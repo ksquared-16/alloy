@@ -18,7 +18,7 @@ import {
     formatMoneyFromDollars,
     formatPhoneUS,
 } from "@/lib/adminFormatters";
-import { formatLayoutRuntimeStatusLabel } from "@/lib/layout/runtime/formatLayoutRuntimeStatusLabel";
+import { formatLayoutRuntimeStatusLabel, isLayoutRuntimeStatusRefKey } from "@/lib/layout/runtime/formatLayoutRuntimeStatusLabel";
 import type { LayoutItem } from "./layoutV2";
 import { parseRefKey } from "./fieldCatalog";
 import { normalizeRefKeyOnRead } from "./layoutRefKeyAliases";
@@ -102,10 +102,12 @@ export function resolveItemValue(record: Record<string, unknown>, item: LayoutIt
         };
     }
 
-    // Status: prefer the hydrated display label, else the raw key value.
+    // Status: prefer hydrated display label only for status refKeys — never bleed anchor status.
     if (hint === "status") {
-        const raw = record["_status_display"] ?? resolveRaw(record, item.refKey);
-        const display = formatLayoutRuntimeStatusLabel(raw, { refKey: item.refKey, renderHint: hint });
+        const refKey = item.refKey ?? "";
+        const useAnchorStatusDisplay = isLayoutRuntimeStatusRefKey(refKey);
+        const raw = (useAnchorStatusDisplay ? record["_status_display"] : undefined) ?? resolveRaw(record, refKey);
+        const display = formatLayoutRuntimeStatusLabel(raw, { refKey, renderHint: hint });
         return {
             display,
             isPlaceholder: !hasValue(display),

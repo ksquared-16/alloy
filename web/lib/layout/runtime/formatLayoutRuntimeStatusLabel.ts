@@ -1,5 +1,6 @@
 import { humanizeSnakeCaseToken } from "@/lib/admin/activityTimelineFormat";
 import { normalizeRefKeyOnRead } from "@/lib/layout/layoutRefKeyAliases";
+import { isLayoutRuntimePrimaryContactRefKey } from "@/lib/layout/runtime/layoutRuntimePrimaryContactField";
 import {
     ENROLLMENT_CHILD_TRACK_STATUS_VOCABULARY,
     ENROLLMENT_FAMILY_TRACK_STATUS_VOCABULARY,
@@ -65,6 +66,10 @@ export function formatLayoutRuntimeStatusLabel(
         || looksLikeStatusKeyToken(text);
 
     if (!shouldFormat) return text;
+
+    if (options?.refKey && isLayoutRuntimePrimaryContactRefKey(options.refKey)) {
+        return text;
+    }
 
     const domain = resolveStatusDomain(options?.refKey);
     const vocabulary = vocabularyForDomain(domain);

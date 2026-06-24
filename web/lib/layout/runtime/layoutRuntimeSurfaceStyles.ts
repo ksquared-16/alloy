@@ -49,10 +49,10 @@ export const LAYOUT_RUNTIME_PRIMARY_WORKSPACE_HEADER =
 
 /** Lighter body section chrome — avoids settings-preview heaviness. */
 export const LAYOUT_RUNTIME_BODY_SECTION_SURFACE =
-    "mb-3 overflow-hidden rounded-lg border border-alloy-stone/22 border-b-alloy-stone/30 bg-white shadow-[0_1px_3px_rgba(24,39,58,0.05)]";
+    "mb-3 flex h-full min-h-0 flex-col overflow-hidden rounded-lg border border-alloy-stone/26 border-b-alloy-stone/34 bg-white shadow-[0_1px_4px_rgba(24,39,58,0.06)]";
 
 export const LAYOUT_RUNTIME_BODY_SECTION_HEADER =
-    "border-b border-alloy-stone/10 px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.08em] text-alloy-midnight/55";
+    "shrink-0 border-b border-alloy-stone/12 px-3 py-2.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-alloy-midnight/58";
 
 /** White drawer overview canvas — depth comes from section panels, not gray fill. */
 export const LAYOUT_RUNTIME_DRAWER_OVERVIEW_CANVAS = "bg-white";
@@ -80,7 +80,7 @@ export const LAYOUT_RUNTIME_ENROLLMENT_TABLE_WRAP = LAYOUT_RUNTIME_ENROLLMENT_GR
 
 /** Lead overview composition card — white card with Bend Pine left accent. */
 export const LAYOUT_RUNTIME_COMPOSITION_SECTION_SURFACE =
-    "mb-3 overflow-hidden rounded-lg border border-alloy-stone/22 border-b-alloy-stone/30 border-l-[3px] border-l-alloy-juniper/70 bg-white shadow-[0_1px_4px_rgba(24,39,58,0.06)]";
+    "mb-3 flex h-full min-h-0 flex-col overflow-hidden rounded-lg border border-alloy-stone/26 border-b-alloy-stone/34 border-l-[3px] border-l-alloy-juniper/70 bg-white shadow-[0_1px_5px_rgba(24,39,58,0.07)]";
 
 export const LAYOUT_RUNTIME_COMPOSITION_SECTION_BODY = "px-3 pb-3 pt-2";
 
@@ -91,7 +91,7 @@ export const LAYOUT_RUNTIME_COMPOSITION_SECTION_TITLE =
     "text-[13px] font-semibold tracking-tight text-alloy-midnight";
 
 export const LAYOUT_RUNTIME_COMPOSITION_SECTION_HEADER =
-    "flex flex-col gap-0.5 border-b border-alloy-stone/10 bg-gradient-to-r from-emerald-50/70 via-emerald-50/35 to-white px-3 py-2";
+    "shrink-0 flex flex-col gap-0.5 border-b border-alloy-stone/12 bg-gradient-to-r from-emerald-50/70 via-emerald-50/35 to-white px-3 py-2.5";
 
 /** Primary enrollment centerpiece — same composition card chrome as household/activity. */
 export const LAYOUT_RUNTIME_COMPOSITION_ENROLLMENT_SURFACE = LAYOUT_RUNTIME_COMPOSITION_SECTION_SURFACE;
@@ -101,8 +101,9 @@ export const LAYOUT_RUNTIME_COMPOSITION_ENROLLMENT_HEADER =
 
 export const LAYOUT_RUNTIME_COMPOSITION_ENROLLMENT_BODY = "px-0 pb-0 pt-0";
 
-/** Summary widget — empty state uses same chrome strength; body copy is muted only. */
-export const LAYOUT_RUNTIME_SUMMARY_WIDGET_MINIMIZED = LAYOUT_RUNTIME_SUMMARY_WIDGET_SURFACE;
+/** Shared peer-row grid — sections stretch to tallest sibling height. */
+export const LAYOUT_RUNTIME_SECTION_ROW_GROUP_CLASS = "min-w-0 grid items-stretch";
+export const LAYOUT_RUNTIME_SECTION_ROW_CELL_CLASS = "min-w-0 flex h-full min-h-0 flex-col";
 
 /** Needs-attention accent — left rail only (Child Information, Attention widget). */
 export const LAYOUT_RUNTIME_ATTENTION_RAIL = "border-l-[3px] border-l-alloy-ember/75";

@@ -1,4 +1,4 @@
-import { formatPhoneUS } from "@/lib/adminFormatters";
+import { formatLayoutRuntimeDrawerHeaderPhone } from "@/lib/layout/runtime/formatLayoutRuntimeDrawerHeaderPhone";
 
 function trimOrNull(value: unknown): string | null {
     if (value == null) return null;
@@ -7,9 +7,7 @@ function trimOrNull(value: unknown): string | null {
 }
 
 function formatHeaderPhone(value: string | null): string | null {
-    if (!value) return null;
-    const formatted = formatPhoneUS(value);
-    return formatted !== "—" ? formatted : value;
+    return formatLayoutRuntimeDrawerHeaderPhone(value);
 }
 
 function countLinkedChildren(record: Record<string, unknown>): number {

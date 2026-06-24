@@ -219,6 +219,8 @@ import {
     LAYOUT_RUNTIME_PRIMARY_WORKSPACE_HEADER,
     LAYOUT_RUNTIME_PRIMARY_WORKSPACE_SECTION,
     LAYOUT_RUNTIME_SECTION_HEADER,
+    LAYOUT_RUNTIME_SECTION_ROW_CELL_CLASS,
+    LAYOUT_RUNTIME_SECTION_ROW_GROUP_CLASS,
     LAYOUT_RUNTIME_SECTION_SURFACE,
     LAYOUT_RUNTIME_SUMMARY_WIDGET_BODY,
     LAYOUT_RUNTIME_SUMMARY_WIDGET_HEADER,
@@ -2300,19 +2302,20 @@ function SectionView({
 
     return wrapSectionInlineEdit(
         <div
-            className={`${surfaceClass} group/section`}
+            className={`${surfaceClass} group/section flex h-full min-h-0 flex-col`}
             data-layout-runtime-section-key={section.key}
+            data-layout-runtime-section-shell="true"
             {...(isEnrollmentSection ?
                 { "data-layout-runtime-primary-workspace-section": "true" }
             :   {})}
         >
-            <div className={headerClass}>
+            <div className={`${headerClass} shrink-0`}>
                 <div className="flex items-center justify-between gap-2 text-inherit">
                     <div>{section.title}</div>
                     {sectionHeaderEdit}
                 </div>
             </div>
-            <div className={`flex flex-col ${bodyPadding}`}>{body}</div>
+            <div className={`flex flex-1 flex-col ${bodyPadding}`}>{body}</div>
         </div>,
     );
 }
@@ -2384,8 +2387,8 @@ export default function LayoutRuntimePlanView({
                             onAdornmentAction={onAdornmentAction}
                             sectionPresentation={sectionPresentation}
                             stackClassName="min-w-0"
-                            rowClassName="min-w-0 items-stretch"
-                            rowCellClassName="min-w-0 flex h-full min-h-0 flex-col"
+                            rowClassName={LAYOUT_RUNTIME_SECTION_ROW_GROUP_CLASS}
+                            rowCellClassName={LAYOUT_RUNTIME_SECTION_ROW_CELL_CLASS}
                         />
                     :   null}
                     {!useSectionFlow ?

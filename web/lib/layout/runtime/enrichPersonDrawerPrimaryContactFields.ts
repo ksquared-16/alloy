@@ -4,6 +4,11 @@
 
 import type { ProofRuntimeRecord } from "@/lib/layout/runtime/proofRecordContext";
 
+import {
+    formatLayoutRuntimePrimaryContactDisplay,
+    LAYOUT_RUNTIME_PRIMARY_CONTACT_LABEL,
+    LAYOUT_RUNTIME_NOT_PRIMARY_CONTACT_LABEL,
+} from "@/lib/layout/runtime/layoutRuntimePrimaryContactField";
 export type PersonDrawerPrimaryContactProjection = {
     isPrimary: boolean;
     display: string;
@@ -28,15 +33,15 @@ export function resolvePersonDrawerPrimaryContactProjection(
             || role === "primary";
         return {
             isPrimary,
-            display: isPrimary ? "Primary contact" : "Not primary",
+            display: formatLayoutRuntimePrimaryContactDisplay(isPrimary),
         };
     }
 
     if (vmRecord._primary_contact_on_opportunity === true) {
-        return { isPrimary: true, display: "Primary contact" };
+        return { isPrimary: true, display: LAYOUT_RUNTIME_PRIMARY_CONTACT_LABEL };
     }
 
-    return { isPrimary: false, display: "Not primary" };
+    return { isPrimary: false, display: LAYOUT_RUNTIME_NOT_PRIMARY_CONTACT_LABEL };
 }
 
 /** Fill person.is_primary_contact when relationship context exists on the VM record. */

@@ -9,6 +9,8 @@
  */
 
 import { LAYOUT_RUNTIME_DRAWER_OVERVIEW_CANVAS } from "@/lib/layout/runtime/layoutRuntimeSurfaceStyles";
+import { readSectionRowGroup } from "@/lib/layout/layoutEditorSectionLayout";
+import type { LayoutDoc, LayoutSection } from "@/lib/layout/layoutV2";
 import { PRESENTATION_EMPTY_STATE } from "@/lib/presentation/presentationTypography";
 
 /** Twelve-column shell: left 4 / main 5 / right rail 3 — relationship cards / enrollment / comms rail. */
@@ -61,7 +63,7 @@ export const DRAWER_OVERVIEW_PANEL_ENROLLMENT_BODY_CLASS = "px-0 pb-0 pt-0";
 
 /** Premium drawer overview panel — pine accent + soft header (Lead reference styling). */
 export const DRAWER_OVERVIEW_PANEL_SURFACE =
-    "overflow-hidden rounded-lg border border-alloy-stone/18 border-l-[3px] border-l-alloy-juniper/70 bg-white shadow-[0_1px_5px_rgba(24,39,58,0.06)]";
+    "flex h-full min-h-0 flex-col overflow-hidden rounded-lg border border-alloy-stone/22 border-b-alloy-stone/30 border-l-[3px] border-l-alloy-juniper/70 bg-white shadow-[0_1px_5px_rgba(24,39,58,0.07)]";
 
 export const DRAWER_OVERVIEW_PANEL_CENTERPIECE_SURFACE =
     "overflow-hidden rounded-xl border border-alloy-stone/20 border-l-[3px] border-l-alloy-juniper/75 bg-white shadow-[0_2px_8px_rgba(24,39,58,0.06)] ring-1 ring-alloy-stone/10";
@@ -82,4 +84,29 @@ export function drawerOverviewShellGridSpans(): {
         main: DRAWER_OVERVIEW_MAIN_COLUMN_CLASS,
         rightRail: DRAWER_OVERVIEW_RIGHT_RAIL_CLASS,
     };
+}
+
+/**
+ * When a semantic composition slot shares a row group with flow sections, render them
+ * together via section flow so stacked/peer layouts match builder preview.
+ */
+export function mergeCompositionSlotIntoFlowWhenRowGrouped(
+    doc: LayoutDoc,
+    slotSection: LayoutSection | null,
+    flowSections: LayoutSection[],
+): { slotStandalone: LayoutSection | null; flowSections: LayoutSection[] } {
+    if (!slotSection || flowSections.length === 0) {
+        return { slotStandalone: slotSection, flowSections };
+    }
+    const groupId = readSectionRowGroup(slotSection);
+    if (!groupId) {
+        return { slotStandalone: slotSection, flowSections };
+    }
+    const sharesGroup = flowSections.some((section) => readSectionRowGroup(section) === groupId);
+    if (!sharesGroup) {
+        return { slotStandalone: slotSection, flowSections };
+    }
+    const flowKeys = new Set([slotSection.key, ...flowSections.map((section) => section.key)]);
+    const merged = doc.sections.filter((section) => flowKeys.has(section.key));
+    return { slotStandalone: null, flowSections: merged };
 }

@@ -11,6 +11,15 @@ import {
     formatLayoutRuntimeRepeaterColumnDisplay,
 } from "@/lib/layout/runtime/formatLayoutRuntimeRepeaterColumnDisplay";
 import { layoutRuntimeRepeaterRowReactKey } from "@/lib/layout/runtime/layoutRuntimeRepeaterRowKey";
+import {
+    LAYOUT_RUNTIME_PROFILE_CARD_HEADER_ROW,
+    LAYOUT_RUNTIME_PROFILE_CARD_LIST,
+    LAYOUT_RUNTIME_PROFILE_CARD_META_DETAIL,
+    LAYOUT_RUNTIME_PROFILE_CARD_META_PRIMARY,
+    LAYOUT_RUNTIME_PROFILE_CARD_SURFACE,
+} from "@/lib/layout/runtime/layoutRuntimeProfileCardStyles";
+import { partitionLayoutRuntimeProfileCardMeta } from "@/lib/layout/runtime/partitionLayoutRuntimeProfileCardMeta";
+import { resolveChildRowTemplateRowLayout } from "@/lib/layout/runtime/resolveChildRowTemplateRowLayout";
 import type { ProofRuntimeRecord } from "@/lib/layout/runtime/proofRecordContext";
 import {
     PRESENTATION_DATA_VALUE_COMPACT,
@@ -51,7 +60,7 @@ export default function PersonConnectedChildrenCardList({
                 <div className="p-2">
                     <DrawerOverviewEmptyState message="No children linked yet." compact />
                 </div>
-            :   <ul className="flex flex-col gap-2 p-2">
+            :   <ul className={LAYOUT_RUNTIME_PROFILE_CARD_LIST}>
                     {rows.map((row, index) => {
                         const rowKey = layoutRuntimeRepeaterRowReactKey(row, index, item.source ?? item.refKey);
                         const nameCol = nameColumn!;
@@ -61,7 +70,15 @@ export default function PersonConnectedChildrenCardList({
                             refKey: nameCol.refKey,
                             adornment: nameCol.adornment,
                         };
-                        const metaSegments = metaColumns
+                        const rowTemplate = resolveChildRowTemplateRowLayout(item);
+                        const { headline, details } = partitionLayoutRuntimeProfileCardMeta(metaColumns);
+                        const headlineSegments = headline
+                            .map((col) => ({
+                                key: col.refKey,
+                                text: formatLayoutRuntimeRepeaterColumnDisplay(row, col),
+                            }))
+                            .filter((segment) => segment.text !== "—" && segment.text.trim().length > 0);
+                        const detailSegments = details
                             .map((col) => ({
                                 key: col.refKey,
                                 text: formatLayoutRuntimeRepeaterColumnDisplay(row, col),
@@ -77,10 +94,10 @@ export default function PersonConnectedChildrenCardList({
                         return (
                             <li
                                 key={rowKey}
-                                className="rounded-lg border border-alloy-stone/12 bg-white px-3 py-2 shadow-[0_1px_2px_rgba(24,39,58,0.03)] transition-shadow hover:shadow-[0_2px_6px_rgba(24,39,58,0.06)]"
+                                className={LAYOUT_RUNTIME_PROFILE_CARD_SURFACE}
                                 data-person-connected-child-card-row="true"
                             >
-                                <div className="flex items-start gap-2.5">
+                                <div className={LAYOUT_RUNTIME_PROFILE_CARD_HEADER_ROW}>
                                     <DrawerHouseholdChildLinkAvatar
                                         childId={childId}
                                         displayName={childDisplayName}
@@ -108,19 +125,58 @@ export default function PersonConnectedChildrenCardList({
                                                 {childDisplayName}
                                             </p>
                                         }
-                                        {metaSegments.length > 0 ?
-                                            <div
-                                                className={`mt-0.5 flex flex-wrap gap-x-2 gap-y-0.5 ${PRESENTATION_SUPPORTING}`}
-                                                data-person-connected-child-meta-line="true"
-                                            >
-                                                {metaSegments.map((segment) => (
-                                                    <span key={segment.key} className="whitespace-nowrap">
-                                                        {segment.text}
-                                                    </span>
-                                                ))}
-                                            </div>
-                                        :   null}
-                                        {enrollmentStatus && !metaSegments.some((segment) => segment.text.includes(enrollmentStatus)) ?
+                                        {rowTemplate && rowTemplate.length > 0 ?
+                                            rowTemplate.map((layoutRow, rowIndex) => {
+                                                const slots = layoutRow.slots.filter(
+                                                    (col): col is LayoutCollectionColumn => Boolean(col),
+                                                );
+                                                if (slots.length === 0) return null;
+                                                const lineClass =
+                                                    rowIndex === 0 ?
+                                                        LAYOUT_RUNTIME_PROFILE_CARD_META_PRIMARY
+                                                    :   LAYOUT_RUNTIME_PROFILE_CARD_META_DETAIL;
+                                                return (
+                                                    <div
+                                                        key={rowIndex}
+                                                        className={lineClass}
+                                                        data-person-connected-child-meta-line={rowIndex}
+                                                    >
+                                                        {slots.map((col) => (
+                                                            <span key={col.refKey} className="whitespace-nowrap">
+                                                                {formatLayoutRuntimeRepeaterColumnDisplay(row, col)}
+                                                            </span>
+                                                        ))}
+                                                    </div>
+                                                );
+                                            })
+                                        :   <>
+                                                {headlineSegments.length > 0 ?
+                                                    <div
+                                                        className={LAYOUT_RUNTIME_PROFILE_CARD_META_PRIMARY}
+                                                        data-person-connected-child-meta-line="headline"
+                                                    >
+                                                        {headlineSegments.map((segment) => (
+                                                            <span key={segment.key} className="whitespace-nowrap">
+                                                                {segment.text}
+                                                            </span>
+                                                        ))}
+                                                    </div>
+                                                :   null}
+                                                {detailSegments.length > 0 ?
+                                                    <div
+                                                        className={LAYOUT_RUNTIME_PROFILE_CARD_META_DETAIL}
+                                                        data-person-connected-child-meta-line="details"
+                                                    >
+                                                        {detailSegments.map((segment) => (
+                                                            <span key={segment.key}>{segment.text}</span>
+                                                        ))}
+                                                    </div>
+                                                :   null}
+                                            </>
+                                        }
+                                        {enrollmentStatus
+                                        && !headlineSegments.some((segment) => segment.text.includes(enrollmentStatus))
+                                        && !detailSegments.some((segment) => segment.text.includes(enrollmentStatus)) ?
                                             <p className={`mt-0.5 ${PRESENTATION_SUPPORTING}`}>{enrollmentStatus}</p>
                                         :   null}
                                         {opportunityId ?

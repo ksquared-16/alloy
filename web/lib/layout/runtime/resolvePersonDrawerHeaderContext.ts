@@ -2,6 +2,8 @@
  * Person drawer command header context — relationship-focused meta lines.
  */
 
+import { formatLayoutRuntimeDrawerHeaderPhone } from "@/lib/layout/runtime/formatLayoutRuntimeDrawerHeaderPhone";
+
 function pickLine(...values: unknown[]): string | null {
     for (const value of values) {
         if (value == null) continue;
@@ -37,7 +39,9 @@ export function resolvePersonDrawerCommandHeaderMeta(
     );
 
     const metaParts = [relationship].filter(Boolean);
-    const phone = pickLine(record["person.primary_phone"], record.phone, record._primary_phone);
+    const phone = formatLayoutRuntimeDrawerHeaderPhone(
+        pickLine(record["person.primary_phone"], record.phone, record._primary_phone),
+    );
     const email = pickLine(record["person.primary_email"], record.email, record._primary_email);
     const contactParts = [phone, email].filter(Boolean);
 

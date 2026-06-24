@@ -27,14 +27,14 @@ export const PRIMARY_CONTACT_BADGE_FIELD_PRESET: LayoutEditorFieldDisplayPreset 
     description: "Read-only badge when this contact is the household primary.",
     refKey: "person.is_primary_contact",
     fieldLabel: "Primary contact",
-    fieldType: "status",
+    fieldType: "text",
     entityKey: "person",
     entityLabel: "Contact",
     display: {
         displayType: "badge",
         statusFormat: "badge",
         labelPosition: "hidden",
-        emptyState: "",
+        emptyState: "Not primary",
     },
     editable: false,
 };
@@ -61,7 +61,7 @@ export function applyLayoutEditorFieldDisplayPresetToItem(
     return {
         ...item,
         label: preset.fieldLabel,
-        renderHint: "status",
+        renderHint: "badge",
         editable: preset.editable,
         visibleWhen: visibilityConditionForRule("show_when_field_exists", preset.refKey),
         metadata: writeLayoutEditorDisplayConfig(item.metadata, preset.display),

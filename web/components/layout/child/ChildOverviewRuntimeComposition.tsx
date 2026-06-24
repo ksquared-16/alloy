@@ -1,6 +1,7 @@
 "use client";
 
 import LayoutRuntimeDrawerBodyView from "@/components/layout/LayoutRuntimeDrawerBodyView";
+import LayoutRuntimeSectionFlowView from "@/components/layout/LayoutRuntimeSectionFlowView";
 import type { AdornmentActionHandler } from "@/components/layout/LayoutRuntimePlanView";
 import type { LayoutDoc, LayoutSection } from "@/lib/layout/layoutV2";
 import { LayoutRuntimeCompositionProvider } from "@/lib/layout/runtime/layoutRuntimeCompositionContext";
@@ -17,7 +18,12 @@ import {
     DRAWER_OVERVIEW_MAIN_COLUMN_CLASS,
     DRAWER_OVERVIEW_RIGHT_RAIL_CLASS,
     DRAWER_OVERVIEW_SHELL_GRID_CLASS,
+    mergeCompositionSlotIntoFlowWhenRowGrouped,
 } from "@/lib/layout/runtime/drawerOverviewCompositionStandard";
+import {
+    LAYOUT_RUNTIME_SECTION_ROW_CELL_CLASS,
+    LAYOUT_RUNTIME_SECTION_ROW_GROUP_CLASS,
+} from "@/lib/layout/runtime/layoutRuntimeSurfaceStyles";
 import type { ProofRuntimeRecord } from "@/lib/layout/runtime/proofRecordContext";
 
 type Props = {
@@ -63,30 +69,36 @@ function CompositionSlot({
     );
 }
 
-function RightRailSlot({
-    section,
+/** Published runtime section flow — honors layoutEditorSectionRowGroup metadata. */
+function PublishedSectionFlow({
+    sections,
     doc,
     record,
     entityId,
     canMutate,
     onAdornmentAction,
+    stackClassName,
 }: {
-    section: LayoutSection;
+    sections: LayoutSection[];
     doc: LayoutDoc;
     record: ProofRuntimeRecord;
     entityId: string;
     canMutate?: boolean;
     onAdornmentAction?: AdornmentActionHandler;
+    stackClassName?: string;
 }) {
+    if (sections.length === 0) return null;
     return (
-        <CompositionSlot
-            slotKey={section.key}
-            sectionKeys={[section.key]}
+        <LayoutRuntimeSectionFlowView
             doc={doc}
+            sections={sections}
             record={record}
             entityId={entityId}
             canMutate={canMutate}
             onAdornmentAction={onAdornmentAction}
+            stackClassName={stackClassName}
+            rowClassName={LAYOUT_RUNTIME_SECTION_ROW_GROUP_CLASS}
+            rowCellClassName={LAYOUT_RUNTIME_SECTION_ROW_CELL_CLASS}
         />
     );
 }
@@ -105,6 +117,12 @@ export default function ChildOverviewRuntimeComposition({
     const showSchedule =
         slots.schedule
         && shouldRenderLayoutRuntimeSection(slots.schedule, record, { compositionShell: true });
+    const { slotStandalone: scheduleStandalone, flowSections: belowShellFlow } =
+        mergeCompositionSlotIntoFlowWhenRowGrouped(
+            doc,
+            showSchedule ? slots.schedule : null,
+            slots.overflow,
+        );
 
     return (
         <LayoutRuntimeCompositionProvider value={hints}>
@@ -145,25 +163,23 @@ export default function ChildOverviewRuntimeComposition({
                             data-child-overview-slot="right_rail"
                             data-child-overview-right-rail-section-count={String(rightRailSections.length)}
                         >
-                            {rightRailSections.map((section) => (
-                                <RightRailSlot
-                                    key={section.key}
-                                    section={section}
-                                    doc={doc}
-                                    record={record}
-                                    entityId={entityId}
-                                    canMutate={canMutate}
-                                    onAdornmentAction={onAdornmentAction}
-                                />
-                            ))}
+                            <PublishedSectionFlow
+                                sections={rightRailSections}
+                                doc={doc}
+                                record={record}
+                                entityId={entityId}
+                                canMutate={canMutate}
+                                onAdornmentAction={onAdornmentAction}
+                                stackClassName="space-y-2"
+                            />
                         </div>
                     :   null}
                 </div>
 
-                {showSchedule ?
+                {scheduleStandalone ?
                     <CompositionSlot
                         slotKey="schedule_attendance"
-                        sectionKeys={[slots.schedule!.key]}
+                        sectionKeys={[scheduleStandalone.key]}
                         doc={doc}
                         record={record}
                         entityId={entityId}
@@ -172,20 +188,17 @@ export default function ChildOverviewRuntimeComposition({
                     />
                 :   null}
 
-                {slots.overflow.length > 0 ?
-                    <div className="space-y-3" data-child-overview-overflow="true">
-                        {slots.overflow.map((section) => (
-                            <CompositionSlot
-                                key={section.key}
-                                slotKey={section.key}
-                                sectionKeys={[section.key]}
-                                doc={doc}
-                                record={record}
-                                entityId={entityId}
-                                canMutate={canMutate}
-                                onAdornmentAction={onAdornmentAction}
-                            />
-                        ))}
+                {belowShellFlow.length > 0 ?
+                    <div data-child-overview-overflow="true">
+                        <PublishedSectionFlow
+                            sections={belowShellFlow}
+                            doc={doc}
+                            record={record}
+                            entityId={entityId}
+                            canMutate={canMutate}
+                            onAdornmentAction={onAdornmentAction}
+                            stackClassName="space-y-3"
+                        />
                     </div>
                 :   null}
             </div>

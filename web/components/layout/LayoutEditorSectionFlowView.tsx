@@ -10,6 +10,10 @@ import {
     sectionStackedRowPrimaryStyle,
 } from "@/lib/layout/layoutEditorSectionLayout";
 import { cardWidthStackStyle } from "@/lib/layout/layoutBuilderCardWidth";
+import {
+    LAYOUT_RUNTIME_SECTION_ROW_CELL_CLASS,
+    LAYOUT_RUNTIME_SECTION_ROW_GROUP_CLASS,
+} from "@/lib/layout/runtime/layoutRuntimeSurfaceStyles";
 
 type Props = {
     sections: LayoutSection[];
@@ -24,8 +28,8 @@ export default function LayoutEditorSectionFlowView({
     sections,
     renderSection,
     stackClassName,
-    rowClassName = "min-w-0",
-    rowCellClassName = "min-w-0",
+    rowClassName = LAYOUT_RUNTIME_SECTION_ROW_GROUP_CLASS,
+    rowCellClassName = LAYOUT_RUNTIME_SECTION_ROW_CELL_CLASS,
 }: Props) {
     const segments = useMemo(() => segmentSectionsForRowLayout(sections), [sections]);
 
@@ -53,13 +57,13 @@ export default function LayoutEditorSectionFlowView({
                         <div
                             key={segment.groupId}
                             className={`${rowClassName} items-stretch`}
-                            style={gridStyle}
+                            style={{ ...gridStyle, alignItems: "stretch" }}
                             data-layout-section-row-group={segment.groupId}
                             data-layout-section-segment="stacked_row"
                             data-layout-section-stack-layout={segment.layout}
                         >
                             <div
-                                className={`${rowCellClassName} flex h-full min-h-0 flex-col`}
+                                className={rowCellClassName}
                                 style={primaryStyle}
                                 data-layout-runtime-peer-row-card="true"
                                 data-layout-runtime-stack-role="primary"
@@ -69,7 +73,7 @@ export default function LayoutEditorSectionFlowView({
                             {segment.stacked.map((section, index) => (
                                 <div
                                     key={section.key}
-                                    className={`${rowCellClassName} flex h-full min-h-0 flex-col`}
+                                    className={rowCellClassName}
                                     style={sectionStackedRowCellStyle(segment.layout, index as 0 | 1)}
                                     data-layout-runtime-peer-row-card="true"
                                     data-layout-runtime-stack-role="stack"
@@ -85,14 +89,14 @@ export default function LayoutEditorSectionFlowView({
                         <div
                             key={segment.groupId}
                             className={`${rowClassName} items-stretch`}
-                            style={sectionRowGroupGridStyle(segment.spans)}
+                            style={{ ...sectionRowGroupGridStyle(segment.spans), alignItems: "stretch" }}
                             data-layout-section-row-group={segment.groupId}
                             data-layout-section-segment="row"
                         >
                             {segment.sections.map((section) => (
                                 <div
                                     key={section.key}
-                                    className={`${rowCellClassName} flex h-full min-h-0 flex-col`}
+                                    className={rowCellClassName}
                                     data-layout-runtime-peer-row-card="true"
                                 >
                                     {renderSection(section)}

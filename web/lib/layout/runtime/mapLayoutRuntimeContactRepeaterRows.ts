@@ -4,6 +4,9 @@
 
 import type { LayoutItem } from "@/lib/layout/layoutV2";
 import {
+    formatLayoutRuntimePrimaryContactDisplay,
+} from "@/lib/layout/runtime/layoutRuntimePrimaryContactField";
+import {
     resolveOpportunityDrawerHouseholdContacts,
     resolvePersonDrawerHouseholdContacts,
     type DrawerHouseholdContactRow,
@@ -39,7 +42,7 @@ function contactRowToRepeaterRecord(contact: DrawerHouseholdContactRow): ProofRu
         "person.role": roleLabel,
         "person.contact_role": roleLabel,
         "person.relationship": roleLabel,
-        "person.is_primary_contact": contact.is_primary ? "Yes" : "",
+        "person.is_primary_contact": formatLayoutRuntimePrimaryContactDisplay(contact.is_primary),
         "person.is_primary": contact.is_primary ? "Primary" : "",
         "person.is_payer": roleLabel.toLowerCase().includes("payer") ? "Payer" : "",
     };

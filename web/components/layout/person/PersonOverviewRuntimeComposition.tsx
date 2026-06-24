@@ -18,7 +18,12 @@ import {
     DRAWER_OVERVIEW_MAIN_COLUMN_CLASS,
     DRAWER_OVERVIEW_RIGHT_RAIL_CLASS,
     DRAWER_OVERVIEW_SHELL_GRID_CLASS,
+    mergeCompositionSlotIntoFlowWhenRowGrouped,
 } from "@/lib/layout/runtime/drawerOverviewCompositionStandard";
+import {
+    LAYOUT_RUNTIME_SECTION_ROW_CELL_CLASS,
+    LAYOUT_RUNTIME_SECTION_ROW_GROUP_CLASS,
+} from "@/lib/layout/runtime/layoutRuntimeSurfaceStyles";
 import type { ProofRuntimeRecord } from "@/lib/layout/runtime/proofRecordContext";
 
 type Props = {
@@ -92,8 +97,8 @@ function PublishedSectionFlow({
             canMutate={canMutate}
             onAdornmentAction={onAdornmentAction}
             stackClassName={stackClassName}
-            rowClassName="min-w-0 items-stretch"
-            rowCellClassName="min-w-0 flex h-full min-h-0 flex-col"
+            rowClassName={LAYOUT_RUNTIME_SECTION_ROW_GROUP_CLASS}
+            rowCellClassName={LAYOUT_RUNTIME_SECTION_ROW_CELL_CLASS}
         />
     );
 }
@@ -112,6 +117,12 @@ export default function PersonOverviewRuntimeComposition({
     const showContact =
         slots.contact
         && shouldRenderLayoutRuntimeSection(slots.contact, record, { compositionShell: true });
+    const { slotStandalone: contactStandalone, flowSections: belowShellFlow } =
+        mergeCompositionSlotIntoFlowWhenRowGrouped(
+            doc,
+            showContact ? slots.contact : null,
+            slots.overflow,
+        );
 
     return (
         <LayoutRuntimeCompositionProvider value={hints}>
@@ -165,10 +176,10 @@ export default function PersonOverviewRuntimeComposition({
                     :   null}
                 </div>
 
-                {showContact ?
+                {contactStandalone ?
                     <CompositionSlot
                         slotKey="contact_information"
-                        sectionKeys={[slots.contact!.key]}
+                        sectionKeys={[contactStandalone.key]}
                         doc={doc}
                         record={record}
                         entityId={entityId}
@@ -177,10 +188,10 @@ export default function PersonOverviewRuntimeComposition({
                     />
                 :   null}
 
-                {slots.overflow.length > 0 ?
+                {belowShellFlow.length > 0 ?
                     <div data-person-overview-overflow="true">
                         <PublishedSectionFlow
-                            sections={slots.overflow}
+                            sections={belowShellFlow}
                             doc={doc}
                             record={record}
                             entityId={entityId}

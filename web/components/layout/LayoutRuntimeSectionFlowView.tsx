@@ -5,6 +5,10 @@ import LayoutRuntimeDrawerBodyView from "@/components/layout/LayoutRuntimeDrawer
 import type { AdornmentActionHandler, LayoutRuntimeSectionPresentation } from "@/components/layout/LayoutRuntimePlanView";
 import type { LayoutDoc, LayoutSection } from "@/lib/layout/layoutV2";
 import type { ProofRuntimeRecord } from "@/lib/layout/runtime/proofRecordContext";
+import {
+    LAYOUT_RUNTIME_SECTION_ROW_CELL_CLASS,
+    LAYOUT_RUNTIME_SECTION_ROW_GROUP_CLASS,
+} from "@/lib/layout/runtime/layoutRuntimeSurfaceStyles";
 
 type Props = {
     doc: LayoutDoc;
@@ -29,8 +33,8 @@ export default function LayoutRuntimeSectionFlowView({
     onAdornmentAction,
     sectionPresentation = "default",
     stackClassName,
-    rowClassName = "min-w-0",
-    rowCellClassName = "min-w-0",
+    rowClassName = LAYOUT_RUNTIME_SECTION_ROW_GROUP_CLASS,
+    rowCellClassName = LAYOUT_RUNTIME_SECTION_ROW_CELL_CLASS,
 }: Props) {
     if (sections.length === 0) return null;
 

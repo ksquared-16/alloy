@@ -64,7 +64,7 @@ export default function LayoutRuntimeCollapsibleSectionShell({
     const collapsedHint = !expanded && collapse.collapsedSummary ? collapse.collapsedSummary : null;
 
     return (
-        <div className={`${surfaceClassName} group/section`} {...rest}>
+        <div className={`${surfaceClassName} group/section flex h-full min-h-0 flex-col`} {...rest}>
             <div className={headerClassName}>
                 <div className="flex min-w-0 items-center justify-between gap-2 text-inherit">
                     <button
@@ -91,7 +91,7 @@ export default function LayoutRuntimeCollapsibleSectionShell({
                 :   null}
             </div>
             {expanded ?
-                <div className={bodyClassName}>{children}</div>
+                <div className={`${bodyClassName} flex flex-1 flex-col`}>{children}</div>
             :   null}
         </div>
     );
