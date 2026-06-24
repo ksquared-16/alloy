@@ -2,24 +2,28 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-    PLATFORM_BUILDER_BTN,
-    PLATFORM_BUILDER_BTN_DANGER,
-    PLATFORM_BUILDER_BTN_PRIMARY,
     PLATFORM_BUILDER_INPUT,
     PLATFORM_BUILDER_SELECT,
     PLATFORM_BUILDER_SHELL,
     PLATFORM_BUILDER_TEXTAREA,
+    PlatformBuilderButton,
+    PlatformBuilderCallout,
+    PlatformBuilderEmptyState,
     PlatformBuilderField,
+    PlatformBuilderListItem,
+    PlatformBuilderListPanel,
+    PlatformBuilderModal,
     PlatformBuilderSection,
+    PlatformBuilderStatusBadge,
 } from "@/app/adminV2/settings/analytics/platformBuilderUi";
 import {
-    fetchMetricDefinitions,
-    previewMetricDefinition,
-} from "@/lib/metrics/platform/fetchMetricPlatform";
+    METRIC_STATUS_LABELS,
+    slugifyMetricKey,
+} from "@/app/adminV2/settings/analytics/platformBuilderLabels";
+import { fetchMetricDefinitions, previewMetricDefinition } from "@/lib/metrics/platform/fetchMetricPlatform";
 import { copyMetricToOrg, runMetricSnapshots } from "@/lib/metrics/platform/fetchMetricRender";
-import type { MetricDefinitionRow } from "@/lib/metrics/platform/types";
+import type { MetricDefinitionRow, MetricEvaluationResult } from "@/lib/metrics/platform/types";
 import type { MetricSourceAdapter } from "@/lib/metrics/platform/metricSourceRegistry";
-import type { MetricEvaluationResult } from "@/lib/metrics/platform/types";
 
 type Props = { canEdit: boolean };
 
@@ -138,22 +142,226 @@ function formToPayload(form: MetricForm, status: string) {
     };
 }
 
+function MetricFormFields({
+    form,
+    patchField,
+    adapters,
+    disabled,
+    showAdvanced,
+}: {
+    form: MetricForm;
+    patchField: <K extends keyof MetricForm>(key: K, value: MetricForm[K]) => void;
+    adapters: MetricSourceAdapter[];
+    disabled: boolean;
+    showAdvanced: boolean;
+}) {
+    const sourceLabel = adapters.find((a) => a.key === form.source_key)?.label ?? form.source_key;
+
+    return (
+        <>
+            <PlatformBuilderSection title="What are you measuring?" hint="Give this calculation a clear name operators will recognize.">
+                {showAdvanced ?
+                    <PlatformBuilderField label="Internal key">
+                        <input
+                            className={PLATFORM_BUILDER_INPUT}
+                            value={form.key}
+                            disabled={disabled}
+                            onChange={(e) => patchField("key", e.target.value)}
+                        />
+                    </PlatformBuilderField>
+                :   null}
+                <PlatformBuilderField label="Name">
+                    <input
+                        className={PLATFORM_BUILDER_INPUT}
+                        value={form.label}
+                        disabled={disabled}
+                        onChange={(e) => patchField("label", e.target.value)}
+                        placeholder="Tour Conversion %"
+                    />
+                </PlatformBuilderField>
+                <PlatformBuilderField label="Category">
+                    <input
+                        className={PLATFORM_BUILDER_INPUT}
+                        value={form.category}
+                        disabled={disabled}
+                        onChange={(e) => patchField("category", e.target.value)}
+                    />
+                </PlatformBuilderField>
+                <div className="sm:col-span-2">
+                    <PlatformBuilderField label="Description">
+                        <textarea
+                            className={PLATFORM_BUILDER_TEXTAREA}
+                            value={form.description}
+                            disabled={disabled}
+                            onChange={(e) => patchField("description", e.target.value)}
+                            placeholder="What this number means for operators."
+                        />
+                    </PlatformBuilderField>
+                </div>
+            </PlatformBuilderSection>
+
+            <PlatformBuilderSection title="How is it calculated?" hint={`Source: ${sourceLabel} · Rolling ${form.period_days}-day window`}>
+                <PlatformBuilderField label="Data source">
+                    <select
+                        className={PLATFORM_BUILDER_SELECT}
+                        value={form.source_key}
+                        onChange={(e) => patchField("source_key", e.target.value)}
+                        disabled={disabled}
+                    >
+                        {adapters.map((a) => (
+                            <option key={a.key} value={a.key} disabled={a.status !== "available"}>
+                                {a.label}
+                            </option>
+                        ))}
+                    </select>
+                </PlatformBuilderField>
+                <PlatformBuilderField label="Calculation type">
+                    <select
+                        className={PLATFORM_BUILDER_SELECT}
+                        value={form.aggregation}
+                        onChange={(e) => patchField("aggregation", e.target.value)}
+                        disabled={disabled}
+                    >
+                        {["count", "rate", "avg", "sum", "median"].map((a) => (
+                            <option key={a} value={a}>{a}</option>
+                        ))}
+                    </select>
+                </PlatformBuilderField>
+                <PlatformBuilderField label="Time window (days)">
+                    <input
+                        type="number"
+                        className={PLATFORM_BUILDER_INPUT}
+                        value={form.period_days}
+                        onChange={(e) => patchField("period_days", parseInt(e.target.value, 10) || 30)}
+                        disabled={disabled}
+                    />
+                </PlatformBuilderField>
+                <PlatformBuilderField label="Display unit">
+                    <select
+                        className={PLATFORM_BUILDER_SELECT}
+                        value={form.unit}
+                        onChange={(e) => patchField("unit", e.target.value)}
+                        disabled={disabled}
+                    >
+                        {["percent", "count", "rate", "duration", "currency"].map((u) => (
+                            <option key={u} value={u}>{u}</option>
+                        ))}
+                    </select>
+                </PlatformBuilderField>
+            </PlatformBuilderSection>
+
+            <PlatformBuilderSection title="Targets & health" hint="Used for green / yellow / red health states in the workspace.">
+                <PlatformBuilderField label="Track as KPI">
+                    <input
+                        type="checkbox"
+                        checked={form.is_kpi}
+                        onChange={(e) => patchField("is_kpi", e.target.checked)}
+                        disabled={disabled}
+                        className="mt-2 h-4 w-4 rounded border-alloy-stone/40"
+                    />
+                </PlatformBuilderField>
+                <PlatformBuilderField label="Better direction">
+                    <select
+                        className={PLATFORM_BUILDER_SELECT}
+                        value={form.direction}
+                        onChange={(e) => patchField("direction", e.target.value as MetricForm["direction"])}
+                        disabled={disabled}
+                    >
+                        <option value="higher_is_better">Higher is better</option>
+                        <option value="lower_is_better">Lower is better</option>
+                    </select>
+                </PlatformBuilderField>
+                {form.aggregation === "rate" ?
+                    <>
+                        <PlatformBuilderField label="Target minimum"><input className={PLATFORM_BUILDER_INPUT} value={form.target_min_rate} onChange={(e) => patchField("target_min_rate", e.target.value)} disabled={disabled} /></PlatformBuilderField>
+                        <PlatformBuilderField label="Healthy minimum"><input className={PLATFORM_BUILDER_INPUT} value={form.healthy_min_rate} onChange={(e) => patchField("healthy_min_rate", e.target.value)} disabled={disabled} /></PlatformBuilderField>
+                        <PlatformBuilderField label="Warning minimum"><input className={PLATFORM_BUILDER_INPUT} value={form.warning_min_rate} onChange={(e) => patchField("warning_min_rate", e.target.value)} disabled={disabled} /></PlatformBuilderField>
+                    </>
+                :   <>
+                        <PlatformBuilderField label="Target maximum"><input className={PLATFORM_BUILDER_INPUT} value={form.target_max_count} onChange={(e) => patchField("target_max_count", e.target.value)} disabled={disabled} /></PlatformBuilderField>
+                        <PlatformBuilderField label="Healthy maximum"><input className={PLATFORM_BUILDER_INPUT} value={form.healthy_max_count} onChange={(e) => patchField("healthy_max_count", e.target.value)} disabled={disabled} /></PlatformBuilderField>
+                        <PlatformBuilderField label="Warning maximum"><input className={PLATFORM_BUILDER_INPUT} value={form.warning_max_count} onChange={(e) => patchField("warning_max_count", e.target.value)} disabled={disabled} /></PlatformBuilderField>
+                    </>
+                }
+            </PlatformBuilderSection>
+        </>
+    );
+}
+
+function PreviewPanel({
+    preview,
+    previewLoading,
+    previewError,
+    form,
+    adapters,
+}: {
+    preview: MetricEvaluationResult | null;
+    previewLoading: boolean;
+    previewError: string | null;
+    form: MetricForm;
+    adapters: MetricSourceAdapter[];
+}) {
+    const sourceLabel = adapters.find((a) => a.key === form.source_key)?.label ?? form.source_key;
+    const noData = preview && preview.value == null;
+
+    if (previewLoading) {
+        return (
+            <div className="rounded-lg border border-alloy-stone/20 bg-white p-4">
+                <p className="text-sm text-alloy-midnight/55">Running live preview…</p>
+            </div>
+        );
+    }
+
+    if (previewError) {
+        return (
+            <PlatformBuilderCallout tone="warning">
+                {previewError}
+            </PlatformBuilderCallout>
+        );
+    }
+
+    if (!preview) return null;
+
+    return (
+        <div className="rounded-lg border border-alloy-juniper/25 bg-alloy-juniper/5 p-4">
+            <p className="text-xs font-semibold uppercase tracking-wide text-alloy-juniper">Live preview</p>
+            <p className="mt-2 text-3xl font-semibold tabular-nums text-alloy-midnight">
+                {noData ? "No data" : preview.formattedValue}
+            </p>
+            <p className="mt-1 text-sm text-alloy-midnight/60">
+                Health: {preview.healthState === "unknown" && noData ? "Not enough data" : preview.healthState}
+            </p>
+            {noData ?
+                <p className="mt-2 text-xs text-alloy-midnight/55">
+                    No matching records found for the last {form.period_days} days. Check your data source or widen the time window.
+                </p>
+            :   null}
+            <dl className="mt-3 grid gap-1 text-[11px] text-alloy-midnight/50">
+                <div><dt className="inline font-semibold">Source: </dt><dd className="inline">{sourceLabel}</dd></div>
+                <div><dt className="inline font-semibold">Period: </dt><dd className="inline">Rolling {form.period_days} days</dd></div>
+                <div><dt className="inline font-semibold">Mode: </dt><dd className="inline">Live preview (builder only — publish then update live values for workspace display)</dd></div>
+            </dl>
+        </div>
+    );
+}
+
 export default function MetricBuilderPanel({ canEdit }: Props) {
     const [items, setItems] = useState<MetricDefinitionRow[]>([]);
     const [adapters, setAdapters] = useState<MetricSourceAdapter[]>([]);
     const [selectedId, setSelectedId] = useState<string | null>(null);
     const [form, setForm] = useState<MetricForm>(EMPTY_FORM);
-    const [isNew, setIsNew] = useState(false);
+    const [createModalOpen, setCreateModalOpen] = useState(false);
+    const [showAdvanced, setShowAdvanced] = useState(false);
     const [preview, setPreview] = useState<MetricEvaluationResult | null>(null);
+    const [previewLoading, setPreviewLoading] = useState(false);
+    const [previewError, setPreviewError] = useState<string | null>(null);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
+    const [action, setAction] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
 
-    const selected = useMemo(
-        () => items.find((i) => i.id === selectedId) ?? null,
-        [items, selectedId]
-    );
-    const isGlobal = selected?.org_id == null && !isNew;
+    const selected = useMemo(() => items.find((i) => i.id === selectedId) ?? null, [items, selectedId]);
+    const isGlobal = selected?.org_id == null;
 
     const load = useCallback(async () => {
         setLoading(true);
@@ -168,34 +376,40 @@ export default function MetricBuilderPanel({ canEdit }: Props) {
     }, [load]);
 
     useEffect(() => {
-        if (selected && !isNew) setForm(rowToForm(selected));
-    }, [selected, isNew]);
+        if (selected) setForm(rowToForm(selected));
+    }, [selected]);
 
     const patchField = <K extends keyof MetricForm>(key: K, value: MetricForm[K]) => {
-        setForm((f) => ({ ...f, [key]: value }));
+        setForm((f) => {
+            const next = { ...f, [key]: value };
+            if (createModalOpen && key === "label" && !showAdvanced) {
+                next.key = slugifyMetricKey(String(value));
+            }
+            return next;
+        });
     };
 
     const ensureOrgCopy = async (): Promise<MetricDefinitionRow | null> => {
         if (!selected || selected.org_id != null) return selected;
         const copied = await copyMetricToOrg(selected.id);
         if (!copied?.item) {
-            setError("Could not copy global template to your organization.");
+            setError("Could not copy template metric to your organization.");
             return null;
         }
         await load();
         const item = copied.item as MetricDefinitionRow;
         setSelectedId(item.id);
-        setIsNew(false);
         return item;
     };
 
-    const save = async (status: string) => {
+    const save = async (status: string, fromModal = false) => {
         if (!canEdit) return;
         setSaving(true);
+        setAction(status === "active" ? "publish" : status === "archived" ? "archive" : "save");
         setError(null);
         try {
             let targetId = selectedId;
-            if (isGlobal && !isNew) {
+            if (isGlobal && selected) {
                 const orgCopy = await ensureOrgCopy();
                 if (!orgCopy) return;
                 targetId = orgCopy.id;
@@ -203,7 +417,7 @@ export default function MetricBuilderPanel({ canEdit }: Props) {
 
             const payload = formToPayload(form, status);
             const res =
-                isNew || !targetId
+                createModalOpen || !targetId
                     ? await fetch("/api/admin/analytics/metrics", {
                           method: "POST",
                           credentials: "include",
@@ -224,205 +438,191 @@ export default function MetricBuilderPanel({ canEdit }: Props) {
             }
             const data = (await res.json()) as { item: MetricDefinitionRow };
             setSelectedId(data.item.id);
-            setIsNew(false);
+            setCreateModalOpen(false);
             await load();
             if (status === "active") await runMetricSnapshots({ metric_definition_ids: [data.item.id] });
+            if (fromModal) setPreview(null);
         } finally {
             setSaving(false);
+            setAction(null);
         }
     };
 
     const runPreview = async () => {
-        if (!selectedId) return;
-        let id = selectedId;
-        if (isGlobal) {
-            const orgCopy = await ensureOrgCopy();
-            if (!orgCopy) return;
-            id = orgCopy.id;
+        if (!selectedId && !createModalOpen) return;
+        setPreviewLoading(true);
+        setPreviewError(null);
+        setPreview(null);
+        try {
+            let id = selectedId;
+            if (isGlobal && selected) {
+                const orgCopy = await ensureOrgCopy();
+                if (!orgCopy) return;
+                id = orgCopy.id;
+            }
+            if (!id) {
+                setPreviewError("Save this calculation first, then preview the result.");
+                return;
+            }
+            const result = await previewMetricDefinition(id);
+            if (!result) {
+                setPreviewError("Preview could not run. Check the data source and try again.");
+                return;
+            }
+            setPreview(result);
+        } finally {
+            setPreviewLoading(false);
         }
-        const result = await previewMetricDefinition(id);
-        setPreview(result);
     };
 
-    const duplicate = async () => {
-        if (!selected || !canEdit) return;
-        setIsNew(true);
+    const openCreateModal = () => {
+        setForm(EMPTY_FORM);
+        setPreview(null);
+        setPreviewError(null);
+        setCreateModalOpen(true);
         setSelectedId(null);
-        patchField("key", `${selected.key}_copy`);
-        patchField("label", `${selected.label} (copy)`);
     };
 
-    const archive = async () => {
-        if (!selectedId || !canEdit || isGlobal) return;
-        await save("archived");
+    const duplicate = () => {
+        if (!selected || !canEdit) return;
+        setForm({ ...rowToForm(selected), key: `${selected.key}_copy`, label: `${selected.label} (copy)` });
+        setCreateModalOpen(true);
+        setSelectedId(null);
     };
 
     return (
         <div data-metric-builder="true" className={`${PLATFORM_BUILDER_SHELL} p-4`}>
-            <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+            <div className="mb-4 flex flex-wrap items-start justify-between gap-2">
                 <div>
-                    <h3 className="text-sm font-semibold text-alloy-midnight">Metrics</h3>
-                    <p className="text-xs text-alloy-midnight/50">Define what to measure, how to compute it, and KPI thresholds.</p>
+                    <h3 className="text-sm font-semibold text-alloy-midnight">Calculations</h3>
+                    <p className="text-xs text-alloy-midnight/55">Define what to measure, then choose how and where it appears.</p>
                 </div>
                 {canEdit ?
-                    <button
-                        type="button"
-                        className={PLATFORM_BUILDER_BTN_PRIMARY}
-                        onClick={() => {
-                            setIsNew(true);
-                            setSelectedId(null);
-                            setForm(EMPTY_FORM);
-                            setPreview(null);
-                        }}
-                    >
-                        + New metric
-                    </button>
+                    <PlatformBuilderButton variant="primary" onClick={openCreateModal}>
+                        + New calculation
+                    </PlatformBuilderButton>
                 :   null}
             </div>
 
             {error ?
-                <p className="mb-3 text-sm text-alloy-ember">{error}</p>
+                <PlatformBuilderCallout tone="warning">{error}</PlatformBuilderCallout>
             :   null}
 
-            <div className="grid gap-4 lg:grid-cols-[220px_1fr]">
-                <div className="rounded-lg border border-alloy-stone/12 p-2">
-                    {loading ?
-                        <p className="p-2 text-sm text-alloy-midnight/45">Loading…</p>
-                    :   <ul className="max-h-[480px] space-y-0.5 overflow-y-auto">
-                            {items.map((item) => (
-                                <li key={item.id}>
-                                    <button
-                                        type="button"
-                                        onClick={() => {
-                                            setSelectedId(item.id);
-                                            setIsNew(false);
-                                            setPreview(null);
-                                        }}
-                                        className={`w-full rounded-md px-2 py-1.5 text-left text-sm ${selectedId === item.id && !isNew ? "bg-alloy-midnight/8 font-semibold" : "hover:bg-alloy-stone/8"}`}
-                                    >
-                                        {item.label}
-                                        <span className="ml-1 block text-[10px] text-alloy-midnight/40">
-                                            {item.status}{item.org_id ? "" : " · template"}
-                                        </span>
-                                    </button>
-                                </li>
-                            ))}
-                        </ul>
-                    }
-                </div>
+            <div className="grid gap-4 lg:grid-cols-[240px_1fr]">
+                <PlatformBuilderListPanel
+                    title="Saved metrics"
+                    hint="Select a metric to edit or preview."
+                    emptyTitle="No calculations yet"
+                    emptyHint="Create your first metric to start building Operational Intelligence."
+                    loading={loading}
+                    itemCount={items.length}
+                >
+                    {items.map((item) => {
+                        const status = METRIC_STATUS_LABELS[item.status] ?? { label: item.status, tone: "neutral" as const };
+                        return (
+                            <PlatformBuilderListItem
+                                key={item.id}
+                                selected={selectedId === item.id}
+                                onClick={() => {
+                                    setSelectedId(item.id);
+                                    setPreview(null);
+                                    setPreviewError(null);
+                                }}
+                                title={item.label}
+                                meta={item.category}
+                                badges={
+                                    <>
+                                        <PlatformBuilderStatusBadge label={status.label} tone={status.tone} />
+                                        {item.org_id == null ?
+                                            <PlatformBuilderStatusBadge label="Template" tone="template" />
+                                        :   null}
+                                    </>
+                                }
+                            />
+                        );
+                    })}
+                </PlatformBuilderListPanel>
 
-                {(selected || isNew) ?
+                {selected ?
                     <div className="space-y-4">
-                        <PlatformBuilderSection title="Identity">
-                            <PlatformBuilderField label="Key">
-                                <input
-                                    className={PLATFORM_BUILDER_INPUT}
-                                    value={form.key}
-                                    disabled={!isNew}
-                                    onChange={(e) => patchField("key", e.target.value)}
-                                />
-                            </PlatformBuilderField>
-                            <PlatformBuilderField label="Label">
-                                <input className={PLATFORM_BUILDER_INPUT} value={form.label} onChange={(e) => patchField("label", e.target.value)} disabled={isGlobal} />
-                            </PlatformBuilderField>
-                            <PlatformBuilderField label="Category">
-                                <input className={PLATFORM_BUILDER_INPUT} value={form.category} onChange={(e) => patchField("category", e.target.value)} disabled={isGlobal} />
-                            </PlatformBuilderField>
-                            <div className="sm:col-span-2">
-                                <PlatformBuilderField label="Description">
-                                    <textarea className={PLATFORM_BUILDER_TEXTAREA} value={form.description} onChange={(e) => patchField("description", e.target.value)} disabled={isGlobal} />
-                                </PlatformBuilderField>
-                            </div>
-                        </PlatformBuilderSection>
-
-                        <PlatformBuilderSection title="Computation">
-                            <PlatformBuilderField label="Source adapter">
-                                <select className={PLATFORM_BUILDER_SELECT} value={form.source_key} onChange={(e) => patchField("source_key", e.target.value)} disabled={isGlobal}>
-                                    {adapters.map((a) => (
-                                        <option key={a.key} value={a.key} disabled={a.status !== "available"}>
-                                            {a.label} ({a.status})
-                                        </option>
-                                    ))}
-                                </select>
-                            </PlatformBuilderField>
-                            <PlatformBuilderField label="Aggregation">
-                                <select className={PLATFORM_BUILDER_SELECT} value={form.aggregation} onChange={(e) => patchField("aggregation", e.target.value)} disabled={isGlobal}>
-                                    {["count", "rate", "avg", "sum", "median"].map((a) => (
-                                        <option key={a} value={a}>{a}</option>
-                                    ))}
-                                </select>
-                            </PlatformBuilderField>
-                            <PlatformBuilderField label="Period (days)">
-                                <input type="number" className={PLATFORM_BUILDER_INPUT} value={form.period_days} onChange={(e) => patchField("period_days", parseInt(e.target.value, 10) || 30)} disabled={isGlobal} />
-                            </PlatformBuilderField>
-                            <PlatformBuilderField label="Unit">
-                                <select className={PLATFORM_BUILDER_SELECT} value={form.unit} onChange={(e) => patchField("unit", e.target.value)} disabled={isGlobal}>
-                                    {["percent", "count", "rate", "duration", "currency"].map((u) => (
-                                        <option key={u} value={u}>{u}</option>
-                                    ))}
-                                </select>
-                            </PlatformBuilderField>
-                        </PlatformBuilderSection>
-
-                        <PlatformBuilderSection title="Thresholds">
-                            <PlatformBuilderField label="Is KPI">
-                                <input type="checkbox" checked={form.is_kpi} onChange={(e) => patchField("is_kpi", e.target.checked)} disabled={isGlobal} className="mt-2" />
-                            </PlatformBuilderField>
-                            <PlatformBuilderField label="Direction">
-                                <select className={PLATFORM_BUILDER_SELECT} value={form.direction} onChange={(e) => patchField("direction", e.target.value as MetricForm["direction"])} disabled={isGlobal}>
-                                    <option value="higher_is_better">Higher is better</option>
-                                    <option value="lower_is_better">Lower is better</option>
-                                </select>
-                            </PlatformBuilderField>
-                            {form.aggregation === "rate" ?
-                                <>
-                                    <PlatformBuilderField label="Target min rate"><input className={PLATFORM_BUILDER_INPUT} value={form.target_min_rate} onChange={(e) => patchField("target_min_rate", e.target.value)} disabled={isGlobal} /></PlatformBuilderField>
-                                    <PlatformBuilderField label="Healthy min"><input className={PLATFORM_BUILDER_INPUT} value={form.healthy_min_rate} onChange={(e) => patchField("healthy_min_rate", e.target.value)} disabled={isGlobal} /></PlatformBuilderField>
-                                    <PlatformBuilderField label="Warning min"><input className={PLATFORM_BUILDER_INPUT} value={form.warning_min_rate} onChange={(e) => patchField("warning_min_rate", e.target.value)} disabled={isGlobal} /></PlatformBuilderField>
-                                </>
-                            :   <>
-                                    <PlatformBuilderField label="Target max count"><input className={PLATFORM_BUILDER_INPUT} value={form.target_max_count} onChange={(e) => patchField("target_max_count", e.target.value)} disabled={isGlobal} /></PlatformBuilderField>
-                                    <PlatformBuilderField label="Healthy max"><input className={PLATFORM_BUILDER_INPUT} value={form.healthy_max_count} onChange={(e) => patchField("healthy_max_count", e.target.value)} disabled={isGlobal} /></PlatformBuilderField>
-                                    <PlatformBuilderField label="Warning max"><input className={PLATFORM_BUILDER_INPUT} value={form.warning_max_count} onChange={(e) => patchField("warning_max_count", e.target.value)} disabled={isGlobal} /></PlatformBuilderField>
-                                </>
-                            }
-                        </PlatformBuilderSection>
-
                         {isGlobal ?
-                            <p className="text-xs text-alloy-midnight/50">Global template — editing creates an org copy automatically.</p>
+                            <PlatformBuilderCallout>
+                                Template metric — saving creates a copy for your organization automatically.
+                            </PlatformBuilderCallout>
                         :   null}
 
+                        <div className="flex flex-wrap items-center gap-2">
+                            <button
+                                type="button"
+                                className="text-xs font-semibold text-alloy-juniper underline-offset-2 hover:underline"
+                                onClick={() => setShowAdvanced((v) => !v)}
+                            >
+                                {showAdvanced ? "Hide advanced settings" : "Show advanced settings"}
+                            </button>
+                        </div>
+
+                        <MetricFormFields
+                            form={form}
+                            patchField={patchField}
+                            adapters={adapters}
+                            disabled={isGlobal}
+                            showAdvanced={showAdvanced}
+                        />
+
                         <div className="flex flex-wrap gap-2">
-                            <button type="button" className={PLATFORM_BUILDER_BTN} onClick={() => void runPreview()} disabled={!selectedId && !isNew}>Preview live</button>
+                            <PlatformBuilderButton loading={previewLoading} loadingLabel="Previewing…" onClick={() => void runPreview()}>
+                                Preview live result
+                            </PlatformBuilderButton>
                             {canEdit ?
                                 <>
-                                    <button type="button" className={PLATFORM_BUILDER_BTN} onClick={() => void save("draft")} disabled={saving}>Save draft</button>
-                                    <button type="button" className={PLATFORM_BUILDER_BTN_PRIMARY} onClick={() => void save("active")} disabled={saving}>Publish</button>
-                                    {selected?.status === "active" ?
-                                        <button type="button" className={PLATFORM_BUILDER_BTN} onClick={() => void save("draft")} disabled={saving || isGlobal}>Unpublish</button>
+                                    <PlatformBuilderButton loading={saving && action === "save"} onClick={() => void save("draft")}>Save draft</PlatformBuilderButton>
+                                    <PlatformBuilderButton variant="primary" loading={saving && action === "publish"} onClick={() => void save("active")}>Publish</PlatformBuilderButton>
+                                    {selected.status === "active" ?
+                                        <PlatformBuilderButton onClick={() => void save("draft")}>Unpublish</PlatformBuilderButton>
                                     :   null}
-                                    {selected && !isNew ?
-                                        <>
-                                            <button type="button" className={PLATFORM_BUILDER_BTN} onClick={() => void duplicate()}>Duplicate</button>
-                                            {!isGlobal ?
-                                                <button type="button" className={PLATFORM_BUILDER_BTN_DANGER} onClick={() => void archive()}>Archive</button>
-                                            :   null}
-                                        </>
+                                    <PlatformBuilderButton onClick={duplicate}>Duplicate</PlatformBuilderButton>
+                                    {!isGlobal ?
+                                        <PlatformBuilderButton variant="danger" loading={saving && action === "archive"} onClick={() => void save("archived")}>Archive</PlatformBuilderButton>
                                     :   null}
                                 </>
                             :   null}
                         </div>
 
-                        {preview ?
-                            <div className="rounded-lg border border-alloy-juniper/20 bg-alloy-juniper/5 p-3">
-                                <p className="text-xs font-semibold uppercase text-alloy-juniper">Preview (builder only)</p>
-                                <p className="mt-1 text-2xl font-semibold tabular-nums">{preview.formattedValue}</p>
-                                <p className="text-xs text-alloy-midnight/50">Health: {preview.healthState}</p>
-                            </div>
-                        :   null}
+                        <PreviewPanel preview={preview} previewLoading={previewLoading} previewError={previewError} form={form} adapters={adapters} />
                     </div>
-                :   <p className="text-sm text-alloy-midnight/45">Select a metric or create a new one.</p>}
+                :   !loading ?
+                    <PlatformBuilderEmptyState
+                        title="Select a calculation"
+                        body="Choose a saved metric from the list, or create a new calculation to get started."
+                        action={
+                            canEdit ?
+                                <PlatformBuilderButton variant="primary" onClick={openCreateModal}>+ New calculation</PlatformBuilderButton>
+                            :   null
+                        }
+                    />
+                :   null}
             </div>
+
+            <PlatformBuilderModal
+                open={createModalOpen}
+                title="New calculation"
+                subtitle="Start with a clear name and data source. You can choose how it appears after saving."
+                onClose={() => setCreateModalOpen(false)}
+                footer={
+                    <>
+                        <PlatformBuilderButton onClick={() => setCreateModalOpen(false)}>Cancel</PlatformBuilderButton>
+                        <PlatformBuilderButton loading={saving && action === "save"} onClick={() => void save("draft", true)}>Save draft</PlatformBuilderButton>
+                        <PlatformBuilderButton variant="primary" loading={saving && action === "publish"} onClick={() => void save("active", true)}>Publish</PlatformBuilderButton>
+                    </>
+                }
+            >
+                <div className="space-y-4">
+                    <MetricFormFields form={form} patchField={patchField} adapters={adapters} disabled={false} showAdvanced={showAdvanced} />
+                    <button type="button" className="text-xs font-semibold text-alloy-juniper" onClick={() => setShowAdvanced((v) => !v)}>
+                        {showAdvanced ? "Hide internal key" : "Show internal key"}
+                    </button>
+                </div>
+            </PlatformBuilderModal>
         </div>
     );
 }

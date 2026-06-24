@@ -69,6 +69,9 @@ export const metricDisplayConfigSchema = z
         showThreshold: z.boolean().optional(),
         showSparkline: z.boolean().optional(),
         labelOverride: z.string().optional(),
+        subtitle: z.string().optional(),
+        showTrend: z.boolean().optional(),
+        additionalMetricDefinitionIds: z.array(z.string().uuid()).optional(),
     })
     .strict();
 

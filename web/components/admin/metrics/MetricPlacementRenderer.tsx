@@ -2,6 +2,7 @@
 
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useState } from "react";
+import { ANALYTICS_V2_SNAPSHOTS_UPDATED } from "@/app/adminV2/settings/analytics/platformBuilderEvents";
 import { MetricVisualRenderer } from "@/components/admin/metrics/MetricVisualRenderer";
 import { placementRenderToEvaluation } from "@/lib/metrics/platform/renderMetricPlacements";
 import type { MetricPlacementRenderItem } from "@/lib/metrics/platform/renderMetricPlacements";
@@ -48,6 +49,12 @@ export function MetricPlacementRenderer({
         void load();
     }, [load]);
 
+    useEffect(() => {
+        const onSnapshotsUpdated = () => void load();
+        window.addEventListener(ANALYTICS_V2_SNAPSHOTS_UPDATED, onSnapshotsUpdated);
+        return () => window.removeEventListener(ANALYTICS_V2_SNAPSHOTS_UPDATED, onSnapshotsUpdated);
+    }, [load]);
+
     if (!loading && !items.length) return emptyFallback ?? null;
 
     const layoutClass =
@@ -80,24 +87,27 @@ export function useMetricRenderZones(params: {
     const [zones, setZones] = useState<Record<string, MetricPlacementRenderItem[]>>({});
     const [loading, setLoading] = useState(true);
 
-    useEffect(() => {
-        let cancelled = false;
+    const load = useCallback(async () => {
         setLoading(true);
-        void fetchMetricRenderBundle({
+        const bundle = await fetchMetricRenderBundle({
             surface: params.surface,
             surfaceKey: params.surfaceKey,
             contextType: params.contextType,
             contextId: params.contextId,
-        }).then((bundle) => {
-            if (!cancelled) {
-                setZones(bundle.zones ?? {});
-                setLoading(false);
-            }
         });
-        return () => {
-            cancelled = true;
-        };
+        setZones(bundle.zones ?? {});
+        setLoading(false);
     }, [params.surface, params.surfaceKey, params.contextType, params.contextId]);
 
-    return { zones, loading, reload: () => {} };
+    useEffect(() => {
+        void load();
+    }, [load]);
+
+    useEffect(() => {
+        const onSnapshotsUpdated = () => void load();
+        window.addEventListener(ANALYTICS_V2_SNAPSHOTS_UPDATED, onSnapshotsUpdated);
+        return () => window.removeEventListener(ANALYTICS_V2_SNAPSHOTS_UPDATED, onSnapshotsUpdated);
+    }, [load]);
+
+    return { zones, loading, reload: load };
 }
