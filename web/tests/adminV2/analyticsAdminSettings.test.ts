@@ -169,20 +169,29 @@ describe("Operational Intelligence panel V1 polish", () => {
 });
 
 describe("Analytics settings IA cleanup", () => {
-    it("settings page starts with primary tabs without summary block", () => {
+    it("settings page uses flat single-level tabs without nested builders", () => {
         const client = read("app/adminV2/settings/analytics/AnalyticsSettingsClient.tsx");
         expect(client).toContain('"Calculations"');
+        expect(client).toContain('"Display styles"');
+        expect(client).toContain('"Where it appears"');
+        expect(client).toContain('"Combined scores"');
         expect(client).toContain('"Experience placement"');
-        expect(client).toContain('"Metric builders"');
+        // No nested "Metric builders" wrapper tab and no redundant guidance callout.
+        expect(client).not.toContain('"Metric builders"');
+        expect(client).not.toContain("MetricPlatformBuilderTabs");
         expect(client).not.toContain("OipSettingsSummary");
-        expect(client).not.toContain("Preview panel");
+    });
+
+    it("removes the 'use the top-level Calculations tab' guidance box", () => {
+        // The nested builder-tabs wrapper that carried the guidance callout is gone.
+        expect(() => read("app/adminV2/settings/analytics/MetricPlatformBuilderTabs.tsx")).toThrow();
     });
 
     it("calculations use edit mode not unpublish-to-edit", () => {
         const panel = read("app/adminV2/settings/analytics/MetricBuilderPanel.tsx");
         expect(panel).toContain("Save changes");
-        expect(panel).toContain('variant="primary" onClick={() => void startEdit()}');
-        expect(panel).toContain("METRIC_CATEGORY_OPTIONS");
+        expect(panel).toContain('variant="primary" disabled={saving} onClick={() => void startEdit()}');
+        expect(read("app/adminV2/settings/analytics/MetricFormFields.tsx")).toContain("METRIC_CATEGORY_OPTIONS");
     });
 
     it("display style preview uses MetricVisualRenderer", () => {
@@ -190,10 +199,64 @@ describe("Analytics settings IA cleanup", () => {
         expect(read("app/adminV2/settings/analytics/platformBuilderLabels.ts")).toContain("AVAILABLE_VIZ_TYPES");
     });
 
-    it("placement builder groups by display style", () => {
+    it("placement builder uses 'Add another place' language", () => {
         const panel = read("app/adminV2/settings/analytics/PlacementBuilderPanel.tsx");
         expect(panel).toContain("Where this appears");
-        expect(panel).toContain("+ Add location");
+        expect(panel).toContain("Add another place");
+        expect(panel).toContain("One display style can appear in multiple places.");
+        expect(panel).not.toContain("+ Add location");
+    });
+});
+
+describe("Analytics V2 guided setup flow", () => {
+    it("settings page exposes a primary '+ New metric' guided flow", () => {
+        const client = read("app/adminV2/settings/analytics/AnalyticsSettingsClient.tsx");
+        expect(client).toContain("MetricSetupFlow");
+        expect(client).toContain("+ New metric");
+    });
+
+    it("guided flow walks calculation, display style, placement, review", () => {
+        const flow = read("app/adminV2/settings/analytics/MetricSetupFlow.tsx");
+        expect(flow).toContain("Calculation");
+        expect(flow).toContain("Display style");
+        expect(flow).toContain("Where it appears");
+        expect(flow).toContain("Review & publish");
+        // Creates the full chain transparently.
+        expect(flow).toContain("/api/admin/analytics/metrics");
+        expect(flow).toContain("/api/admin/analytics/visualizations");
+        expect(flow).toContain("/api/admin/analytics/placements");
+        // Dedupe via shared write-plan helpers.
+        expect(flow).toContain("resolveWriteTarget");
+        expect(flow).toContain("planPlacementWrites");
+    });
+
+    it("display style list groups by metric and shows place counts", () => {
+        const panel = read("app/adminV2/settings/analytics/VisualizationBuilderPanel.tsx");
+        expect(panel).toContain("groupedStyles");
+        expect(panel).toContain("place${count === 1");
+    });
+
+    it("icon picker is category-only; trend direction is dynamic", () => {
+        const picker = read("app/adminV2/settings/analytics/BuilderIconPicker.tsx");
+        expect(picker).not.toContain("trending-up");
+        expect(picker).not.toContain("TrendingUp");
+        const trendCard = read("components/admin/metrics/MetricTrendCard.tsx");
+        expect(trendCard).toContain("deriveTrendDirection");
+    });
+
+    it("rendered KPI/trend cards apply the selected accent rail", () => {
+        const kpi = read("components/admin/metrics/MetricKpiCard.tsx");
+        expect(kpi).toContain("resolveMetricVisualAccent");
+        expect(kpi).toContain("visual.rail");
+        expect(kpi).toContain("truncate");
+        const trend = read("components/admin/metrics/MetricTrendCard.tsx");
+        expect(trend).toContain("resolveMetricVisualAccent");
+    });
+
+    it("data source helper copy explains system-provided sources", () => {
+        expect(read("app/adminV2/settings/analytics/MetricFormFields.tsx")).toContain(
+            "Data sources are system-provided. More sources can be added as Alloy expands."
+        );
     });
 });
 

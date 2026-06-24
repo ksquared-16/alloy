@@ -11,15 +11,15 @@ import {
     ClipboardList,
     DollarSign,
     Gauge,
-    TrendingDown,
-    TrendingUp,
     Users,
 } from "lucide-react";
 import { PLATFORM_BUILDER_SELECT } from "@/app/adminV2/settings/analytics/platformBuilderUi";
 
+/**
+ * Category/style icons only. Trend direction (up/down) is computed from metric
+ * history at render time, so operators never pick a static "trending up" glyph.
+ */
 export const BUILDER_ICON_OPTIONS: { key: string; label: string; Icon: LucideIcon }[] = [
-    { key: "trending-up", label: "Trending up", Icon: TrendingUp },
-    { key: "trending-down", label: "Trending down", Icon: TrendingDown },
     { key: "users", label: "Users", Icon: Users },
     { key: "calendar", label: "Calendar", Icon: Calendar },
     { key: "clipboard", label: "Clipboard", Icon: ClipboardList },

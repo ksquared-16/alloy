@@ -29,6 +29,7 @@ export function MetricVisualRenderer({
     const viz = placement.visualization;
     const label = (viz.display_config as { labelOverride?: string }).labelOverride ?? viz.label;
     const type = viz.visualization_type as MetricVisualizationType;
+    const accent = (viz.style_config as { accent?: string }).accent;
 
     switch (type) {
         case "kpi_card":
@@ -40,7 +41,7 @@ export function MetricVisualRenderer({
                     value={evaluation?.formattedValue ?? "—"}
                     status={evaluation?.healthState ?? "unknown"}
                     loading={loading}
-                    accent={(viz.style_config as { accent?: string }).accent}
+                    accent={accent}
                 />
             );
         case "trend_card":
@@ -51,6 +52,8 @@ export function MetricVisualRenderer({
                     status={evaluation?.healthState ?? "unknown"}
                     loading={loading}
                     sparklinePoints={sparklinePoints}
+                    accent={accent}
+                    direction={trendComparison?.direction}
                 />
             );
         case "chip":
@@ -69,6 +72,7 @@ export function MetricVisualRenderer({
                     value={evaluation?.formattedValue ?? "—"}
                     comparison={trendComparison}
                     loading={loading}
+                    accent={accent}
                 />
             );
         case "line_chart":

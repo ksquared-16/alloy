@@ -2,240 +2,37 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-    PLATFORM_BUILDER_INPUT,
-    PLATFORM_BUILDER_SELECT,
     PLATFORM_BUILDER_SHELL,
-    PLATFORM_BUILDER_TEXTAREA,
     PlatformBuilderButton,
     PlatformBuilderCallout,
     PlatformBuilderEmptyState,
-    PlatformBuilderField,
     PlatformBuilderListItem,
     PlatformBuilderListPanel,
     PlatformBuilderModal,
-    PlatformBuilderSection,
     PlatformBuilderStatusBadge,
 } from "@/app/adminV2/settings/analytics/platformBuilderUi";
+import { MetricFormFields } from "@/app/adminV2/settings/analytics/MetricFormFields";
 import {
     METRIC_STATUS_LABELS,
     slugifyMetricKey,
 } from "@/app/adminV2/settings/analytics/platformBuilderLabels";
+import {
+    EMPTY_METRIC_FORM as EMPTY_FORM,
+    formToPayload,
+    rowToForm,
+    type MetricForm,
+} from "@/app/adminV2/settings/analytics/metricFormModel";
 import { fetchMetricDefinitions, previewMetricDefinition } from "@/lib/metrics/platform/fetchMetricPlatform";
 import { copyMetricToOrg, runMetricSnapshots } from "@/lib/metrics/platform/fetchMetricRender";
 import {
     deriveMetricCategoryFromSource,
-    METRIC_CATEGORY_OPTIONS,
     metricCategoryLabel,
-    normalizeMetricCategoryKey,
-    type MetricCategoryKey,
 } from "@/lib/metrics/platform/metricCategory";
+import { resolveWriteTarget } from "@/lib/metrics/platform/metricWritePlan";
 import type { MetricDefinitionRow, MetricEvaluationResult } from "@/lib/metrics/platform/types";
 import type { MetricSourceAdapter } from "@/lib/metrics/platform/metricSourceRegistry";
 
 type Props = { canEdit: boolean };
-
-type MetricForm = {
-    key: string;
-    label: string;
-    description: string;
-    category: MetricCategoryKey;
-    source_key: string;
-    aggregation: string;
-    unit: string;
-    precision: number;
-    is_kpi: boolean;
-    period_days: number;
-    target_min_rate: string;
-    healthy_min_rate: string;
-    warning_min_rate: string;
-    target_max_count: string;
-    healthy_max_count: string;
-    warning_max_count: string;
-    direction: "higher_is_better" | "lower_is_better";
-};
-
-const EMPTY_FORM: MetricForm = {
-    key: "",
-    label: "",
-    description: "",
-    category: "enrollment",
-    source_key: "enrollment.tour_conversion_rate",
-    aggregation: "rate",
-    unit: "percent",
-    precision: 1,
-    is_kpi: true,
-    period_days: 30,
-    target_min_rate: "0.65",
-    healthy_min_rate: "0.65",
-    warning_min_rate: "0.50",
-    target_max_count: "10",
-    healthy_max_count: "10",
-    warning_max_count: "25",
-    direction: "higher_is_better",
-};
-
-function rowToForm(row: MetricDefinitionRow): MetricForm {
-    const period = row.default_period_config;
-    const target = row.target_config;
-    const thresholds = row.threshold_config;
-    return {
-        key: row.key,
-        label: row.label,
-        description: row.description,
-        category: normalizeMetricCategoryKey(row.category),
-        source_key: row.source_key,
-        aggregation: row.aggregation,
-        unit: row.unit,
-        precision: row.precision,
-        is_kpi: row.is_kpi,
-        period_days: period?.days ?? 30,
-        target_min_rate: String(target?.targetMinRate ?? thresholds?.healthyMinRate ?? ""),
-        healthy_min_rate: String(thresholds?.healthyMinRate ?? ""),
-        warning_min_rate: String(thresholds?.warningMinRate ?? ""),
-        target_max_count: String(target?.targetMaxCount ?? thresholds?.healthyMaxCount ?? ""),
-        healthy_max_count: String(thresholds?.healthyMaxCount ?? ""),
-        warning_max_count: String(thresholds?.warningMaxCount ?? ""),
-        direction: target?.direction ?? "higher_is_better",
-    };
-}
-
-function formToPayload(form: MetricForm, status: string) {
-    const isRate = form.aggregation === "rate";
-    return {
-        key: form.key.trim(),
-        label: form.label.trim(),
-        description: form.description.trim(),
-        category: form.category,
-        entity_scope: "org" as const,
-        source_type: "oip_adapter" as const,
-        source_key: form.source_key,
-        aggregation: form.aggregation,
-        filter_config: { version: 1 as const },
-        dimension_config: { version: 1 as const },
-        default_period_config: { version: 1 as const, kind: "rolling" as const, days: form.period_days },
-        unit: form.unit,
-        precision: form.precision,
-        is_kpi: form.is_kpi,
-        target_config: form.is_kpi
-            ? isRate
-                ? {
-                      version: 1 as const,
-                      kind: "rate_min" as const,
-                      targetMinRate: parseFloat(form.target_min_rate) || 0,
-                      direction: form.direction,
-                  }
-                : {
-                      version: 1 as const,
-                      kind: "count_max" as const,
-                      targetMaxCount: parseInt(form.target_max_count, 10) || 0,
-                      direction: form.direction,
-                  }
-            : null,
-        threshold_config: form.is_kpi
-            ? isRate
-                ? {
-                      version: 1 as const,
-                      healthyMinRate: parseFloat(form.healthy_min_rate) || 0,
-                      warningMinRate: parseFloat(form.warning_min_rate) || 0,
-                  }
-                : {
-                      version: 1 as const,
-                      healthyMaxCount: parseInt(form.healthy_max_count, 10) || 0,
-                      warningMaxCount: parseInt(form.warning_max_count, 10) || 0,
-                  }
-            : null,
-        status,
-        version: 1 as const,
-    };
-}
-
-function MetricFormFields({
-    form,
-    patchField,
-    adapters,
-    disabled,
-    showAdvanced,
-}: {
-    form: MetricForm;
-    patchField: <K extends keyof MetricForm>(key: K, value: MetricForm[K]) => void;
-    adapters: MetricSourceAdapter[];
-    disabled: boolean;
-    showAdvanced: boolean;
-}) {
-    return (
-        <div className="space-y-2">
-            <PlatformBuilderSection title="What are you measuring?" hint="Name and category operators will recognize." compact>
-                {showAdvanced ?
-                    <PlatformBuilderField label="Internal key">
-                        <input className={PLATFORM_BUILDER_INPUT} value={form.key} disabled={disabled} onChange={(e) => patchField("key", e.target.value)} />
-                    </PlatformBuilderField>
-                :   null}
-                <PlatformBuilderField label="Name">
-                    <input className={PLATFORM_BUILDER_INPUT} value={form.label} disabled={disabled} onChange={(e) => patchField("label", e.target.value)} placeholder="Tour Conversion %" />
-                </PlatformBuilderField>
-                <PlatformBuilderField label="Category">
-                    <select className={PLATFORM_BUILDER_SELECT} value={form.category} disabled={disabled} onChange={(e) => patchField("category", e.target.value as MetricCategoryKey)}>
-                        {METRIC_CATEGORY_OPTIONS.map((opt) => (
-                            <option key={opt.key} value={opt.key}>{opt.label}</option>
-                        ))}
-                    </select>
-                </PlatformBuilderField>
-                <div className="sm:col-span-2">
-                    <PlatformBuilderField label="Description">
-                        <textarea className={PLATFORM_BUILDER_TEXTAREA} value={form.description} disabled={disabled} onChange={(e) => patchField("description", e.target.value)} rows={2} />
-                    </PlatformBuilderField>
-                </div>
-            </PlatformBuilderSection>
-
-            <PlatformBuilderSection title="Calculation" hint="Data source and rolling window." compact>
-                <PlatformBuilderField label="Data source">
-                    <select className={PLATFORM_BUILDER_SELECT} value={form.source_key} onChange={(e) => patchField("source_key", e.target.value)} disabled={disabled}>
-                        {adapters.map((a) => (
-                            <option key={a.key} value={a.key} disabled={a.status !== "available"}>{a.label}</option>
-                        ))}
-                    </select>
-                </PlatformBuilderField>
-                <PlatformBuilderField label="Type">
-                    <select className={PLATFORM_BUILDER_SELECT} value={form.aggregation} onChange={(e) => patchField("aggregation", e.target.value)} disabled={disabled}>
-                        {["count", "rate", "avg", "sum", "median"].map((a) => <option key={a} value={a}>{a}</option>)}
-                    </select>
-                </PlatformBuilderField>
-                <PlatformBuilderField label="Window (days)">
-                    <input type="number" className={PLATFORM_BUILDER_INPUT} value={form.period_days} onChange={(e) => patchField("period_days", parseInt(e.target.value, 10) || 30)} disabled={disabled} />
-                </PlatformBuilderField>
-                <PlatformBuilderField label="Unit">
-                    <select className={PLATFORM_BUILDER_SELECT} value={form.unit} onChange={(e) => patchField("unit", e.target.value)} disabled={disabled}>
-                        {["percent", "count", "rate", "duration", "currency"].map((u) => <option key={u} value={u}>{u}</option>)}
-                    </select>
-                </PlatformBuilderField>
-            </PlatformBuilderSection>
-
-            <PlatformBuilderSection title="Target & health" compact>
-                <PlatformBuilderField label="Track as KPI">
-                    <input type="checkbox" checked={form.is_kpi} onChange={(e) => patchField("is_kpi", e.target.checked)} disabled={disabled} className="mt-2 h-4 w-4 rounded border-alloy-stone/40" />
-                </PlatformBuilderField>
-                <PlatformBuilderField label="Direction">
-                    <select className={PLATFORM_BUILDER_SELECT} value={form.direction} onChange={(e) => patchField("direction", e.target.value as MetricForm["direction"])} disabled={disabled}>
-                        <option value="higher_is_better">Higher is better</option>
-                        <option value="lower_is_better">Lower is better</option>
-                    </select>
-                </PlatformBuilderField>
-                {form.aggregation === "rate" ?
-                    <>
-                        <PlatformBuilderField label="Target min"><input className={PLATFORM_BUILDER_INPUT} value={form.target_min_rate} onChange={(e) => patchField("target_min_rate", e.target.value)} disabled={disabled} /></PlatformBuilderField>
-                        <PlatformBuilderField label="Healthy min"><input className={PLATFORM_BUILDER_INPUT} value={form.healthy_min_rate} onChange={(e) => patchField("healthy_min_rate", e.target.value)} disabled={disabled} /></PlatformBuilderField>
-                        <PlatformBuilderField label="Warning min"><input className={PLATFORM_BUILDER_INPUT} value={form.warning_min_rate} onChange={(e) => patchField("warning_min_rate", e.target.value)} disabled={disabled} /></PlatformBuilderField>
-                    </>
-                :   <>
-                        <PlatformBuilderField label="Target max"><input className={PLATFORM_BUILDER_INPUT} value={form.target_max_count} onChange={(e) => patchField("target_max_count", e.target.value)} disabled={disabled} /></PlatformBuilderField>
-                        <PlatformBuilderField label="Healthy max"><input className={PLATFORM_BUILDER_INPUT} value={form.healthy_max_count} onChange={(e) => patchField("healthy_max_count", e.target.value)} disabled={disabled} /></PlatformBuilderField>
-                        <PlatformBuilderField label="Warning max"><input className={PLATFORM_BUILDER_INPUT} value={form.warning_max_count} onChange={(e) => patchField("warning_max_count", e.target.value)} disabled={disabled} /></PlatformBuilderField>
-                    </>
-                }
-            </PlatformBuilderSection>
-        </div>
-    );
-}
 
 function PreviewPanel({
     preview,
@@ -278,6 +75,8 @@ export default function MetricBuilderPanel({ canEdit }: Props) {
     const [selectedId, setSelectedId] = useState<string | null>(null);
     const [form, setForm] = useState<MetricForm>(EMPTY_FORM);
     const [createModalOpen, setCreateModalOpen] = useState(false);
+    const [workingId, setWorkingId] = useState<string | null>(null);
+    const [draftSaved, setDraftSaved] = useState(false);
     const [isEditing, setIsEditing] = useState(false);
     const [showAdvanced, setShowAdvanced] = useState(false);
     const [preview, setPreview] = useState<MetricEvaluationResult | null>(null);
@@ -335,28 +134,31 @@ export default function MetricBuilderPanel({ canEdit }: Props) {
     };
 
     const persist = async (status: string, fromModal = false) => {
-        if (!canEdit) return;
+        if (!canEdit || saving) return;
         setSaving(true);
         setAction(status === "active" ? "publish" : status === "archived" ? "archive" : "save");
         setError(null);
         try {
-            let targetId = selectedId;
+            // Establish the org-owned id we are writing to. Once known, every save
+            // PATCHes it — Save draft then Publish (or a double click) never duplicates.
+            let targetId = createModalOpen ? workingId : selectedId;
             if (isGlobal && selected && !createModalOpen) {
                 const orgCopy = await ensureOrgCopy();
                 if (!orgCopy) return;
                 targetId = orgCopy.id;
             }
 
+            const target = resolveWriteTarget(targetId);
             const payload = formToPayload(form, status);
             const res =
-                createModalOpen || !targetId
+                target.method === "POST"
                     ? await fetch("/api/admin/analytics/metrics", {
                           method: "POST",
                           credentials: "include",
                           headers: { "Content-Type": "application/json" },
                           body: JSON.stringify(payload),
                       })
-                    : await fetch(`/api/admin/analytics/metrics/${targetId}`, {
+                    : await fetch(`/api/admin/analytics/metrics/${target.id}`, {
                           method: "PATCH",
                           credentials: "include",
                           headers: { "Content-Type": "application/json" },
@@ -370,11 +172,22 @@ export default function MetricBuilderPanel({ canEdit }: Props) {
             }
             const data = (await res.json()) as { item: MetricDefinitionRow };
             setSelectedId(data.item.id);
-            setCreateModalOpen(false);
+            setWorkingId(data.item.id);
             setIsEditing(data.item.status === "draft");
             await load();
             if (status === "active") await runMetricSnapshots({ metric_definition_ids: [data.item.id] });
-            if (fromModal) setPreview(null);
+            if (fromModal) {
+                // Keep the modal open after Save draft so a follow-up Publish updates the
+                // same record; close it once published.
+                if (status === "active") {
+                    setCreateModalOpen(false);
+                    setPreview(null);
+                } else {
+                    setDraftSaved(true);
+                }
+            } else {
+                setCreateModalOpen(false);
+            }
         } finally {
             setSaving(false);
             setAction(null);
@@ -430,6 +243,8 @@ export default function MetricBuilderPanel({ canEdit }: Props) {
         setForm({ ...EMPTY_FORM, category: deriveMetricCategoryFromSource(EMPTY_FORM.source_key) });
         setPreview(null);
         setPreviewError(null);
+        setWorkingId(null);
+        setDraftSaved(false);
         setCreateModalOpen(true);
         setSelectedId(null);
         setIsEditing(true);
@@ -438,6 +253,8 @@ export default function MetricBuilderPanel({ canEdit }: Props) {
     const duplicate = () => {
         if (!selected || !canEdit) return;
         setForm({ ...rowToForm(selected), key: `${selected.key}_copy`, label: `${selected.label} (copy)` });
+        setWorkingId(null);
+        setDraftSaved(false);
         setCreateModalOpen(true);
         setSelectedId(null);
         setIsEditing(true);
@@ -494,33 +311,33 @@ export default function MetricBuilderPanel({ canEdit }: Props) {
 
                         <div className="flex flex-wrap items-center gap-2">
                             {!isEditing && canEdit ?
-                                <PlatformBuilderButton variant="primary" onClick={() => void startEdit()}>Edit</PlatformBuilderButton>
+                                <PlatformBuilderButton variant="primary" disabled={saving} onClick={() => void startEdit()}>Edit</PlatformBuilderButton>
                             :   null}
                             {isEditing && canEdit ?
                                 <>
-                                    <PlatformBuilderButton variant="primary" loading={saving && action === "save"} onClick={saveChanges}>Save changes</PlatformBuilderButton>
-                                    <PlatformBuilderButton onClick={cancelEdit}>Cancel</PlatformBuilderButton>
+                                    <PlatformBuilderButton variant="primary" loading={saving && action === "save"} disabled={saving} onClick={saveChanges}>Save changes</PlatformBuilderButton>
+                                    <PlatformBuilderButton disabled={saving} onClick={cancelEdit}>Cancel</PlatformBuilderButton>
                                 </>
                             :   null}
                             {canEdit && !isEditing ?
                                 <>
-                                    <PlatformBuilderButton onClick={duplicate}>Duplicate</PlatformBuilderButton>
+                                    <PlatformBuilderButton disabled={saving} onClick={duplicate}>Duplicate</PlatformBuilderButton>
                                     {!isGlobal ?
-                                        <PlatformBuilderButton variant="danger" loading={saving && action === "archive"} onClick={archive}>Archive</PlatformBuilderButton>
+                                        <PlatformBuilderButton variant="danger" loading={saving && action === "archive"} disabled={saving} onClick={archive}>Archive</PlatformBuilderButton>
                                     :   null}
                                     {selected.status === "draft" ?
-                                        <PlatformBuilderButton loading={saving && action === "publish"} onClick={publish}>Publish</PlatformBuilderButton>
+                                        <PlatformBuilderButton loading={saving && action === "publish"} disabled={saving} onClick={publish}>Publish</PlatformBuilderButton>
                                     :   selected.status === "active" ?
-                                        <PlatformBuilderButton onClick={unpublish}>Unpublish</PlatformBuilderButton>
+                                        <PlatformBuilderButton disabled={saving} onClick={unpublish}>Unpublish</PlatformBuilderButton>
                                     :   null}
                                 </>
                             :   null}
                             {isEditing && canEdit && selected.status === "draft" ?
-                                <PlatformBuilderButton loading={saving && action === "publish"} onClick={publish}>Publish</PlatformBuilderButton>
+                                <PlatformBuilderButton loading={saving && action === "publish"} disabled={saving} onClick={publish}>Publish</PlatformBuilderButton>
                             :   isEditing && canEdit && selected.status === "active" ?
-                                <PlatformBuilderButton onClick={unpublish}>Unpublish</PlatformBuilderButton>
+                                <PlatformBuilderButton disabled={saving} onClick={unpublish}>Unpublish</PlatformBuilderButton>
                             :   null}
-                            <PlatformBuilderButton loading={previewLoading} loadingLabel="Previewing…" onClick={() => void runPreview()}>Preview live</PlatformBuilderButton>
+                            <PlatformBuilderButton loading={previewLoading} loadingLabel="Previewing…" disabled={saving} onClick={() => void runPreview()}>Preview live</PlatformBuilderButton>
                             <button type="button" className="text-[11px] font-semibold text-alloy-juniper" onClick={() => setShowAdvanced((v) => !v)}>
                                 {showAdvanced ? "Hide advanced" : "Advanced"}
                             </button>
@@ -543,9 +360,10 @@ export default function MetricBuilderPanel({ canEdit }: Props) {
                 onClose={() => setCreateModalOpen(false)}
                 footer={
                     <>
-                        <PlatformBuilderButton onClick={() => setCreateModalOpen(false)}>Cancel</PlatformBuilderButton>
-                        <PlatformBuilderButton loading={saving && action === "save"} onClick={() => void persist("draft", true)}>Save draft</PlatformBuilderButton>
-                        <PlatformBuilderButton variant="primary" loading={saving && action === "publish"} onClick={() => void persist("active", true)}>Publish</PlatformBuilderButton>
+                        {draftSaved ? <span className="mr-auto text-[11px] font-medium text-alloy-juniper">Saved as draft</span> : null}
+                        <PlatformBuilderButton disabled={saving} onClick={() => setCreateModalOpen(false)}>Cancel</PlatformBuilderButton>
+                        <PlatformBuilderButton loading={saving && action === "save"} disabled={saving} onClick={() => void persist("draft", true)}>Save draft</PlatformBuilderButton>
+                        <PlatformBuilderButton variant="primary" loading={saving && action === "publish"} disabled={saving} onClick={() => void persist("active", true)}>Publish</PlatformBuilderButton>
                     </>
                 }
             >

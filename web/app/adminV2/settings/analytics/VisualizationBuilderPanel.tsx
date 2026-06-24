@@ -23,12 +23,18 @@ import {
     METRIC_STATUS_LABELS,
     MULTI_METRIC_VIZ_TYPES,
     slugifyMetricKey,
+    TREND_BASED_VIZ_TYPES,
     VIZ_TYPE_HINTS,
     VIZ_TYPE_LABELS,
 } from "@/app/adminV2/settings/analytics/platformBuilderLabels";
-import { fetchMetricDefinitions, fetchMetricVisualizations } from "@/lib/metrics/platform/fetchMetricPlatform";
+import {
+    fetchMetricDefinitions,
+    fetchMetricPlacementsList,
+    fetchMetricVisualizations,
+} from "@/lib/metrics/platform/fetchMetricPlatform";
 import { copyMetricToOrg, copyVisualizationToOrg } from "@/lib/metrics/platform/fetchMetricRender";
-import type { MetricDefinitionRow, MetricVisualizationRow } from "@/lib/metrics/platform/types";
+import { resolveWriteTarget } from "@/lib/metrics/platform/metricWritePlan";
+import type { MetricDefinitionRow, MetricPlacementRow, MetricVisualizationRow } from "@/lib/metrics/platform/types";
 
 type Props = { canEdit: boolean };
 
@@ -65,16 +71,25 @@ const EMPTY: VizForm = {
 export default function VisualizationBuilderPanel({ canEdit }: Props) {
     const [items, setItems] = useState<MetricVisualizationRow[]>([]);
     const [metrics, setMetrics] = useState<MetricDefinitionRow[]>([]);
+    const [placements, setPlacements] = useState<MetricPlacementRow[]>([]);
     const [selectedId, setSelectedId] = useState<string | null>(null);
     const [form, setForm] = useState<VizForm>(EMPTY);
     const [createModalOpen, setCreateModalOpen] = useState(false);
+    const [workingId, setWorkingId] = useState<string | null>(null);
+    const [draftSaved, setDraftSaved] = useState(false);
     const [showAdvanced, setShowAdvanced] = useState(false);
     const [saving, setSaving] = useState(false);
+    const [saveAction, setSaveAction] = useState<"draft" | "active" | null>(null);
 
     const load = useCallback(async () => {
-        const [viz, defs] = await Promise.all([fetchMetricVisualizations(), fetchMetricDefinitions()]);
+        const [viz, defs, pl] = await Promise.all([
+            fetchMetricVisualizations(),
+            fetchMetricDefinitions(),
+            fetchMetricPlacementsList(),
+        ]);
         setItems((viz.items ?? []) as MetricVisualizationRow[]);
         setMetrics((defs.items ?? []) as MetricDefinitionRow[]);
+        setPlacements((pl.items ?? []) as MetricPlacementRow[]);
     }, []);
 
     useEffect(() => {
@@ -84,6 +99,23 @@ export default function VisualizationBuilderPanel({ canEdit }: Props) {
     const selected = items.find((i) => i.id === selectedId) ?? null;
     const isGlobal = selected?.org_id == null && !createModalOpen;
     const supportsMulti = MULTI_METRIC_VIZ_TYPES.has(form.visualization_type);
+    const isTrendBased = TREND_BASED_VIZ_TYPES.has(form.visualization_type);
+
+    const placementCount = useCallback(
+        (vizId: string) => placements.filter((p) => p.visualization_id === vizId && p.status !== "archived").length,
+        [placements],
+    );
+
+    const groupedStyles = useMemo(() => {
+        const groups = new Map<string, { metricLabel: string; vizes: MetricVisualizationRow[] }>();
+        for (const viz of items) {
+            const metricLabel = metrics.find((m) => m.id === viz.metric_definition_id)?.label ?? "Unassigned metric";
+            const existing = groups.get(viz.metric_definition_id);
+            if (existing) existing.vizes.push(viz);
+            else groups.set(viz.metric_definition_id, { metricLabel, vizes: [viz] });
+        }
+        return Array.from(groups.values()).sort((a, b) => a.metricLabel.localeCompare(b.metricLabel));
+    }, [items, metrics]);
     const primaryMetric = metrics.find((m) => m.id === form.metric_definition_id);
     const extraLabels = useMemo(
         () => form.additional_metric_ids.map((id) => metrics.find((m) => m.id === id)?.label).filter(Boolean) as string[],
@@ -133,42 +165,51 @@ export default function VisualizationBuilderPanel({ canEdit }: Props) {
         version: 1,
     });
 
-    const save = async (status: string, fromModal = false) => {
-        if (!canEdit) return;
+    const save = async (status: "draft" | "active", fromModal = false) => {
+        if (!canEdit || saving) return;
         setSaving(true);
-        let targetId = selectedId;
-        if (isGlobal && selected && !createModalOpen) {
-            const copiedMetric = await copyMetricToOrg(selected.metric_definition_id);
-            const orgMetricId = (copiedMetric?.item as MetricDefinitionRow | undefined)?.id;
-            if (!orgMetricId) { setSaving(false); return; }
-            const copiedViz = await copyVisualizationToOrg(selected.id, orgMetricId);
-            if (!copiedViz?.item) { setSaving(false); return; }
-            targetId = (copiedViz.item as MetricVisualizationRow).id;
-            setSelectedId(targetId);
-        }
+        setSaveAction(status);
+        try {
+            let targetId = createModalOpen ? workingId : selectedId;
+            if (isGlobal && selected && !createModalOpen && !workingId) {
+                // Copy-on-edit: clone template metric + visualization once, then edit the copy.
+                const copiedMetric = await copyMetricToOrg(selected.metric_definition_id);
+                const orgMetricId = (copiedMetric?.item as MetricDefinitionRow | undefined)?.id;
+                if (!orgMetricId) return;
+                const copiedViz = await copyVisualizationToOrg(selected.id, orgMetricId);
+                if (!copiedViz?.item) return;
+                targetId = (copiedViz.item as MetricVisualizationRow).id;
+                setSelectedId(targetId);
+                setWorkingId(targetId);
+            }
 
-        const res =
-            createModalOpen || !targetId
-                ? await fetch("/api/admin/analytics/visualizations", {
-                      method: "POST",
-                      credentials: "include",
-                      headers: { "Content-Type": "application/json" },
-                      body: JSON.stringify(payload(status)),
-                  })
-                : await fetch(`/api/admin/analytics/visualizations/${targetId}`, {
-                      method: "PATCH",
-                      credentials: "include",
-                      headers: { "Content-Type": "application/json" },
-                      body: JSON.stringify(payload(status)),
-                  });
-        if (res.ok) {
-            const data = (await res.json()) as { item: MetricVisualizationRow };
-            setSelectedId(data.item.id);
-            setCreateModalOpen(false);
-            await load();
+            const target = resolveWriteTarget(targetId);
+            const res =
+                target.method === "POST"
+                    ? await fetch("/api/admin/analytics/visualizations", {
+                          method: "POST",
+                          credentials: "include",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify(payload(status)),
+                      })
+                    : await fetch(`/api/admin/analytics/visualizations/${target.id}`, {
+                          method: "PATCH",
+                          credentials: "include",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify(payload(status)),
+                      });
+            if (res.ok) {
+                const data = (await res.json()) as { item: MetricVisualizationRow };
+                setSelectedId(data.item.id);
+                setWorkingId(data.item.id);
+                await load();
+                if (fromModal && status === "active") setCreateModalOpen(false);
+                if (status === "draft") setDraftSaved(true);
+            }
+        } finally {
+            setSaving(false);
+            setSaveAction(null);
         }
-        setSaving(false);
-        if (fromModal) setCreateModalOpen(false);
     };
 
     const cardSetupFields = (disabled: boolean) => (
@@ -229,7 +270,10 @@ export default function VisualizationBuilderPanel({ canEdit }: Props) {
                 </PlatformBuilderField>
             </div>
             <div className="sm:col-span-2">
-                <PlatformBuilderField label="Icon">
+                <PlatformBuilderField
+                    label="Icon"
+                    hint={isTrendBased ? "Trend direction is calculated automatically from metric history. The icon only represents the category." : "Represents the metric category or style."}
+                >
                     <BuilderIconPicker value={form.icon} onChange={(icon) => setForm((f) => ({ ...f, icon }))} disabled={disabled} />
                 </PlatformBuilderField>
             </div>
@@ -257,14 +301,31 @@ export default function VisualizationBuilderPanel({ canEdit }: Props) {
                     <p className="text-xs text-alloy-midnight/55">How a calculation looks — placement is configured separately.</p>
                 </div>
                 {canEdit ?
-                    <PlatformBuilderButton variant="primary" onClick={() => { setForm(EMPTY); setCreateModalOpen(true); setSelectedId(null); }}>+ New display style</PlatformBuilderButton>
+                    <PlatformBuilderButton variant="primary" onClick={() => { setForm(EMPTY); setWorkingId(null); setDraftSaved(false); setCreateModalOpen(true); setSelectedId(null); }}>+ New display style</PlatformBuilderButton>
                 :   null}
             </div>
 
-            <div className="grid gap-3 lg:grid-cols-[220px_1fr]">
-                <PlatformBuilderListPanel title="Saved styles" hint="Select to edit." emptyTitle="No styles yet" emptyHint="Create a KPI card or scorecard." loading={false} itemCount={items.length}>
-                    {items.map((item) => (
-                        <PlatformBuilderListItem key={item.id} selected={selectedId === item.id} onClick={() => setSelectedId(item.id)} title={item.label} meta={VIZ_TYPE_LABELS[item.visualization_type] ?? item.visualization_type} badges={<PlatformBuilderStatusBadge label={METRIC_STATUS_LABELS[item.status]?.label ?? item.status} tone={METRIC_STATUS_LABELS[item.status]?.tone ?? "neutral"} />} />
+            <div className="grid gap-3 lg:grid-cols-[240px_1fr]">
+                <PlatformBuilderListPanel title="Saved styles" hint="Grouped by the metric they show." emptyTitle="No styles yet" emptyHint="Create a KPI card or scorecard." loading={false} itemCount={items.length}>
+                    {groupedStyles.map((group) => (
+                        <li key={group.metricLabel} className="mb-1">
+                            <p className="px-1 pt-1 text-[10px] font-semibold uppercase tracking-wide text-alloy-midnight/40">{group.metricLabel}</p>
+                            <ul className="space-y-1">
+                                {group.vizes.map((item) => {
+                                    const count = placementCount(item.id);
+                                    return (
+                                        <PlatformBuilderListItem
+                                            key={item.id}
+                                            selected={selectedId === item.id}
+                                            onClick={() => setSelectedId(item.id)}
+                                            title={item.label}
+                                            meta={`${VIZ_TYPE_LABELS[item.visualization_type] ?? item.visualization_type} · ${count} place${count === 1 ? "" : "s"}`}
+                                            badges={<PlatformBuilderStatusBadge label={METRIC_STATUS_LABELS[item.status]?.label ?? item.status} tone={METRIC_STATUS_LABELS[item.status]?.tone ?? "neutral"} />}
+                                        />
+                                    );
+                                })}
+                            </ul>
+                        </li>
                     ))}
                 </PlatformBuilderListPanel>
 
@@ -275,9 +336,10 @@ export default function VisualizationBuilderPanel({ canEdit }: Props) {
                             <button type="button" className="text-[11px] font-semibold text-alloy-juniper" onClick={() => setShowAdvanced((v) => !v)}>{showAdvanced ? "Hide advanced" : "Advanced"}</button>
                             {formBody(isGlobal)}
                             {canEdit ?
-                                <div className="flex flex-wrap gap-2">
-                                    <PlatformBuilderButton loading={saving} onClick={() => void save("draft")}>Save draft</PlatformBuilderButton>
-                                    <PlatformBuilderButton variant="primary" loading={saving} onClick={() => void save("active")}>Publish</PlatformBuilderButton>
+                                <div className="flex flex-wrap items-center gap-2">
+                                    <PlatformBuilderButton loading={saving && saveAction === "draft"} disabled={saving} onClick={() => void save("draft")}>Save draft</PlatformBuilderButton>
+                                    <PlatformBuilderButton variant="primary" loading={saving && saveAction === "active"} disabled={saving} onClick={() => void save("active")}>Publish</PlatformBuilderButton>
+                                    {draftSaved ? <span className="text-[11px] font-medium text-alloy-juniper">Saved as draft</span> : null}
                                 </div>
                             :   null}
                         </div>
@@ -286,7 +348,7 @@ export default function VisualizationBuilderPanel({ canEdit }: Props) {
                 :   <PlatformBuilderEmptyState title="Select a display style" body="Pick a saved style or create a new one." />}
             </div>
 
-            <PlatformBuilderModal open={createModalOpen} title="New display style" subtitle="Card setup and visual treatment." onClose={() => setCreateModalOpen(false)} footer={<><PlatformBuilderButton onClick={() => setCreateModalOpen(false)}>Cancel</PlatformBuilderButton><PlatformBuilderButton variant="primary" loading={saving} onClick={() => void save("active", true)}>Publish</PlatformBuilderButton></>}>
+            <PlatformBuilderModal open={createModalOpen} title="New display style" subtitle="Card setup and visual treatment." onClose={() => setCreateModalOpen(false)} footer={<>{draftSaved ? <span className="mr-auto text-[11px] font-medium text-alloy-juniper">Saved as draft</span> : null}<PlatformBuilderButton disabled={saving} onClick={() => setCreateModalOpen(false)}>Cancel</PlatformBuilderButton><PlatformBuilderButton loading={saving && saveAction === "draft"} disabled={saving} onClick={() => void save("draft", true)}>Save draft</PlatformBuilderButton><PlatformBuilderButton variant="primary" loading={saving && saveAction === "active"} disabled={saving} onClick={() => void save("active", true)}>Publish</PlatformBuilderButton></>}>
                 <div className="grid gap-3 lg:grid-cols-[1fr_200px]">
                     {formBody(false)}
                     <VisualizationStylePreview form={form} primaryMetric={primaryMetric} extraMetricLabels={extraLabels} />

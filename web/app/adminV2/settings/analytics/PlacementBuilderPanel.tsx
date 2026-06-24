@@ -16,6 +16,7 @@ import {
     METRIC_STATUS_LABELS,
     VIZ_TYPE_LABELS,
     ZONE_LABELS,
+    ZONES_BY_SURFACE,
     type SurfaceKey,
 } from "@/app/adminV2/settings/analytics/platformBuilderLabels";
 import {
@@ -26,13 +27,6 @@ import { fetchMetricPlacementsList, fetchMetricVisualizations } from "@/lib/metr
 import type { MetricPlacementRow, MetricVisualizationRow } from "@/lib/metrics/platform/types";
 
 type Props = { canEdit: boolean };
-
-const ZONES_BY_SURFACE: Record<SurfaceKey, string[]> = {
-    operational_intelligence: ["overview", "health", "trends", "comparisons"],
-    workspace_header: ["primary_metrics", "secondary_metrics"],
-    work_unit_header: ["header_metrics"],
-    business_process_tile: ["tile_metrics"],
-};
 
 type AddForm = { surface: SurfaceKey; placement_zone: string; surface_key: string };
 
@@ -177,10 +171,13 @@ export default function PlacementBuilderPanel({ canEdit }: Props) {
                         </div>
 
                         <div className="flex items-center justify-between gap-2">
-                            <p className="text-xs font-semibold uppercase tracking-wide text-alloy-midnight/55">Where this appears</p>
+                            <div>
+                                <p className="text-xs font-semibold uppercase tracking-wide text-alloy-midnight/55">Where this appears</p>
+                                <p className="text-[11px] text-alloy-midnight/45">One display style can appear in multiple places.</p>
+                            </div>
                             {canEdit ?
                                 <PlatformBuilderButton variant="primary" onClick={() => { setAddForm(ADD_EMPTY); setAddModalOpen(true); }}>
-                                    + Add location
+                                    + Add another place
                                 </PlatformBuilderButton>
                             :   null}
                         </div>
@@ -208,8 +205,8 @@ export default function PlacementBuilderPanel({ canEdit }: Props) {
                             </ul>
                         :   <PlatformBuilderEmptyState
                                 title="Not placed yet"
-                                body="Add locations where operators should see this display style — work unit headers, workspace pulse, OI sections, or process tiles."
-                                action={canEdit ? <PlatformBuilderButton variant="primary" onClick={() => setAddModalOpen(true)}>+ Add location</PlatformBuilderButton> : null}
+                                body="Add the surfaces where operators should see this display style — work unit headers, workspace pulse, OI sections, or process tiles. One display style can appear in multiple places."
+                                action={canEdit ? <PlatformBuilderButton variant="primary" onClick={() => setAddModalOpen(true)}>+ Add another place</PlatformBuilderButton> : null}
                             />}
 
                         {vizPlacements[0] ?
@@ -239,13 +236,13 @@ export default function PlacementBuilderPanel({ canEdit }: Props) {
 
             <PlatformBuilderModal
                 open={addModalOpen}
-                title="Add location"
-                subtitle={`Place "${selectedViz?.label ?? "this style"}" on another surface.`}
+                title="Add another place"
+                subtitle={`Place "${selectedViz?.label ?? "this style"}" on another surface. One display style can appear in multiple places.`}
                 onClose={() => setAddModalOpen(false)}
                 footer={
                     <>
-                        <PlatformBuilderButton onClick={() => setAddModalOpen(false)}>Cancel</PlatformBuilderButton>
-                        <PlatformBuilderButton variant="primary" loading={saving} onClick={() => void addLocation()}>Add location</PlatformBuilderButton>
+                        <PlatformBuilderButton disabled={saving} onClick={() => setAddModalOpen(false)}>Cancel</PlatformBuilderButton>
+                        <PlatformBuilderButton variant="primary" loading={saving} disabled={saving} onClick={() => void addLocation()}>Add place</PlatformBuilderButton>
                     </>
                 }
             >

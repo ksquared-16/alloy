@@ -1,5 +1,7 @@
 /** Operator-facing labels — platform keys stay in code/API. */
 
+import { METRIC_VISUAL_ACCENTS } from "@/lib/metrics/platform/metricVisualAccent";
+
 export const BUILDER_TAB_LABELS = {
     metrics: "Calculations",
     visualizations: "Display styles",
@@ -35,6 +37,9 @@ export const VIZ_TYPE_HINTS: Record<string, string> = {
 
 export const MULTI_METRIC_VIZ_TYPES = new Set(["scorecard", "kpi_card"]);
 
+/** Styles whose direction/trend is computed from metric history — never operator-picked. */
+export const TREND_BASED_VIZ_TYPES = new Set(["trend_card", "sparkline", "comparison", "line_chart", "area_chart"]);
+
 /** Styles with distinct preview renderers in MetricVisualRenderer. */
 export const AVAILABLE_VIZ_TYPES = [
     "kpi_card",
@@ -47,15 +52,10 @@ export const AVAILABLE_VIZ_TYPES = [
 
 export const COMING_SOON_VIZ_TYPES = ["line_chart", "gauge", "area_chart", "bar_chart", "table"] as const;
 
-export const ACCENT_OPTIONS: { key: string; label: string; swatch: string; ring: string }[] = [
-    { key: "enrollment", label: "Green", swatch: "bg-alloy-juniper", ring: "ring-alloy-juniper/40" },
-    { key: "operational", label: "Slate", swatch: "bg-alloy-midnight/70", ring: "ring-alloy-midnight/30" },
-    { key: "forms", label: "Violet", swatch: "bg-violet-500", ring: "ring-violet-400/40" },
-    { key: "communications", label: "Blue", swatch: "bg-alloy-blue", ring: "ring-alloy-blue/40" },
-    { key: "amber", label: "Amber", swatch: "bg-amber-500", ring: "ring-amber-400/40" },
-    { key: "critical", label: "Red", swatch: "bg-alloy-ember", ring: "ring-alloy-ember/40" },
-    { key: "neutral", label: "Gray", swatch: "bg-alloy-stone/50", ring: "ring-alloy-stone/40" },
-];
+/** Accent picker is color-first; tokens come from the shared visual accent palette. */
+export const ACCENT_OPTIONS: { key: string; label: string; swatch: string; ring: string }[] = METRIC_VISUAL_ACCENTS.map(
+    (a) => ({ key: a.key, label: a.label, swatch: a.swatch, ring: a.ring }),
+);
 
 export type SurfaceKey = "operational_intelligence" | "workspace_header" | "work_unit_header" | "business_process_tile";
 
@@ -85,6 +85,13 @@ export const SURFACE_OPTIONS: {
         description: "Metrics preview on each process navigation tile.",
     },
 ];
+
+export const ZONES_BY_SURFACE: Record<SurfaceKey, string[]> = {
+    operational_intelligence: ["overview", "health", "trends", "comparisons"],
+    workspace_header: ["primary_metrics", "secondary_metrics"],
+    work_unit_header: ["header_metrics"],
+    business_process_tile: ["tile_metrics"],
+};
 
 export const ZONE_LABELS: Record<string, Record<string, string>> = {
     operational_intelligence: {

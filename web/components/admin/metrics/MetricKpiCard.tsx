@@ -2,7 +2,7 @@
 
 import { normalizeOipHealthStatus, oipHealthStatusChipClass, oipHealthStatusLabel } from "@/lib/metrics/oipStatusPresentation";
 import type { MetricHealthState } from "@/lib/metrics/platform/types";
-import { oipDomainVisualTokens } from "@/lib/metrics/oipKpiCardVisualSystem";
+import { resolveMetricVisualAccent } from "@/lib/metrics/platform/metricVisualAccent";
 
 type Props = {
     label: string;
@@ -17,32 +17,24 @@ function normalizeStatus(status: MetricHealthState | string): MetricHealthState 
 }
 
 export function MetricKpiCard({ label, value, status = "unknown", loading = false, accent = "enrollment" }: Props) {
-    const accentKey = accent === "ops" ? "operational" : accent;
-    const known = ["enrollment", "operational", "forms", "communications"] as const;
-    const domain =
-        known.includes(accentKey as (typeof known)[number])
-            ? oipDomainVisualTokens(accentKey as (typeof known)[number])
-            : accentKey === "amber"
-              ? { sectionLabel: "text-amber-700" }
-              : accentKey === "critical"
-                ? { sectionLabel: "text-alloy-ember" }
-                : accentKey === "neutral"
-                  ? { sectionLabel: "text-alloy-midnight/55" }
-                  : oipDomainVisualTokens("enrollment");
+    const visual = resolveMetricVisualAccent(accent);
     const healthClass = oipHealthStatusChipClass(normalizeStatus(status));
 
     return (
         <div
-            className="rounded-lg border border-alloy-stone/15 bg-white p-3 shadow-[0_1px_2px_rgba(15,23,42,0.04)]"
+            className={`min-w-0 rounded-lg border border-l-[3px] border-alloy-stone/15 ${visual.rail} bg-white p-3 shadow-[0_1px_2px_rgba(15,23,42,0.04)]`}
             data-metric-visual="kpi_card"
+            data-metric-accent={visual.key}
         >
             <div className="flex items-start justify-between gap-2">
-                <p className={`text-[11px] font-semibold uppercase tracking-wide ${domain.sectionLabel}`}>{label}</p>
-                <span className={`rounded-md border px-1.5 py-0.5 text-[9px] font-semibold ${healthClass}`}>
+                <p className={`min-w-0 flex-1 truncate text-[11px] font-semibold uppercase tracking-wide ${visual.text}`} title={label}>
+                    {label}
+                </p>
+                <span className={`shrink-0 rounded-md border px-1.5 py-0.5 text-[9px] font-semibold ${healthClass}`}>
                     {oipHealthStatusLabel(normalizeStatus(status))}
                 </span>
             </div>
-            <p className="mt-2 text-xl font-semibold tabular-nums text-alloy-midnight">
+            <p className="mt-2 truncate text-xl font-semibold tabular-nums text-alloy-midnight">
                 {loading ? "…" : value}
             </p>
         </div>
