@@ -7,10 +7,9 @@ import type { WorkUnitRouteSlugRow } from "@/lib/admin/resolveWorkUnitByRouteSlu
 const SLUG_WU_SELECT =
     "id, org_id, department_id, key, name, sort_order, is_active, queue_definition";
 
-function applyDepartmentScope<T extends { in: (col: string, vals: string[]) => T }>(
-    query: T,
-    dim: AdminAccessScopeDimensions
-): T {
+/** Avoid PostgrestFilterBuilder deep-instantiation (matches accessScope query helpers). */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function applyDepartmentScope(query: any, dim: AdminAccessScopeDimensions): any {
     if (dim.departmentScope === "restricted") {
         const allowed = dim.allowedDepartmentIds ?? [];
         if (!allowed.length) return query;
