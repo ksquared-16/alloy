@@ -68,16 +68,12 @@ export default function LayoutRuntimeLinkSurface({
     suppressEntityIcon = false,
 }: Props) {
     const linkSurface = surface === "drawer" ? "drawer" : "queue";
-    const effectiveAdornment = useMemo(() => {
-        const base =
-            entityType === "child"
-                ? ensureLayoutRuntimeChildLinkAdornment(adornment, item.refKey)
-                : ensureLayoutRuntimePersonLinkAdornment(adornment);
-        if (suppressEntityIcon) {
-            return { ...base, icon: undefined };
-        }
-        return base;
-    }, [adornment, entityType, item.refKey, suppressEntityIcon]);
+    const effectiveAdornment = useMemo((): LayoutFieldAdornment => {
+        return entityType === "child"
+            ? ensureLayoutRuntimeChildLinkAdornment(adornment, item.refKey)
+            : ensureLayoutRuntimePersonLinkAdornment(adornment);
+    }, [adornment, entityType, item.refKey]);
+    const showEntityIcon = !suppressEntityIcon;
 
     const childOpenTarget = useMemo(() => {
         if (entityType !== "child" || !rowRecord) return null;
@@ -236,14 +232,14 @@ export default function LayoutRuntimeLinkSurface({
                         handleOpen();
                     }}
                 >
-                    {effectiveAdornment.icon ?
+                    {showEntityIcon && effectiveAdornment.icon ?
                         <AdornmentIcon icon={effectiveAdornment.icon} className="h-3 w-3 shrink-0" aria-hidden />
                     :   null}
                     <span className="min-w-0 truncate">{display}</span>
                     {secondary ? <span className="shrink-0 opacity-80">{secondary}</span> : null}
                 </button>
             :   <span className="inline-flex min-w-0 items-center gap-1.5">
-                    {effectiveAdornment.icon ?
+                    {showEntityIcon && effectiveAdornment.icon ?
                         <AdornmentIcon icon={effectiveAdornment.icon} className="h-3 w-3 shrink-0 opacity-60" aria-hidden />
                     :   null}
                     <span className="min-w-0 truncate">{display}</span>
