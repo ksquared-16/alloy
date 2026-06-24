@@ -308,13 +308,15 @@ export function buildLifecycleSiblingNavRowsFromDepartmentWorkUnits(args: {
         });
     }
 
+    const metaById = new Map(args.workUnits.map((w) => [w.id, w.metadata]));
+
     for (const wu of filterSortLifecycleSiblingWorkUnits(args.workUnits)) {
         if (consumedIds.has(wu.id)) continue;
         rows.push({
             id: wu.id,
             name: wu.name,
             key: wu.key,
-            metadata: wu.metadata,
+            metadata: metaById.get(wu.id),
             total: null,
         });
     }

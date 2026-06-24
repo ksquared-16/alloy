@@ -149,7 +149,7 @@ export default function LeadEnrollmentRepeaterFieldCell({
                     adornment={synthetic.adornment}
                     rowRecord={row}
                     onAction={onAdornmentAction}
-                    traceSurface="drawer"
+                    traceSurface="opportunity_drawer"
                 />
             :   null}
             {label ?
