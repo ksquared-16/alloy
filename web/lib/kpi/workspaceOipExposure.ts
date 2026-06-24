@@ -9,14 +9,12 @@ import {
     oipMetricKeyForStripKey,
     type OipMetricStripValues,
 } from "@/lib/kpi/oipBridge";
+import { OPERATIONAL_PULSE_STRIP_KEYS } from "@/lib/kpi/workspaceKpiPresentation";
+import { listAvailableMetricPacks } from "@/lib/metrics/packs";
+import { formatTargetFromKpi } from "@/lib/metrics/oipKpiObjectPresentation";
 
-/** Code-owned workspace OIP strip keys when no DB placement rows exist. */
-export const DEFAULT_WORKSPACE_OIP_STRIP_KEYS: readonly MetricKey[] = [
-    "oip.enrollment.tour_conversion_rate",
-    "oip.enrollment.time_to_schedule_tour",
-    "oip.ops.work_overdue_count",
-    "oip.forms.completion_rate",
-];
+/** Code-owned workspace OIP strip keys when no DB placement rows exist — operational pulse only. */
+export const DEFAULT_WORKSPACE_OIP_STRIP_KEYS: readonly MetricKey[] = OPERATIONAL_PULSE_STRIP_KEYS;
 
 export function resolveWorkspaceOipMetricKeys(
     placementRows: WorkspaceKpiPlacementRow[] | undefined,
@@ -28,8 +26,9 @@ export function resolveWorkspaceOipMetricKeys(
     const defaults = DEFAULT_WORKSPACE_OIP_STRIP_KEYS.map((k) => oipMetricKeyForStripKey(k)).filter(
         (k): k is OipMetricKey => k != null
     );
+    const packKeys = listAvailableMetricPacks().flatMap((p) => p.metricKeys) as OipMetricKey[];
     const merged = [...fromPlacements];
-    for (const key of defaults) {
+    for (const key of [...defaults, ...packKeys]) {
         if (!merged.includes(key)) merged.push(key);
     }
     return merged;
@@ -51,13 +50,8 @@ function kpiToneFromStatus(status: string | undefined): KPIVm["tone"] {
     return "neutral";
 }
 
-/** Code-owned work-unit OIP strip keys (append when placements omit them). */
-export const DEFAULT_WORK_UNIT_OIP_STRIP_KEYS: readonly MetricKey[] = [
-    "oip.enrollment.tour_conversion_rate",
-    "oip.enrollment.time_to_schedule_tour",
-    "oip.forms.completion_rate",
-    "oip.ops.work_overdue_count",
-];
+/** Code-owned work-unit OIP strip keys — operational pulse only. */
+export const DEFAULT_WORK_UNIT_OIP_STRIP_KEYS: readonly MetricKey[] = OPERATIONAL_PULSE_STRIP_KEYS;
 
 export function resolveWorkUnitOipMetricKeys(placementRows: WorkspaceKpiPlacementRow[] | undefined): OipMetricKey[] {
     const fromPlacements = placementRows?.length ? extractOipMetricKeysFromPlacements(placementRows) : [];
@@ -103,21 +97,28 @@ export function appendWorkspaceOipKpis(
             value: item?.formatted_value ?? "—",
             lane: def.defaultLane ?? "business",
             tone: kpiToneFromStatus(item?.kpi?.status),
+            targetDisplay: formatTargetFromKpi(item?.kpi) ?? undefined,
+            kpiStatus: item?.kpi?.status,
         });
     }
 
     return appended.length ? [...strip, ...appended] : strip;
 }
 
-function metricDisplay(key: OipMetricKey, resolved: ResolvedMetricMap): { label: string; value: string } {
+function metricDisplay(
+    key: OipMetricKey,
+    resolved: ResolvedMetricMap
+): { label: string; value: string; target?: string; status?: string } {
     const item = resolved[key];
     return {
         label: item?.label ?? key,
         value: item?.formatted_value ?? "—",
+        target: formatTargetFromKpi(item?.kpi) ?? undefined,
+        status: item?.kpi?.status,
     };
 }
 
-/** Light performance metrics for lifecycle command tiles — max 3 per card. */
+/** Light teaser stats for process navigation tiles — max two inline stats, no KPI cards. */
 export function enrichLifecycleCardsWithOipMetrics(
     cards: readonly OperatorLifecycleLandingCard[],
     resolved: ResolvedMetricMap
@@ -128,20 +129,17 @@ export function enrichLifecycleCardsWithOipMetrics(
 
         if (processKey.includes("enroll")) {
             metrics.push(metricDisplay("enrollment.tour_conversion_rate", resolved));
-            metrics.push(metricDisplay("enrollment.time_to_schedule_tour", resolved));
+            metrics.push(metricDisplay("ops.needs_attention_count", resolved));
+        } else if (processKey.includes("form")) {
             metrics.push(metricDisplay("forms.completion_rate", resolved));
-        }
-
-        if (processKey.includes("form")) {
-            metrics.push(metricDisplay("forms.completion_rate", resolved));
-        }
-
-        if (processKey.includes("operational") || processKey.includes("health")) {
+        } else if (processKey.includes("communic")) {
+            metrics.push(metricDisplay("ops.needs_attention_count", resolved));
+        } else if (processKey.includes("operational") || processKey.includes("health")) {
             metrics.push(metricDisplay("ops.work_overdue_count", resolved));
             metrics.push(metricDisplay("ops.needs_attention_count", resolved));
         }
 
-        const performanceMetrics = metrics.slice(0, 3);
+        const performanceMetrics = metrics.slice(0, 2);
         if (!performanceMetrics.length) return card;
         return { ...card, performanceMetrics };
     });

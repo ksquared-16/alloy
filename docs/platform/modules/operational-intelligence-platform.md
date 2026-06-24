@@ -206,23 +206,90 @@ Unknown keys return **400** with `unknown_keys`, `available_keys`, and `packs`.
 
 ---
 
-## Analytics admin workspace (Phase 3A — productization)
+## Operational Intelligence configuration (Phase 3A–3B)
 
-**Route:** `/admin/settings/analytics` (Admin → Configuration → Experience → Analytics)
+**Route:** `/admin/settings/analytics` (Configuration → Experience → **Operational Intelligence**)
 
-Configuration surface (not the operator Analytics modal):
+Legacy `/admin/settings/kpis` redirects to `?tab=visibility`.
 
 | Tab | Purpose |
 |-----|---------|
-| KPI packs | Read-only pack catalog — metrics and KPI keys per domain |
-| KPI targets | Org overrides via `org_settings.metadata.kpi_targets` — PATCH `/api/admin/metrics/kpi-targets` |
-| KPI placement | Visibility matrix (workspace strip, work unit strip, Analytics modal, lifecycle tile) + link to Workspace metrics |
+| Operational playbooks | What is tracked, why, current vs target, where teams see it |
+| Targets | Org overrides via `org_settings.metadata.kpi_targets` — target, current, status |
+| Experience placement | Placement matrix + embedded strip editor |
 
-**Operator Analytics modal** — Operational Intelligence Center: summary row (tour conversion, time to tour, overdue work, forms completion), pack health chips, site scope, pack sections below.
+**Operator panel** — white Communications-aligned shell; condensed executive summary row; compact pack list rows; Configure closes modal then navigates to settings.
 
-**Workspace strip** — dual band: Pipeline overview (inventory Q/L metrics) + Operational performance (O-family OIP cells).
+**Workspace strip** — **Pipeline Overview** + **Operational Performance** bands, visually distinct.
 
-**Work unit OIP** — lifecycle builder-owned shells show OIP-only performance strip; default keys include forms completion; resolve passes `workUnitId`.
+**Work unit** — dual-band when both inventory and OIP cells present; lifecycle shells OIP-only.
+
+### Phase 3C — workspace design convergence
+
+- **Workspace command header** replaces dual-band strip at root — Business / Operations / Enrollment health chips + performance indicators only (no inventory band).
+- **Business Processes** operator terminology (sidebar, cards, settings visibility labels).
+- **Business process cards** — performance metrics above operational counts; denser layout.
+- **O.I. command center** — intentional Bend Pine / Midnight / Blue pack accents; compact rows retained.
+
+### Phase 3D — configuration usability & operational value
+
+**Goal:** Operators understand what they configure without platform knowledge.
+
+| Surface | Change |
+|---------|--------|
+| Settings summary | Indicator count, playbook count, off-track targets, last updated, health chips |
+| Operational playbooks | Story cards: Purpose, Indicators (target/current/status), Where shown, pack status |
+| Targets tab | Table: Target · Current · Status + inline edit |
+| Experience placement | Operator labels: Organization Workspace, Business Process, Work Unit, Operational Intelligence Panel |
+| Command center modal | Business / Operational / Enrollment health command bar; playbooks nav label |
+
+**UX pattern audit (Communications + platform workspace modals):**
+
+| Pattern | Communications | O.I. application |
+|---------|----------------|------------------|
+| Section cards | `CommsSectionCard` — title, helper, border-b header | `OipSectionCard` — same hierarchy |
+| Card chrome | `rounded-xl border border-alloy-stone/20 bg-white p-3 shadow` | `OIP_CARD_CLASS` — matched |
+| Section title | `text-[11px] font-semibold tracking-wide` | `OIP_SECTION_TITLE_CLASS` |
+| Helper copy | `text-[10px] text-alloy-midnight/50` below title | `OIP_SECTION_HELPER_CLASS` |
+| Primary action | Pine button, bottom/right of section | Adjust targets / Configure → |
+| Modal shell | White panel inside `AdminV2WorkspaceBosModalShell` | Analytics modal — same shell |
+| Command layout | Queue \| Conversation \| Composer columns | Health bar + summary row + playbook sections |
+| Health signals | Status pills in queue/conversation headers | Health command chips + per-indicator status |
+
+POS workspace is not yet implemented in-repo; O.I. follows the shared **platform workspace modal** pattern (`AdminV2WorkspaceBosModalShell`) used by Communications and Inbox.
+
+### Phase 3E — premium workspace convergence
+
+- **KPI object cards** — label, value, target, status (`OipKpiObjectCard`) on workspace header, work unit operational performance, O.I. panel, and settings playbooks.
+- **Workspace header** — filler copy removed; Business / Operational / Enrollment health + KPI objects only.
+- **Business process grid** — denser 2×2 cards; performance first, counts second, minimal action footer.
+- **O.I. panel** — white surfaces, thin borders, pine accent bars; no tinted washes or gray fills.
+- **Playbooks** — inline Edit Targets / Edit Visibility on cards; collapsible placement detail.
+- **Work unit** — unified operational header; Needs Attention as OIP KPI object; deduped from queue inventory band.
+
+### V1 final polish — workspace integration
+
+- **Needs Attention** — first-class OIP KPI object (`ops.needs_attention_count`) on workspace, work unit, O.I. panel, and enrollment business process cards.
+- **Unified headers** — health summary cards share KPI object shell; work unit context + KPIs in one operational header.
+- **KPI object layout** — shared visual system (`oipKpiCardVisualSystem`) with accent families (Enrollment/pine, Communications/blue, Forms/violet, Operational/midnight), status-colored left bars, icon wells, goal + trend slots.
+- **O.I. panel** — enrollment vs operations KPI grouping; Bend Pine accent bar; health cards aligned with workspace.
+
+### V1 design alignment — Experience Builder color system
+
+OIP surfaces delegate accent colors to **`layoutEditorWidgetStyle`** (Experience Builder widget tones). Domain mapping:
+
+| Domain | EB tone | Tailwind accent |
+|--------|---------|-----------------|
+| Enrollment | `green` | `alloy-juniper` (Bend Pine #00A283) |
+| Communications | `blue` | `alloy-blue` |
+| Forms | `purple` | `violet-500/600` |
+| Operational Health | `neutral` | `alloy-midnight` |
+
+**Important:** In `@theme`, Bend Pine teal is `alloy-juniper`, not `alloy-pine`.
+
+Surfaces (workspace command band, work-unit band, O.I. modal sections) are **flat** — KPI cards sit on the page without nested outer boxes.
+
+V1 settings expose active playbooks with **Edit targets** and **Experience placement** only. Coming-soon playbooks are collapsed. **Not in V1:** adding or swapping indicators, editing operator copy, choosing card colors/appearance, or playbook templates — planned for a future settings release.
 
 ---
 
@@ -251,7 +318,8 @@ See `docs/platform/modules/ai-platform.md` and BOS GATE 0 doctrine.
 | 2A | Analytics modal, KPI packs, workspace OIP exposure | **Done** |
 | 2B | Snapshot writer route, trend API, sparklines, site filter passthrough | **Done** |
 | 3A | Analytics admin config, modal polish, unified workspace strip, WU OIP visibility, lifecycle tile performance band | **Done** |
-| 3B | Scheduled snapshot cron infra, settings targets table (optional) | Planned |
+| 3B | UX convergence — Communications-aligned modal, config unification, operator terminology | **Done** |
+| 3C | Scheduled snapshot cron infra, settings targets table (optional) | Planned |
 | 4 | BOS aggregate queries | Planned |
 | 5 | Report exports | Planned |
 

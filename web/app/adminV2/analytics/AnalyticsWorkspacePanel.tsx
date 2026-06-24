@@ -1,39 +1,59 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import Link from "next/link";
+import { useRouter } from "next/navigation";
 
-import { AnalyticsKpiCard } from "@/app/adminV2/analytics/AnalyticsKpiCard";
-import { fetchOipMetricsResolved } from "@/lib/kpi/oipBridge";
+import {
+    OIP_LINK_CLASS,
+    OIP_SECONDARY_BTN_CLASS,
+} from "@/app/adminV2/analytics/oipWorkspaceUi";
+import { OipOverviewStructure } from "@/components/admin/workspace/OipOverviewStructure";
+import {
+    OipKpiObjectCard,
+    OipKpiObjectRow,
+} from "@/components/admin/workspace/OipKpiObjectCard";
 import { useWorkspaceSiteFilter } from "@/contexts/WorkspaceSiteFilterContext";
 import { fetchMetricTrends } from "@/lib/metrics/fetchMetricTrends";
 import type { MetricTrendMap } from "@/lib/metrics/fetchMetricTrends";
 import {
-    listAvailableMetricPacks,
     listMetricPacks,
     type MetricPackDefinition,
 } from "@/lib/metrics/packs";
 import type { ResolvedMetricMap } from "@/lib/metrics/fetchResolvedMetrics";
-import type { OipMetricKey } from "@/lib/metrics/types";
 import { getMetricDefinition } from "@/lib/metrics/registry";
+import { closeWorkspaceModal } from "@/lib/adminV2/workspaceModalCoordinator";
+import { computeWorkspaceHealthSummary } from "@/lib/metrics/workspaceHealthSummary";
+import {
+    normalizeOipHealthStatus,
+    oipHealthStatusChipClass,
+    oipHealthStatusLabel,
+    type OipHealthStatus,
+} from "@/lib/metrics/oipStatusPresentation";
+import { formatTargetFromKpi } from "@/lib/metrics/oipKpiObjectPresentation";
+import {
+    oipDomainVisualTokens,
+    oipKpiCompactRowClass,
+    oipModalSectionClass,
+    oipPackAccentKey,
+} from "@/lib/metrics/oipKpiCardVisualSystem";
+import {
+    allAvailableOipMetricKeys,
+    buildOipWarmScopeKey,
+    getLatestOipWarmSnapshotForSite,
+    getOipWarmSnapshot,
+    prefetchOipMetricsWarm,
+    subscribeOipWarmCache,
+} from "@/lib/metrics/oipWorkspaceWarmCache";
 
 const DEFAULT_WINDOW = "rolling_30d" as const;
 
-const SUMMARY_METRIC_KEYS: OipMetricKey[] = [
-    "enrollment.tour_conversion_rate",
-    "enrollment.time_to_schedule_tour",
-    "ops.work_overdue_count",
-    "forms.completion_rate",
-];
+type OipPanelTab = "overview" | "playbooks";
 
-function packHealthStatus(
-    pack: MetricPackDefinition,
-    resolved: ResolvedMetricMap
-): "healthy" | "warning" | "critical" | "unknown" {
+function packHealthStatus(pack: MetricPackDefinition, resolved: ResolvedMetricMap): OipHealthStatus {
     if (pack.domainStatus !== "available") return "unknown";
     const statuses = pack.metricKeys
-        .map((k) => resolved[k]?.kpi?.status)
-        .filter((s): s is string => Boolean(s && s !== "unknown"));
+        .map((k) => normalizeOipHealthStatus(resolved[k]?.kpi?.status))
+        .filter((s) => s !== "unknown");
     if (!statuses.length) return "unknown";
     if (statuses.some((s) => s === "critical")) return "critical";
     if (statuses.some((s) => s === "warning")) return "warning";
@@ -41,154 +61,143 @@ function packHealthStatus(
     return "unknown";
 }
 
-function healthChipClass(status: ReturnType<typeof packHealthStatus>): string {
-    switch (status) {
-        case "healthy":
-            return "border-alloy-pine/25 bg-alloy-pine/8 text-alloy-pine";
-        case "warning":
-            return "border-alloy-amber/30 bg-alloy-amber/8 text-alloy-amber";
-        case "critical":
-            return "border-alloy-ember/30 bg-alloy-ember/8 text-alloy-ember";
-        default:
-            return "border-alloy-stone/20 bg-alloy-stone/8 text-alloy-midnight/50";
-    }
-}
-
-function healthChipLabel(status: ReturnType<typeof packHealthStatus>): string {
-    switch (status) {
-        case "healthy":
-            return "Healthy";
-        case "warning":
-            return "Needs attention";
-        case "critical":
-            return "Critical";
-        default:
-            return "No data";
-    }
-}
-
-function SummaryMetricCard({
-    metricKey,
-    resolved,
-    trends,
-    loading,
-}: {
-    metricKey: OipMetricKey;
-    resolved: ResolvedMetricMap;
-    trends: MetricTrendMap;
-    loading: boolean;
-}) {
-    const def = getMetricDefinition(metricKey);
-    const metric = resolved[metricKey] ?? null;
-    const status = metric?.kpi?.status;
-
-    if (loading) {
-        return (
-            <div className="rounded-xl border border-alloy-stone/15 bg-white/70 p-3" aria-busy="true">
-                <div className="h-3 w-2/3 animate-pulse rounded bg-alloy-stone/15" />
-                <div className="mt-3 h-7 w-1/2 animate-pulse rounded bg-alloy-stone/10" />
-            </div>
-        );
-    }
-
-    return (
-        <div className="rounded-xl border border-alloy-stone/15 bg-white px-3 py-3 shadow-[0_4px_16px_rgba(47,93,74,0.05)]">
-            <div className="flex items-start justify-between gap-2">
-                <div className="text-[11px] font-semibold uppercase tracking-wide text-alloy-midnight/50">{def.label}</div>
-                {status && status !== "unknown" ?
-                    <span
-                        className={`rounded-full px-1.5 py-0.5 text-[9px] font-semibold uppercase ${healthChipClass(status as "healthy")}`}
-                    >
-                        {healthChipLabel(status as "healthy")}
-                    </span>
-                :   null}
-            </div>
-            <div className="mt-2 text-2xl font-semibold tabular-nums tracking-tight text-alloy-midnight">
-                {metric?.formatted_value ?? "—"}
-            </div>
-            {trends[metricKey]?.trend_label ?
-                <p className="mt-1 text-[10px] font-medium text-alloy-midnight/45">{trends[metricKey]!.trend_label}</p>
-            :   null}
-        </div>
-    );
-}
-
 function PackSection({
     pack,
     resolved,
-    trends,
     loading,
 }: {
     pack: MetricPackDefinition;
     resolved: ResolvedMetricMap;
-    trends: MetricTrendMap;
     loading: boolean;
 }) {
-    if (pack.domainStatus === "coming_soon") {
-        return (
-            <section
-                id={`analytics-pack-${pack.key}`}
-                className="rounded-xl border border-dashed border-alloy-stone/25 bg-alloy-stone/[0.04] px-4 py-5"
-            >
-                <h3 className="text-sm font-semibold text-alloy-midnight/70">{pack.label}</h3>
-                <p className="mt-1 text-xs text-alloy-midnight/50">{pack.description}</p>
-                <p className="mt-3 text-[11px] font-medium uppercase tracking-wide text-alloy-midnight/40">Coming soon</p>
-            </section>
-        );
-    }
+    const health = packHealthStatus(pack, resolved);
+    const accent = oipPackAccentKey(pack.key);
+    const domain = oipDomainVisualTokens(accent);
 
     return (
-        <section id={`analytics-pack-${pack.key}`} aria-labelledby={`analytics-pack-heading-${pack.key}`}>
-            <div className="mb-3 flex flex-wrap items-end justify-between gap-2">
-                <div>
-                    <h3 id={`analytics-pack-heading-${pack.key}`} className="text-sm font-semibold text-alloy-midnight">
-                        {pack.label}
-                    </h3>
-                    <p className="mt-0.5 text-xs text-alloy-midnight/55">{pack.description}</p>
-                </div>
+        <section
+            id={`analytics-pack-${pack.key}`}
+            aria-labelledby={`analytics-pack-heading-${pack.key}`}
+            className={`py-1 ${oipModalSectionClass(accent)}`}
+        >
+            <div className="mb-1.5 flex flex-wrap items-center justify-between gap-2">
+                <h3 id={`analytics-pack-heading-${pack.key}`} className={`text-sm font-semibold ${domain.sectionLabel}`}>
+                    {pack.label}
+                </h3>
                 <span
-                    className={`rounded-full border px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${healthChipClass(packHealthStatus(pack, resolved))}`}
+                    className={`rounded-md border px-2 py-0.5 text-[10px] font-semibold ${oipHealthStatusChipClass(health)}`}
                 >
-                    {healthChipLabel(packHealthStatus(pack, resolved))}
+                    {oipHealthStatusLabel(health)}
                 </span>
             </div>
-            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-                {pack.metricKeys.map((key) => (
-                    <AnalyticsKpiCard
-                        key={key}
-                        metricKey={key}
-                        metric={resolved[key] ?? null}
-                        trend={trends[key] ?? null}
-                        loading={loading}
-                    />
-                ))}
-            </div>
+            <OipKpiObjectRow layout="compact" className={oipKpiCompactRowClass()}>
+                {pack.metricKeys.map((key) => {
+                    const metric = resolved[key];
+                    const def = getMetricDefinition(key);
+                    return (
+                        <OipKpiObjectCard
+                            key={key}
+                            label={def.label}
+                            value={metric?.formatted_value ?? "—"}
+                            target={formatTargetFromKpi(metric?.kpi)}
+                            status={metric?.kpi?.status}
+                            loading={loading}
+                            layout="compact"
+                            metricKey={key}
+                        />
+                    );
+                })}
+            </OipKpiObjectRow>
         </section>
     );
 }
 
-export default function AnalyticsWorkspacePanel() {
+function ComingSoonPacksGroup({ packs }: { packs: readonly MetricPackDefinition[] }) {
+    const [expanded, setExpanded] = useState(false);
+    if (!packs.length) return null;
+
+    return (
+        <section
+            id="analytics-pack-coming-soon"
+            className="rounded-lg border border-dashed border-alloy-stone/18 bg-white px-3 py-2"
+            data-oip-coming-soon-group="true"
+        >
+            <button
+                type="button"
+                className="flex w-full items-center justify-between gap-2 text-left"
+                onClick={() => setExpanded((open) => !open)}
+                aria-expanded={expanded}
+            >
+                <span className="text-xs font-semibold text-alloy-midnight/55">Coming soon</span>
+                <span className="text-[10px] font-medium text-alloy-midnight/40">
+                    {packs.length} playbook{packs.length === 1 ? "" : "s"}
+                </span>
+            </button>
+            {expanded ?
+                <ul className="mt-2 space-y-1 border-t border-alloy-stone/10 pt-2">
+                    {packs.map((pack) => (
+                        <li key={pack.key} className="text-[11px] text-alloy-midnight/45">
+                            {pack.label}
+                        </li>
+                    ))}
+                </ul>
+            :   null}
+        </section>
+    );
+}
+
+export type AnalyticsWorkspacePanelProps = {
+    onRequestClose?: () => void;
+};
+
+export default function AnalyticsWorkspacePanel({ onRequestClose }: AnalyticsWorkspacePanelProps) {
+    const router = useRouter();
     const siteFilter = useWorkspaceSiteFilter();
     const selectedSiteId = siteFilter?.selectedSiteId ?? null;
 
-    const [resolved, setResolved] = useState<ResolvedMetricMap>({});
-    const [trends, setTrends] = useState<MetricTrendMap>({});
-    const [loading, setLoading] = useState(true);
-    const [fetchError, setFetchError] = useState<string | null>(null);
-    const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
-
-    const metricKeys = useMemo(
-        () => listAvailableMetricPacks().flatMap((p) => p.metricKeys) as OipMetricKey[],
-        []
+    const metricKeys = useMemo(() => allAvailableOipMetricKeys(), []);
+    const warmScopeKey = useMemo(
+        () => buildOipWarmScopeKey({ siteId: selectedSiteId, keys: metricKeys }),
+        [selectedSiteId, metricKeys]
     );
+    const cachedOnMount = useMemo(
+        () => getOipWarmSnapshot(warmScopeKey) ?? getLatestOipWarmSnapshotForSite(selectedSiteId),
+        [warmScopeKey, selectedSiteId]
+    );
+
+    const [resolved, setResolved] = useState<ResolvedMetricMap>(cachedOnMount ?? {});
+    const [trends, setTrends] = useState<MetricTrendMap>({});
+    const [loading, setLoading] = useState(!cachedOnMount || Object.keys(cachedOnMount).length === 0);
+    const [fetchError, setFetchError] = useState<string | null>(null);
+    const [lastUpdated, setLastUpdated] = useState<Date | null>(cachedOnMount ? new Date() : null);
+    const [activeTab, setActiveTab] = useState<OipPanelTab>("overview");
+
+    void trends;
+
+    useEffect(() => {
+        return subscribeOipWarmCache(() => {
+            const snap = getOipWarmSnapshot(warmScopeKey) ?? getLatestOipWarmSnapshotForSite(selectedSiteId);
+            if (snap && Object.keys(snap).length) {
+                setResolved((prev) => ({ ...prev, ...snap }));
+                setLastUpdated(new Date());
+                setLoading(false);
+            }
+        });
+    }, [warmScopeKey, selectedSiteId]);
 
     useEffect(() => {
         let cancelled = false;
-        setLoading(true);
+        const cached = getOipWarmSnapshot(warmScopeKey) ?? getLatestOipWarmSnapshotForSite(selectedSiteId);
+        if (cached && Object.keys(cached).length) {
+            setResolved(cached);
+            setLoading(false);
+        } else {
+            setLoading(true);
+        }
         setFetchError(null);
 
         void Promise.all([
-            fetchOipMetricsResolved({ keys: metricKeys, window: DEFAULT_WINDOW, siteId: selectedSiteId }),
+            prefetchOipMetricsWarm({ siteId: selectedSiteId, keys: metricKeys }),
             fetchMetricTrends({ keys: metricKeys, window: DEFAULT_WINDOW, siteId: selectedSiteId }),
         ])
             .then(([metrics, trendMap]) => {
@@ -199,7 +208,7 @@ export default function AnalyticsWorkspacePanel() {
                 }
             })
             .catch(() => {
-                if (!cancelled) setFetchError("Unable to load metrics right now.");
+                if (!cancelled) setFetchError("Unable to load performance indicators right now.");
             })
             .finally(() => {
                 if (!cancelled) setLoading(false);
@@ -208,97 +217,129 @@ export default function AnalyticsWorkspacePanel() {
         return () => {
             cancelled = true;
         };
-    }, [metricKeys, selectedSiteId]);
+    }, [metricKeys, selectedSiteId, warmScopeKey]);
 
-    const packs = listMetricPacks();
+    const allPacks = listMetricPacks();
+    const availablePacks = allPacks.filter((pack) => pack.domainStatus === "available");
+    const comingSoonPacks = allPacks.filter((pack) => pack.domainStatus === "coming_soon");
+    const health = computeWorkspaceHealthSummary(resolved);
     const siteLabel =
         selectedSiteId && siteFilter?.bootstrap?.sites?.length
             ? (siteFilter.bootstrap.sites.find((s) => s.id === selectedSiteId)?.label ?? "Selected site")
             : "All sites";
 
-    const enrollmentHealth = packHealthStatus(
-        packs.find((p) => p.key === "enrollment")!,
-        resolved
-    );
-    const opsHealth = packHealthStatus(
-        packs.find((p) => p.key === "operational_health")!,
-        resolved
-    );
+    const openConfiguration = () => {
+        closeWorkspaceModal("analytics");
+        onRequestClose?.();
+        router.push("/admin/settings/analytics");
+    };
 
     return (
-        <div className="flex min-h-0 flex-1 flex-col overflow-hidden" data-adminv2-analytics-panel="true">
-            <div className="shrink-0 border-b border-alloy-stone/12 bg-[linear-gradient(135deg,rgba(236,247,243,0.92)_0%,rgba(255,255,255,0.98)_100%)] px-4 py-4 sm:px-5">
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div>
-                        <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-alloy-pine">
-                            Operational Intelligence
-                        </div>
-                        <p className="mt-1 text-xs text-alloy-midnight/60">
-                            Live metrics · rolling 30 days
-                            {lastUpdated ?
-                                <> · Updated {lastUpdated.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}</>
-                            :   null}
-                        </p>
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-white" data-adminv2-analytics-panel="true">
+            <div className="shrink-0 border-b border-alloy-midnight/10 bg-white px-3 py-2 sm:px-4">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex items-center gap-1 rounded-md border border-alloy-midnight/10 p-0.5" role="tablist">
+                        <button
+                            type="button"
+                            role="tab"
+                            aria-selected={activeTab === "overview"}
+                            className={`rounded px-2.5 py-1 text-[11px] font-semibold ${activeTab === "overview" ? "bg-alloy-midnight/8 text-alloy-midnight" : "text-alloy-midnight/50"}`}
+                            onClick={() => setActiveTab("overview")}
+                            data-oip-tab="overview"
+                        >
+                            Overview
+                        </button>
+                        <button
+                            type="button"
+                            role="tab"
+                            aria-selected={activeTab === "playbooks"}
+                            className={`rounded px-2.5 py-1 text-[11px] font-semibold ${activeTab === "playbooks" ? "bg-alloy-midnight/8 text-alloy-midnight" : "text-alloy-midnight/50"}`}
+                            onClick={() => setActiveTab("playbooks")}
+                            data-oip-tab="playbooks"
+                        >
+                            Playbooks
+                        </button>
                     </div>
-                    <div className="flex flex-wrap items-center gap-2">
-                        <span className="rounded-full border border-alloy-stone/20 bg-white/80 px-2.5 py-1 text-[10px] font-medium text-alloy-midnight/65">
-                            Site: {siteLabel}
-                        </span>
-                        <span className={`rounded-full border px-2.5 py-1 text-[10px] font-semibold ${healthChipClass(enrollmentHealth)}`}>
-                            Enrollment · {healthChipLabel(enrollmentHealth)}
-                        </span>
-                        <span className={`rounded-full border px-2.5 py-1 text-[10px] font-semibold ${healthChipClass(opsHealth)}`}>
-                            Operations · {healthChipLabel(opsHealth)}
-                        </span>
-                    </div>
-                </div>
-
-                <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-4" data-analytics-summary-row="true">
-                    {SUMMARY_METRIC_KEYS.map((key) => (
-                        <SummaryMetricCard key={key} metricKey={key} resolved={resolved} trends={trends} loading={loading} />
-                    ))}
+                    <p className="text-[10px] text-alloy-midnight/45">
+                        Rolling 30 days
+                        {lastUpdated ?
+                            <> · {lastUpdated.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}</>
+                        :   null}
+                        <> · {siteLabel}</>
+                    </p>
+                    <button type="button" onClick={openConfiguration} className={`hidden md:inline ${OIP_LINK_CLASS}`}>
+                        Configure →
+                    </button>
                 </div>
             </div>
 
-            <div className="flex min-h-0 flex-1 overflow-hidden">
-                <aside className="hidden w-44 shrink-0 border-r border-alloy-stone/12 bg-[#f7f6f3]/80 px-3 py-4 md:block">
-                    <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-alloy-midnight/45">Packs</div>
-                    <nav className="mt-3 space-y-1" aria-label="Analytics metric packs">
-                        {packs.map((pack) => (
-                            <a
-                                key={pack.key}
-                                href={`#analytics-pack-${pack.key}`}
-                                className={[
-                                    "block rounded-md px-2 py-1.5 text-xs font-medium transition-colors",
-                                    pack.domainStatus === "coming_soon"
-                                        ? "text-alloy-midnight/40"
-                                        : "text-alloy-midnight/75 hover:bg-white hover:text-alloy-pine",
-                                ].join(" ")}
-                            >
-                                {pack.label}
-                            </a>
-                        ))}
-                    </nav>
-                    <Link
-                        href="/admin/settings/analytics"
-                        className="mt-6 block text-[11px] font-medium text-alloy-pine hover:underline"
-                    >
-                        Configure analytics →
-                    </Link>
-                </aside>
-
-                <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4 sm:px-5 sm:py-5">
-                    {fetchError ?
-                        <p className="mb-4 rounded-lg border border-alloy-ember/25 bg-alloy-ember/5 px-3 py-2 text-xs text-alloy-ember">
-                            {fetchError}
-                        </p>
-                    :   null}
-                    <div className="space-y-8">
-                        {packs.map((pack) => (
-                            <PackSection key={pack.key} pack={pack} resolved={resolved} trends={trends} loading={loading} />
-                        ))}
+            <div className="flex min-h-0 flex-1 overflow-hidden bg-white">
+                {activeTab === "overview" ?
+                    <div className="min-h-0 flex-1 overflow-y-auto px-3 py-3 sm:px-4 sm:py-4" data-oip-tab-panel="overview">
+                        {fetchError ?
+                            <p className="mb-3 rounded-lg border border-alloy-ember/30 bg-white px-3 py-2 text-xs text-alloy-ember">
+                                {fetchError}
+                            </p>
+                        :   null}
+                        <OipOverviewStructure health={health} resolved={resolved} loading={loading} />
+                        <div className="mt-4 flex justify-end md:hidden">
+                            <button type="button" onClick={openConfiguration} className={OIP_SECONDARY_BTN_CLASS}>
+                                Configure
+                            </button>
+                        </div>
                     </div>
-                </div>
+                :   <>
+                        <aside className="hidden w-36 shrink-0 border-r border-alloy-stone/12 bg-white px-2.5 py-3 md:block">
+                            <div className="text-[10px] font-semibold uppercase tracking-[0.12em] text-alloy-midnight/45">
+                                Playbooks
+                            </div>
+                            <nav className="mt-2 space-y-0.5" aria-label="Operational playbooks">
+                                {availablePacks.map((pack) => (
+                                    <a
+                                        key={pack.key}
+                                        href={`#analytics-pack-${pack.key}`}
+                                        className="block rounded-md px-2 py-1 text-xs font-medium text-alloy-midnight/70 transition-colors hover:text-alloy-juniper"
+                                    >
+                                        {pack.label}
+                                    </a>
+                                ))}
+                                {comingSoonPacks.length ?
+                                    <a
+                                        href="#analytics-pack-coming-soon"
+                                        className="block rounded-md px-2 py-1 text-xs font-medium text-alloy-midnight/35"
+                                    >
+                                        Coming soon
+                                    </a>
+                                :   null}
+                            </nav>
+                            <button type="button" onClick={openConfiguration} className={`mt-4 ${OIP_LINK_CLASS}`}>
+                                Configure →
+                            </button>
+                        </aside>
+
+                        <div
+                            className="min-h-0 flex-1 overflow-y-auto bg-white px-3 py-3 sm:px-4 sm:py-4"
+                            data-oip-tab-panel="playbooks"
+                        >
+                            <div className="mb-3 flex justify-end md:hidden">
+                                <button type="button" onClick={openConfiguration} className={OIP_SECONDARY_BTN_CLASS}>
+                                    Configure
+                                </button>
+                            </div>
+                            {fetchError ?
+                                <p className="mb-3 rounded-lg border border-alloy-ember/30 bg-white px-3 py-2 text-xs text-alloy-ember">
+                                    {fetchError}
+                                </p>
+                            :   null}
+                            <div className="space-y-3">
+                                {availablePacks.map((pack) => (
+                                    <PackSection key={pack.key} pack={pack} resolved={resolved} loading={loading} />
+                                ))}
+                                <ComingSoonPacksGroup packs={comingSoonPacks} />
+                            </div>
+                        </div>
+                    </>
+                }
             </div>
         </div>
     );

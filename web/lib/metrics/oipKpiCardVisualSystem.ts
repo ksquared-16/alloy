@@ -52,8 +52,14 @@ export type OipDomainVisualTokens = {
 
 export function oipDomainVisualTokens(accent: OipKpiAccentKey): OipDomainVisualTokens {
     const ebTone = OIP_DOMAIN_EB_TONE[accent] ?? "neutral";
-    const iconWell = resolveLayoutEditorWidgetToneIconClass(ebTone);
-    const leftRail = resolveLayoutEditorWidgetToneRailClass(ebTone);
+    const iconWell =
+        accent === "operational"
+            ? "border-alloy-midnight/12 bg-alloy-midnight/[0.07] text-alloy-midnight"
+            : resolveLayoutEditorWidgetToneIconClass(ebTone);
+    const leftRail =
+        accent === "operational"
+            ? "border-l-alloy-midnight/55"
+            : resolveLayoutEditorWidgetToneRailClass(ebTone);
     const title = resolveLayoutEditorWidgetToneTitleClass(ebTone);
 
     const topBar =
@@ -175,29 +181,33 @@ export function oipSummaryGroupAccentKey(label: string): OipKpiAccentKey {
     return "neutral";
 }
 
-export function oipKpiStatusBorderClass(status: OipHealthStatus | string | undefined | null): string {
-    switch (normalizeOipHealthStatus(status)) {
-        case "healthy":
-            return "border-alloy-juniper/50";
-        case "warning":
-            return "border-alloy-ember/55";
-        case "critical":
-            return "border-alloy-ember/65";
+export function oipKpiStatusBorderClass(_status: OipHealthStatus | string | undefined | null): string {
+    return "border-alloy-midnight/14";
+}
+
+function oipKpiCommandDomainWash(accent: OipKpiAccentKey): string {
+    switch (accent) {
+        case "enrollment":
+            return "bg-gradient-to-br from-white via-white to-alloy-juniper/[0.07]";
+        case "forms":
+            return "bg-gradient-to-br from-white via-white to-violet-500/[0.06]";
+        case "operational":
+            return "bg-gradient-to-br from-white via-white to-alloy-midnight/[0.05]";
         default:
-            return "border-alloy-midnight/14";
+            return "bg-white";
     }
 }
 
 export function oipKpiStatusLeftBarClass(status: OipHealthStatus | string | undefined | null): string {
     switch (normalizeOipHealthStatus(status)) {
         case "healthy":
-            return "border-l-alloy-juniper/75";
+            return "border-l-alloy-juniper/70";
         case "warning":
             return "border-l-alloy-ember/75";
         case "critical":
-            return "border-l-alloy-ember";
+            return "border-l-red-500/80";
         default:
-            return "border-l-alloy-midnight/20";
+            return "border-l-alloy-midnight/16";
     }
 }
 
@@ -213,18 +223,22 @@ export function oipKpiCardShellClass(args: {
     const domain = oipDomainVisualTokens(accent);
     const statusBorder = oipKpiStatusBorderClass(status);
 
-    const base = "rounded-md border bg-white border-l-[3px] transition-colors";
+    const base = "rounded-md border border-l-[3px] transition-colors";
 
     const size =
         layout === "command"
-            ? "w-[8.75rem] shrink-0 px-2 py-1.5"
+            ? "min-h-[5rem] w-full min-w-0 px-3 py-2.5 shadow-[0_1px_3px_rgba(15,23,42,0.06)]"
             : layout === "health"
               ? "w-[8.25rem] shrink-0 px-2 py-1.5"
               : layout === "preview"
                 ? "min-w-0 px-0 py-0 border-0 border-l-0 bg-transparent shadow-none"
-                : "min-w-[5.5rem] max-w-[8.5rem] flex-1 px-2 py-1.5";
+                : "min-h-[4.5rem] w-full min-w-0 px-2.5 py-2 bg-white";
 
-    const leftBar = status === "unknown" ? domain.leftRail : oipKpiStatusLeftBarClass(status);
+    const leftBar =
+        status === "warning" || status === "critical"
+            ? oipKpiStatusLeftBarClass(status)
+            : domain.leftRail;
+    const domainWash = layout === "command" ? oipKpiCommandDomainWash(accent) : "bg-white";
 
     const interactive =
         args.interactive
@@ -235,22 +249,27 @@ export function oipKpiCardShellClass(args: {
         return "min-w-0";
     }
 
-    return [base, size, leftBar, statusBorder, interactive].filter(Boolean).join(" ");
+    return [base, size, domainWash, leftBar, statusBorder, interactive].filter(Boolean).join(" ");
 }
 
-/** Flat workspace command band — no outer card box. */
+/** Flat workspace command band — health snapshot surface, visually distinct from process tiles. */
 export function oipWorkspaceCommandBandClass(): string {
-    return "w-full";
+    return "w-full border-b border-alloy-midnight/10 pb-2.5 mb-1";
 }
 
 /** Flat work-unit command band — no nested shell box. */
 export function oipWorkUnitCommandBandClass(): string {
-    return "w-full pb-2";
+    return "w-full";
 }
 
-/** Centered, dense KPI row — cards stay visually grouped. */
+/** Command / workspace KPI row — full-width four-column grid inside command banners. */
 export function oipKpiCommandRowClass(_layout: "command" | "compact" | "health" = "command"): string {
-    return "flex flex-wrap items-stretch justify-center gap-1.5";
+    return "grid w-full grid-cols-4 gap-3";
+}
+
+/** Playbook / compact KPI row — predictable columns. */
+export function oipKpiCompactRowClass(): string {
+    return "grid w-full grid-cols-[repeat(auto-fill,minmax(7rem,9rem))] gap-2";
 }
 
 /** O.I. modal section — color identity without heavy boxing. */

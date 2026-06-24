@@ -38,15 +38,17 @@ describe("work unit queue row actions hydration", () => {
     it("awaits row action hydration before first queue row paint", () => {
         const page = read("app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page.tsx");
         expect(page).toMatch(
-            /if \(!options\?\.prefetchOnly && !options\?\.quietStaleRefresh\)[\s\S]{0,120}await hydrateWorkUnitQueueRowActions/
+            /!options\?\.prefetchOnly[\s\S]{0,200}await hydrateWorkUnitQueueRowActions/
         );
         expect(page).toMatch(
-            /Array\.isArray\(pl\.items\)[\s\S]{0,120}await hydrateWorkUnitQueueRowActions/
+            /Array\.isArray\(pl\.items\)[\s\S]{0,200}earlyActionsHydrationPRef|await hydrateWorkUnitQueueRowActions/
         );
+        expect(page).toContain("earlyActionsHydrationPRef");
     });
 
     it("suppresses row action skeletons while lifecycle lane retains prior rows", () => {
         const page = read("app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page.tsx");
-        expect(page).toContain("!lifecycleRetainPaint");
+        expect(page).toContain("rowsHeld:");
+        expect(page).toContain("rowActionsPending");
     });
 });

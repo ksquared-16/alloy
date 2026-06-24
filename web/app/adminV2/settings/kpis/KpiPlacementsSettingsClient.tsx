@@ -42,11 +42,11 @@ function sortPlacements(items: WorkspaceKpiPlacementRow[]): WorkspaceKpiPlacemen
 function surfaceTitle(s: KpiSurface): string {
     switch (s) {
         case "workspace":
-            return "Workspace (organization root)";
+            return "Organization workspace";
         case "department":
-            return "Department";
+            return "Department pages";
         case "work_unit":
-            return "Work unit";
+            return "Work unit pages";
         default:
             return s;
     }
@@ -54,7 +54,7 @@ function surfaceTitle(s: KpiSurface): string {
 
 type RowDraft = { display_order: number; is_visible: boolean; label_override: string };
 
-export default function KpiPlacementsSettingsClient() {
+export default function KpiPlacementsSettingsClient({ embedded = false }: { embedded?: boolean }) {
     const { canMutate } = useAdminAuth();
     const [items, setItems] = useState<WorkspaceKpiPlacementRow[]>([]);
     const [loading, setLoading] = useState(true);
@@ -313,22 +313,15 @@ export default function KpiPlacementsSettingsClient() {
 
     return (
         <div className="w-full min-w-0 space-y-6 pb-8">
-            <header>
-                <h1 className="text-xl font-semibold tracking-tight text-alloy-midnight">Workspace KPI placements</h1>
-                <p className="mt-1 max-w-2xl text-xs leading-snug text-alloy-midnight/60">
-                    Control which registry metrics appear on AdminV2 workspace surfaces. Hiding a metric sets{" "}
-                    <code className="rounded bg-alloy-midnight/5 px-1">is_visible = false</code> — rows are not deleted.
-                    Raw metadata JSON is not editable here (v0).
-                </p>
-                <p className="mt-2 text-[11px] text-alloy-midnight/50">
-                    Registry keys and surfaces are enforced server-side. You cannot add formulas or SQL.
-                </p>
-                <p className="mt-2 rounded-md border border-alloy-forge/15 bg-alloy-midnight/[0.02] px-2.5 py-2 text-[11px] leading-snug text-alloy-midnight/65">
-                    <strong className="font-medium text-alloy-midnight/80">Limited catalog (v0):</strong> only approved KPI
-                    metrics from the product registry are available. Broader, template-based metric definitions are planned
-                    in <strong className="font-medium">Card 10+</strong> — this screen does not add arbitrary metrics.
-                </p>
-            </header>
+            {!embedded ?
+                <header>
+                    <h1 className="text-xl font-semibold tracking-tight text-alloy-midnight">Indicator placement</h1>
+                    <p className="mt-1 max-w-2xl text-xs leading-snug text-alloy-midnight/60">
+                        Control which performance indicators appear on workspace surfaces. Hiding an indicator removes it from
+                        view without deleting your configuration.
+                    </p>
+                </header>
+            :   null}
 
             {saveError ? (
                 <div className="rounded-lg border border-alloy-ember/40 bg-alloy-ember/5 px-3 py-2 text-sm text-alloy-ember">{saveError}</div>
@@ -616,23 +609,25 @@ export default function KpiPlacementsSettingsClient() {
                 </section>
             ) : null}
 
-            <footer className="border-t border-alloy-forge/10 pt-3 text-[11px] text-alloy-midnight/50">
-                <Link
-                    href={SETTINGS_ROOT}
-                    prefetch={shouldDisableAdminV2LinkPrefetch(SETTINGS_ROOT) ? false : undefined}
-                    className="font-medium text-alloy-blue hover:underline"
-                >
-                    ← Back to Settings
-                </Link>
-                {" · "}
-                <Link
-                    href="/workspace"
-                    prefetch={shouldDisableAdminV2LinkPrefetch("/workspace") ? false : undefined}
-                    className="font-medium text-alloy-blue hover:underline"
-                >
-                    Open workspace
-                </Link>
-            </footer>
+            {!embedded ?
+                <footer className="border-t border-alloy-forge/10 pt-3 text-[11px] text-alloy-midnight/50">
+                    <Link
+                        href={SETTINGS_ROOT}
+                        prefetch={shouldDisableAdminV2LinkPrefetch(SETTINGS_ROOT) ? false : undefined}
+                        className="font-medium text-alloy-blue hover:underline"
+                    >
+                        ← Back to Settings
+                    </Link>
+                    {" · "}
+                    <Link
+                        href="/workspace"
+                        prefetch={shouldDisableAdminV2LinkPrefetch("/workspace") ? false : undefined}
+                        className="font-medium text-alloy-blue hover:underline"
+                    >
+                        Open workspace
+                    </Link>
+                </footer>
+            :   null}
         </div>
     );
 }

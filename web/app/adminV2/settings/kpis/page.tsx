@@ -1,7 +1,6 @@
-import KpiPlacementsSettingsClient from "./KpiPlacementsSettingsClient";
+import { redirect } from "next/navigation";
 
-export const dynamic = "force-dynamic";
-
-export default function AdminV2SettingsKpisPage() {
-    return <KpiPlacementsSettingsClient />;
+/** Legacy route — workspace metric placement lives under Operational Intelligence. */
+export default function AdminV2SettingsKpisRedirectPage() {
+    redirect("/admin/settings/analytics?tab=visibility");
 }

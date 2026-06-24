@@ -20,7 +20,8 @@ export type OipKpiKey =
     | "enrollment.tour_conversion_rate"
     | "comms.delivery_rate"
     | "forms.completion_rate"
-    | "ops.work_overdue_count";
+    | "ops.work_overdue_count"
+    | "ops.needs_attention_count";
 
 export type MetricComputationKind =
     | "event_window"

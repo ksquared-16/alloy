@@ -16,7 +16,12 @@ import {
     buildWorkspaceRootDepartmentTileRollupLine,
 } from "@/lib/workspace/viewModels/workspaceRootRollup";
 import { resolveKpisForWorkspace } from "@/lib/kpi/resolver";
-import { fetchOipMetricsResolved } from "@/lib/kpi/oipBridge";
+import {
+    buildOipWarmScopeKey,
+    getOipWarmSnapshot,
+    prefetchOipMetricsWarm,
+    subscribeOipWarmCache,
+} from "@/lib/metrics/oipWorkspaceWarmCache";
 import type { OipMetricStripValues } from "@/lib/kpi/oipBridge";
 import {
     appendWorkspaceOipKpis,
@@ -594,9 +599,18 @@ export default function AdminV2WorkspaceIndexPage() {
             setOipFetchPending(false);
             return;
         }
+        const scopeKey = buildOipWarmScopeKey({ siteId: selectedSiteId, keys });
+        const cached = getOipWarmSnapshot(scopeKey);
+        if (cached) {
+            setOipResolved(cached);
+            setOipMetricValues(resolvedMetricsToStripValues(cached));
+            setOipFetchPending(false);
+        } else {
+            setOipFetchPending(true);
+        }
+
         let cancelled = false;
-        setOipFetchPending(true);
-        void fetchOipMetricsResolved({ keys, window: "rolling_30d", siteId: selectedSiteId })
+        void prefetchOipMetricsWarm({ siteId: selectedSiteId, keys })
             .then((data) => {
                 if (!cancelled) {
                     setOipResolved(data);
@@ -609,6 +623,21 @@ export default function AdminV2WorkspaceIndexPage() {
         return () => {
             cancelled = true;
         };
+    }, [workspaceRollupRefined, workspacePlacementRows, workspaceScopeHasPlacements, selectedSiteId]);
+
+    useEffect(() => {
+        if (!workspaceRollupRefined) return;
+        const keys = resolveWorkspaceOipMetricKeys(workspacePlacementRows, workspaceScopeHasPlacements);
+        if (!keys.length) return;
+        const scopeKey = buildOipWarmScopeKey({ siteId: selectedSiteId, keys });
+        return subscribeOipWarmCache(() => {
+            const snap = getOipWarmSnapshot(scopeKey);
+            if (snap) {
+                setOipResolved(snap);
+                setOipMetricValues(resolvedMetricsToStripValues(snap));
+                setOipFetchPending(false);
+            }
+        });
     }, [workspaceRollupRefined, workspacePlacementRows, workspaceScopeHasPlacements, selectedSiteId]);
 
     const workspaceKpiStripWithOip = useMemo(() => {
@@ -665,6 +694,7 @@ export default function AdminV2WorkspaceIndexPage() {
                 deptTileStatsPending={false}
                 lifecycleCards={lifecycleCardsWithOip}
                 lifecycleCardsPending={lifecycleCardsPending}
+                oipResolved={oipResolved}
             />
             {isLifecycleDebugUiEnabled() ? (
                 <>

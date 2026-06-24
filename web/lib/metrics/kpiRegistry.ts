@@ -66,6 +66,19 @@ const KPI_DEFINITIONS: Record<OipKpiKey, KpiDefinition> = {
             thresholds: { healthyMaxCount: 5, warningMaxCount: 10 },
         },
     },
+    "ops.needs_attention_count": {
+        key: "ops.needs_attention_count",
+        label: "Needs attention",
+        metricKey: "ops.needs_attention_count",
+        pack: "operational_health",
+        owner: "operations",
+        defaultTarget: {
+            metricKey: "ops.needs_attention_count",
+            kind: "count_max",
+            targetMaxCount: 3,
+            thresholds: { healthyMaxCount: 3, warningMaxCount: 6 },
+        },
+    },
 };
 
 /** Phase 2: move to kpi_targets table; until then optional org_settings.metadata.kpi_targets overlay. */
@@ -162,6 +175,7 @@ const METRIC_TO_KPI: Partial<Record<OipMetricKey, OipKpiKey>> = {
     "comms.delivery_rate": "comms.delivery_rate",
     "forms.completion_rate": "forms.completion_rate",
     "ops.work_overdue_count": "ops.work_overdue_count",
+    "ops.needs_attention_count": "ops.needs_attention_count",
 };
 
 export function kpiForMetric(metricKey: OipMetricKey): OipKpiKey | null {

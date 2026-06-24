@@ -18,6 +18,8 @@ export type LifecycleSiblingHydrationWorkUnit = {
 export type LifecycleSiblingHydrationBlock = {
     work_units: LifecycleSiblingHydrationWorkUnit[];
     totals_by_work_unit_id: Record<string, number>;
+    /** Operator-nav ordered pill rows (sidebar parity), when available. */
+    nav_rows?: import("@/lib/lifecycle/lifecycleWorkUnitShellPills").LifecycleSiblingWorkUnitNavRow[];
 };
 
 export type LifecycleSiblingHydrationSource = "bootstrap" | "client_fetch" | "dept_cache_totals";
@@ -162,8 +164,11 @@ export function mergeLifecycleSiblingHydrationBlock(
     siblings: LifecycleSiblingWorkUnitNavRow[];
     totalsByWorkUnitId: Record<string, number>;
 } | null {
-    if (!block?.work_units?.length) return null;
-    const siblings = mapLifecycleSiblingNavRows(block.work_units);
+    if (!block?.work_units?.length && !block?.nav_rows?.length) return null;
+    const siblings =
+        block.nav_rows?.length
+            ? [...block.nav_rows]
+            : mapLifecycleSiblingNavRows(block.work_units);
     const totals: Record<string, number> = {};
     for (const [id, n] of Object.entries(block.totals_by_work_unit_id ?? {})) {
         if (typeof n === "number" && Number.isFinite(n)) totals[id] = Math.max(0, Math.floor(n));

@@ -13,6 +13,7 @@ describe("Card 2 — WU bootstrap parallelization", () => {
     it("loader uses priority summaries then conditional attention before primary rows", () => {
         const src = read("lib/workspace/loadWorkUnitOperationalBootstrap.ts");
         expect(src).toContain('summaryMode: "priority"');
+        expect(src).toContain('countAccuracy: "planned"');
         expect(src).toContain("priorityBudget: 6");
         expect(src).toMatch(
             /getWorkUnitQueueSummaries[\s\S]*?attentionNeededForReveal[\s\S]*?loadWorkUnitBootstrapAttention/
@@ -46,6 +47,7 @@ describe("Card 2 — WU bootstrap parallelization", () => {
         expect(perf).toContain("queue_summaries_ms");
         expect(perf).toContain("attention_ms");
         expect(perf).toContain("primary_lane_rows_ms");
+        expect(perf).toContain("oip_snapshot_ms");
         expect(perf).toContain("primary_lane_rows_deferred");
         expect(perf).toContain("reveal_blocking_loader_ms");
     });

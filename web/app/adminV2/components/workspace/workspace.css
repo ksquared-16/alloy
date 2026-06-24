@@ -648,6 +648,130 @@
       transparent 72%);
 }
 
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-dept-v2-control-deck[data-wu-unified-header="true"] {
+  position: static;
+  border-left-width: 0;
+  border-color: transparent;
+  box-shadow: none;
+  background: transparent;
+  padding-bottom: 0;
+  margin-bottom: 0;
+}
+
+/* ── Command banner (work unit + workspace root) ── */
+[data-ws-command-banner="true"] {
+  box-sizing: border-box;
+  background: linear-gradient(135deg, #ffffff 0%, #ffffff 70%, rgba(0, 162, 131, 0.06) 100%);
+  background-color: #ffffff;
+}
+
+[data-ws-layout="overview-summary"] {
+  background: linear-gradient(180deg, #ffffff 0%, rgba(24, 39, 58, 0.02) 100%);
+  background-color: #ffffff;
+}
+
+[data-ws-command-banner="true"] [data-oip-kpi-object-row="true"][data-oip-kpi-row-layout="command"] {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.75rem;
+  width: 100%;
+  max-width: none;
+}
+
+[data-ws-command-banner="true"] [data-oip-kpi-object-row="true"][data-oip-kpi-row-layout="command"] > * {
+  width: 100%;
+  min-width: 0;
+  max-width: none;
+  justify-self: stretch;
+}
+
+[data-ws-command-banner="true"] [data-oip-kpi-object="true"][data-oip-kpi-layout="command"] {
+  height: 100%;
+}
+
+[data-ws-layout="overview-summary"] [data-oip-kpi-object-row="true"][data-oip-kpi-row-layout="command"],
+.oip-overview-pulse-row[data-oip-kpi-row-layout="command"] {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(8.5rem, 1fr));
+  gap: 0.5rem;
+  width: 100%;
+}
+
+[data-ws-layout="command-surface"] [data-ws-command-row="process-pills"] {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.5rem;
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 [data-ws-layout="command-surface"] .adminv2-ws-queue-pill-scroll--equal-width {
+  display: grid;
+  grid-auto-flow: column;
+  justify-content: start;
+  align-items: stretch;
+  width: auto;
+  flex: 0 0 auto;
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: auto;
+  scrollbar-width: thin;
+  gap: 0.35rem;
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 [data-ws-layout="command-surface"] .adminv2-ws-queue-pill-scroll--equal-width > button,
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 [data-ws-layout="command-surface"] .adminv2-ws-queue-pill-chip--inline-command {
+  width: 100%;
+  min-width: 0;
+  max-width: none;
+  flex: unset;
+  justify-content: space-between;
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-dept-v2-control-deck[data-wu-unified-header="true"] {
+  padding: 0;
+  margin: 0 0 0.5rem;
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-dept-v2-control-deck[data-wu-unified-header="true"] + .adminv2-ws-dept-v2-operational-row {
+  margin-top: 0;
+  border-top: none;
+  padding-top: 0;
+}
+
+[data-ws-surface="company"].adminv2-ws-company-v2 [data-ws-layout="workspace-section-a"] {
+  margin-bottom: 0;
+  padding-bottom: 0;
+  border-bottom: none;
+}
+
+[data-ws-layout="workspace-section-b"] {
+  padding-top: 0;
+  margin-top: 1.5rem;
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-dept-v2-control-deck[data-wu-unified-header="true"] .adminv2-ws-dept-v2-top-stack {
+  background: transparent;
+}
+
+[data-ws-surface="company"].adminv2-ws-company-v2 [data-workspace-command-header="true"] {
+  margin-bottom: 0;
+  padding-bottom: 0;
+  border-bottom: none;
+}
+
+.adminv2-ws-root-departments-zone {
+  margin-top: 1.5rem;
+  padding-top: 0;
+  border-top: none;
+}
+
+[data-ws-business-process-grid] [data-ws-business-process-tile="true"] {
+  min-height: 10rem;
+}
+
+[data-ws-business-process-grid] [data-ws-business-process-performance="true"] li {
+  line-height: 1.25;
+}
+
 [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-dept-v2-control-deck {
   position: sticky;
   top: 0;
@@ -668,11 +792,7 @@
       transparent 38%);
 }
 
-.adminv2-ws-root-departments-zone {
-  margin-top: 1rem;
-  padding-top: 10px;
-}
-
+/* legacy zone kicker styles retained for dept surfaces */
 .adminv2-ws-root-departments-zone .adminv2-ws-root-zone-kicker {
   margin: 0;
   font-size: 10px;
@@ -2137,7 +2257,7 @@
   border-radius: 8px;
   overflow: hidden;
   padding: 2px 4px 4px;
-  background-color: #fafcfd;
+  background-color: #ffffff;
   background-image: none;
   box-shadow: 0 1px 2px rgba(39, 63, 82, 0.04);
 }
@@ -2148,7 +2268,8 @@
   align-self: stretch;
   border: 1px solid color-mix(in srgb, var(--vc-section-rail, var(--d-pine)) 24%, var(--d-border));
   border-left: 2px solid color-mix(in srgb, var(--d-brand) 32%, color-mix(in srgb, var(--d-pine) 38%, var(--d-border)));
-  background-color: color-mix(in srgb, var(--d-brand) 2.5%, #fafcfd);
+  background-color: #ffffff;
+  background-image: none;
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.82),
     0 1px 3px rgba(39, 63, 82, 0.06);
@@ -2235,6 +2356,8 @@
     -webkit-overflow-scrolling: touch;
     padding-bottom: 6px;
     scroll-padding-bottom: 8px;
+    background-color: #ffffff;
+    background-image: none;
   }
 }
 
@@ -6277,6 +6400,8 @@
   overflow: hidden;
   border-bottom: none;
   padding-bottom: 6px;
+  background-color: #ffffff;
+  background-image: none;
 }
 
 [data-ws-surface="work_unit"].adminv2-ws-work-unit.adminv2-ws-wu-v2 .adminv2-ws-wu-queue-shell.adminv2-ws-dept-qsec--primary > :not(.adminv2-ws-wu-queue-list-shell) {
@@ -6295,6 +6420,8 @@
   -webkit-overflow-scrolling: touch;
   padding-bottom: 6px;
   scroll-padding-bottom: 8px;
+  background-color: #ffffff;
+  background-image: none;
 }
 
 /* Work unit — compact queue row density (V3 frozen baseline; spacing-only) */
@@ -7267,9 +7394,8 @@
   list-style: none;
   border-radius: 8px;
   border: 1px solid color-mix(in srgb, var(--d-brand) 12%, color-mix(in srgb, var(--vc-label-accent, var(--d-pine)) 12%, var(--d-border)));
-  background: linear-gradient(180deg,
-      color-mix(in srgb, #ffffff 96%, var(--d-brand)) 0%,
-      color-mix(in srgb, #ffffff 97%, var(--d-surface)) 100%);
+  background: #ffffff;
+  background-image: none;
 }
 
 [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-wu-queue-list:has(> .adminv2-ws-wu-queue-empty-wrap:only-child) {

@@ -41,8 +41,13 @@ export type OperatorLifecycleLandingCard = {
     activeRecordCount: number | null;
     /** Populated when needs-attention lane summaries are available; otherwise null (UI shows —). */
     needsAttentionCount: number | null;
-    /** Optional OIP performance preview (max 2) — server-resolved formatted values only. */
-    performanceMetrics?: readonly { label: string; value: string }[];
+    /** Optional OIP performance preview — server-resolved formatted values. */
+    performanceMetrics?: readonly {
+        label: string;
+        value: string;
+        target?: string | null;
+        status?: string | null;
+    }[];
 };
 
 export type OperatorLifecycleWorkUnitRow = {
@@ -90,13 +95,19 @@ function pipelineExecutionQueues(
     }));
 }
 
-function operatorQueuesFromLifecycleBuilder(
-    entry: LifecycleCatalogEntry,
-    departmentsById: Map<string, OperatorLifecycleDepartmentRow>,
+function operatorQueuesFromLifecycleBuilderMetadata(
+    departmentMetadata: unknown,
+    processId?: string | null
 ): OperatorLifecycleWorkQueuePreview[] {
-    const dept = departmentsById.get(entry.department_id);
-    const config = lifecycleBuilderFromDepartmentMetadata(dept?.metadata);
-    const process = config.processes.find((p) => p.id === entry.process_id && p.is_active);
+    const config = lifecycleBuilderFromDepartmentMetadata(departmentMetadata);
+    if (!config) return [];
+    const resolvedProcessId = processId?.trim() || config.active_process_id;
+    const process =
+        (resolvedProcessId
+            ? config.processes.find((p) => p.id === resolvedProcessId && p.is_active)
+            : null) ??
+        config.processes.find((p) => p.is_active) ??
+        null;
     if (!process) return [];
 
     return activeStagesForProcess(process).map((stage) => {
@@ -111,22 +122,37 @@ function operatorQueuesFromLifecycleBuilder(
     });
 }
 
-function workQueuesForDepartment(
+function operatorQueuesFromLifecycleBuilder(
     entry: LifecycleCatalogEntry,
-    departmentId: string,
-    workUnits: OperatorLifecycleWorkUnitRow[],
     departmentsById: Map<string, OperatorLifecycleDepartmentRow>,
 ): OperatorLifecycleWorkQueuePreview[] {
-    const forDept = workUnits.filter(
-        (wu) => wu.department_id === departmentId && wu.is_active !== false,
+    const dept = departmentsById.get(entry.department_id);
+    return operatorQueuesFromLifecycleBuilderMetadata(dept?.metadata, entry.process_id);
+}
+
+/**
+ * Sidebar + work-unit pill stage list — pipeline lanes when configured, else builder stages.
+ * Keeps operator nav and work-unit header pills aligned.
+ */
+export function resolveOperatorLifecycleWorkQueueNavEntriesForDepartment(args: {
+    departmentId: string;
+    departmentMetadata: unknown;
+    workUnits: OperatorLifecycleWorkUnitRow[];
+    processId?: string | null;
+}): OperatorLifecycleWorkQueuePreview[] {
+    const forDept = args.workUnits.filter(
+        (wu) => wu.department_id === args.departmentId && wu.is_active !== false,
     );
-    const pipelineWu = pickDeptPipelineWorkUnit(forDept, departmentId);
+    const pipelineWu = pickDeptPipelineWorkUnit(forDept, args.departmentId);
     if (pipelineWu) {
         const fromPipeline = pipelineExecutionQueues(pipelineWu);
         if (fromPipeline.length) return fromPipeline;
     }
 
-    const fromBuilder = operatorQueuesFromLifecycleBuilder(entry, departmentsById);
+    const fromBuilder = operatorQueuesFromLifecycleBuilderMetadata(
+        args.departmentMetadata,
+        args.processId ?? null
+    );
     if (fromBuilder.length) return fromBuilder;
 
     return forDept
@@ -140,6 +166,21 @@ function workQueuesForDepartment(
             platformKey: wu.key,
             href: operatorWorkUnitHrefFromKey(wu.key),
         }));
+}
+
+function workQueuesForDepartment(
+    entry: LifecycleCatalogEntry,
+    departmentId: string,
+    workUnits: OperatorLifecycleWorkUnitRow[],
+    departmentsById: Map<string, OperatorLifecycleDepartmentRow>,
+): OperatorLifecycleWorkQueuePreview[] {
+    const dept = departmentsById.get(entry.department_id);
+    return resolveOperatorLifecycleWorkQueueNavEntriesForDepartment({
+        departmentId,
+        departmentMetadata: dept?.metadata,
+        workUnits,
+        processId: entry.process_id,
+    });
 }
 
 function resolveDefaultEntryQueue(

@@ -109,7 +109,7 @@ export function DeptPairedOperQuietReserve({ throughputTitle }: { throughputTitl
 export function WorkspaceQuietQueueLaneReserve() {
     return (
         <div
-            className="adminv2-ws-wu-queue-shell rounded-xl border border-alloy-stone/12 bg-white/40"
+            className="adminv2-ws-wu-queue-shell rounded-xl border border-alloy-stone/12 bg-white"
             style={adminV2WorkUnitQueueLaneReserveStyle()}
             data-adminv2-wu-queue-lane-reserve="true"
             aria-hidden

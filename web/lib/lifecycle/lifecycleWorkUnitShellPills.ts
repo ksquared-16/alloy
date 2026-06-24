@@ -18,6 +18,7 @@ import {
 import { loadQueueDefinitionBundle } from "@/lib/config/queueDefinitionV2Runtime";
 import {
     isLifecycleStageWorkUnitKey,
+    lifecycleStageWorkUnitKey,
     primaryQueueKeyForLifecycleStage,
     stageKeyFromLifecycleWorkUnitMetadata,
 } from "@/lib/lifecycle/lifecycleStageWorkUnit";
@@ -28,8 +29,15 @@ import {
 import { resolveLifecycleStageQueuePresentationMode } from "@/lib/lifecycle/lifecycleStageQueuePresentation";
 import { logLifecycleWorkUnitPillTrace } from "@/lib/lifecycle/lifecycleWorkUnitSwitchRuntime";
 import { resolveDeptWorkUnitDisplayLabel } from "@/lib/workspace/workUnitShellDisplayTitle";
+import {
+    resolveOperatorLifecycleWorkQueueNavEntriesForDepartment,
+    type OperatorLifecycleWorkQueuePreview,
+} from "@/lib/admin/buildOperatorLifecycleLanding";
+import { operatorStageKeysForPipelineQueueKey } from "@/lib/lifecycle/enrollmentProcessStageQueueKeys";
+import { workUnitKeyToRouteSlug, workUnitRouteSlugsEquivalent } from "@/lib/admin/workUnitRouteSlug";
 
 export const LIFECYCLE_WORK_UNIT_NAV_CHIP_PREFIX = "lifecycle_wu_nav:";
+export const LIFECYCLE_PLATFORM_NAV_CHIP_PREFIX = "lifecycle_platform_nav:";
 
 export const LIFECYCLE_NEEDS_ATTENTION_PLACEHOLDER_CHIP_KEY = "lifecycle_na_placeholder";
 
@@ -41,7 +49,23 @@ export type LifecycleSiblingWorkUnitNavRow = {
     queue_definition?: unknown;
     /** Visibility-based total for pill badge (dept summary or current WU queue head). */
     total: number | null;
+    /** Sidebar parity — navigate by platform queue key when no lifecycle WU row exists. */
+    nav_platform_key?: string | null;
 };
+
+export function lifecyclePlatformNavChipKey(platformKey: string): string {
+    return `${LIFECYCLE_PLATFORM_NAV_CHIP_PREFIX}${platformKey.trim()}`;
+}
+
+export function parseLifecyclePlatformNavChipKey(chipKey: string): string | null {
+    if (!chipKey.startsWith(LIFECYCLE_PLATFORM_NAV_CHIP_PREFIX)) return null;
+    const key = chipKey.slice(LIFECYCLE_PLATFORM_NAV_CHIP_PREFIX.length).trim();
+    return key || null;
+}
+
+export function isLifecyclePlatformNavChipKey(chipKey: string): boolean {
+    return parseLifecyclePlatformNavChipKey(chipKey) != null;
+}
 
 export function lifecycleWorkUnitNavChipKey(workUnitId: string): string {
     return `${LIFECYCLE_WORK_UNIT_NAV_CHIP_PREFIX}${workUnitId}`;
@@ -190,6 +214,141 @@ export function filterActiveLifecycleSiblingWorkUnits(rows: WorkUnitListRow[]): 
     }));
 }
 
+function normalizePlatformKey(key: string): string {
+    return key.trim().toLowerCase();
+}
+
+function workUnitMatchesPlatformKey(wu: WorkUnitListRow, platformKey: string): boolean {
+    const normalized = normalizePlatformKey(platformKey);
+    const wuKey = (wu.key ?? "").trim();
+    if (!wuKey) return false;
+    if (normalizePlatformKey(wuKey) === normalized) return true;
+    return workUnitRouteSlugsEquivalent(workUnitKeyToRouteSlug(wuKey), workUnitKeyToRouteSlug(platformKey));
+}
+
+function resolveWorkUnitForOperatorNavEntry(
+    entry: OperatorLifecycleWorkQueuePreview,
+    workUnits: WorkUnitListRow[]
+): WorkUnitListRow | null {
+    const active = workUnits.filter((w) => w.is_active !== false);
+    const platformKey = entry.platformKey.trim();
+
+    const direct = active.find((wu) => workUnitMatchesPlatformKey(wu, platformKey));
+    if (direct) return direct;
+
+    for (const stageKey of operatorStageKeysForPipelineQueueKey(platformKey)) {
+        const lifecycleKey = lifecycleStageWorkUnitKey(stageKey).toLowerCase();
+        const byLifecycleKey = active.find(
+            (wu) => (wu.key ?? "").trim().toLowerCase() === lifecycleKey
+        );
+        if (byLifecycleKey) return byLifecycleKey;
+
+        const byStageMeta = active.find(
+            (wu) => stageKeyFromLifecycleWorkUnitMetadata(wu.metadata)?.trim().toLowerCase() === stageKey
+        );
+        if (byStageMeta) return byStageMeta;
+    }
+
+    for (const wu of active) {
+        const stageKey = stageKeyFromLifecycleWorkUnitMetadata(wu.metadata);
+        if (!stageKey) continue;
+        if (workUnitRouteSlugsEquivalent(workUnitKeyToRouteSlug(stageKey), workUnitKeyToRouteSlug(platformKey))) {
+            return wu;
+        }
+    }
+
+    return null;
+}
+
+/** Build pill rows in the same order/labels as sidebar business-process nav. */
+export function buildLifecycleSiblingNavRowsFromDepartmentWorkUnits(args: {
+    departmentId: string;
+    departmentMetadata: unknown;
+    workUnits: WorkUnitListRow[];
+}): LifecycleSiblingWorkUnitNavRow[] {
+    const navEntries = resolveOperatorLifecycleWorkQueueNavEntriesForDepartment({
+        departmentId: args.departmentId,
+        departmentMetadata: args.departmentMetadata,
+        workUnits: args.workUnits.map((wu) => ({
+            id: wu.id,
+            department_id: args.departmentId,
+            key: wu.key ?? "",
+            name: wu.name ?? "",
+            queue_definition: (wu as { queue_definition?: unknown }).queue_definition,
+            is_active: wu.is_active,
+        })),
+    });
+    if (!navEntries.length) {
+        return filterActiveLifecycleSiblingWorkUnits(args.workUnits);
+    }
+
+    const consumedIds = new Set<string>();
+    const rows: LifecycleSiblingWorkUnitNavRow[] = [];
+
+    for (const entry of navEntries) {
+        const wu = resolveWorkUnitForOperatorNavEntry(entry, args.workUnits);
+        if (wu) {
+            consumedIds.add(wu.id);
+            rows.push({
+                id: wu.id,
+                name: entry.label.trim() || wu.name,
+                key: wu.key,
+                metadata: wu.metadata,
+                queue_definition: (wu as { queue_definition?: unknown }).queue_definition,
+                total: null,
+            });
+            continue;
+        }
+        rows.push({
+            id: `platform_nav:${normalizePlatformKey(entry.platformKey)}`,
+            name: entry.label.trim() || entry.platformKey,
+            key: entry.platformKey,
+            total: null,
+            nav_platform_key: entry.platformKey,
+        });
+    }
+
+    for (const wu of filterSortLifecycleSiblingWorkUnits(args.workUnits)) {
+        if (consumedIds.has(wu.id)) continue;
+        rows.push({
+            id: wu.id,
+            name: wu.name,
+            key: wu.key,
+            metadata: wu.metadata,
+            total: null,
+        });
+    }
+
+    return rows;
+}
+
+export function lifecycleSiblingNavRowSelected(
+    row: LifecycleSiblingWorkUnitNavRow,
+    currentWorkUnitId: string,
+    currentWorkUnitKey?: string | null
+): boolean {
+    if (row.id === currentWorkUnitId && !row.nav_platform_key) return true;
+    const currentKey = (currentWorkUnitKey ?? "").trim();
+    if (!currentKey) return row.id === currentWorkUnitId;
+    if (row.nav_platform_key) {
+        return workUnitRouteSlugsEquivalent(
+            workUnitKeyToRouteSlug(row.nav_platform_key),
+            workUnitKeyToRouteSlug(currentKey)
+        );
+    }
+    if (row.key) {
+        return workUnitRouteSlugsEquivalent(
+            workUnitKeyToRouteSlug(row.key),
+            workUnitKeyToRouteSlug(currentKey)
+        );
+    }
+    return row.id === currentWorkUnitId;
+}
+
+export function lifecycleSiblingNavRowHasResolvableWorkUnit(row: LifecycleSiblingWorkUnitNavRow): boolean {
+    return !row.nav_platform_key;
+}
+
 export function attachSiblingWorkUnitTotals(
     siblings: LifecycleSiblingWorkUnitNavRow[],
     totalsByWorkUnitId: Record<string, number | null | undefined>,
@@ -212,24 +371,35 @@ function chipCountForSibling(total: number | null): WorkUnitAboveFoldChip["count
 function buildWorkUnitsSection(params: {
     siblings: LifecycleSiblingWorkUnitNavRow[];
     currentWorkUnitId: string;
+    currentWorkUnitKey?: string | null;
 }): WorkUnitAboveFoldChipSection {
     return {
         key: "lifecycle_work_units",
         label: "Work Units",
         chips: params.siblings.map((wu) => {
-            const selected = wu.id === params.currentWorkUnitId;
+            const selected = lifecycleSiblingNavRowSelected(
+                wu,
+                params.currentWorkUnitId,
+                params.currentWorkUnitKey
+            );
+            const chipKey =
+                wu.nav_platform_key
+                    ? lifecyclePlatformNavChipKey(wu.nav_platform_key)
+                    : lifecycleWorkUnitNavChipKey(wu.id);
             return {
-                key: lifecycleWorkUnitNavChipKey(wu.id),
-                label: resolveLifecycleSiblingPillLabel({
-                    name: wu.name,
-                    key: wu.key ?? null,
-                    metadata: wu.metadata,
-                    queue_definition: wu.queue_definition,
-                }),
+                key: chipKey,
+                label:
+                    wu.name?.trim() ||
+                    resolveLifecycleSiblingPillLabel({
+                        name: wu.name,
+                        key: wu.key ?? null,
+                        metadata: wu.metadata,
+                        queue_definition: wu.queue_definition,
+                    }),
                 priority: "standard" as const,
                 selected,
                 count: chipCountForSibling(wu.total),
-                lifecycle_work_unit_nav_id: wu.id,
+                lifecycle_work_unit_nav_id: wu.nav_platform_key ? undefined : wu.id,
             };
         }),
     };
@@ -238,34 +408,21 @@ function buildWorkUnitsSection(params: {
 function buildNeedsAttentionSection(params: {
     attentionQueues: Array<{ key: string; label: string; count: number; priority?: "standard" | "attention" | "critical" }>;
     selectedQueueKey: string | null;
-}): WorkUnitAboveFoldChipSection {
-    if (params.attentionQueues.length > 0) {
-        return {
-            key: "needs_attention",
-            label: "Needs Attention",
-            chips: params.attentionQueues.map((q) => ({
-                key: q.key,
-                label: q.label,
-                priority: q.priority ?? ("critical" as const),
-                selected: params.selectedQueueKey === q.key,
-                count: Math.max(0, Math.floor(q.count)),
-            })),
-        };
+}): WorkUnitAboveFoldChipSection | null {
+    if (params.attentionQueues.length === 0) {
+        return null;
     }
 
     return {
         key: "needs_attention",
         label: "Needs Attention",
-        chips: [
-            {
-                key: LIFECYCLE_NEEDS_ATTENTION_PLACEHOLDER_CHIP_KEY,
-                label: "No needs attention rules configured",
-                priority: "critical" as const,
-                selected: false,
-                count: 0,
-                attention_placeholder: true,
-            },
-        ],
+        chips: params.attentionQueues.map((q) => ({
+            key: q.key,
+            label: q.label,
+            priority: q.priority ?? ("critical" as const),
+            selected: params.selectedQueueKey === q.key,
+            count: Math.max(0, Math.floor(q.count)),
+        })),
     };
 }
 
@@ -273,6 +430,7 @@ function buildNeedsAttentionSection(params: {
 export function buildLifecycleBuilderOwnedAboveFoldHeaderSections(params: {
     siblings: LifecycleSiblingWorkUnitNavRow[];
     currentWorkUnitId: string;
+    currentWorkUnitKey?: string | null;
     selectedQueueKey: string | null;
     attentionQueues?: Array<{
         key: string;
@@ -287,15 +445,17 @@ export function buildLifecycleBuilderOwnedAboveFoldHeaderSections(params: {
             buildWorkUnitsSection({
                 siblings: params.siblings,
                 currentWorkUnitId: params.currentWorkUnitId,
+                currentWorkUnitKey: params.currentWorkUnitKey,
             })
         );
     }
-    sections.push(
-        buildNeedsAttentionSection({
-            attentionQueues: params.attentionQueues ?? [],
-            selectedQueueKey: params.selectedQueueKey,
-        })
-    );
+    const needsAttention = buildNeedsAttentionSection({
+        attentionQueues: params.attentionQueues ?? [],
+        selectedQueueKey: params.selectedQueueKey,
+    });
+    if (needsAttention) {
+        sections.push(needsAttention);
+    }
     return sections;
 }
 

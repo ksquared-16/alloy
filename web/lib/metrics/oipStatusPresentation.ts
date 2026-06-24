@@ -21,13 +21,13 @@ export function oipHealthStatusLabel(status: OipHealthStatus): string {
 export function oipHealthStatusChipClass(status: OipHealthStatus): string {
     switch (status) {
         case "healthy":
-            return "border-alloy-juniper/30 bg-alloy-juniper/10 text-alloy-juniper";
+            return "border-alloy-juniper/50 bg-alloy-juniper/12 text-alloy-juniper";
         case "warning":
-            return "border-alloy-amber/35 bg-alloy-amber/10 text-alloy-amber";
+            return "border-alloy-ember/70 bg-alloy-ember text-white";
         case "critical":
-            return "border-alloy-ember/35 bg-alloy-ember/10 text-alloy-ember";
+            return "border-red-600/80 bg-red-600 text-white";
         default:
-            return "border-alloy-stone/20 bg-alloy-stone/5 text-alloy-midnight/45";
+            return "border-alloy-stone/30 bg-alloy-stone/10 text-alloy-midnight/55";
     }
 }
 

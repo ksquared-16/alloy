@@ -35,6 +35,7 @@ export type WorkUnitBootstrapClientTimings = {
     client_total_ms?: number;
     bootstrap_owner?: string;
     payload_bytes?: number;
+    actions_hydration_ms?: number;
 };
 
 export function logWorkUnitBootstrapBreakdown(args: {
@@ -59,6 +60,7 @@ export function logWorkUnitBootstrapBreakdown(args: {
         attention_query: phases.attention_query_ms,
         attention_resolver: phases.attention_resolver_ms,
         primary_lane_rows: phases.primary_lane_rows_ms,
+        oip_snapshot: phases.oip_snapshot_ms,
         right_rail_actions: phases.right_rail_actions_ms,
         kpi_placements: phases.kpi_placements_ms,
         loader_wall: server.loader_ms,
@@ -77,6 +79,10 @@ export function logWorkUnitBootstrapBreakdown(args: {
         department_lookup_ms: roundMs(phases.dept_fetch_ms),
         queue_summaries_ms: roundMs(phases.queue_summaries_ms),
         primary_lane_rows_ms: roundMs(phases.primary_lane_rows_ms),
+        oip_snapshot_ms: roundMs(phases.oip_snapshot_ms),
+        oip_snapshot_source: phases.oip_snapshot_source,
+        placement_resolution_ms: roundMs(phases.placement_resolution_ms),
+        actions_hydration_ms: roundMs(args.client?.actions_hydration_ms),
         primary_lane_rows_deferred: phases.primary_lane_rows_deferred,
         right_rail_actions_ms: roundMs(phases.right_rail_actions_ms),
         right_rail_actions_deferred: phases.right_rail_actions_deferred,

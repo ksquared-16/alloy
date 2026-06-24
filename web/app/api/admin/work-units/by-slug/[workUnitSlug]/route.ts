@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { adminRouteGateFailureResponse, loadAdminRouteGate } from "@/lib/admin/adminRouteGate";
+import { fetchWorkUnitsForSlugResolution } from "@/lib/admin/fetchWorkUnitsForSlugResolution";
 import { resolveWorkUnitByRouteSlug } from "@/lib/admin/resolveWorkUnitByRouteSlug";
 import { workUnitRouteSlugToKey } from "@/lib/admin/workUnitRouteSlug";
 
@@ -20,26 +21,28 @@ export async function GET(_request: NextRequest, { params }: RouteParams) {
 
     const supabase = createAdminClient();
 
-    let wuQuery = supabase
-        .from("work_units")
-        .select("id, org_id, department_id, key, name, sort_order, is_active, queue_definition")
-        .eq("org_id", gate.orgId)
-        .eq("is_active", true);
-
     if (gate.dim.departmentScope === "restricted") {
         const allowed = gate.dim.allowedDepartmentIds ?? [];
         if (!allowed.length) {
             return NextResponse.json({ status: "not_found" }, { status: 404 });
         }
-        wuQuery = wuQuery.in("department_id", allowed);
     }
 
-    const { data: workUnits, error: wuErr } = await wuQuery;
-    if (wuErr) {
-        return NextResponse.json({ error: wuErr.message }, { status: 500 });
+    let workUnits: Awaited<ReturnType<typeof fetchWorkUnitsForSlugResolution>>["rows"];
+    try {
+        const fetched = await fetchWorkUnitsForSlugResolution({
+            supabase,
+            orgId: gate.orgId,
+            dim: gate.dim,
+            platformKey,
+        });
+        workUnits = fetched.rows;
+    } catch (e) {
+        const msg = e instanceof Error ? e.message : "Could not load work units.";
+        return NextResponse.json({ error: msg }, { status: 500 });
     }
 
-    const deptIds = [...new Set((workUnits ?? []).map((row) => row.department_id).filter(Boolean))];
+    const deptIds = [...new Set(workUnits.map((row) => row.department_id).filter(Boolean))];
     let departments: { id: string; key: string | null; name: string | null }[] = [];
     if (deptIds.length) {
         const { data: deptRows, error: deptErr } = await supabase
@@ -59,15 +62,7 @@ export async function GET(_request: NextRequest, { params }: RouteParams) {
 
     const result = resolveWorkUnitByRouteSlug({
         slug,
-        workUnits: (workUnits ?? []).map((row) => ({
-            id: row.id,
-            department_id: row.department_id,
-            key: row.key,
-            name: row.name,
-            queue_definition: row.queue_definition,
-            sort_order: row.sort_order,
-            is_active: row.is_active,
-        })),
+        workUnits,
         departments,
     });
 

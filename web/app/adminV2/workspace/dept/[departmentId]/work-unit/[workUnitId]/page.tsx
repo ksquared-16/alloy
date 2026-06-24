@@ -170,14 +170,19 @@ import { mergeEnrollmentRightRailActions } from "@/lib/workspace/viewModels/enro
 import { fetchWorkspaceRightRailResolvedActions } from "@/lib/workspace/fetchWorkspaceRightRailResolvedActions";
 import { workspaceDataFetchInit } from "@/lib/workspace/workspaceDataFetch";
 import { resolveKpisForWorkUnit } from "@/lib/kpi/resolver";
+import type { OipMetricStripValues } from "@/lib/kpi/oipBridge";
 import {
-    fetchOipMetricsResolved,
-    type OipMetricStripValues,
-} from "@/lib/kpi/oipBridge";
+    buildOipWarmScopeKey,
+    getLatestOipWarmSnapshotForSite,
+    getOipWarmSnapshot,
+    prefetchOipMetricsWarm,
+    subscribeOipWarmCache,
+} from "@/lib/metrics/oipWorkspaceWarmCache";
 import {
     appendWorkUnitOipKpis,
     resolveWorkUnitOipMetricKeys,
 } from "@/lib/kpi/workspaceOipExposure";
+import { bootstrapOipSnapshotToClientState } from "@/lib/workspace/applyBootstrapOipSnapshot";
 import type { ResolvedMetricMap } from "@/lib/metrics/fetchResolvedMetrics";
 import {
     applyLifecycleWorkUnitQueueUiOverlay,
@@ -188,22 +193,18 @@ import { departmentReservesOperationalActionsRail } from "@/lib/lifecycle/builde
 import {
     attachSiblingWorkUnitTotals,
     buildLifecycleBuilderOwnedAboveFoldHeaderSections,
-    deptOrderedLifecycleSiblingSource,
-    filterActiveLifecycleSiblingWorkUnits,
+    buildLifecycleSiblingNavRowsFromDepartmentWorkUnits,
     isLifecycleWorkUnitNavChipKey,
     lifecycleBuilderOwnedUsesEnrollmentPillShell,
     LIFECYCLE_NEEDS_ATTENTION_PLACEHOLDER_CHIP_KEY,
     inferLifecycleQueueRowLoader,
-    orderLifecycleSiblingNavRows,
+    parseLifecyclePlatformNavChipKey,
     parseLifecycleWorkUnitNavChipKey,
     resolveLifecycleWorkUnitPrimaryQueueKey,
     traceLifecyclePillQueueResult,
     type LifecycleSiblingWorkUnitNavRow,
 } from "@/lib/lifecycle/lifecycleWorkUnitShellPills";
-import {
-    buildLifecycleStageOrderIndex,
-    sortByLifecycleStageOrder,
-} from "@/lib/lifecycle/sortLifecycleDeptWorkUnits";
+import { operatorWorkUnitHrefFromKey } from "@/lib/admin/canonicalOperatorRoutes";
 import {
     lifecycleSiblingHeaderPaintReady,
     lifecycleSiblingTotalsFromDeptSummaries,
@@ -755,6 +756,8 @@ export default function AdminV2OpportunityWorkUnitPage() {
     const [oipMetricValues, setOipMetricValues] = useState<OipMetricStripValues | undefined>(undefined);
     const [oipResolved, setOipResolved] = useState<ResolvedMetricMap>({});
     const [oipFetchPending, setOipFetchPending] = useState(false);
+    const oipBootstrapHydratedRef = useRef(false);
+    const earlyActionsHydrationPRef = useRef<Promise<boolean> | null>(null);
     const [wuScopeHasPlacements, setWuScopeHasPlacements] = useState(false);
     const queueItemsRequestSeq = useRef(0);
     const queueSummariesRequestSeq = useRef(0);
@@ -1108,9 +1111,11 @@ export default function AdminV2OpportunityWorkUnitPage() {
                         sort_order?: number | null;
                     }>;
                 };
-                const siblings = filterActiveLifecycleSiblingWorkUnits(
-                    toLifecycleSiblingListRows(j.items ?? [])
-                );
+                const siblings = buildLifecycleSiblingNavRowsFromDepartmentWorkUnits({
+                    departmentId,
+                    departmentMetadata: dept?.metadata,
+                    workUnits: toLifecycleSiblingListRows(j.items ?? []),
+                });
                 if (!cancelled && siblings.length) {
                     setLifecycleSiblingWorkUnits(siblings);
                     setLifecycleSiblingsHydrationComplete(true);
@@ -1134,6 +1139,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
         orgId,
         workUnitId,
         lifecycleSiblingsHydrationComplete,
+        dept?.metadata,
     ]);
 
     useEffect(() => {
@@ -1225,26 +1231,14 @@ export default function AdminV2OpportunityWorkUnitPage() {
         if (!lifecycleSiblingWorkUnits?.length) return null;
         const totals: Record<string, number | null | undefined> = { ...lifecycleSiblingTotalsById };
         const cache = readDepartmentPageCache(orgId, departmentId, principalUserId, viewScopeFingerprint);
-        const deptOrder = cache?.workUnits?.length
-            ? deptOrderedLifecycleSiblingSource(
-                  cache.workUnits as Array<{
-                      id: string;
-                      name?: string | null;
-                      key?: string | null;
-                      sort_order?: number | null;
-                      metadata?: unknown;
-                  }>
-              )
-            : [];
         const deptNameById: Record<string, string | null> = {};
         for (const w of cache?.workUnits ?? []) {
             deptNameById[w.id] = w.name ?? null;
         }
-        const orderedSiblings = orderLifecycleSiblingNavRows(
-            lifecycleSiblingWorkUnits,
-            deptOrder,
-            deptNameById
-        );
+        const orderedSiblings = lifecycleSiblingWorkUnits.map((sibling) => {
+            const fromDept = sibling.nav_platform_key ? null : deptNameById[sibling.id]?.trim();
+            return fromDept ? { ...sibling, name: fromDept } : sibling;
+        });
         let currentTotal: number | null = null;
         if (queueSummaries?.length && queueDef) {
             const activeSummary =
@@ -1286,13 +1280,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
                 currentTotal = scopeMeta.total;
             }
         }
-        // P1 — re-sort the lifecycle pills by canonical /settings/lifecycle stage order
-        // (sync-independent of work_units.sort_order), so /work-units matches /dept and settings.
-        const stageOrderedSiblings = sortByLifecycleStageOrder(
-            orderedSiblings,
-            buildLifecycleStageOrderIndex(dept?.metadata)
-        );
-        return attachSiblingWorkUnitTotals(stageOrderedSiblings, totals, workUnitId, currentTotal);
+        return attachSiblingWorkUnitTotals(orderedSiblings, totals, workUnitId, currentTotal);
     }, [
         lifecycleSiblingWorkUnits,
         lifecycleSiblingTotalsById,
@@ -1359,12 +1347,14 @@ export default function AdminV2OpportunityWorkUnitPage() {
         return buildLifecycleBuilderOwnedAboveFoldHeaderSections({
             siblings,
             currentWorkUnitId: workUnitId,
+            currentWorkUnitKey: workUnit?.key ?? null,
             selectedQueueKey,
             attentionQueues,
         });
     }, [
         builderOwnedLifecycleShell,
         workUnitId,
+        workUnit?.key,
         lifecycleSiblingHeaderReady,
         lifecycleSiblingWorkUnitsForHeader,
         displayQueueSummaries,
@@ -2647,6 +2637,11 @@ export default function AdminV2OpportunityWorkUnitPage() {
     const handleQueueTabChange = useCallback(
         (nextKey: string, opts?: { unmappedActive?: boolean }) => {
             if (nextKey === LIFECYCLE_NEEDS_ATTENTION_PLACEHOLDER_CHIP_KEY) return;
+            const platformNavKey = parseLifecyclePlatformNavChipKey(nextKey);
+            if (platformNavKey) {
+                router.push(operatorWorkUnitHrefFromKey(platformNavKey));
+                return;
+            }
             const lifecycleNavWuId = parseLifecycleWorkUnitNavChipKey(nextKey);
             if (lifecycleNavWuId) {
                 if (lifecycleNavWuId === workUnitId) return;
@@ -3013,6 +3008,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
             setSelectedQueueKeyTraced,
             workUnit,
             workUnitId,
+            router,
         ]
     );
 
@@ -3290,6 +3286,8 @@ export default function AdminV2OpportunityWorkUnitPage() {
             setNeedsAttentionWorkUnitId(null);
             setOpportunityQueueRowResolved(null);
             setQueueRowActionsReady(false);
+            oipBootstrapHydratedRef.current = false;
+            earlyActionsHydrationPRef.current = hydrateWorkUnitQueueRowActions();
             if (!inPageLifecycleSwitch) {
                 setEnrollmentRightRailResolved(null);
                 setEnrollmentActionsSettled(false);
@@ -3536,7 +3534,12 @@ export default function AdminV2OpportunityWorkUnitPage() {
                                 }>;
                                 totals_by_work_unit_id: Record<string, number>;
                             };
+                            oip_snapshot?: {
+                                metrics?: import("@/app/api/admin/metrics/resolve/route").MetricResolveApiItem[];
+                            };
                         };
+
+                        let bootstrapActionsHydrationMs: number | undefined;
 
                         const wu = b.work_unit as WorkUnitRow | undefined;
                         const deptRow = b.department as DeptRow | undefined;
@@ -3716,7 +3719,15 @@ export default function AdminV2OpportunityWorkUnitPage() {
                                 !primaryRowsDeferred &&
                                 Array.isArray(pl.items)
                             ) {
-                                await hydrateWorkUnitQueueRowActions();
+                                const tActionsHydrate0 =
+                                    typeof performance !== "undefined" ? performance.now() : 0;
+                                await (earlyActionsHydrationPRef.current ??
+                                    hydrateWorkUnitQueueRowActions());
+                                const actionsHydrationMs =
+                                    typeof performance !== "undefined" && tActionsHydrate0 > 0
+                                        ? Math.round(performance.now() - tActionsHydrate0)
+                                        : undefined;
+                                bootstrapActionsHydrationMs = actionsHydrationMs;
                                 bootstrapPrimaryRowFetchScheduledRef.current = true;
                                 const summaryForLane =
                                     findQueueSummaryForSelection(qs, wu, authoritativePrimary) ??
@@ -3848,9 +3859,27 @@ export default function AdminV2OpportunityWorkUnitPage() {
                         }
 
                         if (!cancelled) {
+                            if (b.oip_snapshot?.metrics?.length) {
+                                const { resolved, stripValues } = bootstrapOipSnapshotToClientState(
+                                    b.oip_snapshot.metrics
+                                );
+                                setOipResolved(resolved);
+                                setOipMetricValues(stripValues);
+                                setOipFetchPending(false);
+                                oipBootstrapHydratedRef.current = true;
+                            } else if (b.oip_snapshot) {
+                                setOipResolved({});
+                                setOipMetricValues(undefined);
+                                setOipFetchPending(false);
+                                oipBootstrapHydratedRef.current = true;
+                            }
+
                             if (b.kpi_placements) {
                                 setWuPlacementRows(b.kpi_placements.items ?? []);
                                 setWuScopeHasPlacements(b.kpi_placements.scope_has_placements === true);
+                            } else if (b.oip_snapshot) {
+                                setWuPlacementRows([]);
+                                setWuScopeHasPlacements(true);
                             } else {
                                 void loadWuKpiPlacements(wu);
                             }
@@ -3873,6 +3902,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
                                     bootstrapClientT0 > 0 && applyT1 > 0 ? applyT1 - bootstrapClientT0 : undefined,
                                 bootstrap_owner: bootstrapOwner,
                                 payload_bytes: payloadBytes,
+                                actions_hydration_ms: bootstrapActionsHydrationMs,
                             },
                         });
                         return;
@@ -6239,12 +6269,14 @@ export default function AdminV2OpportunityWorkUnitPage() {
 
     const effectiveModel = mergedWorkspaceModel;
 
-    const workUnitKpiMetricsPending =
-        showOipOnlyKpiStrip
-            ? oipFetchPending
-            : !suppressWorkUnitKpiStrip &&
-              (wuPlacementRows === undefined ||
-                  (wuPlacementRows !== undefined && queueSummaries === null && !queueSummariesError));
+    const workUnitPlacementKpiMetricsPending =
+        !suppressWorkUnitKpiStrip &&
+        !showOipOnlyKpiStrip &&
+        (wuPlacementRows === undefined ||
+            (wuPlacementRows !== undefined && queueSummaries === null && !queueSummariesError));
+    const workUnitOipKpiPending = showOipOnlyKpiStrip && oipFetchPending;
+    /** Drives KPI strip placeholder — includes OIP background fetch. */
+    const workUnitKpiMetricsPending = workUnitOipKpiPending || workUnitPlacementKpiMetricsPending;
     /** Shell + header render after WU + dept; queue summaries and rows stay in-lane (Phase 3.1). */
     const workUnitShellReady = Boolean(workUnit) && Boolean(dept) && !error;
     /** UI: only block full-page shell — above-fold slots mount from atomic model. */
@@ -6404,7 +6436,9 @@ export default function AdminV2OpportunityWorkUnitPage() {
             rows_ready,
             kpi_ready: workUnitRevealKpiReady({
                 suppress_kpi_strip: suppressWorkUnitKpiStrip && !showOipOnlyKpiStrip,
-                kpi_metrics_pending: workUnitKpiMetricsPending,
+                kpi_metrics_pending: showOipOnlyKpiStrip
+                    ? workUnitOipKpiPending
+                    : workUnitPlacementKpiMetricsPending,
             }),
         });
     }, [
@@ -6423,7 +6457,8 @@ export default function AdminV2OpportunityWorkUnitPage() {
         queueRowActionsReady,
         suppressWorkUnitKpiStrip,
         showOipOnlyKpiStrip,
-        workUnitKpiMetricsPending,
+        workUnitPlacementKpiMetricsPending,
+        workUnitOipKpiPending,
     ]);
 
     const workUnitAboveFoldPageReady = workUnitRevealGate.above_fold_ready;
@@ -6803,15 +6838,58 @@ export default function AdminV2OpportunityWorkUnitPage() {
         if (!keys.length && !showOipOnlyKpiStrip) {
             setOipMetricValues(undefined);
             setOipResolved({});
+            setOipFetchPending(false);
             return;
         }
+
         let cancelled = false;
-        setOipFetchPending(true);
-        void fetchOipMetricsResolved({
-            keys,
+
+        if (oipBootstrapHydratedRef.current) {
+            void prefetchOipMetricsWarm({
+                siteId: selectedSiteId,
+                workUnitId: workUnitId ?? null,
+                keys,
+            }).then((resolved) => {
+                if (cancelled) return;
+                setOipResolved(resolved);
+                setOipMetricValues(
+                    Object.fromEntries(
+                        Object.entries(resolved)
+                            .filter(([, v]) => v?.formatted_value)
+                            .map(([k, v]) => [k, v!.formatted_value])
+                    ) as OipMetricStripValues
+                );
+            });
+            return () => {
+                cancelled = true;
+            };
+        }
+
+        const scopeKey = buildOipWarmScopeKey({
             siteId: selectedSiteId,
             workUnitId: workUnitId ?? null,
-            window: "rolling_30d",
+            keys,
+        });
+        const cached =
+            getOipWarmSnapshot(scopeKey) ?? getLatestOipWarmSnapshotForSite(selectedSiteId);
+        if (cached) {
+            setOipResolved(cached);
+            setOipMetricValues(
+                Object.fromEntries(
+                    Object.entries(cached)
+                        .filter(([, v]) => v?.formatted_value)
+                        .map(([k, v]) => [k, v!.formatted_value])
+                ) as OipMetricStripValues
+            );
+            setOipFetchPending(false);
+        } else {
+            setOipFetchPending(true);
+        }
+
+        void prefetchOipMetricsWarm({
+            siteId: selectedSiteId,
+            workUnitId: workUnitId ?? null,
+            keys,
         })
             .then((resolved) => {
                 if (!cancelled) {
@@ -6831,6 +6909,31 @@ export default function AdminV2OpportunityWorkUnitPage() {
         return () => {
             cancelled = true;
         };
+    }, [wuPlacementRows, selectedSiteId, workUnitId, showOipOnlyKpiStrip]);
+
+    useEffect(() => {
+        const keys = resolveWorkUnitOipMetricKeys(wuPlacementRows);
+        if (!keys.length && !showOipOnlyKpiStrip) return;
+        const scopeKey = buildOipWarmScopeKey({
+            siteId: selectedSiteId,
+            workUnitId: workUnitId ?? null,
+            keys,
+        });
+        return subscribeOipWarmCache(() => {
+            const snap =
+                getOipWarmSnapshot(scopeKey) ?? getLatestOipWarmSnapshotForSite(selectedSiteId);
+            if (snap) {
+                setOipResolved(snap);
+                setOipMetricValues(
+                    Object.fromEntries(
+                        Object.entries(snap)
+                            .filter(([, v]) => v?.formatted_value)
+                            .map(([k, v]) => [k, v!.formatted_value])
+                    ) as OipMetricStripValues
+                );
+                setOipFetchPending(false);
+            }
+        });
     }, [wuPlacementRows, selectedSiteId, workUnitId, showOipOnlyKpiStrip]);
 
     useEffect(() => {
@@ -6910,6 +7013,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
                         aboveFold={workUnitAboveFoldRenderable}
                         aboveFoldHandlers={workUnitAboveFoldHandlers}
                         onAction={onAction}
+                        oipResolved={oipResolved}
                         opportunityDrawerWorkspaceContext={opportunityWorkspaceContext ?? null}
                         queueRowOpenPendingOpportunityId={queueRowOpenPendingOpportunityId}
                         queuePillPendingKey={queuePillPendingKey}

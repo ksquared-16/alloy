@@ -41,7 +41,6 @@ export function buildCanonicalWorkUnitOperationalBootstrapUrl(params: WorkUnitBo
     const qs = new URLSearchParams({
         department_id: params.departmentId,
         include_previews: "false",
-        count_mode: "exact",
         summary_mode: "initial",
         limit: "3",
         omit_total_count: "true",

@@ -3,54 +3,85 @@
 import KPIBlock from "@/app/adminV2/components/workspace/blocks/KPIBlock";
 import { splitWorkspaceKpiBands } from "@/lib/kpi/workspaceKpiPresentation";
 import type { KPIVm } from "@/lib/ui-v2/workspace-types";
+import type { ResolvedMetricMap } from "@/lib/metrics/fetchResolvedMetrics";
+import { OipPerformanceKpiRow } from "@/components/admin/workspace/OipKpiObjectCard";
 
 type Props = {
     kpis: KPIVm[];
+    oipResolved?: ResolvedMetricMap;
+    loading?: boolean;
     inventoryMaxVisible?: number;
+    /** @deprecated retained for call-site compat */
     performanceMaxVisible?: number;
+    variant?: "default" | "unified";
+    onKpiClick?: (kpi: KPIVm) => void;
 };
 
-function BandHeading({ children }: { children: React.ReactNode }) {
-    return (
-        <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-alloy-midnight/45">
-            {children}
-        </div>
-    );
-}
-
 /**
- * Unified workspace KPI presentation — pipeline inventory above operational performance.
+ * Work unit / workspace KPI bands — queue inventory separate from operational performance objects.
  */
 export default function WorkspaceKpiUnifiedStrip({
     kpis,
+    oipResolved,
+    loading = false,
     inventoryMaxVisible = 5,
-    performanceMaxVisible = 4,
+    performanceMaxVisible: _performanceMaxVisible = 4,
+    variant = "default",
+    onKpiClick,
 }: Props) {
+    void _performanceMaxVisible;
     const { inventory, performance } = splitWorkspaceKpiBands(kpis);
 
     if (!inventory.length && !performance.length) return null;
 
-    const dualBand = inventory.length > 0 && performance.length > 0;
+    const unified = variant === "unified";
 
     return (
-        <div className="adminv2-ws-kpi-unified-strip space-y-3" data-workspace-kpi-unified="true">
-            {inventory.length ?
-                <div data-workspace-kpi-band="inventory">
-                    {dualBand ?
-                        <BandHeading>Pipeline overview</BandHeading>
-                    :   null}
-                    <KPIBlock kpis={inventory} maxVisible={inventoryMaxVisible} />
-                </div>
-            :   null}
+        <div
+            className={unified ? "space-y-1.5" : "adminv2-ws-kpi-unified-strip space-y-2"}
+            data-workspace-kpi-unified="true"
+            data-workspace-kpi-variant={variant}
+        >
             {performance.length ?
                 <div
                     data-workspace-kpi-band="performance"
-                    className={dualBand ? "rounded-lg border border-alloy-pine/15 bg-[linear-gradient(135deg,rgba(236,247,243,0.55)_0%,rgba(255,255,255,0.4)_100%)] px-1 py-2" : ""}
+                    className={
+                        unified
+                            ? "pt-0"
+                            : "rounded-lg border border-alloy-stone/18 border-l-[3px] border-l-alloy-juniper bg-white px-2 py-1.5"
+                    }
+                    data-work-unit-operational-performance="true"
                 >
-                    {dualBand ?
-                        <BandHeading>Operational performance</BandHeading>
+                    {!unified ?
+                        <div className="mb-1 text-[9px] font-semibold uppercase tracking-[0.12em] text-alloy-juniper">
+                            Operational Performance
+                        </div>
                     :   null}
-                    <KPIBlock kpis={performance} maxVisible={performanceMaxVisible} />
+                    <OipPerformanceKpiRow
+                        kpis={performance}
+                        oipResolved={oipResolved}
+                        loading={loading}
+                        compact
+                        layout="command"
+                        onKpiClick={onKpiClick}
+                    />
+                </div>
+            :   null}
+            {inventory.length ?
+                <div
+                    data-workspace-kpi-band="inventory"
+                    className={
+                        unified
+                            ? "border-t border-alloy-stone/8 pt-1.5"
+                            : "rounded-lg border border-alloy-stone/18 bg-white px-2 py-1.5"
+                    }
+                >
+                    {!unified ?
+                        <div className="mb-1 text-[9px] font-semibold uppercase tracking-[0.12em] text-alloy-midnight/50">
+                            Queue Overview
+                        </div>
+                    :   null}
+                    <KPIBlock kpis={inventory} maxVisible={inventoryMaxVisible} />
                 </div>
             :   null}
         </div>

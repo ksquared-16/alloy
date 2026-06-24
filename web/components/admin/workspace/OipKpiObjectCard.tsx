@@ -10,6 +10,7 @@ import {
     oipHealthAccentKey,
     oipKpiCardShellClass,
     oipKpiCommandRowClass,
+    oipKpiCompactRowClass,
     oipMetricAccentKey,
     type OipKpiAccentKey,
     type OipKpiCardLayout,
@@ -113,16 +114,17 @@ export function OipKpiObjectCard({
     const preview = resolvedLayout === "preview";
 
     if (loading) {
+        const loadingShell =
+            resolvedLayout === "command"
+                ? "min-h-[5.25rem] rounded-lg border border-alloy-stone/15 bg-white px-3.5 py-3 shadow-[0_1px_4px_rgba(15,23,42,0.06)]"
+                : "rounded-lg border border-alloy-midnight/15 bg-white px-2.5 py-2";
         return (
-            <div
-                className={`rounded-lg border border-alloy-midnight/15 bg-white px-2.5 py-2 ${className}`}
-                aria-busy="true"
-            >
-                <div className="flex items-center gap-1.5">
-                    <div className="h-5 w-5 animate-pulse rounded-md bg-alloy-midnight/8" />
-                    <div className="h-2 w-12 animate-pulse rounded bg-alloy-midnight/8" />
+            <div className={`${loadingShell} ${className}`} aria-busy="true">
+                <div className="flex items-center gap-2">
+                    <div className={`animate-pulse rounded-md bg-alloy-midnight/8 ${resolvedLayout === "command" ? "h-7 w-7" : "h-5 w-5"}`} />
+                    <div className={`animate-pulse rounded bg-alloy-midnight/8 ${resolvedLayout === "command" ? "h-2.5 w-16" : "h-2 w-12"}`} />
                 </div>
-                <div className="mt-1.5 h-4 w-10 animate-pulse rounded bg-alloy-midnight/6" />
+                <div className={`mt-2 animate-pulse rounded bg-alloy-midnight/6 ${resolvedLayout === "command" ? "h-5 w-14" : "h-4 w-10"}`} />
             </div>
         );
     }
@@ -136,21 +138,21 @@ export function OipKpiObjectCard({
 
     const body = (
         <>
-            <div className={preview ? "flex flex-col gap-1" : "flex items-start gap-1.5"}>
+            <div className={preview ? "flex flex-col gap-0.5" : "flex items-start gap-1.5"}>
                 <OipKpiIcon
                     iconKey={resolvedIconKey}
                     accent={resolvedAccent}
                     withWell
-                    wellSize={preview ? "sm" : "md"}
+                    wellSize={preview ? "sm" : resolvedLayout === "command" ? "md" : "sm"}
                 />
                 <div className="min-w-0 flex-1">
                     <div
-                        className={`truncate font-semibold uppercase tracking-wide text-alloy-midnight/55 ${preview ? "text-[7px]" : "text-[8px]"}`}
+                        className={`truncate font-semibold uppercase tracking-wide text-alloy-midnight/55 ${preview ? "text-[7px]" : resolvedLayout === "command" ? "text-[9px] leading-none" : "text-[8px] leading-none"}`}
                     >
                         {label}
                     </div>
                     <div
-                        className={`mt-0.5 font-semibold tabular-nums leading-tight ${resolvedLayout === "command" || resolvedLayout === "health" ? "text-sm" : preview ? "text-sm" : "text-base"} ${variant === "health" ? oipKpiObjectStatusTextClass(normalized) : oipKpiObjectValueClass(normalized)}`}
+                        className={`font-semibold tabular-nums leading-tight ${resolvedLayout === "command" ? "mt-0.5 text-base" : resolvedLayout === "health" ? "mt-0.5 text-sm" : preview ? "mt-0.5 text-sm" : "mt-0.5 text-sm"} ${variant === "health" ? oipKpiObjectStatusTextClass(normalized) : oipKpiObjectValueClass(normalized)}`}
                     >
                         {displayValue}
                     </div>
@@ -161,7 +163,13 @@ export function OipKpiObjectCard({
             :   null}
             {showStatus ?
                 <div
-                    className={`mt-0.5 flex items-center gap-1 text-[9px] font-medium ${oipKpiObjectStatusTextClass(normalized)}`}
+                    className={`mt-1 inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[9px] font-semibold ${
+                        normalized === "critical"
+                            ? "bg-red-50 text-red-700"
+                            : normalized === "warning"
+                              ? "bg-alloy-ember/10 text-alloy-ember"
+                              : "bg-alloy-juniper/8 text-alloy-juniper"
+                    } ${resolvedLayout === "command" ? "" : oipKpiObjectStatusTextClass(normalized)}`}
                 >
                     <span aria-hidden>{oipStatusIcon(normalized)}</span>
                     <span>{oipStatusOperatorLabel(normalized)}</span>
@@ -224,12 +232,15 @@ export function OipKpiObjectRow({
     layout?: OipKpiCardLayout | "compact";
 }) {
     const command = layout === "command" || layout === "health";
+    const compactGrid = layout === "compact";
     return (
         <div
             className={
                 command
                     ? `${oipKpiCommandRowClass(layout === "health" ? "health" : "command")} ${className}`
-                    : `flex flex-wrap gap-1.5 ${className}`
+                    : compactGrid
+                      ? `${oipKpiCompactRowClass()} ${className}`
+                      : `flex flex-wrap gap-1.5 ${className}`
             }
             data-oip-kpi-object-row="true"
             data-oip-kpi-row-layout={layout}

@@ -20,7 +20,10 @@ import {
     filterWorkUnitsForBuilderOwnedDeptDisplay,
 } from "@/lib/lifecycle/builderOwnedLifecycleRuntime";
 import {
-    filterSortLifecycleSiblingWorkUnits,
+    buildLifecycleSiblingNavRowsFromDepartmentWorkUnits,
+    lifecycleSiblingNavRowHasResolvableWorkUnit,
+} from "@/lib/lifecycle/lifecycleWorkUnitShellPills";
+import {
     logLifecycleSiblingHydrationDev,
     type LifecycleSiblingHydrationBlock,
 } from "@/lib/lifecycle/lifecycleWorkUnitSiblingHydration";
@@ -34,6 +37,10 @@ import {
     writeWorkUnitPrimaryLaneRowsBootstrapCache,
     writeWorkUnitQueueSummariesBootstrapCache,
 } from "@/lib/workspace/workUnitOperBootstrapLaneCache";
+import {
+    resolveWorkUnitBootstrapOipSnapshot,
+    type WorkUnitBootstrapOipSnapshot,
+} from "@/lib/workspace/resolveWorkUnitBootstrapOipSnapshot";
 
 export type WorkUnitOperationalBootstrapQueue = {
     summaries: Awaited<ReturnType<typeof getWorkUnitQueueSummaries>>["queues"];
@@ -82,6 +89,8 @@ export type WorkUnitOperationalBootstrapPayload = {
     queue: WorkUnitOperationalBootstrapQueue;
     /** Builder-owned lifecycle: full sibling set + visibility-based pill totals (one paint). */
     lifecycle_siblings?: LifecycleSiblingHydrationBlock;
+    /** Above-fold OIP KPI values — snapshot/no-data only (no live resolve on critical path). */
+    oip_snapshot?: WorkUnitBootstrapOipSnapshot;
 };
 
 export type WorkUnitOperBootstrapContext = {
@@ -111,6 +120,7 @@ export type WorkUnitOperBootstrapContext = {
      * its existing `/api/admin/work-units?department_id=` fallback. Preserves Queue First.
      */
     deferLifecycleSiblings?: boolean;
+    workspaceSiteId?: string | null;
 };
 
 type AttentionBootstrapOutcome = {
@@ -248,6 +258,7 @@ export async function loadWorkUnitOperationalBootstrap(params: {
         deferPrimaryLaneRows,
         deferLifecycleSiblings,
     } = ctx;
+    const workspaceSiteId = ctx.workspaceSiteId ?? null;
 
     if (!departmentIdAllowed(accessDim, departmentId)) {
         return { error: "Not found", status: 404 };
@@ -298,6 +309,8 @@ export async function loadWorkUnitOperationalBootstrap(params: {
     const workUnitMetadata = (wuRow as { metadata?: unknown }).metadata ?? null;
     const queueDefinition = (wuRow as { queue_definition?: unknown }).queue_definition;
     const wuKey = (wuRow as { key?: string | null }).key ?? null;
+    const deptWuRows = deptWuListRes.data ?? [];
+    const builderOwnedRuntime = deptUsesBuilderOwnedLifecycleRuntime(departmentMetadata, deptWuRows);
 
     const preloadedQueueDefinition = {
         queue_definition: queueDefinition,
@@ -368,6 +381,8 @@ export async function loadWorkUnitOperationalBootstrap(params: {
             recordScopeImpossible,
             recordScopeConstraints,
             perfTag: "wu_bootstrap_reveal",
+            /** Reveal path: planned counts — exact counts remain on queue items API and `countAccuracy: "exact"` callers. */
+            countAccuracy: "planned",
         }));
     if (!summariesCached) {
         writeWorkUnitQueueSummariesBootstrapCache(summariesCacheParams, summariesResult);
@@ -433,67 +448,108 @@ export async function loadWorkUnitOperationalBootstrap(params: {
         primaryQueueKey == null ? "none" : primaryIsNeedsAttention ? "needs_attention" : "summaries_only";
 
     let primary_lane: WorkUnitOperationalBootstrapQueue["primary_lane"];
-    if (primaryQueueKey) {
+    let oip_snapshot: WorkUnitBootstrapOipSnapshot | undefined;
+
+    const fetchPrimaryLaneRows = async (): Promise<WorkUnitOperationalBootstrapQueue["primary_lane"] | undefined> => {
+        if (!primaryQueueKey) return undefined;
         const rowRoute = `/api/admin/queues/${encodeURIComponent(workUnitId)}/${encodeURIComponent(primaryQueueKey)}`;
         if (deferPrimaryLaneRows) {
             phases.primary_lane_rows_deferred = true;
             phases.primary_lane_rows_ms = 0;
             phases.deferred_rows_source = "client_queue_items_api";
-            primary_lane = {
+            return {
                 queue_key: primaryQueueKey,
                 route: rowRoute,
                 rows_deferred: true,
                 ...(omitTotalCount ? { total_omitted: true } : {}),
             };
-        } else {
-            const tRows0 = Date.now();
-            const primaryCacheParams = {
-                orgId,
-                workUnitId,
-                queueKey: primaryQueueKey,
-                limit: primaryRowLimit,
-                attentionBucketKey: primaryIsNeedsAttention ? attentionBucketKey : "",
-                queueScopeKey: ctx.queueScopeKey,
-                omitTotalCount,
-            };
-            const primaryCached = readWorkUnitPrimaryLaneRowsBootstrapCache(primaryCacheParams);
-            const result = primaryCached
-                ? { items: primaryCached.items, total_omitted: primaryCached.total_omitted }
-                : (
-                      await getWorkUnitQueuePreviewRows({
-                          orgId,
-                          workUnitId,
-                          queueKey: primaryQueueKey,
-                          limit: primaryRowLimit,
-                          offset: 0,
-                          omitTotalCount,
-                          recordScopeImpossible,
-                          recordScopeConstraints,
-                          viewerDisplayTimeZone,
-                          attentionBucketKey: primaryIsNeedsAttention ? attentionBucketKey : null,
-                          preloadedQueueDefinition,
-                          preloadedDepartmentMetadata: departmentMetadata,
-                          sharedBootstrap,
-                          preloadedAttentionPack: primaryIsNeedsAttention ? preloadedAttention : undefined,
-                      })
-                  ).result;
-            if (!primaryCached) {
-                writeWorkUnitPrimaryLaneRowsBootstrapCache(primaryCacheParams, {
-                    items: result.items as unknown[],
-                    total_omitted: result.total_omitted,
-                });
-            }
-            phases.primary_lane_rows_ms = Date.now() - tRows0;
-            phases.primary_lane_rows_cache_hit = Boolean(primaryCached);
-            phases.primary_lane_row_enrichment = "queue_reveal";
-            phases.primary_lane_rows_deferred = false;
-            primary_lane = {
-                queue_key: primaryQueueKey,
-                route: rowRoute,
-                items: result.items as unknown[],
-                ...(result.total_omitted ? { total_omitted: true } : {}),
-            };
         }
+        const primaryCacheParams = {
+            orgId,
+            workUnitId,
+            queueKey: primaryQueueKey,
+            limit: primaryRowLimit,
+            attentionBucketKey: primaryIsNeedsAttention ? attentionBucketKey : "",
+            queueScopeKey: ctx.queueScopeKey,
+            omitTotalCount,
+        };
+        const primaryCached = readWorkUnitPrimaryLaneRowsBootstrapCache(primaryCacheParams);
+        const result = primaryCached
+            ? { items: primaryCached.items, total_omitted: primaryCached.total_omitted }
+            : (
+                  await getWorkUnitQueuePreviewRows({
+                      orgId,
+                      workUnitId,
+                      queueKey: primaryQueueKey,
+                      limit: primaryRowLimit,
+                      offset: 0,
+                      omitTotalCount,
+                      recordScopeImpossible,
+                      recordScopeConstraints,
+                      viewerDisplayTimeZone,
+                      attentionBucketKey: primaryIsNeedsAttention ? attentionBucketKey : null,
+                      preloadedQueueDefinition,
+                      preloadedDepartmentMetadata: departmentMetadata,
+                      sharedBootstrap,
+                      preloadedAttentionPack: primaryIsNeedsAttention ? preloadedAttention : undefined,
+                  })
+              ).result;
+        if (!primaryCached) {
+            writeWorkUnitPrimaryLaneRowsBootstrapCache(primaryCacheParams, {
+                items: result.items as unknown[],
+                total_omitted: result.total_omitted,
+            });
+        }
+        phases.primary_lane_rows_cache_hit = Boolean(primaryCached);
+        phases.primary_lane_row_enrichment = "queue_reveal";
+        phases.primary_lane_rows_deferred = false;
+        return {
+            queue_key: primaryQueueKey,
+            route: rowRoute,
+            items: result.items as unknown[],
+            ...(result.total_omitted ? { total_omitted: true } : {}),
+        };
+    };
+
+    const fetchOipSnapshot = async (): Promise<WorkUnitBootstrapOipSnapshot | undefined> => {
+        if (!builderOwnedRuntime) return undefined;
+        const normalizedSite = workspaceSiteId?.trim() || null;
+        const { data: orgSettings } = await supabase
+            .from("org_settings")
+            .select("metadata")
+            .eq("org_id", orgId)
+            .maybeSingle();
+        return resolveWorkUnitBootstrapOipSnapshot({
+            supabase,
+            orgId,
+            siteLocationId: normalizedSite,
+            workUnitId,
+            orgMetadata: (orgSettings as { metadata?: unknown } | null)?.metadata ?? null,
+        });
+    };
+
+    if (primaryQueueKey || builderOwnedRuntime) {
+        const tRows0 = Date.now();
+        const tOip0 = Date.now();
+        const [primaryLaneOut, oipOut] = await Promise.all([
+            primaryQueueKey
+                ? fetchPrimaryLaneRows().then((lane) => {
+                      if (primaryQueueKey && !deferPrimaryLaneRows) {
+                          phases.primary_lane_rows_ms = Date.now() - tRows0;
+                      }
+                      return lane;
+                  })
+                : Promise.resolve(undefined),
+            builderOwnedRuntime
+                ? fetchOipSnapshot().then((snap) => {
+                      phases.oip_snapshot_ms = Date.now() - tOip0;
+                      if (snap) phases.oip_snapshot_source = snap.source;
+                      return snap;
+                  })
+                : Promise.resolve(undefined),
+        ]);
+        primary_lane = primaryLaneOut;
+        oip_snapshot = oipOut;
     } else {
         phases.primary_lane_rows_deferred = deferPrimaryLaneRows ? true : undefined;
     }
@@ -501,8 +557,6 @@ export async function loadWorkUnitOperationalBootstrap(params: {
     phases.pipeline_ms = 0;
 
     let lifecycle_siblings: LifecycleSiblingHydrationBlock | undefined;
-    const deptWuRows = deptWuListRes.data ?? [];
-    const builderOwnedRuntime = deptUsesBuilderOwnedLifecycleRuntime(departmentMetadata, deptWuRows);
     if (deferLifecycleSiblings) {
         // Card 2 — keep lifecycle siblings off the reveal-blocking path. Omit the block so the
         // client's existing fallback (gated on !lifecycleSiblingsHydrationComplete) hydrates
@@ -511,16 +565,30 @@ export async function loadWorkUnitOperationalBootstrap(params: {
         phases.lifecycle_siblings_deferred = true;
     } else if (builderOwnedRuntime && !deptWuListRes.error) {
         const tSib0 = Date.now();
-        const lifecycleRows = filterSortLifecycleSiblingWorkUnits(
-            deptWuRows.map((w) => ({
+        const siblingNavRows = buildLifecycleSiblingNavRowsFromDepartmentWorkUnits({
+            departmentId,
+            departmentMetadata,
+            workUnits: deptWuRows.map((w) => ({
                 id: String((w as { id: string }).id),
                 name: (w as { name?: string | null }).name ?? null,
                 key: (w as { key?: string | null }).key ?? null,
                 metadata: (w as { metadata?: unknown }).metadata,
                 is_active: (w as { is_active?: boolean }).is_active,
                 sort_order: (w as { sort_order?: number | null }).sort_order ?? null,
-            }))
-        );
+                queue_definition: (w as { queue_definition?: unknown }).queue_definition,
+            })),
+        });
+        const lifecycleRows = siblingNavRows
+            .filter(lifecycleSiblingNavRowHasResolvableWorkUnit)
+            .map((row) => ({
+                id: row.id,
+                name: row.name,
+                key: row.key ?? null,
+                sort_order:
+                    (deptWuRows.find((w) => String((w as { id: string }).id) === row.id) as
+                        | { sort_order?: number | null }
+                        | undefined)?.sort_order ?? null,
+            }));
         if (lifecycleRows.length) {
             const departmentWorkUnitIdsForLifecycleScope = filterWorkUnitsForBuilderOwnedDeptDisplay(
                 deptWuRows.map((w) => ({
@@ -578,6 +646,7 @@ export async function loadWorkUnitOperationalBootstrap(params: {
             lifecycle_siblings = {
                 work_units: lifecycleRows,
                 totals_by_work_unit_id,
+                nav_rows: siblingNavRows,
             };
             logLifecycleSiblingHydrationDev("bootstrap_siblings", {
                 source: "server",
@@ -621,6 +690,7 @@ export async function loadWorkUnitOperationalBootstrap(params: {
             ...(attentionBlock ? { attention: attentionBlock } : {}),
         },
         ...(lifecycle_siblings ? { lifecycle_siblings } : {}),
+        ...(oip_snapshot ? { oip_snapshot } : {}),
     };
 
     return { payload, phases };

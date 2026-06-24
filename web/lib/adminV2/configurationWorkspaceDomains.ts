@@ -170,14 +170,9 @@ export const CONFIGURATION_WORKSPACE_DOMAINS: readonly ConfigurationWorkspaceDom
                 description: "Intake forms and enrollment packets.",
             },
             {
-                href: "/admin/settings/kpis",
-                label: "Workspace metrics",
-                description: "Dashboard KPI tiles.",
-            },
-            {
                 href: "/admin/settings/analytics",
-                label: "Analytics",
-                description: "Operational intelligence — KPI packs, targets, and placement.",
+                label: "Operational Intelligence",
+                description: "Performance packs, targets, and where indicators appear.",
             },
             {
                 href: "/admin/settings/documents/document-fields",

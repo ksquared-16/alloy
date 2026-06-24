@@ -3,11 +3,15 @@
 import type { CSSProperties } from "react";
 import { neutral, derived, brand } from "@/styles/tokens/colors";
 import type { KPIVm } from "@/lib/ui-v2/workspace-types";
+import type { ResolvedMetricMap } from "@/lib/metrics/fetchResolvedMetrics";
 import { WorkspaceRootLifecycleGrid } from "@/components/admin/workspace/WorkspaceRootLifecycleGrid";
-import { WorkspaceKpiOrientationCrossfade } from "@/components/admin/workspace/WorkspaceKpiOrientationCrossfade";
+import WorkspaceCommandHeader from "@/components/admin/workspace/WorkspaceCommandHeader";
 import type { OperatorLifecycleLandingCard } from "@/lib/admin/buildOperatorLifecycleLanding";
 import { WorkspaceShellLayout } from "@/components/admin/workspace/WorkspaceShellLayout";
 import { WorkspaceRootActionsRail } from "@/app/adminV2/components/workspace/WorkspaceRootActionsRail";
+import { OPERATOR_BUSINESS_PROCESSES_LABEL } from "@/lib/metrics/workspaceHealthSummary";
+import { WS_ZONE_MT } from "@/lib/workspace/workspaceLayoutSpacing";
+import { WS_LAYOUT, WS_LAYOUT_ATTR } from "@/lib/workspace/workspaceLayoutSystem";
 
 const companyRootStyle: CSSProperties = {
   backgroundColor: "transparent",
@@ -45,13 +49,13 @@ export type WorkspaceRootMetrics = {
 
 type Props = {
   orgName: string | null;
-  /** Retained for workspace page API compatibility — lifecycle landing does not render departments. */
   departments?: unknown;
   deptTileStats?: unknown;
   metrics: WorkspaceRootMetrics | null;
   metricsLoading: boolean;
   orgOpportunityKpis?: KPIVm[] | null;
   workspaceKpiStrip?: KPIVm[] | undefined;
+  oipResolved?: ResolvedMetricMap;
   kpiStripPlaceholder?: boolean;
   workspaceRollupRefined?: boolean;
   departmentsPending?: boolean;
@@ -61,21 +65,18 @@ type Props = {
   lifecycleCardsPending?: boolean;
 };
 
-/**
- * Operator workspace root — lifecycle tiles and orientation rail.
- * KPI strip hidden until the model is trustworthy; aggregation continues in page.tsx.
- */
 export function WorkspaceRootShell({
   orgName,
   workspaceKpiStrip,
+  oipResolved,
   kpiStripPlaceholder = false,
   workspaceRollupRefined = false,
   lifecycleCards = [],
   lifecycleCardsPending = false,
 }: Props) {
   const displayName = (orgName && orgName.trim()) || "Your organization";
-
   const defaultDepartmentId = lifecycleCards[0]?.departmentId ?? null;
+  const showHeader = workspaceRollupRefined && (workspaceKpiStrip?.length || kpiStripPlaceholder);
 
   return (
     <WorkspaceShellLayout
@@ -88,42 +89,30 @@ export function WorkspaceRootShell({
       containLead={null}
       primaryColumn={
         <>
-          <div className="adminv2-ws-dept-v2-control-deck">
-            <div className="adminv2-ws-dept-v2-top-stack">
-              <div className="adminv2-ws-dept-v2-brief">
-                <div className="adminv2-ws-dept-v2-brief-focus-label">Operator workspace</div>
-                <div className="adminv2-ws-dept-v2-brief-head-row">
-                  <h2 className="adminv2-ws-dept-v2-brief-headline">{displayName}</h2>
-                </div>
-                <p
-                  className="text-sm mt-2 max-w-3xl adminv2-ws-root-brief-subline"
-                  style={{ lineHeight: 1.45 }}
-                >
-                  Enrollment operations at a glance — track families, manage waitlists, and move children toward enrollment.
-                </p>
-              </div>
-            </div>
-          </div>
-
-          {workspaceKpiStrip?.length ?
+          {showHeader ?
             <div
-              className={`adminv2-ws-root-kpi-zone px-0 ${workspaceRollupRefined ? "adminv2-ws-deferred-surface--refined" : "adminv2-ws-deferred-surface--coarse"}`}
-              data-workspace-zone="kpi-orientation"
+              className="adminv2-ws-root-kpi-zone px-0 pb-1"
+              data-workspace-zone="command-header"
             >
-              <WorkspaceKpiOrientationCrossfade
-                kpis={workspaceKpiStrip}
-                placeholderPending={kpiStripPlaceholder}
-                maxVisible={5}
+              <WorkspaceCommandHeader
+                orgName={displayName}
+                kpis={workspaceKpiStrip ?? []}
+                oipResolved={oipResolved}
+                loading={kpiStripPlaceholder}
               />
             </div>
           :   null}
 
-          <section
-            className={`adminv2-ws-root-departments-zone ${workspaceRollupRefined ? "adminv2-ws-deferred-surface--refined" : "adminv2-ws-deferred-surface--coarse"}`}
-            aria-label="Lifecycle command tiles"
-          >
-            <WorkspaceRootLifecycleGrid lifecycles={lifecycleCards} pending={lifecycleCardsPending} />
-          </section>
+            <section
+                className={`adminv2-ws-root-departments-zone ${WS_ZONE_MT.commandToGrid}`}
+                data-ws-layout={WS_LAYOUT_ATTR.workspaceSectionB}
+                aria-label="Business process command tiles"
+            >
+                <h2 className={`${WS_LAYOUT.sectionKicker} mb-2`}>
+                    {OPERATOR_BUSINESS_PROCESSES_LABEL}
+                </h2>
+                <WorkspaceRootLifecycleGrid lifecycles={lifecycleCards} pending={lifecycleCardsPending} />
+            </section>
         </>
       }
     />

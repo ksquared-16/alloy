@@ -53,13 +53,23 @@ function WorkspaceSiteFilterLocationReserve() {
   );
 }
 
+function useClientHydrated(): boolean {
+  return useSyncExternalStore(
+    () => () => {},
+    () => true,
+    () => false
+  );
+}
+
 function WorkspaceSiteFilterStrip({ normalizedPath }: { normalizedPath: string }) {
+  const hydrated = useClientHydrated();
   const wf = useWorkspaceSiteFilter();
   const showSiteFilter = isWorkspaceOperatorPath(normalizedPath);
   if (!showSiteFilter) return null;
 
   const bootstrap = wf?.displayBootstrap ?? wf?.bootstrap ?? null;
-  if (!bootstrap || !wf) {
+  // Client-only bootstrap cache must not render select before hydration — SSR and first client paint match reserve.
+  if (!hydrated || !bootstrap || !wf) {
     return <WorkspaceSiteFilterLocationReserve />;
   }
 

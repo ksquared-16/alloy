@@ -10,8 +10,8 @@ type CacheEntry<T> = { atMs: number; value: T };
 const summariesCache = new Map<string, CacheEntry<WorkUnitQueueSummariesResult>>();
 const primaryRowsCache = new Map<string, CacheEntry<{ items: unknown[]; total_omitted?: boolean }>>();
 
-/** Must match loader `summaryMode` + `priorityBudget` (WU reveal uses priority:6). */
-const WU_REVEAL_SUMMARIES_MODE = "priority:6";
+/** Must match loader `summaryMode` + `priorityBudget` + reveal `countAccuracy` (planned). */
+export const WU_REVEAL_SUMMARIES_MODE = "priority:6:planned";
 
 function summariesKey(params: {
     orgId: string;

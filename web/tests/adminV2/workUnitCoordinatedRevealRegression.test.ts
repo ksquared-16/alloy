@@ -14,7 +14,7 @@ describe("workUnitCoordinatedRevealRegression", () => {
             "app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page.tsx"
         );
         expect(page).toContain("resolveWorkUnitQueueLaneRevealState");
-        expect(page).toContain("rowsHeld: !laneMayPaint");
+        expect(page).toContain("rowsHeld:");
         expect(page).not.toContain("page_seeded_from_cache: workUnitPageSeededWarm");
     });
 

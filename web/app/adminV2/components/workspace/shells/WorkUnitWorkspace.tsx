@@ -12,14 +12,12 @@ import {
     workUnitAboveFoldQueueRowsHeld,
     workUnitAboveFoldQueueRowsLoading,
 } from "@/lib/adminV2/routeShellPipeline/adapters/workUnit/aboveFoldTypes";
-import {
-    WorkUnitAboveFoldHeaderChips,
-    type WorkUnitAboveFoldHeaderHandlers,
-} from "@/app/adminV2/components/workspace/WorkUnitAboveFoldHeaderChips";
+import type { WorkUnitAboveFoldHeaderHandlers } from "@/app/adminV2/components/workspace/WorkUnitAboveFoldHeaderChips";
 import { WorkUnitAboveFoldActionsRail } from "@/app/adminV2/components/workspace/WorkUnitAboveFoldActionsRail";
-import { SignalBlock, KPIBlock, QueueBlock, WorkBlock } from "../blocks";
+import { SignalBlock, QueueBlock, WorkBlock } from "../blocks";
+import WorkUnitUnifiedOperationalHeader from "@/components/admin/workspace/WorkUnitUnifiedOperationalHeader";
+import type { ResolvedMetricMap } from "@/lib/metrics/fetchResolvedMetrics";
 import { WorkspaceShellLayout } from "@/components/admin/workspace/WorkspaceShellLayout";
-import { WorkspaceQuietKpiReserve } from "@/components/admin/workspace/WorkspaceQuietLoadingReserve";
 
 type Props = {
   model: WorkUnitWorkspaceModel;
@@ -33,6 +31,7 @@ type Props = {
   otherPillSectionKey?: string | null;
   kpiStripPlaceholder: boolean;
   kpiStripSkeletonCellCount?: number;
+  oipResolved?: ResolvedMetricMap;
   /** Workflow telemetry card in the command rail (between Actions and BOS). */
   commandRailTelemetrySlot?: ReactNode;
   opportunityDrawerWorkspaceContext?: OpportunityDrawerIntentContext | null;
@@ -53,6 +52,7 @@ export default function WorkUnitWorkspace({
   otherPillSectionKey = null,
   kpiStripPlaceholder,
   kpiStripSkeletonCellCount: _kpiStripSkeletonCellCount,
+  oipResolved,
   commandRailTelemetrySlot = null,
   opportunityDrawerWorkspaceContext = null,
   queueRowOpenPendingOpportunityId = null,
@@ -80,10 +80,14 @@ export default function WorkUnitWorkspace({
   const hasSignals = model.signals.length > 0;
   const hasKpis = model.kpis.length > 0;
   const hasHeaderSlot = aboveFold.header.visible;
-  const hasTopStack = hasBrief || hasSignals || hasAwareness || hasHeaderSlot;
   const hasKpiZone = hasKpis || kpiStripPlaceholder;
-  const hasControlDeck = hasTopStack || hasKpiZone;
-  const focusKicker = model.focusLabel?.trim() || "Work unit";
+  const hasUnifiedHeader = hasHeaderSlot || hasKpiZone;
+  const processName = model.focusLabel?.trim() || null;
+  const suppressLegacyBrief = hasUnifiedHeader;
+  const showBrief = hasBrief && !suppressLegacyBrief;
+  /** Unified command surface owns process/stage/pulse — no parallel brief/signal rows. */
+  const hasTopStack = !hasUnifiedHeader && (showBrief || hasSignals || hasAwareness);
+  const hasControlDeck = hasTopStack || hasUnifiedHeader;
 
   const li = model.laneInterpretation;
   const statusLine = li?.laneStatusLine?.trim() ?? "";
@@ -112,79 +116,63 @@ export default function WorkUnitWorkspace({
       primaryColumn={
         <>
           {hasControlDeck ? (
-            <div className="adminv2-ws-dept-v2-control-deck">
-              {hasTopStack ? (
-                <div className="adminv2-ws-dept-v2-top-stack">
-                  {hasBrief ? (
+            <div
+              className="adminv2-ws-dept-v2-control-deck"
+              data-wu-unified-header={hasUnifiedHeader ? "true" : undefined}
+            >
+              {hasTopStack ?
+                <div className="adminv2-ws-dept-v2-top-stack mb-2">
+                  {showBrief ?
                     <div className="adminv2-ws-dept-v2-brief">
-                      <div className="adminv2-ws-dept-v2-brief-kicker">{focusKicker}</div>
+                      <div className="adminv2-ws-dept-v2-brief-kicker">{processName ?? "Work unit"}</div>
                       <div className="adminv2-ws-dept-v2-brief-head-row">
-                        {model.aiSummary?.headline?.trim() ? (
-                          <h2 className="adminv2-ws-dept-v2-brief-headline">{model.aiSummary.headline.trim()}</h2>
-                        ) : (
-                          <h2 className="adminv2-ws-dept-v2-brief-headline adminv2-ws-dept-v2-brief-headline--placeholder">
-                            Lane headline
-                          </h2>
-                        )}
-                        {fullBriefTooltip ? (
-                          <button
-                            type="button"
-                            className="adminv2-ws-dept-v2-briefing-trigger"
-                            title={fullBriefTooltip}
-                            aria-label={`Lane briefing: ${fullBriefTooltip}`}
-                          >
-                            <span className="adminv2-ws-dept-v2-briefing-trigger-icon" aria-hidden>
-                              ⓘ
-                            </span>
-                            <span className="adminv2-ws-dept-v2-briefing-trigger-label">Briefing</span>
-                          </button>
-                        ) : null}
+                        {model.aiSummary?.headline?.trim() ?
+                            <h2 className="adminv2-ws-dept-v2-brief-headline">{model.aiSummary.headline.trim()}</h2>
+                        :   <h2 className="adminv2-ws-dept-v2-brief-headline adminv2-ws-dept-v2-brief-headline--placeholder">
+                                Lane headline
+                            </h2>
+                        }
+                        {fullBriefTooltip ?
+                            <button
+                                type="button"
+                                className="adminv2-ws-dept-v2-briefing-trigger"
+                                title={fullBriefTooltip}
+                                aria-label={`Lane briefing: ${fullBriefTooltip}`}
+                            >
+                                <span className="adminv2-ws-dept-v2-briefing-trigger-icon" aria-hidden>
+                                    ⓘ
+                                </span>
+                                <span className="adminv2-ws-dept-v2-briefing-trigger-label">Briefing</span>
+                            </button>
+                        :   null}
                       </div>
-                      {hasHeaderSlot ? (
-                        <div className="adminv2-ws-wu-header-queue-picker mt-2 min-w-0">
-                          <WorkUnitAboveFoldHeaderChips
-                            slot={aboveFold.header}
-                            handlers={aboveFoldHandlers}
-                            otherPillSectionKey={otherPillSectionKey}
-                            lifecyclePanel={lifecyclePanel}
-                            queuePillPendingKey={queuePillPendingKey}
-                          />
-                        </div>
-                      ) : null}
                     </div>
-                  ) : null}
-                  {!hasBrief && hasHeaderSlot ? (
-                    <div className="adminv2-ws-wu-header-queue-picker mt-1 min-w-0 px-1">
-                      <WorkUnitAboveFoldHeaderChips
-                        slot={aboveFold.header}
-                        handlers={aboveFoldHandlers}
-                        otherPillSectionKey={otherPillSectionKey}
-                        lifecyclePanel={lifecyclePanel}
-                        queuePillPendingKey={queuePillPendingKey}
-                      />
-                    </div>
-                  ) : null}
-                  {hasAwareness ? (
+                  : null}
+                  {hasAwareness ?
                     <p className="adminv2-ws-dept-v2-ai-awareness" aria-live="polite">
                       {awarenessLine}
                     </p>
-                  ) : null}
-                  {hasSignals ? (
+                  : null}
+                  {hasSignals ?
                     <div className="adminv2-ws-dept-v2-signals">
-                      <SignalBlock signals={model.signals} onAction={onAction} surface="work_unit" maxVisible={3} />
+                      <SignalBlock signals={model.signals} onAction={onAction} surface="work_unit" maxVisible={2} />
                     </div>
-                  ) : null}
+                  : null}
                 </div>
-              ) : null}
-              {kpiStripPlaceholder ? (
-                <div data-workspace-zone="kpi-banner">
-                  <WorkspaceQuietKpiReserve id="wu-kpi-quiet-reserve" />
-                </div>
-              ) : hasKpis ? (
-                <div data-workspace-zone="kpi-banner">
-                  <KPIBlock kpis={model.kpis} maxVisible={5} />
-                </div>
-              ) : null}
+              : null}
+              {hasUnifiedHeader ?
+                <WorkUnitUnifiedOperationalHeader
+                  aboveFold={aboveFold}
+                  handlers={aboveFoldHandlers}
+                  kpis={model.kpis}
+                  oipResolved={oipResolved}
+                  kpiStripPlaceholder={kpiStripPlaceholder}
+                  lifecyclePanel={lifecyclePanel}
+                  otherPillSectionKey={otherPillSectionKey}
+                  queuePillPendingKey={queuePillPendingKey}
+                  processName={processName}
+                />
+              : null}
             </div>
           ) : null}
           {aboveFold.queue_lane.visible ? (

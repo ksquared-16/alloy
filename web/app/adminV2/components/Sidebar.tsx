@@ -167,15 +167,15 @@ function SidebarNav({
     const lifecycleNavExpanded = (
         <div className="pt-2 min-h-0">
             <div className="adminv2-sidebar-section-label mb-1 px-2 text-[11px] font-semibold tracking-wide">
-                Lifecycles
+                Business Processes
             </div>
             {lifecycleLoading ? (
                 <p className="adminv2-sidebar-muted px-2 py-2 text-xs" aria-busy="true">
-                    Loading lifecycles…
+                    Loading business processes…
                 </p>
             ) : null}
             {!lifecycleLoading && lifecycleCards.length === 0 ? (
-                <p className="adminv2-sidebar-muted px-2 py-2 text-xs">No lifecycles configured.</p>
+                <p className="adminv2-sidebar-muted px-2 py-2 text-xs">No business processes configured.</p>
             ) : null}
             <div className="space-y-1">
                 {lifecycleCards.map((lifecycle) => {

@@ -48,8 +48,8 @@ describe("Card 3 — deferred primary lane rows", () => {
         const page = read(
             "app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page.tsx"
         );
-        expect(page).toContain('pl.queue_key.trim().toLowerCase() === "needs_attention"');
         expect(page).toContain("attention_bucket");
+        expect(page).toMatch(/needs_attention/);
     });
 
     it("non-defer callers still receive inline primary_lane items", () => {

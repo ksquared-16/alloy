@@ -42,6 +42,10 @@ export type WorkUnitBootstrapPerfPhases = {
     right_rail_actions_ms?: number;
     right_rail_actions_cache_hit?: boolean;
     right_rail_actions_deferred?: boolean;
+    oip_snapshot_ms?: number;
+    oip_snapshot_source?: string;
+    placement_resolution_ms?: number;
+    actions_hydration_ms?: number;
 };
 
 export function logWorkUnitOperationalBootstrapPerf(params: {
@@ -56,6 +60,7 @@ export function logWorkUnitOperationalBootstrapPerf(params: {
     phases?: WorkUnitBootstrapPerfPhases;
 }): void {
     if (params.totalMs < 250 && (params.loaderMs ?? params.totalMs) < 250) return;
+    const phases = params.phases ?? {};
     const payloadKb =
         typeof params.payloadBytes === "number"
             ? Math.round((params.payloadBytes / 1024) * 10) / 10
@@ -65,6 +70,13 @@ export function logWorkUnitOperationalBootstrapPerf(params: {
         department_id: params.departmentId,
         total_ms: params.totalMs,
         duration_ms: params.totalMs,
+        loader_ms: params.loaderMs,
+        route_gate_ms: params.routeGateMs,
+        route_prep_ms: params.prepMs,
+        queue_summaries_ms: phases.queue_summaries_ms,
+        primary_lane_rows_ms: phases.primary_lane_rows_ms,
+        oip_snapshot_ms: phases.oip_snapshot_ms,
+        attention_ms: phases.attention_ms,
         payload_kb: payloadKb,
         source: "network",
     });

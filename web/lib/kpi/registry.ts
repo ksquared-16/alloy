@@ -185,6 +185,14 @@ const DEFINITIONS: Record<MetricKey, MetricDefinition> = {
         defaultLane: "business",
         defaultFormat: "count",
     },
+    "oip.ops.needs_attention_count": {
+        key: "oip.ops.needs_attention_count",
+        family: "O",
+        allowedSurfaces: ["workspace", "work_unit"],
+        defaultLabel: "Needs attention",
+        defaultLane: "business",
+        defaultFormat: "count",
+    },
     "oip.forms.completion_rate": {
         key: "oip.forms.completion_rate",
         family: "O",

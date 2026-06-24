@@ -29,9 +29,10 @@ describe("analytics modal shell", () => {
 
     it("uses BOS-rail modal shell and batch metric fetch", () => {
         expect(read("app/adminV2/components/AnalyticsModal.tsx")).toContain("AdminV2WorkspaceBosModalShell");
-        expect(read("app/adminV2/analytics/AnalyticsWorkspacePanel.tsx")).toContain("fetchOipMetricsResolved");
-        expect(read("app/adminV2/analytics/AnalyticsWorkspacePanel.tsx")).toContain("fetchMetricTrends");
-        expect(read("app/adminV2/analytics/AnalyticsWorkspacePanel.tsx")).toContain("data-analytics-summary-row");
+        expect(read("app/adminV2/components/AnalyticsModal.tsx")).toContain("bg-white");
+        expect(read("app/adminV2/analytics/AnalyticsWorkspacePanel.tsx")).toContain("prefetchOipMetricsWarm");
+        expect(read("app/adminV2/analytics/AnalyticsWorkspacePanel.tsx")).toContain('data-oip-tab="overview"');
+        expect(read("app/adminV2/analytics/AnalyticsWorkspacePanel.tsx")).toContain('closeWorkspaceModal("analytics")');
         expect(read("lib/metrics/packs.ts")).toContain("operational_health");
     });
 });

@@ -1,62 +1,78 @@
 "use client";
 
-import { useState } from "react";
-import Link from "next/link";
+import { useCallback, useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { useAdminAuth } from "@/contexts/AdminAuthContext";
 import SettingsEntityTabBar from "@/components/adminV2/settings/SettingsEntityTabBar";
 import SettingsPageHeader from "@/components/adminV2/settings/SettingsPageHeader";
 import { SETTINGS_PAGE_SHELL_CLASS } from "@/lib/adminV2/settingsPageLayout";
+import { dispatchAdminV2OpenAnalyticsModal } from "@/lib/adminV2/workspaceModalEvents";
 import KpiPacksPanel from "@/app/adminV2/settings/analytics/KpiPacksPanel";
 import KpiTargetsPanel from "@/app/adminV2/settings/analytics/KpiTargetsPanel";
-import KpiPlacementOverviewPanel from "@/app/adminV2/settings/analytics/KpiPlacementOverviewPanel";
+import OipVisibilityPanel from "@/app/adminV2/settings/analytics/OipVisibilityPanel";
+import OipSettingsSummary from "@/app/adminV2/settings/analytics/OipSettingsSummary";
+import { OipSettingsProvider } from "@/app/adminV2/settings/analytics/OipSettingsContext";
+import { OIP_SECONDARY_BTN_CLASS } from "@/app/adminV2/analytics/oipWorkspaceUi";
 
 const TABS: { key: TabKey; label: string }[] = [
-    { key: "packs", label: "KPI packs" },
-    { key: "targets", label: "KPI targets" },
-    { key: "placements", label: "KPI placement" },
+    { key: "packs", label: "Operational playbooks" },
+    { key: "targets", label: "Targets" },
+    { key: "visibility", label: "Experience placement" },
 ];
 
-type TabKey = "packs" | "targets" | "placements";
+type TabKey = "packs" | "targets" | "visibility";
 
-export default function AnalyticsSettingsClient() {
-    const [tab, setTab] = useState<TabKey>("packs");
+function tabFromParam(raw: string | null): TabKey {
+    if (raw === "targets" || raw === "visibility" || raw === "placements") return raw === "placements" ? "visibility" : raw;
+    return "packs";
+}
+
+function AnalyticsSettingsInner() {
+    const searchParams = useSearchParams();
+    const [tab, setTab] = useState<TabKey>(() => tabFromParam(searchParams.get("tab")));
     const { canMutate } = useAdminAuth();
+
+    useEffect(() => {
+        setTab(tabFromParam(searchParams.get("tab")));
+    }, [searchParams]);
+
+    const previewModal = useCallback(() => {
+        dispatchAdminV2OpenAnalyticsModal();
+    }, []);
 
     return (
         <div className={SETTINGS_PAGE_SHELL_CLASS} data-adminv2-analytics-settings="true">
             <SettingsPageHeader
                 variant="hero"
-                title="Analytics"
-                subtitle="Configure operational intelligence — KPI packs, targets, and where metrics appear for your team."
+                title="Operational Intelligence"
+                subtitle="What your team tracks, the targets you set, and where performance indicators appear across the workspace."
             />
 
-            <div className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-alloy-pine/20 bg-[linear-gradient(135deg,rgba(236,247,243,0.95)_0%,rgba(255,255,255,0.98)_100%)] px-4 py-3">
-                <p className="text-xs text-alloy-midnight/65">
-                    Operators view live metrics in the{" "}
-                    <span className="font-medium text-alloy-midnight">Analytics</span> workspace from the sidebar.
-                    Configure targets and placements here.
-                </p>
-                <Link
-                    href="/adminV2/workspace"
-                    className="text-xs font-medium text-alloy-pine hover:underline"
-                    onClick={(e) => {
-                        e.preventDefault();
-                        window.dispatchEvent(new CustomEvent("adminv2:open-analytics-modal"));
-                    }}
-                >
-                    Preview Analytics modal →
-                </Link>
+            <OipSettingsSummary />
+
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-alloy-stone/18 bg-white px-4 py-2.5 shadow-[0_1px_3px_rgba(15,23,42,0.05)]">
+                <button type="button" onClick={previewModal} className={OIP_SECONDARY_BTN_CLASS}>
+                    Preview panel →
+                </button>
             </div>
 
-            <SettingsEntityTabBar tabs={TABS} activeKey={tab} onSelect={setTab} aria-label="Analytics configuration sections" />
+            <SettingsEntityTabBar tabs={TABS} activeKey={tab} onSelect={setTab} aria-label="Operational Intelligence sections" />
 
             <div className="mt-4">
                 {tab === "packs" ?
-                    <KpiPacksPanel />
+                    <KpiPacksPanel onNavigateTab={setTab} />
                 : tab === "targets" ?
                     <KpiTargetsPanel canEdit={canMutate} />
-                :   <KpiPlacementOverviewPanel canEdit={canMutate} />}
+                :   <OipVisibilityPanel canEdit={canMutate} />}
             </div>
         </div>
+    );
+}
+
+export default function AnalyticsSettingsClient() {
+    return (
+        <OipSettingsProvider>
+            <AnalyticsSettingsInner />
+        </OipSettingsProvider>
     );
 }

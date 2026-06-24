@@ -10,6 +10,7 @@ import { ADMIN_FORMS_HREF, isCanonicalFormsPath, normalizeToCanonicalAdminPath }
 import { useOperationalTasksNavCounts } from "@/lib/adminV2/useOperationalTasksNavCounts";
 import { useInboxUnreadNavCount } from "@/lib/adminV2/useInboxUnreadNavCount";
 import { warmCommunicationsWorkspaceModal } from "@/lib/communications/v2/communicationsWorkspaceWarmCache";
+import { warmOipAnalyticsModal } from "@/lib/metrics/oipWorkspaceWarmCache";
 import { isCommsV2FlagEnabled } from "@/lib/communications/v2/flags";
 import {
     dispatchAdminV2OpenInboxModal,
@@ -204,7 +205,16 @@ export function SidebarAnalyticsNavItem({ collapsed }: { collapsed: boolean }) {
             icon={<BarChart3 size={collapsed ? 20 : 16} strokeWidth={1.75} className="shrink-0" />}
             badge={null}
             dataAttr="analytics"
-            onClick={() => dispatchAdminV2OpenAnalyticsModal()}
+            onMouseEnter={() => {
+                void warmOipAnalyticsModal();
+            }}
+            onFocus={() => {
+                void warmOipAnalyticsModal();
+            }}
+            onClick={() => {
+                void warmOipAnalyticsModal();
+                dispatchAdminV2OpenAnalyticsModal();
+            }}
         />
     );
 }

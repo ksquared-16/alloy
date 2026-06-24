@@ -22,9 +22,10 @@ import {
     loadWorkUnitOperationalBootstrapCached,
 } from "@/lib/workspace/workUnitOperationalBootstrapServerCache";
 import { attachBootstrapServerPerf } from "@/lib/workspace/bootstrapServerPerfEnvelope";
+import { WU_REVEAL_SUMMARIES_MODE } from "@/lib/workspace/workUnitOperBootstrapLaneCache";
 
-/** Matches loader `summaryMode: priority` + `priorityBudget: 6`. */
-const WU_REVEAL_SUMMARIES_MODE_KEY = "priority:6";
+/** Matches loader `summaryMode: priority` + `priorityBudget: 6` + `countAccuracy: planned`. */
+const WU_REVEAL_SUMMARIES_MODE_KEY = WU_REVEAL_SUMMARIES_MODE;
 
 function parsePrimaryRowLimit(searchParams: URLSearchParams): number {
     const raw = (searchParams.get("primary_row_limit") ?? "8").trim();
@@ -122,6 +123,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
             deferPrimaryLaneRows: deferBundle,
             // Card 2 — lifecycle siblings are always hydrated off the reveal path (Queue First).
             deferLifecycleSiblings: true,
+            workspaceSiteId,
         };
 
         const bootstrapP = loadWorkUnitOperationalBootstrapCached(
