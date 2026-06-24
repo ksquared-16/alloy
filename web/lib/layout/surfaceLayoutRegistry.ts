@@ -360,8 +360,12 @@ export const PERSON_DRAWER_LINKED_CHILD_FIELD_REFS = [
     "child.status",
     "child.desired_start_date",
     "inquiry_child.desired_start_date",
+    "inquiry_child.desired_program_type",
+    "inquiry_child.desired_schedule_type",
     "inquiry_child.program",
     "inquiry_child.program_room_cohort_key",
+    "inquiry_child.location_id",
+    "inquiry_child.outcome_status_key",
 ] as const;
 
 const LINKED_CHILD_FIELD_PREFIXES = ["child.", "inquiry_child."] as const;

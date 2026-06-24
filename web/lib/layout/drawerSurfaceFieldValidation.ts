@@ -67,7 +67,10 @@ export function isAllowedDrawerEditorFieldRefKey(
         if (options.linkedChildContext || isLinkedChildBlockContext(options.relatedListItem)) {
             if (tenantRefKeys?.has(trimmed)) return true;
             if (isAllowedPersonDrawerLinkedChildFieldRefKey(trimmed)) return true;
-            return isAllowedOpportunityDrawerFieldRefKey(trimmed) && trimmed.startsWith("child.");
+            return (
+                isAllowedOpportunityDrawerFieldRefKey(trimmed)
+                && (trimmed.startsWith("child.") || trimmed.startsWith("inquiry_child."))
+            );
         }
         return isAllowedPersonDrawerFieldRefKey(trimmed, tenantRefKeys);
     }
@@ -141,7 +144,10 @@ export function isAllowedDrawerRelatedListColumnRefKey(
     if (surfaceKey === "person_drawer" && isLinkedChildRelatedListItem(relatedListItem)) {
         if (tenantFieldRefKeys?.has(refKey)) return true;
         if (isAllowedPersonDrawerLinkedChildFieldRefKey(refKey)) return true;
-        return isAllowedOpportunityDrawerFieldRefKey(refKey) && refKey.startsWith("child.");
+        return (
+            isAllowedOpportunityDrawerFieldRefKey(refKey)
+            && (refKey.startsWith("child.") || refKey.startsWith("inquiry_child."))
+        );
     }
     if (surfaceKey === "child_drawer") {
         return isAllowedChildDrawerFieldRefKey(refKey, tenantFieldRefKeys);

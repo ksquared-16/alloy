@@ -1,6 +1,7 @@
 "use client";
 
 import LayoutRuntimeDrawerBodyView from "@/components/layout/LayoutRuntimeDrawerBodyView";
+import LayoutRuntimeSectionFlowView from "@/components/layout/LayoutRuntimeSectionFlowView";
 import type { AdornmentActionHandler } from "@/components/layout/LayoutRuntimePlanView";
 import type { LayoutDoc, LayoutSection } from "@/lib/layout/layoutV2";
 import { LayoutRuntimeCompositionProvider } from "@/lib/layout/runtime/layoutRuntimeCompositionContext";
@@ -63,30 +64,36 @@ function CompositionSlot({
     );
 }
 
-function RightRailSlot({
-    section,
+/** Published runtime section flow — honors layoutEditorSectionRowGroup metadata. */
+function PublishedSectionFlow({
+    sections,
     doc,
     record,
     entityId,
     canMutate,
     onAdornmentAction,
+    stackClassName,
 }: {
-    section: LayoutSection;
+    sections: LayoutSection[];
     doc: LayoutDoc;
     record: ProofRuntimeRecord;
     entityId: string;
     canMutate?: boolean;
     onAdornmentAction?: AdornmentActionHandler;
+    stackClassName?: string;
 }) {
+    if (sections.length === 0) return null;
     return (
-        <CompositionSlot
-            slotKey={section.key}
-            sectionKeys={[section.key]}
+        <LayoutRuntimeSectionFlowView
             doc={doc}
+            sections={sections}
             record={record}
             entityId={entityId}
             canMutate={canMutate}
             onAdornmentAction={onAdornmentAction}
+            stackClassName={stackClassName}
+            rowClassName="min-w-0 items-stretch"
+            rowCellClassName="min-w-0 flex h-full min-h-0 flex-col"
         />
     );
 }
@@ -100,7 +107,7 @@ export default function PersonOverviewRuntimeComposition({
     onAdornmentAction,
 }: Props) {
     const slots = partitionPersonOverviewBodySections(doc);
-    const hints = personOverviewCompositionHints();
+    const hints = personOverviewCompositionHints({ honorLayoutDocBlocks: true });
     const rightRailSections = resolvePersonOverviewRightRailSections(slots, record);
     const showContact =
         slots.contact
@@ -145,17 +152,15 @@ export default function PersonOverviewRuntimeComposition({
                             data-person-overview-slot="right_rail"
                             data-person-overview-right-rail-section-count={String(rightRailSections.length)}
                         >
-                            {rightRailSections.map((section) => (
-                                <RightRailSlot
-                                    key={section.key}
-                                    section={section}
-                                    doc={doc}
-                                    record={record}
-                                    entityId={entityId}
-                                    canMutate={canMutate}
-                                    onAdornmentAction={onAdornmentAction}
-                                />
-                            ))}
+                            <PublishedSectionFlow
+                                sections={rightRailSections}
+                                doc={doc}
+                                record={record}
+                                entityId={entityId}
+                                canMutate={canMutate}
+                                onAdornmentAction={onAdornmentAction}
+                                stackClassName="space-y-2"
+                            />
                         </div>
                     :   null}
                 </div>
@@ -173,19 +178,16 @@ export default function PersonOverviewRuntimeComposition({
                 :   null}
 
                 {slots.overflow.length > 0 ?
-                    <div className="space-y-3" data-person-overview-overflow="true">
-                        {slots.overflow.map((section) => (
-                            <CompositionSlot
-                                key={section.key}
-                                slotKey={section.key}
-                                sectionKeys={[section.key]}
-                                doc={doc}
-                                record={record}
-                                entityId={entityId}
-                                canMutate={canMutate}
-                                onAdornmentAction={onAdornmentAction}
-                            />
-                        ))}
+                    <div data-person-overview-overflow="true">
+                        <PublishedSectionFlow
+                            sections={slots.overflow}
+                            doc={doc}
+                            record={record}
+                            entityId={entityId}
+                            canMutate={canMutate}
+                            onAdornmentAction={onAdornmentAction}
+                            stackClassName="space-y-3"
+                        />
                     </div>
                 :   null}
             </div>

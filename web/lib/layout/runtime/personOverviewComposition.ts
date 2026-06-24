@@ -111,16 +111,18 @@ export function partitionPersonOverviewBodySections(doc: LayoutDoc): PersonOverv
 export function personOverviewCompositionHints(
     overrides: Partial<import("@/lib/layout/runtime/layoutRuntimeCompositionContext").LayoutRuntimeCompositionHints> = {},
 ): import("@/lib/layout/runtime/layoutRuntimeCompositionContext").LayoutRuntimeCompositionHints {
+    const honorLayoutDocBlocks = overrides.honorLayoutDocBlocks === true;
     return {
         personOverviewComposition: true,
         connectedChildrenSummaryOnly: true,
         connectedChildrenMaxVisibleRows: PERSON_OVERVIEW_CONNECTED_CHILDREN_MAX_VISIBLE_ROWS,
         compositionSectionSurface: true,
-        connectedChildrenPrimaryColumnsOnly: true,
+        connectedChildrenPrimaryColumnsOnly: honorLayoutDocBlocks ? false : true,
         summaryStripCompactRow: true,
         personOperatingSummaryCards: true,
         personConnectedChildrenCardList: true,
         personConnectedChildrenReadFirst: true,
+        honorLayoutDocBlocks,
         ...overrides,
     };
 }

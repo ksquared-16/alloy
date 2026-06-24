@@ -9,7 +9,6 @@ import type { AdornmentActionHandler } from "@/components/layout/LayoutRuntimePl
 import { personDrawerHouseholdInitials } from "@/lib/admin/person/personDrawerHouseholdDisplay";
 import {
     formatLayoutRuntimeRepeaterColumnDisplay,
-    formatPersonConnectedChildMetaLine,
 } from "@/lib/layout/runtime/formatLayoutRuntimeRepeaterColumnDisplay";
 import { layoutRuntimeRepeaterRowReactKey } from "@/lib/layout/runtime/layoutRuntimeRepeaterRowKey";
 import type { ProofRuntimeRecord } from "@/lib/layout/runtime/proofRecordContext";
@@ -62,7 +61,12 @@ export default function PersonConnectedChildrenCardList({
                             refKey: nameCol.refKey,
                             adornment: nameCol.adornment,
                         };
-                        const metaLine = formatPersonConnectedChildMetaLine(row, metaColumns);
+                        const metaSegments = metaColumns
+                            .map((col) => ({
+                                key: col.refKey,
+                                text: formatLayoutRuntimeRepeaterColumnDisplay(row, col),
+                            }))
+                            .filter((segment) => segment.text !== "—" && segment.text.trim().length > 0);
                         const opportunityId = String(row["child.opportunity_id"] ?? "").trim();
                         const opportunityName = String(row["child.opportunity_name"] ?? "").trim();
                         const enrollmentStatus = String(row["child.enrollment_status"] ?? "").trim();
@@ -103,15 +107,19 @@ export default function PersonConnectedChildrenCardList({
                                                 {childDisplayName}
                                             </p>
                                         }
-                                        {metaColumns.length > 0 && metaLine ?
-                                            <p
-                                                className={`mt-0.5 line-clamp-2 ${PRESENTATION_SUPPORTING}`}
+                                        {metaSegments.length > 0 ?
+                                            <div
+                                                className={`mt-0.5 flex flex-wrap gap-x-2 gap-y-0.5 ${PRESENTATION_SUPPORTING}`}
                                                 data-person-connected-child-meta-line="true"
                                             >
-                                                {metaLine}
-                                            </p>
+                                                {metaSegments.map((segment) => (
+                                                    <span key={segment.key} className="whitespace-nowrap">
+                                                        {segment.text}
+                                                    </span>
+                                                ))}
+                                            </div>
                                         :   null}
-                                        {enrollmentStatus && !metaLine.includes(enrollmentStatus) ?
+                                        {enrollmentStatus && !metaSegments.some((segment) => segment.text.includes(enrollmentStatus)) ?
                                             <p className={`mt-0.5 ${PRESENTATION_SUPPORTING}`}>{enrollmentStatus}</p>
                                         :   null}
                                         {opportunityId ?
