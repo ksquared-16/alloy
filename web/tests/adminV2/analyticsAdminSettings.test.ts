@@ -168,6 +168,35 @@ describe("Operational Intelligence panel V1 polish", () => {
     });
 });
 
+describe("Analytics settings IA cleanup", () => {
+    it("settings page starts with primary tabs without summary block", () => {
+        const client = read("app/adminV2/settings/analytics/AnalyticsSettingsClient.tsx");
+        expect(client).toContain('"Calculations"');
+        expect(client).toContain('"Experience placement"');
+        expect(client).toContain('"Metric builders"');
+        expect(client).not.toContain("OipSettingsSummary");
+        expect(client).not.toContain("Preview panel");
+    });
+
+    it("calculations use edit mode not unpublish-to-edit", () => {
+        const panel = read("app/adminV2/settings/analytics/MetricBuilderPanel.tsx");
+        expect(panel).toContain("Save changes");
+        expect(panel).toContain('variant="primary" onClick={() => void startEdit()}');
+        expect(panel).toContain("METRIC_CATEGORY_OPTIONS");
+    });
+
+    it("display style preview uses MetricVisualRenderer", () => {
+        expect(read("app/adminV2/settings/analytics/VisualizationStylePreview.tsx")).toContain("MetricVisualRenderer");
+        expect(read("app/adminV2/settings/analytics/platformBuilderLabels.ts")).toContain("AVAILABLE_VIZ_TYPES");
+    });
+
+    it("placement builder groups by display style", () => {
+        const panel = read("app/adminV2/settings/analytics/PlacementBuilderPanel.tsx");
+        expect(panel).toContain("Where this appears");
+        expect(panel).toContain("+ Add location");
+    });
+});
+
 describe("Configuration usability (retained)", () => {
     it("playbooks panel is actionable", () => {
         const packs = read("app/adminV2/settings/analytics/KpiPacksPanel.tsx");

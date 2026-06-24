@@ -44,16 +44,26 @@ export function PlatformBuilderField({
     );
 }
 
-export function PlatformBuilderSection({ title, children, hint }: { title: string; children: ReactNode; hint?: string }) {
+export function PlatformBuilderSection({
+    title,
+    children,
+    hint,
+    compact = false,
+}: {
+    title: string;
+    children: ReactNode;
+    hint?: string;
+    compact?: boolean;
+}) {
     return (
-        <section className="space-y-3 rounded-lg border border-alloy-stone/15 bg-alloy-stone/[0.03] p-3">
+        <section className={`rounded-lg border border-alloy-stone/15 bg-alloy-stone/[0.03] ${compact ? "space-y-2 p-2.5" : "space-y-3 p-3"}`}>
             <div>
-                <h4 className="text-sm font-semibold text-alloy-midnight">{title}</h4>
+                <h4 className={`font-semibold text-alloy-midnight ${compact ? "text-xs" : "text-sm"}`}>{title}</h4>
                 {hint ?
-                    <p className="mt-0.5 text-xs text-alloy-midnight/50">{hint}</p>
+                    <p className={`text-alloy-midnight/50 ${compact ? "mt-0.5 text-[11px] leading-snug" : "mt-0.5 text-xs"}`}>{hint}</p>
                 :   null}
             </div>
-            <div className="grid gap-3 sm:grid-cols-2">{children}</div>
+            <div className={`grid sm:grid-cols-2 ${compact ? "gap-2" : "gap-3"}`}>{children}</div>
         </section>
     );
 }

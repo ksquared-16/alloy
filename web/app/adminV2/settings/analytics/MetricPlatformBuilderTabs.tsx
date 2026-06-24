@@ -36,7 +36,7 @@ function formatLastRun(iso: string | null): string | null {
 }
 
 export default function MetricPlatformBuilderTabs({ canEdit }: Props) {
-    const [tab, setTab] = useState<BuilderTab>("metrics");
+    const [tab, setTab] = useState<BuilderTab>("visualizations");
     const [snapshotState, setSnapshotState] = useState<"idle" | "running" | "success" | "error">("idle");
     const [snapshotMessage, setSnapshotMessage] = useState<string | null>(null);
     const [lastRunAt, setLastRunAt] = useState<string | null>(() => {
@@ -65,6 +65,9 @@ export default function MetricPlatformBuilderTabs({ canEdit }: Props) {
 
     return (
         <div className="space-y-4" data-metric-platform-builders="true">
+            <PlatformBuilderCallout>
+                Use the top-level <strong>Calculations</strong> tab for metric definitions. This area covers display styles, placement, and combined scores.
+            </PlatformBuilderCallout>
             <div className={`${PLATFORM_BUILDER_SHELL} flex flex-wrap items-start justify-between gap-3 p-3`}>
                 <SettingsEntityTabBar tabs={TABS} activeKey={tab} onSelect={setTab} aria-label="Metric platform builders" />
                 {canEdit ?

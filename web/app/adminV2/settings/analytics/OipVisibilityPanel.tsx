@@ -21,8 +21,8 @@ export default function OipVisibilityPanel({ canEdit }: { canEdit: boolean }) {
     return (
         <div className="space-y-5" data-testid="kpi-placement-panel">
             <OipSectionCard
-                title="Experience placement"
-                helper="Where each indicator appears across your workspace. Operators see performance in these surfaces without opening configuration."
+                title="V1 indicator placement"
+                helper="Legacy Operational Intelligence indicators (playbook KPIs). For V2 metric cards, use Metric builders → Where it appears."
             >
                 <div className="overflow-x-auto">
                     <table className="w-full min-w-[36rem] text-left text-xs">

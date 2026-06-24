@@ -18,7 +18,17 @@ function normalizeStatus(status: MetricHealthState | string): MetricHealthState 
 
 export function MetricKpiCard({ label, value, status = "unknown", loading = false, accent = "enrollment" }: Props) {
     const accentKey = accent === "ops" ? "operational" : accent;
-    const domain = oipDomainVisualTokens(accentKey as "enrollment" | "operational" | "forms" | "communications");
+    const known = ["enrollment", "operational", "forms", "communications"] as const;
+    const domain =
+        known.includes(accentKey as (typeof known)[number])
+            ? oipDomainVisualTokens(accentKey as (typeof known)[number])
+            : accentKey === "amber"
+              ? { sectionLabel: "text-amber-700" }
+              : accentKey === "critical"
+                ? { sectionLabel: "text-alloy-ember" }
+                : accentKey === "neutral"
+                  ? { sectionLabel: "text-alloy-midnight/55" }
+                  : oipDomainVisualTokens("enrollment");
     const healthClass = oipHealthStatusChipClass(normalizeStatus(status));
 
     return (

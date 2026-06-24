@@ -35,11 +35,26 @@ export const VIZ_TYPE_HINTS: Record<string, string> = {
 
 export const MULTI_METRIC_VIZ_TYPES = new Set(["scorecard", "kpi_card"]);
 
+/** Styles with distinct preview renderers in MetricVisualRenderer. */
+export const AVAILABLE_VIZ_TYPES = [
+    "kpi_card",
+    "trend_card",
+    "chip",
+    "sparkline",
+    "comparison",
+    "scorecard",
+] as const;
+
+export const COMING_SOON_VIZ_TYPES = ["line_chart", "gauge", "area_chart", "bar_chart", "table"] as const;
+
 export const ACCENT_OPTIONS: { key: string; label: string; swatch: string; ring: string }[] = [
-    { key: "enrollment", label: "Enrollment green", swatch: "bg-alloy-juniper", ring: "ring-alloy-juniper/40" },
-    { key: "operational", label: "Operational slate", swatch: "bg-alloy-midnight/70", ring: "ring-alloy-midnight/30" },
-    { key: "forms", label: "Forms violet", swatch: "bg-violet-500", ring: "ring-violet-400/40" },
-    { key: "communications", label: "Communications blue", swatch: "bg-alloy-blue", ring: "ring-alloy-blue/40" },
+    { key: "enrollment", label: "Green", swatch: "bg-alloy-juniper", ring: "ring-alloy-juniper/40" },
+    { key: "operational", label: "Slate", swatch: "bg-alloy-midnight/70", ring: "ring-alloy-midnight/30" },
+    { key: "forms", label: "Violet", swatch: "bg-violet-500", ring: "ring-violet-400/40" },
+    { key: "communications", label: "Blue", swatch: "bg-alloy-blue", ring: "ring-alloy-blue/40" },
+    { key: "amber", label: "Amber", swatch: "bg-amber-500", ring: "ring-amber-400/40" },
+    { key: "critical", label: "Red", swatch: "bg-alloy-ember", ring: "ring-alloy-ember/40" },
+    { key: "neutral", label: "Gray", swatch: "bg-alloy-stone/50", ring: "ring-alloy-stone/40" },
 ];
 
 export type SurfaceKey = "operational_intelligence" | "workspace_header" | "work_unit_header" | "business_process_tile";

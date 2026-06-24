@@ -204,11 +204,11 @@ export default function RollupBuilderPanel({ canEdit }: Props) {
 
     return (
         <div className={`${PLATFORM_BUILDER_SHELL} p-4`} data-rollup-builder="true">
-            <div className="mb-4 flex flex-wrap items-start justify-between gap-2">
+            <div className="mb-3 flex flex-wrap items-start justify-between gap-2">
                 <div>
                     <h3 className="text-sm font-semibold text-alloy-midnight">Combined scores</h3>
                     <p className="text-xs text-alloy-midnight/55">
-                        Roll up multiple calculations into a single health or composite score operators can scan at a glance.
+                        Combine multiple calculations into one health score operators can scan at a glance — e.g. Enrollment Health.
                     </p>
                 </div>
                 {canEdit ?
@@ -218,7 +218,11 @@ export default function RollupBuilderPanel({ canEdit }: Props) {
                 :   null}
             </div>
 
-            <div className="mb-4 rounded-lg border border-alloy-stone/15 bg-alloy-stone/[0.03] p-3">
+            <PlatformBuilderCallout tone="warning">
+                Combined scores are configured here but not yet rendered on workspace surfaces. Use individual calculations and display styles for live metrics today.
+            </PlatformBuilderCallout>
+
+            <div className="mb-3 rounded-lg border border-alloy-stone/15 bg-alloy-stone/[0.03] p-3">
                 <p className="text-xs font-semibold text-alloy-midnight">Examples</p>
                 <ul className="mt-2 space-y-1 text-xs text-alloy-midnight/55">
                     {ROLLUP_EXAMPLES.map((ex) => (
