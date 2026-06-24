@@ -130,6 +130,7 @@ export default function PersonOverviewRuntimeComposition({
                 className={DRAWER_OVERVIEW_CANVAS_CLASS}
                 data-person-overview-composition="true"
                 data-layout-runtime-composition-profile="person-shell"
+                data-debug-drawer-path="PersonOverviewRuntimeComposition"
             >
                 <div className={DRAWER_OVERVIEW_SHELL_GRID_CLASS}>
                     {slots.household ?

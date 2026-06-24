@@ -70,6 +70,7 @@ export default function DrawerLayoutRuntimeShellZoneView({
             data-drawer-layout-runtime-shell-zone={zone}
             data-drawer-layout-runtime-shell-zone-sections={doc.sections.map((s) => s.key).join(",")}
             data-layout-runtime-composition-profile={compositionProfile}
+            data-debug-drawer-path={`DrawerLayoutRuntimeShellZoneView:${zone}`}
         >
             <LayoutRuntimeDrawerEditProvider
                 record={record}

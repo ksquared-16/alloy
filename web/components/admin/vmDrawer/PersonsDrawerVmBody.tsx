@@ -297,14 +297,14 @@ export default function PersonsDrawerVmBody({
 
     if (chrome === "generic") {
         return (
-            <div data-adminv2-person-drawer-body="true" data-drawer-vm-runtime-overview="true">
+            <div data-adminv2-person-drawer-body="true" data-drawer-vm-runtime-overview="true" data-debug-drawer-path="PersonsDrawerVmBody:generic">
                 {overviewPanel}
             </div>
         );
     }
 
     return (
-        <div data-adminv2-person-drawer-body="true" data-drawer-vm-runtime-overview="true">
+        <div data-adminv2-person-drawer-body="true" data-drawer-vm-runtime-overview="true" data-debug-drawer-path="PersonsDrawerVmBody">
             {drawerTab === "overview" ? overviewPanel : null}
             {drawerTab === "related" ?
                 <PersonDrawerOperatingActivityTab variant={isChildSurface ? "child" : "parent"} />

@@ -91,6 +91,7 @@ export default function EntityDrawerOperatingShell({
                 data-adminv2-drawer="true"
                 data-drawer-runtime={runtimeDataAttribute}
                 data-entity-drawer-operating-shell={entity}
+                data-debug-drawer-path={`EntityDrawerOperatingShell:${entity}`}
                 {...(holdPriorPayload ? { "data-drawer-vm-transition-hold": "true" } : {})}
                 {...runtimeShellDataAttributes}
             >

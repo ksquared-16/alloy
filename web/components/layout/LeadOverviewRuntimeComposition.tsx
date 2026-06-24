@@ -108,7 +108,7 @@ export default function LeadOverviewRuntimeComposition({
 
     return (
         <LayoutRuntimeCompositionProvider value={hints}>
-            <div className={DRAWER_OVERVIEW_CANVAS_CLASS} data-lead-overview-composition="true">
+            <div className={DRAWER_OVERVIEW_CANVAS_CLASS} data-lead-overview-composition="true" data-debug-drawer-path="LeadOverviewRuntimeComposition">
                 {/* Shell grid: household 4 / enrollment 5 / right rail 3 — see LEAD_OVERVIEW_SHELL_GRID */}
                 <div className={DRAWER_OVERVIEW_SHELL_GRID_CLASS}>
                     {visualConfigEnabled && zones.main.length > 0 ?

@@ -112,7 +112,7 @@ export default function OpportunityDrawerInquiryWorkflowOverview({
         isOperationalWorkV1Enabled() || isTaskAssistV1UiEnabled();
 
     return (
-        <div className="space-y-3" data-opportunity-inquiry-workflow-overview="true">
+        <div className="space-y-3" data-opportunity-inquiry-workflow-overview="true" data-debug-drawer-path="OpportunityDrawerInquiryWorkflowOverview">
             <div
                 className={oppInqLeadSummaryShellClassName}
                 data-opportunity-inquiry-summary="true"

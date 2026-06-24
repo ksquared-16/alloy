@@ -129,6 +129,7 @@ export default function ChildOverviewRuntimeComposition({
             <div
                 className={DRAWER_OVERVIEW_CANVAS_CLASS}
                 data-child-overview-composition="true"
+                data-debug-drawer-path="ChildOverviewRuntimeComposition"
             >
                 <div className={DRAWER_OVERVIEW_SHELL_GRID_CLASS}>
                     {slots.family ?

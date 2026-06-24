@@ -163,6 +163,13 @@ export default function DrawerLayoutRuntimeOverviewBody({
                 <div
                     className="space-y-4"
                     data-drawer-layout-runtime-overview="true"
+                    data-debug-drawer-path="DrawerLayoutRuntimeOverviewBody:bodyReady"
+                    data-debug-drawer-composition={
+                        useLeadComposition ? "LeadOverviewRuntimeComposition"
+                        : usePersonComposition ? "PersonOverviewRuntimeComposition"
+                        : useChildComposition ? "ChildOverviewRuntimeComposition"
+                        : "LayoutRuntimeDrawerBodyView"
+                    }
                     data-layout-runtime-surface={surface}
                     data-layout-runtime-source={layoutBody.layoutSource ?? ""}
                     data-layout-runtime-key={layoutBody.layoutKey ?? ""}
@@ -242,7 +249,12 @@ export default function DrawerLayoutRuntimeOverviewBody({
 
     if (useEmptyBodyFallback) {
         return (
-            <div className="space-y-4" data-drawer-layout-runtime-empty-fallback="true">
+            <div
+                className="space-y-4"
+                data-drawer-layout-runtime-empty-fallback="true"
+                data-debug-drawer-path="DrawerLayoutRuntimeOverviewBody:emptyFallback"
+                data-debug-drawer-hard-cutover={hardCutover ? "1" : "0"}
+            >
                 {showStagingDiagnostic ?
                     <DrawerLayoutRuntimeStagingDiagnostic
                         layoutSource={layoutBody.layoutSource}
@@ -259,7 +271,11 @@ export default function DrawerLayoutRuntimeOverviewBody({
     }
 
     return (
-        <>
+        <div
+            data-debug-drawer-path="DrawerLayoutRuntimeOverviewBody:fallback"
+            data-debug-drawer-phase={layoutBody.phase}
+            data-debug-drawer-hard-cutover={hardCutover ? "1" : "0"}
+        >
             {showStagingDiagnostic ?
                 <DrawerLayoutRuntimeStagingDiagnostic
                     layoutSource={layoutBody.layoutSource}
@@ -271,6 +287,6 @@ export default function DrawerLayoutRuntimeOverviewBody({
                 />
             :   null}
             {fallbackNode}
-        </>
+        </div>
     );
 }

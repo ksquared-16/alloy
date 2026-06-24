@@ -47,7 +47,7 @@ function VmOverviewBody({
     onSelectTab,
 }: Pick<Props, "displayVm" | "drawerId" | "opportunitySingular" | "onSelectTab">) {
     return (
-        <div data-drawer-vm-runtime-overview="true">
+        <div data-drawer-vm-runtime-overview="true" data-debug-drawer-path="OpportunityDrawerOverviewBody:VmFallback">
             <OpportunityDrawerInquiryWorkflowOverview
                 displayVm={displayVm}
                 drawerId={drawerId}
@@ -151,7 +151,14 @@ export default function OpportunityDrawerOverviewBody(props: Props) {
         process.env.NEXT_PUBLIC_LAYOUT_RUNTIME_STAGING_DEBUG === "1";
 
     return (
-        <div className="space-y-4" data-adminv2-opportunity-drawer-body="true">
+        <div
+            className="space-y-4"
+            data-adminv2-opportunity-drawer-body="true"
+            data-debug-drawer-path="OpportunityDrawerOverviewBody"
+            data-debug-drawer-cutover-enabled={layoutBody.cutoverEnabled ? "1" : "0"}
+            data-debug-drawer-body-phase={layoutBody.phase}
+            data-debug-drawer-body-ready={layoutBody.bodyReady ? "1" : "0"}
+        >
             <DrawerLayoutRuntimeOverviewBody
                 layoutBody={mergedLayoutBody}
                 layoutDocOverride={layoutDocBodyOverride}

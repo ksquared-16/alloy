@@ -2367,7 +2367,7 @@ export default function LayoutRuntimePlanView({
         <LayoutRuntimeVariantContext.Provider value={variant}>
             <LayoutRuntimeHostContext.Provider value={hostContext}>
                 <AdornmentActionContext.Provider value={onAdornmentAction}>
-                <div className={`flex flex-col gap-3 ${variant === "production" || variant === "preview" ? "sm:gap-4" : ""}`} style={{ border: `0 solid ${BORDER}` }}>
+                <div className={`flex flex-col gap-3 ${variant === "production" || variant === "preview" ? "sm:gap-4" : ""}`} style={{ border: `0 solid ${BORDER}` }} data-debug-drawer-path="LayoutRuntimePlanView" data-debug-drawer-plan-variant={variant}>
                     {variant === "proof" ?
                         <div className="rounded-md border border-[#e6e8ec] bg-[#fbfcfe] px-3 py-2 text-[11px]" style={{ color: MUTED }}>
                             Runtime plan · {plan.layoutKey ?? "default"} · bindings:{" "}
