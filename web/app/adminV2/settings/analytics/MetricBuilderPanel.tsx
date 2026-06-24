@@ -262,14 +262,9 @@ export default function MetricBuilderPanel({ canEdit }: Props) {
 
     return (
         <div data-metric-builder="true" className={`${PLATFORM_BUILDER_SHELL} p-4`}>
-            <div className="mb-3 flex flex-wrap items-start justify-between gap-2">
-                <div>
-                    <h3 className="text-sm font-semibold text-alloy-midnight">Calculations</h3>
-                    <p className="text-xs text-alloy-midnight/55">Define what to measure before choosing display styles and placement.</p>
-                </div>
-                {canEdit ?
-                    <PlatformBuilderButton variant="primary" onClick={openCreateModal}>+ New calculation</PlatformBuilderButton>
-                :   null}
+            <div className="mb-3">
+                <h3 className="text-sm font-semibold text-alloy-midnight">Calculations</h3>
+                <p className="text-xs text-alloy-midnight/55">Define what is measured. Use <strong>+ New metric</strong> above for the full guided flow, or add a calculation here to define just the measurement.</p>
             </div>
 
             {error ? <PlatformBuilderCallout tone="warning">{error}</PlatformBuilderCallout> : null}

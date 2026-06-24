@@ -54,9 +54,16 @@ type VizForm = {
     accent: string;
     icon: string;
     subtitle: string;
+    fill: string;
 };
 
-const EMPTY_VIZ: VizForm = { label: "", visualization_type: "kpi_card", accent: "enrollment", icon: "", subtitle: "" };
+const EMPTY_VIZ: VizForm = { label: "", visualization_type: "kpi_card", accent: "enrollment", icon: "", subtitle: "", fill: "border" };
+
+const FILL_OPTIONS: { key: string; label: string }[] = [
+    { key: "border", label: "Border only" },
+    { key: "soft", label: "Soft background" },
+    { key: "filled", label: "Filled" },
+];
 
 const STEP_LABELS = ["Calculation", "Display style", "Where it appears", "Review & publish"];
 
@@ -162,7 +169,7 @@ export default function MetricSetupFlow({ open, onClose, onComplete }: Props) {
                     key: slugifyMetricKey(vizLabel),
                     label: vizLabel,
                     visualization_type: vizForm.visualization_type,
-                    style_config: { version: 1, accent: vizForm.accent, icon: vizForm.icon || undefined },
+                    style_config: { version: 1, accent: vizForm.accent, icon: vizForm.icon || undefined, fill: vizForm.fill || "border" },
                     display_config: { version: 1, subtitle: vizForm.subtitle || undefined },
                     status,
                 },
@@ -310,6 +317,17 @@ export default function MetricSetupFlow({ open, onClose, onComplete }: Props) {
                                 </PlatformBuilderField>
                             </div>
                             <div className="sm:col-span-2">
+                                <PlatformBuilderField label="Background fill" hint="Border keeps a white card; soft and filled wash the card with the selected color.">
+                                    <div className="mt-1 flex flex-wrap gap-1.5">
+                                        {FILL_OPTIONS.map((opt) => (
+                                            <button key={opt.key} type="button" onClick={() => setVizForm((f) => ({ ...f, fill: opt.key }))} className={`rounded-lg border px-2.5 py-1 text-xs font-medium ${vizForm.fill === opt.key ? "border-alloy-juniper/40 bg-alloy-juniper/10 text-alloy-juniper" : "border-alloy-stone/25 text-alloy-midnight/70"}`}>
+                                                {opt.label}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </PlatformBuilderField>
+                            </div>
+                            <div className="sm:col-span-2">
                                 <PlatformBuilderField label="Icon" hint={isTrendBased ? "Trend direction is calculated automatically from metric history. The icon only represents the category." : "Represents the metric category or style."}>
                                     <BuilderIconPicker value={vizForm.icon} onChange={(icon) => setVizForm((f) => ({ ...f, icon }))} />
                                 </PlatformBuilderField>
@@ -317,7 +335,7 @@ export default function MetricSetupFlow({ open, onClose, onComplete }: Props) {
                         </PlatformBuilderSection>
                     </div>
                     <VisualizationStylePreview
-                        form={{ label: vizForm.label, label_override: "", visualization_type: vizForm.visualization_type, accent: vizForm.accent, icon: vizForm.icon, subtitle: vizForm.subtitle, additional_metric_ids: [] }}
+                        form={{ label: vizForm.label, label_override: "", visualization_type: vizForm.visualization_type, accent: vizForm.accent, icon: vizForm.icon, subtitle: vizForm.subtitle, fill: vizForm.fill, additional_metric_ids: [] }}
                         extraMetricLabels={[]}
                     />
                 </div>

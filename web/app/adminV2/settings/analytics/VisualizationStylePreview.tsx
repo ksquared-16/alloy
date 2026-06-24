@@ -16,11 +16,14 @@ type Props = {
         accent: string;
         icon: string;
         subtitle: string;
+        fill?: string;
         additional_metric_ids: string[];
     };
     primaryMetric?: MetricDefinitionRow;
     extraMetricLabels: string[];
 };
+
+const MOCK_SCORECARD_VALUES = ["48", "82%", "12", "5", "91%", "7"];
 
 const MOCK_EVALUATION: MetricEvaluationResult = {
     metricDefinitionId: "preview-def",
@@ -77,7 +80,7 @@ function buildMockPlacement(form: Props["form"], primaryMetric?: MetricDefinitio
         key: "preview",
         label: form.label || "Preview",
         visualization_type: form.visualization_type as MetricVisualizationRow["visualization_type"],
-        style_config: { version: 1, accent: form.accent, icon: form.icon || undefined },
+        style_config: { version: 1, accent: form.accent, icon: form.icon || undefined, fill: form.fill || undefined },
         display_config: {
             version: 1,
             labelOverride: form.label_override || undefined,
@@ -111,6 +114,10 @@ function buildMockPlacement(form: Props["form"], primaryMetric?: MetricDefinitio
 
 export function VisualizationStylePreview({ form, primaryMetric, extraMetricLabels }: Props) {
     const placement = buildMockPlacement(form, primaryMetric);
+    const scorecardMetrics = extraMetricLabels.map((label, i) => ({
+        label,
+        value: MOCK_SCORECARD_VALUES[i % MOCK_SCORECARD_VALUES.length]!,
+    }));
 
     return (
         <div className="rounded-lg border border-alloy-stone/15 bg-alloy-stone/[0.02] p-3" data-viz-style-preview={form.visualization_type}>
@@ -119,6 +126,7 @@ export function VisualizationStylePreview({ form, primaryMetric, extraMetricLabe
                 placement={placement}
                 evaluation={MOCK_EVALUATION}
                 sparklinePoints={MOCK_SPARKLINE}
+                scorecardMetrics={scorecardMetrics}
                 trendComparison={{
                     current: MOCK_EVALUATION,
                     previous: { ...MOCK_EVALUATION, formattedValue: "58%", value: 0.58 },
@@ -128,12 +136,10 @@ export function VisualizationStylePreview({ form, primaryMetric, extraMetricLabe
                     sentiment: "good",
                 }}
             />
-            {form.visualization_type === "scorecard" && extraMetricLabels.length ?
-                <ul className="mt-2 space-y-1 border-t border-alloy-stone/10 pt-2 text-xs text-alloy-midnight/55">
-                    {extraMetricLabels.map((label) => (
-                        <li key={label}>+ {label}</li>
-                    ))}
-                </ul>
+            {form.visualization_type === "scorecard" && !extraMetricLabels.length ?
+                <p className="mt-2 border-t border-alloy-stone/10 pt-2 text-[11px] text-alloy-midnight/50">
+                    Add related metrics to show them in this scorecard.
+                </p>
             :   null}
         </div>
     );

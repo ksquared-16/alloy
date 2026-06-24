@@ -175,11 +175,65 @@ describe("Analytics settings IA cleanup", () => {
         expect(client).toContain('"Display styles"');
         expect(client).toContain('"Where it appears"');
         expect(client).toContain('"Combined scores"');
-        expect(client).toContain('"Experience placement"');
         // No nested "Metric builders" wrapper tab and no redundant guidance callout.
         expect(client).not.toContain('"Metric builders"');
         expect(client).not.toContain("MetricPlatformBuilderTabs");
         expect(client).not.toContain("OipSettingsSummary");
+    });
+
+    it("primary tabs exclude Targets and Experience placement (moved to legacy/advanced)", () => {
+        const client = read("app/adminV2/settings/analytics/AnalyticsSettingsClient.tsx");
+        // The primary TABS array must not list legacy surfaces.
+        const tabsBlock = client.slice(client.indexOf("const TABS"), client.indexOf("const LEGACY_TABS"));
+        expect(tabsBlock).not.toContain('label: "Targets"');
+        expect(tabsBlock).not.toContain('label: "Experience placement"');
+        // Legacy surfaces still reachable behind the Advanced disclosure.
+        expect(client).toContain("data-analytics-legacy-advanced");
+        expect(client).toContain("Targets (legacy)");
+        expect(client).toContain("Experience placement (legacy V1)");
+    });
+
+    it("uses one primary '+ New metric' CTA and only the empty-state '+ New calculation'", () => {
+        const client = read("app/adminV2/settings/analytics/AnalyticsSettingsClient.tsx");
+        expect(client).toContain("+ New metric");
+        const panel = read("app/adminV2/settings/analytics/MetricBuilderPanel.tsx");
+        // Exactly one create CTA remains in the panel — the empty-state action.
+        const occurrences = panel.split("+ New calculation").length - 1;
+        expect(occurrences).toBe(1);
+        expect(panel).toContain("PlatformBuilderEmptyState");
+    });
+
+    it("tab subtitles use the final copy", () => {
+        const client = read("app/adminV2/settings/analytics/AnalyticsSettingsClient.tsx");
+        expect(client).toContain("Define what is measured.");
+        expect(client).toContain("Choose how metrics appear.");
+        expect(client).toContain("Choose where metrics show up.");
+        expect(client).toContain("Combine metrics into one health score.");
+    });
+
+    it("display styles support a background fill treatment using accent opacity", () => {
+        const accents = read("lib/metrics/platform/metricVisualAccent.ts");
+        expect(accents).toContain("resolveMetricCardSurface");
+        expect(accents).toContain("softBg");
+        expect(accents).toContain("normalizeMetricVisualFill");
+        const builder = read("app/adminV2/settings/analytics/VisualizationBuilderPanel.tsx");
+        expect(builder).toContain("Background fill");
+        expect(builder).toContain("Border only");
+        expect(builder).toContain("Soft background");
+        const kpi = read("components/admin/metrics/MetricKpiCard.tsx");
+        expect(kpi).toContain("resolveMetricCardSurface");
+        expect(kpi).toContain('data-metric-fill');
+    });
+
+    it("multi-metric scorecard uses chip/checkbox picker and renders body metrics", () => {
+        const builder = read("app/adminV2/settings/analytics/VisualizationBuilderPanel.tsx");
+        expect(builder).toContain("toggleAdditional");
+        expect(builder).toContain("Add related metrics to show them in this scorecard.");
+        expect(builder).not.toContain("select multiple");
+        const scorecard = read("components/admin/metrics/MetricScorecard.tsx");
+        expect(scorecard).toContain('data-scorecard-metrics');
+        const renderer = read("components/admin/metrics/MetricVisualRenderer.tsx");
+        expect(renderer).toContain("scorecardMetrics");
     });
 
     it("removes the 'use the top-level Calculations tab' guidance box", () => {

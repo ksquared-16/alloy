@@ -10,6 +10,7 @@ import { MetricKpiCard } from "@/components/admin/metrics/MetricKpiCard";
 import { MetricTrendCard } from "@/components/admin/metrics/MetricTrendCard";
 import { MetricChip } from "@/components/admin/metrics/MetricChip";
 import { MetricSparkline } from "@/components/admin/metrics/MetricSparkline";
+import { MetricScorecard, type ScorecardMetric } from "@/components/admin/metrics/MetricScorecard";
 
 export type MetricVisualRendererProps = {
     placement: ResolvedMetricPlacement;
@@ -17,6 +18,8 @@ export type MetricVisualRendererProps = {
     loading?: boolean;
     sparklinePoints?: number[];
     trendComparison?: MetricTrendComparison | null;
+    /** Additional metric rows for scorecard bodies (label + value). */
+    scorecardMetrics?: ScorecardMetric[];
 };
 
 export function MetricVisualRenderer({
@@ -25,15 +28,28 @@ export function MetricVisualRenderer({
     loading = false,
     sparklinePoints,
     trendComparison,
+    scorecardMetrics,
 }: MetricVisualRendererProps) {
     const viz = placement.visualization;
     const label = (viz.display_config as { labelOverride?: string }).labelOverride ?? viz.label;
     const type = viz.visualization_type as MetricVisualizationType;
     const accent = (viz.style_config as { accent?: string }).accent;
+    const fill = (viz.style_config as { fill?: string }).fill;
 
     switch (type) {
-        case "kpi_card":
         case "scorecard":
+            return (
+                <MetricScorecard
+                    label={label}
+                    value={evaluation?.formattedValue ?? "—"}
+                    status={evaluation?.healthState ?? "unknown"}
+                    loading={loading}
+                    accent={accent}
+                    fill={fill}
+                    metrics={scorecardMetrics}
+                />
+            );
+        case "kpi_card":
         case "gauge":
             return (
                 <MetricKpiCard
@@ -42,6 +58,7 @@ export function MetricVisualRenderer({
                     status={evaluation?.healthState ?? "unknown"}
                     loading={loading}
                     accent={accent}
+                    fill={fill}
                 />
             );
         case "trend_card":
@@ -53,6 +70,7 @@ export function MetricVisualRenderer({
                     loading={loading}
                     sparklinePoints={sparklinePoints}
                     accent={accent}
+                    fill={fill}
                     direction={trendComparison?.direction}
                 />
             );
@@ -73,6 +91,7 @@ export function MetricVisualRenderer({
                     comparison={trendComparison}
                     loading={loading}
                     accent={accent}
+                    fill={fill}
                 />
             );
         case "line_chart":
@@ -91,6 +110,8 @@ export function MetricVisualRenderer({
                     value={evaluation?.formattedValue ?? "—"}
                     status={evaluation?.healthState ?? "unknown"}
                     loading={loading}
+                    accent={accent}
+                    fill={fill}
                 />
             );
     }

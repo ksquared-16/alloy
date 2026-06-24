@@ -19,14 +19,15 @@ import { PlatformBuilderButton } from "@/app/adminV2/settings/analytics/platform
 
 type TabKey = "calculations" | "displays" | "placements" | "rollups" | "targets" | "visibility";
 
-const TABS: { key: TabKey; label: string }[] = [
-    { key: "calculations", label: "Calculations" },
-    { key: "displays", label: "Display styles" },
-    { key: "placements", label: "Where it appears" },
-    { key: "rollups", label: "Combined scores" },
-    { key: "targets", label: "Targets" },
-    { key: "visibility", label: "Experience placement" },
+const TABS: { key: TabKey; label: string; subtitle: string }[] = [
+    { key: "calculations", label: "Calculations", subtitle: "Define what is measured." },
+    { key: "displays", label: "Display styles", subtitle: "Choose how metrics appear." },
+    { key: "placements", label: "Where it appears", subtitle: "Choose where metrics show up." },
+    { key: "rollups", label: "Combined scores", subtitle: "Combine metrics into one health score." },
 ];
+
+/** Legacy V1 surfaces — reachable via the Advanced link / ?tab=, not primary tabs. */
+const LEGACY_TABS: TabKey[] = ["targets", "visibility"];
 
 function tabFromParam(raw: string | null): TabKey {
     if (raw === "displays" || raw === "visualizations") return "displays";
@@ -49,11 +50,14 @@ function AnalyticsSettingsInner() {
         setTab(tabFromParam(searchParams.get("tab")));
     }, [searchParams]);
 
+    const isLegacy = LEGACY_TABS.includes(tab);
+    const activeSubtitle = TABS.find((t) => t.key === tab)?.subtitle;
+
     return (
         <div className={SETTINGS_PAGE_SHELL_CLASS} data-adminv2-analytics-settings="true">
             <SettingsPageHeader
                 title="Operational Intelligence"
-                subtitle="Configure calculations, targets, and where metrics appear across the workspace."
+                subtitle="Configure calculations, display styles, and where metrics appear across the workspace."
             />
 
             {canMutate ?
@@ -63,7 +67,8 @@ function AnalyticsSettingsInner() {
                 </div>
             :   null}
 
-            <SettingsEntityTabBar tabs={TABS} activeKey={tab} onSelect={setTab} aria-label="Operational Intelligence sections" />
+            <SettingsEntityTabBar tabs={TABS} activeKey={isLegacy ? "calculations" : tab} onSelect={setTab} aria-label="Operational Intelligence sections" />
+            {activeSubtitle ? <p className="-mt-1 text-xs text-alloy-midnight/55">{activeSubtitle}</p> : null}
 
             <div className="mt-4" key={refreshKey}>
                 {tab === "calculations" ?
@@ -77,6 +82,22 @@ function AnalyticsSettingsInner() {
                 : tab === "targets" ?
                     <KpiTargetsPanel canEdit={canMutate} />
                 :   <OipVisibilityPanel canEdit={canMutate} />}
+            </div>
+
+            <div className="mt-6 border-t border-alloy-stone/15 pt-3">
+                <details data-analytics-legacy-advanced="true">
+                    <summary className="cursor-pointer text-[11px] font-semibold uppercase tracking-wide text-alloy-midnight/45">
+                        Advanced · legacy V1 surfaces
+                    </summary>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                        <button type="button" onClick={() => setTab("targets")} className={`rounded-lg border px-2.5 py-1 text-xs font-medium ${tab === "targets" ? "border-alloy-juniper/40 bg-alloy-juniper/10 text-alloy-juniper" : "border-alloy-stone/25 text-alloy-midnight/60"}`}>
+                            Targets (legacy)
+                        </button>
+                        <button type="button" onClick={() => setTab("visibility")} className={`rounded-lg border px-2.5 py-1 text-xs font-medium ${tab === "visibility" ? "border-alloy-juniper/40 bg-alloy-juniper/10 text-alloy-juniper" : "border-alloy-stone/25 text-alloy-midnight/60"}`}>
+                            Experience placement (legacy V1)
+                        </button>
+                    </div>
+                </details>
             </div>
 
             <MetricSetupFlow

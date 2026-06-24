@@ -59,6 +59,7 @@ export const metricStyleConfigSchema = z
         accent: z.string().optional(),
         icon: z.string().optional(),
         colorToken: z.string().optional(),
+        fill: z.enum(["border", "soft", "filled"]).optional(),
     })
     .strict();
 

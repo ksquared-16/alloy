@@ -48,6 +48,7 @@ type VizForm = {
     subtitle: string;
     accent: string;
     icon: string;
+    fill: string;
     compact: boolean;
     show_threshold: boolean;
     show_trend: boolean;
@@ -63,10 +64,17 @@ const EMPTY: VizForm = {
     subtitle: "",
     accent: "enrollment",
     icon: "",
+    fill: "border",
     compact: false,
     show_threshold: true,
     show_trend: false,
 };
+
+const FILL_OPTIONS: { key: string; label: string; hint: string }[] = [
+    { key: "border", label: "Border only", hint: "White card with an accent rail." },
+    { key: "soft", label: "Soft background", hint: "Light wash of the selected color." },
+    { key: "filled", label: "Filled", hint: "Stronger color background." },
+];
 
 export default function VisualizationBuilderPanel({ canEdit }: Props) {
     const [items, setItems] = useState<MetricVisualizationRow[]>([]);
@@ -138,6 +146,7 @@ export default function VisualizationBuilderPanel({ canEdit }: Props) {
             subtitle: String(display.subtitle ?? ""),
             accent: String(style.accent ?? "enrollment"),
             icon: String(style.icon ?? ""),
+            fill: String(style.fill ?? "border"),
             compact: Boolean(display.compact),
             show_threshold: display.showThreshold !== false,
             show_trend: Boolean(display.showSparkline ?? display.showTrend),
@@ -149,7 +158,7 @@ export default function VisualizationBuilderPanel({ canEdit }: Props) {
         key: form.key.trim() || slugifyMetricKey(form.label),
         label: form.label.trim(),
         visualization_type: form.visualization_type,
-        style_config: { version: 1, accent: form.accent, icon: form.icon || undefined },
+        style_config: { version: 1, accent: form.accent, icon: form.icon || undefined, fill: form.fill || "border" },
         display_config: {
             version: 1,
             labelOverride: form.label_override || undefined,
@@ -233,6 +242,14 @@ export default function VisualizationBuilderPanel({ canEdit }: Props) {
         </PlatformBuilderSection>
     );
 
+    const toggleAdditional = (id: string) =>
+        setForm((f) => ({
+            ...f,
+            additional_metric_ids: f.additional_metric_ids.includes(id)
+                ? f.additional_metric_ids.filter((x) => x !== id)
+                : [...f.additional_metric_ids, id],
+        }));
+
     const metricsFields = (disabled: boolean) => (
         <PlatformBuilderSection title="Metrics shown" compact>
             <PlatformBuilderField label="Primary metric">
@@ -243,12 +260,30 @@ export default function VisualizationBuilderPanel({ canEdit }: Props) {
             </PlatformBuilderField>
             {supportsMulti ?
                 <div className="sm:col-span-2">
-                    <PlatformBuilderField label="Additional metrics">
-                        <select multiple className={`${PLATFORM_BUILDER_SELECT} min-h-[72px]`} value={form.additional_metric_ids} disabled={disabled} onChange={(e) => setForm((f) => ({ ...f, additional_metric_ids: Array.from(e.target.selectedOptions).map((o) => o.value) }))}>
+                    <PlatformBuilderField label="Additional metrics" hint="Shown beneath the primary value in the scorecard body.">
+                        {form.additional_metric_ids.length ?
+                            <div className="mb-2 mt-1 flex flex-wrap gap-1.5">
+                                {form.additional_metric_ids.map((id) => {
+                                    const label = metrics.find((m) => m.id === id)?.label ?? "Metric";
+                                    return (
+                                        <span key={id} className="inline-flex items-center gap-1 rounded-full border border-alloy-juniper/30 bg-alloy-juniper/10 px-2 py-0.5 text-[11px] font-medium text-alloy-juniper">
+                                            {label}
+                                            {!disabled ?
+                                                <button type="button" className="text-alloy-juniper/70 hover:text-alloy-juniper" onClick={() => toggleAdditional(id)} aria-label={`Remove ${label}`}>×</button>
+                                            :   null}
+                                        </span>
+                                    );
+                                })}
+                            </div>
+                        :   <p className="mb-2 mt-1 text-[11px] text-alloy-midnight/50">Add related metrics to show them in this scorecard.</p>}
+                        <div className="max-h-[140px] space-y-1 overflow-y-auto rounded-lg border border-alloy-stone/25 p-2">
                             {metrics.filter((m) => m.id !== form.metric_definition_id && m.status === "active").map((m) => (
-                                <option key={m.id} value={m.id}>{m.label}</option>
+                                <label key={m.id} className="flex cursor-pointer items-center gap-2 rounded px-1 py-0.5 text-sm text-alloy-midnight/80 hover:bg-alloy-stone/8">
+                                    <input type="checkbox" className="h-3.5 w-3.5 rounded border-alloy-stone/40" checked={form.additional_metric_ids.includes(m.id)} disabled={disabled} onChange={() => toggleAdditional(m.id)} />
+                                    {m.label}
+                                </label>
                             ))}
-                        </select>
+                        </div>
                     </PlatformBuilderField>
                 </div>
             :   null}
@@ -264,6 +299,17 @@ export default function VisualizationBuilderPanel({ canEdit }: Props) {
                             <button key={accent.key} type="button" disabled={disabled} title={accent.label} onClick={() => setForm((f) => ({ ...f, accent: accent.key }))} className={`flex items-center gap-1.5 rounded-lg border px-2 py-1 text-xs ${form.accent === accent.key ? `border-alloy-juniper/40 ring-2 ${accent.ring}` : "border-alloy-stone/25"}`}>
                                 <span className={`h-3.5 w-3.5 rounded-full ${accent.swatch}`} />
                                 {accent.label}
+                            </button>
+                        ))}
+                    </div>
+                </PlatformBuilderField>
+            </div>
+            <div className="sm:col-span-2">
+                <PlatformBuilderField label="Background fill" hint="Border keeps a white card; soft and filled wash the card with the selected color.">
+                    <div className="mt-1 flex flex-wrap gap-1.5">
+                        {FILL_OPTIONS.map((opt) => (
+                            <button key={opt.key} type="button" disabled={disabled} title={opt.hint} onClick={() => setForm((f) => ({ ...f, fill: opt.key }))} className={`rounded-lg border px-2.5 py-1 text-xs font-medium ${form.fill === opt.key ? "border-alloy-juniper/40 bg-alloy-juniper/10 text-alloy-juniper" : "border-alloy-stone/25 text-alloy-midnight/70"}`}>
+                                {opt.label}
                             </button>
                         ))}
                     </div>
