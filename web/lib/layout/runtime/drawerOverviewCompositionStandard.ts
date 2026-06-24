@@ -9,9 +9,16 @@
  */
 
 import { LAYOUT_RUNTIME_DRAWER_OVERVIEW_CANVAS } from "@/lib/layout/runtime/layoutRuntimeSurfaceStyles";
-import { readSectionRowGroup } from "@/lib/layout/layoutEditorSectionLayout";
 import type { LayoutDoc, LayoutSection } from "@/lib/layout/layoutV2";
 import { PRESENTATION_EMPTY_STATE } from "@/lib/presentation/presentationTypography";
+
+/** Local metadata read — mirrors layoutEditorSectionLayout without importing it (avoids module cycle). */
+const LAYOUT_EDITOR_SECTION_ROW_GROUP_METADATA_KEY = "layoutEditorSectionRowGroup" as const;
+
+function readSectionRowGroup(section: LayoutSection): string | null {
+    const raw = section.metadata?.[LAYOUT_EDITOR_SECTION_ROW_GROUP_METADATA_KEY];
+    return typeof raw === "string" && raw.trim() ? raw.trim() : null;
+}
 
 /** Twelve-column shell: left 4 / main 5 / right rail 3 — relationship cards / enrollment / comms rail. */
 export const DRAWER_OVERVIEW_SHELL_GRID = {
