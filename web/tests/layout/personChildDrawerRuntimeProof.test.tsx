@@ -138,7 +138,9 @@ describe("childDrawerRuntimeProof — layout plan", () => {
     it("renders child proof with handles, not opaque ids", () => {
         const doc = buildChildDrawerRelationshipProofLayout();
         const record = buildProofChildRecord();
-        const html = renderToStaticMarkup(<LayoutRuntimePlanView doc={doc} record={record} />);
+        const html = renderToStaticMarkup(
+            <LayoutRuntimePlanView doc={doc} record={record} useSectionFlow={false} variant="proof" />
+        );
 
         expect(html).toContain("Riley Brooks");
         expect(html).toContain("Jamie Johnson");

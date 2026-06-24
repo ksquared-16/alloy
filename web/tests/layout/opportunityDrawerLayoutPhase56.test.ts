@@ -127,6 +127,9 @@ describe("editor wiring", () => {
         expect(canvas).not.toContain("visual-editor-inline-section-editor");
         const inspector = readFileSync(resolve(root, "components/adminV2/settings/LayoutBuilderInspectorPanel.tsx"), "utf8");
         expect(inspector).toContain("visual-editor-composition-panel");
+        expect(inspector).toContain('label="Row layout"');
+        expect(inspector).toContain("BUILDER_SECTION_ROW_LAYOUT_PRESET_KEYS");
+        expect(inspector).toContain("visual-editor-section-row-group-layout");
     });
 
     it("exposes field settings component with registry-constrained controls", () => {

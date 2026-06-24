@@ -26,7 +26,7 @@ export const CHILD_OVERVIEW_SHELL_GRID = {
 export const CHILD_COMPOSITION_SECTION_EYEBROWS: Record<string, string> = {
     program_enrollment: "Program & enrollment",
     family_relationships: "Family",
-    schedule_attendance: "Schedule",
+    schedule_attendance: "Enrollment & schedule",
     recent_activity: "Activity",
     notes_communication: "Communication",
     documents: "Documents",

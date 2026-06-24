@@ -66,6 +66,8 @@ import {
     type InquiryChildFieldDefLike,
 } from "@/lib/fields/inquiryChildFieldRegistry";
 import ViewPersonDrawerIconButton from "@/components/admin/drawer/ViewPersonDrawerIconButton";
+import EnrollmentPlacementIntentReadout from "@/components/childcareOperational/EnrollmentPlacementIntentReadout";
+import OperationalEnrollmentOpportunityReadout from "@/components/childcareOperational/OperationalEnrollmentOpportunityReadout";
 import { inquiryChildRowMatchesSubjectFocus } from "@/lib/admin/drawer/resolveDrawerSubjectFocusPresentation";
 import { buildChildEnrollmentStatusControlVm } from "@/lib/adminV2/viewModel/drawer/opportunity/buildChildEnrollmentStatusControlVm";
 import type { LifecycleBuilderStageRecord } from "@/lib/lifecycle/lifecycleBuilderConfig";
@@ -1073,6 +1075,18 @@ export default function OpportunityInquiryChildrenSection({
             data-inquiry-children-section="OpportunityInquiryChildrenSection"
         >
             {loadErr ? <p className="mb-2 text-sm text-red-700">{loadErr}</p> : null}
+            <EnrollmentPlacementIntentReadout rows={rows} />
+            {opportunityId ?
+                <OperationalEnrollmentOpportunityReadout
+                    opportunityId={opportunityId}
+                    opportunityStatusKey={
+                        typeof opportunityRecord.status_key === "string" ?
+                            opportunityRecord.status_key
+                        :   null
+                    }
+                    rows={rows}
+                />
+            :   null}
             <div className={`${listWrap} w-full`} role="region" aria-label="Inquiry children">
                 <div className="w-full" data-inquiry-children-desktop-table="true">
                 <div

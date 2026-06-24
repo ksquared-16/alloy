@@ -40,6 +40,10 @@ import {
     stampChildEnrollmentDatesIfBlank,
     todayEnrollmentDateIso,
 } from "@/lib/admin/actions/executeApproveEnrollmentAction";
+import type { OperationalEnrollmentHandoffResult } from "@/lib/childcareOperational/enrollmentAgreementHandoff";
+import { executeOperationalEnrollmentHandoffFromApprovedOpportunity } from "@/lib/childcareOperational/enrollmentAgreementHandoff";
+import { isChildcareOperationalEnrollmentV1EnabledForOrg } from "@/lib/childcareOperational/featureFlag";
+import { resolveOperationalEnrollmentTodayYmd } from "@/lib/childcareOperational/operationalEnrollmentApi";
 import type { RequirementValidationResult } from "@/lib/completion/requirementValidationTypes";
 import { preflightOpportunityActionOrNull } from "@/lib/admin/actions/adminActionPreflight";
 import { applyMetadataAutoPopulate } from "@/lib/completion/applyAutoPopulateInstructions";
@@ -980,6 +984,34 @@ export async function executeAdminAction(
             const existing = transitionCtx.existing;
             const oldStatusKey = transitionCtx.oldStatusKey;
 
+            let operationalEnrollmentHandoff: OperationalEnrollmentHandoffResult | null = null;
+            if (actionKey === APPROVE_ENROLLMENT_ACTION_KEY) {
+                if (await isChildcareOperationalEnrollmentV1EnabledForOrg(supabase, ctx.orgId)) {
+                    const todayYmd = await resolveOperationalEnrollmentTodayYmd(supabase, ctx.orgId);
+                    const enrollmentDate = todayEnrollmentDateIso();
+                    operationalEnrollmentHandoff =
+                        await executeOperationalEnrollmentHandoffFromApprovedOpportunity({
+                            supabase,
+                            orgId: ctx.orgId,
+                            opportunityId: entityId,
+                            actorUserId: ctx.userId,
+                            todayYmd,
+                            enrollmentDateYmd: enrollmentDate,
+                            correlationId,
+                        });
+                    if (!operationalEnrollmentHandoff.ok) {
+                        return {
+                            ok: false,
+                            correlation_id: correlationId,
+                            error:
+                                operationalEnrollmentHandoff.error ??
+                                "Operational enrollment handoff failed",
+                            status: 500,
+                        };
+                    }
+                }
+            }
+
             const updates: Record<string, unknown> = { status_key: statusKey };
             if (merged.lost_reason != null) {
                 updates.lost_reason = String(merged.lost_reason);
@@ -1066,6 +1098,9 @@ export async function executeAdminAction(
                 entity: "opportunities",
                 id: entityId,
                 row: updated,
+                ...(operationalEnrollmentHandoff
+                    ? { operational_enrollment_handoff: operationalEnrollmentHandoff }
+                    : {}),
             });
         }
         case "update_field": {

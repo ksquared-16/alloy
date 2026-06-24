@@ -26,7 +26,6 @@ import {
     LAYOUT_SECTION_RAIL_SLOT_METADATA_KEY,
     LAYOUT_SECTION_SHOW_WHEN_EMPTY_METADATA_KEY,
 } from "@/lib/layout/runtime/layoutSectionPresentationMetadata";
-import { FUTURE_MODULE_METADATA_KEY } from "@/lib/layout/runtime/proofLayoutHelpers";
 
 const CHILD_LINK: LayoutFieldAdornment = {
     position: "left",
@@ -211,21 +210,19 @@ export function buildChildDrawerDefaultDoc(): LayoutDoc {
     const saBase = id("child", "drawer", "schedule_attendance");
     const scheduleAttendance = section(
         "schedule_attendance",
-        "Schedule & Attendance",
+        "Enrollment & schedule",
         [
             row(id(saBase, "r0"), [
                 col(id(saBase, "r0"), 0, LAYOUT_GRID_COLUMNS, [
                     {
-                        id: id(saBase, "schedule_future"),
+                        id: id(saBase, "operational_enrollment"),
                         kind: "widget_placeholder",
-                        refKey: "schedule_attendance",
-                        label: "Schedule & attendance",
+                        refKey: "operational_enrollment",
+                        label: "Operational enrollment",
                         widget: {
-                            widgetKey: "child.schedule_attendance",
+                            widgetKey: "child.operational_enrollment",
                             displayMode: "summary",
-                            note: "Future module — schedule/attendance not yet wired",
                         },
-                        metadata: { [FUTURE_MODULE_METADATA_KEY]: true },
                     },
                 ]),
             ]),

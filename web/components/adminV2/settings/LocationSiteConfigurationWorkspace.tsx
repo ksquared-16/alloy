@@ -5,6 +5,7 @@ import {
     type LocationProgramCategoryRow,
 } from "@/lib/locations/locationProgramCategories";
 import LocationProgramCategoriesSettingsPanel from "@/components/adminV2/settings/LocationProgramCategoriesSettingsPanel";
+import LocationSchedulePatternsSettingsPanel from "@/components/adminV2/settings/LocationSchedulePatternsSettingsPanel";
 import type { LocationHierarchyRow } from "@/lib/adminV2/locationsHierarchyTablePresentation";
 
 function roomLabel(row: LocationHierarchyRow): string {
@@ -128,6 +129,14 @@ export default function LocationSiteConfigurationWorkspace({
                         inputClass={inputClass}
                     />
                 </div>
+            </section>
+
+            <section className="rounded-xl border border-alloy-forge/12 bg-white/90 px-4 py-3.5 shadow-sm">
+                <LocationSchedulePatternsSettingsPanel
+                    siteId={site.id}
+                    onError={onError}
+                    inputClass={inputClass}
+                />
             </section>
         </div>
     );

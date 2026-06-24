@@ -94,6 +94,7 @@ export function futureModuleSection(
     entityType: string,
     prefix: string,
     modules: Array<{ key: string; label: string }>,
+    defaultExpanded = false,
 ): LayoutSection {
     const base = proofId(entityType, prefix, "future_modules");
     const half = LAYOUT_GRID_COLUMNS / 2;
@@ -109,7 +110,7 @@ export function futureModuleSection(
             ]),
         );
     }
-    return proofSection(entityType, prefix, "future_modules", "Future modules (placeholders)", rows, false);
+    return proofSection(entityType, prefix, "future_modules", "Future modules (placeholders)", rows, defaultExpanded);
 }
 
 export function appendFutureModuleSection(doc: LayoutDoc, section: LayoutSection): LayoutDoc {

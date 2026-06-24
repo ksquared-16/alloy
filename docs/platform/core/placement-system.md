@@ -65,9 +65,22 @@ Room cascade resolves program filter key via `desired_program_category_id` when 
 | Child program | `opportunity_customer_members.desired_program_category_id` | Canonical program/category FK |
 | Legacy program key | `opportunity_customer_members.desired_program_type` | Synced category key; legacy read path |
 | Child room | `opportunity_customer_members.program_room_cohort_key` | **Unit `locations.id`** (legacy column name) |
-| Schedule interest | `opportunity_customer_members.desired_schedule_type` | Option set (org-wide interim) |
+| Schedule interest | `opportunity_customer_members.desired_schedule_type` | **Enrollment schedule proposal** (may be captured before tour; BOS capacity forecasting) |
 
-### Temporary (acceptable for enrollment MVP)
+### Enrollment proposal vs operational contract (June 2026)
+
+| Layer | Storage | Role |
+|-------|---------|------|
+| Enrollment proposal | OCM columns (`location_id`, `desired_program_type`, `program_room_cohort_key`, `desired_schedule_type`) | Intent during inquiry/enrollment — not committed operational truth |
+| Operational contract | `child_enrollment_agreements` | Per child × site agreement after approve handoff |
+| Committed placement | `child_placements` | Effective-dated physical/program/room assignment on an agreement |
+| Committed schedule | `schedule_assignments` | Effective-dated schedule on an agreement (from latest valid `desired_schedule_type` at handoff) |
+
+Handoff on `approve_enrollment` creates or reuses the agreement and converts the latest valid enrollment proposal into committed placement/schedule rows. Missing schedule patterns produce partial handoff warnings without blocking approval.
+
+**Operator edits (Batch 5):** After handoff, operators change placement or schedule via supersede (new effective-dated row; prior row closed the day before). Agreement lifecycle uses ending / ended / cancel routes — not in-place patches.
+
+---
 
 - OCM columns act as placement storage before a dedicated placements table.
 - `program_room_cohort_key` column name (value is unit location id).

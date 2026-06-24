@@ -81,6 +81,31 @@ Delivery lifecycle (separate table `communication_delivery_events`): `queued`, `
 
 ---
 
+## Operational enrollment (childcare)
+
+Handoff from `approve_enrollment` when `CHILDCARE_OPERATIONAL_ENROLLMENT_V1_ENABLED=1` (see `web/lib/childcareOperational/featureFlag.ts`).
+
+| event_type | entity_type | When emitted |
+|------------|-------------|--------------|
+| `enrollment_agreement_created` | `child_enrollment_agreements` | New agreement on handoff |
+| `placement_created` | `child_placements` | Initial placement on handoff |
+| `schedule_assignment_created` | `schedule_assignments` | Initial schedule assignment on handoff |
+| `operational_enrollment_handoff_completed` | `opportunities` | Handoff finished with no partial warnings |
+| `operational_enrollment_handoff_partial` | `opportunities` | Handoff finished with schedule/placement warnings |
+| `placement_changed` | `child_placements` | Operator supersede or initial create (non-handoff source) |
+| `schedule_assignment_changed` | `schedule_assignments` | Operator supersede or initial create (non-handoff source) |
+| `agreement_ending_scheduled` | `child_enrollment_agreements` | Operator marks active agreement ending with future end date |
+| `agreement_ended` | `child_enrollment_agreements` | Operator marks agreement ended (not automated transition job) |
+| `agreement_canceled` | `child_enrollment_agreements` | Operator cancels `pending_start` agreement |
+
+Operator edit events use `action_type: operator_enrollment_edit`. Handoff continues to emit `placement_created` / `schedule_assignment_created` with `action_type: approve_enrollment_handoff` (not `placement_changed`).
+
+Constants: `web/lib/childcareOperational/operationalEnrollmentEvents.ts`. Payloads include `schema_version: 1`.
+
+**Schedule doctrine:** OCM `desired_schedule_type` is enrollment schedule **intent/proposal** (may be captured before tour). `schedule_assignments` are **committed operational schedule** after approve handoff converts the latest valid proposal. BOS capacity forecasting may use proposal intent before approval.
+
+---
+
 ## Audit reference
 
 Full API route coverage: `docs/audits/event-integrity-audit.md`.

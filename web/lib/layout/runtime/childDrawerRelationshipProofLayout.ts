@@ -177,6 +177,7 @@ export function buildChildDrawerRelationshipProofLayout(): LayoutDoc {
         "parents",
         "Parents / guardians",
         [row(proofId(parBase, "r0"), [col(proofId(parBase, "r0"), 0, LAYOUT_GRID_COLUMNS, [parentsRepeater])])],
+        true,
     );
 
     const locBase = proofId(ENTITY, PREFIX, "locations");
@@ -221,6 +222,7 @@ export function buildChildDrawerRelationshipProofLayout(): LayoutDoc {
                 ]),
             ]),
         ],
+        true,
     );
 
     const baseDoc: LayoutDoc = {
@@ -238,6 +240,6 @@ export function buildChildDrawerRelationshipProofLayout(): LayoutDoc {
 
     return appendFutureModuleSection(
         baseDoc,
-        futureModuleSection(ENTITY, PREFIX, [...CHILD_FUTURE_DRAWER_MODULES]),
+        futureModuleSection(ENTITY, PREFIX, [...CHILD_FUTURE_DRAWER_MODULES], true),
     );
 }
