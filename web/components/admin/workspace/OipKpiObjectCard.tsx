@@ -112,6 +112,11 @@ export function OipKpiObjectCard({
     const showNoDataHelper = variant === "health" && normalized === "unknown";
     const interactive = Boolean(onClick);
     const preview = resolvedLayout === "preview";
+    const isCommandLayout = resolvedLayout === "command";
+    const commandHelperText =
+        isCommandLayout && status && !["healthy", "warning", "critical"].includes(String(status))
+            ? String(status).trim()
+            : null;
 
     if (loading) {
         const loadingShell =
@@ -120,11 +125,24 @@ export function OipKpiObjectCard({
                 : "rounded-lg border border-alloy-midnight/15 bg-white px-2.5 py-2";
         return (
             <div className={`${loadingShell} ${className}`} aria-busy="true">
-                <div className="flex items-center gap-2">
-                    <div className={`animate-pulse rounded-md bg-alloy-midnight/8 ${resolvedLayout === "command" ? "h-7 w-7" : "h-5 w-5"}`} />
-                    <div className={`animate-pulse rounded bg-alloy-midnight/8 ${resolvedLayout === "command" ? "h-2.5 w-16" : "h-2 w-12"}`} />
-                </div>
-                <div className={`mt-2 animate-pulse rounded bg-alloy-midnight/6 ${resolvedLayout === "command" ? "h-5 w-14" : "h-4 w-10"}`} />
+                {isCommandLayout ?
+                    <>
+                        <div className="flex items-start gap-2">
+                            <div className="h-7 w-7 animate-pulse rounded-md bg-alloy-midnight/8" aria-hidden />
+                            <div className="min-w-0 flex-1">
+                                <div className="h-6 w-12 animate-pulse rounded bg-alloy-midnight/8" aria-hidden />
+                                <div className="mt-1.5 h-2.5 w-20 animate-pulse rounded bg-alloy-midnight/6" aria-hidden />
+                            </div>
+                        </div>
+                    </>
+                :   <>
+                        <div className="flex items-center gap-2">
+                            <div className="h-5 w-5 animate-pulse rounded-md bg-alloy-midnight/8" aria-hidden />
+                            <div className="h-2 w-12 animate-pulse rounded bg-alloy-midnight/8" aria-hidden />
+                        </div>
+                        <div className="mt-2 h-4 w-10 animate-pulse rounded bg-alloy-midnight/6" aria-hidden />
+                    </>
+                }
             </div>
         );
     }
@@ -136,23 +154,57 @@ export function OipKpiObjectCard({
         interactive,
     });
 
-    const body = (
+    const body = isCommandLayout ? (
+        <>
+            <div className="flex items-start gap-2">
+                <OipKpiIcon iconKey={resolvedIconKey} accent={resolvedAccent} withWell wellSize="md" />
+                <div className="min-w-0 flex-1">
+                    <div
+                        className={`font-semibold tabular-nums leading-none tracking-tight text-xl ${variant === "health" ? oipKpiObjectStatusTextClass(normalized) : oipKpiObjectValueClass(normalized)}`}
+                    >
+                        {displayValue}
+                    </div>
+                    <div className="mt-1 truncate text-[11px] font-medium leading-snug text-alloy-midnight/52">{label}</div>
+                    {commandHelperText ?
+                        <div className="mt-0.5 truncate text-[10px] leading-snug text-alloy-midnight/40">{commandHelperText}</div>
+                    :   null}
+                </div>
+            </div>
+            {showStatus ?
+                <div
+                    className={`mt-1.5 inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[9px] font-semibold ${
+                        normalized === "critical"
+                            ? "bg-red-50 text-red-700"
+                            : normalized === "warning"
+                              ? "bg-alloy-ember/10 text-alloy-ember"
+                              : "bg-alloy-juniper/8 text-alloy-juniper"
+                    }`}
+                >
+                    <span aria-hidden>{oipStatusIcon(normalized)}</span>
+                    <span>{oipStatusOperatorLabel(normalized)}</span>
+                </div>
+            :   null}
+            <div className="hidden" data-oip-future-trend aria-hidden />
+            <div className="hidden" data-oip-future-benchmark aria-hidden />
+            <div className="hidden" data-oip-future-period-compare aria-hidden />
+        </>
+    ) : (
         <>
             <div className={preview ? "flex flex-col gap-0.5" : "flex items-start gap-1.5"}>
                 <OipKpiIcon
                     iconKey={resolvedIconKey}
                     accent={resolvedAccent}
                     withWell
-                    wellSize={preview ? "sm" : resolvedLayout === "command" ? "md" : "sm"}
+                    wellSize={preview ? "sm" : "sm"}
                 />
                 <div className="min-w-0 flex-1">
                     <div
-                        className={`truncate font-semibold uppercase tracking-wide text-alloy-midnight/55 ${preview ? "text-[7px]" : resolvedLayout === "command" ? "text-[9px] leading-none" : "text-[8px] leading-none"}`}
+                        className={`truncate font-semibold uppercase tracking-wide text-alloy-midnight/55 ${preview ? "text-[7px]" : "text-[8px] leading-none"}`}
                     >
                         {label}
                     </div>
                     <div
-                        className={`font-semibold tabular-nums leading-tight ${resolvedLayout === "command" ? "mt-0.5 text-base" : resolvedLayout === "health" ? "mt-0.5 text-sm" : preview ? "mt-0.5 text-sm" : "mt-0.5 text-sm"} ${variant === "health" ? oipKpiObjectStatusTextClass(normalized) : oipKpiObjectValueClass(normalized)}`}
+                        className={`mt-0.5 font-semibold tabular-nums leading-tight text-sm ${variant === "health" ? oipKpiObjectStatusTextClass(normalized) : oipKpiObjectValueClass(normalized)}`}
                     >
                         {displayValue}
                     </div>
@@ -169,7 +221,7 @@ export function OipKpiObjectCard({
                             : normalized === "warning"
                               ? "bg-alloy-ember/10 text-alloy-ember"
                               : "bg-alloy-juniper/8 text-alloy-juniper"
-                    } ${resolvedLayout === "command" ? "" : oipKpiObjectStatusTextClass(normalized)}`}
+                    } ${oipKpiObjectStatusTextClass(normalized)}`}
                 >
                     <span aria-hidden>{oipStatusIcon(normalized)}</span>
                     <span>{oipStatusOperatorLabel(normalized)}</span>
@@ -178,7 +230,7 @@ export function OipKpiObjectCard({
             {showNoDataHelper ?
                 <div className="mt-0.5 text-[9px] text-alloy-midnight/40">No data yet</div>
             :   null}
-            {showTrendPlaceholder && variant === "metric" && !preview && resolvedLayout !== "command" ?
+            {showTrendPlaceholder && variant === "metric" && !preview ?
                 <div
                     className="mt-0.5 truncate text-[8px] text-alloy-midnight/35"
                     data-oip-trend-placeholder="true"

@@ -127,13 +127,14 @@ describe("Announcements workspace", () => {
         expect(WS).not.toMatch(/announcement_recipients/);
     });
 
-    it("shows announcement library first without auto-opening the editor", () => {
-        expect(WS).not.toContain("didAutoOpenEditorRef");
+    it("opens announcements with warm-cache-first occupancy", () => {
+        expect(WS).toContain("didInitialOccupancyRef");
+        expect(WS).toContain("getInitialAnnouncementOccupancy");
         expect(WS).toContain("CommsLibraryListReserve");
-        expect(WS).toContain("Select an announcement from the library");
+        expect(WS).toContain("Create Announcement");
         expect(WS).toContain("New Announcement");
         expect(WS).toContain("All Announcements");
-        expect(WS).toContain("No Announcements");
+        expect(WS).toContain("No announcements yet");
         expect(WS).toContain("Draft and Scheduled Broadcasts");
     });
 

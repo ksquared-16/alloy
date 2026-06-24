@@ -8,6 +8,8 @@ import CommunicationsWorkspaceKpiStrip from "@/app/adminV2/communications/Commun
 import {
     COMMS_PRIMARY_BTN_CLASS,
     COMMS_SECONDARY_BTN_CLASS,
+    COMMS_WORKSPACE_EXECUTION_CLASS,
+    COMMS_WORKSPACE_NAV_CLASS,
 } from "@/app/adminV2/communications/commsWorkspaceUi";
 import type { CommunicationsModalTab } from "@/app/adminV2/communications/CommunicationsModalTabPanel";
 
@@ -40,20 +42,23 @@ export default function CommunicationsWorkspaceShell({
         <div
             className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-alloy-stone/20 bg-white"
             data-comms-workspace-shell="true"
-            data-comms-modal-version="workspace-inc2"
+            data-comms-modal-version="workspace-inc2c"
         >
             <header
-                className="flex shrink-0 flex-col gap-2 border-b border-alloy-stone/15 bg-white px-4 py-3"
+                className="flex w-full shrink-0 border-b border-alloy-stone/12 bg-white px-4 py-2.5"
                 data-comms-workspace-header="true"
             >
-                <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="flex w-full flex-nowrap items-center justify-between gap-4">
                     <div className="flex min-w-0 items-center gap-2">
                         <MessageSquare className="h-4 w-4 shrink-0 text-alloy-midnight/65" aria-hidden strokeWidth={2} />
                         <h2 id="adminv2-inbox-modal-title" className="text-sm font-semibold text-alloy-midnight">
                             Communications
                         </h2>
                     </div>
-                    <div className="flex shrink-0 items-center gap-1.5">
+                    <div
+                        className="ml-auto flex shrink-0 items-center gap-1.5"
+                        data-comms-workspace-header-actions="true"
+                    >
                         {showComposeNew && onComposeNew ?
                             <button
                                 type="button"
@@ -79,18 +84,11 @@ export default function CommunicationsWorkspaceShell({
 
             <CommunicationsWorkspaceKpiStrip activeTab={activeTab} />
 
-            <nav
-                className="shrink-0 border-b border-alloy-stone/12 bg-white px-4 py-2"
-                data-comms-workspace-nav="true"
-                aria-label="Communications views"
-            >
+            <nav className={COMMS_WORKSPACE_NAV_CLASS} data-comms-workspace-nav="true" aria-label="Communications views">
                 <CommsModalTabBar tabs={tabs} activeKey={activeTab} onSelect={onTabChange} />
             </nav>
 
-            <div
-                className="flex min-h-[min(22rem,65vh)] flex-1 flex-col overflow-hidden bg-white p-3"
-                data-comms-workspace-execution="true"
-            >
+            <div className={COMMS_WORKSPACE_EXECUTION_CLASS} data-comms-workspace-execution="true">
                 {children}
             </div>
         </div>

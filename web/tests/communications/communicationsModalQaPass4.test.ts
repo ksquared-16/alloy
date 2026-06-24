@@ -9,13 +9,14 @@ function read(rel: string): string {
 }
 
 describe("Communications modal QA pass 4", () => {
-    it("Templates workspace is library-first and does not auto-open the editor", () => {
+    it("Templates workspace opens with warm-cache-first occupancy", () => {
         const ws = read("app/adminV2/communications/TemplatesWorkspace.tsx");
-        expect(ws).not.toContain("didAutoOpenEditorRef");
+        expect(ws).toContain("didInitialOccupancyRef");
+        expect(ws).toContain("getInitialTemplateOccupancy");
         expect(ws).toContain("CommsLibraryListReserve");
-        expect(ws).toContain("Select a template from the library");
+        expect(ws).toContain("Create Template");
         expect(ws).toContain("Template Library");
-        expect(ws).toContain("No Templates");
+        expect(ws).toContain("No templates yet");
     });
 
     it("stateless recipient preview route resolves audience without announcement id", () => {

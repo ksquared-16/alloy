@@ -644,11 +644,11 @@ export default function CommandCenterShell() {
         !selected;
 
     return (
-        <div data-cc-shell="communications-command-center" className="relative flex min-h-0 flex-1 flex-col gap-3 bg-white p-2.5">
+        <div data-cc-shell="communications-command-center" className="relative flex min-h-0 flex-1 flex-col gap-2.5 bg-white p-2.5">
             {error ? <div className="text-[11px] text-alloy-ember">{error}</div> : null}
 
             {/* Outer split — queue ~25% | workspace ~75%. Outer modal/BOS geometry untouched. */}
-            <div className="grid min-h-0 flex-1 grid-cols-[minmax(260px,25%)_minmax(0,1fr)] gap-3">
+            <div className="grid min-h-0 flex-1 grid-cols-[minmax(260px,25%)_minmax(0,1fr)] gap-2.5">
                 {/* QUEUE */}
                 <aside data-cc-column="queue" aria-label="Communication queue" className={`flex min-h-0 flex-col overflow-hidden ${COMMS_PANEL_SHELL_CLASS}`}>
                     <div className="shrink-0 border-b border-alloy-stone/12 px-3 py-2.5">

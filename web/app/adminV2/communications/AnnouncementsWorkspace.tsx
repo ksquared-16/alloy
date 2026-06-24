@@ -37,6 +37,9 @@ import {
     COMMS_SECONDARY_BTN_CLASS,
     COMMS_SELECT_CLASS,
     COMMS_UTILITY_CARD_CLASS,
+    COMMS_LIBRARY_RAIL_HEADER_CLASS,
+    COMMS_LIBRARY_ROW_CLASS,
+    COMMS_LIBRARY_ROW_SELECTED_CLASS,
     CommsLibraryListReserve,
     CommsSectionCard,
 } from "@/app/adminV2/communications/commsWorkspaceUi";
@@ -124,6 +127,44 @@ function initialAnnouncementsListResolved(): boolean {
     return getCommunicationsWarmAnnouncements() !== null;
 }
 
+function getInitialAnnouncementOccupancy(): {
+    selectedId: string | null;
+    creating: boolean;
+    draft: Draft;
+    status: string;
+} {
+    if (!initialAnnouncementsListResolved()) {
+        return { selectedId: null, creating: false, draft: EMPTY_DRAFT, status: "draft" };
+    }
+    const warm = initialAnnouncementsFromWarm();
+    if (warm.length === 0) {
+        return { selectedId: null, creating: true, draft: EMPTY_DRAFT, status: "draft" };
+    }
+    const row = warm[0];
+    return {
+        selectedId: row.id,
+        creating: false,
+        draft: {
+            title: row.title ?? "",
+            channels: (row.channels ?? []) as AnnouncementChannel[],
+            template_id: row.template_id ?? null,
+            subject: row.subject ?? "",
+            body: row.body ?? "",
+        },
+        status: row.status ?? "draft",
+    };
+}
+
+function draftFromAnnouncementRow(row: AnnouncementRow): Draft {
+    return {
+        title: row.title ?? "",
+        channels: (row.channels ?? []) as AnnouncementChannel[],
+        template_id: row.template_id ?? null,
+        subject: row.subject ?? "",
+        body: row.body ?? "",
+    };
+}
+
 function hydrateAudienceMetadataFromWarm(): {
     programOptions: ProgramOptionRow[];
     locationHierarchy: InquiryChildPlacementHierarchyRow[];
@@ -156,11 +197,13 @@ export default function AnnouncementsWorkspace() {
     const [listResolved, setListResolved] = useState(initialAnnouncementsListResolved);
     const [error, setError] = useState<string | null>(null);
 
-    const [selectedId, setSelectedId] = useState<string | null>(null);
-    const [creating, setCreating] = useState(false);
-    const [draft, setDraft] = useState<Draft>(EMPTY_DRAFT);
-    const [status, setStatus] = useState<string>("draft");
+    const [selectedId, setSelectedId] = useState<string | null>(() => getInitialAnnouncementOccupancy().selectedId);
+    const [creating, setCreating] = useState(() => getInitialAnnouncementOccupancy().creating);
+    const [draft, setDraft] = useState<Draft>(() => getInitialAnnouncementOccupancy().draft);
+    const [status, setStatus] = useState<string>(() => getInitialAnnouncementOccupancy().status);
     const [saving, setSaving] = useState(false);
+
+    const didInitialOccupancyRef = useRef(false);
 
     const [templates, setTemplates] = useState<TemplateOption[]>(initialActiveTemplatesFromWarm);
     const [templatePreview, setTemplatePreview] = useState<{ subject: string | null; body: string } | null>(null);
@@ -453,6 +496,35 @@ export default function AnnouncementsWorkspace() {
         [loadTemplatePreview, applyAudienceSpec]
     );
 
+    useEffect(() => {
+        if (didInitialOccupancyRef.current) return;
+        if (!listResolved) return;
+        didInitialOccupancyRef.current = true;
+
+        if (list.length === 0) {
+            if (!creating) {
+                setCreating(true);
+                setSelectedId(null);
+                setDraft(EMPTY_DRAFT);
+                setStatus("draft");
+            }
+            return;
+        }
+
+        if (selectedId) {
+            void selectAnnouncement(selectedId);
+            return;
+        }
+
+        if (!creating) {
+            const row = list[0];
+            setSelectedId(row.id);
+            setDraft(draftFromAnnouncementRow(row));
+            setStatus(row.status ?? "draft");
+            void selectAnnouncement(row.id);
+        }
+    }, [listResolved, list, selectedId, creating, selectAnnouncement]);
+
     const startCreate = useCallback(() => {
         setCreating(true);
         setSelectedId(null);
@@ -612,11 +684,11 @@ export default function AnnouncementsWorkspace() {
     const isArchived = status === "archived";
 
     return (
-        <div data-announcements-workspace="true" className="grid h-full min-h-0 grid-cols-[272px_minmax(0,1fr)_320px] gap-3">
+        <div data-announcements-workspace="true" className="grid h-full min-h-0 grid-cols-[272px_minmax(0,1fr)_320px] gap-2.5">
             {/* LEFT — list */}
             <CommsSectionCard title="Announcements" helper="Draft and Scheduled Broadcasts" data-announcement-list="true" className="flex min-h-0 flex-col !p-0">
-                <div className="flex items-center justify-between border-b border-alloy-stone/12 p-3">
-                    <span className="text-xs font-semibold text-alloy-midnight/80">All Announcements</span>
+                <div className={`${COMMS_LIBRARY_RAIL_HEADER_CLASS} flex items-center justify-between gap-2`}>
+                    <span className="text-xs font-semibold tracking-wide text-alloy-midnight/85">All Announcements</span>
                     <button type="button" data-announcement-new="true" onClick={startCreate} className={`${COMMS_PRIMARY_BTN_CLASS} !px-2 !py-1 text-[11px]`}>
                         New
                     </button>
@@ -626,7 +698,12 @@ export default function AnnouncementsWorkspace() {
                         <CommsLibraryListReserve label="Loading announcements" />
                     :   null}
                     {listResolved && !loading && list.length === 0 ?
-                        <div className="p-3 text-[11px] text-alloy-midnight/50">No Announcements</div>
+                        <div className="px-3 py-4 text-center">
+                            <p className="text-[11px] font-medium text-alloy-midnight/60">No announcements yet</p>
+                            <button type="button" onClick={startCreate} className={`${COMMS_PRIMARY_BTN_CLASS} mt-2 !px-2.5 !py-1 text-[11px]`}>
+                                Create Announcement
+                            </button>
+                        </div>
                     :   null}
                     {list.map((a) => (
                         <button
@@ -634,10 +711,8 @@ export default function AnnouncementsWorkspace() {
                             type="button"
                             data-announcement-row={a.id}
                             onClick={() => void selectAnnouncement(a.id)}
-                            className={`mb-1 flex w-full flex-col items-start gap-0.5 rounded-lg border px-2 py-2 text-left transition-colors ${
-                                selectedId === a.id
-                                    ? "border-alloy-juniper/35 bg-alloy-juniper/10 shadow-sm"
-                                    : "border-transparent hover:border-alloy-stone/15 hover:bg-alloy-stone/8"
+                            className={`${COMMS_LIBRARY_ROW_CLASS} ${
+                                selectedId === a.id ? COMMS_LIBRARY_ROW_SELECTED_CLASS : ""
                             }`}
                         >
                             <span className="truncate text-[12px] font-medium text-alloy-midnight/90">{a.title || "Untitled"}</span>
@@ -651,11 +726,17 @@ export default function AnnouncementsWorkspace() {
             </CommsSectionCard>
 
             {/* CENTER — draft editor */}
-            <section data-announcement-editor="true" className="flex min-h-0 flex-col gap-3 overflow-y-auto">
+            <section data-announcement-editor="true" className="flex min-h-0 flex-col gap-2.5 overflow-y-auto">
                 {error && <div className={COMMS_ERROR_BANNER_CLASS}>{error}</div>}
                 {!hasSelection ?
                     <div className={COMMS_EMPTY_STATE_DASHED_CLASS}>
-                        Select an announcement from the library or click New to create one.
+                        <p className="font-medium text-alloy-midnight/70">No announcement selected</p>
+                        <p className="mt-1 text-[11px] text-alloy-midnight/50">
+                            Choose an announcement from the library or create a new one.
+                        </p>
+                        <button type="button" onClick={startCreate} className={`${COMMS_PRIMARY_BTN_CLASS} mt-3`}>
+                            Create Announcement
+                        </button>
                     </div>
                 :   (
                     <>
@@ -812,7 +893,7 @@ export default function AnnouncementsWorkspace() {
             </section>
 
             {/* RIGHT — template preview + targets + recipient preview */}
-            <aside className="flex min-h-0 flex-col gap-3 overflow-y-auto">
+            <aside className="flex min-h-0 flex-col gap-2.5 overflow-y-auto">
                 <CommsSectionCard title="Preview" data-announcement-preview="true">
                     {templatePreview && (
                         <div data-announcement-template-preview="true" className={COMMS_UTILITY_CARD_CLASS}>

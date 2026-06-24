@@ -188,11 +188,17 @@ export function oipKpiStatusBorderClass(_status: OipHealthStatus | string | unde
 function oipKpiCommandDomainWash(accent: OipKpiAccentKey): string {
     switch (accent) {
         case "enrollment":
-            return "bg-gradient-to-br from-white via-white to-alloy-juniper/[0.07]";
+            return "bg-gradient-to-br from-white via-white to-alloy-juniper/[0.09]";
+        case "attendance":
+            return "bg-gradient-to-br from-white via-white to-alloy-amber/[0.1]";
+        case "capacity":
+            return "bg-gradient-to-br from-white via-white to-alloy-blue/[0.08]";
         case "forms":
-            return "bg-gradient-to-br from-white via-white to-violet-500/[0.06]";
+            return "bg-gradient-to-br from-white via-white to-violet-500/[0.08]";
         case "operational":
             return "bg-gradient-to-br from-white via-white to-alloy-midnight/[0.05]";
+        case "communications":
+            return "bg-gradient-to-br from-white via-white to-alloy-blue/[0.06]";
         default:
             return "bg-white";
     }

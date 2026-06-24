@@ -33,6 +33,9 @@ import {
     COMMS_SECONDARY_BTN_CLASS,
     COMMS_SELECT_CLASS,
     COMMS_UTILITY_CARD_CLASS,
+    COMMS_LIBRARY_RAIL_HEADER_CLASS,
+    COMMS_LIBRARY_ROW_CLASS,
+    COMMS_LIBRARY_ROW_SELECTED_CLASS,
     CommsLibraryListReserve,
     CommsSectionCard,
 } from "@/app/adminV2/communications/commsWorkspaceUi";
@@ -103,6 +106,50 @@ function initialTemplatesListResolved(): boolean {
     return getCommunicationsWarmTemplatesLibrary() !== null;
 }
 
+function getInitialTemplateOccupancy(): {
+    selectedId: string | null;
+    creating: boolean;
+    draft: EditorDraft;
+    versionInfo: { current: number | null; count: number };
+} {
+    if (!initialTemplatesListResolved()) {
+        return { selectedId: null, creating: false, draft: EMPTY_DRAFT, versionInfo: { current: null, count: 0 } };
+    }
+    const warm = initialTemplatesFromWarm();
+    if (warm.length === 0) {
+        return { selectedId: null, creating: true, draft: EMPTY_DRAFT, versionInfo: { current: null, count: 0 } };
+    }
+    const row = warm[0];
+    const cv = row.current_version ?? null;
+    return {
+        selectedId: row.id,
+        creating: false,
+        draft: {
+            name: row.name ?? "",
+            description: row.description ?? "",
+            category: row.category,
+            channel: row.channel,
+            status: row.status,
+            subject: cv?.subject ?? "",
+            body: cv?.body ?? "",
+        },
+        versionInfo: { current: cv?.version_number ?? null, count: cv ? 1 : 0 },
+    };
+}
+
+function draftFromTemplateRow(row: TemplateRow): EditorDraft {
+    const cv = row.current_version ?? null;
+    return {
+        name: row.name ?? "",
+        description: row.description ?? "",
+        category: row.category,
+        channel: row.channel,
+        status: row.status,
+        subject: cv?.subject ?? "",
+        body: cv?.body ?? "",
+    };
+}
+
 /** Build a nested sample context from the catalog so the live preview reads naturally. */
 function buildSampleContext(): Record<string, unknown> {
     const ctx: Record<string, unknown> = {};
@@ -132,18 +179,19 @@ export default function TemplatesWorkspace() {
     const [channelFilter, setChannelFilter] = useState<TemplateChannel | "">("");
     const [statusFilter, setStatusFilter] = useState<TemplateStatus | "">("");
 
-    // selection + editor
-    const [selectedId, setSelectedId] = useState<string | null>(null);
-    const [draft, setDraft] = useState<EditorDraft>(EMPTY_DRAFT);
-    const [creating, setCreating] = useState(false);
+    // selection + editor — warm-cache-first occupancy (Increment 2C)
+    const [selectedId, setSelectedId] = useState<string | null>(() => getInitialTemplateOccupancy().selectedId);
+    const [draft, setDraft] = useState<EditorDraft>(() => getInitialTemplateOccupancy().draft);
+    const [creating, setCreating] = useState(() => getInitialTemplateOccupancy().creating);
     const [saving, setSaving] = useState(false);
     const [extraCategories, setExtraCategories] = useState<string[]>([]);
     const [removedCategories, setRemovedCategories] = useState<string[]>([]);
     const [categoriesManageOpen, setCategoriesManageOpen] = useState(false);
-    const [versionInfo, setVersionInfo] = useState<{ current: number | null; count: number }>({
-        current: null,
-        count: 0,
-    });
+    const [versionInfo, setVersionInfo] = useState<{ current: number | null; count: number }>(
+        () => getInitialTemplateOccupancy().versionInfo
+    );
+
+    const didInitialOccupancyRef = useRef(false);
 
     const sampleContext = useMemo(buildSampleContext, []);
     const templateDerivedCategories = useMemo(() => collectTemplateCategories(templates), [templates]);
@@ -241,6 +289,38 @@ export default function TemplatesWorkspace() {
             setError(e instanceof Error ? e.message : "Failed to load template");
         }
     }, []);
+
+    useEffect(() => {
+        if (didInitialOccupancyRef.current) return;
+        if (!listResolved || !filtersDefault) return;
+        didInitialOccupancyRef.current = true;
+
+        if (templates.length === 0) {
+            if (!creating) {
+                setCreating(true);
+                setSelectedId(null);
+                setDraft(EMPTY_DRAFT);
+                setVersionInfo({ current: null, count: 0 });
+            }
+            return;
+        }
+
+        if (selectedId) {
+            const row = templates.find((t) => t.id === selectedId);
+            const hasEditorBody = Boolean(draft.body || row?.current_version?.body);
+            if (!hasEditorBody) void selectTemplate(selectedId);
+            return;
+        }
+
+        if (!creating) {
+            const row = templates[0];
+            const cv = row.current_version ?? null;
+            setSelectedId(row.id);
+            setDraft(draftFromTemplateRow(row));
+            setVersionInfo({ current: cv?.version_number ?? null, count: cv ? 1 : 0 });
+            if (!cv?.body) void selectTemplate(row.id);
+        }
+    }, [listResolved, filtersDefault, templates, selectedId, creating, draft.body, selectTemplate]);
 
     const startCreate = useCallback(() => {
         setCreating(true);
@@ -417,12 +497,12 @@ export default function TemplatesWorkspace() {
     const isArchived = draft.status === "archived";
 
     return (
-        <div data-templates-workspace="true" className="relative grid h-full min-h-0 grid-cols-[272px_minmax(0,1fr)_320px] gap-3">
+        <div data-templates-workspace="true" className="relative grid h-full min-h-0 grid-cols-[272px_minmax(0,1fr)_320px] gap-2.5">
             {/* LEFT — list + filters */}
             <CommsSectionCard title="Template Library" helper="Search and filter saved templates." data-template-list="true" className="flex min-h-0 flex-col !p-0">
-                <div className="border-b border-alloy-stone/12 p-3">
+                <div className={COMMS_LIBRARY_RAIL_HEADER_CLASS}>
                     <div className="flex items-center justify-between gap-2">
-                        <span className="text-xs font-semibold text-alloy-midnight/80">Templates</span>
+                        <span className="text-xs font-semibold tracking-wide text-alloy-midnight/85">Templates</span>
                         <button type="button" data-template-new="true" onClick={startCreate} className={`${COMMS_PRIMARY_BTN_CLASS} !px-2 !py-1 text-[11px]`}>
                             New
                         </button>
@@ -486,7 +566,12 @@ export default function TemplatesWorkspace() {
                         <CommsLibraryListReserve label="Loading templates" />
                     :   null}
                     {listResolved && !loading && visibleTemplates.length === 0 ?
-                        <div className="p-3 text-[11px] text-alloy-midnight/50">No Templates</div>
+                        <div className="px-3 py-4 text-center">
+                            <p className="text-[11px] font-medium text-alloy-midnight/60">No templates yet</p>
+                            <button type="button" onClick={startCreate} className={`${COMMS_PRIMARY_BTN_CLASS} mt-2 !px-2.5 !py-1 text-[11px]`}>
+                                Create Template
+                            </button>
+                        </div>
                     :   null}
                     {visibleTemplates.map((t) => (
                         <button
@@ -494,10 +579,8 @@ export default function TemplatesWorkspace() {
                             type="button"
                             data-template-row={t.id}
                             onClick={() => void selectTemplate(t.id)}
-                            className={`mb-1 flex w-full flex-col items-start gap-0.5 rounded-lg border px-2 py-2 text-left transition-colors ${
-                                selectedId === t.id
-                                    ? "border-alloy-juniper/35 bg-alloy-juniper/10 shadow-sm"
-                                    : "border-transparent hover:border-alloy-stone/15 hover:bg-alloy-stone/8"
+                            className={`${COMMS_LIBRARY_ROW_CLASS} ${
+                                selectedId === t.id ? COMMS_LIBRARY_ROW_SELECTED_CLASS : ""
                             }`}
                         >
                             <span className="truncate text-[12px] font-medium text-alloy-midnight/90">{t.name}</span>
@@ -510,7 +593,7 @@ export default function TemplatesWorkspace() {
             </CommsSectionCard>
 
             {/* CENTER — details + message */}
-            <section data-template-editor="true" className="flex min-h-0 flex-col gap-3 overflow-y-auto">
+            <section data-template-editor="true" className="flex min-h-0 flex-col gap-2.5 overflow-y-auto">
                 {error && (
                     <div data-template-error="true" className={COMMS_ERROR_BANNER_CLASS}>
                         {error}
@@ -518,7 +601,13 @@ export default function TemplatesWorkspace() {
                 )}
                 {!hasSelection ?
                     <div className={COMMS_EMPTY_STATE_CLASS}>
-                        Select a template from the library or click New to create one.
+                        <p className="font-medium text-alloy-midnight/70">No template selected</p>
+                        <p className="mt-1 text-[11px] text-alloy-midnight/50">
+                            Choose a template from the library or create a new one.
+                        </p>
+                        <button type="button" onClick={startCreate} className={`${COMMS_PRIMARY_BTN_CLASS} mt-3`}>
+                            Create Template
+                        </button>
                     </div>
                 :   (
                     <>
@@ -662,7 +751,7 @@ export default function TemplatesWorkspace() {
             </section>
 
             {/* RIGHT — tokens + preview */}
-            <aside className="flex min-h-0 flex-col gap-3 overflow-y-auto">
+            <aside className="flex min-h-0 flex-col gap-2.5 overflow-y-auto">
                 <TemplateTokenPickerPanel onInsert={insertToken} />
                 <CommsSectionCard title="Live preview" data-template-preview="true">
                     {subjectPreview && (

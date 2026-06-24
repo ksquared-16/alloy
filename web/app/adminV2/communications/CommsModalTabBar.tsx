@@ -1,8 +1,12 @@
 "use client";
 
-import { COMMS_BEND_PINE_ACTIVE_TAB_CLASS, COMMS_SECONDARY_BTN_CLASS } from "@/app/adminV2/communications/commsWorkspaceUi";
+import {
+    COMMS_BEND_PINE_ACTIVE_TAB_CLASS,
+    COMMS_TAB_INACTIVE_CLASS,
+    COMMS_TAB_RAIL_CLASS,
+} from "@/app/adminV2/communications/commsWorkspaceUi";
 
-/** Communications modal tabs — Bend Pine (alloy-juniper) active state. */
+/** Communications modal tabs — workspace mode switcher (not action buttons). */
 export default function CommsModalTabBar<K extends string>({
     tabs,
     activeKey,
@@ -15,7 +19,7 @@ export default function CommsModalTabBar<K extends string>({
     "aria-label"?: string;
 }) {
     return (
-        <div className="flex flex-wrap items-center gap-2" role="tablist" aria-label={ariaLabel} data-comms-modal-tabs="true">
+        <div className={COMMS_TAB_RAIL_CLASS} role="tablist" aria-label={ariaLabel} data-comms-modal-tabs="true">
             {tabs.map((tab) => {
                 const isOn = activeKey === tab.key;
                 return (
@@ -26,11 +30,7 @@ export default function CommsModalTabBar<K extends string>({
                         aria-selected={isOn}
                         data-comms-tab={tab.key}
                         onClick={() => onSelect(tab.key)}
-                        className={
-                            isOn
-                                ? COMMS_BEND_PINE_ACTIVE_TAB_CLASS
-                                : `${COMMS_SECONDARY_BTN_CLASS} !px-3 !py-1.5 text-xs font-semibold`
-                        }
+                        className={isOn ? COMMS_BEND_PINE_ACTIVE_TAB_CLASS : COMMS_TAB_INACTIVE_CLASS}
                     >
                         {tab.label}
                     </button>

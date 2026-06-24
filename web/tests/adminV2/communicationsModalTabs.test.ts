@@ -35,16 +35,23 @@ describe("Communications modal tabs", () => {
         expect(shell).toContain('data-inbox-compose-new="true"');
         expect(src).toContain("QuickMessageModal");
         expect(shell).toContain('data-comms-workspace-shell="true"');
-        expect(shell).toContain('data-comms-modal-version="workspace-inc2"');
+        expect(shell).toContain('data-comms-modal-version="workspace-inc2c"');
+        expect(shell).not.toContain('data-comms-workspace-context="true"');
+        expect(shell).toContain('data-comms-workspace-header-actions="true"');
+        expect(shell).toContain("COMMS_WORKSPACE_EXECUTION_CLASS");
         expect(shell).toContain("CommunicationsWorkspaceKpiStrip");
     });
 
-    it("CommsModalTabBar uses Bend Pine (alloy-juniper), not alloy-blue active styling", () => {
+    it("CommsModalTabBar uses workspace mode rail styling with Bend Pine active state", () => {
         const tabBar = read("app/adminV2/communications/CommsModalTabBar.tsx");
+        const ui = read("app/adminV2/communications/commsWorkspaceUi.tsx");
+        expect(tabBar).toContain("COMMS_TAB_RAIL_CLASS");
         expect(tabBar).toContain("COMMS_BEND_PINE_ACTIVE_TAB_CLASS");
-        expect(tabBar).toContain("alloy-juniper");
-        expect(tabBar).not.toContain("alloy-blue");
-        expect(tabBar).not.toMatch(/bg-alloy-pine\b/);
+        expect(tabBar).toContain("COMMS_TAB_INACTIVE_CLASS");
+        expect(ui).toContain("alloy-juniper");
+        expect(ui).not.toContain("alloy-blue");
+        expect(ui).not.toMatch(/bg-alloy-pine\b/);
+        expect(tabBar).not.toContain("COMMS_SECONDARY_BTN_CLASS");
     });
 
     it("TemplateCategoryField uses dropdown default and explicit create mode", () => {
