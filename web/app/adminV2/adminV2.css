@@ -561,6 +561,9 @@ html[data-adminv2-workspace-shell="v2"] .adminv2-drawer-sidebar-panel.adminv2-dr
 .adminv2-drawer-overview-canvas {
   container-type: inline-size;
   container-name: drawer-overview;
+  /* Never let overview content force the scroll body wider than the drawer. */
+  min-width: 0;
+  max-width: 100%;
 }
 
 .adminv2-drawer-overview-shell-grid {
@@ -568,6 +571,8 @@ html[data-adminv2-workspace-shell="v2"] .adminv2-drawer-sidebar-panel.adminv2-dr
   grid-template-columns: minmax(0, 1fr);
   gap: 1.25rem;
   align-items: stretch;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .adminv2-drawer-overview-col-left,

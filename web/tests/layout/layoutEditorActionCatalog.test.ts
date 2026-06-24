@@ -109,8 +109,10 @@ describe("layout editor action catalog", () => {
         expect(item?.label).toBe("Primary contact");
     });
 
-    it("row template action keys exclude make_primary_contact", () => {
-        expect(layoutEditorRowTemplateActionKeys()).not.toContain("make_primary_contact");
+    it("row template action keys expose make_primary_contact as a relationship row action", () => {
+        // Make Primary Contact is a configurable row/relationship action (not a field/badge),
+        // so operators can place it on contact / household-member related lists.
+        expect(layoutEditorRowTemplateActionKeys()).toContain("make_primary_contact");
         expect(layoutEditorRowTemplateActionKeys()).toContain("edit_enrollment");
     });
 

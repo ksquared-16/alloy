@@ -310,5 +310,8 @@ export function makeLayoutEditorActionButtonFromCatalogEntry(
 }
 
 export function layoutEditorRowTemplateActionKeys(): LayoutEditorRowAction[] {
-    return ["open_child_drawer", "edit_enrollment", "open_schedule"];
+    // `make_primary_contact` is a relationship row action (promote a non-primary
+    // adult to household primary) — exposed here so the Builder row-action control
+    // can offer it on contact / household-member related lists, not as a field.
+    return ["open_child_drawer", "edit_enrollment", "open_schedule", "make_primary_contact"];
 }

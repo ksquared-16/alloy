@@ -27,7 +27,7 @@ type Props = {
  * Canonical peer-row cell base. Always applied so the equal-height alignment
  * contract cannot drift when a caller passes a custom `rowCellClassName`.
  */
-const ROW_CELL_STRETCH_BASE = "min-w-0 flex h-full min-h-0 flex-col";
+const ROW_CELL_STRETCH_BASE = "min-w-0 max-w-full flex h-full min-h-0 flex-col";
 
 /** Merge caller classes onto the stretch base, de-duplicating tokens. */
 function mergeRowCellClass(custom?: string): string {

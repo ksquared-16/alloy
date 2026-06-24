@@ -113,9 +113,9 @@ export const LAYOUT_RUNTIME_COMPOSITION_ENROLLMENT_BODY = "px-0 pb-0 pt-0";
  *   stretches to the tallest sibling.
  * - STACK: vertical rhythm between stacked sections/rows (≥5px).
  */
-export const LAYOUT_RUNTIME_SECTION_ROW_GROUP_CLASS = "min-w-0 grid items-stretch";
-export const LAYOUT_RUNTIME_SECTION_ROW_CELL_CLASS = "min-w-0 flex h-full min-h-0 flex-col";
-export const LAYOUT_RUNTIME_SECTION_STACK_CLASS = "flex flex-col gap-5";
+export const LAYOUT_RUNTIME_SECTION_ROW_GROUP_CLASS = "min-w-0 max-w-full grid items-stretch";
+export const LAYOUT_RUNTIME_SECTION_ROW_CELL_CLASS = "min-w-0 max-w-full flex h-full min-h-0 flex-col";
+export const LAYOUT_RUNTIME_SECTION_STACK_CLASS = "flex min-w-0 max-w-full flex-col gap-5";
 
 /** Needs-attention accent — left rail only (Child Information, Attention widget). */
 export const LAYOUT_RUNTIME_ATTENTION_RAIL = "border-l-[3px] border-l-alloy-ember/75";

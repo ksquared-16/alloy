@@ -261,7 +261,9 @@ export function segmentSectionsForRowLayout(sections: LayoutSection[]): SectionL
 export function sectionRowGroupGridStyle(spans: number[]): { display: "grid"; gridTemplateColumns: string; gap: string } {
     return {
         display: "grid",
-        gridTemplateColumns: spans.map((span) => `${span}fr`).join(" "),
+        // `minmax(0, Nfr)` (not raw `Nfr`) so wide cell content (e.g. a child table
+        // with a min-width) can never push a track past the available drawer width.
+        gridTemplateColumns: spans.map((span) => `minmax(0, ${span}fr)`).join(" "),
         gap: "0.75rem",
     };
 }
@@ -270,13 +272,13 @@ export function sectionStackedRowGroupGridStyle(
     layout: "stacked_right" | "stacked_left" | "stacked_right_equal" | "stacked_left_equal",
 ): { display: "grid"; gridTemplateColumns: string; gridTemplateRows: string; gap: string } {
     const columns =
-        layout === "stacked_right" ? "2fr 1fr"
-        : layout === "stacked_left" ? "1fr 2fr"
-        : "1fr 1fr";
+        layout === "stacked_right" ? "minmax(0, 2fr) minmax(0, 1fr)"
+        : layout === "stacked_left" ? "minmax(0, 1fr) minmax(0, 2fr)"
+        : "minmax(0, 1fr) minmax(0, 1fr)";
     return {
         display: "grid",
         gridTemplateColumns: columns,
-        gridTemplateRows: "1fr 1fr",
+        gridTemplateRows: "minmax(0, 1fr) minmax(0, 1fr)",
         gap: "0.75rem",
     };
 }
