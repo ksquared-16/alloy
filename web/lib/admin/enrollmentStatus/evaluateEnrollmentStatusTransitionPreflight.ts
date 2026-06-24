@@ -278,7 +278,7 @@ export async function evaluateEnrollmentStatusTransitionPreflight(
             entity_id: input.scope.opportunityId,
             field_key: `skipped_stage_${stage.key}`,
             label: "Skipped stage",
-            requirement_type: "recommended_before_action",
+            requirement_type: "recommended_non_blocking",
             blocking_level: "recommendation",
             missing_reason: stage.label,
         }),
