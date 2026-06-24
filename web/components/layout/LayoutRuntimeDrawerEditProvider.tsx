@@ -44,6 +44,10 @@ import {
 } from "@/lib/layout/runtime/layoutRuntimeOpportunityFieldEdit";
 import { layoutRuntimeRepeaterRowReactKey } from "@/lib/layout/runtime/layoutRuntimeRepeaterRowKey";
 import {
+    collectLayoutRuntimePersonNativeBaseline,
+    saveLayoutRuntimePersonNativeEdits,
+} from "@/lib/layout/runtime/layoutRuntimePersonNativeFieldEdit";
+import {
     isLayoutRuntimePersonFieldRefKey,
     saveLayoutRuntimePersonContactEdits,
 } from "@/lib/layout/runtime/layoutRuntimePersonContactEdit";
@@ -147,6 +151,7 @@ function collectEditableBaseline(record: ProofRuntimeRecord, entityType: DrawerE
     const { rows, rowKeys } = collectRepeaterRows(record);
     return {
         ...collectPersonContactBaseline(record),
+        ...collectLayoutRuntimePersonNativeBaseline(record),
         ...collectDisplayCompanionBaseline(record),
         ...collectLayoutRuntimeOpportunityNativeBaseline(record),
         ...collectLayoutRuntimeChildRepeaterBaselines(record, rowKeys, rows),
@@ -237,6 +242,22 @@ export default function LayoutRuntimeDrawerEditProvider({
             ...bindings,
         };
     }, []);
+
+    const savePersonNative = useCallback(async (patchBaseline: Record<string, string>) => {
+        const fullNativeBaseline = collectLayoutRuntimePersonNativeBaseline(record);
+        const nativeBaseline: Record<string, string> = {};
+        const nativeDraft: Record<string, string> = {};
+        for (const refKey of Object.keys(fullNativeBaseline)) {
+            nativeBaseline[refKey] = patchBaseline[refKey] ?? fullNativeBaseline[refKey] ?? "";
+            nativeDraft[refKey] = draft[refKey] ?? nativeBaseline[refKey] ?? "";
+        }
+        const result = await saveLayoutRuntimePersonNativeEdits({
+            record: record as ProofRuntimeRecord,
+            baseline: nativeBaseline,
+            draft: nativeDraft,
+        });
+        if (!result.ok) throw new Error(result.error);
+    }, [draft, record]);
 
     const savePersonContact = useCallback(async (patchBaseline: Record<string, string>) => {
         const personBaseline: Record<string, string> = {};
@@ -348,12 +369,14 @@ export default function LayoutRuntimeDrawerEditProvider({
 
             if (!options?.confirmOnly) {
                 await savePersonContact(patchBaseline);
+                await savePersonNative(patchBaseline);
                 await saveOpportunityNative(patchBaseline);
                 await saveChildRepeater(patchBaseline);
                 await saveChildStandalone(patchBaseline);
             } else {
                 await Promise.all([
                     savePersonContact(patchBaseline),
+                    savePersonNative(patchBaseline),
                     saveOpportunityNative(patchBaseline),
                     saveChildRepeater(patchBaseline),
                     saveChildStandalone(patchBaseline),
@@ -382,6 +405,7 @@ export default function LayoutRuntimeDrawerEditProvider({
             saveChildStandalone,
             saveOpportunityNative,
             savePersonContact,
+            savePersonNative,
         ],
     );
 

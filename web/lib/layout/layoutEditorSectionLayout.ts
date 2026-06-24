@@ -43,13 +43,14 @@ export const SECTION_ROW_WIDTH_PRESET_KEYS = [
     "equal_4",
     "stacked_right_2x2",
     "stacked_left_2x2",
+    "half_stacked_right",
 ] as const;
 
 export type SectionRowWidthPresetKey = (typeof SECTION_ROW_WIDTH_PRESET_KEYS)[number];
 
 export const SECTION_ROW_WIDTH_PRESETS: Record<
     SectionRowWidthPresetKey,
-    { label: string; spans: number[]; stackLayout?: "stacked_right" | "stacked_left" }
+    { label: string; spans: number[]; stackLayout?: "stacked_right" | "stacked_left" | "stacked_right_equal" | "stacked_left_equal" }
 > = {
     full_width: { label: "Full width", spans: [12] },
     full: { label: "Full", spans: [12] },
@@ -64,6 +65,7 @@ export const SECTION_ROW_WIDTH_PRESETS: Record<
     equal_4: { label: "Equal (4)", spans: [3, 3, 3, 3] },
     stacked_right_2x2: { label: "Stacked right (2×2)", spans: [8, 4, 4], stackLayout: "stacked_right" },
     stacked_left_2x2: { label: "Stacked left (2×2)", spans: [4, 4, 8], stackLayout: "stacked_left" },
+    half_stacked_right: { label: "Half + stacked half", spans: [6, 6, 6], stackLayout: "stacked_right_equal" },
 };
 
 export type SectionLayoutSegment =
@@ -72,7 +74,7 @@ export type SectionLayoutSegment =
     | {
           kind: "stacked_row";
           groupId: string;
-          layout: "stacked_right" | "stacked_left";
+          layout: "stacked_right" | "stacked_left" | "stacked_right_equal" | "stacked_left_equal";
           primary: LayoutSection;
           stacked: LayoutSection[];
       };
@@ -112,10 +114,15 @@ function sectionGroupHasStackRole(sections: LayoutSection[]): boolean {
     return sections.some((section) => readSectionRowStackRole(section) != null);
 }
 
-function resolveStackedRowLayout(sections: LayoutSection[]): "stacked_right" | "stacked_left" | null {
+function resolveStackedRowLayout(
+    sections: LayoutSection[],
+): "stacked_right" | "stacked_left" | "stacked_right_equal" | "stacked_left_equal" | null {
     const primaryIndex = sections.findIndex((section) => readSectionRowStackRole(section) === "primary");
     if (primaryIndex < 0) return null;
-    return primaryIndex === 0 ? "stacked_right" : "stacked_left";
+    const spans = sections.map((section) => readSectionRowSpan(section));
+    const equalColumns = spans.length >= 3 && spans.every((span) => span === spans[0]);
+    if (primaryIndex === 0) return equalColumns ? "stacked_right_equal" : "stacked_right";
+    return equalColumns ? "stacked_left_equal" : "stacked_left";
 }
 
 export function readSectionType(section: LayoutSection): LayoutEditorSectionType {
@@ -195,9 +202,12 @@ export function sectionRowGroupGridStyle(spans: number[]): { display: "grid"; gr
 }
 
 export function sectionStackedRowGroupGridStyle(
-    layout: "stacked_right" | "stacked_left",
+    layout: "stacked_right" | "stacked_left" | "stacked_right_equal" | "stacked_left_equal",
 ): { display: "grid"; gridTemplateColumns: string; gridTemplateRows: string; gap: string } {
-    const columns = layout === "stacked_right" ? "2fr 1fr" : "1fr 2fr";
+    const columns =
+        layout === "stacked_right" ? "2fr 1fr"
+        : layout === "stacked_left" ? "1fr 2fr"
+        : "1fr 1fr";
     return {
         display: "grid",
         gridTemplateColumns: columns,
@@ -206,20 +216,20 @@ export function sectionStackedRowGroupGridStyle(
     };
 }
 
-export function sectionStackedRowPrimaryStyle(layout: "stacked_right" | "stacked_left"): {
+export function sectionStackedRowPrimaryStyle(layout: "stacked_right" | "stacked_left" | "stacked_right_equal" | "stacked_left_equal"): {
     gridColumn: string;
     gridRow: string;
 } {
-    return layout === "stacked_right" ?
+    return layout === "stacked_right" || layout === "stacked_right_equal" ?
             { gridColumn: "1", gridRow: "1 / span 2" }
         :   { gridColumn: "2", gridRow: "1 / span 2" };
 }
 
 export function sectionStackedRowCellStyle(
-    layout: "stacked_right" | "stacked_left",
+    layout: "stacked_right" | "stacked_left" | "stacked_right_equal" | "stacked_left_equal",
     stackIndex: 0 | 1,
 ): { gridColumn: string; gridRow: string } {
-    const column = layout === "stacked_right" ? "2" : "1";
+    const column = layout === "stacked_right" || layout === "stacked_right_equal" ? "2" : "1";
     return { gridColumn: column, gridRow: String(stackIndex + 1) };
 }
 
@@ -287,7 +297,7 @@ export function applySectionRowLayout(
 
     if (preset.stackLayout) {
         const roles: LayoutEditorSectionRowStackRole[] =
-            preset.stackLayout === "stacked_right" ?
+            preset.stackLayout === "stacked_right" || preset.stackLayout === "stacked_right_equal" ?
                 ["primary", "stack", "stack"]
             :   ["stack", "stack", "primary"];
         for (let i = 0; i < slice.length; i += 1) {

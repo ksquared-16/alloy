@@ -66,6 +66,7 @@ import {
     type ActivityTimelineSurfaceKey,
 } from "@/lib/layout/layoutEditorActivityTimelineConfig";
 import { LAYOUT_EDITOR_RELATIONSHIP_WIDGET_CONFIG_METADATA_KEY } from "@/lib/layout/runtime/layoutRuntimeScopedRelationshipContacts";
+import { LAYOUT_EDITOR_CROSS_FIELD_VISIBILITY_METADATA_KEY } from "@/lib/layout/layoutEditorVisibilityRules";
 
 export type LayoutSurfaceValidationResult = {
     ok: boolean;
@@ -123,6 +124,7 @@ const ALLOWED_ITEM_METADATA_KEYS = new Set([
     LAYOUT_EDITOR_ACTIVITY_TIMELINE_CONFIG_METADATA_KEY,
     LAYOUT_EDITOR_RELATIONSHIP_WIDGET_CONFIG_METADATA_KEY,
     "layoutEditorRelatedListConfig",
+    LAYOUT_EDITOR_CROSS_FIELD_VISIBILITY_METADATA_KEY,
     "enrollmentRosterReadFirst",
     LAYOUT_EDITOR_CUSTOM_METADATA_KEY,
     LAYOUT_EDITOR_CREATED_BY_VISUAL_EDITOR_METADATA_KEY,

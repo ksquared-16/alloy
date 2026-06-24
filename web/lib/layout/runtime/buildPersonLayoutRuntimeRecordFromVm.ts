@@ -8,6 +8,7 @@ import { isOpaqueIdValue, pickEntityId, type ProofRuntimeRecord } from "./proofR
 import { resolveHouseholdAddressFieldValues } from "./resolveHouseholdAddressFieldValues";
 import { resolvePersonAddressFieldValues } from "./resolvePersonAddressFieldValues";
 import { stampLayoutRuntimeActiveRecordContext } from "./layoutRuntimeRelatedListActiveRecord";
+import { enrichPersonDrawerSecondaryContactScalars } from "./enrichPersonDrawerSecondaryContactScalars";
 
 function pickDisplay(...values: unknown[]): string | null {
     for (const value of values) {
@@ -247,8 +248,11 @@ export function buildPersonLayoutRuntimeRecordFromVm(input: {
         };
     }
 
-    return stampLayoutRuntimeActiveRecordContext(record, {
-        anchorEntity: "person",
-        entityId: personId,
-    });
+    return stampLayoutRuntimeActiveRecordContext(
+        enrichPersonDrawerSecondaryContactScalars(record),
+        {
+            anchorEntity: "person",
+            entityId: personId,
+        },
+    );
 }

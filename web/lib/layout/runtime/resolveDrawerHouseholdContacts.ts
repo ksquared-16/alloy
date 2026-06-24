@@ -130,6 +130,40 @@ function toDrawerContactRow(input: {
     };
 }
 
+function lookupHouseholdContactDetails(
+    record: Record<string, unknown>,
+    personId: string,
+): { email: string | null; phone: string | null; display_name: string | null } {
+    for (const raw of (record._customer_persons as {
+        person_id?: string;
+        email?: string | null;
+        phone?: string | null;
+        _person_name?: string | null;
+        name?: string | null;
+    }[]) ?? []) {
+        if (String(raw.person_id ?? "").trim() !== personId) continue;
+        return {
+            email: trimOrNull(raw.email),
+            phone: trimOrNull(raw.phone),
+            display_name: pickDisplay(raw._person_name, raw.name),
+        };
+    }
+    for (const raw of (record._opportunity_persons as {
+        person_id?: string;
+        email?: string | null;
+        phone?: string | null;
+        name?: string | null;
+    }[]) ?? []) {
+        if (String(raw.person_id ?? "").trim() !== personId) continue;
+        return {
+            email: trimOrNull(raw.email),
+            phone: trimOrNull(raw.phone),
+            display_name: pickDisplay(raw.name),
+        };
+    }
+    return { email: null, phone: null, display_name: null };
+}
+
 function mergeAdultLinksIntoContacts(
     record: Record<string, unknown>,
     contacts: DrawerHouseholdContactRow[],
@@ -140,14 +174,17 @@ function mergeAdultLinksIntoContacts(
         const personId = trimOrNull(raw.person_id);
         if (!personId || personId === excludePersonId || byPersonId.has(personId)) continue;
         const displayName = pickDisplay(raw.display_name) ?? "Unnamed";
+        const details = lookupHouseholdContactDetails(record, personId);
         byPersonId.set(
             personId,
             toDrawerContactRow({
                 person_id: personId,
-                display_name: displayName,
+                display_name: pickDisplay(displayName, details.display_name) ?? "Unnamed",
                 role_type: raw.role_type,
                 role_label: raw.role_label,
                 is_primary: raw.is_household_primary_contact === true || raw.is_primary === true,
+                email: details.email,
+                phone: details.phone,
             }),
         );
     }

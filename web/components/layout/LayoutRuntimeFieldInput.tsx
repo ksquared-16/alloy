@@ -62,6 +62,16 @@ function resolveSelectOptions(
     locationId: string,
     programKey: string,
 ): { options: LayoutRuntimeSelectOption[]; disabled: boolean; placeholder: string } {
+    if (optionSource === "layout_boolean") {
+        return {
+            options: [
+                { value: "true", label: "Yes" },
+                { value: "false", label: "No" },
+            ],
+            disabled: false,
+            placeholder: "Select…",
+        };
+    }
     if (optionSource === "locations") {
         return {
             options: placementData?.siteOptions ?? [],

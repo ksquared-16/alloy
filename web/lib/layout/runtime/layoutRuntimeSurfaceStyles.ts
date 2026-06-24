@@ -9,6 +9,10 @@ export const LAYOUT_RUNTIME_FIELD_SURFACE =
 /** Flat read-only field row for production drawer runtime (no input chrome). */
 export const LAYOUT_RUNTIME_FIELD_READ_SURFACE = "min-w-0 py-1";
 
+/** Subtle edit-mode affordance for inline-editable drawer fields. */
+export const LAYOUT_RUNTIME_FIELD_EDITABLE_AFFORDANCE =
+    "min-w-0 rounded-md border border-dashed border-alloy-stone/28 bg-alloy-stone/[0.02] px-2 py-1 transition-[border-color,background-color,box-shadow] hover:border-alloy-juniper/35 hover:bg-white focus-within:border-alloy-juniper/40 focus-within:bg-white focus-within:shadow-[0_0_0_1px_rgba(0,162,131,0.08)]";
+
 export const LAYOUT_RUNTIME_GROUP_SURFACE =
     "rounded-md border border-admin-border bg-white p-2.5";
 
@@ -45,7 +49,7 @@ export const LAYOUT_RUNTIME_PRIMARY_WORKSPACE_HEADER =
 
 /** Lighter body section chrome — avoids settings-preview heaviness. */
 export const LAYOUT_RUNTIME_BODY_SECTION_SURFACE =
-    "overflow-hidden rounded-lg border border-alloy-stone/15 bg-white/95 shadow-[0_1px_2px_rgba(24,39,58,0.04)]";
+    "mb-3 overflow-hidden rounded-lg border border-alloy-stone/22 border-b-alloy-stone/30 bg-white shadow-[0_1px_3px_rgba(24,39,58,0.05)]";
 
 export const LAYOUT_RUNTIME_BODY_SECTION_HEADER =
     "border-b border-alloy-stone/10 px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.08em] text-alloy-midnight/55";
@@ -76,7 +80,7 @@ export const LAYOUT_RUNTIME_ENROLLMENT_TABLE_WRAP = LAYOUT_RUNTIME_ENROLLMENT_GR
 
 /** Lead overview composition card — white card with Bend Pine left accent. */
 export const LAYOUT_RUNTIME_COMPOSITION_SECTION_SURFACE =
-    "overflow-hidden rounded-lg border border-alloy-stone/15 border-l-[3px] border-l-alloy-juniper/70 bg-white shadow-[0_1px_4px_rgba(24,39,58,0.05)]";
+    "mb-3 overflow-hidden rounded-lg border border-alloy-stone/22 border-b-alloy-stone/30 border-l-[3px] border-l-alloy-juniper/70 bg-white shadow-[0_1px_4px_rgba(24,39,58,0.06)]";
 
 export const LAYOUT_RUNTIME_COMPOSITION_SECTION_BODY = "px-3 pb-3 pt-2";
 

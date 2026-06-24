@@ -9,6 +9,7 @@ import { isLayoutRuntimeChildEditableRefKey } from "@/lib/layout/runtime/layoutR
 import { isLayoutRuntimeOpportunityNativeRefKey } from "@/lib/layout/runtime/layoutRuntimeOpportunityFieldEdit";
 import { isLayoutRuntimePersonAddressRefKey } from "@/lib/layout/runtime/layoutRuntimePersonContactEdit";
 import { isLayoutRuntimeRoleContactEditableRefKey } from "@/lib/layout/runtime/layoutRuntimeContactRoleFieldCapability";
+import { isLayoutRuntimePersonNativeEditableRefKey } from "@/lib/layout/runtime/layoutRuntimePersonNativeFieldEdit";
 import { resolveLayoutRuntimeFieldControl } from "@/lib/layout/runtime/resolveLayoutRuntimeFieldControl";
 import type { ProofRuntimeRecord } from "@/lib/layout/runtime/proofRecordContext";
 
@@ -32,6 +33,7 @@ export function isLayoutRuntimeEditableRefKeySupported(refKey: string): boolean 
     if (isLayoutRuntimeRoleContactEditableRefKey(resolved)) return true;
     if (isLayoutRuntimePersonAddressRefKey(resolved)) return true;
     if (isLayoutRuntimeOpportunityNativeRefKey(resolved)) return true;
+    if (isLayoutRuntimePersonNativeEditableRefKey(resolved)) return true;
     return isLayoutRuntimeChildEditableRefKey(resolved);
 }
 

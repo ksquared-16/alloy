@@ -26,8 +26,11 @@ import {
 import {
     buildCrossFieldVisibilityCondition,
     parseCrossFieldVisibility,
+    readLayoutEditorCrossFieldVisibilityDraft,
+    resolveLayoutEditorFieldVisibilityRule,
     resolveVisibilityRuleKey,
     visibilityConditionForRule,
+    writeLayoutEditorCrossFieldVisibilityMetadata,
     type LayoutEditorCrossFieldVisibility,
     type LayoutEditorVisibilityRule,
 } from "@/lib/layout/layoutEditorVisibilityRules";
@@ -108,9 +111,9 @@ function fieldNodeFromItem(
         refKey: item.refKey,
         path,
         displayConfig: readLayoutEditorDisplayConfig(item),
-        visibilityRule: resolveVisibilityRuleKey(item.visibleWhen, boundPath),
+        visibilityRule: resolveLayoutEditorFieldVisibilityRule(item, boundPath),
         visibleWhen: item.visibleWhen,
-        crossFieldVisibility: parseCrossFieldVisibility(item.visibleWhen, boundPath),
+        crossFieldVisibility: readLayoutEditorCrossFieldVisibilityDraft(item, boundPath),
         editable: item.editable === true,
         contactRole,
     };
@@ -128,7 +131,7 @@ function columnNode(
         refKey: col.refKey,
         path: { kind: "column", sectionKey, blockItemId, colIdx },
         displayConfig: readLayoutEditorDisplayConfig(col),
-        visibilityRule: resolveVisibilityRuleKey(col.visibleWhen, col.refKey),
+        visibilityRule: resolveLayoutEditorFieldVisibilityRule(col, col.refKey),
         editable: col.editable === true,
     };
 }
@@ -322,6 +325,12 @@ export function applyLayoutEditorFieldSettingsPatch(
     }
     if (patch.crossFieldVisibility !== undefined) {
         next = patchLayoutEditorCrossFieldVisibility(next, path, patch.crossFieldVisibility);
+    } else if (patch.visibility === "conditional") {
+        next = patchLayoutEditorCrossFieldVisibility(next, path, {
+            sourcePath: "",
+            operator: "equals",
+            value: "",
+        });
     } else if (patch.visibility) {
         next = patchLayoutEditorFieldVisibility(next, path, patch.visibility, boundRefKey);
     }
@@ -410,7 +419,64 @@ export function patchLayoutEditorCrossFieldVisibility(
     crossField: LayoutEditorCrossFieldVisibility | null,
 ): LayoutDoc {
     const condition = crossField ? buildCrossFieldVisibilityCondition(crossField) : undefined;
-    return patchLayoutEditorFieldVisibleWhen(doc, path, condition);
+    return applyLayoutEditorFieldVisibilityState(doc, path, {
+        visibleWhen: condition,
+        crossFieldMetadata: crossField,
+    });
+}
+
+function applyLayoutEditorFieldVisibilityState(
+    doc: LayoutDoc,
+    path: LayoutEditorNodePath,
+    state: {
+        visibleWhen: LayoutCondition | undefined;
+        crossFieldMetadata: LayoutEditorCrossFieldVisibility | null | undefined;
+    },
+): LayoutDoc {
+    const mergeMetadata = (metadata?: Record<string, unknown>) =>
+        writeLayoutEditorCrossFieldVisibilityMetadata(metadata, state.crossFieldMetadata);
+
+    if (path.kind === "field") {
+        const loc = findLayoutItemLocation(doc, path.itemId);
+        if (!loc) return doc;
+        const item = loc.item;
+        const nextItem: LayoutItem = {
+            ...item,
+            metadata: mergeMetadata(item.metadata),
+        };
+        if (state.visibleWhen) nextItem.visibleWhen = state.visibleWhen;
+        else delete nextItem.visibleWhen;
+        return patchItem(doc, loc.sIdx, loc.rIdx, loc.cIdx, path.itemId, nextItem);
+    }
+    if (path.kind === "group_field") {
+        const loc = groupLoc(doc, path.sectionKey, path.blockItemId);
+        if (!loc) return doc;
+        const group = doc.sections[loc.sIdx]?.rows[loc.rIdx]?.columns[loc.cIdx]?.items.find((it) => it.id === path.blockItemId);
+        const field = group?.rows?.[path.gr]?.columns[path.gc]?.items.find((it) => it.id === path.fieldId);
+        if (!field) return doc;
+        const nextField: LayoutItem = {
+            ...field,
+            metadata: mergeMetadata(field.metadata),
+        };
+        if (state.visibleWhen) nextField.visibleWhen = state.visibleWhen;
+        else delete nextField.visibleWhen;
+        return groupPatchItem(doc, loc, path.gr, path.gc, path.fieldId, nextField);
+    }
+    if (path.kind === "column") {
+        const loc = groupLoc(doc, path.sectionKey, path.blockItemId);
+        if (!loc) return doc;
+        const item = doc.sections[loc.sIdx]?.rows[loc.rIdx]?.columns[loc.cIdx]?.items.find((it) => it.id === path.blockItemId);
+        const col = item?.columns?.[path.colIdx];
+        if (!col) return doc;
+        const nextColumn: LayoutCollectionColumn = {
+            ...col,
+            metadata: mergeMetadata(col.metadata),
+        };
+        if (state.visibleWhen) nextColumn.visibleWhen = state.visibleWhen;
+        else delete nextColumn.visibleWhen;
+        return relatedPatchColumn(doc, loc, path.colIdx, nextColumn);
+    }
+    return doc;
 }
 
 function patchLayoutEditorFieldVisibleWhen(
@@ -442,6 +508,14 @@ export function patchLayoutEditorFieldVisibility(
     rule: LayoutEditorVisibilityRule,
     boundPath?: string,
 ): LayoutDoc {
+    if (rule === "conditional") {
+        return patchLayoutEditorCrossFieldVisibility(doc, path, {
+            sourcePath: "",
+            operator: "equals",
+            value: "",
+        });
+    }
+
     const refKey =
         path.kind === "column" ?
             doc.sections[sectionIndex(doc, path.sectionKey)]?.rows
@@ -458,7 +532,10 @@ export function patchLayoutEditorFieldVisibility(
 
     const condition = visibilityConditionForRule(rule, boundPath ?? refKey, boundPath);
 
-    return patchLayoutEditorFieldVisibleWhen(doc, path, condition);
+    return applyLayoutEditorFieldVisibilityState(doc, path, {
+        visibleWhen: condition,
+        crossFieldMetadata: null,
+    });
 }
 
 export function tryAddFieldAtLayoutBlock(

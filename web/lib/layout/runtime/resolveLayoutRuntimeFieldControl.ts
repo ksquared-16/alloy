@@ -20,13 +20,22 @@ import { opportunityReferenceMetadataForRefKey } from "@/lib/fields/opportunityR
 import { placementCascadeConfigForEntityField } from "@/lib/fields/configurablePlacementFieldCatalog";
 import { resolveSelectFieldBinding } from "@/lib/fields/resolveSelectFieldBinding";
 import { normalizeRefKeyOnRead, parseLayoutRefKey } from "@/lib/layout/layoutRefKeyAliases";
+import { LAYOUT_RUNTIME_PERSON_NATIVE_EDITABLE_REF_KEYS } from "@/lib/layout/runtime/layoutRuntimePersonNativeFieldEdit";
+
+const LAYOUT_RUNTIME_BOOLEAN_REF_KEYS = new Set<string>(
+    LAYOUT_RUNTIME_PERSON_NATIVE_EDITABLE_REF_KEYS.filter(
+        (refKey) => refKey.includes("_opt_in") || refKey.includes("opt_out") || refKey.endsWith(".is_employee"),
+    ),
+);
 
 export type LayoutRuntimeFieldControlType = "text" | "date" | "select";
+
+export type LayoutRuntimeBooleanOptionSource = "layout_boolean";
 
 export type LayoutRuntimeFieldControlResolution = {
     controlType: LayoutRuntimeFieldControlType;
     placement?: InquiryChildPlacementFieldMetadata;
-    option_source?: PlacementOptionSource;
+    option_source?: PlacementOptionSource | LayoutRuntimeBooleanOptionSource;
     depends_on_field_key?: InquiryChildNativeOcmFieldKey;
     option_set_key?: string | null;
 };
@@ -40,6 +49,9 @@ export function resolveLayoutRuntimeFieldControl(
 ): LayoutRuntimeFieldControlResolution {
     const normalized = normalizeRefKeyOnRead(refKey.trim());
     const { entityKey, fieldKey } = parseLayoutRefKey(normalized);
+    if (LAYOUT_RUNTIME_BOOLEAN_REF_KEYS.has(normalized)) {
+        return { controlType: "select", option_source: "layout_boolean" };
+    }
     if (normalized === "child.date_of_birth" || normalized === "inquiry_child.desired_start_date") {
         return { controlType: "date" };
     }

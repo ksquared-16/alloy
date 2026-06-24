@@ -2,7 +2,7 @@
  * Layout editor conditional visibility presets — maps to LayoutCondition (V1).
  */
 
-import type { LayoutCondition } from "@/lib/layout/layoutV2";
+import type { LayoutCollectionColumn, LayoutCondition, LayoutItem } from "@/lib/layout/layoutV2";
 import {
     LAYOUT_CONTACT_BLOCK_VISIBILITY_PATHS,
     type LayoutEditorContactRole,
@@ -36,6 +36,65 @@ export type LayoutEditorCrossFieldVisibility = {
     operator: LayoutEditorCrossFieldVisibilityOperator;
     value?: string;
 };
+
+/** Draft conditional visibility while the operator configures sourcePath (not yet in visibleWhen). */
+export const LAYOUT_EDITOR_CROSS_FIELD_VISIBILITY_METADATA_KEY = "layoutEditorCrossFieldVisibility" as const;
+
+type VisibilityMetadataCarrier = {
+    visibleWhen?: LayoutCondition;
+    metadata?: Record<string, unknown>;
+};
+
+function isCrossFieldVisibilityDraft(raw: unknown): raw is LayoutEditorCrossFieldVisibility {
+    if (!raw || typeof raw !== "object") return false;
+    const draft = raw as LayoutEditorCrossFieldVisibility;
+    return typeof draft.sourcePath === "string" && typeof draft.operator === "string";
+}
+
+/** Read in-progress or persisted cross-field visibility from item metadata or visibleWhen. */
+export function readLayoutEditorCrossFieldVisibilityDraft(
+    item: VisibilityMetadataCarrier,
+    boundPath: string,
+): LayoutEditorCrossFieldVisibility | null {
+    const fromCondition = parseCrossFieldVisibility(item.visibleWhen, boundPath);
+    if (fromCondition) return fromCondition;
+    const raw = item.metadata?.[LAYOUT_EDITOR_CROSS_FIELD_VISIBILITY_METADATA_KEY];
+    return isCrossFieldVisibilityDraft(raw) ? raw : null;
+}
+
+export function resolveLayoutEditorFieldVisibilityRule(
+    item: VisibilityMetadataCarrier,
+    boundPath: string,
+): LayoutEditorVisibilityRule {
+    if (readLayoutEditorCrossFieldVisibilityDraft(item, boundPath)) return "conditional";
+    return resolveVisibilityRuleKey(item.visibleWhen, boundPath);
+}
+
+export function writeLayoutEditorCrossFieldVisibilityMetadata(
+    metadata: Record<string, unknown> | undefined,
+    crossField: LayoutEditorCrossFieldVisibility | null | undefined,
+): Record<string, unknown> {
+    const next = { ...(metadata ?? {}) };
+    if (crossField) {
+        next[LAYOUT_EDITOR_CROSS_FIELD_VISIBILITY_METADATA_KEY] = crossField;
+    } else {
+        delete next[LAYOUT_EDITOR_CROSS_FIELD_VISIBILITY_METADATA_KEY];
+    }
+    return next;
+}
+
+export function readLayoutEditorCrossFieldVisibilityDraftFromItem(
+    item: Pick<LayoutItem, "visibleWhen" | "metadata" | "refKey">,
+): LayoutEditorCrossFieldVisibility | null {
+    const boundPath = item.refKey.startsWith("_") ? item.refKey : item.refKey;
+    return readLayoutEditorCrossFieldVisibilityDraft(item, boundPath);
+}
+
+export function readLayoutEditorCrossFieldVisibilityDraftFromColumn(
+    col: Pick<LayoutCollectionColumn, "visibleWhen" | "metadata" | "refKey">,
+): LayoutEditorCrossFieldVisibility | null {
+    return readLayoutEditorCrossFieldVisibilityDraft(col, col.refKey);
+}
 
 export type LayoutEditorVisibilityPreset = {
     key: LayoutEditorVisibilityRule;

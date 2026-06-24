@@ -208,6 +208,7 @@ import {
 import {
     LAYOUT_RUNTIME_BODY_SECTION_HEADER,
     LAYOUT_RUNTIME_BODY_SECTION_SURFACE,
+    LAYOUT_RUNTIME_FIELD_EDITABLE_AFFORDANCE,
     LAYOUT_RUNTIME_FIELD_READ_SURFACE,
     LAYOUT_RUNTIME_FIELD_SURFACE,
     LAYOUT_RUNTIME_GROUP_READ_SURFACE,
@@ -421,6 +422,8 @@ function ValueCell({
         Boolean(edit) &&
         layoutRuntimeBlockAllowsFieldEdit(blockEdit) &&
         (edit?.canEditContactRefKey(editableRefKey, layoutContactRole) ?? false);
+    const showEditAffordance =
+        layoutRuntimeFieldIsEditable(item, variant) && layoutRuntimeBlockAllowsFieldEdit(blockEdit);
     const editValue =
         canEdit && edit ?
             edit.getFieldValue(
@@ -491,7 +494,12 @@ function ValueCell({
 
     return (
         <div
-            className={`${operatorSurfaces ? LAYOUT_RUNTIME_FIELD_READ_SURFACE : LAYOUT_RUNTIME_FIELD_SURFACE} ${traceProps.className ?? ""}`}
+            className={`${
+                operatorSurfaces ?
+                    showEditAffordance ? LAYOUT_RUNTIME_FIELD_EDITABLE_AFFORDANCE
+                    : LAYOUT_RUNTIME_FIELD_READ_SURFACE
+                :   LAYOUT_RUNTIME_FIELD_SURFACE
+            } ${traceProps.className ?? ""}`}
             {...traceProps.attrs}
             onClick={(e) => {
                 traceProps.onClick?.();
