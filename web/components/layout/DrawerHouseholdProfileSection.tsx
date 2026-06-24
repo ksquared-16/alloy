@@ -8,13 +8,15 @@ import DrawerHouseholdPersonLinkAvatar, {
 import DrawerRelationshipOverflowText from "@/components/layout/DrawerRelationshipOverflowText";
 import LayoutRuntimePersonLinkSurface from "@/components/layout/LayoutRuntimePersonLinkSurface";
 import type { AdornmentActionHandler } from "@/components/layout/LayoutRuntimePlanView";
-import PersonRelatedPeopleGroupsWidget from "@/components/layout/person/PersonRelatedPeopleGroupsWidget";
+import PersonHouseholdContactsActionableWidget from "@/components/layout/person/PersonHouseholdContactsActionableWidget";
 import { personDrawerHouseholdInitials } from "@/lib/admin/person/personDrawerHouseholdDisplay";
 import {
     resolveLeadDrawerHouseholdProfile,
     resolvePersonDrawerHouseholdProfile,
 } from "@/lib/layout/runtime/resolveDrawerHouseholdProfile";
-import { resolveOpportunityDrawerHouseholdContacts } from "@/lib/layout/runtime/resolveDrawerHouseholdContacts";
+import {
+    resolveOpportunityDrawerHouseholdContacts,
+} from "@/lib/layout/runtime/resolveDrawerHouseholdContacts";
 import type { ProofRuntimeRecord } from "@/lib/layout/runtime/proofRecordContext";
 import {
     PRESENTATION_DATA_VALUE,
@@ -269,7 +271,12 @@ export default function DrawerHouseholdProfileSection({
             <div className="min-w-0" data-drawer-household-profile-section="true" data-drawer-household-profile-variant="person">
                 <PersonHouseholdIdentityStrip profile={profile} />
                 <div className="flex flex-col gap-3 p-2" data-drawer-household-relationships-group="true">
-                    <PersonRelatedPeopleGroupsWidget record={record} onAdornmentAction={onAdornmentAction} />
+                    <PersonHouseholdContactsActionableWidget
+                        record={record}
+                        onAdornmentAction={onAdornmentAction}
+                        canMutate={canMutate}
+                        emptyMessage="No linked family members yet."
+                    />
                 </div>
             </div>
         );

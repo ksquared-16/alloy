@@ -566,7 +566,7 @@ html[data-adminv2-workspace-shell="v2"] .adminv2-drawer-sidebar-panel.adminv2-dr
 .adminv2-drawer-overview-shell-grid {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  gap: 0.75rem;
+  gap: 1.25rem;
   align-items: stretch;
 }
 
@@ -574,6 +574,9 @@ html[data-adminv2-workspace-shell="v2"] .adminv2-drawer-sidebar-panel.adminv2-dr
 .adminv2-drawer-overview-col-main,
 .adminv2-drawer-overview-col-rail {
   min-width: 0;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
 }
 
 .adminv2-drawer-overview-col-rail {
@@ -597,19 +600,15 @@ html[data-adminv2-workspace-shell="v2"] .adminv2-drawer-sidebar-panel.adminv2-dr
 @container drawer-overview (min-width: 1040px) {
   .adminv2-drawer-overview-shell-grid {
     grid-template-columns: repeat(12, minmax(0, 1fr));
-    gap: 1rem;
+    gap: 1.25rem;
   }
 
   .adminv2-drawer-overview-col-left {
     grid-column: span 4;
-    display: flex;
-    flex-direction: column;
   }
 
   .adminv2-drawer-overview-col-main {
     grid-column: span 5;
-    display: flex;
-    flex-direction: column;
   }
 
   .adminv2-drawer-overview-main-zone-flow {

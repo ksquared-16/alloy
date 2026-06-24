@@ -89,7 +89,7 @@ import {
     layoutRuntimeRelatedListEmptyMessage,
     resolveLayoutRuntimeActiveRecordContext,
 } from "@/lib/layout/runtime/layoutRuntimeRelatedListActiveRecord";
-import { readLayoutRuntimeSectionCollapseConfig } from "@/lib/layout/runtime/layoutRuntimeSectionCollapse";
+import { readLayoutRuntimeSectionCollapseConfigForRecord } from "@/lib/layout/runtime/layoutRuntimeSectionCollapse";
 import { isRelationshipWidgetKey } from "@/lib/layout/runtime/layoutRuntimeScopedRelationshipContacts";
 import { logLayoutRuntimeChildrenRenderDebug } from "@/lib/layout/runtime/logLayoutRuntimeChildrenRenderDebug";
 import { isOpaqueIdValue } from "@/lib/layout/runtime/proofRecordContext";
@@ -130,6 +130,7 @@ import DrawerOverviewEmptyState from "@/components/layout/DrawerOverviewEmptySta
 import { isLayoutRuntimeContactRepeater } from "@/lib/layout/runtime/mapLayoutRuntimeContactRepeaterRows";
 import PersonConnectedChildrenCardList from "@/components/layout/person/PersonConnectedChildrenCardList";
 import PersonRelatedPeopleGroupsWidget from "@/components/layout/person/PersonRelatedPeopleGroupsWidget";
+import PersonHouseholdContactsActionableWidget from "@/components/layout/person/PersonHouseholdContactsActionableWidget";
 import LayoutRuntimeRelationshipContactsWidget from "@/components/layout/LayoutRuntimeRelationshipContactsWidget";
 import LeadHouseholdContactsWidget from "@/components/layout/lead/LeadHouseholdContactsWidget";
 import LeadLastTouchSummaryCard from "@/components/layout/lead/LeadLastTouchSummaryCard";
@@ -614,6 +615,31 @@ function wrapLayoutRuntimeCompositionWidget(
     );
 }
 
+/** Widgets that render as full section body blocks — never nested field-card chrome. */
+const LAYOUT_RUNTIME_STANDALONE_COMPOSITION_WIDGET_KEYS = new Set([
+    "activity_timeline",
+    "activity",
+    "notes",
+    "recent_communication",
+    "documents",
+]);
+
+function layoutRuntimeWidgetRendersStandaloneInComposition(widgetKey: string): boolean {
+    return LAYOUT_RUNTIME_STANDALONE_COMPOSITION_WIDGET_KEYS.has(widgetKey);
+}
+
+function wrapLayoutRuntimeStandaloneCompositionWidget(widgetKey: string, children: ReactNode): ReactNode {
+    return (
+        <div
+            className="min-w-0 pt-1"
+            data-layout-runtime-standalone-widget={widgetKey}
+            data-layout-runtime-widget-section-body="true"
+        >
+            {children}
+        </div>
+    );
+}
+
 function GroupCell({ record, item, anchorEntity }: { record: ProofRuntimeRecord; item: LayoutItem; anchorEntity: string }) {
     const blockConfig = readLayoutEditorBlockConfig(item.metadata);
     const isContactBlock = item.kind === "field_group" && item.refKey === "contact_block";
@@ -1010,6 +1036,29 @@ function RelatedCellInner({
         isOpportunityAnchor;
 
     if (isContactRepeater) {
+        const isPersonDrawerAnchor =
+            activeRecordContext.anchorEntity === "person"
+            || anchorEntity === "persons"
+            || host.anchorEntity === "person"
+            || host.anchorEntity === "persons";
+        if (isPersonDrawerAnchor) {
+            return (
+                <div
+                    className="min-w-0"
+                    data-layout-runtime-household-members-actionable="true"
+                    data-person-drawer-contact-summary-household-members="true"
+                    data-person-drawer-contact-repeater-actionable="true"
+                >
+                    <PersonHouseholdContactsActionableWidget
+                        record={record}
+                        onAdornmentAction={onAdornmentAction}
+                        canMutate={host.canMutate}
+                        emptyMessage="No household members linked yet."
+                    />
+                </div>
+            );
+        }
+
         const entityLabel = item.refKey === "household_members" ? "household members" : "contacts";
         const presentation = editorRelatedList ? editorPresentation : "cards";
         const contactEmptyMessage =
@@ -1692,7 +1741,12 @@ function WidgetCell({ record, item }: { record: ProofRuntimeRecord; item: Layout
 
     if (widgetKey === "related_people" && composition.personOverviewComposition) {
         return (
-            <PersonRelatedPeopleGroupsWidget record={record} onAdornmentAction={onAdornmentAction} />
+            <PersonHouseholdContactsActionableWidget
+                record={record}
+                onAdornmentAction={onAdornmentAction}
+                canMutate={host.canMutate}
+                emptyMessage="No linked family members yet."
+            />
         );
     }
 
@@ -1888,6 +1942,9 @@ function WidgetCell({ record, item }: { record: ProofRuntimeRecord; item: Layout
             </div>
         );
         if (composition.compositionSectionSurface) {
+            if (layoutRuntimeWidgetRendersStandaloneInComposition("activity")) {
+                return wrapLayoutRuntimeStandaloneCompositionWidget("activity", activityMarkup);
+            }
             return wrapLayoutRuntimeCompositionWidget(title || "Activity", configuredTone, activityMarkup);
         }
         return <WidgetChrome title={title} tone={configuredTone}>{activityMarkup}</WidgetChrome>;
@@ -1929,6 +1986,9 @@ function WidgetCell({ record, item }: { record: ProofRuntimeRecord; item: Layout
             );
         }
         if (composition.compositionSectionSurface) {
+            if (layoutRuntimeWidgetRendersStandaloneInComposition(widgetKey)) {
+                return wrapLayoutRuntimeStandaloneCompositionWidget(widgetKey, timelineMarkup);
+            }
             return wrapLayoutRuntimeCompositionWidget(title || "Activity Timeline", configuredTone, timelineMarkup);
         }
         return <WidgetChrome title={title || "Activity Timeline"} tone={configuredTone}>{timelineMarkup}</WidgetChrome>;
@@ -1945,7 +2005,9 @@ function WidgetCell({ record, item }: { record: ProofRuntimeRecord; item: Layout
             <LayoutRuntimeDocumentsOverviewWidget record={record} title={title} showEmptyState={!hasContent} />
         );
         return composition.compositionSectionSurface ?
-                wrapLayoutRuntimeCompositionWidget(title, configuredTone, markup)
+                layoutRuntimeWidgetRendersStandaloneInComposition("documents") ?
+                    wrapLayoutRuntimeStandaloneCompositionWidget("documents", markup)
+                :   wrapLayoutRuntimeCompositionWidget(title, configuredTone, markup)
             :   <WidgetChrome title={title} tone={configuredTone}>{markup}</WidgetChrome>;
     }
 
@@ -1962,7 +2024,9 @@ function WidgetCell({ record, item }: { record: ProofRuntimeRecord; item: Layout
             />
         );
         return composition.compositionSectionSurface ?
-                wrapLayoutRuntimeCompositionWidget(title, configuredTone, markup)
+                layoutRuntimeWidgetRendersStandaloneInComposition(widgetKey) ?
+                    wrapLayoutRuntimeStandaloneCompositionWidget(widgetKey, markup)
+                :   wrapLayoutRuntimeCompositionWidget(title, configuredTone, markup)
             :   <WidgetChrome title={title} tone={configuredTone}>{markup}</WidgetChrome>;
     }
 
@@ -2042,7 +2106,7 @@ function ColumnView({ record, column, anchorEntity }: { record: ProofRuntimeReco
     return (
         <div
             style={summaryCompact ? undefined : { gridColumn: `span ${span} / span ${span}` }}
-            className="flex min-w-0 flex-col gap-1"
+            className="flex min-w-0 flex-col gap-2"
         >
             {column.items.map((item) => (
                 <ItemCell key={item.id} record={record} item={item} anchorEntity={anchorEntity} />
@@ -2111,6 +2175,24 @@ function RowView({ record, row, anchorEntity }: { record: ProofRuntimeRecord; ro
 
 export type LayoutRuntimeSectionPresentation = "default" | "summary_strip";
 
+/**
+ * Person drawer household section: detect whether the configured layout already
+ * renders household adults (via the `related_people` widget or a contacts/household_members
+ * repeater). When it does not — e.g. a published doc that only carries fields — the
+ * actionable contacts widget is injected so "Make primary" is always reachable.
+ */
+function personHouseholdSectionAlreadyRendersContacts(section: LayoutSection): boolean {
+    if (layoutSectionIncludesWidget(section, "related_people")) return true;
+    for (const row of section.rows) {
+        for (const col of row.columns) {
+            for (const item of col.items) {
+                if (isLayoutRuntimeContactRepeater(item)) return true;
+            }
+        }
+    }
+    return false;
+}
+
 function SectionView({
     record,
     section,
@@ -2171,6 +2253,12 @@ function SectionView({
         && section.key === "household_contact"
         && layoutSectionIncludesWidget(section, "household_contacts");
 
+    const injectPersonHouseholdActionableContacts =
+        composition.personOverviewComposition
+        && section.key === "household_relationships"
+        && !useHouseholdProfile
+        && !personHouseholdSectionAlreadyRendersContacts(section);
+
     const body = useHouseholdProfile ?
         <DrawerHouseholdProfileSection
             record={record}
@@ -2185,6 +2273,19 @@ function SectionView({
                     {section.rows.map((row) => (
                         <RowView key={row.id} record={record} row={row} anchorEntity={anchorEntity} />
                     ))}
+                    {injectPersonHouseholdActionableContacts ?
+                        <div
+                            className="mt-3"
+                            data-person-drawer-household-actionable-injected="true"
+                        >
+                            <PersonHouseholdContactsActionableWidget
+                                record={record}
+                                onAdornmentAction={onAdornmentAction}
+                                canMutate={host.canMutate}
+                                emptyMessage="No household members linked yet."
+                            />
+                        </div>
+                    :   null}
                 </LayoutRuntimeSectionContext.Provider>
             </LayoutRuntimeRenderedContactIdsProvider>
         );
@@ -2193,7 +2294,9 @@ function SectionView({
     const sectionEditMode = resolveLayoutRuntimeSectionEditMode(section);
     const sectionHeaderEdit = useLayoutDocInlineEdit ? <SectionHeaderEditAction sectionKey={section.key} /> : null;
     const sectionCollapse =
-        effectiveSectionPresentation === "summary_strip" ? null : readLayoutRuntimeSectionCollapseConfig(section);
+        effectiveSectionPresentation === "summary_strip" ? null : (
+            readLayoutRuntimeSectionCollapseConfigForRecord(section, record)
+        );
     const collapseAnchorEntity = host.anchorEntity ?? anchorEntity;
     const collapseEntityId = host.entityId ?? String(record.id ?? "");
 

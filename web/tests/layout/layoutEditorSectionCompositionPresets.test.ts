@@ -3,6 +3,8 @@ import { describe, expect, it } from "vitest";
 import { buildLeadDrawerDefaultDoc } from "@/lib/layout/defaultLeadLayouts";
 import {
     applySectionRowLayout,
+    applySectionRowLayoutWithResult,
+    readSectionRowLayoutPresetApplyState,
     readSectionRowStackRole,
     segmentSectionsForRowLayout,
     SECTION_ROW_WIDTH_PRESETS,
@@ -56,8 +58,8 @@ describe("section composition presets (EB-FW-02)", () => {
         expect(SECTION_ROW_WIDTH_PRESETS.half_stacked_right.spans).toEqual([6, 6, 6]);
         expect(SECTION_ROW_WIDTH_PRESETS.half_stacked_left.stackLayout).toBe("stacked_left_equal");
         expect(SECTION_ROW_WIDTH_PRESETS.half_stacked_left.spans).toEqual([6, 6, 6]);
-        expect(SECTION_ROW_WIDTH_PRESETS.half_stacked_right.label).toMatch(/half \+ stacked right/i);
-        expect(SECTION_ROW_WIDTH_PRESETS.half_stacked_left.label).toMatch(/stacked left \+ half/i);
+        expect(SECTION_ROW_WIDTH_PRESETS.half_stacked_right.label).toMatch(/left full · right stacked/i);
+        expect(SECTION_ROW_WIDTH_PRESETS.half_stacked_left.label).toMatch(/left stacked · right full/i);
     });
 
     it("segments half_stacked_right: one half-width primary + two stacked on the right", () => {
@@ -102,5 +104,31 @@ describe("section composition presets (EB-FW-02)", () => {
         const household = doc.sections.find((s) => s.key === "household_contact")!;
         expect(enrollment.metadata?.layoutEditorSectionRowSpan).toBe(8);
         expect(household.metadata?.layoutEditorSectionRowSpan).toBe(4);
+    });
+
+    it("reports when stacked row preset cannot apply (not enough following sections)", () => {
+        const doc = buildLeadDrawerDefaultDoc();
+        const state = readSectionRowLayoutPresetApplyState(doc, "household_contact", "half_stacked_right");
+        expect(state.canApply).toBe(false);
+        expect(state.reason).toMatch(/more card/i);
+
+        const result = applySectionRowLayoutWithResult(doc, "household_contact", "half_stacked_right");
+        expect(result.ok).toBe(false);
+        if (!result.ok) expect(result.reason).toMatch(/more card/i);
+    });
+
+    it("applySectionRowLayoutWithResult writes stack role metadata for half_stacked_right", () => {
+        let doc = buildLeadDrawerDefaultDoc();
+        const zoneKeys = ["children_enrollment", "household_contact", "lead_source"];
+        const result = applySectionRowLayoutWithResult(doc, zoneKeys[0]!, "half_stacked_right");
+        expect(result.ok).toBe(true);
+        if (!result.ok) return;
+        doc = result.doc;
+        const grouped = doc.sections.filter((s) => zoneKeys.includes(s.key));
+        expect(readSectionRowStackRole(grouped[0]!)).toBe("primary");
+        expect(readSectionRowStackRole(grouped[1]!)).toBe("stack");
+        expect(readSectionRowStackRole(grouped[2]!)).toBe("stack");
+        const segments = segmentSectionsForRowLayout(grouped);
+        expect(segments[0]?.kind).toBe("stacked_row");
     });
 });

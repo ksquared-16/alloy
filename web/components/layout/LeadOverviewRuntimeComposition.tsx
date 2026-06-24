@@ -19,6 +19,7 @@ import { resolveLeadOverviewRightRailSections } from "@/lib/layout/runtime/resol
 import { shouldRenderLayoutRuntimeSection } from "@/lib/layout/runtime/resolveLayoutRuntimeSectionVisibility";
 import {
     DRAWER_OVERVIEW_CANVAS_CLASS,
+    DRAWER_OVERVIEW_COMPOSITION_SLOT_CLASS,
     DRAWER_OVERVIEW_LEAD_SOURCE_GRID_CLASS,
     DRAWER_OVERVIEW_LEFT_COLUMN_CLASS,
     DRAWER_OVERVIEW_MAIN_COLUMN_CLASS,
@@ -60,7 +61,7 @@ function CompositionSlot({
     if (!slice.sections.length) return null;
 
     return (
-        <div className={className} data-lead-overview-slot={slotKey}>
+        <div className={`${DRAWER_OVERVIEW_COMPOSITION_SLOT_CLASS} ${className ?? ""}`.trim()} data-lead-overview-slot={slotKey}>
             <LayoutRuntimeDrawerBodyView
                 doc={slice}
                 record={record}

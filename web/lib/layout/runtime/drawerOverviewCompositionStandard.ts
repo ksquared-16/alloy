@@ -57,6 +57,9 @@ export const DRAWER_OVERVIEW_ENROLLMENT_FIELD_GRID_CLASS = "adminv2-drawer-enrol
 
 export const DRAWER_OVERVIEW_OVERFLOW_STACK_CLASS = LAYOUT_RUNTIME_SECTION_STACK_CLASS;
 
+/** Composition slot wrapper — stretch section shell to peer row height in shell grid. */
+export const DRAWER_OVERVIEW_COMPOSITION_SLOT_CLASS = "flex h-full min-h-0 min-w-0 flex-col";
+
 export const DRAWER_OVERVIEW_SUMMARY_STRIP_WIDGET_MIN_HEIGHT = "min-h-[4.25rem]";
 
 export const DRAWER_OVERVIEW_SUMMARY_STRIP_HOST_CLASS =

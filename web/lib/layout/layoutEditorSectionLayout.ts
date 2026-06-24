@@ -14,9 +14,10 @@ import {
     writeLayoutEditorRelatedListConfig,
 } from "@/lib/layout/layoutEditorRelatedListConfig";
 import type { DrawerLayoutEditorSurfaceKey } from "@/lib/layout/drawerLayoutEditorSurfaceConfig";
+import { resolveDrawerLayoutEditorSurfaceKeyFromDoc } from "@/lib/layout/drawerLayoutEditorSurfaceConfig";
+import { resolveDrawerSectionZone } from "@/lib/layout/drawerLayoutEditorModel";
 import type { LayoutDoc, LayoutSection } from "@/lib/layout/layoutV2";
-import type { OpportunityDrawerLayoutZone } from "@/lib/layout/surfaceLayoutRegistry";
-import { resolveOpportunityDrawerSectionZone } from "@/lib/layout/opportunityDrawerLayoutEditorModel";
+import type { DrawerSurfaceLayoutZone } from "@/lib/layout/surfaceLayoutRegistry";
 
 export const LAYOUT_EDITOR_SECTION_ROW_GROUP_METADATA_KEY = "layoutEditorSectionRowGroup" as const;
 export const LAYOUT_EDITOR_SECTION_ROW_SPAN_METADATA_KEY = "layoutEditorSectionRowSpan" as const;
@@ -55,7 +56,7 @@ export const SECTION_ROW_WIDTH_PRESETS: Record<
 > = {
     full_width: { label: "Full width", spans: [12] },
     full: { label: "Full", spans: [12] },
-    half_half: { label: "Half / half", spans: [6, 6] },
+    half_half: { label: "2 columns (50 / 50)", spans: [6, 6] },
     "50_50": { label: "50 / 50", spans: [6, 6] },
     third_two_thirds: { label: "1/3 · 2/3", spans: [4, 8] },
     "33_66": { label: "33 / 66", spans: [4, 8] },
@@ -66,8 +67,8 @@ export const SECTION_ROW_WIDTH_PRESETS: Record<
     equal_4: { label: "Equal (4)", spans: [3, 3, 3, 3] },
     stacked_right_2x2: { label: "Wide left · stacked right (2/3 + 1/3×2)", spans: [8, 4, 4], stackLayout: "stacked_right" },
     stacked_left_2x2: { label: "Stacked left · wide right (1/3×2 + 2/3)", spans: [4, 4, 8], stackLayout: "stacked_left" },
-    half_stacked_right: { label: "Half + stacked right (1/2 + 1/2×2)", spans: [6, 6, 6], stackLayout: "stacked_right_equal" },
-    half_stacked_left: { label: "Stacked left + half (1/2×2 + 1/2)", spans: [6, 6, 6], stackLayout: "stacked_left_equal" },
+    half_stacked_right: { label: "Left full · right stacked (½ + ½×2)", spans: [6, 6, 6], stackLayout: "stacked_right_equal" },
+    half_stacked_left: { label: "Left stacked · right full (½×2 + ½)", spans: [6, 6, 6], stackLayout: "stacked_left_equal" },
 };
 
 export type SectionLayoutSegment =
@@ -110,6 +111,51 @@ export function readSectionRowStackRole(section: LayoutSection): LayoutEditorSec
     const raw = section.metadata?.[LAYOUT_EDITOR_SECTION_ROW_STACK_ROLE_METADATA_KEY];
     if (raw === "primary" || raw === "stack") return raw;
     return null;
+}
+
+/** Curated presets for Builder section row layout — obvious 2-column and stacked options. */
+export const BUILDER_SECTION_ROW_LAYOUT_PRESET_KEYS = [
+    "full_width",
+    "half_half",
+    "half_stacked_right",
+    "half_stacked_left",
+    "third_two_thirds",
+    "two_thirds_third",
+] as const satisfies readonly SectionRowWidthPresetKey[];
+
+export type BuilderSectionRowLayoutPresetKey = (typeof BUILDER_SECTION_ROW_LAYOUT_PRESET_KEYS)[number];
+
+/** Read preset from a section and its row-group siblings (accurate for stacked layouts). */
+export function readSectionRowLayoutPresetKeyForDoc(doc: LayoutDoc, sectionKey: string): SectionRowWidthPresetKey {
+    const section = doc.sections.find((s) => s.key === sectionKey);
+    if (!section) return "full_width";
+    const groupId = readSectionRowGroup(section);
+    if (!groupId) return "full_width";
+
+    const members = doc.sections.filter((s) => readSectionRowGroup(s) === groupId);
+    if (members.length === 1) return "full_width";
+
+    const hasStackRoles = members.some((s) => readSectionRowStackRole(s) != null);
+    if (hasStackRoles) {
+        const primary = members.find((s) => readSectionRowStackRole(s) === "primary");
+        const primaryIndex = primary ? members.indexOf(primary) : -1;
+        const equalSpans = members.every((s) => readSectionRowSpan(s) === readSectionRowSpan(members[0]!));
+        if (equalSpans && members.length === 3 && readSectionRowSpan(primary!) === 6) {
+            return primaryIndex === 0 ? "half_stacked_right" : "half_stacked_left";
+        }
+        if (members.length === 3 && readSectionRowSpan(primary!) === 8) {
+            return primaryIndex === 0 ? "stacked_right_2x2" : "stacked_left_2x2";
+        }
+    }
+
+    if (members.length === 2) {
+        const spans = members.map((s) => readSectionRowSpan(s));
+        if (spans[0] === 6 && spans[1] === 6) return "half_half";
+        if (spans[0] === 4 && spans[1] === 8) return "third_two_thirds";
+        if (spans[0] === 8 && spans[1] === 4) return "two_thirds_third";
+    }
+
+    return readSectionRowLayoutPresetKey(section);
 }
 
 function sectionGroupHasStackRole(sections: LayoutSection[]): boolean {
@@ -266,35 +312,121 @@ export function clearSectionRowGroup(doc: LayoutDoc, groupId: string): LayoutDoc
     return next;
 }
 
-function sectionsInZoneOrdered(doc: LayoutDoc, zone: ReturnType<typeof resolveOpportunityDrawerSectionZone>): LayoutSection[] {
-    return doc.sections.filter((section) => resolveOpportunityDrawerSectionZone(section) === zone);
+function resolveSectionZoneForRowLayout(
+    section: LayoutSection,
+    surfaceKey: DrawerLayoutEditorSurfaceKey,
+): DrawerSurfaceLayoutZone {
+    return resolveDrawerSectionZone(section, surfaceKey);
 }
 
-export function applySectionRowLayout(
+function sectionsInZoneOrdered(
+    doc: LayoutDoc,
+    zone: DrawerSurfaceLayoutZone,
+    surfaceKey: DrawerLayoutEditorSurfaceKey,
+): LayoutSection[] {
+    return doc.sections.filter((section) => resolveSectionZoneForRowLayout(section, surfaceKey) === zone);
+}
+
+export type SectionRowLayoutApplyResult =
+    | { ok: true; doc: LayoutDoc }
+    | { ok: false; doc: LayoutDoc; reason: string };
+
+export type SectionRowLayoutPresetApplyState = {
+    canApply: boolean;
+    reason?: string;
+    followingSectionCount: number;
+    requiredSectionCount: number;
+};
+
+/** Whether a row-layout preset can be applied from this anchor in the current doc. */
+export function readSectionRowLayoutPresetApplyState(
     doc: LayoutDoc,
     anchorSectionKey: string,
     presetKey: SectionRowWidthPresetKey,
-): LayoutDoc {
+    surfaceKey?: DrawerLayoutEditorSurfaceKey,
+): SectionRowLayoutPresetApplyState {
     const preset = SECTION_ROW_WIDTH_PRESETS[presetKey];
+    const resolvedSurfaceKey = surfaceKey ?? resolveDrawerLayoutEditorSurfaceKeyFromDoc(doc) ?? "opportunity_drawer";
     const anchor = doc.sections.find((s) => s.key === anchorSectionKey);
-    if (!anchor) return doc;
+    if (!anchor) {
+        return {
+            canApply: false,
+            reason: "Section not found.",
+            followingSectionCount: 0,
+            requiredSectionCount: preset.spans.length,
+        };
+    }
 
-    const zone = resolveOpportunityDrawerSectionZone(anchor);
-    const zoneSections = sectionsInZoneOrdered(doc, zone);
+    if (presetKey === "full_width" || presetKey === "full") {
+        return { canApply: true, followingSectionCount: 0, requiredSectionCount: 0 };
+    }
+
+    const zone = resolveSectionZoneForRowLayout(anchor, resolvedSurfaceKey);
+    const zoneSections = sectionsInZoneOrdered(doc, zone, resolvedSurfaceKey);
     const anchorPos = zoneSections.findIndex((s) => s.key === anchorSectionKey);
-    if (anchorPos < 0) return doc;
+    if (anchorPos < 0) {
+        return {
+            canApply: false,
+            reason: "Section zone could not be resolved.",
+            followingSectionCount: 0,
+            requiredSectionCount: preset.spans.length,
+        };
+    }
+
+    const slice = zoneSections.slice(anchorPos, anchorPos + preset.spans.length);
+    const required = preset.spans.length;
+    if (slice.length < required) {
+        const missing = required - slice.length;
+        return {
+            canApply: false,
+            reason: `Add ${missing} more card${missing === 1 ? "" : "s"} after "${anchor.title}" in the same zone, then select this row layout again.`,
+            followingSectionCount: slice.length,
+            requiredSectionCount: required,
+        };
+    }
+
+    return {
+        canApply: true,
+        followingSectionCount: slice.length,
+        requiredSectionCount: required,
+    };
+}
+
+export function applySectionRowLayoutWithResult(
+    doc: LayoutDoc,
+    anchorSectionKey: string,
+    presetKey: SectionRowWidthPresetKey,
+    options?: { surfaceKey?: DrawerLayoutEditorSurfaceKey },
+): SectionRowLayoutApplyResult {
+    const applyState = readSectionRowLayoutPresetApplyState(
+        doc,
+        anchorSectionKey,
+        presetKey,
+        options?.surfaceKey,
+    );
+    if (!applyState.canApply) {
+        return { ok: false, doc, reason: applyState.reason ?? "Cannot apply row layout." };
+    }
+
+    const preset = SECTION_ROW_WIDTH_PRESETS[presetKey];
+    const resolvedSurfaceKey = options?.surfaceKey ?? resolveDrawerLayoutEditorSurfaceKeyFromDoc(doc) ?? "opportunity_drawer";
+    const anchor = doc.sections.find((s) => s.key === anchorSectionKey);
+    if (!anchor) return { ok: false, doc, reason: "Section not found." };
+
+    const zone = resolveSectionZoneForRowLayout(anchor, resolvedSurfaceKey);
+    const zoneSections = sectionsInZoneOrdered(doc, zone, resolvedSurfaceKey);
+    const anchorPos = zoneSections.findIndex((s) => s.key === anchorSectionKey);
+    if (anchorPos < 0) return { ok: false, doc, reason: "Section zone could not be resolved." };
 
     let next = doc;
     const existingGroup = readSectionRowGroup(anchor);
     if (existingGroup) next = clearSectionRowGroup(next, existingGroup);
 
     if (presetKey === "full_width" || presetKey === "full") {
-        return clearSectionRowGroupMetadata(next, anchorSectionKey);
+        return { ok: true, doc: clearSectionRowGroupMetadata(next, anchorSectionKey) };
     }
 
     const slice = zoneSections.slice(anchorPos, anchorPos + preset.spans.length);
-    if (slice.length < preset.spans.length) return doc;
-
     const groupId = makeSectionRowGroupId();
 
     if (preset.stackLayout) {
@@ -312,7 +444,7 @@ export function applySectionRowLayout(
                 [LAYOUT_EDITOR_SECTION_ROW_STACK_ROLE_METADATA_KEY]: roles[i] ?? "stack",
             }));
         }
-        return next;
+        return { ok: true, doc: next };
     }
 
     for (let i = 0; i < slice.length; i += 1) {
@@ -328,7 +460,16 @@ export function applySectionRowLayout(
             return nextMetadata;
         });
     }
-    return next;
+    return { ok: true, doc: next };
+}
+
+export function applySectionRowLayout(
+    doc: LayoutDoc,
+    anchorSectionKey: string,
+    presetKey: SectionRowWidthPresetKey,
+    options?: { surfaceKey?: DrawerLayoutEditorSurfaceKey },
+): LayoutDoc {
+    return applySectionRowLayoutWithResult(doc, anchorSectionKey, presetKey, options).doc;
 }
 
 export function setSectionType(doc: LayoutDoc, sectionKey: string, sectionType: LayoutEditorSectionType): LayoutDoc {

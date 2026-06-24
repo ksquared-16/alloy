@@ -21,10 +21,12 @@ import {
     readLayoutRuntimeSectionCollapseConfig,
 } from "@/lib/layout/runtime/layoutRuntimeSectionCollapse";
 import {
-    applySectionRowLayout,
+    applySectionRowLayoutWithResult,
+    BUILDER_SECTION_ROW_LAYOUT_PRESET_KEYS,
     LAYOUT_EDITOR_SECTION_TYPES,
+    readSectionRowLayoutPresetApplyState,
+    readSectionRowLayoutPresetKeyForDoc,
     readSectionType,
-    SECTION_ROW_WIDTH_PRESET_KEYS,
     SECTION_ROW_WIDTH_PRESETS,
     setSectionType,
     type LayoutEditorSectionType,
@@ -175,6 +177,24 @@ export default function LayoutBuilderInspectorPanel({
         () => (section ? collectSectionFieldRefKeys(doc, section.key, surfaceKey) : new Set<string>()),
         [doc, section, surfaceKey],
     );
+
+    const rowLayoutPresetStates = useMemo(() => {
+        if (!section) return null;
+        return Object.fromEntries(
+            BUILDER_SECTION_ROW_LAYOUT_PRESET_KEYS.map((key) => [
+                key,
+                readSectionRowLayoutPresetApplyState(doc, section.key, key, surfaceKey),
+            ]),
+        ) as Record<
+            (typeof BUILDER_SECTION_ROW_LAYOUT_PRESET_KEYS)[number],
+            ReturnType<typeof readSectionRowLayoutPresetApplyState>
+        >;
+    }, [doc, section, surfaceKey]);
+
+    const stackedLayoutHint =
+        rowLayoutPresetStates?.half_stacked_right?.canApply === false ?
+            rowLayoutPresetStates.half_stacked_right.reason
+        :   null;
 
     const selectionTitle =
         inspectorItem ? inspectorItem.title
@@ -481,24 +501,50 @@ export default function LayoutBuilderInspectorPanel({
                             </InspectorField>
                         :   null}
 
-                        {widgetStrip ?
-                            <InspectorField label="Side-by-side cards" helper="Advanced: split this row with neighboring cards.">
+                        {!kpiTile && !widgetStrip ?
+                            <InspectorField
+                                label="Row layout"
+                                helper="Groups this card with the next card(s) in the same zone. Pick the first card in the row — e.g. Contact Summary left, Address + Employment stacked right."
+                            >
                                 <select
-                                    defaultValue="full_width"
-                                    onChange={(e) =>
-                                        applyDoc(
-                                            applySectionRowLayout(doc, section.key, e.target.value as SectionRowWidthPresetKey),
-                                        )
-                                    }
+                                    value={readSectionRowLayoutPresetKeyForDoc(doc, section.key)}
+                                    onChange={(e) => {
+                                        const presetKey = e.target.value as SectionRowWidthPresetKey;
+                                        const result = applySectionRowLayoutWithResult(doc, section.key, presetKey, {
+                                            surfaceKey,
+                                        });
+                                        if (!result.ok) {
+                                            onFieldAddError(result.reason);
+                                            return;
+                                        }
+                                        applyDoc(result.doc);
+                                        onFieldAddError(null);
+                                    }}
                                     className="w-full rounded-lg border border-alloy-forge/15 px-2.5 py-1.5 text-sm"
                                     data-testid="visual-editor-section-row-group-layout"
                                 >
-                                    {SECTION_ROW_WIDTH_PRESET_KEYS.map((key) => (
-                                        <option key={key} value={key}>
-                                            {SECTION_ROW_WIDTH_PRESETS[key].label}
-                                        </option>
-                                    ))}
+                                    {BUILDER_SECTION_ROW_LAYOUT_PRESET_KEYS.map((key) => {
+                                        const state = rowLayoutPresetStates?.[key];
+                                        const needsMore =
+                                            state && !state.canApply && state.requiredSectionCount > 0 ?
+                                                ` — needs ${state.requiredSectionCount - state.followingSectionCount} more`
+                                            :   "";
+                                        return (
+                                            <option key={key} value={key} disabled={state?.canApply === false}>
+                                                {SECTION_ROW_WIDTH_PRESETS[key].label}
+                                                {needsMore}
+                                            </option>
+                                        );
+                                    })}
                                 </select>
+                                {stackedLayoutHint ?
+                                    <p
+                                        className="mt-1.5 text-[10px] leading-snug text-alloy-midnight/55"
+                                        data-testid="visual-editor-section-row-group-layout-feedback"
+                                    >
+                                        {stackedLayoutHint}
+                                    </p>
+                                :   null}
                             </InspectorField>
                         :   null}
 
