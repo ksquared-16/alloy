@@ -125,6 +125,23 @@ export const BUILDER_SECTION_ROW_LAYOUT_PRESET_KEYS = [
 
 export type BuilderSectionRowLayoutPresetKey = (typeof BUILDER_SECTION_ROW_LAYOUT_PRESET_KEYS)[number];
 
+/** Infer preset from row-group members when span/stack patterns are non-standard. */
+function readSectionRowLayoutPresetKeyFromMembers(members: LayoutSection[]): SectionRowWidthPresetKey {
+    if (members.length === 2) {
+        const spans = members.map((s) => readSectionRowSpan(s));
+        if (spans[0] === 3 && spans[1] === 9) return "25_75";
+    }
+    if (members.length === 3) {
+        const spans = members.map((s) => readSectionRowSpan(s));
+        if (spans[0] === 3 && spans[1] === 3 && spans[2] === 6) return "25_25_50";
+        if (spans.every((span) => span === 4)) return "equal_3";
+    }
+    if (members.length === 4 && members.every((s) => readSectionRowSpan(s) === 3)) {
+        return "equal_4";
+    }
+    return "full_width";
+}
+
 /** Read preset from a section and its row-group siblings (accurate for stacked layouts). */
 export function readSectionRowLayoutPresetKeyForDoc(doc: LayoutDoc, sectionKey: string): SectionRowWidthPresetKey {
     const section = doc.sections.find((s) => s.key === sectionKey);
@@ -155,7 +172,7 @@ export function readSectionRowLayoutPresetKeyForDoc(doc: LayoutDoc, sectionKey: 
         if (spans[0] === 8 && spans[1] === 4) return "two_thirds_third";
     }
 
-    return readSectionRowLayoutPresetKey(section);
+    return readSectionRowLayoutPresetKeyFromMembers(members);
 }
 
 function sectionGroupHasStackRole(sections: LayoutSection[]): boolean {
