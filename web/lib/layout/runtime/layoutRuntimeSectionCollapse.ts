@@ -6,6 +6,18 @@
 
 import type { LayoutDoc, LayoutSection } from "@/lib/layout/layoutV2";
 import { patchSection } from "@/lib/layout/builderOps";
+import { LEAD_OVERVIEW_SECTION_KEYS } from "@/lib/layout/runtime/leadOverviewComposition";
+import {
+    leadActivitySectionHasVisibleContent,
+    leadNotesCommunicationSectionHasVisibleContent,
+} from "@/lib/layout/runtime/leadOverviewSectionContent";
+import { PERSON_OVERVIEW_SECTION_KEYS } from "@/lib/layout/runtime/personOverviewComposition";
+import {
+    personActivitySectionHasVisibleContent,
+    personDocumentsSectionHasVisibleContent,
+    personNotesCommunicationSectionHasVisibleContent,
+} from "@/lib/layout/runtime/personOverviewSectionContent";
+import type { ProofRuntimeRecord } from "@/lib/layout/runtime/proofRecordContext";
 
 export const LAYOUT_SECTION_PERSIST_COLLAPSE_STATE_METADATA_KEY = "persistCollapseState" as const;
 export const LAYOUT_SECTION_COLLAPSED_SUMMARY_METADATA_KEY = "collapsedSummary" as const;
@@ -32,6 +44,36 @@ export function readLayoutRuntimeSectionCollapseConfig(section: LayoutSection): 
         persistCollapseState: metadata[LAYOUT_SECTION_PERSIST_COLLAPSE_STATE_METADATA_KEY] === true,
         collapsedSummary,
     };
+}
+
+function drawerOverviewSectionHasVisibleContent(sectionKey: string, record: ProofRuntimeRecord): boolean {
+    switch (sectionKey) {
+        case LEAD_OVERVIEW_SECTION_KEYS.activity:
+            return leadActivitySectionHasVisibleContent(record);
+        case LEAD_OVERVIEW_SECTION_KEYS.notes:
+            return leadNotesCommunicationSectionHasVisibleContent(record);
+        case PERSON_OVERVIEW_SECTION_KEYS.activity:
+            return personActivitySectionHasVisibleContent(record);
+        case PERSON_OVERVIEW_SECTION_KEYS.notes:
+            return personNotesCommunicationSectionHasVisibleContent(record);
+        case PERSON_OVERVIEW_SECTION_KEYS.documents:
+            return personDocumentsSectionHasVisibleContent(record);
+        default:
+            return false;
+    }
+}
+
+/** Collapse config with content-aware default expansion for drawer overview rail sections. */
+export function readLayoutRuntimeSectionCollapseConfigForRecord(
+    section: LayoutSection,
+    record: ProofRuntimeRecord,
+): LayoutRuntimeSectionCollapseConfig {
+    const config = readLayoutRuntimeSectionCollapseConfig(section);
+    if (!config.collapsible || config.defaultExpanded) return config;
+    if (drawerOverviewSectionHasVisibleContent(section.key, record)) {
+        return { ...config, defaultExpanded: true };
+    }
+    return config;
 }
 
 export function layoutRuntimeSectionCollapseStorageKey(input: {
