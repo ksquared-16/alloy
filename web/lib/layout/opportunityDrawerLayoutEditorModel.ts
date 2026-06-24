@@ -157,7 +157,7 @@ export function setSectionEditorHidden(doc: LayoutDoc, sectionKey: string, hidde
     const sIdx = doc.sections.findIndex((s) => s.key === sectionKey);
     if (sIdx < 0) return doc;
     const section = doc.sections[sIdx]!;
-    const metadata = { ...(section.metadata ?? {}) };
+    const metadata: Record<string, unknown> = { ...(section.metadata ?? {}) };
     if (hidden) metadata[LAYOUT_SECTION_EDITOR_HIDDEN_METADATA_KEY] = true;
     else delete metadata[LAYOUT_SECTION_EDITOR_HIDDEN_METADATA_KEY];
     return patchSection(doc, sIdx, { metadata });

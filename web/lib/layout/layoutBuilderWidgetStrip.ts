@@ -10,6 +10,18 @@ import { resolveOpportunityDrawerSectionZone } from "@/lib/layout/opportunityDra
 import type { LayoutDoc, LayoutSection } from "@/lib/layout/layoutV2";
 import type { SectionCompositionItem } from "@/lib/layout/layoutEditorSectionComposition";
 
+function patchSectionMetadata(
+    doc: LayoutDoc,
+    sectionKey: string,
+    patch: (metadata: Record<string, unknown>) => Record<string, unknown>,
+): LayoutDoc {
+    const sIdx = doc.sections.findIndex((s) => s.key === sectionKey);
+    if (sIdx < 0) return doc;
+    const section = doc.sections[sIdx]!;
+    const metadata = patch({ ...(section.metadata ?? {}) });
+    return patchSection(doc, sIdx, { metadata });
+}
+
 function countSectionWidgets(section: LayoutSection): number {
     return section.rows.reduce(
         (total, row) =>
@@ -37,14 +49,12 @@ export function isLayoutBuilderWidgetCardWidgetKey(widgetKey: string): boolean {
 }
 
 export function markSectionAsWidgetCard(doc: LayoutDoc, sectionKey: string): LayoutDoc {
-    const sIdx = doc.sections.findIndex((s) => s.key === sectionKey);
-    if (sIdx < 0) return doc;
-    const metadata = {
-        ...(doc.sections[sIdx]!.metadata ?? {}),
-        [LAYOUT_EDITOR_WIDGET_CARD_METADATA_KEY]: true,
-    };
-    delete metadata[LAYOUT_EDITOR_KPI_TILE_METADATA_KEY];
-    return patchSection(doc, sIdx, { metadata });
+    return patchSectionMetadata(doc, sectionKey, (metadata) => {
+        const next: Record<string, unknown> = { ...metadata };
+        next[LAYOUT_EDITOR_WIDGET_CARD_METADATA_KEY] = true;
+        delete next[LAYOUT_EDITOR_KPI_TILE_METADATA_KEY];
+        return next;
+    });
 }
 
 /** Single-widget KPI tile — first-class surface block, not a card wrapper. */

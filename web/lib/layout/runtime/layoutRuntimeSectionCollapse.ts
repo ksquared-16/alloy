@@ -75,7 +75,7 @@ export function patchLayoutSectionCollapseMetadata(
         collapsedSummary: string | null;
     }>,
 ): LayoutSection {
-    const metadata = { ...(section.metadata ?? {}) };
+    const metadata: Record<string, unknown> = { ...(section.metadata ?? {}) };
 
     if (patch.persistCollapseState != null) {
         if (patch.persistCollapseState) {

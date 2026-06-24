@@ -242,14 +242,21 @@ function buildChildRowGroups(config: LayoutEditorRelatedListConfig, columns: Lay
     const indexFor = (refKey: string) => columns.findIndex((c) => c.refKey === refKey);
     const groups: LayoutEditorChildRowGroup[] = [];
 
+    const childRowGroupColumnCountHint = (fieldCount: number): 1 | 2 | 3 | undefined => {
+        if (fieldCount === 1) return 1;
+        if (fieldCount === 2) return 2;
+        if (fieldCount === 3) return 3;
+        return undefined;
+    };
+
     const pushGroup = (row?: LayoutEditorRelatedListRowTemplate) => {
         if (!row?.fields.length) return;
         const indices = row.fields.map(indexFor).filter((i) => i >= 0);
         if (indices.length === 0) return;
-        groups.push({
-            columnIndices: indices,
-            columnCount: Math.max(1, Math.min(LAYOUT_EDITOR_RELATED_LIST_MAX_ROW_FIELDS, indices.length)),
-        });
+        const group: LayoutEditorChildRowGroup = { columnIndices: indices };
+        const columnCountHint = childRowGroupColumnCountHint(indices.length);
+        if (columnCountHint != null) group.columnCount = columnCountHint;
+        groups.push(group);
     };
 
     pushGroup(config.primaryRow);
