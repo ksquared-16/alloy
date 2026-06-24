@@ -8,6 +8,7 @@ import type { ProofRuntimeRecord } from "@/lib/layout/runtime/proofRecordContext
 import {
     LAYOUT_RUNTIME_SECTION_ROW_CELL_CLASS,
     LAYOUT_RUNTIME_SECTION_ROW_GROUP_CLASS,
+    LAYOUT_RUNTIME_SECTION_STACK_CLASS,
 } from "@/lib/layout/runtime/layoutRuntimeSurfaceStyles";
 
 type Props = {
@@ -38,23 +39,26 @@ export default function LayoutRuntimeSectionFlowView({
 }: Props) {
     if (sections.length === 0) return null;
 
+    const flowStackClass = stackClassName ?? LAYOUT_RUNTIME_SECTION_STACK_CLASS;
+
     return (
-        <LayoutEditorSectionFlowView
-            sections={sections}
-            stackClassName={stackClassName}
-            rowClassName={rowClassName}
-            rowCellClassName={rowCellClassName}
-            renderSection={(section) => (
-                <LayoutRuntimeDrawerBodyView
-                    doc={{ ...doc, sections: [section] }}
-                    record={record}
-                    entityId={entityId}
-                    canMutate={canMutate}
-                    onAdornmentAction={onAdornmentAction}
-                    sectionPresentation={sectionPresentation}
-                    useSectionFlow={false}
-                />
-            )}
-        />
+        <div className={flowStackClass} data-layout-runtime-section-flow="true">
+            <LayoutEditorSectionFlowView
+                sections={sections}
+                rowClassName={rowClassName}
+                rowCellClassName={rowCellClassName}
+                renderSection={(section) => (
+                    <LayoutRuntimeDrawerBodyView
+                        doc={{ ...doc, sections: [section] }}
+                        record={record}
+                        entityId={entityId}
+                        canMutate={canMutate}
+                        onAdornmentAction={onAdornmentAction}
+                        sectionPresentation={sectionPresentation}
+                        useSectionFlow={false}
+                    />
+                )}
+            />
+        </div>
     );
 }

@@ -101,9 +101,21 @@ export const LAYOUT_RUNTIME_COMPOSITION_ENROLLMENT_HEADER =
 
 export const LAYOUT_RUNTIME_COMPOSITION_ENROLLMENT_BODY = "px-0 pb-0 pt-0";
 
-/** Shared peer-row grid — sections stretch to tallest sibling height. */
+/**
+ * Shared section-flow alignment contract — used identically by Builder preview
+ * (`OpportunityDrawerLayoutEditorCanvas`) and published runtime drawer compositions
+ * (Lead / Person / Child / any LayoutDoc drawer) via `LayoutEditorSectionFlowView`.
+ *
+ * Single source of truth: do not redefine row/cell/stack classes per drawer.
+ * - ROW_GROUP: peer sections in one row use CSS grid + `items-stretch` so all
+ *   cells share the same top and bottom edge.
+ * - ROW_CELL: each cell is a full-height flex column so the rendered section
+ *   stretches to the tallest sibling.
+ * - STACK: vertical rhythm between stacked sections/rows (≥5px).
+ */
 export const LAYOUT_RUNTIME_SECTION_ROW_GROUP_CLASS = "min-w-0 grid items-stretch";
 export const LAYOUT_RUNTIME_SECTION_ROW_CELL_CLASS = "min-w-0 flex h-full min-h-0 flex-col";
+export const LAYOUT_RUNTIME_SECTION_STACK_CLASS = "flex flex-col gap-5";
 
 /** Needs-attention accent — left rail only (Child Information, Attention widget). */
 export const LAYOUT_RUNTIME_ATTENTION_RAIL = "border-l-[3px] border-l-alloy-ember/75";

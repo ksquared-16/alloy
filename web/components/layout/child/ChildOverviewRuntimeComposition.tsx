@@ -23,6 +23,7 @@ import {
 import {
     LAYOUT_RUNTIME_SECTION_ROW_CELL_CLASS,
     LAYOUT_RUNTIME_SECTION_ROW_GROUP_CLASS,
+    LAYOUT_RUNTIME_SECTION_STACK_CLASS,
 } from "@/lib/layout/runtime/layoutRuntimeSurfaceStyles";
 import type { ProofRuntimeRecord } from "@/lib/layout/runtime/proofRecordContext";
 
@@ -171,7 +172,7 @@ export default function ChildOverviewRuntimeComposition({
                                 entityId={entityId}
                                 canMutate={canMutate}
                                 onAdornmentAction={onAdornmentAction}
-                                stackClassName="space-y-2"
+                                stackClassName={LAYOUT_RUNTIME_SECTION_STACK_CLASS}
                             />
                         </div>
                     :   null}
@@ -198,7 +199,7 @@ export default function ChildOverviewRuntimeComposition({
                             entityId={entityId}
                             canMutate={canMutate}
                             onAdornmentAction={onAdornmentAction}
-                            stackClassName="space-y-3"
+                            stackClassName={LAYOUT_RUNTIME_SECTION_STACK_CLASS}
                         />
                     </div>
                 :   null}

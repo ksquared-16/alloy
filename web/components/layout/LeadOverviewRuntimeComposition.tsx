@@ -26,6 +26,7 @@ import {
     DRAWER_OVERVIEW_RIGHT_RAIL_CLASS,
     DRAWER_OVERVIEW_SHELL_GRID_CLASS,
 } from "@/lib/layout/runtime/drawerOverviewCompositionStandard";
+import { LAYOUT_RUNTIME_SECTION_STACK_CLASS } from "@/lib/layout/runtime/layoutRuntimeSurfaceStyles";
 import type { ProofRuntimeRecord } from "@/lib/layout/runtime/proofRecordContext";
 
 type Props = {
@@ -166,7 +167,7 @@ export default function LeadOverviewRuntimeComposition({
                                 entityId={entityId}
                                 canMutate={canMutate}
                                 onAdornmentAction={onAdornmentAction}
-                                stackClassName="space-y-2"
+                                stackClassName={LAYOUT_RUNTIME_SECTION_STACK_CLASS}
                             />
                         </div>
                     :   null}
@@ -188,7 +189,7 @@ export default function LeadOverviewRuntimeComposition({
                 :   null}
 
                 {slots.overflow.length > 0 ?
-                    <div data-lead-overview-slot="overflow" className="space-y-4">
+                    <div data-lead-overview-slot="overflow" className={LAYOUT_RUNTIME_SECTION_STACK_CLASS}>
                         <LayoutRuntimeSectionFlowView
                             doc={doc}
                             sections={

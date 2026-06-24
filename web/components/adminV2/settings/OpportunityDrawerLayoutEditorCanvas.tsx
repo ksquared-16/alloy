@@ -32,6 +32,10 @@ import {
     DRAWER_OVERVIEW_SUMMARY_STRIP_HOST_CLASS,
 } from "@/lib/layout/runtime/drawerOverviewCompositionStandard";
 import { LAYOUT_DRAWER_PREVIEW_RECORD } from "@/lib/layout/runtime/layoutDrawerPreviewRecord";
+import {
+    LAYOUT_RUNTIME_SECTION_ROW_CELL_CLASS,
+    LAYOUT_RUNTIME_SECTION_STACK_CLASS,
+} from "@/lib/layout/runtime/layoutRuntimeSurfaceStyles";
 import { LayoutRuntimeCompositionProvider } from "@/lib/layout/runtime/layoutRuntimeCompositionContext";
 import type { ProofRuntimeRecord } from "@/lib/layout/runtime/proofRecordContext";
 import { repackPeerCardsAfterZoneReorder } from "@/lib/layout/layoutBuilderPeerCardRows";
@@ -642,7 +646,7 @@ function CompositionGrid({
                         renderSection={renderSection}
                         stackClassName="min-w-0"
                         rowClassName="min-w-0 w-full"
-                        rowCellClassName="min-w-0 flex h-full min-h-0 flex-col"
+                        rowCellClassName={LAYOUT_RUNTIME_SECTION_ROW_CELL_CLASS}
                     />
                 </div>
             :   null}
@@ -654,9 +658,9 @@ function CompositionGrid({
                     <LayoutEditorSectionFlowView
                         sections={gridLayout.rightRailSections}
                         renderSection={renderSection}
-                        stackClassName="space-y-2"
+                        stackClassName={LAYOUT_RUNTIME_SECTION_STACK_CLASS}
                         rowClassName="min-w-0"
-                        rowCellClassName="min-w-0 flex h-full min-h-0 flex-col"
+                        rowCellClassName={LAYOUT_RUNTIME_SECTION_ROW_CELL_CLASS}
                     />
                 </div>
             </div>
@@ -672,7 +676,7 @@ function CompositionGrid({
                         renderSection={renderSection}
                         stackClassName=""
                         rowClassName="min-w-0"
-                        rowCellClassName="min-w-0 flex h-full min-h-0 flex-col"
+                        rowCellClassName={LAYOUT_RUNTIME_SECTION_ROW_CELL_CLASS}
                     />
                 </div>
             :   null}

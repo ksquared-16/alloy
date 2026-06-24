@@ -8,7 +8,10 @@
  * grids respond to drawer content width, not the browser viewport.
  */
 
-import { LAYOUT_RUNTIME_DRAWER_OVERVIEW_CANVAS } from "@/lib/layout/runtime/layoutRuntimeSurfaceStyles";
+import {
+    LAYOUT_RUNTIME_DRAWER_OVERVIEW_CANVAS,
+    LAYOUT_RUNTIME_SECTION_STACK_CLASS,
+} from "@/lib/layout/runtime/layoutRuntimeSurfaceStyles";
 import type { LayoutDoc, LayoutSection } from "@/lib/layout/layoutV2";
 import { PRESENTATION_EMPTY_STATE } from "@/lib/presentation/presentationTypography";
 
@@ -35,7 +38,7 @@ export const DRAWER_OVERVIEW_CONTAINER_CLASS = "adminv2-drawer-overview-canvas";
 
 export const DRAWER_OVERVIEW_SHELL_GRID_CLASS = "adminv2-drawer-overview-shell-grid";
 
-export const DRAWER_OVERVIEW_CANVAS_CLASS = `${DRAWER_OVERVIEW_CONTAINER_CLASS} space-y-3 rounded-lg p-3 ${LAYOUT_RUNTIME_DRAWER_OVERVIEW_CANVAS}`;
+export const DRAWER_OVERVIEW_CANVAS_CLASS = `${DRAWER_OVERVIEW_CONTAINER_CLASS} ${LAYOUT_RUNTIME_SECTION_STACK_CLASS} rounded-lg p-3 ${LAYOUT_RUNTIME_DRAWER_OVERVIEW_CANVAS}`;
 
 /** @deprecated Use DRAWER_OVERVIEW_SHELL_GRID_CLASS — container-aware, not viewport `lg:`. */
 export const DRAWER_OVERVIEW_BODY_GRID_CLASS = DRAWER_OVERVIEW_SHELL_GRID_CLASS;
@@ -52,7 +55,7 @@ export const DRAWER_OVERVIEW_LEAD_SOURCE_GRID_CLASS = "adminv2-drawer-overview-l
 
 export const DRAWER_OVERVIEW_ENROLLMENT_FIELD_GRID_CLASS = "adminv2-drawer-enrollment-field-grid";
 
-export const DRAWER_OVERVIEW_OVERFLOW_STACK_CLASS = "space-y-3";
+export const DRAWER_OVERVIEW_OVERFLOW_STACK_CLASS = LAYOUT_RUNTIME_SECTION_STACK_CLASS;
 
 export const DRAWER_OVERVIEW_SUMMARY_STRIP_WIDGET_MIN_HEIGHT = "min-h-[4.25rem]";
 
