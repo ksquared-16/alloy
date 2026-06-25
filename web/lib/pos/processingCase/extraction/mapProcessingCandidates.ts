@@ -11,6 +11,7 @@
  */
 
 import { groupFactsIntoHouseholdCandidates } from "@/lib/intake/group/groupFactsIntoHouseholdCandidates";
+import { formatIntakeReviewWarnings } from "@/lib/intake/review/intakeReviewWarnings";
 import type {
     IntakeFact,
     IntakeFactConfidence,
@@ -72,7 +73,7 @@ interface Ctx {
 
 function pushChildName(ctx: Ctx): void {
     const household = groupFactsIntoHouseholdCandidates(ctx.facts);
-    ctx.warnings.push(...household.review_warnings);
+    ctx.warnings.push(...formatIntakeReviewWarnings(household.review_warnings));
     const child = household.children[0];
     if (!child) return;
     const value = [child.first_name, child.last_name].filter(Boolean).join(" ").trim();
