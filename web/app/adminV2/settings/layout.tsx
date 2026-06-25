@@ -12,7 +12,11 @@ export default async function AdminV2SettingsLayout({
 }) {
     const auth = await getAdminAuth();
 
-    if (!auth?.user?.id || !auth.role) {
+    if (!auth?.user?.id) {
+        redirect("/login");
+    }
+
+    if (!auth.role) {
         redirect("/unauthorized");
     }
 

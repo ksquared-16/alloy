@@ -80,7 +80,19 @@ import {
 } from "@/lib/workspace/workUnitQueueLaneRevealState";
 import { useAdminDrawer } from "@/contexts/AdminDrawerContext";
 import { ALLOY_OS_RUNTIME_ENABLED } from "@/lib/adminV2/runtime/alloyOsRuntimeFlag";
+import {
+    operatorOperationalPerspectivesEnabled,
+} from "@/lib/adminV2/runtime/configurationRuntimeConvergenceFlag";
 import { deriveRuntimePerspective } from "@/lib/adminV2/runtime/perspective/deriveRuntimePerspective";
+import {
+    applyOperationalViewsToPillSections,
+    applyOperationalViewsToTabPlaceholders,
+    buildOperationalViewHeaderSection,
+    deriveRuntimePerspectiveWithOperationalViews,
+    deriveOperationalViewsFromQueueDefinition,
+    relabelPrimaryPillSectionWorkView,
+} from "@/lib/adminV2/runtime/perspective/mergeOperationalViewMetadata";
+import { resolveOperationalViewsForWorkUnit } from "@/lib/adminV2/runtime/perspective/resolveStageOperationalViews";
 import { setActiveRuntimePerspective } from "@/lib/adminV2/runtime/perspective/RuntimePerspectiveContext";
 import { buildPrepareParamsFromOpenDrawer, peekDrawerViewModelPreloadSync } from "@/lib/adminV2/viewModel/drawer/drawerShellPinnedModelSwap";
 import { logDrawerVmRuntimeDiagnostic } from "@/lib/adminV2/viewModel/drawer/drawerVmRuntimeDiagnostics";
@@ -900,6 +912,22 @@ export default function AdminV2OpportunityWorkUnitPage() {
         return ui;
     }, [queueDef, workUnit?.key, workUnit?.metadata]);
 
+    const workViewPerspectivesEnabled = operatorOperationalPerspectivesEnabled();
+
+    const stageOperationalViews = useMemo(() => {
+        if (!workViewPerspectivesEnabled) return [];
+        const fromConfig =
+            dept?.metadata ?
+                resolveOperationalViewsForWorkUnit({
+                    departmentMetadata: dept.metadata,
+                    workUnitMetadata: workUnit?.metadata,
+                    queueDefinition: workUnit?.queue_definition,
+                })
+            :   [];
+        if (fromConfig.length) return fromConfig;
+        return deriveOperationalViewsFromQueueDefinition(workUnit?.queue_definition);
+    }, [workViewPerspectivesEnabled, dept?.metadata, workUnit?.metadata, workUnit?.queue_definition]);
+
     const normalizedQueueDef = useMemo(
         () => (workUnit?.queue_definition ? normalizeQueueDefinitionDocument(workUnit.queue_definition) : null),
         [workUnit?.queue_definition]
@@ -964,8 +992,22 @@ export default function AdminV2OpportunityWorkUnitPage() {
             ...sec,
             queues: expandNeedsAttentionQueueSummariesForPills(sec.queues, naSummary, enabledAttentionBuckets),
         }));
-        return buildWorkUnitAboveFoldPillSections({ ui: queueUi, sectionedSummaries: expanded });
-    }, [sectionedQueueSummariesOrdered, displayQueueSummaries, enabledAttentionBuckets, queueUi]);
+        let sections = buildWorkUnitAboveFoldPillSections({ ui: queueUi, sectionedSummaries: expanded });
+        if (workViewPerspectivesEnabled && stageOperationalViews.length) {
+            sections = applyOperationalViewsToPillSections(sections, stageOperationalViews);
+        }
+        if (workViewPerspectivesEnabled) {
+            sections = relabelPrimaryPillSectionWorkView(sections);
+        }
+        return sections;
+    }, [
+        sectionedQueueSummariesOrdered,
+        displayQueueSummaries,
+        enabledAttentionBuckets,
+        queueUi,
+        stageOperationalViews,
+        workViewPerspectivesEnabled,
+    ]);
 
     /** Tab shells from definition only (no counts) while exact summaries are in flight. */
     const queueTabPlaceholders = useMemo(() => {
@@ -995,9 +1037,15 @@ export default function AdminV2OpportunityWorkUnitPage() {
             .filter((s) => s.queues.length > 0);
         if (!sections.length) return null;
         const ordered = reorderSectionsWithAllRecordsFirst(sections, allRecordsQueueKey);
-        if (!queueUi) return ordered;
-        return buildWorkUnitAboveFoldPlaceholderSections({ ui: queueUi, sections: ordered });
-    }, [queueUi, queueDef, allRecordsQueueKey, entityLabels]);
+        let placeholders = buildWorkUnitAboveFoldPlaceholderSections({ ui: queueUi, sections: ordered });
+        if (workViewPerspectivesEnabled && stageOperationalViews.length) {
+            placeholders = applyOperationalViewsToTabPlaceholders(placeholders, stageOperationalViews);
+        }
+        if (workViewPerspectivesEnabled) {
+            placeholders = relabelPrimaryPillSectionWorkView(placeholders);
+        }
+        return placeholders;
+    }, [queueUi, queueDef, allRecordsQueueKey, entityLabels, stageOperationalViews, workViewPerspectivesEnabled]);
 
     const queueTabPlaceholdersExpanded = useMemo(() => {
         if (!queueTabPlaceholders?.length || !enabledAttentionBuckets.length) return queueTabPlaceholders;
@@ -1331,6 +1379,32 @@ export default function AdminV2OpportunityWorkUnitPage() {
 
     const lifecycleHeaderSections = useMemo(() => {
         if (!builderOwnedLifecycleShell || !workUnitId || !lifecycleSiblingHeaderReady) return null;
+
+        if (workViewPerspectivesEnabled) {
+            const naSummary = displayQueueSummaries?.find(
+                (x) => x.key.trim().toLowerCase() === "needs_attention",
+            );
+            const attentionQueues = naSummary
+                ? expandNeedsAttentionQueueSummariesForPills(
+                      [naSummary],
+                      naSummary,
+                      enabledAttentionBuckets,
+                  ).map((q) => ({
+                      key: q.key,
+                      label: q.label,
+                      count: typeof q.count === "number" ? q.count : 0,
+                      priority: "critical" as const,
+                  }))
+                : [];
+            return buildLifecycleBuilderOwnedAboveFoldHeaderSections({
+                siblings: [],
+                currentWorkUnitId: workUnitId,
+                currentWorkUnitKey: workUnit?.key ?? null,
+                selectedQueueKey,
+                attentionQueues,
+            });
+        }
+
         const siblings = lifecycleSiblingWorkUnitsForHeader ?? [];
         const naSummary = displayQueueSummaries?.find(
             (x) => x.key.trim().toLowerCase() === "needs_attention"
@@ -1347,13 +1421,33 @@ export default function AdminV2OpportunityWorkUnitPage() {
                   priority: "critical" as const,
               }))
             : [];
-        return buildLifecycleBuilderOwnedAboveFoldHeaderSections({
+        const sections = buildLifecycleBuilderOwnedAboveFoldHeaderSections({
             siblings,
             currentWorkUnitId: workUnitId,
             currentWorkUnitKey: workUnit?.key ?? null,
             selectedQueueKey,
             attentionQueues,
         });
+        if (!workViewPerspectivesEnabled || !stageOperationalViews.length) return sections;
+        const operationalViewsSection = buildOperationalViewHeaderSection({
+            views: stageOperationalViews,
+            queueSummaries: (displayQueueSummaries ?? []).map((q) => ({
+                key: q.key,
+                label: q.label,
+                count: typeof q.count === "number" ? q.count : undefined,
+                priority: q.priority,
+            })),
+            selectedQueueKey,
+            allowSingleLane: true,
+        });
+        if (!operationalViewsSection) return sections;
+        const workUnitsIdx = sections.findIndex((s) => s.key === "lifecycle_work_units");
+        if (workUnitsIdx === -1) return [...sections, operationalViewsSection];
+        return [
+            ...sections.slice(0, workUnitsIdx + 1),
+            operationalViewsSection,
+            ...sections.slice(workUnitsIdx + 1),
+        ];
     }, [
         builderOwnedLifecycleShell,
         workUnitId,
@@ -1363,6 +1457,8 @@ export default function AdminV2OpportunityWorkUnitPage() {
         displayQueueSummaries,
         enabledAttentionBuckets,
         selectedQueueKey,
+        stageOperationalViews,
+        workViewPerspectivesEnabled,
     ]);
 
     const showOipOnlyKpiStrip = builderOwnedLifecycleShell;
@@ -1405,16 +1501,22 @@ export default function AdminV2OpportunityWorkUnitPage() {
             setActiveRuntimePerspective(null);
             return;
         }
+        const deriveParams = {
+            workUnitId: wuId,
+            queueDefinition: workUnit.queue_definition,
+            activeQueueKey: selectedQueueKey,
+            attentionBucketKey: attentionBucketKey || null,
+            source: "pill" as const,
+        };
         setActiveRuntimePerspective(
-            deriveRuntimePerspective({
-                workUnitId: wuId,
-                queueDefinition: workUnit.queue_definition,
-                activeQueueKey: selectedQueueKey,
-                attentionBucketKey: attentionBucketKey || null,
-                source: "pill",
-            }),
+            workViewPerspectivesEnabled && stageOperationalViews.length
+                ? deriveRuntimePerspectiveWithOperationalViews({
+                      ...deriveParams,
+                      operationalViews: stageOperationalViews,
+                  })
+                : deriveRuntimePerspective(deriveParams),
         );
-    }, [workUnitId, workUnit, selectedQueueKey, attentionBucketKey]);
+    }, [workUnitId, workUnit, selectedQueueKey, attentionBucketKey, stageOperationalViews]);
 
     useEffect(() => {
         if (!ALLOY_OS_RUNTIME_ENABLED) return;
@@ -6361,7 +6463,8 @@ export default function AdminV2OpportunityWorkUnitPage() {
             reserve_actions_rail: reserveWorkUnitActionsRail,
             queue_summaries: queueSummariesForAboveFold,
             queue_summaries_error: queueSummariesError,
-            queue_pill_sections: builderOwnedLifecycleShell ? null : pillSectionsForModel,
+            queue_pill_sections:
+                builderOwnedLifecycleShell && !workViewPerspectivesEnabled ? null : pillSectionsForModel,
             queue_tab_placeholders: builderOwnedLifecycleShell
                 ? null
                 : queueTabPlaceholdersExpanded ?? queueTabPlaceholders,

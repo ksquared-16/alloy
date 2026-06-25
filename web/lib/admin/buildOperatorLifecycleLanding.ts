@@ -18,6 +18,14 @@ import {
 } from "@/lib/workspace/extractPipelineExecutionLanes";
 import { pickDeptPipelineWorkUnit } from "@/lib/workspace/pickDeptPipelineWorkUnit";
 import { tryLoadWorkUnitQueueDefinitionBundle } from "@/lib/config/queueDefinitionV2Runtime";
+import {
+    operatorOperationalPerspectivesEnabled,
+} from "@/lib/adminV2/runtime/configurationRuntimeConvergenceFlag";
+import {
+    deriveOperationalViewsFromQueueDefinition,
+} from "@/lib/adminV2/runtime/perspective/mergeOperationalViewMetadata";
+import { buildOperationalViewPreviewRuntimeHref } from "@/lib/adminV2/runtime/perspective/mergeOperationalViewMetadata";
+import { resolveOperationalViewsForWorkUnit } from "@/lib/adminV2/runtime/perspective/resolveStageOperationalViews";
 
 /** Default operator queue when configured on the enrollment pipeline. */
 export const OPERATOR_DEFAULT_ENTRY_QUEUE_KEY = "new_leads" as const;
@@ -130,6 +138,52 @@ function operatorQueuesFromLifecycleBuilder(
     return operatorQueuesFromLifecycleBuilderMetadata(dept?.metadata, entry.process_id);
 }
 
+function workViewNavEntriesForDepartment(args: {
+    departmentId: string;
+    departmentMetadata: unknown;
+    workUnits: OperatorLifecycleWorkUnitRow[];
+}): OperatorLifecycleWorkQueuePreview[] {
+    const forDept = args.workUnits.filter(
+        (wu) => wu.department_id === args.departmentId && wu.is_active !== false,
+    );
+    const pipelineWu = pickDeptPipelineWorkUnit(forDept, args.departmentId);
+    const stageWu = forDept.find((wu) => isLifecycleStageWorkUnitKey(wu.key)) ?? null;
+    const targetWu = pipelineWu ?? stageWu;
+    if (!targetWu) return [];
+    const platformKey = (targetWu.key ?? "").trim();
+    if (!platformKey) return [];
+
+    const fromConfig = resolveOperationalViewsForWorkUnit({
+        departmentMetadata: args.departmentMetadata,
+        workUnitMetadata: null,
+        queueDefinition: targetWu.queue_definition,
+    });
+    const views =
+        fromConfig.length > 0 ?
+            fromConfig.filter((row) => row.visible_in_rail !== false)
+        :   deriveOperationalViewsFromQueueDefinition(targetWu.queue_definition);
+
+    return [...views]
+        .sort(
+            (a, b) =>
+                (a.display_order ?? Number.MAX_SAFE_INTEGER) - (b.display_order ?? Number.MAX_SAFE_INTEGER)
+                || a.queue_key.localeCompare(b.queue_key),
+        )
+        .map((row) => {
+            const href =
+                buildOperationalViewPreviewRuntimeHref({
+                    departmentId: args.departmentId,
+                    workUnitId: targetWu.id,
+                    queueKey: row.queue_key,
+                }) ?? operatorWorkUnitHrefFromKey(platformKey);
+            return {
+                label: row.label?.trim() || row.queue_key,
+                platformKey,
+                href,
+            };
+        });
+}
+
 /**
  * Sidebar + work-unit pill stage list — pipeline lanes when configured, else builder stages.
  * Keeps operator nav and work-unit header pills aligned.
@@ -140,6 +194,11 @@ export function resolveOperatorLifecycleWorkQueueNavEntriesForDepartment(args: {
     workUnits: OperatorLifecycleWorkUnitRow[];
     processId?: string | null;
 }): OperatorLifecycleWorkQueuePreview[] {
+    if (operatorOperationalPerspectivesEnabled()) {
+        const workViewEntries = workViewNavEntriesForDepartment(args);
+        if (workViewEntries.length) return workViewEntries;
+    }
+
     const forDept = args.workUnits.filter(
         (wu) => wu.department_id === args.departmentId && wu.is_active !== false,
     );

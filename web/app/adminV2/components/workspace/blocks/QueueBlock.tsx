@@ -70,6 +70,15 @@ import {
 import { QueueRowPlacementPriorityV2Panel } from "@/app/adminV2/components/workspace/blocks/QueueRowPlacementPriorityV2Panel";
 import { WorkUnitQueueLaneRowSkeleton } from "@/components/admin/workspace/WorkUnitQueueCompactRowSkeleton";
 import RelatedRecordDrawerIconButton from "@/components/admin/drawer/RelatedRecordDrawerIconButton";
+import { useAdminDrawerOptional } from "@/contexts/AdminDrawerContext";
+import { ALLOY_OS_RUNTIME_ENABLED } from "@/lib/adminV2/runtime/alloyOsRuntimeFlag";
+import { useAlloyOsRuntimeSplitActive } from "@/lib/adminV2/runtime/useAlloyOsRuntimeSplitActive";
+import { CompressedQueueRow } from "@/app/adminV2/components/workspace/blocks/CompressedQueueRow";
+import { resolveCompressedQueueRowDisplay } from "@/lib/adminV2/runtime/compressedQueueRowFields";
+import {
+  compressedQueueRowShowsChildCount,
+  resolveCompressedQueueRowCue,
+} from "@/lib/adminV2/runtime/compressedQueueRowCue";
 import { ADMINV2_WORK_UNIT_QUEUE_ROW_SKELETON_COUNT } from "@/lib/ui-v2/adminV2LoadingGeometry";
 import {
     formatPlacementGroupHeaderTitle,
@@ -1714,6 +1723,24 @@ export function CrmCompactQueuePreview({
   );
 }
 
+function compressedQueueRowCueFromItem(
+  item: QueueItemVm,
+  crm: CrmCompactRowSemanticSlots,
+) {
+  const childrenCount = crm.childrenLines?.length ?? (crm.childName?.trim() ? 1 : 0);
+  return resolveCompressedQueueRowCue({
+    childrenCount,
+    tourContext: crm.tourContext,
+    waitlistPositionLabel:
+      item.placementWaitlistCandidate?.runtimePositionLabel ??
+      item.placementPriority?.scopedWaitlistPositionLabel ??
+      null,
+    ageContext: crm.ageContext ?? crm.ageBandContext,
+    roomContext: crm.roomContext,
+    locationContext: crm.locationContext,
+  });
+}
+
 function WorkUnitQueueLane({
   queue,
   onAction,
@@ -1725,6 +1752,10 @@ function WorkUnitQueueLane({
   opportunityDrawerWorkspaceContext?: OpportunityDrawerIntentContext | null;
   queueRowOpenPendingOpportunityId?: string | null;
 }) {
+  const splitActive = useAlloyOsRuntimeSplitActive();
+  const drawerCtx = useAdminDrawerOptional();
+  const openDrawerOpportunityId =
+    drawerCtx?.drawer?.type === "opportunities" ? String(drawerCtx.drawer.id ?? "") : "";
   const listShellRef = useRef<HTMLDivElement>(null);
   const [refreshMinHeightPx, setRefreshMinHeightPx] = useState<number>();
   /** Client-only collapsed waitlist program/room groups (placement sections). */
@@ -1877,7 +1908,7 @@ function WorkUnitQueueLane({
       data-ws-queue-id={queue.id}
       aria-label={queue.title?.trim() || "Queue"}
     >
-      {showQueueHeader ? (
+      {showQueueHeader && !ALLOY_OS_RUNTIME_ENABLED ?
         <header className="adminv2-ws-queue-header">
           <div className="adminv2-ws-queue-title-row">
             {queue.title?.trim() ? <h3 className="adminv2-ws-queue-title">{queue.title.trim()}</h3> : <span className="sr-only">Queue</span>}
@@ -1891,7 +1922,7 @@ function WorkUnitQueueLane({
             ) : null}
           </div>
         </header>
-      ) : null}
+      : null}
       {queue.rollupSummary ? <p className="adminv2-ws-wu-queue-summary">{queue.rollupSummary}</p> : null}
       {queue.sortCaption ? (
         <p className="adminv2-ws-wu-queue-sort-caption" role="note">
@@ -2051,6 +2082,11 @@ function WorkUnitQueueLane({
                 } adminv2-ws-wu-queue-card--operational-row`}
                 data-ws-wu-urgency={tier}
                 data-ws-needs-attention={attentionAccent ? "true" : undefined}
+                data-queue-row-active={
+                  splitActive && openDrawerOpportunityId && openDrawerOpportunityId === actionEntityId ?
+                      "true"
+                  :   undefined
+                }
                 data-queue-row-open-pending={rowOpenPending ? "true" : undefined}
                 data-queue-row-operational-card="true"
                 aria-busy={rowOpenPending ? true : undefined}
@@ -2071,6 +2107,46 @@ function WorkUnitQueueLane({
                     Opening…
                   </span>
                 ) : null}
+                {splitActive && crm ?
+                    <>
+                      {(() => {
+                        const cue =
+                          ALLOY_OS_RUNTIME_ENABLED ? compressedQueueRowCueFromItem(item, crm) : null;
+                        const display = resolveCompressedQueueRowDisplay(item, crm, cue);
+                        return (
+                          <CompressedQueueRow
+                            identity={display.identity}
+                            statusLabel={display.statusLabel}
+                            line2={display.line2}
+                            line3={display.line3}
+                            line4={display.line4}
+                            grain={display.grain}
+                            tier={tier === "critical" || tier === "warning" ? tier : "standard"}
+                            attention={display.attention}
+                            onOpen={() => fireQueueRowOpenRecord(queue, item, onAction, "card")}
+                          />
+                        );
+                      })()}
+                      {ALLOY_OS_RUNTIME_ENABLED ?
+                          (() => {
+                            const cue = compressedQueueRowCueFromItem(item, crm);
+                            if (!compressedQueueRowShowsChildCount(cue) && !cue.rightCue) return null;
+                            return (
+                              <div className="adminv2-ws-wu-queue-card__os-compressed-cue">
+                                {compressedQueueRowShowsChildCount(cue) ?
+                                    <span className="adminv2-ws-wu-queue-card__os-cue adminv2-ws-wu-queue-card__os-cue--children">
+                                      {cue.childCount} children
+                                    </span>
+                                :   null}
+                                {cue.rightCue ?
+                                    <span className="adminv2-ws-wu-queue-card__os-cue">{cue.rightCue}</span>
+                                :   null}
+                              </div>
+                            );
+                          })()
+                      :   null}
+                    </>
+                : <>
                 {showLayoutQueueHold ?
                   <LayoutRuntimeQueueRowHold />
                 : useLayoutQueueRows && queueLayoutRuntime.doc ?
@@ -2297,6 +2373,7 @@ function WorkUnitQueueLane({
                     </div>
                   </div>
                 ) : null}
+                </>}
               </div>
               ) : null}
             </li>

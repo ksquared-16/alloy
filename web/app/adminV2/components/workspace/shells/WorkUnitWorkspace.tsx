@@ -18,6 +18,9 @@ import { SignalBlock, QueueBlock, WorkBlock } from "../blocks";
 import WorkUnitUnifiedOperationalHeader from "@/components/admin/workspace/WorkUnitUnifiedOperationalHeader";
 import type { ResolvedMetricMap } from "@/lib/metrics/fetchResolvedMetrics";
 import { WorkspaceShellLayout } from "@/components/admin/workspace/WorkspaceShellLayout";
+import { ALLOY_OS_RUNTIME_ENABLED } from "@/lib/adminV2/runtime/alloyOsRuntimeFlag";
+import { resolveCompressedQueueHeader } from "@/lib/adminV2/runtime/compressedQueueHeader";
+import { CompressedQueueHeader } from "@/app/adminV2/components/workspace/blocks/CompressedQueueHeader";
 
 type Props = {
   model: WorkUnitWorkspaceModel;
@@ -103,6 +106,12 @@ export default function WorkUnitWorkspace({
     [model.primaryQueue, aboveFold]
   );
 
+  const compressedQueueHeader = useMemo(() => {
+    if (!ALLOY_OS_RUNTIME_ENABLED) return null;
+    const attentionCount = primaryQueue.items.filter((item) => item.needsOperationalAttention).length;
+    return resolveCompressedQueueHeader(primaryQueue, attentionCount);
+  }, [primaryQueue]);
+
   return (
     <WorkspaceShellLayout
       surface="work_unit"
@@ -119,6 +128,9 @@ export default function WorkUnitWorkspace({
             <div
               className="adminv2-ws-dept-v2-control-deck"
               data-wu-unified-header={hasUnifiedHeader ? "true" : undefined}
+              data-alloy-os-context-bar={
+                ALLOY_OS_RUNTIME_ENABLED && hasUnifiedHeader ? "true" : undefined
+              }
             >
               {hasTopStack ?
                 <div className="adminv2-ws-dept-v2-top-stack mb-2">
@@ -206,9 +218,16 @@ export default function WorkUnitWorkspace({
                       ) : null}
                     </div>
                   ) : null}
-                  {recordFilterBar ? (
-                    <div className="adminv2-ws-wu-record-filter-bar-slot">{recordFilterBar}</div>
-                  ) : null}
+                  {recordFilterBar ?
+                    ALLOY_OS_RUNTIME_ENABLED ?
+                        <div className="adminv2-os-queue-header" data-alloy-os-queue-header="true">
+                            {compressedQueueHeader ?
+                                <CompressedQueueHeader {...compressedQueueHeader} />
+                            :   null}
+                            <div className="adminv2-os-queue-header__controls">{recordFilterBar}</div>
+                        </div>
+                    :   <div className="adminv2-ws-wu-record-filter-bar-slot">{recordFilterBar}</div>
+                  :   null}
                   <QueueBlock
                     queue={primaryQueue}
                     onAction={onAction}

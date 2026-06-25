@@ -10,6 +10,11 @@ import {
     legacyAdminRedirectTarget,
     normalizeTransitionalAdminPath,
 } from "@/lib/admin/canonicalAdminRoutes";
+import {
+    isSettingsCompatibilityPath,
+    operatorLoginRedirectPath,
+    requiresOperatorSession,
+} from "@/lib/admin/operatorSessionGate";
 
 let didWarnAuthUrlMismatch = false;
 
@@ -57,7 +62,7 @@ export async function middleware(request: NextRequest) {
     const supabaseAnonKey = getSupabaseAnonKeyForAuth();
 
     if (!supabaseUrl || !supabaseAnonKey) {
-        if (isOperatorAdminPath(pathname)) {
+        if (requiresOperatorSession(pathname) || isSettingsCompatibilityPath(pathname)) {
             console.error(
                 "[MIDDLEWARE] Missing Supabase environment variables. Set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY (or SUPABASE_URL / SUPABASE_ANON_KEY)."
             );
@@ -98,12 +103,12 @@ export async function middleware(request: NextRequest) {
         data: { user },
     } = await supabase.auth.getUser();
 
-    if (!isOperatorAdminPath(pathname)) {
+    if (!requiresOperatorSession(pathname)) {
         return response;
     }
 
     if (!user) {
-        const res = NextResponse.redirect(new URL("/login", request.url));
+        const res = NextResponse.redirect(new URL(operatorLoginRedirectPath(), request.url));
         res.headers.set("x-alloy-admin-mw", "redirect:/login");
         return res;
     }

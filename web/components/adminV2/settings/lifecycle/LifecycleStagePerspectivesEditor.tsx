@@ -38,17 +38,25 @@ import {
 } from "@/lib/lifecycle/perspectiveWorkIncludedProjection";
 import type { EnrollmentPipelineWorkUnitSnapshot } from "@/lib/lifecycle/parseEnrollmentPipelineQueues";
 import { LAYOUTS_SETTINGS_HREF } from "@/lib/admin/canonicalAdminRoutes";
+import { buildOperationalViewPreviewRuntimeHref } from "@/lib/adminV2/runtime/perspective/mergeOperationalViewMetadata";
 
 export type LifecycleStagePerspectivesEditorHandle = {
     getDraftPerspectives: () => PerspectiveConfigV1Stored[];
     isDirty: () => boolean;
 };
 
-function workUnitPreviewHref(departmentId: string, pipeline: EnrollmentPipelineWorkUnitSnapshot | null): string | null {
-    const dept = departmentId.trim();
+function workUnitPreviewHref(
+    departmentId: string,
+    pipeline: EnrollmentPipelineWorkUnitSnapshot | null,
+    queueKey: string,
+): string | null {
     const workUnitId = pipeline?.id?.trim();
-    if (!dept || !workUnitId) return null;
-    return `/adminV2/workspace/dept/${dept}/work-unit/${workUnitId}`;
+    if (!workUnitId) return null;
+    return buildOperationalViewPreviewRuntimeHref({
+        departmentId,
+        workUnitId,
+        queueKey,
+    });
 }
 
 const LifecycleStagePerspectivesEditor = forwardRef<
@@ -71,7 +79,6 @@ const LifecycleStagePerspectivesEditor = forwardRef<
         [lanes, savedPerspectives],
     );
     const [drafts, setDrafts] = useState<PerspectiveEditorDraftRow[]>(baseline);
-    const previewHref = workUnitPreviewHref(departmentId, pipeline);
 
     useEffect(() => {
         setDrafts(baseline);
@@ -123,6 +130,7 @@ const LifecycleStagePerspectivesEditor = forwardRef<
                         stageStatusLabels,
                     );
                     const sortLabel = projectPerspectiveSortLabel(pipeline, row.queue_key);
+                    const previewHref = workUnitPreviewHref(departmentId, pipeline, row.queue_key);
 
                     return (
                         <li

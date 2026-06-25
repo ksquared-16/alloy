@@ -35,6 +35,7 @@ import {
     SidebarTasksNavItem,
 } from "@/app/adminV2/components/SidebarModalNavItems";
 import { appendWorkspaceSiteToPath, readStickyWorkspaceSiteIdForNavigation } from "@/lib/adminV2/workspaceSiteFilterClient";
+import { WORK_VIEW_PILL_SECTION_LABEL } from "@/lib/adminV2/runtime/configurationRuntimeConvergenceFlag";
 
 const WORKSPACE = CANONICAL_OPERATOR_BASE;
 const SETTINGS_HREF = CANONICAL_ADMIN_BASE;
@@ -251,11 +252,18 @@ function SidebarNav({
                                 </AdminV2NavLink>
                             </div>
                             {isExpanded && lifecycle.workQueues.length ? (
-                                <ul
-                                    className="adminv2-sidebar-queue-list ml-8 list-none space-y-0.5 border-l pl-2.5"
-                                    role="group"
-                                    aria-label={`${lifecycle.label} work queues`}
-                                >
+                                <div className="ml-8 border-l pl-2.5">
+                                    <p
+                                        className="adminv2-sidebar-queue-group-label px-2 pb-0.5 pt-1 text-[10px] font-semibold uppercase tracking-wide text-white/45"
+                                        aria-hidden
+                                    >
+                                        {WORK_VIEW_PILL_SECTION_LABEL}
+                                    </p>
+                                    <ul
+                                        className="adminv2-sidebar-queue-list list-none space-y-0.5"
+                                        role="group"
+                                        aria-label={`${lifecycle.label} ${WORK_VIEW_PILL_SECTION_LABEL}`}
+                                    >
                                     {lifecycle.workQueues.map((entry) => {
                                         const childHref = workspaceHref(entry.href);
                                         const childActive =
@@ -289,7 +297,8 @@ function SidebarNav({
                                             </li>
                                         );
                                     })}
-                                </ul>
+                                    </ul>
+                                </div>
                             ) : null}
                         </div>
                     );
