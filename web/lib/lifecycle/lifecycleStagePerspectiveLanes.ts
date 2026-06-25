@@ -48,3 +48,18 @@ export function derivePerspectiveLanesFromPipeline(
     }
     return lanes;
 }
+
+/** Queue lane keys from work-unit queue_definition (excludes aggregate lanes). */
+export function deriveQueueKeysFromQueueDefinition(raw: unknown): string[] {
+    if (!raw || typeof raw !== "object") return [];
+    const doc = raw as { queues?: unknown };
+    if (!Array.isArray(doc.queues)) return [];
+    const keys: string[] = [];
+    for (const q of doc.queues) {
+        if (!q || typeof q !== "object") continue;
+        const key = String((q as { key?: unknown }).key ?? "").trim();
+        if (!key || SKIP_QUEUE_KEYS.has(key)) continue;
+        keys.push(key);
+    }
+    return keys;
+}

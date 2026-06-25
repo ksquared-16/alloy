@@ -11,6 +11,16 @@ import { LIFECYCLE_FIELD_RULE_BINDINGS } from "@/lib/lifecycle/lifecycleFieldRul
 import type { LifecycleRequirementEntityKey } from "@/lib/lifecycle/lifecycleFieldRequirementsCatalog";
 import { normalizeRefKeyOnRead, parseLayoutRefKey } from "@/lib/layout/layoutRefKeyAliases";
 import { OPERATIONAL_FORM_SYSTEM_FIELDS } from "@/lib/forms/systemFieldRegistry";
+import {
+    customerMemberFieldKeyFromLayoutChildField,
+    isCustomerMemberProfileFieldKey,
+} from "@/lib/fields/canonicalFieldOwnership";
+import { isCustomerMemberProfileResolutionField } from "@/lib/fields/childProfileFieldResolution";
+import { CHILDCARE_STARTER_FIELD_CATALOG } from "@/lib/layout/childcareLayoutFieldCatalog";
+
+const COMPUTED_LAYOUT_REF_KEYS = new Set(
+    CHILDCARE_STARTER_FIELD_CATALOG.filter((entry) => entry.computed).map((entry) => entry.refKey)
+);
 
 /** Canonical registry ref — matches `field_definitions` grain. */
 export type CanonicalRegistryRef = {
@@ -26,6 +36,18 @@ export function fieldDefinitionEntityTypeFromLifecycleEntity(
 ): string {
     if (entity === "child") return "inquiry_child";
     return entity;
+}
+
+function canonicalEntityTypeForLifecycleBinding(binding: {
+    entity: LifecycleRequirementEntityKey;
+    value_source: string;
+    field_key: string | null;
+}): string {
+    if (binding.value_source === "customer_member_profile") return "customer_member";
+    if (binding.entity === "child" && binding.field_key && isCustomerMemberProfileResolutionField(binding.field_key)) {
+        return "customer_member";
+    }
+    return fieldDefinitionEntityTypeFromLifecycleEntity(binding.entity);
 }
 
 export function lifecycleEntityFromFieldDefinitionEntityType(entityType: string): LifecycleRequirementEntityKey | null {
@@ -66,9 +88,9 @@ export function formsEntityTypeFromFieldDefinitionEntity(entityType: string): st
  * Used when schema field_key differs from field_definitions.field_key.
  */
 const FORMS_SYSTEM_ID_CANONICAL_OVERRIDES: Readonly<Record<string, CanonicalRegistryRef>> = {
-    child_first_name: { entity_type: "inquiry_child", field_key: "first_name" },
-    child_last_name: { entity_type: "inquiry_child", field_key: "last_name" },
-    child_date_of_birth: { entity_type: "inquiry_child", field_key: "date_of_birth" },
+    child_first_name: { entity_type: "customer_member", field_key: "first_name" },
+    child_last_name: { entity_type: "customer_member", field_key: "last_name" },
+    child_date_of_birth: { entity_type: "customer_member", field_key: "dob" },
     guardian_first_name: { entity_type: "person", field_key: "first_name" },
     guardian_last_name: { entity_type: "person", field_key: "last_name" },
     guardian_email: { entity_type: "person", field_key: "email" },
@@ -105,8 +127,12 @@ const CANONICAL_TO_FORMS_ID = new Map<string, string>();
 
 for (const binding of LIFECYCLE_FIELD_RULE_BINDINGS) {
     if (!binding.field_key) continue;
-    const entityType = fieldDefinitionEntityTypeFromLifecycleEntity(binding.entity);
-    const ref: CanonicalRegistryRef = { entity_type: entityType, field_key: binding.field_key };
+    const entityType = canonicalEntityTypeForLifecycleBinding(binding);
+    const fieldKey =
+        binding.value_source === "customer_member_profile" && binding.customer_member_field
+            ? binding.customer_member_field
+            : binding.field_key;
+    const ref: CanonicalRegistryRef = { entity_type: entityType, field_key: fieldKey };
     const key = canonicalRefKey(ref);
     CANONICAL_TO_RULE_ID.set(key, binding.rule_id);
     RULE_ID_TO_CANONICAL.set(binding.rule_id, ref);
@@ -141,8 +167,12 @@ export function ruleIdToCanonicalRef(ruleId: string): CanonicalRegistryRef | nul
     if (direct) return direct;
     const custom = /^custom:(person|child|opportunity|customer):(.+)$/.exec(ruleId.trim());
     if (!custom) return null;
-    const entityType = fieldDefinitionEntityTypeFromLifecycleEntity(custom[1] as LifecycleRequirementEntityKey);
-    return { entity_type: entityType, field_key: custom[2]! };
+    const fieldKey = custom[2]!;
+    const entityType =
+        custom[1] === "child" && isCustomerMemberProfileFieldKey(fieldKey)
+            ? "customer_member"
+            : fieldDefinitionEntityTypeFromLifecycleEntity(custom[1] as LifecycleRequirementEntityKey);
+    return { entity_type: entityType, field_key: fieldKey };
 }
 
 export function canonicalRefToRuleId(ref: CanonicalRegistryRef): string | null {
@@ -159,8 +189,17 @@ export function canonicalRefToSystemFieldId(ref: CanonicalRegistryRef): string |
 
 export function layoutRefKeyToCanonicalRef(refKey: string): CanonicalRegistryRef | null {
     const normalized = normalizeRefKeyOnRead(refKey.trim());
+    if (COMPUTED_LAYOUT_REF_KEYS.has(normalized)) return null;
     const parsed = parseLayoutRefKey(normalized);
     if (!parsed) return null;
+
+    if (parsed.entityKey === "child") {
+        const profileKey = customerMemberFieldKeyFromLayoutChildField(parsed.fieldKey);
+        if (profileKey) {
+            return { entity_type: "customer_member", field_key: profileKey };
+        }
+    }
+
     const entityType = LAYOUT_NAMESPACE_TO_ENTITY_TYPE[parsed.entityKey];
     if (!entityType) return null;
     return { entity_type: entityType, field_key: parsed.fieldKey };

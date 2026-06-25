@@ -11,6 +11,7 @@ import type { LifecycleStageFieldRulesStored } from "@/lib/lifecycle/lifecycleSt
 import type { LifecycleBaseActionDefinition } from "@/lib/lifecycle/lifecycleStageBaseActions";
 import type { QueueMembershipStatusOption } from "@/lib/lifecycle/loadQueueMembershipStatusOptions";
 import type { QueueMembershipV1 } from "@/lib/lifecycle/queueMembershipV1";
+import type { PerspectiveConfigV1Stored } from "@/lib/lifecycle/perspectiveConfigV1";
 import type { StageOperatingPlanV1 } from "@/lib/lifecycle/stageOperatingPlanV1";
 import type { StatusCategoryGroup, StatusRollupV1 } from "@/lib/lifecycle/statusRollupV1";
 
@@ -60,4 +61,5 @@ export type LifecycleStageBootstrapPayload = {
     status_category_catalog: StatusCategoryGroup[];
     status_rollup_v1: StatusRollupV1 | null;
     stage_operating_plan: StageOperatingPlanV1 | null;
+    perspectives_v1: PerspectiveConfigV1Stored[] | null;
 };

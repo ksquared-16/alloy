@@ -4,6 +4,7 @@ import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/
 import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
 import { fetchScopedCustomerIdsForRestrictedAdmin, scopeDimensionsFromAccess } from "@/lib/admin/accessScope";
 import { displayLabelsFromDefinitions, fetchEffectiveStatusDefinitions } from "@/lib/admin/statusDefinitionsResolve";
+import { CUSTOMER_CANONICAL_LIST_SELECT } from "@/lib/fields/canonicalEntitySelectColumns";
 
 type CustomerRow = {
     id: string;
@@ -48,7 +49,7 @@ export async function GET(request: NextRequest) {
     const scopedCustomerIds = await fetchScopedCustomerIdsForRestrictedAdmin(supabase, ctx.orgId, dim);
 
     const selectCols =
-        "id, customer_number, created_at, updated_at, name, status, status_key, customer_type, primary_contact_id, vertical_id, org_id, metadata, stripe_customer_id, external_source, external_id, default_payment_method_id, payment_method_brand, payment_method_last4, setup_intent_id";
+        CUSTOMER_CANONICAL_LIST_SELECT;
     let q = supabase
         .from("customers")
         .select(selectCols, { count: "exact" })

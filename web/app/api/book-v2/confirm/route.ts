@@ -31,6 +31,10 @@ import { formatBookingStartForSms, resolveBookingSmsTimeZone } from "@/lib/booki
 import { formatMoneyFromCents } from "@/lib/adminFormatters";
 import { emitEvent } from "@/lib/emitEvent";
 import { createServiceRoleClient } from "@/lib/supabase/serverServiceClient";
+import {
+    CUSTOMER_CANONICAL_ADMIN_SELECT,
+    OPPORTUNITY_CANONICAL_WORKFLOW_SELECT,
+} from "@/lib/fields/canonicalEntitySelectColumns";
 import { loadPublicBookingFieldDefRows } from "@/lib/fields/loadPublicBookingFieldDefs";
 import { upsertConfigurableFieldValuesForEntity } from "@/lib/fields/upsertConfigurableFieldValues";
 import { initializeJobPricing } from "@/lib/pricing/initializeJobPricing";
@@ -319,8 +323,8 @@ async function runDeferredBookingEffects(params: {
         const tHydrate = typeof performance !== "undefined" ? performance.now() : Date.now();
         const [jobRes, oppRes, customerRes, scheduleRes, personRes, cjdRes] = await Promise.all([
             supa.from("jobs").select("*").eq("id", jobId).single(),
-            supa.from("opportunities").select("*").eq("id", opportunityId).single(),
-            supa.from("customers").select("*").eq("id", customerId).single(),
+            supa.from("opportunities").select(OPPORTUNITY_CANONICAL_WORKFLOW_SELECT).eq("id", opportunityId).single(),
+            supa.from("customers").select(CUSTOMER_CANONICAL_ADMIN_SELECT).eq("id", customerId).single(),
             supa.from("schedules").select("*").eq("id", scheduleId).single(),
             personIdFromQuote
                 ? supa.from("persons").select("id, first_name, last_name, email, phone").eq("id", personIdFromQuote).maybeSingle()

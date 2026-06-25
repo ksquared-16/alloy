@@ -38,6 +38,8 @@ export type EntityDrawerOperatingShellProps = {
     /** Optional diagnostic attrs on the runtime body wrapper (e.g. drawer subject context). */
     runtimeShellDataAttributes?: Record<string, string | undefined>;
     holdPriorPayload?: boolean;
+    /** Alloy OS Focus Panel — marks scroll body for split-state presentation CSS. */
+    focusPanelPresentation?: boolean;
     /** Layout-owned operational widgets — platform container only. Omitted when null/empty. */
     summaryStrip?: ReactNode;
 };
@@ -57,6 +59,7 @@ export default function EntityDrawerOperatingShell({
     runtimeDataAttribute,
     runtimeShellDataAttributes,
     holdPriorPayload = false,
+    focusPanelPresentation = false,
     summaryStrip,
 }: EntityDrawerOperatingShellProps) {
     const useComposedHeader = composedStickyHeader != null && composedStickyHeader !== false;
@@ -78,6 +81,7 @@ export default function EntityDrawerOperatingShell({
             headerTitleRight={useComposedHeader ? undefined : headerTitleRight}
             composedStickyHeader={useComposedHeader ? composedStickyHeader : undefined}
             panelFooterChrome={panelFooterChrome}
+            focusPanelPresentation={focusPanelPresentation}
             variant="adminV2"
             presentation="modal"
             panelClassName={resolvedPanelClassName || undefined}
@@ -98,6 +102,7 @@ export default function EntityDrawerOperatingShell({
                 <div
                     className="flex min-h-0 flex-col gap-2 bg-white"
                     data-entity-drawer-scroll-body="true"
+                    {...(focusPanelPresentation ? { "data-alloy-os-focus-panel": "true" } : {})}
                 >
                     {showSummaryStrip ?
                         <div

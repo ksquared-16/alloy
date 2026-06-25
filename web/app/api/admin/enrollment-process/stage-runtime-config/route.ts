@@ -8,6 +8,7 @@ import { requireAdminOrOps } from "@/lib/adminAuth";
 import { isConfiguredStageKey } from "@/lib/lifecycle/lifecycleBuilderConfig";
 import { LifecycleStageQueueFiltersEmptyError } from "@/lib/lifecycle/lifecycleStageQueueFilters";
 import { LifecycleStageWorkUnitIdentityConflictError } from "@/lib/lifecycle/lifecycleStageWorkUnitIdentity";
+import { parsePerspectivesV1 } from "@/lib/lifecycle/perspectiveConfigV1";
 import { parseQueueMembershipV1 } from "@/lib/lifecycle/queueMembershipV1";
 import { parseStageOperatingPlanV1 } from "@/lib/lifecycle/stageOperatingPlanV1";
 import { parseStatusRollupV1 } from "@/lib/lifecycle/statusRollupV1";
@@ -64,6 +65,7 @@ export async function POST(request: NextRequest) {
         queue_membership_v1?: unknown;
         stage_operating_plan_v1?: unknown;
         status_rollup_v1?: unknown;
+        perspectives_v1?: unknown;
     } = {};
     try {
         body = (await request.json()) as typeof body;
@@ -146,6 +148,15 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: "Invalid status_rollup_v1" }, { status: 400 });
     }
 
+    const perspectivesRaw = body.perspectives_v1;
+    const perspectivesV1 =
+        perspectivesRaw !== undefined && perspectivesRaw !== null
+            ? parsePerspectivesV1(perspectivesRaw)
+            : null;
+    if (perspectivesRaw !== undefined && perspectivesRaw !== null && perspectivesV1 === null) {
+        return NextResponse.json({ error: "Invalid perspectives_v1" }, { status: 400 });
+    }
+
     const supabase = createAdminClient();
     const deptOk = await assertRowOrg(supabase, "departments", departmentId, ctx.orgId);
     if (!deptOk.ok) return NextResponse.json({ error: "Department not found" }, { status: 404 });
@@ -166,6 +177,9 @@ export async function POST(request: NextRequest) {
             ...(queueMembership ? { queueMembership } : {}),
             ...(stageOperatingPlan ? { stageOperatingPlan } : {}),
             ...(statusRollup ? { statusRollup } : {}),
+            ...(perspectivesV1 !== null && perspectivesRaw !== undefined && perspectivesRaw !== null
+                ? { perspectivesV1 }
+                : {}),
         });
 
         const pipelineSnapshot =

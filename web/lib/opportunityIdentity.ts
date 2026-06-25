@@ -4,6 +4,11 @@
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import {
+    CONTACT_COMPAT_SELECT,
+    PERSON_CANONICAL_IDENTITY_SELECT,
+} from "@/lib/fields/canonicalEntitySelectColumns";
+import { stripLegacyTextStatusFromWritePayload } from "@/lib/fields/canonicalLegacyStatusWrite";
 import { ensureContactLinkedToPerson } from "@/lib/bookingCustomerPersonLink";
 import { findOrCreatePersonInOrgWithMeta } from "@/lib/persons/findOrCreatePersonInOrg";
 
@@ -62,7 +67,7 @@ export async function resolveOpportunityPerson(
     const pid = trimOpportunityUuid(opportunity.primary_person_id);
     const cid = trimOpportunityUuid(opportunity.primary_contact_id);
     if (pid) {
-        const { data: person } = await supabase.from("persons").select("*").eq("id", pid).maybeSingle();
+        const { data: person } = await supabase.from("persons").select(PERSON_CANONICAL_IDENTITY_SELECT).eq("id", pid).maybeSingle();
         return {
             kind: "person",
             primary_person_id: pid,
@@ -71,11 +76,11 @@ export async function resolveOpportunityPerson(
         };
     }
     if (cid) {
-        const { data: contact } = await supabase.from("contacts").select("*").eq("id", cid).maybeSingle();
+        const { data: contact } = await supabase.from("contacts").select(CONTACT_COMPAT_SELECT).eq("id", cid).maybeSingle();
         const cRow = contact as { person_id?: string | null } | null;
         const linked = trimOpportunityUuid(cRow?.person_id ?? null);
         if (linked) {
-            const { data: person } = await supabase.from("persons").select("*").eq("id", linked).maybeSingle();
+            const { data: person } = await supabase.from("persons").select(PERSON_CANONICAL_IDENTITY_SELECT).eq("id", linked).maybeSingle();
             return {
                 kind: "person",
                 primary_person_id: linked,
@@ -245,6 +250,7 @@ export async function insertOpportunityWithPersonFirst(
     const insertPayload = Object.fromEntries(
         Object.entries(raw).filter(([, v]) => v !== undefined)
     ) as Record<string, unknown>;
+    stripLegacyTextStatusFromWritePayload(insertPayload);
 
     const { data, error } = await supabase.from("opportunities").insert(insertPayload).select("id").single();
     if (error || !data) {

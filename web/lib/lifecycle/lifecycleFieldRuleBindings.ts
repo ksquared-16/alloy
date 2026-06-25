@@ -5,7 +5,12 @@
 
 import type { LifecycleRequirementEntityKey } from "@/lib/lifecycle/lifecycleFieldRequirementsCatalog";
 
-export type LifecycleFieldValueSource = "primary_person" | "inquiry_child" | "opportunity" | "opportunity_metadata";
+export type LifecycleFieldValueSource =
+    | "primary_person"
+    | "customer_member_profile"
+    | "inquiry_child"
+    | "opportunity"
+    | "opportunity_metadata";
 
 export type LifecycleFieldRuleBinding = {
     rule_id: string;
@@ -13,6 +18,17 @@ export type LifecycleFieldRuleBinding = {
     /** Org field_definitions.field_key when applicable */
     field_key: string | null;
     value_source: LifecycleFieldValueSource;
+    /** customer_members column or field_values key when value_source is customer_member_profile */
+    customer_member_field?:
+        | "first_name"
+        | "last_name"
+        | "dob"
+        | "date_of_birth"
+        | "preferred_name"
+        | "gender"
+        | "allergies"
+        | "medical_notes"
+        | "special_instructions";
     /** inquiry_child / OCM column when value_source is inquiry_child */
     ocm_field?:
         | "first_name"
@@ -73,8 +89,8 @@ export const LIFECYCLE_FIELD_RULE_BINDINGS: readonly LifecycleFieldRuleBinding[]
         rule_id: "child:first_name",
         entity: "child",
         field_key: "first_name",
-        value_source: "inquiry_child",
-        ocm_field: "first_name",
+        value_source: "customer_member_profile",
+        customer_member_field: "first_name",
         form_capture_keys: ["child_first_name", "Child first name", "First Name"],
         runtime_enforced: true,
         form_coverage_supported: true,
@@ -83,8 +99,8 @@ export const LIFECYCLE_FIELD_RULE_BINDINGS: readonly LifecycleFieldRuleBinding[]
         rule_id: "child:last_name",
         entity: "child",
         field_key: "last_name",
-        value_source: "inquiry_child",
-        ocm_field: "last_name",
+        value_source: "customer_member_profile",
+        customer_member_field: "last_name",
         form_capture_keys: ["child_last_name", "Child last name", "Last Name"],
         runtime_enforced: true,
         form_coverage_supported: true,
@@ -93,7 +109,8 @@ export const LIFECYCLE_FIELD_RULE_BINDINGS: readonly LifecycleFieldRuleBinding[]
         rule_id: "child:date_of_birth",
         entity: "child",
         field_key: "date_of_birth",
-        value_source: "inquiry_child",
+        value_source: "customer_member_profile",
+        customer_member_field: "dob",
         form_capture_keys: ["child_date_of_birth", "Child date of birth", "Date of Birth", "DOB"],
         runtime_enforced: false,
         form_coverage_supported: true,

@@ -13,7 +13,7 @@ import { sanitizeDrawerOperTrustPreviewFromHints } from "@/lib/admin/sanitizeDra
 import { validateQueueDefinition, type QueueDefinitionV1 } from "@/lib/config/queueDefinitionSchema";
 import type { AdminRouteGateSuccess } from "@/lib/admin/adminRouteGate";
 import type { RecordLayoutConfigJson } from "@/lib/recordChrome/types";
-import { createReadinessMemoScope } from "@/lib/completion/readinessEvaluationMemo";
+import { OPPORTUNITY_CANONICAL_ADMIN_SELECT } from "@/lib/fields/canonicalEntitySelectColumns";
 import { tryEvaluateDrawerRecordReadiness } from "@/lib/completion/readinessDrawerBootstrap";
 import type { ReadinessResult } from "@/lib/completion/readinessTypes";
 
@@ -55,7 +55,7 @@ export async function loadOpportunityDrawerOperationalBootstrap(
     const tOpp0 = Date.now();
     const { data: oppRow, error: oppErr } = await supabase
         .from("opportunities")
-        .select("*")
+        .select(OPPORTUNITY_CANONICAL_ADMIN_SELECT)
         .eq("id", opportunityId)
         .eq("org_id", orgId)
         .single();

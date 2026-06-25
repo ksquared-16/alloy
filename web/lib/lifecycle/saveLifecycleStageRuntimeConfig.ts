@@ -43,11 +43,18 @@ import type { LifecycleActivationV1 } from "@/lib/lifecycle/lifecycleActivationC
 import { isLifecycleDebugUiEnabled } from "@/lib/lifecycle/lifecycleDebugUi";
 import type { LifecycleStageFieldRules } from "@/lib/lifecycle/lifecycleFieldRequirementsCatalog";
 import { persistLifecycleStageFieldRules } from "@/lib/lifecycle/persistLifecycleStageFieldRules";
+import { deriveQueueKeysFromQueueDefinition } from "@/lib/lifecycle/lifecycleStagePerspectiveLanes";
+import { persistPerspectivesForLifecycleStageSave } from "@/lib/lifecycle/persistPerspectivesV1";
 import { persistQueueMembershipForLifecycleStageSave } from "@/lib/lifecycle/persistQueueMembershipV1";
 import { persistStageOperatingPlanForLifecycleStageSave } from "@/lib/lifecycle/persistStageOperatingPlanV1";
 import type { LifecycleStageFieldRulesStored } from "@/lib/lifecycle/lifecycleStageRequirementLevels";
 import { parseQueueMembershipV1, type QueueMembershipV1 } from "@/lib/lifecycle/queueMembershipV1";
 import { persistStatusRollupForLifecycleStageSave } from "@/lib/lifecycle/persistStatusRollupV1";
+import {
+    coercePerspectivesV1ForLanes,
+    parsePerspectivesV1,
+    type PerspectiveConfigV1Stored,
+} from "@/lib/lifecycle/perspectiveConfigV1";
 import { parseStageOperatingPlanV1, type StageOperatingPlanV1 } from "@/lib/lifecycle/stageOperatingPlanV1";
 import { parseStatusRollupV1, type StatusRollupV1 } from "@/lib/lifecycle/statusRollupV1";
 
@@ -64,6 +71,7 @@ export type SaveLifecycleStageRuntimeConfigInput = {
     queueMembership?: QueueMembershipV1 | unknown | null;
     stageOperatingPlan?: StageOperatingPlanV1 | unknown | null;
     statusRollup?: StatusRollupV1 | unknown | null;
+    perspectivesV1?: readonly PerspectiveConfigV1Stored[] | unknown | null;
 };
 
 function mapStatusRows(rows: Awaited<ReturnType<typeof fetchEffectiveStatusDefinitions>>) {
@@ -365,6 +373,30 @@ export async function saveLifecycleStageRuntimeConfig(
                 );
             }
         }
+    }
+
+    let explicitPerspectives: PerspectiveConfigV1Stored[] | undefined;
+    if (input.perspectivesV1 !== undefined && input.perspectivesV1 !== null) {
+        const parsed = parsePerspectivesV1(input.perspectivesV1);
+        if (parsed === null) {
+            throw new Error("Invalid perspectives_v1");
+        }
+        explicitPerspectives = parsed;
+    }
+
+    if (explicitPerspectives !== undefined) {
+        const laneKeys = deriveQueueKeysFromQueueDefinition(queueDefinitionRaw);
+        const coerced = laneKeys.length
+            ? coercePerspectivesV1ForLanes(explicitPerspectives, laneKeys)
+            : explicitPerspectives;
+        const perspectivesPersist = await persistPerspectivesForLifecycleStageSave(supabase, {
+            orgId: input.orgId,
+            departmentId: input.departmentId,
+            stageKey,
+            metadata,
+            explicitPerspectives: coerced,
+        });
+        metadata = perspectivesPersist.metadata;
     }
 
     const synced =

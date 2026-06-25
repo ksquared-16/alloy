@@ -21,18 +21,16 @@ export type OpportunityStatusSourceRow = {
 
 type OpportunityStatusMeta = {
     statusKey: string | null;
-    legacyStatus: string | null;
     pipelineStageId: string | null;
 };
 
 function metaFromRow(row: OpportunityStatusSourceRow): OpportunityStatusMeta {
     const statusKey = row.status_key != null ? String(row.status_key).trim() || null : null;
-    const legacyStatus = row.status != null ? String(row.status).trim() || null : null;
     const pipelineStageId =
         row.pipeline_stage_id && UUID_RE.test(String(row.pipeline_stage_id))
             ? String(row.pipeline_stage_id)
             : null;
-    return { statusKey, legacyStatus, pipelineStageId };
+    return { statusKey, pipelineStageId };
 }
 
 /**
@@ -78,7 +76,6 @@ export async function resolveOpportunityStatusLabelsBatch(
     for (const [oppId, meta] of metaByOppId) {
         const label = resolveOpportunityStatusDisplay({
             statusKey: meta.statusKey,
-            legacyStatus: meta.legacyStatus,
             statusDefs,
             pipelineStageId: meta.pipelineStageId,
             pipelineStageName: meta.pipelineStageId ? pipelineStageNames.get(meta.pipelineStageId) ?? null : null,

@@ -15,6 +15,7 @@ import {
 import type { FieldRegistryAttachMeta } from "@/lib/admin/entityFieldRegistryAttach";
 import { isUuidLike } from "@/lib/admin/overviewRelationshipLabels";
 import { resolveOpportunityStatusDisplay } from "@/lib/admin/drawer/opportunityStatusDisplayResolve";
+import { OPPORTUNITY_CANONICAL_ADMIN_SELECT } from "@/lib/fields/canonicalEntitySelectColumns";
 import { batchOptionItemLabelsForOrg, EMPTY_OPTION_LABEL_MAP, optionLabelFromBatchMap } from "@/lib/admin/optionItemLabelForOrg";
 import {
   isActiveChildCustomerMemberForInquiry,
@@ -1259,20 +1260,16 @@ export async function buildOpportunityDrawerVisiblePayload(
   }
   Object.assign(vis, primaryHydrV.patch);
   vis._drawer_primary_phase_ms = phaseMs;
-  const oppLegacyStatusV = opp.status;
   const oppSkRawV =
     opp.status_key != null && String(opp.status_key).trim() !== ""
       ? String(opp.status_key).trim()
-      : oppLegacyStatusV != null && String(oppLegacyStatusV).trim() !== ""
-        ? String(oppLegacyStatusV).trim()
-        : null;
+      : null;
   const stageLabelV =
     vis._pipeline_stage_name != null && String(vis._pipeline_stage_name).trim() !== ""
       ? String(vis._pipeline_stage_name).trim()
       : null;
   vis._status_display = resolveOpportunityStatusDisplay({
     statusKey: oppSkRawV,
-    legacyStatus: oppLegacyStatusV,
     statusDefs: opportunityDefsVisible,
     pipelineStageId: oppPipelineStageId,
     pipelineStageName: stageLabelV,
@@ -1356,7 +1353,7 @@ export async function respondOpportunityEntityGet(
     async () =>
       supabase
         .from("opportunities")
-        .select("*")
+        .select(OPPORTUNITY_CANONICAL_ADMIN_SELECT)
         .eq("id", id)
         .eq("org_id", orgId)
         .single(),
@@ -1693,13 +1690,10 @@ export async function respondOpportunityEntityGet(
   markPhase("after_primary_person_contact");
   const tFinShell = Date.now();
   const oppOrgId = oppOrgIdForDefs;
-  const oppLegacyStatus = (opp as { status?: string | null }).status;
   const oppSkRaw =
     opp.status_key != null && String(opp.status_key).trim() !== ""
       ? String(opp.status_key).trim()
-      : oppLegacyStatus != null && String(oppLegacyStatus).trim() !== ""
-        ? String(oppLegacyStatus).trim()
-        : null;
+      : null;
   const stageLabel =
     out._pipeline_stage_name != null &&
     String(out._pipeline_stage_name).trim() !== ""
@@ -1707,7 +1701,6 @@ export async function respondOpportunityEntityGet(
       : null;
   let oppStatusDisplay = resolveOpportunityStatusDisplay({
     statusKey: oppSkRaw,
-    legacyStatus: oppLegacyStatus,
     statusDefs: opportunityDefs,
     pipelineStageId: oppPipelineStageId,
     pipelineStageName: stageLabel,

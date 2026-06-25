@@ -12,7 +12,6 @@ export type OpportunityStatusDefLike = {
  */
 export function resolveOpportunityStatusDisplay(params: {
     statusKey: string | null | undefined;
-    legacyStatus?: string | null;
     statusDefs: OpportunityStatusDefLike[];
     pipelineStageId?: string | null;
     pipelineStageName?: string | null;
@@ -20,9 +19,7 @@ export function resolveOpportunityStatusDisplay(params: {
     const oppSkRaw =
         params.statusKey != null && String(params.statusKey).trim() !== ""
             ? String(params.statusKey).trim()
-            : params.legacyStatus != null && String(params.legacyStatus).trim() !== ""
-              ? String(params.legacyStatus).trim()
-              : null;
+            : null;
     const stageLabel =
         params.pipelineStageName != null && String(params.pipelineStageName).trim() !== ""
             ? String(params.pipelineStageName).trim()

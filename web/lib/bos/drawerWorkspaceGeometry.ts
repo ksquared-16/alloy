@@ -1,4 +1,11 @@
 import { BOS_RAIL_OVERLAY_GUTTER_PX } from "@/lib/bos/bosOverlayGeometry";
+import {
+    ALLOY_OS_QUEUE_COMPRESSED_WIDTH_PX,
+    ALLOY_OS_RUNTIME_ATTR,
+    ALLOY_OS_RUNTIME_PERSPECTIVE_ATTR,
+    ALLOY_OS_RUNTIME_SPLIT_ATTR,
+    isWorkUnitQueueSurfacePath,
+} from "@/lib/adminV2/runtime/alloyOsRuntimeFlag";
 
 /** Clearance between drawer left edge and sidebar right edge. */
 export const DRAWER_WORKSPACE_LEFT_CLEARANCE_PX = 16;
@@ -34,6 +41,9 @@ export const DRAWER_AVAILABLE_WIDTH_CSS_VAR = "--adminv2-drawer-available-width"
 export const DRAWER_COMPUTED_LEFT_CSS_VAR = "--adminv2-drawer-computed-left";
 export const DRAWER_COMPUTED_WIDTH_CSS_VAR = "--adminv2-drawer-computed-width";
 export const DRAWER_COMPUTED_RIGHT_CSS_VAR = "--adminv2-drawer-computed-right";
+
+/** Focus Panel dock left edge (queue right + peer gap) — set only in State 2. */
+export const ALLOY_OS_FOCUS_PANEL_LEFT_CSS_VAR = "--alloy-os-focus-panel-left";
 
 /** When drawer is open, caps BOS overlay width (shrink strategy). */
 export const BOS_OVERLAY_EFFECTIVE_WIDTH_CSS_VAR = "--adminv2-bos-overlay-effective-width";
@@ -213,6 +223,67 @@ export function computeDrawerWorkspaceBounds(params: ComputeDrawerWorkspaceBound
     };
 }
 
+/**
+ * True when Alloy OS State 2 split geometry should apply.
+ */
+export function isAlloyOsSplitGeometryActive(root: HTMLElement = document.documentElement): boolean {
+    if (root.getAttribute(ALLOY_OS_RUNTIME_SPLIT_ATTR) === "true") return true;
+    if (root.getAttribute(ALLOY_OS_RUNTIME_ATTR) !== "on") return false;
+    if (!root.getAttribute(ALLOY_OS_RUNTIME_PERSPECTIVE_ATTR)?.trim()) return false;
+    if (typeof document !== "undefined" && document.querySelector(DRAWER_OPEN_SELECTOR) == null) {
+        return false;
+    }
+    if (typeof window !== "undefined" && !isWorkUnitQueueSurfacePath(window.location.pathname)) {
+        return false;
+    }
+    return true;
+}
+
+/**
+ * Alloy OS State 2 — Queue | Focus Panel | BOS peer geometry.
+ * Docks the Focus Panel right of the compressed queue; never shrinks BOS.
+ */
+export function computeAlloyOsFocusPanelBounds(
+    params: ComputeDrawerWorkspaceBoundsParams,
+): DrawerWorkspaceBounds {
+    const gutter = params.gutterPx ?? BOS_RAIL_OVERLAY_GUTTER_PX;
+    const leftClearance = params.leftClearancePx ?? DRAWER_WORKSPACE_LEFT_CLEARANCE_PX;
+    const outerMargin = params.outerMarginPx ?? DRAWER_WORKSPACE_OUTER_MARGIN_PX;
+    const sidebarRight = params.sidebarRight;
+
+    const queueRight = sidebarRight + leftClearance + ALLOY_OS_QUEUE_COMPRESSED_WIDTH_PX;
+    const computedDrawerLeft = queueRight + gutter;
+
+    let bosOverlayLeft = params.bosOverlayLeft;
+    let bosOverlayWidth = params.bosOverlayWidth ?? null;
+    if (bosOverlayLeft == null) {
+        const estimated = estimateDrawerWorkspaceBounds(params.viewportWidth);
+        bosOverlayLeft = estimated.bosOverlayLeft;
+        bosOverlayWidth = estimated.effectiveBosOverlayWidth;
+    }
+
+    const naturalBosLeft = bosOverlayLeft ?? params.viewportWidth;
+    const bandRight = naturalBosLeft - gutter;
+    const computedDrawerRight = bandRight;
+    const computedDrawerWidth = Math.max(0, bandRight - computedDrawerLeft);
+    const availableLeft = sidebarRight + leftClearance;
+
+    return {
+        sidebarRight,
+        bosOverlayLeft: params.bosOverlayLeft ?? naturalBosLeft,
+        effectiveBosOverlayLeft: params.bosOverlayLeft ?? naturalBosLeft,
+        effectiveBosOverlayWidth: bosOverlayWidth ?? params.bosOverlayWidth,
+        backdropLeft: sidebarRight,
+        availableLeft,
+        availableRight: bandRight,
+        availableWidth: Math.max(0, bandRight - availableLeft),
+        computedDrawerLeft: Math.round(computedDrawerLeft),
+        computedDrawerRight: Math.round(computedDrawerRight),
+        computedDrawerWidth: Math.round(computedDrawerWidth),
+        computedBackdropRight: Math.round(computedDrawerRight + outerMargin),
+    };
+}
+
 export function passesDrawerWorkspaceGutterRules(
     bounds: DrawerWorkspaceBounds,
     drawerRect: { left: number; right: number },
@@ -289,6 +360,7 @@ export function clearDrawerWorkspaceGeometryVars(root: HTMLElement) {
     root.style.removeProperty(DRAWER_COMPUTED_RIGHT_CSS_VAR);
     root.style.removeProperty(DRAWER_BACKDROP_RIGHT_CSS_VAR);
     root.style.removeProperty(BOS_OVERLAY_EFFECTIVE_WIDTH_CSS_VAR);
+    root.style.removeProperty(ALLOY_OS_FOCUS_PANEL_LEFT_CSS_VAR);
 }
 
 export function applyDrawerWorkspaceGeometryVars(root: HTMLElement, bounds: DrawerWorkspaceBounds) {
@@ -352,8 +424,18 @@ export function measureAndApplyDrawerWorkspaceGeometry(root: HTMLElement = docum
         bosOverlayRight = Math.round(rect.right);
     }
 
+    const splitActive = isAlloyOsSplitGeometryActive(root);
+
     const bounds =
-        bosOverlayLeft != null ?
+        splitActive ?
+            computeAlloyOsFocusPanelBounds({
+                sidebarRight,
+                bosOverlayLeft,
+                bosOverlayWidth,
+                bosOverlayRight,
+                viewportWidth: window.innerWidth,
+            })
+        : bosOverlayLeft != null ?
             computeDrawerWorkspaceBounds({
                 sidebarRight,
                 bosOverlayLeft,
@@ -364,6 +446,11 @@ export function measureAndApplyDrawerWorkspaceGeometry(root: HTMLElement = docum
         :   estimateDrawerWorkspaceBounds(window.innerWidth);
 
     applyDrawerWorkspaceGeometryVars(root, bounds);
+    if (splitActive) {
+        root.style.setProperty(ALLOY_OS_FOCUS_PANEL_LEFT_CSS_VAR, `${bounds.computedDrawerLeft}px`);
+    } else {
+        root.style.removeProperty(ALLOY_OS_FOCUS_PANEL_LEFT_CSS_VAR);
+    }
     return bounds;
 }
 

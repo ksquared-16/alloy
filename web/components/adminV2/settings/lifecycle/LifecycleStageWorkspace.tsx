@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import {
     useEffect,
     useImperativeHandle,
@@ -8,18 +9,24 @@ import {
     useState,
     type ReactNode,
 } from "react";
+import ConfigurationRuntimeUniversalCard from "@/components/adminV2/settings/configurationRuntime/ConfigurationRuntimeUniversalCard";
 import {
+    BUSINESS_PROCESS_CARD_OPERATING_PLAN,
+    BUSINESS_PROCESS_CARD_OPERATING_PLAN_QUESTION,
+    BUSINESS_PROCESS_CARD_PERSPECTIVES,
+    BUSINESS_PROCESS_CARD_PERSPECTIVES_QUESTION,
+    BUSINESS_PROCESS_CARD_PRESENTATION,
+    BUSINESS_PROCESS_CARD_PRESENTATION_QUESTION,
+    BUSINESS_PROCESS_CARD_READY,
+    BUSINESS_PROCESS_CARD_READY_QUESTION,
+    BUSINESS_PROCESS_CARD_REQUIRED,
+    BUSINESS_PROCESS_CARD_REQUIRED_QUESTION,
+    BUSINESS_PROCESS_CARD_STATUS_MEMBERSHIP,
+    BUSINESS_PROCESS_CARD_STATUS_MEMBERSHIP_QUESTION,
+    BUSINESS_PROCESS_PREVIEW_WORK_UNIT,
     BUSINESS_PROCESS_SAVE_STAGE,
-    BUSINESS_PROCESS_SECTION_MEMBERSHIP,
-    BUSINESS_PROCESS_SECTION_MEMBERSHIP_SUMMARY,
-    BUSINESS_PROCESS_SECTION_OPERATING_PLAN,
     BUSINESS_PROCESS_SECTION_OPERATING_PLAN_SUMMARY,
-    BUSINESS_PROCESS_SECTION_PERSPECTIVES,
-    BUSINESS_PROCESS_SECTION_PERSPECTIVES_SUMMARY,
-    BUSINESS_PROCESS_SECTION_READY,
     BUSINESS_PROCESS_SECTION_READY_SUMMARY,
-    BUSINESS_PROCESS_SECTION_REQUIRED,
-    BUSINESS_PROCESS_SECTION_REQUIRED_SUMMARY,
     BUSINESS_PROCESS_STAGE_HEADER,
 } from "@/lib/lifecycle/businessProcessUiLabels";
 import {
@@ -39,7 +46,10 @@ import LifecycleStageQueueMembershipEditor, {
 import LifecycleStageOperatingPlanEditor, {
     type LifecycleStageOperatingPlanEditorHandle,
 } from "@/components/adminV2/settings/lifecycle/LifecycleStageOperatingPlanEditor";
-import LifecycleStagePerspectivesEditor from "@/components/adminV2/settings/lifecycle/LifecycleStagePerspectivesEditor";
+import LifecycleStagePerspectivesEditor, {
+    type LifecycleStagePerspectivesEditorHandle,
+} from "@/components/adminV2/settings/lifecycle/LifecycleStagePerspectivesEditor";
+import LifecycleStagePresentationCard from "@/components/adminV2/settings/lifecycle/LifecycleStagePresentationCard";
 import type { LifecycleStageBootstrapPayload } from "@/lib/lifecycle/lifecycleStageBootstrapTypes";
 import {
     queueMembershipSubjectForStatusOptions,
@@ -49,60 +59,12 @@ import {
 import type { LifecycleStageFieldRules } from "@/lib/lifecycle/lifecycleFieldRequirementsCatalog";
 import type { LifecycleStageFieldRulesStored } from "@/lib/lifecycle/lifecycleStageRequirementLevels";
 import type { LifecycleRequirementEntityKey } from "@/lib/lifecycle/lifecycleFieldRequirementsCatalog";
-export type LifecycleStageSaveUiState = "idle" | "unsaved" | "saving" | "saved" | "error";
 
-type SectionId = "membership" | "required" | "operating_plan" | "perspectives" | "ready_check";
+export type LifecycleStageSaveUiState = "idle" | "unsaved" | "saving" | "saved" | "error";
 
 function countFieldRules(rules: LifecycleStageFieldRules | undefined): number {
     if (!rules) return 0;
     return new Set([...rules.required_rule_ids, ...rules.recommended_rule_ids]).size;
-}
-
-function StageSection({
-    id,
-    title,
-    summary,
-    children,
-    onOpenChange,
-    lazyMount,
-    defaultOpen = false,
-}: {
-    id: SectionId;
-    title: string;
-    summary?: string;
-    children: ReactNode;
-    onOpenChange?: (open: boolean) => void;
-    lazyMount?: boolean;
-    defaultOpen?: boolean;
-}) {
-    const [open, setOpen] = useState(defaultOpen);
-    return (
-        <details
-            className="group rounded-xl border border-alloy-forge/12 bg-white/90 shadow-sm"
-            data-testid={`lifecycle-stage-section-${id}`}
-            open={open}
-            onToggle={(e) => {
-                const next = (e.currentTarget as HTMLDetailsElement).open;
-                setOpen(next);
-                onOpenChange?.(next);
-            }}
-        >
-            <summary className="cursor-pointer list-none px-4 py-2.5 [&::-webkit-details-marker]:hidden">
-                <div className="flex items-start justify-between gap-2">
-                    <div>
-                        <h4 className="text-xs font-semibold text-alloy-midnight">{title}</h4>
-                        {summary ? (
-                            <p className="mt-0.5 text-[11px] text-alloy-midnight/55">{summary}</p>
-                        ) : null}
-                    </div>
-                    <span className="text-[10px] text-alloy-midnight/40 group-open:rotate-90">›</span>
-                </div>
-            </summary>
-            <div className="border-t border-alloy-forge/8 px-4 py-3">
-                {!lazyMount || open ? children : null}
-            </div>
-        </details>
-    );
 }
 
 function SaveBar({
@@ -110,47 +72,54 @@ function SaveBar({
     saveError,
     saveDisabled,
     onSaveStage,
-    compact,
+    previewHref,
 }: {
     effectiveSaveState: LifecycleStageSaveUiState;
     saveError: string | null;
     saveDisabled: boolean;
     onSaveStage: () => void | Promise<void>;
-    compact?: boolean;
+    previewHref: string | null;
 }) {
     return (
-        <div
-            className={`flex shrink-0 items-center gap-2 ${compact ? "justify-end" : "flex-wrap justify-between"}`}
-        >
-            <div className={`flex flex-col items-end gap-0.5 ${compact ? "order-2" : ""}`}>
-                {effectiveSaveState === "unsaved" ? (
+        <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
+            <div className="flex flex-col items-end gap-0.5">
+                {effectiveSaveState === "unsaved" ?
                     <span
                         className="text-[10px] font-medium text-amber-800/90"
                         data-testid="lifecycle-stage-save-unsaved"
                     >
                         Unsaved changes
                     </span>
-                ) : null}
-                {effectiveSaveState === "saved" ? (
+                :   null}
+                {effectiveSaveState === "saved" ?
                     <span
                         className="text-[10px] font-medium text-alloy-pine"
                         data-testid="lifecycle-stage-save-saved"
                     >
                         Saved
                     </span>
-                ) : null}
-                {effectiveSaveState === "error" && saveError ? (
+                :   null}
+                {effectiveSaveState === "error" && saveError ?
                     <span className="max-w-[14rem] text-right text-[10px] text-red-700" role="alert">
                         {saveError}
                     </span>
-                ) : null}
+                :   null}
             </div>
+            {previewHref ?
+                <Link
+                    href={previewHref}
+                    className="rounded-md border border-alloy-forge/15 px-3 py-1.5 text-xs font-medium text-alloy-pine hover:bg-alloy-stone/10"
+                    data-testid="lifecycle-stage-preview-work-unit"
+                >
+                    {BUSINESS_PROCESS_PREVIEW_WORK_UNIT}
+                </Link>
+            :   null}
             <button
                 type="button"
                 className="rounded-md bg-alloy-pine px-4 py-1.5 text-xs font-medium text-white disabled:opacity-50"
                 disabled={saveDisabled}
                 onClick={() => void onSaveStage()}
-                data-testid={compact ? "lifecycle-stage-save-sticky" : "lifecycle-stage-save"}
+                data-testid="lifecycle-stage-save"
             >
                 {effectiveSaveState === "saving" ? "Saving…" : BUSINESS_PROCESS_SAVE_STAGE}
             </button>
@@ -168,10 +137,13 @@ export type LifecycleStageWorkspaceHandle = {
     isStatusRollupDirty: () => boolean;
     getStageOperatingPlanDraft: () => import("@/lib/lifecycle/stageOperatingPlanV1").StageOperatingPlanV1 | null;
     isStageOperatingPlanDirty: () => boolean;
+    getPerspectivesDraft: () => import("@/lib/lifecycle/perspectiveConfigV1").PerspectiveConfigV1Stored[];
+    isPerspectivesDirty: () => boolean;
 };
 
 export default function LifecycleStageWorkspace({
     departmentId,
+    businessProcessKey,
     stageKey,
     stageLabel,
     lifecycleName,
@@ -189,6 +161,7 @@ export default function LifecycleStageWorkspace({
     workspaceRef,
 }: {
     departmentId: string;
+    businessProcessKey: string;
     stageKey: string;
     stageLabel: string;
     lifecycleName: string;
@@ -209,21 +182,28 @@ export default function LifecycleStageWorkspace({
     const membershipRef = useRef<LifecycleStageQueueMembershipEditorHandle | null>(null);
     const rollupRef = useRef<LifecycleStageStatusRollupEditorHandle | null>(null);
     const operatingPlanRef = useRef<LifecycleStageOperatingPlanEditorHandle | null>(null);
+    const perspectivesRef = useRef<LifecycleStagePerspectivesEditorHandle | null>(null);
     const [fieldDirty, setFieldDirty] = useState(false);
     const [membershipDirty, setMembershipDirty] = useState(false);
     const [rollupDirty, setRollupDirty] = useState(false);
     const [operatingPlanDirty, setOperatingPlanDirty] = useState(false);
+    const [perspectivesDirty, setPerspectivesDirty] = useState(false);
 
     const savedFieldRules = bootstrap?.field_requirements?.effective.field_rules;
     const configuredFieldCount = countFieldRules(savedFieldRules);
     const savedStatusCount = bootstrap?.status_rollup_v1
-        ? bootstrap.status_rollup_v1.categories.reduce(
-              (n, c) => n + c.selected_status_keys.length,
-              0
-          )
+        ? bootstrap.status_rollup_v1.categories.reduce((n, c) => n + c.selected_status_keys.length, 0)
         : 0;
+    const perspectiveCount = bootstrap?.perspectives_v1?.length ?? bootstrap?.pipeline?.queues?.length ?? 0;
 
-    const isDirty = fieldDirty || rollupDirty || membershipDirty || operatingPlanDirty;
+    const stageStatusLabels = useMemo(() => {
+        const options = bootstrap?.queue_membership_status_options ?? [];
+        const keys = bootstrap?.status_rollup_v1?.categories.flatMap((c) => c.selected_status_keys) ?? [];
+        return keys.map((key) => options.find((o) => o.status_key === key)?.status_label ?? key);
+    }, [bootstrap?.queue_membership_status_options, bootstrap?.status_rollup_v1]);
+
+    const isDirty =
+        fieldDirty || rollupDirty || membershipDirty || operatingPlanDirty || perspectivesDirty;
 
     useEffect(() => {
         onDirtyChange?.(isDirty);
@@ -239,6 +219,8 @@ export default function LifecycleStageWorkspace({
         isStatusRollupDirty: () => rollupRef.current?.isDirty() ?? false,
         getStageOperatingPlanDraft: () => operatingPlanRef.current?.getDraftPlan() ?? null,
         isStageOperatingPlanDirty: () => operatingPlanRef.current?.isDirty() ?? false,
+        getPerspectivesDraft: () => perspectivesRef.current?.getDraftPerspectives() ?? [],
+        isPerspectivesDirty: () => perspectivesRef.current?.isDirty() ?? false,
     }));
 
     const effectiveSaveState: LifecycleStageSaveUiState =
@@ -256,35 +238,25 @@ export default function LifecycleStageWorkspace({
         trackKey: bootstrap?.stage_track_key ?? null,
         queueMembership: bootstrap?.queue_membership ?? null,
     });
-    const statusesSettingsHref = statusesSettingsHrefForEntity(
-        statusEntityTypeForSubject(statusSubjectType)
-    );
+    const statusesSettingsHref = statusesSettingsHrefForEntity(statusEntityTypeForSubject(statusSubjectType));
+
     useEffect(() => {
         setRollupDirty(rollupRef.current?.isDirty() ?? false);
     }, [bootstrap?.status_rollup_v1, stageKey]);
 
-    const summaryLine = (
-        <ul
-            className="flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] text-alloy-midnight/65"
-            data-testid="lifecycle-stage-summary"
-        >
-            <li>
-                {savedStatusCount > 0
-                    ? `${savedStatusCount} status${savedStatusCount === 1 ? "" : "es"} saved`
-                    : rollupDirty
-                      ? "Unsaved status selection"
-                      : "No statuses yet"}
-            </li>
-            <li>
-                {configuredFieldCount > 0
-                    ? `${configuredFieldCount} field${configuredFieldCount === 1 ? "" : "s"} configured`
-                    : "No stage requirements yet"}
-            </li>
-            {bootstrap?.stage_operating_plan?.work_templates.length ? (
-                <li>{bootstrap.stage_operating_plan.work_templates.length} work item(s)</li>
-            ) : null}
-        </ul>
-    );
+    const previewHref =
+        departmentId.trim() && bootstrap?.pipeline?.id ?
+            `/adminV2/workspace/dept/${departmentId}/work-unit/${bootstrap.pipeline.id}`
+        :   null;
+
+    const insightChips = [
+        savedStatusCount > 0 ? `${savedStatusCount} statuses` : "No statuses",
+        configuredFieldCount > 0 ? `${configuredFieldCount} fields` : "No requirements",
+        perspectiveCount > 0 ? `${perspectiveCount} perspective${perspectiveCount === 1 ? "" : "s"}` : "No lenses",
+        bootstrap?.stage_operating_plan?.work_templates.length ?
+            `${bootstrap.stage_operating_plan.work_templates.length} work items`
+        :   null,
+    ].filter(Boolean) as string[];
 
     if (bootstrapLoading && !bootstrap) {
         return (
@@ -302,40 +274,54 @@ export default function LifecycleStageWorkspace({
     return (
         <div className="relative" data-testid="lifecycle-stage-workspace">
             <header
-                className="sticky top-0 z-20 -mx-0.5 mb-2 rounded-xl border border-alloy-forge/12 bg-white/95 px-3 py-2 shadow-sm backdrop-blur-sm"
+                className="sticky top-0 z-20 mb-3 rounded-[10px] border border-alloy-forge/12 bg-white/95 px-4 py-3 shadow-sm backdrop-blur-sm"
                 data-testid="lifecycle-stage-workspace-header"
             >
-                <div className="flex flex-wrap items-start justify-between gap-2">
+                <div className="flex flex-wrap items-start justify-between gap-3">
                     <div className="min-w-0 flex-1">
                         <p className="text-[10px] font-medium uppercase tracking-wide text-alloy-midnight/45">
                             {lifecycleName} · {BUSINESS_PROCESS_STAGE_HEADER}
                         </p>
-                        <h3 className="text-sm font-semibold text-alloy-midnight">{stageLabel || stageKey}</h3>
-                        {summaryLine}
+                        <h3 className="text-base font-semibold text-alloy-midnight">{stageLabel || stageKey}</h3>
+                        <div className="mt-1.5 flex flex-wrap gap-1">
+                            {insightChips.map((chip) => (
+                                <span
+                                    key={chip}
+                                    className="rounded-full border border-alloy-forge/10 bg-alloy-stone/[0.04] px-2 py-0.5 text-[10px] text-alloy-midnight/60"
+                                >
+                                    {chip}
+                                </span>
+                            ))}
+                        </div>
                     </div>
                     <SaveBar
                         effectiveSaveState={effectiveSaveState}
                         saveError={saveError}
                         saveDisabled={saveDisabled}
                         onSaveStage={onSaveStage}
+                        previewHref={previewHref}
                     />
                 </div>
             </header>
 
-            {statusesError ? (
+            {statusesError ?
                 <p className="mb-2 text-xs text-red-700" role="alert" data-testid="lifecycle-stage-statuses-error">
                     {statusesError}
                 </p>
-            ) : null}
+            :   null}
 
-            <div className="space-y-1.5">
-                <StageSection
+            <div
+                className="grid gap-3 lg:grid-cols-2"
+                data-testid="configuration-runtime-stage-card-grid"
+            >
+                <ConfigurationRuntimeUniversalCard
                     id="membership"
-                    title={BUSINESS_PROCESS_SECTION_MEMBERSHIP}
-                    summary={BUSINESS_PROCESS_SECTION_MEMBERSHIP_SUMMARY}
+                    title={BUSINESS_PROCESS_CARD_STATUS_MEMBERSHIP}
+                    question={BUSINESS_PROCESS_CARD_STATUS_MEMBERSHIP_QUESTION}
+                    dirty={membershipDirty || rollupDirty}
                     defaultOpen
                 >
-                    {stageKey.trim() ? (
+                    {stageKey.trim() ?
                         <div className="space-y-4">
                             <LifecycleStageQueueMembershipEditor
                                 ref={membershipRef}
@@ -356,26 +342,29 @@ export default function LifecycleStageWorkspace({
                                     catalog={bootstrap?.status_category_catalog ?? []}
                                     savedRollup={bootstrap?.status_rollup_v1 ?? null}
                                     statusesSettingsHref={statusesSettingsHref}
-                                    onRollupChange={(rollup, _flatKeys) => {
-                                        setRollupDirty(
-                                            rollupRef.current?.isDirty() ?? true
+                                    onRollupChange={(rollup) => {
+                                        setRollupDirty(rollupRef.current?.isDirty() ?? true);
+                                        onStatusRollupChange(
+                                            rollup,
+                                            rollup.categories.flatMap((c) => c.selected_status_keys),
                                         );
-                                        onStatusRollupChange(rollup, _flatKeys);
                                     }}
                                 />
                             </div>
                         </div>
-                    ) : (
-                        <p className="text-xs text-alloy-midnight/50">Select a stage first.</p>
-                    )}
-                </StageSection>
+                    :   <p className="text-xs text-alloy-midnight/50">Select a stage first.</p>}
+                </ConfigurationRuntimeUniversalCard>
 
-                <StageSection
+                <ConfigurationRuntimeUniversalCard
                     id="required"
-                    title={BUSINESS_PROCESS_SECTION_REQUIRED}
-                    summary={BUSINESS_PROCESS_SECTION_REQUIRED_SUMMARY}
+                    title={BUSINESS_PROCESS_CARD_REQUIRED}
+                    question={BUSINESS_PROCESS_CARD_REQUIRED_QUESTION}
+                    dirty={fieldDirty}
+                    insightChips={
+                        configuredFieldCount > 0 ? [`${configuredFieldCount} fields`] : undefined
+                    }
                 >
-                    {stageKey.trim() ? (
+                    {stageKey.trim() ?
                         <LifecycleStageFieldRequirementsEditor
                             ref={fieldReqRef}
                             departmentId={departmentId}
@@ -388,15 +377,51 @@ export default function LifecycleStageWorkspace({
                             }
                             onDirtyChange={setFieldDirty}
                         />
-                    ) : (
-                        <p className="text-xs text-alloy-midnight/50">Select a stage first.</p>
-                    )}
-                </StageSection>
+                    :   <p className="text-xs text-alloy-midnight/50">Select a stage first.</p>}
+                </ConfigurationRuntimeUniversalCard>
 
-                <StageSection
+                <ConfigurationRuntimeUniversalCard
+                    id="perspectives"
+                    title={BUSINESS_PROCESS_CARD_PERSPECTIVES}
+                    question={BUSINESS_PROCESS_CARD_PERSPECTIVES_QUESTION}
+                    dirty={perspectivesDirty}
+                    span="full"
+                    defaultOpen
+                >
+                    {stageKey.trim() ?
+                        <LifecycleStagePerspectivesEditor
+                            ref={perspectivesRef}
+                            departmentId={departmentId}
+                            pipeline={bootstrap?.pipeline ?? null}
+                            savedPerspectives={bootstrap?.perspectives_v1 ?? null}
+                            stageStatusLabels={stageStatusLabels}
+                            loading={bootstrapLoading}
+                            onDirtyChange={setPerspectivesDirty}
+                        />
+                    :   <p className="text-xs text-alloy-midnight/50">Select a stage first.</p>}
+                </ConfigurationRuntimeUniversalCard>
+
+                <ConfigurationRuntimeUniversalCard
+                    id="presentation"
+                    title={BUSINESS_PROCESS_CARD_PRESENTATION}
+                    question={BUSINESS_PROCESS_CARD_PRESENTATION_QUESTION}
+                    span="full"
+                >
+                    {stageKey.trim() ?
+                        <LifecycleStagePresentationCard
+                            businessProcessKey={businessProcessKey}
+                            stageKey={stageKey}
+                            stageLabel={stageLabel}
+                        />
+                    :   <p className="text-xs text-alloy-midnight/50">Select a stage first.</p>}
+                </ConfigurationRuntimeUniversalCard>
+
+                <ConfigurationRuntimeUniversalCard
                     id="operating_plan"
-                    title={BUSINESS_PROCESS_SECTION_OPERATING_PLAN}
+                    title={BUSINESS_PROCESS_CARD_OPERATING_PLAN}
+                    question={BUSINESS_PROCESS_CARD_OPERATING_PLAN_QUESTION}
                     summary={BUSINESS_PROCESS_SECTION_OPERATING_PLAN_SUMMARY}
+                    dirty={operatingPlanDirty}
                 >
                     {stageKey.trim() ?
                         <LifecycleStageOperatingPlanEditor
@@ -407,32 +432,19 @@ export default function LifecycleStageWorkspace({
                             onDirtyChange={setOperatingPlanDirty}
                         />
                     :   <p className="text-xs text-alloy-midnight/50">Select a stage first.</p>}
-                </StageSection>
+                </ConfigurationRuntimeUniversalCard>
 
-                <StageSection
-                    id="perspectives"
-                    title={BUSINESS_PROCESS_SECTION_PERSPECTIVES}
-                    summary={BUSINESS_PROCESS_SECTION_PERSPECTIVES_SUMMARY}
-                >
-                    {stageKey.trim() ?
-                        <LifecycleStagePerspectivesEditor
-                            pipeline={bootstrap?.pipeline ?? null}
-                            loading={bootstrapLoading}
-                        />
-                    :   <p className="text-xs text-alloy-midnight/50">Select a stage first.</p>}
-                </StageSection>
-
-                <StageSection
+                <ConfigurationRuntimeUniversalCard
                     id="ready_check"
-                    title={BUSINESS_PROCESS_SECTION_READY}
+                    title={BUSINESS_PROCESS_CARD_READY}
+                    question={BUSINESS_PROCESS_CARD_READY_QUESTION}
                     summary={BUSINESS_PROCESS_SECTION_READY_SUMMARY}
+                    span="full"
                     lazyMount
                 >
                     <div key={readyCheckRefreshKey ?? "initial"}>{validationSlot}</div>
-                </StageSection>
-
+                </ConfigurationRuntimeUniversalCard>
             </div>
-
         </div>
     );
 }

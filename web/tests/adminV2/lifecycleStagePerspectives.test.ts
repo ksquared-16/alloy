@@ -37,23 +37,28 @@ describe("lifecycle stage perspectives — Phase 2 UI shell", () => {
         expect(lanes[1]?.grain).toBe("child");
     });
 
-    it("stage workspace includes Perspectives section between Operating Plan and Ready Check", () => {
+    it("stage workspace uses Universal Card grid with perspectives card before ready check", () => {
         const workspace = read("components/adminV2/settings/lifecycle/LifecycleStageWorkspace.tsx");
+        expect(workspace).toContain("configuration-runtime-stage-card-grid");
         expect(workspace).toContain('id="perspectives"');
         expect(workspace).toContain("LifecycleStagePerspectivesEditor");
-        expect(workspace).toContain("BUSINESS_PROCESS_SECTION_PERSPECTIVES");
-        const opIdx = workspace.indexOf('id="operating_plan"');
+        expect(workspace).toContain("BUSINESS_PROCESS_CARD_PERSPECTIVES");
+        expect(workspace).toContain("LifecycleStagePresentationCard");
         const perspIdx = workspace.indexOf('id="perspectives"');
+        const presentationIdx = workspace.indexOf('id="presentation"');
+        const opIdx = workspace.indexOf('id="operating_plan"');
         const readyIdx = workspace.indexOf('id="ready_check"');
-        expect(opIdx).toBeGreaterThan(-1);
-        expect(perspIdx).toBeGreaterThan(opIdx);
-        expect(readyIdx).toBeGreaterThan(perspIdx);
+        expect(perspIdx).toBeGreaterThan(-1);
+        expect(presentationIdx).toBeGreaterThan(perspIdx);
+        expect(opIdx).toBeGreaterThan(presentationIdx);
+        expect(readyIdx).toBeGreaterThan(opIdx);
     });
 
-    it("perspectives editor links layout assignment to Layouts not a Queue Builder", () => {
+    it("perspectives editor uses operational lens and links to Layouts not a Queue Builder", () => {
         const editor = read("components/adminV2/settings/lifecycle/LifecycleStagePerspectivesEditor.tsx");
         expect(editor).toContain("LAYOUTS_SETTINGS_HREF");
-        expect(editor).toContain("perspectives-save-pending-note");
+        expect(editor).toContain("BUSINESS_PROCESS_LENS_PREVIEW_RUNTIME");
+        expect(editor).not.toContain("perspectives-save-pending-note");
         expect(editor).not.toContain("queue-builder");
         expect(editor).not.toContain("focus-panel-builder");
     });

@@ -10,6 +10,7 @@ import {
 import { resolveWorkUnitQueueDefinitionForDrawer } from "@/lib/admin/drawer/resolveWorkUnitQueueDefinitionForDrawer";
 import { sanitizeDrawerOperTrustPreviewFromHints } from "@/lib/admin/sanitizeDrawerOperTrustPreview";
 import { fetchEffectiveStatusDefinitionsTagged } from "@/lib/admin/statusDefinitionsResolve";
+import { OPPORTUNITY_CANONICAL_ADMIN_SELECT } from "@/lib/fields/canonicalEntitySelectColumns";
 import { createReadinessMemoScope } from "@/lib/completion/readinessEvaluationMemo";
 import { tryEvaluateDrawerRecordReadiness } from "@/lib/completion/readinessDrawerBootstrap";
 import type { DrawerTabKey } from "@/lib/entityPresentation";
@@ -131,7 +132,7 @@ export async function composeOpportunityDrawerViewModel(
     const tOpp0 = Date.now();
     const { data: oppRow, error: oppErr } = await supabase
         .from("opportunities")
-        .select("*")
+        .select(OPPORTUNITY_CANONICAL_ADMIN_SELECT)
         .eq("id", opportunityId)
         .eq("org_id", orgId)
         .single();

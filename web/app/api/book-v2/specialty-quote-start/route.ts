@@ -11,6 +11,7 @@ import {
 } from "@/lib/bookV2/fieldValueUpsert";
 import { findOrCreatePersonInOrg } from "@/lib/persons/findOrCreatePersonInOrg";
 import { normalizeOpportunityWritePayload } from "@/lib/opportunityIdentity";
+import { OPPORTUNITY_CANONICAL_WORKFLOW_SELECT } from "@/lib/fields/canonicalEntitySelectColumns";
 import { emitStatusChangedEvent } from "@/lib/admin/emitStatusChangedEvent";
 import { updateOpportunityStatusWithEvent } from "@/lib/opportunities/updateOpportunityStatusWithEvent";
 import { LEGACY_QUOTE_STARTED_PIPELINE_STAGE_ID } from "@/lib/book-v2/bookingConstants";
@@ -516,7 +517,7 @@ export async function POST(request: NextRequest) {
         .eq("entity_type", "opportunity");
       if (orgIdForWrites) wq = wq.or(`org_id.eq.${orgIdForWrites},org_id.is.null`);
       const { data: quoteWfs } = await wq;
-      const { data: oppRow } = await supabase.from("opportunities").select("*").eq("id", opportunityId).single();
+      const { data: oppRow } = await supabase.from("opportunities").select(OPPORTUNITY_CANONICAL_WORKFLOW_SELECT).eq("id", opportunityId).single();
       const eventPayload: Record<string, unknown> = {
         event_type: specialtyEventType,
         occurred_at: new Date().toISOString(),

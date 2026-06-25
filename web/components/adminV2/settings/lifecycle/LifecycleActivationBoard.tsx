@@ -766,6 +766,8 @@ export default function LifecycleActivationBoard({
         );
         const stageOperatingPlan =
             handle?.isStageOperatingPlanDirty() ? handle.getStageOperatingPlanDraft() : null;
+        const perspectivesV1 =
+            handle?.isPerspectivesDirty() ? handle.getPerspectivesDraft() : null;
         const statusRollup =
             handle?.isStatusRollupDirty()
                 ? handle.getStatusRollupDraft()
@@ -780,6 +782,7 @@ export default function LifecycleActivationBoard({
             ...(fieldRules ? { field_rules: fieldRules } : {}),
             queue_membership_v1: queueMembership,
             ...(stageOperatingPlan ? { stage_operating_plan_v1: stageOperatingPlan } : {}),
+            ...(perspectivesV1 !== null ? { perspectives_v1: perspectivesV1 } : {}),
             ...(statusRollup ? { status_rollup_v1: statusRollup } : {}),
         };
 
@@ -842,6 +845,9 @@ export default function LifecycleActivationBoard({
             }
             if (stageOperatingPlan) {
                 patchStageBootstrap({ stage_operating_plan: stageOperatingPlan });
+            }
+            if (perspectivesV1) {
+                patchStageBootstrap({ perspectives_v1: perspectivesV1 });
             }
             setStatusKeys(keys);
             setStatusDisplayLabels(labels);
@@ -1693,6 +1699,7 @@ export default function LifecycleActivationBoard({
                             </div>
                             <LifecycleStageConfiguration
                                 departmentId={runtimeDepartmentId}
+                                businessProcessKey={builderProcess?.key ?? "enrollment"}
                                 stageKey={stageKey}
                                 stageLabel={stageLabel}
                                 lifecycleName={lifecycleName}

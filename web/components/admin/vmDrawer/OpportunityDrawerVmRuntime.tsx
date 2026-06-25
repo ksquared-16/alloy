@@ -3,6 +3,10 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import clsx from "clsx";
 import OpportunityDrawerProofLayoutHeader from "@/components/admin/vmDrawer/OpportunityDrawerProofLayoutHeader";
+import OpportunityFocusPanelHeader from "@/components/admin/focusPanel/OpportunityFocusPanelHeader";
+import OpportunityFocusPanelModeBody from "@/components/admin/focusPanel/OpportunityFocusPanelModeBody";
+import { useAlloyOsRuntimeSplitActive } from "@/lib/adminV2/runtime/useAlloyOsRuntimeSplitActive";
+import { useFocusPanelMode } from "@/lib/adminV2/runtime/focusPanel/useFocusPanelMode";
 import EntityDrawerOperatingShell from "@/components/admin/drawer/EntityDrawerOperatingShell";
 import ProofDoctrineLifecycleRail from "@/components/layout/proofShell/ProofDoctrineLifecycleRail";
 import CommunicationsDrawerBackgroundLoader from "@/components/admin/communications/CommunicationsDrawerBackgroundLoader";
@@ -90,6 +94,10 @@ export default function OpportunityDrawerVmRuntime() {
         useOpportunityDrawerVmPayload();
     const [drawerTab, setDrawerTab] = useState<DrawerTabKey>("overview");
     const layoutCutoverHeader = isLayoutRuntimeHardCutoverActiveClient();
+    const focusPanelActive = useAlloyOsRuntimeSplitActive();
+    const { mode: focusPanelMode, setMode: setFocusPanelMode } = useFocusPanelMode({
+        subjectId: drawer.type === "opportunities" ? drawer.id : null,
+    });
 
     const statusCanMutate = useMemo(
         () => resolveOpportunityVmStatusCanMutate(displayVm, authCanMutate),
@@ -611,7 +619,10 @@ export default function OpportunityDrawerVmRuntime() {
         committedVisible &&
         Boolean(displayVm) &&
         Boolean(record) &&
-        (!layoutCutoverHeader || drawerTab !== "overview" || overviewLayoutShellReady);
+        (!layoutCutoverHeader ||
+            focusPanelActive ||
+            drawerTab !== "overview" ||
+            overviewLayoutShellReady);
 
     const showRuntimeOpeningOverlay =
         Boolean(drawer.type === "opportunities" && drawer.id) &&
@@ -632,7 +643,65 @@ export default function OpportunityDrawerVmRuntime() {
         [drawer.drawerSubjectContext],
     );
 
+    const composedFocusPanelHeader = useMemo(() => {
+        if (!focusPanelActive || !committedVisible || !drawer.id || !displayVm || !headerRecord) {
+            return undefined;
+        }
+        return (
+            <OpportunityFocusPanelHeader
+                title={drawerTitle}
+                opportunityId={drawer.id}
+                record={headerRecord}
+                displayVm={displayVm}
+                queuePreviewSeed={drawer.opportunityQueuePreviewSeed}
+                opportunitySingular={opportunitySingular}
+                statusLabel={statusLabel}
+                currentStatusKey={currentStatusKey}
+                statusControl={displayVm.header.status}
+                statusCanMutate={statusCanMutate}
+                manageCanMutate={manageCanMutate}
+                activeMode={focusPanelMode}
+                onModeChange={setFocusPanelMode}
+                onClose={closeDrawer}
+                manageMenuItems={manageMenuItems}
+                onManageSelect={onManageSelect}
+                manageBusyKey={manageBusyKey}
+                actionPreflightBlocked={actionPreflightBlocked}
+                onDismissActionPreflightBlocked={clearActionPreflightBlocked}
+                registryActionFeedback={registryActionFeedback}
+                primaryHeaderAction={displayVm.actions.header_menu[0] ?? null}
+                onPrimaryHeaderAction={onActionSelect}
+                primaryActionLoading={Boolean(actionLoadingKey)}
+            />
+        );
+    }, [
+        focusPanelActive,
+        committedVisible,
+        drawer.id,
+        drawer.opportunityQueuePreviewSeed,
+        displayVm,
+        headerRecord,
+        drawerTitle,
+        opportunitySingular,
+        statusLabel,
+        currentStatusKey,
+        statusCanMutate,
+        manageCanMutate,
+        focusPanelMode,
+        setFocusPanelMode,
+        closeDrawer,
+        manageBusyKey,
+        manageMenuItems,
+        onManageSelect,
+        actionPreflightBlocked,
+        clearActionPreflightBlocked,
+        registryActionFeedback,
+        onActionSelect,
+        actionLoadingKey,
+    ]);
+
     const composedProofHeader = useMemo(() => {
+        if (focusPanelActive) return composedFocusPanelHeader;
         if (!layoutCutoverHeader || !committedVisible || !drawer.id || !displayVm || !headerRecord) return undefined;
         return (
             <OpportunityDrawerProofLayoutHeader
@@ -665,6 +734,8 @@ export default function OpportunityDrawerVmRuntime() {
             />
         );
     }, [
+        focusPanelActive,
+        composedFocusPanelHeader,
         layoutCutoverHeader,
         committedVisible,
         drawer.id,
@@ -713,8 +784,9 @@ export default function OpportunityDrawerVmRuntime() {
                 headerTitleCenter={layoutCutoverHeader ? undefined : headerAttentionCenter}
                 headerTitleRight={layoutCutoverHeader ? undefined : headerTitleRight}
                 composedStickyHeader={composedProofHeader}
+                focusPanelPresentation={focusPanelActive}
                 panelFooterChrome={
-                    layoutCutoverHeader && committedVisible ?
+                    (layoutCutoverHeader || focusPanelActive) && committedVisible ?
                         <OpportunityDrawerBodySaveBar canMutate={statusCanMutate} />
                         : undefined
                 }
@@ -722,7 +794,9 @@ export default function OpportunityDrawerVmRuntime() {
                 runtimeShellDataAttributes={drawerSubjectShellAttrs}
                 holdPriorPayload={holdPriorPayload}
                 summaryStrip={
-                    drawerTab === "overview" && committedVisible ? drawerSummaryStrip : null
+                    focusPanelActive ? null
+                    : drawerTab === "overview" && committedVisible ? drawerSummaryStrip
+                    : null
                 }
             >
                 {isOpportunityQueueNavPending ?
@@ -734,7 +808,7 @@ export default function OpportunityDrawerVmRuntime() {
                         <p className="text-sm font-medium text-alloy-midnight/85">Opening record…</p>
                     </div>
                     : null}
-                {!layoutCutoverHeader && queueNavigationControls ?
+                {!layoutCutoverHeader && !focusPanelActive && queueNavigationControls ?
                     <div className="mb-3 flex justify-end">
                         {queueNavigationControls}
                     </div>
@@ -746,7 +820,7 @@ export default function OpportunityDrawerVmRuntime() {
                     />
                     : committedVisible && displayVm && record ?
                         <>
-                            {!layoutCutoverHeader ?
+                            {!layoutCutoverHeader && !focusPanelActive ?
                                 <>
                                     <div
                                         className="mb-3 flex flex-wrap gap-0.5 border-b border-alloy-stone/15 pb-2"
@@ -788,7 +862,20 @@ export default function OpportunityDrawerVmRuntime() {
                                     <OpportunityDrawerTabBackgroundLoader drawerId={drawer.id} />
                                 </>
                                 : null}
-                            {drawerTab === "overview" ?
+                            {focusPanelActive ?
+                                <OpportunityFocusPanelModeBody
+                                    mode={focusPanelMode}
+                                    displayVm={displayVm}
+                                    drawerId={String(displayVm.entity.id)}
+                                    opportunitySingular={opportunitySingular}
+                                    record={record}
+                                    drawerTitle={drawerTitle}
+                                    statusLabel={statusLabel}
+                                    canMutate={statusCanMutate}
+                                    onSelectTab={onTabSelect}
+                                    onHeaderAction={onActionSelect}
+                                />
+                            : drawerTab === "overview" ?
                                 <OpportunityDrawerOverviewBody
                                     displayVm={displayVm}
                                     drawerId={String(displayVm.entity.id)}

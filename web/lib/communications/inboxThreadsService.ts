@@ -249,7 +249,7 @@ async function loadEntityContext(
     const personIdByPhone = new Map<string, string>();
     const opportunityStatusMeta = new Map<
         string,
-        { statusKey: string | null; legacyStatus: string | null; pipelineStageId: string | null }
+        { statusKey: string | null; pipelineStageId: string | null }
     >();
     const pipelineStageIds = new Set<string>();
 
@@ -302,11 +302,9 @@ async function loadEntityContext(
                             personIds.add(ppStr);
                         }
                         const statusKey = (row as { status_key?: string | null }).status_key;
-                        const legacyStatus = (row as { status?: string | null }).status;
                         const pipelineStageId = (row as { pipeline_stage_id?: string | null }).pipeline_stage_id;
                         opportunityStatusMeta.set(id, {
                             statusKey: statusKey != null ? String(statusKey) : null,
-                            legacyStatus: legacyStatus != null ? String(legacyStatus) : null,
                             pipelineStageId:
                                 pipelineStageId && UUID_RE.test(String(pipelineStageId))
                                     ? String(pipelineStageId)
@@ -452,7 +450,6 @@ async function loadEntityContext(
     for (const [oppId, meta] of opportunityStatusMeta) {
         const label = resolveOpportunityStatusDisplay({
             statusKey: meta.statusKey,
-            legacyStatus: meta.legacyStatus,
             statusDefs: opportunityStatusDefs,
             pipelineStageId: meta.pipelineStageId,
             pipelineStageName: meta.pipelineStageId ? pipelineStageNames.get(meta.pipelineStageId) ?? null : null,

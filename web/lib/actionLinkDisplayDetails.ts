@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { PERSON_CANONICAL_IDENTITY_SELECT } from "@/lib/fields/canonicalEntitySelectColumns";
 
 /** Enriched booking/job context for public action-link pages (hydrated from DB + link metadata snapshot). */
 export type ActionLinkDisplayDetails = {
@@ -183,7 +184,7 @@ export async function loadBookingPersonForJobWorkflow(
     customerId: string | null
 ): Promise<Record<string, unknown> | null> {
     const fetchPersonById = async (personId: string) => {
-        const { data } = await supabase.from("persons").select("*").eq("id", personId).maybeSingle();
+        const { data } = await supabase.from("persons").select(PERSON_CANONICAL_IDENTITY_SELECT).eq("id", personId).maybeSingle();
         return (data as Record<string, unknown>) ?? null;
     };
 

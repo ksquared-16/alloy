@@ -65,13 +65,48 @@ export const BUSINESS_PROCESS_SECTION_PERSPECTIVES = "Perspectives";
 export const BUSINESS_PROCESS_SECTION_PERSPECTIVES_SUMMARY =
     "Operational lenses staff switch between in the work unit — each maps to a synced queue lane.";
 export const BUSINESS_PROCESS_PERSPECTIVES_INTRO =
-    "Perspectives are configuration metadata over queue lanes synced when you save this stage. Queue row and Focus Panel presentation are authored in Layouts (Experience Builder).";
-export const BUSINESS_PROCESS_PERSPECTIVES_SAVE_PENDING_NOTE =
-    "Perspective metadata save wiring is pending (Phase 2B). Edits here are staged locally and are not persisted yet.";
+    "Each perspective is an operational lens staff switch between in the work unit. Configure what operators see, the mission, and visibility — presentation is authored in Layouts.";
 export const BUSINESS_PROCESS_PERSPECTIVES_SINGLE_LANE_NOTE =
     "This stage exposes one lens. Multi-perspective rails appear when a stage syncs multiple queue lanes.";
 export const BUSINESS_PROCESS_PERSPECTIVES_NO_LANES_NOTE =
-    "Save this stage once to sync queue lanes, then configure perspective labels and missions here.";
+    "Save this stage once to sync queue lanes, then configure operational lenses here.";
+
+/** Concept A — Universal Card titles and questions (stage workspace). */
+export const BUSINESS_PROCESS_CARD_STATUS_MEMBERSHIP = "Status membership";
+export const BUSINESS_PROCESS_CARD_STATUS_MEMBERSHIP_QUESTION = "Who belongs here?";
+export const BUSINESS_PROCESS_CARD_REQUIRED = "Required information";
+export const BUSINESS_PROCESS_CARD_REQUIRED_QUESTION = "What must be completed?";
+export const BUSINESS_PROCESS_CARD_PERSPECTIVES = "Perspectives";
+export const BUSINESS_PROCESS_CARD_PERSPECTIVES_QUESTION = "How operators view this work.";
+export const BUSINESS_PROCESS_CARD_PRESENTATION = "Presentation";
+export const BUSINESS_PROCESS_CARD_PRESENTATION_QUESTION = "What operators see.";
+export const BUSINESS_PROCESS_CARD_OPERATING_PLAN = "Operating plan";
+export const BUSINESS_PROCESS_CARD_OPERATING_PLAN_QUESTION = "What staff should do in this stage.";
+export const BUSINESS_PROCESS_CARD_READY = "Ready check";
+export const BUSINESS_PROCESS_CARD_READY_QUESTION = "Is this stage complete?";
+
+export const BUSINESS_PROCESS_PREVIEW_WORK_UNIT = "Preview work unit";
+
+/** Concept A — operational lens field labels. */
+export const BUSINESS_PROCESS_LENS_OPERATORS_SEE = "Operators see";
+export const BUSINESS_PROCESS_LENS_MISSION = "Mission";
+export const BUSINESS_PROCESS_LENS_WORK_INCLUDED = "Work included";
+export const BUSINESS_PROCESS_LENS_WORK_INCLUDED_NOTE =
+    "Derived from synced queue lane filters and stage membership. Editable business filters ship in a follow-up.";
+export const BUSINESS_PROCESS_LENS_SORTED_BY = "Sorted by";
+export const BUSINESS_PROCESS_LENS_PRESENTATION = "Presentation";
+export const BUSINESS_PROCESS_LENS_VISIBLE_IN_WORK_UNIT = "Visible in work unit";
+export const BUSINESS_PROCESS_LENS_PREVIEW_RUNTIME = "Preview runtime";
+export const BUSINESS_PROCESS_LENS_ADVANCED_IDENTITY = "Advanced · Technical identity";
+export const BUSINESS_PROCESS_LENS_OPEN_LAYOUTS = "Open in Layouts";
+
+/** Concept A — presentation card copy. */
+export const BUSINESS_PROCESS_PRESENTATION_CARD_INTRO =
+    "Operators see these layouts when working {stage} records in the workspace.";
+export const BUSINESS_PROCESS_PRESENTATION_QUEUE = "Queue preview";
+export const BUSINESS_PROCESS_PRESENTATION_FOCUS_PANEL = "Focus Panel preview";
+export const BUSINESS_PROCESS_PRESENTATION_CHANGE = "Change";
+export const BUSINESS_PROCESS_PRESENTATION_OPEN_LAYOUTS = "Need a new layout? Author in Experience Builder:";
 
 export const BUSINESS_PROCESS_SECTION_EXPECTED_WORK = "Expected work";
 export const BUSINESS_PROCESS_SECTION_EXPECTED_WORK_SUMMARY =

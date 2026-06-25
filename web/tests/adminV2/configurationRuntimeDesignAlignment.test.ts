@@ -103,10 +103,14 @@ describe("configuration runtime design alignment — Phase 0/1", () => {
         expect(read("app/adminV2/settings/page.tsx")).not.toContain("queue-builder");
     });
 
-    it("BP stage workspace owns perspectives metadata section", () => {
+    it("BP stage workspace owns perspectives metadata in Universal Card grid", () => {
         const workspace = read("components/adminV2/settings/lifecycle/LifecycleStageWorkspace.tsx");
         expect(workspace).toContain('id="perspectives"');
+        expect(workspace).toContain("ConfigurationRuntimeUniversalCard");
         expect(read("components/adminV2/settings/lifecycle/LifecycleStagePerspectivesEditor.tsx")).toContain(
+            "BUSINESS_PROCESS_LENS_OPERATORS_SEE",
+        );
+        expect(read("components/adminV2/settings/lifecycle/LifecycleStagePerspectivesEditor.tsx")).not.toContain(
             "perspectives-save-pending-note",
         );
     });

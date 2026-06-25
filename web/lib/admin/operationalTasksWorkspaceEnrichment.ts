@@ -10,6 +10,7 @@ import {
 } from "@/lib/admin/statusDefinitionsResolve";
 import { resolveMyTasksGuardianFieldLabelFromRoleTypes } from "@/lib/agent/taskAssist/myTasksPresentationLabels";
 import { resolvePlacementCandidateChildDisplayName } from "@/lib/orchestration/placement/resolvePlacementCandidateChildDisplayName";
+import { OPPORTUNITY_CANONICAL_TASK_ENRICHMENT_SELECT } from "@/lib/fields/canonicalEntitySelectColumns";
 
 import { enrichOperationalTasksWithAssigneeLabels } from "@/lib/admin/operationalWork/operationalWorkAssigneeEnrichment";
 import type { OperationalTaskRow } from "@/lib/admin/operationalTasksService";
@@ -129,7 +130,7 @@ export async function enrichOperationalTasksForWorkspace(params: {
 
     const { data: oppRows, error: oppErr } = await supabase
         .from("opportunities")
-        .select("id, name, title, status, status_key, customer_id, primary_person_id, location_id, metadata")
+        .select(OPPORTUNITY_CANONICAL_TASK_ENRICHMENT_SELECT)
         .eq("org_id", orgId)
         .in("id", opportunityIds);
 
@@ -227,12 +228,8 @@ export async function enrichOperationalTasksForWorkspace(params: {
         const customerId = trimOrNull(opp.customer_id);
         const personId = trimOrNull(opp.primary_person_id);
         const statusKey = trimOrNull(opp.status_key);
-        const legacyStatus = trimOrNull(opp.status);
 
-        const rawStatus =
-            humanizeGlobalSearchStatusLabel(statusKey, statusLabelByKey) ??
-            legacyStatus ??
-            null;
+        const rawStatus = humanizeGlobalSearchStatusLabel(statusKey, statusLabelByKey) ?? null;
 
         contextByOpportunityId.set(opp.id, {
             entity_label: opportunityDisplayLabel(opp),

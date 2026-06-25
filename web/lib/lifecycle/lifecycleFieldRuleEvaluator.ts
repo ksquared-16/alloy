@@ -23,6 +23,7 @@ import type {
     PrimaryPersonSnapshot,
     RequirementViolation,
 } from "@/lib/completion/requirementValidationTypes";
+import { resolveChildProfileFieldValue } from "@/lib/fields/childProfileFieldResolution";
 import { completionValueEmpty, trimOrNull } from "@/lib/completion/valueEmpty";
 import type { BlockingLevel } from "@/lib/completion/requirementValidationTypes";
 import {
@@ -178,6 +179,60 @@ function evaluatePersonRule(
     ];
 }
 
+function evaluateCustomerMemberProfileRule(
+    ctx: CompletionEvaluationContext,
+    ruleId: string,
+    level: PersistedRequirementLevel
+): RequirementViolation[] {
+    const binding = lifecycleFieldRuleBinding(ruleId);
+    const profileField = binding?.customer_member_field ?? binding?.field_key;
+    if (!binding || !profileField) return [];
+
+    const children = ctx.related?.inquiry_children ?? [];
+    const violations: RequirementViolation[] = [];
+    const blocking_level = blockingLevelForPersistedLevel(level);
+    const fieldLabels: Record<string, string> = {
+        first_name: "First Name",
+        last_name: "Last Name",
+        dob: "Date of Birth",
+        date_of_birth: "Date of Birth",
+    };
+    const labelField = binding.field_key ?? profileField;
+
+    if (children.length === 0) {
+        return [
+            fieldViolation(ctx, {
+                rule_id: ruleId,
+                label: `${lifecycleEntityLabel("child")} · ${fieldLabels[labelField] ?? labelField}`,
+                field_key: binding.field_key ?? profileField,
+                missing_reason: "Add at least one child before continuing.",
+                blocking_level,
+                requirement_level: level,
+            }),
+        ];
+    }
+
+    for (const child of children) {
+        const memberId = trimOrNull(child.customer_member_id) ?? trimOrNull(child.id) ?? "unknown";
+        const value = resolveChildProfileFieldValue(child, profileField);
+        if (!completionValueEmpty(value)) continue;
+
+        violations.push(
+            fieldViolation(ctx, {
+                rule_id: ruleId,
+                label: `${lifecycleEntityLabel("child")} · ${fieldLabels[labelField] ?? labelField}`,
+                field_key: binding.field_key ?? profileField,
+                entity_type: "customer_member",
+                entity_id: memberId,
+                missing_reason: `${fieldLabels[labelField] ?? "Field"} is required for each child.`,
+                blocking_level,
+                requirement_level: level,
+            })
+        );
+    }
+    return violations;
+}
+
 function evaluateChildRule(
     ctx: CompletionEvaluationContext,
     ruleId: string,
@@ -276,6 +331,8 @@ function evaluateSingleFieldRule(
     switch (binding.value_source) {
         case "primary_person":
             return evaluatePersonRule(ctx, ruleId, level);
+        case "customer_member_profile":
+            return evaluateCustomerMemberProfileRule(ctx, ruleId, level);
         case "inquiry_child":
             return evaluateChildRule(ctx, ruleId, level);
         case "opportunity":

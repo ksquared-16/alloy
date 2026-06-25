@@ -9,7 +9,12 @@ import {
     mergeDefinitionAndLinkPrefillMaps,
     PREFILL_SOURCE_PATH_RE,
 } from "@/lib/forms/prefill/prefillFieldMap";
-import { buildCanonicalPrefillFieldMap } from "@/lib/forms/prefill/canonicalPrefillMap";
+import {
+    CONTACT_COMPAT_SELECT,
+    CUSTOMER_CANONICAL_ADMIN_SELECT,
+    OPPORTUNITY_CANONICAL_ADMIN_SELECT,
+    PERSON_CANONICAL_IDENTITY_SELECT,
+} from "@/lib/fields/canonicalEntitySelectColumns";
 import type { FormField, FormSchemaV1 } from "@/lib/forms/schema";
 
 export function shouldApplyServerPrefill(linkMetadata: Record<string, unknown>): boolean {
@@ -106,9 +111,7 @@ export async function resolveFormPrefillValues(
     if (needOpp && launchFks.opportunity_id) {
         const { data, error } = await supabase
             .from("opportunities")
-            .select("*")
-            .eq("org_id", orgId)
-            .eq("id", launchFks.opportunity_id)
+            .select(OPPORTUNITY_CANONICAL_ADMIN_SELECT)
             .maybeSingle();
         if (error) throw new Error(error.message);
         opportunityRow = (data as Record<string, unknown>) ?? null;
@@ -125,7 +128,7 @@ export async function resolveFormPrefillValues(
     if (needCustomerRow && customerIdForQueries) {
         const { data, error } = await supabase
             .from("customers")
-            .select("*")
+            .select(CUSTOMER_CANONICAL_ADMIN_SELECT)
             .eq("org_id", orgId)
             .eq("id", customerIdForQueries)
             .maybeSingle();
@@ -138,7 +141,7 @@ export async function resolveFormPrefillValues(
         if (cid) {
             const { data, error } = await supabase
                 .from("contacts")
-                .select("*")
+                .select(CONTACT_COMPAT_SELECT)
                 .eq("org_id", orgId)
                 .eq("id", cid)
                 .maybeSingle();
@@ -153,7 +156,7 @@ export async function resolveFormPrefillValues(
         if (personId) {
             const { data, error } = await supabase
                 .from("persons")
-                .select("*")
+                .select(PERSON_CANONICAL_IDENTITY_SELECT)
                 .eq("org_id", orgId)
                 .eq("id", personId)
                 .maybeSingle();

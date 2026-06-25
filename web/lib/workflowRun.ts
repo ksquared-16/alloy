@@ -12,6 +12,7 @@ import {
 } from "@/lib/admin/vendorPayoutPolicy";
 import { CANONICAL_SQFT_TIER_OPTIONS } from "@/lib/book-v2/loadCleaningPricingCatalog";
 import { attachCanonicalOpportunityIdentityToWorkflowPayload } from "@/lib/opportunityIdentity";
+import { OPPORTUNITY_CANONICAL_WORKFLOW_SELECT } from "@/lib/fields/canonicalEntitySelectColumns";
 import { getByPath, renderActionLinkMetadata, renderTemplate } from "@/lib/workflowTemplate";
 import { resolveJobStatusRowByOrgAndKey } from "@/lib/admin/jobEffectiveStatusKey";
 import { resolveScheduleStatusRowByKey } from "@/lib/admin/scheduleEffectiveStatusKey";
@@ -1294,7 +1295,7 @@ async function enrichWorkflowEventPayloadEntities(supabase: SupabaseClient, payl
     }
 
     if (oppId) {
-        const { data: oFull } = await supabase.from("opportunities").select("*").eq("id", oppId).maybeSingle();
+        const { data: oFull } = await supabase.from("opportunities").select(OPPORTUNITY_CANONICAL_WORKFLOW_SELECT).eq("id", oppId).maybeSingle();
         if (oFull) {
             p.opportunity = { ...(existingOpp ?? {}), ...(oFull as Record<string, unknown>) };
         }

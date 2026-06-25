@@ -16,6 +16,8 @@ import { ENROLLMENT_PROCESS_KEY } from "@/lib/lifecycle/lifecycleProcessTypes";
 import type { LifecyclePrimaryEntityKey } from "@/lib/lifecycle/lifecycleConfiguration";
 import type { QueueMembershipV1 } from "@/lib/lifecycle/queueMembershipV1";
 import { parseQueueMembershipV1 } from "@/lib/lifecycle/queueMembershipV1";
+import type { PerspectiveConfigV1Stored } from "@/lib/lifecycle/perspectiveConfigV1";
+import { parsePerspectivesV1 } from "@/lib/lifecycle/perspectiveConfigV1";
 import type { StageOperatingPlanV1 } from "@/lib/lifecycle/stageOperatingPlanV1";
 import { parseStageOperatingPlanV1 } from "@/lib/lifecycle/stageOperatingPlanV1";
 import type { EnrollmentManualTransitionPolicyV1 } from "@/lib/admin/enrollmentStatus/enrollmentStatusTransitionPolicy";
@@ -40,6 +42,8 @@ export type LifecycleBuilderStageRecord = {
     status_rollup_v1?: StatusRollupV1;
     /** Stage work plan + outcome rules (metadata only). */
     stage_operating_plan_v1?: StageOperatingPlanV1;
+    /** Queue lane presentation overrides (Configuration Runtime). */
+    perspectives_v1?: PerspectiveConfigV1Stored[];
 };
 
 export type LifecycleBuilderProcessRecord = {
@@ -127,6 +131,7 @@ export function parseLifecycleBuilderV1(raw: unknown): LifecycleBuilderV1 | null
             const queueMembership = parseQueueMembershipV1(sr.queue_membership_v1);
             const statusRollup = parseStatusRollupV1(sr.status_rollup_v1);
             const operatingPlan = parseStageOperatingPlanV1(sr.stage_operating_plan_v1);
+            const perspectives = parsePerspectivesV1(sr.perspectives_v1);
             const track_key = typeof sr.track_key === "string" ? sr.track_key.trim() : undefined;
             stages.push({
                 id: sid,
@@ -139,6 +144,7 @@ export function parseLifecycleBuilderV1(raw: unknown): LifecycleBuilderV1 | null
                 ...(queueMembership ? { queue_membership_v1: queueMembership } : {}),
                 ...(statusRollup ? { status_rollup_v1: statusRollup } : {}),
                 ...(operatingPlan ? { stage_operating_plan_v1: operatingPlan } : {}),
+                ...(perspectives ? { perspectives_v1: perspectives } : {}),
             });
         }
         stages.sort((a, b) => a.sort_order - b.sort_order || a.label.localeCompare(b.label));

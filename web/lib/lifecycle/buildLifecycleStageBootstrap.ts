@@ -29,6 +29,11 @@ import { loadBusinessProcessStatusCategoryCatalog } from "@/lib/lifecycle/loadSt
 import { resolveStatusRollupForStage } from "@/lib/lifecycle/statusCategoryCatalog";
 import { queueMembershipSubjectForStatusOptions } from "@/lib/lifecycle/stageStatusRollup";
 import { defaultStageOperatingPlanForEnrollmentStage } from "@/lib/lifecycle/defaultEnrollmentStageOperatingPlans";
+import {
+    coercePerspectivesV1ForLanes,
+    resolvePerspectivesForStage,
+} from "@/lib/lifecycle/perspectiveConfigV1";
+import { derivePerspectiveLanesFromPipeline } from "@/lib/lifecycle/lifecycleStagePerspectiveLanes";
 import { resolveStageOperatingPlanForStage } from "@/lib/lifecycle/stageOperatingPlanV1";
 
 function mapStatusRows(rows: Awaited<ReturnType<typeof fetchEffectiveStatusDefinitions>>) {
@@ -242,6 +247,12 @@ export async function buildLifecycleStageBootstrap(params: {
         (process?.key === "enrollment"
             ? defaultStageOperatingPlanForEnrollmentStage(builderStageKey)
             : null);
+    const savedPerspectives = resolvePerspectivesForStage(stageRecord ?? {});
+    const perspectiveLaneKeys = derivePerspectiveLanesFromPipeline(pipeline).map((lane) => lane.queueKey);
+    const perspectives_v1 =
+        savedPerspectives && perspectiveLaneKeys.length
+            ? coercePerspectivesV1ForLanes(savedPerspectives, perspectiveLaneKeys)
+            : savedPerspectives;
 
     return {
         department_id: departmentId,
@@ -261,6 +272,7 @@ export async function buildLifecycleStageBootstrap(params: {
         status_category_catalog,
         status_rollup_v1,
         stage_operating_plan,
+        perspectives_v1: perspectives_v1?.length ? perspectives_v1 : null,
     };
 }
 

@@ -18,8 +18,6 @@ function trimOrNull(v: unknown): string | null {
 function opportunityStatusKey(record: Record<string, unknown>): string | null {
     const sk = record.status_key;
     if (sk != null && String(sk).trim()) return String(sk).trim();
-    const legacy = record.status;
-    if (legacy != null && String(legacy).trim()) return String(legacy).trim();
     return null;
 }
 
@@ -42,7 +40,6 @@ export function buildOpportunityStatusControlVm(params: {
     const label =
         resolveOpportunityStatusDisplay({
             statusKey,
-            legacyStatus: params.record.status as string | null | undefined,
             statusDefs: activeDefs,
             pipelineStageId,
             pipelineStageName,

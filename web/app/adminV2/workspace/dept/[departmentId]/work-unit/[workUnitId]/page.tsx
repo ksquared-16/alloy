@@ -79,6 +79,9 @@ import {
     workUnitQueueLaneRevealSettled,
 } from "@/lib/workspace/workUnitQueueLaneRevealState";
 import { useAdminDrawer } from "@/contexts/AdminDrawerContext";
+import { ALLOY_OS_RUNTIME_ENABLED } from "@/lib/adminV2/runtime/alloyOsRuntimeFlag";
+import { deriveRuntimePerspective } from "@/lib/adminV2/runtime/perspective/deriveRuntimePerspective";
+import { setActiveRuntimePerspective } from "@/lib/adminV2/runtime/perspective/RuntimePerspectiveContext";
 import { buildPrepareParamsFromOpenDrawer, peekDrawerViewModelPreloadSync } from "@/lib/adminV2/viewModel/drawer/drawerShellPinnedModelSwap";
 import { logDrawerVmRuntimeDiagnostic } from "@/lib/adminV2/viewModel/drawer/drawerVmRuntimeDiagnostics";
 import { warmQueueRowOpportunityVm } from "@/lib/adminV2/viewModel/drawer/vmRuntime/queueRowDrawerVmWarm";
@@ -1394,6 +1397,29 @@ export default function AdminV2OpportunityWorkUnitPage() {
     laneUnmappedOnlyRef.current = laneUnmappedOnly;
     const attentionBucketKeyRef = useRef("");
     attentionBucketKeyRef.current = attentionBucketKey;
+
+    useEffect(() => {
+        if (!ALLOY_OS_RUNTIME_ENABLED) return;
+        const wuId = workUnitId?.trim();
+        if (!wuId || !workUnit) {
+            setActiveRuntimePerspective(null);
+            return;
+        }
+        setActiveRuntimePerspective(
+            deriveRuntimePerspective({
+                workUnitId: wuId,
+                queueDefinition: workUnit.queue_definition,
+                activeQueueKey: selectedQueueKey,
+                attentionBucketKey: attentionBucketKey || null,
+                source: "pill",
+            }),
+        );
+    }, [workUnitId, workUnit, selectedQueueKey, attentionBucketKey]);
+
+    useEffect(() => {
+        if (!ALLOY_OS_RUNTIME_ENABLED) return;
+        return () => setActiveRuntimePerspective(null);
+    }, [workUnitId]);
 
     const setSelectedQueueKeyTraced = useCallback((source: string, next: string | null) => {
         setSelectedQueueKey((prev) => {

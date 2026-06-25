@@ -10,6 +10,7 @@ import type { StatusRollupV1 } from "@/lib/lifecycle/statusRollupV1";
 
 export default function LifecycleStageConfiguration({
     departmentId,
+    businessProcessKey,
     stageKey,
     stageLabel,
     lifecycleName,
@@ -26,6 +27,7 @@ export default function LifecycleStageConfiguration({
     workspaceHandleRef,
 }: {
     departmentId: string;
+    businessProcessKey: string;
     stageKey: string;
     stageLabel: string;
     lifecycleName: string;
@@ -49,6 +51,7 @@ export default function LifecycleStageConfiguration({
             <LifecycleStageWorkspace
                 workspaceRef={ref}
                 departmentId={departmentId}
+                businessProcessKey={businessProcessKey}
                 stageKey={stageKey}
                 stageLabel={stageLabel}
                 lifecycleName={lifecycleName}

@@ -15,15 +15,33 @@ export const ADMINV2_DRAWER_OUTSIDE_CLICK_IGNORE_SELECTORS = [
     "[data-adminv2-bos-rail-overlay]",
 ] as const;
 
+/** Queue scrollport — row clicks swap the Focus Panel subject in State 2 instead of closing. */
+export const ADMINV2_DRAWER_OUTSIDE_CLICK_SPLIT_IGNORE_SELECTOR =
+    '[data-workspace-queue-scrollport="true"]';
+
+const ADMINV2_DRAWER_OUTSIDE_CLICK_SPLIT_IGNORE_SELECTORS = [
+    ADMINV2_DRAWER_OUTSIDE_CLICK_SPLIT_IGNORE_SELECTOR,
+    '[data-alloy-os-queue-header="true"]',
+    '[data-alloy-os-context-bar="true"]',
+] as const;
+
 /**
  * Returns true when a mousedown target is outside the drawer panel and outside the bottom command bar.
  */
-export function shouldCloseAdminV2DrawerOnOutsideTarget(target: EventTarget | null): boolean {
+export function shouldCloseAdminV2DrawerOnOutsideTarget(
+    target: EventTarget | null,
+    options?: { alloyOsSplitActive?: boolean },
+): boolean {
     if (target == null || typeof target !== "object") return false;
     const el = target as { closest?: (selector: string) => Element | null };
     if (typeof el.closest !== "function") return false;
     for (const selector of ADMINV2_DRAWER_OUTSIDE_CLICK_IGNORE_SELECTORS) {
         if (el.closest(selector)) return false;
+    }
+    if (options?.alloyOsSplitActive) {
+        for (const selector of ADMINV2_DRAWER_OUTSIDE_CLICK_SPLIT_IGNORE_SELECTORS) {
+            if (el.closest(selector)) return false;
+        }
     }
     return true;
 }

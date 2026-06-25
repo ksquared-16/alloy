@@ -7,6 +7,11 @@ import { formatBookingStartForSms, resolveBookingSmsTimeZone } from "@/lib/booki
 import { emitEvent } from "@/lib/emitEvent";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { executeWorkflowRun } from "@/lib/workflowRun";
+import {
+    CONTACT_COMPAT_SELECT,
+    CUSTOMER_CANONICAL_ADMIN_SELECT,
+    OPPORTUNITY_CANONICAL_WORKFLOW_SELECT,
+} from "@/lib/fields/canonicalEntitySelectColumns";
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -181,13 +186,13 @@ export async function POST(request: NextRequest) {
         const [vendorRes, oppRes, customerRes, contactRes, personRow] = await Promise.all([
             supabase.from("vendors").select("*").eq("id", assignedVendorId).maybeSingle(),
             opportunityId
-                ? supabase.from("opportunities").select("*").eq("id", opportunityId).maybeSingle()
+                ? supabase.from("opportunities").select(OPPORTUNITY_CANONICAL_WORKFLOW_SELECT).eq("id", opportunityId).maybeSingle()
                 : Promise.resolve({ data: null as null }),
             customerId
-                ? supabase.from("customers").select("*").eq("id", customerId).maybeSingle()
+                ? supabase.from("customers").select(CUSTOMER_CANONICAL_ADMIN_SELECT).eq("id", customerId).maybeSingle()
                 : Promise.resolve({ data: null as null }),
             primaryContactId
-                ? supabase.from("contacts").select("*").eq("id", primaryContactId).maybeSingle()
+                ? supabase.from("contacts").select(CONTACT_COMPAT_SELECT).eq("id", primaryContactId).maybeSingle()
                 : Promise.resolve({ data: null as null }),
             loadBookingPersonForJobWorkflow(supabase, jobRow, customerId),
         ]);

@@ -37,7 +37,7 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ id
 
     const { data: opp, error: oppErr } = await supabase
         .from("opportunities")
-        .select("id, status_key, status, work_unit_id, location_id")
+        .select("id, status_key, work_unit_id, location_id")
         .eq("id", opportunityId)
         .eq("org_id", ctx.orgId)
         .maybeSingle();
@@ -46,8 +46,8 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ id
         return NextResponse.json({ error: oppErr?.message ?? "Not found" }, { status: 404 });
     }
 
-    const row = opp as { status_key?: string | null; status?: string | null; work_unit_id?: string | null };
-    const statusKey = trimOrEmpty(row.status_key) || trimOrEmpty(row.status) || "";
+    const row = opp as { status_key?: string | null; work_unit_id?: string | null };
+    const statusKey = trimOrEmpty(row.status_key) || "";
     const workUnitId = trimOrEmpty(row.work_unit_id) || null;
 
     let sig;

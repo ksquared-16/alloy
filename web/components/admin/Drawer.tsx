@@ -9,9 +9,11 @@ import {
     DRAWER_BACKDROP_LEFT_CSS_VAR,
     DRAWER_COMPUTED_LEFT_CSS_VAR,
     DRAWER_COMPUTED_WIDTH_CSS_VAR,
+    isAlloyOsSplitGeometryActive,
     isDrawerGeometryProbeActive,
     measureAndApplyDrawerWorkspaceGeometry,
 } from "@/lib/bos/drawerWorkspaceGeometry";
+import { ALLOY_OS_RUNTIME_SPLIT_ATTR } from "@/lib/adminV2/runtime/alloyOsRuntimeFlag";
 import {
     LAYOUT_RUNTIME_DRAWER_OUTER_BORDER,
     LAYOUT_RUNTIME_DRAWER_OUTER_SHADOW,
@@ -106,6 +108,8 @@ interface DrawerProps {
      * Fixed footer chrome inside the drawer panel (below scroll body) — e.g. floating save bar.
      */
     panelFooterChrome?: React.ReactNode;
+    /** Alloy OS Focus Panel — docked peer column (geometry only; content from runtime). */
+    focusPanelPresentation?: boolean;
 }
 
 export default function Drawer({
@@ -133,6 +137,7 @@ export default function Drawer({
     recordModalContextStyle,
     composedStickyHeader,
     panelFooterChrome,
+    focusPanelPresentation = false,
 }: DrawerProps) {
     const [portalReady, setPortalReady] = useState(false);
     useEffect(() => {
@@ -157,7 +162,10 @@ export default function Drawer({
             measureAndApplyDrawerWorkspaceGeometry(root);
         };
         const mo = new MutationObserver(remeasure);
-        mo.observe(root, { attributes: true, attributeFilter: [BOS_ACTION_WORKSPACE_OPEN_ATTR] });
+        mo.observe(root, {
+            attributes: true,
+            attributeFilter: [BOS_ACTION_WORKSPACE_OPEN_ATTR, ALLOY_OS_RUNTIME_SPLIT_ATTR],
+        });
         return () => mo.disconnect();
     }, [isOpen, bosWorkspaceDrawerLayoutEarly]);
 
@@ -187,7 +195,9 @@ export default function Drawer({
         const onMouseDown = (e: MouseEvent) => {
             const target = e.target;
             if (target instanceof Element && target.closest(".adminv2-drawer-backdrop-hit")) return;
-            if (!shouldCloseAdminV2DrawerOnOutsideTarget(target)) return;
+            if (!shouldCloseAdminV2DrawerOnOutsideTarget(target, {
+                alloyOsSplitActive: isAlloyOsSplitGeometryActive(),
+            })) return;
             e.preventDefault();
             e.stopPropagation();
             onClose();
@@ -572,6 +582,7 @@ export default function Drawer({
                     data-adminv2-drawer="true"
                     data-adminv2-record-modal="true"
                     data-adminv2-record-modal-tone={cleaningRecordModalTone ? "cleaning-v2" : undefined}
+                    data-alloy-os-focus-panel-docked={focusPanelPresentation ? "true" : undefined}
                     className={`adminv2-drawer-modal-panel adminv2-drawer-shell-inset pointer-events-auto fixed flex max-h-[min(920px,100%)] flex-col overflow-hidden rounded-2xl border border-solid shadow-2xl animate-in fade-in zoom-in-[0.99] duration-300 ${bosModalDrawerLayout ? "adminv2-drawer-modal-panel--bos-rail" : "left-1/2 w-[min(calc(100vw-1.5rem),80rem)] -translate-x-1/2"} ${cleaningRecordModalTone ? "min-h-[min(520px,50%)]" : ""} ${bosModalDrawerLayout ? "" : (panelClassName ?? "max-w-5xl")}`}
                     style={
                         cleaningRecordModalTone && recordModalContextStyle
