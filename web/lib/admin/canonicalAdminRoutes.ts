@@ -7,8 +7,10 @@
  * - `/workspace/work-unit/:workUnitSlug/:recordId` — drawer URL state
  *
  * **Admin / config:**
- * - `/admin` — admin / settings / config landing (not operator home)
- * - `/admin/settings/*` — settings sub-surfaces (exact `/admin/settings` redirects to `/admin` interim)
+ * - `/settings` — Configuration landing (Alloy OS Configuration Runtime canonical)
+ * - `/settings/*` — settings sub-surfaces
+ * - `/admin/settings/*` — compatibility redirect → `/settings/*`
+ * - `/admin` — compatibility redirect → `/settings`
  *
  * **Legacy:**
  * - `/legacy-admin` — archived old admin
@@ -16,13 +18,16 @@
  * **H1 compatibility:** `/admin/workspace` still rewrites to operator workspace until bookmarks migrate.
  */
 
-/** Public canonical admin base — use for product nav hrefs. */
+/** Public canonical admin base — non-settings admin modules (forms, workflows, …). */
 export const CANONICAL_ADMIN_BASE = "/admin" as const;
+
+/** Alloy OS Configuration Runtime — canonical Settings base URL. */
+export const CANONICAL_SETTINGS_BASE = "/settings" as const;
 
 /** Legacy admin implementation base (financials, old list pages, unmigrated system). */
 export const LEGACY_ADMIN_BASE = "/legacy-admin" as const;
 
-/** Transitional — redirects to {@link CANONICAL_ADMIN_BASE}. */
+/** Transitional — redirects to {@link CANONICAL_ADMIN_CONFIG_LANDING}. */
 export const TRANSITIONAL_ADMIN_V2_BASE = "/adminV2" as const;
 
 /** Canonical workspace entry under admin (H1 interim — operator home until `/workspace` ships). */
@@ -34,8 +39,8 @@ export const CANONICAL_OPERATOR_BASE = "/workspace" as const;
 /** Phase G — work-unit queue route prefix. */
 export const CANONICAL_OPERATOR_WORK_UNIT_PREFIX = `${CANONICAL_OPERATOR_BASE}/work-unit` as const;
 
-/** Admin / settings / config landing — not the operator home. */
-export const CANONICAL_ADMIN_CONFIG_LANDING = CANONICAL_ADMIN_BASE;
+/** Admin / settings / config landing — Alloy OS Configuration Runtime. */
+export const CANONICAL_ADMIN_CONFIG_LANDING = CANONICAL_SETTINGS_BASE;
 
 /**
  * Path prefixes served by the canonical AdminV2 app (rewrite targets).
@@ -44,6 +49,7 @@ export const CANONICAL_ADMIN_CONFIG_LANDING = CANONICAL_ADMIN_BASE;
 export const CANONICAL_ADMIN_PATH_PREFIXES = [
     `${CANONICAL_ADMIN_BASE}/workspace`,
     `${CANONICAL_ADMIN_BASE}/settings`,
+    `${CANONICAL_SETTINGS_BASE}`,
     `${CANONICAL_ADMIN_BASE}/forms`,
     `${CANONICAL_ADMIN_BASE}/workflows`,
     `${CANONICAL_ADMIN_BASE}/messages`,
@@ -59,6 +65,7 @@ export const CANONICAL_ADMIN_PATH_PREFIXES = [
 export function isCanonicalAdminPath(pathname: string): boolean {
     const p = pathname.trim();
     if (p === CANONICAL_ADMIN_BASE) return true;
+    if (p === CANONICAL_SETTINGS_BASE || p.startsWith(`${CANONICAL_SETTINGS_BASE}/`)) return true;
     return CANONICAL_ADMIN_PATH_PREFIXES.some(
         (prefix) => p === prefix || p.startsWith(`${prefix}/`),
     );
@@ -75,11 +82,17 @@ export function legacyAdminRedirectTarget(pathname: string): string | null {
     return `${LEGACY_ADMIN_BASE}${suffix}`;
 }
 
-/** Normalize transitional `/adminV2` or `/admin/v2` paths to canonical `/admin`. */
+/** Normalize transitional `/adminV2` or `/admin/v2` paths to canonical settings landing. */
 export function normalizeTransitionalAdminPath(pathname: string): string | null {
     const p = pathname.trim();
     if (p === TRANSITIONAL_ADMIN_V2_BASE) {
         return CANONICAL_ADMIN_CONFIG_LANDING;
+    }
+    if (p.startsWith(`${TRANSITIONAL_ADMIN_V2_BASE}/settings/`)) {
+        return `${CANONICAL_SETTINGS_BASE}${p.slice(`${TRANSITIONAL_ADMIN_V2_BASE}/settings`.length)}`;
+    }
+    if (p === `${TRANSITIONAL_ADMIN_V2_BASE}/settings`) {
+        return CANONICAL_SETTINGS_BASE;
     }
     if (p.startsWith(`${TRANSITIONAL_ADMIN_V2_BASE}/`)) {
         return `${CANONICAL_ADMIN_BASE}${p.slice(TRANSITIONAL_ADMIN_V2_BASE.length)}`;
@@ -87,8 +100,20 @@ export function normalizeTransitionalAdminPath(pathname: string): string | null 
     if (p === "/admin/v2" || p === "/adminv2") {
         return CANONICAL_ADMIN_CONFIG_LANDING;
     }
+    if (p.startsWith("/admin/v2/settings/")) {
+        return `${CANONICAL_SETTINGS_BASE}${p.slice("/admin/v2/settings".length)}`;
+    }
+    if (p === "/admin/v2/settings") {
+        return CANONICAL_SETTINGS_BASE;
+    }
     if (p.startsWith("/admin/v2/")) {
         return `${CANONICAL_ADMIN_BASE}${p.slice("/admin/v2".length)}`;
+    }
+    if (p.startsWith("/adminv2/settings/")) {
+        return `${CANONICAL_SETTINGS_BASE}${p.slice("/adminv2/settings".length)}`;
+    }
+    if (p === "/adminv2/settings") {
+        return CANONICAL_SETTINGS_BASE;
     }
     if (p.startsWith("/adminv2/")) {
         return `${CANONICAL_ADMIN_BASE}${p.slice("/adminv2".length)}`;
@@ -105,6 +130,8 @@ export function isOperatorAdminPath(pathname: string): boolean {
     return (
         p === CANONICAL_ADMIN_BASE ||
         p.startsWith(`${CANONICAL_ADMIN_BASE}/`) ||
+        p === CANONICAL_SETTINGS_BASE ||
+        p.startsWith(`${CANONICAL_SETTINGS_BASE}/`) ||
         p === LEGACY_ADMIN_BASE ||
         p.startsWith(`${LEGACY_ADMIN_BASE}/`) ||
         p === TRANSITIONAL_ADMIN_V2_BASE ||
@@ -116,8 +143,32 @@ export function isOperatorAdminPath(pathname: string): boolean {
     );
 }
 
+/** Normalize browser pathname to canonical settings paths (`/settings/...`). */
+export function normalizeToCanonicalSettingsPath(pathname: string): string {
+    const trimmed = pathname.trim();
+    if (trimmed === "/admin" || trimmed === "/admin/settings") {
+        return CANONICAL_SETTINGS_BASE;
+    }
+    if (trimmed.startsWith("/admin/settings/")) {
+        return `${CANONICAL_SETTINGS_BASE}${trimmed.slice("/admin/settings".length)}`;
+    }
+    if (trimmed === CANONICAL_SETTINGS_BASE || trimmed.startsWith(`${CANONICAL_SETTINGS_BASE}/`)) {
+        return trimmed;
+    }
+    if (trimmed === TRANSITIONAL_ADMIN_V2_BASE || trimmed === "/admin/v2" || trimmed === "/adminv2") {
+        return CANONICAL_SETTINGS_BASE;
+    }
+    if (trimmed.startsWith(`${TRANSITIONAL_ADMIN_V2_BASE}/settings/`)) {
+        return `${CANONICAL_SETTINGS_BASE}${trimmed.slice(`${TRANSITIONAL_ADMIN_V2_BASE}/settings`.length)}`;
+    }
+    if (trimmed === `${TRANSITIONAL_ADMIN_V2_BASE}/settings`) {
+        return CANONICAL_SETTINGS_BASE;
+    }
+    return trimmed;
+}
+
 /**
- * Normalize browser pathname to canonical `/admin/...` for route matching.
+ * Normalize browser pathname to canonical settings or admin paths for route matching.
  * Accepts transitional `/adminV2`, `/admin/v2`, `/adminv2` aliases.
  */
 export function normalizeToCanonicalAdminPath(pathname: string): string {
@@ -125,6 +176,15 @@ export function normalizeToCanonicalAdminPath(pathname: string): string {
     if (trimmed === CANONICAL_OPERATOR_BASE || trimmed.startsWith(`${CANONICAL_OPERATOR_BASE}/`)) {
         return trimmed;
     }
+
+    const settingsNormalized = normalizeToCanonicalSettingsPath(trimmed);
+    if (
+        settingsNormalized === CANONICAL_SETTINGS_BASE ||
+        settingsNormalized.startsWith(`${CANONICAL_SETTINGS_BASE}/`)
+    ) {
+        return settingsNormalized;
+    }
+
     if (trimmed === TRANSITIONAL_ADMIN_V2_BASE) {
         return CANONICAL_ADMIN_CONFIG_LANDING;
     }
@@ -164,7 +224,8 @@ export function isCanonicalWorkspacePath(pathname: string): boolean {
 
 export function isCanonicalSettingsPath(pathname: string): boolean {
     const p = normalizeToCanonicalAdminPath(pathname.trim());
-    if (p === CANONICAL_ADMIN_BASE || p === CANONICAL_ADMIN_CONFIG_LANDING) return true;
+    if (p === CANONICAL_SETTINGS_BASE || p.startsWith(`${CANONICAL_SETTINGS_BASE}/`)) return true;
+    if (p === CANONICAL_ADMIN_CONFIG_LANDING) return true;
     return matchesCanonicalPrefix(pathname, `${CANONICAL_ADMIN_BASE}/settings`);
 }
 
@@ -181,7 +242,7 @@ export function isCanonicalAiActivityPath(pathname: string): boolean {
 }
 
 /**
- * Drawer VM and workspace runtime gates — canonical `/admin` plus transitional aliases
+ * Drawer VM and workspace runtime gates — canonical settings plus transitional aliases
  * until redirects fully settle bookmarks.
  */
 export function isCanonicalDrawerHostPath(pathname: string | null | undefined): boolean {
@@ -204,13 +265,13 @@ export const ADMIN_WORKFLOWS_HREF = `${CANONICAL_ADMIN_BASE}/workflows` as const
 /** Product nav — AI activity module base. */
 export const ADMIN_AI_ACTIVITY_HREF = `${CANONICAL_ADMIN_BASE}/ai-activity` as const;
 
-/** Product nav — settings sub-surfaces (`/admin/settings/...`). Exact `/admin` is settings landing. */
-export const ADMIN_SETTINGS_SUBPATH_PREFIX = `${CANONICAL_ADMIN_BASE}/settings` as const;
+/** Product nav — settings sub-surfaces (`/settings/...`). */
+export const ADMIN_SETTINGS_SUBPATH_PREFIX = CANONICAL_SETTINGS_BASE;
 
 /** Product nav — Settings → Layouts gallery (Experience Builder). */
 export const LAYOUTS_SETTINGS_HREF = `${ADMIN_SETTINGS_SUBPATH_PREFIX}/layouts` as const;
 
-/** Build `/admin/settings/:subpath` for product nav (never `/adminV2/settings/...`). */
+/** Build `/settings/:subpath` for product nav (never `/adminV2/settings/...`). */
 export function adminSettingsSubpathHref(subpath: string): string {
     const trimmed = subpath.trim().replace(/^\//, "").replace(/^settings\/?/, "");
     if (!trimmed) return ADMIN_SETTINGS_SUBPATH_PREFIX;
@@ -221,6 +282,9 @@ export function adminSettingsSubpathHref(subpath: string): string {
 export function adminProductHref(segment: string): string {
     const trimmed = segment.trim().replace(/^\//, "");
     if (!trimmed) return CANONICAL_ADMIN_CONFIG_LANDING;
+    if (trimmed === "settings" || trimmed.startsWith("settings/")) {
+        return adminSettingsSubpathHref(trimmed.replace(/^settings\/?/, ""));
+    }
     return `${CANONICAL_ADMIN_BASE}/${trimmed}`;
 }
 
@@ -228,13 +292,31 @@ export function adminProductHref(segment: string): string {
 export function canonicalAdminHref(path: string): string {
     const trimmed = path.trim();
     if (trimmed.startsWith(TRANSITIONAL_ADMIN_V2_BASE)) {
-        return `${CANONICAL_ADMIN_BASE}${trimmed.slice(TRANSITIONAL_ADMIN_V2_BASE.length)}`;
+        const suffix = trimmed.slice(TRANSITIONAL_ADMIN_V2_BASE.length);
+        if (suffix === "/settings" || suffix.startsWith("/settings/")) {
+            return `${CANONICAL_SETTINGS_BASE}${suffix.slice("/settings".length)}`;
+        }
+        return `${CANONICAL_ADMIN_BASE}${suffix}`;
     }
     if (trimmed.startsWith("/admin/v2")) {
-        return `${CANONICAL_ADMIN_BASE}${trimmed.slice("/admin/v2".length)}`;
+        const suffix = trimmed.slice("/admin/v2".length);
+        if (suffix === "/settings" || suffix.startsWith("/settings/")) {
+            return `${CANONICAL_SETTINGS_BASE}${suffix.slice("/settings".length)}`;
+        }
+        return `${CANONICAL_ADMIN_BASE}${suffix}`;
     }
     if (trimmed.startsWith("/adminv2")) {
-        return `${CANONICAL_ADMIN_BASE}${trimmed.slice("/adminv2".length)}`;
+        const suffix = trimmed.slice("/adminv2".length);
+        if (suffix === "/settings" || suffix.startsWith("/settings/")) {
+            return `${CANONICAL_SETTINGS_BASE}${suffix.slice("/settings".length)}`;
+        }
+        return `${CANONICAL_ADMIN_BASE}${suffix}`;
+    }
+    if (trimmed.startsWith("/admin/settings/")) {
+        return `${CANONICAL_SETTINGS_BASE}${trimmed.slice("/admin/settings".length)}`;
+    }
+    if (trimmed === "/admin/settings" || trimmed === "/admin") {
+        return CANONICAL_SETTINGS_BASE;
     }
     return trimmed;
 }

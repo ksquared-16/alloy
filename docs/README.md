@@ -51,6 +51,8 @@ Start here: **`platform/foundation/system-overview.md`**
 14. `platform/operator/operator-story.md` — **lived operator experience** (open → work → interrupt → return)
 15. `platform/operator/alloy-visual-language.md` — **visual doctrine** (how the model looks/feels; bridge into mockups)
 16. `platform/operator/alloy-runtime-specification.md` — **runtime specification** (synthesis; read before building any domain)
+17. `platform/operator/alloy-os-runtime-completion.md` — **Runtime Completion & Freeze** (✅ runtime complete; ownership matrix, config handoff, final verdict — start here for runtime status)
+17. `platform/operator/universal-card-system.md` — **Universal Card System** (System 4 design freeze; no code until checklist approved)
 17. `platform/operator/queue-system.md`
 18. `platform/operator/drawer-system.md`
 19. `platform/operator/experience-builder-doctrine.md` — LayoutDoc, builder, queue v3, actions/widgets
@@ -118,6 +120,7 @@ CSV source: `supabase/reference/*.csv` (8 files)
 | Routing detail | `system/routing-doctrine.md` |
 | Drawer VM contracts | `system/drawer-doctrine.md`, `drawer-operating-model-v1.md`, `drawer-view-model-runtime-contract.md` |
 | Operating Plan runtime | `system/operating-plan-runtime-doctrine.md` |
+| Configuration Runtime (Settings IA) | `system/configuration-runtime-design-alignment.md` |
 | Legacy inventory | `system/legacy-architecture-inventory.md` |
 
 ---

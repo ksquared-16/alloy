@@ -12,21 +12,23 @@ Settings must feel like part of the product — not an admin console organized a
 |--------|---------|------------------|
 | **Organization** | Who uses the system and where? | Locations, Users & access, Communications |
 | **Data Model** | What data exists? | Fields, Option lists, Relationships |
-| **Operations** | How does work move? | Business Processes, Statuses, Actions, Automations |
-| **Experience** | How is information collected and displayed? | Layouts, Forms, Workspace metrics |
+| **Operations** | How does work move? | Business Processes (stages, **perspectives**, missions, required info), Statuses, Actions, Automations |
+| **Experience** | How is information collected and displayed? | Layouts (queue rows, Focus Panel presentation), Forms, Workspace metrics |
 
 ### Hard rules
 
 - **No Enrollment settings section.** Enrollment is a Business Process — tomorrow there may be Hiring, Onboarding, Case management. Processes are the abstraction.
 - **Work Units are runtime output**, not primary configuration. Lanes sync when a Business Process stage is saved.
+- **Perspectives** are Business Process stage metadata over queue lanes — not a separate settings product or builder.
+- **Queue rows and Focus Panel presentation** are authored in **Layouts / Experience Builder** — not in Business Processes and not via Queue Builder or Focus Panel Builder routes.
 - **Attention stage rules** belong in Business Processes (Expected Work + Attention section). Org-wide bucket labels remain in advanced Attention defaults.
 
 ## Setup journey (guidance, not a wizard)
 
 1. **Organization** — locations and access
 2. **Data Model** — fields and option lists
-3. **Operations** — business processes (stages, membership, requirements, attention, actions)
-4. **Experience** — layouts and forms
+3. **Operations** — business processes (stages, **perspectives**, membership, requirements, attention, actions); statuses vocabulary (Statuses sprint)
+4. **Experience** — layouts (queue rows, Focus Panel presentation) and forms
 
 Relationship operators should understand without docs:
 
@@ -57,14 +59,25 @@ Hidden from operator paths (not deleted):
 
 - Provider (`vendor`), Schedule (`schedule`), Job (`job`), Customer Member (`customer_member`)
 
-## Business Process stage structure
+## Parallel sprint dependencies
+
+Configuration Runtime **consumes** canonical systems — it does not duplicate them:
+
+| Sprint | Owner surface | Configuration Runtime must not… |
+|--------|---------------|-----------------------------------|
+| **Fields & Field Formats** | `/admin/settings/fields` | Add parallel field definitions, formats, or validation outside Fields |
+| **Statuses** | `/admin/settings/statuses` | Add status vocabulary or transition UI outside Statuses; stage assignment stays in Business Processes |
+
+---
 
 Per stage:
 
 1. Stage Membership
 2. Stage Requirements
 3. Operating Plan (expected work + attention rules)
-4. Ready Check
+4. Perspectives (lane metadata — Phase 2+ UI; registered in doctrine Phase 0/1)
+5. Layout assignments (published layouts from Experience Builder)
+6. Ready Check
 
 Process-level (not per-stage):
 
@@ -88,5 +101,6 @@ See `enrollment_workflow_qa_ready_path.md` for full QA walkthrough.
 ## Related docs
 
 - `configuration-ownership-doctrine.md` — canonical owner per concept
+- `configuration-runtime-design-alignment.md` — Alloy OS Configuration Runtime (approved design)
 - `field-model-convergence-doctrine.md` — Fields registry → Layouts / Forms / BP
 - `settings-v2-doctrine.md` — visual reference (Business Processes workspace)

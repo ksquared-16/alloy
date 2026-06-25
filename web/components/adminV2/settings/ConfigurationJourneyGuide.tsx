@@ -10,8 +10,9 @@ export default function ConfigurationJourneyGuide() {
         >
             <h2 className="text-sm font-semibold text-alloy-midnight">How configuration fits together</h2>
             <p className="mt-1 max-w-3xl text-xs leading-relaxed text-alloy-midnight/55">
-                Define what you track, how work moves, and how staff see it — then runtime drawers, queues, and
-                actions read from the same configuration.
+                Business Processes is the operational spine — stages, perspectives, missions, and required
+                info. Layouts (Experience Builder) owns queue rows and Focus Panel presentation. Fields and
+                Statuses are canonical catalogs configured in their own settings surfaces.
             </p>
 
             <div
@@ -22,11 +23,15 @@ export default function ConfigurationJourneyGuide() {
                 <span className="text-alloy-midnight/35" aria-hidden>
                     →
                 </span>
+                <span className="rounded-md bg-white px-2 py-1 shadow-sm">Statuses</span>
+                <span className="text-alloy-midnight/35" aria-hidden>
+                    →
+                </span>
+                <span className="rounded-md bg-alloy-pine/10 px-2 py-1 text-alloy-pine">Business Processes</span>
+                <span className="text-alloy-midnight/35" aria-hidden>
+                    →
+                </span>
                 <span className="rounded-md bg-white px-2 py-1 shadow-sm">Layouts</span>
-                <span className="text-alloy-midnight/35">/</span>
-                <span className="rounded-md bg-white px-2 py-1 shadow-sm">Forms</span>
-                <span className="text-alloy-midnight/35">/</span>
-                <span className="rounded-md bg-white px-2 py-1 shadow-sm">Business Processes</span>
                 <span className="text-alloy-midnight/35" aria-hidden>
                     →
                 </span>

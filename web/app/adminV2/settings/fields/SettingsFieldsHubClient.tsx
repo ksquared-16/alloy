@@ -13,7 +13,7 @@ import {
 } from "@/lib/fields/childcareFieldCatalogDoctrine";
 import SettingsEntityTabBar from "@/components/adminV2/settings/SettingsEntityTabBar";
 
-const MANAGE_OPTION_SETS_HREF = "/admin/settings/option-sets";
+const MANAGE_OPTION_SETS_HREF = "/settings/option-sets";
 
 export type FieldEntityKey =
     | "person"
@@ -37,7 +37,7 @@ function normalizeEntity(raw: string | undefined): FieldEntityKey {
 function settingsFieldsBasePath(pathname: string): string {
     if (pathname.startsWith("/admin/v2/settings")) return "/admin/v2/settings/fields";
     if (pathname.startsWith("/adminv2/settings")) return "/adminv2/settings/fields";
-    return "/admin/settings/fields";
+    return "/settings/fields";
 }
 
 export default function SettingsFieldsHubClient({ initialEntity }: { initialEntity?: string }) {

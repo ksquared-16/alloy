@@ -61,6 +61,18 @@ export const BUSINESS_PROCESS_SECTION_OPERATING_PLAN = "Operating Plan";
 export const BUSINESS_PROCESS_SECTION_OPERATING_PLAN_SUMMARY =
     "What staff should do in this stage: purpose, expected work, success criteria, and when records need attention. Process Actions are configured at the process level below the stage list.";
 
+export const BUSINESS_PROCESS_SECTION_PERSPECTIVES = "Perspectives";
+export const BUSINESS_PROCESS_SECTION_PERSPECTIVES_SUMMARY =
+    "Operational lenses staff switch between in the work unit — each maps to a synced queue lane.";
+export const BUSINESS_PROCESS_PERSPECTIVES_INTRO =
+    "Perspectives are configuration metadata over queue lanes synced when you save this stage. Queue row and Focus Panel presentation are authored in Layouts (Experience Builder).";
+export const BUSINESS_PROCESS_PERSPECTIVES_SAVE_PENDING_NOTE =
+    "Perspective metadata save wiring is pending (Phase 2B). Edits here are staged locally and are not persisted yet.";
+export const BUSINESS_PROCESS_PERSPECTIVES_SINGLE_LANE_NOTE =
+    "This stage exposes one lens. Multi-perspective rails appear when a stage syncs multiple queue lanes.";
+export const BUSINESS_PROCESS_PERSPECTIVES_NO_LANES_NOTE =
+    "Save this stage once to sync queue lanes, then configure perspective labels and missions here.";
+
 export const BUSINESS_PROCESS_SECTION_EXPECTED_WORK = "Expected work";
 export const BUSINESS_PROCESS_SECTION_EXPECTED_WORK_SUMMARY =
     "Tasks and outcomes staff should complete while records are in this stage.";

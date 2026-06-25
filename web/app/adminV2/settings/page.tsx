@@ -75,8 +75,9 @@ export default function AdminV2SettingsIndexPage() {
                         Advanced
                     </h2>
                     <p className="mt-1 text-xs leading-relaxed text-alloy-midnight/50">
-                        Diagnostics and org-wide defaults — not everyday configuration. Attention stage rules
-                        live in Business Processes; work units are runtime output.
+                        Diagnostics and org-wide defaults — not everyday configuration. Perspectives and stage
+                        rules live in Business Processes; queue and Focus Panel presentation in Layouts; work
+                        units are runtime output.
                     </p>
                 </div>
                 <div className="mt-3 grid gap-2 sm:grid-cols-2">

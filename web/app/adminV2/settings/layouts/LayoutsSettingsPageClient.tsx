@@ -93,7 +93,7 @@ function LayoutsSettingsPageClientInner() {
                     <p className="mt-0.5 text-xs text-alloy-midnight/45">
                         Create, duplicate, edit, and publish layout documents. Assign published layouts to business
                         process stages from{" "}
-                        <Link href="/admin/settings/business-processes" className="font-medium text-alloy-pine hover:underline">
+                        <Link href="/settings/business-processes" className="font-medium text-alloy-pine hover:underline">
                             Settings → Business processes
                         </Link>
                         .

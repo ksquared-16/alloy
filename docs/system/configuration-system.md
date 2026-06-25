@@ -12,7 +12,7 @@ Define what **configuration** is allowed to control vs what must remain **platfo
 | **Runtime (operational)** | Business logic and side effects: entity PATCH, `executeAdminAction`, `executeWorkflowRun`, dedicated tour/quote/job flows, status transitions. |
 | **Integrity / diagnostics** | Read-only checks (e.g. layout integrity) that config matches enforceable write paths — not a second config store. |
 
-**Principles:** No second source of truth; no builder-only hidden config; no AI-only config model. **BOS config capabilities** use the same structured PATCH helpers and tables as human operators (see **BOS readiness** below; doctrine **`docs/product/bos-foundation.md`**).
+**Principles:** No second source of truth; no builder-only hidden config; no AI-only config model. **Alloy OS Configuration Runtime** design alignment (Settings IA, ownership copy, sprint dependencies): **`docs/system/configuration-runtime-design-alignment.md`**. **BOS config capabilities** use the same structured PATCH helpers and tables as human operators (see **BOS readiness** below; doctrine **`docs/product/bos-foundation.md`**).
 
 ## Four-plane operator model (Records settings)
 

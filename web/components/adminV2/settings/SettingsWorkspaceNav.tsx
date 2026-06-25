@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { AdminV2NavLink } from "@/app/adminV2/components/navigation/AdminV2NavLink";
 import {
     CANONICAL_ADMIN_CONFIG_LANDING,
+    CANONICAL_SETTINGS_BASE,
     normalizeToCanonicalAdminPath,
 } from "@/lib/admin/canonicalAdminRoutes";
 import {
@@ -26,7 +27,11 @@ export default function SettingsWorkspaceNav() {
     const pathname = usePathname();
     const path = useMemo(() => normalizeToCanonicalAdminPath(pathname), [pathname]);
     const activeDomain = configurationWorkspaceDomainForPath(path);
-    const isHub = path === CANONICAL_ADMIN_CONFIG_LANDING || path === "/admin/settings";
+    const isHub =
+        path === CANONICAL_ADMIN_CONFIG_LANDING ||
+        path === CANONICAL_SETTINGS_BASE ||
+        path === "/admin/settings" ||
+        path === "/admin";
     const [collapsed, setCollapsed] = useState(false);
 
     useEffect(() => {
@@ -105,7 +110,7 @@ export default function SettingsWorkspaceNav() {
                                     <AdminV2NavLink
                                         href={item.href}
                                         active={navItemActive(item.href, path)}
-                                        title={item.label}
+                                        title={item.description ?? item.label}
                                         className={`block rounded-lg text-[13px] leading-snug transition-colors ${
                                             item.emphasis ? "font-semibold" : "font-medium"
                                         } ${

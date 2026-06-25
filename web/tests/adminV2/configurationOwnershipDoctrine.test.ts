@@ -33,6 +33,7 @@ describe("configuration ownership doctrine — drift prevention", () => {
         expect(workspace).toContain("stage-membership-included-statuses");
         expect(workspace).toContain("STAGE_MEMBERSHIP_INCLUDED_STATUSES_LABEL");
         expect(workspace).toContain('id="operating_plan"');
+        expect(workspace).toContain('id="perspectives"');
         expect(read("components/adminV2/settings/lifecycle/LifecycleStageOperatingPlanEditor.tsx")).toContain(
             "LifecycleStageAttentionRulesEditor",
         );
@@ -77,5 +78,6 @@ describe("configuration ownership doctrine — drift prevention", () => {
         expect(doc).toContain("Business Processes");
         expect(doc).toContain("queueMembershipWithSyncedStatusKeys");
         expect(doc).toContain("lifecycle_builder_stage_field_rules_v1");
+        expect(doc).toContain("configuration-runtime-design-alignment.md");
     });
 });

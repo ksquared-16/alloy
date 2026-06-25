@@ -14,6 +14,8 @@ import {
     BUSINESS_PROCESS_SECTION_MEMBERSHIP_SUMMARY,
     BUSINESS_PROCESS_SECTION_OPERATING_PLAN,
     BUSINESS_PROCESS_SECTION_OPERATING_PLAN_SUMMARY,
+    BUSINESS_PROCESS_SECTION_PERSPECTIVES,
+    BUSINESS_PROCESS_SECTION_PERSPECTIVES_SUMMARY,
     BUSINESS_PROCESS_SECTION_READY,
     BUSINESS_PROCESS_SECTION_READY_SUMMARY,
     BUSINESS_PROCESS_SECTION_REQUIRED,
@@ -37,6 +39,7 @@ import LifecycleStageQueueMembershipEditor, {
 import LifecycleStageOperatingPlanEditor, {
     type LifecycleStageOperatingPlanEditorHandle,
 } from "@/components/adminV2/settings/lifecycle/LifecycleStageOperatingPlanEditor";
+import LifecycleStagePerspectivesEditor from "@/components/adminV2/settings/lifecycle/LifecycleStagePerspectivesEditor";
 import type { LifecycleStageBootstrapPayload } from "@/lib/lifecycle/lifecycleStageBootstrapTypes";
 import {
     queueMembershipSubjectForStatusOptions,
@@ -48,7 +51,7 @@ import type { LifecycleStageFieldRulesStored } from "@/lib/lifecycle/lifecycleSt
 import type { LifecycleRequirementEntityKey } from "@/lib/lifecycle/lifecycleFieldRequirementsCatalog";
 export type LifecycleStageSaveUiState = "idle" | "unsaved" | "saving" | "saved" | "error";
 
-type SectionId = "membership" | "required" | "operating_plan" | "ready_check";
+type SectionId = "membership" | "required" | "operating_plan" | "perspectives" | "ready_check";
 
 function countFieldRules(rules: LifecycleStageFieldRules | undefined): number {
     if (!rules) return 0;
@@ -402,6 +405,19 @@ export default function LifecycleStageWorkspace({
                             stageLabel={stageLabel}
                             savedPlan={bootstrap?.stage_operating_plan ?? null}
                             onDirtyChange={setOperatingPlanDirty}
+                        />
+                    :   <p className="text-xs text-alloy-midnight/50">Select a stage first.</p>}
+                </StageSection>
+
+                <StageSection
+                    id="perspectives"
+                    title={BUSINESS_PROCESS_SECTION_PERSPECTIVES}
+                    summary={BUSINESS_PROCESS_SECTION_PERSPECTIVES_SUMMARY}
+                >
+                    {stageKey.trim() ?
+                        <LifecycleStagePerspectivesEditor
+                            pipeline={bootstrap?.pipeline ?? null}
+                            loading={bootstrapLoading}
                         />
                     :   <p className="text-xs text-alloy-midnight/50">Select a stage first.</p>}
                 </StageSection>

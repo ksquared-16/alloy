@@ -13,10 +13,10 @@ import {
 import { operatorWorkUnitHrefFromKey, parseOperatorWorkUnitPath, normalizeOperatorPathname } from "@/lib/admin/canonicalOperatorRoutes";
 
 describe("canonicalAdminRoutes", () => {
-    it("maps transitional adminV2 paths to canonical /admin config landing", () => {
+    it("maps transitional adminV2 paths to canonical /settings", () => {
         expect(normalizeTransitionalAdminPath("/adminV2")).toBe(CANONICAL_ADMIN_CONFIG_LANDING);
         expect(normalizeTransitionalAdminPath("/adminV2/settings/lifecycle")).toBe(
-            "/admin/settings/lifecycle",
+            "/settings/lifecycle",
         );
     });
 

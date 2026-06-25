@@ -17,7 +17,7 @@ import {
 function layoutsBasePath(pathname: string): string {
     if (pathname.startsWith("/admin/v2/settings")) return "/admin/v2/settings/layouts";
     if (pathname.startsWith("/adminv2/settings")) return "/adminv2/settings/layouts";
-    return "/admin/settings/layouts";
+    return "/settings/layouts";
 }
 
 export default function LayoutsSettingsHubClient({ initialEntity }: { initialEntity?: string }) {
