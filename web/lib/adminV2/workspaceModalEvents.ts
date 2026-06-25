@@ -8,6 +8,7 @@ import {
 export const ADMIN_V2_OPEN_TASKS_PANEL = "adminv2:open-tasks-panel";
 export const ADMIN_V2_OPEN_INBOX_MODAL = "adminv2:open-inbox-modal";
 export const ADMIN_V2_OPEN_ANALYTICS_MODAL = "adminv2:open-analytics-modal";
+export const ADMIN_V2_OPEN_PROCESSING_MODAL = "adminv2:open-processing-modal";
 export const ADMIN_V2_CLOSE_WORKSPACE_MODALS = "adminv2:close-workspace-modals";
 
 export {
@@ -22,6 +23,10 @@ export {
 
 export function dispatchAdminV2OpenTasksPanel(): void {
     openWorkspaceModal("tasks");
+}
+
+export function dispatchAdminV2OpenProcessingModal(): void {
+    openWorkspaceModal("processing");
 }
 
 export function dispatchAdminV2OpenInboxModal(): void {

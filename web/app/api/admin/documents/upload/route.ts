@@ -16,6 +16,12 @@ import { assertEntityInOrg } from "@/lib/admin/assertEntityInOrg";
 import { normalizeDocumentRow } from "@/lib/admin/normalizeDocumentRow";
 import { classifySupabaseStorageError } from "@/lib/admin/storageDocumentErrors";
 import { emitEvent } from "@/lib/emitEvent";
+import { resolveUploadEntityTarget } from "@/lib/admin/resolveUploadEntityTarget";
+import { maybeOpenProcessingCaseFromNonFormSourceSafe } from "@/lib/pos/processingCase/maybeOpenProcessingCaseFromNonFormSourceSafe";
+import { maybeClassifyProcessingCaseFromDocumentSafe } from "@/lib/pos/processingCase/classification/maybeClassifyProcessingCaseFromDocumentSafe";
+import { maybeExtractProcessingCaseFromDocumentSafe } from "@/lib/pos/processingCase/extraction/maybeExtractProcessingCaseFromDocumentSafe";
+import { maybeBuildDocumentFormPreviewSafe } from "@/lib/pos/processingCase/structure/maybeBuildDocumentFormPreviewSafe";
+import { buildDocumentTextUpdate, extractPdfText, looksLikePdf } from "@/lib/pos/processingCase/structure/pdfTextExtract";
 
 export const DEFAULT_ORG_DOCUMENTS_BUCKET = "org_documents";
 
@@ -71,20 +77,26 @@ export async function POST(request: NextRequest) {
     const entityId = typeof formData.get("entity_id") === "string" ? (formData.get("entity_id") as string).trim() : "";
     const docType = typeof formData.get("doc_type") === "string" ? (formData.get("doc_type") as string).trim() || null : null;
     const titleRaw = typeof formData.get("title") === "string" ? (formData.get("title") as string).trim() || null : null;
+    // POS-FP1c opt-in: when explicitly requested, route the uploaded document into the
+    // existing Processing Case spine (non-form on-ramp). Default OFF — existing callers
+    // that don't send this flag are completely unaffected.
+    const openProcessingCase = formData.get("open_processing_case") === "true";
 
-    if (!entityTypeRaw || !entityId) {
-        return NextResponse.json({ error: "entity_type and entity_id are required", code: "MISSING_ENTITY" }, { status: 400 });
-    }
-
-    const canonicalType = CANONICAL_ENTITY_TYPE[entityTypeRaw] ?? entityTypeRaw;
-    if (!CANONICAL_ENTITY_TYPE[entityTypeRaw] && !Object.values(CANONICAL_ENTITY_TYPE).includes(canonicalType)) {
-        return NextResponse.json({ error: "Unsupported entity_type", code: "UNSUPPORTED_ENTITY" }, { status: 400 });
+    // Resolve where this document attaches. Normal uploads still require a valid entity;
+    // POS intake (open_processing_case=true) may upload without one (entity-less artifact).
+    const target = resolveUploadEntityTarget({ openProcessingCase, entityTypeRaw, entityId }, CANONICAL_ENTITY_TYPE);
+    if (!target.ok) {
+        return NextResponse.json({ error: target.message, code: target.code }, { status: 400 });
     }
 
     const supabase = createAdminClient();
-    const okEntity = await assertEntityInOrg(supabase, ctx.orgId, canonicalType, entityId);
-    if (!okEntity) {
-        return NextResponse.json({ error: "Entity not found for this organization", code: "ENTITY_NOT_FOUND" }, { status: 404 });
+    const canonicalType: string | null = target.mode === "entity" ? target.canonicalType : null;
+    const rowEntityId: string | null = target.mode === "entity" ? target.entityId : null;
+    if (target.mode === "entity") {
+        const okEntity = await assertEntityInOrg(supabase, ctx.orgId, target.canonicalType, target.entityId);
+        if (!okEntity) {
+            return NextResponse.json({ error: "Entity not found for this organization", code: "ENTITY_NOT_FOUND" }, { status: 404 });
+        }
     }
 
     const bucket = process.env.ADMIN_DOCUMENTS_BUCKET?.trim() || DEFAULT_ORG_DOCUMENTS_BUCKET;
@@ -93,7 +105,8 @@ export async function POST(request: NextRequest) {
     const origName = file instanceof File && file.name ? file.name : "upload";
     const safeName = sanitizeFilename(origName);
     const objectId = randomUUID();
-    const storagePath = `${ctx.orgId}/${canonicalType}/${entityId}/${objectId}-${safeName}`;
+    const pathSegment = canonicalType ? `${canonicalType}/${rowEntityId}` : "pos_intake";
+    const storagePath = `${ctx.orgId}/${pathSegment}/${objectId}-${safeName}`;
 
     const { error: upErr } = await supabase.storage.from(bucket).upload(storagePath, buffer, {
         contentType: file.type || "application/octet-stream",
@@ -116,7 +129,7 @@ export async function POST(request: NextRequest) {
         .insert({
             org_id: ctx.orgId,
             entity_type: canonicalType,
-            entity_id: entityId,
+            entity_id: rowEntityId,
             doc_type: docType,
             title,
             original_filename: origName !== "upload" ? origName : null,
@@ -144,6 +157,21 @@ export async function POST(request: NextRequest) {
 
     const document = normalizeDocumentRow(row as Record<string, unknown>);
     const docId = (row as { id: string }).id;
+
+    // POS-FP11b: best-effort text-only PDF extraction. We already have the bytes in
+    // memory. On success the text lands on `documents.extracted_text` so the structure
+    // preview (below) can use it. NEVER blocks the upload — any failure is swallowed and
+    // recorded as an extraction status. No OCR; scanned PDFs simply yield no text.
+    if (looksLikePdf(file.type, origName)) {
+        try {
+            const pdfResult = await extractPdfText(new Uint8Array(buffer));
+            const textUpdate = buildDocumentTextUpdate(pdfResult);
+            await supabase.from("documents").update(textUpdate).eq("org_id", ctx.orgId).eq("id", docId);
+        } catch (e) {
+            console.warn("[documents/upload] pdf text extraction", e instanceof Error ? e.message : e);
+        }
+    }
+
     try {
         await emitEvent({
             org_id: ctx.orgId,
@@ -152,7 +180,7 @@ export async function POST(request: NextRequest) {
             entity_id: docId,
             payload: {
                 canonical_entity_type: canonicalType,
-                entity_id: entityId,
+                entity_id: rowEntityId,
                 doc_type: docType,
                 storage_path: storagePath,
                 actor_user_id: ctx.userId,
@@ -161,5 +189,94 @@ export async function POST(request: NextRequest) {
     } catch (e) {
         console.warn("[documents/upload] emitEvent", e instanceof Error ? e.message : e);
     }
-    return NextResponse.json({ document, raw: row });
+
+    // POS-FP1c: opt-in, best-effort non-form on-ramp. Reuses the existing Processing
+    // Case engine (idempotent on the primary source); never throws, never blocks the
+    // upload response. No extraction/matching/commit happens here — that stays honest
+    // in the review spine (a document source resolves to a "routed" no-op on approval).
+    let processingCaseId: string | null = null;
+    let classificationKey: string | null = null;
+    let candidateCount: number | null = null;
+    // Defensive outer guard: the upload has already succeeded (storage + row + event).
+    // Opening the case / classification / extraction are all best-effort and must NEVER
+    // turn a successful upload into a failed response, even if a helper is changed later.
+    try {
+      if (openProcessingCase) {
+        const opened = await maybeOpenProcessingCaseFromNonFormSourceSafe(supabase, {
+            orgId: ctx.orgId,
+            sourceKind: "document",
+            sourceId: docId,
+        });
+        processingCaseId = opened?.processingCaseId ?? null;
+
+        // POS-FP9: classify the opened case from cheap document signals (filename /
+        // mime / doc_type / metadata). Classification ONLY — no extraction, no record
+        // writes, no status change. Best-effort; never blocks the upload response.
+        if (processingCaseId) {
+            const docRow = row as {
+                original_filename?: string | null;
+                mime_type?: string | null;
+                doc_type?: string | null;
+                title?: string | null;
+                metadata?: Record<string, unknown> | null;
+            };
+            const classified = await maybeClassifyProcessingCaseFromDocumentSafe(supabase, {
+                orgId: ctx.orgId,
+                caseId: processingCaseId,
+                document: {
+                    sourceKind: "document",
+                    fileName: docRow.original_filename ?? origName,
+                    mimeType: docRow.mime_type ?? (file.type || null),
+                    docType: docRow.doc_type ?? docType,
+                    title: docRow.title ?? title,
+                    metadata: docRow.metadata ?? null,
+                },
+            });
+            classificationKey = classified?.classification_key ?? null;
+
+            // POS-FP10 (intake-aligned): run the shared intake pipeline (document → facts →
+            // field candidates) for the classified case. PROPOSALS ONLY — no extraction of
+            // record truth, no matching, no commit, no status change. Best-effort.
+            if (classified) {
+                const docMeta = (docRow.metadata ?? null) as Record<string, unknown> | null;
+                candidateCount =
+                    (
+                        await maybeExtractProcessingCaseFromDocumentSafe(supabase, {
+                            orgId: ctx.orgId,
+                            caseId: processingCaseId,
+                            classificationKey: classified.classification_key,
+                            sourceId: docId,
+                            document: {
+                                fileName: docRow.original_filename ?? origName,
+                                title: docRow.title ?? title,
+                                docType: docRow.doc_type ?? docType,
+                                metadata: docMeta,
+                            },
+                        })
+                    )?.candidates.length ?? null;
+            }
+
+            // POS-FP11: build a Document → Form structure PREVIEW (text → sections/fields).
+            // Preview only — no form created, no publish, no record write. Best-effort;
+            // honest empty preview when no document text is available.
+            await maybeBuildDocumentFormPreviewSafe(supabase, {
+                orgId: ctx.orgId,
+                caseId: processingCaseId,
+                documentId: docId,
+            });
+        }
+      }
+    } catch (e) {
+        // Swallowed: a successful upload must not be reported as a failure because a
+        // downstream best-effort step (open case / classify / extract) errored.
+        console.warn("[documents/upload] processing-case side-effect", e instanceof Error ? e.message : e);
+    }
+
+    return NextResponse.json({
+        document,
+        raw: row,
+        processing_case_id: processingCaseId,
+        classification_key: classificationKey,
+        extraction_candidate_count: candidateCount,
+    });
 }

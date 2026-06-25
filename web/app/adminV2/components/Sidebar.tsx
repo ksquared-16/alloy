@@ -6,6 +6,7 @@ import {
     ChevronDown,
     ChevronRight,
     Home,
+    Layers,
     PanelLeftClose,
     PanelLeft,
     Settings,
@@ -18,6 +19,7 @@ import {
     isCanonicalFormsPath,
     normalizeToCanonicalAdminPath,
 } from "@/lib/admin/canonicalAdminRoutes";
+import { dispatchAdminV2OpenProcessingModal } from "@/lib/adminV2/workspaceModalEvents";
 import { parseOperatorWorkUnitPath } from "@/lib/admin/canonicalOperatorRoutes";
 import type { OperatorLifecycleLandingCard } from "@/lib/admin/buildOperatorLifecycleLanding";
 import {
@@ -29,7 +31,6 @@ import { workUnitRouteSlugsEquivalent } from "@/lib/admin/workUnitRouteSlug";
 import { AdminV2NavLink } from "@/app/adminV2/components/navigation/AdminV2NavLink";
 import {
     SidebarAnalyticsNavItem,
-    SidebarFormsNavItem,
     SidebarInboxNavItem,
     SidebarTasksNavItem,
 } from "@/app/adminV2/components/SidebarModalNavItems";
@@ -137,13 +138,34 @@ function SidebarNav({
         </AdminV2NavLink>
     );
 
+    // POS-FP-W: Processing is the operator-facing entry (replaces the Forms nav slot).
+    // It opens as a context-preserving workspace modal (Communications doctrine) — a nav
+    // button that dispatches the open event, not a route navigation. Forms/library/composer
+    // remain reachable inside Processing later; Forms is no longer the primary nav label.
+    const processingLink = (
+        <button
+            type="button"
+            title="Processing"
+            aria-label="Processing"
+            onClick={() => dispatchAdminV2OpenProcessingModal()}
+            className={collapsed ? "adminv2-sidebar-rail-link" : EXPANDED_PRIMARY_LINK}
+        >
+            {collapsed ? (
+                <Layers size={20} strokeWidth={1.75} />
+            ) : (
+                <span className="inline-flex items-center gap-2">
+                    <Layers size={16} strokeWidth={1.75} />
+                    Processing
+                </span>
+            )}
+        </button>
+    );
+
     const tasksLink = <SidebarTasksNavItem collapsed={collapsed} />;
 
     const inboxLink = <SidebarInboxNavItem collapsed={collapsed} />;
 
     const analyticsLink = <SidebarAnalyticsNavItem collapsed={collapsed} />;
-
-    const formsLink = <SidebarFormsNavItem collapsed={collapsed} />;
 
     const settingsLink = (
         <AdminV2NavLink
@@ -336,7 +358,7 @@ function SidebarNav({
                         {tasksLink}
                         {inboxLink}
                         {analyticsLink}
-                        {formsLink}
+                        {processingLink}
                     </div>
                     <div className="min-h-0 flex-1" aria-hidden />
                     <div className="adminv2-sidebar-footer flex shrink-0 flex-col items-stretch gap-1 border-t pt-1">
@@ -350,7 +372,7 @@ function SidebarNav({
                         {tasksLink}
                         {inboxLink}
                         {analyticsLink}
-                        {formsLink}
+                        {processingLink}
                     </div>
                     <div className="min-h-0 flex-1 overflow-y-auto">{lifecycleNavExpanded}</div>
                     <div className="adminv2-sidebar-footer shrink-0 border-t pt-2">

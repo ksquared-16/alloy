@@ -10,6 +10,19 @@ import type { NormalizedValidationError } from "@/lib/forms/validateSubmission";
 import { FormEngineRenderer, type FormEngineOptionChoice } from "@/components/forms/engine/FormEngineRenderer";
 import { emptyPayload, payloadWithMinimumRepeatingGroups } from "@/components/forms/engine/formEnginePayload";
 import { formatPublicValidationErrors } from "@/lib/public/forms/formatPublicValidationErrors";
+import { subSchemaForFieldsGrouped } from "@/lib/forms/guidedIntakePartition";
+import { buildGuidedQuestionPlan, mirrorCanonicalValues, type GuidedQuestionPlan } from "@/lib/forms/guidedQuestionPlan";
+import {
+    buildFamilyGuidedPlan,
+    detectFamilyChildren,
+    isFamilyIntake,
+    seedFamilyChildSlices,
+    omitChildFields,
+    assembleFamilySubmissionPayload,
+    type FamilyChildRef,
+    type FamilyGuidedPlan,
+} from "@/lib/forms/familyGuidedPlan";
+import { partitionFieldsByScope } from "@/lib/forms/fieldScope";
 
 type ResolvePacketMeta = {
     packet_session_id: string;
@@ -29,6 +42,7 @@ type ResolveOk = {
         packet?: ResolvePacketMeta | null;
         option_values_by_field_id?: Record<string, string[]>;
         option_choices_by_field_id?: Record<string, FormEngineOptionChoice[]>;
+        link?: { metadata?: Record<string, unknown> };
     };
 };
 
@@ -103,6 +117,13 @@ export function FormEmbedClient({
     const [packetAlreadyDone, setPacketAlreadyDone] = useState(false);
     const [packetFinalThankYou, setPacketFinalThankYou] = useState(false);
     const [advancingToNextPacketStep, setAdvancingToNextPacketStep] = useState(false);
+    // Guided intake shell (packets only): schema-generated steps, rendered by field type.
+    const [guidedPlan, setGuidedPlan] = useState<GuidedQuestionPlan | null>(null);
+    const [guidedStepIdx, setGuidedStepIdx] = useState(0);
+    // Family Packet intake (multi-child): per-child value slices + step index.
+    const [familyChildren, setFamilyChildren] = useState<FamilyChildRef[]>([]);
+    const [childSlices, setChildSlices] = useState<Record<string, Record<string, unknown>>>({});
+    const [familyStepIdx, setFamilyStepIdx] = useState(0);
     const draftPersistSeqRef = useRef(0);
     const submittedRef = useRef(false);
 
@@ -121,11 +142,17 @@ export function FormEmbedClient({
             setPacketFinalThankYou(false);
             setPacketAlreadyDone(false);
             setPacketProgress(null);
+            setGuidedPlan(null);
+            setGuidedStepIdx(0);
+            setFamilyChildren([]);
+            setChildSlices({});
+            setFamilyStepIdx(0);
             const res = await fetch(`/api/public/forms/${encToken}/resolve`, { method: "GET" });
             const json = (await res.json()) as ResolveOk | ApiErr;
             if (!json.ok) {
                 setPhase("error");
-                setMessage(json.error ?? "Resolve failed");
+                const code = json.code ? ` [${json.code}]` : "";
+                setMessage(`${json.error ?? "Resolve failed"}${code}`);
                 return;
             }
 
@@ -154,6 +181,7 @@ export function FormEmbedClient({
             }
             setSchema(parsedSchema);
             setPacketProgress(json.data.packet ?? null);
+            setFamilyChildren(detectFamilyChildren(json.data.link?.metadata));
             setOptionValuesByFieldId(normalizeOptionValues(json.data.option_values_by_field_id));
             setOptionChoicesByFieldId(normalizeOptionChoices(json.data.option_choices_by_field_id));
 
@@ -193,7 +221,11 @@ export function FormEmbedClient({
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ payload: initialPayload }),
             });
-            const cr = (await created.json()) as { ok: boolean; data?: { id: string }; error?: string };
+            const cr = (await created.json()) as {
+                ok: boolean;
+                data?: { id: string; payload?: FormPayload };
+                error?: string;
+            };
             if (!cr.ok || !cr.data?.id) {
                 setPhase("error");
                 setMessage(cr.error ?? "Could not start form session");
@@ -201,7 +233,21 @@ export function FormEmbedClient({
             }
             setSubmissionId(cr.data.id);
             window.sessionStorage.setItem(storageKey(token), cr.data.id);
-            setPayload(initialPayload);
+            // For packets, the server merges known-record prefill into the created draft
+            // and returns it. Use that so the parent sees known info to CONFIRM on first
+            // open (single forms keep the empty initial payload — no behavior change).
+            let firstPayload: FormPayload = initialPayload;
+            if (json.data.packet && cr.data.payload && typeof cr.data.payload === "object") {
+                const serverPayload = cr.data.payload;
+                firstPayload = {
+                    ...serverPayload,
+                    values: filterPayloadValuesToSchemaFields(
+                        parsedSchema,
+                        (serverPayload.values ?? {}) as Record<string, unknown>
+                    ),
+                };
+            }
+            setPayload(firstPayload);
             setPhase("ready");
         } finally {
             setAdvancingToNextPacketStep(false);
@@ -211,6 +257,13 @@ export function FormEmbedClient({
     useEffect(() => {
         void bootstrap();
     }, [bootstrap]);
+
+    // Generate the guided question plan once per form step (packets only), from the schema.
+    useEffect(() => {
+        if (phase !== "ready" || !schema || !packetProgress || guidedPlan) return;
+        setGuidedPlan(buildGuidedQuestionPlan(schema, (payload.values ?? {}) as Record<string, unknown>));
+        setGuidedStepIdx(0);
+    }, [phase, schema, packetProgress, guidedPlan, payload.values]);
 
     useLayoutEffect(() => {
         if ((!submitted && !packetFinalThankYou) || typeof window === "undefined") return;
@@ -243,12 +296,26 @@ export function FormEmbedClient({
         setSubmitting(true);
         setMessage(null);
         setValidationErrors(null);
+        // Family packets: assemble first child into canonical values, all children into meta.family.
+        const famChildFieldIds = schema && packetProgress && familyChildren.length > 1 ? partitionFieldsByScope(schema).child : [];
+        const submitPayload =
+            schema && isFamilyIntake(familyChildren, famChildFieldIds)
+                ? (() => {
+                      const a = assembleFamilySubmissionPayload({
+                          baseValues: omitChildFields((payload.values ?? {}) as Record<string, unknown>, famChildFieldIds),
+                          childAnswers: familyChildren.map((c) => ({ customer_member_id: c.customer_member_id, ...(c.label ? { label: c.label } : {}), values: childSlices[c.customer_member_id] ?? {} })),
+                          childFieldIds: famChildFieldIds,
+                          meta: (payload as { meta?: Record<string, unknown> }).meta ?? {},
+                      });
+                      return { ...payload, values: a.values, meta: a.meta };
+                  })()
+                : payload;
         try {
             const res = await fetch(`/api/public/forms/${encToken}/submissions/${submissionId}/submit`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
-                    payload,
+                    payload: submitPayload,
                     option_values_by_field_id: optionValuesByFieldId,
                 }),
             });
@@ -289,7 +356,16 @@ export function FormEmbedClient({
         } finally {
             setSubmitting(false);
         }
-    }, [bootstrap, encToken, optionValuesByFieldId, payload, packetAlreadyDone, packetProgress, submissionId, submitting, submitted, token]);
+    }, [bootstrap, encToken, optionValuesByFieldId, payload, packetAlreadyDone, packetProgress, submissionId, submitting, submitted, token, schema, familyChildren, childSlices]);
+
+    // Seed per-child value slices once when a family intake starts (first child inherits prefill).
+    useEffect(() => {
+        if (phase !== "ready" || !schema || !packetProgress || familyChildren.length <= 1) return;
+        const childFieldIds = partitionFieldsByScope(schema).child;
+        if (!isFamilyIntake(familyChildren, childFieldIds)) return;
+        if (Object.keys(childSlices).length > 0) return;
+        setChildSlices(seedFamilyChildSlices(familyChildren, childFieldIds, (payload.values ?? {}) as Record<string, unknown>));
+    }, [phase, schema, packetProgress, familyChildren, childSlices, payload.values]);
 
     if (phase === "loading") {
         return (
@@ -303,6 +379,7 @@ export function FormEmbedClient({
         return (
             <div className="p-6 text-center text-sm text-red-700">
                 {message ?? "Unable to load this form."}
+                <div className="mt-1 text-[11px] text-neutral-400">link token length: {token.length}</div>
             </div>
         );
     }
@@ -377,6 +454,54 @@ export function FormEmbedClient({
     }
 
     const errorLines = validationErrors?.length ? formatPublicValidationErrors(validationErrors) : [];
+    // Guided intake (packets only): schema-generated steps, each rendered by field type.
+    const guided = packetProgress != null && guidedPlan != null && guidedPlan.steps.length > 0;
+    const guidedSteps = guidedPlan?.steps ?? [];
+    const stepIdx = guided ? Math.min(guidedStepIdx, guidedSteps.length - 1) : 0;
+    const guidedStep = guided ? guidedSteps[stepIdx] : null;
+    const isLastStep = guided ? stepIdx >= guidedSteps.length - 1 : false;
+    const PHASE_LABEL: Record<string, string> = { confirm: "Confirm", provide: "Add details", uploads: "Sign & upload" };
+    const onGuidedChange = (next: FormPayload) => {
+        const mirrored: FormPayload = {
+            ...next,
+            values: mirrorCanonicalValues((next.values ?? {}) as Record<string, unknown>, guidedPlan?.canonicalGroups ?? {}),
+        };
+        setValidationErrors(null);
+        setMessage(null);
+        setPayload(mirrored);
+        void persistDraft(mirrored);
+    };
+    // Family Packet intake (multi-child): household once → child step per child → signatures.
+    const familyChildFieldIds = packetProgress != null && familyChildren.length > 1 ? partitionFieldsByScope(schema).child : [];
+    const familyMode = packetProgress != null && isFamilyIntake(familyChildren, familyChildFieldIds);
+    const familyPlan: FamilyGuidedPlan | null = familyMode ? buildFamilyGuidedPlan(schema, familyChildren) : null;
+    const familySteps = familyPlan?.steps ?? [];
+    const famIdx = familyMode ? Math.min(familyStepIdx, familySteps.length - 1) : 0;
+    const famStep = familyMode ? familySteps[famIdx] : null;
+    const famIsLast = familyMode ? famIdx >= familySteps.length - 1 : false;
+    const persistFamilyDraft = (baseValues: Record<string, unknown>, slices: Record<string, Record<string, unknown>>) => {
+        const a = assembleFamilySubmissionPayload({
+            baseValues: omitChildFields(baseValues, familyChildFieldIds),
+            childAnswers: familyChildren.map((c) => ({ customer_member_id: c.customer_member_id, ...(c.label ? { label: c.label } : {}), values: slices[c.customer_member_id] ?? {} })),
+            childFieldIds: familyChildFieldIds,
+            meta: (payload as { meta?: Record<string, unknown> }).meta ?? {},
+        });
+        void persistDraft({ ...payload, values: a.values, meta: a.meta } as FormPayload);
+    };
+    const onFamilyBaseChange = (next: FormPayload) => {
+        setValidationErrors(null);
+        setMessage(null);
+        setPayload(next);
+        persistFamilyDraft((next.values ?? {}) as Record<string, unknown>, childSlices);
+    };
+    const onFamilyChildChange = (childId: string, next: FormPayload) => {
+        setValidationErrors(null);
+        setMessage(null);
+        const slices = { ...childSlices, [childId]: (next.values ?? {}) as Record<string, unknown> };
+        setChildSlices(slices);
+        persistFamilyDraft((payload.values ?? {}) as Record<string, unknown>, slices);
+    };
+
     const summaries = packetProgress?.step_summaries ?? [];
     const currentStepNum = packetProgress ? packetProgress.current_sequence_index + 1 : 0;
     const remaining = packetProgress
@@ -414,48 +539,167 @@ export function FormEmbedClient({
                         )}
                     </div>
                 ) : null}
-                <FormEngineRenderer
-                    schema={schema}
-                    payload={payload}
-                    onChange={(next) => {
-                        setValidationErrors(null);
-                        setMessage(null);
-                        setPayload(next);
-                        void persistDraft(next);
-                    }}
-                    mode="edit"
-                    optionValuesByFieldId={optionValuesByFieldId}
-                    optionChoicesByFieldId={optionChoicesByFieldId}
-                    variant="embed"
-                    validationErrors={validationErrors ?? undefined}
-                />
+                {familyMode && famStep ? (
+                    <div>
+                        <div className="mb-3 flex items-center justify-between text-xs text-neutral-500">
+                            <span className="font-medium text-neutral-700">
+                                {famStep.kind === "household" ? "Household" : famStep.kind === "signature" ? "Sign" : famStep.child?.label ?? "Child"}
+                            </span>
+                            <span className="flex items-center gap-2">
+                                <span>Step {famIdx + 1} of {familySteps.length}</span>
+                                <span className="flex gap-1.5">
+                                    {familySteps.map((s, i) => (
+                                        <span key={s.key} className={clsx("h-1.5 w-5 rounded-full", i <= famIdx ? "bg-neutral-800" : "bg-neutral-200")} />
+                                    ))}
+                                </span>
+                            </span>
+                        </div>
+                        <div className="mb-4">
+                            <h2 className="text-base font-semibold text-neutral-900">{famStep.title}</h2>
+                            {famStep.subtitle ? <p className="mt-1 text-sm text-neutral-600">{famStep.subtitle}</p> : null}
+                        </div>
+                        {famStep.kind === "child" && famStep.child ? (
+                            <FormEngineRenderer
+                                schema={subSchemaForFieldsGrouped(schema, famStep.fieldIds, famStep.title)}
+                                payload={{ values: childSlices[famStep.child.customer_member_id] ?? {}, groups: {}, signatures: {} } as FormPayload}
+                                onChange={(next) => onFamilyChildChange(famStep.child!.customer_member_id, next)}
+                                mode="edit"
+                                optionValuesByFieldId={optionValuesByFieldId}
+                                optionChoicesByFieldId={optionChoicesByFieldId}
+                                variant="embed"
+                                validationErrors={validationErrors ?? undefined}
+                            />
+                        ) : (
+                            <FormEngineRenderer
+                                schema={subSchemaForFieldsGrouped(schema, famStep.fieldIds, famStep.title)}
+                                payload={payload}
+                                onChange={onFamilyBaseChange}
+                                mode="edit"
+                                optionValuesByFieldId={optionValuesByFieldId}
+                                optionChoicesByFieldId={optionChoicesByFieldId}
+                                variant="embed"
+                                validationErrors={validationErrors ?? undefined}
+                            />
+                        )}
+                        <div className="mt-8 space-y-3 border-t border-neutral-200 pt-6">
+                            {errorLines.length ? (
+                                <ul className="list-disc space-y-1 rounded-md border border-red-100 bg-red-50/80 px-4 py-3 pl-7 text-left text-sm text-red-800">
+                                    {errorLines.map((line, i) => <li key={i}>{line}</li>)}
+                                </ul>
+                            ) : null}
+                            {message ? <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-center text-sm text-amber-950">{message}</p> : null}
+                            <div className="flex items-center gap-3">
+                                {famIdx > 0 ? (
+                                    <button type="button" className="rounded-lg border border-neutral-300 px-4 py-2.5 text-sm font-medium text-neutral-600" onClick={() => setFamilyStepIdx((i) => Math.max(0, i - 1))}>Back</button>
+                                ) : null}
+                                {famIsLast ? (
+                                    <button type="button" disabled={submitting || !submissionId} aria-busy={submitting} className="flex-1 rounded-lg bg-neutral-900 py-3 text-sm font-semibold text-white shadow-sm disabled:cursor-not-allowed disabled:bg-neutral-400" onClick={() => void handleSubmit()}>
+                                        {submitting ? "Submitting…" : "Confirm & submit"}
+                                    </button>
+                                ) : (
+                                    <button type="button" disabled={!submissionId} className="flex-1 rounded-lg bg-neutral-900 py-3 text-sm font-semibold text-white shadow-sm disabled:cursor-not-allowed disabled:bg-neutral-400" onClick={() => setFamilyStepIdx((i) => Math.min(familySteps.length - 1, i + 1))}>
+                                        Continue
+                                    </button>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                ) : packetProgress && !guidedPlan ? (
+                    <div className="py-10 text-center text-sm text-neutral-500">Preparing your steps…</div>
+                ) : guided && guidedStep ? (
+                    <div>
+                        <div className="mb-3 flex items-center justify-between text-xs text-neutral-500">
+                            <span className="font-medium text-neutral-700">{PHASE_LABEL[guidedStep.kind] ?? "Step"}</span>
+                            <span className="flex items-center gap-2">
+                                <span>Step {stepIdx + 1} of {guidedSteps.length}</span>
+                                <span className="flex gap-1.5">
+                                    {guidedSteps.map((s, i) => (
+                                        <span key={s.key} className={clsx("h-1.5 w-5 rounded-full", i <= stepIdx ? "bg-neutral-800" : "bg-neutral-200")} />
+                                    ))}
+                                </span>
+                            </span>
+                        </div>
 
-                <div className="mt-10 space-y-4 border-t border-neutral-200 pt-8">
-                    {errorLines.length ?
-                        <ul className="list-disc space-y-1 rounded-md border border-red-100 bg-red-50/80 px-4 py-3 pl-7 text-left text-sm text-red-800">
-                            {errorLines.map((line, i) => (
-                                <li key={i}>{line}</li>
-                            ))}
-                        </ul>
-                    : null}
-                    {message ?
-                        <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-center text-sm text-amber-950">
-                            {message}
-                        </p>
-                    : null}
-                    <button
-                        type="button"
-                        disabled={submitting || !submissionId}
-                        aria-busy={submitting}
-                        className="w-full rounded-lg bg-neutral-900 py-3.5 text-sm font-semibold text-white shadow-sm disabled:cursor-not-allowed disabled:bg-neutral-400"
-                        onClick={() => void handleSubmit()}
-                    >
-                        {submitting ? "Submitting…" : "Submit"}
-                    </button>
-                    <p className="text-center text-xs text-neutral-500">
-                        Scroll up to review your answers before submitting.
-                    </p>
-                </div>
+                        {stepIdx === 0 && guidedPlan ? (
+                            <div className="mb-4 flex flex-wrap gap-2 text-xs">
+                                {guidedPlan.counts.known > 0 ? <span className="rounded-full bg-emerald-50 px-3 py-1 text-emerald-800">{guidedPlan.counts.known} already filled in</span> : null}
+                                {guidedPlan.counts.missing > 0 ? <span className="rounded-full bg-amber-50 px-3 py-1 text-amber-800">{guidedPlan.counts.missing} to add</span> : null}
+                                {guidedPlan.counts.uploads > 0 ? <span className="rounded-full bg-sky-50 px-3 py-1 text-sky-800">{guidedPlan.counts.uploads} to sign/upload</span> : null}
+                            </div>
+                        ) : null}
+
+                        <div className="mb-4">
+                            <h2 className="text-base font-semibold text-neutral-900">{guidedStep.title}</h2>
+                            {guidedStep.subtitle ? <p className="mt-1 text-sm text-neutral-600">{guidedStep.subtitle}</p> : null}
+                        </div>
+                        <FormEngineRenderer
+                            schema={subSchemaForFieldsGrouped(schema, guidedStep.fieldIds, guidedStep.title)}
+                            payload={payload}
+                            onChange={onGuidedChange}
+                            mode="edit"
+                            optionValuesByFieldId={optionValuesByFieldId}
+                            optionChoicesByFieldId={optionChoicesByFieldId}
+                            variant="embed"
+                            validationErrors={validationErrors ?? undefined}
+                        />
+
+                        <div className="mt-8 space-y-3 border-t border-neutral-200 pt-6">
+                            {errorLines.length ? (
+                                <ul className="list-disc space-y-1 rounded-md border border-red-100 bg-red-50/80 px-4 py-3 pl-7 text-left text-sm text-red-800">
+                                    {errorLines.map((line, i) => <li key={i}>{line}</li>)}
+                                </ul>
+                            ) : null}
+                            {message ? <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-center text-sm text-amber-950">{message}</p> : null}
+                            <div className="flex items-center gap-3">
+                                {stepIdx > 0 ? (
+                                    <button type="button" className="rounded-lg border border-neutral-300 px-4 py-2.5 text-sm font-medium text-neutral-600" onClick={() => setGuidedStepIdx((i) => Math.max(0, i - 1))}>
+                                        Back
+                                    </button>
+                                ) : null}
+                                {isLastStep ? (
+                                    <button type="button" disabled={submitting || !submissionId} aria-busy={submitting} className="flex-1 rounded-lg bg-neutral-900 py-3 text-sm font-semibold text-white shadow-sm disabled:cursor-not-allowed disabled:bg-neutral-400" onClick={() => void handleSubmit()}>
+                                        {submitting ? "Submitting…" : "Confirm & submit"}
+                                    </button>
+                                ) : (
+                                    <button type="button" disabled={!submissionId} className="flex-1 rounded-lg bg-neutral-900 py-3 text-sm font-semibold text-white shadow-sm disabled:cursor-not-allowed disabled:bg-neutral-400" onClick={() => setGuidedStepIdx((i) => Math.min(guidedSteps.length - 1, i + 1))}>
+                                        Continue
+                                    </button>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                ) : (
+                    <>
+                        {/* Single-form (non-packet) experience — unchanged. */}
+                        <FormEngineRenderer
+                            schema={schema}
+                            payload={payload}
+                            onChange={(next) => {
+                                setValidationErrors(null);
+                                setMessage(null);
+                                setPayload(next);
+                                void persistDraft(next);
+                            }}
+                            mode="edit"
+                            optionValuesByFieldId={optionValuesByFieldId}
+                            optionChoicesByFieldId={optionChoicesByFieldId}
+                            variant="embed"
+                            validationErrors={validationErrors ?? undefined}
+                        />
+                        <div className="mt-10 space-y-4 border-t border-neutral-200 pt-8">
+                            {errorLines.length ? (
+                                <ul className="list-disc space-y-1 rounded-md border border-red-100 bg-red-50/80 px-4 py-3 pl-7 text-left text-sm text-red-800">
+                                    {errorLines.map((line, i) => <li key={i}>{line}</li>)}
+                                </ul>
+                            ) : null}
+                            {message ? <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-center text-sm text-amber-950">{message}</p> : null}
+                            <button type="button" disabled={submitting || !submissionId} aria-busy={submitting} className="w-full rounded-lg bg-neutral-900 py-3.5 text-sm font-semibold text-white shadow-sm disabled:cursor-not-allowed disabled:bg-neutral-400" onClick={() => void handleSubmit()}>
+                                {submitting ? "Submitting…" : "Submit"}
+                            </button>
+                            <p className="text-center text-xs text-neutral-500">Scroll up to review your answers before submitting.</p>
+                        </div>
+                    </>
+                )}
             </div>
         </div>
     );

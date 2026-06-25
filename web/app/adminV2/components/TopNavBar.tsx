@@ -19,6 +19,7 @@ import GlobalSearchBox from "@/app/adminV2/components/GlobalSearchBox";
 import MyTasksModal from "@/app/adminV2/components/MyTasksModal";
 import InboxModal from "@/app/adminV2/components/InboxModal";
 import AnalyticsModal from "@/app/adminV2/components/AnalyticsModal";
+import ProcessingModal from "@/app/adminV2/processing/ProcessingModal";
 import { warmCommunicationsWorkspaceModal } from "@/lib/communications/v2/communicationsWorkspaceWarmCache";
 import { isCommsV2FlagEnabled } from "@/lib/communications/v2/flags";
 import QuickMessageModal, { type QuickMessageModalSeed } from "@/app/adminV2/components/QuickMessageModal";
@@ -130,6 +131,7 @@ export default function TopNavBar() {
   const inboxModalOpen = activeWorkspaceModal === "inbox";
   const quickMessageOpen = activeWorkspaceModal === "quick_message";
   const analyticsModalOpen = activeWorkspaceModal === "analytics";
+  const processingModalOpen = activeWorkspaceModal === "processing";
 
   useEffect(() => {
     const onLaunch = (ev: Event) => {
@@ -219,6 +221,7 @@ export default function TopNavBar() {
       <MyTasksModal open={tasksModalOpen} onClose={() => closeWorkspaceModal("tasks")} />
       <InboxModal open={inboxModalOpen} onClose={() => closeWorkspaceModal("inbox")} />
       <AnalyticsModal open={analyticsModalOpen} onClose={() => closeWorkspaceModal("analytics")} />
+      <ProcessingModal open={processingModalOpen} onClose={() => closeWorkspaceModal("processing")} />
     </header>
   );
 }

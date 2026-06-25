@@ -111,7 +111,33 @@ export type PacketSessionRow = {
     crm_snapshot: Record<string, unknown>;
     shared_values: Record<string, unknown>;
     current_sequence_index: number;
+    /** Family Packet instance id. When set, recipient links share THIS session. */
+    packet_instance_id?: string | null;
 };
+
+/** Family Packet instance id from link metadata (`packet_instance_id` or `share_group_id`). */
+export function pickPacketInstanceId(metadata: Record<string, unknown>): string | null {
+    const v = metadata.packet_instance_id ?? metadata.share_group_id;
+    return typeof v === "string" && v.trim() ? v.trim() : null;
+}
+
+export type SessionResolution = "reuse_instance" | "reuse_link" | "create";
+
+/**
+ * Decide how a public link resolves to a packet session:
+ *  - reuse_instance: a session already exists for this family packet instance (shared answers)
+ *  - reuse_link:     a session already exists started by this exact link (legacy / first link)
+ *  - create:         no session yet — create one
+ */
+export function decideSessionResolution(args: {
+    packetInstanceId: string | null;
+    instanceSessionExists: boolean;
+    linkSessionExists: boolean;
+}): SessionResolution {
+    if (args.packetInstanceId && args.instanceSessionExists) return "reuse_instance";
+    if (args.linkSessionExists) return "reuse_link";
+    return "create";
+}
 
 export type PacketSessionItemRow = {
     id: string;
@@ -144,6 +170,9 @@ export function pickLaunchContextForPacketSession(metadata: Record<string, unkno
         "selected_customer_member_id",
         "recipient_person_id",
         "delivery_intent",
+        // Family Packet instance context
+        "packet_instance_id",
+        "selected_customer_member_ids",
     ] as const;
     const out: Record<string, unknown> = {};
     for (const k of keys) {
@@ -189,26 +218,36 @@ export async function ensurePacketSessionForPublicLink(
     }
 ): Promise<{ session: PacketSessionRow; items: PacketSessionItemRow[]; error: Error | null }> {
     const { orgId, linkId, packetDefinitionId, linkMetadata, launchFks } = input;
+    const packetInstanceId = pickPacketInstanceId(linkMetadata);
 
+    const loadSessionWithItems = async (sess: PacketSessionRow) => {
+        const { data: items } = await supabase
+            .from("form_packet_session_items")
+            .select("id, packet_session_id, packet_item_id, sequence_index, status, form_submission_id")
+            .eq("packet_session_id", sess.id)
+            .order("sequence_index", { ascending: true });
+        return { session: sess, items: (items ?? []) as PacketSessionItemRow[], error: null };
+    };
+
+    // Family Packet: all recipient links for an instance resolve to ONE shared session.
+    if (packetInstanceId) {
+        const { data: instSess } = await supabase
+            .from("form_packet_sessions")
+            .select("*")
+            .eq("org_id", orgId)
+            .eq("packet_instance_id", packetInstanceId)
+            .maybeSingle();
+        if (instSess) return loadSessionWithItems(instSess as PacketSessionRow);
+    }
+
+    // Legacy / first link of an instance: one session per starting link.
     const { data: existingSess } = await supabase
         .from("form_packet_sessions")
         .select("*")
         .eq("started_via_public_link_id", linkId)
         .maybeSingle();
 
-    if (existingSess) {
-        const sess = existingSess as PacketSessionRow;
-        const { data: items } = await supabase
-            .from("form_packet_session_items")
-            .select("id, packet_session_id, packet_item_id, sequence_index, status, form_submission_id")
-            .eq("packet_session_id", sess.id)
-            .order("sequence_index", { ascending: true });
-        return {
-            session: sess,
-            items: (items ?? []) as PacketSessionItemRow[],
-            error: null,
-        };
-    }
+    if (existingSess) return loadSessionWithItems(existingSess as PacketSessionRow);
 
     const { data: defItems, error: itemsErr } = await listPacketDefinitionItems(supabase, orgId, packetDefinitionId);
     if (itemsErr) return { session: null as never, items: [], error: itemsErr };
@@ -231,26 +270,29 @@ export async function ensurePacketSessionForPublicLink(
             shared_values: {},
             current_sequence_index: defItems[0].sequence_index,
             metadata: {},
+            ...(packetInstanceId ? { packet_instance_id: packetInstanceId } : {}),
         })
         .select("*")
         .single();
 
     if (insErr) {
+        // Race: another recipient link (same instance) or the same link created the session first.
         if (insErr.code === "23505") {
+            if (packetInstanceId) {
+                const { data: racedInst } = await supabase
+                    .from("form_packet_sessions")
+                    .select("*")
+                    .eq("org_id", orgId)
+                    .eq("packet_instance_id", packetInstanceId)
+                    .maybeSingle();
+                if (racedInst) return loadSessionWithItems(racedInst as PacketSessionRow);
+            }
             const { data: raced } = await supabase
                 .from("form_packet_sessions")
                 .select("*")
                 .eq("started_via_public_link_id", linkId)
                 .maybeSingle();
-            if (raced) {
-                const sessR = raced as PacketSessionRow;
-                const { data: itemsR } = await supabase
-                    .from("form_packet_session_items")
-                    .select("id, packet_session_id, packet_item_id, sequence_index, status, form_submission_id")
-                    .eq("packet_session_id", sessR.id)
-                    .order("sequence_index", { ascending: true });
-                return { session: sessR, items: (itemsR ?? []) as PacketSessionItemRow[], error: null };
-            }
+            if (raced) return loadSessionWithItems(raced as PacketSessionRow);
         }
         return { session: null as never, items: [], error: new Error(insErr.message) };
     }
