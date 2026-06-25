@@ -8,12 +8,14 @@ import {
     OPERATIONAL_EDIT_NO_ACTIVE_PATTERNS_WARNING,
 } from "@/lib/childcareOperational/operationalEnrollmentEditDoctrine";
 import {
-    fetchActiveSchedulePatternsForSite,
     formatOperationalEnrollmentDate,
     formatWeekdaySelection,
     type OperationalEnrollmentSummaryResponse,
 } from "@/lib/childcareOperational/fetchOperationalEnrollment";
-import { submitScheduleAssignment } from "@/lib/childcareOperational/fetchOperationalEnrollmentMutations";
+import {
+    fetchActiveSchedulePatternsForSite,
+    submitScheduleAssignment,
+} from "@/lib/childcareOperational/fetchOperationalEnrollmentMutations";
 import OperationalEnrollmentModalChrome from "@/components/childcareOperational/OperationalEnrollmentModalChrome";
 
 type Props = {

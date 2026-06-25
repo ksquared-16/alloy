@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { buildCompletionContextFromRecord } from "@/lib/completion/evaluateCompletionRequirements";
 import type { CompletionEvaluationContext } from "@/lib/completion/requirementValidationTypes";
+import { resolveOpportunityDepartmentId } from "@/lib/opportunities/resolveOpportunityDepartmentId";
 
 async function loadInquiryChildrenForOpportunity(
     supabase: SupabaseClient,
@@ -79,7 +80,7 @@ export async function loadOpportunityRecordForEffectiveRequirements(
     const { data, error } = await supabase
         .from("opportunities")
         .select(
-            "id, org_id, status_key, metadata, primary_person_id, customer_id, location_id, desired_program_type, work_unit_id, department_id"
+            "id, org_id, status_key, metadata, primary_person_id, customer_id, location_id, work_unit_id"
         )
         .eq("id", opportunityId)
         .eq("org_id", orgId)
@@ -87,6 +88,10 @@ export async function loadOpportunityRecordForEffectiveRequirements(
     if (error || !data) return null;
 
     const row = data as Record<string, unknown>;
+    const department_id = await resolveOpportunityDepartmentId(supabase, orgId, {
+        metadata: row.metadata,
+        work_unit_id: row.work_unit_id,
+    });
     const inquiry_children = await loadInquiryChildrenForOpportunity(supabase, orgId, opportunityId);
 
     const primaryPersonId =
@@ -119,7 +124,12 @@ export async function loadOpportunityRecordForEffectiveRequirements(
         }
     }
 
-    return { ...row, _inquiry_children: inquiry_children, ...(_primary_person ? { _primary_person } : {}) };
+    return {
+        ...row,
+        ...(department_id ? { department_id } : {}),
+        _inquiry_children: inquiry_children,
+        ...(_primary_person ? { _primary_person } : {}),
+    };
 }
 
 export async function buildOpportunityCompletionContextFromDb(

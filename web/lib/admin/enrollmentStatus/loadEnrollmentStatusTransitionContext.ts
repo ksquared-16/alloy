@@ -11,6 +11,7 @@ import type {
 import { resolveBpEnrollmentStatusDestinations } from "@/lib/admin/enrollmentStatus/enrollmentStatusTransitionBpResolver";
 import { resolveEnrollmentOperatorStageDisplay } from "@/lib/admin/enrollmentStatus/enrollmentStatusTransitionLabels";
 import { canonicalOperatorStageForStatusKey } from "@/lib/lifecycle/enrollmentOperatorStage";
+import { resolveOpportunityDepartmentId } from "@/lib/opportunities/resolveOpportunityDepartmentId";
 
 export type EnrollmentStatusTransitionContextResult = {
     scope: EnrollmentStatusTransitionScope;
@@ -103,13 +104,24 @@ export async function loadEnrollmentStatusTransitionContext(
 ): Promise<EnrollmentStatusTransitionContextResult> {
     const { data: opp } = await supabase
         .from("opportunities")
-        .select("status_key, department_id")
+        .select("status_key, work_unit_id, metadata")
         .eq("id", scope.opportunityId)
         .eq("org_id", orgId)
         .maybeSingle();
 
-    const oppRow = opp as { status_key?: string | null; department_id?: string | null } | null;
-    const departmentId = options?.departmentId?.trim() || oppRow?.department_id?.trim() || null;
+    const oppRow = opp as {
+        status_key?: string | null;
+        work_unit_id?: string | null;
+        metadata?: unknown;
+    } | null;
+    const departmentId =
+        options?.departmentId?.trim() ||
+        (oppRow
+            ? (await resolveOpportunityDepartmentId(supabase, orgId, {
+                  metadata: oppRow.metadata,
+                  work_unit_id: oppRow.work_unit_id,
+              }))
+            : null);
     const departmentMetadata = await loadDepartmentMetadata(supabase, orgId, departmentId);
 
     const children = await loadChildOptions(supabase, orgId, scope.opportunityId, departmentMetadata);

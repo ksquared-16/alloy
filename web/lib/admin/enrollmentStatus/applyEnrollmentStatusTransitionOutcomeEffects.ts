@@ -20,6 +20,7 @@ import {
 import { DOMAIN_LIFECYCLE_SYSTEM_ACTOR_USER_ID } from "@/lib/lifecycle/emitDomainLifecycleStatusChangedEvent";
 import { onChildDispositionEntrySpawnWorkIntent } from "@/lib/lifecycle/onChildDispositionEntrySpawnWorkIntent";
 import type { OnStageEntrySpawnWorkIntentResult } from "@/lib/lifecycle/onStageEntrySpawnWorkIntent";
+import { resolveOpportunityDepartmentId } from "@/lib/opportunities/resolveOpportunityDepartmentId";
 import { resolveEffectiveStageOperatingPlan } from "@/lib/lifecycle/resolveEffectiveStageOperatingPlan";
 import { outcomeRulesForKey } from "@/lib/lifecycle/stageOperatingPlanV1";
 
@@ -125,14 +126,16 @@ export async function applyEnrollmentStatusTransitionOutcomeEffects(
     if (!departmentId) {
         const { data: opp } = await input.supabase
             .from("opportunities")
-            .select("department_id")
+            .select("work_unit_id, metadata")
             .eq("id", opportunityId)
             .eq("org_id", orgId)
             .maybeSingle();
-        departmentId =
-            typeof (opp as { department_id?: unknown } | null)?.department_id === "string"
-                ? (opp as { department_id: string }).department_id.trim()
-                : null;
+        if (opp) {
+            departmentId = await resolveOpportunityDepartmentId(input.supabase, orgId, {
+                metadata: (opp as { metadata?: unknown }).metadata,
+                work_unit_id: (opp as { work_unit_id?: unknown }).work_unit_id,
+            });
+        }
     }
 
     if (!departmentId) {
