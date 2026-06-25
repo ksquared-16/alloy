@@ -102,6 +102,8 @@ export default function FormDetailClient() {
     const [lifecycleCoverageLoadFailed, setLifecycleCoverageLoadFailed] = useState(false);
     const [duplicateBusy, setDuplicateBusy] = useState(false);
     const [duplicateErr, setDuplicateErr] = useState<string | null>(null);
+    const [processingBusy, setProcessingBusy] = useState(false);
+    const [processingErr, setProcessingErr] = useState<string | null>(null);
 
     type CreatedLinkResponse = CreatedLinkPayload &
         Partial<FormPublicLinkRow> & {
@@ -341,6 +343,31 @@ export default function FormDetailClient() {
     const handleFormMetadataUpdated = useCallback((metadata: Record<string, unknown>) => {
         setDetail((prev) => (prev ? { ...prev, metadata } : prev));
     }, []);
+
+    // POS-FP5 — mark this form Processing-enabled. Reuses the existing form-definition
+    // PATCH endpoint; merges metadata.pos_connected (no new column, no clobber).
+    const toggleProcessingEnabled = useCallback(
+        async (next: boolean) => {
+            setProcessingBusy(true);
+            setProcessingErr(null);
+            try {
+                const baseMeta = (detail?.metadata ?? {}) as Record<string, unknown>;
+                const metadata = { ...baseMeta, pos_connected: next };
+                const res = await fetch(`/api/admin/forms/${encodeURIComponent(formId)}`, {
+                    method: "PATCH",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ metadata }),
+                });
+                if (!res.ok) throw new Error(`Request failed (${res.status})`);
+                handleFormMetadataUpdated(metadata);
+            } catch (e) {
+                setProcessingErr(e instanceof Error ? e.message : "Failed to update");
+            } finally {
+                setProcessingBusy(false);
+            }
+        },
+        [detail?.metadata, formId, handleFormMetadataUpdated]
+    );
 
     const handleSelectedRuntimeLinkChange = useCallback(
         (linkId: string) => {
@@ -601,6 +628,51 @@ export default function FormDetailClient() {
                     {duplicateErr ?
                         <p className="mb-3 text-sm text-alloy-ember" role="alert">{duplicateErr}</p>
                     :   null}
+                    <div className="mb-3 rounded-md border border-stone-200 bg-white px-3 py-2.5">
+                        <div className="flex items-center justify-between gap-3">
+                            <div className="min-w-0">
+                                <div className="flex items-center gap-2">
+                                    <span className="text-sm font-medium text-stone-900">Processing</span>
+                                    <span
+                                        className={
+                                            detail.metadata.pos_connected === true ?
+                                                "rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-800"
+                                            :   "rounded-full bg-stone-100 px-2 py-0.5 text-[11px] text-stone-500"
+                                        }
+                                    >
+                                        {detail.metadata.pos_connected === true ? "Enabled" : "Disabled"}
+                                    </span>
+                                </div>
+                                <div className="mt-0.5 text-xs text-stone-500">
+                                    {detail.metadata.pos_connected === true ?
+                                        "New submissions to this form create a Processing Case for operator review before any record changes."
+                                    :   "Turn on to send new submissions to Processing for review before they update records."}
+                                </div>
+                                {processingErr ?
+                                    <div className="mt-1 text-xs text-amber-700">{processingErr}</div>
+                                :   null}
+                            </div>
+                            <button
+                                type="button"
+                                disabled={!canMutate || processingBusy}
+                                onClick={() => void toggleProcessingEnabled(detail.metadata.pos_connected !== true)}
+                                className={
+                                    detail.metadata.pos_connected === true ?
+                                        "shrink-0 rounded-md border border-stone-300 px-3 py-1.5 text-xs font-medium text-stone-700 disabled:opacity-50"
+                                    :   "shrink-0 rounded-md bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white disabled:opacity-50"
+                                }
+                            >
+                                {detail.metadata.pos_connected === true ? "Disable" : "Enable processing"}
+                            </button>
+                        </div>
+                        {detail.metadata.pos_connected === true ?
+                            <ul className="mt-2 space-y-0.5 border-t border-stone-100 pt-2 text-[11px] text-stone-400">
+                                <li>Cases promote the fields you map to records — map a field to <span className="text-stone-500">person.email</span> (and name) so approval can create a person.</li>
+                                <li>Existing submissions are not backfilled — only new ones.</li>
+                                <li>Submit through the form’s published public link to generate a test case.</li>
+                            </ul>
+                        :   null}
+                    </div>
                     <FormLifecycleWorkspaceLayout
                     formId={formId}
                     detail={{

@@ -59,6 +59,7 @@ export const CANONICAL_ADMIN_PATH_PREFIXES = [
     `${CANONICAL_ADMIN_BASE}/compliance`,
     `${CANONICAL_ADMIN_BASE}/operations`,
     `${CANONICAL_ADMIN_BASE}/inquiries`,
+    `${CANONICAL_ADMIN_BASE}/processing`,
     `${CANONICAL_ADMIN_BASE}/system`,
 ] as const;
 
@@ -252,6 +253,8 @@ export function isCanonicalDrawerHostPath(pathname: string | null | undefined): 
     if (isCanonicalWorkspacePath(p)) return true;
     if (isCanonicalSettingsPath(p)) return true;
     if (isCanonicalFormsPath(p)) return true;
+    // POS-FP4: Processing Workspace hosts the read-only Processing Case detail drawer.
+    if (p === `${CANONICAL_ADMIN_BASE}/processing` || p.startsWith(`${CANONICAL_ADMIN_BASE}/processing/`)) return true;
     if (p.startsWith(`${LEGACY_ADMIN_BASE}/workspace`)) return true;
     return false;
 }

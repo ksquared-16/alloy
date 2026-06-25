@@ -9,6 +9,7 @@ import {
     mergeDefinitionAndLinkPrefillMaps,
     PREFILL_SOURCE_PATH_RE,
 } from "@/lib/forms/prefill/prefillFieldMap";
+import { buildCanonicalPrefillFieldMap } from "@/lib/forms/prefill/canonicalPrefillMap";
 import type { FormField, FormSchemaV1 } from "@/lib/forms/schema";
 
 export function shouldApplyServerPrefill(linkMetadata: Record<string, unknown>): boolean {
@@ -60,11 +61,16 @@ export async function resolveFormPrefillValues(
 ): Promise<Record<string, string | number | boolean>> {
     if (!shouldApplyServerPrefill(linkMetadata)) return {};
 
-    const merged = mergeDefinitionAndLinkPrefillMaps(formDefinitionMetadata ?? null, linkMetadata);
-    if (!merged) return {};
+    // Canonical (field_source-driven) map fixes generated/manual fields whose ids don't
+    // match the legacy prefill_field_map keys (e.g. a child Name/DOB bound to customer_member).
+    // The explicit prefill_field_map still wins on conflicts.
+    const canonical = buildCanonicalPrefillFieldMap(schema);
+    const explicit = mergeDefinitionAndLinkPrefillMaps(formDefinitionMetadata ?? null, linkMetadata) ?? {};
+    const combined = { ...canonical, ...explicit };
+    if (Object.keys(combined).length === 0) return {};
 
     const allowed = collectScalarFormFieldIds(schema);
-    const map = filterPrefillMapToKnownFields(merged, allowed);
+    const map = filterPrefillMapToKnownFields(combined, allowed);
     if (Object.keys(map).length === 0) return {};
 
     const rootsNeeded = new Set<string>();

@@ -53,3 +53,6 @@ web/test-results/
 /SMS_*.md
 /comms-v2-*
 /communications-v2-*
+
+# Local scoped typecheck helper (not product code)
+web/tsconfig.poscheck.json

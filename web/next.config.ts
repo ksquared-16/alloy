@@ -9,6 +9,9 @@ const webRoot = path.dirname(fileURLToPath(import.meta.url));
 const nextConfig: NextConfig = {
   /** Align with turbopack.root — avoids monorepo parent lockfile overriding trace root. */
   outputFileTracingRoot: webRoot,
+  /** Load `unpdf` (server-only, text-only PDF extraction) from node_modules at runtime
+   *  rather than bundling it — see lib/pos/processingCase/structure/pdfTextExtract.ts. */
+  serverExternalPackages: ["unpdf"],
   typescript: {
     /** Production build typecheck — app + API routes only (excludes tests/scripts). */
     tsconfigPath: "./tsconfig.build.json",

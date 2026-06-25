@@ -10,9 +10,9 @@ import {
     formatPersonDisplayName,
     normalizeIntakeEmail,
     normalizeIntakePhone,
-    phoneLookupVariants,
     submittedIdentityMatchesPersonRecord,
 } from "./intakePersonMatch";
+import { listPersonIdsByEmail, listPersonIdsByPhone } from "./intakeIdentityLookups";
 import { parseIntakeAutoCreateFlags } from "./parseIntakeAutoCreateFlags";
 import { parseIntakeLinkDefaults, resolveIntakeOpportunitySource } from "./parseIntakeLinkDefaults";
 import { normalizeIntakeOpportunityStatusKey } from "./normalizeIntakeOpportunityStatusKey";
@@ -23,25 +23,6 @@ import {
 import { findExistingIntakeOpportunity, resolveIntakeWorkUnitId } from "./intakeOpportunityDedup";
 import { applyIntakeChildToOpportunity } from "./applyIntakeChildToOpportunity";
 import { listIntakeChildrenFromMeta } from "./listIntakeChildrenFromMeta";
-
-async function listPersonIdsByEmail(
-    supabase: SupabaseClient,
-    orgId: string,
-    emailNorm: string
-): Promise<string[]> {
-    const { data, error } = await supabase.from("persons").select("id").eq("org_id", orgId).ilike("email", emailNorm);
-    if (error) throw new Error(error.message);
-    const ids = (data ?? []).map((r: { id: string }) => r.id).filter(Boolean);
-    return [...new Set(ids)];
-}
-
-async function listPersonIdsByPhone(supabase: SupabaseClient, orgId: string, phoneNorm: string): Promise<string[]> {
-    const variants = phoneLookupVariants(phoneNorm);
-    const { data, error } = await supabase.from("persons").select("id").eq("org_id", orgId).in("phone", variants);
-    if (error) throw new Error(error.message);
-    const ids = (data ?? []).map((r: { id: string }) => r.id).filter(Boolean);
-    return [...new Set(ids)];
-}
 
 async function insertPersonForIntake(
     supabase: SupabaseClient,
@@ -280,7 +261,7 @@ export async function applyFormIntakeSafe(
     }
     let workUnitDepartmentMismatch = false;
     let intakeRoutingWorkUnitId: string | null = linkDefaults.default_work_unit_id;
-    let intakeRoutingDepartmentId: string | null = linkDefaults.default_department_id;
+    const intakeRoutingDepartmentId: string | null = linkDefaults.default_department_id;
 
     const { data: cpRow } = await supabase
         .from("customer_persons")

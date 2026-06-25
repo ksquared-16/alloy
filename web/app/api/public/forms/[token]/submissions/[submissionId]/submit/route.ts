@@ -29,6 +29,8 @@ import {
     emitFormSubmittedSafe,
 } from "@/lib/forms/workflow/formSubmissionEvents";
 import { emitIntakeCaseLifecycleEventsSafe } from "@/lib/forms/workflow/intakeCaseLifecycleEvents";
+import { maybeOpenProcessingCaseFromPacketCompletionSafe } from "@/lib/pos/processingCase/maybeOpenProcessingCaseFromPacketCompletionSafe";
+import { maybeOpenProcessingCaseFromFormSubmissionSafe } from "@/lib/pos/processingCase/maybeOpenProcessingCaseFromFormSubmissionSafe";
 import {
     emitOpportunityEnrollmentPacketCompletedProjectionSafe,
     emitOpportunityEnrollmentPacketOpenedSafe,
@@ -383,6 +385,27 @@ export async function POST(
         await emitFormSignedSafe(submittedRow as Parameters<typeof emitFormSignedSafe>[0]);
     }
 
+    // POS-FP5: best-effort, marker-gated. A POS-connected SINGLE form submitted through
+    // the public UI opens one Processing Case (the submission as primary source). Packet
+    // steps are excluded (packets open one case on completion below). Never throws.
+    // [POS_FORM_SUBMIT_TRACE] TEMPORARY diagnostic — remove after root-causing the missing case.
+    const posTraceFormDefinitionId = String((submittedRow as { form_definition_id?: string }).form_definition_id ?? "");
+    console.log("[POS_FORM_SUBMIT_TRACE] public submit reached producer gate", {
+        route: "public/forms/[token]/submissions/[submissionId]/submit",
+        submissionId,
+        orgId: ctx.orgId,
+        formDefinitionId: posTraceFormDefinitionId,
+        isPacket: Boolean(ctx.packet),
+        willCallProducer: !ctx.packet,
+    });
+    if (!ctx.packet) {
+        await maybeOpenProcessingCaseFromFormSubmissionSafe(supabase, {
+            orgId: ctx.orgId,
+            submissionId,
+            formDefinitionId: posTraceFormDefinitionId,
+        });
+    }
+
     if (linkRequiresLeadCapture(metaRecord)) {
         await emitIntakeCaseLifecycleEventsSafe({
             submission: submittedRow as Parameters<typeof emitFormSubmittedSafe>[0],
@@ -441,6 +464,13 @@ export async function POST(
         if (oDone.error) {
             console.error("[public submit] enrollment completed projection failed:", oDone.error.message);
         }
+
+        // POS-FP1b: best-effort, marker-gated. POS-connected packet completion opens one
+        // Processing Case (packet session as primary source). Legacy packets unaffected. Never throws.
+        await maybeOpenProcessingCaseFromPacketCompletionSafe(supabase, {
+            orgId: ctx.orgId,
+            packetSessionId: ctx.packet.packet_session_id,
+        });
     }
 
     const packetExtras: Record<string, unknown> = {};
