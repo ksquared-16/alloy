@@ -1,31 +1,11 @@
 /**
- * System 5 — Activity mode horizontal workspace tabs.
- * @see docs/platform/operator/operational-surface-design-system.md §12
+ * @deprecated Import from `embeddedWorkspaceTabs` — ActivityWorkspace renamed to EmbeddedWorkspace.
+ * @see docs/platform/operator/focus-panel-architecture-vocabulary.md
  */
-
-export const ACTIVITY_WORKSPACE_TAB_KEYS = [
-    "timeline",
-    "communications",
-    "documents",
-    "notes",
-    "workflow",
-    "audit",
-] as const;
-
-export type ActivityWorkspaceTabKey = (typeof ACTIVITY_WORKSPACE_TAB_KEYS)[number];
-
-export type ActivityWorkspaceTab = {
-    key: ActivityWorkspaceTabKey;
-    label: string;
-};
-
-export const ACTIVITY_WORKSPACE_TABS: ActivityWorkspaceTab[] = [
-    { key: "timeline", label: "Timeline" },
-    { key: "communications", label: "Communications" },
-    { key: "documents", label: "Documents" },
-    { key: "notes", label: "Notes" },
-    { key: "workflow", label: "Workflow" },
-    { key: "audit", label: "Audit" },
-];
-
-export const DEFAULT_ACTIVITY_WORKSPACE_TAB: ActivityWorkspaceTabKey = "timeline";
+export {
+    EMBEDDED_WORKSPACE_TAB_KEYS as ACTIVITY_WORKSPACE_TAB_KEYS,
+    EMBEDDED_WORKSPACE_TABS as ACTIVITY_WORKSPACE_TABS,
+    DEFAULT_EMBEDDED_WORKSPACE_TAB as DEFAULT_ACTIVITY_WORKSPACE_TAB,
+    type EmbeddedWorkspaceTab as ActivityWorkspaceTab,
+    type EmbeddedWorkspaceTabKey as ActivityWorkspaceTabKey,
+} from "@/lib/adminV2/runtime/focusPanel/embeddedWorkspaceTabs";

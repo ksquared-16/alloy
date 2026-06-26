@@ -145,7 +145,7 @@ describe("System 5A Universal Card Archetypes", () => {
     });
 
     it("activity communications embed includes summary strip before workspace", () => {
-        const workspace = readSrc("components/admin/focusPanel/OpportunityFocusPanelActivityWorkspace.tsx");
+        const workspace = readSrc("components/admin/focusPanel/OpportunityFocusPanelEmbeddedWorkspace.tsx");
         expect(workspace).toContain('data-activity-comms-summary="true"');
         expect(workspace).toContain("CommunicationsDrawerSection");
         expect(workspace).not.toContain("composer");

@@ -136,8 +136,8 @@ describe("deriveOpportunityFocusPanelPresentation", () => {
     });
 
     it("activity grid includes timeline and audit cards", () => {
-        const workspace = readSrc("components/admin/focusPanel/OpportunityFocusPanelActivityWorkspace.tsx");
-        expect(workspace).toContain('data-activity-workspace-tab={tab.key}');
-        expect(workspace).toContain("DEFAULT_ACTIVITY_WORKSPACE_TAB");
+        const workspace = readSrc("components/admin/focusPanel/OpportunityFocusPanelEmbeddedWorkspace.tsx");
+        expect(workspace).toContain('data-embedded-workspace-tab={tab.key}');
+        expect(workspace).toContain("DEFAULT_EMBEDDED_WORKSPACE_TAB");
     });
 });

@@ -1,14 +1,14 @@
 # Drawer system
 
-**Status:** Canonical (June 2026 freeze).
+**Status:** Canonical infrastructure doc (June 2026). **Product vocabulary:** operators work in the **Focus Panel** on an **operational subject** — see [`focus-panel-architecture-vocabulary.md`](./focus-panel-architecture-vocabulary.md). This file documents payload/VM infrastructure that still uses *drawer* in module names during migration.
 
-Entity drawer architecture, VM ownership, and navigation semantics.
+Entity detail architecture, VM ownership, and navigation semantics.
 
 ---
 
 ## Purpose
 
-Drawers are **operational workspaces** for record detail — opened from queue rows, search, linked navigation, or **Default Operational Subject resolution** on Work Unit entry.
+Drawers are **operational workspaces** for record detail — opened from queue rows, search, linked navigation, or **Default Operational Subject resolution** on Work Unit entry. In Alloy OS, this experience is presented as the **Focus Panel** (docked split layout); *drawer* here refers to the underlying payload and reveal infrastructure.
 
 > **Operational Mode:** On Work Unit open, the Focus Panel opens automatically on the strategy-resolved subject. See [`operational-mode-default-state-doctrine.md`](./operational-mode-default-state-doctrine.md).
 
@@ -87,6 +87,7 @@ Header slot for assist — proposals require human approve/apply. No autonomous 
 
 ## Related
 
+- `./focus-panel-architecture-vocabulary.md` — **Focus Panel lexical layers** (product terms vs drawer infrastructure)
 - `./operational-mode-default-state-doctrine.md` — auto-open Focus Panel on Work Unit entry
 - `./canonical-interaction-model.md` — universal drawer (Truth / Attention / Frame), Modes, Cards
 - `./interaction-grammar.md` — drawer preserves context; Previous/Next follows current queue

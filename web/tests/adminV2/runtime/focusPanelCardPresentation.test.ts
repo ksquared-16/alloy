@@ -82,8 +82,8 @@ describe("Focus Panel Universal Card presentation", () => {
         expect(cards.get("primary_next_action")?.visible).toBe(false);
     });
 
-    it("activity communications embeds via Activity workspace component", () => {
-        const workspace = readSrc("components/admin/focusPanel/OpportunityFocusPanelActivityWorkspace.tsx");
+    it("activity communications embeds via Embedded workspace component", () => {
+        const workspace = readSrc("components/admin/focusPanel/OpportunityFocusPanelEmbeddedWorkspace.tsx");
         expect(workspace).toContain("CommunicationsDrawerSection");
         expect(workspace).toContain('data-embedded-workspace="communications"');
     });

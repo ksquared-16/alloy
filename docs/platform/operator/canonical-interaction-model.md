@@ -33,13 +33,15 @@ Workspace
   → Perspective
     → Queue
       → Row
-        → Drawer
+        → Drawer (infra) / **Focus Panel** (presentation)
           → Context Frame
             → Mode
-              → Card
+              → Card / **Subject Composition**
                 → Section
                   → Field
 ```
+
+> **Alloy OS vocabulary:** The operator-facing surface at this step is the **Focus Panel** — one shell, different **subject composition** per operational subject and mode. Legacy code and this spine still say *Drawer* for the payload/reveal layer; see [`focus-panel-architecture-vocabulary.md`](./focus-panel-architecture-vocabulary.md).
 
 The operator learns this **once**. Adding Billing or Attendance feels like the same workspace gaining new abilities, not learning a new tool.
 

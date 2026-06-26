@@ -4,7 +4,7 @@ import { useMemo } from "react";
 
 import FocusPanelCardGrid from "@/components/admin/focusPanel/FocusPanelCardGrid";
 import FocusPanelCardRenderer from "@/components/admin/focusPanel/FocusPanelCardRenderer";
-import OpportunityFocusPanelActivityWorkspace from "@/components/admin/focusPanel/OpportunityFocusPanelActivityWorkspace";
+import OpportunityFocusPanelEmbeddedWorkspace from "@/components/admin/focusPanel/OpportunityFocusPanelEmbeddedWorkspace";
 import { deriveOpportunityFocusPanelPresentation } from "@/lib/adminV2/runtime/focusPanel/deriveOpportunityFocusPanelCards";
 import type { FocusPanelMode } from "@/lib/adminV2/runtime/focusPanel/focusPanelMode";
 import type { FocusPanelCardKey } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardModel";
@@ -78,7 +78,7 @@ export default function OpportunityFocusPanelModeGrid({
 
     if (mode === "activity") {
         return (
-            <OpportunityFocusPanelActivityWorkspace
+            <OpportunityFocusPanelEmbeddedWorkspace
                 drawerId={drawerId}
                 record={record}
                 displayVm={displayVm}

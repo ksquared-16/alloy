@@ -186,6 +186,9 @@ export type OpportunityDrawerViewModel = {
     };
 };
 
+/** Canonical Focus Panel VM alias — same compose shape during drawer→Focus Panel migration. */
+export type OpportunityFocusPanelViewModel = OpportunityDrawerViewModel;
+
 export type OpportunityDrawerViewModelSkipped = {
     structureSettled: false;
     reason: "classic_layout_deferred" | "layout_unavailable" | "opportunity_not_found";

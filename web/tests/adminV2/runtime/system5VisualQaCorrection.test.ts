@@ -103,9 +103,10 @@ describe("System 5 Visual QA correction guards", () => {
         });
         expect(grid.rows).toHaveLength(0);
 
-        const workspace = readSrc("components/admin/focusPanel/OpportunityFocusPanelActivityWorkspace.tsx");
+        const workspace = readSrc("components/admin/focusPanel/OpportunityFocusPanelEmbeddedWorkspace.tsx");
+        expect(workspace).toContain('data-focus-panel-embedded-workspace="true"');
         expect(workspace).toContain('data-focus-panel-activity-workspace="true"');
-        expect(workspace).toContain('data-activity-workspace-nav="true"');
+        expect(workspace).toContain('data-embedded-workspace-nav="true"');
         expect(workspace).toContain("CommunicationsDrawerSection");
         expect(ACTIVITY_WORKSPACE_TABS.map((t) => t.key)).toEqual([
             "timeline",
