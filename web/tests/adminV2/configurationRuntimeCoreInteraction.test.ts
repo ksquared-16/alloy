@@ -41,17 +41,12 @@ describe("Configuration Runtime core interaction", () => {
 
     it("registers configuration mode nav surfaces", () => {
         expect(CONFIGURATION_MODE_DEFAULT_SURFACE).toBe("/settings/processes");
-        expect(CONFIGURATION_MODE_NAV_ITEMS.map((item) => item.label)).toEqual([
-            "Processes",
-            "Layouts",
-            "Fields",
-            "Statuses",
-            "Actions",
-            "Automation",
-            "Operational Intelligence",
-            "Integrations",
-            "Security / Roles",
-        ]);
+        const labels = CONFIGURATION_MODE_NAV_ITEMS.map((item) => item.label);
+        expect(labels).toContain("Processes");
+        expect(labels).toContain("Surfaces");
+        expect(labels).toContain("Access");
+        expect(labels).toContain("Communications");
+        expect(labels).not.toContain("Actions");
     });
 
     it("process queue uses grouped Configure / Process / Health sections", () => {

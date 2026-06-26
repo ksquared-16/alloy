@@ -33,10 +33,10 @@ describe("Configuration Runtime end-to-end vertical slice", () => {
         expect(ADMIN_V2_SETTINGS_PROCESSES_PATH).toBe("/settings/processes");
     });
 
-    it("settings hub links to Processes and Layouts with Processes label", () => {
+    it("settings hub links to Processes and Layouts", () => {
         const hrefs = CONFIGURATION_WORKSPACE_DOMAINS.flatMap((d) => d.items.map((i) => ({ href: i.href, label: i.label })));
         expect(hrefs).toContainEqual({ href: "/settings/processes", label: "Processes" });
-        expect(hrefs).toContainEqual({ href: "/settings/layouts", label: "Layouts" });
+        expect(hrefs).toContainEqual({ href: "/settings/surfaces", label: "Surfaces" });
         expect(hrefs.some((i) => i.label === "Business Processes")).toBe(false);
     });
 
