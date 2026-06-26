@@ -4,6 +4,7 @@ import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { User } from "lucide-react";
 import { createClient } from "@/lib/supabaseClient";
+import { clearVolatileRuntimeSessionState } from "@/lib/adminV2/runtime/runtimeSessionState";
 import { palette, neutral, derived } from "@/styles/tokens/colors";
 import { brand } from "@/styles/tokens/colors";
 import { AdminV2NavLink } from "@/app/adminV2/components/navigation/AdminV2NavLink";
@@ -85,6 +86,7 @@ export default function AdminV2ProfileMenu() {
 
     const onSignOut = useCallback(async () => {
         setOpen(false);
+        clearVolatileRuntimeSessionState();
         const supabase = createClient();
         await supabase.auth.signOut();
         router.push("/login");

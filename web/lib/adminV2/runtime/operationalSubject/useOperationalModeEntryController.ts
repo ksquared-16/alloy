@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, type RefObject } from "react";
+import { useEffect, useLayoutEffect, type RefObject } from "react";
 
 import type { QueuePreviewItemVm } from "@/lib/ui-v2/workspace-types";
 import {
@@ -31,7 +31,7 @@ type OperationalModeEntrySnapshot = {
     message: string;
 };
 
-function resolveOperationalModeEntrySnapshot(params: Params): OperationalModeEntrySnapshot {
+export function resolveOperationalModeEntrySnapshot(params: Params): OperationalModeEntrySnapshot {
     const rowCount = params.displayItemsRef.current?.length ?? 0;
     const routeRecordId = params.routeRecordId?.trim() || null;
     const drawerOpen = Boolean(params.drawerType && params.drawerId != null);
@@ -90,7 +90,11 @@ export function useOperationalModeEntryController(params: Params): void {
         params.queueRevision,
     ]);
 
-    useEffect(() => {
+    // Layout-effect (not post-paint) so the State 1.5 compressed-rail attribute lands in the same
+    // commit the prepare panel renders in. `AlloyOsRuntimeSplitController` also writes its split
+    // attribute in a layout effect; keeping both on the same timing prevents a one-frame
+    // browse-width geometry flash before the operational rail compresses.
+    useLayoutEffect(() => {
         if (!params.enabled || typeof document === "undefined") return;
         const root = document.documentElement;
         const rowCount = params.displayItemsRef.current?.length ?? 0;

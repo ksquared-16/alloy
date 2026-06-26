@@ -5,13 +5,13 @@
  * split behavior (Operational Mode: condensed queue + Focus Panel by default when subject resolves).
  * It introduces NO new runtime primitive and changes NO data/VM/reveal contract.
  *
- * Default: OFF. When `NEXT_PUBLIC_ALLOY_OS_RUNTIME=1`, the controller may apply
- * additive root attributes that drive the runtime token layer and the flag-gated
- * split CSS/geometry. With the flag off, every code path is a no-op.
+ * Default: ON (build mode — this is the current runtime path, no longer experimental).
+ * Emergency kill switch only: `NEXT_PUBLIC_ALLOY_OS_RUNTIME=0` restores the pre-split
+ * no-op behavior. No env var is required to run or QA the runtime path.
  */
 
-/** Build-time flag. Default off. Set `NEXT_PUBLIC_ALLOY_OS_RUNTIME=1` to enable. */
-export const ALLOY_OS_RUNTIME_ENABLED = process.env.NEXT_PUBLIC_ALLOY_OS_RUNTIME === "1";
+/** Build-time flag. Default ON. Emergency kill switch: `NEXT_PUBLIC_ALLOY_OS_RUNTIME=0`. */
+export const ALLOY_OS_RUNTIME_ENABLED = process.env.NEXT_PUBLIC_ALLOY_OS_RUNTIME !== "0";
 
 /** Root attribute that opts a document into the runtime token layer (tokens only). */
 export const ALLOY_OS_RUNTIME_ATTR = "data-alloy-os-runtime";

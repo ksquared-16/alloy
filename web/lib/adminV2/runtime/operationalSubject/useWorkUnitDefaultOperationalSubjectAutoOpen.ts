@@ -9,6 +9,7 @@ import {
     resolveDefaultOperationalSubject,
     resolveDefaultOperationalSubjectStrategyForWorkUnit,
 } from "@/lib/adminV2/runtime/operationalSubject/resolveDefaultOperationalSubject";
+import { perfAlloyOsRuntimeMark } from "@/lib/perf/adminV2PerfLog";
 
 const AUTO_OPEN_SOURCE = "default_operational_subject";
 
@@ -92,6 +93,11 @@ export function useWorkUnitDefaultOperationalSubjectAutoOpen(params: Params): vo
         if (!resolved) return;
 
         autoOpenedLaneRef.current = laneKey;
+        perfAlloyOsRuntimeMark("default_subject_resolved", {
+            work_unit_id: params.workUnitId,
+            queue_key: params.activeQueueKey,
+            entity_type: resolved.entityType,
+        });
         params.openRecord(resolved.entityId, resolved.entityType, AUTO_OPEN_SOURCE);
     }, [
         params.enabled,

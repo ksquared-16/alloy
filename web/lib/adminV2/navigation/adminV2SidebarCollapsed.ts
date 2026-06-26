@@ -1,4 +1,7 @@
-const STORAGE_KEY = "alloy:v1:admV2:shell:sidebarCollapsed";
+/** Durable preference key — preserved across idle logout (see `clearVolatileRuntimeSessionState`). */
+export const ADMIN_V2_SIDEBAR_COLLAPSED_KEY = "alloy:v1:admV2:shell:sidebarCollapsed";
+
+const STORAGE_KEY = ADMIN_V2_SIDEBAR_COLLAPSED_KEY;
 
 /** Read persisted sidebar collapsed state (default expanded preference: collapsed true). */
 export function readAdminV2SidebarCollapsed(): boolean | null {

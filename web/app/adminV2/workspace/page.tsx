@@ -85,6 +85,8 @@ import {
     writeWorkspaceLifecycleCardsCache,
 } from "@/lib/workspace/workspaceContinuityPrefetch";
 import { peekOperatorLifecycleLandingCards } from "@/lib/admin/loadOperatorLifecycleLandingClient";
+import { ResumeWhereYouLeftOffChip } from "@/components/admin/workspace/ResumeWhereYouLeftOffChip";
+import { useAlloyOsRuntimeMarkOnce } from "@/lib/perf/useAlloyOsRuntimeMark";
 
 /** First paint: work-unit counts + rollup lines without per-dept growth KPI / pipeline calls. */
 function buildWorkspaceQuickRollup(
@@ -665,6 +667,10 @@ export default function AdminV2WorkspaceIndexPage() {
         [lifecycleCards, oipResolved]
     );
 
+    useAlloyOsRuntimeMarkOnce("workspace_ready", workspaceAboveFoldPageReady, {
+        surface: "workspace_root",
+    });
+
     if (error && !loading && !workspaceCachePrimed) {
         return (
             <div className="max-w-3xl">
@@ -679,6 +685,7 @@ export default function AdminV2WorkspaceIndexPage() {
 
     return (
         <>
+            <ResumeWhereYouLeftOffChip />
             <WorkspaceRootShell
                 orgName={orgNameFromContext}
                 departments={departments}

@@ -4,9 +4,11 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import clsx from "clsx";
 import OpportunityDrawerProofLayoutHeader from "@/components/admin/vmDrawer/OpportunityDrawerProofLayoutHeader";
 import OpportunityFocusPanelHeader from "@/components/admin/focusPanel/OpportunityFocusPanelHeader";
+import FocusPanelCompactHeader from "@/components/admin/focusPanel/FocusPanelCompactHeader";
 import OpportunityFocusPanelModeBody from "@/components/admin/focusPanel/OpportunityFocusPanelModeBody";
 import { useAlloyOsRuntimeSplitActive } from "@/lib/adminV2/runtime/useAlloyOsRuntimeSplitActive";
 import { useFocusPanelMode } from "@/lib/adminV2/runtime/focusPanel/useFocusPanelMode";
+import { useFocusPanelModePrewarm } from "@/lib/adminV2/runtime/focusPanel/useFocusPanelModePrewarm";
 import EntityDrawerOperatingShell from "@/components/admin/drawer/EntityDrawerOperatingShell";
 import ProofDoctrineLifecycleRail from "@/components/layout/proofShell/ProofDoctrineLifecycleRail";
 import CommunicationsDrawerBackgroundLoader from "@/components/admin/communications/CommunicationsDrawerBackgroundLoader";
@@ -291,6 +293,24 @@ export default function OpportunityDrawerVmRuntime() {
         scheduleDeferredCommunicationsDrawerPrefetch("opportunities", layoutPrefetchId);
         scheduleOpportunityDrawerTabPrefetch(layoutPrefetchId);
     }, [layoutPrefetchId]);
+
+    // Focus Panel mode prewarm: active mode wins; non-active modes warm their metadata after a
+    // short idle so switching feels instant. Heavy embedded Communications stays lazy until opened.
+    useFocusPanelModePrewarm({
+        enabled: Boolean(layoutPrefetchId),
+        activeMode: focusPanelMode,
+        subjectId: layoutPrefetchId,
+        prewarm: useMemo(
+            () => ({
+                activity: () => {
+                    if (!layoutPrefetchId) return;
+                    scheduleDeferredCommunicationsDrawerPrefetch("opportunities", layoutPrefetchId);
+                    scheduleOpportunityDrawerTabPrefetch(layoutPrefetchId);
+                },
+            }),
+            [layoutPrefetchId],
+        ),
+    });
 
     const summaryStripBoundaryEnabled = isDrawerSummaryStripBoundaryEnabledClient();
 
@@ -599,12 +619,26 @@ export default function OpportunityDrawerVmRuntime() {
             drawerTab !== "overview" ||
             overviewLayoutShellReady);
 
+    /** Runtime-on: mount Focus Panel shell as soon as subject id is selected (payload may still warm). */
+    const focusPanelShellOpen =
+        focusPanelActive &&
+        Boolean(drawer.type === "opportunities" && drawer.id) &&
+        !isOpportunityDrawerOpening &&
+        drawerVmRender.type === "opportunities" &&
+        Boolean(drawerVmRender.id);
+
+    const focusPanelPayloadPending = focusPanelShellOpen && !drawerOpen;
+
+    const drawerShellIsOpen = focusPanelActive ? focusPanelShellOpen : drawerOpen;
+
+    // Legacy centered overlay — quarantined from Alloy OS operational mode (Focus Panel warms in-place).
     const showRuntimeOpeningOverlay =
         Boolean(drawer.type === "opportunities" && drawer.id) &&
         drawerVmRender.type === "opportunities" &&
         Boolean(drawerVmRender.id) &&
         !isOpportunityDrawerOpening &&
-        !drawerOpen;
+        !drawerOpen &&
+        !focusPanelActive;
 
     const headerRecord = mergedOverviewLayoutRecord ?? record;
 
@@ -671,8 +705,34 @@ export default function OpportunityDrawerVmRuntime() {
         actionLoadingKey,
     ]);
 
+    const focusPanelPendingHeader = useMemo(() => {
+        if (!focusPanelPayloadPending || !drawer.id) return undefined;
+        const seed = drawer.opportunityQueuePreviewSeed;
+        const subjectTitle = seed?.title?.trim() || opportunitySingular;
+        return (
+            <FocusPanelCompactHeader
+                subjectTitle={subjectTitle}
+                contextChips={[]}
+                activeMode={focusPanelMode}
+                onModeChange={setFocusPanelMode}
+                onClose={closeDrawer}
+            />
+        );
+    }, [
+        focusPanelPayloadPending,
+        drawer.id,
+        drawer.opportunityQueuePreviewSeed,
+        opportunitySingular,
+        focusPanelMode,
+        setFocusPanelMode,
+        closeDrawer,
+    ]);
+
     const composedProofHeader = useMemo(() => {
-        if (focusPanelActive) return composedFocusPanelHeader;
+        if (focusPanelActive) {
+            if (focusPanelPayloadPending) return focusPanelPendingHeader;
+            return composedFocusPanelHeader;
+        }
         if (!layoutCutoverHeader || !committedVisible || !drawer.id || !displayVm || !headerRecord) return undefined;
         return (
             <OpportunityDrawerProofLayoutHeader
@@ -706,6 +766,8 @@ export default function OpportunityDrawerVmRuntime() {
         );
     }, [
         focusPanelActive,
+        focusPanelPayloadPending,
+        focusPanelPendingHeader,
         composedFocusPanelHeader,
         layoutCutoverHeader,
         committedVisible,
@@ -748,7 +810,7 @@ export default function OpportunityDrawerVmRuntime() {
                 : null}
             <EntityDrawerOperatingShell
                 entity="opportunity"
-                isOpen={drawerOpen}
+                isOpen={drawerShellIsOpen}
                 onClose={closeDrawer}
                 title={drawerTitleNode}
                 headerSubtitle={layoutCutoverHeader ? undefined : headerSubtitleBelowTitle}
@@ -784,7 +846,12 @@ export default function OpportunityDrawerVmRuntime() {
                         {queueNavigationControls}
                     </div>
                     : null}
-                {showColdShell ?
+                {focusPanelPayloadPending ?
+                    <AlloyCanonicalLoadingSurface
+                        message={`Preparing ${opportunitySingular}…`}
+                        data-alloy-os-focus-panel-pending="true"
+                    />
+                : showColdShell ?
                     <AlloyCanonicalLoadingSurface
                         message={`Preparing ${opportunitySingular}…`}
                         data-testid="opportunity-drawer-cold-loading"

@@ -1756,13 +1756,16 @@ function WorkUnitQueueLane({
 }) {
   const splitActive = useAlloyOsRuntimeSplitActive();
   const operationalEntry = useOperationalModeEntryOptional();
-  const operationalModePreparing =
-    ALLOY_OS_RUNTIME_ENABLED &&
-    operationalEntry?.phase === "preparing" &&
-    !splitActive;
   const drawerCtx = useAdminDrawerOptional();
   const openDrawerOpportunityId =
     drawerCtx?.drawer?.type === "opportunities" ? String(drawerCtx.drawer.id ?? "") : "";
+  // In-queue prep only before the first subject drawer opens. Once a subject is selected (or split
+  // is active), keep rows interactive — the legacy prep panel must not replace rows and block clicks.
+  const operationalModePreparing =
+    ALLOY_OS_RUNTIME_ENABLED &&
+    operationalEntry?.phase === "preparing" &&
+    !splitActive &&
+    !openDrawerOpportunityId;
   const listShellRef = useRef<HTMLDivElement>(null);
   const [refreshMinHeightPx, setRefreshMinHeightPx] = useState<number>();
   /** Client-only collapsed waitlist program/room groups (placement sections). */

@@ -86,7 +86,13 @@ import {
     markManualOperationalSubjectSelection,
     useWorkUnitDefaultOperationalSubjectAutoOpen,
 } from "@/lib/adminV2/runtime/operationalSubject/useWorkUnitDefaultOperationalSubjectAutoOpen";
-import { useOperationalModeEntryController } from "@/lib/adminV2/runtime/operationalSubject/useOperationalModeEntryController";
+import { useResumeSessionWriter } from "@/lib/adminV2/runtime/useResumeSessionWriter";
+import { consumeResumeIntent, RESUME_SCROLL_SURFACE_SELECTOR } from "@/lib/adminV2/runtime/resumeSession";
+import { useAlloyOsRuntimeMarkOnce } from "@/lib/perf/useAlloyOsRuntimeMark";
+import {
+    resolveOperationalModeEntrySnapshot,
+    useOperationalModeEntryController,
+} from "@/lib/adminV2/runtime/operationalSubject/useOperationalModeEntryController";
 import {
     operatorOperationalPerspectivesEnabled,
 } from "@/lib/adminV2/runtime/configurationRuntimeConvergenceFlag";
@@ -5975,6 +5981,32 @@ export default function AdminV2OpportunityWorkUnitPage() {
         queueRevision: operationalSubjectQueueRevision,
     });
 
+    const resumeSubjectEntityType =
+        drawer.type === "jobs" ? "job"
+        : drawer.type === "schedules" ? "schedule"
+        : drawer.type === "opportunities" ? "opportunity"
+        : null;
+    const resumeSubjectId =
+        resumeSubjectEntityType && drawer.id != null ? String(drawer.id).trim() || null : null;
+    useResumeSessionWriter({
+        enabled: ALLOY_OS_RUNTIME_ENABLED,
+        scope: { orgId, principalUserId, accessScopeFingerprint },
+        workUnitSlug: slugRoute?.routeSlug ?? null,
+        workUnitName: slugRoute?.workUnitName ?? workUnit?.name ?? null,
+        departmentId,
+        workUnitId: workUnit?.id ?? null,
+        laneKey: workUnitLaneReveal.activeQueueKey || selectedQueueKey || null,
+        laneLabel: queueItems?.queue?.label ?? null,
+        perspectiveKey: null,
+        subjectEntityId: resumeSubjectId,
+        subjectEntityType: resumeSubjectEntityType,
+        subjectLabel:
+            resumeSubjectId
+                ? findQueuePreviewItemById(queueDisplayItemsRef.current, resumeSubjectId)?.title ?? null
+                : null,
+        focusPanelMode: null,
+    });
+
     useEffect(() => {
         if (
             drawer.type === "opportunities" &&
@@ -6754,16 +6786,125 @@ export default function AdminV2OpportunityWorkUnitPage() {
 
     const workUnitQueueRevealReady = workUnitLaneReveal.settled;
 
+    // Phase 3/9 — one coordinated Operational Mode reveal. On the cold path (runtime-on), hold the
+    // single cold shell until the operational subject + Focus Panel shell are coherent, so the
+    // Work Unit reveals as ONE surface instead of: queue → prep panel → drawer overlay → compress.
+    // Mirrors `useOperationalModeEntryController`'s readiness (rows==0, or open drawer matches URL).
+    const operationalEntryRevealSnapshot = useMemo(
+        () =>
+            resolveOperationalModeEntrySnapshot({
+                enabled: ALLOY_OS_RUNTIME_ENABLED,
+                workUnitId: workUnit?.id ?? null,
+                activeQueueKey: workUnitLaneReveal.activeQueueKey || selectedQueueKey,
+                laneMayPaint: workUnitLaneReveal.mayPaintRows,
+                queueItemsLoading,
+                displayItemsRef: queueDisplayItemsRef,
+                routeRecordId: slugRoute?.routeRecordId ?? null,
+                drawerType: drawer.type,
+                drawerId: drawer.id != null ? String(drawer.id) : null,
+                queueRevision: operationalSubjectQueueRevision,
+            }),
+        [
+            workUnit?.id,
+            workUnitLaneReveal.activeQueueKey,
+            workUnitLaneReveal.mayPaintRows,
+            selectedQueueKey,
+            queueItemsLoading,
+            slugRoute?.routeRecordId,
+            drawer.type,
+            drawer.id,
+            operationalSubjectQueueRevision,
+        ],
+    );
+    const operationalRevealPhaseReady =
+        !ALLOY_OS_RUNTIME_ENABLED || operationalEntryRevealSnapshot.phase === "ready";
+
+    // Bounded fallback: a subject that never resolves (e.g. resolution returns nothing) must not
+    // strand the cold shell. After a short coordination window we reveal anyway (today's behavior).
+    const OPERATIONAL_REVEAL_COORDINATION_FALLBACK_MS = 1000;
+    const operationalRevealResetKey = `${departmentId}:${workUnitId}`;
+    const [operationalRevealFallbackElapsed, setOperationalRevealFallbackElapsed] = useState(false);
+    useEffect(() => {
+        setOperationalRevealFallbackElapsed(false);
+    }, [operationalRevealResetKey]);
+    useEffect(() => {
+        if (!ALLOY_OS_RUNTIME_ENABLED) return;
+        if (wuCoordinatedRevealDone) return; // warm path already revealed
+        if (!workUnitAboveFoldPageReady) return; // wait for the normal gate first
+        if (operationalRevealPhaseReady) return; // subject already coherent
+        if (operationalRevealFallbackElapsed) return;
+        const t = window.setTimeout(
+            () => setOperationalRevealFallbackElapsed(true),
+            OPERATIONAL_REVEAL_COORDINATION_FALLBACK_MS,
+        );
+        return () => window.clearTimeout(t);
+    }, [
+        workUnitAboveFoldPageReady,
+        operationalRevealPhaseReady,
+        operationalRevealFallbackElapsed,
+        wuCoordinatedRevealDone,
+        operationalRevealResetKey,
+    ]);
+
+    const operationalSurfaceReady = operationalRevealPhaseReady || operationalRevealFallbackElapsed;
+
     const workUnitPageContentReady = resolveWorkUnitPageContentReady({
         shell_ready: workUnitShellReady,
         critical_bundle_ready: workUnitAboveFoldPageReady,
         coordinated_reveal_completed: wuCoordinatedRevealDone,
+        operational_surface_ready: operationalSurfaceReady,
     });
 
+    const workUnitMarkResetKey = `${departmentId}:${workUnitId}`;
+    useAlloyOsRuntimeMarkOnce(
+        "work_unit_context_ready",
+        workUnitPageContentReady,
+        { department_id: departmentId, work_unit_id: workUnitId },
+        workUnitMarkResetKey,
+    );
+    useAlloyOsRuntimeMarkOnce(
+        "queue_ready",
+        workUnitQueueRevealReady,
+        { work_unit_id: workUnitId, queue_key: selectedQueueKey },
+        `${workUnitMarkResetKey}:${selectedQueueKey ?? ""}`,
+    );
+    // Total cold vs warm reveal duration: one mark when the coordinated surface latches. `warm`
+    // distinguishes the seeded (warm cache) path from the cold path so timelines separate cleanly.
+    useAlloyOsRuntimeMarkOnce(
+        "coordinated_reveal_ready",
+        wuCoordinatedRevealDone,
+        {
+            department_id: departmentId,
+            work_unit_id: workUnitId,
+            warm: workUnitPageSeededFromCache,
+        },
+        workUnitMarkResetKey,
+    );
+
+    // Resume continuity: when arriving via the Resume affordance, restore queue scroll once rows
+    // are painted for the matching work unit + lane. URL still drives subject/lane selection.
     useEffect(() => {
-        if (!workUnitAboveFoldPageReady || wuCoordinatedRevealDone) return;
+        if (!ALLOY_OS_RUNTIME_ENABLED) return;
+        if (!workUnitQueueRevealReady) return;
+        const intent = consumeResumeIntent();
+        if (!intent) return;
+        const laneKey = workUnitLaneReveal.activeQueueKey || selectedQueueKey || null;
+        if (intent.workUnitId !== (workUnit?.id ?? null)) return;
+        if (intent.laneKey && laneKey && intent.laneKey !== laneKey) return;
+        if (intent.queueScrollTop == null || intent.queueScrollTop <= 0) return;
+        if (typeof document === "undefined") return;
+        const el = document.querySelector<HTMLElement>(RESUME_SCROLL_SURFACE_SELECTOR);
+        if (el) el.scrollTop = intent.queueScrollTop;
+    }, [workUnitQueueRevealReady, workUnit?.id, workUnitLaneReveal.activeQueueKey, selectedQueueKey]);
+
+    useEffect(() => {
+        if (wuCoordinatedRevealDone) return;
+        if (!workUnitAboveFoldPageReady) return;
+        // Latch the cold coordinated reveal only once the operational surface is coherent; once
+        // latched it stays revealed (pill switches / subject churn never drop back to a cold shell).
+        if (!operationalSurfaceReady) return;
         setWuCoordinatedRevealDone(true);
-    }, [workUnitAboveFoldPageReady, wuCoordinatedRevealDone]);
+    }, [workUnitAboveFoldPageReady, operationalSurfaceReady, wuCoordinatedRevealDone]);
 
     const workUnitKpiStripPlaceholder = workUnitKpiStripShowsPlaceholder({
         kpi_metrics_pending: workUnitKpiMetricsPending,
@@ -7317,7 +7458,11 @@ export default function AdminV2OpportunityWorkUnitPage() {
                             <AutomationWorkflowsBlock
                                 presentation="work_unit_rail"
                                 title="Automations"
-                                kpisLoading={workflowKpisLoading}
+                                // Phase 9 quarantine: under Alloy OS runtime this non-critical telemetry
+                                // refreshes on idle AFTER the coordinated reveal. Suppress its independent
+                                // "Checking…" transient so it never pops a loader in over a ready surface —
+                                // values hydrate quietly in place instead.
+                                kpisLoading={ALLOY_OS_RUNTIME_ENABLED ? false : workflowKpisLoading}
                                 kpis={{
                                     runs_today: workflowKpis.runs_today,
                                     failed_last_7d: workflowKpis.failed_last_7d,

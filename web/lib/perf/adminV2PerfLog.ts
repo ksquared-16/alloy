@@ -5,7 +5,7 @@
  * — Emits via `[perf:*]` namespaces (see `perfNamespaceLog.ts`).
  */
 
-import { emitPerf, resolvePerfNamespaceFromTag } from "@/lib/perf/perfNamespaceLog";
+import { emitPerf, perfDevDetailEnabled, resolvePerfNamespaceFromTag } from "@/lib/perf/perfNamespaceLog";
 
 export type AdminV2PerfSource = "cache" | "network" | "background";
 
@@ -37,6 +37,40 @@ function compact<T extends Record<string, unknown>>(obj: T): Record<string, unkn
         if (v !== undefined && v !== null && v !== "") out[k] = v;
     }
     return out;
+}
+
+/**
+ * Alloy OS runtime lifecycle marks — lightweight, dev/staging only (gated to non-production
+ * via {@link perfDevDetailEnabled} so production stays quiet). One line per boundary; never in a
+ * render loop. These observe readiness; they do not alter reveal/cache/queue semantics.
+ */
+export type AlloyOsRuntimeMark =
+    | "os_shell_mounted"
+    | "workspace_ready"
+    | "work_unit_context_ready"
+    | "queue_ready"
+    | "default_subject_resolved"
+    | "focus_panel_opened"
+    | "focus_panel_mode_ready"
+    | "coordinated_reveal_ready"
+    | "core_surface_prefetched";
+
+export function perfAlloyOsRuntimeMark(
+    mark: AlloyOsRuntimeMark,
+    payload: AdminV2PerfCommon & Record<string, unknown> = {},
+): void {
+    if (!perfDevDetailEnabled()) return;
+    // Readable timeline line (dev/staging only): `[perf:work-unit] coordinated_reveal_ready +842ms`.
+    // `since_nav_ms` is elapsed from the shared work-unit drill-in start; falls back to total_ms.
+    const sinceNav = payload.since_nav_ms ?? payload.total_ms;
+    if (typeof sinceNav === "number" && typeof console !== "undefined" && typeof console.warn === "function") {
+        console.warn(`[perf:work-unit] ${mark} +${sinceNav}ms`);
+    }
+    emitAdminV2Perf("[perf.os.runtime]", {
+        surface: "alloy_os_runtime",
+        phase: mark,
+        ...payload,
+    });
 }
 
 /** Merge standard envelope fields with event-specific payloads; emits a single structured line. */

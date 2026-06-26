@@ -5,11 +5,10 @@ import {
     readAdminV2SidebarCollapsed,
     writeAdminV2SidebarCollapsed,
 } from "@/lib/adminV2/navigation/adminV2SidebarCollapsed";
-import { prefetchWorkspaceNavTree } from "@/lib/adminV2/navigation/workspaceNavTreeCache";
-import { scheduleInboxWarmLoad } from "@/lib/adminV2/inboxWarmLoadCache";
-import { scheduleCommunicationsWorkspaceWarm } from "@/lib/communications/v2/communicationsWorkspaceWarmCache";
-import { scheduleOipAnalyticsWarm } from "@/lib/metrics/oipWorkspaceWarmCache";
+import { runCoreSurfacePreload } from "@/lib/adminV2/coreSurfacePreloadRegistry";
 import { scheduleAdminV2BackgroundWork } from "@/lib/workspace/adminV2DeferBackgroundWork";
+import { perfAlloyOsRuntimeMark } from "@/lib/perf/adminV2PerfLog";
+import { useIdleSessionLogout } from "@/lib/adminV2/runtime/useIdleSessionLogout";
 import { usePathname, useSearchParams } from "next/navigation";
 import { neutral, derived, palette } from "@/styles/tokens/colors";
 
@@ -114,16 +113,15 @@ function AdminV2ShellInner({
   }, []);
 
   useEffect(() => {
-    return scheduleAdminV2BackgroundWork(
-      () => {
-        prefetchWorkspaceNavTree();
-        scheduleInboxWarmLoad();
-        scheduleCommunicationsWorkspaceWarm();
-        scheduleOipAnalyticsWarm();
-      },
-      { idleTimeoutMs: 4500, fallbackMs: 2800 },
-    );
+    perfAlloyOsRuntimeMark("os_shell_mounted");
+    return scheduleAdminV2BackgroundWork(() => runCoreSurfacePreload(), {
+      idleTimeoutMs: 4500,
+      fallbackMs: 2800,
+    });
   }, []);
+
+  // Idle / inactivity logout (flag-gated). Uses the existing Supabase signOut path.
+  useIdleSessionLogout();
 
   const [zoomLevel, setZoomLevel] = useState<"company" | "department">("company");
   const [selectedDepartmentKey, setSelectedDepartmentKey] = useState<DepartmentKey | null>(null);
