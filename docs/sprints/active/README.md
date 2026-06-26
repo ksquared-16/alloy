@@ -24,7 +24,7 @@
 | **Configuration Runtime (Phase 3 + QA)** | [`configuration_runtime_sprint_completion.md`](../06_2026/configuration_runtime_sprint_completion.md) |
 | Tasks V2 framework | `../06_2026/tasks_v2_operational_work_framework.md` |
 | Enrollment forms Phase 2 remainder | `../05_2026/later-phase/enrollment_packet_phase_2.md` |
-| Workspace V3 — Operational Command Center | Sprint 1: [`README.md`](../06_2026/workspace-v3-operational-command-center/README.md) · Sprint 3: [`sprint-3-evolution-reset.md`](../06_2026/workspace-v3-operational-command-center/sprint-3-evolution-reset.md) · Sprint 4 (System 5 reset): [`sprint-4-ux-continuity.md`](../06_2026/workspace-v3-operational-command-center/sprint-4-ux-continuity.md) |
+| Workspace V3 — Operational Command Center | Sprint 5 (final validation): [`sprint-5-final-ux-validation.md`](../06_2026/workspace-v3-operational-command-center/sprint-5-final-ux-validation.md) · Sprint 4: [`sprint-4-ux-continuity.md`](../06_2026/workspace-v3-operational-command-center/sprint-4-ux-continuity.md) · Sprint 3: [`sprint-3-evolution-reset.md`](../06_2026/workspace-v3-operational-command-center/sprint-3-evolution-reset.md) · Sprint 1: [`README.md`](../06_2026/workspace-v3-operational-command-center/README.md) |
 
 Full sequencing: `../../platform/foundation/product-roadmap.md`
 
