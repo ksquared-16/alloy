@@ -3,12 +3,13 @@ import {
     BarChart3,
     GitBranch,
     LayoutGrid,
+    Mail,
+    MapPin,
     Plug,
     Shield,
     Tags,
     TextCursorInput,
     Workflow,
-    Zap,
 } from "lucide-react";
 import type { ConfigurationModeNavIcon } from "@/lib/adminV2/configurationModeNav";
 
@@ -17,11 +18,12 @@ const ICONS: Record<ConfigurationModeNavIcon, LucideIcon> = {
     layouts: LayoutGrid,
     fields: TextCursorInput,
     statuses: Tags,
-    actions: Zap,
     automation: GitBranch,
     analytics: BarChart3,
     integrations: Plug,
     security: Shield,
+    locations: MapPin,
+    communications: Mail,
 };
 
 export function configurationModeNavLucideIcon(icon: ConfigurationModeNavIcon): LucideIcon {

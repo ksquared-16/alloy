@@ -7,8 +7,10 @@ import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
     CONFIGURATION_MODE_DEFAULT_SURFACE,
+    CONFIGURATION_MODE_INTERNAL_NAV_ITEMS,
     CONFIGURATION_MODE_NAV_ITEMS,
 } from "@/lib/adminV2/configurationModeNav";
+import { configurationModeNavLucideIcon } from "@/lib/adminV2/configurationModeNavIcons";
 import { CONFIGURATION_PROCESS_QUEUE_GROUPS } from "@/lib/adminV2/configurationModeDoctrine";
 
 const root = resolve(__dirname, "../..");
@@ -109,6 +111,12 @@ describe("Configuration Runtime core interaction", () => {
         const nav = read("app/adminV2/components/SidebarConfigurationModeNav.tsx");
         expect(nav).toContain('data-testid="config-mode-nav-home"');
         expect(nav).toContain("configurationModeNavLucideIcon");
+    });
+
+    it("configurationModeNavIcons resolves every nav item icon key", () => {
+        for (const item of [...CONFIGURATION_MODE_NAV_ITEMS, ...CONFIGURATION_MODE_INTERNAL_NAV_ITEMS]) {
+            expect(configurationModeNavLucideIcon(item.icon)).toBeDefined();
+        }
     });
 
     it("work views use condensed single-column editor with presentation below sort", () => {
