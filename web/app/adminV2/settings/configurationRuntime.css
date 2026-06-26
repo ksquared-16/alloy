@@ -4,13 +4,19 @@
  */
 
 .config-runtime-shell {
-    --cr-pine: var(--color-alloy-pine, #00a283);
-    --cr-pine-soft: color-mix(in srgb, var(--cr-pine) 8%, white);
-    --cr-pine-border: color-mix(in srgb, var(--cr-pine) 28%, transparent);
+    --cr-pine: #00a283;
+    --cr-pine-soft: rgba(0, 162, 131, 0.08);
+    --cr-pine-border: rgba(0, 162, 131, 0.28);
     --cr-midnight: var(--color-alloy-midnight, #1a2332);
     --cr-stone-border: color-mix(in srgb, var(--color-alloy-stone, #d4d8de) 55%, transparent);
     --cr-card-radius: 1rem;
-    background: white;
+    background: #ffffff;
+}
+
+/* Settings mode: force white canvas over any shell ambient tint */
+[data-adminv2-app-shell="workspace-v2"] .config-runtime-shell,
+[data-adminv2-workspace-ambient-root]:has(.config-runtime-shell) {
+    background: #ffffff;
 }
 
 .config-runtime-shell input[type="checkbox"],
@@ -264,8 +270,9 @@
     flex: 1;
     overflow: hidden;
     border-radius: 1rem;
-    border: 1px solid var(--cr-stone-border);
+    border: 1px solid rgba(89, 103, 139, 0.14);
     background: white;
+    box-shadow: 0 1px 2px rgba(26, 35, 50, 0.04);
 }
 
 .process-config-nav {
@@ -391,19 +398,208 @@
     background: white;
 }
 
-.config-mode-icon-tile,
-.config-runtime-icon-tile {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border-radius: 0.85rem;
-    background: color-mix(in srgb, var(--cr-pine) 14%, white);
-    color: var(--cr-pine);
-}
-
 .config-mode-condition-row,
 .config-runtime-condition-row {
     border-radius: 0.85rem;
     border: 1px solid var(--cr-stone-border);
     background: white;
+}
+
+/* ── Configuration Mode visual balance (settings surfaces) ── */
+
+[data-adminv2-settings-mode="true"] [data-adminv2-workspace-ambient-root] {
+    background: #ffffff;
+}
+
+[data-adminv2-settings-mode="true"] .adminv2-sidebar-config-link--active {
+    background: rgba(0, 162, 131, 0.1) !important;
+}
+
+.config-runtime-icon-tile,
+.config-mode-icon-tile {
+    border: 1px solid rgba(0, 162, 131, 0.12);
+    background: rgba(0, 162, 131, 0.06);
+    color: #00a283;
+}
+
+.config-runtime-primary-tile .text-alloy-midnight {
+    color: var(--cr-midnight);
+}
+
+.config-runtime-primary-tile:hover .text-base {
+    color: #00a283;
+}
+
+.config-runtime-hero h1 {
+    font-size: 1.375rem;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+}
+
+.config-runtime-hero p {
+    color: color-mix(in srgb, var(--cr-midnight) 58%, transparent);
+}
+
+.process-config-nav .text-alloy-forge\/60,
+.process-config-list-column h4 + p {
+    color: color-mix(in srgb, var(--color-alloy-forge, #59678b) 70%, transparent);
+}
+
+.process-config-work-view-list-card:hover {
+    border-color: rgba(0, 162, 131, 0.22);
+    background: rgba(0, 162, 131, 0.03);
+}
+
+.process-config-process-card--active,
+.process-config-work-view-list-card--active,
+.process-config-nav-item--active {
+    border-color: rgba(0, 162, 131, 0.28);
+    background: rgba(0, 162, 131, 0.08);
+    box-shadow: inset 3px 0 0 #00a283;
+}
+
+.process-config-nav-item--active {
+    box-shadow: inset 3px 0 0 #00a283;
+}
+
+.work-view-section-title {
+    font-size: 0.8125rem;
+    font-weight: 600;
+    line-height: 1.35;
+    color: var(--cr-midnight);
+}
+
+.work-view-section-summary {
+    max-width: 58%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 0.8125rem;
+    line-height: 1.35;
+    color: color-mix(in srgb, var(--color-alloy-forge, #59678b) 70%, transparent);
+    text-align: right;
+}
+
+.work-view-section-summary--active {
+    color: #00a283;
+}
+
+.work-view-field-label {
+    display: block;
+    font-size: 0.8125rem;
+    font-weight: 500;
+    color: color-mix(in srgb, var(--color-alloy-forge, #59678b) 72%, transparent);
+}
+
+.work-view-editor-header-title {
+    font-size: 0.9375rem;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    color: var(--cr-midnight);
+}
+
+/* ── Configuration Mode lock-in: primary actions + workspace structure ── */
+
+.config-primary-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 0.5rem;
+    border: 1px solid transparent;
+    background: #00a283;
+    padding: 0.4375rem 0.875rem;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    line-height: 1.2;
+    color: #ffffff;
+    transition:
+        background 0.15s ease,
+        opacity 0.15s ease;
+}
+
+.config-primary-btn:hover:not(:disabled) {
+    background: #009276;
+}
+
+.config-primary-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.config-primary-btn--sm {
+    padding: 0.3125rem 0.625rem;
+    font-size: 0.6875rem;
+}
+
+.config-secondary-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 0.5rem;
+    border: 1px solid rgba(89, 103, 139, 0.18);
+    background: #ffffff;
+    padding: 0.4375rem 0.875rem;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    color: color-mix(in srgb, var(--color-alloy-forge, #59678b) 85%, var(--cr-midnight));
+    transition:
+        background 0.15s ease,
+        border-color 0.15s ease;
+}
+
+.config-secondary-btn:hover:not(:disabled) {
+    border-color: rgba(0, 162, 131, 0.28);
+    background: rgba(0, 162, 131, 0.04);
+    color: #00a283;
+}
+
+.process-config-nav {
+    border-right: 1px solid rgba(89, 103, 139, 0.14);
+}
+
+.process-config-list-column {
+    border-right: 1px solid rgba(89, 103, 139, 0.14);
+}
+
+.process-config-setup-card {
+    border: 1px solid rgba(89, 103, 139, 0.14);
+    box-shadow: none;
+}
+
+.process-config-workspace-toolbar {
+    flex-shrink: 0;
+    margin-bottom: 0.75rem;
+    border-bottom: 1px solid rgba(89, 103, 139, 0.12);
+    padding-bottom: 0.75rem;
+}
+
+.process-config-workspace-header {
+    margin-bottom: 0.75rem;
+    border-bottom: 1px solid rgba(89, 103, 139, 0.12);
+    padding-bottom: 0.625rem;
+}
+
+.statuses-config-surface [data-status-settings-category] {
+    overflow: hidden;
+    border-radius: 1rem;
+    border: 1px solid rgba(89, 103, 139, 0.14);
+    background: #ffffff;
+    box-shadow: 0 1px 2px rgba(26, 35, 50, 0.04);
+}
+
+.statuses-config-surface [data-status-settings-category] > button {
+    border-bottom: 1px solid rgba(89, 103, 139, 0.1);
+    background: #ffffff;
+}
+
+.statuses-config-surface [data-status-settings-category] > button:hover {
+    background: rgba(0, 162, 131, 0.03);
+}
+
+.statuses-config-surface [data-status-settings-category] .text-\[\#31394d\] {
+    color: var(--cr-midnight);
+}
+
+.statuses-config-surface [data-status-settings-category] .text-\[\#59678b\] {
+    color: color-mix(in srgb, var(--color-alloy-forge, #59678b) 72%, transparent);
 }

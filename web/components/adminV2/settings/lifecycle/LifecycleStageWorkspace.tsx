@@ -101,7 +101,7 @@ function SaveBar({
             :   null}
             <button
                 type="button"
-                className="rounded-md bg-alloy-pine px-3 py-1 text-[11px] font-medium text-white disabled:opacity-50"
+                className="config-primary-btn config-primary-btn--sm"
                 disabled={saveDisabled}
                 onClick={() => void onSaveStage()}
                 data-testid="lifecycle-stage-save"
@@ -234,7 +234,7 @@ export default function LifecycleStageWorkspace({
     return (
         <div className="relative" data-testid="lifecycle-stage-workspace">
             <header
-                className="mb-2 flex flex-wrap items-center justify-between gap-2 border-b border-alloy-forge/10 pb-2"
+                className="process-config-workspace-header flex flex-wrap items-center justify-between gap-2"
                 data-testid="lifecycle-stage-workspace-header"
             >
                 <div className="min-w-0">

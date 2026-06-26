@@ -20,6 +20,9 @@ import BusinessProcessActionsListColumn, {
 } from "@/components/adminV2/settings/businessProcess/BusinessProcessActionsQueueWorkspace";
 import BusinessProcessAutomationShell from "@/components/adminV2/settings/businessProcess/BusinessProcessAutomationShell";
 import BusinessProcessHealthListColumn from "@/components/adminV2/settings/businessProcess/BusinessProcessHealthQueueWorkspace";
+import {
+    BUSINESS_PROCESS_CONFIGURATION_HEALTH_SUMMARY,
+} from "@/lib/lifecycle/businessProcessUiLabels";
 import BusinessProcessConfigurationShell from "@/components/adminV2/settings/businessProcess/BusinessProcessConfigurationShell";
 import BusinessProcessStagesListColumn from "@/components/adminV2/settings/businessProcess/BusinessProcessStagesListColumn";
 import BusinessProcessWorkViewsListColumn from "@/components/adminV2/settings/businessProcess/BusinessProcessWorkViewsListColumn";
@@ -1702,10 +1705,8 @@ export default function LifecycleActivationBoard({
                                 />
                             : processSection === "health" ?
                                 <BusinessProcessHealthListColumn
-                                    stages={navStages}
-                                    activeStageKey={stageKey}
-                                    onSelect={(s) => void selectStage(s)}
                                     runtimeSummary={runtimeSummary}
+                                    processLabel={builderProcess?.label ?? lifecycleName ?? "This process"}
                                 />
                             :   null
                         }
@@ -1809,15 +1810,15 @@ export default function LifecycleActivationBoard({
                         <BusinessProcessAutomationShell />
                     :   null}
 
-                    {processSection === "health" && stageKey ?
+                    {processSection === "health" ?
                         <div
                             className="process-config-setup-card p-4"
                             data-testid="business-process-health-workspace"
                         >
                             <header className="mb-4">
-                                <h3 className="text-lg font-semibold text-alloy-midnight">Configuration health</h3>
-                                <p className="mt-1 text-sm text-alloy-midnight/60">
-                                    Ready check and BOS configuration recommendations for {stageLabel || "this stage"}.
+                                <h3 className="text-lg font-semibold text-alloy-midnight">Configuration Health</h3>
+                                <p className="mt-1 text-sm text-alloy-forge/70">
+                                    {BUSINESS_PROCESS_CONFIGURATION_HEALTH_SUMMARY}
                                 </p>
                             </header>
                             {identity ?

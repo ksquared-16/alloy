@@ -30,7 +30,7 @@ export default function BusinessProcessWorkViewsListColumn() {
                 <button
                     type="button"
                     onClick={addWorkView}
-                    className="rounded-lg bg-alloy-pine px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-alloy-pine/90"
+                    className="config-primary-btn config-primary-btn--sm"
                     data-testid="business-process-add-work-view"
                 >
                     + {BUSINESS_PROCESS_WORK_VIEW_ADD}
@@ -52,22 +52,9 @@ export default function BusinessProcessWorkViewsListColumn() {
                             className={`process-config-work-view-list-card ${active ? "process-config-work-view-list-card--active" : ""}`}
                             data-testid={`business-process-work-view-list-${view.id}`}
                         >
-                            <div className="flex items-start gap-2">
-                                <span className="mt-0.5 text-alloy-pine/80" aria-hidden>
-                                    ⠿
-                                </span>
-                                <div className="min-w-0 flex-1">
-                                    <p className="truncate text-sm font-semibold text-alloy-midnight">{view.label}</p>
-                                    {view.mission ?
-                                        <p className="mt-0.5 line-clamp-2 text-[11px] leading-snug text-alloy-midnight/55">
-                                            {view.mission}
-                                        </p>
-                                    :   null}
-                                </div>
-                                <span className="shrink-0 rounded-full bg-alloy-stone/20 px-2 py-0.5 text-[10px] font-semibold text-alloy-midnight/60">
-                                    {view.display_order ?? 1}
-                                </span>
-                            </div>
+                            <p className="truncate text-[13px] font-semibold leading-snug text-alloy-midnight">
+                                {view.label.trim() || "Untitled work view"}
+                            </p>
                         </button>
                     );
                 })}

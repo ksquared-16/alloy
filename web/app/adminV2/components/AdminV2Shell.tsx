@@ -191,6 +191,7 @@ function AdminV2ShellInner({
             }}
             data-adminv2-app-shell="workspace-v2"
             data-adminv2-workspace-shell="v2"
+            data-adminv2-settings-mode={isSettingsRoute ? "true" : undefined}
             data-adminv2-sidebar-collapsed={sidebarCollapsed ? "true" : "false"}
           >
             <Sidebar collapsed={sidebarCollapsed} onToggle={toggleSidebarCollapsed} />

@@ -69,7 +69,7 @@ export default function BusinessProcessProcessSelectorStrip({
                 <p className="text-sm text-alloy-midnight/60">{BUSINESS_PROCESS_CATALOG_EMPTY}</p>
                 <button
                     type="button"
-                    className="rounded-lg bg-alloy-pine px-3 py-1.5 text-sm font-semibold text-white hover:bg-alloy-pine/90"
+                    className="config-primary-btn"
                     onClick={onCreateNew}
                     data-testid="lifecycle-catalog-create-new"
                 >
@@ -148,7 +148,7 @@ export default function BusinessProcessProcessSelectorStrip({
                     {trailingActions}
                     <button
                         type="button"
-                        className="shrink-0 rounded-lg bg-alloy-pine px-3.5 py-1.5 text-sm font-semibold text-white hover:bg-alloy-pine/90"
+                        className="config-primary-btn shrink-0"
                         onClick={onCreateNew}
                         data-testid="lifecycle-catalog-create-new"
                     >

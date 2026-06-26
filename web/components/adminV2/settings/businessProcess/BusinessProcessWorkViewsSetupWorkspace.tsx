@@ -42,7 +42,7 @@ export default function BusinessProcessWorkViewsSetupWorkspace({
                 </p>
             :   null}
 
-            <div className="flex flex-wrap items-center justify-end gap-2">
+            <div className="flex flex-wrap items-center justify-end gap-2 process-config-workspace-toolbar">
                 {dirty ?
                     <span className="text-xs font-medium text-amber-800">Unsaved changes</span>
                 :   null}
@@ -53,7 +53,7 @@ export default function BusinessProcessWorkViewsSetupWorkspace({
                     type="button"
                     disabled={!dirty || saving}
                     onClick={() => void save()}
-                    className="rounded-lg border border-alloy-pine/30 bg-white px-3 py-1.5 text-xs font-semibold text-alloy-pine disabled:opacity-50"
+                    className="config-primary-btn config-primary-btn--sm"
                     data-testid="business-process-save-work-views"
                 >
                     {saving ? "Saving…" : "Save Work Views"}

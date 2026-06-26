@@ -77,7 +77,7 @@ export function ConfigRuntimePrimaryTile({
                 <div className="config-runtime-icon-tile">{icon}</div>
                 <div className="min-w-0">
                     <p className="text-base font-semibold text-alloy-midnight group-hover:text-alloy-pine">{title}</p>
-                    <p className="mt-1 text-sm leading-relaxed text-alloy-midnight/60">{description}</p>
+                    <p className="mt-1 text-[13px] leading-relaxed text-alloy-forge/70">{description}</p>
                 </div>
             </div>
             <span className="mt-4 inline-flex text-xs font-semibold text-alloy-pine">Open →</span>

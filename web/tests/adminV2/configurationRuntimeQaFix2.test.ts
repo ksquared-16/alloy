@@ -53,11 +53,35 @@ describe("Configuration Runtime QA Fix 2", () => {
     it("Work View editor supports multi-sort and condensed presentation", () => {
         const card = read("components/adminV2/settings/businessProcess/WorkViewProcessEditorCard.tsx");
         const sortEditor = read("components/adminV2/settings/businessProcess/WorkViewSortRulesEditor.tsx");
+        const sectionState = read("components/adminV2/settings/businessProcess/useWorkViewEditorSectionState.ts");
+        const summaries = read("lib/lifecycle/workViewEditorSummaries.ts");
         expect(card).toContain("WorkViewSortRulesEditor");
+        expect(card).toContain("useWorkViewEditorSectionState");
+        expect(card).toContain("workViewEditorSummaries");
+        expect(summaries).toContain("formatWorkViewConditionsSummary");
+        expect(sectionState).toContain("basics: true");
+        expect(sectionState).toContain("conditions: false");
         expect(sortEditor).toContain("-add-sort");
+        expect(sortEditor).toContain("Newest first");
         expect(card).not.toContain("lg:grid-cols-[minmax(0,1fr)_16rem]");
         expect(card).toContain("LayoutAssignmentCard");
         expect(card).not.toContain("LayoutPresentationPreview");
+        expect(card).toContain('testId="work-view-section-basics"');
+    });
+
+    it("Configuration Health is process-level, not stage readiness", () => {
+        const health = read("components/adminV2/settings/businessProcess/BusinessProcessHealthQueueWorkspace.tsx");
+        expect(health).toContain("Configuration Health");
+        expect(health).toContain("business-process-health-process-item");
+        expect(health).toContain("BUSINESS_PROCESS_CONFIGURATION_HEALTH_SUMMARY");
+        const labels = read("lib/lifecycle/businessProcessUiLabels.ts");
+        expect(labels).toContain('BUSINESS_PROCESS_NAV_HEALTH = "Configuration Health"');
+    });
+
+    it("settings active nav uses Bend Pine not mint/cyan", () => {
+        const css = read("app/adminV2/adminV2.css");
+        expect(css).not.toContain("#7ee8cc");
+        expect(css).toContain("#00a283");
     });
 
     it("relative date controls remain in condition value control", () => {
@@ -77,7 +101,7 @@ describe("Configuration Runtime QA Fix 2", () => {
 
     it("configurationRuntime.css enforces white canvas and pine accent controls", () => {
         const css = read("app/adminV2/settings/configurationRuntime.css");
-        expect(css).toContain("background: white");
+        expect(css).toContain("background: #ffffff");
         expect(css).toContain("accent-color: rgb(0, 162, 131)");
         expect(css).toContain("rgba(0, 162, 131, 0.08)");
         expect(css).not.toContain("alloy-blue");

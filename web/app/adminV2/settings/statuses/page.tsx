@@ -5,7 +5,7 @@ export const dynamic = "force-dynamic";
 
 export default function AdminV2SettingsStatusesPage() {
   return (
-    <div className="w-full min-w-0 space-y-3">
+    <div className="statuses-config-surface w-full min-w-0 space-y-3">
       <LifecycleSettingsCrossLinkBanner variant="statuses" />
       <StatusesClient basePath="/admin/settings/statuses" adminV2Chrome />
     </div>

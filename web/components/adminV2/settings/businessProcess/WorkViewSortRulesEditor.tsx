@@ -5,6 +5,19 @@ import {
     type WorkViewSortV1,
 } from "@/lib/lifecycle/workViewsConfigV1";
 
+const SORT_FIELD_LABELS = Object.fromEntries(
+    WORK_VIEW_SORT_FIELD_OPTIONS.map((opt) => [opt.key, opt.label]),
+) as Record<string, string>;
+
+export function formatWorkViewSortSummary(sorts: WorkViewSortV1[]): string {
+    const primary = sorts[0];
+    if (!primary?.field_key) return "Updated · Newest first";
+    const fieldLabel = SORT_FIELD_LABELS[primary.field_key] ?? primary.field_key;
+    const directionLabel = primary.direction === "asc" ? "Oldest first" : "Newest first";
+    const suffix = sorts.length > 1 ? ` (+${sorts.length - 1} more)` : "";
+    return `${fieldLabel} · ${directionLabel}${suffix}`;
+}
+
 export function normalizeWorkViewSorts(
     sortV1: WorkViewSortV1 | undefined,
     sortsV1: WorkViewSortV1[] | undefined,
@@ -76,8 +89,8 @@ export default function WorkViewSortRulesEditor({
                         className="config-runtime-select"
                         data-testid={`${testIdPrefix}-sort-direction-${index}`}
                     >
-                        <option value="desc">Descending</option>
-                        <option value="asc">Ascending</option>
+                        <option value="desc">Newest first</option>
+                        <option value="asc">Oldest first</option>
                     </select>
                     <div className="flex items-center gap-1">
                         <button

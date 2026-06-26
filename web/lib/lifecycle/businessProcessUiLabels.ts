@@ -29,7 +29,9 @@ export const BUSINESS_PROCESS_NAV_WORK_VIEWS = "Work Views";
 export const BUSINESS_PROCESS_NAV_PRESENTATION = "Presentation";
 export const BUSINESS_PROCESS_NAV_ACTIONS = "Actions";
 export const BUSINESS_PROCESS_NAV_AUTOMATION = "Automation";
-export const BUSINESS_PROCESS_NAV_HEALTH = "Health";
+export const BUSINESS_PROCESS_NAV_HEALTH = "Configuration Health";
+export const BUSINESS_PROCESS_CONFIGURATION_HEALTH_SUMMARY =
+    "Checks whether this process is ready for operators.";
 
 export const BUSINESS_PROCESS_WORK_VIEWS_INTRO =
     "Work Views are process-level operational lenses. They can include records from one stage or many — for example Tours Today, Needs Follow-up, or Hot Leads.";

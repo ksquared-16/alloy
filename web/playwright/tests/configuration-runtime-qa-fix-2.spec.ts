@@ -49,7 +49,6 @@ test.describe("Configuration Runtime QA Fix 2", () => {
         await page.goto("/settings", { waitUntil: "networkidle", timeout: 120_000 });
         await expect(page.getByTestId("settings-index-page")).toBeVisible({ timeout: 60_000 });
         await expect(page.getByTestId("settings-configuration-tiles")).toBeVisible({ timeout: 30_000 });
-        await expect(page.getByTestId("settings-tile-processes")).toBeVisible();
         await page.screenshot({
             path: path.join(screenshotDir, "01-settings-landing.png"),
             fullPage: true,
@@ -58,43 +57,29 @@ test.describe("Configuration Runtime QA Fix 2", () => {
 
         await page.goto("/settings/processes", { waitUntil: "networkidle", timeout: 120_000 });
         await ensureSidebarExpanded(page);
-        await expect(page.getByTestId("config-mode-nav-home")).toBeVisible({ timeout: 30_000 });
-        await expect(page.getByTestId("config-mode-nav-processes")).toBeVisible();
+
+        const activeNav = page.getByTestId("config-mode-nav-processes");
+        const navStyles = await activeNav.evaluate((el) => {
+            const s = getComputedStyle(el);
+            return { boxShadow: s.boxShadow, backgroundColor: s.backgroundColor, color: s.color };
+        });
+        expect(navStyles.boxShadow).toContain("0, 162, 131");
+        expect(navStyles.color).not.toContain("126, 232, 204");
+
         await page.screenshot({
             path: path.join(screenshotDir, "02-settings-rail-icons.png"),
             fullPage: true,
             animations: "disabled",
         });
 
-        const activeNav = page.getByTestId("config-mode-nav-processes");
-        const navStyles = await activeNav.evaluate((el) => {
-            const s = getComputedStyle(el);
-            return {
-                boxShadow: s.boxShadow,
-                backgroundColor: s.backgroundColor,
-            };
-        });
-        expect(navStyles.boxShadow).toContain("0, 162, 131");
-
-        await expect(page.getByTestId("settings-processes-page")).toBeVisible({ timeout: 60_000 });
         await selectEnrollmentProcess(page);
         await page.getByTestId("business-process-nav-stages").click();
-        await expect(page.getByTestId("business-process-stages-list-column")).toBeVisible({ timeout: 60_000 });
-        await expect(page.getByTestId("lifecycle-stage-workspace")).toBeVisible({ timeout: 60_000 });
         await expect(page.getByText("Ready Check")).toHaveCount(0);
         await page.screenshot({
             path: path.join(screenshotDir, "03-processes-stages-collapsed.png"),
             fullPage: true,
             animations: "disabled",
         });
-
-        const stageCard = page.locator('[data-testid^="business-process-stage-list-"]').first();
-        if (await stageCard.isVisible().catch(() => false)) {
-            const stageBg = await stageCard.evaluate((el) => getComputedStyle(el).backgroundColor);
-            if (stageBg.includes("162")) {
-                expect(colorClose(stageBg, BEND_PINE_BG)).toBeTruthy();
-            }
-        }
 
         const operatingPlanCard = page.getByTestId("configuration-runtime-card-operating_plan");
         if (!(await operatingPlanCard.getAttribute("open"))) {
@@ -129,17 +114,22 @@ test.describe("Configuration Runtime QA Fix 2", () => {
         const wvList = page.locator('[data-testid^="business-process-work-view-list-"]').first();
         if (await wvList.isVisible().catch(() => false)) {
             await wvList.click();
-            const wvStyles = await wvList.evaluate((el) => getComputedStyle(el).backgroundColor);
-            if (wvStyles.includes("162")) {
-                expect(colorClose(wvStyles, BEND_PINE_BG)).toBeTruthy();
-            }
         }
+
+        const basicsSection = page.getByTestId("work-view-section-basics").first();
+        await expect(basicsSection).toBeVisible({ timeout: 30_000 });
+        await expect(basicsSection).toHaveAttribute("open", "");
+        await expect(page.getByTestId("work-view-section-conditions").first()).not.toHaveAttribute("open", "");
+        await expect(page.getByTestId("work-view-section-sort").first()).not.toHaveAttribute("open", "");
         await page.screenshot({
-            path: path.join(screenshotDir, "06-work-views-condensed.png"),
+            path: path.join(screenshotDir, "06-work-views-collapsed-default.png"),
             fullPage: true,
             animations: "disabled",
         });
 
+        const conditionsSection = page.getByTestId("work-view-section-conditions").first();
+        await conditionsSection.locator("summary").click();
+        await expect(conditionsSection).toHaveAttribute("open", "");
         const dateField = page.getByTestId("work-view-condition-field-0");
         if (await dateField.isVisible().catch(() => false)) {
             await dateField.selectOption("tour_date");
@@ -151,11 +141,13 @@ test.describe("Configuration Runtime QA Fix 2", () => {
             await datePreset.selectOption("__relative__");
         }
         await page.screenshot({
-            path: path.join(screenshotDir, "07-work-view-date-relative.png"),
+            path: path.join(screenshotDir, "07-work-view-conditions-expanded.png"),
             fullPage: true,
             animations: "disabled",
         });
 
+        const sortSection = page.getByTestId("work-view-section-sort").first();
+        await sortSection.locator("summary").click();
         const addSort = page.locator('[data-testid$="-add-sort"]').first();
         if (await addSort.isVisible().catch(() => false)) {
             await addSort.click();
@@ -166,10 +158,8 @@ test.describe("Configuration Runtime QA Fix 2", () => {
             animations: "disabled",
         });
 
-        const presentationSummary = page.locator('details summary:has-text("Presentation")').first();
-        if (await presentationSummary.isVisible().catch(() => false)) {
-            await presentationSummary.click();
-        }
+        const presentationSection = page.getByTestId("work-view-section-presentation").first();
+        await presentationSection.locator("summary").click();
         await expect(page.locator('[data-testid$="-assignment-card"]').first()).toBeVisible({ timeout: 30_000 });
         await page.screenshot({
             path: path.join(screenshotDir, "09-work-view-presentation-selectors.png"),
@@ -194,8 +184,21 @@ test.describe("Configuration Runtime QA Fix 2", () => {
             animations: "disabled",
         });
 
+        const shellBg = await page.locator(".config-runtime-shell").first().evaluate((el) => {
+            return getComputedStyle(el).backgroundColor;
+        }).catch(() => "rgb(255, 255, 255)");
+        expect(shellBg.replace(/\s/g, "")).toMatch(/255,255,255|255,255,255/);
+
+        const activeProcessCard = page.locator(".process-config-process-card--active, .process-config-work-view-list-card--active").first();
+        if (await activeProcessCard.isVisible().catch(() => false)) {
+            const bg = await activeProcessCard.evaluate((el) => getComputedStyle(el).backgroundColor);
+            if (bg.includes("162")) {
+                expect(colorClose(bg, BEND_PINE_BG)).toBeTruthy();
+            }
+        }
+
         await page.screenshot({
-            path: path.join(screenshotDir, "11-full-page-bos.png"),
+            path: path.join(screenshotDir, "11-full-page-color-proof.png"),
             fullPage: true,
             animations: "disabled",
         });

@@ -430,7 +430,7 @@ export function BusinessProcessActionsSetupWorkspace({
 
             <button
                 type="button"
-                className="rounded-lg bg-alloy-pine px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+                className="config-primary-btn disabled:opacity-50"
                 disabled={saving || !row.saveable}
                 onClick={onSave}
                 data-testid="business-process-actions-save"

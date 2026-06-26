@@ -128,3 +128,34 @@
 - Global checkbox/radio `accent-color: rgb(0, 162, 131)` in `configurationRuntime.css` (explicit RGB for reliable computed-style match).
 - Actions enabled checkbox uses `config-mode-control` (removed `accent-alloy-pine` Tailwind-only path).
 - Playwright `colorClose()` accepts both `rgb(0, 162, 131)` and `#00a283`.
+
+## Final follow-up (June 26, 2026)
+
+### Perceived color fixes
+
+| Source | Issue | Fix |
+|--------|-------|-----|
+| `.adminv2-sidebar-config-link--active` | Mint `#7ee8cc` text read as cyan/blue on dark rail | White text + pine `#00a283` icon on collapsed rail |
+| `--cr-pine-soft` | `color-mix` could vary by browser | Explicit `rgba(0, 162, 131, 0.08)` |
+| Settings canvas | Shell ambient could tint content | Force `#ffffff` on `.config-runtime-shell` |
+
+### Work View editor
+
+- Collapsible sections with localStorage persistence (`useWorkViewEditorSectionState`).
+- **Default:** Basics open; conditions, sort, presentation, visibility, advanced collapsed.
+- Sort summary when collapsed: `Updated · Newest first` (+N more when multi-sort).
+- Direction labels: Newest first / Oldest first.
+
+### Configuration Health
+
+- Nav label: **Configuration Health**
+- Queue shows single whole-process item (not stage list)
+- Workspace copy clarifies process-level evaluation, not stage readiness
+
+### Updated screenshots
+
+- `06-work-views-collapsed-default.png`
+- `07-work-view-conditions-expanded.png`
+- `08-work-view-multi-sort.png`
+- `09-work-view-presentation-selectors.png`
+- `11-full-page-color-proof.png`

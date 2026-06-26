@@ -2,12 +2,16 @@
 
 import Link from "next/link";
 import LayoutAssignmentCard from "@/components/adminV2/settings/configurationRuntime/LayoutAssignmentCard";
-import { ConfigRuntimeLensRow } from "@/components/adminV2/settings/configurationRuntime/ConfigurationRuntimePrimitives";
 import WorkViewConditionEditor from "@/components/adminV2/settings/businessProcess/WorkViewConditionEditor";
 import WorkViewSortRulesEditor, {
+    formatWorkViewSortSummary,
     normalizeWorkViewSorts,
     syncSortFields,
 } from "@/components/adminV2/settings/businessProcess/WorkViewSortRulesEditor";
+import {
+    useWorkViewEditorSectionState,
+    type WorkViewEditorSectionId,
+} from "@/components/adminV2/settings/businessProcess/useWorkViewEditorSectionState";
 import {
     BUSINESS_PROCESS_SECTION_PURPOSE,
     BUSINESS_PROCESS_LENS_OPERATORS_SEE,
@@ -18,11 +22,61 @@ import {
     BUSINESS_PROCESS_WORK_VIEW_DEFAULT_ORDER,
     BUSINESS_PROCESS_WORK_VIEW_TECHNICAL_IDENTITY,
 } from "@/lib/lifecycle/businessProcessUiLabels";
+import {
+    formatWorkViewBasicsSummary,
+    formatWorkViewConditionsSummary,
+    formatWorkViewPresentationSummary,
+    formatWorkViewVisibilitySummary,
+} from "@/lib/lifecycle/workViewEditorSummaries";
 import { buildOperationalViewPreviewRuntimeHref } from "@/lib/adminV2/runtime/perspective/mergeOperationalViewMetadata";
 import type { WorkViewCompatQueueLane } from "@/lib/lifecycle/workViewsRuntimeConvergence";
 import type { WorkViewConfigV1Stored } from "@/lib/lifecycle/workViewsConfigV1";
 import type { EntityLayoutRecord } from "@/lib/layout/layoutV2";
 import { publishedLayoutOptionsForAssignmentSlot } from "@/lib/layout/layoutAssignmentLayoutOptions";
+
+function WorkViewEditorSection({
+    sectionId,
+    title,
+    summary,
+    summaryActive = false,
+    open,
+    onOpenChange,
+    children,
+    testId,
+}: {
+    sectionId: WorkViewEditorSectionId;
+    title: string;
+    summary?: string;
+    summaryActive?: boolean;
+    open: boolean;
+    onOpenChange: (open: boolean) => void;
+    children: React.ReactNode;
+    testId?: string;
+}) {
+    return (
+        <details
+            className="group border-b border-alloy-stone/25 py-2.5"
+            open={open}
+            onToggle={(e) => onOpenChange(e.currentTarget.open)}
+            data-testid={testId ?? `work-view-section-${sectionId}`}
+        >
+            <summary className="cursor-pointer list-none py-0.5 [&::-webkit-details-marker]:hidden">
+                <div className="flex items-center justify-between gap-3">
+                    <span className="work-view-section-title">{title}</span>
+                    {!open && summary ?
+                        <span
+                            className={`work-view-section-summary ${summaryActive ? "work-view-section-summary--active" : ""}`}
+                            data-testid={`${testId ?? `work-view-section-${sectionId}`}-summary`}
+                        >
+                            {summary}
+                        </span>
+                    :   null}
+                </div>
+            </summary>
+            <div className="pt-3">{children}</div>
+        </details>
+    );
+}
 
 export default function WorkViewProcessEditorCard({
     view,
@@ -31,7 +85,7 @@ export default function WorkViewProcessEditorCard({
     workUnitId,
     layouts,
     queueLanes = [],
-    onSelect,
+    onSelect: _onSelect,
     onChange,
     onDelete,
 }: {
@@ -65,26 +119,44 @@ export default function WorkViewProcessEditorCard({
 
     const displayTitle = view.label.trim() || "Untitled work view";
     const sortRules = normalizeWorkViewSorts(view.sort_v1, view.sorts_v1);
+    const { open, setSectionOpen } = useWorkViewEditorSectionState(view.id);
+
+    const conditionsSummary = formatWorkViewConditionsSummary(view.filters_v1);
+    const sortSummary = formatWorkViewSortSummary(sortRules);
+    const presentationSummary = formatWorkViewPresentationSummary(
+        view.queue_layout_id,
+        view.focus_panel_layout_id,
+        layouts,
+    );
+    const visibilitySummary = formatWorkViewVisibilitySummary(view);
+    const basicsSummary = formatWorkViewBasicsSummary(view.mission);
 
     return (
         <article
             className="process-config-setup-card overflow-hidden"
             data-testid={`process-work-view-card-${view.id}`}
         >
-            <header className="flex items-center gap-2 border-b border-alloy-stone/40 bg-white px-3 py-2">
+            <header className="flex items-center gap-2 border-b border-alloy-stone/30 bg-white px-4 py-2.5">
                 <div className="min-w-0 flex-1">
-                    <h4 className="truncate text-sm font-semibold text-alloy-midnight">{displayTitle}</h4>
+                    {open.basics ?
+                        <p className="work-view-editor-header-title truncate" aria-hidden>
+                            Work view
+                        </p>
+                    :   <h4 className="work-view-editor-header-title truncate" data-testid={`process-work-view-header-title-${view.id}`}>
+                            {displayTitle}
+                        </h4>
+                    }
                 </div>
                 {selected ?
-                    <span className="rounded-full bg-alloy-pine/10 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-alloy-pine">
-                        Selected
+                    <span className="rounded-full bg-alloy-pine/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-alloy-pine">
+                        Active
                     </span>
                 :   null}
                 {onDelete ?
                     <button
                         type="button"
                         onClick={onDelete}
-                        className="rounded px-2 py-0.5 text-[10px] font-medium text-alloy-midnight/45 hover:text-red-700"
+                        className="rounded px-2 py-0.5 text-xs font-medium text-alloy-forge/60 hover:text-red-700"
                         data-testid={`process-work-view-delete-${view.id}`}
                     >
                         Delete
@@ -92,52 +164,78 @@ export default function WorkViewProcessEditorCard({
                 :   null}
             </header>
 
-            <div className="space-y-0 px-3 pb-3 [&_.config-runtime-lens-row]:border-alloy-stone/30 [&_.config-runtime-lens-row]:py-2">
-                <ConfigRuntimeLensRow label={BUSINESS_PROCESS_LENS_OPERATORS_SEE}>
-                    <input
-                        type="text"
-                        value={view.label}
-                        onChange={(e) => onChange({ label: e.target.value })}
-                        className="config-runtime-input"
-                        data-testid={`process-work-view-label-${view.id}`}
-                    />
-                </ConfigRuntimeLensRow>
-
-                <ConfigRuntimeLensRow label={BUSINESS_PROCESS_SECTION_PURPOSE}>
-                    <textarea
-                        value={view.mission ?? ""}
-                        rows={2}
-                        onChange={(e) => onChange({ mission: e.target.value })}
-                        className="config-runtime-input leading-relaxed"
-                        data-testid={`process-work-view-mission-${view.id}`}
-                    />
-                </ConfigRuntimeLensRow>
-
-                <details className="group border-b border-alloy-stone/30 py-2" open>
-                    <summary className="cursor-pointer list-none text-[10px] font-semibold uppercase tracking-wide text-alloy-midnight/45 [&::-webkit-details-marker]:hidden">
-                        Show work when…
-                    </summary>
-                    <div className="pt-2">
-                        <WorkViewConditionEditor
-                            filters={view.filters_v1 ?? []}
-                            onChange={(filters_v1) => onChange({ filters_v1 })}
-                        />
+            <div className="space-y-0 px-4 pb-4">
+                <WorkViewEditorSection
+                    sectionId="basics"
+                    title="Basics"
+                    summary={basicsSummary}
+                    open={open.basics}
+                    onOpenChange={(isOpen) => setSectionOpen("basics", isOpen)}
+                    testId="work-view-section-basics"
+                >
+                    <div className="space-y-3">
+                        <label className="block space-y-1.5">
+                            <span className="work-view-field-label">{BUSINESS_PROCESS_LENS_OPERATORS_SEE}</span>
+                            <input
+                                type="text"
+                                value={view.label}
+                                onChange={(e) => onChange({ label: e.target.value })}
+                                className="config-runtime-input"
+                                data-testid={`process-work-view-label-${view.id}`}
+                            />
+                        </label>
+                        <label className="block space-y-1.5">
+                            <span className="work-view-field-label">{BUSINESS_PROCESS_SECTION_PURPOSE}</span>
+                            <textarea
+                                value={view.mission ?? ""}
+                                rows={2}
+                                onChange={(e) => onChange({ mission: e.target.value })}
+                                className="config-runtime-input leading-relaxed"
+                                data-testid={`process-work-view-mission-${view.id}`}
+                            />
+                        </label>
                     </div>
-                </details>
+                </WorkViewEditorSection>
 
-                <ConfigRuntimeLensRow label={BUSINESS_PROCESS_LENS_SORTED_BY}>
+                <WorkViewEditorSection
+                    sectionId="conditions"
+                    title="Show work when…"
+                    summary={conditionsSummary}
+                    open={open.conditions}
+                    onOpenChange={(isOpen) => setSectionOpen("conditions", isOpen)}
+                    testId="work-view-section-conditions"
+                >
+                    <WorkViewConditionEditor
+                        filters={view.filters_v1 ?? []}
+                        onChange={(filters_v1) => onChange({ filters_v1 })}
+                    />
+                </WorkViewEditorSection>
+
+                <WorkViewEditorSection
+                    sectionId="sort"
+                    title={BUSINESS_PROCESS_LENS_SORTED_BY}
+                    summary={sortSummary}
+                    summaryActive
+                    open={open.sort}
+                    onOpenChange={(isOpen) => setSectionOpen("sort", isOpen)}
+                    testId="work-view-section-sort"
+                >
                     <WorkViewSortRulesEditor
                         sorts={sortRules}
                         testIdPrefix={`process-work-view-${view.id}`}
                         onChange={(sorts) => onChange(syncSortFields(sorts))}
                     />
-                </ConfigRuntimeLensRow>
+                </WorkViewEditorSection>
 
-                <details className="group border-b border-alloy-stone/30 py-2">
-                    <summary className="cursor-pointer list-none text-[10px] font-semibold uppercase tracking-wide text-alloy-midnight/45 [&::-webkit-details-marker]:hidden">
-                        {BUSINESS_PROCESS_LENS_PRESENTATION}
-                    </summary>
-                    <div className="grid gap-2 pt-2" data-testid={`process-work-view-presentation-${view.id}`}>
+                <WorkViewEditorSection
+                    sectionId="presentation"
+                    title={BUSINESS_PROCESS_LENS_PRESENTATION}
+                    summary={presentationSummary}
+                    open={open.presentation}
+                    onOpenChange={(isOpen) => setSectionOpen("presentation", isOpen)}
+                    testId="work-view-section-presentation"
+                >
+                    <div className="grid gap-2" data-testid={`process-work-view-presentation-${view.id}`}>
                         <LayoutAssignmentCard
                             title="Queue layout"
                             subtitle="Work list presentation for this view."
@@ -161,62 +259,68 @@ export default function WorkViewProcessEditorCard({
                             testIdPrefix={`process-work-view-focus-${view.id}`}
                         />
                     </div>
-                </details>
+                </WorkViewEditorSection>
 
-                <details className="group border-b border-alloy-stone/30 py-2">
-                    <summary className="cursor-pointer list-none text-[10px] font-semibold uppercase tracking-wide text-alloy-midnight/45 [&::-webkit-details-marker]:hidden">
-                        Visibility & order
-                    </summary>
-                    <div className="flex flex-wrap items-center gap-5 pt-2">
-                        <label className="flex items-center gap-2.5 text-sm text-alloy-midnight/80">
-                            <input
-                                type="checkbox"
-                                checked={view.visible_in_runtime !== false}
-                                onChange={(e) => onChange({ visible_in_runtime: e.target.checked })}
-                                className="config-mode-control h-4 w-4 rounded border-alloy-stone/40"
-                            />
-                            {BUSINESS_PROCESS_LENS_VISIBLE_IN_WORK_UNIT}
-                        </label>
-                        <label className="flex items-center gap-2 text-sm text-alloy-midnight/75">
-                            <span>{BUSINESS_PROCESS_WORK_VIEW_DEFAULT_ORDER}</span>
-                            <input
-                                type="number"
-                                min={1}
-                                value={view.display_order ?? 1}
-                                onChange={(e) =>
-                                    onChange({ display_order: Math.max(1, Number(e.target.value) || 1) })
-                                }
-                                className="config-runtime-input w-16 py-1"
-                            />
-                        </label>
+                <WorkViewEditorSection
+                    sectionId="visibility"
+                    title="Visibility"
+                    summary={visibilitySummary}
+                    open={open.visibility}
+                    onOpenChange={(isOpen) => setSectionOpen("visibility", isOpen)}
+                    testId="work-view-section-visibility"
+                >
+                    <div className="space-y-3">
+                        <div className="flex flex-wrap items-center gap-5">
+                            <label className="flex items-center gap-2.5 text-[13px] text-alloy-forge/80">
+                                <input
+                                    type="checkbox"
+                                    checked={view.visible_in_runtime !== false}
+                                    onChange={(e) => onChange({ visible_in_runtime: e.target.checked })}
+                                    className="config-mode-control h-4 w-4 rounded border-alloy-stone/40"
+                                />
+                                {BUSINESS_PROCESS_LENS_VISIBLE_IN_WORK_UNIT}
+                            </label>
+                            <label className="flex items-center gap-2 text-[13px] text-alloy-forge/75">
+                                <span>{BUSINESS_PROCESS_WORK_VIEW_DEFAULT_ORDER}</span>
+                                <input
+                                    type="number"
+                                    min={1}
+                                    value={view.display_order ?? 1}
+                                    onChange={(e) =>
+                                        onChange({ display_order: Math.max(1, Number(e.target.value) || 1) })
+                                    }
+                                    className="config-runtime-input w-16 py-1"
+                                />
+                            </label>
+                        </div>
+                        {previewHref ?
+                            <Link
+                                href={previewHref}
+                                className="config-runtime-preview-btn"
+                                data-testid={`process-work-view-preview-${view.id}`}
+                            >
+                                {BUSINESS_PROCESS_LENS_PREVIEW_RUNTIME}
+                            </Link>
+                        :   null}
                     </div>
-                </details>
+                </WorkViewEditorSection>
 
-                {previewHref ?
-                    <div className="pt-2">
-                        <Link
-                            href={previewHref}
-                            className="config-runtime-preview-btn"
-                            data-testid={`process-work-view-preview-${view.id}`}
-                        >
-                            {BUSINESS_PROCESS_LENS_PREVIEW_RUNTIME}
-                        </Link>
-                    </div>
-                :   null}
-
-                <details className="mt-2 rounded-lg border border-alloy-stone/40 bg-white px-3 py-2">
-                    <summary className="cursor-pointer text-[10px] font-semibold uppercase tracking-wide text-alloy-midnight/40">
-                        {BUSINESS_PROCESS_WORK_VIEW_TECHNICAL_IDENTITY}
-                    </summary>
-                    <div className="mt-2 space-y-2">
-                        <p className="font-mono text-[10px] text-alloy-forge/70">Work view id: {view.id}</p>
+                <WorkViewEditorSection
+                    sectionId="advanced"
+                    title={BUSINESS_PROCESS_WORK_VIEW_TECHNICAL_IDENTITY}
+                    open={open.advanced}
+                    onOpenChange={(isOpen) => setSectionOpen("advanced", isOpen)}
+                    testId="work-view-section-advanced"
+                >
+                    <div className="space-y-2">
+                        <p className="font-mono text-xs text-alloy-forge/70">Work view id: {view.id}</p>
                         {queueLanes.length ?
-                            <label className="block text-[10px] text-alloy-forge/70">
-                                Compatibility queue lane
+                            <label className="block">
+                                <span className="work-view-field-label">Compatibility queue lane</span>
                                 <select
                                     value={view.compat_queue_key ?? ""}
                                     onChange={(e) => onChange({ compat_queue_key: e.target.value || undefined })}
-                                    className="config-runtime-select mt-1 text-xs"
+                                    className="config-runtime-select mt-1.5 text-xs"
                                 >
                                     <option value="">Not mapped</option>
                                     {queueLanes.map((lane) => (
@@ -228,7 +332,7 @@ export default function WorkViewProcessEditorCard({
                             </label>
                         :   null}
                     </div>
-                </details>
+                </WorkViewEditorSection>
             </div>
         </article>
     );

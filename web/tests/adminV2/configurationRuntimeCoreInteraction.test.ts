@@ -92,10 +92,22 @@ describe("Configuration Runtime core interaction", () => {
         expect(board).not.toContain("<LifecycleActionsMatrix");
     });
 
-    it("health uses queue list column", () => {
-        expect(read("components/adminV2/settings/businessProcess/BusinessProcessHealthQueueWorkspace.tsx")).toContain(
-            "business-process-health-list-column",
-        );
+    it("health uses process-level Configuration Health queue item", () => {
+        const health = read("components/adminV2/settings/businessProcess/BusinessProcessHealthQueueWorkspace.tsx");
+        expect(health).toContain("business-process-health-list-column");
+        expect(health).toContain("Configuration Health");
+        expect(health).toContain("business-process-health-process-item");
+        const board = read("components/adminV2/settings/lifecycle/LifecycleActivationBoard.tsx");
+        expect(board).toContain("BUSINESS_PROCESS_CONFIGURATION_HEALTH_SUMMARY");
+    });
+
+    it("work views default collapsed sections except basics", () => {
+        const card = read("components/adminV2/settings/businessProcess/WorkViewProcessEditorCard.tsx");
+        expect(card).toContain("useWorkViewEditorSectionState");
+        expect(card).toContain("work-view-section-basics");
+        expect(card).toContain("work-view-section-conditions");
+        expect(card).toContain("work-view-section-sort");
+        expect(card).toContain("work-view-section-presentation");
     });
 
     it("settings rail includes Home entry in configuration mode", () => {

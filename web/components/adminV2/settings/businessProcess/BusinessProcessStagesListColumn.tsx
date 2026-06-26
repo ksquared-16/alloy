@@ -26,7 +26,7 @@ export default function BusinessProcessStagesListColumn({
                 <button
                     type="button"
                     onClick={onAddStageClick}
-                    className="rounded-lg border border-alloy-pine/30 bg-white px-2.5 py-1 text-[11px] font-semibold text-alloy-pine hover:bg-alloy-pine/[0.05]"
+                    className="config-primary-btn config-primary-btn--sm"
                     data-testid="lifecycle-stage-tab-add"
                 >
                     {addingStage ? "Adding…" : "+ Add Stage"}
@@ -43,8 +43,7 @@ export default function BusinessProcessStagesListColumn({
                             className={`process-config-work-view-list-card ${active ? "process-config-work-view-list-card--active" : ""}`}
                             data-testid={`lifecycle-stage-tab-${stage.key}`}
                         >
-                            <p className="truncate text-sm font-semibold text-alloy-midnight">{stage.label}</p>
-                            <p className="mt-0.5 truncate text-[11px] text-alloy-midnight/50">Stage configuration</p>
+                            <p className="truncate text-[13px] font-semibold leading-snug text-alloy-midnight">{stage.label}</p>
                         </button>
                     );
                 })}
