@@ -1,7 +1,7 @@
 # Alloy OS — System 5 — Operational Surface Design System
 
-**Revision:** 1  
-**Status:** Canonical platform doctrine (June 2026)  
+**Revision:** 2  
+**Status:** Approved / frozen (June 2026) — canonical platform doctrine  
 **Authority:** Visual and compositional law for every operational surface in Alloy OS.
 
 ---
@@ -393,7 +393,27 @@ Configuration **must not** override: card anatomy, tier color language, maximum 
 
 | Rev | Date | Change |
 |-----|------|--------|
+| 2 | June 2026 | **Implementation freeze** — Subject Identity Block, registry Manage, operational header |
 | 1 | June 2026 | Initial canonical freeze — philosophy through configuration boundary |
+
+---
+
+## Implementation freeze (June 2026)
+
+The Focus Panel operational surface is **approved**. Further work is configuration and interaction depth (5B/5C), not visual redesign.
+
+**Frozen implementation:**
+
+- Operational Mode default stack (condensed queue → subject → Focus Panel → BOS)
+- Subject Identity Block header (pine rail, icon tile, context chips, Mission, BOS + Manage)
+- System 5 card grammar, tiers, and archetype rendering (5A)
+- Read-only status chip — protected by operational action pipeline
+- Manage menu = `displayVm.actions.header_menu` (same registry catalog as command rail)
+- No header stage-movement CTA; no unrestricted status mutation
+
+**Documented, not fully built:** System 5B card interaction/expansion; System 5C content templates.
+
+**Dormant:** Browse Mode; full-width expanded queue as default entry.
 
 ---
 

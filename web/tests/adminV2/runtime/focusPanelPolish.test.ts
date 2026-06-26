@@ -150,8 +150,11 @@ describe("Focus Panel header composition guards", () => {
         expect(header).toContain("FOCUS_PANEL_HEADER_BOS_LABEL");
         expect(header).toContain('bosAssistLabel={FOCUS_PANEL_HEADER_BOS_LABEL}');
         expect(header).toContain('bosActionVariant="default"');
-        expect(header).toContain("manageMenuItems");
-        expect(header).toContain("OpportunityDrawerHeaderControls");
+        expect(header).toContain("onSubjectManageActionSelect");
+        expect(header).toContain("buildSubjectManageMenuFromResolvedActions");
+        expect(header).toContain("displayVm.actions.header_menu");
+        expect(header).not.toContain("buildRecordManageMenuForEntity");
+        expect(header).not.toContain("Duplicate Lead");
 
         const bos = readSrc("components/admin/drawer/BosDrawerAssistCta.tsx");
         expect(bos).toContain("BosMark");

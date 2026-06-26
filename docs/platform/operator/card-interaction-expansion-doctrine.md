@@ -1,7 +1,7 @@
 # Alloy OS — System 5B — Card Interaction & Expansion Doctrine
 
 **Revision:** 1  
-**Status:** Canonical platform doctrine (June 2026) — **documentation only; no runtime implementation until explicitly requested**  
+**Status:** Approved doctrine (June 2026) — **documented; runtime expansion not fully built**  
 **Extends:** [`operational-surface-design-system.md`](./operational-surface-design-system.md) (System 5) · [`universal-card-archetypes.md`](./universal-card-archetypes.md) (System 5A) · [`card-content-template-field-inclusion-doctrine.md`](./card-content-template-field-inclusion-doctrine.md) (System 5C)
 
 ---

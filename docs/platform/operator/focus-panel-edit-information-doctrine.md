@@ -1,6 +1,6 @@
 # Focus Panel Edit Information Doctrine
 
-**Status:** Active (implementation plan — Phase 1)  
+**Status:** Approved / frozen (June 2026) — Phase 1 complete; edit mutations deferred to Phase 2  
 **Scope:** Alloy OS Focus Panel (System 5 Universal Cards)  
 **Related:** [card-interaction-expansion-doctrine.md](./card-interaction-expansion-doctrine.md), [universal-card-archetypes.md](./universal-card-archetypes.md), [card-content-template-field-inclusion-doctrine.md](./card-content-template-field-inclusion-doctrine.md), [operational-action-doctrine.md](./operational-action-doctrine.md)
 
@@ -101,3 +101,21 @@ When permissions allow mutation, missing profile values should expose **Edit** i
 - Raw status keys must not render in Focus Panel chips or header.
 - Edit affordances must not appear on collapsed Summary cards except Action CTAs.
 - Subject switch must not remount operational surface or reset queue selection.
+
+---
+
+## Implementation freeze (June 2026)
+
+**Approved and frozen** — do not redesign without explicit platform review.
+
+| Surface | Frozen state |
+|---------|----------------|
+| **Entry** | Operational Mode default — condensed queue, resolved subject, auto-open Focus Panel |
+| **Header** | Subject Identity Block — icon tile, title, context chips, structured Mission, BOS + Manage |
+| **Status** | Read-only chip — no direct dropdown; changes via operational actions ([operational-action-doctrine.md](./operational-action-doctrine.md)) |
+| **Manage** | Registry-backed `header_menu` — same catalog as command rail; no placeholder admin stubs |
+| **Cards** | System 5 Universal Cards + archetypes (5A) |
+| **Interaction** | 5B / 5C documented; full expansion/template authoring not yet built |
+| **Browse** | Full-width queue dormant — not default operator path |
+
+**Out of scope for further visual passes:** split geometry, queue compression, operational entry gate, BOS rail, WUC shell, card derivation logic.

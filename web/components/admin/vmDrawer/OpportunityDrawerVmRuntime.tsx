@@ -631,9 +631,8 @@ export default function OpportunityDrawerVmRuntime() {
                 activeMode={focusPanelMode}
                 onModeChange={setFocusPanelMode}
                 onClose={closeDrawer}
-                manageMenuItems={manageMenuItems}
-                onManageSelect={onManageSelect}
-                manageBusyKey={manageBusyKey}
+                onSubjectManageActionSelect={onActionSelect}
+                subjectManageActionLoadingKey={actionLoadingKey}
                 actionPreflightBlocked={actionPreflightBlocked}
                 onDismissActionPreflightBlocked={clearActionPreflightBlocked}
                 registryActionFeedback={registryActionFeedback}
@@ -687,9 +686,9 @@ export default function OpportunityDrawerVmRuntime() {
                 onTabSelect={onTabSelect}
                 lifecycleRail={lifecycleRailForHeader}
                 onClose={closeDrawer}
-                manageMenuItems={manageMenuItems}
-                onManageSelect={onManageSelect}
-                manageBusyKey={manageBusyKey}
+                subjectManageActions={subjectManageActions}
+                onSubjectManageActionSelect={onActionSelect}
+                subjectManageActionLoadingKey={actionLoadingKey}
                 actionPreflightBlocked={actionPreflightBlocked}
                 onDismissActionPreflightBlocked={clearActionPreflightBlocked}
                 registryActionFeedback={registryActionFeedback}
@@ -719,9 +718,9 @@ export default function OpportunityDrawerVmRuntime() {
         onTabSelect,
         lifecycleRail,
         closeDrawer,
-        manageBusyKey,
-        manageMenuItems,
-        onManageSelect,
+        subjectManageActions,
+        onActionSelect,
+        actionLoadingKey,
         actionPreflightBlocked,
         clearActionPreflightBlocked,
         registryActionFeedback,

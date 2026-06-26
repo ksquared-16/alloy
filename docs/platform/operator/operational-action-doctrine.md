@@ -1,6 +1,6 @@
 # Operational Action Doctrine
 
-**Status:** Active (doctrine — execution shell partially implemented)  
+**Status:** Approved / frozen (June 2026) — Manage/rail alignment implemented; rule engine deferred  
 **Scope:** Alloy OS operator surfaces — Focus Panel header, Manage menu, command rail, lifecycle/status protection  
 **Related:** [drawer-system.md](./drawer-system.md), [focus-panel-edit-information-doctrine.md](./focus-panel-edit-information-doctrine.md), [actions-and-workflows.md](../modules/actions-and-workflows.md)
 
@@ -23,13 +23,16 @@ The Focus Panel **Manage** menu and the **right rail Actions** inventory must no
 | **Right rail** | Always-available command inventory — broader grouping, telemetry, workflows |
 | **Manage menu** | Subject-local command menu — same action metadata, filtered and grouped for the active record |
 
-**Current implementation (alignment, not rebuild):**
+**Current implementation (June 2026 — frozen):**
 
-- Drawer VM composes registry-backed actions into `displayVm.actions.header_menu` (header/rail CTAs) and related manage metadata via `buildRecordManageMenuForEntity` / action resolution in `composeOpportunityDrawerViewModel`.
-- Focus Panel header passes `manageMenuItems` from the same VM/runtime path as the legacy drawer Manage control.
-- Focus Panel header **does not** render `header_menu[0]` as a stage-movement CTA — operational actions belong in Manage or the command rail, not as an always-present header button.
+- Drawer VM composes registry-backed actions via `buildOpportunityDrawerHeaderMenuActions` → `displayVm.actions.header_menu`.
+- `displayVm.actions.manage_menu` mirrors `header_menu` (same catalog).
+- Focus Panel **Manage** reads `displayVm.actions.header_menu` through `buildSubjectManageMenuFromResolvedActions`.
+- Command rail registers the same `header_menu` via `DrawerCommandRailActionsRegistrar`.
+- Legacy `buildRecordManageMenuForEntity` placeholders (Duplicate/Merge/Transfer) are **not** used for opportunity Focus Panel.
+- Focus Panel header **does not** render stage-movement CTAs or unrestricted status dropdown.
 
-**Target:** Configuration owns operational action definitions; platform surfaces read one resolved catalog per subject context.
+**Target (deferred):** Configuration owns operational action rule sets with invariant/repair pipeline.
 
 ---
 

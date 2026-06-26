@@ -140,7 +140,17 @@ export function minimalSettledOpportunityDrawerViewModel(
                 },
             ],
             manage_menu: [
-                { kind: "action", key: "delete_lead", label: "Delete Lead", enabled: true },
+                {
+                    key: "schedule_tour",
+                    label: "Schedule tour",
+                    description: null,
+                    action_type: "workflow",
+                    icon: null,
+                    style: null,
+                    display_style: "button",
+                    payload: {},
+                    workflow_id: null,
+                },
             ],
         },
         layout: {

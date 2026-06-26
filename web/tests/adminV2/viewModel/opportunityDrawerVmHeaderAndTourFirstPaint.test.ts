@@ -80,18 +80,19 @@ describe("Opportunity VM header layout A.4", () => {
         expect(runtime).toContain("data-opportunity-drawer-header-status-below-title");
         expect(runtime).not.toContain("displayVm?.header.subtitle");
         expect(runtime).toMatch(
-            /headerTitleRight[\s\S]*OpportunityDrawerHeaderControls[\s\S]*manageMenuItems/
+            /headerTitleRight[\s\S]*OpportunityDrawerHeaderControls[\s\S]*subjectManageActions/
         );
         expect(runtime).not.toMatch(
             /headerTitleRight[\s\S]*VmProgressiveStatusDropdown/
         );
     });
 
-    it("uses header_menu for command rail and manage menu for header controls", () => {
+    it("uses header_menu for command rail and Manage menu", () => {
         const runtime = read("components/admin/vmDrawer/OpportunityDrawerVmRuntime.tsx");
         expect(runtime).toContain("displayVm.actions.header_menu");
-        expect(runtime).toContain("buildRecordManageMenuForEntity");
-        expect(runtime).not.toContain("menuActions={displayVm.actions.header}");
+        expect(runtime).toContain("subjectManageActions");
+        expect(runtime).toContain("onSubjectManageActionSelect={onActionSelect}");
+        expect(runtime).not.toContain("buildRecordManageMenuForEntity");
     });
 });
 

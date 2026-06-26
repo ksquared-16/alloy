@@ -1,7 +1,7 @@
 # Alloy OS — System 5A — Universal Card Archetypes
 
 **Revision:** 1  
-**Status:** Canonical platform doctrine (June 2026)  
+**Status:** Approved / frozen (June 2026) — archetypes implemented in Focus Panel runtime  
 **Extends:** [`operational-surface-design-system.md`](./operational-surface-design-system.md) (System 5 — frozen) · [`universal-card-system.md`](./universal-card-system.md) (System 4)
 
 ---

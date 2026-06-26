@@ -14,7 +14,7 @@ import VmProgressiveStatusDropdown from "@/components/admin/vmDrawer/VmProgressi
 import type { OpportunityDrawerViewModel } from "@/lib/adminV2/viewModel/drawer/types";
 import type { DrawerTabKey } from "@/lib/entityPresentation";
 import type { OpportunityDrawerRegistryActionFeedback } from "@/lib/admin/actions/useOpportunityDrawerRegistryActionFeedback";
-import type { RecordManageMenuActionKey, RecordManageMenuItem } from "@/lib/admin/recordManage/types";
+import type { ResolvedActionForClient } from "@/lib/admin/actions/types";
 import type { ActionPreflightUiPayload } from "@/lib/admin/actions/actionPreflightPresentation";
 import type { OpportunityQueuePreviewSeed } from "@/lib/adminV2/bos/activeOperationalContext";
 import type { StatusControlVm } from "@/lib/adminV2/viewModel/drawer/types";
@@ -37,9 +37,9 @@ export type OpportunityDrawerProofLayoutHeaderProps = {
     onTabSelect: (tab: DrawerTabKey) => void;
     lifecycleRail: React.ReactNode | null;
     onClose: () => void;
-    manageMenuItems: RecordManageMenuItem[];
-    onManageSelect: (key: RecordManageMenuActionKey) => void;
-    manageBusyKey?: RecordManageMenuActionKey | null;
+    subjectManageActions: ResolvedActionForClient[];
+    onSubjectManageActionSelect: (action: ResolvedActionForClient) => void;
+    subjectManageActionLoadingKey?: string | null;
     actionPreflightBlocked: ActionPreflightUiPayload | null;
     onDismissActionPreflightBlocked: () => void;
     registryActionFeedback: OpportunityDrawerRegistryActionFeedback | null;
@@ -66,9 +66,9 @@ export default function OpportunityDrawerProofLayoutHeader({
     onTabSelect,
     lifecycleRail,
     onClose,
-    manageMenuItems,
-    onManageSelect,
-    manageBusyKey = null,
+    subjectManageActions,
+    onSubjectManageActionSelect,
+    subjectManageActionLoadingKey = null,
     actionPreflightBlocked,
     onDismissActionPreflightBlocked,
     registryActionFeedback,
@@ -90,10 +90,10 @@ export default function OpportunityDrawerProofLayoutHeader({
                 overviewData={record}
                 queuePreviewSeed={queuePreviewSeed}
                 inquiryWorkflow
-                manageMenuItems={manageMenuItems}
+                subjectManageActions={subjectManageActions}
+                onSubjectManageActionSelect={onSubjectManageActionSelect}
+                subjectManageActionLoadingKey={subjectManageActionLoadingKey}
                 canMutate={manageCanMutate}
-                manageBusyKey={manageBusyKey}
-                onManageSelect={onManageSelect}
                 layout="modal-actions"
                 proofLayoutActions
                 bosActionVariant="juniper"
@@ -101,7 +101,7 @@ export default function OpportunityDrawerProofLayoutHeader({
                 onDismissActionPreflightBlocked={onDismissActionPreflightBlocked}
                 registryActionFeedback={registryActionFeedback}
                 manageDisabledReason={
-                    manageBusyKey ? "A manage action is running — wait for it to finish."
+                    subjectManageActionLoadingKey ? "An action is running — wait for it to finish."
                     : !manageCanMutate ? "You don't have permission to manage this record."
                     :   null
                 }

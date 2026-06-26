@@ -10,32 +10,19 @@ function read(relPath: string): string {
 }
 
 describe("record drawer Manage menu presentation", () => {
-    it("uses Manage label and platform menu component in opportunity header controls", () => {
+    it("uses Manage label and registry-backed menu in opportunity header controls", () => {
         const controls = read("components/admin/opportunity/OpportunityDrawerHeaderControls.tsx");
         const menu = read("components/admin/drawer/record/RecordDrawerManageMenu.tsx");
         expect(controls).toContain("RecordDrawerManageMenu");
-        expect(controls).not.toContain("OpportunityDrawerHeaderActionsMenu");
+        expect(controls).toContain("subjectManageActions");
         expect(menu).toContain("RECORD_DRAWER_MANAGE_MENU_LABEL");
-        expect(menu).toContain("RECORD_DRAWER_MANAGE_MENU_LABEL");
-        expect(menu).toContain('"aria-label": "Record manage menu"');
-        expect(menu).toContain("whitespace-nowrap");
+        expect(menu).toContain("registryActions");
     });
 
-    it("wires delete lead modal from opportunity VM runtime", () => {
+    it("legacy entity admin stubs remain for person drawer only", () => {
+        const person = read("components/admin/entity/PersonDrawerHeaderControls.tsx");
+        expect(person).toContain("buildRecordManageMenuForEntity");
         const runtime = read("components/admin/vmDrawer/OpportunityDrawerVmRuntime.tsx");
-        expect(runtime).toContain("DeleteLeadModal");
-        expect(runtime).toContain('key === "delete_lead"');
-        expect(runtime).toContain('dispatchOpportunityQueueUpdated(opportunityId, "delete_lead")');
-        expect(runtime).toContain("closeDrawer");
-        expect(runtime).toContain("resolvePortalRecordManageAccess");
-        expect(runtime).toContain("manageCanMutate");
-        expect(runtime).toContain("showSuccess");
-    });
-
-    it("keeps registry actions on command rail separate from manage menu", () => {
-        const runtime = read("components/admin/vmDrawer/OpportunityDrawerVmRuntime.tsx");
-        expect(runtime).toContain("displayVm.actions.header_menu");
-        expect(runtime).toContain("DrawerCommandRailActionsRegistrar");
-        expect(runtime).toContain("buildRecordManageMenuForEntity");
+        expect(runtime).not.toContain("buildRecordManageMenuForEntity");
     });
 });

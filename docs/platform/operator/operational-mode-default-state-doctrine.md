@@ -1,7 +1,7 @@
 # Alloy OS — Operational Mode as Default Runtime State
 
-**Revision:** 1  
-**Status:** Canonical platform doctrine (June 2026)  
+**Revision:** 2  
+**Status:** Approved / frozen (June 2026) — operational entry implemented  
 **Authority:** Runtime behavior law for Work Unit entry, queue presentation, and Default Operational Subject resolution.
 
 **Related:** [`alloy-runtime-specification.md`](./alloy-runtime-specification.md) · [`alloy-os-runtime-completion.md`](./alloy-os-runtime-completion.md) · [`queue-system.md`](./queue-system.md) · [`operational-surface-design-system.md`](./operational-surface-design-system.md) (System 5)
@@ -288,7 +288,16 @@ Do **not** start F until B–E are stable behind `ALLOY_OS_RUNTIME_ENABLED`.
 
 ---
 
-## Cross-references
+## Implementation freeze (June 2026)
+
+Phases B–E are **approved** for Alloy OS runtime (`NEXT_PUBLIC_ALLOY_OS_RUNTIME=1`):
+
+- Condensed queue as default Work Unit queue presentation
+- Default Operational Subject resolution + entry gate
+- Auto-open Focus Panel with Subject Identity Block
+- Browse / full-width expanded queue **dormant** (code retained, not operator default)
+
+Phase F (configuration UI for subject strategy) remains deferred.
 
 - Queue preview contract: [`queue-system.md`](./queue-system.md)
 - Operational surface geometry: [`alloy-os-runtime-completion.md`](./alloy-os-runtime-completion.md)

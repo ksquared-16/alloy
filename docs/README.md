@@ -53,18 +53,19 @@ Start here: **`platform/foundation/system-overview.md`**
 16. `platform/operator/alloy-runtime-specification.md` — **runtime specification** (synthesis; read before building any domain)
 17. `platform/operator/alloy-os-runtime-completion.md` — **Runtime Completion & Freeze** (✅ runtime complete; ownership matrix, config handoff, final verdict — start here for runtime status)
 17. `platform/operator/universal-card-system.md` — **Universal Card System** (System 4 design freeze)
-18. `platform/operator/operational-surface-design-system.md` — **Operational Surface Design System** (System 5 — visual language, card grammar, mode composition)
-19. `platform/operator/universal-card-archetypes.md` — **Universal Card Archetypes** (System 5A — purpose-specific card composition)
-20. `platform/operator/card-interaction-expansion-doctrine.md` — **Card Interaction & Expansion** (System 5B — five interaction models; doctrine only)
-21. `platform/operator/card-content-template-field-inclusion-doctrine.md` — **Content Templates & Field Inclusion** (System 5C — compact/expanded/drill rules; doctrine only)
-22. `platform/operator/operational-mode-default-state-doctrine.md` — **Operational Mode as Default State** (Work Unit entry, subject resolution, Browse retirement)
-23. `platform/operator/workspace-v3-command-center-doctrine.md` — **Workspace V3 — Operational Command Center** (Rev 2 — four zones, progressive depth, enterability)
-24. `platform/operator/workspace-v3-operational-surface-doctrine.md` — **Workspace V3 — Operational Surface launcher** (storytelling, Work View deep links)
-25. `platform/operator/queue-system.md`
-26. `platform/operator/drawer-system.md`
-27. `platform/operator/operational-action-doctrine.md` — **Operational Actions** (status via action pipeline; Manage/rail catalog alignment; invariant example)
-28. `platform/operator/experience-builder-doctrine.md` — LayoutDoc, builder, queue v3, actions/widgets
-29. `platform/operator/business-process-layout-assignments.md` — BP stage layout routing
+18. `platform/operator/operational-surface-design-system.md` — **Operational Surface Design System** (System 5 — **approved/frozen** June 2026)
+19. `platform/operator/universal-card-archetypes.md` — **Universal Card Archetypes** (System 5A — implemented)
+20. `platform/operator/card-interaction-expansion-doctrine.md` — **Card Interaction & Expansion** (System 5B — doctrine; expansion not fully built)
+21. `platform/operator/card-content-template-field-inclusion-doctrine.md` — **Content Templates & Field Inclusion** (System 5C — doctrine; templates not fully built)
+22. `platform/operator/focus-panel-edit-information-doctrine.md` — **Focus Panel** edit law + **implementation freeze**
+23. `platform/operator/operational-mode-default-state-doctrine.md` — **Operational Mode as Default State** (approved/frozen)
+24. `platform/operator/workspace-v3-command-center-doctrine.md` — **Workspace V3 — Operational Command Center** (Rev 2 — four zones, progressive depth, enterability)
+25. `platform/operator/workspace-v3-operational-surface-doctrine.md` — **Workspace V3 — Operational Surface launcher** (storytelling, Work View deep links)
+26. `platform/operator/queue-system.md`
+27. `platform/operator/drawer-system.md`
+28. `platform/operator/operational-action-doctrine.md` — **Operational Actions** (status via action pipeline; Manage/rail catalog alignment; invariant example)
+29. `platform/operator/experience-builder-doctrine.md` — LayoutDoc, builder, queue v3, actions/widgets
+30. `platform/operator/business-process-layout-assignments.md` — BP stage layout routing
 
 ### 4. Platform modules (load when touching area)
 

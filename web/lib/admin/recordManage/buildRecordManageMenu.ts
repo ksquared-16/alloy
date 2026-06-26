@@ -13,7 +13,8 @@ function separator(): RecordManageMenuItem {
 }
 
 /**
- * Platform-standard Manage menu items per entity — not driven by layout or action registry.
+ * Legacy entity admin Manage stubs — person/vendor/child drawers only.
+ * Opportunity Focus Panel Manage uses registry `header_menu` (see buildSubjectManageMenuFromResolvedActions).
  */
 export function buildRecordManageMenuForEntity(
     entityKind: RecordManageEntityKind,

@@ -1,7 +1,7 @@
 # Alloy OS — System 5C — Card Content Templates & Field Inclusion Doctrine
 
 **Revision:** 1  
-**Status:** Canonical platform doctrine (June 2026) — **documentation only; no runtime implementation until explicitly requested**  
+**Status:** Approved doctrine (June 2026) — **documented; template authoring not fully built**  
 **Extends:** [`operational-surface-design-system.md`](./operational-surface-design-system.md) (System 5) · [`universal-card-archetypes.md`](./universal-card-archetypes.md) (System 5A) · [`card-interaction-expansion-doctrine.md`](./card-interaction-expansion-doctrine.md) (System 5B)
 
 ---
