@@ -32,11 +32,11 @@ export const STATUS_SETTINGS_CATEGORY_DESCRIPTIONS: Record<
     string
 > = {
     enrollment_statuses:
-        "Enrollment process movement — New Lead through Enrolled and terminal outcomes. Powers Business Process stage rollups.",
+        "",
     lead_statuses:
-        "Opportunity case container state — Open, Closed, Inactive, Archived. Not enrollment pipeline movement.",
+        "",
     person_statuses:
-        "Profile and identity statuses on people records — Pre-Enrolled, Active, Inactive, Archived.",
+        "",
 };
 
 const ENROLLMENT_PROCESS_LAYERS = new Set([
