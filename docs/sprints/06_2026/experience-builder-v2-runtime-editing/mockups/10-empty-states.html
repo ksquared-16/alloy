@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><title>10 — Empty States</title><link rel="stylesheet" href="_shared.css"></head>
+<body>
+<div class="mockup-frame">
+  <div class="mockup-label">10 — Empty States <span class="sub">Empty surface · empty zone · add first card · empty ≠ disabled</span></div>
+  <div class="app-shell">
+    <div class="app-rail"><div class="rail-icon">⌂</div><div class="rail-icon">☰</div><div class="rail-icon">💬</div><div class="rail-spacer"></div><div class="rail-icon active">✎</div></div>
+    <div class="main-area">
+      <div class="edit-bar">
+        <span class="eb-done">◀ Done</span>
+        <span class="eb-status"><span class="edit-dot"></span> Editing <span class="eb-sub">· New Dashboard (untitled)</span></span>
+        <div class="mode-toggle"><span class="mt active">Structure</span><span class="mt">Content</span></div>
+        <div class="eb-icons"><span class="eb-icon">⤺</span><span class="eb-icon">⤻</span></div>
+        <span class="eb-state"><span class="state-pill state-working">Working Copy</span> History</span>
+        <span class="eb-spacer"></span>
+        <span class="scope-chip"><span class="dot"></span> Organization</span>
+        <span class="btn btn-primary" style="opacity:0.5;">Publish</span>
+      </div>
+      <div class="runtime-region">
+        <div class="runtime-canvas structure">
+          <div class="dash" style="max-width:720px;">
+            <!-- brand new empty surface -->
+            <div class="empty-zone" style="margin-bottom:18px;">
+              <div class="ez-icon">▦</div>
+              <div class="ez-title">This surface is empty</div>
+              <div class="ez-sub">A Design Surface always renders its full chrome — it's empty, not disabled.</div>
+              <div class="ez-add">＋ Add your first card</div>
+            </div>
+
+            <div class="section-label">An empty zone within a populated surface</div>
+            <div class="zone-boundary" style="margin-bottom:14px;">
+              <div class="zone-tag">Zone · KPIs</div>
+              <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;">
+                <div class="kpi-tile"><div class="kpi-value">128</div><div class="kpi-label">Active leads</div></div>
+                <div class="empty-zone" style="padding:18px;"><div class="ez-icon" style="font-size:18px;">＋</div><div class="ez-sub" style="margin-top:4px;">Add metric</div></div>
+                <div class="empty-zone" style="padding:18px;"><div class="ez-icon" style="font-size:18px;">＋</div><div class="ez-sub" style="margin-top:4px;">Add metric</div></div>
+              </div>
+            </div>
+
+            <div class="section-label">Empty slot inside a card (Content Mode)</div>
+            <div class="card" style="max-width:340px;"><div class="card-head"><div class="card-icon">💰</div><div class="card-title">Billing</div></div>
+              <div class="card-rows"><div class="crow"><span class="lbl">Balance</span><span class="val">$1,234</span></div>
+              <div class="crow"><span class="lbl" style="color:var(--pine);">＋ slot</span><span class="val" style="color:var(--midnight-30);font-style:italic;">Bind a field…</span></div></div>
+            </div>
+          </div>
+          <div class="center-note">Empty states keep full runtime chrome and guide the next action — never a blank void. Insertion always uses the same affordances (＋ card, ＋ metric, ＋ slot).</div>
+        </div>
+        <div class="bos-rail">
+          <div class="bos-title">Empty ≠ disabled</div>
+          <div class="bos-suggestion">An empty Design Surface, zone, or slot renders normally and offers a single clear "add" affordance in place.</div>
+          <div class="bos-note">A new surface cannot be Published until it has at least one card and required slots are bound — Publish stays dimmed until valid.</div>
+          <div class="bos-note">Dragging the last card out of a zone returns it to this empty state; the zone does not vanish.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</body></html>

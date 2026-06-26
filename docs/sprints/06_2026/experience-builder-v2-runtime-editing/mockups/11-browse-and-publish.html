@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><title>11 — Browse IA + Publish Flow</title><link rel="stylesheet" href="_shared.css"></head>
+<body>
+<div class="mockup-frame">
+  <div class="mockup-label">11 — Browse &amp; Manage (secondary) + Publish <span class="sub">Category → Domain → Surface · scope filter · impact analysis on Publish</span></div>
+  <div class="app-shell">
+    <div class="app-rail"><div class="rail-icon">⌂</div><div class="rail-icon">☰</div><div class="rail-icon">💬</div><div class="rail-spacer"></div><div class="rail-icon active">⚙</div></div>
+    <div class="main-area">
+      <!-- BROWSE -->
+      <div style="padding:10px 18px;background:var(--white);border-bottom:1px solid var(--stone-15);display:flex;align-items:center;gap:12px;">
+        <span style="font-size:14px;font-weight:700;">Design Surfaces</span>
+        <span style="font-size:12px;color:var(--midnight-46);">Browse &amp; Manage · find surfaces you can't reach in context</span>
+        <span class="scope-chip" style="margin-left:auto;"><span class="dot"></span> Scope: Organization ▾</span>
+        <span class="btn btn-secondary">＋ New surface</span>
+      </div>
+      <div style="display:flex;flex:1;min-height:0;">
+        <!-- category rail -->
+        <div style="width:180px;border-right:1px solid var(--stone-15);background:var(--white);padding:12px 8px;">
+          <div class="catalog-group" style="padding-left:8px;">Categories</div>
+          <div style="display:flex;flex-direction:column;gap:2px;">
+            <div style="padding:8px 10px;border-radius:8px;font-size:12px;font-weight:600;background:var(--pine-soft);color:var(--midnight);">Focus Panels <span style="float:right;color:var(--midnight-30);">12</span></div>
+            <div style="padding:8px 10px;border-radius:8px;font-size:12px;color:var(--midnight-70);">Queue Rows <span style="float:right;color:var(--midnight-30);">9</span></div>
+            <div style="padding:8px 10px;border-radius:8px;font-size:12px;color:var(--midnight-70);">Dashboards <span style="float:right;color:var(--midnight-30);">7</span></div>
+            <div style="padding:8px 10px;border-radius:8px;font-size:12px;color:var(--midnight-70);">Documents <span style="float:right;color:var(--midnight-30);">5</span></div>
+            <div style="padding:8px 10px;border-radius:8px;font-size:12px;color:var(--midnight-70);">Forms</div>
+            <div style="padding:8px 10px;border-radius:8px;font-size:12px;color:var(--midnight-70);">POS</div>
+            <div style="padding:8px 10px;border-radius:8px;font-size:12px;color:var(--midnight-70);">Communications</div>
+            <div style="padding:8px 10px;border-radius:8px;font-size:12px;color:var(--midnight-70);">Reports · Portal · Mobile</div>
+          </div>
+        </div>
+        <!-- surfaces grouped by domain -->
+        <div style="flex:1;padding:16px 20px;overflow:auto;background:var(--canvas);">
+          <div class="catalog-group">Enrollment</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px;">
+            <div class="card"><div class="card-head"><div class="card-icon">▦</div><div class="card-title">Summary</div><span class="marker override" style="margin-left:auto;">Published v3</span></div><div class="card-insight" style="font-size:11px;">Assigned ×3 · edited 2 sites</div></div>
+            <div class="card"><div class="card-head"><div class="card-icon">▦</div><div class="card-title">Work</div><span class="marker inherited" style="margin-left:auto;">Published v2</span></div><div class="card-insight" style="font-size:11px;">Assigned ×2</div></div>
+            <div class="card"><div class="card-head"><div class="card-icon">▦</div><div class="card-title">Activity</div><span class="state-pill state-working" style="margin-left:auto;">Working Copy</span></div><div class="card-insight" style="font-size:11px;">Unpublished edits</div></div>
+            <div class="card" style="opacity:0.7;"><div class="card-head"><div class="card-icon">▦</div><div class="card-title">Director Snapshot</div><span class="marker locked" style="margin-left:auto;">🔒 Default</span></div><div class="card-insight" style="font-size:11px;">Platform default · fork to override</div></div>
+          </div>
+          <div class="catalog-group">Attendance</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+            <div class="card"><div class="card-head"><div class="card-icon">▦</div><div class="card-title">Daily Roster Panel</div><span class="marker inherited" style="margin-left:auto;">Published v5</span></div><div class="card-insight" style="font-size:11px;">Assigned ×1</div></div>
+            <div class="card"><div class="card-head"><div class="card-icon">▦</div><div class="card-title">Check-in Summary</div><span class="marker inherited" style="margin-left:auto;">Published v1</span></div></div>
+          </div>
+          <div class="center-note" style="margin-top:14px;">Three levels — Category → Domain → Surface — never a flat list. Selecting a surface <strong>opens it in Edit Mode</strong> (same destination as in-context Edit). State badges show Working Copy / Published / Default and override reach.</div>
+        </div>
+        <!-- publish confirmation -->
+        <div style="width:320px;border-left:1px solid var(--stone-15);background:var(--white);padding:16px;">
+          <div class="bos-title">Publish · Enrollment Summary</div>
+          <div style="border:1px solid var(--stone);border-radius:10px;padding:12px;margin-bottom:10px;">
+            <div style="font-size:12px;font-weight:700;margin-bottom:8px;">Pre-publish checks</div>
+            <div style="font-size:12px;color:var(--midnight-70);display:flex;flex-direction:column;gap:5px;">
+              <div>✓ All required slots bound</div>
+              <div>✓ No unresolved data sources</div>
+              <div>✓ No preview-only renderers</div>
+            </div>
+          </div>
+          <div class="bos-suggestion"><strong>Impact:</strong> assigned to <strong>3 Work Views</strong> and <strong>1 stage</strong>. Publishing at <strong>Organization</strong> scope updates the runtime for all of them.</div>
+          <div class="bos-note">Creates <strong>Published v4</strong> (immutable). The runtime reads it immediately. No staging step — the Working Copy was the preview.</div>
+          <span class="btn btn-primary" style="width:100%;text-align:center;display:block;margin-top:8px;">Publish v4</span>
+          <span class="btn btn-ghost" style="width:100%;text-align:center;display:block;margin-top:4px;">Cancel</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</body></html>

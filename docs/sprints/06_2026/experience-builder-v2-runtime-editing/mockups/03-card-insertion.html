@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><title>03 — Card Insertion</title><link rel="stylesheet" href="_shared.css"></head>
+<body>
+<div class="mockup-frame">
+  <div class="mockup-label">03 — Card Insertion <span class="sub">Add a card between cards · inline Card Type picker anchored at the gap</span></div>
+  <div class="app-shell">
+    <div class="app-rail"><div class="rail-icon">⌂</div><div class="rail-icon">☰</div><div class="rail-icon">💬</div><div class="rail-spacer"></div><div class="rail-icon active">✎</div></div>
+    <div class="main-area">
+      <div class="edit-bar">
+        <span class="eb-done">◀ Done</span>
+        <span class="eb-status"><span class="edit-dot"></span> Editing <span class="eb-sub">· Enrollment Summary</span></span>
+        <div class="mode-toggle"><span class="mt active">Structure</span><span class="mt">Content</span></div>
+        <div class="eb-icons"><span class="eb-icon">⤺</span><span class="eb-icon">⤻</span></div>
+        <span class="eb-state"><span class="state-pill state-working">Working Copy</span> History</span>
+        <span class="eb-spacer"></span>
+        <span class="scope-chip"><span class="dot"></span> Organization</span>
+        <span class="btn btn-primary">Publish</span>
+      </div>
+      <div class="runtime-region">
+        <div class="runtime-canvas structure">
+          <div class="fp">
+            <div class="fp-header"><div class="fp-subject">Hayes Family · Enrollment</div><div class="fp-mission">Review lead</div></div>
+            <div class="fp-modes"><div class="fp-mode active">Summary</div><div class="fp-mode">Work</div><div class="fp-mode">Activity</div></div>
+            <div class="fp-body" style="display:block;">
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+                <div class="card structural"><span class="drag-handle">⠿</span><div class="card-head"><div class="card-icon">👤</div><div class="card-title">Family</div></div><div class="card-meta"><span class="card-tag">span 1</span></div><div class="card-insight">Chris &amp; Claire Hayes</div></div>
+                <div class="card structural"><span class="drag-handle">⠿</span><div class="card-head"><div class="card-icon">📋</div><div class="card-title">Enrollment</div></div><div class="card-meta"><span class="card-tag">span 1</span></div><div class="card-insight">North Campus</div></div>
+              </div>
+
+              <!-- active insertion line with picker -->
+              <div style="position:relative;height:8px;margin:14px 0;display:flex;align-items:center;justify-content:center;">
+                <div style="position:absolute;left:0;right:0;height:2px;background:var(--pine);border-radius:2px;"></div>
+                <div class="plus" style="position:relative;width:24px;height:24px;border-radius:50%;background:var(--pine);color:#fff;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:700;box-shadow:var(--shadow-md);z-index:2;">+</div>
+                <div class="type-picker" style="position:absolute;top:26px;left:50%;transform:translateX(-50%);z-index:30;">
+                  <div class="ie-arrow" style="left:50%;margin-left:-7px;"></div>
+                  <input class="tp-search" value="Search card types…" readonly>
+                  <div class="tp-group">Operational</div>
+                  <div class="tp-item hl"><span class="tp-icon">💰</span><span class="tp-name">Billing</span><span class="tp-q">Where do they stand financially?</span></div>
+                  <div class="tp-item"><span class="tp-icon">📅</span><span class="tp-name">Attendance</span><span class="tp-q">Are they showing up?</span></div>
+                  <div class="tp-item"><span class="tp-icon">✓</span><span class="tp-name">Tasks</span><span class="tp-q">What's outstanding?</span></div>
+                  <div class="tp-group">Records</div>
+                  <div class="tp-item"><span class="tp-icon">📄</span><span class="tp-name">Documents</span><span class="tp-q">What's on file?</span></div>
+                  <div class="tp-item"><span class="tp-icon">🔗</span><span class="tp-name">Related Records</span><span class="tp-q">What connects here?</span></div>
+                </div>
+              </div>
+
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:120px;">
+                <div class="card structural"><span class="drag-handle">⠿</span><div class="card-head"><div class="card-icon">⚡</div><div class="card-title">Current Work</div></div><div class="card-meta"><span class="card-tag">span 1</span></div><div class="card-insight">Schedule tour</div></div>
+                <div class="card structural"><span class="drag-handle">⠿</span><div class="card-head"><div class="card-icon">🕑</div><div class="card-title">Timeline</div></div><div class="card-meta"><span class="card-tag">span 1</span></div><div class="card-insight">Last contact 2d ago</div></div>
+              </div>
+            </div>
+          </div>
+          <div class="center-note">Click the <strong>+</strong> between Enrollment and Current Work → choose a Card Type → a real card drops in at that exact position, pre-filled with its default content template.</div>
+        </div>
+        <div class="bos-rail">
+          <div class="bos-title">Card Type picker</div>
+          <div class="bos-note">Card Types are <strong>platform-owned</strong> and scoped to this surface's entity. You insert an instance — you don't author new types.</div>
+          <div class="bos-suggestion">Each type names the operational question it answers. Picking <strong>Billing</strong> inserts a card pre-built with balance · status · next invoice.</div>
+          <div class="bos-note">Configure it next in Content Mode, or keep arranging.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</body></html>

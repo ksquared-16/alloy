@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><title>07 — Queue Row Editing</title><link rel="stylesheet" href="_shared.css"></head>
+<body>
+<div class="mockup-frame">
+  <div class="mockup-label">07 — Queue Row Editing <span class="sub">Edit the 52px row inside the actual queue · same inline gestures · row zones</span></div>
+  <div class="app-shell">
+    <div class="app-rail"><div class="rail-icon">⌂</div><div class="rail-icon">☰</div><div class="rail-icon">💬</div><div class="rail-spacer"></div><div class="rail-icon active">✎</div></div>
+    <div class="main-area">
+      <div class="edit-bar">
+        <span class="eb-done">◀ Done</span>
+        <span class="eb-status"><span class="edit-dot"></span> Editing <span class="eb-sub">· Enrollment Queue Row</span></span>
+        <div class="mode-toggle"><span class="mt">Structure</span><span class="mt active">Content</span></div>
+        <div class="eb-icons"><span class="eb-icon">⤺</span><span class="eb-icon">⤻</span></div>
+        <span class="eb-state"><span class="state-pill state-working">Working Copy</span> History</span>
+        <span class="eb-spacer"></span>
+        <span class="scope-chip"><span class="dot"></span> Organization</span>
+        <span class="btn btn-primary">Publish</span>
+      </div>
+      <div class="runtime-region">
+        <div class="runtime-canvas">
+          <div class="queue">
+            <div class="qhead">New Leads · 14 records</div>
+            <div class="qrow"><div class="qzone" style="flex:2;"><span class="qtitle">Morgan Family</span><span class="qmeta">2 children · inquiry 1d ago</span></div><div class="qzone" style="flex:1;"><span class="qmeta">North Campus</span></div><div class="qzone"><span class="card-status">New</span></div><div class="qzone"><span class="qmeta">Tour →</span></div></div>
+            <!-- selected row in edit -->
+            <div class="qrow selected" style="position:relative;overflow:visible;margin:34px 0;">
+              <div class="qzone editing" style="flex:2;"><span class="qz-tag">header.primary</span><span class="qtitle slot-editable selected">Hayes Family</span><span class="qmeta">2 children · inquiry 2d ago</span></div>
+              <div class="qzone" style="flex:1;"><span class="qmeta">North Campus</span></div>
+              <div class="qzone"><span class="card-status warn">Past due</span></div>
+              <div class="qzone"><span class="qmeta">Tour →</span></div>
+              <!-- inline editor anchored to header.primary -->
+              <div class="inline-editor" style="top:48px;left:0;">
+                <div class="ie-arrow"></div>
+                <div class="ie-title">Edit slot · header.primary</div>
+                <div class="ie-field"><div class="ie-label">Data source</div><div class="ie-control">person.full_name <span class="caret">▾</span></div></div>
+                <div class="ie-field"><div class="ie-label">Renderer</div>
+                  <div class="renderer-grid">
+                    <div class="renderer-option selected"><span class="ri">Aa</span>Text</div>
+                    <div class="renderer-option"><span class="ri">◉</span>Avatar+Name</div>
+                    <div class="renderer-option"><span class="ri">🔗</span>Link</div>
+                  </div>
+                </div>
+                <div class="ie-field"><div class="ie-label">Secondary line</div><div class="ie-control">children · inquiry age <span class="caret">▾</span></div></div>
+              </div>
+            </div>
+            <div class="qrow"><div class="qzone" style="flex:2;"><span class="qtitle">Nguyen Family</span><span class="qmeta">1 child · inquiry 3d ago</span></div><div class="qzone" style="flex:1;"><span class="qmeta">West Campus</span></div><div class="qzone"><span class="card-status">New</span></div><div class="qzone"><span class="qmeta">Tour →</span></div></div>
+          </div>
+          <div class="center-note">You edit the row <strong>inside the real queue</strong>, beside its neighbors — not in a separate row configurator. Selecting a row zone (header.primary) reveals its slots; the inline editor is the <strong>same</strong> one used on Focus Panel cards.</div>
+        </div>
+        <div class="bos-rail">
+          <div class="bos-title">One model, every surface</div>
+          <div class="bos-suggestion">A Queue Row is edited with the same Edit Bar, the same Structure/Content modes, and the same inline editors as a Focus Panel.</div>
+          <div class="bos-note">Only the <strong>zone topology</strong> (header.primary / secondary / context / body / actions) and the <strong>52px height constraint</strong> differ.</div>
+          <div class="bos-note">Rows remain previews — authoritative detail still comes from entity GET.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</body></html>

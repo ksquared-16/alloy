@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><title>04 — Card Movement</title><link rel="stylesheet" href="_shared.css"></head>
+<body>
+<div class="mockup-frame">
+  <div class="mockup-label">04 — Card Movement <span class="sub">Drag to reorder · card lifts · others reflow · drop target ghost</span></div>
+  <div class="app-shell">
+    <div class="app-rail"><div class="rail-icon">⌂</div><div class="rail-icon">☰</div><div class="rail-icon">💬</div><div class="rail-spacer"></div><div class="rail-icon active">✎</div></div>
+    <div class="main-area">
+      <div class="edit-bar">
+        <span class="eb-done">◀ Done</span>
+        <span class="eb-status"><span class="edit-dot"></span> Editing <span class="eb-sub">· Enrollment Summary</span></span>
+        <div class="mode-toggle"><span class="mt active">Structure</span><span class="mt">Content</span></div>
+        <div class="eb-icons"><span class="eb-icon">⤺</span><span class="eb-icon">⤻</span></div>
+        <span class="eb-state"><span class="state-pill state-working">Working Copy</span> History</span>
+        <span class="eb-spacer"></span>
+        <span class="scope-chip"><span class="dot"></span> Organization</span>
+        <span class="btn btn-primary">Publish</span>
+      </div>
+      <div class="runtime-region">
+        <div class="runtime-canvas structure">
+          <div class="fp">
+            <div class="fp-header"><div class="fp-subject">Hayes Family · Enrollment</div><div class="fp-mission">Review lead</div></div>
+            <div class="fp-modes"><div class="fp-mode active">Summary</div><div class="fp-mode">Work</div><div class="fp-mode">Activity</div></div>
+            <div class="fp-body" style="display:block;">
+              <!-- drop target where Readiness is heading -->
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
+                <div class="drop-ghost">Drop here — Readiness</div>
+                <div class="card structural"><span class="drag-handle">⠿</span><div class="card-head"><div class="card-icon">👤</div><div class="card-title">Family</div></div><div class="card-meta"><span class="card-tag">span 1</span></div><div class="card-insight">Chris &amp; Claire Hayes</div></div>
+              </div>
+              <!-- the lifting card -->
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
+                <div class="card structural lifting">
+                  <span class="drag-handle">⠿</span>
+                  <div class="card-head"><div class="card-icon">✓</div><div class="card-title">Readiness</div></div>
+                  <div class="card-meta"><span class="card-tag">Status</span><span class="card-tag">span 1</span></div>
+                  <div class="card-insight">All required information collected.</div>
+                  <div class="callout-arrow" style="top:-22px;left:50%;transform:translateX(-50%);">⬆ moving up</div>
+                </div>
+                <div class="card structural"><span class="drag-handle">⠿</span><div class="card-head"><div class="card-icon">📋</div><div class="card-title">Enrollment</div></div><div class="card-meta"><span class="card-tag">span 1</span></div><div class="card-insight">North Campus</div></div>
+              </div>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+                <div class="card structural"><span class="drag-handle">⠿</span><div class="card-head"><div class="card-icon">⚡</div><div class="card-title">Current Work</div></div><div class="card-meta"><span class="card-tag">span 1</span></div><div class="card-insight">Schedule tour</div></div>
+              </div>
+            </div>
+          </div>
+          <div class="center-note">Grabbing Readiness by its handle lifts it (elevation + tilt). Sibling cards reflow; a dashed <strong>drop-target ghost</strong> shows where it will land. Motion preserves context — no jump.</div>
+        </div>
+        <div class="bos-rail">
+          <div class="bos-title">Moving a card</div>
+          <div class="bos-note"><strong>Readiness</strong> is being dragged toward the top of the Status zone.</div>
+          <div class="bos-suggestion">Valid drop targets glow; positions that would violate tier or zone rules stay inert and won't accept the card.</div>
+          <div class="bos-note">Release to drop. Undo (⤺) reverses the move exactly.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</body></html>

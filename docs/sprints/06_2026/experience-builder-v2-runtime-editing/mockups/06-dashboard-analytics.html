@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><title>06 — Dashboard / Analytics Editing</title><link rel="stylesheet" href="_shared.css"></head>
+<body>
+<div class="mockup-frame">
+  <div class="mockup-label">06 — Dashboard / Analytics Editing <span class="sub">Identical Edit Bar &amp; modes · only Card Types (Metric) and Renderers (KPI / Chart) differ</span></div>
+  <div class="app-shell">
+    <div class="app-rail"><div class="rail-icon">⌂</div><div class="rail-icon">☰</div><div class="rail-icon">📊</div><div class="rail-spacer"></div><div class="rail-icon active">✎</div></div>
+    <div class="main-area">
+      <div class="edit-bar">
+        <span class="eb-done">◀ Done</span>
+        <span class="eb-status"><span class="edit-dot"></span> Editing <span class="eb-sub">· Enrollment Dashboard</span></span>
+        <div class="mode-toggle"><span class="mt">Structure</span><span class="mt active">Content</span></div>
+        <div class="eb-icons"><span class="eb-icon">⤺</span><span class="eb-icon">⤻</span></div>
+        <span class="eb-state"><span class="state-pill state-working">Working Copy</span> History</span>
+        <span class="eb-spacer"></span>
+        <span class="scope-chip"><span class="dot"></span> Organization</span>
+        <span class="btn btn-primary">Publish</span>
+      </div>
+      <div class="runtime-region">
+        <div class="runtime-canvas">
+          <div class="dash">
+            <div class="kpi-strip">
+              <div class="kpi-tile editable"><div class="kpi-value">128</div><div class="kpi-label">Active leads</div><div class="kpi-trend">▲ 12% vs last mo</div></div>
+              <div class="kpi-tile editable hovered" style="overflow:visible;">
+                <div class="edit-chip"><span class="chip-btn">✎ Metric card</span></div>
+                <div class="kpi-value slot-editable selected">63%</div><div class="kpi-label">Tour show rate</div><div class="kpi-trend">▲ 4 pts</div>
+                <div class="inline-editor" style="top:80px;left:0;width:280px;">
+                  <div class="ie-arrow"></div>
+                  <div class="ie-title">Edit metric card</div>
+                  <div class="ie-field"><div class="ie-label">Metric (data source)</div><div class="ie-control readonly">enrollment.tour_show_rate ↗ OI</div></div>
+                  <div class="ie-field"><div class="ie-label">Renderer</div>
+                    <div class="catalog-group">Analytics</div>
+                    <div class="renderer-grid">
+                      <div class="renderer-option selected"><span class="ri">▣</span>KPI Card</div>
+                      <div class="renderer-option"><span class="ri">◔</span>Gauge</div>
+                      <div class="renderer-option"><span class="ri">∿</span>Sparkline</div>
+                    </div>
+                  </div>
+                  <div class="ie-field"><div class="ie-label">Comparison</div><div class="ie-control">vs last month <span class="caret">▾</span></div></div>
+                </div>
+              </div>
+              <div class="kpi-tile editable"><div class="kpi-value">$84k</div><div class="kpi-label">Projected MRR</div><div class="kpi-trend">▲ 6%</div></div>
+              <div class="kpi-tile editable"><div class="kpi-value">9</div><div class="kpi-label">Waitlist</div><div class="kpi-trend" style="color:var(--amber);">▼ 2</div></div>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+              <div class="chart-card editable"><div class="card-head"><div class="card-icon">📈</div><div class="card-title">Enrollments by month</div></div>
+                <div class="bars"><div class="bar" style="height:40%;"></div><div class="bar" style="height:55%;"></div><div class="bar" style="height:48%;"></div><div class="bar" style="height:70%;"></div><div class="bar" style="height:82%;"></div><div class="bar" style="height:64%;"></div></div>
+              </div>
+              <div class="chart-card editable"><div class="card-head"><div class="card-icon">🍩</div><div class="card-title">Pipeline by stage</div></div>
+                <div style="height:110px;display:flex;align-items:center;justify-content:center;color:var(--midnight-30);font-size:11px;">[ Donut renderer ]</div>
+              </div>
+            </div>
+          </div>
+          <div class="center-note">The dashboard is just a Design Surface. Same Edit Bar, same Structure/Content modes, same <strong>+</strong>-between-cards. A Metric card's data source is a <strong>metric ref</strong> (math owned by Operational Intelligence ↗); here you choose only its visualization.</div>
+        </div>
+        <div class="bos-rail">
+          <div class="bos-title">Analytics is identical</div>
+          <div class="bos-suggestion">There is no separate analytics builder. Editing a dashboard feels exactly like editing a Focus Panel or Queue Row.</div>
+          <div class="bos-note">Only two things change: <strong>Card Type = Metric</strong> and the <strong>Renderers</strong> are analytics renderers (KPI, Trend, Sparkline, Chart, Gauge, Table).</div>
+          <div class="bos-note">Metric <em>math</em> stays in Operational Intelligence. This surface owns <em>placement + visualization</em> only.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</body></html>
