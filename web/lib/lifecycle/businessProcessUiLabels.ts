@@ -3,9 +3,9 @@
  * Internal types, APIs, and metadata keys remain lifecycle_*.
  */
 
-export const BUSINESS_PROCESS_SETTINGS_PAGE_TITLE = "Business Processes";
+export const BUSINESS_PROCESS_SETTINGS_PAGE_TITLE = "Processes";
 export const BUSINESS_PROCESS_SETTINGS_PAGE_SUBTITLE =
-    "Configure how work moves — stage membership, requirements, operating plan, and process actions.";
+    "Design how work moves — process cards, Work Views, presentation, and process actions.";
 
 export const BUSINESS_PROCESS_CATALOG_LABEL = "Processes";
 export const BUSINESS_PROCESS_CATALOG_EMPTY = "No processes yet";
@@ -13,6 +13,33 @@ export const BUSINESS_PROCESS_CATALOG_LOADING = "Loading processes…";
 export const BUSINESS_PROCESS_CATALOG_CREATE = "Create Process";
 export const BUSINESS_PROCESS_CATALOG_SELECT_ARIA = "Select business process";
 export const BUSINESS_PROCESS_CATALOG_BACK = "All processes";
+
+/** Process-level workspace navigation sections. */
+export type BusinessProcessWorkspaceSection =
+    | "stages"
+    | "work-views"
+    | "presentation"
+    | "actions"
+    | "automation"
+    | "health";
+
+export const BUSINESS_PROCESS_NAV_STAGES = "Stages";
+export const BUSINESS_PROCESS_NAV_WORK_VIEWS = "Work Views";
+export const BUSINESS_PROCESS_NAV_PRESENTATION = "Presentation";
+export const BUSINESS_PROCESS_NAV_ACTIONS = "Actions";
+export const BUSINESS_PROCESS_NAV_AUTOMATION = "Automation";
+export const BUSINESS_PROCESS_NAV_HEALTH = "Health";
+
+export const BUSINESS_PROCESS_WORK_VIEWS_INTRO =
+    "Work Views are process-level operational lenses. They can include records from one stage or many — for example Tours Today, Needs Follow-up, or Hot Leads.";
+export const BUSINESS_PROCESS_WORK_VIEW_ADD = "Add Work View";
+export const BUSINESS_PROCESS_WORK_VIEW_SHOW_WORK_WHEN = "Show work when…";
+export const BUSINESS_PROCESS_WORK_VIEW_DEFAULT_ORDER = "Display order";
+export const BUSINESS_PROCESS_WORK_VIEW_TECHNICAL_IDENTITY = "Advanced · Technical identity";
+export const BUSINESS_PROCESS_WORK_VIEW_COMPAT_NOTE =
+    "Unsaved Work Views are seeded from legacy stage perspectives. Save to persist process-level configuration.";
+export const BUSINESS_PROCESS_WORK_VIEW_PREVIEW_PENDING =
+    "Preview runtime uses compatibility mapping until process-level Work Views ship to runtime.";
 
 export const BUSINESS_PROCESS_SECTION_MEMBERSHIP = "Stage Membership";
 export const BUSINESS_PROCESS_SECTION_MEMBERSHIP_SUMMARY =
@@ -61,22 +88,22 @@ export const BUSINESS_PROCESS_SECTION_OPERATING_PLAN = "Operating Plan";
 export const BUSINESS_PROCESS_SECTION_OPERATING_PLAN_SUMMARY =
     "What staff should do in this stage: purpose, expected work, success criteria, and when records need attention. Process Actions are configured at the process level below the stage list.";
 
-export const BUSINESS_PROCESS_SECTION_PERSPECTIVES = "Perspectives";
+export const BUSINESS_PROCESS_SECTION_PERSPECTIVES = "Work Views";
 export const BUSINESS_PROCESS_SECTION_PERSPECTIVES_SUMMARY =
     "Operational lenses staff switch between in the work unit — each maps to a synced queue lane.";
 export const BUSINESS_PROCESS_PERSPECTIVES_INTRO =
-    "Each perspective is an operational lens staff switch between in the work unit. Configure what operators see, the mission, and visibility — presentation is authored in Layouts.";
+    "Each work view is an operational lens staff switch between in the work unit. Configure what operators see, the mission, and visibility — presentation is authored in Layouts.";
 export const BUSINESS_PROCESS_PERSPECTIVES_SINGLE_LANE_NOTE =
-    "This stage exposes one lens. Multi-perspective rails appear when a stage syncs multiple queue lanes.";
+    "This stage exposes one work view. Multiple views appear when a stage syncs several queue lanes.";
 export const BUSINESS_PROCESS_PERSPECTIVES_NO_LANES_NOTE =
-    "Save this stage once to sync queue lanes, then configure operational lenses here.";
+    "Save this stage once to sync queue lanes, then configure work views here.";
 
 /** Concept A — Universal Card titles and questions (stage workspace). */
 export const BUSINESS_PROCESS_CARD_STATUS_MEMBERSHIP = "Status membership";
 export const BUSINESS_PROCESS_CARD_STATUS_MEMBERSHIP_QUESTION = "Who belongs here?";
 export const BUSINESS_PROCESS_CARD_REQUIRED = "Required information";
 export const BUSINESS_PROCESS_CARD_REQUIRED_QUESTION = "What must be completed?";
-export const BUSINESS_PROCESS_CARD_PERSPECTIVES = "Perspectives";
+export const BUSINESS_PROCESS_CARD_PERSPECTIVES = "Work Views";
 export const BUSINESS_PROCESS_CARD_PERSPECTIVES_QUESTION = "How operators view this work.";
 export const BUSINESS_PROCESS_CARD_PRESENTATION = "Presentation";
 export const BUSINESS_PROCESS_CARD_PRESENTATION_QUESTION = "What operators see.";

@@ -4,7 +4,6 @@ import Link from "next/link";
 import {
     useEffect,
     useImperativeHandle,
-    useMemo,
     useRef,
     useState,
     type ReactNode,
@@ -13,10 +12,6 @@ import ConfigurationRuntimeUniversalCard from "@/components/adminV2/settings/con
 import {
     BUSINESS_PROCESS_CARD_OPERATING_PLAN,
     BUSINESS_PROCESS_CARD_OPERATING_PLAN_QUESTION,
-    BUSINESS_PROCESS_CARD_PERSPECTIVES,
-    BUSINESS_PROCESS_CARD_PERSPECTIVES_QUESTION,
-    BUSINESS_PROCESS_CARD_PRESENTATION,
-    BUSINESS_PROCESS_CARD_PRESENTATION_QUESTION,
     BUSINESS_PROCESS_CARD_READY,
     BUSINESS_PROCESS_CARD_READY_QUESTION,
     BUSINESS_PROCESS_CARD_REQUIRED,
@@ -46,10 +41,6 @@ import LifecycleStageQueueMembershipEditor, {
 import LifecycleStageOperatingPlanEditor, {
     type LifecycleStageOperatingPlanEditorHandle,
 } from "@/components/adminV2/settings/lifecycle/LifecycleStageOperatingPlanEditor";
-import LifecycleStagePerspectivesEditor, {
-    type LifecycleStagePerspectivesEditorHandle,
-} from "@/components/adminV2/settings/lifecycle/LifecycleStagePerspectivesEditor";
-import LifecycleStagePresentationCard from "@/components/adminV2/settings/lifecycle/LifecycleStagePresentationCard";
 import type { LifecycleStageBootstrapPayload } from "@/lib/lifecycle/lifecycleStageBootstrapTypes";
 import {
     queueMembershipSubjectForStatusOptions,
@@ -137,8 +128,6 @@ export type LifecycleStageWorkspaceHandle = {
     isStatusRollupDirty: () => boolean;
     getStageOperatingPlanDraft: () => import("@/lib/lifecycle/stageOperatingPlanV1").StageOperatingPlanV1 | null;
     isStageOperatingPlanDirty: () => boolean;
-    getPerspectivesDraft: () => import("@/lib/lifecycle/perspectiveConfigV1").PerspectiveConfigV1Stored[];
-    isPerspectivesDirty: () => boolean;
 };
 
 export default function LifecycleStageWorkspace({
@@ -182,28 +171,18 @@ export default function LifecycleStageWorkspace({
     const membershipRef = useRef<LifecycleStageQueueMembershipEditorHandle | null>(null);
     const rollupRef = useRef<LifecycleStageStatusRollupEditorHandle | null>(null);
     const operatingPlanRef = useRef<LifecycleStageOperatingPlanEditorHandle | null>(null);
-    const perspectivesRef = useRef<LifecycleStagePerspectivesEditorHandle | null>(null);
     const [fieldDirty, setFieldDirty] = useState(false);
     const [membershipDirty, setMembershipDirty] = useState(false);
     const [rollupDirty, setRollupDirty] = useState(false);
     const [operatingPlanDirty, setOperatingPlanDirty] = useState(false);
-    const [perspectivesDirty, setPerspectivesDirty] = useState(false);
 
     const savedFieldRules = bootstrap?.field_requirements?.effective.field_rules;
     const configuredFieldCount = countFieldRules(savedFieldRules);
     const savedStatusCount = bootstrap?.status_rollup_v1
         ? bootstrap.status_rollup_v1.categories.reduce((n, c) => n + c.selected_status_keys.length, 0)
         : 0;
-    const perspectiveCount = bootstrap?.perspectives_v1?.length ?? bootstrap?.pipeline?.queues?.length ?? 0;
 
-    const stageStatusLabels = useMemo(() => {
-        const options = bootstrap?.queue_membership_status_options ?? [];
-        const keys = bootstrap?.status_rollup_v1?.categories.flatMap((c) => c.selected_status_keys) ?? [];
-        return keys.map((key) => options.find((o) => o.status_key === key)?.status_label ?? key);
-    }, [bootstrap?.queue_membership_status_options, bootstrap?.status_rollup_v1]);
-
-    const isDirty =
-        fieldDirty || rollupDirty || membershipDirty || operatingPlanDirty || perspectivesDirty;
+    const isDirty = fieldDirty || rollupDirty || membershipDirty || operatingPlanDirty;
 
     useEffect(() => {
         onDirtyChange?.(isDirty);
@@ -219,8 +198,6 @@ export default function LifecycleStageWorkspace({
         isStatusRollupDirty: () => rollupRef.current?.isDirty() ?? false,
         getStageOperatingPlanDraft: () => operatingPlanRef.current?.getDraftPlan() ?? null,
         isStageOperatingPlanDirty: () => operatingPlanRef.current?.isDirty() ?? false,
-        getPerspectivesDraft: () => perspectivesRef.current?.getDraftPerspectives() ?? [],
-        isPerspectivesDirty: () => perspectivesRef.current?.isDirty() ?? false,
     }));
 
     const effectiveSaveState: LifecycleStageSaveUiState =
@@ -252,7 +229,6 @@ export default function LifecycleStageWorkspace({
     const insightChips = [
         savedStatusCount > 0 ? `${savedStatusCount} statuses` : "No statuses",
         configuredFieldCount > 0 ? `${configuredFieldCount} fields` : "No requirements",
-        perspectiveCount > 0 ? `${perspectiveCount} perspective${perspectiveCount === 1 ? "" : "s"}` : "No lenses",
         bootstrap?.stage_operating_plan?.work_templates.length ?
             `${bootstrap.stage_operating_plan.work_templates.length} work items`
         :   null,
@@ -376,42 +352,6 @@ export default function LifecycleStageWorkspace({
                                 entityDisplayLabels ?? bootstrap?.entity_display_labels ?? undefined
                             }
                             onDirtyChange={setFieldDirty}
-                        />
-                    :   <p className="text-xs text-alloy-midnight/50">Select a stage first.</p>}
-                </ConfigurationRuntimeUniversalCard>
-
-                <ConfigurationRuntimeUniversalCard
-                    id="perspectives"
-                    title={BUSINESS_PROCESS_CARD_PERSPECTIVES}
-                    question={BUSINESS_PROCESS_CARD_PERSPECTIVES_QUESTION}
-                    dirty={perspectivesDirty}
-                    span="full"
-                    defaultOpen
-                >
-                    {stageKey.trim() ?
-                        <LifecycleStagePerspectivesEditor
-                            ref={perspectivesRef}
-                            departmentId={departmentId}
-                            pipeline={bootstrap?.pipeline ?? null}
-                            savedPerspectives={bootstrap?.perspectives_v1 ?? null}
-                            stageStatusLabels={stageStatusLabels}
-                            loading={bootstrapLoading}
-                            onDirtyChange={setPerspectivesDirty}
-                        />
-                    :   <p className="text-xs text-alloy-midnight/50">Select a stage first.</p>}
-                </ConfigurationRuntimeUniversalCard>
-
-                <ConfigurationRuntimeUniversalCard
-                    id="presentation"
-                    title={BUSINESS_PROCESS_CARD_PRESENTATION}
-                    question={BUSINESS_PROCESS_CARD_PRESENTATION_QUESTION}
-                    span="full"
-                >
-                    {stageKey.trim() ?
-                        <LifecycleStagePresentationCard
-                            businessProcessKey={businessProcessKey}
-                            stageKey={stageKey}
-                            stageLabel={stageLabel}
                         />
                     :   <p className="text-xs text-alloy-midnight/50">Select a stage first.</p>}
                 </ConfigurationRuntimeUniversalCard>

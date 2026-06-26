@@ -1,23 +1,7 @@
-import SettingsPageHeader from "@/components/adminV2/settings/SettingsPageHeader";
-import {
-    BUSINESS_PROCESS_SETTINGS_PAGE_SUBTITLE,
-    BUSINESS_PROCESS_SETTINGS_PAGE_TITLE,
-} from "@/lib/lifecycle/businessProcessUiLabels";
-import LifecycleSettingsShell from "@/components/adminV2/settings/LifecycleSettingsShell";
-import { SETTINGS_PAGE_SHELL_COMPACT_CLASS } from "@/lib/adminV2/settingsPageLayout";
+import { redirect } from "next/navigation";
+import { ADMIN_V2_SETTINGS_PROCESSES_PATH } from "@/lib/adminV2/settings/lifecycleSettingsPaths";
 
-export const dynamic = "force-dynamic";
-
-export default function AdminV2SettingsBusinessProcessesPage() {
-    return (
-        <div className={SETTINGS_PAGE_SHELL_COMPACT_CLASS} data-testid="settings-business-processes-page">
-            <SettingsPageHeader
-                variant="hero"
-                title={BUSINESS_PROCESS_SETTINGS_PAGE_TITLE}
-                subtitle={BUSINESS_PROCESS_SETTINGS_PAGE_SUBTITLE}
-                className="mb-4"
-            />
-            <LifecycleSettingsShell />
-        </div>
-    );
+/** Legacy route — canonical Processes hub is {@link ADMIN_V2_SETTINGS_PROCESSES_PATH}. */
+export default function AdminV2SettingsBusinessProcessesRedirectPage() {
+    redirect(ADMIN_V2_SETTINGS_PROCESSES_PATH);
 }

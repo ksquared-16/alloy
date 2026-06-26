@@ -5,8 +5,10 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import LayoutGalleryClient from "@/components/adminV2/settings/LayoutGalleryClient";
 import LayoutVisualEditorRouter from "@/components/adminV2/settings/LayoutVisualEditorRouter";
+import LeadSummaryCardBlueprintEditor from "@/components/adminV2/settings/layouts/LeadSummaryCardBlueprintEditor";
 import LayoutConfigClient from "@/components/layout/LayoutConfigClient";
 import { LAYOUTS_SETTINGS_HREF } from "@/lib/admin/canonicalAdminRoutes";
+import { ADMIN_V2_SETTINGS_PROCESSES_PATH } from "@/lib/adminV2/settings/lifecycleSettingsPaths";
 
 export default function LayoutsSettingsPageClient() {
     return (
@@ -29,6 +31,7 @@ function LayoutsSettingsPageClientInner() {
 
     const editorMode = searchParams.get("editor") === "1";
     const layoutId = searchParams.get("layout")?.trim() || null;
+    const blueprint = searchParams.get("blueprint")?.trim() || null;
     const showLegacyBuilder = searchParams.get("legacy") === "1";
     const showAdvancedBuilder = searchParams.get("advanced") === "1";
 
@@ -42,6 +45,25 @@ function LayoutsSettingsPageClientInner() {
     const backToGallery = useCallback(() => {
         router.push(base);
     }, [router, base]);
+
+    const openBlueprintEditor = useCallback(
+        (layoutIdForBlueprint?: string | null) => {
+            const params = new URLSearchParams({ blueprint: "lead_summary" });
+            if (layoutIdForBlueprint) params.set("layout", layoutIdForBlueprint);
+            router.push(`${base}?${params.toString()}`);
+        },
+        [router, base],
+    );
+
+    if (blueprint === "lead_summary") {
+        return (
+            <LeadSummaryCardBlueprintEditor
+                layoutId={layoutId}
+                onLayoutIdChange={(id) => openBlueprintEditor(id)}
+                onBack={backToGallery}
+            />
+        );
+    }
 
     if (editorMode && layoutId) {
         if (showAdvancedBuilder) {
@@ -88,13 +110,47 @@ function LayoutsSettingsPageClientInner() {
             <section className="space-y-3">
                 <div>
                     <h2 className="text-xs font-semibold uppercase tracking-wide text-alloy-midnight/50">
+                        Card blueprint library
+                    </h2>
+                    <p className="mt-0.5 text-xs text-alloy-midnight/45">
+                        Configure card archetypes, then publish and assign from{" "}
+                        <Link href={ADMIN_V2_SETTINGS_PROCESSES_PATH} className="font-medium text-alloy-pine hover:underline">
+                            Processes
+                        </Link>
+                        .
+                    </p>
+                </div>
+                <article
+                    className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-l-4 border-l-alloy-pine border-alloy-forge/12 bg-white/90 p-5 shadow-sm"
+                    data-testid="layout-blueprint-lead-summary"
+                >
+                    <div>
+                        <h3 className="text-base font-semibold text-alloy-midnight">Lead Summary</h3>
+                        <p className="mt-1 text-xs text-alloy-midnight/55">
+                            Attention · Current Work · Tour · Children — compact card slots for Focus Panel summary strip.
+                        </p>
+                    </div>
+                    <button
+                        type="button"
+                        onClick={() => openBlueprintEditor()}
+                        className="rounded-xl bg-alloy-pine px-4 py-2 text-sm font-semibold text-white hover:bg-alloy-pine/90"
+                        data-testid="layout-blueprint-lead-summary-open"
+                    >
+                        Edit blueprint
+                    </button>
+                </article>
+            </section>
+
+            <section className="space-y-3">
+                <div>
+                    <h2 className="text-xs font-semibold uppercase tracking-wide text-alloy-midnight/50">
                         Surface gallery
                     </h2>
                     <p className="mt-0.5 text-xs text-alloy-midnight/45">
-                        Create, duplicate, edit, and publish layout documents. Assign published layouts to business
-                        process stages from{" "}
-                        <Link href="/settings/business-processes" className="font-medium text-alloy-pine hover:underline">
-                            Settings → Business processes
+                        Create, duplicate, edit, and publish layout documents. Assign published layouts to process stages
+                        from{" "}
+                        <Link href={ADMIN_V2_SETTINGS_PROCESSES_PATH} className="font-medium text-alloy-pine hover:underline">
+                            Settings → Processes
                         </Link>
                         .
                     </p>

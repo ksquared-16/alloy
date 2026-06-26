@@ -1,0 +1,74 @@
+import { describe, expect, it } from "vitest";
+import {
+    createEmptyWorkViewDraft,
+    normalizeWorkViewsDisplayOrder,
+    parseWorkViewsV1,
+    slugifyWorkViewId,
+    workViewsV1Equal,
+} from "@/lib/lifecycle/workViewsConfigV1";
+import { resolveProcessWorkViews } from "@/lib/lifecycle/workViewsCompatibility";
+
+describe("work_views_v1 metadata", () => {
+    it("parses process-level work view rows", () => {
+        const parsed = parseWorkViewsV1([
+            {
+                id: "tours_today",
+                label: "Tours today",
+                mission: "Help tours arrive",
+                filters_v1: [{ field_key: "status", operator: "equals", value: "Scheduled" }],
+                sort_v1: { field_key: "tour_time", direction: "asc" },
+                visible_in_runtime: true,
+                display_order: 1,
+            },
+        ]);
+        expect(parsed?.[0]?.label).toBe("Tours today");
+        expect(parsed?.[0]?.filters_v1?.[0]?.field_key).toBe("status");
+    });
+
+    it("seeds from stage perspectives when process views absent", () => {
+        const effective = resolveProcessWorkViews({
+            process: {
+                id: "p1",
+                key: "enrollment",
+                name: "Enrollment",
+                primary_entity: "opportunity",
+                sort_order: 0,
+                is_active: true,
+                stages: [
+                    {
+                        id: "s1",
+                        key: "lead",
+                        label: "Lead",
+                        sort_order: 0,
+                        is_active: true,
+                        perspectives_v1: [
+                            {
+                                queue_key: "new_families",
+                                label: "New families today",
+                                mission: "Respond quickly",
+                            },
+                        ],
+                    },
+                ],
+            },
+            saved: null,
+        });
+        expect(effective[0]?.label).toBe("New families today");
+        expect(effective[0]?.compat_queue_key).toBe("new_families");
+    });
+
+    it("normalizes display order", () => {
+        const rows = normalizeWorkViewsDisplayOrder([
+            { ...createEmptyWorkViewDraft("B"), id: slugifyWorkViewId("b"), display_order: 2 },
+            { ...createEmptyWorkViewDraft("A"), id: slugifyWorkViewId("a"), display_order: 1 },
+        ]);
+        expect(rows[0]?.label).toBe("A");
+    });
+
+    it("detects equality", () => {
+        const a = [createEmptyWorkViewDraft("Same")];
+        const b = [createEmptyWorkViewDraft("Same")];
+        a[0]!.id = b[0]!.id = "same";
+        expect(workViewsV1Equal(a, b)).toBe(true);
+    });
+});

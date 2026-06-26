@@ -16,7 +16,10 @@ import LifecycleStageConfiguration from "@/components/adminV2/settings/lifecycle
 import type { LifecycleStageWorkspaceHandle } from "@/components/adminV2/settings/lifecycle/LifecycleStageWorkspace";
 import type { LifecycleStageSaveUiState } from "@/components/adminV2/settings/lifecycle/LifecycleStageWorkspace";
 import LifecycleActionsMatrix from "@/components/adminV2/settings/lifecycle/LifecycleActionsMatrix";
-import BusinessProcessTrackExplainer from "@/components/adminV2/settings/lifecycle/BusinessProcessTrackExplainer";
+import BusinessProcessWorkspaceNav from "@/components/adminV2/settings/businessProcess/BusinessProcessWorkspaceNav";
+import BusinessProcessWorkViewsWorkspace from "@/components/adminV2/settings/businessProcess/BusinessProcessWorkViewsWorkspace";
+import BusinessProcessPresentationWorkspace from "@/components/adminV2/settings/businessProcess/BusinessProcessPresentationWorkspace";
+import type { BusinessProcessWorkspaceSection } from "@/lib/lifecycle/businessProcessUiLabels";
 import {
     BUSINESS_PROCESS_PROCESS_ACTIONS_SUMMARY,
     BUSINESS_PROCESS_PROCESS_ACTIONS_TITLE,
@@ -82,6 +85,7 @@ import {
 } from "@/lib/lifecycle/lifecycleStatusDraftReducer";
 import { workspaceDataFetchInit } from "@/lib/workspace/workspaceDataFetch";
 import { defaultWorkUnitQueueNameForStageKey } from "@/lib/lifecycle/lifecycleRuntimeBinding";
+import { derivePerspectiveLanesFromPipeline } from "@/lib/lifecycle/lifecycleStagePerspectiveLanes";
 
 type DeptRow = {
     id: string;
@@ -159,6 +163,7 @@ export default function LifecycleActivationBoard({
     const [stageSaveState, setStageSaveState] = useState<LifecycleStageSaveUiState>("idle");
     const [stageSaveError, setStageSaveError] = useState<string | null>(null);
     const [readyCheckRevision, setReadyCheckRevision] = useState(0);
+    const [processSection, setProcessSection] = useState<BusinessProcessWorkspaceSection>("stages");
     const workspaceHandleRef = useRef<LifecycleStageWorkspaceHandle | null>(null);
     const stageDirtyRef = useRef(false);
 
@@ -176,6 +181,15 @@ export default function LifecycleActivationBoard({
     const userSelectedStageRef = useRef(false);
 
     stageKeyRef.current = stageKey;
+
+    const workViewQueueLanes = useMemo(
+        () =>
+            derivePerspectiveLanesFromPipeline(pipeline).map((lane) => ({
+                queueKey: lane.queueKey,
+                label: lane.label,
+            })),
+        [pipeline],
+    );
 
     const dispatchStatusDraft = useCallback((action: LifecycleStatusDraftAction) => {
         statusDraftRef.current = applyLifecycleStatusDraftAction(statusDraftRef.current, action);
@@ -766,8 +780,6 @@ export default function LifecycleActivationBoard({
         );
         const stageOperatingPlan =
             handle?.isStageOperatingPlanDirty() ? handle.getStageOperatingPlanDraft() : null;
-        const perspectivesV1 =
-            handle?.isPerspectivesDirty() ? handle.getPerspectivesDraft() : null;
         const statusRollup =
             handle?.isStatusRollupDirty()
                 ? handle.getStatusRollupDraft()
@@ -782,7 +794,6 @@ export default function LifecycleActivationBoard({
             ...(fieldRules ? { field_rules: fieldRules } : {}),
             queue_membership_v1: queueMembership,
             ...(stageOperatingPlan ? { stage_operating_plan_v1: stageOperatingPlan } : {}),
-            ...(perspectivesV1 !== null ? { perspectives_v1: perspectivesV1 } : {}),
             ...(statusRollup ? { status_rollup_v1: statusRollup } : {}),
         };
 
@@ -845,9 +856,6 @@ export default function LifecycleActivationBoard({
             }
             if (stageOperatingPlan) {
                 patchStageBootstrap({ stage_operating_plan: stageOperatingPlan });
-            }
-            if (perspectivesV1) {
-                patchStageBootstrap({ perspectives_v1: perspectivesV1 });
             }
             setStatusKeys(keys);
             setStatusDisplayLabels(labels);
@@ -1516,7 +1524,7 @@ export default function LifecycleActivationBoard({
               : "Pending";
 
     return (
-        <div className="mx-auto max-w-5xl space-y-1.5" data-testid="lifecycle-builder-board">
+        <div className="mx-auto w-full max-w-none space-y-3" data-testid="lifecycle-builder-board">
             <LifecycleIdentitySyncBanner
                 identity={identity}
                 onUseRuntimeDepartment={() => onUseRuntimeDepartment?.()}
@@ -1570,202 +1578,255 @@ export default function LifecycleActivationBoard({
                         trackCount={catalogSummary?.trackCount ?? (processTracks?.tracks.length ?? 0)}
                         stageCount={catalogSummary?.stageCount ?? builderStages.length}
                         queueCount={catalogSummary?.queueCount ?? 0}
-                        onBack={onBackToCatalog}
                     />
-                    <BusinessProcessTrackExplainer
-                        tracks={processTracks}
-                        processKey={builderProcess?.key ?? "enrollment"}
+                    <BusinessProcessWorkspaceNav
+                        activeSection={processSection}
+                        onSelect={setProcessSection}
                     />
-                    {activeSplitRule ?
-                        <p
-                            className="rounded-lg border border-alloy-forge/10 bg-white/80 px-3 py-2 text-xs text-alloy-midnight/65"
-                            data-testid="lifecycle-split-rule-hint"
-                        >
-                            At Decision, choose a path for each child:{" "}
-                            {activeSplitRule.per_subject_outcomes.map((o) => o.label).join(" · ")}
-                        </p>
-                    :   null}
-                    <div
-                        className="flex flex-wrap items-start justify-between gap-2"
-                        data-testid="lifecycle-stage-nav-row"
-                    >
-                        {processTracks && builderProcess ?
-                            <div className="min-w-0 flex-1">
-                                <LifecycleTrackStageNav
-                                    tracks={processTracks}
-                                    builderProcess={builderProcess}
-                                    activeStageKey={stageKey}
-                                    onSelect={(s) => void selectStage(s)}
-                                    onAddStageClick={() => setShowAddStage((v) => !v)}
-                                    onReorderStage={reorderBuilderStage}
-                                    reorderBusy={stageReorderBusy}
-                                />
-                            </div>
-                        :   <LifecycleStageNav
-                                stages={navStages}
-                                activeStageKey={stageKey}
-                                onSelect={(s) => void selectStage(s)}
-                                onAddStageClick={() => setShowAddStage((v) => !v)}
-                                onReorderStage={reorderBuilderStage}
-                                reorderBusy={stageReorderBusy}
-                            />
-                        }
-                        {processId ? (
-                            <details
-                                className="relative shrink-0 text-xs"
-                                data-testid="lifecycle-board-more-menu"
-                            >
-                                <summary className="cursor-pointer list-none rounded-md border border-alloy-forge/20 bg-white px-2.5 py-1 font-medium text-alloy-midnight/70 hover:bg-alloy-stone/10 [&::-webkit-details-marker]:hidden">
-                                    More
-                                </summary>
-                                <div className="absolute right-0 z-10 mt-1 min-w-[10rem] rounded-md border border-alloy-forge/15 bg-white py-1 shadow-md">
-                                    <button
-                                        type="button"
-                                        className="block w-full px-3 py-1.5 text-left text-alloy-midnight/80 hover:bg-alloy-stone/10"
-                                        onClick={() => setRenameOpen(true)}
-                                        data-testid="lifecycle-rename"
-                                    >
-                                        Rename process
-                                    </button>
-                                    {canDeleteLifecycle ? (
-                                        <button
-                                            type="button"
-                                            className="block w-full px-3 py-1.5 text-left text-red-800 hover:bg-red-50"
-                                            onClick={handleDeleteLifecycle}
-                                            data-testid="lifecycle-activation-delete"
-                                        >
-                                            Delete process
-                                        </button>
-                                    ) : null}
-                                    {onRepairVisibility || (runtimeDepartmentId && processId) ? (
-                                        <button
-                                            type="button"
-                                            className="block w-full px-3 py-1.5 text-left text-alloy-pine hover:bg-alloy-stone/10 disabled:opacity-50"
-                                            disabled={repairingBusy || !runtimeDepartmentId || !processId}
-                                            onClick={() =>
-                                                onRepairVisibility
-                                                    ? onRepairVisibility()
-                                                    : void repairWorkspaceVisibility()
-                                            }
-                                            data-testid="lifecycle-activation-repair-workspace"
-                                        >
-                                            {repairingBusy ? "Repairing…" : "Repair workspace"}
-                                        </button>
-                                    ) : null}
-                                    {activationOwned && runtimeDepartmentId && processId ? (
-                                        <button
-                                            type="button"
-                                            className="block w-full px-3 py-1.5 text-left text-alloy-pine hover:bg-alloy-stone/10 disabled:opacity-50"
-                                            disabled={repairingBusy}
-                                            onClick={() => void repairLifecycleWorkUnits()}
-                                            data-testid="lifecycle-activation-repair-work-units"
-                                        >
-                                            {repairingBusy ? "Repairing…" : "Repair lifecycle work units"}
-                                        </button>
-                                    ) : null}
-                                    <p
-                                        className="border-t border-alloy-forge/10 px-3 py-1.5 text-[10px] text-alloy-midnight/50"
-                                        data-testid="lifecycle-activation-runtime-status"
-                                    >
-                                        Runtime: {runtimeStatusLabel}
-                                    </p>
-                                </div>
-                            </details>
-                        ) : null}
-                    </div>
-                    {showAddStage ? (
-                        <div className="rounded-lg border border-dashed border-alloy-pine/30 bg-alloy-pine/5 p-3">
-                            <LifecycleAddStageForm
-                                departmentId={runtimeDepartmentId}
-                                processId={processId}
-                                isFirstStage={false}
-                                onCreated={onStageCreated}
-                            />
-                        </div>
-                    ) : null}
-                    {stageKey ? (
+
+                    {processSection === "stages" ?
                         <>
-                            <div className="flex justify-end">
-                                {activationOwned ? (
-                                    <button
-                                        type="button"
-                                        className="text-[10px] font-medium text-red-800 hover:underline"
-                                        onClick={() => setDeleteStageOpen(true)}
-                                        data-testid="lifecycle-activation-delete-stage"
+                            {activeSplitRule ?
+                                <p
+                                    className="rounded-lg border border-alloy-forge/10 bg-white/80 px-3 py-2 text-xs text-alloy-midnight/65"
+                                    data-testid="lifecycle-split-rule-hint"
+                                >
+                                    At Decision, choose a path for each child:{" "}
+                                    {activeSplitRule.per_subject_outcomes.map((o) => o.label).join(" · ")}
+                                </p>
+                            :   null}
+                            <div
+                                className="flex flex-wrap items-start justify-between gap-2"
+                                data-testid="lifecycle-stage-nav-row"
+                            >
+                                {processTracks && builderProcess ?
+                                    <div className="min-w-0 flex-1">
+                                        <LifecycleTrackStageNav
+                                            tracks={processTracks}
+                                            builderProcess={builderProcess}
+                                            activeStageKey={stageKey}
+                                            onSelect={(s) => void selectStage(s)}
+                                            onAddStageClick={() => setShowAddStage((v) => !v)}
+                                            onReorderStage={reorderBuilderStage}
+                                            reorderBusy={stageReorderBusy}
+                                        />
+                                    </div>
+                                :   <LifecycleStageNav
+                                        stages={navStages}
+                                        activeStageKey={stageKey}
+                                        onSelect={(s) => void selectStage(s)}
+                                        onAddStageClick={() => setShowAddStage((v) => !v)}
+                                        onReorderStage={reorderBuilderStage}
+                                        reorderBusy={stageReorderBusy}
+                                    />
+                                }
+                                {processId ? (
+                                    <details
+                                        className="relative shrink-0 text-xs"
+                                        data-testid="lifecycle-board-more-menu"
                                     >
-                                        Delete this stage
-                                    </button>
+                                        <summary className="cursor-pointer list-none rounded-md border border-alloy-forge/20 bg-white px-2.5 py-1 font-medium text-alloy-midnight/70 hover:bg-alloy-stone/10 [&::-webkit-details-marker]:hidden">
+                                            More
+                                        </summary>
+                                        <div className="absolute right-0 z-10 mt-1 min-w-[10rem] rounded-md border border-alloy-forge/15 bg-white py-1 shadow-md">
+                                            <button
+                                                type="button"
+                                                className="block w-full px-3 py-1.5 text-left text-alloy-midnight/80 hover:bg-alloy-stone/10"
+                                                onClick={() => setRenameOpen(true)}
+                                                data-testid="lifecycle-rename"
+                                            >
+                                                Rename process
+                                            </button>
+                                            {canDeleteLifecycle ? (
+                                                <button
+                                                    type="button"
+                                                    className="block w-full px-3 py-1.5 text-left text-red-800 hover:bg-red-50"
+                                                    onClick={handleDeleteLifecycle}
+                                                    data-testid="lifecycle-activation-delete"
+                                                >
+                                                    Delete process
+                                                </button>
+                                            ) : null}
+                                            {onRepairVisibility || (runtimeDepartmentId && processId) ? (
+                                                <button
+                                                    type="button"
+                                                    className="block w-full px-3 py-1.5 text-left text-alloy-pine hover:bg-alloy-stone/10 disabled:opacity-50"
+                                                    disabled={repairingBusy || !runtimeDepartmentId || !processId}
+                                                    onClick={() =>
+                                                        onRepairVisibility
+                                                            ? onRepairVisibility()
+                                                            : void repairWorkspaceVisibility()
+                                                    }
+                                                    data-testid="lifecycle-activation-repair-workspace"
+                                                >
+                                                    {repairingBusy ? "Repairing…" : "Repair workspace"}
+                                                </button>
+                                            ) : null}
+                                            {activationOwned && runtimeDepartmentId && processId ? (
+                                                <button
+                                                    type="button"
+                                                    className="block w-full px-3 py-1.5 text-left text-alloy-pine hover:bg-alloy-stone/10 disabled:opacity-50"
+                                                    disabled={repairingBusy}
+                                                    onClick={() => void repairLifecycleWorkUnits()}
+                                                    data-testid="lifecycle-activation-repair-work-units"
+                                                >
+                                                    {repairingBusy ? "Repairing…" : "Repair lifecycle work units"}
+                                                </button>
+                                            ) : null}
+                                            <p
+                                                className="border-t border-alloy-forge/10 px-3 py-1.5 text-[10px] text-alloy-midnight/50"
+                                                data-testid="lifecycle-activation-runtime-status"
+                                            >
+                                                Runtime: {runtimeStatusLabel}
+                                            </p>
+                                        </div>
+                                    </details>
                                 ) : null}
                             </div>
-                            <LifecycleStageConfiguration
-                                departmentId={runtimeDepartmentId}
-                                businessProcessKey={builderProcess?.key ?? "enrollment"}
-                                stageKey={stageKey}
-                                stageLabel={stageLabel}
-                                lifecycleName={lifecycleName}
-                                bootstrap={stageBootstrap}
-                                bootstrapLoading={stageBootstrapLoading}
-                                statusesError={statusesError}
-                                onStatusRollupChange={onStatusRollupChange}
-                                saveState={stageSaveState}
-                                saveError={stageSaveError}
-                                onSaveStage={saveStageUnified}
-                                onDirtyChange={(dirty) => {
-                                    stageDirtyRef.current = dirty;
-                                }}
-                                workspaceHandleRef={workspaceHandleRef}
-                                validationSlot={
-                                    identity ? (
-                                        <LifecycleActivationValidation
-                                            identity={identity}
-                                            refreshKey={String(readyCheckRevision)}
-                                            repairQueue={
-                                                workUnitId && stageKey.trim()
-                                                    ? {
-                                                          workUnitId,
-                                                          stageKey: normalizeLifecycleBuilderStageKey(stageKey),
-                                                      }
-                                                    : null
-                                            }
-                                            onQueueRepaired={async () => {
-                                                await loadPipeline(runtimeDepartmentId);
-                                                await refreshStageBootstrap();
-                                            }}
-                                            onAttachRecords={() => attachLifecycleRecords()}
-                                            onRuntimeStatus={(allPass) => {
-                                                setRuntimeSummary(allPass ? "pass" : "fail");
-                                            }}
-                                        />
-                                    ) : null
-                                }
-                                readyCheckRefreshKey={`${runtimeDepartmentId}:${readyCheckRevision}`}
-                            />
-                            <details
-                                id="business-process-actions"
-                                className="rounded-xl border border-alloy-forge/12 bg-white/90 shadow-sm"
-                                data-testid="business-process-actions-section"
-                            >
-                                <summary className="cursor-pointer list-none px-4 py-3 [&::-webkit-details-marker]:hidden">
-                                    <h3 className="text-sm font-semibold text-alloy-midnight">
-                                        {BUSINESS_PROCESS_PROCESS_ACTIONS_TITLE}
-                                    </h3>
-                                    <p className="mt-0.5 text-[11px] text-alloy-midnight/55">
-                                        {BUSINESS_PROCESS_PROCESS_ACTIONS_SUMMARY}
-                                    </p>
-                                </summary>
-                                <div className="border-t border-alloy-forge/8 px-2 py-2">
-                                    <LifecycleActionsMatrix
+                            {showAddStage ?
+                                <div className="rounded-lg border border-dashed border-alloy-pine/30 bg-alloy-pine/5 p-3">
+                                    <LifecycleAddStageForm
                                         departmentId={runtimeDepartmentId}
-                                        builderStageKeys={builderStageKeys}
-                                        embedded
-                                        onSaved={async () => {
-                                            await refreshStageBootstrap();
-                                        }}
+                                        processId={processId}
+                                        isFirstStage={false}
+                                        onCreated={onStageCreated}
                                     />
                                 </div>
-                            </details>
+                            :   null}
+                            {stageKey ?
+                                <>
+                                    <div className="flex justify-end">
+                                        {activationOwned ?
+                                            <button
+                                                type="button"
+                                                className="text-[10px] font-medium text-red-800 hover:underline"
+                                                onClick={() => setDeleteStageOpen(true)}
+                                                data-testid="lifecycle-activation-delete-stage"
+                                            >
+                                                Delete this stage
+                                            </button>
+                                        :   null}
+                                    </div>
+                                    <LifecycleStageConfiguration
+                                        departmentId={runtimeDepartmentId}
+                                        businessProcessKey={builderProcess?.key ?? "enrollment"}
+                                        stageKey={stageKey}
+                                        stageLabel={stageLabel}
+                                        lifecycleName={lifecycleName}
+                                        bootstrap={stageBootstrap}
+                                        bootstrapLoading={stageBootstrapLoading}
+                                        statusesError={statusesError}
+                                        onStatusRollupChange={onStatusRollupChange}
+                                        saveState={stageSaveState}
+                                        saveError={stageSaveError}
+                                        onSaveStage={saveStageUnified}
+                                        onDirtyChange={(dirty) => {
+                                            stageDirtyRef.current = dirty;
+                                        }}
+                                        workspaceHandleRef={workspaceHandleRef}
+                                        validationSlot={null}
+                                        readyCheckRefreshKey={`${runtimeDepartmentId}:${readyCheckRevision}`}
+                                    />
+                                </>
+                            :   null}
                         </>
-                    ) : null}
+                    :   null}
+
+                    {processSection === "work-views" && processId ?
+                        <BusinessProcessWorkViewsWorkspace
+                            departmentId={runtimeDepartmentId}
+                            processId={processId}
+                            workUnitId={workUnitId}
+                            queueLanes={workViewQueueLanes}
+                        />
+                    :   null}
+
+                    {processSection === "presentation" ?
+                        <BusinessProcessPresentationWorkspace
+                            businessProcessKey={builderProcess?.key ?? "enrollment"}
+                            stageKey={stageKey}
+                            stageLabel={stageLabel}
+                            processTracks={processTracks}
+                            builderProcess={builderProcess}
+                            navStages={navStages}
+                            onSelectStage={(s) => void selectStage(s)}
+                            onAddStageClick={() => setShowAddStage((v) => !v)}
+                            onReorderStage={reorderBuilderStage}
+                            reorderBusy={stageReorderBusy}
+                        />
+                    :   null}
+
+                    {processSection === "actions" ?
+                        <div
+                            className="rounded-2xl border border-alloy-forge/12 bg-white p-4 shadow-sm"
+                            data-testid="business-process-actions-workspace"
+                        >
+                            <header className="mb-4">
+                                <h3 className="text-lg font-semibold text-alloy-midnight">
+                                    {BUSINESS_PROCESS_PROCESS_ACTIONS_TITLE}
+                                </h3>
+                                <p className="mt-1 text-sm text-alloy-midnight/60">
+                                    {BUSINESS_PROCESS_PROCESS_ACTIONS_SUMMARY}
+                                </p>
+                            </header>
+                            <LifecycleActionsMatrix
+                                departmentId={runtimeDepartmentId}
+                                builderStageKeys={builderStageKeys}
+                                embedded
+                                onSaved={async () => {
+                                    await refreshStageBootstrap();
+                                }}
+                            />
+                        </div>
+                    :   null}
+
+                    {processSection === "automation" ?
+                        <div
+                            className="rounded-2xl border border-dashed border-alloy-forge/15 bg-white px-5 py-8 text-center"
+                            data-testid="business-process-automation-workspace"
+                        >
+                            <h3 className="text-lg font-semibold text-alloy-midnight">Automation</h3>
+                            <p className="mt-2 text-sm text-alloy-midnight/55">
+                                Workflow entry points and automatic platform actions will be configured here.
+                            </p>
+                        </div>
+                    :   null}
+
+                    {processSection === "health" && stageKey ?
+                        <div
+                            className="rounded-2xl border border-alloy-forge/12 bg-white p-4 shadow-sm"
+                            data-testid="business-process-health-workspace"
+                        >
+                            <header className="mb-4">
+                                <h3 className="text-lg font-semibold text-alloy-midnight">Configuration health</h3>
+                                <p className="mt-1 text-sm text-alloy-midnight/60">
+                                    Ready check and BOS configuration recommendations for the selected stage.
+                                </p>
+                            </header>
+                            {identity ?
+                                <LifecycleActivationValidation
+                                    identity={identity}
+                                    refreshKey={String(readyCheckRevision)}
+                                    repairQueue={
+                                        workUnitId && stageKey.trim()
+                                            ? {
+                                                  workUnitId,
+                                                  stageKey: normalizeLifecycleBuilderStageKey(stageKey),
+                                              }
+                                            : null
+                                    }
+                                    onQueueRepaired={async () => {
+                                        await loadPipeline(runtimeDepartmentId);
+                                        await refreshStageBootstrap();
+                                    }}
+                                    onAttachRecords={() => attachLifecycleRecords()}
+                                    onRuntimeStatus={(allPass) => {
+                                        setRuntimeSummary(allPass ? "pass" : "fail");
+                                    }}
+                                />
+                            :   null}
+                        </div>
+                    :   null}
                 </>
             )}
 

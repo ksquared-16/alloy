@@ -8,6 +8,10 @@ import { describe, expect, it } from "vitest";
 const root = resolve(__dirname, "../..");
 const mockupDir = resolve(root, "../docs/sprints/06_2026/configuration-runtime-bp-ux-redesign");
 const freezeDoc = resolve(root, "../docs/sprints/06_2026/configuration_runtime_concept_a_freeze.md");
+const realignmentDoc = resolve(
+    root,
+    "../docs/sprints/06_2026/configuration_runtime_process_work_views_realignment.md",
+);
 
 function read(rel: string): string {
     return readFileSync(resolve(root, rel), "utf8");
@@ -18,41 +22,59 @@ describe("Configuration Runtime Concept A freeze", () => {
         const doc = readFileSync(freezeDoc, "utf8");
         expect(doc).toContain("Configuration Runtime Concept A");
         expect(doc).toContain("mockup-business-processes-page.png");
-        expect(doc).toContain("mockup-stage-workspace.png");
         expect(doc).toContain("mockup-perspective-card.png");
-        expect(doc).toContain("mockup-presentation-assignment.png");
     });
 
-    it("stage workspace uses Universal Card grid shell", () => {
+    it("documents process-level Work Views realignment", () => {
+        const doc = readFileSync(realignmentDoc, "utf8");
+        expect(doc).toContain("work_views_v1");
+        expect(doc).toContain("Paused");
+    });
+
+    it("stage workspace no longer embeds Work Views card", () => {
         const workspace = read("components/adminV2/settings/lifecycle/LifecycleStageWorkspace.tsx");
         expect(workspace).toContain("ConfigurationRuntimeUniversalCard");
-        expect(workspace).toContain("configuration-runtime-stage-card-grid");
-        expect(workspace).toContain("LifecycleStagePresentationCard");
-        expect(workspace).toContain("BUSINESS_PROCESS_PREVIEW_WORK_UNIT");
+        expect(workspace).not.toContain("WorkViewOperationalLensCard");
+        expect(workspace).not.toContain('id="work-views"');
     });
 
-    it("perspectives editor uses operational lens language not primary queue_key", () => {
-        const editor = read("components/adminV2/settings/lifecycle/LifecycleStagePerspectivesEditor.tsx");
-        expect(editor).toContain("BUSINESS_PROCESS_LENS_OPERATORS_SEE");
-        expect(editor).toContain("BUSINESS_PROCESS_LENS_WORK_INCLUDED");
-        expect(editor).toContain("BUSINESS_PROCESS_LENS_PREVIEW_RUNTIME");
-        expect(editor).toContain("BUSINESS_PROCESS_LENS_ADVANCED_IDENTITY");
-        expect(editor).not.toContain("perspectives-save-pending-note");
-        expect(editor).not.toMatch(/Lane key:/);
+    it("process board exposes Work Views workspace navigation", () => {
+        const board = read("components/adminV2/settings/lifecycle/LifecycleActivationBoard.tsx");
+        expect(board).toContain("BusinessProcessWorkspaceNav");
+        expect(board).toContain("BusinessProcessWorkViewsWorkspace");
+        expect(board).toContain('processSection === "work-views"');
     });
 
-    it("presentation card includes visual previews", () => {
-        const card = read("components/adminV2/settings/lifecycle/LifecycleStagePresentationCard.tsx");
-        expect(card).toContain("QueueLayoutPreviewThumbnail");
-        expect(card).toContain("FocusPanelLayoutPreviewThumbnail");
-        expect(card).toContain("lifecycle-stage-presentation-card");
+    it("work views editor includes editable condition rows", () => {
+        const editor = read("components/adminV2/settings/businessProcess/WorkViewConditionEditor.tsx");
+        expect(editor).toContain("work-view-add-condition");
+        expect(editor).toContain("BUSINESS_PROCESS_WORK_VIEW_SHOW_WORK_WHEN");
     });
 
-    it("forbidden builder routes remain absent", () => {
-        const domains = read("lib/adminV2/configurationWorkspaceDomains.ts");
-        expect(domains).toContain("queue-builder");
-        expect(domains).toContain("focus-panel-builder");
-        expect(domains).toContain("CONFIGURATION_RUNTIME_FORBIDDEN_SETTINGS_ROUTES");
+    it("process work view card includes presentation selectors", () => {
+        const card = read("components/adminV2/settings/businessProcess/WorkViewProcessEditorCard.tsx");
+        expect(card).toContain("queue_layout_id");
+        expect(card).toContain("focus_panel_layout_id");
+        expect(card).toContain("BUSINESS_PROCESS_LENS_PREVIEW_RUNTIME");
+        expect(card).toContain("process-work-view-preview");
+    });
+
+    it("processes page uses Processes title and test id", () => {
+        const page = read("app/adminV2/settings/processes/page.tsx");
+        expect(page).toContain("BUSINESS_PROCESS_SETTINGS_PAGE_TITLE");
+        expect(page).toContain('data-testid="settings-processes-page"');
+    });
+
+    it("legacy business-processes route redirects to processes", () => {
+        const page = read("app/adminV2/settings/business-processes/page.tsx");
+        expect(page).toContain("redirect");
+        expect(page).toContain("ADMIN_V2_SETTINGS_PROCESSES_PATH");
+    });
+
+    it("layouts gallery exposes Lead Summary card blueprint", () => {
+        const client = read("app/adminV2/settings/layouts/LayoutsSettingsPageClient.tsx");
+        expect(client).toContain("LeadSummaryCardBlueprintEditor");
+        expect(client).toContain("layout-blueprint-lead-summary");
     });
 
     it("canonical mockup PNGs exist on disk", () => {

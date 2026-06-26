@@ -6,9 +6,10 @@ import AdminEntityDrawer from "@/components/admin/AdminEntityDrawer";
 import type { EntityLabelsBootstrapMap } from "@/lib/admin/entityLabelsServer";
 import { isExperienceBuilderStudioActive } from "@/lib/layout/experienceBuilderStudioMode";
 import { usePathname, useSearchParams } from "next/navigation";
-import { Suspense, type ReactNode } from "react";
+import { Suspense, useMemo, type ReactNode } from "react";
 import SettingsHierarchyBreadcrumb from "./SettingsHierarchyBreadcrumb";
 import SettingsWorkspaceNav from "@/components/adminV2/settings/SettingsWorkspaceNav";
+import { normalizeToCanonicalAdminPath } from "@/lib/admin/canonicalAdminRoutes";
 
 interface AdminV2SettingsClientProvidersProps {
     children: ReactNode;
@@ -37,6 +38,15 @@ function AdminV2SettingsClientProvidersInner({
     const pathname = usePathname();
     const searchParams = useSearchParams();
     const studioMode = isExperienceBuilderStudioActive(pathname, searchParams);
+    const isBusinessProcessesSurface = useMemo(() => {
+        const path = normalizeToCanonicalAdminPath(pathname ?? "");
+        return (
+            path === "/settings/processes"
+            || path.startsWith("/settings/processes/")
+            || path === "/settings/business-processes"
+            || path.startsWith("/settings/business-processes/")
+        );
+    }, [pathname]);
     const safeEmail = typeof userEmail === "string" && userEmail.length > 0 ? userEmail : "Unknown";
     const safeUserId = typeof userId === "string" ? userId : "";
     const safeOrgId = typeof orgId === "string" ? orgId : "";
@@ -71,9 +81,11 @@ function AdminV2SettingsClientProvidersInner({
                         <SettingsHierarchyBreadcrumb />
                     </div>
                     <div className="flex min-h-0 flex-1 overflow-hidden">
-                        <aside className="hidden shrink-0 overflow-y-auto border-r border-alloy-forge/10 bg-white/20 px-3 py-4 lg:block">
-                            <SettingsWorkspaceNav />
-                        </aside>
+                        {!isBusinessProcessesSurface ?
+                            <aside className="hidden shrink-0 overflow-y-auto border-r border-alloy-forge/10 bg-white/20 px-3 py-4 lg:block">
+                                <SettingsWorkspaceNav />
+                            </aside>
+                        :   null}
                         <div className="min-h-0 min-w-0 flex-1 overflow-y-auto px-4 pb-8 pt-3 sm:px-5">
                             {children}
                         </div>

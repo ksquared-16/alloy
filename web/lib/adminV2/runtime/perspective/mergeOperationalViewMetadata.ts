@@ -179,11 +179,20 @@ export function buildOperationalViewPreviewRuntimeHref(params: {
     departmentId: string;
     workUnitId: string;
     queueKey: string;
+    workViewId?: string | null;
+    queueLayoutId?: string | null;
+    focusPanelLayoutId?: string | null;
 }): string | null {
     const departmentId = params.departmentId.trim();
     const workUnitId = params.workUnitId.trim();
     const queueKey = params.queueKey.trim();
     if (!departmentId || !workUnitId || !queueKey) return null;
     const sp = new URLSearchParams({ queue: queueKey });
+    const workViewId = params.workViewId?.trim();
+    if (workViewId) sp.set("work_view", workViewId);
+    const queueLayoutId = params.queueLayoutId?.trim();
+    if (queueLayoutId) sp.set("queue_layout", queueLayoutId);
+    const focusPanelLayoutId = params.focusPanelLayoutId?.trim();
+    if (focusPanelLayoutId) sp.set("focus_layout", focusPanelLayoutId);
     return `/adminV2/workspace/dept/${encodeURIComponent(departmentId)}/work-unit/${encodeURIComponent(workUnitId)}?${sp.toString()}`;
 }

@@ -48,6 +48,67 @@ function layoutLabel(record: EntityLayoutRecord | null): string {
     return formatLayoutTitleWithVersion(record.name, record.version);
 }
 
+function PresentationSurfacePanel({
+    title,
+    layoutName,
+    preview,
+    options,
+    selectedId,
+    busy,
+    disabled,
+    onChange,
+    testIdPrefix,
+}: {
+    title: string;
+    layoutName: string;
+    preview: React.ReactNode;
+    options: EntityLayoutRecord[];
+    selectedId: string;
+    busy: boolean;
+    disabled: boolean;
+    onChange: (layoutId: string) => void;
+    testIdPrefix: string;
+}) {
+    return (
+        <div className="rounded-xl border border-alloy-forge/10 bg-alloy-stone/[0.02] p-4">
+            <div className="mb-3 flex items-center gap-2">
+                <span className="flex h-7 w-7 items-center justify-center rounded-md bg-alloy-pine/10 text-[11px] text-alloy-pine">
+                    ◫
+                </span>
+                <p className="text-sm font-semibold text-alloy-midnight">{title}</p>
+            </div>
+            {preview}
+            <p className="mt-3 text-sm font-medium text-alloy-midnight">{layoutName}</p>
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+                <select
+                    value={selectedId}
+                    disabled={busy || disabled}
+                    onChange={(e) => {
+                        const v = e.target.value;
+                        if (v) onChange(v);
+                    }}
+                    className="max-w-full flex-1 rounded-lg border border-alloy-forge/15 bg-white px-2.5 py-1.5 text-[11px] disabled:opacity-50"
+                    data-testid={`${testIdPrefix}-layout-select`}
+                >
+                    <option value="">Surface default</option>
+                    {options.map((opt) => (
+                        <option key={opt.id} value={opt.id}>
+                            {formatLayoutTitleWithVersion(opt.name, opt.version)}
+                        </option>
+                    ))}
+                </select>
+                <Link
+                    href={LAYOUTS_SETTINGS_HREF}
+                    className="rounded-lg border border-alloy-pine/30 px-3 py-1.5 text-[11px] font-medium text-alloy-pine hover:bg-alloy-pine/[0.04]"
+                    data-testid={`${testIdPrefix}-change-link`}
+                >
+                    {BUSINESS_PROCESS_PRESENTATION_CHANGE}
+                </Link>
+            </div>
+        </div>
+    );
+}
+
 export default function LifecycleStagePresentationCard({
     businessProcessKey,
     stageKey,
@@ -144,87 +205,60 @@ export default function LifecycleStagePresentationCard({
     const drawerOptions = drawerSlot ? publishedLayoutOptionsForAssignmentSlot(layouts, drawerSlot.surfaceKey) : [];
 
     return (
-        <div className="space-y-3" data-testid="lifecycle-stage-presentation-card">
-            <p className="text-[11px] leading-relaxed text-alloy-midnight/55">
-                {BUSINESS_PROCESS_PRESENTATION_CARD_INTRO.replace("{stage}", stageLabel)}
-            </p>
+        <div className="space-y-4" data-testid="lifecycle-stage-presentation-card">
+            <header className="flex items-start gap-3">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-alloy-pine/10 text-alloy-pine">
+                    ◫
+                </div>
+                <div>
+                    <h5 className="text-sm font-semibold text-alloy-midnight">Presentation</h5>
+                    <p className="mt-0.5 text-[11px] leading-relaxed text-alloy-midnight/55">
+                        {BUSINESS_PROCESS_PRESENTATION_CARD_INTRO.replace("{stage}", stageLabel)}
+                    </p>
+                </div>
+            </header>
 
             {error ?
                 <p className="rounded border border-red-200 bg-red-50 px-2 py-1 text-xs text-red-800">{error}</p>
             :   null}
 
-            <div className="grid gap-3 sm:grid-cols-2">
-                <div className="rounded-lg border border-alloy-forge/10 bg-alloy-stone/[0.02] p-3">
-                    <p className="text-[10px] font-semibold uppercase tracking-wide text-alloy-midnight/45">
-                        {BUSINESS_PROCESS_PRESENTATION_QUEUE}
-                    </p>
-                    <QueueLayoutPreviewThumbnail label={layoutLabel(queueRecord)} />
-                    <p className="mt-2 text-xs font-medium text-alloy-midnight">{layoutLabel(queueRecord)}</p>
-                    <div className="mt-2 flex flex-wrap items-center gap-2">
-                        <select
-                            value={queueAssignment?.entityLayoutId ?? ""}
-                            disabled={!!busy || !queueSlot}
-                            onChange={(e) => {
-                                const v = e.target.value;
-                                if (v && queueSlot) void saveAssignment(queueSlot.surfaceKey, v);
-                            }}
-                            className="max-w-full flex-1 rounded border border-alloy-forge/15 px-2 py-1 text-[11px] disabled:opacity-50"
-                            data-testid="presentation-queue-layout-select"
-                        >
-                            <option value="">Surface default</option>
-                            {queueOptions.map((opt) => (
-                                <option key={opt.id} value={opt.id}>
-                                    {formatLayoutTitleWithVersion(opt.name, opt.version)}
-                                </option>
-                            ))}
-                        </select>
-                        <Link
-                            href={LAYOUTS_SETTINGS_HREF}
-                            className="text-[11px] font-medium text-alloy-pine hover:underline"
-                        >
-                            {BUSINESS_PROCESS_PRESENTATION_CHANGE}
-                        </Link>
-                    </div>
-                </div>
-
-                <div className="rounded-lg border border-alloy-forge/10 bg-alloy-stone/[0.02] p-3">
-                    <p className="text-[10px] font-semibold uppercase tracking-wide text-alloy-midnight/45">
-                        {BUSINESS_PROCESS_PRESENTATION_FOCUS_PANEL}
-                    </p>
-                    <FocusPanelLayoutPreviewThumbnail label={layoutLabel(drawerRecord)} />
-                    <p className="mt-2 text-xs font-medium text-alloy-midnight">{layoutLabel(drawerRecord)}</p>
-                    <div className="mt-2 flex flex-wrap items-center gap-2">
-                        <select
-                            value={drawerAssignment?.entityLayoutId ?? ""}
-                            disabled={!!busy || !drawerSlot}
-                            onChange={(e) => {
-                                const v = e.target.value;
-                                if (v && drawerSlot) void saveAssignment(drawerSlot.surfaceKey, v);
-                            }}
-                            className="max-w-full flex-1 rounded border border-alloy-forge/15 px-2 py-1 text-[11px] disabled:opacity-50"
-                            data-testid="presentation-focus-panel-layout-select"
-                        >
-                            <option value="">Surface default</option>
-                            {drawerOptions.map((opt) => (
-                                <option key={opt.id} value={opt.id}>
-                                    {formatLayoutTitleWithVersion(opt.name, opt.version)}
-                                </option>
-                            ))}
-                        </select>
-                        <Link
-                            href={LAYOUTS_SETTINGS_HREF}
-                            className="text-[11px] font-medium text-alloy-pine hover:underline"
-                        >
-                            {BUSINESS_PROCESS_PRESENTATION_CHANGE}
-                        </Link>
-                    </div>
-                </div>
+            <div className="grid gap-4 lg:grid-cols-2">
+                <PresentationSurfacePanel
+                    title={BUSINESS_PROCESS_PRESENTATION_QUEUE}
+                    layoutName={layoutLabel(queueRecord)}
+                    preview={<QueueLayoutPreviewThumbnail label={layoutLabel(queueRecord)} />}
+                    options={queueOptions}
+                    selectedId={queueAssignment?.entityLayoutId ?? ""}
+                    busy={!!busy}
+                    disabled={!queueSlot}
+                    onChange={(layoutId) => {
+                        if (queueSlot) void saveAssignment(queueSlot.surfaceKey, layoutId);
+                    }}
+                    testIdPrefix="presentation-queue"
+                />
+                <PresentationSurfacePanel
+                    title={BUSINESS_PROCESS_PRESENTATION_FOCUS_PANEL}
+                    layoutName={layoutLabel(drawerRecord)}
+                    preview={<FocusPanelLayoutPreviewThumbnail label={layoutLabel(drawerRecord)} />}
+                    options={drawerOptions}
+                    selectedId={drawerAssignment?.entityLayoutId ?? ""}
+                    busy={!!busy}
+                    disabled={!drawerSlot}
+                    onChange={(layoutId) => {
+                        if (drawerSlot) void saveAssignment(drawerSlot.surfaceKey, layoutId);
+                    }}
+                    testIdPrefix="presentation-focus-panel"
+                />
             </div>
 
             <p className="text-[11px] text-alloy-midnight/50">
                 {BUSINESS_PROCESS_PRESENTATION_OPEN_LAYOUTS}{" "}
-                <Link href={LAYOUTS_SETTINGS_HREF} className="font-medium text-alloy-pine hover:underline">
-                    Settings → Layouts
+                <Link
+                    href={LAYOUTS_SETTINGS_HREF}
+                    className="font-medium text-alloy-pine hover:underline"
+                    data-testid="presentation-open-layouts-link"
+                >
+                    Open in Layouts gallery →
                 </Link>
             </p>
         </div>

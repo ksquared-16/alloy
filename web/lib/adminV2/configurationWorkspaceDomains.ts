@@ -22,7 +22,7 @@ export const CONFIGURATION_RUNTIME_FORBIDDEN_SETTINGS_ROUTES = [
 /** Doctrine strings — drift-prevention tests assert these remain in hub/nav config. */
 export const CONFIGURATION_RUNTIME_OWNERSHIP_COPY = {
     businessProcessesSpine:
-        "Operational spine: stages, perspectives, missions, required info, attention, and process actions.",
+        "Operational spine: stages, Work Views, missions, required info, attention, and process actions.",
     layoutsPresentation:
         "Experience Builder: queue rows, Focus Panel drawer layouts, and field placement on surfaces.",
     fieldsCanonical:
@@ -57,7 +57,7 @@ export type ConfigurationWorkspaceDomain = {
 
 export const CONFIGURATION_WORKSPACE_HUB_TITLE = "Configuration";
 export const CONFIGURATION_WORKSPACE_HUB_SUBTITLE =
-    "Business Processes is the operational spine. Layouts (Experience Builder) owns presentation. Fields and Statuses are canonical catalogs — configure them there, then assign and compose in processes and layouts.";
+    "Processes is the operational spine. Layouts (Experience Builder) owns presentation. Fields and Statuses are canonical catalogs — configure them there, then assign and compose in processes and layouts.";
 
 /** Ordered setup journey — guidance only, not a wizard. */
 export const CONFIGURATION_JOURNEY_STEPS = [
@@ -77,8 +77,8 @@ export const CONFIGURATION_JOURNEY_STEPS = [
         step: 3,
         label: "Operations",
         summary:
-            "Business Processes: stages, perspectives, missions, required info, attention, and process actions.",
-        href: settings("business-processes"),
+            "Processes: stages, Work Views, missions, required info, attention, and process actions.",
+        href: settings("processes"),
     },
     {
         step: 4,
@@ -148,11 +148,11 @@ export const CONFIGURATION_WORKSPACE_DOMAINS: readonly ConfigurationWorkspaceDom
     {
         id: "operations",
         label: "Operations",
-        description: "Business Processes is the operational spine.",
+        description: "Processes is the operational spine.",
         items: [
             {
-                href: settings("business-processes"),
-                label: "Business Processes",
+                href: settings("processes"),
+                label: "Processes",
                 description: CONFIGURATION_RUNTIME_OWNERSHIP_COPY.businessProcessesSpine,
                 emphasis: true,
             },

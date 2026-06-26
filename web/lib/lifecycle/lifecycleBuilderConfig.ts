@@ -18,6 +18,8 @@ import type { QueueMembershipV1 } from "@/lib/lifecycle/queueMembershipV1";
 import { parseQueueMembershipV1 } from "@/lib/lifecycle/queueMembershipV1";
 import type { PerspectiveConfigV1Stored } from "@/lib/lifecycle/perspectiveConfigV1";
 import { parsePerspectivesV1 } from "@/lib/lifecycle/perspectiveConfigV1";
+import type { WorkViewConfigV1Stored } from "@/lib/lifecycle/workViewsConfigV1";
+import { parseWorkViewsV1 } from "@/lib/lifecycle/workViewsConfigV1";
 import type { StageOperatingPlanV1 } from "@/lib/lifecycle/stageOperatingPlanV1";
 import { parseStageOperatingPlanV1 } from "@/lib/lifecycle/stageOperatingPlanV1";
 import type { EnrollmentManualTransitionPolicyV1 } from "@/lib/admin/enrollmentStatus/enrollmentStatusTransitionPolicy";
@@ -58,7 +60,8 @@ export type LifecycleBuilderProcessRecord = {
     /** Tracks and split rules — template-defined, stored as generic metadata. */
     tracks_v1?: ProcessTracksV1;
     /** Manual Change Enrollment Status transition policy. */
-    manual_status_transition_policy_v1?: EnrollmentManualTransitionPolicyV1;
+    /** Process-level operational Work Views (Configuration Runtime). */
+    work_views_v1?: WorkViewConfigV1Stored[];
     stages: LifecycleBuilderStageRecord[];
 };
 
@@ -150,6 +153,7 @@ export function parseLifecycleBuilderV1(raw: unknown): LifecycleBuilderV1 | null
         stages.sort((a, b) => a.sort_order - b.sort_order || a.label.localeCompare(b.label));
         const tracks_v1 = parseProcessTracksV1(row.tracks_v1) ?? undefined;
         const manualPolicy = parseEnrollmentManualTransitionPolicy(row.manual_status_transition_policy_v1);
+        const workViews = parseWorkViewsV1(row.work_views_v1);
         processes.push({
             id,
             key,
@@ -159,6 +163,7 @@ export function parseLifecycleBuilderV1(raw: unknown): LifecycleBuilderV1 | null
             is_active: row.is_active !== false,
             ...(tracks_v1 ? { tracks_v1 } : {}),
             manual_status_transition_policy_v1: manualPolicy,
+            ...(workViews ? { work_views_v1: workViews } : {}),
             stages,
         });
     }

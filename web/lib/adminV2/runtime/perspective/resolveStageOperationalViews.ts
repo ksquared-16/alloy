@@ -14,6 +14,7 @@ import {
     resolvePerspectivesForStage,
     type PerspectiveConfigV1Stored,
 } from "@/lib/lifecycle/perspectiveConfigV1";
+import { operationalPerspectivesFromWorkViews } from "@/lib/lifecycle/workViewsRuntimeConvergence";
 
 /** Load coerced operational view rows for a builder stage + synced queue lanes. */
 export function resolveStageOperationalViewsFromDepartmentMetadata(params: {
@@ -26,11 +27,20 @@ export function resolveStageOperationalViewsFromDepartmentMetadata(params: {
 
     const builder = lifecycleBuilderFromDepartmentMetadata(params.departmentMetadata);
     const process = activeLifecycleProcess(builder);
+    const laneKeys = deriveQueueKeysFromQueueDefinition(params.queueDefinition);
+
+    const savedWorkViews = process?.work_views_v1;
+    if (savedWorkViews?.length) {
+        const fromWorkViews = operationalPerspectivesFromWorkViews(savedWorkViews, laneKeys);
+        return laneKeys.length ?
+                coercePerspectivesV1ForLanes(fromWorkViews, laneKeys)
+            :   fromWorkViews;
+    }
+
     const stage = process?.stages.find((s) => s.key === stageKey && s.is_active);
     if (!stage) return [];
 
     const saved = resolvePerspectivesForStage(stage) ?? [];
-    const laneKeys = deriveQueueKeysFromQueueDefinition(params.queueDefinition);
     return laneKeys.length ? coercePerspectivesV1ForLanes(saved, laneKeys) : saved;
 }
 
@@ -40,6 +50,18 @@ export function resolveOperationalViewsForWorkUnit(params: {
     workUnitMetadata?: unknown;
     queueDefinition?: unknown;
 }): PerspectiveConfigV1Stored[] {
+    const builder = lifecycleBuilderFromDepartmentMetadata(params.departmentMetadata);
+    const process = activeLifecycleProcess(builder);
+    const laneKeys = deriveQueueKeysFromQueueDefinition(params.queueDefinition);
+
+    const savedWorkViews = process?.work_views_v1;
+    if (savedWorkViews?.length) {
+        const fromWorkViews = operationalPerspectivesFromWorkViews(savedWorkViews, laneKeys);
+        return laneKeys.length ?
+                coercePerspectivesV1ForLanes(fromWorkViews, laneKeys)
+            :   fromWorkViews;
+    }
+
     const stageKey = stageKeyFromLifecycleWorkUnitMetadata(params.workUnitMetadata ?? null);
     if (stageKey) {
         return resolveStageOperationalViewsFromDepartmentMetadata({
@@ -49,11 +71,8 @@ export function resolveOperationalViewsForWorkUnit(params: {
         });
     }
 
-    const laneKeys = deriveQueueKeysFromQueueDefinition(params.queueDefinition);
     if (!laneKeys.length) return [];
 
-    const builder = lifecycleBuilderFromDepartmentMetadata(params.departmentMetadata);
-    const process = activeLifecycleProcess(builder);
     if (!process) return [];
 
     const laneSet = new Set(laneKeys);
