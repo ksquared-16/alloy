@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>03 — Zone Editing + Card Composition</title>
+<link rel="stylesheet" href="_shared.css">
+<style>
+.workspace-split { display: flex; gap: 12px; }
+.editor-col { flex: 1; min-width: 0; }
+.inspector-col { width: 340px; flex-shrink: 0; }
+.card-grid-editor { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.card-grid-editor .card-preview { cursor: default; border: 2px solid transparent; }
+.card-grid-editor .card-preview.selected { border-color: var(--pine); }
+</style>
+</head>
+<body>
+<div class="mockup-frame">
+  <div class="mockup-label">03 — Zone Editing · Card Composition · Slot Configuration</div>
+  <div class="app-shell">
+    <div class="app-rail"><div class="rail-icon">⌂</div><div class="rail-icon">☰</div><div class="rail-spacer"></div><div class="rail-icon active">⚙</div></div>
+    <div class="config-rail">
+      <div class="config-rail-title">Configuration</div>
+      <div class="config-nav-item"><span class="icon">⚡</span> Processes</div>
+      <div class="config-nav-item active"><span class="icon">◫</span> Design Surfaces</div>
+      <div class="config-nav-item"><span class="icon">▤</span> Fields</div>
+    </div>
+    <div class="main-area">
+      <div class="context-bar">
+        <div class="context-title">Design Surfaces</div>
+        <div class="context-chips"><span class="chip">Queue Row</span><span class="chip active">Focus Panel</span><span class="chip">Dashboard</span></div>
+        <div class="context-actions"><span style="font-size:12px;color:var(--midnight-46);">Enrollment Summary · Summary mode</span></div>
+      </div>
+      <div class="workspace-grid">
+        <div class="config-queue" style="width:200px;">
+          <div class="queue-group-label">Focus Panel</div>
+          <div class="queue-item active">Enrollment Summary</div>
+          <div class="queue-item">Enrollment Work</div>
+        </div>
+        <div class="workspace-center">
+          <div class="tabs">
+            <div class="tab active">Zones</div>
+            <div class="tab">Cards</div>
+            <div class="tab">Preview</div>
+          </div>
+          <div class="workspace-split">
+            <div class="editor-col">
+              <div class="section-label">Zone: main (selected)</div>
+              <div class="zone-canvas selected" style="min-height:280px;">
+                <div class="zone-label">main · 6 cards · 2-col grid</div>
+                <div class="card-grid-editor">
+                  <div class="card-preview selected">
+                    <div class="card-preview-header"><div class="card-icon">✓</div><div class="card-preview-title">Readiness</div><div class="card-preview-status">Ready</div></div>
+                    <div class="card-preview-insight">Status archetype · Compact · Span 1</div>
+                  </div>
+                  <div class="card-preview">
+                    <div class="card-preview-header"><div class="card-icon">👤</div><div class="card-preview-title">Family</div></div>
+                    <div class="card-preview-insight">Profile archetype · Standard · Span 1</div>
+                  </div>
+                  <div class="card-preview">
+                    <div class="card-preview-header"><div class="card-icon">⚡</div><div class="card-preview-title">Current Work</div></div>
+                    <div class="card-preview-insight">Action archetype · Compact · Span 1</div>
+                  </div>
+                  <div class="card-preview">
+                    <div class="card-preview-header"><div class="card-icon">📋</div><div class="card-preview-title">Enrollment</div></div>
+                    <div class="card-preview-insight">Summary archetype · Standard · Span 1</div>
+                  </div>
+                </div>
+              </div>
+              <div style="margin-top:8px;display:flex;gap:8px;">
+                <div class="zone-canvas" style="flex:1;min-height:60px;"><div class="zone-label">summary_strip</div><span style="font-size:11px;color:var(--midnight-46);">1 card</span></div>
+                <div class="zone-canvas" style="flex:1;min-height:60px;"><div class="zone-label">right_rail</div><span style="font-size:11px;color:var(--midnight-46);">2 cards</span></div>
+              </div>
+            </div>
+            <div class="inspector-col">
+              <div class="panel">
+                <div class="panel-header pine-accent"><span class="panel-title">Card: Readiness</span></div>
+                <div class="panel-body">
+                  <div class="section-label">Composition</div>
+                  <div style="font-size:12px;margin-bottom:12px;">
+                    <div style="display:flex;justify-content:space-between;margin-bottom:4px;"><span>Archetype</span><strong>Status</strong></div>
+                    <div style="display:flex;justify-content:space-between;margin-bottom:4px;"><span>Card Type</span><strong>Readiness</strong></div>
+                    <div style="display:flex;justify-content:space-between;margin-bottom:4px;"><span>Density</span><strong>Compact</strong></div>
+                    <div style="display:flex;justify-content:space-between;"><span>Span</span><strong>1 column</strong></div>
+                  </div>
+                  <div class="section-label">Slots</div>
+                  <div class="slot-row selected">
+                    <span class="slot-name">status</span>
+                    <span class="slot-arrow">→</span>
+                    <span class="slot-renderer">Status</span>
+                    <span class="slot-inherited">ⓘ inherited</span>
+                  </div>
+                  <div class="slot-row">
+                    <span class="slot-name">summary</span>
+                    <span class="slot-arrow">→</span>
+                    <span class="slot-renderer">Text</span>
+                  </div>
+                  <div class="slot-row">
+                    <span class="slot-name">blockers</span>
+                    <span class="slot-arrow">→</span>
+                    <span class="slot-renderer">List</span>
+                  </div>
+                  <div class="slot-row">
+                    <span class="slot-name">primary_action</span>
+                    <span class="slot-arrow">→</span>
+                    <span class="slot-renderer">Action Button</span>
+                  </div>
+                  <div class="section-label" style="margin-top:12px;">Expansion</div>
+                  <div class="expansion-models">
+                    <div class="expansion-option selected"><input type="radio" checked disabled> Expand — show expanded slot depths inline</div>
+                    <div class="expansion-option"><input type="radio" disabled> Drill — focused subordinate detail</div>
+                    <div class="expansion-option"><input type="radio" disabled> Embedded Workspace</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="bos-rail" style="width:280px;">
+          <div class="bos-title">Slot Inspector</div>
+          <div class="section-label">Selected: status slot</div>
+          <div style="font-size:12px;margin-bottom:12px;">
+            <div style="margin-bottom:8px;"><strong>Data Source</strong><br>readiness.status_key → opportunity.status_key</div>
+            <div style="margin-bottom:8px;"><strong>Renderer</strong><br>Status</div>
+          </div>
+          <div class="section-label">Renderer Options</div>
+          <div class="renderer-grid">
+            <div class="renderer-option"><span class="r-icon">Aa</span>Text</div>
+            <div class="renderer-option selected"><span class="r-icon">◉</span>Status</div>
+            <div class="renderer-option"><span class="r-icon">🏷</span>Badge</div>
+            <div class="renderer-option"><span class="r-icon">📊</span>KPI</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

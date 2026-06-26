@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>06 — Mobile Adaptation</title>
+<link rel="stylesheet" href="_shared.css">
+</head>
+<body>
+<div class="mockup-frame">
+  <div class="mockup-label">06 — Mobile Adaptation · Director Snapshot (Viewpoint: Director)</div>
+  <div style="display:flex;gap:40px;padding:40px;justify-content:center;align-items:flex-start;">
+    <div>
+      <div class="section-label" style="text-align:center;margin-bottom:12px;">Mobile Design Surface · Director Snapshot</div>
+      <div class="mobile-frame">
+        <div class="mobile-status-bar">9:41 · North Campus</div>
+        <div class="mobile-content">
+          <div style="font-size:16px;font-weight:700;color:var(--midnight);margin-bottom:4px;">Good morning, Sarah</div>
+          <div style="font-size:12px;color:var(--midnight-46);margin-bottom:12px;">Director · North Campus · Today</div>
+          <div class="dash-kpi-strip" style="grid-template-columns:1fr 1fr;padding:0;gap:6px;margin-bottom:12px;">
+            <div class="kpi-tile" style="padding:8px;"><div class="kpi-value" style="font-size:18px;">142</div><div class="kpi-label">Active Leads</div></div>
+            <div class="kpi-tile" style="padding:8px;"><div class="kpi-value" style="font-size:18px;">23</div><div class="kpi-label">Tours Today</div></div>
+          </div>
+          <div class="card-preview" style="margin-bottom:8px;">
+            <div class="card-preview-header"><div class="card-icon">⚠</div><div class="card-preview-title">Attention</div><div class="card-preview-status" style="background:rgba(220,38,38,0.1);color:#dc2626;">3 items</div></div>
+            <div class="card-preview-insight">2 overdue follow-ups · 1 failed payment</div>
+          </div>
+          <div class="card-preview" style="margin-bottom:8px;">
+            <div class="card-preview-header"><div class="card-icon">📋</div><div class="card-preview-title">Today's Enrollments</div></div>
+            <div class="card-preview-insight">4 tours scheduled · 2 approvals pending</div>
+          </div>
+          <div class="card-preview">
+            <div class="card-preview-header"><div class="card-icon">📊</div><div class="card-preview-title">Weekly Snapshot</div></div>
+            <div class="card-preview-insight">87% conversion · 4.2d avg response</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div style="width:400px;">
+      <div class="section-label">Responsive Rules (platform-owned)</div>
+      <div class="panel">
+        <div class="panel-body" style="font-size:12px;">
+          <div style="margin-bottom:12px;">
+            <strong>Same primitives, different topology.</strong> Mobile Design Surfaces use the same Card Types, Slots, and Renderers — the platform applies responsive collapse rules.
+          </div>
+          <div style="margin-bottom:8px;"><strong>Zone collapse</strong><br>Multi-column zones → single column stack</div>
+          <div style="margin-bottom:8px;"><strong>Card span</strong><br>All cards → full-width (span: row)</div>
+          <div style="margin-bottom:8px;"><strong>Density</strong><br>Auto-select Compact density</div>
+          <div style="margin-bottom:8px;"><strong>KPI strip</strong><br>4-across → 2×2 grid</div>
+          <div style="margin-bottom:8px;"><strong>Viewpoint</strong><br>Director Viewpoint shows financial KPIs; Teacher Viewpoint hides them</div>
+          <div class="bos-suggestion" style="margin-top:12px;">Mobile surfaces are Design Surface category "Mobile" — not a separate app. Same Experience Builder, same publishing lifecycle.</div>
+        </div>
+      </div>
+      <div class="section-label" style="margin-top:16px;">Inheritance at Mobile scope</div>
+      <div class="arch-diagram">
+        <div class="arch-row"><span class="arch-tag">Platform</span> Mobile Blueprint</div>
+        <div class="arch-row"><span class="arch-tag">Industry</span> Childcare mobile defaults</div>
+        <div class="arch-row"><span class="arch-tag">Org</span> Published Director Snapshot</div>
+        <div class="arch-row highlight"><span class="arch-tag">Viewpoint</span> Director → show financial KPIs</div>
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

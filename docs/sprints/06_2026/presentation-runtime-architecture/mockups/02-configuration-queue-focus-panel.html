@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>02 — Configuration Queue + Focus Panel Category</title>
+<link rel="stylesheet" href="_shared.css">
+</head>
+<body>
+<div class="mockup-frame">
+  <div class="mockup-label">02 — Configuration Queue · Focus Panel Category Selected</div>
+  <div class="app-shell">
+    <div class="app-rail">
+      <div class="rail-icon">⌂</div><div class="rail-icon">☰</div><div class="rail-icon">💬</div>
+      <div class="rail-spacer"></div><div class="rail-icon active">⚙</div>
+    </div>
+    <div class="config-rail">
+      <div class="config-rail-title">Configuration</div>
+      <div class="config-nav-item"><span class="icon">⚡</span> Processes</div>
+      <div class="config-nav-item active"><span class="icon">◫</span> Design Surfaces</div>
+      <div class="config-nav-item"><span class="icon">▤</span> Fields</div>
+      <div class="config-nav-item"><span class="icon">◉</span> Statuses</div>
+      <div class="config-nav-item"><span class="icon">▶</span> Actions</div>
+      <div class="config-nav-item"><span class="icon">⟳</span> Automation</div>
+      <div class="config-nav-item"><span class="icon">📊</span> Operational Intelligence</div>
+      <div class="config-nav-item"><span class="icon">🔗</span> Integrations</div>
+      <div class="config-nav-item"><span class="icon">🔒</span> Security / Roles</div>
+    </div>
+    <div class="main-area">
+      <div class="context-bar">
+        <div class="context-title">Design Surfaces</div>
+        <div class="context-chips">
+          <span class="chip">Queue Row</span>
+          <span class="chip active">Focus Panel</span>
+          <span class="chip">Workspace</span>
+          <span class="chip">Dashboard</span>
+          <span class="chip">Document</span>
+          <span class="chip">Form</span>
+          <span class="chip more">+6 more</span>
+        </div>
+        <div class="context-actions">
+          <button class="btn btn-primary">+ Create Focus Panel</button>
+        </div>
+      </div>
+      <div class="workspace-grid">
+        <div class="config-queue">
+          <div class="queue-group-label">Published</div>
+          <div class="queue-item active">Enrollment Summary <span class="badge badge-published">v3</span></div>
+          <div class="queue-item">Enrollment Work <span class="badge badge-published">v2</span></div>
+          <div class="queue-item">Person Summary <span class="badge badge-published">v1</span></div>
+          <div class="queue-group-label">Draft</div>
+          <div class="queue-item">Enrollment Activity <span class="badge badge-draft">draft</span></div>
+          <div class="queue-item">Child Summary <span class="badge badge-draft">draft</span></div>
+          <div class="queue-group-label">Platform Defaults</div>
+          <div class="queue-item">Enrollment Summary (default) <span class="badge badge-published">system</span></div>
+          <div class="queue-item">Billing Focus Panel (default) <span class="badge badge-published">system</span></div>
+          <div class="queue-group-label">Retired</div>
+          <div class="queue-item">Legacy Drawer Layout <span class="badge badge-retired">retired</span></div>
+        </div>
+        <div class="list-column">
+          <div class="list-item active">
+            <div class="list-item-title">Enrollment Summary</div>
+            <div class="list-item-meta"><span class="status-pill status-published">Published v3</span> Opportunity · 3 assignments</div>
+          </div>
+          <div class="list-item">
+            <div class="list-item-title">Enrollment Work</div>
+            <div class="list-item-meta"><span class="status-pill status-published">Published v2</span> Opportunity · 2 assignments</div>
+          </div>
+          <div class="list-item">
+            <div class="list-item-title">Person Summary</div>
+            <div class="list-item-meta"><span class="status-pill status-published">Published v1</span> Person · 1 assignment</div>
+          </div>
+        </div>
+        <div class="workspace-center">
+          <div class="status-bar">
+            <span class="status-pill status-published">Published v3</span>
+            <span>Enrollment Summary · Focus Panel · Opportunity</span>
+            <span style="margin-left:auto;">Last edited 2 hours ago</span>
+          </div>
+          <div class="panel">
+            <div class="panel-header pine-accent">
+              <span class="panel-title">Architecture</span>
+              <span style="margin-left:auto;font-size:11px;color:var(--midnight-46);">Hybrid · 4 zones · 6 cards</span>
+            </div>
+            <div class="panel-body">
+              <div class="arch-diagram">
+                <div class="arch-row"><span class="arch-tag">Surface</span> Enrollment Summary</div>
+                <div class="arch-row highlight"><span class="arch-tag">Zone</span> main <span style="margin-left:auto;font-size:10px;color:var(--pine);">6 cards</span></div>
+                <div class="arch-row"><span class="indent">├─</span> <span class="arch-tag">Card</span> Readiness <span class="arch-tag" style="margin-left:4px;">Status</span></div>
+                <div class="arch-row"><span class="indent">├─</span> <span class="arch-tag">Card</span> Family <span class="arch-tag" style="margin-left:4px;">Profile</span></div>
+                <div class="arch-row"><span class="indent">├─</span> <span class="arch-tag">Card</span> Current Work <span class="arch-tag" style="margin-left:4px;">Action</span></div>
+                <div class="arch-row"><span class="indent">├─</span> <span class="arch-tag">Card</span> Timeline <span class="arch-tag" style="margin-left:4px;">Timeline</span></div>
+                <div class="arch-row"><span class="indent">├─</span> <span class="arch-tag">Card</span> Enrollment <span class="arch-tag" style="margin-left:4px;">Summary</span></div>
+                <div class="arch-row"><span class="indent">└─</span> <span class="arch-tag">Card</span> Documents <span class="arch-tag" style="margin-left:4px;">Collection</span></div>
+              </div>
+            </div>
+          </div>
+          <div class="fp-preview">
+            <div class="fp-header">
+              <div class="fp-subject">Hayes Family · Enrollment</div>
+              <div class="fp-mission">Review lead — New Leads perspective</div>
+            </div>
+            <div class="fp-modes">
+              <div class="fp-mode active">Summary</div>
+              <div class="fp-mode">Work</div>
+              <div class="fp-mode">Activity</div>
+            </div>
+            <div class="fp-card-grid">
+              <div class="card-preview"><div class="card-preview-header"><div class="card-icon">✓</div><div class="card-preview-title">Readiness</div><div class="card-preview-status">Ready</div></div><div class="card-preview-insight">All required information collected.</div></div>
+              <div class="card-preview"><div class="card-preview-header"><div class="card-icon">👤</div><div class="card-preview-title">Family</div></div><div class="card-preview-insight">Chris & Claire Hayes · 2 children</div></div>
+              <div class="card-preview"><div class="card-preview-header"><div class="card-icon">⚡</div><div class="card-preview-title">Current Work</div></div><div class="card-preview-insight">Schedule tour — due today</div></div>
+              <div class="card-preview"><div class="card-preview-header"><div class="card-icon">📋</div><div class="card-preview-title">Enrollment</div></div><div class="card-preview-insight">North Campus · Full-time · Aug 2026</div></div>
+            </div>
+          </div>
+          <div style="margin-top:12px;display:flex;gap:8px;">
+            <button class="btn btn-secondary">Preview</button>
+            <button class="btn btn-secondary">Version History</button>
+            <button class="btn btn-primary">Publish</button>
+          </div>
+        </div>
+        <div class="bos-rail">
+          <div class="bos-title">BOS Assist</div>
+          <div class="bos-suggestion">Enrollment Summary uses 6 Card Types across the main zone. Readiness and Current Work cards drive operator action — consider placing them in the Attention tier.</div>
+          <div class="bos-warning">⚠ 1 Slot uses inherited Renderer from Platform Default: <strong>billing.balance → Currency</strong>. Override to customize.</div>
+          <div class="bos-suggestion">This surface is assigned to 3 Work Views: New Leads, Active Tours, Waitlist.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>
