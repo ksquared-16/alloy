@@ -336,7 +336,7 @@ export function BusinessProcessActionsSetupWorkspace({
                                 : new Set(),
                         })
                     }
-                    className="h-4 w-4 rounded border-alloy-forge/20 accent-alloy-pine"
+                    className="config-mode-control h-4 w-4 rounded border-alloy-stone/40"
                     data-testid={`business-process-action-enabled-${row.base_action_key}`}
                 />
                 Enabled
@@ -371,7 +371,7 @@ export function BusinessProcessActionsSetupWorkspace({
                                 checked={row.placement_ids.has(p.id)}
                                 disabled={!row.enabled || !row.saveable}
                                 onChange={() => onTogglePlacement(p.id)}
-                                className="h-4 w-4 rounded border-alloy-forge/20 accent-alloy-pine"
+                                className="h-4 w-4 rounded border-alloy-stone/40 config-mode-control"
                                 data-testid={`business-process-action-placement-${row.base_action_key}-${p.id}`}
                             />
                             {p.label}
@@ -395,7 +395,7 @@ export function BusinessProcessActionsSetupWorkspace({
                                 stage_restrictions: e.target.checked ? new Set() : row.stage_restrictions,
                             })
                         }
-                        className="h-4 w-4 rounded border-alloy-forge/20 accent-alloy-pine"
+                        className="config-mode-control h-4 w-4 rounded border-alloy-stone/40"
                     />
                     Available in all stages
                 </label>
@@ -410,7 +410,7 @@ export function BusinessProcessActionsSetupWorkspace({
                                     type="checkbox"
                                     checked={row.stage_restrictions.has(stage)}
                                     onChange={() => onToggleStageRestriction(stage)}
-                                    className="h-4 w-4 rounded border-alloy-forge/20 accent-alloy-pine"
+                                    className="h-4 w-4 rounded border-alloy-stone/40 config-mode-control"
                                 />
                                 {LIFECYCLE_STAGE_LABELS[stage] ?? stage}
                             </label>

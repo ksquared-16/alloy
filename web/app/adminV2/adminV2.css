@@ -2733,6 +2733,8 @@ html[data-adminv2-workspace-shell="v2"] [data-adminv2-bos-rail-overlay="true"] [
 
 .adminv2-sidebar-config-link--active {
   box-shadow: inset 3px 0 0 #00a283;
+  background: rgba(0, 162, 131, 0.14) !important;
+  color: #7ee8cc !important;
 }
 
 .adminv2-sidebar-config-list .adminv2-sidebar-config-link--active {

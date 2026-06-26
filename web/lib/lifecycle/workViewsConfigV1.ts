@@ -35,6 +35,8 @@ export type WorkViewConfigV1Stored = {
     mission?: string;
     filters_v1?: WorkViewFilterV1[];
     sort_v1?: WorkViewSortV1;
+    /** Optional multi-sort rules; first rule mirrors `sort_v1` for runtime. */
+    sorts_v1?: WorkViewSortV1[];
     visible_in_runtime?: boolean;
     display_order?: number;
     queue_layout_id?: string;
@@ -93,6 +95,13 @@ export function parseWorkViewRow(raw: unknown): WorkViewConfigV1Stored | null {
     }
     const sort = parseSort(raw.sort_v1);
     if (sort) stored.sort_v1 = sort;
+    if (Array.isArray(raw.sorts_v1)) {
+        const sorts = raw.sorts_v1.map(parseSort).filter(Boolean) as WorkViewSortV1[];
+        if (sorts.length) {
+            stored.sorts_v1 = sorts;
+            if (!stored.sort_v1) stored.sort_v1 = sorts[0];
+        }
+    }
     if (typeof raw.visible_in_runtime === "boolean") stored.visible_in_runtime = raw.visible_in_runtime;
     if (typeof raw.display_order === "number" && Number.isFinite(raw.display_order)) {
         stored.display_order = Math.max(1, Math.floor(raw.display_order));
@@ -138,6 +147,7 @@ export function createEmptyWorkViewDraft(label = "New work view"): WorkViewConfi
         mission: "",
         filters_v1: [{ field_key: "tour_date", operator: "equals", value: "today" }],
         sort_v1: { field_key: "updated_at", direction: "desc" },
+        sorts_v1: [{ field_key: "updated_at", direction: "desc" }],
         visible_in_runtime: true,
         display_order: 1,
     };

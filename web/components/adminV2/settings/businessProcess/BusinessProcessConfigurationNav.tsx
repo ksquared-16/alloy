@@ -1,6 +1,13 @@
 "use client";
 
 import {
+    GitBranch,
+    HeartPulse,
+    Layers,
+    LayoutGrid,
+    Zap,
+} from "lucide-react";
+import {
     BUSINESS_PROCESS_NAV_ACTIONS,
     BUSINESS_PROCESS_NAV_AUTOMATION,
     BUSINESS_PROCESS_NAV_HEALTH,
@@ -13,12 +20,20 @@ import {
     type ConfigurationProcessQueueSection,
 } from "@/lib/adminV2/configurationModeDoctrine";
 
-const SECTION_META: Record<ConfigurationProcessQueueSection, { label: string; icon: string }> = {
-    stages: { label: BUSINESS_PROCESS_NAV_STAGES, icon: "◎" },
-    "work-views": { label: BUSINESS_PROCESS_NAV_WORK_VIEWS, icon: "◆" },
-    actions: { label: BUSINESS_PROCESS_NAV_ACTIONS, icon: "⚡" },
-    automation: { label: BUSINESS_PROCESS_NAV_AUTOMATION, icon: "↻" },
-    health: { label: BUSINESS_PROCESS_NAV_HEALTH, icon: "✓" },
+const SECTION_ICONS: Record<ConfigurationProcessQueueSection, typeof Layers> = {
+    stages: Layers,
+    "work-views": LayoutGrid,
+    actions: Zap,
+    automation: GitBranch,
+    health: HeartPulse,
+};
+
+const SECTION_META: Record<ConfigurationProcessQueueSection, { label: string }> = {
+    stages: { label: BUSINESS_PROCESS_NAV_STAGES },
+    "work-views": { label: BUSINESS_PROCESS_NAV_WORK_VIEWS },
+    actions: { label: BUSINESS_PROCESS_NAV_ACTIONS },
+    automation: { label: BUSINESS_PROCESS_NAV_AUTOMATION },
+    health: { label: BUSINESS_PROCESS_NAV_HEALTH },
 };
 
 export default function BusinessProcessConfigurationNav({
@@ -35,13 +50,14 @@ export default function BusinessProcessConfigurationNav({
             data-testid="business-process-workspace-nav"
         >
             {CONFIGURATION_PROCESS_QUEUE_GROUPS.map((group) => (
-                <div key={group.label} className="mb-3 last:mb-0">
-                    <p className="px-2 pb-1 text-[10px] font-semibold uppercase tracking-wide text-alloy-midnight/40">
+                <div key={group.label} className="mb-2 last:mb-0">
+                    <p className="px-2 pb-1 text-[10px] font-semibold uppercase tracking-wide text-alloy-forge/60">
                         {group.label}
                     </p>
                     <div className="space-y-0.5">
                         {group.sections.map((sectionId) => {
                             const section = SECTION_META[sectionId];
+                            const Icon = SECTION_ICONS[sectionId];
                             const active = sectionId === activeSection;
                             return (
                                 <button
@@ -52,9 +68,7 @@ export default function BusinessProcessConfigurationNav({
                                     data-testid={`business-process-nav-${sectionId}`}
                                     aria-current={active ? "page" : undefined}
                                 >
-                                    <span className="text-sm" aria-hidden>
-                                        {section.icon}
-                                    </span>
+                                    <Icon size={15} strokeWidth={1.75} className="shrink-0" aria-hidden />
                                     <span className={`text-sm font-semibold ${active ? "text-alloy-pine" : ""}`}>
                                         {section.label}
                                     </span>

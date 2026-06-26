@@ -263,7 +263,6 @@ export default function LifecycleStageWorkspace({
                     summary={BUSINESS_PROCESS_SECTION_WHO_BELONGS_SUMMARY}
                     dirty={membershipDirty || rollupDirty}
                     insightChips={savedStatusCount > 0 ? [`${savedStatusCount} statuses`] : undefined}
-                    defaultOpen
                 >
                     {stageKey.trim() ?
                         <div className="space-y-4">

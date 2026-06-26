@@ -370,7 +370,7 @@ function SidebarNav({
             {collapsed ? (
                 <nav className="flex min-h-0 flex-1 flex-col px-1.5 pb-2" aria-label="Workspace navigation">
                     <div className="flex shrink-0 flex-col items-stretch gap-1">
-                        {homeLink}
+                        {!onSettings ? homeLink : null}
                         {onSettings ? null : (
                             <>
                                 {tasksLink}
@@ -388,11 +388,15 @@ function SidebarNav({
             ) : (
                 <div className="adminv2-sidebar-body flex min-h-0 flex-1 flex-col gap-2 overflow-hidden px-2 pb-3 text-[13px]">
                     <div className="shrink-0 space-y-1 pt-1">
-                        {homeLink}
-                        {tasksLink}
-                        {inboxLink}
-                        {analyticsLink}
-                        {processingLink}
+                        {!onSettings ? homeLink : null}
+                        {!onSettings ?
+                            <>
+                                {tasksLink}
+                                {inboxLink}
+                                {analyticsLink}
+                                {processingLink}
+                            </>
+                        :   null}
                     </div>
                     <div className="min-h-0 flex-1 overflow-y-auto">{onSettings ? <SidebarConfigurationModeNav collapsed={false} /> : lifecycleNavExpanded}</div>
                     <div className="adminv2-sidebar-footer shrink-0 border-t pt-2">

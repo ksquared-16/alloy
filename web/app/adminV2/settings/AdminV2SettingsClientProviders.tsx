@@ -77,7 +77,7 @@ function AdminV2SettingsClientProvidersInner({
         <AdminAuthProvider userEmail={safeEmail} userId={safeUserId} orgId={safeOrgId} role={safeRole} roleKeys={safeRoleKeys}>
             <EntityLabelsProvider initialLabels={labels}>
                 <div className="config-runtime-shell flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-white">
-                    <div className="shrink-0 border-b border-alloy-stone/40 bg-white px-4 py-2 sm:px-5">
+                    <div className="shrink-0 border-b border-alloy-stone/40 bg-white px-4 py-1.5 sm:px-5">
                         <SettingsHierarchyBreadcrumb />
                     </div>
                     <div className="flex min-h-0 flex-1 overflow-hidden">

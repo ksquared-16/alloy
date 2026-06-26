@@ -98,9 +98,17 @@ describe("Configuration Runtime core interaction", () => {
         );
     });
 
-    it("work views use two-column editor layout", () => {
+    it("settings rail includes Home entry in configuration mode", () => {
+        const nav = read("app/adminV2/components/SidebarConfigurationModeNav.tsx");
+        expect(nav).toContain('data-testid="config-mode-nav-home"');
+        expect(nav).toContain("configurationModeNavLucideIcon");
+    });
+
+    it("work views use condensed single-column editor with presentation below sort", () => {
         const card = read("components/adminV2/settings/businessProcess/WorkViewProcessEditorCard.tsx");
-        expect(card).toContain("lg:grid-cols-[minmax(0,1fr)_16rem]");
+        expect(card).toContain("WorkViewSortRulesEditor");
+        expect(card).not.toContain("lg:grid-cols-[minmax(0,1fr)_16rem]");
+        expect(card).toContain("LayoutAssignmentCard");
     });
 
     it("ConfigurationModeShell is reusable beyond Processes", () => {

@@ -59,8 +59,8 @@ const LifecycleStageOperatingPlanEditor = forwardRef<
             setSelectedWorkKey(null);
             return;
         }
-        if (!selectedWorkKey || !draft.work_templates.some((work) => work.template_key === selectedWorkKey)) {
-            setSelectedWorkKey(draft.work_templates[0]!.template_key);
+        if (selectedWorkKey && !draft.work_templates.some((work) => work.template_key === selectedWorkKey)) {
+            setSelectedWorkKey(null);
         }
     }, [draft.work_templates, selectedWorkKey]);
 
@@ -124,7 +124,7 @@ const LifecycleStageOperatingPlanEditor = forwardRef<
                 className="rounded-lg border border-alloy-forge/10 bg-white"
                 data-testid="stage-operating-plan-work-section"
             >
-                <details open className="group" data-testid="stage-operating-plan-work-items-collapsible">
+                <details className="group" data-testid="stage-operating-plan-work-items-collapsible">
                     <summary className="flex cursor-pointer list-none items-center justify-between gap-2 px-3 py-2 [&::-webkit-details-marker]:hidden">
                         <span className="text-[11px] font-semibold text-alloy-midnight/75">
                             Work items ({draft.work_templates.length})
