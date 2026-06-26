@@ -12,6 +12,8 @@ For behavior-changing work, include **`docs/platform/governance/design-and-opera
 
 **Runtime Specification (read before building any operational domain):** The synthesis of all interaction/visual doctrine into one implementation-ready spec is **`platform/operator/alloy-runtime-specification.md`**. *The Runtime Specification is the implementation bridge between doctrine and visual mockups* — it freezes behavior; mockups express it; implementation expresses the mockups.
 
+**Presentation Runtime (unifying presentation architecture):** How every operator surface — queue row, Focus Panel, dashboard, document, POS, portal — becomes one **Design Surface** authored in one **Experience Builder**, built renderer-first on three axes (composition: Design Surface → Zone → Card → Slot → Renderer; selection: Perspective; audience: Viewpoint), with Analytics as a Dashboard category, is defined in **`platform/operator/presentation-runtime-doctrine.md`** (design stage). Full sprint: `sprints/06_2026/presentation-runtime-architecture/`.
+
 ---
 
 ## What Alloy is
@@ -66,7 +68,8 @@ Start here: **`platform/foundation/system-overview.md`**
 28. `platform/operator/drawer-system.md`
 29. `platform/operator/operational-action-doctrine.md` — **Operational Actions** (status via action pipeline; Manage/rail catalog alignment; invariant example)
 30. `platform/operator/experience-builder-doctrine.md` — LayoutDoc, builder, queue v3, actions/widgets
-31. `platform/operator/business-process-layout-assignments.md` — BP stage layout routing
+31. `platform/operator/presentation-runtime-doctrine.md` — **Presentation Runtime** (unifying umbrella: Design Surfaces, Experience Builder, renderer-first model, three axes — composition/Perspective/Viewpoint, Analytics-as-Dashboard, ownership + lifecycle; design stage)
+32. `platform/operator/business-process-layout-assignments.md` — BP stage layout routing
 
 ### 4. Platform modules (load when touching area)
 

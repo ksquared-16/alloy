@@ -7,6 +7,8 @@
 
 This document is the **platform entry point** for the Universal Card System. The sprint doc remains the authoritative design freeze; promote sections into [`alloy-runtime-specification.md`](./alloy-runtime-specification.md) Part 7–8 only after checklist approval.
 
+**Unifying umbrella:** The Card sits inside the broader **Presentation Runtime** — see [`presentation-runtime-doctrine.md`](./presentation-runtime-doctrine.md). Note its renderer-first conclusion: the Card is a mid-level composite, while the **Renderer** is the smallest reusable presentation primitive shared across cards, queue rows, dashboards, documents, and POS.
+
 ---
 
 ## What a card is
