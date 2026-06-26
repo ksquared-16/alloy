@@ -1706,7 +1706,7 @@ export default function LifecycleActivationBoard({
                             : processSection === "health" ?
                                 <BusinessProcessHealthListColumn
                                     runtimeSummary={runtimeSummary}
-                                    processLabel={builderProcess?.label ?? lifecycleName ?? "This process"}
+                                    processLabel={builderProcess?.name ?? lifecycleName ?? "This process"}
                                 />
                             :   null
                         }

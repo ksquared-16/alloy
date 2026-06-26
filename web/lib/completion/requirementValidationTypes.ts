@@ -106,6 +106,7 @@ export type CompletionRelatedContext = {
 export type InquiryChildCompletionSnapshot = {
     id?: string;
     person_id?: string | null;
+    customer_member_id?: string | null;
     first_name?: string | null;
     last_name?: string | null;
     location_id?: string | null;
@@ -114,6 +115,15 @@ export type InquiryChildCompletionSnapshot = {
     desired_schedule_type?: string | null;
     desired_start_date?: string | null;
     outcome_status_key?: string | null;
+    /** Profile fields — hydrated from customer_member when available. */
+    dob?: string | null;
+    date_of_birth?: string | null;
+    preferred_name?: string | null;
+    gender?: string | null;
+    allergies?: string | null;
+    medical_notes?: string | null;
+    special_instructions?: string | null;
+    custom_fields?: Record<string, unknown> | null;
 };
 
 export const COMPLETION_REQUIREMENT_VALIDATION_ERROR = "Completion requirements not met";

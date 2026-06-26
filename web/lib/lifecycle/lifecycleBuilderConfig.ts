@@ -60,6 +60,7 @@ export type LifecycleBuilderProcessRecord = {
     /** Tracks and split rules — template-defined, stored as generic metadata. */
     tracks_v1?: ProcessTracksV1;
     /** Manual Change Enrollment Status transition policy. */
+    manual_status_transition_policy_v1?: EnrollmentManualTransitionPolicyV1;
     /** Process-level operational Work Views (Configuration Runtime). */
     work_views_v1?: WorkViewConfigV1Stored[];
     stages: LifecycleBuilderStageRecord[];
@@ -162,7 +163,7 @@ export function parseLifecycleBuilderV1(raw: unknown): LifecycleBuilderV1 | null
             sort_order: typeof row.sort_order === "number" ? row.sort_order : processes.length,
             is_active: row.is_active !== false,
             ...(tracks_v1 ? { tracks_v1 } : {}),
-            manual_status_transition_policy_v1: manualPolicy,
+            ...(manualPolicy ? { manual_status_transition_policy_v1: manualPolicy } : {}),
             ...(workViews ? { work_views_v1: workViews } : {}),
             stages,
         });

@@ -272,7 +272,7 @@ export function computeAlloyOsFocusPanelBounds(
         sidebarRight,
         bosOverlayLeft: params.bosOverlayLeft ?? naturalBosLeft,
         effectiveBosOverlayLeft: params.bosOverlayLeft ?? naturalBosLeft,
-        effectiveBosOverlayWidth: bosOverlayWidth ?? params.bosOverlayWidth,
+        effectiveBosOverlayWidth: bosOverlayWidth ?? params.bosOverlayWidth ?? null,
         backdropLeft: sidebarRight,
         availableLeft,
         availableRight: bandRight,
