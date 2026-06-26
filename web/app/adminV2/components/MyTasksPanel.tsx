@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ListTodo } from "lucide-react";
 
 import { useAdminAuth } from "@/contexts/AdminAuthContext";
@@ -19,7 +19,19 @@ import {
     ADMIN_V2_OPPORTUNITY_OPERATIONAL_TASKS_REFRESH,
 } from "@/lib/adminV2/opportunityDrawerTaskEvents";
 import { formatTaskAssistClientError } from "@/lib/agent/taskAssist/taskAssistClientErrorMessages";
-import { operationalTaskDueToLocalInput } from "@/lib/agent/taskAssist/formatOperationalTaskSourceLabel";
+import {
+    formatOperationalTaskDueDisplay,
+    operationalTaskDueToLocalInput,
+} from "@/lib/agent/taskAssist/formatOperationalTaskSourceLabel";
+import { normalizeOperationalTaskTitleDisplay } from "@/lib/agent/taskAssist/normalizeOperationalTaskTitleDisplay";
+import { operationalTaskUrgencyBadge } from "@/lib/agent/taskAssist/taskAssistOperationalUrgency";
+import {
+    deriveWorkItemsProcessGroups,
+    filterTasksByProcessGroup,
+    WORK_ITEMS_ALL_GROUP_KEY,
+    type WorkItemsProcessGroup,
+    type WorkItemsProcessGroupKey,
+} from "@/lib/agent/taskAssist/myTasksProcessGroups";
 import {
     buildOperationalTaskBody,
     createOperationalTask,
@@ -58,10 +70,28 @@ const FILTERS: { key: OperationalTaskWorkspaceFilter; label: string }[] = [
     { key: "completed", label: "Completed" },
 ];
 
+// Filter rail = canonical operational section nav (matches Communications child tabs):
+// subtle group container, active reads as a selected view (juniper-on-white), not a CTA.
+const FILTER_RAIL_CLASS =
+    "inline-flex flex-wrap items-center gap-0.5 rounded-lg bg-alloy-stone/[0.04] p-0.5 ring-1 ring-alloy-stone/12";
 const FILTER_TAB_ACTIVE =
-    "border-alloy-midnight/25 bg-alloy-midnight text-white shadow-sm";
+    "rounded-md bg-white text-alloy-juniper shadow-[0_1px_2px_rgba(15,23,42,0.06)] ring-1 ring-alloy-juniper/22";
 const FILTER_TAB_IDLE =
-    "border-alloy-stone/22 bg-white text-alloy-midnight/75 hover:border-alloy-stone/35 hover:bg-alloy-stone/[0.04]";
+    "rounded-md text-alloy-midnight/55 hover:bg-alloy-stone/[0.06] hover:text-alloy-midnight/80";
+
+/** Resolve the queue header label for the active process / stage rail selection. */
+function resolveActiveProcessLabel(
+    groups: WorkItemsProcessGroup[],
+    activeKey: WorkItemsProcessGroupKey,
+): string {
+    if (activeKey === WORK_ITEMS_ALL_GROUP_KEY) return "All work";
+    for (const group of groups) {
+        if (group.key === activeKey) return group.label;
+        const stage = group.stages.find((s) => s.key === activeKey);
+        if (stage) return `${group.label} · ${stage.label}`;
+    }
+    return "All work";
+}
 
 function MyTasksLoadingState() {
     return (
@@ -98,9 +128,11 @@ export type MyTasksPanelProps = {
     onClose?: () => void;
     /** Modal header summary — current filter result count. */
     onFilterCountChange?: (count: number) => void;
+    /** Bump to open the create form from an external trigger (modal header "New task"). */
+    requestCreateNonce?: number;
 };
 
-export default function MyTasksPanel({ compact = false, onClose, onFilterCountChange }: MyTasksPanelProps) {
+export default function MyTasksPanel({ compact = false, onClose, onFilterCountChange, requestCreateNonce = 0 }: MyTasksPanelProps) {
     const workEnabled = isOperationalWorkV1Enabled();
     const { userId } = useAdminAuth();
     const { labels: entityLabels } = useEntityLabelsOptional();
@@ -123,6 +155,10 @@ export default function MyTasksPanel({ compact = false, onClose, onFilterCountCh
 
     const [filter, setFilter] = useState<OperationalTaskWorkspaceFilter>("open");
     const [searchQuery, setSearchQuery] = useState("");
+    // Two-pane (modal) workspace: which queue row is open in the right detail pane.
+    const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
+    // Business Process → Stage doctrine: selected process / stage rail key (modal only).
+    const [processGroup, setProcessGroup] = useState<WorkItemsProcessGroupKey>(WORK_ITEMS_ALL_GROUP_KEY);
     const [tasks, setTasks] = useState<MyTasksTaskRow[]>(
         () => getCachedWorkspaceOperationalTasks("open") ?? []
     );
@@ -160,6 +196,14 @@ export default function MyTasksPanel({ compact = false, onClose, onFilterCountCh
         resetCreateForm();
         setCreateOpen(true);
     }, [resetCreateForm]);
+
+    // External "New task" trigger (modal header). Ref avoids re-firing when the create
+    // callback identity changes; only a nonce bump opens the form.
+    const openCreateFormRef = useRef(openCreateForm);
+    openCreateFormRef.current = openCreateForm;
+    useEffect(() => {
+        if (requestCreateNonce > 0) openCreateFormRef.current();
+    }, [requestCreateNonce]);
 
     const load = useCallback(async () => {
         if (!workEnabled) return;
@@ -453,161 +497,377 @@ export default function MyTasksPanel({ compact = false, onClose, onFilterCountCh
         return <p className="text-sm text-alloy-midnight/70">Operational work is not enabled.</p>;
     }
 
-    const listRegionClass = compact ? "min-h-0 flex-1 overflow-y-auto pr-0.5" : "";
+    const activeFilterLabel = FILTERS.find((f) => f.key === filter)?.label ?? "Open";
+    // Process rail (modal): Business Process → Stage groups derived from real task metadata
+    // (department_id / lifecycle_stage_key). Tasks without Business Process metadata fall
+    // into General / Cross-process. See myTasksProcessGroups.ts for the doctrine + label gap.
+    const processGroups = deriveWorkItemsProcessGroups(visibleTasks);
+    const isValidProcessSelection =
+        processGroup === WORK_ITEMS_ALL_GROUP_KEY ||
+        processGroups.some((g) => g.key === processGroup || g.stages.some((s) => s.key === processGroup));
+    const activeProcessGroup = isValidProcessSelection ? processGroup : WORK_ITEMS_ALL_GROUP_KEY;
+    const processTasks = filterTasksByProcessGroup(visibleTasks, activeProcessGroup);
+    const activeProcessLabel = resolveActiveProcessLabel(processGroups, activeProcessGroup);
+    // Selection is scoped to the visible (server-filtered) set; detail clears when the
+    // selected item leaves the current process/filter.
+    const selectedTask = visibleTasks.find((t) => t.id === selectedTaskId) ?? null;
 
-    return (
+    const renderTaskCard = (t: MyTasksTaskRow) => {
+        const mode =
+            editingId === t.id ? "edit"
+            : rescheduleId === t.id ? "reschedule"
+            : outcomeTaskId === t.id ? "outcome"
+            : "view";
+        return (
+            <MyTasksTaskCard
+                key={t.id}
+                task={t}
+                mode={mode}
+                busy={actionId === t.id}
+                canOpenRecord={
+                    t.entity_type === "opportunities" &&
+                    Boolean(t.entity_id?.trim()) &&
+                    adminDrawer != null
+                }
+                presentation={presentation}
+                entityLabels={entityLabels}
+                editTitle={editTitle}
+                editDue={editDue}
+                editNotes={editNotes}
+                editAssignedToUserId={editAssignedToUserId}
+                onEditTitleChange={setEditTitle}
+                onEditDueChange={setEditDue}
+                onEditNotesChange={setEditNotes}
+                onEditAssignedToUserIdChange={setEditAssignedToUserId}
+                onComplete={() => void onCompleteTask(t)}
+                onDismiss={() => void onPatchStatus(t.id, "canceled")}
+                onStartEdit={() => startEdit(t)}
+                onStartReschedule={() => startReschedule(t)}
+                onSaveEdit={() => void saveEdit()}
+                onSaveReschedule={() => void saveReschedule()}
+                onCancelForm={clearForms}
+                onOpenRecord={() => onOpenRecord(t)}
+                outcomeWorkTitle={outcomeContext?.work_title ?? t.title}
+                outcomeOptions={outcomeTaskId === t.id ? outcomeOptions : undefined}
+                onSelectOutcome={(key) => void onSelectOutcome(key)}
+            />
+        );
+    };
+
+    const filterRail = (
+        <div className={FILTER_RAIL_CLASS} role="tablist" aria-label="Task filters">
+            {FILTERS.map((f) => (
+                <button
+                    key={f.key}
+                    type="button"
+                    role="tab"
+                    aria-selected={filter === f.key}
+                    onClick={() => {
+                        setFilter(f.key);
+                        setSelectedTaskId(null);
+                        clearForms();
+                    }}
+                    className={`px-2.5 py-1 text-[11px] font-semibold transition-colors ${
+                        filter === f.key ? FILTER_TAB_ACTIVE : FILTER_TAB_IDLE
+                    }`}
+                >
+                    {f.label}
+                </button>
+            ))}
+        </div>
+    );
+
+    const searchInput = (
+        <div className="shrink-0" data-adminv2-tasks-search="true">
+            <input
+                type="search"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search tasks, records, households, children…"
+                className="w-full rounded-lg border border-alloy-stone/22 bg-white px-3 py-2 text-[12px] text-alloy-midnight/85 shadow-sm placeholder:text-alloy-midnight/40"
+                aria-label="Search tasks"
+            />
+        </div>
+    );
+
+    const createCard = (
+        <MyTasksCreateTaskCard
+            open={createOpen}
+            presentation={presentation}
+            linkMode={createLinkMode}
+            linkedRecord={createLinkedRecord}
+            contextPrefill={contextPrefill}
+            workspaceSiteId={selectedSiteId}
+            title={newTitle}
+            due={newDue}
+            notes={newNotes}
+            assignedToUserId={newAssignedToUserId}
+            busy={createBusy}
+            onLinkModeChange={setCreateLinkMode}
+            onLinkedRecordChange={setCreateLinkedRecord}
+            onTitleChange={setNewTitle}
+            onDueChange={setNewDue}
+            onNotesChange={setNewNotes}
+            onAssignedToUserIdChange={setNewAssignedToUserId}
+            onCreate={() => void onCreateTask()}
+            onCancel={() => setCreateOpen(false)}
+        />
+    );
+
+    const errorBanner = error ? (
         <div
-            className={`flex flex-col ${compact ? "min-h-0 flex-1 gap-3" : "gap-4"}`}
-            data-adminv2-tasks-panel="true"
+            className="shrink-0 rounded-lg border border-red-200/80 bg-red-50/90 px-3 py-2 text-[12px] font-medium text-red-900/90"
+            role="alert"
+            data-adminv2-tasks-error="true"
         >
-            {!compact ? (
+            {error}
+        </div>
+    ) : null;
+
+    const emptyState = (
+        <MyTasksEmptyState
+            message={
+                searchQuery.trim() ? "No tasks match your search."
+                : siteScopedTasks.length === 0 && tasks.length > 0 ?
+                    "No tasks for this site."
+                :   emptyLabel
+            }
+            helper={
+                searchQuery.trim() ?
+                    "Try a different name, household, or child."
+                :   `Create a general task or link one to a ${opportunityEntitySingular.toLowerCase()}.`
+            }
+        />
+    );
+
+    const queueHeader = (
+        <div className="flex items-baseline justify-between px-0.5 pb-1.5" data-adminv2-tasks-queue-header="true">
+            <h3 className="text-[13px] font-semibold text-alloy-midnight">{activeFilterLabel}</h3>
+            <span className="text-[11px] tabular-nums text-alloy-midnight/45">
+                {visibleTasks.length} item{visibleTasks.length === 1 ? "" : "s"}
+            </span>
+        </div>
+    );
+
+    // Standalone page (/adminV2/tasks): single-column list with inline cards.
+    if (!compact) {
+        return (
+            <div className="flex flex-col gap-4" data-adminv2-tasks-panel="true">
                 <header>
                     <h1 className="text-xl font-semibold tracking-tight text-alloy-midnight">My tasks</h1>
                     <p className="mt-0.5 text-[12px] text-alloy-midnight/55">
                         Follow-ups and reminders linked to {opportunityEntitySingular.toLowerCase()}s in your org.
                     </p>
                 </header>
-            ) : null}
 
-            <div
-                className={`flex shrink-0 flex-wrap items-center justify-between gap-2 ${compact ? "" : "rounded-xl border border-alloy-stone/15 bg-white p-2.5 shadow-sm"}`}
-                data-adminv2-tasks-toolbar="true"
-            >
-                <div className="flex flex-wrap gap-1.5" role="tablist" aria-label="Task filters">
-                    {FILTERS.map((f) => (
-                        <button
-                            key={f.key}
-                            type="button"
-                            role="tab"
-                            aria-selected={filter === f.key}
-                            onClick={() => {
-                                setFilter(f.key);
-                                clearForms();
-                            }}
-                            className={`rounded-full border px-3 py-1 text-[11px] font-semibold transition-colors ${
-                                filter === f.key ? FILTER_TAB_ACTIVE : FILTER_TAB_IDLE
-                            }`}
-                        >
-                            {f.label}
-                        </button>
-                    ))}
-                </div>
-                <button
-                    type="button"
-                    data-adminv2-new-task="true"
-                    className="rounded-lg border border-alloy-stone/25 bg-white px-3 py-1 text-[11px] font-semibold text-alloy-blue shadow-sm hover:bg-alloy-blue/[0.05]"
-                    onClick={() => (createOpen ? setCreateOpen(false) : openCreateForm())}
-                >
-                    New task
-                </button>
-            </div>
-
-            <div className="shrink-0" data-adminv2-tasks-search="true">
-                <input
-                    type="search"
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder="Search tasks, records, households, children…"
-                    className="w-full rounded-lg border border-alloy-stone/22 bg-white px-3 py-2 text-[12px] text-alloy-midnight/85 shadow-sm placeholder:text-alloy-midnight/40"
-                    aria-label="Search tasks"
-                />
-            </div>
-
-            <MyTasksCreateTaskCard
-                open={createOpen}
-                presentation={presentation}
-                linkMode={createLinkMode}
-                linkedRecord={createLinkedRecord}
-                contextPrefill={contextPrefill}
-                workspaceSiteId={selectedSiteId}
-                title={newTitle}
-                due={newDue}
-                notes={newNotes}
-                assignedToUserId={newAssignedToUserId}
-                busy={createBusy}
-                onLinkModeChange={setCreateLinkMode}
-                onLinkedRecordChange={setCreateLinkedRecord}
-                onTitleChange={setNewTitle}
-                onDueChange={setNewDue}
-                onNotesChange={setNewNotes}
-                onAssignedToUserIdChange={setNewAssignedToUserId}
-                onCreate={() => void onCreateTask()}
-                onCancel={() => setCreateOpen(false)}
-            />
-
-            {error ? (
                 <div
-                    className="shrink-0 rounded-lg border border-red-200/80 bg-red-50/90 px-3 py-2 text-[12px] font-medium text-red-900/90"
-                    role="alert"
-                    data-adminv2-tasks-error="true"
+                    className="flex shrink-0 flex-wrap items-center justify-between gap-2 rounded-xl border border-alloy-stone/15 bg-white p-2.5 shadow-sm"
+                    data-adminv2-tasks-toolbar="true"
                 >
-                    {error}
+                    {filterRail}
+                    <button
+                        type="button"
+                        data-adminv2-new-task="true"
+                        className="rounded-lg border border-alloy-stone/25 bg-white px-3 py-1 text-[11px] font-semibold text-alloy-juniper shadow-sm hover:bg-alloy-juniper/[0.05]"
+                        onClick={() => (createOpen ? setCreateOpen(false) : openCreateForm())}
+                    >
+                        New task
+                    </button>
                 </div>
-            ) : null}
 
-            <div className={listRegionClass}>
-                {loading && visibleTasks.length === 0 && tasks.length === 0 ? <MyTasksLoadingState /> : null}
-                {!loading && visibleTasks.length === 0 ? (
-                    <MyTasksEmptyState
-                        message={
-                            searchQuery.trim() ? "No tasks match your search."
-                            : siteScopedTasks.length === 0 && tasks.length > 0 ?
-                                "No tasks for this site."
-                            :   emptyLabel
-                        }
-                        helper={
-                            searchQuery.trim() ?
-                                "Try a different name, household, or child."
-                            :   `Create a general task or link one to a ${opportunityEntitySingular.toLowerCase()}.`
-                        }
-                    />
-                ) : null}
-                {visibleTasks.length > 0 ? (
-                    <ul className="space-y-2.5">
-                        {visibleTasks.map((t) => {
-                            const mode =
-                                editingId === t.id ? "edit"
-                                : rescheduleId === t.id ? "reschedule"
-                                : outcomeTaskId === t.id ? "outcome"
-                                : "view";
-                            return (
-                                <MyTasksTaskCard
-                                    key={t.id}
-                                    task={t}
-                                    mode={mode}
-                                    busy={actionId === t.id}
-                                    canOpenRecord={
-                                        t.entity_type === "opportunities" &&
-                                        Boolean(t.entity_id?.trim()) &&
-                                        adminDrawer != null
-                                    }
-                                    presentation={presentation}
-                                    entityLabels={entityLabels}
-                                    editTitle={editTitle}
-                                    editDue={editDue}
-                                    editNotes={editNotes}
-                                    editAssignedToUserId={editAssignedToUserId}
-                                    onEditTitleChange={setEditTitle}
-                                    onEditDueChange={setEditDue}
-                                    onEditNotesChange={setEditNotes}
-                                    onEditAssignedToUserIdChange={setEditAssignedToUserId}
-                                    onComplete={() => void onCompleteTask(t)}
-                                    onDismiss={() => void onPatchStatus(t.id, "canceled")}
-                                    onStartEdit={() => startEdit(t)}
-                                    onStartReschedule={() => startReschedule(t)}
-                                    onSaveEdit={() => void saveEdit()}
-                                    onSaveReschedule={() => void saveReschedule()}
-                                    onCancelForm={clearForms}
-                                    onOpenRecord={() => onOpenRecord(t)}
-                                    outcomeWorkTitle={outcomeContext?.work_title ?? t.title}
-                                    outcomeOptions={outcomeTaskId === t.id ? outcomeOptions : undefined}
-                                    onSelectOutcome={(key) => void onSelectOutcome(key)}
-                                />
-                            );
-                        })}
-                    </ul>
-                ) : null}
+                {searchInput}
+                {createCard}
+                {errorBanner}
+
+                <div>
+                    {loading && visibleTasks.length === 0 && tasks.length === 0 ? <MyTasksLoadingState /> : null}
+                    {!loading && visibleTasks.length === 0 ? emptyState : null}
+                    {visibleTasks.length > 0 ? (
+                        <>
+                            {queueHeader}
+                            <ul className="space-y-2">{visibleTasks.map((t) => renderTaskCard(t))}</ul>
+                        </>
+                    ) : null}
+                </div>
             </div>
-        </div>
+        );
+    }
+
+    // Modal (compact): Process rail → Queue → Workspace, the Business Process → Stage →
+    // Item → Focus Panel/record doctrine. Process/Stage groups partition work; the legacy
+    // filters (Open/Mine/Overdue…) live inside the selected process, not as the primary axis.
+    return (
+        <div className="flex min-h-0 flex-1 gap-3" data-adminv2-tasks-panel="true" data-adminv2-tasks-workspace="true">
+            {/* Process rail — primary organization (Process → Work View). */}
+            <aside className="flex w-[11.5rem] shrink-0 flex-col gap-1.5" data-adminv2-tasks-process-rail="true">
+                <p className="px-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-alloy-midnight/45">
+                    Process
+                </p>
+                <nav className="space-y-0.5" role="tablist" aria-label="Work by process">
+                    {processGroups.map((g) => {
+                        const stageActive = g.stages.some((s) => s.key === activeProcessGroup);
+                        const on = g.key === activeProcessGroup || stageActive;
+                        return (
+                            <div key={g.key}>
+                                <button
+                                    type="button"
+                                    role="tab"
+                                    aria-selected={g.key === activeProcessGroup}
+                                    data-adminv2-process-group={g.key}
+                                    onClick={() => {
+                                        setProcessGroup(g.key);
+                                        setSelectedTaskId(null);
+                                        clearForms();
+                                    }}
+                                    className={`flex w-full items-center justify-between gap-2 rounded-lg px-2 py-1.5 text-left text-[12px] font-semibold transition-colors ${
+                                        on ?
+                                            "bg-alloy-juniper/[0.08] text-alloy-juniper ring-1 ring-alloy-juniper/20"
+                                        :   "text-alloy-midnight/65 hover:bg-alloy-stone/[0.06] hover:text-alloy-midnight/85"
+                                    }`}
+                                >
+                                    <span className="truncate">{g.label}</span>
+                                    <span className={`shrink-0 tabular-nums text-[10px] ${on ? "text-alloy-juniper/80" : "text-alloy-midnight/40"}`}>
+                                        {g.count}
+                                    </span>
+                                </button>
+                                {on && g.stages.length > 0 ? (
+                                    <div
+                                        className="mt-0.5 space-y-0.5 border-l border-alloy-stone/15 pl-2"
+                                        role="group"
+                                        aria-label={`${g.label} stages`}
+                                    >
+                                        {g.stages.map((s) => {
+                                            const stageOn = s.key === activeProcessGroup;
+                                            return (
+                                                <button
+                                                    key={s.key}
+                                                    type="button"
+                                                    role="tab"
+                                                    aria-selected={stageOn}
+                                                    data-adminv2-process-stage={s.key}
+                                                    onClick={() => {
+                                                        setProcessGroup(s.key);
+                                                        setSelectedTaskId(null);
+                                                        clearForms();
+                                                    }}
+                                                    className={`flex w-full items-center justify-between gap-2 rounded-md px-2 py-1 text-left text-[11px] font-medium transition-colors ${
+                                                        stageOn ?
+                                                            "bg-alloy-juniper/[0.06] text-alloy-juniper"
+                                                        :   "text-alloy-midnight/55 hover:bg-alloy-stone/[0.05] hover:text-alloy-midnight/80"
+                                                    }`}
+                                                >
+                                                    <span className="truncate">{s.label}</span>
+                                                    <span className="shrink-0 tabular-nums text-[10px] text-alloy-midnight/40">
+                                                        {s.count}
+                                                    </span>
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                ) : null}
+                            </div>
+                        );
+                    })}
+                </nav>
+                {/* Work views appear here once processes expose them (see data gap). */}
+                <div className="mt-1 rounded-lg border border-dashed border-alloy-stone/20 px-2 py-1.5" data-adminv2-tasks-work-views="true">
+                    <p className="text-[10px] font-semibold uppercase tracking-wide text-alloy-midnight/40">Work views</p>
+                    <p className="mt-0.5 text-[10px] leading-snug text-alloy-midnight/40">
+                        Appear here once a process publishes work views.
+                    </p>
+                </div>
+            </aside>
+
+            {/* Queue — work items for the selected process, with filters as a secondary axis. */}
+            <div className="flex min-h-0 w-[18.5rem] shrink-0 flex-col gap-2" data-adminv2-tasks-queue="true">
+                {searchInput}
+                {filterRail}
+                {errorBanner}
+                <div className="min-h-0 flex-1 overflow-y-auto pr-0.5">
+                    {loading && visibleTasks.length === 0 && tasks.length === 0 ? <MyTasksLoadingState /> : null}
+                    {!loading && processTasks.length === 0 ? emptyState : null}
+                    {processTasks.length > 0 ? (
+                        <>
+                            <div
+                                className="flex items-baseline justify-between px-0.5 pb-1.5"
+                                data-adminv2-tasks-queue-header="true"
+                            >
+                                <h3 className="text-[13px] font-semibold text-alloy-midnight">{activeProcessLabel}</h3>
+                                <span className="text-[11px] tabular-nums text-alloy-midnight/45">
+                                    {activeFilterLabel} · {processTasks.length}
+                                </span>
+                            </div>
+                            <ul className="space-y-1.5">
+                                {processTasks.map((t) => {
+                                    const badge = operationalTaskUrgencyBadge(t);
+                                    const isSelected = t.id === selectedTaskId;
+                                    return (
+                                        <li key={t.id}>
+                                            <button
+                                                type="button"
+                                                data-adminv2-task-queue-row={t.id}
+                                                aria-pressed={isSelected}
+                                                onClick={() => {
+                                                    clearForms();
+                                                    setSelectedTaskId(t.id);
+                                                    if (createOpen) setCreateOpen(false);
+                                                }}
+                                                className={`w-full rounded-lg border px-2.5 py-2 text-left shadow-sm transition-colors ${
+                                                    isSelected ?
+                                                        "border-alloy-juniper/45 border-l-2 border-l-alloy-juniper bg-alloy-juniper/[0.06] ring-1 ring-alloy-juniper/15"
+                                                    : badge.urgency === "overdue" ?
+                                                        "border-alloy-stone/18 border-l-2 border-l-red-400/80 bg-white hover:bg-alloy-stone/[0.04]"
+                                                    :   "border-alloy-stone/18 bg-white hover:bg-alloy-stone/[0.04]"
+                                                }`}
+                                            >
+                                                <div className="flex items-center justify-between gap-2">
+                                                    <span className="truncate text-[12.5px] font-semibold text-alloy-midnight/90">
+                                                        {normalizeOperationalTaskTitleDisplay(t.title)}
+                                                    </span>
+                                                    <span
+                                                        className={`shrink-0 rounded-full border px-1.5 py-0.5 text-[9px] font-semibold ${badge.className}`}
+                                                    >
+                                                        {badge.label}
+                                                    </span>
+                                                </div>
+                                                <p className="mt-0.5 truncate text-[11px] text-alloy-midnight/55">
+                                                    Due {formatOperationalTaskDueDisplay(t.due_at)}
+                                                </p>
+                                            </button>
+                                        </li>
+                                    );
+                                })}
+                            </ul>
+                        </>
+                    ) : null}
+                </div>
+            </div>
+
+            {/* Workspace — selected work item detail, create form, or calm empty state. */}
+            <div
+                className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-alloy-stone/15 bg-alloy-stone/[0.02]"
+                data-adminv2-tasks-detail="true"
+            >
+                <div className="min-h-0 flex-1 overflow-y-auto p-3">
+                    {createOpen ? (
+                        createCard
+                    ) : selectedTask ? (
+                        <ul className="list-none">{renderTaskCard(selectedTask)}</ul>
+                    ) : (
+                        <div
+                            className="flex h-full flex-col items-center justify-center px-6 py-10 text-center"
+                            data-adminv2-tasks-detail-empty="true"
+                        >
+                            <ListTodo className="mb-2 h-9 w-9 text-alloy-midnight/20" aria-hidden strokeWidth={1.5} />
+                            <p className="text-[13px] font-medium text-alloy-midnight/70">Select a work item</p>
+                            <p className="mt-1 max-w-xs text-[11px] leading-snug text-alloy-midnight/45">
+                                Choose a work item from the queue to view its details, record context, and actions — or
+                                start a new one.
+                            </p>
+                        </div>
+                        )}
+                    </div>
+                </div>
+            </div>
     );
 }

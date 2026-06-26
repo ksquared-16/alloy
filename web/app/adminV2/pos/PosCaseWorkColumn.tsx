@@ -87,8 +87,8 @@ export default function PosCaseWorkColumn({ state }: { state: PosCaseState }) {
                 </div>
             </div>
 
-            {/* 1 — Source Viewer: submitted content + evidence (the raw source, not extraction) */}
-            <PosPanel eyebrow="Source viewer">
+            {/* 1 — What came in: submitted content + where it came from (the raw source) */}
+            <PosPanel eyebrow="What came in">
                 {submitted.length > 0 ? (
                     <>
                         <div className="mb-1 text-[10px] font-medium uppercase tracking-wide text-stone-400">Submitted values</div>
@@ -106,7 +106,7 @@ export default function PosCaseWorkColumn({ state }: { state: PosCaseState }) {
                 )}
 
                 <div className="mt-2.5 border-t border-alloy-stone/10 pt-2">
-                    <div className="mb-1 text-[10px] font-medium uppercase tracking-wide text-stone-400">Evidence</div>
+                    <div className="mb-1 text-[10px] font-medium uppercase tracking-wide text-stone-400">Where it came from</div>
                     <ul className="space-y-1.5">
                         {detail.sources.map((s) => {
                             const ev = evidence.find((e) => e.kind === s.kind && e.id === s.id);
@@ -139,8 +139,8 @@ export default function PosCaseWorkColumn({ state }: { state: PosCaseState }) {
                 onCorrected={reload}
             />
 
-            {/* 3 — Record context (only when available) */}
-            <PosPanel eyebrow="Record context" accent={false}>
+            {/* 3 — Matched records (only when available) */}
+            <PosPanel eyebrow="Matched records" accent={false}>
                 {hasRecordContext ? (
                     <div className="space-y-2">
                         {candidates.length > 0 ? (
@@ -171,11 +171,10 @@ export default function PosCaseWorkColumn({ state }: { state: PosCaseState }) {
                 )}
             </PosPanel>
 
-            {/* 4 — Proposal (future, honest pending) */}
-            <PosPanel eyebrow="Proposal" accent={false} right={<span className="text-[9px] text-stone-400">Future</span>}>
+            {/* 4 — What Alloy found (honest pending until extraction/matching exist) */}
+            <PosPanel eyebrow="What Alloy found" accent={false}>
                 <div className="text-[12.5px] text-stone-400">
-                    No proposal available — awaiting extraction and matching. Proposed record changes will appear here once
-                    extraction runs.
+                    Alloy is still reading this. Suggested record changes will appear here once it finishes.
                 </div>
             </PosPanel>
         </div>

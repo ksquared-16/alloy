@@ -1,10 +1,10 @@
 "use client";
 
 /**
- * POS Processing — the command-center, left-to-right:
- *   Column 1: intake queue (existing ProcessingQueueList)
- *   Column 2: the selected work item (extracted data / evidence / preview)
- *   Column 3: Alloy recommendation + confidence + candidates + actions
+ * Processing → Work mode → Incoming — the command-center, left-to-right:
+ *   Column 1: incoming queue (existing ProcessingQueueList)
+ *   Column 2: what came in (the selected item: submitted content / preview)
+ *   Column 3: what Alloy found + what to do next (recommendation → approve)
  * The sticky BOS rail lives OUTSIDE this content (owned by the modal shell).
  *
  * Canonical chrome: white canvas + kit primitives (WorkspaceSectionHeader,
@@ -19,14 +19,15 @@ import { usePosCase } from "./usePosCase";
 import PosCaseWorkColumn from "./PosCaseWorkColumn";
 import PosCaseDecisionColumn from "./PosCaseDecisionColumn";
 import PosTemplateSetupColumn from "./PosTemplateSetupColumn";
+import ProcessingKpiStrip from "./ProcessingKpiStrip";
 
 export default function PosProcessingWorkspace({
     selectedCaseId,
     onSelectCase,
     onGoToSources,
     onOpenForm,
-    title = "Processing",
-    subtitle = "Information that has entered Alloy, triaged and ready for your decision.",
+    title = "Incoming",
+    subtitle,
 }: {
     selectedCaseId: string | null;
     onSelectCase: (caseId: string) => void;
@@ -49,6 +50,8 @@ export default function PosProcessingWorkspace({
         <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
             <WorkspaceSectionHeader title={title} subtitle={subtitle} />
 
+            <ProcessingKpiStrip />
+
             <div className="flex min-h-0 flex-1 overflow-x-auto">
                 {/* Column 1 — queue (always) */}
                 <div className="flex w-[16rem] shrink-0 flex-col overflow-y-auto border-r border-alloy-stone/12 bg-white">
@@ -56,14 +59,15 @@ export default function PosProcessingWorkspace({
                         selectedCaseId={selectedCaseId}
                         onSelectCase={onSelectCase}
                         onGoToSources={onGoToSources}
+                        showFolders
                     />
                 </div>
 
                 {!selectedCaseId ? (
                     <div className="flex min-w-[20rem] flex-1 flex-col overflow-hidden bg-white">
                         <WorkspaceEmptyState
-                            title="Select a case"
-                            body="Pick an item from the queue. Records open for review and approval; uploaded documents open for form template setup."
+                            title="Pick something that came in"
+                            body="Submissions open for your approval. Uploaded documents open so Alloy can turn them into a reusable form."
                         />
                     </div>
                 ) : detailLoading ? (

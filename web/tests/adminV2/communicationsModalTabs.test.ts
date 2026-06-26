@@ -37,17 +37,22 @@ describe("Communications modal tabs", () => {
         expect(shell).toContain('data-comms-workspace-shell="true"');
         expect(shell).toContain('data-comms-modal-version="workspace-inc2c"');
         expect(shell).not.toContain('data-comms-workspace-context="true"');
-        expect(shell).toContain('data-comms-workspace-header-actions="true"');
+        // Shared Operational Workspace Shell header (icon + title + actions + Close).
+        expect(shell).toContain("OperationalModalHeader");
         expect(shell).toContain("COMMS_WORKSPACE_EXECUTION_CLASS");
         expect(shell).toContain("CommunicationsWorkspaceKpiStrip");
     });
 
-    it("CommsModalTabBar uses workspace mode rail styling with Bend Pine active state", () => {
+    it("CommsModalTabBar renders subordinate underline tabs with a Bend Pine active state (not floating pills)", () => {
         const tabBar = read("app/adminV2/communications/CommsModalTabBar.tsx");
         const ui = read("app/adminV2/communications/commsWorkspaceUi.tsx");
-        expect(tabBar).toContain("COMMS_TAB_RAIL_CLASS");
-        expect(tabBar).toContain("COMMS_BEND_PINE_ACTIVE_TAB_CLASS");
-        expect(tabBar).toContain("COMMS_TAB_INACTIVE_CLASS");
+        // Child sections read as an underline tab strip attached to the mode context,
+        // not a floating pill group.
+        expect(tabBar).toContain('data-comms-modal-tabs="true"');
+        expect(tabBar).toContain("border-b-2");
+        expect(tabBar).toContain("border-alloy-juniper");
+        expect(tabBar).toContain("text-alloy-juniper");
+        expect(tabBar).not.toContain("COMMS_TAB_RAIL_CLASS");
         expect(ui).toContain("alloy-juniper");
         expect(ui).not.toContain("alloy-blue");
         expect(ui).not.toMatch(/bg-alloy-pine\b/);

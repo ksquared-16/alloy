@@ -4,9 +4,11 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import {
-    OIP_LINK_CLASS,
-    OIP_SECONDARY_BTN_CLASS,
+    OIP_PRIMARY_BTN_CLASS,
+    OipSectionCard,
 } from "@/app/adminV2/analytics/oipWorkspaceUi";
+import AlloyModeSwitch from "@/components/workspace/AlloyModeSwitch";
+import { Settings2 } from "lucide-react";
 import { OipOverviewStructure } from "@/components/admin/workspace/OipOverviewStructure";
 import { OiV2MetricOverview } from "@/components/admin/metrics/OiV2MetricOverview";
 import {
@@ -48,7 +50,29 @@ import {
 
 const DEFAULT_WINDOW = "rolling_30d" as const;
 
-type OipPanelTab = "overview" | "playbooks";
+/**
+ * Operational Intelligence shell follows the operational-workspace doctrine:
+ * Work / Studio mode, with analytics *views* underneath. Work surfaces live operational
+ * intelligence (Overview today; Planning / Financials / Utilization are the documented
+ * future category model). Studio owns the reusable analytics assets (Playbooks today;
+ * Metrics / Targets / Display are future), and Configure belongs to Studio — one entry,
+ * not a duplicated header action.
+ */
+type OipMode = "work" | "studio";
+type OipStudioView = "playbooks" | "configure";
+
+const OI_MODES: ReadonlyArray<{ key: OipMode; label: string }> = [
+    { key: "work", label: "Work" },
+    { key: "studio", label: "Studio" },
+];
+/** Underline child-view tab styling (subordinate to the mode switch, attached to baseline). */
+function oiViewTabClass(active: boolean): string {
+    return `-mb-px px-0.5 pb-1.5 pt-0.5 text-xs font-semibold transition-colors ${
+        active
+            ? "border-b-2 border-alloy-juniper text-alloy-juniper"
+            : "border-b-2 border-transparent text-alloy-midnight/50 hover:text-alloy-midnight/80"
+    }`;
+}
 
 function packHealthStatus(pack: MetricPackDefinition, resolved: ResolvedMetricMap): OipHealthStatus {
     if (pack.domainStatus !== "available") return "unknown";
@@ -171,7 +195,8 @@ export default function AnalyticsWorkspacePanel({ onRequestClose }: AnalyticsWor
     const [loading, setLoading] = useState(!cachedOnMount || Object.keys(cachedOnMount).length === 0);
     const [fetchError, setFetchError] = useState<string | null>(null);
     const [lastUpdated, setLastUpdated] = useState<Date | null>(cachedOnMount ? new Date() : null);
-    const [activeTab, setActiveTab] = useState<OipPanelTab>("overview");
+    const [mode, setMode] = useState<OipMode>("work");
+    const [studioView, setStudioView] = useState<OipStudioView>("playbooks");
 
     void trends;
 
@@ -237,30 +262,15 @@ export default function AnalyticsWorkspacePanel({ onRequestClose }: AnalyticsWor
 
     return (
         <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-white" data-adminv2-analytics-panel="true">
-            <div className="shrink-0 border-b border-alloy-midnight/10 bg-white px-3 py-2 sm:px-4">
+            {/* Mode (Work / Studio) + analytics views, doctrine-aligned with other modules. */}
+            <div className="shrink-0 bg-white px-3 py-2 sm:px-4">
                 <div className="flex flex-wrap items-center justify-between gap-2">
-                    <div className="flex items-center gap-1 rounded-md border border-alloy-midnight/10 p-0.5" role="tablist">
-                        <button
-                            type="button"
-                            role="tab"
-                            aria-selected={activeTab === "overview"}
-                            className={`rounded px-2.5 py-1 text-[11px] font-semibold ${activeTab === "overview" ? "bg-alloy-midnight/8 text-alloy-midnight" : "text-alloy-midnight/50"}`}
-                            onClick={() => setActiveTab("overview")}
-                            data-oip-tab="overview"
-                        >
-                            Overview
-                        </button>
-                        <button
-                            type="button"
-                            role="tab"
-                            aria-selected={activeTab === "playbooks"}
-                            className={`rounded px-2.5 py-1 text-[11px] font-semibold ${activeTab === "playbooks" ? "bg-alloy-midnight/8 text-alloy-midnight" : "text-alloy-midnight/50"}`}
-                            onClick={() => setActiveTab("playbooks")}
-                            data-oip-tab="playbooks"
-                        >
-                            Playbooks
-                        </button>
-                    </div>
+                    <AlloyModeSwitch
+                        modes={OI_MODES}
+                        active={mode}
+                        onChange={setMode}
+                        ariaLabel="Operational Intelligence mode"
+                    />
                     <p className="text-[10px] text-alloy-midnight/45">
                         Rolling 30 days
                         {lastUpdated ?
@@ -268,14 +278,47 @@ export default function AnalyticsWorkspacePanel({ onRequestClose }: AnalyticsWor
                         :   null}
                         <> · {siteLabel}</>
                     </p>
-                    <button type="button" onClick={openConfiguration} className={`hidden md:inline ${OIP_LINK_CLASS}`}>
-                        Configure →
-                    </button>
+                </div>
+                {/* Child views — subordinate to the mode (underline strip on a baseline). */}
+                <div
+                    className="mt-2 flex flex-wrap items-end gap-4 border-b border-alloy-stone/15"
+                    role="tablist"
+                    aria-label={mode === "work" ? "Work views" : "Studio views"}
+                    data-oip-views="true"
+                >
+                    {mode === "work" ? (
+                        <button type="button" role="tab" aria-selected data-oip-tab="overview" className={oiViewTabClass(true)}>
+                            Overview
+                        </button>
+                    ) : (
+                        <>
+                            <button
+                                type="button"
+                                role="tab"
+                                aria-selected={studioView === "playbooks"}
+                                data-oip-tab="playbooks"
+                                onClick={() => setStudioView("playbooks")}
+                                className={oiViewTabClass(studioView === "playbooks")}
+                            >
+                                Playbooks
+                            </button>
+                            <button
+                                type="button"
+                                role="tab"
+                                aria-selected={studioView === "configure"}
+                                data-oip-tab="configure"
+                                onClick={() => setStudioView("configure")}
+                                className={oiViewTabClass(studioView === "configure")}
+                            >
+                                Configure
+                            </button>
+                        </>
+                    )}
                 </div>
             </div>
 
             <div className="flex min-h-0 flex-1 overflow-hidden bg-white">
-                {activeTab === "overview" ?
+                {mode === "work" ?
                     <div className="min-h-0 flex-1 overflow-y-auto px-3 py-3 sm:px-4 sm:py-4" data-oip-tab-panel="overview">
                         {fetchError ?
                             <p className="mb-3 rounded-lg border border-alloy-ember/30 bg-white px-3 py-2 text-xs text-alloy-ember">
@@ -286,13 +329,9 @@ export default function AnalyticsWorkspacePanel({ onRequestClose }: AnalyticsWor
                         <div className="mt-4 border-t border-alloy-stone/12 pt-4">
                             <OiV2MetricOverview />
                         </div>
-                        <div className="mt-4 flex justify-end md:hidden">
-                            <button type="button" onClick={openConfiguration} className={OIP_SECONDARY_BTN_CLASS}>
-                                Configure
-                            </button>
-                        </div>
                     </div>
-                :   <>
+                : studioView === "playbooks" ?
+                    <>
                         <aside className="hidden w-36 shrink-0 border-r border-alloy-stone/12 bg-white px-2.5 py-3 md:block">
                             <div className="text-[10px] font-semibold uppercase tracking-[0.12em] text-alloy-midnight/45">
                                 Playbooks
@@ -316,20 +355,12 @@ export default function AnalyticsWorkspacePanel({ onRequestClose }: AnalyticsWor
                                     </a>
                                 :   null}
                             </nav>
-                            <button type="button" onClick={openConfiguration} className={`mt-4 ${OIP_LINK_CLASS}`}>
-                                Configure →
-                            </button>
                         </aside>
 
                         <div
                             className="min-h-0 flex-1 overflow-y-auto bg-white px-3 py-3 sm:px-4 sm:py-4"
                             data-oip-tab-panel="playbooks"
                         >
-                            <div className="mb-3 flex justify-end md:hidden">
-                                <button type="button" onClick={openConfiguration} className={OIP_SECONDARY_BTN_CLASS}>
-                                    Configure
-                                </button>
-                            </div>
                             {fetchError ?
                                 <p className="mb-3 rounded-lg border border-alloy-ember/30 bg-white px-3 py-2 text-xs text-alloy-ember">
                                     {fetchError}
@@ -343,6 +374,28 @@ export default function AnalyticsWorkspacePanel({ onRequestClose }: AnalyticsWor
                             </div>
                         </div>
                     </>
+                :   <div className="min-h-0 flex-1 overflow-y-auto px-3 py-3 sm:px-4 sm:py-4" data-oip-tab-panel="configure">
+                        <OipSectionCard
+                            title="Analytics configuration"
+                            helper="Metrics, targets, and display/placement are configured in analytics settings."
+                        >
+                            <button
+                                type="button"
+                                onClick={openConfiguration}
+                                className={OIP_PRIMARY_BTN_CLASS}
+                                data-oip-configure-link="true"
+                            >
+                                <span className="inline-flex items-center gap-1.5">
+                                    <Settings2 className="h-3.5 w-3.5" aria-hidden strokeWidth={2} />
+                                    Open analytics configuration
+                                </span>
+                            </button>
+                            <p className="mt-3 text-[11px] leading-snug text-alloy-midnight/55">
+                                Studio will grow to host the reusable analytics assets directly: Metrics, Playbooks,
+                                Targets, and Display / placement.
+                            </p>
+                        </OipSectionCard>
+                    </div>
                 }
             </div>
         </div>

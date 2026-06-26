@@ -26,6 +26,7 @@ export default function WorkspaceShell<K extends string>({
     onNavigate,
     groupLabels = {},
     width = "8.5rem",
+    navHeader,
     children,
 }: {
     items: ReadonlyArray<WorkspaceNavItem<K>>;
@@ -33,6 +34,8 @@ export default function WorkspaceShell<K extends string>({
     onNavigate: (key: K) => void;
     groupLabels?: Record<string, string>;
     width?: string;
+    /** Optional element rendered at the top of the nav column (e.g. a mode switcher). */
+    navHeader?: ReactNode;
     children: ReactNode;
 }) {
     let lastGroup: string | null = null;
@@ -43,6 +46,7 @@ export default function WorkspaceShell<K extends string>({
                 className="flex shrink-0 flex-col gap-0.5 overflow-y-auto border-r border-alloy-stone/12 bg-white px-2 py-2.5"
                 style={{ width }}
             >
+                {navHeader ? <div className="mb-1">{navHeader}</div> : null}
                 {items.map((item) => {
                     const Icon = item.icon;
                     const isActive = active === item.key;

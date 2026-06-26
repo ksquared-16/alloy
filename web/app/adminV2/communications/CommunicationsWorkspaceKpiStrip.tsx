@@ -1,20 +1,22 @@
 "use client";
 
-import { OipKpiObjectCard, OipKpiObjectRow } from "@/components/admin/workspace/OipKpiObjectCard";
+/**
+ * Communications KPI band — compact, glanceable status strip.
+ *
+ * Refactored (Work/Studio parity) to render the SHARED `CompactKpiStrip` with platform
+ * KPI color semantics, so Communications and Processing read as siblings. Data is
+ * unchanged: real inbox metrics + derived template/announcement KPIs from already-loaded
+ * workspace data. No new fetches, no fabricated counts.
+ */
+
+import CompactKpiStrip, { type CompactKpiItem } from "@/components/workspace/CompactKpiStrip";
 import type { CommunicationsModalTab } from "@/app/adminV2/communications/CommunicationsModalTabPanel";
-import { COMMS_KPI_STRIP_SURFACE_CLASS } from "@/app/adminV2/communications/commsWorkspaceUi";
 import { useCommunicationsWorkspaceKpi } from "@/app/adminV2/communications/CommunicationsWorkspaceKpiContext";
 import { NEEDS_REVIEW_STATUS_LABEL } from "@/lib/communications/v2/commandCenterViewModel";
 import {
     computeAnnouncementWorkspaceKpis,
     computeTemplateWorkspaceKpis,
-    inboxKpiStatusLine,
 } from "@/lib/communications/v2/communicationsWorkspaceKpiModel";
-import {
-    commsAnnouncementKpiVisual,
-    commsInboxKpiVisual,
-    commsTemplateKpiVisual,
-} from "@/lib/communications/v2/communicationsWorkspaceKpiVisualModel";
 
 export default function CommunicationsWorkspaceKpiStrip({ activeTab }: { activeTab: CommunicationsModalTab }) {
     const { inbox, templates, announcements } = useCommunicationsWorkspaceKpi();
@@ -23,98 +25,39 @@ export default function CommunicationsWorkspaceKpiStrip({ activeTab }: { activeT
     const templatesLoading = !templates.listResolved;
     const announcementsLoading = !announcements.listResolved;
 
-    let body: React.ReactNode = null;
+    let items: CompactKpiItem[] = [];
+    let loading = false;
 
     if (activeTab === "inbox") {
         const m = inbox.metrics;
-        const cards = [
-            { label: "Needs reply", value: m?.requiresResponse ?? 0 },
-            { label: "Overdue", value: m?.slaAtRisk ?? 0 },
-            { label: "Unread", value: m?.unread ?? 0 },
-            { label: NEEDS_REVIEW_STATUS_LABEL, value: m?.unclassified ?? 0 },
+        loading = inboxLoading;
+        items = [
+            { key: "needs_reply", label: "Needs reply", value: String(m?.requiresResponse ?? 0), state: "pending" },
+            { key: "overdue", label: "Overdue", value: String(m?.slaAtRisk ?? 0), state: "attention" },
+            { key: "unread", label: "Unread", value: String(m?.unread ?? 0), state: "attention" },
+            { key: "needs_review", label: NEEDS_REVIEW_STATUS_LABEL, value: String(m?.unclassified ?? 0), state: "pending" },
         ];
-        body = (
-            <OipKpiObjectRow layout="command">
-                {cards.map((c) => {
-                    const visual = commsInboxKpiVisual(c.label);
-                    return (
-                        <OipKpiObjectCard
-                            key={c.label}
-                            label={c.label}
-                            value={String(c.value)}
-                            status={inboxKpiStatusLine(c.label, c.value) ?? undefined}
-                            accent={visual.accent}
-                            iconKey={visual.iconKey}
-                            layout="command"
-                            loading={inboxLoading}
-                            showTrendPlaceholder={false}
-                        />
-                    );
-                })}
-            </OipKpiObjectRow>
-        );
     } else if (activeTab === "templates") {
         const k = computeTemplateWorkspaceKpis(templates.rows);
-        const cards = [
-            { label: "Active Templates", value: String(k.active) },
-            { label: "Draft Templates", value: String(k.draft) },
-            { label: "Categories", value: String(k.categories) },
-            { label: "Last Updated", value: k.lastUpdatedLabel },
+        loading = templatesLoading;
+        items = [
+            { key: "active", label: "Active", value: String(k.active), state: "ready" },
+            { key: "draft", label: "Draft", value: String(k.draft), state: "pending" },
+            { key: "categories", label: "Categories", value: String(k.categories), state: "neutral" },
+            { key: "last_updated", label: "Last updated", value: k.lastUpdatedLabel, state: "done" },
         ];
-        body = (
-            <OipKpiObjectRow layout="command">
-                {cards.map((c) => {
-                    const visual = commsTemplateKpiVisual(c.label);
-                    return (
-                        <OipKpiObjectCard
-                            key={c.label}
-                            label={c.label}
-                            value={c.value}
-                            accent={visual.accent}
-                            iconKey={visual.iconKey}
-                            layout="command"
-                            loading={templatesLoading}
-                            showTrendPlaceholder={false}
-                        />
-                    );
-                })}
-            </OipKpiObjectRow>
-        );
     } else if (activeTab === "announcements") {
         const k = computeAnnouncementWorkspaceKpis(announcements.rows);
-        const cards = [
-            { label: "Draft", value: String(k.draft) },
-            { label: "Scheduled", value: String(k.scheduled) },
-            { label: "Active", value: String(k.active) },
-            { label: "Sent Recently", value: String(k.sentRecently), status: "last 7 days" },
+        loading = announcementsLoading;
+        items = [
+            { key: "draft", label: "Draft", value: String(k.draft), state: "pending" },
+            { key: "scheduled", label: "Scheduled", value: String(k.scheduled), state: "pending" },
+            { key: "active", label: "Active", value: String(k.active), state: "ready" },
+            { key: "sent_recently", label: "Sent (7d)", value: String(k.sentRecently), state: "done" },
         ];
-        body = (
-            <OipKpiObjectRow layout="command">
-                {cards.map((c) => {
-                    const visual = commsAnnouncementKpiVisual(c.label);
-                    return (
-                        <OipKpiObjectCard
-                            key={c.label}
-                            label={c.label}
-                            value={c.value}
-                            status={"status" in c ? c.status : undefined}
-                            accent={visual.accent}
-                            iconKey={visual.iconKey}
-                            layout="command"
-                            loading={announcementsLoading}
-                            showTrendPlaceholder={false}
-                        />
-                    );
-                })}
-            </OipKpiObjectRow>
-        );
     }
 
-    if (!body) return null;
+    if (items.length === 0) return null;
 
-    return (
-        <div className={COMMS_KPI_STRIP_SURFACE_CLASS} data-comms-workspace-kpi-band="true">
-            {body}
-        </div>
-    );
+    return <CompactKpiStrip items={items} loading={loading} ariaLabel="Communications status" data-comms-workspace-kpi-band="true" />;
 }

@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * POS → Packets — operational home for packet creation + visibility.
+ * Processing → Studio → Packets — reusable packet assets + their sent links.
  *
  * Packet Composer MVP: assemble ONE packet definition from multiple ordered form
  * templates, choose a target household (child-centered), select children + parent/guardian
@@ -124,7 +124,7 @@ export default function PosPacketsPanel() {
             const body = (await res.json()) as { data?: FormOption[] };
             setFormOptions(body.data ?? []);
         } catch (e) {
-            setComposeErr(e instanceof Error ? e.message : "Failed to load form templates");
+            setComposeErr(e instanceof Error ? e.message : "Failed to load forms");
             setFormOptions([]);
         }
     }, [formOptions]);
@@ -223,7 +223,7 @@ export default function PosPacketsPanel() {
 
     return (
         <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-            <WorkspaceSectionHeader title="Packets" subtitle="Assemble a parent packet from multiple forms, target a child + recipients, and send one link per pair." />
+            <WorkspaceSectionHeader title="Packets" subtitle="Reusable packets built from your forms. Build one, choose who it's for, and send a link per child + recipient." />
 
             <div className="min-h-0 flex-1 overflow-y-auto p-3">
                 <div className="mb-2 flex items-center justify-between">
@@ -231,7 +231,7 @@ export default function PosPacketsPanel() {
                         {packets ? `${packets.length} packet${packets.length === 1 ? "" : "s"}` : "Packets"}
                     </span>
                     <div className="flex items-center gap-1.5">
-                        <button type="button" onClick={() => (showCreate ? setShowCreate(false) : void openCreate())} className="inline-flex items-center gap-1 rounded-md bg-[#00A283] px-2 py-0.5 text-[10px] font-semibold text-white hover:bg-[#00917a]">
+                        <button type="button" onClick={() => (showCreate ? setShowCreate(false) : void openCreate())} className="inline-flex items-center gap-1 rounded-md bg-alloy-juniper px-2 py-0.5 text-[10px] font-semibold text-white hover:bg-alloy-juniper/90">
                             <Plus className="h-3 w-3" aria-hidden /> {showCreate ? "Close" : "New packet"}
                         </button>
                         <button type="button" onClick={() => void load()} className="inline-flex items-center gap-1 rounded border border-stone-200 px-1.5 py-0.5 text-[10px] font-medium text-stone-500 hover:bg-stone-50">
@@ -242,13 +242,13 @@ export default function PosPacketsPanel() {
 
                 {showCreate ? (
                     <div className="mb-3 space-y-3 rounded-lg border border-emerald-200 bg-emerald-50/40 p-3">
-                        <div className="text-[11px] font-semibold text-emerald-900">Compose a packet</div>
+                        <div className="text-[11px] font-semibold text-emerald-900">Build a packet</div>
 
                         {/* 1. Forms */}
                         <div>
                             <div className="text-[10.5px] font-medium text-stone-500">1. Forms (select one or more)</div>
                             {!formOptions ? (
-                                <div className="mt-1 text-[11px] text-stone-400">Loading templates…</div>
+                                <div className="mt-1 text-[11px] text-stone-400">Loading forms…</div>
                             ) : (
                                 <div className="mt-1 max-h-40 space-y-2 overflow-y-auto rounded border border-stone-200 bg-white p-2">
                                     {Object.entries(grouped).map(([group, opts]) => (
@@ -327,7 +327,7 @@ export default function PosPacketsPanel() {
                             <span className="shrink-0 text-[10px] text-stone-500">
                                 {Math.max(1, selectedChildIds.length || 1) * Math.max(1, selectedRecipientIds.length || 1)} link{(Math.max(1, selectedChildIds.length || 1) * Math.max(1, selectedRecipientIds.length || 1)) === 1 ? "" : "s"}
                             </span>
-                            <button type="button" disabled={composing || selectedFormIds.length === 0} onClick={() => void compose()} className="inline-flex items-center gap-1 rounded-md bg-[#00A283] px-3 py-1.5 text-[11px] font-semibold text-white hover:bg-[#00917a] disabled:opacity-50">
+                            <button type="button" disabled={composing || selectedFormIds.length === 0} onClick={() => void compose()} className="inline-flex items-center gap-1 rounded-md bg-alloy-juniper px-3 py-1.5 text-[11px] font-semibold text-white hover:bg-alloy-juniper/90 disabled:opacity-50">
                                 <Plus className="h-3.5 w-3.5" aria-hidden /> {composing ? "Creating…" : "Create packet + links"}
                             </button>
                         </div>
@@ -393,7 +393,7 @@ export default function PosPacketsPanel() {
                                                     </ul>
                                                 </div>
                                             ))}
-                                            <p className="text-[9.5px] text-stone-400">Recipient links are nested under one family packet. Existing links show status only — full URLs appear once at creation (tokens stored hashed).</p>
+                                            <p className="text-[9.5px] text-stone-400">Each recipient gets their own secure link. Full links appear once when you build the packet; afterward you'll see status only.</p>
                                         </div>
                                     ) : (
                                         <div className="mt-2 text-[10.5px] text-stone-400">No shares yet.</div>
@@ -421,7 +421,6 @@ function ShareRow({ share }: { share: PosPacketShareRow }) {
             ) : null}
             <span className={`ml-auto shrink-0 rounded px-1.5 py-0.5 text-[9px] font-semibold ${linkStatus.cls}`}>{linkStatus.label}</span>
             <span className={`shrink-0 rounded px-1.5 py-0.5 text-[9px] font-semibold ${progress.cls}`}>{progress.label}</span>
-            <span className="shrink-0 font-mono text-[9.5px] text-stone-400">{share.token_prefix ?? "—"}…</span>
         </li>
     );
 }

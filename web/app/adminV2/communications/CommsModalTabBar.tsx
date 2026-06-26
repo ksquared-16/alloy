@@ -1,12 +1,15 @@
 "use client";
 
-import {
-    COMMS_BEND_PINE_ACTIVE_TAB_CLASS,
-    COMMS_TAB_INACTIVE_CLASS,
-    COMMS_TAB_RAIL_CLASS,
-} from "@/app/adminV2/communications/commsWorkspaceUi";
+/**
+ * Communications child-section tabs — these are sections *inside* the active Work/Studio
+ * mode, not peers of it. Rendered as a lighter underline tab strip (not a floating pill
+ * group) so they read as subordinate to, and attached beneath, the mode switch.
+ */
+const COMMS_CHILD_TAB_ACTIVE_CLASS =
+    "border-b-2 border-alloy-juniper text-alloy-juniper";
+const COMMS_CHILD_TAB_INACTIVE_CLASS =
+    "border-b-2 border-transparent text-alloy-midnight/50 hover:text-alloy-midnight/80";
 
-/** Communications modal tabs — workspace mode switcher (not action buttons). */
 export default function CommsModalTabBar<K extends string>({
     tabs,
     activeKey,
@@ -19,7 +22,7 @@ export default function CommsModalTabBar<K extends string>({
     "aria-label"?: string;
 }) {
     return (
-        <div className={COMMS_TAB_RAIL_CLASS} role="tablist" aria-label={ariaLabel} data-comms-modal-tabs="true">
+        <div className="-mb-px inline-flex items-center gap-3" role="tablist" aria-label={ariaLabel} data-comms-modal-tabs="true">
             {tabs.map((tab) => {
                 const isOn = activeKey === tab.key;
                 return (
@@ -30,7 +33,9 @@ export default function CommsModalTabBar<K extends string>({
                         aria-selected={isOn}
                         data-comms-tab={tab.key}
                         onClick={() => onSelect(tab.key)}
-                        className={isOn ? COMMS_BEND_PINE_ACTIVE_TAB_CLASS : COMMS_TAB_INACTIVE_CLASS}
+                        className={`px-0.5 pb-1.5 pt-0.5 text-xs font-semibold transition-colors ${
+                            isOn ? COMMS_CHILD_TAB_ACTIVE_CLASS : COMMS_CHILD_TAB_INACTIVE_CLASS
+                        }`}
                     >
                         {tab.label}
                     </button>

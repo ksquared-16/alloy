@@ -1,10 +1,13 @@
 /**
- * POS workspace — section registry.
+ * Processing workspace — section registry.
  *
- * POS is the home for information entering Alloy. These are the in-modal
- * sub-surfaces (rendered inside the existing AdminV2WorkspaceBosModalShell —
- * the same shell/geometry/right-rail as Inbox & My Tasks). Forms is one Source,
- * Processing is one workspace; Home ties them together.
+ * Processing is the product area for information entering Alloy. It has two modes:
+ *   • Work   — runtime processing (the Incoming queue)
+ *   • Studio — design-time setup (Documents, Forms, Packets, the assets that power Work)
+ *
+ * These are the in-modal sub-surfaces (rendered inside the existing
+ * AdminV2WorkspaceBosModalShell — the same shell/geometry/right-rail as Inbox & My
+ * Tasks). The `group` field IS the mode; the shell shows a [Work][Studio] control.
  */
 
 export type PosSection =
@@ -20,29 +23,38 @@ export type PosSection =
 export interface PosSectionDef {
     key: PosSection;
     label: string;
-    /** Secondary nav items sit under a divider (configuration vs. operational work). */
-    group: "work" | "sources" | "config";
+    /** The Processing mode this section belongs to (drives the [Work][Studio] control). */
+    group: "work" | "studio";
 }
 
+/**
+ * First-class operator nav, grouped by mode. Work lands directly on Incoming (no
+ * separate dashboard/home). `home` (former Work landing), `review` (a duplicate of
+ * Incoming) and `linkage` (a placeholder) are intentionally NOT listed — their
+ * components remain in the tree but are not reachable from navigation.
+ *
+ * Scope B (future): the Work group is the seam for a grouped/hierarchical Incoming
+ * (e.g. Enrollment · Subsidy · Licensing · Imports, and deeper trees). Add those as
+ * Work sections / sub-nav when the grouped queue is real — do not hardcode a fake tree.
+ */
 export const POS_SECTIONS: PosSectionDef[] = [
-    { key: "home", label: "Home", group: "work" },
-    { key: "processing", label: "Processing", group: "work" },
-    { key: "review", label: "Review", group: "work" },
-    { key: "linkage", label: "Linkage", group: "work" },
-    { key: "forms", label: "Forms", group: "sources" },
-    { key: "packets", label: "Packets", group: "sources" },
-    { key: "documents", label: "Documents", group: "sources" },
-    { key: "settings", label: "Settings", group: "config" },
+    // Work mode — runtime processing
+    { key: "processing", label: "Incoming", group: "work" },
+    // Studio mode — setup / design-time assets
+    { key: "documents", label: "Documents", group: "studio" },
+    { key: "forms", label: "Forms", group: "studio" },
+    { key: "packets", label: "Packets", group: "studio" },
+    { key: "settings", label: "Settings", group: "studio" },
 ];
 
-/** Human label for a processing-case lifecycle status. */
+/** Operator-facing label for an intake-case lifecycle status. */
 export const POS_STATUS_LABELS: Record<string, string> = {
-    received: "Received",
-    processing: "Processing",
-    needs_review: "Needs review",
-    needs_resolution: "Needs resolution",
-    ready: "Ready",
-    completed: "Completed",
+    received: "Just arrived",
+    processing: "Working",
+    needs_review: "Needs you",
+    needs_resolution: "Needs a decision",
+    ready: "Ready to approve",
+    completed: "Saved to records",
     archived: "Archived",
 };
 

@@ -1,15 +1,17 @@
 "use client";
 
 /**
- * POS → Rules / Settings (prototype).
+ * POS → Source rules.
  *
- * POS configuration lives here. The first real rule is which Sources are
- * Processing-connected (a form is POS-connected when its metadata marks it so —
- * `isPosConnectedSurface` / `pos_connected`). This panel reads the REAL forms
- * list to show current connection state; editing rules lands in a later pass.
+ * POS configuration lives here. The first real rule is which sources open intake
+ * (a form is intake-connected when its metadata marks it so — `isPosConnectedSurface`
+ * / `pos_connected`). This panel reads the REAL forms list to show current state;
+ * editing rules lands in a later pass. No fabricated "coming soon" actions.
  */
 
 import { useCallback, useEffect, useState } from "react";
+import WorkspaceSectionHeader from "@/components/workspace/WorkspaceSectionHeader";
+import PosPanel from "./PosPanel";
 
 interface FormRow {
     id: string;
@@ -46,51 +48,49 @@ export default function PosSettingsPanel() {
     const connected = (forms ?? []).filter((f) => f.metadata?.pos_connected === true);
 
     return (
-        <div className="h-full overflow-y-auto bg-white p-4">
-            <div className="mb-4">
-                <h3 className="text-sm font-semibold text-stone-900">Rules &amp; settings</h3>
-                <p className="mt-0.5 text-xs text-stone-500">
-                    Control how information becomes work. Today: which sources open Processing cases.
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+            <WorkspaceSectionHeader
+                title="Source rules"
+                subtitle="Control how incoming information becomes work. Today: which sources open intake."
+            />
+            <div className="min-h-0 flex-1 overflow-y-auto p-3">
+                <PosPanel
+                    eyebrow="Sources that open intake"
+                    right={<span className="text-[10px] font-medium text-alloy-midnight/40">Read-only</span>}
+                >
+                    {loading ? (
+                        <div className="h-16 animate-pulse rounded-md bg-alloy-stone/60" />
+                    ) : error ? (
+                        <div className="text-[12px] text-amber-700">
+                            Couldn’t load ({error}).{" "}
+                            <button type="button" onClick={() => void load()} className="font-medium underline">
+                                Retry
+                            </button>
+                        </div>
+                    ) : connected.length === 0 ? (
+                        <p className="text-[12px] text-alloy-midnight/55">
+                            No sources open intake yet. Enable a form to start opening intake when it’s submitted.
+                        </p>
+                    ) : (
+                        <ul className="space-y-1.5">
+                            {connected.map((f) => (
+                                <li
+                                    key={f.id}
+                                    className="flex items-center justify-between rounded-md border border-alloy-stone/20 bg-white px-2.5 py-1.5"
+                                >
+                                    <span className="truncate text-[12.5px] font-medium text-alloy-midnight">{f.name || f.key}</span>
+                                    <span className="shrink-0 rounded bg-emerald-50 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700">
+                                        Connected
+                                    </span>
+                                </li>
+                            ))}
+                        </ul>
+                    )}
+                </PosPanel>
+
+                <p className="mt-3 text-[11px] leading-relaxed text-alloy-midnight/45">
+                    More source rules — routing, matching, and imports — will arrive here as they’re built.
                 </p>
-            </div>
-
-            <section className="mb-4 rounded-xl border border-stone-200 bg-white p-4">
-                <div className="mb-2 flex items-center justify-between">
-                    <span className="text-[11px] font-semibold uppercase tracking-wide text-stone-500">Processing-connected sources</span>
-                    <span className="rounded bg-amber-50 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700">Read-only prototype</span>
-                </div>
-                {loading ? (
-                    <div className="h-16 animate-pulse rounded-md bg-stone-100" />
-                ) : error ? (
-                    <div className="text-xs text-amber-700">
-                        Couldn’t load ({error}).{" "}
-                        <button type="button" onClick={() => void load()} className="font-medium underline">
-                            Retry
-                        </button>
-                    </div>
-                ) : connected.length === 0 ? (
-                    <p className="text-[12px] text-stone-500">
-                        No sources are Processing-connected yet. Enable a form to start opening cases on submission.
-                    </p>
-                ) : (
-                    <ul className="space-y-1.5">
-                        {connected.map((f) => (
-                            <li key={f.id} className="flex items-center justify-between rounded-md border border-stone-200 bg-stone-50/60 px-2.5 py-1.5">
-                                <span className="truncate text-[12px] font-medium text-stone-800">{f.name || f.key}</span>
-                                <span className="rounded bg-emerald-50 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700">Connected</span>
-                            </li>
-                        ))}
-                    </ul>
-                )}
-            </section>
-
-            <div className="grid gap-2 sm:grid-cols-2">
-                {["Outcome recipes", "Match thresholds", "Source routing", "Imports"].map((r) => (
-                    <div key={r} className="rounded-lg border border-dashed border-stone-200 bg-stone-50/60 p-3 text-xs text-stone-500">
-                        {r}
-                        <div className="mt-0.5 text-[10px] text-stone-400">Coming later</div>
-                    </div>
-                ))}
             </div>
         </div>
     );

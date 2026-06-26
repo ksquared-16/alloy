@@ -35,6 +35,7 @@ import {
     SidebarTasksNavItem,
 } from "@/app/adminV2/components/SidebarModalNavItems";
 import { appendWorkspaceSiteToPath, readStickyWorkspaceSiteIdForNavigation } from "@/lib/adminV2/workspaceSiteFilterClient";
+import { useActiveAdminV2WorkspaceModal } from "@/lib/adminV2/useActiveWorkspaceModal";
 import SidebarConfigurationModeNav from "@/app/adminV2/components/SidebarConfigurationModeNav";
 
 const WORKSPACE = CANONICAL_OPERATOR_BASE;
@@ -81,6 +82,10 @@ function SidebarNav({
     const path = useMemo(() => normalizeAdminPath(pathname), [pathname]);
     const workUnitSlug = parseWorkUnitSlug(path);
     const onSettings = isAdminConfigPath(path);
+    // When an operational modal is open it is the active workspace; route-based highlights
+    // (Workspace / lifecycle) defer to it so the rail shows a single active anchor.
+    const activeModal = useActiveAdminV2WorkspaceModal();
+    const modalOpen = activeModal != null;
 
     const [lifecycleCards, setLifecycleCards] = useState<OperatorLifecycleLandingCard[]>(
         () => peekOperatorLifecycleLandingCards() ?? [],
@@ -130,7 +135,7 @@ function SidebarNav({
             href={homeHref}
             title="Workspace"
             aria-label="Workspace"
-            active={path === WORKSPACE || path === `${WORKSPACE}/`}
+            active={!modalOpen && (path === WORKSPACE || path === `${WORKSPACE}/`)}
             className={collapsed ? "adminv2-sidebar-rail-link" : EXPANDED_PRIMARY_LINK}
         >
             {collapsed ? (
@@ -185,7 +190,7 @@ function SidebarNav({
                 {lifecycleCards.map((lifecycle) => {
                     const isExpanded = expandedLifecycleIds.has(lifecycle.id);
                     const lifecycleEntryActive =
-                        path === lifecycle.entryHref && !workUnitSlug;
+                        !modalOpen && path === lifecycle.entryHref && !workUnitSlug;
                     return (
                         <div key={lifecycle.id} className="space-y-0.5">
                             <div className="flex items-stretch gap-0.5">
@@ -242,6 +247,7 @@ function SidebarNav({
                                     {lifecycle.workQueues.map((entry) => {
                                         const childHref = workspaceHref(entry.href);
                                         const childActive =
+                                            !modalOpen &&
                                             workUnitSlug != null &&
                                             workUnitRouteSlugsEquivalent(workUnitSlug, entry.platformKey);
                                         return (
@@ -341,10 +347,10 @@ function SidebarNav({
                         {!onSettings ? homeLink : null}
                         {onSettings ? null : (
                             <>
-                                {tasksLink}
                                 {inboxLink}
-                                {analyticsLink}
                                 {processingLink}
+                                {tasksLink}
+                                {analyticsLink}
                             </>
                         )}
                     </div>
@@ -360,10 +366,10 @@ function SidebarNav({
                             {!onSettings ? homeLink : null}
                             {!onSettings ?
                                 <>
-                                    {tasksLink}
                                     {inboxLink}
-                                    {analyticsLink}
                                     {processingLink}
+                                    {tasksLink}
+                                    {analyticsLink}
                                     {lifecycleNavExpanded}
                                 </>
                             :   <SidebarConfigurationModeNav collapsed={false} />}

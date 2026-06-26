@@ -13,6 +13,31 @@ export const COMMUNICATIONS_MODAL_TABS: { key: CommunicationsModalTab; label: st
     { key: "announcements", label: "Announcements" },
 ];
 
+/**
+ * Work / Studio mode layer (parity with Processing). Mode organizes the existing domain
+ * concepts — it does not remove them:
+ *   • Work   → live operational work: Inbox, Announcements.
+ *   • Studio → reusable assets + setup: Templates (channel/signature/rules config still
+ *              lives in Settings → Communications; Studio links there for now).
+ */
+export type CommunicationsMode = "work" | "studio";
+
+export const COMMUNICATIONS_MODES: { key: CommunicationsMode; label: string }[] = [
+    { key: "work", label: "Work" },
+    { key: "studio", label: "Studio" },
+];
+
+export const COMMUNICATIONS_TAB_MODE: Record<CommunicationsModalTab, CommunicationsMode> = {
+    inbox: "work",
+    announcements: "work",
+    templates: "studio",
+};
+
+/** First tab shown when entering a mode. */
+export function defaultCommunicationsTabForMode(mode: CommunicationsMode): CommunicationsModalTab {
+    return mode === "studio" ? "templates" : "inbox";
+}
+
 function tabPanelClass(active: boolean): string {
     return active
         ? "flex min-h-0 flex-1 flex-col overflow-hidden"

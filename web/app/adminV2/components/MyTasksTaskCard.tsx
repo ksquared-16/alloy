@@ -173,8 +173,8 @@ export default function MyTasksTaskCard({
     if (mode === "reschedule") {
         return (
             <li
-                className={`rounded-xl border bg-white p-3.5 shadow-sm ring-1 ${
-                    overdue ? "border-red-200/70 ring-red-100/80" : "border-alloy-stone/18 ring-alloy-stone/[0.06]"
+                className={`rounded-xl border border-alloy-stone/18 bg-white p-3.5 shadow-sm ring-1 ring-alloy-stone/[0.06] ${
+                    overdue ? "border-l-2 border-l-red-400/80" : ""
                 }`}
                 data-adminv2-task-row={task.id}
                 data-adminv2-task-mode="reschedule"
@@ -205,10 +205,8 @@ export default function MyTasksTaskCard({
 
     return (
         <li
-            className={`rounded-xl border bg-white p-3.5 shadow-sm ring-1 ${
-                overdue ?
-                    "border-red-200/60 ring-red-100/70"
-                :   "border-alloy-stone/18 ring-alloy-stone/[0.06]"
+            className={`rounded-xl border border-alloy-stone/18 bg-white p-3.5 shadow-sm ring-1 ring-alloy-stone/[0.06] ${
+                overdue ? "border-l-2 border-l-red-400/80" : ""
             }`}
             data-adminv2-task-row={task.id}
             data-adminv2-task-mode="view"

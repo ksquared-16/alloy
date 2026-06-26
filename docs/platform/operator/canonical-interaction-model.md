@@ -57,6 +57,8 @@ The operator's home for getting work done. A workspace hosts business processes,
 
 ### Perspective
 
+> **Terminology (June 2026):** The operator-facing name for this primitive is **Work View**. `Perspective` / `RuntimePerspective` / `PerspectiveConfig` are retained as **internal compatibility/runtime** names only — this spine keeps "Perspective" as the architectural term, but UI copy should read **Work View** and continue converging there. See [`operational-workspace-shell.md` § Perspective terminology](./operational-workspace-shell.md#perspective-terminology-resolved).
+
 An **operating lens** over the same underlying records — a saved framing of *what subset of work matters right now* and *how it is ordered/grouped*. "Today's Tours," "Failed Payments," "Missing Check-ins," and "Waitlist" are perspectives.
 
 A perspective **changes the lens, not reality**. It re-filters, re-sorts, and re-groups records; it never creates a separate data store and never mutates the records it observes. Two perspectives over the same records show the same truth from different angles.

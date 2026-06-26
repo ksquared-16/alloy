@@ -10,12 +10,20 @@
  * intentional empty / loading / error states. Read-only; selection is controlled.
  */
 
-import { useCallback, useEffect, useState } from "react";
+import { useState } from "react";
 import type { ProcessingCaseQueueRow, ProcessingCaseStatus } from "@/lib/pos/processingCase/readModel/types";
-import type { QueueRecommendationSummary } from "@/lib/pos/processingCase/recommendation/recommendationSummary";
 import RecommendationBadge from "@/app/adminV2/pos/RecommendationBadge";
+import { useProcessingQueueWarm } from "@/lib/pos/useProcessingQueueWarm";
 
-/** Display order: operator-actionable lanes first; completed/archived are secondary. */
+/**
+ * Display order: operator-actionable lanes first; completed/archived are secondary.
+ *
+ * Scope B (future, not built here): Incoming will gain an OUTER grouping dimension —
+ * categories like Enrollment · Subsidy · Licensing · Imports, and deeper trees
+ * (e.g. Subsidy → State → AZ → School 201). The current status lanes would nest under
+ * the selected category. Keep this lane rendering category-agnostic so a grouped queue
+ * can wrap it later; do NOT hardcode a fake category tree until the data model exists.
+ */
 const PRIMARY_LANES: { key: ProcessingCaseStatus; label: string }[] = [
     { key: "needs_resolution", label: "Needs resolution" },
     { key: "needs_review", label: "Needs review" },
@@ -37,6 +45,51 @@ const SOURCE_TYPE_LABELS: Record<string, string> = {
     recreated_document: "Recreated",
 };
 
+/**
+ * Scope C2 — Incoming folder/category rail.
+ *
+ * Folders are DERIVED from the on-ramp kind already on each loaded row — no new schema,
+ * no fabricated categories, counts reflect loaded rows only. This is the UI foundation
+ * for grouped processing: the folder is a filter layer that wraps the status lanes.
+ *
+ * The richer category tree the product wants (Enrollment · Subsidy · Licensing, and
+ * deeper trees like Subsidy → State → AZ → School 201) is intentionally NOT hardcoded
+ * here — when category metadata exists, swap `deriveFolder` for a category resolver and
+ * this same rail/header renders the deeper hierarchy. `all` is always the queue root.
+ */
+type ProcessingFolderKey = "all" | "documents" | "submissions" | "packets" | "imports" | "other";
+
+const FOLDER_ORDER: { key: ProcessingFolderKey; label: string }[] = [
+    { key: "all", label: "Incoming" },
+    { key: "documents", label: "Documents" },
+    { key: "submissions", label: "Submissions" },
+    { key: "packets", label: "Packets" },
+    { key: "imports", label: "Imports" },
+    { key: "other", label: "Other" },
+];
+const FOLDER_LABEL: Record<ProcessingFolderKey, string> = FOLDER_ORDER.reduce(
+    (acc, f) => ({ ...acc, [f.key]: f.label }),
+    {} as Record<ProcessingFolderKey, string>,
+);
+
+function deriveFolder(row: ProcessingCaseQueueRow): Exclude<ProcessingFolderKey, "all"> {
+    switch (row.primarySource?.kind) {
+        case "document":
+        case "upload":
+        case "recreated_document":
+            return "documents";
+        case "form_submission":
+            return "submissions";
+        case "form_packet_session":
+            return "packets";
+        case "import":
+        case "email_attachment":
+            return "imports";
+        default:
+            return "other";
+    }
+}
+
 /** Lane accent for the eyebrow — quiet, semantic, no rainbow. */
 const LANE_TONE: Record<string, string> = {
     needs_resolution: "text-amber-700",
@@ -47,15 +100,6 @@ const LANE_TONE: Record<string, string> = {
     completed: "text-stone-400",
     archived: "text-stone-400",
 };
-
-interface QueueResponse {
-    data: {
-        rows: ProcessingCaseQueueRow[];
-        next_cursor: unknown;
-        counts: Record<string, number>;
-        recommendations?: Record<string, QueueRecommendationSummary>;
-    };
-}
 
 function formatAge(iso: string | null): string {
     if (!iso) return "—";
@@ -75,40 +119,21 @@ export default function ProcessingQueueList({
     selectedCaseId,
     onSelectCase,
     onGoToSources,
+    showFolders = false,
 }: {
     selectedCaseId: string | null;
     onSelectCase: (caseId: string) => void;
     /** When provided (POS workspace), the empty state switches to the Sources tab instead of linking out. */
     onGoToSources?: () => void;
+    /** Processing Work mode: show the derived folder rail + folder-aware queue header. */
+    showFolders?: boolean;
 }) {
-    const [rows, setRows] = useState<ProcessingCaseQueueRow[]>([]);
-    const [counts, setCounts] = useState<Record<string, number>>({});
-    const [recommendations, setRecommendations] = useState<Record<string, QueueRecommendationSummary>>({});
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState<string | null>(null);
-
-    const load = useCallback(async () => {
-        setLoading(true);
-        setError(null);
-        try {
-            const url = new URL("/api/admin/processing/queue", window.location.origin);
-            const res = await fetch(url.toString(), { credentials: "same-origin" });
-            if (!res.ok) throw new Error(`Request failed (${res.status})`);
-            const body = (await res.json()) as QueueResponse;
-            setRows(body.data.rows);
-            setCounts(body.data.counts);
-            setRecommendations(body.data.recommendations ?? {});
-        } catch (e) {
-            setError(e instanceof Error ? e.message : "Failed to load processing queue");
-            setRows([]);
-        } finally {
-            setLoading(false);
-        }
-    }, []);
-
-    useEffect(() => {
-        void load();
-    }, [load]);
+    const { data, loading, error, refresh } = useProcessingQueueWarm();
+    const rows = data?.rows ?? [];
+    const counts = data?.counts ?? {};
+    const recommendations = data?.recommendations ?? {};
+    const [activeFolder, setActiveFolder] = useState<ProcessingFolderKey>("all");
+    const load = refresh;
 
     const total = rows.length;
 
@@ -141,9 +166,9 @@ export default function ProcessingQueueList({
     if (total === 0) {
         return (
             <div className="m-3 rounded-lg border border-dashed border-stone-200 bg-stone-50/60 p-5 text-center">
-                <div className="text-sm font-medium text-stone-700">No active processing</div>
+                <div className="text-sm font-medium text-stone-700">Nothing in Incoming yet</div>
                 <p className="mx-auto mt-1 max-w-[18rem] text-xs leading-relaxed text-stone-500">
-                    Cases appear here when a connected source receives a submission. Enable Processing on a form under Sources, then submit it.
+                    Items show up here as they arrive — a submitted form or packet, or an uploaded document. Set up a source in Studio to start.
                 </p>
                 {onGoToSources ? (
                     <button
@@ -151,7 +176,7 @@ export default function ProcessingQueueList({
                         onClick={onGoToSources}
                         className="mt-3 inline-flex items-center gap-1 rounded-md border border-emerald-700 px-2.5 py-1 text-xs font-medium text-emerald-800 hover:bg-emerald-50"
                     >
-                        Go to Sources → Forms
+                        Go to Documents
                     </button>
                 ) : (
                     <a
@@ -165,10 +190,27 @@ export default function ProcessingQueueList({
         );
     }
 
+    // Derived folder rail — counts reflect loaded rows only; `all` is always present.
+    const folderCounts = rows.reduce<Record<string, number>>((acc, r) => {
+        const f = deriveFolder(r);
+        acc[f] = (acc[f] ?? 0) + 1;
+        return acc;
+    }, {});
+    const availableFolders = FOLDER_ORDER.filter((f) => f.key === "all" || (folderCounts[f.key] ?? 0) > 0);
+    const effectiveFolder: ProcessingFolderKey =
+        showFolders && availableFolders.some((f) => f.key === activeFolder) ? activeFolder : "all";
+    const visibleRows =
+        effectiveFolder === "all" ? rows : rows.filter((r) => deriveFolder(r) === effectiveFolder);
+
     const renderLane = (lane: { key: ProcessingCaseStatus; label: string }) => {
-        const laneRows = rows.filter((r) => r.status === lane.key);
+        const laneRows = visibleRows.filter((r) => r.status === lane.key);
         if (laneRows.length === 0) return null;
-        const count = typeof counts[lane.key] === "number" ? counts[lane.key] : laneRows.length;
+        // Folder view: count the loaded subset (honest). Default view: server count.
+        const count = showFolders
+            ? laneRows.length
+            : typeof counts[lane.key] === "number"
+              ? counts[lane.key]
+              : laneRows.length;
         return (
             <div key={lane.key} className="mb-1.5">
                 <div
@@ -224,11 +266,54 @@ export default function ProcessingQueueList({
     };
 
     return (
-        <div className="w-full py-1">
-            {PRIMARY_LANES.map(renderLane)}
-            {SECONDARY_LANES.some((l) => rows.some((r) => r.status === l.key)) ? (
-                <div className="mt-1 border-t border-stone-100 pt-1">{SECONDARY_LANES.map(renderLane)}</div>
+        <div className="w-full">
+            {showFolders ? (
+                <>
+                    <div
+                        className="flex flex-wrap items-center gap-1 border-b border-alloy-stone/12 px-3 py-2"
+                        role="tablist"
+                        aria-label="Incoming folders"
+                        data-processing-folder-rail="true"
+                    >
+                        {availableFolders.map((f) => {
+                            const isOn = f.key === effectiveFolder;
+                            const c = f.key === "all" ? rows.length : folderCounts[f.key] ?? 0;
+                            return (
+                                <button
+                                    key={f.key}
+                                    type="button"
+                                    role="tab"
+                                    aria-selected={isOn}
+                                    data-processing-folder={f.key}
+                                    onClick={() => setActiveFolder(f.key)}
+                                    className={`inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-medium transition-colors ${
+                                        isOn
+                                            ? "bg-alloy-juniper/[0.10] text-alloy-juniper ring-1 ring-alloy-juniper/30"
+                                            : "text-alloy-midnight/55 hover:bg-alloy-stone/60 hover:text-alloy-midnight/80"
+                                    }`}
+                                >
+                                    {f.label}
+                                    <span className={`tabular-nums ${isOn ? "text-alloy-juniper/80" : "text-alloy-midnight/35"}`}>
+                                        {c}
+                                    </span>
+                                </button>
+                            );
+                        })}
+                    </div>
+                    <div className="flex items-baseline justify-between px-3 pb-1 pt-2.5">
+                        <h3 className="text-[13px] font-semibold text-alloy-midnight">{FOLDER_LABEL[effectiveFolder]}</h3>
+                        <span className="text-[11px] text-alloy-midnight/45">
+                            {visibleRows.length} item{visibleRows.length === 1 ? "" : "s"}
+                        </span>
+                    </div>
+                </>
             ) : null}
+            <div className="py-1">
+                {PRIMARY_LANES.map(renderLane)}
+                {SECONDARY_LANES.some((l) => visibleRows.some((r) => r.status === l.key)) ? (
+                    <div className="mt-1 border-t border-stone-100 pt-1">{SECONDARY_LANES.map(renderLane)}</div>
+                ) : null}
+            </div>
         </div>
     );
 }

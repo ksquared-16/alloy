@@ -6,6 +6,8 @@ import AdminV2WorkspaceBosModalShell from "@/app/adminV2/components/AdminV2Works
 import InboxPanel from "@/app/adminV2/messages/InboxPanel";
 import CommunicationsModalTabPanel, {
     COMMUNICATIONS_MODAL_TABS,
+    COMMUNICATIONS_TAB_MODE,
+    defaultCommunicationsTabForMode,
     type CommunicationsModalTab,
 } from "@/app/adminV2/communications/CommunicationsModalTabPanel";
 import CommunicationsWorkspaceShell from "@/app/adminV2/communications/CommunicationsWorkspaceShell";
@@ -52,6 +54,8 @@ export default function InboxModal({ open, onClose }: InboxModalProps) {
                         tabs={COMMUNICATIONS_MODAL_TABS}
                         activeTab={tab}
                         onTabChange={setTab}
+                        mode={COMMUNICATIONS_TAB_MODE[tab]}
+                        onModeChange={(m) => setTab(defaultCommunicationsTabForMode(m))}
                         onClose={onClose}
                         onComposeNew={() => setComposeOpen(true)}
                         showComposeNew={showComposeNew}

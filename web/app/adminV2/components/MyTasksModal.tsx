@@ -1,10 +1,14 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import { ListTodo } from "lucide-react";
+import { useEffect, useState } from "react";
+import { ListChecks, Plus } from "lucide-react";
 
 import AdminV2WorkspaceBosModalShell from "@/app/adminV2/components/AdminV2WorkspaceBosModalShell";
+import OperationalModalHeader, {
+    OPERATIONAL_PRIMARY_ACTION_CLASS,
+} from "@/app/adminV2/components/OperationalModalHeader";
 import MyTasksPanel from "@/app/adminV2/components/MyTasksPanel";
+import CompactKpiStrip, { type CompactKpiItem } from "@/components/workspace/CompactKpiStrip";
 import { fetchOperationalTasksSummary, readJson } from "@/lib/agent/taskAssist/taskAssistV11OpportunityApi";
 
 export type MyTasksModalProps = {
@@ -14,23 +18,12 @@ export type MyTasksModalProps = {
 
 type TaskCounts = { open: number; due_soon: number; overdue: number };
 
-function formatHeaderSummary(counts: TaskCounts | null, filterCount: number | null): string {
-    if (!counts && filterCount == null) return "Follow-ups and reminders across your workspace";
-    const parts: string[] = [];
-    if (counts != null) {
-        parts.push(`${counts.open} open`);
-        if (counts.overdue > 0) parts.push(`${counts.overdue} overdue`);
-        else if (counts.due_soon > 0) parts.push(`${counts.due_soon} due soon`);
-    }
-    if (filterCount != null && filterCount !== counts?.open) {
-        parts.push(`${filterCount} in this view`);
-    }
-    return parts.length ? parts.join(" · ") : "Follow-ups and reminders across your workspace";
-}
-
 export default function MyTasksModal({ open, onClose }: MyTasksModalProps) {
     const [counts, setCounts] = useState<TaskCounts | null>(null);
-    const [filterCount, setFilterCount] = useState<number | null>(null);
+    // Header "New task" is the doctrinal primary action. The create form + all its state
+    // live in MyTasksPanel (and the standalone /adminV2/tasks page); bumping this nonce asks
+    // the panel to open its create form. No task logic moves out of the panel.
+    const [newTaskNonce, setNewTaskNonce] = useState(0);
 
     useEffect(() => {
         if (!open) return;
@@ -51,11 +44,13 @@ export default function MyTasksModal({ open, onClose }: MyTasksModalProps) {
         };
     }, [open]);
 
-    const onFilterCountChange = useCallback((count: number) => {
-        setFilterCount(count);
-    }, []);
-
-    const summary = formatHeaderSummary(counts, filterCount);
+    // Compact status strip — same primitive + semantics as Processing / Communications.
+    // Real counts from the existing summary endpoint; never fabricated.
+    const kpiItems: CompactKpiItem[] = [
+        { key: "open", label: "Open", value: String(counts?.open ?? 0), state: "neutral" },
+        { key: "due_soon", label: "Due soon", value: String(counts?.due_soon ?? 0), state: "pending" },
+        { key: "overdue", label: "Overdue", value: String(counts?.overdue ?? 0), state: "attention" },
+    ];
 
     return (
         <AdminV2WorkspaceBosModalShell
@@ -66,35 +61,29 @@ export default function MyTasksModal({ open, onClose }: MyTasksModalProps) {
             panelClassName="max-h-[min(92vh,56rem)]"
         >
             <div
-                className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-alloy-stone/18 bg-[#f7f6f3]"
+                className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-alloy-stone/18 bg-white"
                 data-adminv2-tasks-modal="true"
             >
-                <div className="flex shrink-0 items-start justify-between gap-3 border-b border-alloy-stone/15 bg-white px-4 py-3.5 sm:px-5">
-                    <div className="min-w-0">
-                        <div className="flex items-center gap-2">
-                            <ListTodo className="h-4 w-4 shrink-0 text-alloy-midnight/65" aria-hidden strokeWidth={2} />
-                            <h2 id="adminv2-tasks-modal-title" className="text-sm font-semibold text-alloy-midnight">
-                                My tasks
-                            </h2>
-                        </div>
-                        <p
-                            className="mt-0.5 pl-6 text-[11px] leading-snug text-alloy-midnight/55"
-                            data-adminv2-tasks-summary="true"
+                <OperationalModalHeader
+                    icon={<ListChecks className="h-4 w-4" aria-hidden strokeWidth={2} />}
+                    title="Work Items"
+                    titleId="adminv2-tasks-modal-title"
+                    onClose={onClose}
+                    actions={
+                        <button
+                            type="button"
+                            data-adminv2-new-task="true"
+                            className={OPERATIONAL_PRIMARY_ACTION_CLASS}
+                            onClick={() => setNewTaskNonce((n) => n + 1)}
                         >
-                            {summary}
-                        </p>
-                    </div>
-                    <button
-                        type="button"
-                        onClick={onClose}
-                        className="shrink-0 rounded-lg border border-alloy-stone/20 px-2.5 py-1 text-[11px] font-semibold text-alloy-forge hover:bg-alloy-stone/[0.06]"
-                        aria-label="Close"
-                    >
-                        Close
-                    </button>
-                </div>
+                            <Plus className="h-3.5 w-3.5" aria-hidden strokeWidth={2.25} />
+                            New task
+                        </button>
+                    }
+                />
+                <CompactKpiStrip items={kpiItems} loading={counts === null} ariaLabel="Work Items status" data-adminv2-tasks-summary="true" />
                 <div className="flex min-h-0 flex-1 flex-col overflow-hidden px-4 py-3 sm:px-5 sm:py-4">
-                    <MyTasksPanel compact onClose={onClose} onFilterCountChange={onFilterCountChange} />
+                    <MyTasksPanel compact onClose={onClose} requestCreateNonce={newTaskNonce} />
                 </div>
             </div>
         </AdminV2WorkspaceBosModalShell>

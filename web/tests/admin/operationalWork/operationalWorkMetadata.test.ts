@@ -3,7 +3,9 @@ import { describe, expect, it } from "vitest";
 import {
     attachOperationalWorkView,
     buildOperationalWorkMetadataForCreate,
+    extractOperationalTaskBpDimensions,
     parseOperationalWorkViewFromTaskRow,
+    toOperationalTaskApiRow,
 } from "@/lib/admin/operationalWork/operationalWorkMetadata";
 import { OPERATIONAL_WORK_FRAMEWORK_VERSION } from "@/lib/admin/operationalWork/operationalWorkTypes";
 import type { OperationalTaskRow } from "@/lib/admin/operationalTasksService";
@@ -147,5 +149,85 @@ describe("parseOperationalWorkViewFromTaskRow", () => {
         const instance = attachOperationalWorkView(baseRow());
         expect(instance.work.shape).toBe("task");
         expect(instance.title).toBe("Follow up");
+    });
+});
+
+describe("extractOperationalTaskBpDimensions", () => {
+    it("projects Business Process dimensions from top-level metadata", () => {
+        const row = baseRow();
+        row.metadata = {
+            department_id: "dept-1",
+            lifecycle_stage_key: "tour_scheduled",
+            lifecycle_provenance: "lifecycle_template",
+            work_definition_key: "follow_up_after_tour",
+        };
+        expect(extractOperationalTaskBpDimensions(row)).toEqual({
+            department_id: "dept-1",
+            lifecycle_stage_key: "tour_scheduled",
+            lifecycle_provenance: "lifecycle_template",
+            work_definition_key: "follow_up_after_tour",
+        });
+    });
+
+    it("falls back to context_snapshot.lifecycle_stage_key when not top-level", () => {
+        const row = baseRow();
+        row.metadata = {
+            work_definition_key: "collect_missing_information",
+            context_snapshot: { lifecycle_stage_key: "qualification" },
+        };
+        const dims = extractOperationalTaskBpDimensions(row);
+        expect(dims.lifecycle_stage_key).toBe("qualification");
+        expect(dims.work_definition_key).toBe("collect_missing_information");
+        expect(dims.department_id).toBeNull();
+        expect(dims.lifecycle_provenance).toBeNull();
+    });
+
+    it("returns nulls for tasks without Business Process metadata", () => {
+        const row = baseRow();
+        row.metadata = {};
+        expect(extractOperationalTaskBpDimensions(row)).toEqual({
+            department_id: null,
+            lifecycle_stage_key: null,
+            lifecycle_provenance: null,
+            work_definition_key: null,
+        });
+    });
+});
+
+describe("toOperationalTaskApiRow", () => {
+    it("strips the parsed work view, preserves metadata, and surfaces BP dimensions (API → client contract)", () => {
+        const row = attachOperationalWorkView({
+            ...baseRow(),
+            metadata: {
+                work_framework_version: 1,
+                shape: "task",
+                provenance: { source: "lifecycle_template" },
+                department_id: "dept-1",
+                lifecycle_stage_key: "tour_scheduled",
+                lifecycle_provenance: "lifecycle_template",
+                work_definition_key: "follow_up_after_tour",
+            },
+        });
+        // Sanity: the parsed view exists before conversion.
+        expect(row.work.shape).toBe("task");
+
+        const apiRow = toOperationalTaskApiRow(row);
+        // Parsed work view stripped.
+        expect("work" in apiRow).toBe(false);
+        // Existing fields preserved, including the full metadata jsonb.
+        expect(apiRow.title).toBe("Follow up");
+        expect(apiRow.metadata).toMatchObject({ work_definition_key: "follow_up_after_tour" });
+        // BP dimensions additively surfaced (the fields the client groups by).
+        expect(apiRow.department_id).toBe("dept-1");
+        expect(apiRow.lifecycle_stage_key).toBe("tour_scheduled");
+        expect(apiRow.lifecycle_provenance).toBe("lifecycle_template");
+        expect(apiRow.work_definition_key).toBe("follow_up_after_tour");
+    });
+
+    it("surfaces null BP dimensions for a manual / cross-process task", () => {
+        const apiRow = toOperationalTaskApiRow(attachOperationalWorkView(baseRow()));
+        expect(apiRow.department_id).toBeNull();
+        expect(apiRow.lifecycle_stage_key).toBeNull();
+        expect(apiRow.lifecycle_provenance).toBeNull();
     });
 });

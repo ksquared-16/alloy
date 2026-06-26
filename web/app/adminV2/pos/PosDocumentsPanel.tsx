@@ -1,21 +1,20 @@
 "use client";
 
 /**
- * POS → Documents (prototype surface).
+ * POS → Documents.
  *
- * Shows the two intended document intake workflows so the product story is
- * visible end-to-end:
- *   A. Document → Data    (extract values → open a Processing case → approve)
- *   B. Document → Form    (read structure → draft a form → publish)
- *
- * Storage + upload foundations already exist (`POST /api/admin/documents/upload`,
- * Supabase bucket `org_documents`). AI extraction / structure detection are NOT
- * wired yet — these actions are clearly marked Prototype and route the operator
- * to the relevant POS section so the flow is demonstrable today.
+ * Upload a document; Alloy opens intake and (through the document setup path in
+ * Incoming) recognizes its fields so you can review record sync and create a
+ * reusable form. Storage + upload are live (`POST /api/admin/documents/upload`,
+ * Supabase bucket `org_documents`). This surface stays honest: it describes the
+ * real, shipped path — no "planned" capability that already works.
  */
 
-import { ArrowRight, FileSearch, FileText, FileUp, Sparkles, Trash2 } from "lucide-react";
-import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { FileText, FileUp, Trash2 } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import WorkspaceSectionHeader from "@/components/workspace/WorkspaceSectionHeader";
+import { WS_ACTION_PRIMARY } from "@/components/workspace/workspaceTokens";
+import PosPanel from "./PosPanel";
 import type { PosSection } from "./posSections";
 
 interface PosDocListItem {
@@ -27,6 +26,8 @@ interface PosDocListItem {
     caseStatus: string | null;
     classificationKey: string | null;
 }
+
+const SETUP_STEPS = ["Add document", "Alloy recognizes the fields", "Review record sync", "Create form"];
 
 function formatWhen(iso: string | null): string {
     if (!iso) return "—";
@@ -58,58 +59,12 @@ function OpenDocLink({ documentId }: { documentId: string }) {
                         setBusy(false);
                     }
                 }}
-                className="text-[11.5px] font-medium text-emerald-700 hover:underline disabled:opacity-50"
+                className="text-[11.5px] font-medium text-alloy-juniper hover:underline disabled:opacity-50"
             >
                 {busy ? "Opening…" : "Open document"}
             </button>
             {error ? <span className="text-[11px] text-amber-700">· {error}</span> : null}
         </>
-    );
-}
-
-function WorkflowCard({
-    badge,
-    title,
-    steps,
-    cta,
-    onCta,
-    icon,
-}: {
-    badge: string;
-    title: string;
-    steps: string[];
-    cta: string;
-    onCta: () => void;
-    icon: ReactNode;
-}) {
-    return (
-        <div className="rounded-xl border border-stone-200 bg-white p-4">
-            <div className="mb-2 flex items-center justify-between">
-                <span className="flex items-center gap-1.5 text-stone-700">
-                    {icon}
-                    <span className="text-sm font-semibold text-stone-900">{title}</span>
-                </span>
-                <span className="rounded bg-stone-100 px-1.5 py-0.5 text-[10px] font-semibold text-stone-600">{badge}</span>
-            </div>
-            <ol className="mb-3 space-y-1">
-                {steps.map((s, i) => (
-                    <li key={s} className="flex items-center gap-2 text-[12px] text-stone-600">
-                        <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-stone-100 text-[9px] font-semibold text-stone-500">
-                            {i + 1}
-                        </span>
-                        {s}
-                        {i < steps.length - 1 ? <ArrowRight className="h-3 w-3 text-stone-300" aria-hidden /> : null}
-                    </li>
-                ))}
-            </ol>
-            <button
-                type="button"
-                onClick={onCta}
-                className="inline-flex items-center gap-1.5 rounded-lg border border-stone-200 bg-white px-3 py-1.5 text-xs font-semibold text-stone-700 hover:bg-stone-50"
-            >
-                {cta}
-            </button>
-        </div>
     );
 }
 
@@ -142,9 +97,9 @@ export default function PosDocumentsPanel({ onNavigate }: { onNavigate: (section
     }, [loadDocs]);
 
     // Safe delete of an unused test upload (guarded server-side: refused if it produced a
-    // form template or its case is completed). Removes it from the list on success.
+    // form or its case is completed). Removes it from the list on success.
     const deleteDoc = useCallback(async (documentId: string, label: string) => {
-        if (!window.confirm(`Delete “${label}”? This removes the upload and its Processing case. Forms already created are kept.`)) {
+        if (!window.confirm(`Delete “${label}”? This removes the upload and its intake. Forms already created are kept.`)) {
             return;
         }
         setDeletingId(documentId);
@@ -167,7 +122,7 @@ export default function PosDocumentsPanel({ onNavigate }: { onNavigate: (section
         try {
             const form = new FormData();
             form.append("file", file);
-            // POS document intake: open a Processing Case; no CRM entity required.
+            // POS document intake: open intake; no CRM entity required.
             form.append("open_processing_case", "true");
             const res = await fetch("/api/admin/documents/upload", {
                 method: "POST",
@@ -183,10 +138,10 @@ export default function PosDocumentsPanel({ onNavigate }: { onNavigate: (section
             setStatus({
                 kind: "ok",
                 message: body.processing_case_id
-                    ? `Uploaded — Processing case opened${body.classification_key ? ` · ${body.classification_key}` : ""}.`
+                    ? `Uploaded — intake opened${body.classification_key ? ` · ${body.classification_key}` : ""}.`
                     : "Uploaded.",
             });
-            void loadDocs(); // refresh the list so the new upload appears immediately
+            void loadDocs();
         } catch (e) {
             setStatus({ kind: "error", message: e instanceof Error ? e.message : "Upload failed" });
         } finally {
@@ -195,15 +150,12 @@ export default function PosDocumentsPanel({ onNavigate }: { onNavigate: (section
     }
 
     return (
-        <div className="h-full overflow-y-auto bg-white p-4">
-            <div className="mb-4 flex items-start justify-between gap-3">
-                <div>
-                    <h3 className="text-sm font-semibold text-stone-900">Documents</h3>
-                    <p className="mt-0.5 text-xs text-stone-500">
-                        Upload a document and let Alloy turn it into data or a form. Storage is live; extraction is being wired.
-                    </p>
-                </div>
-                <div className="flex shrink-0 flex-col items-end gap-1">
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+            <WorkspaceSectionHeader title="Documents" subtitle="Upload a document and Alloy turns it into a reusable form." />
+
+            <div className="min-h-0 flex-1 overflow-y-auto p-3">
+                {/* Upload */}
+                <div className="mb-4 flex flex-wrap items-center gap-3">
                     <input
                         ref={fileInputRef}
                         type="file"
@@ -218,53 +170,69 @@ export default function PosDocumentsPanel({ onNavigate }: { onNavigate: (section
                         type="button"
                         disabled={uploading}
                         onClick={() => fileInputRef.current?.click()}
-                        className="inline-flex items-center gap-1.5 rounded-lg bg-[#00A283] px-3 py-2 text-xs font-semibold text-white hover:bg-[#009276] disabled:opacity-60"
+                        className={`${WS_ACTION_PRIMARY} inline-flex items-center gap-1.5`}
                     >
                         <FileUp className="h-3.5 w-3.5" aria-hidden />
-                        {uploading ? "Uploading…" : "Upload Document"}
+                        {uploading ? "Uploading…" : "Add document"}
                     </button>
                     {status ? (
-                        <span className={`text-[11px] ${status.kind === "ok" ? "text-emerald-700" : "text-amber-700"}`}>
+                        <span className={`text-[11.5px] ${status.kind === "ok" ? "text-emerald-700" : "text-amber-700"}`}>
                             {status.message}
                         </span>
                     ) : null}
                 </div>
-            </div>
 
-            {/* A — uploaded documents, with classification + linked Processing Case status. */}
-            <section className="mb-4">
+                {/* How it works — the real, shipped path */}
+                <PosPanel eyebrow="How it works" className="mb-4">
+                    <ol className="flex flex-wrap items-center gap-x-2 gap-y-1.5">
+                        {SETUP_STEPS.map((s, i) => (
+                            <li key={s} className="flex items-center gap-2 text-[12px] text-alloy-midnight/70">
+                                <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-alloy-juniper/10 text-[9px] font-semibold text-alloy-juniper">
+                                    {i + 1}
+                                </span>
+                                {s}
+                                {i < SETUP_STEPS.length - 1 ? <span className="text-alloy-midnight/25">→</span> : null}
+                            </li>
+                        ))}
+                    </ol>
+                    <p className="mt-2 text-[11px] text-alloy-midnight/45">
+                        Open a document below in Incoming to review what Alloy recognized and create the form.
+                    </p>
+                </PosPanel>
+
+                {/* Uploaded documents */}
                 <div className="mb-2 flex items-center justify-between">
-                    <span className="text-[10.5px] font-semibold uppercase tracking-wide text-stone-500">Uploaded documents</span>
-                    <button type="button" onClick={() => void loadDocs()} className="text-[11px] text-stone-500 hover:underline">
+                    <span className="text-[10.5px] font-semibold uppercase tracking-wide text-alloy-midnight/45">Uploaded documents</span>
+                    <button type="button" onClick={() => void loadDocs()} className="text-[11px] text-alloy-midnight/50 hover:underline">
                         Refresh
                     </button>
                 </div>
                 {docsLoading ? (
-                    <div className="text-[12px] text-stone-400">Loading…</div>
+                    <div className="text-[12px] text-alloy-midnight/40">Loading…</div>
                 ) : docsError ? (
                     <div className="text-[12px] text-amber-700">{docsError}</div>
                 ) : docs.length === 0 ? (
-                    <div className="rounded-lg border border-dashed border-stone-200 bg-stone-50/60 p-4 text-[12px] text-stone-500">
-                        No documents yet. Use <span className="font-medium text-stone-600">Upload Document</span> above — it opens a
-                        Processing case automatically.
+                    <div className="rounded-lg border border-dashed border-alloy-stone/30 bg-alloy-stone/40 p-4 text-[12px] text-alloy-midnight/55">
+                        No documents yet. Use <span className="font-medium text-alloy-midnight/70">Add document</span> above — Alloy opens
+                        intake automatically.
                     </div>
                 ) : (
-                    <ul className="divide-y divide-stone-100 rounded-lg border border-stone-200">
+                    <ul className="divide-y divide-alloy-stone/15 rounded-lg border border-alloy-stone/20">
                         {docs.map((d) => (
                             <li key={d.documentId} className="flex items-center gap-3 px-3 py-2">
-                                <FileText className="h-4 w-4 shrink-0 text-stone-400" aria-hidden />
+                                <FileText className="h-4 w-4 shrink-0 text-alloy-midnight/35" aria-hidden />
                                 <div className="min-w-0 flex-1">
-                                    <div className="truncate text-[13px] font-medium text-stone-800">{d.label}</div>
-                                    <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-stone-500">
+                                    <div className="truncate text-[13px] font-medium text-alloy-midnight">{d.label}</div>
+                                    <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-alloy-midnight/50">
                                         <span>{formatWhen(d.uploadedAt)}</span>
                                         {d.classificationKey ? (
-                                            <span className="rounded bg-stone-100 px-1.5 py-0.5 text-[10px] font-medium text-stone-600">
+                                            <span className="rounded bg-alloy-stone/70 px-1.5 py-0.5 text-[10px] font-medium text-alloy-midnight/60">
                                                 {d.classificationKey}
                                             </span>
                                         ) : (
-                                            <span className="text-stone-400">unclassified</span>
+                                            <span className="text-alloy-midnight/35">not categorized</span>
                                         )}
-                                        {d.caseStatus ? <span>· case {d.caseStatus.replace(/_/g, " ")}</span> : <span>· no case</span>}
+                                        {d.caseStatus ? <span>· intake {d.caseStatus.replace(/_/g, " ")}</span> : <span>· not started</span>}
                                     </div>
                                 </div>
                                 <div className="flex shrink-0 items-center gap-3">
@@ -273,9 +241,9 @@ export default function PosDocumentsPanel({ onNavigate }: { onNavigate: (section
                                         <button
                                             type="button"
                                             onClick={() => onNavigate("processing")}
-                                            className="text-[11.5px] font-medium text-emerald-700 hover:underline"
+                                            className="text-[11.5px] font-medium text-alloy-juniper hover:underline"
                                         >
-                                            Open in Processing
+                                            Open in Incoming
                                         </button>
                                     ) : null}
                                     <button
@@ -283,8 +251,8 @@ export default function PosDocumentsPanel({ onNavigate }: { onNavigate: (section
                                         disabled={deletingId === d.documentId}
                                         onClick={() => void deleteDoc(d.documentId, d.label)}
                                         aria-label="Delete document"
-                                        title="Delete this upload (kept if it produced a form or has a completed case)"
-                                        className="inline-flex items-center gap-1 text-[11.5px] font-medium text-stone-400 hover:text-amber-700 disabled:opacity-50"
+                                        title="Delete this upload (kept if it produced a form or has a completed intake)"
+                                        className="inline-flex items-center gap-1 text-[11.5px] font-medium text-alloy-midnight/40 hover:text-amber-700 disabled:opacity-50"
                                     >
                                         <Trash2 className="h-3.5 w-3.5" aria-hidden />
                                         {deletingId === d.documentId ? "Deleting…" : "Delete"}
@@ -294,56 +262,6 @@ export default function PosDocumentsPanel({ onNavigate }: { onNavigate: (section
                         ))}
                     </ul>
                 )}
-            </section>
-
-            <div className="mb-4 grid gap-3 lg:grid-cols-2">
-                <WorkflowCard
-                    icon={<FileSearch className="h-4 w-4" />}
-                    title="Document → Data"
-                    badge="Live"
-                    steps={["Upload", "Classify", "Extract facts → candidates", "Review in Processing", "Approve (later)"]}
-                    cta="See it in Processing"
-                    onCta={() => onNavigate("processing")}
-                />
-                {/* E — Document → Form: correct next-step shell. Generation is NOT built yet. */}
-                <div className="rounded-xl border border-stone-200 bg-white p-4">
-                    <div className="mb-2 flex items-center justify-between">
-                        <span className="flex items-center gap-1.5 text-stone-700">
-                            <Sparkles className="h-4 w-4" />
-                            <span className="text-sm font-semibold text-stone-900">Document → Form</span>
-                        </span>
-                        <span className="rounded bg-stone-100 px-1.5 py-0.5 text-[10px] font-semibold text-stone-600">Planned</span>
-                    </div>
-                    <ol className="mb-3 space-y-1">
-                        {[
-                            "Classify document",
-                            "Extract structure / facts",
-                            "Identify sections & fields",
-                            "Propose a form draft",
-                            "Operator reviews",
-                            "Publish form",
-                        ].map((s, i) => (
-                            <li key={s} className="flex items-center gap-2 text-[12px] text-stone-600">
-                                <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-stone-100 text-[9px] font-semibold text-stone-500">
-                                    {i + 1}
-                                </span>
-                                {s}
-                            </li>
-                        ))}
-                    </ol>
-                    <button
-                        type="button"
-                        disabled
-                        title="Needs document structure detection (steps 2–4) before a draft can be proposed"
-                        className="inline-flex cursor-not-allowed items-center gap-1 rounded-lg border border-stone-200 px-3 py-1.5 text-xs font-semibold text-stone-400"
-                    >
-                        Create form draft
-                        <span className="rounded bg-stone-100 px-1 py-0.5 text-[9px] font-semibold uppercase text-stone-400">Planned</span>
-                    </button>
-                    <p className="mt-1.5 text-[10.5px] text-stone-400">
-                        Blocked on structure detection — classification + facts exist today; section/field detection is next.
-                    </p>
-                </div>
             </div>
         </div>
     );

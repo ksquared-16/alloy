@@ -11,7 +11,7 @@
  *
  * Field rows ↔ PDF highlights stay in sync (click either to select). Fields are edited /
  * added / removed in place; manual fields are flagged "Not mapped to PDF". Create uses
- * the reviewed list (preserving pdf_field_name / page / bbox) and then jumps to POS →
+ * the reviewed list (preserving pdf_field_name / page / bbox) and then jumps to Studio →
  * Forms with the new form selected — never /admin/forms, never leaving the modal.
  *
  * Reuse-only: `/form-draft` (detect), `/form-draft/save` (reviewed list), `/form-draft/
@@ -304,7 +304,7 @@ export default function PosTemplateSetupColumn({
         }
     };
 
-    // Create from the REVIEWED list (preserving PDF provenance), then jump to POS → Forms.
+    // Create from the REVIEWED list (preserving PDF provenance), then jump to Studio → Forms.
     const handleCreate = async () => {
         const clean = reviewFields.filter((f) => f.label.trim().length > 0);
         if (clean.length === 0) {
@@ -413,22 +413,27 @@ export default function PosTemplateSetupColumn({
 
             {/* Two-pane review — PDF ↔ field definition, both visible, independent scroll */}
             <div className="flex min-h-0 flex-1 overflow-hidden">
-                {/* LEFT — source PDF preview + highlights */}
+                {/* LEFT — the source document, viewed as recognized-field highlights or the raw PDF.
+                    These are two VIEWS OF THE SAME DOCUMENT, not separate sources: "Recognized fields"
+                    is the clickable map of what Alloy found; "Original PDF" is the untouched file.
+                    TODO (follow-up): once pages are rasterized, render the highlights as a true overlay
+                    on the PDF and sync field-row selection to the highlighted region (see feasibility
+                    note above) so the toggle becomes a single layered view. */}
                 <div className="flex min-w-0 flex-1 flex-col border-r border-alloy-stone/12">
                     <div className="flex shrink-0 items-center justify-between gap-2 border-b border-alloy-stone/10 px-3 py-1.5">
-                        <span className="text-[11px] font-semibold text-alloy-midnight">Source PDF preview</span>
+                        <span className="text-[11px] font-semibold text-alloy-midnight">Source document</span>
                         <div className="flex items-center gap-2">
-                            <div className="flex overflow-hidden rounded-md border border-stone-200">
+                            <div className="flex overflow-hidden rounded-md border border-stone-200" title="Two views of the same document">
                                 {(["highlights", "pdf"] as const).map((v) => (
                                     <button
                                         key={v}
                                         type="button"
                                         onClick={() => setLeftView(v)}
-                                        className={`px-2 py-0.5 text-[10.5px] font-medium capitalize ${
-                                            leftView === v ? "bg-[#00A283] text-white" : "bg-white text-stone-500 hover:bg-stone-50"
+                                        className={`px-2 py-0.5 text-[10.5px] font-medium ${
+                                            leftView === v ? "bg-alloy-juniper text-white" : "bg-white text-stone-500 hover:bg-stone-50"
                                         }`}
                                     >
-                                        {v === "pdf" ? "PDF" : "Highlights"}
+                                        {v === "pdf" ? "Original PDF" : "Recognized fields"}
                                     </button>
                                 ))}
                             </div>
@@ -460,18 +465,18 @@ export default function PosTemplateSetupColumn({
                                     />
                                     <div className="mt-2 flex items-center gap-3 text-[10px] text-stone-500">
                                         <span className="flex items-center gap-1">
-                                            <span className="inline-block h-2.5 w-3 rounded-sm border border-[#9bbcb3] bg-[#00A283]/15" /> Detected field
+                                            <span className="inline-block h-2.5 w-3 rounded-sm border border-alloy-juniper/40 bg-alloy-juniper/15" /> Recognized field
                                         </span>
                                         <span className="flex items-center gap-1">
-                                            <span className="inline-block h-2.5 w-3 rounded-sm border-2 border-[#00A283] bg-[#00A283]/30" /> Selected
+                                            <span className="inline-block h-2.5 w-3 rounded-sm border-2 border-alloy-juniper bg-alloy-juniper/30" /> Selected
                                         </span>
                                         <span className="ml-auto text-stone-400">Click a field or row to select</span>
                                     </div>
                                 </>
                             ) : (
                                 <div className="rounded-md border border-dashed border-stone-300 bg-white p-4 text-center text-[11.5px] text-stone-400">
-                                    No PDF field highlights — this draft came from text. Switch to PDF to view the document, and add
-                                    fields on the right.
+                                    No recognized field regions — this draft came from text. Switch to Original PDF to view the
+                                    document, and add fields on the right.
                                 </div>
                             )
                         ) : pdfUrl ? (
@@ -717,36 +722,40 @@ export default function PosTemplateSetupColumn({
                 </div>
             </div>
 
-            {/* Create bar */}
+            {/* Create bar — footer action row: helper text left, Alloy-sized actions right. */}
             <div className="shrink-0 border-t border-alloy-stone/12 bg-white px-3 py-2.5">
-                <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-[0.07em] text-alloy-juniper/80">Template setup</div>
                 {err ? <div className="mb-2 text-[11px] text-amber-700">{err}</div> : null}
-                {created ? (
-                    <button type="button" onClick={() => created.form_id && onOpenForm?.(created.form_id)} className={`${WS_ACTION_PRIMARY} w-full`}>
-                        Open in Forms builder
-                    </button>
-                ) : (
-                    <button type="button" disabled={creating || busy || reviewFields.filter((f) => f.label.trim()).length === 0} onClick={() => void handleCreate()} className={`${WS_ACTION_PRIMARY} w-full`}>
-                        {creating ? "Creating…" : "Create form from these fields"}
-                    </button>
-                )}
-                <div className="mt-2 grid grid-cols-2 gap-1.5">
-                    {!created ? (
-                        <button type="button" disabled={busy || creating} onClick={() => void handleDetect()} className={WS_ACTION_SECONDARY}>
-                            {busy ? "Re-reading…" : "Re-detect fields"}
-                        </button>
-                    ) : null}
-                    <button type="button" onClick={() => setTab("text")} className={WS_ACTION_SECONDARY}>
-                        Review extracted text
-                    </button>
-                </div>
-                {created ? (
-                    <p className="mt-2 text-[10.5px] text-emerald-700">Form created — opens in POS → Forms; this case stays here.</p>
-                ) : (
-                    <p className="mt-2 text-[10.5px] text-stone-400">
-                        Creates an unpublished draft form from the reviewed fields (PDF mapping preserved) and opens it in POS → Forms.
+                <div className="flex items-center justify-between gap-3">
+                    <p className={`min-w-0 text-[10.5px] ${created ? "text-emerald-700" : "text-stone-400"}`}>
+                        {created
+                            ? "Form created — opens in Forms; this case stays here."
+                            : "Creates an unpublished draft form from the reviewed fields (PDF mapping preserved)."}
                     </p>
-                )}
+                    <div className="flex shrink-0 items-center gap-2">
+                        {!created ? (
+                            <button type="button" disabled={busy || creating} onClick={() => void handleDetect()} className={WS_ACTION_SECONDARY}>
+                                {busy ? "Re-reading…" : "Re-detect fields"}
+                            </button>
+                        ) : null}
+                        <button type="button" onClick={() => setTab("text")} className={WS_ACTION_SECONDARY}>
+                            Review extracted text
+                        </button>
+                        {created ? (
+                            <button type="button" onClick={() => created.form_id && onOpenForm?.(created.form_id)} className={WS_ACTION_PRIMARY}>
+                                Open in Forms builder
+                            </button>
+                        ) : (
+                            <button
+                                type="button"
+                                disabled={creating || busy || reviewFields.filter((f) => f.label.trim()).length === 0}
+                                onClick={() => void handleCreate()}
+                                className={WS_ACTION_PRIMARY}
+                            >
+                                {creating ? "Creating…" : "Create form"}
+                            </button>
+                        )}
+                    </div>
+                </div>
             </div>
         </div>
     );

@@ -207,11 +207,50 @@ export function attachOperationalWorkView(row: OperationalTaskRow): OperationalW
     return { ...row, work: parseOperationalWorkViewFromTaskRow(row) };
 }
 
-/** Strip parsed work view for API responses that must preserve legacy task JSON shape (PR1). */
-export function toOperationalTaskApiRow<T extends OperationalTaskRow>(row: T & { work?: OperationalWorkView }): T {
+/**
+ * Business Process dimensions surfaced to the workspace tasks client — a read-only,
+ * additive projection of fields already present in `metadata` (no schema change). These
+ * let Work Items group operational work by its real Business Process / Stage. Fields are
+ * `null` when the task is not Business Process–generated.
+ *
+ * - `department_id` / `lifecycle_provenance`: stamped by `buildBusinessProcessWorkTaskMetadata`.
+ * - `lifecycle_stage_key`: top-level BP metadata, or nested `context_snapshot.lifecycle_stage_key`.
+ * - `work_definition_key`: framework v1 metadata (present even on manual ad-hoc work).
+ *
+ * Naming note: this is the flat *task* projection — distinct from `WorkViewConfigV1Stored`
+ * (the queue/record Work View config) and from `OperationalWorkView` (the parsed framework
+ * view). These three must not be conflated.
+ */
+export type OperationalTaskBpDimensions = {
+    department_id: string | null;
+    lifecycle_stage_key: string | null;
+    work_definition_key: string | null;
+    lifecycle_provenance: string | null;
+};
+
+/** Project the Business Process dimensions already present in a task's metadata. */
+export function extractOperationalTaskBpDimensions(row: OperationalTaskRow): OperationalTaskBpDimensions {
+    const md = isRecord(row.metadata) ? row.metadata : {};
+    const ctx = isRecord(md.context_snapshot) ? md.context_snapshot : null;
+    return {
+        department_id: trimOrNull(md.department_id),
+        lifecycle_stage_key: trimOrNull(md.lifecycle_stage_key) ?? (ctx ? trimOrNull(ctx.lifecycle_stage_key) : null),
+        work_definition_key: trimOrNull(md.work_definition_key),
+        lifecycle_provenance: trimOrNull(md.lifecycle_provenance),
+    };
+}
+
+/**
+ * Strip the parsed work view for API responses while preserving the legacy task JSON shape,
+ * and additively surface the Business Process dimensions (read-only projection of metadata).
+ * Existing fields — including the full `metadata` jsonb — are preserved.
+ */
+export function toOperationalTaskApiRow<T extends OperationalTaskRow>(
+    row: T & { work?: OperationalWorkView },
+): T & OperationalTaskBpDimensions {
     const { work: _work, ...task } = row;
     void _work;
-    return task as T;
+    return { ...(task as T), ...extractOperationalTaskBpDimensions(row) };
 }
 
 const FRAMEWORK_METADATA_KEYS = new Set([

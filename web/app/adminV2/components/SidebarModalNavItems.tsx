@@ -9,8 +9,10 @@ import { prefetchWorkspaceOperationalTasks } from "@/lib/agent/taskAssist/operat
 import { ADMIN_FORMS_HREF, isCanonicalFormsPath, normalizeToCanonicalAdminPath } from "@/lib/admin/canonicalAdminRoutes";
 import { useOperationalTasksNavCounts } from "@/lib/adminV2/useOperationalTasksNavCounts";
 import { useInboxUnreadNavCount } from "@/lib/adminV2/useInboxUnreadNavCount";
+import { useActiveAdminV2WorkspaceModal } from "@/lib/adminV2/useActiveWorkspaceModal";
 import { warmCommunicationsWorkspaceModal } from "@/lib/communications/v2/communicationsWorkspaceWarmCache";
 import { warmOipAnalyticsModal } from "@/lib/metrics/oipWorkspaceWarmCache";
+import { warmProcessingQueueCache } from "@/lib/pos/processingQueueWarmCache";
 import { isCommsV2FlagEnabled } from "@/lib/communications/v2/flags";
 import {
     dispatchAdminV2OpenInboxModal,
@@ -34,6 +36,7 @@ function SidebarModalNavButton({
     label,
     icon,
     badge,
+    active = false,
     onClick,
     onMouseEnter,
     onFocus,
@@ -44,20 +47,24 @@ function SidebarModalNavButton({
     label: string;
     icon: ReactNode;
     badge: ReactNode;
+    /** Active when this item's workspace modal is open (reuses the nav-link active style). */
+    active?: boolean;
     onClick: () => void;
     onMouseEnter?: () => void;
     onFocus?: () => void;
     dataAttr: string;
 }) {
+    const base = collapsed ? "adminv2-sidebar-rail-link relative" : `${EXPANDED_PRIMARY_LINK} relative`;
     return (
         <button
             type="button"
             title={title}
             aria-label={title}
+            aria-current={active ? "page" : undefined}
             onClick={onClick}
             onMouseEnter={onMouseEnter}
             onFocus={onFocus}
-            className={collapsed ? "adminv2-sidebar-rail-link relative" : `${EXPANDED_PRIMARY_LINK} relative`}
+            className={active ? `${base} adminv2-nav-link--active` : base}
             data-adminv2-sidebar-modal-nav={dataAttr}
         >
             {collapsed ?
@@ -77,13 +84,14 @@ function SidebarModalNavButton({
 
 export function SidebarTasksNavItem({ collapsed }: { collapsed: boolean }) {
     const { alertCount, open, enabled } = useOperationalTasksNavCounts();
+    const activeModal = useActiveAdminV2WorkspaceModal();
 
     if (!enabled) return null;
 
     const title =
         alertCount > 0 ?
-            `Tasks — ${alertCount} due soon or overdue (${open} open)`
-        :   `Tasks — ${open} open`;
+            `Work Items — ${alertCount} due soon or overdue (${open} open)`
+        :   `Work Items — ${open} open`;
 
     const badge =
         alertCount > 0 ?
@@ -106,9 +114,10 @@ export function SidebarTasksNavItem({ collapsed }: { collapsed: boolean }) {
         <SidebarModalNavButton
             collapsed={collapsed}
             title={title}
-            label="Tasks"
+            label="Work Items"
             icon={<ListChecks size={collapsed ? 20 : 16} strokeWidth={1.75} className="shrink-0" />}
             badge={badge}
+            active={activeModal === "tasks"}
             dataAttr="tasks"
             onClick={() => {
                 prefetchWorkspaceOperationalTasks("open");
@@ -120,6 +129,7 @@ export function SidebarTasksNavItem({ collapsed }: { collapsed: boolean }) {
 
 export function SidebarInboxNavItem({ collapsed }: { collapsed: boolean }) {
     const { unread } = useInboxUnreadNavCount();
+    const activeModal = useActiveAdminV2WorkspaceModal();
     const title =
         unread > 0 ? `Inbox — ${unread} unread message${unread === 1 ? "" : "s"}` : "Inbox — conversations";
 
@@ -136,6 +146,7 @@ export function SidebarInboxNavItem({ collapsed }: { collapsed: boolean }) {
                     </span>
                 :   null
             }
+            active={activeModal === "inbox"}
             dataAttr="inbox"
             onMouseEnter={() => {
                 if (isCommsV2FlagEnabled("comms_v2_command_center")) {
@@ -198,6 +209,7 @@ function SidebarRouteNavItem({
 }
 
 export function SidebarAnalyticsNavItem({ collapsed }: { collapsed: boolean }) {
+    const activeModal = useActiveAdminV2WorkspaceModal();
     return (
         <SidebarModalNavButton
             collapsed={collapsed}
@@ -205,6 +217,7 @@ export function SidebarAnalyticsNavItem({ collapsed }: { collapsed: boolean }) {
             label="Analytics"
             icon={<BarChart3 size={collapsed ? 20 : 16} strokeWidth={1.75} className="shrink-0" />}
             badge={null}
+            active={activeModal === "analytics"}
             dataAttr="analytics"
             onMouseEnter={() => {
                 void warmOipAnalyticsModal();
@@ -222,6 +235,7 @@ export function SidebarAnalyticsNavItem({ collapsed }: { collapsed: boolean }) {
 
 /** POS intake workspace — operator application alongside Tasks, Inbox, and Analytics. */
 export function SidebarProcessingNavItem({ collapsed }: { collapsed: boolean }) {
+    const activeModal = useActiveAdminV2WorkspaceModal();
     return (
         <SidebarModalNavButton
             collapsed={collapsed}
@@ -229,8 +243,18 @@ export function SidebarProcessingNavItem({ collapsed }: { collapsed: boolean }) 
             label="Processing"
             icon={<Layers size={collapsed ? 20 : 16} strokeWidth={1.75} className="shrink-0" />}
             badge={null}
+            active={activeModal === "processing"}
             dataAttr="processing"
-            onClick={() => dispatchAdminV2OpenProcessingModal()}
+            onMouseEnter={() => {
+                void warmProcessingQueueCache();
+            }}
+            onFocus={() => {
+                void warmProcessingQueueCache();
+            }}
+            onClick={() => {
+                void warmProcessingQueueCache();
+                dispatchAdminV2OpenProcessingModal();
+            }}
         />
     );
 }
