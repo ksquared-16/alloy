@@ -163,7 +163,7 @@ export default function AdminV2SettingsStatusTransitionRulesPage() {
                                         <span
                                             className={[
                                                 "inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold",
-                                                r.is_active ? "bg-alloy-blue/10 text-alloy-blue" : "bg-alloy-forge/10 text-alloy-forge/70",
+                                                r.is_active ? "bg-alloy-pine/10 text-alloy-pine" : "bg-alloy-forge/10 text-alloy-forge/70",
                                             ].join(" ")}
                                         >
                                             {r.is_active ? "active" : "inactive"}

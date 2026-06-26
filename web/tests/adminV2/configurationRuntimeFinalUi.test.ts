@@ -24,9 +24,11 @@ function read(rel: string): string {
 describe("Configuration Runtime final Processes UI", () => {
     it("processes page uses two-column configuration shell layout", () => {
         const page = read("app/adminV2/settings/processes/page.tsx");
-        expect(page).toContain('data-testid="settings-processes-page"');
-        expect(page).toContain("process-config-page");
-        expect(page).toContain("BUSINESS_PROCESS_SETTINGS_PAGE_SUBTITLE");
+        expect(page).toContain("ProcessesConfigurationPage");
+
+        const surface = read("components/adminV2/settings/businessProcess/ProcessesConfigurationPage.tsx");
+        expect(surface).toContain('data-testid="settings-processes-page"');
+        expect(surface).not.toContain("LifecycleSettingsShell");
 
         const board = read("components/adminV2/settings/lifecycle/LifecycleActivationBoard.tsx");
         const shell = read("components/adminV2/settings/businessProcess/BusinessProcessConfigurationShell.tsx");

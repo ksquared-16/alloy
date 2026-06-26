@@ -13,7 +13,7 @@ import {
 
 export default function SettingsConfigurationHub() {
     return (
-        <div className="mx-auto w-full max-w-6xl space-y-6" data-testid="settings-configuration-hub">
+        <div className="mx-auto w-full max-w-6xl space-y-6" data-testid="settings-index-page">
             <ConfigRuntimeHero title={CONFIGURATION_MODE_HUB_TITLE} subtitle={CONFIGURATION_MODE_HUB_SUBTITLE} />
 
             <section

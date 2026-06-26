@@ -62,7 +62,7 @@ export default function CompletionGuardrailsSettingsPanel() {
                     return (
                         <div
                             key={group}
-                            className="rounded-lg border border-admin-border/70 bg-white/90 p-3"
+                            className="rounded-lg border border-alloy-forge/12 bg-white/90 p-3"
                             data-testid={`completion-guardrails-group-${group}`}
                         >
                             <h3 className="text-xs font-semibold text-alloy-midnight">

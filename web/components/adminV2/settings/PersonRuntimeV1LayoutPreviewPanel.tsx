@@ -126,7 +126,7 @@ export default function PersonRuntimeV1LayoutPreviewPanel({
                 {(runtime?.variants ?? []).map((variant) => (
                     <div
                         key={variant.variant_key}
-                        className="rounded-lg border border-admin-border/70 bg-white/90 p-3"
+                        className="rounded-lg border border-alloy-forge/12 bg-white/90 p-3"
                         data-testid={`person-layout-variant-${variant.variant_key}`}
                     >
                         <div className="flex flex-wrap items-center gap-2">

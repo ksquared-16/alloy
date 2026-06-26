@@ -22,6 +22,8 @@ describe("Configuration Runtime core interaction", () => {
         const page = read("app/adminV2/settings/page.tsx");
         expect(page).toContain("SettingsConfigurationHub");
         expect(page).not.toContain("SettingsIndexRedirect");
+        const hub = read("app/adminV2/settings/SettingsConfigurationHub.tsx");
+        expect(hub).toContain('data-testid="settings-index-page"');
     });
 
     it("settings providers omit duplicate SettingsWorkspaceNav sidebar", () => {

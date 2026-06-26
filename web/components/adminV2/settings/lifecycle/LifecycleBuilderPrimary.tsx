@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
 import LifecycleActivationBoard from "@/components/adminV2/settings/lifecycle/LifecycleActivationBoard";
 import BusinessProcessProcessSelectorStrip from "@/components/adminV2/settings/businessProcess/BusinessProcessProcessSelectorStrip";
 import type { LifecycleCatalogEntry } from "@/lib/lifecycle/lifecycleCatalogTypes";
@@ -22,7 +22,13 @@ import LifecycleDevCreateVerifyButton from "@/components/adminV2/settings/lifecy
 import LifecycleTestCleanupButton from "@/components/adminV2/settings/lifecycle/LifecycleTestCleanupButton";
 import { isLifecycleDebugUiEnabled } from "@/lib/lifecycle/lifecycleDebugUi";
 
-export default function LifecycleBuilderPrimary() {
+export default function LifecycleBuilderPrimary({
+    contextActions = null,
+    onContextActionsChange,
+}: {
+    contextActions?: ReactNode;
+    onContextActionsChange?: (actions: ReactNode) => void;
+} = {}) {
     const { orgId, userId } = useAdminAuth();
     const [catalog, setCatalog] = useState<LifecycleCatalogEntry[]>([]);
     const [catalogLoading, setCatalogLoading] = useState(true);
@@ -192,7 +198,7 @@ export default function LifecycleBuilderPrimary() {
     const showBoard = creatingNew || selectedCatalogEntry;
 
     return (
-        <div className="flex min-h-0 flex-1 flex-col gap-3" data-testid="lifecycle-builder-primary">
+        <div className="flex min-h-0 flex-1 flex-col gap-2" data-testid="lifecycle-builder-primary">
             {isLifecycleDebugUiEnabled() ?
                 <>
                     <AdminAccessScopeDebugPanel surface="lifecycle" />
@@ -213,7 +219,7 @@ export default function LifecycleBuilderPrimary() {
                 </p>
             :   null}
 
-            <div className="process-config-top">
+            <div className="process-config-context-bar shrink-0" data-testid="process-config-context">
                 <BusinessProcessProcessSelectorStrip
                     items={catalog}
                     selectedId={selectedCatalogId}
@@ -223,6 +229,7 @@ export default function LifecycleBuilderPrimary() {
                         setCreatingNew(true);
                         setIdentity(null);
                     }}
+                    trailingActions={contextActions}
                 />
             </div>
 
@@ -286,11 +293,12 @@ export default function LifecycleBuilderPrimary() {
                             setCreatingNew(false);
                             setIdentity(null);
                         }}
+                        onContextActionsChange={onContextActionsChange}
                     />
                 </div>
             :   !catalogLoading && catalog.length ?
-                <p className="rounded-xl border border-dashed border-alloy-forge/20 bg-white px-4 py-8 text-center text-sm text-alloy-midnight/55">
-                    Select a process above to configure stages, Work Views, and presentation.
+                <p className="rounded-xl border border-dashed border-alloy-forge/20 bg-white px-4 py-6 text-center text-sm text-alloy-midnight/55">
+                    Select a process to configure stages, Work Views, and actions.
                 </p>
             :   null}
 

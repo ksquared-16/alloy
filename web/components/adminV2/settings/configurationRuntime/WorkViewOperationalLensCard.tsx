@@ -81,7 +81,7 @@ export default function WorkViewOperationalLensCard({
                         type="text"
                         value={row.label}
                         onChange={(e) => onUpdate({ label: e.target.value })}
-                        className="w-full rounded-lg border border-alloy-forge/12 bg-[#FAFBFC] px-3 py-2 text-sm text-alloy-midnight"
+                        className="w-full rounded-lg border border-alloy-forge/12 bg-white px-3 py-2 text-sm text-alloy-midnight"
                         data-testid={`work-view-label-${row.queue_key}`}
                     />
                 </LensSectionRow>
@@ -91,7 +91,7 @@ export default function WorkViewOperationalLensCard({
                         value={row.mission}
                         rows={2}
                         onChange={(e) => onUpdate({ mission: e.target.value })}
-                        className="w-full rounded-lg border border-alloy-forge/12 bg-[#FAFBFC] px-3 py-2 text-sm leading-relaxed text-alloy-midnight"
+                        className="w-full rounded-lg border border-alloy-forge/12 bg-white px-3 py-2 text-sm leading-relaxed text-alloy-midnight"
                         data-testid={`work-view-mission-${row.queue_key}`}
                     />
                 </LensSectionRow>

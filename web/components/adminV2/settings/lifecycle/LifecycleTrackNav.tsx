@@ -29,7 +29,7 @@ export default function LifecycleTrackNav({
                         aria-selected={active}
                         className={`rounded-md px-3 py-1 text-xs font-semibold ${
                             active
-                                ? "bg-alloy-blue text-white"
+                                ? "bg-alloy-pine text-white"
                                 : "bg-alloy-stone/15 text-alloy-midnight/70 hover:bg-alloy-stone/25"
                         }`}
                         onClick={() => onSelect(track.key)}

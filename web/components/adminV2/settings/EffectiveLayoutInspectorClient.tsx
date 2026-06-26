@@ -108,7 +108,7 @@ export default function EffectiveLayoutInspectorClient({
                     <p className="text-xs text-alloy-midnight/60">
                         Read-only resolution via <code>/api/admin/entity-layouts/effective</code>.{" "}
                         {previewOn ?
-                            <Link href="/admin/settings/layouts" className="text-alloy-blue underline">
+                            <Link href="/admin/settings/layouts" className="text-alloy-pine underline">
                                 Open layout editor
                             </Link>
                         :   "Editor requires preview flag."}
@@ -170,7 +170,7 @@ export default function EffectiveLayoutInspectorClient({
 
             <button
                 type="button"
-                className="rounded-md bg-alloy-blue px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-60"
+                className="rounded-md bg-alloy-pine px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-60"
                 disabled={loading}
                 onClick={() => void load()}
             >

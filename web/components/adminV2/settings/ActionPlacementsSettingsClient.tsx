@@ -332,7 +332,7 @@ export default function ActionPlacementsSettingsClient() {
                         <select
                             value={entityFilter}
                             onChange={(e) => setEntityFilter(e.target.value)}
-                            className="rounded border border-[#e6e8ec] px-2 py-1 text-xs"
+                            className="rounded border border-alloy-stone/40 px-2 py-1 text-xs"
                         >
                             <option value="">All</option>
                             {entityFilterOptions.map((opt) => (

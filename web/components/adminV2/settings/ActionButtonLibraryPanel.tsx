@@ -31,7 +31,7 @@ type Props = {
 function categoryChipClass(category: ActionDefinitionCategory): string {
     switch (category) {
         case "communication":
-            return "bg-sky-500/8 text-sky-900/90";
+            return "bg-alloy-pine/8 text-amber-900/90";
         case "bos_native":
             return "bg-violet-500/8 text-violet-900/90";
         case "status_lifecycle":

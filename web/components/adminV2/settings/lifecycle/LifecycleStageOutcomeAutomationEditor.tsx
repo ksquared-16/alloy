@@ -55,7 +55,7 @@ export default function LifecycleStageOutcomeAutomationEditor({
     };
 
     return (
-        <div className="mt-2 space-y-2 rounded border border-alloy-forge/10 bg-[#FAFBFC] px-2 py-1.5" data-testid={`stage-outcome-automation-${outcomeKey}`}>
+        <div className="mt-2 space-y-2 rounded border border-alloy-forge/10 bg-white px-2 py-1.5" data-testid={`stage-outcome-automation-${outcomeKey}`}>
             <label className="flex flex-wrap items-center gap-2 text-[10px] text-alloy-midnight/65">
                 Automation
                 <select

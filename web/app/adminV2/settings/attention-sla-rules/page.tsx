@@ -364,13 +364,13 @@ export default function AdminV2SettingsAttentionSlaRulesPage() {
                 </div>
             ) : null}
 
-            <div className="rounded-xl border border-admin-border bg-white/90 p-4 shadow-sm">
+            <div className="rounded-xl border border-alloy-forge/12 bg-white/90 p-4 shadow-sm">
                 <label className="block text-xs font-semibold uppercase tracking-wide text-alloy-midnight/55">Department</label>
                 <select
                     value={departmentId}
                     disabled={loadingList || !departments.length}
                     onChange={(e) => setDepartmentId(e.target.value)}
-                    className="mt-1 w-full max-w-md rounded-lg border border-admin-border px-2 py-2 text-sm"
+                    className="mt-1 w-full max-w-md rounded-lg border border-alloy-forge/12 px-2 py-2 text-sm"
                 >
                     {departments.map((d) => (
                         <option key={d.id} value={d.id}>
@@ -389,14 +389,14 @@ export default function AdminV2SettingsAttentionSlaRulesPage() {
                             type="button"
                             disabled={saving || !departmentId}
                             onClick={() => void persist()}
-                            className="rounded-lg border border-alloy-blue bg-alloy-blue px-3 py-1.5 text-sm font-semibold text-white hover:bg-alloy-blue/90 disabled:opacity-50"
+                            className="rounded-lg border border-alloy-pine bg-alloy-pine px-3 py-1.5 text-sm font-semibold text-white hover:bg-alloy-pine/90 disabled:opacity-50"
                         >
                             {saving ? "Saving…" : "Save"}
                         </button>
                     </div>
 
                     {/* 1. Needs Attention Types */}
-                    <section className="space-y-3 rounded-xl border border-admin-border bg-white/95 p-4 shadow-sm">
+                    <section className="space-y-3 rounded-xl border border-alloy-forge/12 bg-white/95 p-4 shadow-sm">
                         <h2 className="text-base font-semibold text-alloy-midnight">1. Needs Attention types</h2>
                         <p className="text-sm text-alloy-midnight/70">
                             Labels, order, and reason membership only — resolver math is unchanged.
@@ -404,7 +404,7 @@ export default function AdminV2SettingsAttentionSlaRulesPage() {
                         <button
                             type="button"
                             onClick={addBucket}
-                            className="rounded-lg border border-admin-border bg-white px-3 py-1.5 text-sm font-medium text-alloy-midnight hover:bg-alloy-stone/10"
+                            className="rounded-lg border border-alloy-forge/12 bg-white px-3 py-1.5 text-sm font-medium text-alloy-midnight hover:bg-alloy-stone/10"
                         >
                             Add bucket
                         </button>
@@ -431,7 +431,7 @@ export default function AdminV2SettingsAttentionSlaRulesPage() {
                                                 const v = e.target.value;
                                                 setBucketsDraft((prev) => prev.map((x, i) => (i === idx ? { ...x, key: v } : x)));
                                             }}
-                                            className="mt-1 w-full rounded-lg border border-admin-border px-2 py-1.5 font-mono text-[13px]"
+                                            className="mt-1 w-full rounded-lg border border-alloy-forge/12 px-2 py-1.5 font-mono text-[13px]"
                                         />
                                     </div>
                                     <label className="flex items-center gap-2 text-sm">
@@ -462,7 +462,7 @@ export default function AdminV2SettingsAttentionSlaRulesPage() {
                                                     )
                                                 );
                                             }}
-                                            className="mt-1 w-full rounded-lg border border-admin-border px-2 py-1.5 text-[13px]"
+                                            className="mt-1 w-full rounded-lg border border-alloy-forge/12 px-2 py-1.5 text-[13px]"
                                         />
                                     </div>
                                     <button
@@ -486,7 +486,7 @@ export default function AdminV2SettingsAttentionSlaRulesPage() {
                                                     prev.map((x, i) => (i === idx ? { ...x, label: v } : x))
                                                 );
                                             }}
-                                            className="mt-1 w-full rounded-lg border border-admin-border px-2 py-1.5 text-[13px]"
+                                            className="mt-1 w-full rounded-lg border border-alloy-forge/12 px-2 py-1.5 text-[13px]"
                                         />
                                     </div>
                                     <div>
@@ -501,7 +501,7 @@ export default function AdminV2SettingsAttentionSlaRulesPage() {
                                                     prev.map((x, i) => (i === idx ? { ...x, description: v } : x))
                                                 );
                                             }}
-                                            className="mt-1 w-full rounded-lg border border-admin-border px-2 py-1.5 text-[13px]"
+                                            className="mt-1 w-full rounded-lg border border-alloy-forge/12 px-2 py-1.5 text-[13px]"
                                         />
                                     </div>
                                 </div>
@@ -512,7 +512,7 @@ export default function AdminV2SettingsAttentionSlaRulesPage() {
                                     <p className="mt-0.5 text-[11px] text-alloy-midnight/55">
                                         Toggle membership; expand a code for detail. Thresholds are in section 2.
                                     </p>
-                                    <div className="mt-2 max-h-56 space-y-1 overflow-auto rounded-lg border border-admin-border bg-alloy-stone/[0.04] p-2">
+                                    <div className="mt-2 max-h-56 space-y-1 overflow-auto rounded-lg border border-alloy-forge/12 bg-alloy-stone/[0.04] p-2">
                                         {CANONICAL_OPPORTUNITY_ATTENTION_REASON_CODES_SORTED.map((code) => {
                                             const on = b.reason_codes.includes(code);
                                             const cat = ATTENTION_REASON_CRITERIA_CATALOG[code];
@@ -581,7 +581,7 @@ export default function AdminV2SettingsAttentionSlaRulesPage() {
                     </section>
 
                     {/* 2. Trigger criteria */}
-                    <section className="space-y-4 rounded-xl border border-admin-border bg-white/95 p-4 shadow-sm">
+                    <section className="space-y-4 rounded-xl border border-alloy-forge/12 bg-white/95 p-4 shadow-sm">
                         <h2 className="text-base font-semibold text-alloy-midnight">2. Trigger criteria &amp; thresholds</h2>
                         <p className="text-sm text-alloy-midnight/70">
                             Effective values for this department (merged with platform defaults). Persists as{" "}
@@ -619,7 +619,7 @@ export default function AdminV2SettingsAttentionSlaRulesPage() {
                                                 const v = Math.max(1, Math.floor(Number(e.target.value) || 1));
                                                 setThresholdsDraft((prev) => ({ ...prev, [key]: v }));
                                             }}
-                                            className="mt-1 w-full rounded-lg border border-admin-border px-2 py-1.5 font-mono text-[13px]"
+                                            className="mt-1 w-full rounded-lg border border-alloy-forge/12 px-2 py-1.5 font-mono text-[13px]"
                                         />
                                         <span className="mt-0.5 block font-mono text-[10px] text-alloy-midnight/45">
                                             thresholdsHours.{key}
@@ -654,7 +654,7 @@ export default function AdminV2SettingsAttentionSlaRulesPage() {
                                         min={1}
                                         value={staleHighValueDays}
                                         onChange={(e) => setStaleHighValueDays(Math.max(1, Math.floor(Number(e.target.value) || 1)))}
-                                        className="mt-1 w-full rounded-lg border border-admin-border px-2 py-1.5 font-mono text-[13px]"
+                                        className="mt-1 w-full rounded-lg border border-alloy-forge/12 px-2 py-1.5 font-mono text-[13px]"
                                     />
                                     <span className="mt-0.5 block font-mono text-[10px] text-alloy-midnight/45">stale_high_value_days</span>
                                 </label>
@@ -668,7 +668,7 @@ export default function AdminV2SettingsAttentionSlaRulesPage() {
                                         min={1}
                                         value={staleMidFunnelDays}
                                         onChange={(e) => setStaleMidFunnelDays(Math.max(1, Math.floor(Number(e.target.value) || 1)))}
-                                        className="mt-1 w-full rounded-lg border border-admin-border px-2 py-1.5 font-mono text-[13px]"
+                                        className="mt-1 w-full rounded-lg border border-alloy-forge/12 px-2 py-1.5 font-mono text-[13px]"
                                     />
                                     <span className="mt-0.5 block font-mono text-[10px] text-alloy-midnight/45">stale_mid_funnel_days</span>
                                 </label>
@@ -698,7 +698,7 @@ export default function AdminV2SettingsAttentionSlaRulesPage() {
                                                         const v = Math.max(0, Math.floor(Number(e.target.value) || 0));
                                                         setSlaDraft((prev) => ({ ...prev, [bk]: { ...prev[bk], warning_hours: v } }));
                                                     }}
-                                                    className="ml-1 w-20 rounded border border-admin-border px-1 py-0.5 font-mono"
+                                                    className="ml-1 w-20 rounded border border-alloy-forge/12 px-1 py-0.5 font-mono"
                                                 />
                                             </label>
                                             <label className="text-[11px]">
@@ -711,7 +711,7 @@ export default function AdminV2SettingsAttentionSlaRulesPage() {
                                                         const v = Math.max(0, Math.floor(Number(e.target.value) || 0));
                                                         setSlaDraft((prev) => ({ ...prev, [bk]: { ...prev[bk], critical_hours: v } }));
                                                     }}
-                                                    className="ml-1 w-20 rounded border border-admin-border px-1 py-0.5 font-mono"
+                                                    className="ml-1 w-20 rounded border border-alloy-forge/12 px-1 py-0.5 font-mono"
                                                 />
                                             </label>
                                         </div>
@@ -752,7 +752,7 @@ export default function AdminV2SettingsAttentionSlaRulesPage() {
                                                     [d]: Number.isFinite(v) ? Math.min(1, Math.max(0.05, v)) : prev[d],
                                                 }));
                                             }}
-                                            className="mt-0.5 w-full rounded-lg border border-admin-border px-2 py-1 font-mono text-[13px]"
+                                            className="mt-0.5 w-full rounded-lg border border-alloy-forge/12 px-2 py-1 font-mono text-[13px]"
                                         />
                                     </label>
                                 ))}
@@ -799,7 +799,7 @@ export default function AdminV2SettingsAttentionSlaRulesPage() {
                             </div>
                         </div>
 
-                        <details className="rounded-lg border border-admin-border bg-white p-3">
+                        <details className="rounded-lg border border-alloy-forge/12 bg-white p-3">
                             <summary className="cursor-pointer select-none text-sm font-semibold text-alloy-midnight [&::-webkit-details-marker]:hidden">
                                 Canonical reason reference (full list)
                             </summary>

@@ -14,10 +14,11 @@ import {
     BUSINESS_PROCESS_CARD_OPERATING_PLAN_QUESTION,
     BUSINESS_PROCESS_CARD_REQUIRED,
     BUSINESS_PROCESS_CARD_REQUIRED_QUESTION,
-    BUSINESS_PROCESS_CARD_STATUS_MEMBERSHIP,
     BUSINESS_PROCESS_CARD_STATUS_MEMBERSHIP_QUESTION,
     BUSINESS_PROCESS_PREVIEW_WORK_UNIT,
     BUSINESS_PROCESS_SAVE_STAGE,
+    BUSINESS_PROCESS_SECTION_WHO_BELONGS,
+    BUSINESS_PROCESS_SECTION_WHO_BELONGS_SUMMARY,
 } from "@/lib/lifecycle/businessProcessUiLabels";
 import {
     STAGE_MEMBERSHIP_INCLUDED_STATUSES_HELPER,
@@ -233,12 +234,11 @@ export default function LifecycleStageWorkspace({
     return (
         <div className="relative" data-testid="lifecycle-stage-workspace">
             <header
-                className="sticky top-0 z-20 -mx-1 mb-2 flex flex-wrap items-center justify-between gap-2 border-b border-alloy-forge/10 bg-white/95 px-1 py-2 backdrop-blur-sm"
+                className="mb-2 flex flex-wrap items-center justify-between gap-2 border-b border-alloy-forge/10 pb-2"
                 data-testid="lifecycle-stage-workspace-header"
             >
                 <div className="min-w-0">
                     <h3 className="truncate text-sm font-semibold text-alloy-midnight">{stageLabel || stageKey}</h3>
-                    <p className="truncate text-[10px] text-alloy-midnight/45">{lifecycleName}</p>
                 </div>
                 <SaveBar
                     effectiveSaveState={effectiveSaveState}
@@ -258,8 +258,9 @@ export default function LifecycleStageWorkspace({
             <div className="space-y-2" data-testid="configuration-runtime-stage-card-grid">
                 <ConfigurationRuntimeUniversalCard
                     id="membership"
-                    title={BUSINESS_PROCESS_CARD_STATUS_MEMBERSHIP}
+                    title={BUSINESS_PROCESS_SECTION_WHO_BELONGS}
                     question={BUSINESS_PROCESS_CARD_STATUS_MEMBERSHIP_QUESTION}
+                    summary={BUSINESS_PROCESS_SECTION_WHO_BELONGS_SUMMARY}
                     dirty={membershipDirty || rollupDirty}
                     insightChips={savedStatusCount > 0 ? [`${savedStatusCount} statuses`] : undefined}
                     defaultOpen

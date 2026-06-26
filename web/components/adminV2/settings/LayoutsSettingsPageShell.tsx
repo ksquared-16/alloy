@@ -77,7 +77,7 @@ function LayoutsSettingsPageShellInner({ initialEntityType }: Props) {
                         initialSurface="drawer"
                     />
                     <p className="text-xs text-alloy-midnight/55">
-                        <Link href="/admin/settings/layouts/effective" className="text-alloy-blue underline">
+                        <Link href="/admin/settings/layouts/effective" className="text-alloy-pine underline">
                             Full-screen effective layout inspector
                         </Link>
                     </p>

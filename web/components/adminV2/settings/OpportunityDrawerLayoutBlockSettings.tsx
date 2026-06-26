@@ -97,7 +97,7 @@ export default function OpportunityDrawerLayoutBlockSettings({
 
     return (
         <div
-            className="mt-2 rounded-lg border border-alloy-blue/20 bg-alloy-blue/[0.03] p-3 shadow-sm"
+            className="mt-2 rounded-lg border border-alloy-pine/20 bg-alloy-pine/[0.03] p-3 shadow-sm"
             data-testid="visual-editor-block-settings"
         >
             <div className="mb-2 flex items-center justify-between gap-2">

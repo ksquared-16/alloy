@@ -362,7 +362,7 @@ export default function LocationsHierarchySettingsClient() {
                                                     <button
                                                         type="button"
                                                         onClick={() => openDrawer({ type: "locations", id: row.id })}
-                                                        className="text-left font-medium text-alloy-blue hover:underline"
+                                                        className="text-left font-medium text-alloy-pine hover:underline"
                                                     >
                                                         {row.siteLabel ?? "Untitled site"}
                                                     </button>
@@ -376,7 +376,7 @@ export default function LocationsHierarchySettingsClient() {
                                                 <button
                                                     type="button"
                                                     onClick={() => openDrawer({ type: "locations", id: row.id })}
-                                                    className="text-left font-medium text-alloy-blue hover:underline"
+                                                    className="text-left font-medium text-alloy-pine hover:underline"
                                                 >
                                                     {row.roomLabel ?? "Untitled room"}
                                                 </button>
@@ -500,7 +500,7 @@ export default function LocationsHierarchySettingsClient() {
                                                 <button
                                                     type="button"
                                                     onClick={() => openDrawer({ type: "locations", id: row.id })}
-                                                    className="text-[11px] font-medium text-alloy-blue hover:underline"
+                                                    className="text-[11px] font-medium text-alloy-pine hover:underline"
                                                 >
                                                     Open
                                                 </button>

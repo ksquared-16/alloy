@@ -426,7 +426,7 @@ export default function OpportunityDrawerLayoutSectionRowEditor({
                     </div>
 
                     {!hideInlineItemSettings && selectedItem && row.columns.some((c) => c.items.some((it) => it.itemId === selectedItem.itemId)) ?
-                        <div className="mt-2 rounded-lg border border-alloy-blue/20 bg-alloy-blue/[0.03] p-2" data-testid="visual-editor-item-settings">
+                        <div className="mt-2 rounded-lg border border-alloy-pine/20 bg-alloy-pine/[0.03] p-2" data-testid="visual-editor-item-settings">
                             <LayoutBuilderItemInspector
                                 doc={doc}
                                 sectionKey={sectionKey}
@@ -512,7 +512,7 @@ function SectionItemRow({
                             <span className="text-alloy-midnight/35"> · preview only</span>
                         :   null}
                         {conditionalVisibility ?
-                            <span className="text-alloy-blue/70" data-testid="visual-editor-field-conditional-badge">
+                            <span className="text-alloy-pine/70" data-testid="visual-editor-field-conditional-badge">
                                 {" "}
                                 · conditional
                             </span>

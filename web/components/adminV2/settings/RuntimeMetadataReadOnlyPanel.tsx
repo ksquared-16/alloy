@@ -59,7 +59,7 @@ export default function RuntimeMetadataReadOnlyPanel({
 
     if (isNewRow) {
         return (
-            <div className="rounded-lg border border-dashed border-admin-border/80 bg-alloy-stone/5 px-3 py-2.5 text-xs text-alloy-forge/70">
+            <div className="rounded-lg border border-dashed border-alloy-forge/12 bg-alloy-stone/5 px-3 py-2.5 text-xs text-alloy-forge/70">
                 <div className="font-semibold text-alloy-forge/85">Runtime metadata</div>
                 <p className="mt-1 leading-snug">
                     New {entity === "work_unit" ? "work units" : "departments"} start with empty metadata until set via vertical bootstrap,
@@ -71,7 +71,7 @@ export default function RuntimeMetadataReadOnlyPanel({
 
     if (!root || keys.length === 0) {
         return (
-            <div className="rounded-lg border border-admin-border/60 bg-white/60 px-3 py-2.5 text-xs text-alloy-forge/70">
+            <div className="rounded-lg border border-alloy-forge/12 bg-white/60 px-3 py-2.5 text-xs text-alloy-forge/70">
                 <div className="font-semibold text-alloy-forge/85">Runtime metadata</div>
                 <p className="mt-1 leading-snug">
                     No metadata keys on this row (empty object). Opportunity attention and activity signals use defaults unless department or
@@ -82,7 +82,7 @@ export default function RuntimeMetadataReadOnlyPanel({
     }
 
     return (
-        <div className="rounded-lg border border-admin-border/70 bg-white/70 px-3 py-3 text-xs space-y-3">
+        <div className="rounded-lg border border-alloy-forge/12 bg-white/70 px-3 py-3 text-xs space-y-3">
             <div>
                 <div className="font-semibold text-alloy-forge">Runtime metadata (read-only)</div>
                 <p className="mt-0.5 leading-snug text-alloy-forge/65">
@@ -109,7 +109,7 @@ export default function RuntimeMetadataReadOnlyPanel({
                                 const info = RUNTIME_METADATA_KEY_INFO[k];
                                 const value = root[k];
                                 return (
-                                    <li key={k} className="rounded-md border border-admin-border/50 bg-white/80 px-2.5 py-2">
+                                    <li key={k} className="rounded-md border border-alloy-forge/12 bg-white/80 px-2.5 py-2">
                                         <div className="font-mono text-[11px] font-semibold text-alloy-pine/90">{k}</div>
                                         {info ? (
                                             <p className="mt-1 leading-snug text-alloy-forge/70">
@@ -131,7 +131,7 @@ export default function RuntimeMetadataReadOnlyPanel({
                                                 <summary className="cursor-pointer text-[11px] font-medium text-alloy-pine/90">
                                                     Reference shape (help)
                                                 </summary>
-                                                <pre className="mt-1 max-h-40 overflow-auto rounded border border-admin-border/40 bg-alloy-midnight/[0.03] px-2 py-1.5 text-[10px] leading-relaxed text-alloy-forge/75 whitespace-pre-wrap">
+                                                <pre className="mt-1 max-h-40 overflow-auto rounded border border-alloy-forge/12/40 bg-alloy-midnight/[0.03] px-2 py-1.5 text-[10px] leading-relaxed text-alloy-forge/75 whitespace-pre-wrap">
                                                     {info.schemaSummary}
                                                 </pre>
                                             </details>

@@ -42,7 +42,7 @@ export default function OpportunityDrawerLayoutActivityTimelineSettings({
     const defaultDirection = defaultTimelineDirectionForDisplayMode(config.displayMode);
 
     return (
-        <div className="space-y-3 rounded-lg border border-alloy-blue/15 bg-alloy-blue/[0.03] p-3" data-testid="visual-editor-activity-timeline-settings">
+        <div className="space-y-3 rounded-lg border border-alloy-pine/15 bg-alloy-pine/[0.03] p-3" data-testid="visual-editor-activity-timeline-settings">
             <p className="text-[11px] font-semibold text-alloy-midnight">Activity timeline</p>
             <p className="text-[10px] leading-relaxed text-alloy-midnight/50">
                 Historical event stream for this record. Distinct from Tasks (work) and Notes (authored content).

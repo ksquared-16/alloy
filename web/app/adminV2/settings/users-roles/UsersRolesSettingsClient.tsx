@@ -610,7 +610,7 @@ export default function UsersRolesSettingsClient({ canManageUsersRoles }: { canM
                             <h2 className="text-sm font-semibold">Roles</h2>
                             <button
                                 type="button"
-                                className="text-xs font-medium text-alloy-blue hover:underline"
+                                className="text-xs font-medium text-alloy-pine hover:underline"
                                 onClick={() => setNewRoleOpen((o) => !o)}
                             >
                                 {newRoleOpen ? "Close" : "New role"}

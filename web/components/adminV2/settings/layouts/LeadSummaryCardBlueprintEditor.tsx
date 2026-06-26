@@ -273,7 +273,7 @@ export default function LeadSummaryCardBlueprintEditor({ layoutId, onLayoutIdCha
                         return (
                             <div
                                 key={`${slot.key}-${index}`}
-                                className="rounded-xl border border-alloy-forge/10 bg-[#FAFBFC] p-4"
+                                className="rounded-xl border border-alloy-forge/10 bg-white p-4"
                                 data-testid={`lead-summary-slot-${slot.key}`}
                             >
                                 <div className="grid gap-3 md:grid-cols-2">

@@ -236,7 +236,7 @@ export function PlatformBuilderStatusBadge({
     const cls =
         tone === "success" ? "bg-alloy-juniper/12 text-alloy-juniper"
         : tone === "warning" ? "bg-amber-500/12 text-amber-800"
-        : tone === "template" ? "bg-alloy-blue/10 text-alloy-blue"
+        : tone === "template" ? "bg-alloy-pine/10 text-alloy-pine"
         : tone === "muted" ? "bg-alloy-stone/15 text-alloy-midnight/45"
         : "bg-alloy-stone/12 text-alloy-midnight/55";
     return <span className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-semibold ${cls}`}>{label}</span>;
@@ -266,6 +266,6 @@ export function PlatformBuilderCallout({ tone = "info", children }: { tone?: "in
     const cls =
         tone === "success" ? "border-alloy-juniper/25 bg-alloy-juniper/8 text-alloy-juniper"
         : tone === "warning" ? "border-amber-500/25 bg-amber-500/8 text-amber-900"
-        : "border-alloy-blue/20 bg-alloy-blue/5 text-alloy-midnight/70";
+        : "border-alloy-pine/20 bg-alloy-pine/5 text-alloy-midnight/70";
     return <div className={`rounded-lg border px-3 py-2 text-xs leading-relaxed ${cls}`}>{children}</div>;
 }

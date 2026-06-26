@@ -101,7 +101,7 @@ export default function EffectiveDrawerLayoutPreviewPanel({
                     <label className="flex flex-col gap-0.5 text-[11px] text-alloy-midnight/70">
                         <span className="font-medium">Entity</span>
                         <select
-                            className="rounded-lg border border-admin-border bg-white px-2 py-1.5 text-xs text-alloy-midnight"
+                            className="rounded-lg border border-alloy-forge/12 bg-white px-2 py-1.5 text-xs text-alloy-midnight"
                             value={entityType}
                             onChange={(e) => setEntityTypeInternal(e.target.value)}
                         >
@@ -178,7 +178,7 @@ export default function EffectiveDrawerLayoutPreviewPanel({
                                 {data.sections.map((s) => (
                                     <li
                                         key={`${s.position}:${s.section_key}`}
-                                        className="rounded-lg border border-admin-border/70 bg-white/90 px-3 py-2 text-xs"
+                                        className="rounded-lg border border-alloy-forge/12 bg-white/90 px-3 py-2 text-xs"
                                     >
                                         <div className="flex flex-wrap items-center gap-2">
                                             <span className="font-mono text-[10px] text-alloy-midnight/45">{s.position}.</span>

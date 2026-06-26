@@ -25,7 +25,7 @@ export default function LifecycleStageWorkCompletionPolicyEditor({ policy, onCha
     const summary = completionPolicySummary(current);
 
     return (
-        <div className="mt-3 rounded-md border border-alloy-forge/10 bg-[#FAFBFC] p-2.5" data-testid={`${testIdPrefix}-completion-policy`}>
+        <div className="mt-3 rounded-md border border-alloy-forge/10 bg-white p-2.5" data-testid={`${testIdPrefix}-completion-policy`}>
             <div className="mb-2 flex items-center justify-between gap-2">
                 <span className="text-[10px] font-semibold text-alloy-midnight/70">Completion policy</span>
                 <label className="flex items-center gap-1 text-[10px] text-alloy-midnight/65">

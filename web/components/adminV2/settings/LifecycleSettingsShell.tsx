@@ -4,6 +4,10 @@ import { useState } from "react";
 import LifecycleHubClient from "@/components/adminV2/settings/LifecycleHubClient";
 import LifecycleActivationClient from "@/components/adminV2/settings/lifecycle/LifecycleActivationClient";
 
+/**
+ * @deprecated Processes configuration uses `ProcessesConfigurationPage` directly.
+ * Retained for legacy enrollment-process routes that still mount advanced lifecycle hub tooling.
+ */
 export default function LifecycleSettingsShell() {
     const [showAdvanced, setShowAdvanced] = useState(false);
 

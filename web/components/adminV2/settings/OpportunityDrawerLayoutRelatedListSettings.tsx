@@ -264,8 +264,8 @@ export default function OpportunityDrawerLayoutRelatedListSettings({
     };
 
     return (
-        <div className="mt-3 space-y-3 rounded-lg border border-alloy-blue/20 bg-alloy-blue/[0.04] p-2" data-testid="visual-editor-related-list-settings">
-            <p className="text-[10px] font-semibold uppercase tracking-wide text-alloy-blue">Related list</p>
+        <div className="mt-3 space-y-3 rounded-lg border border-alloy-pine/20 bg-alloy-pine/[0.04] p-2" data-testid="visual-editor-related-list-settings">
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-alloy-pine">Related list</p>
 
             <label className="block text-[11px] text-alloy-midnight/60">
                 Presentation

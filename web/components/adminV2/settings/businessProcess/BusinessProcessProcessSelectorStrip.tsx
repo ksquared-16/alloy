@@ -1,11 +1,12 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import type { LifecycleCatalogEntry } from "@/lib/lifecycle/lifecycleCatalogTypes";
 import {
     BUSINESS_PROCESS_CATALOG_CREATE,
     BUSINESS_PROCESS_CATALOG_EMPTY,
     BUSINESS_PROCESS_CATALOG_LOADING,
+    BUSINESS_PROCESS_SETTINGS_PAGE_TITLE,
 } from "@/lib/lifecycle/businessProcessUiLabels";
 
 const VISIBLE_CHIP_LIMIT = 5;
@@ -27,12 +28,14 @@ export default function BusinessProcessProcessSelectorStrip({
     loading,
     onSelect,
     onCreateNew,
+    trailingActions = null,
 }: {
     items: LifecycleCatalogEntry[];
     selectedId: string | null;
     loading: boolean;
     onSelect: (entry: LifecycleCatalogEntry) => void;
     onCreateNew: () => void;
+    trailingActions?: ReactNode;
 }) {
     const [query, setQuery] = useState("");
     const selectedEntry = useMemo(
@@ -79,8 +82,9 @@ export default function BusinessProcessProcessSelectorStrip({
     const useDropdown = items.length > VISIBLE_CHIP_LIMIT;
 
     return (
-        <div className="space-y-2" data-testid="lifecycle-process-catalog">
+        <div className="space-y-1" data-testid="lifecycle-process-catalog">
             <div className="process-config-selector-row">
+                <h1 className="process-config-context-title shrink-0">{BUSINESS_PROCESS_SETTINGS_PAGE_TITLE}</h1>
                 <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
                     {useDropdown ?
                         <div className="flex min-w-0 flex-1 flex-col gap-1 sm:flex-row sm:items-center">
@@ -137,17 +141,20 @@ export default function BusinessProcessProcessSelectorStrip({
                         </div>
                     }
                     {selectedEntry && useDropdown ?
-                        <p className="text-[11px] text-alloy-midnight/50">{formatProcessSummary(selectedEntry)}</p>
+                        <p className="process-config-context-summary">{formatProcessSummary(selectedEntry)}</p>
                     :   null}
                 </div>
-                <button
-                    type="button"
-                    className="shrink-0 rounded-lg bg-alloy-pine px-3.5 py-2 text-sm font-semibold text-white hover:bg-alloy-pine/90"
-                    onClick={onCreateNew}
-                    data-testid="lifecycle-catalog-create-new"
-                >
-                    {BUSINESS_PROCESS_CATALOG_CREATE}
-                </button>
+                <div className="flex shrink-0 items-center gap-2">
+                    {trailingActions}
+                    <button
+                        type="button"
+                        className="shrink-0 rounded-lg bg-alloy-pine px-3.5 py-1.5 text-sm font-semibold text-white hover:bg-alloy-pine/90"
+                        onClick={onCreateNew}
+                        data-testid="lifecycle-catalog-create-new"
+                    >
+                        {BUSINESS_PROCESS_CATALOG_CREATE}
+                    </button>
+                </div>
             </div>
         </div>
     );

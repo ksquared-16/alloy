@@ -29,13 +29,13 @@ export default function StatusSettingsInventoryPanel() {
 
     return (
         <section
-            className="mt-8 rounded-xl border border-[#e6e8ec] bg-white shadow-sm overflow-hidden"
+            className="mt-8 rounded-xl border border-alloy-stone/40 bg-white shadow-sm overflow-hidden"
             data-status-settings-inventory-panel="true"
         >
-            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#e6e8ec] bg-[#F4F6F9]/50 px-5 py-3">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-alloy-stone/40 bg-alloy-stone/[0.04] px-5 py-3">
                 <div>
-                    <h2 className="text-sm font-semibold text-[#31394d]">Status inventory</h2>
-                    <p className="mt-0.5 text-xs leading-snug text-[#59678b]">
+                    <h2 className="text-sm font-semibold text-alloy-midnight">Status inventory</h2>
+                    <p className="mt-0.5 text-xs leading-snug text-alloy-forge/70">
                         Compare active status definitions with persisted values. Read-only — no data changes.
                     </p>
                 </div>
@@ -63,10 +63,10 @@ export default function StatusSettingsInventoryPanel() {
                                 className="rounded-lg border border-alloy-stone/20 bg-alloy-stone/5 px-3 py-2"
                                 data-status-inventory-summary={key}
                             >
-                                <div className="text-[10px] font-medium uppercase tracking-wide text-[#59678b]">
+                                <div className="text-[10px] font-medium uppercase tracking-wide text-alloy-forge/70">
                                     {key.replace(/_/g, " ")}
                                 </div>
-                                <div className="text-lg font-semibold text-[#31394d]">{value}</div>
+                                <div className="text-lg font-semibold text-alloy-midnight">{value}</div>
                             </div>
                         ))}
                     </div>
@@ -74,22 +74,22 @@ export default function StatusSettingsInventoryPanel() {
                     {report.layers.map((layer) => (
                         <div
                             key={layer.entity_type}
-                            className="rounded-lg border border-[#e6e8ec] p-4"
+                            className="rounded-lg border border-alloy-stone/40 p-4"
                             data-status-inventory-layer={layer.entity_type}
                         >
-                            <h3 className="text-sm font-semibold text-[#31394d]">
+                            <h3 className="text-sm font-semibold text-alloy-midnight">
                                 {layer.entity_type}{" "}
-                                <span className="font-normal text-[#59678b]">({layer.column})</span>
+                                <span className="font-normal text-alloy-forge/70">({layer.column})</span>
                             </h3>
                             <div className="mt-2 grid gap-3 md:grid-cols-2">
                                 <div>
-                                    <p className="text-xs font-semibold text-[#59678b]">Orphan persisted keys</p>
+                                    <p className="text-xs font-semibold text-alloy-forge/70">Orphan persisted keys</p>
                                     {layer.orphan_persisted_keys.length === 0 ?
-                                        <p className="mt-1 text-xs text-[#59678b]">None</p>
-                                    :   <ul className="mt-1 space-y-0.5 text-xs text-[#31394d]">
+                                        <p className="mt-1 text-xs text-alloy-forge/70">None</p>
+                                    :   <ul className="mt-1 space-y-0.5 text-xs text-alloy-midnight">
                                             {layer.orphan_persisted_keys.slice(0, 12).map((row) => (
                                                 <li key={row.status_key}>
-                                                    <code className="rounded bg-[#eef0f4] px-1">{row.status_key}</code>
+                                                    <code className="rounded bg-alloy-stone/10 px-1">{row.status_key}</code>
                                                     {" — "}
                                                     {row.count} record{row.count === 1 ? "" : "s"}
                                                 </li>
@@ -98,10 +98,10 @@ export default function StatusSettingsInventoryPanel() {
                                     }
                                 </div>
                                 <div>
-                                    <p className="text-xs font-semibold text-[#59678b]">Unused active definitions</p>
+                                    <p className="text-xs font-semibold text-alloy-forge/70">Unused active definitions</p>
                                     {layer.unused_definition_keys.length === 0 ?
-                                        <p className="mt-1 text-xs text-[#59678b]">None</p>
-                                    :   <p className="mt-1 text-xs text-[#31394d]">
+                                        <p className="mt-1 text-xs text-alloy-forge/70">None</p>
+                                    :   <p className="mt-1 text-xs text-alloy-midnight">
                                             {layer.unused_definition_keys.slice(0, 12).join(", ")}
                                             {layer.unused_definition_keys.length > 12 ? "…" : ""}
                                         </p>
@@ -109,7 +109,7 @@ export default function StatusSettingsInventoryPanel() {
                                 </div>
                             </div>
                             {layer.entity_type === "persons" ?
-                                <div className="mt-3 grid gap-2 md:grid-cols-3 text-xs text-[#59678b]">
+                                <div className="mt-3 grid gap-2 md:grid-cols-3 text-xs text-alloy-forge/70">
                                     <div>
                                         Missing <code>applies_to_profiles</code>:{" "}
                                         {layer.missing_applicability_metadata?.length ?? 0}

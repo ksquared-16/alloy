@@ -146,7 +146,7 @@ export default function OpportunityWorkflowV1DrawerOrderEditor({ onSaved }: { on
                 {keys.map((key, i) => (
                     <li
                         key={key}
-                        className="flex flex-wrap items-center gap-2 rounded-lg border border-admin-border/60 bg-white px-2 py-1.5 text-xs"
+                        className="flex flex-wrap items-center gap-2 rounded-lg border border-alloy-forge/12 bg-white px-2 py-1.5 text-xs"
                     >
                         <span className="w-6 text-[10px] text-alloy-midnight/45">{i + 1}</span>
                         <span className="min-w-0 flex-1 font-medium text-alloy-midnight">{titles[key] ?? key}</span>
@@ -154,7 +154,7 @@ export default function OpportunityWorkflowV1DrawerOrderEditor({ onSaved }: { on
                             <span className="flex gap-1">
                                 <button
                                     type="button"
-                                    className="rounded border border-admin-border px-2 py-0.5 text-[11px] hover:bg-alloy-stone/15 disabled:opacity-40"
+                                    className="rounded border border-alloy-forge/12 px-2 py-0.5 text-[11px] hover:bg-alloy-stone/15 disabled:opacity-40"
                                     disabled={i === 0 || saving}
                                     onClick={() => setKeys((prev) => move(prev, i, -1))}
                                 >
@@ -162,7 +162,7 @@ export default function OpportunityWorkflowV1DrawerOrderEditor({ onSaved }: { on
                                 </button>
                                 <button
                                     type="button"
-                                    className="rounded border border-admin-border px-2 py-0.5 text-[11px] hover:bg-alloy-stone/15 disabled:opacity-40"
+                                    className="rounded border border-alloy-forge/12 px-2 py-0.5 text-[11px] hover:bg-alloy-stone/15 disabled:opacity-40"
                                     disabled={i >= keys.length - 1 || saving}
                                     onClick={() => setKeys((prev) => move(prev, i, 1))}
                                 >
@@ -187,7 +187,7 @@ export default function OpportunityWorkflowV1DrawerOrderEditor({ onSaved }: { on
                     <button
                         type="button"
                         disabled={!dirty || saving}
-                        className="rounded-lg border border-admin-border px-3 py-1.5 text-xs font-medium text-alloy-midnight disabled:opacity-45"
+                        className="rounded-lg border border-alloy-forge/12 px-3 py-1.5 text-xs font-medium text-alloy-midnight disabled:opacity-45"
                         onClick={discard}
                     >
                         Discard

@@ -565,7 +565,7 @@ export default function LayoutBuilderInspectorPanel({
                         </label>
 
                         {sectionType === "related_list" ?
-                            <div className="rounded-xl border border-alloy-blue/15 bg-alloy-blue/[0.03] p-3">
+                            <div className="rounded-xl border border-alloy-pine/15 bg-alloy-pine/[0.03] p-3">
                                 <OpportunityDrawerLayoutRelatedListSettings
                                     doc={doc}
                                     sectionKey={section.key}

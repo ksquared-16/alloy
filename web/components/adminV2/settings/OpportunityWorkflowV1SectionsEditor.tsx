@@ -309,7 +309,7 @@ export default function OpportunityWorkflowV1SectionsEditor({
                             value={newSectionLabel}
                             onChange={(e) => setNewSectionLabel(e.target.value)}
                             placeholder="Section name"
-                            className="w-full rounded border border-[#e6e8ec] px-2 py-1 text-xs"
+                            className="w-full rounded border border-alloy-stone/40 px-2 py-1 text-xs"
                             onKeyDown={(e) => {
                                 if (e.key === "Enter") void addSection();
                             }}
@@ -336,7 +336,7 @@ export default function OpportunityWorkflowV1SectionsEditor({
                         <select
                             value={restoreKey}
                             onChange={(e) => setRestoreKey(e.target.value)}
-                            className="rounded border border-[#e6e8ec] px-2 py-1 text-xs"
+                            className="rounded border border-alloy-stone/40 px-2 py-1 text-xs"
                         >
                             <option value="">Choose hidden section…</option>
                             {restorableHiddenKeys.map((k) => {
@@ -378,7 +378,7 @@ export default function OpportunityWorkflowV1SectionsEditor({
                         className={`rounded-lg border px-3 py-2 text-xs ${
                             selectedSectionKey === row.section_key
                                 ? "border-alloy-pine/50 bg-alloy-pine/5 ring-1 ring-alloy-pine/25"
-                                : "border-admin-border/60 bg-white"
+                                : "border-alloy-forge/12 bg-white"
                         } cursor-pointer hover:border-alloy-pine/30`}
                         data-testid={`layout-section-row-${row.section_key}`}
                         onClick={() => onSelectSection?.(row.section_key)}
@@ -403,7 +403,7 @@ export default function OpportunityWorkflowV1SectionsEditor({
                                             )
                                         )
                                     }
-                                    className="min-w-[8rem] flex-1 rounded border border-[#e6e8ec] px-2 py-1 text-sm font-medium"
+                                    className="min-w-[8rem] flex-1 rounded border border-alloy-stone/40 px-2 py-1 text-sm font-medium"
                                 />
                             ) : (
                                 <span className="min-w-0 flex-1 font-medium text-alloy-midnight">{row.title}</span>
@@ -434,7 +434,7 @@ export default function OpportunityWorkflowV1SectionsEditor({
                                 <span className="flex gap-1" onClick={(e) => e.stopPropagation()}>
                                     <button
                                         type="button"
-                                        className="rounded border border-admin-border px-2 py-0.5 text-[11px] hover:bg-alloy-stone/15 disabled:opacity-40"
+                                        className="rounded border border-alloy-forge/12 px-2 py-0.5 text-[11px] hover:bg-alloy-stone/15 disabled:opacity-40"
                                         disabled={i === 0 || saving || headerRow}
                                         onClick={() => setRows((prev) => move(prev, i, -1))}
                                     >
@@ -442,7 +442,7 @@ export default function OpportunityWorkflowV1SectionsEditor({
                                     </button>
                                     <button
                                         type="button"
-                                        className="rounded border border-admin-border px-2 py-0.5 text-[11px] hover:bg-alloy-stone/15 disabled:opacity-40"
+                                        className="rounded border border-alloy-forge/12 px-2 py-0.5 text-[11px] hover:bg-alloy-stone/15 disabled:opacity-40"
                                         disabled={i >= rows.length - 1 || saving || headerRow}
                                         onClick={() => setRows((prev) => move(prev, i, 1))}
                                     >
@@ -457,7 +457,7 @@ export default function OpportunityWorkflowV1SectionsEditor({
                                     profile.operatorClass === "custom"
                                         ? "bg-alloy-pine/10 text-alloy-pine"
                                         : profile.operatorClass === "header"
-                                          ? "bg-alloy-blue/10 text-alloy-blue"
+                                          ? "bg-alloy-pine/10 text-alloy-pine"
                                           : "bg-alloy-stone/15 text-alloy-midnight/55"
                                 }`}
                             >

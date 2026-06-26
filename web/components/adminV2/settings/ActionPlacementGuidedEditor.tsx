@@ -185,7 +185,7 @@ export default function ActionPlacementGuidedEditor({ open, mode, seed, onClose,
                                 type="text"
                                 value={buttonLabel}
                                 onChange={(e) => setButtonLabel(e.target.value)}
-                                className="w-full rounded border border-[#e6e8ec] px-2 py-1.5 text-sm disabled:bg-alloy-stone/[0.04]"
+                                className="w-full rounded border border-alloy-stone/40 px-2 py-1.5 text-sm disabled:bg-alloy-stone/[0.04]"
                                 disabled={submitting || !canEditLabel}
                             />
                             {!canEditLabel ? (
@@ -201,7 +201,7 @@ export default function ActionPlacementGuidedEditor({ open, mode, seed, onClose,
                         <select
                             value={surface}
                             onChange={(e) => setSurface(e.target.value)}
-                            className="w-full rounded border border-[#e6e8ec] px-2 py-1.5 text-sm"
+                            className="w-full rounded border border-alloy-stone/40 px-2 py-1.5 text-sm"
                             disabled={submitting}
                         >
                             {WHERE_OPTIONS.map((o) => (
@@ -223,7 +223,7 @@ export default function ActionPlacementGuidedEditor({ open, mode, seed, onClose,
                                 value={sectionKey}
                                 onChange={(e) => setSectionKey(e.target.value)}
                                 placeholder="e.g. details, inquiry_children"
-                                className="w-full rounded border border-[#e6e8ec] px-2 py-1.5 text-sm"
+                                className="w-full rounded border border-alloy-stone/40 px-2 py-1.5 text-sm"
                                 disabled={submitting}
                             />
                             <span className="mt-0.5 block text-[11px] text-alloy-midnight/45">
@@ -238,7 +238,7 @@ export default function ActionPlacementGuidedEditor({ open, mode, seed, onClose,
                             <select
                                 value={entityType}
                                 onChange={(e) => setEntityType(e.target.value)}
-                                className="w-full rounded border border-[#e6e8ec] px-2 py-1.5 text-sm"
+                                className="w-full rounded border border-alloy-stone/40 px-2 py-1.5 text-sm"
                                 disabled={submitting}
                             >
                                 {ACTION_PLACEMENT_ENTITY_TYPES.map((et) => (
@@ -253,7 +253,7 @@ export default function ActionPlacementGuidedEditor({ open, mode, seed, onClose,
                             <select
                                 value={slot}
                                 onChange={(e) => setSlot(e.target.value)}
-                                className="w-full rounded border border-[#e6e8ec] px-2 py-1.5 text-sm"
+                                className="w-full rounded border border-alloy-stone/40 px-2 py-1.5 text-sm"
                                 disabled={submitting}
                             >
                                 {slots.map((s) => (
@@ -271,7 +271,7 @@ export default function ActionPlacementGuidedEditor({ open, mode, seed, onClose,
                             type="number"
                             value={orderIndex}
                             onChange={(e) => setOrderIndex(Number(e.target.value))}
-                            className="w-full rounded border border-[#e6e8ec] px-2 py-1.5 text-sm"
+                            className="w-full rounded border border-alloy-stone/40 px-2 py-1.5 text-sm"
                             disabled={submitting}
                         />
                         <span className="mt-0.5 block text-[11px] text-alloy-midnight/45">Lower numbers appear first.</span>

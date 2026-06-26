@@ -126,7 +126,7 @@ export default function LayoutFieldBehaviorControls({
                 <select
                     value={view.requirementPreset}
                     disabled={disabled || saving !== null || !view.requirementEditable}
-                    className="w-full rounded border border-[#e6e8ec] px-2 py-1 text-[11px] disabled:opacity-50"
+                    className="w-full rounded border border-alloy-stone/40 px-2 py-1 text-[11px] disabled:opacity-50"
                     aria-label={`${LAYOUT_REQUIREMENT_CONTROL_LABEL} for ${displayLabel}`}
                     title={
                         LAYOUT_REQUIREMENT_PRESET_OPTIONS.find((o) => o.value === view.requirementPreset)?.title ?? ""
@@ -155,7 +155,7 @@ export default function LayoutFieldBehaviorControls({
                 <select
                     value={view.interactionPreset}
                     disabled={disabled || saving !== null || !view.interactionEditable}
-                    className="w-full rounded border border-[#e6e8ec] px-2 py-1 text-[11px] disabled:opacity-50"
+                    className="w-full rounded border border-alloy-stone/40 px-2 py-1 text-[11px] disabled:opacity-50"
                     aria-label={`${LAYOUT_INTERACTION_CONTROL_LABEL} for ${displayLabel}`}
                     onChange={(e) =>
                         void patchBehavior(

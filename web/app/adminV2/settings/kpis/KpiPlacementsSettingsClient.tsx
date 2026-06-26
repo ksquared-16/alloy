@@ -614,7 +614,7 @@ export default function KpiPlacementsSettingsClient({ embedded = false }: { embe
                     <Link
                         href={SETTINGS_ROOT}
                         prefetch={shouldDisableAdminV2LinkPrefetch(SETTINGS_ROOT) ? false : undefined}
-                        className="font-medium text-alloy-blue hover:underline"
+                        className="font-medium text-alloy-pine hover:underline"
                     >
                         ← Back to Settings
                     </Link>
@@ -622,7 +622,7 @@ export default function KpiPlacementsSettingsClient({ embedded = false }: { embe
                     <Link
                         href="/workspace"
                         prefetch={shouldDisableAdminV2LinkPrefetch("/workspace") ? false : undefined}
-                        className="font-medium text-alloy-blue hover:underline"
+                        className="font-medium text-alloy-pine hover:underline"
                     >
                         Open workspace
                     </Link>

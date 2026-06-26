@@ -53,7 +53,7 @@ export default function ActionPlacementFormFields({
                 <select
                     value={entityType}
                     onChange={(e) => onEntityTypeChange(e.target.value)}
-                    className="w-full rounded border border-[#e6e8ec] px-2 py-1 text-sm"
+                    className="w-full rounded border border-alloy-stone/40 px-2 py-1 text-sm"
                     disabled={disabled}
                 >
                     <option value="">Any (action default)</option>
@@ -71,7 +71,7 @@ export default function ActionPlacementFormFields({
                 <select
                     value={surface}
                     onChange={(e) => onSurfaceChange(e.target.value)}
-                    className="w-full rounded border border-[#e6e8ec] px-2 py-1 text-sm"
+                    className="w-full rounded border border-alloy-stone/40 px-2 py-1 text-sm"
                     disabled={disabled}
                 >
                     {SETTINGS_SURFACE_OPTIONS.map((o) => (
@@ -88,7 +88,7 @@ export default function ActionPlacementFormFields({
                 <select
                     value={slot}
                     onChange={(e) => onSlotChange(e.target.value)}
-                    className="w-full rounded border border-[#e6e8ec] px-2 py-1 text-sm"
+                    className="w-full rounded border border-alloy-stone/40 px-2 py-1 text-sm"
                     disabled={disabled}
                 >
                     {slotOptions.map((o) => (
@@ -108,7 +108,7 @@ export default function ActionPlacementFormFields({
                     type="number"
                     value={orderIndex}
                     onChange={(e) => onOrderIndexChange(Number(e.target.value))}
-                    className="w-full rounded border border-[#e6e8ec] px-2 py-1 text-sm"
+                    className="w-full rounded border border-alloy-stone/40 px-2 py-1 text-sm"
                     disabled={disabled}
                 />
                 <FieldHint>Lower numbers appear first within the same slot.</FieldHint>
@@ -122,7 +122,7 @@ export default function ActionPlacementFormFields({
                         value={sectionKey}
                         onChange={(e) => onSectionKeyChange(e.target.value)}
                         placeholder="e.g. details, inquiry_children"
-                        className="w-full max-w-sm rounded border border-[#e6e8ec] px-2 py-1 font-mono text-[11px]"
+                        className="w-full max-w-sm rounded border border-alloy-stone/40 px-2 py-1 font-mono text-[11px]"
                         disabled={disabled}
                     />
                     <FieldHint>

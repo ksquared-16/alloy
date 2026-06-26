@@ -63,9 +63,10 @@ describe("Configuration Mode doctrine", () => {
         expect(BUSINESS_PROCESS_SETTINGS_PAGE_TITLE).toBe("Processes");
         expect(BUSINESS_PROCESS_NAV_WORK_VIEWS).toBe("Work Views");
 
-        const page = read("app/adminV2/settings/processes/page.tsx");
-        expect(page).toContain("BUSINESS_PROCESS_SETTINGS_PAGE_TITLE");
-        expect(page).toContain('data-testid="settings-processes-page"');
+        const strip = read("components/adminV2/settings/businessProcess/BusinessProcessProcessSelectorStrip.tsx");
+        expect(strip).toContain("BUSINESS_PROCESS_SETTINGS_PAGE_TITLE");
+        const surface = read("components/adminV2/settings/businessProcess/ProcessesConfigurationPage.tsx");
+        expect(surface).toContain('data-testid="settings-processes-page"');
     });
 
     it("Work View editor uses Purpose label, not Mission", () => {

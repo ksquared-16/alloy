@@ -29,7 +29,7 @@ export function PersonStatusPreviewNotes({ notes }: { notes: readonly string[] }
     if (!notes.length) return null;
     return (
         <ul
-            className="mt-1 space-y-0.5 text-[10px] leading-snug text-[#59678b]"
+            className="mt-1 space-y-0.5 text-[10px] leading-snug text-alloy-forge/70"
             data-person-status-drawer-preview="true"
         >
             {notes.map((note) => (

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState, type ReactNode } from "react";
 import { flushSync } from "react-dom";
 import LifecycleCreateForm from "@/components/adminV2/settings/lifecycle/LifecycleCreateForm";
 import LifecycleAddStageForm from "@/components/adminV2/settings/lifecycle/LifecycleAddStageForm";
@@ -116,6 +116,7 @@ export default function LifecycleActivationBoard({
     repairingVisibility: repairingFromParent = false,
     catalogSummary = null,
     onBackToCatalog,
+    onContextActionsChange,
 }: {
     identity: LifecycleRuntimeIdentity | null;
     catalog?: LifecycleCatalogEntry[];
@@ -133,6 +134,7 @@ export default function LifecycleActivationBoard({
     repairingVisibility?: boolean;
     catalogSummary?: { trackCount: number; stageCount: number; queueCount: number } | null;
     onBackToCatalog?: () => void;
+    onContextActionsChange?: (actions: ReactNode) => void;
 }) {
     const runtimeDepartmentId = identity?.runtimeDepartmentId?.trim() ?? "";
     const catalogEntry =
@@ -1504,6 +1506,96 @@ export default function LifecycleActivationBoard({
         [runtimeDepartmentId, selectStage, loadStatusStages]
     );
 
+    const handleDeleteLifecycle = useCallback(() => {
+        if (!canDeleteLifecycle) return;
+        if (catalogEntry && onRequestDelete) onRequestDelete();
+        else setDeleteOpen(true);
+    }, [canDeleteLifecycle, catalogEntry, onRequestDelete]);
+
+    const runtimeStatusLabel =
+        runtimeSummary === "pass"
+            ? "Connected"
+            : runtimeSummary === "fail"
+              ? "Needs attention"
+              : "Pending";
+
+    const processContextActions = useMemo(() => {
+        if (!processId) return null;
+        return (
+            <details className="relative shrink-0 text-xs" data-testid="lifecycle-board-process-menu">
+                <summary className="cursor-pointer list-none rounded-md border border-alloy-forge/15 bg-white px-2 py-1 font-medium text-alloy-midnight/70 hover:bg-alloy-stone/10 [&::-webkit-details-marker]:hidden">
+                    More
+                </summary>
+                <div className="absolute right-0 z-10 mt-1 min-w-[10rem] rounded-md border border-alloy-forge/15 bg-white py-1 shadow-md">
+                    <button
+                        type="button"
+                        className="block w-full px-3 py-1.5 text-left text-alloy-midnight/80 hover:bg-alloy-stone/10"
+                        onClick={() => setRenameOpen(true)}
+                        data-testid="lifecycle-rename"
+                    >
+                        Rename process
+                    </button>
+                    {canDeleteLifecycle ?
+                        <button
+                            type="button"
+                            className="block w-full px-3 py-1.5 text-left text-red-800 hover:bg-red-50"
+                            onClick={handleDeleteLifecycle}
+                            data-testid="lifecycle-activation-delete"
+                        >
+                            Delete process
+                        </button>
+                    :   null}
+                    {onRepairVisibility || (runtimeDepartmentId && processId) ?
+                        <button
+                            type="button"
+                            className="block w-full px-3 py-1.5 text-left text-alloy-pine hover:bg-alloy-stone/10 disabled:opacity-50"
+                            disabled={repairingBusy || !runtimeDepartmentId || !processId}
+                            onClick={() =>
+                                onRepairVisibility ? onRepairVisibility() : void repairWorkspaceVisibility()
+                            }
+                            data-testid="lifecycle-activation-repair-workspace"
+                        >
+                            {repairingBusy ? "Repairing…" : "Repair workspace"}
+                        </button>
+                    :   null}
+                    {activationOwned && runtimeDepartmentId && processId ?
+                        <button
+                            type="button"
+                            className="block w-full px-3 py-1.5 text-left text-alloy-pine hover:bg-alloy-stone/10 disabled:opacity-50"
+                            disabled={repairingBusy}
+                            onClick={() => void repairLifecycleWorkUnits()}
+                            data-testid="lifecycle-activation-repair-work-units"
+                        >
+                            {repairingBusy ? "Repairing…" : "Repair lifecycle work units"}
+                        </button>
+                    :   null}
+                    <p
+                        className="border-t border-alloy-forge/10 px-3 py-1.5 text-[10px] text-alloy-midnight/50"
+                        data-testid="lifecycle-activation-runtime-status"
+                    >
+                        Runtime: {runtimeStatusLabel}
+                    </p>
+                </div>
+            </details>
+        );
+    }, [
+        processId,
+        canDeleteLifecycle,
+        handleDeleteLifecycle,
+        onRepairVisibility,
+        runtimeDepartmentId,
+        repairingBusy,
+        activationOwned,
+        runtimeStatusLabel,
+        repairWorkspaceVisibility,
+        repairLifecycleWorkUnits,
+    ]);
+
+    useEffect(() => {
+        onContextActionsChange?.(processContextActions);
+        return () => onContextActionsChange?.(null);
+    }, [onContextActionsChange, processContextActions]);
+
     if (bootLoading && runtimeDepartmentId && processId) {
         return (
             <p className="text-sm text-alloy-midnight/60" data-testid="lifecycle-activation-loading">
@@ -1511,12 +1603,6 @@ export default function LifecycleActivationBoard({
             </p>
         );
     }
-
-    const handleDeleteLifecycle = () => {
-        if (!canDeleteLifecycle) return;
-        if (catalogEntry && onRequestDelete) onRequestDelete();
-        else setDeleteOpen(true);
-    };
 
     if (creatingNew && !processId) {
         return (
@@ -1535,13 +1621,6 @@ export default function LifecycleActivationBoard({
             </div>
         );
     }
-
-    const runtimeStatusLabel =
-        runtimeSummary === "pass"
-            ? "Connected"
-            : runtimeSummary === "fail"
-              ? "Needs attention"
-              : "Pending";
 
     return (
         <div className="flex min-h-0 flex-1 flex-col gap-2" data-testid="lifecycle-builder-board">
@@ -1598,70 +1677,6 @@ export default function LifecycleActivationBoard({
                     enabled={Boolean(processId)}
                 >
                     <div className="flex min-h-0 flex-1 flex-col">
-                    {processId ?
-                        <div
-                            className="mb-2 flex flex-wrap items-center justify-end gap-2"
-                            data-testid="lifecycle-process-context-actions"
-                        >
-                            <details className="relative shrink-0 text-xs" data-testid="lifecycle-board-process-menu">
-                                <summary className="cursor-pointer list-none rounded-md border border-alloy-forge/15 bg-white px-2.5 py-1 font-medium text-alloy-midnight/70 hover:bg-alloy-stone/10 [&::-webkit-details-marker]:hidden">
-                                    Process options
-                                </summary>
-                                <div className="absolute right-0 z-10 mt-1 min-w-[10rem] rounded-md border border-alloy-forge/15 bg-white py-1 shadow-md">
-                                    <button
-                                        type="button"
-                                        className="block w-full px-3 py-1.5 text-left text-alloy-midnight/80 hover:bg-alloy-stone/10"
-                                        onClick={() => setRenameOpen(true)}
-                                        data-testid="lifecycle-rename"
-                                    >
-                                        Rename process
-                                    </button>
-                                    {canDeleteLifecycle ?
-                                        <button
-                                            type="button"
-                                            className="block w-full px-3 py-1.5 text-left text-red-800 hover:bg-red-50"
-                                            onClick={handleDeleteLifecycle}
-                                            data-testid="lifecycle-activation-delete"
-                                        >
-                                            Delete process
-                                        </button>
-                                    :   null}
-                                    {onRepairVisibility || (runtimeDepartmentId && processId) ?
-                                        <button
-                                            type="button"
-                                            className="block w-full px-3 py-1.5 text-left text-alloy-pine hover:bg-alloy-stone/10 disabled:opacity-50"
-                                            disabled={repairingBusy || !runtimeDepartmentId || !processId}
-                                            onClick={() =>
-                                                onRepairVisibility
-                                                    ? onRepairVisibility()
-                                                    : void repairWorkspaceVisibility()
-                                            }
-                                            data-testid="lifecycle-activation-repair-workspace"
-                                        >
-                                            {repairingBusy ? "Repairing…" : "Repair workspace"}
-                                        </button>
-                                    :   null}
-                                    {activationOwned && runtimeDepartmentId && processId ?
-                                        <button
-                                            type="button"
-                                            className="block w-full px-3 py-1.5 text-left text-alloy-pine hover:bg-alloy-stone/10 disabled:opacity-50"
-                                            disabled={repairingBusy}
-                                            onClick={() => void repairLifecycleWorkUnits()}
-                                            data-testid="lifecycle-activation-repair-work-units"
-                                        >
-                                            {repairingBusy ? "Repairing…" : "Repair lifecycle work units"}
-                                        </button>
-                                    :   null}
-                                    <p
-                                        className="border-t border-alloy-forge/10 px-3 py-1.5 text-[10px] text-alloy-midnight/50"
-                                        data-testid="lifecycle-activation-runtime-status"
-                                    >
-                                        Runtime: {runtimeStatusLabel}
-                                    </p>
-                                </div>
-                            </details>
-                        </div>
-                    :   null}
                     <BusinessProcessConfigurationShell
                         activeSection={processSection}
                         onSelectSection={setProcessSection}

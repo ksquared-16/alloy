@@ -69,8 +69,11 @@ describe("Configuration Runtime Concept A freeze", () => {
 
     it("processes page uses Processes title and test id", () => {
         const page = read("app/adminV2/settings/processes/page.tsx");
-        expect(page).toContain("BUSINESS_PROCESS_SETTINGS_PAGE_TITLE");
-        expect(page).toContain('data-testid="settings-processes-page"');
+        expect(page).toContain("ProcessesConfigurationPage");
+        const strip = read("components/adminV2/settings/businessProcess/BusinessProcessProcessSelectorStrip.tsx");
+        expect(strip).toContain("BUSINESS_PROCESS_SETTINGS_PAGE_TITLE");
+        const surface = read("components/adminV2/settings/businessProcess/ProcessesConfigurationPage.tsx");
+        expect(surface).toContain('data-testid="settings-processes-page"');
     });
 
     it("legacy business-processes route redirects to processes", () => {

@@ -19,7 +19,7 @@ export default async function EffectiveLayoutInspectorPage({ searchParams }: Pag
     return (
         <div className="mx-auto max-w-4xl space-y-4 px-4 py-6">
             <header className="space-y-1">
-                <Link href="/admin/settings/layouts" className="text-xs text-alloy-blue underline">
+                <Link href="/admin/settings/layouts" className="text-xs text-alloy-pine underline">
                     ← Settings → Layouts
                 </Link>
                 <h1 className="text-lg font-semibold text-alloy-midnight">Effective layout inspector</h1>

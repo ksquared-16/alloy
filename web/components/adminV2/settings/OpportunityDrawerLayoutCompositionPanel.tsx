@@ -202,7 +202,7 @@ export default function OpportunityDrawerLayoutCompositionPanel({
                 </button>
                 <button
                     type="button"
-                    className="rounded border border-alloy-blue/30 bg-alloy-blue/[0.06] px-2 py-1 text-[10px] font-semibold text-alloy-blue"
+                    className="rounded border border-alloy-pine/30 bg-alloy-pine/[0.06] px-2 py-1 text-[10px] font-semibold text-alloy-pine"
                     onClick={() => {
                         setShowCreateBlock((v) => !v);
                         setShowAddBlock(false);

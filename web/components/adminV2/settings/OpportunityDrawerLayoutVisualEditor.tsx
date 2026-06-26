@@ -519,7 +519,7 @@ export default function OpportunityDrawerLayoutVisualEditor({ layoutId, basePath
                         className={`col-span-full rounded-lg border px-3 py-2 text-xs ${
                             studioNotice.tone === "error" ? "border-red-200 bg-red-50 text-red-800"
                             : studioNotice.tone === "success" ? "border-alloy-pine/25 bg-alloy-pine/[0.08] text-alloy-midnight"
-                            : "border-alloy-blue/20 bg-alloy-blue/[0.06] text-alloy-midnight/75"
+                            : "border-alloy-pine/20 bg-alloy-pine/[0.06] text-alloy-midnight/75"
                         }`}
                         data-testid="layout-builder-studio-notice"
                     >

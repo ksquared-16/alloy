@@ -62,7 +62,7 @@ function AdminV2SettingsClientProvidersInner({
             <AdminAuthProvider userEmail={safeEmail} userId={safeUserId} orgId={safeOrgId} role={safeRole} roleKeys={safeRoleKeys}>
                 <EntityLabelsProvider initialLabels={labels}>
                     <div
-                        className="fixed inset-0 z-[120] flex min-h-0 min-w-0 flex-col overflow-hidden bg-[#EEF2F8]"
+                        className="fixed inset-0 z-[120] flex min-h-0 min-w-0 flex-col overflow-hidden bg-white"
                         data-testid="experience-builder-studio-shell"
                         data-experience-builder-studio="true"
                     >
@@ -76,8 +76,8 @@ function AdminV2SettingsClientProvidersInner({
     return (
         <AdminAuthProvider userEmail={safeEmail} userId={safeUserId} orgId={safeOrgId} role={safeRole} roleKeys={safeRoleKeys}>
             <EntityLabelsProvider initialLabels={labels}>
-                <div className="config-runtime-shell flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-                    <div className="shrink-0 border-b border-alloy-forge/10 bg-white/25 px-4 py-2 backdrop-blur-sm sm:px-5">
+                <div className="config-runtime-shell flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-white">
+                    <div className="shrink-0 border-b border-alloy-stone/40 bg-white px-4 py-2 sm:px-5">
                         <SettingsHierarchyBreadcrumb />
                     </div>
                     <div className="flex min-h-0 flex-1 overflow-hidden">

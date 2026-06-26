@@ -106,7 +106,7 @@ export default function LocationSiteConfigurationWorkspace({
                                         <button
                                             type="button"
                                             onClick={() => onOpenRoom(r.id)}
-                                            className="text-[11px] text-alloy-blue hover:underline"
+                                            className="text-[11px] text-alloy-pine hover:underline"
                                         >
                                             Edit {roomLabel(r)}
                                         </button>

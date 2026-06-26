@@ -632,7 +632,7 @@ function CompositionGrid({
 
     return (
         <div
-            className={`${DRAWER_OVERVIEW_CANVAS_CLASS} ${editorMode === "build" ? "rounded-xl bg-[#F6F8FC]/80 p-2" : "p-1"}`}
+            className={`${DRAWER_OVERVIEW_CANVAS_CLASS} ${editorMode === "build" ? "rounded-xl bg-white/80 p-2" : "p-1"}`}
             data-testid="visual-editor-main-composition-grid"
         >
             {gridLayout.summarySections.length > 0 ?

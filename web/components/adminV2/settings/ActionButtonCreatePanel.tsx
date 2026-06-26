@@ -196,7 +196,7 @@ export default function ActionButtonCreatePanel({
                         <select
                             value={definitionId}
                             onChange={(e) => setDefinitionId(e.target.value)}
-                            className="w-full rounded border border-[#e6e8ec] px-2 py-1.5 text-sm"
+                            className="w-full rounded border border-alloy-stone/40 px-2 py-1.5 text-sm"
                             disabled={loadingCatalog || submitting}
                         >
                             <option value="">Choose an action…</option>

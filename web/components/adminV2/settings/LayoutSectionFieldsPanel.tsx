@@ -372,7 +372,7 @@ export default function LayoutSectionFieldsPanel({
                                 onChange={(e) => setSectionLabel(e.target.value)}
                                 onBlur={() => void saveCatalogLabel()}
                                 disabled={labelSaving}
-                                className="w-full rounded border border-[#e6e8ec] px-2 py-1 text-sm font-medium"
+                                className="w-full rounded border border-alloy-stone/40 px-2 py-1 text-sm font-medium"
                             />
                         ) : (
                             section.title
@@ -387,7 +387,7 @@ export default function LayoutSectionFieldsPanel({
                                 sectionProfile?.operatorClass === "custom"
                                     ? "bg-alloy-pine/10 text-alloy-pine"
                                     : sectionProfile?.operatorClass === "header"
-                                      ? "bg-alloy-blue/10 text-alloy-blue"
+                                      ? "bg-alloy-pine/10 text-alloy-pine"
                                       : "bg-alloy-stone/15 text-alloy-midnight/60"
                             }`}
                         >
@@ -452,7 +452,7 @@ export default function LayoutSectionFieldsPanel({
                     return (
                         <li
                             key={row.id}
-                            className="rounded border border-admin-border/50 px-2 py-1.5 text-xs"
+                            className="rounded border border-alloy-forge/12 px-2 py-1.5 text-xs"
                         >
                             <div className="flex flex-wrap items-center gap-2">
                                 <span className="w-5 text-[10px] text-alloy-midnight/40">{i + 1}</span>
@@ -465,7 +465,7 @@ export default function LayoutSectionFieldsPanel({
                                     <span className="flex gap-0.5">
                                         <button
                                             type="button"
-                                            className="rounded border border-admin-border px-1.5 py-0.5 text-[10px] disabled:opacity-40"
+                                            className="rounded border border-alloy-forge/12 px-1.5 py-0.5 text-[10px] disabled:opacity-40"
                                             disabled={i === 0 || saving}
                                             onClick={() => setLocalRows((prev) => move(prev, i, -1))}
                                         >
@@ -473,7 +473,7 @@ export default function LayoutSectionFieldsPanel({
                                         </button>
                                         <button
                                             type="button"
-                                            className="rounded border border-admin-border px-1.5 py-0.5 text-[10px] disabled:opacity-40"
+                                            className="rounded border border-alloy-forge/12 px-1.5 py-0.5 text-[10px] disabled:opacity-40"
                                             disabled={i >= localRows.length - 1 || saving}
                                             onClick={() => setLocalRows((prev) => move(prev, i, 1))}
                                         >
@@ -481,7 +481,7 @@ export default function LayoutSectionFieldsPanel({
                                         </button>
                                         <button
                                             type="button"
-                                            className="rounded border border-admin-border px-1.5 py-0.5 text-[10px] text-alloy-midnight/55 hover:bg-alloy-stone/10"
+                                            className="rounded border border-alloy-forge/12 px-1.5 py-0.5 text-[10px] text-alloy-midnight/55 hover:bg-alloy-stone/10"
                                             disabled={saving}
                                             title="Remove from this section on the layout (field definition stays in Fields)"
                                             onClick={() => removeFromLayout(row as FieldRow, displayLabel)}
@@ -519,7 +519,7 @@ export default function LayoutSectionFieldsPanel({
                         <select
                             value={pickFieldId}
                             onChange={(e) => setPickFieldId(e.target.value)}
-                            className="w-full rounded border border-[#e6e8ec] px-2 py-1 text-xs"
+                            className="w-full rounded border border-alloy-stone/40 px-2 py-1 text-xs"
                         >
                             <option value="">Choose a field…</option>
                             {fieldsAvailableToAdd.map((f) => (

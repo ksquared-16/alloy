@@ -214,7 +214,7 @@ function SurfaceGalleryCard({
                                                 type="button"
                                                 disabled={busy === `rollback-${row.id}`}
                                                 onClick={() => onRollback(row.id)}
-                                                className="shrink-0 rounded border border-alloy-forge/15 px-2 py-0.5 text-[11px] font-medium text-alloy-blue hover:bg-alloy-blue/[0.04] disabled:opacity-50"
+                                                className="shrink-0 rounded border border-alloy-forge/15 px-2 py-0.5 text-[11px] font-medium text-alloy-pine hover:bg-alloy-pine/[0.04] disabled:opacity-50"
                                             >
                                                 {busy === `rollback-${row.id}` ? "Rolling back…" : "Rollback to this"}
                                             </button>

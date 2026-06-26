@@ -18,11 +18,12 @@ function read(rel: string): string {
 }
 
 describe("Configuration Runtime end-to-end vertical slice", () => {
-    it("/settings/processes route renders new Processes UI", () => {
+    it("/settings/processes route renders Configuration Mode Processes surface", () => {
         const page = read("app/adminV2/settings/processes/page.tsx");
-        expect(page).toContain('data-testid="settings-processes-page"');
-        expect(page).toContain("BUSINESS_PROCESS_SETTINGS_PAGE_TITLE");
-        expect(page).toContain("LifecycleSettingsShell");
+        expect(page).toContain("ProcessesConfigurationPage");
+        expect(page).not.toContain("LifecycleSettingsShell");
+        const surface = read("components/adminV2/settings/businessProcess/ProcessesConfigurationPage.tsx");
+        expect(surface).toContain('data-testid="settings-processes-page"');
     });
 
     it("/settings/business-processes redirects to /settings/processes", () => {
@@ -40,9 +41,8 @@ describe("Configuration Runtime end-to-end vertical slice", () => {
     });
 
     it("Work Views workspace supports save and editor controls", () => {
-        const workspace = read("components/adminV2/settings/businessProcess/BusinessProcessWorkViewsWorkspace.tsx");
+        const workspace = read("components/adminV2/settings/businessProcess/BusinessProcessWorkViewsSetupWorkspace.tsx");
         expect(workspace).toContain('data-testid="business-process-save-work-views"');
-        expect(workspace).toContain("process-work-views");
         expect(workspace).toContain("WorkViewProcessEditorCard");
         expect(read("components/adminV2/settings/businessProcess/WorkViewProcessEditorCard.tsx")).toContain(
             "WorkViewConditionEditor",

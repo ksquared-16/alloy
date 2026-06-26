@@ -325,10 +325,15 @@ const LifecycleStageOperatingPlanEditor = forwardRef<
                                 />
 
                                 <div className="mt-3 border-t border-alloy-forge/10 pt-2">
-                                    <div className="mb-1 flex items-center justify-between gap-2">
-                                        <span className="text-[10px] font-semibold text-alloy-midnight/70">
-                                            Outcomes for {work.label || "this work"}
-                                        </span>
+                                    <details className="group" data-testid={`stage-operating-plan-outcomes-${work.template_key}`}>
+                                        <summary className="flex cursor-pointer list-none items-center justify-between gap-2 py-1 [&::-webkit-details-marker]:hidden">
+                                            <span className="text-[10px] font-semibold text-alloy-midnight/70">
+                                                Outcomes ({workOutcomes.length})
+                                            </span>
+                                            <span className="text-[10px] text-alloy-midnight/40 group-open:rotate-90">›</span>
+                                        </summary>
+                                        <div className="pt-2">
+                                    <div className="mb-1 flex items-center justify-end gap-2">
                                         <button
                                             type="button"
                                             className="text-[10px] font-medium text-alloy-pine"
@@ -425,6 +430,8 @@ const LifecycleStageOperatingPlanEditor = forwardRef<
                                             <li className="text-[10px] text-alloy-midnight/45">No outcomes yet.</li>
                                         :   null}
                                     </ul>
+                                        </div>
+                                    </details>
                                 </div>
                             </div>
                         );

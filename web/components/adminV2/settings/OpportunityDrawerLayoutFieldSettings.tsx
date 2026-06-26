@@ -376,7 +376,7 @@ export default function OpportunityDrawerLayoutFieldSettings({ node, inline = fa
 
             {node.visibilityRule === "conditional" ?
                 <div
-                    className="mt-2 space-y-2 rounded-md border border-alloy-blue/20 bg-alloy-blue/[0.04] p-2"
+                    className="mt-2 space-y-2 rounded-md border border-alloy-pine/20 bg-alloy-pine/[0.04] p-2"
                     data-testid="visual-editor-field-conditional-visibility"
                 >
                     <p className="text-[10px] font-medium text-alloy-midnight/55">Conditional visibility</p>
@@ -451,7 +451,7 @@ export default function OpportunityDrawerLayoutFieldSettings({ node, inline = fa
                     :   null}
                 </div>
             : node.crossFieldVisibility ?
-                <p className="mt-1 text-[10px] text-alloy-blue/80" data-testid="visual-editor-field-conditional-indicator">
+                <p className="mt-1 text-[10px] text-alloy-pine/80" data-testid="visual-editor-field-conditional-indicator">
                     Conditional on {node.crossFieldVisibility.sourcePath}
                 </p>
             :   null}

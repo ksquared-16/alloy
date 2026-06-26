@@ -38,7 +38,7 @@ export default function LayoutBuilderPreviewDrawerFrame({ children, record }: Pr
 
     return (
         <div
-            className="overflow-hidden rounded-xl border border-alloy-stone/15 bg-[#F4F7FB] shadow-[0_2px_12px_rgba(24,39,58,0.06)]"
+            className="overflow-hidden rounded-xl border border-alloy-stone/15 bg-white shadow-[0_2px_12px_rgba(24,39,58,0.06)]"
             data-testid="layout-builder-preview-drawer-frame"
         >
             <div className="border-b border-alloy-stone/10 bg-white px-4 py-3" data-testid="visual-editor-preview-shell">
