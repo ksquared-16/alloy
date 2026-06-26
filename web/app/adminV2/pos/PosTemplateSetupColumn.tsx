@@ -24,7 +24,7 @@
  */
 
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { Pencil, Trash2, Plus, Download } from "lucide-react";
+import { Pencil, Trash2, Plus, Download, Check, Link2 } from "lucide-react";
 import type { PosCaseState } from "./usePosCase";
 import type { StoredFormDraftPreview } from "@/lib/pos/processingCase/formDraft/types";
 import { computePageMaps, svgRectToPdfBbox, type FieldWithRegion } from "@/lib/pos/processingCase/structure/pdfFieldMap";
@@ -52,6 +52,14 @@ const BINDING_OPTIONS: Array<{ value: string; label: string; field_source: FormF
 const bindingKey = (fs?: FormFieldSource | null): string => (fs ? `${fs.entity_type}:${fs.field_key}` : "");
 function bindingOptionByKey(key: string): FormFieldSource | null {
     return BINDING_OPTIONS.find((o) => o.value === key)?.field_source ?? null;
+}
+const BINDING_LABEL_BY_KEY: Record<string, string> = Object.fromEntries(
+    BINDING_OPTIONS.filter((o) => o.value).map((o) => [o.value, o.label])
+);
+/** Friendly record label for a canonical binding, e.g. "Child · Date of birth". */
+function bindingLabel(fs?: FormFieldSource | null): string {
+    const k = bindingKey(fs);
+    return BINDING_LABEL_BY_KEY[k] ?? k;
 }
 
 function formatWhen(iso: string | null | undefined): string {
@@ -487,8 +495,8 @@ export default function PosTemplateSetupColumn({
                 {/* RIGHT — review detected fields, tabbed */}
                 <div className="flex w-[22rem] shrink-0 flex-col">
                     <div className="shrink-0 border-b border-alloy-stone/10 px-3 pt-2">
-                        <div className="text-[12.5px] font-semibold text-alloy-midnight">Review detected fields</div>
-                        <p className="mt-0.5 text-[10.5px] text-stone-500">Highlighted fields were detected from the source PDF.</p>
+                        <div className="text-[12.5px] font-semibold text-alloy-midnight">Alloy recognized your fields</div>
+                        <p className="mt-0.5 text-[10.5px] text-stone-500">Mapped fields stay synchronized with your records. Review anything uncertain below.</p>
                         <div className="mt-1.5 flex gap-3">
                             {(["fields", "text"] as const).map((t) => (
                                 <button
@@ -508,6 +516,39 @@ export default function PosTemplateSetupColumn({
                     <div className="min-h-0 flex-1 overflow-y-auto p-3">
                         {tab === "fields" ? (
                             <>
+                                {(() => {
+                                    const recognized = Array.from(
+                                        new Set(reviewFields.filter((f) => f.field_source).map((f) => bindingLabel(f.field_source)))
+                                    );
+                                    const unmappedSuggested = reviewFields.filter(
+                                        (f) => !f.field_source && suggestFieldBinding(f.label, f.type)?.field_source
+                                    ).length;
+                                    if (recognized.length === 0 && unmappedSuggested === 0) return null;
+                                    return (
+                                        <div className="mb-3 rounded-lg border border-emerald-100 bg-emerald-50/50 px-2.5 py-2">
+                                            <div className="flex items-center gap-1.5 text-[11px] font-semibold text-emerald-800">
+                                                <Link2 className="h-3.5 w-3.5" aria-hidden />
+                                                {recognized.length > 0
+                                                    ? `Alloy recognized ${recognized.length} field${recognized.length === 1 ? "" : "s"}`
+                                                    : "Alloy has suggestions"}
+                                            </div>
+                                            {recognized.length > 0 ? (
+                                                <ul className="mt-1.5 space-y-0.5">
+                                                    {recognized.slice(0, 6).map((label) => (
+                                                        <li key={label} className="flex items-center gap-1.5 text-[11px] text-emerald-900">
+                                                            <Check className="h-3 w-3 shrink-0 text-emerald-600" strokeWidth={3} aria-hidden />
+                                                            {label}
+                                                        </li>
+                                                    ))}
+                                                </ul>
+                                            ) : null}
+                                            <p className="mt-1.5 text-[10px] text-emerald-700/80">
+                                                These stay synchronized with your records.
+                                                {unmappedSuggested > 0 ? ` ${unmappedSuggested} more need your review.` : ""}
+                                            </p>
+                                        </div>
+                                    );
+                                })()}
                                 <div className="mb-1.5 text-[10px] font-medium uppercase tracking-wide text-stone-400">
                                     {reviewFields.length} field{reviewFields.length === 1 ? "" : "s"}
                                 </div>
@@ -576,32 +617,39 @@ export default function PosTemplateSetupColumn({
                                                         <Trash2 className="h-3.5 w-3.5" aria-hidden />
                                                     </button>
                                                 </div>
-                                                <div className="flex items-center gap-1.5 border-t border-stone-100 px-2 py-1.5">
-                                                    <span className="shrink-0 text-[10px] text-stone-400">Binds to</span>
-                                                    <select
-                                                        value={bindingKey(f.field_source)}
-                                                        onChange={(e) => updateField(f.id, { field_source: bindingOptionByKey(e.target.value) ?? undefined })}
-                                                        className="min-w-0 flex-1 rounded border border-stone-200 px-1.5 py-0.5 text-[11px] text-stone-700"
-                                                    >
-                                                        {BINDING_OPTIONS.map((o) => (
-                                                            <option key={o.value} value={o.value}>{o.label}</option>
-                                                        ))}
-                                                    </select>
-                                                    {(() => {
-                                                        const sug = suggestFieldBinding(f.label, f.type);
-                                                        if (sug?.field_source && bindingKey(sug.field_source) !== bindingKey(f.field_source)) {
-                                                            return (
-                                                                <button type="button" onClick={() => updateField(f.id, { field_source: sug.field_source })} className="shrink-0 rounded border border-emerald-200 bg-emerald-50 px-1.5 py-0.5 text-[9.5px] font-medium text-emerald-700 hover:bg-emerald-100">
-                                                                    Suggest: {bindingKey(sug.field_source)} ({sug.confidence})
-                                                                </button>
-                                                            );
-                                                        }
-                                                        if (sug && !f.field_source) {
-                                                            return <span className="shrink-0 text-[9.5px] text-amber-600">{sug.special ? sug.special.replace(/_/g, " ") : "review"} · {sug.confidence}</span>;
-                                                        }
-                                                        if (!f.field_source) return <span className="shrink-0 text-[9.5px] text-stone-400">packet-only</span>;
-                                                        return null;
-                                                    })()}
+                                                <div className="space-y-1 border-t border-stone-100 px-2 py-1.5">
+                                                    <div className="flex items-center gap-1.5">
+                                                        {f.field_source ? (
+                                                            <span className="inline-flex min-w-0 items-center gap-1 text-[10.5px] font-medium text-emerald-700">
+                                                                <Check className="h-3 w-3 shrink-0" strokeWidth={3} aria-hidden />
+                                                                <span className="truncate">Syncs to {bindingLabel(f.field_source)}</span>
+                                                            </span>
+                                                        ) : (() => {
+                                                            const sug = suggestFieldBinding(f.label, f.type);
+                                                            if (sug?.field_source) {
+                                                                return (
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => updateField(f.id, { field_source: sug.field_source })}
+                                                                        className="inline-flex items-center gap-1 rounded-md border border-emerald-200 bg-emerald-50 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700 hover:bg-emerald-100"
+                                                                    >
+                                                                        <Check className="h-3 w-3" strokeWidth={3} aria-hidden /> Accept: {bindingLabel(sug.field_source)}
+                                                                    </button>
+                                                                );
+                                                            }
+                                                            return <span className="text-[10px] text-stone-400">Packet-only field</span>;
+                                                        })()}
+                                                        <select
+                                                            value={bindingKey(f.field_source)}
+                                                            onChange={(e) => updateField(f.id, { field_source: bindingOptionByKey(e.target.value) ?? undefined })}
+                                                            aria-label="Change record binding"
+                                                            className="ml-auto min-w-0 max-w-[9rem] shrink-0 rounded border border-stone-200 px-1.5 py-0.5 text-[10.5px] text-stone-600"
+                                                        >
+                                                            {BINDING_OPTIONS.map((o) => (
+                                                                <option key={o.value} value={o.value}>{f.field_source ? o.label : o.value ? `Override → ${o.label}` : o.label}</option>
+                                                            ))}
+                                                        </select>
+                                                    </div>
                                                 </div>
                                                 {isEditing ? (
                                                     <div className="space-y-1.5 border-t border-stone-100 px-2 py-2">

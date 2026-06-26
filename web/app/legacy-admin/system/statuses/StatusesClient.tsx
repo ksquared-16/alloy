@@ -726,18 +726,19 @@ export default function StatusesClient({
         <button
             type="button"
             onClick={() => openNewModal()}
-            className="shrink-0 rounded-md bg-alloy-midnight px-3 py-1.5 text-sm font-medium text-white hover:opacity-90"
+            className={adminV2Chrome ? "config-primary-btn shrink-0" : "shrink-0 rounded-md bg-alloy-midnight px-3 py-1.5 text-sm font-medium text-white hover:opacity-90"}
         >
             New Status
         </button>
     ) : null;
 
     const showInactiveToggle = (
-        <label className="flex items-center gap-2 text-xs text-[#59678b]">
+        <label className={`flex items-center gap-2 text-xs ${adminV2Chrome ? "text-alloy-forge/70" : "text-[#59678b]"}`}>
             <input
                 type="checkbox"
                 checked={showInactive}
                 onChange={(e) => setShowInactive(e.target.checked)}
+                className={adminV2Chrome ? "config-mode-control h-4 w-4 rounded border-alloy-stone/40" : undefined}
                 data-testid="status-settings-show-inactive"
             />
             Show inactive
@@ -791,7 +792,7 @@ export default function StatusesClient({
                     </span>
                     <Link
                         href={basePath}
-                        className="font-medium text-alloy-blue hover:underline"
+                        className="font-medium text-alloy-pine hover:underline"
                     >
                         Clear filter
                     </Link>
@@ -1098,7 +1099,7 @@ export default function StatusesClient({
                                 type="button"
                                 onClick={handleCreate}
                                 disabled={modalSaving}
-                                className="rounded bg-alloy-midnight px-3 py-1.5 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"
+                                className={adminV2Chrome ? "config-primary-btn disabled:opacity-50" : "rounded bg-alloy-midnight px-3 py-1.5 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"}
                             >
                                 {modalSaving ? "Creating…" : "Create"}
                             </button>

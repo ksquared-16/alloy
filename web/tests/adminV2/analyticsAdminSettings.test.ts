@@ -114,11 +114,11 @@ describe("V1 KPI object card layout", () => {
 });
 
 describe("V1 workspace header convergence", () => {
-    it("command header uses health pulse section with command KPI row", () => {
+    it("command header uses health pulse section with compact operational pulse strip", () => {
         const header = read("components/admin/workspace/WorkspaceCommandHeader.tsx");
         expect(header).toContain("WorkspaceHealthPulseSection");
         expect(read("components/admin/workspace/layout/WorkspaceHealthPulseSection.tsx")).toContain(
-            "OipPerformanceKpiRow"
+            "WorkspaceOperationalPulseStrip"
         );
     });
 
