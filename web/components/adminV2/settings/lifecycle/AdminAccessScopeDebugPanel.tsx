@@ -47,14 +47,14 @@ export default function AdminAccessScopeDebugPanel({ surface }: { surface: "life
 
     return (
         <aside
-            className="rounded-lg border border-dashed border-sky-400/45 bg-sky-50/50 p-3"
+            className="rounded-lg border border-dashed border-amber-400/45 bg-amber-50/50 p-3"
             data-testid={`admin-access-scope-debug-${surface}`}
         >
             <div className="flex items-center justify-between gap-2">
-                <p className="text-[11px] font-semibold text-sky-950">Access scope debug ({surface})</p>
+                <p className="text-[11px] font-semibold text-amber-950">Access scope debug ({surface})</p>
                 <button
                     type="button"
-                    className="text-[10px] text-sky-800 underline"
+                    className="text-[10px] text-amber-800 underline"
                     onClick={() => void load()}
                 >
                     Refresh
@@ -63,7 +63,7 @@ export default function AdminAccessScopeDebugPanel({ surface }: { surface: "life
             {error ? (
                 <p className="mt-1 text-[10px] text-red-700">{error}</p>
             ) : data ? (
-                <dl className="mt-2 grid gap-1 font-mono text-[10px] text-sky-950/90">
+                <dl className="mt-2 grid gap-1 font-mono text-[10px] text-amber-950/90">
                     <div>
                         <dt className="inline opacity-60">user_id: </dt>
                         <dd className="inline break-all">{data.user_id}</dd>
@@ -96,10 +96,10 @@ export default function AdminAccessScopeDebugPanel({ surface }: { surface: "life
                             {data.allowed_department_ids_count_effective ?? "n/a"}
                         </dd>
                     </div>
-                    <div className="text-[9px] leading-snug text-sky-900/80">{data.department_scope_rule}</div>
+                    <div className="text-[9px] leading-snug text-amber-900/80">{data.department_scope_rule}</div>
                 </dl>
             ) : (
-                <p className="mt-1 text-[10px] text-sky-900/60">Loading…</p>
+                <p className="mt-1 text-[10px] text-amber-900/60">Loading…</p>
             )}
         </aside>
     );

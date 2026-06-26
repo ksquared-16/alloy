@@ -43,7 +43,7 @@ export const LAYOUT_EDITOR_WIDGET_TONE_LABELS: Record<LayoutEditorWidgetTone, st
 
 export const LAYOUT_EDITOR_WIDGET_TONE_SWATCH_CLASS: Record<LayoutEditorWidgetTone, string> = {
     green: "bg-alloy-juniper",
-    blue: "bg-alloy-blue",
+    blue: "bg-alloy-pine",
     amber: "bg-alloy-ember",
     red: "bg-red-500",
     purple: "bg-violet-500",
@@ -158,7 +158,7 @@ export function resolveLayoutEditorWidgetToneDotClass(tone: LayoutEditorWidgetRu
         case "green":
             return "bg-alloy-juniper/80";
         case "blue":
-            return "bg-alloy-blue/80";
+            return "bg-alloy-pine/80";
         case "amber":
             return "bg-alloy-ember/80";
         case "red":
@@ -177,7 +177,7 @@ export function resolveLayoutEditorWidgetToneTitleClass(tone: LayoutEditorWidget
         case "green":
             return "text-alloy-juniper/80";
         case "blue":
-            return "text-alloy-blue/80";
+            return "text-alloy-pine/80";
         case "amber":
             return "text-alloy-ember/85";
         case "red":
@@ -216,7 +216,7 @@ export function resolveLayoutEditorWidgetToneIconClass(tone: LayoutEditorWidgetR
         case "green":
             return "border-alloy-stone/10 bg-alloy-juniper/[0.08] text-alloy-juniper/80";
         case "blue":
-            return "border-alloy-stone/10 bg-alloy-blue/[0.08] text-alloy-blue/80";
+            return "border-alloy-stone/10 bg-alloy-pine/[0.08] text-alloy-pine/80";
         case "amber":
             return "border-alloy-stone/10 bg-alloy-ember/[0.08] text-alloy-ember/85";
         case "red":
@@ -236,7 +236,7 @@ export function resolveLayoutEditorWidgetToneRailClass(tone: LayoutEditorWidgetT
         case "green":
             return "border-l-alloy-juniper/70";
         case "blue":
-            return "border-l-alloy-blue/70";
+            return "border-l-alloy-pine/70";
         case "amber":
             return "border-l-alloy-ember/75";
         case "red":
