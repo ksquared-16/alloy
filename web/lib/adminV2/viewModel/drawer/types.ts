@@ -189,6 +189,13 @@ export type OpportunityDrawerViewModel = {
 /** Canonical Focus Panel VM alias — same compose shape during drawer→Focus Panel migration. */
 export type OpportunityFocusPanelViewModel = OpportunityDrawerViewModel;
 
+/**
+ * Canonical operational subject VM alias (Phase C). The composed view model for the operational
+ * subject currently displayed in the Focus Panel. Same shape as `OpportunityDrawerViewModel`
+ * during migration.
+ */
+export type OperationalSubjectViewModel = OpportunityDrawerViewModel;
+
 export type OpportunityDrawerViewModelSkipped = {
     structureSettled: false;
     reason: "classic_layout_deferred" | "layout_unavailable" | "opportunity_not_found";
@@ -198,3 +205,6 @@ export type OpportunityDrawerViewModelSkipped = {
 export type OpportunityDrawerViewModelResult =
     | { ok: true; viewModel: OpportunityDrawerViewModel }
     | { ok: false; skipped: OpportunityDrawerViewModelSkipped };
+
+/** Canonical operational subject VM result alias (Phase C). */
+export type OperationalSubjectViewModelResult = OpportunityDrawerViewModelResult;

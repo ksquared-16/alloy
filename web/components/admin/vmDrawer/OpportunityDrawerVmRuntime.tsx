@@ -69,6 +69,13 @@ const OPPORTUNITY_TAB_LABELS: Partial<Record<DrawerTabKey, string>> = {
     activity: "Activity",
 };
 
+/**
+ * @deprecated Import via the canonical name `EnrollmentSubjectSurfaceRuntime` from
+ * `@/components/admin/subjectSurface/EnrollmentSubjectSurfaceRuntime`. This file remains the
+ * implementation during the drawer→Focus Panel migration (Phase C); the runtime payload, reveal,
+ * and cache infrastructure is intentionally unchanged. See
+ * docs/platform/operator/focus-panel-architecture-vocabulary.md.
+ */
 export default function OpportunityDrawerVmRuntime() {
     const { canMutate: authCanMutate, role, roleKeys } = useAdminAuth();
     const { labels } = useEntityLabels();

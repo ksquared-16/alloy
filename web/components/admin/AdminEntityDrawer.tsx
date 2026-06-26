@@ -3,8 +3,8 @@
 import dynamic from "next/dynamic";
 import { usePathname } from "next/navigation";
 import { useAdminDrawer } from "@/contexts/AdminDrawerContext";
-import OpportunityDrawerVmRuntime from "@/components/admin/vmDrawer/OpportunityDrawerVmRuntime";
-import PersonsDrawerVmRuntime from "@/components/admin/vmDrawer/PersonsDrawerVmRuntime";
+import EnrollmentSubjectSurfaceRuntime from "@/components/admin/subjectSurface/EnrollmentSubjectSurfaceRuntime";
+import PersonSubjectSurfaceRuntime from "@/components/admin/subjectSurface/PersonSubjectSurfaceRuntime";
 import { legacyDrawerMustNotRenderVmBackedEntity } from "@/lib/adminV2/viewModel/drawer/vmRuntime/legacyDrawerVmEntityQuarantine";
 import { resolveVmDrawerDisplayRoute } from "@/lib/adminV2/viewModel/drawer/vmRuntime/vmDrawerTransitionCoordinator";
 
@@ -26,10 +26,10 @@ export default function AdminEntityDrawer() {
     const route = resolveVmDrawerDisplayRoute(drawer, pathname, drawerRuntimePhase, previousDrawer);
 
     if (route === "opportunity") {
-        return <OpportunityDrawerVmRuntime />;
+        return <EnrollmentSubjectSurfaceRuntime />;
     }
     if (route === "person" || route === "child") {
-        return <PersonsDrawerVmRuntime />;
+        return <PersonSubjectSurfaceRuntime />;
     }
 
     if (legacyDrawerMustNotRenderVmBackedEntity(drawer, pathname)) {

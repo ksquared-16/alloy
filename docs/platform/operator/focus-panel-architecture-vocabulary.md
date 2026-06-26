@@ -68,16 +68,49 @@ Infrastructure (legacy)    AdminDrawerContext · composedDrawerPayload · AdminE
 
 ---
 
+## Subject Surface presentation layer (Phase C)
+
+Presentation-facing runtime components now have canonical names under
+`web/components/admin/subjectSurface/`. These are **compatibility shims** — they re-export the
+existing `vmDrawer/*` implementations unchanged. New presentation code should import the canonical
+name; the `vmDrawer/*` files remain the implementation (and reveal/payload/cache infrastructure)
+during migration.
+
+| Canonical (use in new code) | Implementation (shimmed) | Notes |
+|------------------------------|--------------------------|-------|
+| `EnrollmentSubjectSurfaceRuntime` | `vmDrawer/OpportunityDrawerVmRuntime` | Enrollment/opportunity Focus Panel runtime |
+| `PersonSubjectSurfaceRuntime` | `vmDrawer/PersonsDrawerVmRuntime` | Person/child Focus Panel runtime |
+| `SubjectSurfaceRuntime` / `FocusPanelRuntime` | `AdminEntityDrawer` | Router resolving operational subject → runtime |
+| `FocusPanelShell` | `drawer/EntityDrawerOperatingShell` | Focus Panel operating chrome |
+| `OperationalSubjectViewModel` | `OpportunityDrawerViewModel` | Composed VM for displayed subject |
+| `SubjectComposition` | `focusPanel/subjectComposition` | Card grid + mode layout (Phase B) |
+
+Old → new naming map (retire from new code):
+
+| Old | Canonical |
+|-----|-----------|
+| `OpportunityDrawerVmRuntime` | `EnrollmentSubjectSurfaceRuntime` |
+| `PersonsDrawerVmRuntime` | `PersonSubjectSurfaceRuntime` |
+| `OpportunityDrawerViewModel` | `OperationalSubjectViewModel` |
+| `EntityDrawerOperatingShell` | `FocusPanelShell` |
+
+Barrel: `import { EnrollmentSubjectSurfaceRuntime } from "@/components/admin/subjectSurface"`.
+
+Deprecated compat exports (`OpportunityDrawerVmRuntime`, `PersonsDrawerVmRuntime`) remain available
+from the barrel and resolve to the identical module.
+
+---
+
 ## Migration phases
 
 | Phase | Scope | Status |
 |-------|--------|--------|
 | **A** | EmbeddedWorkspace renames + compat re-exports | Done (June 2026) |
 | **B** | `useFocusPanelDocked`, `OpportunityFocusPanelViewModel`, `SubjectComposition` | Done (June 2026) |
-| **C** | `vmDrawer/` presentation shims → `focusPanel/` or `subjectSurface/` | Planned |
-| **D** | `AdminDrawerContext` → operational subject context | Deferred — reveal/payload contract |
+| **C** | `subjectSurface/` presentation shims (SubjectSurfaceRuntime, FocusPanelShell, OperationalSubjectViewModel) | Done (June 2026) |
+| **D** | `AdminDrawerContext` → operational subject context + payload infra rename | Deferred — reveal/payload contract |
 
-Do **not** bulk-rename composed payload, cache keys, prefetch, or queue reveal gates without explicit runtime sprint approval.
+Do **not** bulk-rename composed payload, cache keys, prefetch, or queue reveal gates without explicit runtime sprint approval. Phase C is **shim-only**: it adds vocabulary, not behavior.
 
 ---
 

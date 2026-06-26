@@ -120,7 +120,8 @@ describe("AdminDrawerContext shell-pinned swap wiring", () => {
         const { fileURLToPath } = await import("node:url");
         const webRoot = join(dirname(fileURLToPath(import.meta.url)), "../../../");
         const router = readFileSync(join(webRoot, "components/admin/AdminEntityDrawer.tsx"), "utf8");
-        expect(router).toContain("PersonsDrawerVmRuntime");
+        // Phase C: router mounts the person subject surface runtime via canonical shim name.
+        expect(router).toContain("PersonSubjectSurfaceRuntime");
         for (const file of [
             "useOpportunityDrawerVmPayload.ts",
             "usePersonsDrawerVmPayload.ts",

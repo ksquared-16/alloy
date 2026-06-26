@@ -127,8 +127,9 @@ describe("VM drawer runtime wiring", () => {
         const { fileURLToPath } = await import("node:url");
         const webRoot = join(dirname(fileURLToPath(import.meta.url)), "../../../");
         const router = readFileSync(join(webRoot, "components/admin/AdminEntityDrawer.tsx"), "utf8");
-        expect(router).toContain("OpportunityDrawerVmRuntime");
-        expect(router).toContain("PersonsDrawerVmRuntime");
+        // Phase C: router mounts subject surface runtimes via canonical shim names.
+        expect(router).toContain("EnrollmentSubjectSurfaceRuntime");
+        expect(router).toContain("PersonSubjectSurfaceRuntime");
         expect(router).not.toContain("PersonDrawerVmRuntime");
         expect(router).not.toContain("ChildDrawerVmRuntime");
         expect(router).toContain("AdminEntityDrawerLegacy");

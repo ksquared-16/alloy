@@ -55,7 +55,8 @@ describe("EntityDrawerOperatingShell", () => {
 
     it("ChildDrawerVmRuntime remains unused by AdminEntityDrawer router", () => {
         const router = readSrc("components/admin/AdminEntityDrawer.tsx");
-        expect(router).toContain("PersonsDrawerVmRuntime");
+        // Phase C: router mounts the person subject surface runtime via canonical shim name.
+        expect(router).toContain("PersonSubjectSurfaceRuntime");
         expect(router).not.toContain("ChildDrawerVmRuntime");
     });
 

@@ -82,6 +82,13 @@ function resolvePersonDrawerProofTitle(
     return "Person";
 }
 
+/**
+ * @deprecated Import via the canonical name `PersonSubjectSurfaceRuntime` from
+ * `@/components/admin/subjectSurface/PersonSubjectSurfaceRuntime`. This file remains the
+ * implementation during the drawer→Focus Panel migration (Phase C); the runtime payload, reveal,
+ * and cache infrastructure is intentionally unchanged. See
+ * docs/platform/operator/focus-panel-architecture-vocabulary.md.
+ */
 export default function PersonsDrawerVmRuntime() {
     const { canMutate } = useAdminAuth();
     const {

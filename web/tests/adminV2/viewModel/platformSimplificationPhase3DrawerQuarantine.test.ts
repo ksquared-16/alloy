@@ -78,8 +78,12 @@ describe("platform simplification phase 3 — legacy drawer quarantine", () => {
 
     it("AdminEntityDrawer router mounts VM runtimes and quarantines legacy for VM entities", () => {
         const router = read("components/admin/AdminEntityDrawer.tsx");
-        expect(router).toContain("OpportunityDrawerVmRuntime");
-        expect(router).toContain("PersonsDrawerVmRuntime");
+        // Phase C: router mounts the subject surface runtimes via canonical shim names
+        // (these re-export the unchanged OpportunityDrawerVmRuntime / PersonsDrawerVmRuntime).
+        expect(router).toContain("EnrollmentSubjectSurfaceRuntime");
+        expect(router).toContain("PersonSubjectSurfaceRuntime");
+        expect(router).toContain("subjectSurface/EnrollmentSubjectSurfaceRuntime");
+        expect(router).toContain("subjectSurface/PersonSubjectSurfaceRuntime");
         expect(router).toContain("legacyDrawerMustNotRenderVmBackedEntity");
         expect(router).toMatch(/if \(route === "opportunity"\)/);
         expect(router).toMatch(/if \(route === "person" \|\| route === "child"\)/);
