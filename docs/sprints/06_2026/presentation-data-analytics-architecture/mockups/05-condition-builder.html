@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><title>05 — Condition Builder</title><link rel="stylesheet" href="_shared.css"></head>
+<body>
+<div class="mockup-frame">
+  <div class="mockup-label">05 — Condition Builder <span class="sub">One engine · left operand = same Browser · type-aware operators · plain-language read-back</span></div>
+  <div class="stage">
+    <div class="split" style="grid-template-columns:1.4fr 1fr;">
+      <div class="cond">
+        <span class="cond-prop">◉ Highlighted When</span>
+        <div class="bp-owned">Editable in <b>Tour</b> stage — set by Business Process. You can add presentation conditions on top.</div>
+        <div class="match-row">Match <span class="match-pill">ALL</span> of the following:</div>
+        <div class="group">
+          <div class="predicate">
+            <span class="token ref">💰 Billing → Balance <span class="caret">▾</span></span>
+            <span class="token op">is greater than</span>
+            <span class="token val">$0</span>
+          </div>
+          <div class="predicate">
+            <span class="token ref">◉ Readiness <span class="caret">▾</span></span>
+            <span class="token op">is not</span>
+            <span class="token val">Ready</span>
+          </div>
+          <div class="match-row" style="margin:6px 0;">— or nest a group —</div>
+          <div class="group" style="border-color:var(--violet);">
+            <div class="match-row">Match <span class="match-pill" style="color:var(--violet);border-color:var(--violet);background:var(--violet-soft);">ANY</span></div>
+            <div class="predicate">
+              <span class="token ref">🧒 Children <span class="caret">▾</span></span>
+              <span class="token op">any</span>
+              <span class="token val">unenrolled</span>
+            </div>
+          </div>
+          <div class="add-cond">＋ Add condition</div>
+        </div>
+        <div class="readback">Highlight this card when <b>Balance</b> is greater than <b>$0</b> and <b>Readiness</b> is not <b>Ready</b> — or any <b>Child</b> is unenrolled.</div>
+      </div>
+      <div>
+        <div class="panel" style="margin-bottom:14px;">
+          <div class="panel-head"><div class="panel-title">Type-aware operators</div></div>
+          <div style="padding:14px;">
+            <div class="kv"><span class="k">Left: Money</span><span class="v">= ≠ &lt; ≤ &gt; ≥ between</span></div>
+            <div class="kv"><span class="k">Left: Status</span><span class="v">is · is not · is one of</span></div>
+            <div class="kv"><span class="k">Left: Date</span><span class="v">before · after · within</span></div>
+            <div class="kv"><span class="k">Left: Collection</span><span class="v">is empty · count · any · all</span></div>
+            <div class="kv"><span class="k">Left: Metric</span><span class="v">in band · vs comparison</span></div>
+          </div>
+        </div>
+        <div class="panel">
+          <div class="panel-head"><div class="panel-title">Same engine, eight properties</div></div>
+          <div style="padding:14px;display:flex;flex-wrap:wrap;gap:6px;">
+            <span class="rndr-chip">Visible When</span><span class="rndr-chip">Editable When</span><span class="rndr-chip">Required When</span><span class="rndr-chip best">Highlighted When</span><span class="rndr-chip">Collapsed When</span><span class="rndr-chip">Disabled When</span><span class="rndr-chip">Badge When</span><span class="rndr-chip">Actions Available When</span>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="center-note">The condition's <strong>left operand uses the same Data Source Browser</strong> as bindings (Balance, Readiness, Children…). Operators are derived from the operand's <strong>Presentation Type</strong>. No raw expressions; every condition reads as a sentence.</div>
+  </div>
+</div>
+</body></html>

@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><title>04 — Metric Picker</title><link rel="stylesheet" href="_shared.css"></head>
+<body>
+<div class="mockup-frame">
+  <div class="mockup-label">04 — Metric Picker <span class="sub">OI → Enrollment → Projected Tuition · definition (read-only) + presentation profile</span></div>
+  <div class="stage">
+    <div class="panel">
+      <div class="panel-head"><div class="panel-title">Choose a metric</div><div class="panel-sub">from Operational Intelligence</div></div>
+      <div class="browser" style="grid-template-columns:1fr 1fr 320px;min-height:400px;">
+        <div class="b-path">
+          <div class="crumb">Operational Intelligence ▸ <b>Enrollment</b></div>
+          <div class="b-group">Domains</div>
+          <div class="b-item" style="background:var(--canvas);"><span class="ic">🎓</span><span class="nm">Enrollment</span><span class="chev">▾</span></div>
+          <div style="padding-left:14px;">
+            <div class="b-item"><span class="nm">Tour Show Rate</span><span class="tp">Metric</span></div>
+            <div class="b-item selected"><span class="nm">Projected Tuition</span><span class="tp">Metric</span></div>
+            <div class="b-item"><span class="nm">Enrollment Velocity</span><span class="tp">Metric</span></div>
+            <div class="b-item"><span class="nm">Forecast Occupancy</span><span class="tp">Metric</span></div>
+          </div>
+          <div class="b-item"><span class="ic">💰</span><span class="nm">Billing</span><span class="chev">›</span></div>
+          <div class="b-item"><span class="ic">📅</span><span class="nm">Attendance</span><span class="chev">›</span></div>
+        </div>
+        <!-- definition (OI, read-only) -->
+        <div class="b-path" style="background:var(--violet-soft);">
+          <div class="owner-head oi" style="margin:-14px -16px 12px;border-radius:0;">◆ Metric Definition · Operational Intelligence <span class="lock" style="margin-left:auto;">read-only</span></div>
+          <div class="kv"><span class="k">Calculation</span><span class="v">Σ(rate × enrolled)</span></div>
+          <div class="kv"><span class="k">Aggregation</span><span class="v">sum</span></div>
+          <div class="kv"><span class="k">Unit</span><span class="v">Money (USD)</span></div>
+          <div class="kv"><span class="k">Dimensions</span><span class="v">Location, Program</span></div>
+          <div class="kv"><span class="k">Periods</span><span class="v">term, month, YTD</span></div>
+          <div class="kv"><span class="k">Comparisons</span><span class="v">prior term, prior year</span></div>
+          <div class="kv"><span class="k">Bands</span><span class="v">defined</span></div>
+          <div style="font-size:11px;color:var(--violet);margin-top:10px;">Edit math in Operational Intelligence ↗</div>
+        </div>
+        <!-- presentation profile (EB) -->
+        <div class="b-detail">
+          <div class="owner-head eb" style="margin:-16px -16px 12px;border-radius:0;">● Presentation profile · Experience Builder</div>
+          <div class="leaf-row"><span class="k">Type</span><span class="v"><span class="type-pill">Metric → Money</span></span></div>
+          <div class="section-label" style="margin-top:12px;">Choose from what the definition exposes</div>
+          <div class="kv"><span class="k">Period</span><span class="v">This term ▾</span></div>
+          <div class="kv"><span class="k">Dimension slice</span><span class="v">All locations ▾</span></div>
+          <div class="kv"><span class="k">Comparison</span><span class="v">vs prior term ▾</span></div>
+          <div class="section-label" style="margin-top:12px;">Compatible renderers</div>
+          <div class="rndr-chips"><span class="rndr-chip best">KPI Card</span><span class="rndr-chip">Scorecard</span><span class="rndr-chip">Currency</span><span class="rndr-chip">Trend</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="center-note"><strong>The number is owned by OI; the picture is owned by Experience Builder.</strong> The admin selects only from periods/dimensions/comparisons the definition <em>exposes</em> — never a formula. The metric means the same thing on every surface.</div>
+  </div>
+</div>
+</body></html>
