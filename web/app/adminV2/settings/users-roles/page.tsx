@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
 import { canManageUsersAndRoles } from "@/lib/admin/canManageUsersAndRoles";
+import ConfigurationPatternPlaceholder from "@/components/adminV2/settings/configurationRuntime/ConfigurationPatternPlaceholder";
 import UsersRolesSettingsClient from "./UsersRolesSettingsClient";
 
 export const dynamic = "force-dynamic";
@@ -16,12 +17,12 @@ export default async function UsersRolesSettingsPage() {
     return (
         <div className="w-full min-w-0 space-y-3">
             <header>
-                <h1 className="text-xl font-semibold tracking-tight text-alloy-midnight">Users &amp; Roles</h1>
-                <p className="mt-1 max-w-2xl text-xs leading-snug text-alloy-midnight/60">
-                    Org members, role assignment, and CRM data visibility — plus role definitions and permission grants. Server routes require org
-                    admin or the <code className="rounded bg-alloy-forge/8 px-1">settings.users_roles</code> permission.
+                <h1 className="config-typo-page-title">Users &amp; Roles</h1>
+                <p className="config-typo-sublabel mt-1 max-w-2xl">
+                    Org members, role assignment, and permission grants.
                 </p>
             </header>
+            <ConfigurationPatternPlaceholder surface="user-roles" />
             <UsersRolesSettingsClient canManageUsersRoles={canManageUsersRoles} />
         </div>
     );

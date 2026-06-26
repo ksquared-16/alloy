@@ -2,6 +2,7 @@
 
 import type { ReactNode } from "react";
 import BusinessProcessConfigurationNav from "@/components/adminV2/settings/businessProcess/BusinessProcessConfigurationNav";
+import { ConfigurationShell } from "@/components/adminV2/settings/configurationRuntime/ConfigurationModeLayout";
 import type { BusinessProcessWorkspaceSection } from "@/lib/lifecycle/businessProcessUiLabels";
 
 export default function BusinessProcessConfigurationShell({
@@ -16,16 +17,16 @@ export default function BusinessProcessConfigurationShell({
     children: ReactNode;
 }) {
     return (
-        <div className="process-config-shell" data-testid="business-process-configuration-shell">
-            <BusinessProcessConfigurationNav activeSection={activeSection} onSelect={onSelectSection} />
-            {listColumn ?
-                <aside className="process-config-list-column" data-testid="business-process-list-column">
-                    {listColumn}
-                </aside>
-            :   null}
-            <div className="process-config-setup-workspace" data-testid="business-process-setup-workspace">
-                {children}
-            </div>
-        </div>
+        <ConfigurationShell
+            testId="business-process-configuration-shell"
+            listColumnTestId="business-process-list-column"
+            workspaceTestId="business-process-setup-workspace"
+            navColumn={
+                <BusinessProcessConfigurationNav activeSection={activeSection} onSelect={onSelectSection} />
+            }
+            listColumn={listColumn}
+        >
+            {children}
+        </ConfigurationShell>
     );
 }

@@ -123,10 +123,11 @@ describe("Configuration Runtime core interaction", () => {
         expect(card).toContain("LayoutAssignmentCard");
     });
 
-    it("ConfigurationModeShell is reusable beyond Processes", () => {
-        expect(read("components/adminV2/settings/configurationRuntime/ConfigurationModeShell.tsx")).toContain(
-            "BusinessProcessConfigurationShell",
-        );
+    it("ConfigurationModeShell exports shared layout primitives and Processes shell", () => {
+        const shell = read("components/adminV2/settings/configurationRuntime/ConfigurationModeShell.tsx");
+        expect(shell).toContain("ConfigurationContext");
+        expect(shell).toContain("ConfigurationShell");
+        expect(shell).toContain("BusinessProcessConfigurationShell");
     });
 
     it("core interaction doctrine doc forbids blue/gray admin styling", () => {

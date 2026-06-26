@@ -1,5 +1,6 @@
 import SettingsFieldsHubClient from "./SettingsFieldsHubClient";
 import SettingsPageHeader from "@/components/adminV2/settings/SettingsPageHeader";
+import ConfigurationPatternPlaceholder from "@/components/adminV2/settings/configurationRuntime/ConfigurationPatternPlaceholder";
 import { SETTINGS_PAGE_SHELL_COMPACT_CLASS } from "@/lib/adminV2/settingsPageLayout";
 import { SETTINGS_FIELDS_SUBTITLE } from "@/lib/adminV2/settingsPageSubtitles";
 import { FIELDS_HUB_REGISTRY_TRUST_NOTE } from "@/lib/fields/fieldSettingsOperatorUi";
@@ -22,6 +23,7 @@ export default async function AdminV2SettingsFieldsPage({
             >
                 {FIELDS_HUB_REGISTRY_TRUST_NOTE}
             </p>
+            <ConfigurationPatternPlaceholder surface="fields" />
             <SettingsFieldsHubClient initialEntity={entity} />
         </div>
     );

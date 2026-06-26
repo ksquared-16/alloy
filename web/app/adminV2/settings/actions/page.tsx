@@ -1,6 +1,6 @@
 import { Suspense } from "react";
 import ActionPlacementsSettingsClient from "@/components/adminV2/settings/ActionPlacementsSettingsClient";
-import LifecycleSettingsCrossLinkBanner from "@/components/adminV2/settings/LifecycleSettingsCrossLinkBanner";
+import ConfigurationPatternPlaceholder from "@/components/adminV2/settings/configurationRuntime/ConfigurationPatternPlaceholder";
 import { SETTINGS_PAGE_INTRO_CLASS, SETTINGS_PAGE_SHELL_CLASS } from "@/lib/adminV2/settingsPageLayout";
 import { SETTINGS_ACTIONS_SUBTITLE } from "@/lib/adminV2/settingsPageSubtitles";
 
@@ -14,10 +14,10 @@ export default function AdminV2SettingsActionsPage() {
     return (
         <div className={SETTINGS_PAGE_SHELL_CLASS}>
             <header className="space-y-0.5">
-                <h1 className="text-xl font-semibold tracking-tight text-alloy-midnight">Action buttons</h1>
-                <p className={SETTINGS_PAGE_INTRO_CLASS}>{SETTINGS_ACTIONS_SUBTITLE}</p>
+                <h1 className="config-typo-page-title">Action buttons</h1>
+                <p className={`config-typo-sublabel ${SETTINGS_PAGE_INTRO_CLASS}`}>{SETTINGS_ACTIONS_SUBTITLE}</p>
             </header>
-            <LifecycleSettingsCrossLinkBanner variant="actions" />
+            <ConfigurationPatternPlaceholder surface="actions" />
             <Suspense fallback={<ActionsSettingsFallback />}>
                 <ActionPlacementsSettingsClient />
             </Suspense>

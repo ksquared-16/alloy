@@ -34,13 +34,13 @@ export const BUSINESS_PROCESS_CONFIGURATION_HEALTH_SUMMARY =
     "Checks whether this process is ready for operators.";
 
 export const BUSINESS_PROCESS_WORK_VIEWS_INTRO =
-    "Work Views are process-level operational lenses. They can include records from one stage or many — for example Tours Today, Needs Follow-up, or Hot Leads.";
+    "Work Views define how operators focus on work in this process.";
 export const BUSINESS_PROCESS_WORK_VIEW_ADD = "Add Work View";
 export const BUSINESS_PROCESS_WORK_VIEW_SHOW_WORK_WHEN = "Show work when…";
 export const BUSINESS_PROCESS_WORK_VIEW_DEFAULT_ORDER = "Display order";
 export const BUSINESS_PROCESS_WORK_VIEW_TECHNICAL_IDENTITY = "Advanced · Technical identity";
-export const BUSINESS_PROCESS_WORK_VIEW_COMPAT_NOTE =
-    "Unsaved Work Views are seeded from legacy stage perspectives. Save to persist process-level configuration.";
+export const BUSINESS_PROCESS_WORK_VIEW_UNSAVED_HINT =
+    "Work Views define how operators focus on work in this process. Save to persist configuration.";
 export const BUSINESS_PROCESS_WORK_VIEW_PREVIEW_PENDING =
     "Preview runtime opens the workspace with this Work View active — filters and assigned layouts apply when saved.";
 

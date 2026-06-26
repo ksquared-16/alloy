@@ -61,8 +61,10 @@ describe("Configuration Runtime final lock-in", () => {
         );
     });
 
-    it("statuses page uses config surface wrapper", () => {
-        expect(read("app/adminV2/settings/statuses/page.tsx")).toContain("statuses-config-surface");
+    it("statuses page uses configuration queue/workspace surface", () => {
+        const page = read("app/adminV2/settings/statuses/page.tsx");
+        expect(page).toContain("statuses-config-surface");
+        expect(page).toContain("StatusesConfigurationPage");
     });
 
     it("playwright final lock-in screenshot spec exists", () => {
