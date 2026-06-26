@@ -1,10 +1,10 @@
 # Configuration Workspace V1 Doctrine
 
-**Status:** Active — June 2026 (CRM V1 QA foundation).
+**Status:** Frozen — Configuration Runtime V1 (June 2026).
 
 ## Configuration Mode visual rule
 
-Settings configuration must use Alloy’s operational palette — **not** blue/gray legacy admin styling. See **`configuration-mode-doctrine.md`** for the frozen interaction layout (Context → Queue → Workspace → BOS) and pine/midnight/forge/stone tokens.
+Settings configuration must use Alloy’s operational palette. See **`configuration-mode-doctrine.md`** for the frozen interaction layout (Context → Queue → Workspace → BOS) and pine/midnight/forge/stone tokens.
 
 ## Purpose
 
@@ -14,29 +14,33 @@ Settings must feel like part of the product — not an admin console organized a
 
 | Domain | Answers | Primary surfaces |
 |--------|---------|------------------|
-| **Organization** | Who uses the system and where? | Locations, Users & access, Communications |
-| **Data Model** | What data exists? | Fields, Option lists, Relationships |
-| **Operations** | How does work move? | Business Processes (stages, **perspectives**, missions, required info), Statuses, Actions, Automations |
-| **Experience** | How is information collected and displayed? | Layouts (queue rows, Focus Panel presentation), Forms, Workspace metrics |
+| **Organization** | Who uses the system and where? | Locations, **Access**, Communications |
+| **Data Model** | What data exists? | Fields, Statuses, Option lists, Relationships |
+| **Operations** | How does work move? | **Processes** (stages, perspectives, Work Views, operating plan, process actions) |
+| **Experience** | How is information collected and displayed? | **Surfaces** (queue rows, Focus Panel presentation), Forms, Workspace metrics |
+| **Automation** | Platform-triggered behavior | Workflows (`/admin/workflows`) |
+
+Action definitions (`/settings/actions`) are an **internal platform catalog** — not primary operator navigation.
 
 ### Hard rules
 
-- **No Enrollment settings section.** Enrollment is a Business Process — tomorrow there may be Hiring, Onboarding, Case management. Processes are the abstraction.
-- **Work Units are runtime output**, not primary configuration. Lanes sync when a Business Process stage is saved.
-- **Perspectives** are Business Process stage metadata over queue lanes — not a separate settings product or builder.
-- **Queue rows and Focus Panel presentation** are authored in **Layouts / Experience Builder** — not in Business Processes and not via Queue Builder or Focus Panel Builder routes.
-- **Attention stage rules** belong in Business Processes (Expected Work + Attention section). Org-wide bucket labels remain in advanced Attention defaults.
+- **No Enrollment settings section.** Enrollment is a Business Process — Processes are the abstraction.
+- **Work Units are runtime output**, not primary configuration.
+- **Perspectives** are Process stage metadata over queue lanes — not a separate settings product.
+- **Queue rows and Focus Panel presentation** are authored in **Surfaces** — not in Processes and not via Queue Builder or Focus Panel Builder routes.
+- **Process actions and operating plan** belong in **Processes** — not in Action definitions catalog.
+- **Attention stage rules** belong in Processes. Org-wide bucket labels remain in advanced Attention defaults.
 
 ## Setup journey (guidance, not a wizard)
 
 1. **Organization** — locations and access
-2. **Data Model** — fields and option lists
-3. **Operations** — business processes (stages, **perspectives**, membership, requirements, attention, actions); statuses vocabulary (Statuses sprint)
-4. **Experience** — layouts (queue rows, Focus Panel presentation) and forms
+2. **Data Model** — fields and statuses
+3. **Operations** — processes (stages, perspectives, Work Views, operating plan, process actions)
+4. **Experience** — surfaces (queue rows, Focus Panel presentation) and forms
 
 Relationship operators should understand without docs:
 
-**Fields → Business Processes → Forms → Layouts → Runtime**
+**Fields → Processes → Surfaces → Runtime**
 
 ## Location ownership
 

@@ -135,6 +135,7 @@ CSV source: `supabase/reference/*.csv` (8 files)
 | Operating Plan runtime | `system/operating-plan-runtime-doctrine.md` |
 | Configuration Runtime (Settings IA) | `system/configuration-runtime-design-alignment.md` |
 | Configuration Mode doctrine (frozen) | `system/configuration-mode-doctrine.md` |
+| Configuration Runtime V1 (frozen) | `system/configuration-runtime-v1.md` |
 | Configuration Runtime sprint closeout | `sprints/06_2026/configuration_runtime_sprint_completion.md` |
 | Legacy inventory | `system/legacy-architecture-inventory.md` |
 

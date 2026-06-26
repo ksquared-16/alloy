@@ -10,6 +10,9 @@
     --cr-midnight: var(--color-alloy-midnight, #1a2332);
     --cr-stone-border: color-mix(in srgb, var(--color-alloy-stone, #d4d8de) 55%, transparent);
     --cr-card-radius: 1rem;
+    /* Configuration Runtime V1 — frozen shell geometry (see configuration-runtime-v1.md) */
+    --config-section-queue-width: 260px;
+    --config-object-queue-width: 320px;
     background: #ffffff;
 }
 
@@ -201,6 +204,14 @@
 
 .process-config-context-bar {
     flex-shrink: 0;
+    padding: 0;
+    border: none;
+    background: transparent;
+    box-shadow: none;
+}
+
+.settings-configuration-tiles {
+    margin-top: 1.5rem; /* 24px — compact index gap below context row */
 }
 
 .process-config-context-title {
@@ -267,6 +278,8 @@
 }
 
 .process-config-shell {
+    --config-section-queue-width: 260px;
+    --config-object-queue-width: 320px;
     display: flex;
     min-height: 0;
     flex: 1;
@@ -277,13 +290,26 @@
     box-shadow: 0 1px 2px rgba(26, 35, 50, 0.04);
 }
 
-.process-config-nav {
-    width: 17.5rem;
+.process-config-nav,
+.configuration-section-queue,
+.process-config-list-column {
+    width: var(--config-section-queue-width);
     flex-shrink: 0;
     overflow-y: auto;
     border-right: 1px solid var(--cr-stone-border);
     background: white;
+    padding: 0.85rem;
+}
+
+.process-config-nav {
     padding: 0.75rem 0.5rem;
+}
+
+.configuration-object-queue.process-config-list-column,
+.process-config-list-column.process-config-object-queue,
+.configuration-object-queue,
+.process-config-object-queue {
+    width: var(--config-object-queue-width);
 }
 
 .process-config-nav-item {
@@ -319,22 +345,10 @@
     box-shadow: inset 3px 0 0 var(--cr-pine);
 }
 
-.process-config-list-column {
-    width: 17.5rem;
-    flex-shrink: 0;
-    overflow-y: auto;
-    border-right: 1px solid var(--cr-stone-border);
-    background: white;
-    padding: 0.85rem;
-}
-
-.process-config-object-queue {
-    width: 15.5rem;
-}
-
-.process-config-setup-workspace {
+.process-config-setup-workspace,
+.configuration-workspace {
     min-width: 0;
-    flex: 1;
+    flex: 1 1 auto;
     overflow-y: auto;
     padding: 1rem 1.15rem;
     background: white;

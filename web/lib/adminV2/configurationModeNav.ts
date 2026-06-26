@@ -1,6 +1,6 @@
 /**
  * Configuration Mode — left app rail navigation when `/settings/*` is active.
- * @see docs/sprints/06_2026/configuration_runtime_core_interaction_doctrine.md
+ * @see docs/system/configuration-ownership-doctrine.md
  */
 import { adminSettingsSubpathHref } from "@/lib/admin/canonicalAdminRoutes";
 
@@ -11,11 +11,12 @@ export type ConfigurationModeNavIcon =
     | "layouts"
     | "fields"
     | "statuses"
-    | "actions"
     | "automation"
     | "analytics"
     | "integrations"
-    | "security";
+    | "security"
+    | "locations"
+    | "communications";
 
 export type ConfigurationModeNavItem = {
     href: string;
@@ -23,85 +24,129 @@ export type ConfigurationModeNavItem = {
     description: string;
     icon: ConfigurationModeNavIcon;
     testId: string;
+    /** Hidden from primary operator navigation (route may still exist). */
+    internal?: boolean;
 };
 
-/** Primary Configuration Mode surfaces — shown in left app rail and `/settings` hub. */
-export const CONFIGURATION_MODE_NAV_ITEMS: readonly ConfigurationModeNavItem[] = [
+export type ConfigurationModeNavGroup = {
+    label?: string;
+    items: readonly ConfigurationModeNavItem[];
+};
+
+/** Primary operator Configuration IA — Actions definitions are internal catalog only. */
+export const CONFIGURATION_MODE_NAV_GROUPS: readonly ConfigurationModeNavGroup[] = [
     {
-        href: settings("processes"),
-        label: "Processes",
-        description: "Stages, Work Views, operating plan, actions, and process health.",
-        icon: "processes",
-        testId: "config-mode-nav-processes",
+        label: "Organization",
+        items: [
+            {
+                href: settings("locations"),
+                label: "Locations",
+                description: "Sites, rooms, programs, and schedules.",
+                icon: "locations",
+                testId: "config-mode-nav-locations",
+            },
+            {
+                href: settings("users-roles"),
+                label: "Access",
+                description: "Users, roles, permission groups, and location or department scope.",
+                icon: "security",
+                testId: "config-mode-nav-access",
+            },
+            {
+                href: settings("communications"),
+                label: "Communications",
+                description: "Channels, templates, send rules, and messaging.",
+                icon: "communications",
+                testId: "config-mode-nav-communications",
+            },
+        ],
     },
     {
-        href: settings("layouts"),
-        label: "Layouts",
-        description: "Queue rows, Focus Panel presentation, and layout assignments.",
-        icon: "layouts",
-        testId: "config-mode-nav-layouts",
+        items: [
+            {
+                href: settings("fields"),
+                label: "Fields",
+                description: "What data exists — labels, types, formats, and validation.",
+                icon: "fields",
+                testId: "config-mode-nav-fields",
+            },
+            {
+                href: settings("statuses"),
+                label: "Statuses",
+                description: "Status vocabulary and lifecycle presentation metadata.",
+                icon: "statuses",
+                testId: "config-mode-nav-statuses",
+            },
+        ],
     },
     {
-        href: settings("fields"),
-        label: "Fields",
-        description: "Canonical field catalog, formats, and validation.",
-        icon: "fields",
-        testId: "config-mode-nav-fields",
+        items: [
+            {
+                href: settings("processes"),
+                label: "Processes",
+                description: "When operators use actions — stages, Work Views, and operating plan.",
+                icon: "processes",
+                testId: "config-mode-nav-processes",
+            },
+            {
+                href: settings("surfaces"),
+                label: "Surfaces",
+                description: "Where operators see actions — Design Surfaces for queue rows, Focus Panel, and cards.",
+                icon: "layouts",
+                testId: "config-mode-nav-surfaces",
+            },
+        ],
     },
     {
-        href: settings("statuses"),
-        label: "Statuses",
-        description: "Status vocabulary and lifecycle presentation metadata.",
-        icon: "statuses",
-        testId: "config-mode-nav-statuses",
+        items: [
+            {
+                href: settings("analytics"),
+                label: "Operational Intelligence",
+                description: "Metrics, targets, and where indicators appear.",
+                icon: "analytics",
+                testId: "config-mode-nav-analytics",
+            },
+        ],
     },
     {
-        href: settings("actions"),
-        label: "Actions",
-        description: "Action definitions and where they appear in the workspace.",
-        icon: "actions",
-        testId: "config-mode-nav-actions",
-    },
-    {
-        href: "/admin/workflows",
-        label: "Automation",
-        description: "Workflow triggers and platform-triggered behavior.",
-        icon: "automation",
-        testId: "config-mode-nav-automation",
-    },
-    {
-        href: settings("analytics"),
-        label: "Operational Intelligence",
-        description: "Metrics, targets, and where indicators appear.",
-        icon: "analytics",
-        testId: "config-mode-nav-analytics",
-    },
-    {
-        href: settings("communications"),
-        label: "Integrations",
-        description: "Email, messaging, and external integrations.",
-        icon: "integrations",
-        testId: "config-mode-nav-integrations",
-    },
-    {
-        href: settings("users-roles"),
-        label: "Security / Roles",
-        description: "Staff access, roles, and security settings.",
-        icon: "security",
-        testId: "config-mode-nav-security",
+        items: [
+            {
+                href: "/admin/workflows",
+                label: "Automation",
+                description: "Workflow triggers and platform-triggered behavior.",
+                icon: "automation",
+                testId: "config-mode-nav-automation",
+            },
+        ],
     },
 ] as const;
 
+/** Internal / developer catalog — not shown in primary operator nav. */
+export const CONFIGURATION_MODE_INTERNAL_NAV_ITEMS: readonly ConfigurationModeNavItem[] = [
+    {
+        href: settings("actions"),
+        label: "Action definitions",
+        description: "Platform action definition catalog (developer metadata).",
+        icon: "integrations",
+        testId: "config-mode-nav-action-definitions",
+        internal: true,
+    },
+] as const;
+
+/** Flat list for hub tiles and tests. */
+export const CONFIGURATION_MODE_NAV_ITEMS: readonly ConfigurationModeNavItem[] =
+    CONFIGURATION_MODE_NAV_GROUPS.flatMap((g) => g.items);
+
 export const CONFIGURATION_MODE_DEFAULT_SURFACE = settings("processes");
 
-export const CONFIGURATION_MODE_HUB_TITLE = "Configuration";
-export const CONFIGURATION_MODE_HUB_SUBTITLE =
-    "Configure how Alloy runs your operation — processes, presentation, data model, and access.";
+export const CONFIGURATION_MODE_HUB_TITLE = "Settings";
+export const CONFIGURATION_MODE_HUB_SUBTITLE = "Configure Alloy by area.";
 
 export function configurationModeNavItemActive(href: string, path: string): boolean {
     const h = href.replace(/\/$/, "");
     const p = path.replace(/\/$/, "");
     if (h === "/admin/workflows") return p === h || p.startsWith(`${h}/`);
     if (h === settings("processes")) return p === h || p.startsWith(`${h}/`) || p.startsWith("/settings/business-processes");
+    if (h === settings("surfaces")) return p === h || p.startsWith(`${h}/`) || p.startsWith("/settings/layouts");
     return p === h || p.startsWith(`${h}/`);
 }

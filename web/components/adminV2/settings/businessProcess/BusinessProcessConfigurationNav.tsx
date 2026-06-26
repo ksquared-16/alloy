@@ -45,7 +45,7 @@ export default function BusinessProcessConfigurationNav({
 }) {
     return (
         <nav
-            className="process-config-nav"
+            className="configuration-section-queue process-config-nav"
             aria-label="Process configuration"
             data-testid="business-process-workspace-nav"
         >

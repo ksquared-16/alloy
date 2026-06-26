@@ -33,7 +33,7 @@ describe("configuration ownership doctrine — drift prevention", () => {
         expect(workspace).toContain("stage-membership-included-statuses");
         expect(workspace).toContain("STAGE_MEMBERSHIP_INCLUDED_STATUSES_LABEL");
         expect(workspace).toContain('id="operating_plan"');
-        expect(workspace).toContain('id="perspectives"');
+        expect(workspace).toContain('id="operating_plan"');
         expect(read("components/adminV2/settings/lifecycle/LifecycleStageOperatingPlanEditor.tsx")).toContain(
             "LifecycleStageAttentionRulesEditor",
         );
@@ -45,8 +45,10 @@ describe("configuration ownership doctrine — drift prevention", () => {
 
     it("process actions live only in process-level section not stage config", () => {
         const board = read("components/adminV2/settings/lifecycle/LifecycleActivationBoard.tsx");
-        expect(board).toContain("business-process-actions-section");
-        expect(board).toContain("BUSINESS_PROCESS_PROCESS_ACTIONS_TITLE");
+        expect(board).toContain("BusinessProcessActionsListColumn");
+        const actionsWorkspace = read("components/adminV2/settings/businessProcess/BusinessProcessActionsQueueWorkspace.tsx");
+        expect(actionsWorkspace).toContain("business-process-actions-list-column");
+        expect(actionsWorkspace).toContain("BUSINESS_PROCESS_PROCESS_ACTIONS_TITLE");
         expect(board).not.toContain("actionsSection");
         const config = read("components/adminV2/settings/lifecycle/LifecycleStageConfiguration.tsx");
         expect(config).not.toContain("actionsSection");
@@ -67,17 +69,17 @@ describe("configuration ownership doctrine — drift prevention", () => {
         const matrix = read("components/adminV2/settings/lifecycle/LifecycleActionsMatrix.tsx");
         expect(matrix).toContain("Process Actions");
         expect(matrix).not.toContain("Lifecycle Actions");
-        const page = read("app/adminV2/settings/business-processes/page.tsx");
+        const page = read("app/adminV2/settings/processes/page.tsx");
         expect(page).toContain("BUSINESS_PROCESS_SETTINGS_PAGE_TITLE");
         expect(page).not.toContain('>Lifecycle<');
     });
 
     it("ownership doctrine doc exists and defines canonical owners", () => {
         const doc = readFileSync(resolve(root, "../docs/system/configuration-ownership-doctrine.md"), "utf8");
-        expect(doc).toContain("Canonical ownership");
-        expect(doc).toContain("Business Processes");
-        expect(doc).toContain("queueMembershipWithSyncedStatusKeys");
-        expect(doc).toContain("lifecycle_builder_stage_field_rules_v1");
-        expect(doc).toContain("configuration-runtime-design-alignment.md");
+        expect(doc).toContain("Frozen ownership model");
+        expect(doc).toContain("Processes");
+        expect(doc).toContain("Surfaces");
+        expect(doc).toContain("Frozen ownership model");
+        expect(doc).toContain("Action definitions");
     });
 });

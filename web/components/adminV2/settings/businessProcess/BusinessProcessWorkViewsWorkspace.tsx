@@ -24,7 +24,7 @@ export default function BusinessProcessWorkViewsWorkspace({
             queueLanes={queueLanes}
             enabled
         >
-            <div className="grid min-h-[24rem] gap-0 xl:grid-cols-[17.5rem_minmax(0,1fr)]" data-testid="business-process-work-views-workspace">
+            <div className="grid min-h-[24rem] gap-0 xl:grid-cols-[var(--config-section-queue-width)_minmax(0,1fr)]" data-testid="business-process-work-views-workspace">
                 <div className="border-r border-alloy-forge/10 bg-alloy-stone/[0.03] p-3">
                     <BusinessProcessWorkViewsListColumn />
                 </div>

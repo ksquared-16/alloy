@@ -38,9 +38,11 @@ describe("Configuration Runtime final lock-in", () => {
         expect(css).not.toContain("alloy-blue");
     });
 
-    it("process shell defines queue/workspace dividers", () => {
+    it("process shell defines queue/workspace dividers and frozen widths", () => {
         const css = read("app/adminV2/settings/configurationRuntime.css");
         expect(css).toContain(".process-config-list-column");
+        expect(css).toContain("--config-section-queue-width: 260px");
+        expect(css).toContain("--config-object-queue-width: 320px");
         expect(css).toContain("border-right: 1px solid rgba(89, 103, 139, 0.14)");
         expect(css).toContain(".process-config-workspace-toolbar");
     });

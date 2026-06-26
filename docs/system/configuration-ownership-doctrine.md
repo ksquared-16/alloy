@@ -1,154 +1,80 @@
 # Configuration Ownership Doctrine
 
-**Status:** Active — Business Processes V3 (June 2026).
+**Status:** Frozen — Configuration Runtime V1 (June 2026).
 
-**Workspace layout:** See `configuration-workspace-v1-doctrine.md` for domain grouping (Organization / Data Model / Operations / Experience).
-
-## Purpose
-
-Alloy had multiple configuration surfaces controlling the same concepts (statuses, fields, actions, queues). This doctrine establishes **one owner per concept** so operator UI stays simple and runtime has a single source of truth.
-
-Business Processes **consumes** platform definitions. It does not recreate them.
-
----
-
-## Canonical ownership
+## Frozen ownership model
 
 | Surface | Owns | Does **not** own |
 |---------|------|------------------|
-| **Fields** (`/admin/settings/fields`) | Field definitions, types, labels, help text, **formats**, option bindings, **native reference fields** (seeded `field_definitions` with `entity_reference` config) — **Fields & Field Formats sprint** | Drawer placement, stage requiredness, queue layout, human relationship vocabulary |
-| **Relationships** (`/admin/settings/relationships`) | **Person/family relationship vocabulary** — customer ↔ person roles, person ↔ person types | Native FK / entity reference authoring (use Fields) |
-| **Business Processes** (`/admin/settings/business-processes`) | Process/stage structure, **perspectives** (lane metadata over synced queue lanes), **stage status rollups**, stage requiredness/recommendation (e.g. Lead → Location via `opportunity:location`), action availability & stage restrictions, membership subject/count, **Operating Plan per stage**, layout **assignments** (not authoring) | Status labels, field definitions, queue row / Focus Panel **presentation** authoring, action handler semantics |
-| **Layouts** (`/admin/settings/layouts`) | Drawer / Focus Panel body and queue row **presentation** (Experience Builder): section order, field placement (`field_placements_v1`), queue row layout (`metadata.queue_record_layout`), **editable native reference fields when placed** (e.g. `opportunity.location_id`) | Field definitions, stage rollups, action definitions, perspectives, stages |
-| **Statuses** (`/admin/settings/statuses`) | Status **vocabulary**: label, color, sort order, active/inactive; lifecycle presentation metadata and transitions (**Statuses sprint**) | Which stage a status rolls up into |
-| **Actions** (`/admin/settings/actions`) | Action **definitions** and global placement rows | Per-process enablement (Business Processes) |
-| **Work Units** (runtime) | Queue lane execution, filters applied at runtime | Operator configuration (derived from Business Processes + Layouts) |
+| **Locations** | Campuses, programs, rooms, and schedule templates | Process behavior, surface presentation |
+| **Fields** | Canonical data definitions — types, labels, formats, validation | Drawer placement, stage requiredness, action behavior |
+| **Statuses** | Status vocabulary — label, color, sort, active/inactive | Which stage a status rolls up into |
+| **Action definitions** (internal catalog at `/settings/actions`) | Platform action metadata — key, description, parameters, default label | Operator configuration, placements, process enablement |
+| **Processes** | Behavior — stages, Work Views, operating plan, process actions, requirements, attention | Action definition authoring, surface placement |
+| **Surfaces** | Presentation — queue rows, Focus Panel modes, cards, field placement, action placement | Whether an action exists for a process/stage |
+| **Access** (`/settings/users-roles`) | Users, roles, permissions, location/department scope | — |
+| **Communications** | Channels, templates, send rules, quiet hours, signatures | — |
+| **Operational Intelligence** | Metrics, targets, indicator placement | KPI strip geometry (runtime) |
+| **Automation** | Workflow definitions and triggers | Process operating plan semantics |
+
+**Actions is not an operator-facing configuration area.** Action definitions remain an internal/platform catalog at `/settings/actions`.
+
+**Operator navigation does not include Action definitions.**
+
+---
+
+## Interaction pattern (frozen)
+
+**Context → Queue → Workspace → BOS**
+
+---
+
+## Processes vs Surfaces vs Actions
+
+### Processes decides behavior
+
+- Should Schedule Tour exist for this process/stage?
+- Primary / secondary / outcome actions
+- Requirements, preflight, completion rules
+- Attention rules
+- Button labels at the process level
+
+### Surfaces decides presentation
+
+- Queue row placement
+- Focus Panel header / card / overflow
+- Which published surface documents an action appears on
+
+Processes **must not** own global action definition authoring or default surface catalog management.
+
+Route compatibility: product concept is **Surfaces**; legacy route `/settings/layouts` may remain until cutover.
 
 ---
 
 ## Status ownership
 
-### Old model (deprecated)
-
-| Surface | Owned |
-|---------|--------|
-| Statuses page | Label + **Enrollment Stage** column (`process_stage_key` via edit) |
-| Business Processes | Stage rollups (checkboxes) |
-| Queue membership UI | `included_keys` status checkboxes |
-
-### New model
-
 | Surface | Owns |
 |---------|------|
 | **Statuses** | Vocabulary only |
-| **Business Processes → Stage Membership → Included statuses** | Stage assignment / rollups |
-| **Queue membership** | Subject type, count unit, location scope only — **no status UI** |
-
-On **Save stage**, `queueMembershipWithSyncedStatusKeys()` derives `queue_membership_v1.included_*` from selected stage statuses. Runtime queue filters follow stage rollups.
-
-### Migration & compatibility
-
-- Existing `status_definitions.metadata.process_stage_key` values remain readable via `effectiveEnrollmentOperatorStage()` fallback.
-- **Canonical write path:** `persistEnrollmentStageStatusAssignments` when saving a Business Process stage.
-- Statuses page no longer PATCHes `process_stage_key`. Re-assign stages in Business Processes if needed after migration.
+| **Processes → stage membership** | Stage assignment / rollups |
 
 ---
 
-## Stage requirements ownership
+## Future changes
 
-### Old model
+Configuration Runtime V1 is frozen. Future changes are limited to:
 
-| Storage | Purpose |
-|---------|---------|
-| `departments.metadata.lifecycle_builder_stage_field_rules_v1` | Stage required/recommended `rule_id`s |
-| Layout `field_placements_v1` | Drawer requiredness per layout |
+- Bug fixes
+- Small visual polish
+- Wiring Surfaces into the frozen shell
 
-Parallel palettes → field lists did not match.
-
-### Current model (interim)
-
-- Palette merges **org `field_definitions`** (via `loadOrgFieldDefinitionsForLifecycle`) with **platform `LIFECYCLE_FIELD_REQUIREMENT_CATALOG`**.
-- Persistence remains `lifecycle_builder_stage_field_rules_v1` until convergence.
-
-### Target model
-
-- Stage requiredness keyed by **`field_definitions` id / field_key** (same registry as Layouts).
-- Layouts continue to own **placement and drawer requiredness**; Business Processes own **stage progression requiredness**.
-
-### Migration plan (deferred)
-
-1. Map existing `rule_id` → `field_key` + entity.
-2. Dual-read: builder rules + layout placements during transition.
-3. Write new `stage_field_requirements_v1` keyed by field registry.
-4. Deprecate lifecycle field rule catalog entries that duplicate Fields registry.
-
-**Risk:** Runtime evaluators (`lifecycleFieldRuleEvaluator`, forms coverage) bind to `rule_id` today — migration requires coordinated runtime cutover.
-
----
-
-## Action ownership
-
-### Old model
-
-- Stage configuration “Actions in this stage” section
-- Process Actions matrix
-- Global Actions settings
-
-### New model
-
-| Surface | Owns |
-|---------|------|
-| **Actions settings** | Action definitions, global placements |
-| **Business Processes → Process Actions** | Process-level enablement, placements, optional stage restrictions |
-| **Stages** | Participate in restrictions only — **no stage-level Actions section** |
-
----
-
-## Queue ownership
-
-### Old model
-
-- Queue presentation section in stage configuration
-- Layouts queue row layout
-- Work unit sync UI in Business Processes
-
-### New model
-
-| Surface | Owns |
-|---------|------|
-| **Layouts** | Queue row appearance |
-| **Business Processes** | Stage membership + status rollups (defines **what** appears in a lane) |
-| **Runtime (internal)** | `work_units` lane sync on Save stage — not operator-facing |
-
-Queue presentation was **removed** from stage configuration UI. Lane sync still runs in `saveLifecycleStageRuntimeConfig`.
-
----
-
-## Configuration Runtime (Alloy OS)
-
-**Design authority:** `configuration-runtime-design-alignment.md`
-
-Settings copy and IA reflect frozen runtime ownership. Configuration Runtime **must not**:
-
-- Introduce a **Queue Builder** or **Focus Panel Builder** route — presentation is authored in **Layouts / Experience Builder** only.
-- Introduce fields or statuses outside **Fields** and **Statuses** settings — BP and Layouts **consume** canonical catalogs.
-- Duplicate field-format or status-transition UI — wait for **Fields & Field Formats** and **Statuses** parallel sprints.
-
-**Perspectives** are Business Process stage metadata over synced queue lanes (future `perspectives_v1` on save stage). Runtime derives `RuntimePerspective`; there is no standalone Perspectives settings product.
-
----
-
-## Field model convergence (V4)
-
-Status, action, and queue ownership are addressed in V3. **Field registry convergence** (Fields → Layouts → Forms → Business Processes) is documented separately:
-
-**`docs/system/field-model-convergence-doctrine.md`**
+No new IA changes without explicit doctrine update.
 
 ---
 
 ## Related docs
 
-- `docs/system/settings-v2-doctrine.md` — Settings V2 visual/IA patterns
-- `docs/system/configuration-system.md` — Four-plane control plane overview
-- `docs/system/configuration-runtime-design-alignment.md` — Alloy OS Configuration Runtime design alignment (approved)
-- `docs/system/field-model-convergence-doctrine.md` — canonical `field_definitions` and migration plan
+- `docs/system/configuration-mode-doctrine.md`
+- `docs/system/configuration-runtime-v1.md`
+- `docs/system/configuration-workspace-v1-doctrine.md`
+- `docs/system/configuration-runtime-design-alignment.md`
