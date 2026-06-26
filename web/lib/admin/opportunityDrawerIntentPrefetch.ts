@@ -20,6 +20,8 @@ import { dedupeAdminFetch } from "@/lib/workspace/workspaceAdminFetchDedupe";
 export type OpportunityDrawerIntentContext = {
     work_unit_id: string;
     department_id: string;
+    focus_panel_layout_id?: string | null;
+    work_view_id?: string | null;
 };
 
 /**

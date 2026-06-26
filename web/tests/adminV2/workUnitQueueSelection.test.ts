@@ -10,6 +10,7 @@ import {
     resolveWorkUnitFetchQueueKeyFromPill,
     resolveWorkUnitQueueCanonicalKey,
     resolveWorkUnitQueueKey,
+    resolveWorkUnitQueueKeyFromLocation,
     workUnitActivePillKeyFromSelection,
     workUnitQueuePillKeySelected,
     workUnitQueuePillKeysEquivalent,
@@ -24,9 +25,16 @@ import {
 } from "@/lib/admin/opportunityDrawerQueueNavigator";
 
 describe("WorkUnitQueueSelection", () => {
+    const emptyLocationExtras = {
+        workViewId: "",
+        queueLayoutId: "",
+        focusLayoutId: "",
+    };
+
     it("parses dept pipeline queue from location", () => {
         const sel = workUnitQueueSelectionFromLocation("wu-1", {
             queue: "enrolled",
+            ...emptyLocationExtras,
             unmapped: false,
             attentionBucket: "",
             statusKeys: "",
@@ -45,6 +53,7 @@ describe("WorkUnitQueueSelection", () => {
     it("parses needs-attention bucket from location (attention_bucket or bucket alias)", () => {
         const sel = workUnitQueueSelectionFromLocation("wu-1", {
             queue: "needs_attention",
+            ...emptyLocationExtras,
             unmapped: false,
             attentionBucket: "follow_up_due",
             statusKeys: "",
@@ -55,6 +64,60 @@ describe("WorkUnitQueueSelection", () => {
         expect(sel?.source).toBe("dept_needs_attention");
         expect(sel?.attentionBucketKey).toBe("follow_up_due");
         expect(workUnitActivePillKeyFromSelection(sel!)).toBe("__attention_bucket:follow_up_due");
+    });
+
+    it("parses work_view-only location without using id as queue key", () => {
+        const sel = workUnitQueueSelectionFromLocation("wu-1", {
+            queue: "",
+            workViewId: "new_families_today",
+            queueLayoutId: "",
+            focusLayoutId: "",
+            unmapped: false,
+            attentionBucket: "",
+            statusKeys: "",
+            attentionReason: "",
+            attentionReasonCode: "",
+            activitySignalKey: "",
+        });
+        expect(sel).toMatchObject({
+            workUnitId: "wu-1",
+            queueKey: "",
+            workViewId: "new_families_today",
+        });
+        expect(isExplicitWorkUnitQueueSelection(sel)).toBe(true);
+    });
+
+    it("resolveWorkUnitQueueKeyFromLocation maps work_view to compat queue", () => {
+        const deptMetadata = {
+            lifecycle_builder_v1: {
+                version: 1,
+                active_process_id: "proc-1",
+                processes: [
+                    {
+                        id: "proc-1",
+                        key: "enrollment",
+                        name: "Enrollment",
+                        primary_entity: "opportunity",
+                        sort_order: 0,
+                        is_active: true,
+                        stages: [],
+                        work_views_v1: [
+                            {
+                                id: "new_families_today",
+                                label: "New Families",
+                                compat_queue_key: "new_inquiry",
+                            },
+                        ],
+                    },
+                ],
+            },
+        };
+        expect(
+            resolveWorkUnitQueueKeyFromLocation(deptMetadata, {
+                queue: "",
+                workViewId: "new_families_today",
+            }),
+        ).toBe("new_inquiry");
     });
 
     it("explicit URL queue beats priority summaries missing that lane", () => {

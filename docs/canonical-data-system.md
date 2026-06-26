@@ -1,6 +1,6 @@
 # Canonical Data System
 
-**Status:** Formal contract (Phase 5 — June 2026)  
+**Status:** v1 complete — sprint closed (June 2026)  
 **Audience:** Runtime, Configuration, Actions, Workflows, Analytics, BOS, Documents, Reports  
 **Prerequisites:** Phases 1–4 (`docs/canonical-data-system-phase-*.md`)
 
@@ -170,36 +170,89 @@ Supporting tests: `lifecycleFieldRuleEvaluator.test.ts`, `attachCustomerMemberPr
 
 ---
 
-## Schema drop readiness (Phase 5 classification)
+## Schema drop readiness (Phase 5 classification — superseded)
 
-| Candidate | Classification | Notes |
-|-----------|----------------|-------|
-| `opportunities.status` (text) | **Ready to drop** | Runtime reads/writes blocked; backfill via maintenance helper |
-| `persons.status` (text) | **Ready to drop** | Same; some `select("*")` paths remain in workflow/book-v2 |
-| `customers.status` (text) | **Ready to drop** | Admin list migrated to `CUSTOMER_CANONICAL_LIST_SELECT` |
-| `contacts` compatibility layer | **Ready to isolate** | Converge to persons + customer_persons |
-| Home-services residue tables | **Keep temporarily** | Vertical scope — not childcare-primary |
-| Obsolete lifecycle/layout aliases | **Ready to isolate** | `layoutRefKeyAliases` alias-on-read |
-| Analytics/workflow field copies | **Needs additional audit** | Phase 6 convergence |
-| Remaining `select("*")` on CRM entities | **Needs additional audit** | `workflowRun.ts`, `book-v2`, `opportunityIdentity.ts` |
-| DB write-guard triggers | **Keep temporarily** | Draft: `supabase/sql/draft/canonical_status_legacy_column_write_guard.sql` |
-
-Do **not** drop columns until org backfill verified and migration approved.
-
----
-
-## Phase 6 recommendations
-
-1. Apply DB-level legacy status write guards after org backfill.
-2. Drop `opportunities.status`, `persons.status`, `customers.status` columns (single migration per table).
-3. Migrate remaining `select("*")` on CRM entities to explicit canonical SELECT constants.
-4. Update Forms reference matrix overrides where still stale.
-5. Converge analytics resolvers to canonical field paths.
-6. Layout migration: retire `child_inquiry.*` alias-on-read after stored JSON rewrite.
-7. Activate lifecycle strict mode in production after OCM QA sign-off.
+Legacy text `status` columns **dropped** in Phase 6 migration `20260625140100` (applied 2026-06-25).
 
 ---
 
 ## Phase 6 (physical cleanup — complete)
 
 See `docs/canonical-data-system-phase-6-physical-cleanup.md` — DB write guards, column drops, SELECT migrations, contacts/analytics/layout audits.
+
+---
+
+## Phase 7 (E2E QA — complete)
+
+See `docs/canonical-data-system-phase-7-e2e-qa.md` — roundtrip validators, intake write fixes, manual checklist, strict mode recommendation, blockers.
+
+---
+
+## Sprint complete (Canonical Data System v1)
+
+**Closed:** 2026-06-25
+
+| Milestone | Status |
+|-----------|--------|
+| Phases 1–7 | Complete |
+| Doctrine + generated catalog | Complete |
+| Phase 6 DB migrations | Applied (`20260625140000`, `20260625140100`) |
+| Legacy `status` columns | Dropped on `opportunities`, `persons`, `customers` |
+| Backfill verification | Passes — Firefly Early Learning (`93667019-bd28-49b5-a688-acc9bb1e0a19`) |
+| Retired Alloy Bend org | Operational data removed; org `status = retired` |
+| P0 `customer_member` field_values PATCH | Complete |
+| Enforcement tests | `tests/fields/canonical*.test.ts` — 100+ passing |
+
+**Canonical dev org:** Firefly Early Learning — `web/lib/fields/canonicalDevOrg.ts`
+
+**Verification:**
+
+```bash
+cd web && npx tsx scripts/verifyCanonicalStatusKeyBackfill.ts --org-id=93667019-bd28-49b5-a688-acc9bb1e0a19
+```
+
+**Env defaults (local):** `CANONICAL_VERIFY_ORG_ID`, `ALLOY_PUBLIC_ORG_ID`, `DEV_QUEUE_ORG_ID` → Firefly UUID.
+
+### Remaining deferred items (intentional)
+
+See **Deferred Until Runtime / Configuration** below — not blockers for v1 freeze.
+
+---
+
+## Deferred Until Runtime / Configuration
+
+These workstreams resume **against** the Canonical Data System v1 contract. They do not redefine grains, status architecture, or field ownership.
+
+| Area | Notes |
+|------|--------|
+| **Runtime polish** | Queue/drawer/focus panel UX — read canonical grains only |
+| **Focus Panel** | System 5 cards — consume composed canonical payloads |
+| **Configuration Runtime** | BP/stage workspace — bind to `field_definitions` + canonical refKeys |
+| **Experience Builder** | Presentation layers — no new field IDs |
+| **Layout editor UX** | Migrate stored `child_inquiry.*` aliases per org (`migrateStoredLayoutRefKeys.ts`) |
+| **Business Process editor UX** | Journey config — status via `status_definitions` |
+| **Analytics UX** | Converge resolvers to canonical paths (org metric copy audit deferred) |
+| **Reports** | Read canonical entity SELECTs |
+| **Billing** | Vertical scope — not enrollment canonical grain |
+| **Scheduling** | Jobs/schedules domain — separate from CRM canonical grains |
+| **Attendance** | Operational domain — future module |
+
+**Also deferred from Canonical sprint:**
+
+- Contacts → persons read convergence (non-messaging paths)
+- Lifecycle strict mode production activation (`CANONICAL_STRICT_MODE` server flag)
+- CI ephemeral DB: seed fixture + `runCanonicalE2eDbAssertions.ts`
+- Playwright smoke: create lead → drawer status label
+
+---
+
+## v1 frozen — do not reopen without ADR
+
+The following are **closed** for v1:
+
+- Entity grains (`person`, `customer`, `customer_member`, `opportunity`, `inquiry_child`)
+- Status model (`status_key` + `status_definitions` only)
+- Field ownership rules (`web/lib/fields/canonicalFieldOwnership.ts`)
+- Legacy text `status` columns (dropped)
+
+Resume product work in Runtime and Configuration using this contract as the stable foundation.

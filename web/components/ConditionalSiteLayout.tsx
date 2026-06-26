@@ -4,19 +4,8 @@ import { usePathname } from "next/navigation";
 import LayoutWrapper from "@/components/LayoutWrapper";
 import MarketingHeader from "@/components/marketing/MarketingHeader";
 import MarketingFooter from "@/components/marketing/MarketingFooter";
+import { isPublicMarketingChromeSuppressedPath } from "@/lib/admin/canonicalAdminRoutes";
 import { isPublicFormEmbedPath } from "@/lib/public/forms/publicFormEmbedPath";
-
-function isAppShellRoute(pathname: string | null): boolean {
-  if (!pathname) return false;
-  return (
-    pathname.startsWith("/admin") ||
-    pathname.startsWith("/adminV2") ||
-    pathname.startsWith("/adminv2") ||
-    pathname.startsWith("/legacy-admin") ||
-    pathname === "/workspace" ||
-    pathname.startsWith("/workspace/")
-  );
-}
 
 function isAuthRoute(pathname: string | null): boolean {
   if (!pathname) return false;
@@ -35,7 +24,7 @@ export default function ConditionalSiteLayout({
   const pathname = usePathname();
   const isFormEmbedRoute = isPublicFormEmbedPath(pathname);
 
-  if (isAppShellRoute(pathname) || isFormEmbedRoute || isAuthRoute(pathname)) {
+  if (isPublicMarketingChromeSuppressedPath(pathname) || isFormEmbedRoute || isAuthRoute(pathname)) {
     return <>{children}</>;
   }
 

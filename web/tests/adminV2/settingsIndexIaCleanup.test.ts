@@ -1,42 +1,40 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
+import { CONFIGURATION_WORKSPACE_DOMAINS } from "@/lib/adminV2/configurationWorkspaceDomains";
+
 const root = resolve(__dirname, "../..");
 
 function read(rel: string): string {
     return readFileSync(resolve(root, rel), "utf8");
 }
 
-describe("Settings index IA — Settings V2 domains", () => {
-    it("groups tiles by configuration domain", () => {
+describe("Settings index IA — Configuration Runtime domains", () => {
+    it("/settings renders configuration hub tiles in Configuration Mode", () => {
         const page = read("app/adminV2/settings/page.tsx");
-        expect(page).toContain('label="Configure"');
-        expect(page).toContain('label="Data Model"');
-        expect(page).toContain('label="Operations"');
-        expect(page).toContain('label="Workspace Experience"');
-        expect(page).toContain("Advanced");
-        expect(page).not.toContain('label="Enrollment Operations"');
-        expect(page).not.toContain('label="Record Setup"');
-        expect(page).not.toContain('label="Actions & Automation"');
+        expect(page).toContain("SettingsConfigurationHub");
+        expect(page).not.toContain("SettingsIndexRedirect");
+        const domains = CONFIGURATION_WORKSPACE_DOMAINS.map((d) => d.label);
+        expect(domains).toContain("Organization");
+        expect(domains).toContain("Operations");
+        expect(domains).toContain("Experience");
     });
 
-    it("business processes tile lives under Operations with editable mode", () => {
-        const page = read("app/adminV2/settings/page.tsx");
-        expect(page).toContain('title="Business Processes"');
-        expect(page).toContain("ADMIN_V2_SETTINGS_BUSINESS_PROCESSES_PATH");
-        expect(page).toMatch(/title="Business Processes"[\s\S]*mode="editable"/);
+    it("Processes tile lives under Operations with editable mode", () => {
+        const operations = CONFIGURATION_WORKSPACE_DOMAINS.find((d) => d.id === "operations");
+        const processes = operations?.items.find((i) => i.href === "/settings/processes");
+        expect(processes?.label).toBe("Processes");
+        expect(processes?.emphasis).toBe(true);
     });
 
-    it("advanced surfaces stay in sidebar aside", () => {
-        const page = read("app/adminV2/settings/page.tsx");
-        expect(page).toContain("/admin/settings/status-transition-rules");
-        expect(page).toContain("/admin/settings/field-sections");
-        expect(page).toContain("data-testid=\"settings-index-page\"");
+    it("Layouts tile lives under Experience", () => {
+        const experience = CONFIGURATION_WORKSPACE_DOMAINS.find((d) => d.id === "experience");
+        expect(experience?.items.some((i) => i.href === "/settings/layouts" && i.label === "Layouts")).toBe(true);
     });
 
-    it("action buttons tile lives under Operations", () => {
-        const page = read("app/adminV2/settings/page.tsx");
-        expect(page).toMatch(/label="Operations"[\s\S]*title="Action Buttons"/);
-        expect(page).toMatch(/title="Action Buttons"[\s\S]*mode="editable"/);
+    it("journey guide links to Processes not Business Processes", () => {
+        const guide = read("components/adminV2/settings/ConfigurationJourneyGuide.tsx");
+        expect(guide).toContain("Processes");
+        expect(guide).not.toContain("Business Processes");
     });
 });

@@ -1375,7 +1375,6 @@ export async function POST(request: NextRequest) {
                     : {}),
                 customer_id: customerId,
                 name: `${contact_first_name || ""} ${contact_last_name || ""} — Cleaning`.trim() || "Cleaning Service",
-                status: "open",
                 source: "website",
                 pipeline_stage_id: bookedPipelineStageIdResolved,
                 status_key: BOOKING_CONFIRM_OPPORTUNITY_STATUS_KEY,

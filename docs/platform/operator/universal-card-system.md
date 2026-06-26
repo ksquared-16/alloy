@@ -1,6 +1,7 @@
 # Universal Card System (Alloy OS — System 4)
 
-**Status:** Design freeze — **no production code until checklist approved.**  
+**Status:** Design freeze — System 5 owns operational surface presentation; System 5A owns archetype composition; System 5B/5C own interaction and content templates (doctrine only until implementation requested).  
+**Visual law:** [`operational-surface-design-system.md`](./operational-surface-design-system.md) (System 5) · [`universal-card-archetypes.md`](./universal-card-archetypes.md) (System 5A) · [`card-interaction-expansion-doctrine.md`](./card-interaction-expansion-doctrine.md) (System 5B) · [`card-content-template-field-inclusion-doctrine.md`](./card-content-template-field-inclusion-doctrine.md) (System 5C)  
 **Full artifact:** [`docs/sprints/06_2026/alloy_os_system_4_universal_card_system.md`](../../sprints/06_2026/alloy_os_system_4_universal_card_system.md) (all 13 deliverables, Concept A/B/C, freeze checklist)  
 **Interactive mock:** Cursor Canvas `universal-card-system.canvas.tsx` (when opened beside chat)
 

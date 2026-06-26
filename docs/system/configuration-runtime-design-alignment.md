@@ -4,6 +4,16 @@
 
 **Runtime:** Frozen. Configuration Runtime does **not** redesign Workspace, Work Unit Context, Queue, Focus Panel, BOS rail, or Universal runtime regions.
 
+## Configuration Mode (visual + interaction)
+
+**Authority:** `configuration-mode-doctrine.md` — frozen June 2026.
+
+Configuration surfaces follow **Configuration Context → Configuration Queue → Configuration Workspace → BOS rail**. They use Alloy’s brand/runtime palette (pine, midnight, forge, stone) — **not** blue/gray legacy admin styling, slate dashboards, or arbitrary mockup greens.
+
+**Do not use** as primary Configuration Runtime styling: blue selected states, blue-gray admin cards, generic slate dashboards, gray-on-gray inactive UI, legacy admin table layouts.
+
+**First surface:** `/settings/processes` — Stages and Work Views list columns + setup workspace; Presentation assignment lives inside Work View setup, not the left queue.
+
 ## Purpose
 
 Register the approved Settings/Configuration experience that controls frozen runtime primitives. Implementation proceeds in convergence packages (BP perspectives metadata, layout cutover, field/status sprint integration) — not parallel builders or new runtime systems.

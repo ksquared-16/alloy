@@ -136,7 +136,7 @@ export function createEmptyWorkViewDraft(label = "New work view"): WorkViewConfi
         id: base,
         label,
         mission: "",
-        filters_v1: [{ field_key: "status", operator: "equals", value: "" }],
+        filters_v1: [{ field_key: "tour_date", operator: "equals", value: "today" }],
         sort_v1: { field_key: "updated_at", direction: "desc" },
         visible_in_runtime: true,
         display_order: 1,

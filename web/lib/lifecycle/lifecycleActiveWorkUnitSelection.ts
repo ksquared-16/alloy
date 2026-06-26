@@ -3,9 +3,12 @@
  */
 
 import { loadQueueDefinitionBundle } from "@/lib/config/queueDefinitionV2Runtime";
+import { WORK_UNIT_ATTENTION_BUCKET_PILL_PREFIX } from "@/lib/adminV2/routeShellPipeline/adapters/workUnit/aboveFoldTypes";
 import { resolveWorkUnitFetchQueueKeyFromPill } from "@/lib/adminV2/workUnitQueueSelection";
 import {
+    isLifecyclePlatformNavChipKey,
     isLifecycleWorkUnitNavChipKey,
+    LIFECYCLE_NEEDS_ATTENTION_PLACEHOLDER_CHIP_KEY,
     resolveLifecycleWorkUnitPrimaryQueueKey,
 } from "@/lib/lifecycle/lifecycleWorkUnitShellPills";
 import { stageKeyFromLifecycleWorkUnitMetadata } from "@/lib/lifecycle/lifecycleStageWorkUnit";
@@ -55,7 +58,36 @@ export type LifecycleQueueFetchGuardResult = {
 
 export function logLifecycleQueueKeyLeakGuard(detail: Record<string, unknown>): void {
     if (process.env.NODE_ENV === "production") return;
-    console.error("[lifecycle-wu-queue-key-leak-guard]", detail);
+    console.warn("[lifecycle-wu-queue-key-leak-guard]", detail);
+}
+
+/** API queue keys that are valid but not listed on a stage work unit's queue_definition. */
+export function isWorkUnitVirtualApiQueueKey(queueKey: string): boolean {
+    return queueKey.trim().toLowerCase() === "needs_attention";
+}
+
+/** True when hover/focus prefetch should warm rows for this pill (executable lane on current WU only). */
+export function isWorkUnitQueuePillPrefetchable(params: {
+    pillKey: string;
+    workUnit?: { queue_definition?: unknown } | null;
+}): boolean {
+    const pill = params.pillKey.trim();
+    if (!pill) return false;
+    if (pill === LIFECYCLE_NEEDS_ATTENTION_PLACEHOLDER_CHIP_KEY) return false;
+    if (isLifecycleWorkUnitNavChipKey(pill)) return false;
+    if (isLifecyclePlatformNavChipKey(pill)) return false;
+    if (pill.toLowerCase() === "needs_attention") return false;
+    if (pill.startsWith(WORK_UNIT_ATTENTION_BUCKET_PILL_PREFIX)) return false;
+
+    const wu = params.workUnit;
+    if (!wu?.queue_definition) return false;
+
+    const resolved = resolveWorkUnitFetchQueueKeyFromPill(pill, "", wu);
+    const apiKey = resolved.queueKey.trim();
+    if (!apiKey || isWorkUnitVirtualApiQueueKey(apiKey)) return false;
+
+    const validKeys = listExecutableQueueKeysForWorkUnit(wu);
+    return validKeys.length > 0 && validKeys.includes(apiKey);
 }
 
 /**
@@ -79,15 +111,7 @@ export function guardLifecycleQueueFetchBeforeApi(params: {
         return { blocked: true, corrected: false, workUnitId, pillKey: attempted, apiQueueKey: "" };
     }
 
-    if (isLifecycleWorkUnitNavChipKey(attempted)) {
-        logLifecycleQueueKeyLeakGuard({
-            activeWorkUnitId: workUnitId,
-            attemptedQueueKey: attempted,
-            validQueueKeys: validKeys,
-            previousWorkUnitId: params.previousWorkUnitId ?? null,
-            previousQueueKey: params.previousQueueKey ?? null,
-            reason: "lifecycle_wu_nav is not an API queue key",
-        });
+    if (isLifecycleWorkUnitNavChipKey(attempted) || isLifecyclePlatformNavChipKey(attempted)) {
         const pillKey = primary ?? "";
         return {
             blocked: !pillKey,
@@ -120,20 +144,23 @@ export function guardLifecycleQueueFetchBeforeApi(params: {
     }
 
     if (validKeys.length > 0 && apiQueueKey && !validKeys.includes(apiQueueKey)) {
-        logLifecycleQueueKeyLeakGuard({
-            activeWorkUnitId: workUnitId,
-            attemptedQueueKey: attempted,
-            resolvedApiQueueKey: apiQueueKey,
-            validQueueKeys: validKeys,
-            previousWorkUnitId: params.previousWorkUnitId ?? null,
-            previousQueueKey: params.previousQueueKey ?? null,
-            correctedTo: primary,
-        });
+        if (isWorkUnitVirtualApiQueueKey(apiQueueKey)) {
+            return { blocked: false, corrected: false, workUnitId, pillKey, apiQueueKey };
+        }
         if (primary) {
             apiQueueKey = primary;
             pillKey = primary;
             corrected = true;
         } else {
+            logLifecycleQueueKeyLeakGuard({
+                activeWorkUnitId: workUnitId,
+                attemptedQueueKey: attempted,
+                resolvedApiQueueKey: apiQueueKey,
+                validQueueKeys: validKeys,
+                previousWorkUnitId: params.previousWorkUnitId ?? null,
+                previousQueueKey: params.previousQueueKey ?? null,
+                reason: "queue key not on work unit and no primary fallback",
+            });
             return { blocked: true, corrected: false, workUnitId, pillKey: attempted, apiQueueKey: "" };
         }
     }

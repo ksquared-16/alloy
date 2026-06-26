@@ -10,6 +10,7 @@
 
 | Doc | Role |
 |-----|------|
+| [`operational-mode-default-state-doctrine.md`](./operational-mode-default-state-doctrine.md) | Operational Mode default state, subject resolution, Browse retirement |
 | [`alloy-runtime-specification.md`](./alloy-runtime-specification.md) | Behavior synthesis (doctrine → spec) |
 | [`canonical-interaction-model.md`](./canonical-interaction-model.md) | Primitives (the spine) |
 | [`interaction-grammar.md`](./interaction-grammar.md) | Laws (ownership + movement) |
@@ -45,7 +46,7 @@ Seven systems make up the completed runtime. Each is summarized by purpose, owne
 
 - **Purpose:** The shared plane below the WUC holding **Queue · Focus Panel · BOS** as peer regions.
 - **Ownership:** Platform.
-- **Runtime behavior:** All three share one top Y (`--alloy-os-op-surface-top`) and one bottom Y (`--alloy-os-op-surface-bottom`, viewport − 16px); each scrolls internally. State 1 = expanded queue; State 2 = compressed queue + docked Focus Panel.
+- **Runtime behavior:** All three share one top Y (`--alloy-os-op-surface-top`) and one bottom Y (`--alloy-os-op-surface-bottom`, viewport − 16px); each scrolls internally. **Operational Mode is the default state:** condensed queue + resolved subject + open Focus Panel. Legacy State 1 (expanded full-width queue) and Browse Mode are **retired from operator UX** — implementations retained as dormant infrastructure.
 - **Major decisions:** Peer regions, not a modal over a backdrop. No dim, no click-away outer margin in split. Geometry is measured + published as CSS vars; never hardcoded per domain.
 - **Frozen constraints:** Three peer regions. Shared top/bottom Y. BOS never shrinks. No floating/center-floated panel.
 - **Future configuration owner:** None — geometry is permanent platform infrastructure.
@@ -54,7 +55,7 @@ Seven systems make up the completed runtime. Each is summarized by purpose, owne
 
 - **Purpose:** Preview/selection surface for the active perspective.
 - **Ownership:** Platform (presenter); Experience Builder (row field selection, future); Record System (data).
-- **Runtime behavior:** State 1 expanded rows. State 2 → **440px** compressed rail; each row is an **80px four-line, two-column** presenter (`CompressedQueueRow`). Queue header shows branded perspective title + count + search/filter. Selecting a row opens the Focus Panel in place (no remount, scroll + selection preserved).
+- **Runtime behavior:** **Default entry = Operational Mode** — condensed **440px** rail; each row is an **80px four-line, two-column** presenter (`CompressedQueueRow`). On Work Unit open, runtime resolves **Default Operational Subject** via strategy (not “first row”) and opens Focus Panel. Queue header shows branded perspective title + count + search/filter + future strategy override. Row click warm-swaps subject.
 - **Major decisions:** Compressed row is an intentionally different presentation, not a squeezed expanded row. Grain-aware (family/household vs child). Children render `Name (age) · Name (age) +N more`. Avatar in a fixed column; status pill in an isolated right column.
 - **Frozen constraints:** Queues are **preview/selection only** — never operational truth. Row height 80px (76 min / 84 max). Width 440px (430–450 band). No false empty states while loading/held.
 - **Future configuration owner:** Experience Builder (`queue_row_layout` per perspective/grain), Perspective config (search/filter/group/sort options, children display max).
@@ -63,7 +64,7 @@ Seven systems make up the completed runtime. Each is summarized by purpose, owne
 
 - **Purpose:** The docked peer that hosts the universal drawer (Subject + Mission → Summary / Work / Activity modes → Cards).
 - **Ownership:** Platform (shell + geometry); Experience Builder (card composition); Business Processes (mission/mode default).
-- **Runtime behavior:** `position:fixed` peer. Left = queue right + 16px gutter + 1px pad. **Right edge aligns with the WUC right edge** (`right: calc(100vw − --alloy-os-op-surface-right)`). Top/bottom = shared surface Y. Stable across record swaps (open → swap → close, no remount/flash). Perspective change closes it and returns to State 1.
+- **Runtime behavior:** `position:fixed` peer. Left = queue right + 16px gutter + 1px pad. **Right edge aligns with the WUC right edge** (`right: calc(100vw − --alloy-os-op-surface-right)`). Top/bottom = shared surface Y. **Opens automatically** on Work Unit entry when Default Operational Subject resolves. Stable across record swaps (open → swap → close, no remount/flash). Perspective change re-resolves subject for new lens.
 - **Major decisions:** Width is implied by left/right (no fixed width) so the panel and WUC terminate at the same X. Drawer geometry is re-measured on split toggle in `useLayoutEffect` so it never reuses pre-split full-band bounds.
 - **Frozen constraints:** Docked peer, not a modal. Right edge bound to WUC. Never consumes BOS. Subject/Mission/Mode spine is frozen.
 - **Future configuration owner:** Experience Builder (which cards, order, span, visibility), Business Processes (default mission/mode per stage).
@@ -97,7 +98,8 @@ Status legend: **✅ Implemented** · **🟡 Partial** · **🧊 Design frozen o
 | Runtime shell / workspace | ✅ | Existing AdminV2 workspace shell; work-unit surface |
 | Work Unit Context (Concept B bar) | ✅ 🚩 | `WorkUnitCommandSurface` flag branch (`.adminv2-os-context`) |
 | Operational surface geometry | ✅ 🚩 | Peer Queue · Focus Panel · BOS; measured CSS vars |
-| Queue State 1 (expanded) | ✅ | Existing `QueueBlock` |
+| Queue State 1 (expanded) | ✅ dormant | Retired from operator UX — `QueueBlock` retained |
+| Queue Operational Mode (condensed + auto subject) | 🟡 planned | Doctrine: [`operational-mode-default-state-doctrine.md`](./operational-mode-default-state-doctrine.md) |
 | Queue State 2 (compressed) | ✅ 🚩 | `CompressedQueueRow` + `CompressedQueueHeader` |
 | Compressed queue header (branded title/count) | ✅ 🚩 | `resolveCompressedQueueHeader` |
 | Focus Panel dock geometry | ✅ 🚩 | `computeAlloyOsFocusPanelBounds` + edge alignment |
@@ -151,6 +153,9 @@ Status legend: **✅ Implemented** · **🟡 Partial** · **🧊 Design frozen o
 - Focus Panel header (Subject/Mission) is spec'd, not final-built.
 - Group / Sort / Bulk queue controls deferred.
 - Hover "Open"/overflow on compressed rows not added.
+- **Operational Mode as default Work Unit entry** — doctrine accepted; runtime auto-subject resolution not yet implemented.
+- **Default Operational Subject Strategy** — configuration deferred; platform resolver catalog not yet in code.
+- **Browse Mode / full-width queue entry** — retired from UX; dormant code paths remain.
 
 ### Intentional compatibility layers
 - **Runtime Perspective** is derived from existing `queue_definition` / lanes — not a new schema or config UI.
@@ -185,14 +190,18 @@ These are the only runtime primitives. **No new runtime primitive may be added w
 - **Universal Cards** — business primitives inside the Focus Panel body.
 - **Subject** = Record of Attention; **Mission** = Context Frame.
 
-### State 1 (expanded queue)
-Perspective active, no Focus Panel. Queue owns the operational surface full width. Selection/scroll live here.
+### Operational Mode (default state)
 
-### State 2 (compressed queue + Focus Panel)
-Active perspective + open Focus Panel on a work-unit surface. Queue compresses to the 440px rail; Focus Panel docks right of it; BOS unchanged.
+Perspective active, **Default Operational Subject resolved**, Focus Panel open, queue condensed to 440px rail. This is the **only normal operator entry state** for a Work Unit.
+
+Detail: [`operational-mode-default-state-doctrine.md`](./operational-mode-default-state-doctrine.md).
+
+### Legacy State 1 / Browse Mode (dormant)
+
+Expanded full-width queue without an active Focus Panel subject. **Retired from operator UX.** `QueueBlock` expanded presenter and browse entry paths remain in codebase for dormant/future use — not exposed in runtime chrome, not configured in Experience Builder.
 
 ### Record switching
-Opening/swapping a record keeps the same perspective → panel stays open, no remount, no flash. **Perspective change** (different lens) closes the panel and returns to State 1.
+Opening/swapping a record keeps the same perspective → panel stays open, no remount, no flash. **Perspective change** re-resolves queue + default subject for the new lens (does not return to full-width browse).
 
 ### Queue ownership
 Platform owns the presenter + geometry. Experience Builder will own row field selection. Record System owns data. **Queues never hold operational truth.**

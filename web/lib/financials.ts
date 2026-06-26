@@ -2,12 +2,13 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { resolveOrgOperationalMonthToDateForFinancialMtd } from "@/lib/admin/orgLocalDayBounds";
 import { fetchOperationalTimezoneForOrg, type OperationalTimezoneSource } from "@/lib/admin/timezoneContract";
 
+import { CANONICAL_DEV_ORG_ID } from "@/lib/fields/canonicalDevOrg";
+
 /**
  * Financials / GL helpers.
  * Prefer `getAdminContext().orgId` in admin API routes and SSR pages.
- * Kept for ad-hoc scripts or legacy call sites that still hard-code a demo org.
  */
-export const ORG_ID_FINANCIALS = "7803388d-cdee-4afb-89cf-23a137f39423";
+export const ORG_ID_FINANCIALS = CANONICAL_DEV_ORG_ID;
 
 export type GlAccountType = "asset" | "liability" | "equity" | "revenue" | "expense";
 

@@ -11,6 +11,7 @@ import { AdminOrgOperationalTimezoneProvider } from "@/contexts/AdminOrgOperatio
 import { AdminViewerTimezoneProvider, type AdminViewerTimezoneValue } from "@/contexts/AdminViewerTimezoneContext";
 import { WorkspaceOrgProvider } from "@/contexts/WorkspaceOrgContext";
 import WorkspaceSiteFilterPersistenceScopeBridge from "@/app/adminV2/workspace/WorkspaceSiteFilterPersistenceScopeBridge";
+import { OperationalModeEntryProvider } from "@/lib/adminV2/runtime/operationalSubject/OperationalModeEntryContext";
 import type { CSSProperties, ReactNode } from "react";
 
 interface AdminV2WorkspaceClientProvidersProps {
@@ -87,6 +88,7 @@ export default function AdminV2WorkspaceClientProviders({
                 principalUserId={principalUserId}
                 accessScopeFingerprint={accessScopeFingerprint}
               >
+                <OperationalModeEntryProvider>
                 <WorkspaceSiteFilterPersistenceScopeBridge />
                 <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
                   <AdminV2ClickDebugInstaller />
@@ -99,6 +101,7 @@ export default function AdminV2WorkspaceClientProviders({
                   </div>
                   <AdminEntityDrawer />
                 </div>
+                </OperationalModeEntryProvider>
               </WorkspaceOrgProvider>
             </AdminViewerTimezoneProvider>
           </AdminOrgOperationalTimezoneProvider>

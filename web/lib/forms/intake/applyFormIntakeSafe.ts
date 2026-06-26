@@ -388,7 +388,6 @@ export async function applyFormIntakeSafe(
                 primary_person_id: personId,
                 primary_contact_id: null,
                 name: oppName,
-                status: "open",
                 source: intakeSource,
                 status_key,
                 metadata: {

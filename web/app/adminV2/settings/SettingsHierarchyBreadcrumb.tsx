@@ -122,12 +122,16 @@ function crumbsForPath(path: string): Crumb[] {
     }
 
     if (
+        tail === "/processes" ||
+        tail.startsWith("/processes/") ||
         tail === "/business-processes" ||
         tail.startsWith("/business-processes/") ||
         tail === "/lifecycle" ||
-        tail.startsWith("/lifecycle/")
+        tail.startsWith("/lifecycle/") ||
+        tail === "/enrollment-process" ||
+        tail.startsWith("/enrollment-process/")
     ) {
-        base.push({ label: "Business Processes", href: null });
+        base.push({ label: "Processes", href: null });
         return base;
     }
 
@@ -163,7 +167,7 @@ export default function SettingsHierarchyBreadcrumb() {
                             <AdminV2NavLink
                                 href={c.href}
                                 active={crumbActive(c.href, path)}
-                                className="font-medium text-alloy-blue hover:underline px-0.5 -mx-0.5 rounded"
+                                className="font-medium text-alloy-pine hover:underline px-0.5 -mx-0.5 rounded"
                             >
                                 {c.label}
                             </AdminV2NavLink>

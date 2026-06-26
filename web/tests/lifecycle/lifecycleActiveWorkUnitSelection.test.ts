@@ -6,6 +6,7 @@ import { buildLifecycleWaitlistStageQueueDefinition } from "@/lib/lifecycle/life
 import {
     buildLifecycleWorkUnitPillSelection,
     guardLifecycleQueueFetchBeforeApi,
+    isWorkUnitQueuePillPrefetchable,
     lifecycleSelectionStateMatchesRef,
     listExecutableQueueKeysForWorkUnit,
 } from "@/lib/lifecycle/lifecycleActiveWorkUnitSelection";
@@ -96,6 +97,62 @@ describe("lifecycleActiveWorkUnitSelection", () => {
         expect(guarded.apiQueueKey).toBe(waitlistQueueKey);
     });
 
+    it("blocks lifecycle_platform_nav chip keys", () => {
+        const guarded = guardLifecycleQueueFetchBeforeApi({
+            workUnitId: waitlistWuId,
+            attemptedQueueKey: "lifecycle_platform_nav:enrollment",
+            workUnit: {
+                id: waitlistWuId,
+                queue_definition: waitlistRaw,
+                metadata: { lifecycle_stage_key: "waitlist" },
+            },
+        });
+        expect(guarded.corrected).toBe(true);
+        expect(guarded.apiQueueKey).toBe(waitlistQueueKey);
+    });
+
+    it("allows needs_attention virtual queue key on stage work unit", () => {
+        const guarded = guardLifecycleQueueFetchBeforeApi({
+            workUnitId: waitlistWuId,
+            attemptedQueueKey: "needs_attention",
+            workUnit: {
+                id: waitlistWuId,
+                queue_definition: waitlistRaw,
+                metadata: { lifecycle_stage_key: "waitlist" },
+            },
+        });
+        expect(guarded.blocked).toBe(false);
+        expect(guarded.corrected).toBe(false);
+        expect(guarded.apiQueueKey).toBe("needs_attention");
+    });
+
+    it("isWorkUnitQueuePillPrefetchable skips nav and attention pills", () => {
+        expect(
+            isWorkUnitQueuePillPrefetchable({
+                pillKey: `lifecycle_wu_nav:${waitlistWuId}`,
+                workUnit: { queue_definition: waitlistRaw },
+            })
+        ).toBe(false);
+        expect(
+            isWorkUnitQueuePillPrefetchable({
+                pillKey: "lifecycle_platform_nav:enrollment",
+                workUnit: { queue_definition: waitlistRaw },
+            })
+        ).toBe(false);
+        expect(
+            isWorkUnitQueuePillPrefetchable({
+                pillKey: "needs_attention",
+                workUnit: { queue_definition: waitlistRaw },
+            })
+        ).toBe(false);
+        expect(
+            isWorkUnitQueuePillPrefetchable({
+                pillKey: waitlistQueueKey,
+                workUnit: { queue_definition: waitlistRaw },
+            })
+        ).toBe(true);
+    });
+
     it("waitlist pill selection uses waitlist queue key and candidate-grain loader", () => {
         const sel = buildLifecycleWorkUnitPillSelection({
             id: waitlistWuId,
@@ -150,6 +207,7 @@ describe("work unit page atomic lifecycle selection wiring", () => {
         expect(page).toContain("activeLifecycleSelectionRef");
         expect(page).toContain("applyActiveLifecycleWorkUnitSelection");
         expect(page).toContain("guardLifecycleQueueFetchBeforeApi");
+        expect(page).toContain("isWorkUnitQueuePillPrefetchable");
         expect(page).toContain("lifecycleSelectionStateMatchesRef");
         expect(page).toContain("buildLifecycleWorkUnitPillSelection");
     });

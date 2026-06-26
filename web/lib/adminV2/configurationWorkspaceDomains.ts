@@ -226,12 +226,12 @@ export const CONFIGURATION_WORKSPACE_ADVANCED_ITEMS: readonly ConfigurationWorks
     {
         href: settings("attention-sla-rules"),
         label: "Attention defaults (org-wide)",
-        description: "Bucket labels and SLA thresholds — stage rules live in Business Processes.",
+        description: "Bucket labels and SLA thresholds — stage rules live in Processes.",
     },
     {
         href: settings("work-units"),
         label: "Work units (runtime)",
-        description: "Queue lanes derived from Business Processes — diagnostic only.",
+        description: "Queue lanes derived from Processes — diagnostic only.",
     },
     {
         href: settings("status-transition-rules"),

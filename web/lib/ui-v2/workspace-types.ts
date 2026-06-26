@@ -445,6 +445,10 @@ export type QueueVm = {
   drillWorkUnitKey?: string;
   /** Active business process key for BP/stage layout assignment in this lane. */
   businessProcessKey?: string;
+  /** Work View pinned queue layout (`entity_layouts.id`) — highest layout resolution priority. */
+  pinnedQueueLayoutId?: string | null;
+  /** Active process Work View id for queue filter + URL sync. */
+  activeWorkViewId?: string | null;
   /**
    * Department surface: when present, lane renders as rollup groups (counts + descriptors),
    * not as item rows. Drill to work-unit list via `viewAllActionId`.

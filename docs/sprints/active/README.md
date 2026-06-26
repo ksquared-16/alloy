@@ -21,8 +21,10 @@
 | Person/Child drawer VM cutover | `../06_2026/platform_simplification_phase3_drawer_deletion_audit.md` |
 | Messaging V2 | `../06_2026/messaging_v2_design.md` |
 | Lifecycle runtime alignment | `../06_2026/lifecycle_runtime_configuration_alignment_sprint.md` |
+| **Configuration Runtime (Phase 3 + QA)** | [`configuration_runtime_sprint_completion.md`](../06_2026/configuration_runtime_sprint_completion.md) |
 | Tasks V2 framework | `../06_2026/tasks_v2_operational_work_framework.md` |
 | Enrollment forms Phase 2 remainder | `../05_2026/later-phase/enrollment_packet_phase_2.md` |
+| Workspace V3 — Operational Command Center | Sprint 1: [`README.md`](../06_2026/workspace-v3-operational-command-center/README.md) · Sprint 3: [`sprint-3-evolution-reset.md`](../06_2026/workspace-v3-operational-command-center/sprint-3-evolution-reset.md) |
 
 Full sequencing: `../../platform/foundation/product-roadmap.md`
 

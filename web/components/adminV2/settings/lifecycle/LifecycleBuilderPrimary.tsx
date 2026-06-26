@@ -1,8 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import LifecycleProcessCatalogCards from "@/components/adminV2/settings/lifecycle/LifecycleProcessCatalogCards";
 import LifecycleActivationBoard from "@/components/adminV2/settings/lifecycle/LifecycleActivationBoard";
+import BusinessProcessProcessSelectorStrip from "@/components/adminV2/settings/businessProcess/BusinessProcessProcessSelectorStrip";
 import type { LifecycleCatalogEntry } from "@/lib/lifecycle/lifecycleCatalogTypes";
 import { lifecycleCatalogId } from "@/lib/lifecycle/lifecycleCatalog";
 import {
@@ -21,6 +21,7 @@ import LifecycleActivationDeleteModal from "@/components/adminV2/settings/lifecy
 import LifecycleDevCreateVerifyButton from "@/components/adminV2/settings/lifecycle/LifecycleDevCreateVerifyButton";
 import LifecycleTestCleanupButton from "@/components/adminV2/settings/lifecycle/LifecycleTestCleanupButton";
 import { isLifecycleDebugUiEnabled } from "@/lib/lifecycle/lifecycleDebugUi";
+
 export default function LifecycleBuilderPrimary() {
     const { orgId, userId } = useAdminAuth();
     const [catalog, setCatalog] = useState<LifecycleCatalogEntry[]>([]);
@@ -58,7 +59,6 @@ export default function LifecycleBuilderPrimary() {
         void loadCatalog();
     }, [loadCatalog]);
 
-    /** Drop stale selection when metadata cleanup removed catalog rows (not a catalog fallback). */
     useEffect(() => {
         if (catalogLoading || creatingNew || !identity) return;
         if (!findCatalogEntryForIdentity(catalog, identity)) {
@@ -74,6 +74,11 @@ export default function LifecycleBuilderPrimary() {
         setIdentity(buildIdentityFromCatalogEntry(entry));
         setCreatingNew(false);
     }, []);
+
+    useEffect(() => {
+        if (catalogLoading || creatingNew || identity || !catalog.length) return;
+        selectCatalogEntry(catalog[0]!);
+    }, [catalog, catalogLoading, creatingNew, identity, selectCatalogEntry]);
 
     const useRuntimeDepartment = useCallback(() => {
         if (!identity) return;
@@ -134,7 +139,7 @@ export default function LifecycleBuilderPrimary() {
                 setRepairingId(null);
             }
         },
-        [bumpWorkspace, loadCatalog, identity]
+        [bumpWorkspace, loadCatalog, identity],
     );
 
     const deleteEntry = useCallback(
@@ -146,7 +151,7 @@ export default function LifecycleBuilderPrimary() {
                 if (entry.activation_owned) {
                     const res = await fetch(
                         `/api/admin/departments/${encodeURIComponent(runtimeId)}/lifecycle-activation`,
-                        { ...workspaceDataFetchInit(), method: "DELETE" }
+                        { ...workspaceDataFetchInit(), method: "DELETE" },
                     );
                     const j = (await res.json().catch(() => ({}))) as { error?: string };
                     if (!res.ok) throw new Error(j.error ?? "Delete failed");
@@ -177,16 +182,18 @@ export default function LifecycleBuilderPrimary() {
                 setDeleting(false);
             }
         },
-        [bumpWorkspace, loadCatalog, identity?.lifecycleId]
+        [bumpWorkspace, loadCatalog, identity?.lifecycleId],
     );
 
     const onDeleteClick = useCallback((entry: LifecycleCatalogEntry) => {
         setDeleteConfirmTarget(entry);
     }, []);
 
+    const showBoard = creatingNew || selectedCatalogEntry;
+
     return (
-        <div className="space-y-1.5" data-testid="lifecycle-builder-primary">
-            {isLifecycleDebugUiEnabled() ? (
+        <div className="flex min-h-0 flex-1 flex-col gap-3" data-testid="lifecycle-builder-primary">
+            {isLifecycleDebugUiEnabled() ?
                 <>
                     <AdminAccessScopeDebugPanel surface="lifecycle" />
                     <LifecycleDevCreateVerifyButton />
@@ -199,15 +206,15 @@ export default function LifecycleBuilderPrimary() {
                         }}
                     />
                 </>
-            ) : null}
-            {error ? (
+            :   null}
+            {error ?
                 <p className="text-sm text-red-700" role="alert">
                     {error}
                 </p>
-            ) : null}
+            :   null}
 
-            {!creatingNew && !selectedCatalogEntry ? (
-                <LifecycleProcessCatalogCards
+            <div className="process-config-top">
+                <BusinessProcessProcessSelectorStrip
                     items={catalog}
                     selectedId={selectedCatalogId}
                     loading={catalogLoading}
@@ -217,85 +224,75 @@ export default function LifecycleBuilderPrimary() {
                         setIdentity(null);
                     }}
                 />
-            ) : null}
+            </div>
 
-            {creatingNew || selectedCatalogEntry ? (
-                <LifecycleActivationBoard
-                    key={creatingNew ? "new" : selectedCatalogEntry!.id}
-                    identity={
-                        creatingNew
-                            ? identity
-                            : selectedCatalogEntry
-                              ? buildIdentityFromCatalogEntry(selectedCatalogEntry)
-                              : null
-                    }
-                    catalog={catalog}
-                    creatingNew={creatingNew}
-                    onIdentityChange={setIdentity}
-                    onCatalogRefresh={() => void loadCatalog()}
-                    onWorkspaceBust={bumpWorkspace}
-                    onUseRuntimeDepartment={useRuntimeDepartment}
-                    onLifecycleCreated={async (deptId, procId, name) => {
-                        const interim = buildIdentityForNewLifecycle(deptId, procId, name);
-                        setIdentity(interim);
-                        if (isLifecycleDebugUiEnabled()) {
-                            console.info("[lifecycle-create] primary selection after create", {
-                                lifecycleName: name,
-                                runtimeDepartmentId: deptId,
-                                processId: procId,
-                                lifecycleCatalogId: interim.lifecycleId,
-                            });
+            {showBoard ?
+                <div className="flex min-h-0 flex-1 flex-col">
+                    <LifecycleActivationBoard
+                        key={creatingNew ? "new" : selectedCatalogEntry!.id}
+                        identity={
+                            creatingNew ?
+                                identity
+                            :   selectedCatalogEntry ?
+                                buildIdentityFromCatalogEntry(selectedCatalogEntry)
+                            :   null
                         }
-                        bumpWorkspace();
-                        const items = await loadCatalog();
-                        const id = lifecycleCatalogId(deptId, procId);
-                        const row = items.find((c) => c.id === id);
-                        setIdentity(
-                            row ? buildIdentityFromCatalogEntry(row) : interim
-                        );
-                        setCreatingNew(false);
-                    }}
-                    onDeleted={() => {
-                        setIdentity(null);
-                        setCreatingNew(false);
-                        void loadCatalog();
-                    }}
-                    onRequestDelete={() => {
-                        const entry =
-                            selectedCatalogEntry ??
-                            (identity && catalog.length
-                                ? findCatalogEntryForIdentity(catalog, identity)
-                                : null);
-                        if (entry?.can_delete) onDeleteClick(entry);
-                    }}
-                    canDeleteLifecycle={selectedCatalogEntry?.can_delete ?? false}
-                    onRepairVisibility={
-                        selectedCatalogEntry?.can_repair
-                            ? () => void repairEntry(selectedCatalogEntry)
-                            : undefined
-                    }
-                    repairingVisibility={repairingId === selectedCatalogEntry?.id}
-                    catalogSummary={
-                        selectedCatalogEntry
-                            ? {
-                                  trackCount: selectedCatalogEntry.track_count,
-                                  stageCount: selectedCatalogEntry.stage_count,
-                                  queueCount: selectedCatalogEntry.work_unit_count,
-                              }
-                            : null
-                    }
-                    onBackToCatalog={
-                        creatingNew
-                            ? () => {
-                                  setCreatingNew(false);
-                                  setIdentity(null);
-                              }
-                            : () => {
-                                  setIdentity(null);
-                              }
-                    }
-                />
-            ) : null}
+                        catalog={catalog}
+                        creatingNew={creatingNew}
+                        onIdentityChange={setIdentity}
+                        onCatalogRefresh={() => void loadCatalog()}
+                        onWorkspaceBust={bumpWorkspace}
+                        onUseRuntimeDepartment={useRuntimeDepartment}
+                        onLifecycleCreated={async (deptId, procId, name) => {
+                            const interim = buildIdentityForNewLifecycle(deptId, procId, name);
+                            setIdentity(interim);
+                            bumpWorkspace();
+                            const items = await loadCatalog();
+                            const id = lifecycleCatalogId(deptId, procId);
+                            const row = items.find((c) => c.id === id);
+                            setIdentity(row ? buildIdentityFromCatalogEntry(row) : interim);
+                            setCreatingNew(false);
+                        }}
+                        onDeleted={() => {
+                            setIdentity(null);
+                            setCreatingNew(false);
+                            void loadCatalog();
+                        }}
+                        onRequestDelete={() => {
+                            const entry =
+                                selectedCatalogEntry ??
+                                (identity && catalog.length ?
+                                    findCatalogEntryForIdentity(catalog, identity)
+                                :   null);
+                            if (entry?.can_delete) onDeleteClick(entry);
+                        }}
+                        canDeleteLifecycle={selectedCatalogEntry?.can_delete ?? false}
+                        onRepairVisibility={
+                            selectedCatalogEntry?.can_repair ?
+                                () => void repairEntry(selectedCatalogEntry)
+                            :   undefined
+                        }
+                        repairingVisibility={repairingId === selectedCatalogEntry?.id}
+                        catalogSummary={
+                            selectedCatalogEntry ?
+                                {
+                                    trackCount: selectedCatalogEntry.track_count,
+                                    stageCount: selectedCatalogEntry.stage_count,
+                                    queueCount: selectedCatalogEntry.work_unit_count,
+                                }
+                            :   null
+                        }
+                        onBackToCatalog={() => {
+                            setCreatingNew(false);
+                            setIdentity(null);
+                        }}
+                    />
+                </div>
+            :   !catalogLoading && catalog.length ?
+                <p className="rounded-xl border border-dashed border-alloy-forge/20 bg-white px-4 py-8 text-center text-sm text-alloy-midnight/55">
+                    Select a process above to configure stages, Work Views, and presentation.
+                </p>
+            :   null}
 
             <LifecycleActivationDeleteModal
                 open={deleteConfirmTarget != null}

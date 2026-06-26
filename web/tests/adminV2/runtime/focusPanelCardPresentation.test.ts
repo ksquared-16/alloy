@@ -32,12 +32,23 @@ describe("Focus Panel Universal Card presentation", () => {
         },
     });
 
+    it("UniversalCard exposes System 5 grammar markers", () => {
+        const card = readSrc("components/admin/focusPanel/UniversalCard.tsx");
+        expect(card).toContain('data-system5-card="true"');
+        expect(card).toContain("supportingInsight");
+        expect(card).toContain("UniversalCardIcon");
+        const spec = readSrc("lib/adminV2/runtime/focusPanel/system5OperationalSurfaceSpec.ts");
+        expect(spec).toContain("SYSTEM5_CARD_ICON");
+        expect(spec).toContain("SYSTEM5_DEFAULT_CARD_ACTIONS");
+    });
+
     it("UniversalCard exposes data-card-role tier vocabulary", () => {
         const card = readSrc("components/admin/focusPanel/UniversalCard.tsx");
         expect(card).toContain('data-card-role={cardRole}');
-        expect(card).toContain('attention: "critical"');
-        expect(card).toContain('work: "active-work"');
-        expect(card).toContain('historical: "history"');
+        const spec = readSrc("lib/adminV2/runtime/focusPanel/system5OperationalSurfaceSpec.ts");
+        expect(spec).toContain('attention: "critical"');
+        expect(spec).toContain('work: "active-work"');
+        expect(spec).toContain('historical: "history"');
     });
 
     it("summary grid uses business-question card keys, not layout section names", () => {
@@ -71,10 +82,16 @@ describe("Focus Panel Universal Card presentation", () => {
         expect(cards.get("primary_next_action")?.visible).toBe(false);
     });
 
-    it("activity communications renderer does not embed composer by default", () => {
+    it("activity communications embeds via Activity workspace component", () => {
+        const workspace = readSrc("components/admin/focusPanel/OpportunityFocusPanelActivityWorkspace.tsx");
+        expect(workspace).toContain("CommunicationsDrawerSection");
+        expect(workspace).toContain('data-embedded-workspace="communications"');
+    });
+
+    it("summary communications card renderer stays context-only", () => {
         const renderer = readSrc("components/admin/focusPanel/FocusPanelCardRenderer.tsx");
         expect(renderer).not.toContain("CommunicationsDrawerSection");
-        expect(renderer).toContain('focusPanelMode === "activity"');
+        expect(renderer).toContain('focusPanelMode !== "activity"');
     });
 
     it("work idle checklist follows Why Now → step → blockers order", () => {
@@ -89,8 +106,8 @@ describe("Focus Panel Universal Card presentation", () => {
 
         const rowKeys = grid.rows.map((row) => row.cells.map((c) => c.key));
         expect(rowKeys[0]).toEqual(["attention"]);
-        expect(rowKeys[1]).toEqual(["workflow_steps"]);
-        expect(rowKeys[2]).toEqual(["required_information"]);
+        expect(rowKeys[1]).toEqual(["workflow_steps", "required_information"]);
+        expect(rowKeys[2]).toEqual(["work_launcher"]);
     });
 });
 

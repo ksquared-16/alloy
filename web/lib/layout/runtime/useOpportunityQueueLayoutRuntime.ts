@@ -20,6 +20,7 @@ export type OpportunityQueueLayoutRuntimeState = {
 export function useOpportunityQueueLayoutRuntime(
     laneKey: string,
     lane: OpportunityQueueLaneContextInput,
+    pinnedEntityLayoutId?: string | null,
 ): OpportunityQueueLayoutRuntimeState {
     const enabled = isLayoutRuntimeOpportunityQueueBodyEnabledClient();
     const [loading, setLoading] = useState(false);
@@ -55,6 +56,8 @@ export function useOpportunityQueueLayoutRuntime(
             qs.set("waitlist", "1");
             if (!lane.grain) qs.set("grain", "candidate");
         }
+        const pinned = pinnedEntityLayoutId?.trim();
+        if (pinned) qs.set("entity_layout_id", pinned);
 
         fetch(`/api/admin/layout-runtime/opportunity-queue-layout?${qs.toString()}`)
             .then(async (res) => {
@@ -79,6 +82,7 @@ export function useOpportunityQueueLayoutRuntime(
         lane.stageKey,
         lane.grain,
         lane.isWaitlistCandidate,
+        pinnedEntityLayoutId,
     ]);
 
     return { enabled, loading, doc, layoutSource, layoutKey };

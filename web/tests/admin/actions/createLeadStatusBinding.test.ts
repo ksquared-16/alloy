@@ -105,5 +105,6 @@ describe("create lead lifecycle binding status_key", () => {
         const oppInsert = insertPayloads.find((row) => row.table === "opportunities");
         expect(oppInsert?.status_key).toBe(NEW_LEAD_STATUS_KEY);
         expect(oppInsert?.work_unit_id).toBe("wu-enrollment");
+        expect(oppInsert).not.toHaveProperty("status");
     });
 });

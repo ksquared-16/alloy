@@ -112,6 +112,11 @@ export default function WorkUnitWorkspace({
     return resolveCompressedQueueHeader(primaryQueue, attentionCount);
   }, [primaryQueue]);
 
+  const commandRailActions = useMemo(
+    () => <WorkUnitAboveFoldActionsRail slot={aboveFold.actions_rail} onAction={onAction} />,
+    [aboveFold.actions_rail, onAction],
+  );
+
   return (
     <WorkspaceShellLayout
       surface="work_unit"
@@ -119,9 +124,7 @@ export default function WorkUnitWorkspace({
       style={wuShellStyle}
       railAriaLabel="Decisions and actions"
       commandRailTelemetrySlot={commandRailTelemetrySlot}
-      railContent={
-        <WorkUnitAboveFoldActionsRail slot={aboveFold.actions_rail} onAction={onAction} />
-      }
+      railContent={commandRailActions}
       primaryColumn={
         <>
           {hasControlDeck ? (

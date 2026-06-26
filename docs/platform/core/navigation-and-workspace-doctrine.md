@@ -23,8 +23,9 @@ Organization
 
 | Route | Purpose |
 |-------|---------|
-| `/workspace` | Business process landing — tiles + KPI strip |
-| `/workspace/work-unit/:slug` | Stage queue execution surface |
+| `/workspace` | Operational command center — four-zone launch surface |
+| `/workspace/work-unit/:slug` | Work Unit execution (Operational Mode default) |
+| `/workspace/work-unit/:slug?work_view=:id` | Work Unit with predefined Work View (deep link) |
 | `…/:recordId` | Record drawer (same route, no remount) |
 
 **Internal compat:** `/adminV2/workspace/dept/:id/...` — tests and legacy only.
@@ -46,14 +47,38 @@ Catalog source: `loadOperatorLifecycleLandingCards` (same as landing tiles).
 
 ---
 
-## Workspace landing
+## Workspace landing (V3 — Operational Command Center)
 
-Component stack: `WorkspaceRootShell`, `WorkspaceRootLifecycleGrid`.
+**Doctrine:** [`../operator/workspace-v3-command-center-doctrine.md`](../operator/workspace-v3-command-center-doctrine.md) (Rev 2)  
+**Operational Surfaces:** [`../operator/workspace-v3-operational-surface-doctrine.md`](../operator/workspace-v3-operational-surface-doctrine.md)  
+**Sprint packs:** [Sprint 1](../../sprints/06_2026/workspace-v3-operational-command-center/README.md) · [Sprint 2](../../sprints/06_2026/workspace-v3-operational-command-center/sprint-2-evolution.md) · [Sprint 3 — Evolution Reset](../../sprints/06_2026/workspace-v3-operational-command-center/sprint-3-evolution-reset.md)
 
-- Premium process command tiles
-- KPI strip
+Four zones — **one question each**. Visual changes are **evolution inside existing chrome** — see Sprint 3.
+
+Component stack: `WorkspaceRootShell`, `WorkspaceRootLifecycleGrid` (→ `OperationalSurfaceLauncher`), `WorkspaceHealthPulseSection`.
+
+Four zones — **one question each**:
+
+| Zone | Question |
+|------|----------|
+| 1 — Organization Pulse | How is the organization? |
+| 2 — Operational Pulse | What requires attention? |
+| 3 — Operational Surfaces | Where should I go? |
+| 4 — Operational Activity | What just happened? |
+
+- Zone 3 surfaces are **miniature Work Unit launchers** — operational storytelling + enterable Work View deep links
+- **Enterability law:** visible operational numbers → predefined Work View entry when mapped
+- **Deep links:** `/workspace/work-unit/:slug?work_view={id}` (compat: `?queue=`)
+- Analytics is **not** embedded on Workspace
 - No department-first grid
-- No legacy-admin prefetch from landing
+
+### Progressive operational depth
+
+```
+Organization → Workspace → Operational Surface → Work Unit → Queue → Focus Panel → Embedded Workspace → BOS
+```
+
+Every transition preserves shell continuity — zoom-in, not page-swap.
 
 ---
 

@@ -29,7 +29,6 @@ import { resolveStageOperatingPlanPurpose } from "@/lib/lifecycle/resolveStageOp
 import { projectStageWorkRuntime, primaryWorkIntentProjectionFromStageWork } from "@/lib/lifecycle/projectStageWorkRuntime";
 import { filterResidualOperationalTasks } from "@/lib/lifecycle/filterResidualOperationalTasks";
 import { buildOpportunityDrawerHeaderMenuActions } from "@/lib/adminV2/viewModel/drawer/opportunity/buildOpportunityDrawerHeaderMenuActions";
-import { buildRecordManageMenuForEntity } from "@/lib/admin/recordManage/buildRecordManageMenu";
 import { resolveOpportunityDrawerStatusCanMutateFromGate } from "@/lib/adminV2/viewModel/drawer/vmRuntime/resolveOpportunityVmStatusCanMutate";
 import {
     buildOpportunityDrawerAttentionSummary,
@@ -310,7 +309,6 @@ export async function composeOpportunityDrawerViewModel(
         resolvedActions,
         activeTourBookings.length > 0
     );
-    const manageMenu = buildRecordManageMenuForEntity("lead", "Lead");
     const tabs = shell.tabs;
     const default_tab: DrawerTabKey = tabs.includes("overview") ? "overview" : (tabs[0] ?? "overview");
 
@@ -415,7 +413,7 @@ export async function composeOpportunityDrawerViewModel(
         actions: {
             header: headerActions,
             header_menu: headerMenuActions,
-            manage_menu: manageMenu,
+            manage_menu: headerMenuActions,
         },
         layout,
         above_fold: {

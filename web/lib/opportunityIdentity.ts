@@ -129,6 +129,8 @@ export async function normalizeOpportunityWritePayload(
     patch: Record<string, unknown>,
     context: string
 ): Promise<Record<string, unknown>> {
+    stripLegacyTextStatusFromWritePayload(patch);
+
     const hasPersonKey = Object.prototype.hasOwnProperty.call(patch, "primary_person_id");
     const hasContactKey = Object.prototype.hasOwnProperty.call(patch, "primary_contact_id");
     if (!hasPersonKey && !hasContactKey) {

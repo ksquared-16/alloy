@@ -39,7 +39,7 @@ export function operatorLoginRedirectPath(): "/login" {
 /** Paths that must match workspace auth behavior in tests and middleware. */
 export const OPERATOR_SESSION_GATE_EXAMPLES = {
     workspace: [`${CANONICAL_OPERATOR_BASE}`, `${CANONICAL_OPERATOR_BASE}/work-unit/new-leads`],
-    settings: [CANONICAL_SETTINGS_BASE, `${CANONICAL_SETTINGS_BASE}/business-processes`],
+    settings: [CANONICAL_SETTINGS_BASE, `${CANONICAL_SETTINGS_BASE}/processes`, `${CANONICAL_SETTINGS_BASE}/business-processes`],
     settingsCompatibility: [
         `${CANONICAL_ADMIN_BASE}/settings`,
         `${CANONICAL_ADMIN_BASE}/settings/business-processes`,

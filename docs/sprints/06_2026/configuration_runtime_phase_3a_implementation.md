@@ -22,6 +22,7 @@ Make Business Process operational view metadata (`perspectives_v1`) the navigati
 | 5 — Terminology review | **Done** | [configuration_runtime_phase_3a_terminology_review.md](./configuration_runtime_phase_3a_terminology_review.md) |
 | 6 — Screenshots / deviation log | **Done** | See [configuration-runtime-phase-3a/](./configuration-runtime-phase-3a/) |
 | 7 — `/settings` auth gate | **Done** | Protected like `/workspace` (see below) |
+| 8 — `/settings` app shell | **Done** | AdminV2 shell; no marketing chrome (see below) |
 
 ---
 
@@ -43,7 +44,37 @@ Make Business Process operational view metadata (`perspectives_v1`) the navigati
 - `/admin/settings/*` redirects to `/settings/*`; final destination remains auth-protected.
 - No runtime reveal / queue semantics changed.
 
-**Tests:** `web/tests/lib/admin/settingsRouteAuth.test.ts`, Playwright `configuration-runtime-phase-3a-review.spec.ts` (unauthenticated `/settings/business-processes` → `/login`).
+**Tests:** `web/tests/lib/admin/settingsRouteAuth.test.ts`, Playwright `settings-app-shell.spec.ts`.
+
+---
+
+## `/settings` app shell (marketing chrome fix)
+
+**Problem:** After Phase 3A auth, `/settings` still showed marketing header/footer. Browser URL `/settings` was not classified as an app-shell route in root `ConditionalSiteLayout`, so marketing chrome wrapped AdminV2 content even when authenticated.
+
+**Fix:** Added `isPublicMarketingChromeSuppressedPath()` in `canonicalAdminRoutes.ts` and wired `ConditionalSiteLayout` to use it. Canonical `/settings` and `/settings/*` now skip marketing chrome the same way `/workspace` does. AdminV2 layout + shell were already correct; only the root marketing wrapper was wrong.
+
+| Layer | Module | Behavior |
+|-------|--------|----------|
+| Shared classifier | `web/lib/admin/canonicalAdminRoutes.ts` | `isPublicMarketingChromeSuppressedPath()` includes `/settings/*` and `/workspace/*` |
+| Root layout | `web/components/ConditionalSiteLayout.tsx` | No `MarketingHeader` / `MarketingFooter` on settings routes |
+| Admin shell | `app/adminV2/layout.tsx` + `AdminV2Shell` | Same authenticated chrome as workspace |
+
+**Acceptance:**
+
+- Authenticated `/settings`, `/settings/business-processes`, `/settings/layouts` render AdminV2 shell (`data-adminv2-app-shell="workspace-v2"`).
+- Marketing nav (`aria-label="Main"`) and `.marketing-site-chrome` never appear on settings routes.
+- `/admin/settings/*` compatibility redirect lands on protected canonical route in AdminV2 shell.
+
+**Tests:** `settingsRouteAuth.test.ts` (marketing suppression), Playwright `settings-app-shell.spec.ts`.
+
+**Screenshots (app shell):**
+
+| File | Route |
+|------|-------|
+| [settings-app-shell-home.png](./configuration-runtime-phase-3a/settings-app-shell-home.png) | `/settings` |
+| [settings-app-shell-business-processes.png](./configuration-runtime-phase-3a/settings-app-shell-business-processes.png) | `/settings/business-processes` |
+| [settings-app-shell-layouts.png](./configuration-runtime-phase-3a/settings-app-shell-layouts.png) | `/settings/layouts` |
 
 ---
 
@@ -94,11 +125,12 @@ Playwright spec: `web/playwright/tests/configuration-runtime-phase-3a-review.spe
 cd web && npm run test -- \
   tests/lib/admin/settingsRouteAuth.test.ts \
   tests/lib/admin/canonicalSettingsRoutes.test.ts \
+  tests/lib/admin/canonicalAdminRoutes.test.ts \
   tests/adminV2/runtime/operationalViewConvergence.test.ts \
   tests/adminV2/runtime/workspaceShellRegression.test.ts \
   tests/adminV2/configurationRuntimeConceptA.test.ts
 
-cd web && npx playwright test playwright/tests/configuration-runtime-phase-3a-review.spec.ts
+cd web && npx playwright test playwright/tests/settings-app-shell.spec.ts
 ```
 
 **Results (Phase 3A gate):** 25/25 Vitest (auth + convergence + Concept A); Playwright 2/2; Phase 3A source files clean under `tsc --noEmit`.

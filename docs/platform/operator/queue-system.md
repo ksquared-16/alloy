@@ -1,6 +1,6 @@
 # Queue system
 
-**Status:** Canonical (June 2026 freeze).
+**Status:** Canonical (June 2026 freeze). **Operational Mode default state:** [`operational-mode-default-state-doctrine.md`](./operational-mode-default-state-doctrine.md).
 
 Queue preview contract, QueueService behavior, and operational row presentation.
 
@@ -9,6 +9,31 @@ Queue preview contract, QueueService behavior, and operational row presentation.
 ## Purpose
 
 Queues are **stage execution lenses** — preview lists that help operators select records. They are not authoritative record stores.
+
+In **Operational Mode** (default Work Unit state), the queue presents as a **condensed rail** beside an open Focus Panel. The runtime resolves a **Default Operational Subject** on entry — not the first row. Full-width expanded queue and **Browse Mode** are retired from operator UX; implementations remain dormant.
+
+See [`operational-mode-default-state-doctrine.md`](./operational-mode-default-state-doctrine.md).
+
+---
+
+## Default Operational Subject Strategy (future configuration)
+
+Each Work Unit will configure a **Default Operational Subject Strategy**. Platform-owned strategy keys include:
+
+| Strategy | Typical use |
+|----------|-------------|
+| Highest Priority | Enrollment, general pipeline |
+| Earliest Due | SLA-driven work |
+| Assigned To Me | Operator-owned queue |
+| Largest Balance | Billing |
+| Oldest | Compliance, waitlist |
+| Highest Risk | Attention-driven lenses |
+| Highest Score | Composite ranking |
+| Newest | Intake-heavy lenses |
+
+**Operator override:** Queue header may expose a temporary strategy switch — reorders queue, re-resolves subject, updates Focus Panel. Does not change Work Unit configuration.
+
+**Not implemented yet** — doctrine and runtime plan only. Resolver catalog and Work Unit config UI are deferred.
 
 ---
 
@@ -116,6 +141,7 @@ Queue row API latency (~800ms–1s) is known backend debt — not a reveal regre
 
 ## Related
 
+- `./operational-mode-default-state-doctrine.md` — default Operational Mode, subject resolution, Browse Mode retirement
 - `./canonical-interaction-model.md` — Perspective / Queue / Row primitives
 - `./interaction-grammar.md` — queues do not own data; Previous/Next follows current filtered queue
 - `../core/business-process-system.md`

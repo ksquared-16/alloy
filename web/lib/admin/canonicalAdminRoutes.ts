@@ -259,6 +259,24 @@ export function isCanonicalDrawerHostPath(pathname: string | null | undefined): 
     return false;
 }
 
+/**
+ * Root `ConditionalSiteLayout` must not wrap these paths in marketing header/footer.
+ * Includes browser-visible `/workspace` and `/settings` plus transitional admin aliases.
+ */
+export function isPublicMarketingChromeSuppressedPath(pathname: string | null | undefined): boolean {
+    if (!pathname) return false;
+    const p = pathname.trim();
+    if (
+        p.startsWith("/adminV2") ||
+        p.startsWith("/adminv2") ||
+        p.startsWith("/legacy-admin") ||
+        p.startsWith("/admin")
+    ) {
+        return true;
+    }
+    return isCanonicalWorkspacePath(p) || isCanonicalSettingsPath(p);
+}
+
 /** Product nav — forms module base. */
 export const ADMIN_FORMS_HREF = `${CANONICAL_ADMIN_BASE}/forms` as const;
 

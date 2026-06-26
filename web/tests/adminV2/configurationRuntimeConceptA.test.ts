@@ -40,23 +40,31 @@ describe("Configuration Runtime Concept A freeze", () => {
 
     it("process board exposes Work Views workspace navigation", () => {
         const board = read("components/adminV2/settings/lifecycle/LifecycleActivationBoard.tsx");
-        expect(board).toContain("BusinessProcessWorkspaceNav");
-        expect(board).toContain("BusinessProcessWorkViewsWorkspace");
+        expect(board).toContain("BusinessProcessConfigurationShell");
+        expect(board).toContain("BusinessProcessWorkViewsSetupWorkspace");
         expect(board).toContain('processSection === "work-views"');
     });
 
-    it("work views editor includes editable condition rows", () => {
+    it("work views editor includes typed condition value controls", () => {
         const editor = read("components/adminV2/settings/businessProcess/WorkViewConditionEditor.tsx");
         expect(editor).toContain("work-view-add-condition");
-        expect(editor).toContain("BUSINESS_PROCESS_WORK_VIEW_SHOW_WORK_WHEN");
+        expect(editor).toContain("WorkViewConditionValueControl");
+        expect(editor).not.toContain('placeholder="Value"');
     });
 
-    it("process work view card includes presentation selectors", () => {
+    it("process work view card uses layout assignment cards", () => {
         const card = read("components/adminV2/settings/businessProcess/WorkViewProcessEditorCard.tsx");
+        expect(card).toContain("LayoutAssignmentCard");
         expect(card).toContain("queue_layout_id");
         expect(card).toContain("focus_panel_layout_id");
         expect(card).toContain("BUSINESS_PROCESS_LENS_PREVIEW_RUNTIME");
         expect(card).toContain("process-work-view-preview");
+    });
+
+    it("settings home renders configuration hub tiles", () => {
+        const page = read("app/adminV2/settings/page.tsx");
+        expect(page).toContain("SettingsConfigurationHub");
+        expect(page).not.toContain("SettingsIndexRedirect");
     });
 
     it("processes page uses Processes title and test id", () => {

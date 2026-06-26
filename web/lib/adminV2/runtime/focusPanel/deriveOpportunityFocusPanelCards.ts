@@ -10,13 +10,69 @@ import type {
     FocusPanelCardGridSpec,
     FocusPanelCardKey,
     FocusPanelCardModel,
+    FocusPanelCardPayload,
+    FocusPanelCollectionItem,
+    FocusPanelLauncherRow,
+    FocusPanelProfileField,
 } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardModel";
 import type { RuntimePerspective } from "@/lib/adminV2/runtime/perspective/deriveRuntimePerspective";
+import {
+    system5DefaultActionForCard,
+    system5IconForCard,
+} from "@/lib/adminV2/runtime/focusPanel/system5OperationalSurfaceSpec";
+import { system5ArchetypeForCard } from "@/lib/adminV2/runtime/focusPanel/system5CardArchetypes";
+import {
+    formatFocusPanelChipLabel,
+    formatFocusPanelDisplayLabel,
+} from "@/lib/adminV2/runtime/focusPanel/focusPanelDisplayLabels";
+
+const chip = (value: string | null | undefined): string | null => formatFocusPanelChipLabel(value);
+
+const WORK_LAUNCHER_ROWS: FocusPanelLauncherRow[] = [
+    {
+        key: "manual",
+        label: "Manual",
+        description: "Start work directly on this record",
+        actionLabel: "Start",
+    },
+    {
+        key: "bos_assist",
+        label: "BOS Assist",
+        description: "Guided operator assist for this stage",
+        actionLabel: "Assist",
+    },
+    {
+        key: "import_intake",
+        label: "Import / Intake",
+        description: "Bring in external records or documents",
+        actionLabel: "Import",
+    },
+];
+
+function trimOrNull(value: unknown): string | null {
+    if (value == null) return null;
+    const text = String(value).trim();
+    return text.length > 0 ? text : null;
+}
 
 function card(
-    partial: Omit<FocusPanelCardModel, "visible"> & { visible?: boolean },
+    partial: Omit<FocusPanelCardModel, "visible" | "iconName" | "archetype"> & {
+        visible?: boolean;
+        iconName?: string | null;
+        archetype?: FocusPanelCardModel["archetype"];
+        primaryAction?: FocusPanelCardModel["primaryAction"] | null;
+        payload?: FocusPanelCardPayload;
+    },
 ): FocusPanelCardModel {
-    return { visible: true, ...partial };
+    const defaultAction = system5DefaultActionForCard(partial.key);
+    return {
+        visible: true,
+        archetype: partial.archetype ?? system5ArchetypeForCard(partial.key),
+        iconName: partial.iconName ?? system5IconForCard(partial.key),
+        primaryAction:
+            partial.primaryAction !== undefined ? partial.primaryAction : (defaultAction ?? null),
+        ...partial,
+    };
 }
 
 function stageWorkInsight(displayVm: OpportunityDrawerViewModel): string {
@@ -46,26 +102,74 @@ function blockerInsight(displayVm: OpportunityDrawerViewModel): { insight: strin
     return { insight: "Ready to proceed", count: 0 };
 }
 
-function tourInsight(displayVm: OpportunityDrawerViewModel): string {
+function tourInsight(displayVm: OpportunityDrawerViewModel): { insight: string; supporting: string | null } {
     const bookings = displayVm.summaries.active_tour_bookings ?? [];
-    if (bookings.length === 0) return "No tour scheduled";
+    if (bookings.length === 0) {
+        return { insight: "No tour scheduled", supporting: "Schedule when family is ready to visit" };
+    }
     const next = bookings[0];
-    const when = next?.scheduled_at ? String(next.scheduled_at).slice(0, 16).replace("T", " · ") : null;
-    return when ? `Tour ${when}` : "Tour scheduled";
+    const when = next?.start_at ? String(next.start_at).slice(0, 16).replace("T", " · ") : null;
+    const status = formatFocusPanelChipLabel(next?.status_key?.trim() ?? "scheduled");
+    return {
+        insight: when ? `Tour ${when}` : "Tour scheduled",
+        supporting: status ? `Status: ${status}` : null,
+    };
+}
+
+function childStatusPhrase(row: { display_name?: string | null; outcome_status_key?: string | null; outcome_status_label?: string | null }): string {
+    const firstName = (row.display_name ?? "Child").split(/\s+/)[0] ?? "Child";
+    const label =
+        formatFocusPanelDisplayLabel(row.outcome_status_label) ??
+        formatFocusPanelChipLabel(row.outcome_status_key);
+    if (label) return `${firstName} — ${label}`;
+    return `${firstName} — In progress`;
 }
 
 function childrenInsight(record: Record<string, unknown>): { insight: string; detail: string | null } {
     const rows = mapRawInquiryChildrenToDrawerRows((record._inquiry_children as unknown[]) ?? []);
-    if (rows.length === 0) return { insight: "No children linked", detail: null };
-    const enrolling = rows.filter((r) => r.outcome_status_key !== "declined").length;
-    const insight = `${enrolling} enrolling`;
-    const names = rows
-        .slice(0, 2)
-        .map((r) => r.display_name ?? "Child")
-        .join(" · ");
-    const detail =
-        rows.length > 2 ? `${names} +${rows.length - 2} more` : names;
-    return { insight, detail };
+    if (rows.length === 0) return { insight: "No children linked", detail: "Link children to track enrollment progress" };
+    const active = rows.filter((r) => r.outcome_status_key !== "declined");
+    const insight =
+        active.length === 1 ? "1 child enrolling" : `${active.length} children enrolling`;
+    const detail = rows.slice(0, 2).map(childStatusPhrase).join(" · ");
+    const suffix = rows.length > 2 ? ` · +${rows.length - 2} more` : "";
+    return { insight, detail: detail ? `${detail}${suffix}` : null };
+}
+
+function missionStory(input: {
+    displayVm: OpportunityDrawerViewModel;
+    perspective: RuntimePerspective | null;
+    stageRuntime: OpportunityDrawerViewModel["workspace"]["stage_work_runtime"];
+    statusLabel: string | null;
+}): { insight: string; supporting: string | null } {
+    const nextAction = input.displayVm.actions.header_menu[0]?.label?.trim();
+    const purpose = input.stageRuntime?.purpose?.trim();
+    const stageLabel = input.stageRuntime?.stage_label?.trim() || input.statusLabel?.trim();
+    const perspectiveMission = input.perspective?.defaultMission?.trim();
+
+    if (nextAction) {
+        return {
+            insight: nextAction,
+            supporting:
+                perspectiveMission ||
+                purpose ||
+                (stageLabel ? `Advance ${stageLabel.toLowerCase()} workflow` : "Waiting for operator follow-through"),
+        };
+    }
+    const primaryWork = input.stageRuntime?.primary?.label?.trim();
+    if (primaryWork) {
+        return {
+            insight: primaryWork,
+            supporting: purpose || perspectiveMission || "Continue stage work to move forward",
+        };
+    }
+    if (purpose) {
+        return { insight: purpose, supporting: perspectiveMission || "Mission proof for current stage" };
+    }
+    return {
+        insight: stageLabel ? `Complete ${stageLabel} work` : "Define next step for this record",
+        supporting: perspectiveMission || "Capture and validate key info to advance",
+    };
 }
 
 function householdInsight(record: Record<string, unknown>, title: string): string {
@@ -75,20 +179,186 @@ function householdInsight(record: Record<string, unknown>, title: string): strin
     return "Primary contact on file";
 }
 
+function householdProfileFields(record: Record<string, unknown>): FocusPanelProfileField[] {
+    const ident = (record._identity as Record<string, unknown> | null | undefined) ?? null;
+    const primaryPerson =
+        ident?.primary_person && typeof ident.primary_person === "object"
+            ? (ident.primary_person as { label?: unknown })
+            : null;
+
+    return [
+        {
+            label: "Primary Contact",
+            value:
+                trimOrNull(record["person.primary_contact_name"]) ?? trimOrNull(primaryPerson?.label),
+        },
+        {
+            label: "Secondary Contact",
+            value: trimOrNull(record["person.secondary_contact_name"]),
+        },
+        {
+            label: "Phone",
+            value:
+                trimOrNull(record["person.primary_phone"]) ??
+                trimOrNull(record["person.secondary_phone"]),
+        },
+        {
+            label: "Email",
+            value:
+                trimOrNull(record["person.primary_email"]) ??
+                trimOrNull(record["person.secondary_email"]),
+        },
+    ];
+}
+
+function childrenCollectionItems(record: Record<string, unknown>): {
+    items: FocusPanelCollectionItem[];
+    overflowCount: number;
+} {
+    const rows = mapRawInquiryChildrenToDrawerRows((record._inquiry_children as unknown[]) ?? []);
+    const visible = rows.slice(0, 3).map((row) => {
+        const firstName = (row.display_name ?? "Child").split(/\s+/)[0] ?? "Child";
+        const status =
+            formatFocusPanelDisplayLabel(row.outcome_status_label) ??
+            formatFocusPanelChipLabel(row.outcome_status_key) ??
+            "In progress";
+        return { label: firstName, status };
+    });
+    return { items: visible, overflowCount: Math.max(0, rows.length - 3) };
+}
+
+function statusIssuesFromVm(displayVm: OpportunityDrawerViewModel): string[] {
+    const issues: string[] = [];
+    const attention = displayVm.summaries.attention;
+    if (attention?.primary_reason?.trim()) {
+        issues.push(attention.primary_reason.trim());
+    }
+    if (attention?.reason_count && attention.reason_count > 1) {
+        issues.push(`${attention.reason_count - 1} additional signal${attention.reason_count - 1 === 1 ? "" : "s"}`);
+    }
+    const tasks = displayVm.summaries.tasks;
+    if (tasks?.open_count && tasks.open_count > 0) {
+        const first = tasks.open_tasks?.[0]?.title?.trim();
+        if (first && !issues.some((i) => i.toLowerCase().includes(first.toLowerCase()))) {
+            issues.push(`${first}${tasks.open_count > 1 ? " · overdue" : " · overdue task"}`);
+        } else if (tasks.open_count > 0) {
+            issues.push(`${tasks.open_count} overdue task${tasks.open_count === 1 ? "" : "s"}`);
+        }
+    }
+    const tour = displayVm.summaries.active_tour_bookings ?? [];
+    if (tour.length === 0 && attention?.needs_attention) {
+        issues.push("Tour not scheduled");
+    }
+    return issues.slice(0, 4);
+}
+
+function readinessIssues(displayVm: OpportunityDrawerViewModel): string[] {
+    const issues: string[] = [];
+    const attention = displayVm.summaries.attention;
+    if (attention?.primary_reason?.trim()) {
+        issues.push(attention.primary_reason.trim());
+    }
+    const blockers = blockerInsight(displayVm);
+    if (blockers.count > 1 && attention?.primary_reason) {
+        issues.push(`${blockers.count - 1} more required item${blockers.count - 1 === 1 ? "" : "s"}`);
+    } else if (blockers.count > 0 && !attention?.primary_reason) {
+        issues.push(blockers.insight);
+    }
+    return issues.slice(0, 4);
+}
+
+function timelineEventsFromRecord(record: Record<string, unknown>, statusLabel: string | null): {
+    when: string;
+    label: string;
+}[] {
+    const events: { when: string; label: string }[] = [];
+    const updated = trimOrNull(record.updated_at);
+    if (updated) {
+        events.push({ when: "Recent", label: `Record updated · ${updated.slice(0, 10)}` });
+    }
+    if (trimOrNull(record.follow_up_notes)) {
+        events.push({ when: "Notes", label: "Follow-up notes captured" });
+    }
+    if (statusLabel) {
+        events.push({ when: "Status", label: `Currently ${statusLabel}` });
+    }
+    if (events.length === 0) {
+        events.push({ when: "Today", label: "Record opened in workspace" });
+    }
+    return events.slice(0, 5);
+}
+
 function readinessKpiInsight(displayVm: OpportunityDrawerViewModel): {
     insight: string;
+    supporting: string | null;
     tone: FocusPanelCardModel["statusTone"];
     chip: string | null;
 } {
+    const attention = displayVm.summaries.attention;
     const blockers = blockerInsight(displayVm);
-    if (blockers.count > 0) {
+    if (attention?.primary_reason?.trim() && blockers.count > 0) {
         return {
-            insight: `${blockers.count} blocker${blockers.count === 1 ? "" : "s"}`,
+            insight: attention.primary_reason.trim(),
+            supporting:
+                blockers.count > 1
+                    ? `${blockers.count} required items before advancing`
+                    : "1 required item before advancing",
             tone: "blocked",
-            chip: "blocked",
+            chip: chip("blocked"),
         };
     }
-    return { insight: "Ready", tone: "ready", chip: "ready" };
+    if (blockers.count > 0) {
+        return {
+            insight: blockers.insight,
+            supporting: `${blockers.count} required item${blockers.count === 1 ? "" : "s"} before advancing`,
+            tone: "blocked",
+            chip: chip("blocked"),
+        };
+    }
+    return { insight: "Ready to advance", supporting: "No blockers detected", tone: "ready", chip: chip("ready") };
+}
+
+function healthSupportingInsight(displayVm: OpportunityDrawerViewModel): string | null {
+    const parts: string[] = [];
+    const attention = displayVm.summaries.attention;
+    if (attention?.primary_reason?.trim()) {
+        parts.push(attention.primary_reason.trim());
+    }
+    const blockers = blockerInsight(displayVm);
+    if (blockers.count > 1 && !attention?.primary_reason) {
+        parts.push(`${blockers.count} blockers`);
+    }
+    const tasks = displayVm.summaries.tasks?.open_count ?? 0;
+    if (tasks > 0) {
+        parts.push(`${tasks} overdue task${tasks === 1 ? "" : "s"}`);
+    }
+    return parts.length ? parts.join(" · ") : null;
+}
+
+function communicationsInsight(displayVm: OpportunityDrawerViewModel): {
+    insight: string;
+    secondary: string | null;
+} {
+    const reminders = displayVm.summaries.reminders;
+    const scheduledCount = reminders?.scheduled_send_count ?? 0;
+    const followUp = reminders?.next_follow_up_iso;
+    if (scheduledCount > 0) {
+        return {
+            insight: `${scheduledCount} scheduled send${scheduledCount === 1 ? "" : "s"}`,
+            secondary: "Recent outreach context — open inbox to reply or compose.",
+        };
+    }
+    if (followUp) {
+        const when = String(followUp).slice(0, 10);
+        return {
+            insight: `Follow-up due ${when}`,
+            secondary: "Latest thread summary available in inbox.",
+        };
+    }
+    return {
+        insight: "No recent outreach logged",
+        secondary: "Message sending stays action-driven or inbox-driven.",
+    };
 }
 
 function healthInsight(displayVm: OpportunityDrawerViewModel): {
@@ -102,12 +372,12 @@ function healthInsight(displayVm: OpportunityDrawerViewModel): {
             trust.risk_urgency_hint === "high" ? "at-risk"
             : trust.risk_urgency_hint === "medium" ? "due"
             : "ready";
-        return { insight: trust.headline.trim(), tone, chip: tone === "ready" ? "ready" : "at-risk" };
+        return { insight: trust.headline.trim(), tone, chip: chip(tone === "ready" ? "ready" : "at-risk") };
     }
     if (displayVm.summaries.attention?.needs_attention) {
-        return { insight: "Needs attention", tone: "at-risk", chip: "at-risk" };
+        return { insight: "Needs attention", tone: "at-risk", chip: chip("at-risk") };
     }
-    return { insight: "On track", tone: "ready", chip: "ready" };
+    return { insight: "On track", tone: "ready", chip: chip("ready") };
 }
 
 function buildCardModels(input: {
@@ -120,15 +390,17 @@ function buildCardModels(input: {
     const { displayVm, record, title, perspective, statusLabel } = input;
     const blockers = blockerInsight(displayVm);
     const children = childrenInsight(record);
+    const comms = communicationsInsight(displayVm);
     const stageRuntime = displayVm.workspace.stage_work_runtime;
-    const mission =
-        perspective?.defaultMission?.trim() ||
-        perspective?.label?.trim() ||
-        stageRuntime?.purpose?.trim() ||
-        stageRuntime?.stage_label?.trim() ||
-        "Current mission";
+    const headerPrimaryAction = displayVm.actions.header_menu[0] ?? null;
+    const missionStoryLine = missionStory({ displayVm, perspective, stageRuntime, statusLabel });
+    const tour = tourInsight(displayVm);
 
     const map = new Map<FocusPanelCardKey, FocusPanelCardModel>();
+    const healthIssues = statusIssuesFromVm(displayVm);
+    const readinessIssueList = readinessIssues(displayVm);
+    const childCollection = childrenCollectionItems(record);
+    const householdFields = householdProfileFields(record);
 
     map.set(
         "attention",
@@ -138,10 +410,16 @@ function buildCardModels(input: {
             insight:
                 displayVm.summaries.attention?.primary_reason ??
                 (displayVm.summaries.attention?.needs_attention ? "Needs attention" : "No urgent signal"),
+            secondaryInsight:
+                displayVm.summaries.attention?.needs_attention && displayVm.summaries.attention.reason_count > 1
+                    ? `${displayVm.summaries.attention.reason_count} signals need review`
+                    : displayVm.summaries.attention?.needs_attention
+                      ? "Review before advancing this record"
+                      : null,
             tier: "attention",
             span: 1,
             density: "compact",
-            statusChip: displayVm.summaries.attention?.needs_attention ? "at-risk" : "ready",
+            statusChip: displayVm.summaries.attention?.needs_attention ? chip("at-risk") : chip("ready"),
             statusTone: displayVm.summaries.attention?.needs_attention ? "at-risk" : "ready",
             visible: Boolean(displayVm.summaries.attention?.visible),
         }),
@@ -152,12 +430,14 @@ function buildCardModels(input: {
         card({
             key: "current_mission",
             title: "Current Mission",
-            insight: mission,
+            insight: missionStoryLine.insight,
+            secondaryInsight: missionStoryLine.supporting,
             tier: "work",
             span: 1,
             density: "compact",
-            statusChip: statusLabel,
+            statusChip: formatFocusPanelDisplayLabel(statusLabel),
             statusTone: "neutral",
+            primaryAction: { label: "Open workflow →", variant: "primary" },
         }),
     );
 
@@ -167,41 +447,56 @@ function buildCardModels(input: {
             key: "current_work",
             title: "Current Work",
             insight: stageWorkInsight(displayVm),
+            secondaryInsight:
+                stageRuntime?.primary?.state === "open"
+                    ? "Due today · continue stage steps"
+                    : headerPrimaryAction
+                      ? `Next: ${headerPrimaryAction.label}`
+                      : "No open work item right now",
             tier: "work",
             span: 1,
             density: "compact",
-            statusChip: stageRuntime?.primary?.state === "open" ? "due" : null,
+            statusChip: stageRuntime?.primary?.state === "open" ? chip("due") : null,
             statusTone: stageRuntime?.primary?.state === "open" ? "due" : "neutral",
         }),
     );
 
     const readiness = readinessKpiInsight(displayVm);
+    const health = healthInsight(displayVm);
+    const documentsOutstanding =
+        displayVm.summaries.attention?.needs_attention && displayVm.summaries.attention.primary_reason
+            ? 1
+            : 0;
     map.set(
         "readiness_kpi",
         card({
             key: "readiness_kpi",
             title: "Readiness",
             insight: readiness.insight,
+            secondaryInsight: readiness.supporting,
             tier: "metric",
             span: 1,
-            density: "micro",
+            density: "compact",
             statusChip: readiness.chip,
             statusTone: readiness.tone,
+            primaryAction: readiness.tone === "blocked" ? { label: "Resolve →", variant: "primary" } : null,
+            payload: readinessIssueList.length > 0 ? { statusIssues: readinessIssueList } : undefined,
         }),
     );
 
-    const health = healthInsight(displayVm);
     map.set(
         "health",
         card({
             key: "health",
-            title: "Health",
+            title: "Enrollment Health",
             insight: health.insight,
+            secondaryInsight: healthSupportingInsight(displayVm),
             tier: "metric",
             span: 1,
-            density: "micro",
+            density: "compact",
             statusChip: health.chip,
             statusTone: health.tone,
+            payload: healthIssues.length > 0 ? { statusIssues: healthIssues } : undefined,
         }),
     );
 
@@ -210,7 +505,8 @@ function buildCardModels(input: {
         card({
             key: "tour_summary",
             title: "Tour",
-            insight: tourInsight(displayVm),
+            insight: tour.insight,
+            secondaryInsight: tour.supporting,
             tier: "context",
             span: 1,
             density: "compact",
@@ -226,7 +522,7 @@ function buildCardModels(input: {
             tier: "work",
             span: "row",
             density: "compact",
-            statusChip: blockers.count > 0 ? `${blockers.count} blocker${blockers.count === 1 ? "" : "s"}` : "ready",
+            statusChip: blockers.count > 0 ? `${blockers.count} blocker${blockers.count === 1 ? "" : "s"}` : chip("ready"),
             statusTone: blockers.count > 0 ? "blocked" : "ready",
             primaryAction:
                 blockers.count > 0 ?
@@ -244,7 +540,7 @@ function buildCardModels(input: {
             tier: "reference",
             span: 2,
             density: "compact",
-            secondaryInsight: resolveLeadDrawerCommandHeaderMeta(record, { title }).metaRow,
+            payload: { profileFields: householdFields },
         }),
     );
 
@@ -257,8 +553,16 @@ function buildCardModels(input: {
             tier: "reference",
             span: 2,
             density: "compact",
-            secondaryInsight: children.detail,
-            primaryAction: children.detail ? { label: "Expand →", variant: "secondary" } : null,
+            primaryAction: childCollection.items.length > 0 ? { label: "View all →", variant: "secondary" } : null,
+            payload:
+                childCollection.items.length > 0
+                    ? {
+                          collectionItems: childCollection.items,
+                          overflowCount: childCollection.overflowCount,
+                      }
+                    : undefined,
+            secondaryInsight:
+                childCollection.items.length === 0 ? children.detail : null,
         }),
     );
 
@@ -267,10 +571,11 @@ function buildCardModels(input: {
         card({
             key: "communications",
             title: "Communications",
-            insight: "Recent threads and outreach",
-            tier: "historical",
+            insight: comms.insight,
+            tier: "context",
             span: "row",
             density: "compact",
+            secondaryInsight: comms.secondary,
         }),
     );
 
@@ -279,7 +584,13 @@ function buildCardModels(input: {
         card({
             key: "documents",
             title: "Documents",
-            insight: "Forms and missing information",
+            insight:
+                documentsOutstanding > 0 ? "Forms and missing information"
+                :   "Forms up to date",
+            secondaryInsight:
+                documentsOutstanding > 0
+                    ? `${documentsOutstanding} form outstanding`
+                    : "No outstanding document blockers",
             tier: "context",
             span: "row",
             density: "compact",
@@ -291,10 +602,12 @@ function buildCardModels(input: {
         card({
             key: "work_launcher",
             title: "Work Launcher",
-            insight: "Manual · BOS Assist · Import",
+            insight: "Choose how to start or resume work",
             tier: "work",
             span: "row",
             density: "compact",
+            primaryAction: null,
+            payload: { launcherRows: WORK_LAUNCHER_ROWS },
         }),
     );
 
@@ -322,6 +635,19 @@ function buildCardModels(input: {
             tier: "work",
             span: 2,
             density: "compact",
+            payload:
+                displayVm.summaries.tasks?.open_tasks?.length ?
+                    {
+                        collectionItems: displayVm.summaries.tasks.open_tasks.slice(0, 3).map((t) => ({
+                            label: t.title ?? "Task",
+                            status: t.status ?? "open",
+                        })),
+                        overflowCount: Math.max(
+                            0,
+                            (displayVm.summaries.tasks.open_count ?? 0) - 3,
+                        ),
+                    }
+                :   undefined,
         }),
     );
 
@@ -342,13 +668,14 @@ function buildCardModels(input: {
         card({
             key: "primary_next_action",
             title: "Primary Next Action",
-            insight: displayVm.actions.header_menu[0]?.label ?? "No action configured",
+            insight: headerPrimaryAction?.label ?? "No action configured",
             tier: "work",
             span: "row",
             density: "compact",
+            visible: !headerPrimaryAction,
             primaryAction:
-                displayVm.actions.header_menu[0] ?
-                    { label: `${displayVm.actions.header_menu[0].label} →`, variant: "primary" }
+                headerPrimaryAction ?
+                    { label: `${headerPrimaryAction.label} →`, variant: "primary" }
                 :   null,
         }),
     );
@@ -362,6 +689,8 @@ function buildCardModels(input: {
             tier: "historical",
             span: "row",
             density: "expanded",
+            primaryAction: null,
+            payload: { timelineEvents: timelineEventsFromRecord(record, statusLabel) },
         }),
     );
 
@@ -411,39 +740,44 @@ const SUMMARY_GRID: FocusPanelCardGridSpec = {
                 { key: "attention", span: 1, density: "compact", tier: "attention" },
                 { key: "current_mission", span: 1, density: "compact", tier: "work" },
                 { key: "current_work", span: 1, density: "compact", tier: "work" },
-                { key: "health", span: 1, density: "micro", tier: "metric" },
+                { key: "health", span: 1, density: "compact", tier: "metric" },
             ],
         },
         {
             cells: [
-                { key: "readiness_kpi", span: 1, density: "micro", tier: "metric" },
+                { key: "readiness_kpi", span: 1, density: "compact", tier: "metric" },
                 { key: "tour_summary", span: 1, density: "compact", tier: "context" },
             ],
         },
         {
             cells: [
-                { key: "household", span: 2, density: "compact", tier: "reference" },
-                { key: "children", span: 2, density: "compact", tier: "reference" },
+                { key: "household", span: 1, density: "compact", tier: "reference" },
+                { key: "children", span: 1, density: "compact", tier: "reference" },
             ],
         },
         {
-            cells: [{ key: "communications", span: "row", density: "compact", tier: "historical" }],
-        },
-        {
-            cells: [{ key: "documents", span: "row", density: "compact", tier: "context" }],
+            cells: [
+                { key: "communications", span: 1, density: "compact", tier: "context" },
+                { key: "documents", span: 1, density: "compact", tier: "context" },
+            ],
         },
     ],
 };
 
-const WORK_GRID_IDLE: FocusPanelCardGridSpec = {
+const WORK_GRID_SPLIT: FocusPanelCardGridSpec = {
     rows: [
-        { cells: [{ key: "current_mission", span: "row", density: "compact", tier: "work" }] },
-        { cells: [{ key: "required_information", span: "row", density: "compact", tier: "work" }] },
-        { cells: [{ key: "work_launcher", span: "row", density: "compact", tier: "work" }] },
+        { cells: [{ key: "attention", span: "row", density: "compact", tier: "attention" }] },
         {
             cells: [
-                { key: "tasks", span: 2, density: "compact", tier: "work" },
-                { key: "automations", span: 2, density: "compact", tier: "context" },
+                { key: "workflow_steps", span: 1, density: "compact", tier: "work" },
+                { key: "required_information", span: 1, density: "compact", tier: "work" },
+            ],
+        },
+        { cells: [{ key: "work_launcher", span: 1, density: "compact", tier: "work" }] },
+        {
+            cells: [
+                { key: "tasks", span: 1, density: "compact", tier: "work" },
+                { key: "automations", span: 1, density: "compact", tier: "context" },
             ],
         },
         { cells: [{ key: "primary_next_action", span: "row", density: "compact", tier: "work" }] },
@@ -453,41 +787,25 @@ const WORK_GRID_IDLE: FocusPanelCardGridSpec = {
 const WORK_GRID_ACTIVE: FocusPanelCardGridSpec = {
     rows: [
         { cells: [{ key: "attention", span: "row", density: "compact", tier: "attention" }] },
-        { cells: [{ key: "workflow_steps", span: "row", density: "expanded", tier: "work" }] },
-        { cells: [{ key: "required_information", span: "row", density: "compact", tier: "work" }] },
-        { cells: [{ key: "work_launcher", span: "row", density: "compact", tier: "work" }] },
         {
             cells: [
-                { key: "tasks", span: 2, density: "compact", tier: "work" },
-                { key: "automations", span: 2, density: "compact", tier: "context" },
+                { key: "workflow_steps", span: 1, density: "standard", tier: "work" },
+                { key: "required_information", span: 1, density: "compact", tier: "work" },
+            ],
+        },
+        { cells: [{ key: "work_launcher", span: 1, density: "compact", tier: "work" }] },
+        {
+            cells: [
+                { key: "tasks", span: 1, density: "compact", tier: "work" },
+                { key: "automations", span: 1, density: "compact", tier: "context" },
             ],
         },
         { cells: [{ key: "primary_next_action", span: "row", density: "compact", tier: "work" }] },
     ],
 };
 
-const ACTIVITY_GRID: FocusPanelCardGridSpec = {
-    rows: [
-        { cells: [{ key: "timeline", span: "row", density: "expanded", tier: "historical" }] },
-        {
-            cells: [
-                { key: "communications", span: 2, density: "standard", tier: "historical" },
-                { key: "documents", span: 2, density: "standard", tier: "historical" },
-            ],
-        },
-        {
-            cells: [
-                { key: "notes", span: 2, density: "standard", tier: "historical" },
-                { key: "workflow_history", span: 2, density: "standard", tier: "historical" },
-            ],
-        },
-        {
-            cells: [
-                { key: "audit", span: 2, density: "standard", tier: "historical" },
-            ],
-        },
-    ],
-};
+/** Activity uses horizontal workspace — grid unused. */
+const ACTIVITY_GRID: FocusPanelCardGridSpec = { rows: [] };
 
 export function deriveOpportunityFocusPanelPresentation(input: {
     mode: FocusPanelMode;
@@ -504,7 +822,7 @@ export function deriveOpportunityFocusPanelPresentation(input: {
     );
 
     if (input.mode === "work") {
-        return { grid: workflowActive ? WORK_GRID_ACTIVE : WORK_GRID_IDLE, cards };
+        return { grid: workflowActive ? WORK_GRID_ACTIVE : WORK_GRID_SPLIT, cards };
     }
     if (input.mode === "activity") {
         return { grid: ACTIVITY_GRID, cards };

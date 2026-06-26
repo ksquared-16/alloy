@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import {
     isCanonicalSettingsPath,
     isOperatorAdminPath,
+    isPublicMarketingChromeSuppressedPath,
 } from "@/lib/admin/canonicalAdminRoutes";
 import {
     isSettingsCompatibilityPath,
@@ -53,5 +54,39 @@ describe("operator session gate — settings auth parity with workspace", () => 
         const layout = readFileSync(resolve(root, "app/adminV2/settings/layout.tsx"), "utf8");
         expect(layout).toContain('redirect("/login")');
         expect(layout).toContain('redirect("/unauthorized")');
+    });
+});
+
+describe("settings app shell — marketing chrome suppression", () => {
+    it("suppresses marketing chrome for canonical /settings paths", () => {
+        for (const path of OPERATOR_SESSION_GATE_EXAMPLES.settings) {
+            expect(isPublicMarketingChromeSuppressedPath(path)).toBe(true);
+            expect(isCanonicalSettingsPath(path)).toBe(true);
+        }
+    });
+
+    it("suppresses marketing chrome for /admin/settings compatibility paths", () => {
+        for (const path of OPERATOR_SESSION_GATE_EXAMPLES.settingsCompatibility) {
+            expect(isPublicMarketingChromeSuppressedPath(path)).toBe(true);
+        }
+    });
+
+    it("suppresses marketing chrome for workspace parity paths", () => {
+        for (const path of OPERATOR_SESSION_GATE_EXAMPLES.workspace) {
+            expect(isPublicMarketingChromeSuppressedPath(path)).toBe(true);
+        }
+    });
+
+    it("does not suppress marketing chrome for public marketing routes", () => {
+        expect(isPublicMarketingChromeSuppressedPath("/")).toBe(false);
+        expect(isPublicMarketingChromeSuppressedPath("/platform")).toBe(false);
+        expect(isPublicMarketingChromeSuppressedPath("/contact")).toBe(false);
+    });
+
+    it("ConditionalSiteLayout uses shared marketing chrome suppression helper", () => {
+        const root = resolve(__dirname, "../../..");
+        const layout = readFileSync(resolve(root, "components/ConditionalSiteLayout.tsx"), "utf8");
+        expect(layout).toContain("isPublicMarketingChromeSuppressedPath");
+        expect(layout).not.toContain('pathname.startsWith("/workspace/")');
     });
 });

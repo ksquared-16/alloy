@@ -174,22 +174,25 @@ export function buildOperationalViewHeaderSection(params: {
     };
 }
 
-/** Preview Runtime — open work unit with operational view (queue lane) active. */
+/** Preview Runtime — open work unit with Work View active (queue param optional when work_view is set). */
 export function buildOperationalViewPreviewRuntimeHref(params: {
     departmentId: string;
     workUnitId: string;
-    queueKey: string;
+    queueKey?: string | null;
     workViewId?: string | null;
     queueLayoutId?: string | null;
     focusPanelLayoutId?: string | null;
 }): string | null {
     const departmentId = params.departmentId.trim();
     const workUnitId = params.workUnitId.trim();
-    const queueKey = params.queueKey.trim();
-    if (!departmentId || !workUnitId || !queueKey) return null;
-    const sp = new URLSearchParams({ queue: queueKey });
     const workViewId = params.workViewId?.trim();
+    const queueKey = params.queueKey?.trim();
+    if (!departmentId || !workUnitId) return null;
+    if (!workViewId && !queueKey) return null;
+
+    const sp = new URLSearchParams();
     if (workViewId) sp.set("work_view", workViewId);
+    if (queueKey) sp.set("queue", queueKey);
     const queueLayoutId = params.queueLayoutId?.trim();
     if (queueLayoutId) sp.set("queue_layout", queueLayoutId);
     const focusPanelLayoutId = params.focusPanelLayoutId?.trim();

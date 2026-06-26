@@ -109,7 +109,6 @@ export async function applyFormLeadCaptureIntake(
             primary_person_id: personId,
             primary_contact_id: null,
             name: oppName,
-            status: "open",
             source: "public_form",
             status_key,
             metadata: {

@@ -14,10 +14,16 @@ import { resolve } from "path";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { normalizeOpportunityWritePayload } from "@/lib/opportunityIdentity";
 
+import { CANONICAL_DEV_ORG_ID } from "@/lib/fields/canonicalDevOrg";
+
 loadEnv({ path: resolve(process.cwd(), ".env.local") });
 loadEnv({ path: resolve(process.cwd(), ".env") });
 
-const DEFAULT_ORG_ID = "7803388d-cdee-4afb-89cf-23a137f39423";
+const DEFAULT_ORG_ID =
+    process.env.DEMO_RESET_ORG_ID?.trim() ||
+    process.env.CANONICAL_VERIFY_ORG_ID?.trim() ||
+    process.env.ALLOY_PUBLIC_ORG_ID?.trim() ||
+    CANONICAL_DEV_ORG_ID;
 const DEFAULT_WORK_UNIT_KEY = "enrollment_pipeline";
 
 const CHILD_CARE_ACTIVE_OPPORTUNITY_STATUS_KEYS = new Set([

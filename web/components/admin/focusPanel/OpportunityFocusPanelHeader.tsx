@@ -4,16 +4,23 @@ import { useMemo } from "react";
 
 import FocusPanelCompactHeader from "@/components/admin/focusPanel/FocusPanelCompactHeader";
 import { OpportunityDrawerHeaderControls } from "@/components/admin/opportunity/OpportunityDrawerHeaderControls";
-import VmProgressiveStatusDropdown from "@/components/admin/vmDrawer/VmProgressiveStatusDropdown";
 import { useActiveRuntimePerspective } from "@/lib/adminV2/runtime/perspective/RuntimePerspectiveContext";
+import {
+    buildFocusPanelContextChips,
+    formatFocusPanelDisplayLabel,
+    resolveFocusPanelLocationChip,
+    resolveFocusPanelMissionDisplay,
+    resolveFocusPanelProcessLabel,
+} from "@/lib/adminV2/runtime/focusPanel/focusPanelDisplayLabels";
+import { FOCUS_PANEL_HEADER_BOS_LABEL } from "@/lib/adminV2/runtime/focusPanel/focusPanelHeaderActions";
+import { buildSubjectManageMenuFromResolvedActions } from "@/lib/admin/recordManage/buildSubjectManageMenuFromResolvedActions";
 import type { FocusPanelMode } from "@/lib/adminV2/runtime/focusPanel/focusPanelMode";
 import type { OpportunityDrawerViewModel } from "@/lib/adminV2/viewModel/drawer/types";
 import type { OpportunityDrawerRegistryActionFeedback } from "@/lib/admin/actions/useOpportunityDrawerRegistryActionFeedback";
-import type { RecordManageMenuActionKey, RecordManageMenuItem } from "@/lib/admin/recordManage/types";
 import type { ActionPreflightUiPayload } from "@/lib/admin/actions/actionPreflightPresentation";
+import type { ResolvedActionForClient } from "@/lib/admin/actions/types";
 import type { OpportunityQueuePreviewSeed } from "@/lib/adminV2/bos/activeOperationalContext";
 import type { StatusControlVm } from "@/lib/adminV2/viewModel/drawer/types";
-import type { ResolvedActionForClient } from "@/lib/admin/actions/types";
 
 export type OpportunityFocusPanelHeaderProps = {
     title: string;
@@ -30,12 +37,12 @@ export type OpportunityFocusPanelHeaderProps = {
     activeMode: FocusPanelMode;
     onModeChange: (mode: FocusPanelMode) => void;
     onClose: () => void;
-    manageMenuItems: RecordManageMenuItem[];
-    onManageSelect: (key: RecordManageMenuActionKey) => void;
-    manageBusyKey?: RecordManageMenuActionKey | null;
+    onSubjectManageActionSelect: (action: ResolvedActionForClient) => void;
+    subjectManageActionLoadingKey?: string | null;
     actionPreflightBlocked: ActionPreflightUiPayload | null;
     onDismissActionPreflightBlocked: () => void;
     registryActionFeedback: OpportunityDrawerRegistryActionFeedback | null;
+    /** Ignored in Focus Panel — stage movement via operational actions, not header CTA. */
     primaryHeaderAction?: ResolvedActionForClient | null;
     onPrimaryHeaderAction?: (action: ResolvedActionForClient) => void;
     primaryActionLoading?: boolean;
@@ -50,74 +57,75 @@ export default function OpportunityFocusPanelHeader({
     opportunitySingular,
     statusLabel,
     currentStatusKey,
-    statusControl,
-    statusCanMutate,
     manageCanMutate,
     activeMode,
     onModeChange,
     onClose,
-    manageMenuItems,
-    onManageSelect,
-    manageBusyKey = null,
+    onSubjectManageActionSelect,
+    subjectManageActionLoadingKey = null,
     actionPreflightBlocked,
     onDismissActionPreflightBlocked,
     registryActionFeedback,
-    primaryHeaderAction,
-    onPrimaryHeaderAction,
-    primaryActionLoading = false,
 }: OpportunityFocusPanelHeaderProps) {
     const perspective = useActiveRuntimePerspective();
     const stageRuntime = displayVm.workspace.stage_work_runtime;
+    const stageContext = displayVm.workspace.stage_context;
 
-    const missionLine = useMemo(() => {
-        return (
-            perspective?.defaultMission?.trim() ||
-            perspective?.label?.trim() ||
-            stageRuntime?.purpose?.trim() ||
-            null
-        );
-    }, [perspective, stageRuntime?.purpose]);
+    const subjectManageActions = useMemo(
+        () => buildSubjectManageMenuFromResolvedActions(displayVm.actions.header_menu),
+        [displayVm.actions.header_menu],
+    );
 
-    const primaryAction =
-        primaryHeaderAction && onPrimaryHeaderAction ?
-            <button
-                type="button"
-                className="alloy-os-fp-header-compact__primary-btn"
-                disabled={primaryActionLoading}
-                onClick={() => onPrimaryHeaderAction(primaryHeaderAction)}
-            >
-                {primaryHeaderAction.label}
-            </button>
-        :   null;
+    const readOnlyStatusLabel = useMemo(
+        () => formatFocusPanelDisplayLabel(statusLabel) ?? null,
+        [statusLabel],
+    );
 
-    const statusChip = (
-        <VmProgressiveStatusDropdown
-            opportunityId={opportunityId}
-            firstPaintLabel={statusLabel ?? "—"}
-            currentStatusKey={currentStatusKey}
-            statusControl={statusControl}
-            canMutate={statusCanMutate}
-        />
+    const processLabel = useMemo(() => resolveFocusPanelProcessLabel(record), [record]);
+
+    const locationLabel = useMemo(() => resolveFocusPanelLocationChip(record), [record]);
+
+    const contextChips = useMemo(
+        () =>
+            buildFocusPanelContextChips({
+                statusLabel: readOnlyStatusLabel,
+                statusKey: currentStatusKey,
+                processLabel,
+                locationLabel,
+            }),
+        [currentStatusKey, locationLabel, processLabel, readOnlyStatusLabel],
+    );
+
+    const mission = useMemo(
+        () =>
+            resolveFocusPanelMissionDisplay({
+                perspectiveMission: perspective?.defaultMission,
+                stagePurpose: stageRuntime?.purpose,
+                stageContextPurpose: stageContext?.purpose,
+            }),
+        [perspective?.defaultMission, stageContext?.purpose, stageRuntime?.purpose],
     );
 
     const secondaryActions = (
         <OpportunityDrawerHeaderControls
             opportunityId={opportunityId}
             overviewData={record}
+            opportunitySingular={opportunitySingular}
             queuePreviewSeed={queuePreviewSeed}
             inquiryWorkflow
-            manageMenuItems={manageMenuItems}
+            subjectManageActions={subjectManageActions}
+            onSubjectManageActionSelect={onSubjectManageActionSelect}
+            subjectManageActionLoadingKey={subjectManageActionLoadingKey}
             canMutate={manageCanMutate}
-            manageBusyKey={manageBusyKey}
-            onManageSelect={onManageSelect}
             layout="modal-actions"
             proofLayoutActions
-            bosActionVariant="juniper"
+            bosActionVariant="default"
+            bosAssistLabel={FOCUS_PANEL_HEADER_BOS_LABEL}
             actionPreflightBlocked={actionPreflightBlocked}
             onDismissActionPreflightBlocked={onDismissActionPreflightBlocked}
             registryActionFeedback={registryActionFeedback}
             manageDisabledReason={
-                manageBusyKey ? "A manage action is running — wait for it to finish."
+                subjectManageActionLoadingKey ? "An action is running — wait for it to finish."
                 : !manageCanMutate ? "You don't have permission to manage this record."
                 :   null
             }
@@ -127,10 +135,8 @@ export default function OpportunityFocusPanelHeader({
     return (
         <FocusPanelCompactHeader
             subjectTitle={title}
-            missionLine={missionLine}
-            stageLabel={stageRuntime?.stage_label ?? statusLabel}
-            statusChip={statusChip}
-            primaryAction={primaryAction}
+            contextChips={contextChips}
+            mission={mission}
             secondaryActions={secondaryActions}
             activeMode={activeMode}
             onModeChange={onModeChange}

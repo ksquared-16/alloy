@@ -38,6 +38,7 @@ export default function FocusPanelModeSwitch({ activeMode, onModeChange }: Props
                             active && "alloy-os-focus-panel-mode-switch__tab--active",
                         )}
                         data-focus-panel-mode={mode}
+                        data-focus-panel-mode-selected={active ? "true" : undefined}
                         onClick={() => onModeChange(mode)}
                     >
                         {FOCUS_PANEL_MODE_LABELS[mode]}

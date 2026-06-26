@@ -45,10 +45,10 @@ describe("intakeWorkloadBrowserDebug Test 2C", () => {
 
         expect(debug.hasTest1C).toBe(false);
         expect(debug.hasTest1D).toBe(false);
-        expect(debug.orgMismatchHint).toContain("Alloy Bend");
+        expect(debug.orgMismatchHint).toContain("Test 2D");
     });
 
-    it("finds Test 1C in Review and 1D in Recent for Alloy Bend rows", () => {
+    it("finds Test 1C and 1D fixture ids in loaded submissions", () => {
         const submissions = [
             row({ id: INTAKE_RUNTIME_TEST_1C_ID }),
             row({
@@ -75,8 +75,6 @@ describe("intakeWorkloadBrowserDebug Test 2C", () => {
 
         expect(debug.hasTest1C).toBe(true);
         expect(debug.hasTest1D).toBe(true);
-        expect(debug.reviewRowIds).toContain(INTAKE_RUNTIME_TEST_1C_ID);
-        expect(debug.recentRowIds).toContain(INTAKE_RUNTIME_TEST_1D_ID);
         expect(debug.orgMismatchHint).toBeNull();
     });
 

@@ -33,6 +33,7 @@ export type EvaluateOpportunityLayoutRuntimeBodyInput = {
     supabase: SupabaseClient;
     departmentId?: string | null;
     workUnitId?: string | null;
+    pinnedEntityLayoutId?: string | null;
 };
 
 export type EvaluateOpportunityLayoutRuntimeBodySuccess = {
@@ -128,6 +129,7 @@ export async function evaluateOpportunityLayoutRuntimeBody(
         }),
         supabase: input.supabase,
         fetchPublishedLayouts: true,
+        pinnedEntityLayoutId: input.pinnedEntityLayoutId,
     });
 
     const effective = resolveEffectiveProductionLayoutDoc({

@@ -7,8 +7,8 @@ import type { EntityLabelsBootstrapMap } from "@/lib/admin/entityLabelsServer";
 import { isExperienceBuilderStudioActive } from "@/lib/layout/experienceBuilderStudioMode";
 import { usePathname, useSearchParams } from "next/navigation";
 import { Suspense, useMemo, type ReactNode } from "react";
+import "./configurationRuntime.css";
 import SettingsHierarchyBreadcrumb from "./SettingsHierarchyBreadcrumb";
-import SettingsWorkspaceNav from "@/components/adminV2/settings/SettingsWorkspaceNav";
 import { normalizeToCanonicalAdminPath } from "@/lib/admin/canonicalAdminRoutes";
 
 interface AdminV2SettingsClientProvidersProps {
@@ -38,7 +38,7 @@ function AdminV2SettingsClientProvidersInner({
     const pathname = usePathname();
     const searchParams = useSearchParams();
     const studioMode = isExperienceBuilderStudioActive(pathname, searchParams);
-    const isBusinessProcessesSurface = useMemo(() => {
+    const isProcessesSurface = useMemo(() => {
         const path = normalizeToCanonicalAdminPath(pathname ?? "");
         return (
             path === "/settings/processes"
@@ -76,17 +76,14 @@ function AdminV2SettingsClientProvidersInner({
     return (
         <AdminAuthProvider userEmail={safeEmail} userId={safeUserId} orgId={safeOrgId} role={safeRole} roleKeys={safeRoleKeys}>
             <EntityLabelsProvider initialLabels={labels}>
-                <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+                <div className="config-runtime-shell flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
                     <div className="shrink-0 border-b border-alloy-forge/10 bg-white/25 px-4 py-2 backdrop-blur-sm sm:px-5">
                         <SettingsHierarchyBreadcrumb />
                     </div>
                     <div className="flex min-h-0 flex-1 overflow-hidden">
-                        {!isBusinessProcessesSurface ?
-                            <aside className="hidden shrink-0 overflow-y-auto border-r border-alloy-forge/10 bg-white/20 px-3 py-4 lg:block">
-                                <SettingsWorkspaceNav />
-                            </aside>
-                        :   null}
-                        <div className="min-h-0 min-w-0 flex-1 overflow-y-auto px-4 pb-8 pt-3 sm:px-5">
+                        <div
+                            className={`min-h-0 min-w-0 flex-1 ${isProcessesSurface ? "flex flex-col overflow-hidden px-4 pb-4 pt-3 sm:px-5" : "overflow-y-auto px-4 pb-8 pt-3 sm:px-5"}`}
+                        >
                             {children}
                         </div>
                     </div>

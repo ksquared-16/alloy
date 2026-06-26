@@ -30,10 +30,10 @@ export default function BusinessProcessPresentationWorkspace({
     reorderBusy?: boolean;
 }) {
     return (
-        <div className="space-y-4" data-testid="business-process-presentation-workspace">
-            <header className="rounded-2xl border border-alloy-pine/15 bg-alloy-pine/[0.05] px-5 py-4">
-                <h3 className="text-lg font-semibold text-alloy-midnight">Presentation</h3>
-                <p className="mt-1 text-sm text-alloy-midnight/60">
+        <div className="space-y-5" data-testid="business-process-presentation-workspace">
+            <header className="config-runtime-hero px-5 py-4">
+                <h3 className="text-xl font-semibold text-alloy-midnight">Presentation</h3>
+                <p className="mt-2 text-sm leading-relaxed text-alloy-midnight/65">
                     Assign queue and Focus Panel layouts for each stage. Layout content is authored in Experience Builder.
                 </p>
             </header>
@@ -61,7 +61,7 @@ export default function BusinessProcessPresentationWorkspace({
             </div>
 
             {stageKey.trim() ?
-                <div className="rounded-2xl border border-alloy-forge/10 bg-white p-5 shadow-sm">
+                <div className="config-runtime-operational-card p-5">
                     <LifecycleStagePresentationCard
                         businessProcessKey={businessProcessKey}
                         stageKey={stageKey}

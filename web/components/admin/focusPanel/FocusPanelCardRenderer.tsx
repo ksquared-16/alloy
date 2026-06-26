@@ -2,12 +2,14 @@
 
 import clsx from "clsx";
 
+import ArchetypeCardBody from "@/components/admin/focusPanel/ArchetypeCardBody";
 import UniversalCard from "@/components/admin/focusPanel/UniversalCard";
 import ProofDoctrineLifecycleRail from "@/components/layout/proofShell/ProofDoctrineLifecycleRail";
-import CommunicationsDrawerSection from "@/components/admin/communications/CommunicationsDrawerSection";
 import OpportunityDrawerVmTabPanes from "@/components/admin/vmDrawer/OpportunityDrawerVmTabPanes";
 import { buildOpportunityVmLifecycleRailModel } from "@/lib/adminV2/viewModel/drawer/vmRuntime/buildOpportunityVmLifecycleRailModel";
 import type { FocusPanelCardKey, FocusPanelCardModel } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardModel";
+import type { FocusPanelMode } from "@/lib/adminV2/runtime/focusPanel/focusPanelMode";
+import { system5ArchetypeSuppressesFooterAction } from "@/lib/adminV2/runtime/focusPanel/system5CardArchetypes";
 import type { OpportunityDrawerViewModel } from "@/lib/adminV2/viewModel/drawer/types";
 import type { DrawerTabKey } from "@/lib/entityPresentation";
 
@@ -18,6 +20,7 @@ type Props = {
     record: Record<string, unknown>;
     opportunitySingular: string;
     canMutate: boolean;
+    focusPanelMode: FocusPanelMode;
     onSelectTab: (tab: DrawerTabKey) => void;
     onPrimaryAction?: (key: FocusPanelCardKey) => void;
     receded?: boolean;
@@ -36,6 +39,7 @@ function CardFooterAction({
             type="button"
             className={clsx(
                 "alloy-os-ucard__action",
+                "alloy-os-ucard__action--system5",
                 model.primaryAction.variant === "primary" && "alloy-os-ucard__action--primary",
             )}
             onClick={() => onPrimaryAction?.(model.key)}
@@ -45,7 +49,7 @@ function CardFooterAction({
     );
 }
 
-/** Renders one Universal Card blueprint — body is drill detail only, never a field dump. */
+/** Renders one Universal Card by System 5A archetype — body is drill detail or structured payload. */
 export default function FocusPanelCardRenderer({
     model,
     displayVm,
@@ -53,6 +57,7 @@ export default function FocusPanelCardRenderer({
     record,
     opportunitySingular,
     canMutate,
+    focusPanelMode,
     onSelectTab,
     onPrimaryAction,
     receded = false,
@@ -61,40 +66,26 @@ export default function FocusPanelCardRenderer({
 
     const lifecycleRailModel = buildOpportunityVmLifecycleRailModel({ displayVm, drawerId });
     const drillDownAllowed = model.density === "standard" || model.density === "expanded";
+    const suppressFooter = system5ArchetypeSuppressesFooterAction(model.archetype);
+    const isLauncher = model.archetype === "launcher";
 
-    let body: React.ReactNode = null;
+    let drillBody: React.ReactNode = null;
 
     switch (model.key) {
-        case "work_launcher":
-            body = (
-                <div className="alloy-os-work-launcher-rows" data-work-launcher-compact="true">
-                    <button type="button" className="alloy-os-work-launcher-row">◦ Manual work</button>
-                    <button type="button" className="alloy-os-work-launcher-row">◦ BOS Assist</button>
-                    <button type="button" className="alloy-os-work-launcher-row">◦ Import / Intake</button>
-                </div>
-            );
-            break;
         case "workflow_steps":
-            body =
+            drillBody =
                 lifecycleRailModel && lifecycleRailModel.steps.length > 0 ?
                     <ProofDoctrineLifecycleRail model={lifecycleRailModel} aria-label="Workflow steps" />
                 :   null;
             break;
         case "communications":
-            if (drillDownAllowed) {
-                body = (
-                    <CommunicationsDrawerSection
-                        apiEntityType="opportunities"
-                        entityId={drawerId}
-                        embedded
-                        embeddedHeaderMode="description_only"
-                    />
-                );
+            if (focusPanelMode !== "activity" && model.secondaryInsight) {
+                drillBody = <p className="alloy-os-ucard__secondary-line">{model.secondaryInsight}</p>;
             }
             break;
         case "timeline":
             if (drillDownAllowed) {
-                body = (
+                drillBody = (
                     <OpportunityDrawerVmTabPanes
                         drawerId={drawerId}
                         drawerTab="activity"
@@ -106,7 +97,7 @@ export default function FocusPanelCardRenderer({
             break;
         case "documents":
             if (drillDownAllowed) {
-                body = (
+                drillBody = (
                     <OpportunityDrawerVmTabPanes
                         drawerId={drawerId}
                         drawerTab="documents"
@@ -118,7 +109,7 @@ export default function FocusPanelCardRenderer({
             break;
         case "notes":
             if (drillDownAllowed) {
-                body = (
+                drillBody = (
                     <OpportunityDrawerVmTabPanes
                         drawerId={drawerId}
                         drawerTab="notes"
@@ -128,46 +119,48 @@ export default function FocusPanelCardRenderer({
                 );
             }
             break;
-        case "children":
-            if (model.secondaryInsight) {
-                body = <p className="text-[12px] text-alloy-midnight/65">{model.secondaryInsight}</p>;
-            }
-            break;
-        case "household":
-            if (model.secondaryInsight && model.secondaryInsight !== model.insight) {
-                body = <p className="text-[12px] text-alloy-midnight/65">{model.secondaryInsight}</p>;
-            }
-            break;
-        case "tasks":
-            if (displayVm.summaries.tasks?.open_tasks?.length) {
-                body = (
-                    <ul className="alloy-os-ucard__list">
-                        {displayVm.summaries.tasks.open_tasks.slice(0, 3).map((t) => (
-                            <li key={t.id ?? t.title}>{t.title ?? "Task"}</li>
-                        ))}
-                    </ul>
-                );
-            }
-            break;
         default:
             break;
     }
 
-    const showBody = body != null && body !== false && model.density !== "micro";
+    const archetypeBody = (
+        <ArchetypeCardBody
+            archetype={model.archetype}
+            payload={model.payload}
+            fallbackBody={drillBody}
+        />
+    );
+
+    const body = isLauncher ? archetypeBody : (
+        <>
+            {archetypeBody}
+            {drillBody && model.archetype !== "timeline" && model.archetype !== "launcher" ?
+                <div className="alloy-os-ucard__drill">{drillBody}</div>
+            :   null}
+        </>
+    );
+
+    const showBody = body != null && model.density !== "micro" && (isLauncher || model.payload || drillBody);
+    const isPrimaryNextAction = model.key === "primary_next_action";
+    const hideHeaderInsight = isLauncher;
 
     return (
         <UniversalCard
             title={model.title}
-            insight={model.insight}
+            insight={hideHeaderInsight ? "" : model.insight}
+            supportingInsight={isLauncher ? model.insight : model.secondaryInsight}
+            iconName={model.iconName}
             tier={model.tier}
+            archetype={model.archetype}
             statusChip={model.statusChip}
             statusTone={model.statusTone}
             density={model.density}
             gridSpan={model.span}
             data-universal-card-key={model.key}
             receded={receded}
+            className={isPrimaryNextAction ? "alloy-os-ucard--primary-action" : undefined}
             footerAction={
-                model.primaryAction && model.density !== "micro" ?
+                !suppressFooter && model.primaryAction && model.density !== "micro" ?
                     <CardFooterAction model={model} onPrimaryAction={onPrimaryAction} />
                 :   null
             }

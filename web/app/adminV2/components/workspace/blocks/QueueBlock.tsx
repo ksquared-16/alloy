@@ -72,7 +72,9 @@ import { WorkUnitQueueLaneRowSkeleton } from "@/components/admin/workspace/WorkU
 import RelatedRecordDrawerIconButton from "@/components/admin/drawer/RelatedRecordDrawerIconButton";
 import { useAdminDrawerOptional } from "@/contexts/AdminDrawerContext";
 import { ALLOY_OS_RUNTIME_ENABLED } from "@/lib/adminV2/runtime/alloyOsRuntimeFlag";
+import { useOperationalModeEntryOptional } from "@/lib/adminV2/runtime/operationalSubject/OperationalModeEntryContext";
 import { useAlloyOsRuntimeSplitActive } from "@/lib/adminV2/runtime/useAlloyOsRuntimeSplitActive";
+import OperationalModeQueuePreparePanel from "@/app/adminV2/components/workspace/blocks/OperationalModeQueuePreparePanel";
 import { CompressedQueueRow } from "@/app/adminV2/components/workspace/blocks/CompressedQueueRow";
 import { resolveCompressedQueueRowDisplay } from "@/lib/adminV2/runtime/compressedQueueRowFields";
 import {
@@ -1753,6 +1755,11 @@ function WorkUnitQueueLane({
   queueRowOpenPendingOpportunityId?: string | null;
 }) {
   const splitActive = useAlloyOsRuntimeSplitActive();
+  const operationalEntry = useOperationalModeEntryOptional();
+  const operationalModePreparing =
+    ALLOY_OS_RUNTIME_ENABLED &&
+    operationalEntry?.phase === "preparing" &&
+    !splitActive;
   const drawerCtx = useAdminDrawerOptional();
   const openDrawerOpportunityId =
     drawerCtx?.drawer?.type === "opportunities" ? String(drawerCtx.drawer.id ?? "") : "";
@@ -1790,6 +1797,7 @@ function WorkUnitQueueLane({
       isWaitlistCandidate: hasCandidatePlacementRows,
       grain: hasCandidatePlacementRows ? "candidate" : "case",
     },
+    queue.pinnedQueueLayoutId,
   );
   const layoutQueueEnabled =
     queue.queueEntityType === "opportunity" && queueLayoutRuntime.enabled;
@@ -1955,6 +1963,9 @@ function WorkUnitQueueLane({
           aria-busy={Boolean(queue.rowsRefreshing)}
           role="list"
         >
+        {operationalModePreparing ?
+            <OperationalModeQueuePreparePanel message={operationalEntry.message} />
+        : <>
         {queue.rowsLoading && !queue.rowsHeld && queue.items.length === 0
           ? Array.from({ length: ADMINV2_WORK_UNIT_QUEUE_ROW_SKELETON_COUNT }, (_, i) => (
               <WorkUnitQueueLaneRowSkeleton key={`queue-row-skel-${i}`} />
@@ -2379,6 +2390,7 @@ function WorkUnitQueueLane({
             </li>
           );
         })}
+        </>}
         </ul>
         {queue.queueEntityType === "opportunity" ?
             <OpportunityQueueRowLayoutRuntimeShadowMount

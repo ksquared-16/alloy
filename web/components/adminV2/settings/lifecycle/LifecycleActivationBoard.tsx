@@ -8,22 +8,25 @@ import LifecycleActivationValidation from "@/components/adminV2/settings/lifecyc
 import LifecycleActivationDeleteModal from "@/components/adminV2/settings/lifecycle/LifecycleActivationDeleteModal";
 import LifecycleActivationDeleteStageModal from "@/components/adminV2/settings/lifecycle/LifecycleActivationDeleteStageModal";
 import LifecycleRenameModal from "@/components/adminV2/settings/lifecycle/LifecycleRenameModal";
-import LifecycleProcessWorkspaceHeader from "@/components/adminV2/settings/lifecycle/LifecycleProcessWorkspaceHeader";
 import LifecycleStageNav from "@/components/adminV2/settings/lifecycle/LifecycleStageNav";
 import LifecycleTrackStageNav from "@/components/adminV2/settings/lifecycle/LifecycleTrackStageNav";
 import LifecycleEnrollmentV2TemplateCard from "@/components/adminV2/settings/lifecycle/LifecycleEnrollmentV2TemplateCard";
 import LifecycleStageConfiguration from "@/components/adminV2/settings/lifecycle/LifecycleStageConfiguration";
 import type { LifecycleStageWorkspaceHandle } from "@/components/adminV2/settings/lifecycle/LifecycleStageWorkspace";
 import type { LifecycleStageSaveUiState } from "@/components/adminV2/settings/lifecycle/LifecycleStageWorkspace";
-import LifecycleActionsMatrix from "@/components/adminV2/settings/lifecycle/LifecycleActionsMatrix";
-import BusinessProcessWorkspaceNav from "@/components/adminV2/settings/businessProcess/BusinessProcessWorkspaceNav";
-import BusinessProcessWorkViewsWorkspace from "@/components/adminV2/settings/businessProcess/BusinessProcessWorkViewsWorkspace";
-import BusinessProcessPresentationWorkspace from "@/components/adminV2/settings/businessProcess/BusinessProcessPresentationWorkspace";
+import BusinessProcessActionsListColumn, {
+    BusinessProcessActionsSetupWorkspace,
+    useProcessActionsMatrixDraft,
+} from "@/components/adminV2/settings/businessProcess/BusinessProcessActionsQueueWorkspace";
+import BusinessProcessAutomationShell from "@/components/adminV2/settings/businessProcess/BusinessProcessAutomationShell";
+import BusinessProcessHealthListColumn from "@/components/adminV2/settings/businessProcess/BusinessProcessHealthQueueWorkspace";
+import BusinessProcessConfigurationShell from "@/components/adminV2/settings/businessProcess/BusinessProcessConfigurationShell";
+import BusinessProcessStagesListColumn from "@/components/adminV2/settings/businessProcess/BusinessProcessStagesListColumn";
+import BusinessProcessWorkViewsListColumn from "@/components/adminV2/settings/businessProcess/BusinessProcessWorkViewsListColumn";
+import BusinessProcessWorkViewsSetupWorkspace from "@/components/adminV2/settings/businessProcess/BusinessProcessWorkViewsSetupWorkspace";
+import { WorkViewsConfigurationProvider } from "@/components/adminV2/settings/businessProcess/WorkViewsConfigurationContext";
 import type { BusinessProcessWorkspaceSection } from "@/lib/lifecycle/businessProcessUiLabels";
-import {
-    BUSINESS_PROCESS_PROCESS_ACTIONS_SUMMARY,
-    BUSINESS_PROCESS_PROCESS_ACTIONS_TITLE,
-} from "@/lib/lifecycle/businessProcessUiLabels";
+import type { LifecycleBaseActionKey } from "@/lib/lifecycle/lifecycleStageBaseActions";
 import { queueMembershipWithSyncedStatusKeys } from "@/lib/lifecycle/queueMembershipEditorModel";
 import { useAdminAuth } from "@/contexts/AdminAuthContext";
 import { notifyWorkspaceDepartmentsChanged } from "@/lib/workspace/notifyWorkspaceDepartmentsChanged";
@@ -164,6 +167,7 @@ export default function LifecycleActivationBoard({
     const [stageSaveError, setStageSaveError] = useState<string | null>(null);
     const [readyCheckRevision, setReadyCheckRevision] = useState(0);
     const [processSection, setProcessSection] = useState<BusinessProcessWorkspaceSection>("stages");
+    const [selectedActionKey, setSelectedActionKey] = useState<LifecycleBaseActionKey | null>(null);
     const workspaceHandleRef = useRef<LifecycleStageWorkspaceHandle | null>(null);
     const stageDirtyRef = useRef(false);
 
@@ -966,6 +970,22 @@ export default function LifecycleActivationBoard({
         return builderProcess ? stageKeysForProcess(builderProcess) : [];
     }, [builderProcess]);
 
+    const actionsDraft = useProcessActionsMatrixDraft(runtimeDepartmentId, builderStageKeys);
+    const selectedActionRow = useMemo(
+        () =>
+            actionsDraft.rows.find((row) => row.base_action_key === selectedActionKey) ??
+            actionsDraft.rows[0] ??
+            null,
+        [actionsDraft.rows, selectedActionKey],
+    );
+
+    useEffect(() => {
+        if (processSection !== "actions" || !actionsDraft.rows.length) return;
+        if (!selectedActionKey || !actionsDraft.rows.some((row) => row.base_action_key === selectedActionKey)) {
+            setSelectedActionKey(actionsDraft.rows[0]!.base_action_key);
+        }
+    }, [processSection, actionsDraft.rows, selectedActionKey]);
+
     const resetActivation = useCallback(() => {
         setDepartmentName("");
         setActivationOwned(false);
@@ -1524,7 +1544,7 @@ export default function LifecycleActivationBoard({
               : "Pending";
 
     return (
-        <div className="mx-auto w-full max-w-none space-y-3" data-testid="lifecycle-builder-board">
+        <div className="flex min-h-0 flex-1 flex-col gap-2" data-testid="lifecycle-builder-board">
             <LifecycleIdentitySyncBanner
                 identity={identity}
                 onUseRuntimeDepartment={() => onUseRuntimeDepartment?.()}
@@ -1571,20 +1591,111 @@ export default function LifecycleActivationBoard({
                     </div>
                 )
             ) : (
-                <>
-                    <LifecycleProcessWorkspaceHeader
-                        processName={lifecycleName}
-                        description={lifecycleDescription}
-                        trackCount={catalogSummary?.trackCount ?? (processTracks?.tracks.length ?? 0)}
-                        stageCount={catalogSummary?.stageCount ?? builderStages.length}
-                        queueCount={catalogSummary?.queueCount ?? 0}
-                    />
-                    <BusinessProcessWorkspaceNav
+                <WorkViewsConfigurationProvider
+                    departmentId={runtimeDepartmentId}
+                    processId={processId}
+                    queueLanes={workViewQueueLanes}
+                    enabled={Boolean(processId)}
+                >
+                    <div className="flex min-h-0 flex-1 flex-col">
+                    {processId ?
+                        <div
+                            className="mb-2 flex flex-wrap items-center justify-end gap-2"
+                            data-testid="lifecycle-process-context-actions"
+                        >
+                            <details className="relative shrink-0 text-xs" data-testid="lifecycle-board-process-menu">
+                                <summary className="cursor-pointer list-none rounded-md border border-alloy-forge/15 bg-white px-2.5 py-1 font-medium text-alloy-midnight/70 hover:bg-alloy-stone/10 [&::-webkit-details-marker]:hidden">
+                                    Process options
+                                </summary>
+                                <div className="absolute right-0 z-10 mt-1 min-w-[10rem] rounded-md border border-alloy-forge/15 bg-white py-1 shadow-md">
+                                    <button
+                                        type="button"
+                                        className="block w-full px-3 py-1.5 text-left text-alloy-midnight/80 hover:bg-alloy-stone/10"
+                                        onClick={() => setRenameOpen(true)}
+                                        data-testid="lifecycle-rename"
+                                    >
+                                        Rename process
+                                    </button>
+                                    {canDeleteLifecycle ?
+                                        <button
+                                            type="button"
+                                            className="block w-full px-3 py-1.5 text-left text-red-800 hover:bg-red-50"
+                                            onClick={handleDeleteLifecycle}
+                                            data-testid="lifecycle-activation-delete"
+                                        >
+                                            Delete process
+                                        </button>
+                                    :   null}
+                                    {onRepairVisibility || (runtimeDepartmentId && processId) ?
+                                        <button
+                                            type="button"
+                                            className="block w-full px-3 py-1.5 text-left text-alloy-pine hover:bg-alloy-stone/10 disabled:opacity-50"
+                                            disabled={repairingBusy || !runtimeDepartmentId || !processId}
+                                            onClick={() =>
+                                                onRepairVisibility
+                                                    ? onRepairVisibility()
+                                                    : void repairWorkspaceVisibility()
+                                            }
+                                            data-testid="lifecycle-activation-repair-workspace"
+                                        >
+                                            {repairingBusy ? "Repairing…" : "Repair workspace"}
+                                        </button>
+                                    :   null}
+                                    {activationOwned && runtimeDepartmentId && processId ?
+                                        <button
+                                            type="button"
+                                            className="block w-full px-3 py-1.5 text-left text-alloy-pine hover:bg-alloy-stone/10 disabled:opacity-50"
+                                            disabled={repairingBusy}
+                                            onClick={() => void repairLifecycleWorkUnits()}
+                                            data-testid="lifecycle-activation-repair-work-units"
+                                        >
+                                            {repairingBusy ? "Repairing…" : "Repair lifecycle work units"}
+                                        </button>
+                                    :   null}
+                                    <p
+                                        className="border-t border-alloy-forge/10 px-3 py-1.5 text-[10px] text-alloy-midnight/50"
+                                        data-testid="lifecycle-activation-runtime-status"
+                                    >
+                                        Runtime: {runtimeStatusLabel}
+                                    </p>
+                                </div>
+                            </details>
+                        </div>
+                    :   null}
+                    <BusinessProcessConfigurationShell
                         activeSection={processSection}
-                        onSelect={setProcessSection}
-                    />
-
-                    {processSection === "stages" ?
+                        onSelectSection={setProcessSection}
+                        listColumn={
+                            processSection === "work-views" && processId ?
+                                <BusinessProcessWorkViewsListColumn />
+                            : processSection === "stages" ?
+                                <BusinessProcessStagesListColumn
+                                    stages={navStages}
+                                    activeStageKey={stageKey}
+                                    onSelect={(s) => void selectStage(s)}
+                                    onAddStageClick={() => setShowAddStage((v) => !v)}
+                                    addingStage={showAddStage}
+                                />
+                            : processSection === "actions" ?
+                                <BusinessProcessActionsListColumn
+                                    rows={actionsDraft.rows}
+                                    loading={actionsDraft.loading}
+                                    selectedKey={selectedActionRow?.base_action_key ?? null}
+                                    onSelect={setSelectedActionKey}
+                                    placementSummary={actionsDraft.placementSummary}
+                                    stageSummary={actionsDraft.stageSummary}
+                                />
+                            : processSection === "health" ?
+                                <BusinessProcessHealthListColumn
+                                    stages={navStages}
+                                    activeStageKey={stageKey}
+                                    onSelect={(s) => void selectStage(s)}
+                                    runtimeSummary={runtimeSummary}
+                                />
+                            :   null
+                        }
+                    >
+                        {processSection === "stages" ?
                         <>
                             {activeSplitRule ?
                                 <p
@@ -1595,94 +1706,6 @@ export default function LifecycleActivationBoard({
                                     {activeSplitRule.per_subject_outcomes.map((o) => o.label).join(" · ")}
                                 </p>
                             :   null}
-                            <div
-                                className="flex flex-wrap items-start justify-between gap-2"
-                                data-testid="lifecycle-stage-nav-row"
-                            >
-                                {processTracks && builderProcess ?
-                                    <div className="min-w-0 flex-1">
-                                        <LifecycleTrackStageNav
-                                            tracks={processTracks}
-                                            builderProcess={builderProcess}
-                                            activeStageKey={stageKey}
-                                            onSelect={(s) => void selectStage(s)}
-                                            onAddStageClick={() => setShowAddStage((v) => !v)}
-                                            onReorderStage={reorderBuilderStage}
-                                            reorderBusy={stageReorderBusy}
-                                        />
-                                    </div>
-                                :   <LifecycleStageNav
-                                        stages={navStages}
-                                        activeStageKey={stageKey}
-                                        onSelect={(s) => void selectStage(s)}
-                                        onAddStageClick={() => setShowAddStage((v) => !v)}
-                                        onReorderStage={reorderBuilderStage}
-                                        reorderBusy={stageReorderBusy}
-                                    />
-                                }
-                                {processId ? (
-                                    <details
-                                        className="relative shrink-0 text-xs"
-                                        data-testid="lifecycle-board-more-menu"
-                                    >
-                                        <summary className="cursor-pointer list-none rounded-md border border-alloy-forge/20 bg-white px-2.5 py-1 font-medium text-alloy-midnight/70 hover:bg-alloy-stone/10 [&::-webkit-details-marker]:hidden">
-                                            More
-                                        </summary>
-                                        <div className="absolute right-0 z-10 mt-1 min-w-[10rem] rounded-md border border-alloy-forge/15 bg-white py-1 shadow-md">
-                                            <button
-                                                type="button"
-                                                className="block w-full px-3 py-1.5 text-left text-alloy-midnight/80 hover:bg-alloy-stone/10"
-                                                onClick={() => setRenameOpen(true)}
-                                                data-testid="lifecycle-rename"
-                                            >
-                                                Rename process
-                                            </button>
-                                            {canDeleteLifecycle ? (
-                                                <button
-                                                    type="button"
-                                                    className="block w-full px-3 py-1.5 text-left text-red-800 hover:bg-red-50"
-                                                    onClick={handleDeleteLifecycle}
-                                                    data-testid="lifecycle-activation-delete"
-                                                >
-                                                    Delete process
-                                                </button>
-                                            ) : null}
-                                            {onRepairVisibility || (runtimeDepartmentId && processId) ? (
-                                                <button
-                                                    type="button"
-                                                    className="block w-full px-3 py-1.5 text-left text-alloy-pine hover:bg-alloy-stone/10 disabled:opacity-50"
-                                                    disabled={repairingBusy || !runtimeDepartmentId || !processId}
-                                                    onClick={() =>
-                                                        onRepairVisibility
-                                                            ? onRepairVisibility()
-                                                            : void repairWorkspaceVisibility()
-                                                    }
-                                                    data-testid="lifecycle-activation-repair-workspace"
-                                                >
-                                                    {repairingBusy ? "Repairing…" : "Repair workspace"}
-                                                </button>
-                                            ) : null}
-                                            {activationOwned && runtimeDepartmentId && processId ? (
-                                                <button
-                                                    type="button"
-                                                    className="block w-full px-3 py-1.5 text-left text-alloy-pine hover:bg-alloy-stone/10 disabled:opacity-50"
-                                                    disabled={repairingBusy}
-                                                    onClick={() => void repairLifecycleWorkUnits()}
-                                                    data-testid="lifecycle-activation-repair-work-units"
-                                                >
-                                                    {repairingBusy ? "Repairing…" : "Repair lifecycle work units"}
-                                                </button>
-                                            ) : null}
-                                            <p
-                                                className="border-t border-alloy-forge/10 px-3 py-1.5 text-[10px] text-alloy-midnight/50"
-                                                data-testid="lifecycle-activation-runtime-status"
-                                            >
-                                                Runtime: {runtimeStatusLabel}
-                                            </p>
-                                        </div>
-                                    </details>
-                                ) : null}
-                            </div>
                             {showAddStage ?
                                 <div className="rounded-lg border border-dashed border-alloy-pine/30 bg-alloy-pine/5 p-3">
                                     <LifecycleAddStageForm
@@ -1733,74 +1756,53 @@ export default function LifecycleActivationBoard({
                     :   null}
 
                     {processSection === "work-views" && processId ?
-                        <BusinessProcessWorkViewsWorkspace
+                        <BusinessProcessWorkViewsSetupWorkspace
                             departmentId={runtimeDepartmentId}
-                            processId={processId}
                             workUnitId={workUnitId}
                             queueLanes={workViewQueueLanes}
                         />
                     :   null}
 
-                    {processSection === "presentation" ?
-                        <BusinessProcessPresentationWorkspace
-                            businessProcessKey={builderProcess?.key ?? "enrollment"}
-                            stageKey={stageKey}
-                            stageLabel={stageLabel}
-                            processTracks={processTracks}
-                            builderProcess={builderProcess}
-                            navStages={navStages}
-                            onSelectStage={(s) => void selectStage(s)}
-                            onAddStageClick={() => setShowAddStage((v) => !v)}
-                            onReorderStage={reorderBuilderStage}
-                            reorderBusy={stageReorderBusy}
+                    {processSection === "actions" ?
+                        <BusinessProcessActionsSetupWorkspace
+                            row={selectedActionRow}
+                            operatorStageOptions={actionsDraft.operatorStageOptions}
+                            saving={actionsDraft.saving}
+                            error={actionsDraft.error}
+                            success={actionsDraft.success}
+                            onUpdate={(patch) => {
+                                if (!selectedActionRow) return;
+                                actionsDraft.updateRow(selectedActionRow.base_action_key, patch);
+                            }}
+                            onTogglePlacement={(placementId) => {
+                                if (!selectedActionRow) return;
+                                actionsDraft.togglePlacement(selectedActionRow.base_action_key, placementId);
+                            }}
+                            onToggleStageRestriction={(stage) => {
+                                if (!selectedActionRow) return;
+                                actionsDraft.toggleStageRestriction(selectedActionRow.base_action_key, stage);
+                            }}
+                            onSave={() =>
+                                void actionsDraft.save(async () => {
+                                    await refreshStageBootstrap();
+                                })
+                            }
                         />
                     :   null}
 
-                    {processSection === "actions" ?
-                        <div
-                            className="rounded-2xl border border-alloy-forge/12 bg-white p-4 shadow-sm"
-                            data-testid="business-process-actions-workspace"
-                        >
-                            <header className="mb-4">
-                                <h3 className="text-lg font-semibold text-alloy-midnight">
-                                    {BUSINESS_PROCESS_PROCESS_ACTIONS_TITLE}
-                                </h3>
-                                <p className="mt-1 text-sm text-alloy-midnight/60">
-                                    {BUSINESS_PROCESS_PROCESS_ACTIONS_SUMMARY}
-                                </p>
-                            </header>
-                            <LifecycleActionsMatrix
-                                departmentId={runtimeDepartmentId}
-                                builderStageKeys={builderStageKeys}
-                                embedded
-                                onSaved={async () => {
-                                    await refreshStageBootstrap();
-                                }}
-                            />
-                        </div>
-                    :   null}
-
                     {processSection === "automation" ?
-                        <div
-                            className="rounded-2xl border border-dashed border-alloy-forge/15 bg-white px-5 py-8 text-center"
-                            data-testid="business-process-automation-workspace"
-                        >
-                            <h3 className="text-lg font-semibold text-alloy-midnight">Automation</h3>
-                            <p className="mt-2 text-sm text-alloy-midnight/55">
-                                Workflow entry points and automatic platform actions will be configured here.
-                            </p>
-                        </div>
+                        <BusinessProcessAutomationShell />
                     :   null}
 
                     {processSection === "health" && stageKey ?
                         <div
-                            className="rounded-2xl border border-alloy-forge/12 bg-white p-4 shadow-sm"
+                            className="process-config-setup-card p-4"
                             data-testid="business-process-health-workspace"
                         >
                             <header className="mb-4">
                                 <h3 className="text-lg font-semibold text-alloy-midnight">Configuration health</h3>
                                 <p className="mt-1 text-sm text-alloy-midnight/60">
-                                    Ready check and BOS configuration recommendations for the selected stage.
+                                    Ready check and BOS configuration recommendations for {stageLabel || "this stage"}.
                                 </p>
                             </header>
                             {identity ?
@@ -1827,7 +1829,9 @@ export default function LifecycleActivationBoard({
                             :   null}
                         </div>
                     :   null}
-                </>
+                    </BusinessProcessConfigurationShell>
+                    </div>
+                </WorkViewsConfigurationProvider>
             )}
 
             <LifecycleRenameModal

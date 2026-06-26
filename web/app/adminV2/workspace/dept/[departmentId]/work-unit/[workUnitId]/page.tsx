@@ -18,6 +18,7 @@ import {
     mergeWorkUnitQueueSummaryCounts,
     resolveWorkUnitFetchQueueKeyFromPill,
     resolveWorkUnitQueueKey,
+    resolveWorkUnitQueueKeyFromLocation,
     workUnitQueuePillKeysEquivalent,
     workUnitQueueSelectionFromLocation,
     workUnitQueueSelectionFromPillKey,
@@ -81,6 +82,12 @@ import {
 import { useAdminDrawer } from "@/contexts/AdminDrawerContext";
 import { ALLOY_OS_RUNTIME_ENABLED } from "@/lib/adminV2/runtime/alloyOsRuntimeFlag";
 import {
+    DEFAULT_OPERATIONAL_SUBJECT_OPEN_SOURCE,
+    markManualOperationalSubjectSelection,
+    useWorkUnitDefaultOperationalSubjectAutoOpen,
+} from "@/lib/adminV2/runtime/operationalSubject/useWorkUnitDefaultOperationalSubjectAutoOpen";
+import { useOperationalModeEntryController } from "@/lib/adminV2/runtime/operationalSubject/useOperationalModeEntryController";
+import {
     operatorOperationalPerspectivesEnabled,
 } from "@/lib/adminV2/runtime/configurationRuntimeConvergenceFlag";
 import { deriveRuntimePerspective } from "@/lib/adminV2/runtime/perspective/deriveRuntimePerspective";
@@ -93,6 +100,10 @@ import {
     relabelPrimaryPillSectionWorkView,
 } from "@/lib/adminV2/runtime/perspective/mergeOperationalViewMetadata";
 import { resolveOperationalViewsForWorkUnit } from "@/lib/adminV2/runtime/perspective/resolveStageOperationalViews";
+import {
+    resolveActiveWorkViewRuntimeContext,
+    workViewRuntimeUrlParamsFromQueueKey,
+} from "@/lib/lifecycle/resolveWorkViewRuntimeContext";
 import { setActiveRuntimePerspective } from "@/lib/adminV2/runtime/perspective/RuntimePerspectiveContext";
 import { buildPrepareParamsFromOpenDrawer, peekDrawerViewModelPreloadSync } from "@/lib/adminV2/viewModel/drawer/drawerShellPinnedModelSwap";
 import { logDrawerVmRuntimeDiagnostic } from "@/lib/adminV2/viewModel/drawer/drawerVmRuntimeDiagnostics";
@@ -246,6 +257,7 @@ import {
 import {
     buildLifecycleWorkUnitPillSelection,
     guardLifecycleQueueFetchBeforeApi,
+    isWorkUnitQueuePillPrefetchable,
     lifecycleSelectionStateMatchesRef,
     type ActiveLifecycleWorkUnitSelection,
 } from "@/lib/lifecycle/lifecycleActiveWorkUnitSelection";
@@ -745,6 +757,8 @@ export default function AdminV2OpportunityWorkUnitPage() {
     const workUnitRef = useRef<WorkUnitRow | null>(null);
     workUnitRef.current = workUnit;
     const [dept, setDept] = useState<DeptRow | null>(null);
+    const deptRef = useRef<DeptRow | null>(null);
+    deptRef.current = dept;
     const [oq, setOq] = useState<WorkspaceOpportunityQueueRuntime | null>(null);
     const [needsAttentionWorkUnitId, setNeedsAttentionWorkUnitId] = useState<string | null>(null);
     const [opportunityQueueRowResolved, setOpportunityQueueRowResolved] = useState<ResolvedActionForClient[] | null>(null);
@@ -843,6 +857,8 @@ export default function AdminV2OpportunityWorkUnitPage() {
     const queueRowsBufferQueueKeyRef = useRef<string | null>(null);
     /** Latest rendered queue row VMs — used to seed opportunity drawer header on open. */
     const queueDisplayItemsRef = useRef<QueuePreviewItemVm[]>([]);
+    /** Raw API queue rows aligned with display buffer — default subject resolver metadata. */
+    const queueRawRowsBufferRef = useRef<Array<Record<string, unknown>>>([]);
     /** Last opportunity row opened from queue — work-unit rail actions (e.g. Schedule Tour). */
     const lastQueueOpportunityIdRef = useRef<string | null>(null);
     /** Keep prior lane rows visible while lifecycle sibling fetch is in flight (no empty flash). */
@@ -927,6 +943,18 @@ export default function AdminV2OpportunityWorkUnitPage() {
         if (fromConfig.length) return fromConfig;
         return deriveOperationalViewsFromQueueDefinition(workUnit?.queue_definition);
     }, [workViewPerspectivesEnabled, dept?.metadata, workUnit?.metadata, workUnit?.queue_definition]);
+
+    const workViewRuntimeContext = useMemo(() => {
+        if (!dept?.metadata) return null;
+        const loc = initialLocationRef.current;
+        return resolveActiveWorkViewRuntimeContext({
+            departmentMetadata: dept.metadata,
+            workViewId: loc?.workViewId,
+            queueKey: selectedQueueKey ?? loc?.queue,
+            queueLayoutId: loc?.queueLayoutId,
+            focusLayoutId: loc?.focusLayoutId,
+        });
+    }, [dept?.metadata, selectedQueueKey]);
 
     const normalizedQueueDef = useMemo(
         () => (workUnit?.queue_definition ? normalizeQueueDefinitionDocument(workUnit.queue_definition) : null),
@@ -1544,6 +1572,23 @@ export default function AdminV2OpportunityWorkUnitPage() {
         }
     }, []);
 
+    useEffect(() => {
+        if (!dept?.metadata || !workUnitId || userLaneTouchedRef.current) return;
+        const loc = initialLocationRef.current;
+        if (!loc?.workViewId?.trim() && !loc?.queue.trim()) return;
+        const ctx = resolveActiveWorkViewRuntimeContext({
+            departmentMetadata: dept.metadata,
+            workViewId: loc.workViewId,
+            queueKey: loc.queue,
+            queueLayoutId: loc.queueLayoutId,
+            focusLayoutId: loc.focusLayoutId,
+        });
+        if (!ctx.queueKey?.trim()) return;
+        if (selectedQueueKeyRef.current?.trim()) return;
+        setSelectedQueueKeyTraced("work_view_bootstrap", ctx.queueKey);
+        routeQueueSelectionRef.current = workUnitQueueSelectionFromPillKey(workUnitId, ctx.queueKey);
+    }, [dept?.metadata, workUnitId, setSelectedQueueKeyTraced]);
+
     /** Atomic lifecycle sibling pill transition — work unit id + primary queue key stay paired. */
     const applyActiveLifecycleWorkUnitSelection = useCallback(
         (selection: ActiveLifecycleWorkUnitSelection, source: string) => {
@@ -2155,6 +2200,17 @@ export default function AdminV2OpportunityWorkUnitPage() {
                 omit_total_count: "true",
             });
             if (abSnap) qs.set("attention_bucket", abSnap);
+            const deptMeta = deptRef.current?.metadata;
+            if (deptMeta) {
+                const wvCtx = resolveActiveWorkViewRuntimeContext({
+                    departmentMetadata: deptMeta,
+                    workViewId: initialLocationRef.current?.workViewId,
+                    queueKey: queueKeyForLane,
+                    queueLayoutId: initialLocationRef.current?.queueLayoutId,
+                    focusLayoutId: initialLocationRef.current?.focusLayoutId,
+                });
+                if (wvCtx.workViewId) qs.set("work_view_id", wvCtx.workViewId);
+            }
             if (options?.backgroundListRefresh) {
                 /* full queue_list enrichment — no row_mode */
             } else if (
@@ -2971,10 +3027,17 @@ export default function AdminV2OpportunityWorkUnitPage() {
                         wu ? { queue_definition: wu.queue_definition } : undefined
                     );
                     const naAlias = resolvedAlias.queueKey.trim().toLowerCase() === "needs_attention";
+                    const wvUrl =
+                        dept?.metadata ?
+                            workViewRuntimeUrlParamsFromQueueKey(dept.metadata, nextKey)
+                        :   null;
                     scheduleWorkUnitLaneUrlSync({
                         queueKey: nextKey,
                         unmappedActive,
                         ...(naAlias ? { attentionBucket: attentionBucketKeyRef.current } : {}),
+                        ...(wvUrl?.workViewId ? { workViewId: wvUrl.workViewId } : {}),
+                        ...(wvUrl?.queueLayoutId ? { queueLayoutId: wvUrl.queueLayoutId } : {}),
+                        ...(wvUrl?.focusLayoutId ? { focusLayoutId: wvUrl.focusLayoutId } : {}),
                         caller: "handleQueueTabChange",
                         workUnitId,
                     });
@@ -3098,10 +3161,17 @@ export default function AdminV2OpportunityWorkUnitPage() {
             if (workUnitId) {
                 routeQueueSelectionRef.current = workUnitQueueSelectionFromPillKey(workUnitId, nextKey);
                 explicitRouteQueueLockedRef.current = false;
+                const wvUrl =
+                    dept?.metadata ?
+                        workViewRuntimeUrlParamsFromQueueKey(dept.metadata, nextKey)
+                    :   null;
                 scheduleWorkUnitLaneUrlSync({
                     queueKey: nextKey,
                     unmappedActive,
                     ...(na ? { attentionBucket: nextAttentionBucket } : {}),
+                    ...(wvUrl?.workViewId ? { workViewId: wvUrl.workViewId } : {}),
+                    ...(wvUrl?.queueLayoutId ? { queueLayoutId: wvUrl.queueLayoutId } : {}),
+                    ...(wvUrl?.focusLayoutId ? { focusLayoutId: wvUrl.focusLayoutId } : {}),
                     caller: "handleQueueTabChange",
                     workUnitId,
                 });
@@ -3143,11 +3213,8 @@ export default function AdminV2OpportunityWorkUnitPage() {
     const handleQueuePillIntent = useCallback(
         (pillKey: string, opts?: { unmappedActive?: boolean }) => {
             if (!workUnitId) return;
-            if (pillKey === LIFECYCLE_NEEDS_ATTENTION_PLACEHOLDER_CHIP_KEY) return;
-            const lifecycleNavWuId = parseLifecycleWorkUnitNavChipKey(pillKey);
-            if (lifecycleNavWuId) return;
             const wu = workUnitRef.current;
-            if (!wu?.queue_definition) return;
+            if (!isWorkUnitQueuePillPrefetchable({ pillKey, workUnit: wu })) return;
             const resolved = resolveWorkUnitFetchQueueKeyFromPill(
                 pillKey,
                 attentionBucketKeyRef.current,
@@ -3186,10 +3253,17 @@ export default function AdminV2OpportunityWorkUnitPage() {
             setAttentionBucketKey(next);
             routeQueueSelectionRef.current = workUnitQueueSelectionFromPillKey(workUnitId, pillKey);
             explicitRouteQueueLockedRef.current = false;
+            const wvUrl =
+                dept?.metadata ?
+                    workViewRuntimeUrlParamsFromQueueKey(dept.metadata, pillKey)
+                :   null;
             scheduleWorkUnitLaneUrlSync({
                 queueKey: pillKey,
                 unmappedActive: false,
                 attentionBucket: next,
+                ...(wvUrl?.workViewId ? { workViewId: wvUrl.workViewId } : {}),
+                ...(wvUrl?.queueLayoutId ? { queueLayoutId: wvUrl.queueLayoutId } : {}),
+                ...(wvUrl?.focusLayoutId ? { focusLayoutId: wvUrl.focusLayoutId } : {}),
                 caller: "handleAttentionBucketSelect",
                 workUnitId,
             });
@@ -3199,7 +3273,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
                 attentionBucketOverride: next,
             });
         },
-        [fetchQueueItems, setSelectedQueueKeyTraced, workUnitId]
+        [dept, fetchQueueItems, setSelectedQueueKeyTraced, workUnitId]
     );
 
     const fetchQueueSummaries = useCallback(
@@ -3465,9 +3539,22 @@ export default function AdminV2OpportunityWorkUnitPage() {
                 initialLocationRef.current ?? readWorkUnitInitialLocationParams();
             initialLocationRef.current = initialLocation;
 
-        const qFromUrlEffective =
-            routeQueueSelectionRef.current?.queueKey.trim() ??
-            initialLocation.queue.trim();
+            const bootstrapDeptMeta = (
+                orgId ?
+                    (readWorkUnitPageCache(
+                        orgId,
+                        departmentId,
+                        workUnitId,
+                        principalUserId,
+                        accessScopeFingerprint
+                    )?.dept as DeptRow | undefined)
+                :   undefined
+            )?.metadata;
+            const qFromUrlEffective = resolveWorkUnitQueueKeyFromLocation(
+                bootstrapDeptMeta,
+                initialLocation,
+                routeQueueSelectionRef.current?.queueKey,
+            );
 
             const startParallelPrimaryRowFetchFromCache = () => {
                 if (cancelled || parallelPrimaryRowStartedRef.current || userLaneTouchedRef.current) return;
@@ -4629,6 +4716,18 @@ export default function AdminV2OpportunityWorkUnitPage() {
         }
     }, [workUnitLaneReveal.settled, wuInitialLaneRevealDone, departmentId, workUnitId]);
 
+    const [operationalSubjectQueueRevision, setOperationalSubjectQueueRevision] = useState(0);
+    useEffect(() => {
+        if (!ALLOY_OS_RUNTIME_ENABLED) return;
+        setOperationalSubjectQueueRevision((tick) => tick + 1);
+    }, [
+        workUnitLaneReveal.mayPaintRows,
+        workUnitLaneReveal.activeQueueKey,
+        queueItemsLoading,
+        queueItems?.items?.length,
+        queueItems?.queue?.key,
+    ]);
+
     const queueModel = useMemo<WorkUnitWorkspaceModel | null>(() => {
         if (!workUnit || !dept) return null;
 
@@ -5119,6 +5218,9 @@ export default function AdminV2OpportunityWorkUnitPage() {
             activeQueueKey
         ) {
             queueRowsBufferRef.current = liveVmItems.slice();
+            queueRawRowsBufferRef.current = (authoritativeQueueItems.items ?? []).map((row) => ({
+                ...(row as Record<string, unknown>),
+            }));
             queueRowsBufferWorkUnitIdRef.current = workUnitId;
             queueRowsBufferQueueKeyRef.current = activeQueueKey;
         }
@@ -5274,6 +5376,11 @@ export default function AdminV2OpportunityWorkUnitPage() {
                 placementDisplay: placementDiagnostics?.display,
                 rollupSummary: undefined,
                 queueEntityType: entity,
+                drillWorkUnitKey: workUnit.key ?? undefined,
+                businessProcessKey:
+                    activeProcessFromDepartmentMetadata(dept.metadata ?? null)?.key ?? undefined,
+                pinnedQueueLayoutId: workViewRuntimeContext?.queueLayoutId ?? undefined,
+                activeWorkViewId: workViewRuntimeContext?.workViewId ?? undefined,
                 // rowsLoading suppresses "No records" empty-state copy while a fetch is in flight.
                 // Belt-and-suspenders with rowsHeld (which QueueBlock also checks for empty state).
                 rowsLoading:
@@ -5325,6 +5432,8 @@ export default function AdminV2OpportunityWorkUnitPage() {
         lifecyclePillRetainRows,
         queuePillPendingKey,
         queueRowActionsReady,
+        workViewRuntimeContext?.queueLayoutId,
+        workViewRuntimeContext?.workViewId,
     ]);
 
     const queueUiPresentationFlags = useMemo(() => {
@@ -5652,9 +5761,23 @@ export default function AdminV2OpportunityWorkUnitPage() {
     const opportunityWorkspaceContext = useMemo(
         () =>
             workUnit?.id && departmentId
-                ? { work_unit_id: workUnit.id, department_id: departmentId }
+                ? {
+                      work_unit_id: workUnit.id,
+                      department_id: departmentId,
+                      ...(workViewRuntimeContext?.focusPanelLayoutId
+                          ? { focus_panel_layout_id: workViewRuntimeContext.focusPanelLayoutId }
+                          : {}),
+                      ...(workViewRuntimeContext?.workViewId
+                          ? { work_view_id: workViewRuntimeContext.workViewId }
+                          : {}),
+                  }
                 : null,
-        [departmentId, workUnit?.id]
+        [
+            departmentId,
+            workUnit?.id,
+            workViewRuntimeContext?.focusPanelLayoutId,
+            workViewRuntimeContext?.workViewId,
+        ]
     );
     const oppDrawerExtra = opportunityWorkspaceContext ? { opportunityWorkspaceContext } : {};
 
@@ -5753,6 +5876,9 @@ export default function AdminV2OpportunityWorkUnitPage() {
 
     const openWorkUnitQueueRecord = useCallback(
         (itemId: string, entityType: "opportunity" | "job" | "schedule", source: string) => {
+            if (source !== DEFAULT_OPERATIONAL_SUBJECT_OPEN_SOURCE) {
+                markManualOperationalSubjectSelection();
+            }
             const id = itemId.trim();
             if (!id) {
                 logAdminV2QueueRowClick({
@@ -5814,6 +5940,40 @@ export default function AdminV2OpportunityWorkUnitPage() {
         },
         [buildOpportunityDrawerOpenParams, openDrawer, opportunityWorkspaceContext]
     );
+
+    useWorkUnitDefaultOperationalSubjectAutoOpen({
+        enabled: ALLOY_OS_RUNTIME_ENABLED,
+        workUnitId: workUnit?.id ?? null,
+        workUnitKey: workUnit?.key ?? null,
+        activeQueueKey: workUnitLaneReveal.activeQueueKey || selectedQueueKey,
+        laneMayPaint: workUnitLaneReveal.mayPaintRows,
+        queueItemsLoading,
+        displayItemsRef: queueDisplayItemsRef,
+        rawQueueItemsRef: queueRawRowsBufferRef,
+        queueEntityType:
+            queueItems?.queue.entity_type === "job" || queueItems?.queue.entity_type === "schedule"
+                ? queueItems.queue.entity_type
+                : "opportunity",
+        routeRecordId: slugRoute?.routeRecordId ?? null,
+        drawerType: drawer.type,
+        drawerId: drawer.id != null ? String(drawer.id) : null,
+        currentUserId: principalUserId,
+        openRecord: openWorkUnitQueueRecord,
+        queueRevision: operationalSubjectQueueRevision,
+    });
+
+    useOperationalModeEntryController({
+        enabled: ALLOY_OS_RUNTIME_ENABLED,
+        workUnitId: workUnit?.id ?? null,
+        activeQueueKey: workUnitLaneReveal.activeQueueKey || selectedQueueKey,
+        laneMayPaint: workUnitLaneReveal.mayPaintRows,
+        queueItemsLoading,
+        displayItemsRef: queueDisplayItemsRef,
+        routeRecordId: slugRoute?.routeRecordId ?? null,
+        drawerType: drawer.type,
+        drawerId: drawer.id != null ? String(drawer.id) : null,
+        queueRevision: operationalSubjectQueueRevision,
+    });
 
     useEffect(() => {
         if (

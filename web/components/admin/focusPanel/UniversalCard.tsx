@@ -3,13 +3,22 @@
 import type { ReactNode } from "react";
 import clsx from "clsx";
 
+import { formatFocusPanelChipLabelDisplay } from "@/lib/adminV2/runtime/focusPanel/focusPanelDisplayLabels";
+
 import type { FocusPanelCardDensity, FocusPanelCardSpan } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardGrid";
-import type { FocusPanelCardTier } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardModel";
+import type { FocusPanelCardArchetype, FocusPanelCardTier } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardModel";
+import { SYSTEM5_TIER_TO_ROLE } from "@/lib/adminV2/runtime/focusPanel/system5OperationalSurfaceSpec";
+import UniversalCardIcon from "@/components/admin/focusPanel/UniversalCardIcon";
+
+export type { FocusPanelCardRole } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardModel";
 
 export type UniversalCardProps = {
     title: string;
     insight: string;
+    supportingInsight?: string | null;
     tier?: FocusPanelCardTier;
+    archetype?: FocusPanelCardArchetype;
+    iconName?: string | null;
     statusChip?: ReactNode;
     statusTone?: "ready" | "blocked" | "at-risk" | "due" | "done" | "neutral";
     footerAction?: ReactNode;
@@ -52,7 +61,10 @@ const STATUS_CLASS: Record<NonNullable<UniversalCardProps["statusTone"]>, string
 export default function UniversalCard({
     title,
     insight,
+    supportingInsight,
     tier = "context",
+    archetype,
+    iconName,
     statusChip,
     statusTone = "neutral",
     footerAction,
@@ -65,6 +77,10 @@ export default function UniversalCard({
 }: UniversalCardProps) {
     const hasBody = children != null && children !== false;
     const isMicro = density === "micro";
+    const isMetricArchetype = archetype === "metric";
+    const isActionArchetype = archetype === "action";
+    const cardRole = SYSTEM5_TIER_TO_ROLE[tier];
+    const showSupporting = Boolean(supportingInsight?.trim());
 
     return (
         <article
@@ -72,16 +88,22 @@ export default function UniversalCard({
                 "alloy-os-ucard",
                 DENSITY_CLASS[density],
                 TIER_CLASS[tier],
+                archetype && `alloy-os-ucard--archetype-${archetype}`,
+                isActionArchetype && "alloy-os-ucard--archetype-action-emphasis",
                 receded && "alloy-os-ucard--receded",
                 className,
             )}
             data-universal-card="true"
             data-universal-card-density={density}
             data-universal-card-tier={tier}
+            data-card-role={cardRole}
+            data-card-archetype={archetype ?? undefined}
+            data-system5-card="true"
             data-universal-card-span={gridSpan ?? undefined}
             data-universal-card-key={cardKey}
         >
             <header className="alloy-os-ucard__header">
+                <UniversalCardIcon name={iconName ?? null} />
                 <div className="alloy-os-ucard__header-text min-w-0">
                     <div className="alloy-os-ucard__header-row">
                         <h3 className="alloy-os-ucard__title">{title}</h3>
@@ -89,13 +111,32 @@ export default function UniversalCard({
                             <span
                                 className={clsx("alloy-os-ucard__status", STATUS_CLASS[statusTone])}
                             >
-                                {statusChip}
+                                {typeof statusChip === "string"
+                                    ? formatFocusPanelChipLabelDisplay(statusChip)
+                                    :   statusChip}
                             </span>
                         :   null}
                     </div>
-                    {!isMicro ?
-                        <p className="alloy-os-ucard__insight">{insight}</p>
-                    :   <p className="alloy-os-ucard__insight alloy-os-ucard__insight--metric">{insight}</p>}
+                    {!isMicro && insight ?
+                        <p
+                            className={clsx(
+                                "alloy-os-ucard__insight",
+                                isMetricArchetype && "alloy-os-ucard__insight--metric",
+                            )}
+                        >
+                            {insight}
+                        </p>
+                    :   !isMicro ? null
+                    :   <>
+                            <p className="alloy-os-ucard__insight alloy-os-ucard__insight--metric">{insight}</p>
+                            {showSupporting ?
+                                <p className="alloy-os-ucard__supporting alloy-os-ucard__supporting--micro">{supportingInsight}</p>
+                            :   null}
+                        </>
+                    }
+                    {!isMicro && showSupporting ?
+                        <p className="alloy-os-ucard__supporting">{supportingInsight}</p>
+                    :   null}
                 </div>
             </header>
             {hasBody ?

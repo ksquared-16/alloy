@@ -24,6 +24,7 @@ export type AdminV2NavLinkProps = {
     onClick?: (e: MouseEvent<HTMLAnchorElement>) => void;
     onMouseEnter?: (e: MouseEvent<HTMLAnchorElement>) => void;
     onFocus?: (e: FocusEvent<HTMLAnchorElement>) => void;
+    "data-testid"?: string;
 };
 
 /**
@@ -42,6 +43,7 @@ export function AdminV2NavLink({
     onMouseEnter,
     onFocus,
     "aria-label": ariaLabel,
+    "data-testid": dataTestId,
 }: AdminV2NavLinkProps) {
     const pathname = usePathname();
     const router = useRouter();
@@ -76,6 +78,7 @@ export function AdminV2NavLink({
             onClick={handleClick}
             onMouseEnter={onMouseEnter}
             onFocus={onFocus}
+            data-testid={dataTestId}
         >
             <span className="adminv2-nav-link__inner">{children}</span>
         </a>

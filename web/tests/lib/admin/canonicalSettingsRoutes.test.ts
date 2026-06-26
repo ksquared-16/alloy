@@ -15,6 +15,7 @@ describe("canonical settings routes — Configuration Runtime Phase 2A", () => {
     });
 
     it("builds product nav hrefs under /settings", () => {
+        expect(adminSettingsSubpathHref("processes")).toBe("/settings/processes");
         expect(adminSettingsSubpathHref("business-processes")).toBe("/settings/business-processes");
         expect(adminSettingsSubpathHref("layouts")).toBe("/settings/layouts");
         expect(adminSettingsSubpathHref("")).toBe("/settings");
@@ -32,7 +33,7 @@ describe("canonical settings routes — Configuration Runtime Phase 2A", () => {
         expect(hrefs.every((h) => h.startsWith("/settings") || h.startsWith("/admin/forms") || h.startsWith("/admin/workflows"))).toBe(
             true,
         );
-        expect(hrefs).toContain("/settings/business-processes");
+        expect(hrefs).toContain("/settings/processes");
         expect(hrefs).toContain("/settings/layouts");
     });
 });

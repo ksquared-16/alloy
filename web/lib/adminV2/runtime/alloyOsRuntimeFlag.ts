@@ -2,7 +2,7 @@
  * Alloy OS runtime — first implementation slice (flag-gated).
  *
  * This module owns the feature flag + scope predicates for the universal runtime
- * split behavior (State 1 expanded queue ↔ State 2 compressed queue + Focus Panel).
+ * split behavior (Operational Mode: condensed queue + Focus Panel by default when subject resolves).
  * It introduces NO new runtime primitive and changes NO data/VM/reveal contract.
  *
  * Default: OFF. When `NEXT_PUBLIC_ALLOY_OS_RUNTIME=1`, the controller may apply

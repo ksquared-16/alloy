@@ -24,6 +24,8 @@ type Props = {
     proofLayoutActions?: boolean;
     /** Bend Pine filled treatment for Lead command header. */
     actionVariant?: "default" | "juniper";
+    /** Override button label (Focus Panel uses "BOS"). */
+    label?: string;
 };
 
 /**
@@ -38,6 +40,7 @@ export default function BosDrawerAssistCta({
     inquiryWorkflow = true,
     proofLayoutActions = false,
     actionVariant = "default",
+    label = BOS_ASSIST_CTA_DRAWER,
 }: Props) {
     const globalAssistant = useGlobalAssistantOptional();
     const { userEmail } = useAdminAuth();
@@ -48,7 +51,7 @@ export default function BosDrawerAssistCta({
 
     const button = (
         <OpportunityDrawerHeaderActionButton
-            label={BOS_ASSIST_CTA_DRAWER}
+            label={label}
             inquiryWorkflow={inquiryWorkflow}
             proofLayoutActions={proofLayoutActions}
             actionVariant={actionVariant}

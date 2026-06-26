@@ -12,7 +12,11 @@ import { getQueueUiConfig } from "@/lib/ui-v2/queueUiConfig";
 import { findAllRecordsQueueKey } from "@/lib/workspace/workUnitQueueDerived";
 import { appendWorkspaceSiteToPath } from "@/lib/adminV2/workspaceSiteFilterClient";
 import { workspaceDeptQueueNavHref } from "@/lib/adminV2/navigation/buildWorkspaceNavDeptChildren";
-import { parseLifecycleWorkUnitNavChipKey } from "@/lib/lifecycle/lifecycleWorkUnitShellPills";
+import {
+    parseLifecyclePlatformNavChipKey,
+    parseLifecycleWorkUnitNavChipKey,
+} from "@/lib/lifecycle/lifecycleWorkUnitShellPills";
+import { resolveActiveWorkViewRuntimeContext } from "@/lib/lifecycle/resolveWorkViewRuntimeContext";
 
 export type WorkUnitQueueSelectionSource =
     | "dept_queue"
@@ -25,6 +29,8 @@ export type WorkUnitQueueSelection = {
     workUnitId: string;
     queueKey: string;
     source: WorkUnitQueueSelectionSource;
+    /** Process Work View id from `?work_view=` — resolved to compat queue at fetch time. */
+    workViewId?: string;
     attentionBucketKey?: string;
     statusKey?: string;
     label?: string;
@@ -32,6 +38,9 @@ export type WorkUnitQueueSelection = {
 
 export type WorkUnitQueueLocationParams = {
     queue: string;
+    workViewId: string;
+    queueLayoutId: string;
+    focusLayoutId: string;
     unmapped: boolean;
     attentionBucket: string;
     statusKeys: string;
@@ -50,6 +59,9 @@ export function readWorkUnitQueueLocationParams(): WorkUnitQueueLocationParams {
             (sp.get("attention_bucket") ?? sp.get("bucket") ?? "").trim();
         return {
             queue: sp.get("queue")?.trim() ?? "",
+            workViewId: sp.get("work_view")?.trim() ?? "",
+            queueLayoutId: sp.get("queue_layout")?.trim() ?? "",
+            focusLayoutId: sp.get("focus_layout")?.trim() ?? "",
             unmapped: sp.get("unmapped")?.trim() === "1",
             attentionBucket: bucket,
             statusKeys: (sp.get("status_keys") ?? "").trim(),
@@ -65,6 +77,9 @@ export function readWorkUnitQueueLocationParams(): WorkUnitQueueLocationParams {
 function emptyWorkUnitQueueLocationParams(): WorkUnitQueueLocationParams {
     return {
         queue: "",
+        workViewId: "",
+        queueLayoutId: "",
+        focusLayoutId: "",
         unmapped: false,
         attentionBucket: "",
         statusKeys: "",
@@ -80,18 +95,22 @@ export function workUnitQueueSelectionFromLocation(
 ): WorkUnitQueueSelection | null {
     const wuId = workUnitId.trim();
     const queueKey = loc.queue.trim();
-    if (!wuId || !queueKey) return null;
+    const workViewId = loc.workViewId.trim();
+    if (!wuId) return null;
+    if (!queueKey && !workViewId) return null;
 
     const attentionBucketKey = loc.attentionBucket.trim() || undefined;
     const statusKey = loc.statusKeys.trim() || undefined;
-    const isNeedsAttention = queueKey.toLowerCase() === "needs_attention";
+    const laneQueueKey = queueKey || "";
+    const isNeedsAttention = laneQueueKey.toLowerCase() === "needs_attention";
     const source: WorkUnitQueueSelectionSource =
         isNeedsAttention && attentionBucketKey ? "dept_needs_attention" : "dept_queue";
 
     return {
         workUnitId: wuId,
-        queueKey,
+        queueKey: laneQueueKey,
         source,
+        ...(workViewId ? { workViewId } : {}),
         ...(attentionBucketKey ? { attentionBucketKey } : {}),
         ...(statusKey ? { statusKey } : {}),
     };
@@ -101,8 +120,29 @@ export function workUnitQueueSelectionFromLocation(
 export function isExplicitWorkUnitQueueSelection(
     selection: WorkUnitQueueSelection | null | undefined
 ): boolean {
-    if (!selection?.queueKey?.trim()) return false;
+    if (!selection) return false;
+    if (selection.workViewId?.trim()) return true;
+    if (!selection.queueKey?.trim()) return false;
     return selection.source !== "default";
+}
+
+/** Resolve fetch/bootstrap queue key — Work View compat lane wins over bare work_view id. */
+export function resolveWorkUnitQueueKeyFromLocation(
+    departmentMetadata: unknown | null | undefined,
+    loc: Pick<WorkUnitQueueLocationParams, "queue" | "workViewId">,
+    routeQueueKey?: string | null,
+): string {
+    const direct = loc.queue.trim() || routeQueueKey?.trim() || "";
+    if (direct) return direct;
+    if (loc.workViewId.trim() && departmentMetadata) {
+        return (
+            resolveActiveWorkViewRuntimeContext({
+                departmentMetadata,
+                workViewId: loc.workViewId,
+            }).queueKey ?? ""
+        );
+    }
+    return "";
 }
 
 export function workUnitQueueSelectionToSearchParams(
@@ -252,6 +292,9 @@ export function resolveWorkUnitFetchQueueKeyFromPill(
 ): { queueKey: string; attentionBucketOverride?: string } {
     const pill = pillOrQueueKey.trim();
     if (parseLifecycleWorkUnitNavChipKey(pill)) {
+        return { queueKey: "" };
+    }
+    if (parseLifecyclePlatformNavChipKey(pill)) {
         return { queueKey: "" };
     }
     if (pill.startsWith(WORK_UNIT_ATTENTION_BUCKET_PILL_PREFIX)) {

@@ -1,12 +1,14 @@
-/** Runtime Test 1C/1D fixtures — Alloy Bend org only (historical; not used for Demo validation). */
-export const INTAKE_RUNTIME_TEST_ORG_ID = "7803388d-cdee-4afb-89cf-23a137f39423";
+import { CANONICAL_DEV_ORG_ID } from "@/lib/fields/canonicalDevOrg";
+
+/** Runtime Test 1C/1D fixtures — canonical dev org (Firefly Early Learning). */
+export const INTAKE_RUNTIME_TEST_ORG_ID = CANONICAL_DEV_ORG_ID;
 export const INTAKE_RUNTIME_TEST_FORM_ID = "e68e0160-3157-44fd-b207-2c0f14d1764f";
 export const INTAKE_RUNTIME_TEST_1C_ID = "c5e2e078-97ee-4e17-9d66-1527a9f0c46b";
 export const INTAKE_RUNTIME_TEST_1D_ID = "50ac6911-5887-4934-9ae8-a221d61f81f6";
 export const INTAKE_RUNTIME_TEST_EMBED_TOKEN = "alloy_demo_medication_authorization_v1";
 
 /** Demo Childcare Co — active browser validation org (Test 2D). */
-export const DEMO_CHILDCARE_ORG_ID = "93667019-bd28-49b5-a688-acc9bb1e0a19";
+export const DEMO_CHILDCARE_ORG_ID = CANONICAL_DEV_ORG_ID;
 export const DEMO_CHILDCARE_MED_FORM_ID = "8432c527-8799-4a55-88c7-f860bd78e747";
 export const DEMO_CHILDCARE_MED_LINK_ID = "187ba369-78ab-4df1-99d9-ca8d3120379f";
 export const DEMO_CHILDCARE_MED_EMBED_TOKEN =

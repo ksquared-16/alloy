@@ -4,7 +4,7 @@
 **Date:** June 2026  
 **Supersedes for planning:** partial UI passes on old Business Processes page; [process work views realignment](./configuration_runtime_process_work_views_realignment.md) (exploratory — folded here)
 
-**Canonical UX references:** [Concept A freeze](./configuration_runtime_concept_a_freeze.md) · [green/pine mockups](./configuration-runtime-bp-ux-redesign/) · [Universal Card System](../../platform/operator/universal-card-system.md)
+**Canonical UX references:** [Concept A freeze](./configuration_runtime_concept_a_freeze.md) · [green/pine mockups](./configuration-runtime-bp-ux-redesign/) · [Universal Card System](../../platform/operator/universal-card-system.md) · [Configuration Mode doctrine](../../system/configuration-mode-doctrine.md) — **do not use blue/gray legacy admin styling**
 
 ---
 

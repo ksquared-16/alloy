@@ -1,7 +1,14 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
 import { deriveOpportunityFocusPanelPresentation } from "@/lib/adminV2/runtime/focusPanel/deriveOpportunityFocusPanelCards";
 import { minimalSettledOpportunityDrawerViewModel } from "@/tests/adminV2/viewModel/fixtures/minimalSettledOpportunityDrawerViewModel";
+
+const webRoot = join(process.cwd());
+function readSrc(rel: string): string {
+    return readFileSync(join(webRoot, rel), "utf8");
+}
 
 describe("deriveOpportunityFocusPanelPresentation", () => {
     const baseVm = minimalSettledOpportunityDrawerViewModel({
@@ -65,12 +72,12 @@ describe("deriveOpportunityFocusPanelPresentation", () => {
 
         expect(cards.get("attention")?.insight).toBe("Missing immunizations");
         expect(cards.get("health")?.insight).toBe("2 blockers before tour");
-        expect(cards.get("readiness_kpi")?.insight).toBe("2 blockers");
-        expect(cards.get("children")?.insight).toBe("1 enrolling");
+        expect(cards.get("readiness_kpi")?.insight).toBe("Missing immunizations");
+        expect(cards.get("children")?.insight).toBe("1 child enrolling");
     });
 
-    it("work idle grid follows mission → blockers → launcher hierarchy", () => {
-        const { grid } = deriveOpportunityFocusPanelPresentation({
+    it("work idle grid follows attention → step → blockers hierarchy", () => {
+        const { grid, cards } = deriveOpportunityFocusPanelPresentation({
             mode: "work",
             displayVm: baseVm,
             record: {},
@@ -80,10 +87,23 @@ describe("deriveOpportunityFocusPanelPresentation", () => {
         });
 
         const rowKeys = grid.rows.map((row) => row.cells.map((c) => c.key));
-        expect(rowKeys[0]).toEqual(["current_mission"]);
-        expect(rowKeys[1]).toEqual(["required_information"]);
+        expect(rowKeys[0]).toEqual(["attention"]);
+        expect(rowKeys[1]).toEqual(["workflow_steps", "required_information"]);
         expect(rowKeys[2]).toEqual(["work_launcher"]);
-        expect(rowKeys.at(-1)).toEqual(["primary_next_action"]);
+        expect(rowKeys[3]).toEqual(["tasks", "automations"]);
+        expect(cards.get("primary_next_action")?.visible).toBe(false);
+    });
+
+    it("activity mode returns empty card grid (workspace handles layout)", () => {
+        const { grid } = deriveOpportunityFocusPanelPresentation({
+            mode: "activity",
+            displayVm: baseVm,
+            record: {},
+            title: "Smith Family",
+            perspective: null,
+            statusLabel: "New",
+        });
+        expect(grid.rows).toHaveLength(0);
     });
 
     it("work active grid elevates workflow steps and attention", () => {
@@ -112,22 +132,12 @@ describe("deriveOpportunityFocusPanelPresentation", () => {
 
         const rowKeys = grid.rows.map((row) => row.cells.map((c) => c.key));
         expect(rowKeys[0]).toEqual(["attention"]);
-        expect(rowKeys[1]).toEqual(["workflow_steps"]);
+        expect(rowKeys[1]).toEqual(["workflow_steps", "required_information"]);
     });
 
     it("activity grid includes timeline and audit cards", () => {
-        const { grid } = deriveOpportunityFocusPanelPresentation({
-            mode: "activity",
-            displayVm: baseVm,
-            record: {},
-            title: "Smith Family",
-            perspective: null,
-            statusLabel: "New",
-        });
-
-        const allKeys = grid.rows.flatMap((row) => row.cells.map((c) => c.key));
-        expect(allKeys).toContain("timeline");
-        expect(allKeys).toContain("audit");
-        expect(allKeys).toContain("communications");
+        const workspace = readSrc("components/admin/focusPanel/OpportunityFocusPanelActivityWorkspace.tsx");
+        expect(workspace).toContain('data-activity-workspace-tab={tab.key}');
+        expect(workspace).toContain("DEFAULT_ACTIVITY_WORKSPACE_TAB");
     });
 });

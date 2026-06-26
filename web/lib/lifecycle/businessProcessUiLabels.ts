@@ -5,11 +5,12 @@
 
 export const BUSINESS_PROCESS_SETTINGS_PAGE_TITLE = "Processes";
 export const BUSINESS_PROCESS_SETTINGS_PAGE_SUBTITLE =
-    "Design how work moves — process cards, Work Views, presentation, and process actions.";
+    "Design how work moves through your organization.";
 
 export const BUSINESS_PROCESS_CATALOG_LABEL = "Processes";
 export const BUSINESS_PROCESS_CATALOG_EMPTY = "No processes yet";
 export const BUSINESS_PROCESS_CATALOG_LOADING = "Loading processes…";
+export const BUSINESS_PROCESS_CATALOG_VIEW_ALL = "View all";
 export const BUSINESS_PROCESS_CATALOG_CREATE = "Create Process";
 export const BUSINESS_PROCESS_CATALOG_SELECT_ARIA = "Select business process";
 export const BUSINESS_PROCESS_CATALOG_BACK = "All processes";
@@ -39,7 +40,7 @@ export const BUSINESS_PROCESS_WORK_VIEW_TECHNICAL_IDENTITY = "Advanced · Techni
 export const BUSINESS_PROCESS_WORK_VIEW_COMPAT_NOTE =
     "Unsaved Work Views are seeded from legacy stage perspectives. Save to persist process-level configuration.";
 export const BUSINESS_PROCESS_WORK_VIEW_PREVIEW_PENDING =
-    "Preview runtime uses compatibility mapping until process-level Work Views ship to runtime.";
+    "Preview runtime opens the workspace with this Work View active — filters and assigned layouts apply when saved.";
 
 export const BUSINESS_PROCESS_SECTION_MEMBERSHIP = "Stage Membership";
 export const BUSINESS_PROCESS_SECTION_MEMBERSHIP_SUMMARY =
@@ -133,6 +134,11 @@ export const BUSINESS_PROCESS_PRESENTATION_CARD_INTRO =
 export const BUSINESS_PROCESS_PRESENTATION_QUEUE = "Queue preview";
 export const BUSINESS_PROCESS_PRESENTATION_FOCUS_PANEL = "Focus Panel preview";
 export const BUSINESS_PROCESS_PRESENTATION_CHANGE = "Change";
+export const BUSINESS_PROCESS_PRESENTATION_SURFACE_DEFAULT_LABEL = "Surface default";
+export const BUSINESS_PROCESS_PRESENTATION_SURFACE_DEFAULT_EXPLANATION =
+    "Uses the published default layout for this surface.";
+export const BUSINESS_PROCESS_PRESENTATION_UNPUBLISHED_WARNING =
+    "Assigned layout is not published — operators may not see this presentation until it is published in Layouts.";
 export const BUSINESS_PROCESS_PRESENTATION_OPEN_LAYOUTS = "Need a new layout? Author in Experience Builder:";
 
 export const BUSINESS_PROCESS_SECTION_EXPECTED_WORK = "Expected work";
@@ -151,11 +157,11 @@ export const BUSINESS_PROCESS_SECTION_PURPOSE = "Purpose";
 export const BUSINESS_PROCESS_SECTION_SUCCESS = "Success Criteria";
 export const BUSINESS_PROCESS_SECTION_OFF_TRACK = "Off Track Criteria";
 
-export const BUSINESS_PROCESS_CROSS_LINK_OPEN = "Open Business Processes";
+export const BUSINESS_PROCESS_CROSS_LINK_OPEN = "Open Processes";
 
-export const BUSINESS_PROCESS_BREADCRUMB = "Business Processes";
+export const BUSINESS_PROCESS_BREADCRUMB = "Processes";
 
-export const BUSINESS_PROCESS_SETTINGS_TILE_TITLE = "Business Processes";
+export const BUSINESS_PROCESS_SETTINGS_TILE_TITLE = "Processes";
 
 /** Default enrollment process name for new builder processes. */
 export const ENROLLMENT_PROCESS_DISPLAY_NAME = "Enrollment Process";

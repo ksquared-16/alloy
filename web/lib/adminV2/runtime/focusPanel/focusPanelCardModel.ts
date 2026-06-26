@@ -1,5 +1,7 @@
 /**
  * Universal Card presentation model — business question first, not layout sections.
+ * @see docs/platform/operator/operational-surface-design-system.md (System 5)
+ * @see docs/platform/operator/universal-card-archetypes.md (System 5A)
  * @see docs/sprints/06_2026/alloy_os_system_4_universal_card_system.md
  */
 
@@ -15,6 +17,60 @@ export const FOCUS_PANEL_CARD_TIERS = [
 ] as const;
 
 export type FocusPanelCardTier = (typeof FOCUS_PANEL_CARD_TIERS)[number];
+
+/** System 5 card role — maps tier to presentation vocabulary. */
+export type FocusPanelCardRole =
+    | "critical"
+    | "active-work"
+    | "metric"
+    | "context"
+    | "history"
+    | "reference";
+
+/** System 5A card archetype — purpose-specific composition within shared design language. */
+export const FOCUS_PANEL_CARD_ARCHETYPES = [
+    "action",
+    "status",
+    "summary",
+    "profile",
+    "collection",
+    "metric",
+    "timeline",
+    "launcher",
+] as const;
+
+export type FocusPanelCardArchetype = (typeof FOCUS_PANEL_CARD_ARCHETYPES)[number];
+
+export type FocusPanelProfileField = {
+    label: string;
+    value: string | null;
+};
+
+export type FocusPanelCollectionItem = {
+    label: string;
+    status?: string | null;
+};
+
+export type FocusPanelTimelineEvent = {
+    when: string;
+    label: string;
+};
+
+export type FocusPanelLauncherRow = {
+    key: string;
+    label: string;
+    description: string;
+    actionLabel: string;
+};
+
+export type FocusPanelCardPayload = {
+    profileFields?: FocusPanelProfileField[];
+    collectionItems?: FocusPanelCollectionItem[];
+    overflowCount?: number;
+    statusIssues?: string[];
+    timelineEvents?: FocusPanelTimelineEvent[];
+    launcherRows?: FocusPanelLauncherRow[];
+};
 
 /** Platform-owned card blueprint keys (not layout section keys). */
 export const FOCUS_PANEL_CARD_KEYS = [
@@ -51,6 +107,8 @@ export type FocusPanelCardAction = {
 
 export type FocusPanelCardModel = {
     key: FocusPanelCardKey;
+    /** System 5A archetype — platform-owned composition primitive. */
+    archetype: FocusPanelCardArchetype;
     /** Operator-facing card title — the business question category (1–3 words). */
     title: string;
     /** Meaning-first answer line (required for scan). */
@@ -62,6 +120,9 @@ export type FocusPanelCardModel = {
     statusTone?: "ready" | "blocked" | "at-risk" | "due" | "done" | "neutral";
     primaryAction?: FocusPanelCardAction | null;
     secondaryInsight?: string | null;
+    iconName?: string | null;
+    /** Archetype-specific structured body (profile rows, collection items, etc.). */
+    payload?: FocusPanelCardPayload;
     /** When false, card is omitted from the grid. */
     visible: boolean;
 };

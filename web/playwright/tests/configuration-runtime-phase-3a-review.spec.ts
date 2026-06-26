@@ -10,13 +10,13 @@ const reviewDir = path.join(__dirname, "../../../docs/sprints/06_2026/configurat
 
 const STAGE_TAB_CANDIDATES = ["lead", "touring", "tour", "waitlist", "enrolling", "enrolled", "new_leads"];
 
-async function openPerspectivesCard(page: import("@playwright/test").Page) {
-    const card = page.getByTestId("configuration-runtime-card-perspectives");
+async function openWorkViewsCard(page: import("@playwright/test").Page) {
+    const card = page.getByTestId("configuration-runtime-card-work-views");
     await card.scrollIntoViewIfNeeded();
     await card.evaluate((el) => {
         if (el instanceof HTMLDetailsElement) el.open = true;
     });
-    await expect(page.getByTestId("lifecycle-stage-perspectives-editor")).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByTestId("lifecycle-stage-work-views-editor")).toBeVisible({ timeout: 30_000 });
 }
 
 async function openEnrollmentStageWithViews(page: import("@playwright/test").Page) {
@@ -37,14 +37,14 @@ async function openEnrollmentStageWithViews(page: import("@playwright/test").Pag
         if (!(await tab.isVisible().catch(() => false))) continue;
         await tab.click();
         await expect(page.getByTestId("lifecycle-stage-workspace")).toBeVisible({ timeout: 60_000 });
-        await openPerspectivesCard(page);
-        const lensCount = await page.locator('[data-testid^="perspective-lens-"]').count();
+        await openWorkViewsCard(page);
+        const lensCount = await page.locator('[data-testid^="work-view-lens-"]').count();
         if (lensCount > 0) return stageKey;
     }
 
     await page.locator('[data-testid^="lifecycle-stage-tab-"]').first().click();
     await expect(page.getByTestId("lifecycle-stage-workspace")).toBeVisible({ timeout: 60_000 });
-    await openPerspectivesCard(page);
+    await openWorkViewsCard(page);
     return "fallback";
 }
 
@@ -81,7 +81,7 @@ test.describe("Configuration Runtime Phase 3A review", () => {
             animations: "disabled",
         });
 
-        const previewLink = page.locator('[data-testid^="perspective-preview-runtime-"]').first();
+        const previewLink = page.locator('[data-testid^="work-view-preview-runtime-"]').first();
         if (await previewLink.isVisible().catch(() => false)) {
             await previewLink.scrollIntoViewIfNeeded();
             await page.screenshot({

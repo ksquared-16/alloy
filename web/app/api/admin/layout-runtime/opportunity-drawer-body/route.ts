@@ -29,6 +29,10 @@ export async function GET(req: NextRequest) {
 
     const departmentId = req.nextUrl.searchParams.get("departmentId");
     const workUnitId = req.nextUrl.searchParams.get("workUnitId");
+    const pinnedEntityLayoutId =
+        req.nextUrl.searchParams.get("entity_layout_id")
+        ?? req.nextUrl.searchParams.get("focus_layout_id")
+        ?? req.nextUrl.searchParams.get("focus_panel_layout_id");
     const supabase = createAdminClient();
 
     logDrawerVmRuntimeServer("compose_start", {
@@ -43,6 +47,7 @@ export async function GET(req: NextRequest) {
             supabase,
             departmentId: departmentId ?? null,
             workUnitId: workUnitId ?? null,
+            pinnedEntityLayoutId,
         });
 
         if (!result.ok) {

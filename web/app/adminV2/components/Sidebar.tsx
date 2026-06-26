@@ -16,6 +16,7 @@ import { neutral, palette, derived } from "@/styles/tokens/colors";
 import {
     CANONICAL_ADMIN_BASE,
     CANONICAL_OPERATOR_BASE,
+    CANONICAL_SETTINGS_BASE,
     isCanonicalFormsPath,
     normalizeToCanonicalAdminPath,
 } from "@/lib/admin/canonicalAdminRoutes";
@@ -36,6 +37,7 @@ import {
 } from "@/app/adminV2/components/SidebarModalNavItems";
 import { appendWorkspaceSiteToPath, readStickyWorkspaceSiteIdForNavigation } from "@/lib/adminV2/workspaceSiteFilterClient";
 import { WORK_VIEW_PILL_SECTION_LABEL } from "@/lib/adminV2/runtime/configurationRuntimeConvergenceFlag";
+import SidebarConfigurationModeNav from "@/app/adminV2/components/SidebarConfigurationModeNav";
 
 const WORKSPACE = CANONICAL_OPERATOR_BASE;
 const SETTINGS_HREF = CANONICAL_ADMIN_BASE;
@@ -62,7 +64,12 @@ function isAdminConfigPath(path: string): boolean {
     if (path.startsWith("/admin/tasks") || path.startsWith("/admin/messages")) return false;
     if (isCanonicalFormsPath(path)) return false;
     if (path.startsWith(`${CANONICAL_ADMIN_BASE}/workspace`)) return false;
-    return path === CANONICAL_ADMIN_BASE || path.startsWith(`${CANONICAL_ADMIN_BASE}/`);
+    return (
+        path === CANONICAL_SETTINGS_BASE
+        || path.startsWith(`${CANONICAL_SETTINGS_BASE}/`)
+        || path === CANONICAL_ADMIN_BASE
+        || path.startsWith(`${CANONICAL_ADMIN_BASE}/`)
+    );
 }
 
 function SidebarNav({
@@ -364,12 +371,16 @@ function SidebarNav({
                 <nav className="flex min-h-0 flex-1 flex-col px-1.5 pb-2" aria-label="Workspace navigation">
                     <div className="flex shrink-0 flex-col items-stretch gap-1">
                         {homeLink}
-                        {tasksLink}
-                        {inboxLink}
-                        {analyticsLink}
-                        {processingLink}
+                        {onSettings ? null : (
+                            <>
+                                {tasksLink}
+                                {inboxLink}
+                                {analyticsLink}
+                                {processingLink}
+                            </>
+                        )}
                     </div>
-                    <div className="min-h-0 flex-1" aria-hidden />
+                    {onSettings ? <SidebarConfigurationModeNav collapsed /> : <div className="min-h-0 flex-1" aria-hidden />}
                     <div className="adminv2-sidebar-footer flex shrink-0 flex-col items-stretch gap-1 border-t pt-1">
                         {settingsLink}
                     </div>
@@ -383,7 +394,7 @@ function SidebarNav({
                         {analyticsLink}
                         {processingLink}
                     </div>
-                    <div className="min-h-0 flex-1 overflow-y-auto">{lifecycleNavExpanded}</div>
+                    <div className="min-h-0 flex-1 overflow-y-auto">{onSettings ? <SidebarConfigurationModeNav collapsed={false} /> : lifecycleNavExpanded}</div>
                     <div className="adminv2-sidebar-footer shrink-0 border-t pt-2">
                         {settingsLink}
                     </div>

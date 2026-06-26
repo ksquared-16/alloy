@@ -17,27 +17,39 @@ import { recordDrawerHeaderActionClassName } from "@/components/admin/drawer/rec
 import { flattenRecordManageMenuActions } from "@/lib/admin/recordManage/buildRecordManageMenu";
 import { RECORD_DRAWER_MANAGE_MENU_LABEL } from "@/lib/admin/recordManage/types";
 import type { RecordManageMenuActionKey, RecordManageMenuItem } from "@/lib/admin/recordManage/types";
+import type { ResolvedActionForClient } from "@/lib/admin/actions/types";
 
 type Props = {
-    items: RecordManageMenuItem[];
+    /** Legacy entity admin stubs — person/vendor drawers. */
+    items?: RecordManageMenuItem[];
+    /** Registry-backed subject actions — same catalog as command rail. */
+    registryActions?: ResolvedActionForClient[];
     inquiryWorkflow?: boolean;
     disabled?: boolean;
     disabledReason?: string | null;
     busyKey?: RecordManageMenuActionKey | null;
-    onSelect: (key: RecordManageMenuActionKey) => void;
+    onSelect?: (key: RecordManageMenuActionKey) => void;
+    onRegistryActionSelect?: (action: ResolvedActionForClient) => void;
+    registryActionLoadingKey?: string | null;
     proofLayoutActions?: boolean;
+    emptyStateReason?: string | null;
 };
 
-/** Platform Manage dropdown — administrative record operations (not BOS actions). */
+/** Platform Manage dropdown — subject operational actions or legacy admin stubs. */
 export function RecordDrawerManageMenu({
-    items,
+    items = [],
+    registryActions,
     inquiryWorkflow = false,
     disabled = false,
     disabledReason = null,
     busyKey = null,
     onSelect,
+    onRegistryActionSelect,
+    registryActionLoadingKey = null,
     proofLayoutActions = false,
+    emptyStateReason = "No actions available for this record.",
 }: Props) {
+    const registryMode = registryActions !== undefined;
     const [open, setOpen] = useState(false);
     const [activeIndex, setActiveIndex] = useState(0);
     const rootRef = useRef<HTMLDivElement>(null);
@@ -51,7 +63,10 @@ export function RecordDrawerManageMenu({
         proofLayoutActions ? "actions-white" : "default",
     );
 
-    const selectableActions = useMemo(() => flattenRecordManageMenuActions(items), [items]);
+    const selectableActions = useMemo(
+        () => (registryMode ? registryActions : flattenRecordManageMenuActions(items)),
+        [items, registryActions, registryMode],
+    );
 
     const updateMenuPos = useCallback(() => {
         const el = triggerRef.current;
@@ -104,8 +119,6 @@ export function RecordDrawerManageMenu({
         if (open) setActiveIndex(0);
     }, [open, selectableActions.length]);
 
-    if (!items.length) return null;
-
     const menuDisabledReason =
         disabledReason?.trim() ||
         (disabled ? "Manage actions are unavailable for this record right now." : null);
@@ -118,6 +131,7 @@ export function RecordDrawerManageMenu({
         } ${index === activeIndex && !disabled && itemEnabled ? "bg-alloy-blue/[0.06]" : ""}`;
 
     const onTriggerKeyDown = (ev: ReactKeyboardEvent<HTMLButtonElement>) => {
+        if (selectableActions.length === 0) return;
         if (ev.key === "ArrowDown" || ev.key === "Enter" || ev.key === " ") {
             ev.preventDefault();
             setOpen(true);
@@ -140,14 +154,52 @@ export function RecordDrawerManageMenu({
         } else if (ev.key === "Enter" || ev.key === " ") {
             ev.preventDefault();
             const a = selectableActions[activeIndex];
-            if (a && a.enabled && !disabled && busyKey !== a.key) {
+            if (!a || disabled) return;
+            if (registryMode) {
+                const action = a as ResolvedActionForClient;
+                if (registryActionLoadingKey === action.key) return;
                 close();
-                onSelect(a.key);
+                onRegistryActionSelect?.(action);
+                return;
+            }
+            const legacy = a as Extract<RecordManageMenuItem, { kind: "action" }>;
+            if (legacy.enabled && busyKey !== legacy.key) {
+                close();
+                onSelect?.(legacy.key);
             }
         }
     };
 
-    const renderMenuBody = () =>
+    const renderRegistryMenuBody = () =>
+        (registryActions ?? []).map((action, index) => {
+            const itemDisabled = disabled || registryActionLoadingKey === action.key;
+            return (
+                <button
+                    key={action.key}
+                    type="button"
+                    role="menuitem"
+                    disabled={itemDisabled}
+                    title={
+                        registryActionLoadingKey === action.key ? "Action in progress…"
+                        : menuDisabledReason ?
+                            menuDisabledReason
+                        :   action.label
+                    }
+                    aria-current={index === activeIndex ? "true" : undefined}
+                    className={itemClassName(index, true)}
+                    onMouseEnter={() => setActiveIndex(index)}
+                    onClick={() => {
+                        if (itemDisabled) return;
+                        close();
+                        onRegistryActionSelect?.(action);
+                    }}
+                >
+                    {registryActionLoadingKey === action.key ? "…" : action.label}
+                </button>
+            );
+        });
+
+    const renderLegacyMenuBody = () =>
         items.map((item, index) => {
             if (item.kind === "separator") {
                 return (
@@ -159,7 +211,9 @@ export function RecordDrawerManageMenu({
                     />
                 );
             }
-            const selectableIndex = selectableActions.findIndex((a) => a.key === item.key);
+            const selectableIndex = selectableActions.findIndex(
+                (a) => (a as Extract<RecordManageMenuItem, { kind: "action" }>).key === item.key,
+            );
             const itemDisabled = disabled || !item.enabled || busyKey === item.key;
             return (
                 <button
@@ -182,13 +236,15 @@ export function RecordDrawerManageMenu({
                     onClick={() => {
                         if (itemDisabled || !item.enabled) return;
                         close();
-                        onSelect(item.key);
+                        onSelect?.(item.key);
                     }}
                 >
                     {busyKey === item.key ? "…" : item.label}
                 </button>
             );
         });
+
+    const renderMenuBody = () => (registryMode ? renderRegistryMenuBody() : renderLegacyMenuBody());
 
     const menuShell = (portal: boolean) => {
         const className = portal
@@ -229,21 +285,32 @@ export function RecordDrawerManageMenu({
         );
     };
 
+    const emptyRegistry = registryMode && selectableActions.length === 0;
+    const hideLegacy = !registryMode && items.length === 0;
+    if (hideLegacy) return null;
+
+    const triggerDisabled = disabled || emptyRegistry;
+    const triggerTitle =
+        emptyRegistry ? (emptyStateReason ?? "No actions available for this record.")
+        : menuDisabledReason ?? undefined;
+
     return (
         <div ref={rootRef} className="relative shrink-0" data-record-drawer-manage-menu="true">
             <button
                 ref={triggerRef}
                 type="button"
-                disabled={disabled}
-                title={menuDisabledReason ?? undefined}
+                disabled={triggerDisabled}
+                title={triggerTitle}
                 className={`${btnClass} inline-flex items-center gap-1 transition-colors ${
-                    disabled ? "cursor-not-allowed opacity-55" : "hover:bg-alloy-blue/[0.06] active:bg-alloy-blue/[0.11]"
+                    triggerDisabled ? "cursor-not-allowed opacity-55" : "hover:bg-alloy-blue/[0.06] active:bg-alloy-blue/[0.11]"
                 }`}
                 aria-expanded={open}
                 aria-haspopup="menu"
                 aria-controls={menuId}
+                data-focus-panel-manage-trigger={registryMode ? "true" : undefined}
+                data-focus-panel-manage-empty={emptyRegistry ? "true" : undefined}
                 onClick={() => {
-                    if (disabled) return;
+                    if (triggerDisabled || selectableActions.length === 0) return;
                     setOpen((v) => !v);
                 }}
                 onKeyDown={onTriggerKeyDown}
@@ -254,7 +321,7 @@ export function RecordDrawerManageMenu({
                     ▾
                 </span>
             </button>
-            {open && (!proofLayoutActions || menuPos) ?
+            {open && selectableActions.length > 0 && (!proofLayoutActions || menuPos) ?
                 proofLayoutActions ? menuShell(true) : menuShell(false)
             :   null}
         </div>

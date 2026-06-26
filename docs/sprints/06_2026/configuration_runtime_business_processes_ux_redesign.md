@@ -1,6 +1,7 @@
 # Alloy OS Configuration Runtime — Business Processes UX Redesign
 
 **Status:** Design blueprint (pre-implementation) — June 2026  
+**Superseded styling:** Configuration Mode visual doctrine (`docs/system/configuration-mode-doctrine.md`) — **do not use blue/gray legacy admin styling** on Configuration Runtime surfaces. Use Alloy pine/midnight/forge/stone tokens only.
 **Scope:** Business Processes configuration experience only  
 **Implementation:** **Paused** until this document is approved  
 **Runtime:** Frozen — no primitive redesign, no Queue Builder, no Focus Panel Builder

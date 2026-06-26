@@ -39,15 +39,19 @@ export function SettingsNavTile({
         <SettingsIntentLink
             href={href}
             className={[
-                "group flex h-full flex-col justify-center rounded-lg border px-3 py-2.5 shadow-sm transition-colors",
-                TILE_MIN_H,
+                "group flex h-full flex-col justify-center rounded-xl border px-4 py-3 shadow-sm transition-colors",
+                emphasis ? "min-h-[5.5rem]" : TILE_MIN_H,
                 emphasis
-                    ? "border-alloy-pine/25 bg-alloy-pine/[0.06] hover:bg-alloy-pine/[0.1]"
-                    : "border-alloy-forge/12 bg-white/60 hover:bg-white/85",
+                    ? "border-alloy-pine/30 bg-alloy-pine/[0.07] hover:border-alloy-pine/45 hover:bg-alloy-pine/[0.11]"
+                    : "border-alloy-forge/12 bg-white/80 hover:border-alloy-pine/20 hover:bg-white",
             ].join(" ")}
         >
-            <div className="text-sm font-semibold leading-tight text-alloy-midnight group-hover:text-alloy-pine">{title}</div>
-            <div className="mt-0.5 line-clamp-2 text-xs leading-snug text-alloy-midnight/55">{description}</div>
+            <div className={`leading-tight text-alloy-midnight group-hover:text-alloy-pine ${emphasis ? "text-base font-semibold" : "text-sm font-semibold"}`}>
+                {title}
+            </div>
+            <div className={`mt-1 line-clamp-2 leading-snug text-alloy-midnight/55 ${emphasis ? "text-xs" : "text-xs"}`}>
+                {description}
+            </div>
         </SettingsIntentLink>
     );
 }
@@ -62,7 +66,7 @@ export function SettingsNavGroup({
     children: ReactNode;
 }) {
     return (
-        <section className="space-y-3 rounded-xl border border-alloy-forge/10 bg-white/50 px-4 py-3.5">
+        <section className="space-y-3 rounded-2xl border border-alloy-forge/10 bg-white/70 px-5 py-4">
             <div>
                 <h2 className="text-xs font-semibold uppercase tracking-wide text-alloy-midnight/50">{label}</h2>
                 {description ? (

@@ -167,7 +167,6 @@ export async function executeCreateLeadAction(
         primary_person_id: personId,
         primary_contact_id: null,
         name: displayName,
-        status: "open",
         source: trim(input.merged.source) || "manual",
         status_key: statusKeyForLead,
         work_unit_id: workUnitId,

@@ -1,5 +1,4 @@
 import type { ResolvedActionForClient } from "@/lib/admin/actions/types";
-import type { RecordManageMenuItem } from "@/lib/admin/recordManage/types";
 import type { TourBookingRow } from "@/lib/tours/bookings/types";
 import type { InquirySummaryTaskPreviewPayload } from "@/lib/admin/drawer/opportunityInquirySummaryTaskPreview";
 import type { WorkIntentRuntimeProjection } from "@/lib/lifecycle/workIntentRuntimeTypes";
@@ -154,10 +153,10 @@ export type OpportunityDrawerViewModel = {
     actions: {
         /** Raw `record_header` slot from resolver (generation / parity). */
         header: ResolvedActionForClient[];
-        /** Flattened registry actions — BOS command rail when copilot flag is on. */
+        /** Flattened registry actions — BOS command rail and Manage menu (same catalog). */
         header_menu: ResolvedActionForClient[];
-        /** Platform Manage menu — administrative record operations. */
-        manage_menu: RecordManageMenuItem[];
+        /** Subject-local Manage menu — mirrors header_menu (registry-backed). */
+        manage_menu: ResolvedActionForClient[];
     };
     layout: {
         mode: "workflow_v1";

@@ -9,14 +9,23 @@ import { createAdminClient } from "@/lib/supabaseAdmin";
 import { applyFormIntakeSafe } from "@/lib/forms/intake/applyFormIntakeSafe";
 import type { FormPayload } from "@/lib/forms/validateSubmission";
 
+import { CANONICAL_DEV_ORG_ID } from "@/lib/fields/canonicalDevOrg";
+import {
+    DEMO_CHILDCARE_CENTER_LOCATION_ID,
+    DEMO_CHILDCARE_ENROLLMENT_DEPT_ID,
+    DEMO_CHILDCARE_ENROLLMENT_WORK_UNIT_ID,
+    DEMO_CHILDCARE_MED_LINK_ID,
+    DEMO_CHILDCARE_VERTICAL_ID,
+} from "@/lib/forms/intakeRuntimeTestFixtures";
+
 loadEnv({ path: resolve(process.cwd(), ".env.local") });
 loadEnv({ path: resolve(process.cwd(), ".env") });
 
-const ORG_ID = "7803388d-cdee-4afb-89cf-23a137f39423";
-const LINK_ID = "1fb46b72-a5ce-43ad-9fb5-80ffe9528ffa";
-const VERTICAL_ID = "64cb7d29-ec79-494b-a4e7-d8e9b94f1fe2";
-const LOCATION_ID = "c3409d2d-0481-4e6b-939f-9c39d0a153a5";
-const WORK_UNIT_ID = "c2b640e5-e09a-4319-9d1b-d752ebb80122";
+const ORG_ID = process.env.CANONICAL_VERIFY_ORG_ID?.trim() || CANONICAL_DEV_ORG_ID;
+const LINK_ID = DEMO_CHILDCARE_MED_LINK_ID;
+const VERTICAL_ID = DEMO_CHILDCARE_VERTICAL_ID;
+const LOCATION_ID = DEMO_CHILDCARE_CENTER_LOCATION_ID;
+const WORK_UNIT_ID = DEMO_CHILDCARE_ENROLLMENT_WORK_UNIT_ID;
 
 async function main() {
     const supabase = createAdminClient();

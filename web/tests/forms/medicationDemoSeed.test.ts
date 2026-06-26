@@ -4,7 +4,7 @@ import { parseFormPdfMappingJson } from "@/lib/forms/pdf/pdfMappingContract";
 import { validateFormPayload } from "@/lib/forms/validateSubmission";
 import { payloadWithMinimumRepeatingGroups } from "@/components/forms/engine/formEnginePayload";
 import {
-    ALLY_BEND_STAGING_ORG_FORMS_DEMO_ID,
+    FORMS_DEMO_ORG_ID,
     MEDICATION_AUTHORIZATION_DEMO_DEFINITION_METADATA,
     MEDICATION_AUTHORIZATION_DEMO_PDF_MAPPING,
     MEDICATION_AUTHORIZATION_DEMO_SCHEMA,
@@ -13,8 +13,8 @@ import {
 } from "@/lib/forms/seeds/medicationAuthorizationDemo";
 
 describe("Medication authorization demo seed", () => {
-    it("SQL migration org constant matches shared Bend staging UUID", () => {
-        expect(ALLY_BEND_STAGING_ORG_FORMS_DEMO_ID).toBe("7803388d-cdee-4afb-89cf-23a137f39423");
+    it("forms demo org constant matches canonical dev org", () => {
+        expect(FORMS_DEMO_ORG_ID).toBe("93667019-bd28-49b5-a688-acc9bb1e0a19");
     });
 
     it("schema validates under Forms Engine V1 parser", () => {

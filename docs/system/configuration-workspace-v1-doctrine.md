@@ -2,6 +2,10 @@
 
 **Status:** Active — June 2026 (CRM V1 QA foundation).
 
+## Configuration Mode visual rule
+
+Settings configuration must use Alloy’s operational palette — **not** blue/gray legacy admin styling. See **`configuration-mode-doctrine.md`** for the frozen interaction layout (Context → Queue → Workspace → BOS) and pine/midnight/forge/stone tokens.
+
 ## Purpose
 
 Settings must feel like part of the product — not an admin console organized around implementation artifacts. Configuration Workspace groups surfaces by **what operators own**, not by database tables or runtime internals.

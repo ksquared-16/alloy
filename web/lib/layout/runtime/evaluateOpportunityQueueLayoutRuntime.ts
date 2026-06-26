@@ -33,6 +33,7 @@ export async function evaluateOpportunityQueueLayoutRuntime(input: {
     orgId: string;
     supabase: SupabaseClient;
     lane: OpportunityQueueLaneContextInput;
+    pinnedEntityLayoutId?: string | null;
 }): Promise<OpportunityQueueLayoutRuntimeResult> {
     const isWaitlist = Boolean(input.lane.isWaitlistCandidate);
     const entityType = opportunityQueueLayoutEntityType(isWaitlist);
@@ -47,6 +48,7 @@ export async function evaluateOpportunityQueueLayoutRuntime(input: {
         isWaitlist,
         supabase: input.supabase,
         fetchPublishedLayouts: true,
+        pinnedEntityLayoutId: input.pinnedEntityLayoutId,
     });
 
     if (!isLayoutDocRenderableForProduction(resolution.doc)) {

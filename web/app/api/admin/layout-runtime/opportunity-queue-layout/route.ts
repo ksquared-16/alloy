@@ -18,6 +18,7 @@ export async function GET(req: NextRequest) {
 
     const sp = req.nextUrl.searchParams;
     const isWaitlistCandidate = sp.get("waitlist") === "1";
+    const pinnedEntityLayoutId = sp.get("entity_layout_id") ?? sp.get("queue_layout_id");
     const result = await evaluateOpportunityQueueLayoutRuntime({
         orgId: gate.orgId,
         supabase: createAdminClient(),
@@ -28,6 +29,7 @@ export async function GET(req: NextRequest) {
             grain: sp.get("grain"),
             isWaitlistCandidate,
         },
+        pinnedEntityLayoutId,
     });
 
     if (!result.ok) {

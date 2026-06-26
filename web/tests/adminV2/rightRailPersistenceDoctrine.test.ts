@@ -66,6 +66,13 @@ describe("Right rail persistence doctrine", () => {
         expect(wuDoc).toContain("persistent command surface");
     });
 
+    it("work unit actions rail registration is memoized against parent re-renders", () => {
+        const wu = read("app/adminV2/components/workspace/shells/WorkUnitWorkspace.tsx");
+        expect(wu).toContain("commandRailActions");
+        expect(wu).toContain("useMemo");
+        expect(wu).toContain("WorkUnitAboveFoldActionsRail");
+    });
+
     it("persistent command rail shares shell-level AdminDrawerProvider with registered actions", () => {
         const shell = read("app/adminV2/components/AdminV2Shell.tsx");
         const scope = read("app/adminV2/components/AdminV2ShellDrawerScope.tsx");

@@ -23,12 +23,14 @@ export function buildWorkUnitQueueItemsServerCacheKey(params: {
     rowEnrichment: "queue_list" | "queue_reveal";
     omitTotalCount: boolean;
     countAccuracy?: string;
+    workViewId?: string | null;
 }): string {
     const bucket = (params.attentionBucketKey ?? "").trim() || "_";
     const limit = params.limit ?? "_";
     const offset = params.offset ?? 0;
     const count = params.countAccuracy?.trim() || "exact";
     const omit = params.omitTotalCount ? "1" : "0";
+    const workView = (params.workViewId ?? "").trim() || "_";
     return [
         params.orgId,
         params.workUnitId,
@@ -40,6 +42,7 @@ export function buildWorkUnitQueueItemsServerCacheKey(params: {
         params.rowEnrichment,
         omit,
         count,
+        workView,
     ].join("\u0001");
 }
 

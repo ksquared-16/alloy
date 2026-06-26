@@ -12,12 +12,13 @@ type Props = {
     rows: FocusPanelGridRow[];
     renderCell: (cellKey: string) => ReactNode;
     className?: string;
+    dataFocusPanelSplitLayout?: string;
 };
 
 /**
  * Concept B responsive card grid — reads its own width for column collapse.
  */
-export default function FocusPanelCardGrid({ rows, renderCell, className }: Props) {
+export default function FocusPanelCardGrid({ rows, renderCell, className, dataFocusPanelSplitLayout }: Props) {
     const containerRef = useRef<HTMLDivElement>(null);
     const [columns, setColumns] = useState<1 | 2 | 3 | 4>(2);
 
@@ -39,6 +40,7 @@ export default function FocusPanelCardGrid({ rows, renderCell, className }: Prop
             className={["alloy-os-focus-panel-grid", className].filter(Boolean).join(" ")}
             data-focus-panel-card-grid="true"
             data-focus-panel-grid-columns={columns}
+            data-focus-panel-split-layout={dataFocusPanelSplitLayout}
             style={{ ["--alloy-os-fp-cols" as string]: columns }}
         >
             {rows.flatMap((row) =>

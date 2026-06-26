@@ -19,6 +19,8 @@ const ENFORCEMENT_TEST_FILES = [
     "tests/fields/canonicalReadAlignment.test.ts",
     "tests/fields/canonicalNativeColumnParity.test.ts",
     "tests/fields/canonicalLegacyStatusIsolation.test.ts",
+    "tests/fields/canonicalPhase6SourceContract.test.ts",
+    "tests/fields/canonicalE2eRoundtrip.test.ts",
     "tests/fields/canonicalEnforcement.test.ts",
 ] as const;
 

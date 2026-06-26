@@ -106,14 +106,12 @@ export function isReservedCustomerMemberFieldKey(fieldKey: string): boolean {
 }
 
 /**
- * FC-CM-1 write-path follow-up (not implemented in this pass).
- * PATCH /api/admin/customer-members/:id accepts native columns only today.
- * Mirror persons/[id]/route.ts upsertFieldValuesFromBody for entity_type customer_member.
+ * FC-CM-1 write path — PATCH /api/admin/customer-members/:id upserts config fields to field_values.
  */
 export const CUSTOMER_MEMBER_FIELD_VALUES_PATCH = {
-    implemented: false,
+    implemented: true,
     entityType: CUSTOMER_MEMBER_ENTITY_TYPE,
     entityIdSource: "customer_members.id",
     fieldValuesEntityType: CUSTOMER_MEMBER_ENTITY_TYPE,
-    referenceImplementation: "web/app/api/admin/persons/[id]/route.ts",
+    referenceImplementation: "web/app/api/admin/customer-members/[id]/route.ts",
 } as const;

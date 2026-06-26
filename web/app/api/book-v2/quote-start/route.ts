@@ -408,7 +408,6 @@ export async function POST(request: NextRequest) {
         location_id: locationId,
         pipeline_stage_id: quoteStartedStageId,
         status_key: "needs_a_quote",
-        status: "open",
         vertical_id: verticalId,
         metadata: {
           quote_input,
@@ -457,7 +456,6 @@ export async function POST(request: NextRequest) {
         pipeline_stage_id: quoteStartedStageId,
         status_key: "needs_a_quote",
         name: opportunityName,
-        status: "open",
         source: "website",
         estimated_price_cents: estimatedPriceCents,
         monetary_value_cents: estimatedPriceCents,

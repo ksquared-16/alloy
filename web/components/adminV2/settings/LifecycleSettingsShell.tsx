@@ -8,10 +8,10 @@ export default function LifecycleSettingsShell() {
     const [showAdvanced, setShowAdvanced] = useState(false);
 
     return (
-        <div className="space-y-2" data-testid="lifecycle-settings-shell">
+        <div className="flex min-h-0 flex-1 flex-col gap-2" data-testid="lifecycle-settings-shell">
             <LifecycleActivationClient />
 
-            <p className="text-[11px] text-alloy-midnight/45">
+            <p className="shrink-0 text-[11px] text-alloy-midnight/45">
                 <button
                     type="button"
                     className="font-medium hover:text-alloy-pine hover:underline"
@@ -22,14 +22,14 @@ export default function LifecycleSettingsShell() {
                 </button>
             </p>
 
-            {showAdvanced ? (
+            {showAdvanced ?
                 <div
-                    className="rounded-lg border border-alloy-forge/12 bg-alloy-stone/5 p-3"
+                    className="shrink-0 rounded-lg border border-alloy-forge/12 bg-alloy-stone/5 p-3"
                     data-testid="lifecycle-advanced-configuration"
                 >
                     <LifecycleHubClient />
                 </div>
-            ) : null}
+            :   null}
         </div>
     );
 }

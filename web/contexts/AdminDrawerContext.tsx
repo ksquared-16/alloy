@@ -132,7 +132,14 @@ export type JobPrefill = {
 export type JobRecordSurfaceParam = "drawer" | "overview" | "full";
 
 /** When opening an opportunity from the AdminV2 queue, lane scope primes `record_header` actions in parallel with `drawer_initial`. */
-export type OpportunityWorkspaceContext = { work_unit_id: string; department_id: string };
+export type OpportunityWorkspaceContext = {
+    work_unit_id: string;
+    department_id: string;
+    /** Work View pinned focus panel layout (`entity_layouts.id`). */
+    focus_panel_layout_id?: string | null;
+    /** Active process Work View id for layout/filter context. */
+    work_view_id?: string | null;
+};
 
 /** Dev/diagnostic — model-swap navigation between VM-backed drawer entities (shell stays mounted). */
 export const DRAWER_MODEL_SWAP_OPEN_SOURCE = "drawer_model_swap";

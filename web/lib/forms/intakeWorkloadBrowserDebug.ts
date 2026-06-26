@@ -6,7 +6,6 @@ import { buildIntakeWorkspaceFilterPanel } from "@/lib/forms/intakeWorkspaceFilt
 import {
     INTAKE_RUNTIME_TEST_1C_ID,
     INTAKE_RUNTIME_TEST_1D_ID,
-    INTAKE_RUNTIME_TEST_ORG_ID,
     DEMO_CHILDCARE_ORG_ID,
 } from "@/lib/forms/intakeRuntimeTestFixtures";
 import type { SubmissionInboxRow } from "@/lib/forms/submissionInboxPresentation";
@@ -59,11 +58,11 @@ export function buildIntakeWorkloadBrowserDebug(params: {
 
     let orgMismatchHint: string | null = null;
     const resolvedOrg = apiOrgId ?? sessionOrgId;
-    if (resolvedOrg && resolvedOrg !== INTAKE_RUNTIME_TEST_ORG_ID && !hasTest1C && !hasTest1D) {
+    if (!hasTest1C && !hasTest1D) {
         orgMismatchHint =
             resolvedOrg === DEMO_CHILDCARE_ORG_ID ?
-                "Use Forms Runtime Test 2D embed in Demo Childcare Co — prior Test 1C/1D were Alloy Bend only."
-            :   `Prior Test 1C/1D live in Alloy Bend (${INTAKE_RUNTIME_TEST_ORG_ID.slice(0, 8)}…). For Demo Childcare Co use Test 2D embed token.`;
+                "Test 1C/1D fixture submissions not in loaded inbox — use Test 2D embed or refresh filters."
+            :   `Loaded inbox has no Test 1C/1D rows${resolvedOrg ? ` for org ${resolvedOrg.slice(0, 8)}…` : ""}.`;
     }
 
     return {

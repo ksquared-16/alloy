@@ -14,6 +14,7 @@ import { updateOpportunityCustomerMemberLifecycleStatus } from "@/lib/opportunit
 import { validateInquiryChildPlacementPatch } from "@/lib/admin/drawer/inquiryChildPlacementScope";
 import { syncPlacementCandidateFromOcm } from "@/lib/orchestration/placement/syncPlacementCandidateFromOcm";
 import { enrichOcmProgramCategoryFields } from "@/lib/locations/resolveOcmProgramCategoryFields";
+import { assertNoChildProfileKeysOnOcmPatch } from "@/lib/fields/canonicalStrictMode";
 
 export async function PATCH(
     request: NextRequest,
@@ -32,6 +33,11 @@ export async function PATCH(
         body = (await request.json()) as Record<string, unknown>;
     } catch {
         return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
+    }
+
+    const profileGuard = assertNoChildProfileKeysOnOcmPatch(body);
+    if (profileGuard) {
+        return NextResponse.json({ error: profileGuard }, { status: 400 });
     }
 
     const { native: nativeBody, custom: customBody } = partitionInquiryChildPatchBody(body);

@@ -21,7 +21,7 @@ export default function SettingsPageHeader({
 }) {
     const shell =
         variant === "hero"
-            ? "rounded-xl border border-alloy-forge/12 border-l-4 border-l-alloy-pine bg-white/90 px-5 py-4 shadow-sm"
+            ? "config-runtime-hero px-6 py-5"
             : "";
 
     return (
@@ -29,7 +29,7 @@ export default function SettingsPageHeader({
             <div className="flex flex-wrap items-end justify-between gap-3">
                 <div className="min-w-0 flex-1">
                     {variant === "hero" ?
-                        <h1 className="text-xl font-semibold tracking-tight text-alloy-midnight">{title}</h1>
+                        <h1 className="text-2xl font-semibold tracking-tight text-alloy-midnight">{title}</h1>
                     :   <h2 className="text-base font-semibold tracking-tight text-alloy-midnight">{title}</h2>}
                     {subtitle ?
                         <p

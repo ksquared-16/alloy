@@ -60,14 +60,6 @@ import { opportunityDisplayLocationLabel } from "@/lib/opportunities/resolveOppo
 import { drawerSubjectContextDiagnosticAttrs } from "@/lib/workUnits/buildDrawerSubjectContextFromQueueRowContext";
 import { useBosOpportunityDrawerContextSeed } from "@/lib/adminV2/bos/useBosDrawerOperationalContextSeed";
 import { DrawerCommandRailActionsRegistrar } from "@/app/adminV2/components/workspace/DrawerCommandRailActionsRegistrar";
-import { DeleteLeadModal } from "@/components/admin/opportunity/DeleteLeadModal";
-import { buildRecordManageMenuForEntity } from "@/lib/admin/recordManage/buildRecordManageMenu";
-import {
-    dispatchOpportunityQueueUpdated,
-    dispatchOpportunityQueueUpdatedBroadcast,
-} from "@/lib/admin/opportunityQueueRefreshEvent";
-import { dispatchGlobalRecordSearchInvalidate } from "@/lib/admin/globalSearch/dispatchGlobalRecordSearchInvalidate";
-import type { RecordManageMenuActionKey } from "@/lib/admin/recordManage/types";
 
 const OPPORTUNITY_TAB_LABELS: Partial<Record<DrawerTabKey, string>> = {
     overview: "Overview",
@@ -170,35 +162,6 @@ export default function OpportunityDrawerVmRuntime() {
         actionHost: headerActionHost,
     });
 
-    const [deleteLeadModalOpen, setDeleteLeadModalOpen] = useState(false);
-    const [manageBusyKey, setManageBusyKey] = useState<RecordManageMenuActionKey | null>(null);
-
-    const manageMenuItems = useMemo(
-        () => buildRecordManageMenuForEntity("lead", opportunitySingular),
-        [opportunitySingular]
-    );
-
-    const onManageSelect = useCallback((key: RecordManageMenuActionKey) => {
-        if (key === "delete_lead") {
-            setDeleteLeadModalOpen(true);
-            return;
-        }
-    }, []);
-
-    const onLeadDeleted = useCallback(() => {
-        const opportunityId = drawer.id?.trim();
-        setDeleteLeadModalOpen(false);
-        setManageBusyKey(null);
-        showSuccess(`${opportunitySingular} deleted.`);
-        closeDrawer();
-        dispatchGlobalRecordSearchInvalidate();
-        if (opportunityId) {
-            dispatchOpportunityQueueUpdated(opportunityId, "delete_lead");
-        } else {
-            dispatchOpportunityQueueUpdatedBroadcast("delete_lead");
-        }
-    }, [closeDrawer, drawer.id, opportunitySingular, showSuccess]);
-
     useEffect(() => {
         setDrawerTab("overview");
         clearRegistryActionFeedback();
@@ -293,8 +256,13 @@ export default function OpportunityDrawerVmRuntime() {
         () => ({
             departmentId: displayVm?.workspace.department_id,
             workUnitId: displayVm?.workspace.work_unit_id,
+            entity_layout_id: drawer.opportunityWorkspaceContext?.focus_panel_layout_id ?? undefined,
         }),
-        [displayVm?.workspace.department_id, displayVm?.workspace.work_unit_id],
+        [
+            displayVm?.workspace.department_id,
+            displayVm?.workspace.work_unit_id,
+            drawer.opportunityWorkspaceContext?.focus_panel_layout_id,
+        ],
     );
 
     const layoutPrefetchId =
@@ -455,6 +423,11 @@ export default function OpportunityDrawerVmRuntime() {
         [record]
     );
 
+    const subjectManageActions = useMemo(
+        () => displayVm?.actions.header_menu ?? [],
+        [displayVm?.actions.header_menu],
+    );
+
     const headerAttentionCenter = useMemo(() => {
         if (!committedVisible || !drawer.id || !record || !isDrawerHeaderAttentionVisible(record)) {
             return null;
@@ -467,9 +440,7 @@ export default function OpportunityDrawerVmRuntime() {
                 opportunitySingular={opportunitySingular}
                 queuePreviewSeed={drawer.opportunityQueuePreviewSeed}
                 inquiryWorkflow
-                manageMenuItems={manageMenuItems}
                 canMutate={manageCanMutate}
-                onManageSelect={onManageSelect}
                 actionPreflightBlocked={actionPreflightBlocked}
                 onDismissActionPreflightBlocked={clearActionPreflightBlocked}
                 registryActionFeedback={registryActionFeedback}
@@ -479,8 +450,6 @@ export default function OpportunityDrawerVmRuntime() {
         committedVisible,
         drawer.id,
         drawer.opportunityQueuePreviewSeed,
-        manageMenuItems,
-        onManageSelect,
         opportunitySingular,
         record,
         manageCanMutate,
@@ -527,16 +496,16 @@ export default function OpportunityDrawerVmRuntime() {
                     overviewData={record}
                     queuePreviewSeed={drawer.opportunityQueuePreviewSeed}
                     inquiryWorkflow
-                    manageMenuItems={manageMenuItems}
+                    subjectManageActions={subjectManageActions}
+                    onSubjectManageActionSelect={onActionSelect}
+                    subjectManageActionLoadingKey={actionLoadingKey}
                     canMutate={manageCanMutate}
-                    manageBusyKey={manageBusyKey}
-                    onManageSelect={onManageSelect}
                     layout="modal-actions"
                     actionPreflightBlocked={actionPreflightBlocked}
                     onDismissActionPreflightBlocked={clearActionPreflightBlocked}
                     registryActionFeedback={registryActionFeedback}
                     manageDisabledReason={
-                        manageBusyKey ? "A manage action is running — wait for it to finish."
+                        actionLoadingKey ? "An action is running — wait for it to finish."
                             : !manageCanMutate ? "You don't have permission to manage this record."
                                 : null
                     }
@@ -548,10 +517,9 @@ export default function OpportunityDrawerVmRuntime() {
         displayVm,
         drawer.id,
         drawer.opportunityQueuePreviewSeed,
-        manageBusyKey,
-        manageMenuItems,
-        onManageSelect,
-        record,
+        subjectManageActions,
+        onActionSelect,
+        actionLoadingKey,
         manageCanMutate,
         actionPreflightBlocked,
         clearActionPreflightBlocked,
@@ -690,9 +658,6 @@ export default function OpportunityDrawerVmRuntime() {
         focusPanelMode,
         setFocusPanelMode,
         closeDrawer,
-        manageBusyKey,
-        manageMenuItems,
-        onManageSelect,
         actionPreflightBlocked,
         clearActionPreflightBlocked,
         registryActionFeedback,
@@ -900,18 +865,9 @@ export default function OpportunityDrawerVmRuntime() {
                         </>
                         : null}
             </EntityDrawerOperatingShell>
-            {registryModals || deleteLeadModalOpen ?
+            {registryModals ?
                 <VmDrawerActionModalsPortal>
                     {registryModals}
-                    {drawer.id ?
-                        <DeleteLeadModal
-                            open={deleteLeadModalOpen}
-                            opportunityId={drawer.id}
-                            leadSingular={opportunitySingular}
-                            onClose={() => setDeleteLeadModalOpen(false)}
-                            onDeleted={onLeadDeleted}
-                        />
-                    :   null}
                 </VmDrawerActionModalsPortal>
                 : null}
             <DrawerCommandRailActionsRegistrar registration={drawerCommandRailRegistration} />

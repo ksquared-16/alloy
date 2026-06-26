@@ -4,6 +4,7 @@ import { useMemo } from "react";
 
 import FocusPanelCardGrid from "@/components/admin/focusPanel/FocusPanelCardGrid";
 import FocusPanelCardRenderer from "@/components/admin/focusPanel/FocusPanelCardRenderer";
+import OpportunityFocusPanelActivityWorkspace from "@/components/admin/focusPanel/OpportunityFocusPanelActivityWorkspace";
 import { deriveOpportunityFocusPanelPresentation } from "@/lib/adminV2/runtime/focusPanel/deriveOpportunityFocusPanelCards";
 import type { FocusPanelMode } from "@/lib/adminV2/runtime/focusPanel/focusPanelMode";
 import type { FocusPanelCardKey } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardModel";
@@ -75,6 +76,17 @@ export default function OpportunityFocusPanelModeGrid({
         [grid, cards],
     );
 
+    if (mode === "activity") {
+        return (
+            <OpportunityFocusPanelActivityWorkspace
+                drawerId={drawerId}
+                record={record}
+                displayVm={displayVm}
+                onSelectTab={onSelectTab}
+            />
+        );
+    }
+
     return (
         <div
             id={`focus-panel-mode-${mode}`}
@@ -85,6 +97,8 @@ export default function OpportunityFocusPanelModeGrid({
         >
             <FocusPanelCardGrid
                 rows={gridRows}
+                className={mode === "work" ? "alloy-os-focus-panel-grid--work" : undefined}
+                dataFocusPanelSplitLayout={mode === "work" ? "true" : undefined}
                 renderCell={(key) => {
                     const model = cards.get(key as FocusPanelCardKey);
                     if (!model) return null;
@@ -97,6 +111,7 @@ export default function OpportunityFocusPanelModeGrid({
                             record={record}
                             opportunitySingular={opportunitySingular}
                             canMutate={canMutate}
+                            focusPanelMode={mode}
                             onSelectTab={onSelectTab}
                             onPrimaryAction={(key) => {
                                 if (key === "primary_next_action" && displayVm.actions.header_menu[0]) {

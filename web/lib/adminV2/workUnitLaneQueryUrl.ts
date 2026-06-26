@@ -44,6 +44,9 @@ export type WorkUnitLaneQueryCommit = {
     queueKey: string;
     unmappedActive: boolean;
     attentionBucket?: string;
+    workViewId?: string | null;
+    queueLayoutId?: string | null;
+    focusLayoutId?: string | null;
 };
 
 /** Build the next lane query from the current snapshot + commit options. */
@@ -63,6 +66,15 @@ export function buildWorkUnitLaneSearchParams(
         if (v) sp.set("attention_bucket", v);
         else sp.delete("attention_bucket");
     }
+    const workViewId = opts.workViewId?.trim();
+    if (workViewId) sp.set("work_view", workViewId);
+    else sp.delete("work_view");
+    const queueLayoutId = opts.queueLayoutId?.trim();
+    if (queueLayoutId) sp.set("queue_layout", queueLayoutId);
+    else sp.delete("queue_layout");
+    const focusLayoutId = opts.focusLayoutId?.trim();
+    if (focusLayoutId) sp.set("focus_layout", focusLayoutId);
+    else sp.delete("focus_layout");
     return sp;
 }
 

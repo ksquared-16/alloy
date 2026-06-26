@@ -2730,3 +2730,11 @@ html[data-adminv2-workspace-shell="v2"] [data-adminv2-bos-rail-overlay="true"] [
   --adminv2-settings-nav-card-title-size: 0.875rem;
   --adminv2-settings-nav-card-desc-size: 11px;
 }
+
+.adminv2-sidebar-config-link--active {
+  box-shadow: inset 3px 0 0 #00a283;
+}
+
+.adminv2-sidebar-config-list .adminv2-sidebar-config-link--active {
+  font-weight: 600;
+}

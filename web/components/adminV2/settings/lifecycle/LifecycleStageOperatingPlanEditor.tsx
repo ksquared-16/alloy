@@ -48,10 +48,21 @@ const LifecycleStageOperatingPlanEditor = forwardRef<
     const [draft, setDraft] = useState<StageOperatingPlanEditorDraft>(() =>
         stageOperatingPlanDraftFromSaved(savedPlan, stageKey),
     );
+    const [selectedWorkKey, setSelectedWorkKey] = useState<string | null>(null);
 
     useEffect(() => {
         setDraft(stageOperatingPlanDraftFromSaved(savedPlan, stageKey));
     }, [savedPlan, stageKey]);
+
+    useEffect(() => {
+        if (!draft.work_templates.length) {
+            setSelectedWorkKey(null);
+            return;
+        }
+        if (!selectedWorkKey || !draft.work_templates.some((work) => work.template_key === selectedWorkKey)) {
+            setSelectedWorkKey(draft.work_templates[0]!.template_key);
+        }
+    }, [draft.work_templates, selectedWorkKey]);
 
     const dirty = useMemo(
         () => stageOperatingPlanDraftDirty(savedPlan, draft, stageKey),
@@ -109,48 +120,75 @@ const LifecycleStageOperatingPlanEditor = forwardRef<
                 </select>
             </label>
 
-            <div className="space-y-2">
-                <div className="flex items-center justify-between gap-2">
-                    <div>
+            <div
+                className="rounded-lg border border-alloy-forge/10 bg-white"
+                data-testid="stage-operating-plan-work-section"
+            >
+                <details open className="group" data-testid="stage-operating-plan-work-items-collapsible">
+                    <summary className="flex cursor-pointer list-none items-center justify-between gap-2 px-3 py-2 [&::-webkit-details-marker]:hidden">
+                        <span className="text-[11px] font-semibold text-alloy-midnight/75">
+                            Work items ({draft.work_templates.length})
+                        </span>
+                        <span className="text-[10px] text-alloy-midnight/40 group-open:rotate-90">›</span>
+                    </summary>
+                    <div className="border-t border-alloy-forge/8 px-3 pb-3 pt-2">
+            <div className="flex min-h-[14rem] flex-col gap-3 lg:flex-row" data-testid="stage-operating-plan-queue-workspace">
+                <aside className="w-full shrink-0 space-y-2 lg:w-44" data-testid="stage-operating-plan-work-queue">
+                    <div className="flex items-center justify-between gap-2">
                         <span className="text-[11px] font-semibold text-alloy-midnight/75">Work items</span>
-                        <p className="text-[10px] text-alloy-midnight/50">
-                            One primary work item per stage. If none is marked, the first required item is
-                            treated as primary.
-                        </p>
+                        <button
+                            type="button"
+                            className="text-[10px] font-medium text-alloy-pine"
+                            onClick={() =>
+                                setDraft((prev) => {
+                                    const next = newWorkTemplateDraft(prev.work_templates.length);
+                                    setSelectedWorkKey(next.template_key);
+                                    return {
+                                        ...prev,
+                                        work_templates: [...prev.work_templates, next],
+                                    };
+                                })
+                            }
+                            data-testid="stage-operating-plan-add-work"
+                        >
+                            + Add
+                        </button>
                     </div>
-                    <button
-                        type="button"
-                        className="text-[10px] font-medium text-alloy-pine"
-                        onClick={() =>
-                            setDraft((prev) => ({
-                                ...prev,
-                                work_templates: [
-                                    ...prev.work_templates,
-                                    newWorkTemplateDraft(prev.work_templates.length),
-                                ],
-                            }))
-                        }
-                        data-testid="stage-operating-plan-add-work"
-                    >
-                        + Add work item
-                    </button>
-                </div>
+                    <div className="space-y-1.5">
+                        {draft.work_templates.map((work) => {
+                            const active = work.template_key === selectedWorkKey;
+                            return (
+                                <button
+                                    key={work.template_key}
+                                    type="button"
+                                    onClick={() => setSelectedWorkKey(work.template_key)}
+                                    className={`process-config-work-view-list-card !py-2 ${active ? "process-config-work-view-list-card--active" : ""}`}
+                                    data-testid={`stage-operating-plan-work-queue-${work.template_key}`}
+                                >
+                                    <p className="truncate text-left text-xs font-semibold text-alloy-midnight">
+                                        {work.label.trim() || "Untitled work item"}
+                                    </p>
+                                </button>
+                            );
+                        })}
+                        {!draft.work_templates.length ?
+                            <p className="text-xs text-alloy-midnight/50">No work items yet.</p>
+                        :   null}
+                    </div>
+                </aside>
 
-                <ul className="space-y-2" data-testid="stage-operating-plan-work-list">
-                    {draft.work_templates.map((work, index) => {
+                <div className="min-w-0 flex-1 space-y-3" data-testid="stage-operating-plan-work-workspace">
+                {draft.work_templates.map((work, index) => {
+                        if (work.template_key !== selectedWorkKey) return null;
                         const workOutcomes = outcomesForWorkTemplate(draft.outcomes, work.template_key);
                         const isPrimary =
                             work.primary === true ||
                             (primaryWork?.template_key === work.template_key && !draft.work_templates.some((w) => w.primary));
 
                         return (
-                            <li
+                            <div
                                 key={work.template_key}
-                                className={`rounded-md border p-2.5 ${
-                                    isPrimary ?
-                                        "border-alloy-pine/30 bg-alloy-pine/[0.04]"
-                                    :   "border-alloy-forge/12"
-                                }`}
+                                className="rounded-xl border border-alloy-forge/12 bg-white p-3"
                                 data-testid={`stage-operating-plan-work-${work.template_key}`}
                             >
                                 <div className="mb-2 flex flex-wrap items-center gap-2">
@@ -388,13 +426,16 @@ const LifecycleStageOperatingPlanEditor = forwardRef<
                                         :   null}
                                     </ul>
                                 </div>
-                            </li>
+                            </div>
                         );
                     })}
-                    {!draft.work_templates.length ?
-                        <li className="text-xs text-alloy-midnight/50">No work items configured yet.</li>
-                    :   null}
-                </ul>
+                {!selectedWorkKey ?
+                    <p className="text-sm text-alloy-midnight/50">Select a work item to configure purpose, timing, and outcomes.</p>
+                :   null}
+                </div>
+                    </div>
+                    </div>
+                </details>
             </div>
 
             {legacyOutcomes.length ?
@@ -440,16 +481,27 @@ const LifecycleStageOperatingPlanEditor = forwardRef<
                 </div>
             :   null}
 
-            <div className="border-t border-alloy-forge/8 pt-3">
-                <h5 className="mb-2 text-[11px] font-semibold text-alloy-midnight/75">
-                    {BUSINESS_PROCESS_SECTION_ATTENTION}
-                </h5>
-                <LifecycleStageAttentionRulesEditor
-                    rules={draft.attention_rules}
-                    workTemplates={draft.work_templates}
-                    onChange={(attention_rules) => setDraft((prev) => ({ ...prev, attention_rules }))}
-                    stageLabel={stageLabel?.trim() || stageKey}
-                />
+            <div
+                className="rounded-lg border border-alloy-forge/10 bg-white"
+                data-testid="stage-operating-plan-attention-section"
+            >
+                <details className="group" data-testid="stage-operating-plan-attention-collapsible">
+                    <summary className="flex cursor-pointer list-none items-center justify-between gap-2 px-3 py-2 [&::-webkit-details-marker]:hidden">
+                        <span className="text-[11px] font-semibold text-alloy-midnight/75">
+                            {BUSINESS_PROCESS_SECTION_ATTENTION} ({draft.attention_rules.length})
+                        </span>
+                        <span className="text-[10px] text-alloy-midnight/40 group-open:rotate-90">›</span>
+                    </summary>
+                    <div className="border-t border-alloy-forge/8 px-3 pb-3 pt-2">
+                        <LifecycleStageAttentionRulesEditor
+                            rules={draft.attention_rules}
+                            workTemplates={draft.work_templates}
+                            onChange={(attention_rules) => setDraft((prev) => ({ ...prev, attention_rules }))}
+                            stageLabel={stageLabel?.trim() || stageKey}
+                            layout="queue_workspace"
+                        />
+                    </div>
+                </details>
             </div>
         </div>
     );

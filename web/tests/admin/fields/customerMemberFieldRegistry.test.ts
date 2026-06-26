@@ -79,9 +79,10 @@ describe("customerMemberFieldRegistry", () => {
         }
     });
 
-    it("documents field_values PATCH follow-up as not yet implemented", () => {
-        expect(CUSTOMER_MEMBER_FIELD_VALUES_PATCH.implemented).toBe(false);
+    it("documents field_values PATCH on customer-members route", () => {
+        expect(CUSTOMER_MEMBER_FIELD_VALUES_PATCH.implemented).toBe(true);
         expect(CUSTOMER_MEMBER_FIELD_VALUES_PATCH.fieldValuesEntityType).toBe("customer_member");
+        expect(CUSTOMER_MEMBER_FIELD_VALUES_PATCH.referenceImplementation).toContain("customer-members/[id]/route.ts");
     });
 });
 

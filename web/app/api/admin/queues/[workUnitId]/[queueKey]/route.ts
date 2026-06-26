@@ -12,6 +12,11 @@ import {
 } from "@/lib/admin/resolveQueueRecordScopeConstraints";
 import { fetchEffectiveUserDisplayTimezoneCached } from "@/lib/admin/timezoneContract";
 import { getWorkUnitQueueItems, QueueServiceError } from "@/lib/queues/QueueService";
+import { filterQueueRowsByWorkViewFilters } from "@/lib/lifecycle/evaluateWorkViewFiltersV1";
+import {
+    fetchDepartmentMetadataForWorkUnit,
+    resolveActiveWorkViewRuntimeContext,
+} from "@/lib/lifecycle/resolveWorkViewRuntimeContext";
 import { perfQueueRowsServer } from "@/lib/perf/adminV2PerfLog";
 import { buildWorkUnitQueueScopeCacheKey } from "@/lib/workspace/workUnitQueueScopeCacheKey";
 import {
@@ -128,6 +133,9 @@ export async function GET(
         const attentionBucketKey = (request.nextUrl.searchParams.get("attention_bucket") ?? "").trim() || null;
         const rowMode = (request.nextUrl.searchParams.get("row_mode") ?? "").trim().toLowerCase();
         const rowEnrichment = rowMode === "preview" || rowMode === "reveal" ? "queue_reveal" : "queue_list";
+        const workViewIdParam =
+            (request.nextUrl.searchParams.get("work_view_id") ?? request.nextUrl.searchParams.get("work_view") ?? "").trim()
+            || null;
 
         const queueScopeKey = buildWorkUnitQueueScopeCacheKey({
             accessDim: dim,
@@ -145,6 +153,7 @@ export async function GET(
             rowEnrichment,
             omitTotalCount,
             countAccuracy,
+            workViewId: workViewIdParam,
         });
 
         const cached = readWorkUnitQueueItemsServerCache(cacheKey);
@@ -190,10 +199,34 @@ export async function GET(
             rowEnrichment,
         });
 
-        writeWorkUnitQueueItemsServerCache(cacheKey, { result, rowsPerf });
+        let responseResult = result;
+        if (workViewIdParam && Array.isArray(result.items) && result.items.length) {
+            const departmentMetadata = await fetchDepartmentMetadataForWorkUnit(supabase, gate.orgId, workUnitId);
+            const ctx = resolveActiveWorkViewRuntimeContext({
+                departmentMetadata,
+                workViewId: workViewIdParam,
+                queueKey,
+            });
+            if (ctx.filters?.length) {
+                const filtered = filterQueueRowsByWorkViewFilters(
+                    result.items as Array<Record<string, unknown>>,
+                    ctx.filters,
+                );
+                responseResult = {
+                    ...result,
+                    items: filtered,
+                    total_count:
+                        typeof result.total_count === "number" ?
+                            filtered.length
+                        :   result.total_count,
+                };
+            }
+        }
+
+        writeWorkUnitQueueItemsServerCache(cacheKey, { result: responseResult, rowsPerf });
 
         const tSer0 = Date.now();
-        const bodyJson = JSON.stringify(result);
+        const bodyJson = JSON.stringify(responseResult);
         const serialize_ms = Date.now() - tSer0;
         const payload_kb = Buffer.byteLength(bodyJson, "utf8") / 1024;
         const total_ms = Date.now() - handlerT0;

@@ -6,6 +6,7 @@ import {
     isCanonicalDrawerHostPath,
     isCanonicalWorkspacePath,
     isOperatorAdminPath,
+    isPublicMarketingChromeSuppressedPath,
     legacyAdminRedirectTarget,
     normalizeToCanonicalAdminPath,
     normalizeTransitionalAdminPath,
@@ -38,6 +39,13 @@ describe("canonicalAdminRoutes", () => {
         expect(isCanonicalWorkspacePath("/workspace/work-unit/new-leads")).toBe(true);
         expect(isOperatorAdminPath("/workspace")).toBe(true);
         expect(isCanonicalDrawerHostPath("/workspace/work-unit/new-leads")).toBe(true);
+    });
+
+    it("suppresses marketing chrome for canonical /settings URLs", () => {
+        expect(isPublicMarketingChromeSuppressedPath("/settings")).toBe(true);
+        expect(isPublicMarketingChromeSuppressedPath("/settings/business-processes")).toBe(true);
+        expect(isPublicMarketingChromeSuppressedPath("/settings/layouts")).toBe(true);
+        expect(isPublicMarketingChromeSuppressedPath("/platform")).toBe(false);
     });
 
     it("builds operator work unit hrefs without department or uuid segments", () => {

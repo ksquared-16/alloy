@@ -33,11 +33,12 @@ describe("opportunityIdentity", () => {
         ).toEqual({ primary_person_id: "p1", fallback_contact_id: "c1" });
     });
 
-    it("normalizeOpportunityWritePayload no-op without identity keys", async () => {
+    it("normalizeOpportunityWritePayload no-op without identity keys but strips legacy status", async () => {
         const supabase = mockSupabaseForContactPersonId("should-not-run");
-        const patch: Record<string, unknown> = { metadata: { a: 1 }, quote_total: 10 };
+        const patch: Record<string, unknown> = { metadata: { a: 1 }, quote_total: 10, status: "open" };
         const out = await normalizeOpportunityWritePayload(supabase, patch, "test:metadata-only");
         expect(out).toBe(patch);
+        expect(patch.status).toBeUndefined();
         expect((supabase as unknown as { from: ReturnType<typeof vi.fn> }).from).not.toHaveBeenCalled();
     });
 

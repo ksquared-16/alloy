@@ -4,14 +4,17 @@ import type { ReactNode } from "react";
 import { X } from "lucide-react";
 
 import FocusPanelModeSwitch from "@/components/admin/focusPanel/FocusPanelModeSwitch";
+import FocusPanelSubjectIdentityBlock from "@/components/admin/focusPanel/FocusPanelSubjectIdentityBlock";
 import type { FocusPanelMode } from "@/lib/adminV2/runtime/focusPanel/focusPanelMode";
+import type {
+    FocusPanelContextChip,
+    FocusPanelMissionDisplay,
+} from "@/lib/adminV2/runtime/focusPanel/focusPanelDisplayLabels";
 
 export type FocusPanelCompactHeaderProps = {
     subjectTitle: string;
-    missionLine: string | null;
-    stageLabel: string | null;
-    statusChip: ReactNode;
-    primaryAction?: ReactNode | null;
+    contextChips: FocusPanelContextChip[];
+    mission?: FocusPanelMissionDisplay | null;
     secondaryActions?: ReactNode | null;
     activeMode: FocusPanelMode;
     onModeChange: (mode: FocusPanelMode) => void;
@@ -19,15 +22,13 @@ export type FocusPanelCompactHeaderProps = {
 };
 
 /**
- * Compact Focus Panel header (~65–70px subject band + mode control).
- * Subject · Mission · Stage · Status · Primary Action — no breadcrumbs.
+ * Compact Focus Panel header — branded subject identity block + BOS + Manage.
+ * No stage-movement CTAs or unrestricted status mutation.
  */
 export default function FocusPanelCompactHeader({
     subjectTitle,
-    missionLine,
-    stageLabel,
-    statusChip,
-    primaryAction,
+    contextChips,
+    mission,
     secondaryActions,
     activeMode,
     onModeChange,
@@ -45,28 +46,21 @@ export default function FocusPanelCompactHeader({
                 >
                     <X className="h-3.5 w-3.5" aria-hidden />
                 </button>
-                <div className="alloy-os-fp-header-compact__identity min-w-0">
-                    <div className="alloy-os-fp-header-compact__title-row">
-                        <h2 id="admin-focus-panel-title" className="alloy-os-fp-header-compact__title">
-                            {subjectTitle}
-                        </h2>
-                        {stageLabel ?
-                            <span className="alloy-os-fp-header-compact__stage">{stageLabel}</span>
-                        :   null}
-                    </div>
-                    {missionLine ?
-                        <p className="alloy-os-fp-header-compact__mission" data-focus-panel-mission="true">
-                            {missionLine}
-                        </p>
+                <FocusPanelSubjectIdentityBlock
+                    subjectTitle={subjectTitle}
+                    contextChips={contextChips}
+                    mission={mission}
+                />
+                <div
+                    className="alloy-os-fp-header-compact__rail shrink-0"
+                    data-alloy-os-fp-header-actions="true"
+                >
+                    {secondaryActions ?
+                        <div className="alloy-os-fp-header-compact__actions alloy-os-fp-header-compact__secondary-actions">
+                            {secondaryActions}
+                        </div>
                     :   null}
                 </div>
-                <div className="alloy-os-fp-header-compact__state shrink-0">{statusChip}</div>
-                {primaryAction ?
-                    <div className="alloy-os-fp-header-compact__primary shrink-0">{primaryAction}</div>
-                :   null}
-                {secondaryActions ?
-                    <div className="alloy-os-fp-header-compact__actions shrink-0">{secondaryActions}</div>
-                :   null}
             </div>
             <div className="alloy-os-fp-header-compact__mode" data-focus-panel-tier="mode">
                 <FocusPanelModeSwitch activeMode={activeMode} onModeChange={onModeChange} />

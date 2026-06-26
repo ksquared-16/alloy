@@ -12,17 +12,12 @@ import ConfigurationRuntimeUniversalCard from "@/components/adminV2/settings/con
 import {
     BUSINESS_PROCESS_CARD_OPERATING_PLAN,
     BUSINESS_PROCESS_CARD_OPERATING_PLAN_QUESTION,
-    BUSINESS_PROCESS_CARD_READY,
-    BUSINESS_PROCESS_CARD_READY_QUESTION,
     BUSINESS_PROCESS_CARD_REQUIRED,
     BUSINESS_PROCESS_CARD_REQUIRED_QUESTION,
     BUSINESS_PROCESS_CARD_STATUS_MEMBERSHIP,
     BUSINESS_PROCESS_CARD_STATUS_MEMBERSHIP_QUESTION,
     BUSINESS_PROCESS_PREVIEW_WORK_UNIT,
     BUSINESS_PROCESS_SAVE_STAGE,
-    BUSINESS_PROCESS_SECTION_OPERATING_PLAN_SUMMARY,
-    BUSINESS_PROCESS_SECTION_READY_SUMMARY,
-    BUSINESS_PROCESS_STAGE_HEADER,
 } from "@/lib/lifecycle/businessProcessUiLabels";
 import {
     STAGE_MEMBERSHIP_INCLUDED_STATUSES_HELPER,
@@ -73,33 +68,31 @@ function SaveBar({
 }) {
     return (
         <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
-            <div className="flex flex-col items-end gap-0.5">
-                {effectiveSaveState === "unsaved" ?
-                    <span
-                        className="text-[10px] font-medium text-amber-800/90"
-                        data-testid="lifecycle-stage-save-unsaved"
-                    >
-                        Unsaved changes
-                    </span>
-                :   null}
-                {effectiveSaveState === "saved" ?
-                    <span
-                        className="text-[10px] font-medium text-alloy-pine"
-                        data-testid="lifecycle-stage-save-saved"
-                    >
-                        Saved
-                    </span>
-                :   null}
-                {effectiveSaveState === "error" && saveError ?
-                    <span className="max-w-[14rem] text-right text-[10px] text-red-700" role="alert">
-                        {saveError}
-                    </span>
-                :   null}
-            </div>
+            {effectiveSaveState === "unsaved" ?
+                <span
+                    className="text-[10px] font-medium text-amber-800/90"
+                    data-testid="lifecycle-stage-save-unsaved"
+                >
+                    Unsaved
+                </span>
+            :   null}
+            {effectiveSaveState === "saved" ?
+                <span
+                    className="text-[10px] font-medium text-alloy-pine"
+                    data-testid="lifecycle-stage-save-saved"
+                >
+                    Saved
+                </span>
+            :   null}
+            {effectiveSaveState === "error" && saveError ?
+                <span className="max-w-[14rem] text-right text-[10px] text-red-700" role="alert">
+                    {saveError}
+                </span>
+            :   null}
             {previewHref ?
                 <Link
                     href={previewHref}
-                    className="rounded-md border border-alloy-forge/15 px-3 py-1.5 text-xs font-medium text-alloy-pine hover:bg-alloy-stone/10"
+                    className="rounded-md border border-alloy-forge/15 px-2.5 py-1 text-[11px] font-medium text-alloy-pine hover:bg-alloy-stone/10"
                     data-testid="lifecycle-stage-preview-work-unit"
                 >
                     {BUSINESS_PROCESS_PREVIEW_WORK_UNIT}
@@ -107,7 +100,7 @@ function SaveBar({
             :   null}
             <button
                 type="button"
-                className="rounded-md bg-alloy-pine px-4 py-1.5 text-xs font-medium text-white disabled:opacity-50"
+                className="rounded-md bg-alloy-pine px-3 py-1 text-[11px] font-medium text-white disabled:opacity-50"
                 disabled={saveDisabled}
                 onClick={() => void onSaveStage()}
                 data-testid="lifecycle-stage-save"
@@ -141,8 +134,6 @@ export default function LifecycleStageWorkspace({
     entityDisplayLabels,
     statusesError,
     onStatusRollupChange,
-    validationSlot,
-    readyCheckRefreshKey,
     saveState,
     saveError,
     onSaveStage,
@@ -159,7 +150,7 @@ export default function LifecycleStageWorkspace({
     entityDisplayLabels?: Partial<Record<LifecycleRequirementEntityKey, string>>;
     statusesError: string | null;
     onStatusRollupChange: (rollup: StatusRollupV1, flatKeys: string[]) => void;
-    validationSlot: ReactNode;
+    validationSlot?: ReactNode;
     readyCheckRefreshKey?: string;
     saveState: LifecycleStageSaveUiState;
     saveError: string | null;
@@ -226,14 +217,6 @@ export default function LifecycleStageWorkspace({
             `/adminV2/workspace/dept/${departmentId}/work-unit/${bootstrap.pipeline.id}`
         :   null;
 
-    const insightChips = [
-        savedStatusCount > 0 ? `${savedStatusCount} statuses` : "No statuses",
-        configuredFieldCount > 0 ? `${configuredFieldCount} fields` : "No requirements",
-        bootstrap?.stage_operating_plan?.work_templates.length ?
-            `${bootstrap.stage_operating_plan.work_templates.length} work items`
-        :   null,
-    ].filter(Boolean) as string[];
-
     if (bootstrapLoading && !bootstrap) {
         return (
             <div
@@ -250,34 +233,20 @@ export default function LifecycleStageWorkspace({
     return (
         <div className="relative" data-testid="lifecycle-stage-workspace">
             <header
-                className="sticky top-0 z-20 mb-3 rounded-[10px] border border-alloy-forge/12 bg-white/95 px-4 py-3 shadow-sm backdrop-blur-sm"
+                className="sticky top-0 z-20 -mx-1 mb-2 flex flex-wrap items-center justify-between gap-2 border-b border-alloy-forge/10 bg-white/95 px-1 py-2 backdrop-blur-sm"
                 data-testid="lifecycle-stage-workspace-header"
             >
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div className="min-w-0 flex-1">
-                        <p className="text-[10px] font-medium uppercase tracking-wide text-alloy-midnight/45">
-                            {lifecycleName} · {BUSINESS_PROCESS_STAGE_HEADER}
-                        </p>
-                        <h3 className="text-base font-semibold text-alloy-midnight">{stageLabel || stageKey}</h3>
-                        <div className="mt-1.5 flex flex-wrap gap-1">
-                            {insightChips.map((chip) => (
-                                <span
-                                    key={chip}
-                                    className="rounded-full border border-alloy-forge/10 bg-alloy-stone/[0.04] px-2 py-0.5 text-[10px] text-alloy-midnight/60"
-                                >
-                                    {chip}
-                                </span>
-                            ))}
-                        </div>
-                    </div>
-                    <SaveBar
-                        effectiveSaveState={effectiveSaveState}
-                        saveError={saveError}
-                        saveDisabled={saveDisabled}
-                        onSaveStage={onSaveStage}
-                        previewHref={previewHref}
-                    />
+                <div className="min-w-0">
+                    <h3 className="truncate text-sm font-semibold text-alloy-midnight">{stageLabel || stageKey}</h3>
+                    <p className="truncate text-[10px] text-alloy-midnight/45">{lifecycleName}</p>
                 </div>
+                <SaveBar
+                    effectiveSaveState={effectiveSaveState}
+                    saveError={saveError}
+                    saveDisabled={saveDisabled}
+                    onSaveStage={onSaveStage}
+                    previewHref={previewHref}
+                />
             </header>
 
             {statusesError ?
@@ -286,15 +255,13 @@ export default function LifecycleStageWorkspace({
                 </p>
             :   null}
 
-            <div
-                className="grid gap-3 lg:grid-cols-2"
-                data-testid="configuration-runtime-stage-card-grid"
-            >
+            <div className="space-y-2" data-testid="configuration-runtime-stage-card-grid">
                 <ConfigurationRuntimeUniversalCard
                     id="membership"
                     title={BUSINESS_PROCESS_CARD_STATUS_MEMBERSHIP}
                     question={BUSINESS_PROCESS_CARD_STATUS_MEMBERSHIP_QUESTION}
                     dirty={membershipDirty || rollupDirty}
+                    insightChips={savedStatusCount > 0 ? [`${savedStatusCount} statuses`] : undefined}
                     defaultOpen
                 >
                     {stageKey.trim() ?
@@ -336,9 +303,7 @@ export default function LifecycleStageWorkspace({
                     title={BUSINESS_PROCESS_CARD_REQUIRED}
                     question={BUSINESS_PROCESS_CARD_REQUIRED_QUESTION}
                     dirty={fieldDirty}
-                    insightChips={
-                        configuredFieldCount > 0 ? [`${configuredFieldCount} fields`] : undefined
-                    }
+                    insightChips={configuredFieldCount > 0 ? [`${configuredFieldCount} fields`] : undefined}
                 >
                     {stageKey.trim() ?
                         <LifecycleStageFieldRequirementsEditor
@@ -360,7 +325,6 @@ export default function LifecycleStageWorkspace({
                     id="operating_plan"
                     title={BUSINESS_PROCESS_CARD_OPERATING_PLAN}
                     question={BUSINESS_PROCESS_CARD_OPERATING_PLAN_QUESTION}
-                    summary={BUSINESS_PROCESS_SECTION_OPERATING_PLAN_SUMMARY}
                     dirty={operatingPlanDirty}
                 >
                     {stageKey.trim() ?
@@ -372,17 +336,6 @@ export default function LifecycleStageWorkspace({
                             onDirtyChange={setOperatingPlanDirty}
                         />
                     :   <p className="text-xs text-alloy-midnight/50">Select a stage first.</p>}
-                </ConfigurationRuntimeUniversalCard>
-
-                <ConfigurationRuntimeUniversalCard
-                    id="ready_check"
-                    title={BUSINESS_PROCESS_CARD_READY}
-                    question={BUSINESS_PROCESS_CARD_READY_QUESTION}
-                    summary={BUSINESS_PROCESS_SECTION_READY_SUMMARY}
-                    span="full"
-                    lazyMount
-                >
-                    <div key={readyCheckRefreshKey ?? "initial"}>{validationSlot}</div>
                 </ConfigurationRuntimeUniversalCard>
             </div>
         </div>

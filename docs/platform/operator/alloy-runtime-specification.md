@@ -80,6 +80,20 @@ The **same Subject** can be reused across **different Missions** — the Wright 
 
 Per-domain operational surfaces (Billing, Attendance, Schedule, Placement) appear as **cards within Work** — never as separate drawer products. Progressive Hidden / Startable / Active states carry forward unchanged from `../operational-ux-doctrine.md`.
 
+### Work Unit entry (Operational Mode — default state)
+
+When an operator opens a Work Unit, the runtime **does not** land in a full-width browsing queue.
+
+**Canonical entry flow:**
+
+```
+Resolve Perspective → Resolve Queue → Resolve Default Operational Subject → Open Focus Panel
+```
+
+Operational Mode (condensed queue + resolved subject + open Focus Panel) is the **only normal operator state**. Full-width expanded queue and Browse Mode are **retired from active UX** — implementations remain as dormant infrastructure.
+
+Detail: [`operational-mode-default-state-doctrine.md`](./operational-mode-default-state-doctrine.md).
+
 ---
 
 ## Part 3 — Universal Workspace
@@ -113,7 +127,9 @@ No implementation details here — see `../core/navigation-and-workspace-doctrin
 |--------|---------------|
 | **Queue grammar** | Filter · sort · group · select · navigate. Never business logic, workflows, financial math, or identity resolution. |
 | **Row hierarchy** | Lead with recognition + state (meaning before fields); enough to pick, never the source of truth to act. |
-| **Selection** | Single select → drawer; multi-select → bulk action. |
+| **Selection** | Single select → drawer; multi-select → bulk action. On Work Unit open, runtime resolves **Default Operational Subject** (strategy-driven) — not arbitrary “first row.” |
+| **Default subject** | Each Work Unit owns a **Default Operational Subject Strategy** (e.g. Highest Priority, Largest Balance). Platform resolves active row; Focus Panel opens automatically. |
+| **Strategy override** | Operator may temporarily change strategy from queue header — reorders queue, re-resolves subject, updates Focus Panel; does not persist to Work Unit config. |
 | **Bulk actions** | Explicit operator intent across selected rows. |
 | **Previous / Next** | Follows the **current filtered & sorted queue** — not the underlying table (law 8). |
 | **Relationship to drawer** | Row → drawer in place; queue context preserved (law 7). |
@@ -294,6 +310,8 @@ This guarantees the operator always meets the work that matters first, regardles
 | Motion | Conditions |
 | Interaction | Business process logic |
 | Hierarchy (tiers) | Perspective definitions |
+| Default Operational Subject Strategy (resolver catalog) | Work Unit default strategy selection (future) |
+| Operational Mode entry flow | Operator strategy override (session-only, future) |
 | Platform inputs | Tenant-specific behavior |
 
 **Why this split matters:**

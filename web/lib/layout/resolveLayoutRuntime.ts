@@ -16,6 +16,7 @@ import {
     layoutAssignmentSurfaceKeyForRuntime,
     resolveLayoutFromBusinessProcessAssignment,
 } from "./resolveBusinessProcessLayoutAssignment";
+import { resolvePinnedEntityLayoutRecord } from "./resolvePinnedEntityLayout";
 
 export type ResolveLayoutForOrgInput = {
     orgId: string;
@@ -27,6 +28,8 @@ export type ResolveLayoutForOrgInput = {
     supabase: SupabaseClient;
     /** When false, skips DB fetch and resolves registry/builtin only. Defaults to feature flag. */
     fetchPublishedLayouts?: boolean;
+    /** Work View / URL pinned layout — highest priority when published. */
+    pinnedEntityLayoutId?: string | null;
 };
 
 export type ResolveLayoutForOrgResult = ExtendedLayoutResolution & {
@@ -55,7 +58,16 @@ export async function resolveLayoutForOrg(input: ResolveLayoutForOrgInput): Prom
 
     let assignmentRecord = null;
     let assignmentMatchTier: string | undefined;
-    if (input.assignmentContext && shouldFetch) {
+
+    if (shouldFetch) {
+        const pinned = await resolvePinnedEntityLayoutRecord(input.supabase, input.pinnedEntityLayoutId);
+        if (pinned && pinned.surface === input.surface) {
+            assignmentRecord = pinned;
+            assignmentMatchTier = "work_view_pinned";
+        }
+    }
+
+    if (!assignmentRecord && input.assignmentContext && shouldFetch) {
         const surfaceKey = layoutAssignmentSurfaceKeyForRuntime({
             entityType: input.entityType,
             surface: input.surface,

@@ -66,9 +66,7 @@ test.describe("Configuration Runtime vertical slice", () => {
             animations: "disabled",
         });
 
-        await page.getByTestId("business-process-nav-presentation").click();
-        await expect(page.getByTestId("business-process-presentation-workspace")).toBeVisible({ timeout: 60_000 });
-        await expect(page.getByTestId("lifecycle-stage-presentation-card")).toBeVisible({ timeout: 60_000 });
+        await expect(page.locator('[data-testid$="-assignment-card"]').first()).toBeVisible({ timeout: 60_000 });
         await page.screenshot({
             path: path.join(screenshotDir, "05-presentation-assignment.png"),
             fullPage: true,
