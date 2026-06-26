@@ -15,8 +15,7 @@ export interface Opportunity {
     created_at: string | null;
     updated_at?: string | null;
     name: string | null;
-    status: string | null;
-    status_key?: string | null;
+    status_key: string | null;
     job_date: string | null;
     job_time_window: string | null;
     quote_total: number | null;
