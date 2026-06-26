@@ -15,7 +15,6 @@ export interface Customer {
   created_at: string | null;
   updated_at: string | null;
   name: string | null;
-  status: string | null;
   status_key: string | null;
   _status_display?: string | null;
   customer_type: string | null;

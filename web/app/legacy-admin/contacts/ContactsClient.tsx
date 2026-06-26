@@ -19,7 +19,6 @@ type Contact = {
     email: string | null;
     phone: string | null;
     company_name?: string | null;
-    status: string | null;
     status_key?: string | null;
     contact_type?: string | null;
     notes?: string | null;

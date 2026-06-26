@@ -60,4 +60,14 @@ describe("LocationsHierarchySettingsClient pilot UX", () => {
         expect(src).toContain("table-fixed");
         expect(src).not.toContain("min-w-[9rem]");
     });
+
+    it("LocationHierarchyRow includes site address columns for configuration runtime panels", () => {
+        const presentation = read("lib/adminV2/locationsHierarchyTablePresentation.ts");
+        expect(presentation).toContain("address1?: string | null");
+        expect(presentation).toContain("postal_code?: string | null");
+
+        const sitePanel = read("components/adminV2/settings/locations/LocationSiteDetailPanel.tsx");
+        expect(sitePanel).toContain("site.address1");
+        expect(sitePanel).toContain("site.postal_code");
+    });
 });

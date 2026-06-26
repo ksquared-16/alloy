@@ -14,6 +14,8 @@ export type LocationHierarchyRow = {
     _status_display?: string | null;
     city: string | null;
     state: string | null;
+    address1?: string | null;
+    postal_code?: string | null;
     metadata?: unknown;
 };
 
