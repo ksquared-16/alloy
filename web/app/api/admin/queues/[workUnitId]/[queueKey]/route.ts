@@ -215,10 +215,10 @@ export async function GET(
                 responseResult = {
                     ...result,
                     items: filtered,
-                    total_count:
-                        typeof result.total_count === "number" ?
+                    total:
+                        typeof result.total === "number" ?
                             filtered.length
-                        :   result.total_count,
+                        :   result.total,
                 };
             }
         }
