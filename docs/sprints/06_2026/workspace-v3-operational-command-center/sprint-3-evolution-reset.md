@@ -13,7 +13,7 @@
 
 ### Canonical baseline
 
-**Screenshot:** [`mockups/baseline/00-current-alloy-workspace-baseline.png`](./mockups/baseline/00-current-alloy-workspace-baseline.png)
+**Screenshot:** [`mockups/baseline/01-workspace-current-system5.png`](./mockups/baseline/01-workspace-current-system5.png)
 
 **Source code (today's implementation):**
 
@@ -195,7 +195,7 @@ All mockups in [`mockups/evolution/`](./mockups/evolution/) **begin from the bas
 
 | Version | File | Description |
 |---------|------|-------------|
-| **Baseline** | [`baseline/00-current-alloy-workspace-baseline.png`](./mockups/baseline/00-current-alloy-workspace-baseline.png) | Today's Alloy — canonical reference |
+| **Baseline** | [`baseline/01-workspace-current-system5.png`](./mockups/baseline/01-workspace-current-system5.png) | Today's Alloy Workspace — System 5 canonical reference |
 | **A** | `A-conservative-evolution.png` | Label rename only; minimal delta |
 | **B** | `B-operational-surface-storytelling.png` | Same tiles; inner storytelling + Today's Work |
 | **C** | `C-improved-hierarchy.png` | Same layout; refined spacing and scan path |

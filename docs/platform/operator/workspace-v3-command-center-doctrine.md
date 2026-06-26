@@ -4,11 +4,13 @@
 **Status:** Canonical platform doctrine (June 2026)  
 **Authority:** Landing surface law for `/workspace` — how operators enter operational execution.
 
-**Evolution constraint (Sprint 3):** Refine today's shipped Workspace — **do not replace** shell, sidebar, command rail, banner chrome, or tile shells. See [`sprint-3-evolution-reset.md`](../../sprints/06_2026/workspace-v3-operational-command-center/sprint-3-evolution-reset.md).
+**Evolution constraint (Sprint 3):** Refine today's shipped Workspace — **do not replace** shell, sidebar, command rail, banner chrome, or tile shells.
+
+**Continuity objective (Sprint 4):** Workspace Operational Surface = **cover page** of Work Unit `adminv2-os-context` stack — same typography, KPI strip, and progressive reveal. See [`sprint-4-ux-continuity.md`](../../sprints/06_2026/workspace-v3-operational-command-center/sprint-4-ux-continuity.md).
 
 **Related:** [`navigation-and-workspace-doctrine.md`](../core/navigation-and-workspace-doctrine.md) · [`workspace-v3-operational-surface-doctrine.md`](./workspace-v3-operational-surface-doctrine.md) · [`operational-surface-design-system.md`](./operational-surface-design-system.md) (System 5) · [`operational-mode-default-state-doctrine.md`](./operational-mode-default-state-doctrine.md)
 
-**Sprint packs:** [Sprint 1](../../sprints/06_2026/workspace-v3-operational-command-center/README.md) · [Sprint 2](../../sprints/06_2026/workspace-v3-operational-command-center/sprint-2-evolution.md) · [Sprint 3 — Evolution Reset](../../sprints/06_2026/workspace-v3-operational-command-center/sprint-3-evolution-reset.md)
+**Sprint packs:** [Sprint 1](../../sprints/06_2026/workspace-v3-operational-command-center/README.md) · [Sprint 2](../../sprints/06_2026/workspace-v3-operational-command-center/sprint-2-evolution.md) · [Sprint 3 — Evolution Reset](../../sprints/06_2026/workspace-v3-operational-command-center/sprint-3-evolution-reset.md) · [Sprint 4 — UX Continuity](../../sprints/06_2026/workspace-v3-operational-command-center/sprint-4-ux-continuity.md)
 
 ---
 

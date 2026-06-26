@@ -15,6 +15,8 @@ This sprint redesigns `/workspace` around the operating system doctrine: four op
 
 **Sprint 2 (Evolution):** [`sprint-2-evolution.md`](./sprint-2-evolution.md) — Operational Surfaces, storytelling, enterability, Work View deep links, role architecture.
 
+**Sprint 4 (UX Continuity — System 5 reset):** [`sprint-4-ux-continuity.md`](./sprint-4-ux-continuity.md) — Workspace ↔ Work Unit continuity using **current** System 5 baselines only; shared `OperationalContextStack`, expand/reveal transition. Obsolete pre–Focus Panel WU comparisons retired.
+
 **Sprint 3 (Evolution Reset):** [`sprint-3-evolution-reset.md`](./sprint-3-evolution-reset.md) — **Canonical visual direction.** Refine today's Alloy Workspace; baseline-anchored mockups only. Sprint 2 greenfield mockups superseded.
 
 **Deliverables in this pack (Sprint 1):**

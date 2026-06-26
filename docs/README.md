@@ -58,14 +58,15 @@ Start here: **`platform/foundation/system-overview.md`**
 20. `platform/operator/card-interaction-expansion-doctrine.md` — **Card Interaction & Expansion** (System 5B — doctrine; expansion not fully built)
 21. `platform/operator/card-content-template-field-inclusion-doctrine.md` — **Content Templates & Field Inclusion** (System 5C — doctrine; templates not fully built)
 22. `platform/operator/focus-panel-edit-information-doctrine.md` — **Focus Panel** edit law + **implementation freeze**
-23. `platform/operator/operational-mode-default-state-doctrine.md` — **Operational Mode as Default State** (approved/frozen)
-24. `platform/operator/workspace-v3-command-center-doctrine.md` — **Workspace V3 — Operational Command Center** (Rev 2 — four zones, progressive depth, enterability)
-25. `platform/operator/workspace-v3-operational-surface-doctrine.md` — **Workspace V3 — Operational Surface launcher** (storytelling, Work View deep links)
-26. `platform/operator/queue-system.md`
-27. `platform/operator/drawer-system.md`
-28. `platform/operator/operational-action-doctrine.md` — **Operational Actions** (status via action pipeline; Manage/rail catalog alignment; invariant example)
-29. `platform/operator/experience-builder-doctrine.md` — LayoutDoc, builder, queue v3, actions/widgets
-30. `platform/operator/business-process-layout-assignments.md` — BP stage layout routing
+23. `platform/operator/focus-panel-architecture-vocabulary.md` — **Focus Panel architecture vocabulary** (Operational Subject, Subject Composition, Embedded Workspace; drawer = infra)
+24. `platform/operator/operational-mode-default-state-doctrine.md` — **Operational Mode as Default State** (approved/frozen)
+25. `platform/operator/workspace-v3-command-center-doctrine.md` — **Workspace V3 — Operational Command Center** (Rev 2 — four zones, progressive depth, enterability)
+26. `platform/operator/workspace-v3-operational-surface-doctrine.md` — **Workspace V3 — Operational Surface launcher** (storytelling, Work View deep links)
+27. `platform/operator/queue-system.md`
+28. `platform/operator/drawer-system.md`
+29. `platform/operator/operational-action-doctrine.md` — **Operational Actions** (status via action pipeline; Manage/rail catalog alignment; invariant example)
+30. `platform/operator/experience-builder-doctrine.md` — LayoutDoc, builder, queue v3, actions/widgets
+31. `platform/operator/business-process-layout-assignments.md` — BP stage layout routing
 
 ### 4. Platform modules (load when touching area)
 

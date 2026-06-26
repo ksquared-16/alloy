@@ -225,7 +225,25 @@ Operational Surfaces inherit **System 5** tokens and **today's `processNavTile` 
 
 ---
 
-## 9. Configuration (design for — not implement)
+## 9. Workspace ↔ Work Unit continuity (cover page)
+
+The Operational Surface is the **visual and informational cover page** of the Work Unit — not a separate product surface.
+
+| Work Unit element | Operational Surface preview |
+|-------------------|----------------------------|
+| `adminv2-os-context__title` (ENROLLMENT) | Same typography inside tile |
+| `adminv2-os-context__kpi-strip` | Same inline KPI row (cover density) |
+| Perspective pills | Today's Work lines (Work View labels) |
+| `CompressedQueueHeader` | Story sentence + highest-priority insight |
+| Queue rows | Not on Workspace — **revealed on entry below context bar** |
+
+**Law:** Opening a Work Unit should **expand** the cover stack and **reveal the queue below** the operational-surface top — same pine rail, same title row, same shell. Sidebar, header, and BOS rail do not remount.
+
+Full audit: [`sprint-4-ux-continuity.md`](../../sprints/06_2026/workspace-v3-operational-command-center/sprint-4-ux-continuity.md)
+
+---
+
+## 10. Configuration (design for — not implement)
 
 See [`sprint-2-evolution.md` § Configuration architecture](../../sprints/06_2026/workspace-v3-operational-command-center/sprint-2-evolution.md).
 
@@ -240,7 +258,7 @@ Operational Surfaces will become configurable. Platform must reserve:
 
 ---
 
-## 10. Success criteria
+## 11. Success criteria
 
 - [ ] Operators read **priority stories**, not metric tables  
 - [ ] Every Today's work line with a count is **clickable** when a Work View exists  
