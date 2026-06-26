@@ -26,6 +26,15 @@ import {
 } from "@/lib/adminV2/runtime/perspective/mergeOperationalViewMetadata";
 import { buildOperationalViewPreviewRuntimeHref } from "@/lib/adminV2/runtime/perspective/mergeOperationalViewMetadata";
 import { resolveOperationalViewsForWorkUnit } from "@/lib/adminV2/runtime/perspective/resolveStageOperationalViews";
+import type {
+    OperationalSurfaceStory,
+    OperationalSurfaceWorkLineData,
+} from "@/lib/admin/enrollmentOperationalSurfaceLanding";
+import {
+    applyEnrollmentOperationalSurfaceFields,
+    buildEnrollmentOperationalSurfaceFields,
+    isEnrollmentLifecycleCard,
+} from "@/lib/admin/enrollmentOperationalSurfaceLanding";
 
 /** Default operator queue when configured on the enrollment pipeline. */
 export const OPERATOR_DEFAULT_ENTRY_QUEUE_KEY = "new_leads" as const;
@@ -56,6 +65,10 @@ export type OperatorLifecycleLandingCard = {
         target?: string | null;
         status?: string | null;
     }[];
+    /** Enrollment Operational Surface — cover page story (enrollment only). */
+    operationalStory?: OperationalSurfaceStory;
+    /** Enrollment Operational Surface — enterable work lines (enrollment only). */
+    todaysWork?: readonly OperationalSurfaceWorkLineData[];
 };
 
 export type OperatorLifecycleWorkUnitRow = {
@@ -270,8 +283,9 @@ export function buildOperatorLifecycleLandingCards(args: {
             );
             const defaultQueue = resolveDefaultEntryQueue(workQueues);
             const entryHref = defaultQueue?.href ?? operatorWorkUnitHrefFromKey(OPERATOR_DEFAULT_ENTRY_QUEUE_KEY);
+            const dept = departmentsById.get(entry.department_id);
 
-            return {
+            const baseCard: OperatorLifecycleLandingCard = {
                 id: entry.id,
                 departmentId: entry.department_id,
                 processKey: entry.process_key,
@@ -283,6 +297,17 @@ export function buildOperatorLifecycleLandingCards(args: {
                 activeRecordCount: null,
                 needsAttentionCount: null,
             };
+
+            if (!isEnrollmentLifecycleCard(baseCard)) {
+                return baseCard;
+            }
+
+            const enrollmentFields = buildEnrollmentOperationalSurfaceFields({
+                card: baseCard,
+                departmentMetadata: dept?.metadata,
+                workUnits: args.workUnits,
+            });
+            return applyEnrollmentOperationalSurfaceFields(baseCard, enrollmentFields);
         })
         .sort((a, b) => a.label.localeCompare(b.label));
 }

@@ -44,11 +44,11 @@ describe("OIP V1 IA freeze pass", () => {
         expect(pulse.map((k) => k.id)).not.toContain("oip.enrollment.time_to_schedule_tour");
     });
 
-    it("workspace header uses health strip and command operational pulse tiles", () => {
+    it("workspace header uses health strip and compact operational pulse strip", () => {
         const header = read("components/admin/workspace/WorkspaceCommandHeader.tsx");
         expect(header).toContain("WorkspaceHealthPulseSection");
         expect(read("components/admin/workspace/layout/WorkspaceHealthPulseSection.tsx")).toContain(
-            "OipPerformanceKpiRow"
+            "WorkspaceOperationalPulseStrip"
         );
     });
 

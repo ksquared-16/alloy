@@ -42,6 +42,8 @@ describe("buildOperatorLifecycleLandingCards", () => {
                     id: "dept-1",
                     metadata: {
                         lifecycle_builder_v1: {
+                            version: 1,
+                            active_process_id: "proc-1",
                             processes: [
                                 {
                                     id: "proc-1",
@@ -51,6 +53,21 @@ describe("buildOperatorLifecycleLandingCards", () => {
                                         "Manage new leads, tours, follow-ups, waitlist, enrolling, and enrolled records.",
                                     is_active: true,
                                     stages: [],
+                                    work_views_v1: [
+                                        { id: "tours", label: "Tours", compat_queue_key: "tours", display_order: 1 },
+                                        {
+                                            id: "ready_to_enroll",
+                                            label: "Ready to Enroll",
+                                            compat_queue_key: "enrollment_offers",
+                                            display_order: 2,
+                                        },
+                                        {
+                                            id: "follow_ups",
+                                            label: "Follow Ups",
+                                            compat_queue_key: "communications_followup",
+                                            display_order: 3,
+                                        },
+                                    ],
                                 },
                             ],
                         },
@@ -82,6 +99,9 @@ describe("buildOperatorLifecycleLandingCards", () => {
             "Enrolling",
             "Enrolled",
         ]);
+        expect(cards[0]?.operationalStory?.headline).toBeTruthy();
+        expect(cards[0]?.todaysWork?.length).toBe(3);
+        expect(cards[0]?.todaysWork?.[0]?.href).toContain("work_view=");
     });
 
     it("returns only operator-visible lifecycles", () => {

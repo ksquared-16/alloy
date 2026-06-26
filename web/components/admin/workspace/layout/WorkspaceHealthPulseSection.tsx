@@ -4,10 +4,8 @@ import type { KPIVm } from "@/lib/ui-v2/workspace-types";
 import type { ResolvedMetricMap } from "@/lib/metrics/fetchResolvedMetrics";
 import type { WorkspaceHealthSummary } from "@/lib/metrics/workspaceHealthSummary";
 import { OipHealthStrip } from "@/components/admin/workspace/OipHealthStrip";
-import { OipPerformanceKpiRow } from "@/components/admin/workspace/OipKpiObjectCard";
-import { MetricPlacementRenderer } from "@/components/admin/metrics/MetricPlacementRenderer";
-import { WS_LAYOUT, WS_LAYOUT_ATTR } from "@/lib/workspace/workspaceLayoutSystem";
-import { WS_ZONE_MT } from "@/lib/workspace/workspaceLayoutSpacing";
+import { WorkspaceOperationalPulseStrip } from "@/components/admin/workspace/layout/WorkspaceOperationalPulseStrip";
+import { WS_LAYOUT, WS_LAYOUT_ATTR, WS_ORG_PULSE_BAND_CLASS } from "@/lib/workspace/workspaceLayoutSystem";
 
 type Props = {
     health: WorkspaceHealthSummary;
@@ -17,7 +15,7 @@ type Props = {
     contextLabel?: string | null;
 };
 
-/** Workspace root command banner — org context, health, operational pulse KPIs. */
+/** Workspace root command header — compact organization + operational pulse bands. */
 export function WorkspaceHealthPulseSection({
     health,
     kpis,
@@ -27,51 +25,57 @@ export function WorkspaceHealthPulseSection({
 }: Props) {
     const orgName = contextLabel?.trim() ?? "";
 
-    const v1PulseFallback =
-        kpis.length ?
-            <OipPerformanceKpiRow
-                kpis={kpis}
-                oipResolved={oipResolved}
-                loading={loading}
-                layout="command"
-            />
-        :   null;
-
     return (
         <section
-            className={`${WS_LAYOUT.commandBanner} space-y-2`}
+            className={`${WS_ORG_PULSE_BAND_CLASS} space-y-2`}
             data-ws-layout={WS_LAYOUT_ATTR.workspaceSectionA}
             data-ws-command-banner="true"
             data-workspace-health-pulse="true"
+            data-workspace-org-pulse-band="true"
         >
-            {orgName ?
-                <h1 className={WS_LAYOUT.workspaceTitle} data-workspace-org-title="true">
-                    {orgName}
-                </h1>
-            :   null}
+            <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
+                {orgName ?
+                    <div className="min-w-0">
+                        <h1 className={WS_LAYOUT.workspaceTitle} data-workspace-org-title="true">
+                            {orgName}
+                        </h1>
+                        <p
+                            className="mt-0.5 text-[11px] font-medium uppercase tracking-[0.1em] text-alloy-midnight/45"
+                            data-workspace-command-center-label="true"
+                        >
+                            Command Center
+                        </p>
+                    </div>
+                :   null}
 
-            <div>
-                <h2 className={WS_LAYOUT.sectionKicker}>Workspace Health</h2>
-                <div className={`${WS_ZONE_MT.bandRow} min-w-0`} data-workspace-zone="health-snapshot">
-                    <OipHealthStrip health={health} />
+                <div className="min-w-0" data-workspace-zone="health-snapshot">
+                    <h2 id="workspace-org-pulse-heading" className="sr-only">
+                        Organization Pulse
+                    </h2>
+                    <div aria-labelledby="workspace-org-pulse-heading">
+                        <OipHealthStrip health={health} compact />
+                    </div>
                 </div>
             </div>
 
-            <div className={WS_LAYOUT.sectionBreak} data-workspace-zone="operational-pulse">
-                <h3 className={`${WS_LAYOUT.sectionKicker} mb-1.5`}>Operational Pulse</h3>
-                <div className="space-y-2">
-                    <MetricPlacementRenderer
-                        surface="workspace_header"
-                        surfaceKey="default"
-                        placementZone="primary_metrics"
-                        layout="row"
-                    />
-                    <MetricPlacementRenderer
-                        surface="workspace_header"
-                        surfaceKey="default"
-                        placementZone="secondary_metrics"
-                        layout="row"
-                        emptyFallback={v1PulseFallback}
+            <div
+                className="border-t border-alloy-midnight/[0.06] pt-2"
+                data-workspace-zone="operational-pulse"
+            >
+                <h3 id="workspace-operational-pulse-heading" className="sr-only">
+                    Operational Pulse
+                </h3>
+                <p
+                    className={`${WS_LAYOUT.sectionKicker} mb-1.5`}
+                    aria-hidden="true"
+                >
+                    Operational Pulse
+                </p>
+                <div aria-labelledby="workspace-operational-pulse-heading">
+                    <WorkspaceOperationalPulseStrip
+                        kpis={kpis}
+                        oipResolved={oipResolved}
+                        loading={loading}
                     />
                 </div>
             </div>

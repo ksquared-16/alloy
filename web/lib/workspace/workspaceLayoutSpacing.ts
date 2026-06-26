@@ -35,6 +35,8 @@ export const WS_GAP = {
 export const WS_ZONE_MT = {
     /** Section B below Section A on workspace root */
     commandToGrid: "mt-6",
+    /** Operational Pulse → Operational Surface grid (~56px total rhythm). */
+    operationalSurfacesFromPulse: "mt-14",
     /** Subsections within a command band (health → pulse) */
     section: "mt-3",
     /** Rows inside a command surface (process → stage → pulse) */

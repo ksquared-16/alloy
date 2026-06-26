@@ -11,7 +11,7 @@ import { WorkspaceShellLayout } from "@/components/admin/workspace/WorkspaceShel
 import { WorkspaceRootActionsRail } from "@/app/adminV2/components/workspace/WorkspaceRootActionsRail";
 import { OPERATOR_BUSINESS_PROCESSES_LABEL } from "@/lib/metrics/workspaceHealthSummary";
 import { WS_ZONE_MT } from "@/lib/workspace/workspaceLayoutSpacing";
-import { WS_LAYOUT, WS_LAYOUT_ATTR } from "@/lib/workspace/workspaceLayoutSystem";
+import { WS_LAYOUT_ATTR } from "@/lib/workspace/workspaceLayoutSystem";
 
 const companyRootStyle: CSSProperties = {
   backgroundColor: "transparent",
@@ -104,13 +104,11 @@ export function WorkspaceRootShell({
           :   null}
 
             <section
-                className={`adminv2-ws-root-departments-zone ${WS_ZONE_MT.commandToGrid}`}
+                className={`adminv2-ws-root-departments-zone ${WS_ZONE_MT.operationalSurfacesFromPulse}`}
                 data-ws-layout={WS_LAYOUT_ATTR.workspaceSectionB}
-                aria-label="Business process command tiles"
+                aria-label={OPERATOR_BUSINESS_PROCESSES_LABEL}
             >
-                <h2 className={`${WS_LAYOUT.sectionKicker} mb-2`}>
-                    {OPERATOR_BUSINESS_PROCESSES_LABEL}
-                </h2>
+                <h2 className="sr-only">{OPERATOR_BUSINESS_PROCESSES_LABEL}</h2>
                 <WorkspaceRootLifecycleGrid lifecycles={lifecycleCards} pending={lifecycleCardsPending} />
             </section>
         </>

@@ -54,6 +54,7 @@ describe("create_task registry routing", () => {
         expect(host).toContain("openCreateWorkDirect");
         expect(runtime).toContain("VmDrawerActionModalsPortal");
         expect(runtime).toContain("registryModals");
-        expect(readFileSync(drawerRouter, "utf8")).toContain("OpportunityDrawerVmRuntime");
+        // Phase C: router mounts the enrollment subject surface runtime via canonical shim name.
+        expect(readFileSync(drawerRouter, "utf8")).toContain("EnrollmentSubjectSurfaceRuntime");
     });
 });

@@ -20,6 +20,10 @@ export const WS_LAYOUT_ATTR = {
 export const WS_COMMAND_BANNER_CLASS =
     "w-full rounded-xl border border-alloy-juniper/25 border-l-[4px] border-l-alloy-juniper bg-gradient-to-br from-white via-white to-alloy-juniper/[0.045] px-4 py-3.5 shadow-[0_1px_4px_rgba(15,23,42,0.06)]";
 
+/** Workspace root organization pulse — compact command header band (not dashboard tiles). */
+export const WS_ORG_PULSE_BAND_CLASS =
+    "w-full border-b border-alloy-midnight/[0.08] bg-white pb-2.5";
+
 /** O.I. overview summary — distinct from workspace banner (midnight top accent). */
 export const WS_OVERVIEW_SUMMARY_CLASS =
     "w-full rounded-lg border border-alloy-midnight/10 border-t-[3px] border-t-alloy-midnight/35 bg-white px-3 py-2.5";

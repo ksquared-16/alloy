@@ -10,6 +10,10 @@ import {
     resolveLifecycleRollupsFromDepartmentSummaries,
     type LifecycleDepartmentSummariesResponse,
 } from "@/lib/admin/resolveOperatorLifecycleLandingRollups";
+import {
+    enrichEnrollmentOperationalSurfaceForDepartment,
+    enrollmentOperationalSurfaceNeedsHydration,
+} from "@/lib/admin/enrollmentOperationalSurfaceLanding";
 import { workspaceDataFetchInit } from "@/lib/workspace/workspaceDataFetch";
 
 type LifecycleCatalogResponse = { items?: LifecycleCatalogEntry[]; error?: string };
@@ -20,7 +24,11 @@ let inflight: Promise<OperatorLifecycleLandingCard[]> | null = null;
 let cachedCards: OperatorLifecycleLandingCard[] | null = null;
 
 export function peekOperatorLifecycleLandingCards(): OperatorLifecycleLandingCard[] | null {
-    return cachedCards;
+    const cached = cachedCards;
+    if (cached?.length && enrollmentOperationalSurfaceNeedsHydration(cached)) {
+        return null;
+    }
+    return cached;
 }
 
 export function invalidateOperatorLifecycleLandingCache(): void {
@@ -31,6 +39,7 @@ export function invalidateOperatorLifecycleLandingCache(): void {
 async function fetchLifecycleRollupsForCards(
     cards: OperatorLifecycleLandingCard[],
     workUnits: OperatorLifecycleWorkUnitRow[],
+    departments: OperatorLifecycleDepartmentRow[],
     init: RequestInit,
 ): Promise<OperatorLifecycleLandingCard[]> {
     const departmentIds = [...new Set(cards.map((c) => c.departmentId).filter(Boolean))];
@@ -59,7 +68,22 @@ async function fetchLifecycleRollupsForCards(
         }),
     );
 
-    return applyOperatorLifecycleLandingRollups(cards, rollupsByLifecycleId);
+    let enriched = applyOperatorLifecycleLandingRollups(cards, rollupsByLifecycleId);
+
+    const departmentsById = new Map(departments.map((d) => [d.id, d] as const));
+
+    for (const departmentId of departmentIds) {
+        const deptSummaries = summariesByDept.find((row) => row.departmentId === departmentId);
+        enriched = enrichEnrollmentOperationalSurfaceForDepartment({
+            cards: enriched,
+            departmentId,
+            departmentMetadata: departmentsById.get(departmentId)?.metadata,
+            workUnits,
+            queueSummaries: deptSummaries?.summaries ?? [],
+        });
+    }
+
+    return enriched;
 }
 
 export async function loadOperatorLifecycleLandingCards(options?: {
@@ -82,19 +106,20 @@ export async function loadOperatorLifecycleLandingCards(options?: {
         const workUnitsJson = (workUnitsRes.ok ? await workUnitsRes.json() : {}) as WorkUnitsResponse;
         const departmentsJson = (departmentsRes.ok ? await departmentsRes.json() : {}) as DepartmentsResponse;
         const workUnits = workUnitsJson.items ?? [];
+        const departments = (departmentsJson.items ?? []).map((row) => ({
+            id: String((row as { id: string }).id),
+            metadata: (row as { metadata?: unknown }).metadata,
+        }));
 
         let cards = buildOperatorLifecycleLandingCards({
             catalogEntries: catalogJson.items ?? [],
-            departments: (departmentsJson.items ?? []).map((row) => ({
-                id: String((row as { id: string }).id),
-                metadata: (row as { metadata?: unknown }).metadata,
-            })),
+            departments,
             workUnits,
         });
 
         if (options?.includeRollups !== false && cards.length) {
             try {
-                cards = await fetchLifecycleRollupsForCards(cards, workUnits, init);
+                cards = await fetchLifecycleRollupsForCards(cards, workUnits, departments, init);
             } catch {
                 // Rollups are optional — cards still render with null metric fallbacks.
             }
