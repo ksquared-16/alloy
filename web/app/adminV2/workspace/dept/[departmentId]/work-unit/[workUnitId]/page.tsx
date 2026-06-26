@@ -114,6 +114,11 @@ import { setActiveRuntimePerspective } from "@/lib/adminV2/runtime/perspective/R
 import { buildPrepareParamsFromOpenDrawer, peekDrawerViewModelPreloadSync } from "@/lib/adminV2/viewModel/drawer/drawerShellPinnedModelSwap";
 import { logDrawerVmRuntimeDiagnostic } from "@/lib/adminV2/viewModel/drawer/drawerVmRuntimeDiagnostics";
 import { warmQueueRowOpportunityVm } from "@/lib/adminV2/viewModel/drawer/vmRuntime/queueRowDrawerVmWarm";
+import {
+    beginWorkUnitPrimaryReveal,
+    cancelBackgroundDrawerVmPrewarm,
+    endWorkUnitPrimaryReveal,
+} from "@/lib/adminV2/runtime/preload/drawerVmPrewarmScheduler";
 import { useGlobalAssistantOptional } from "@/contexts/GlobalAssistantContext";
 import { useAdminViewerTimezone } from "@/contexts/AdminViewerTimezoneContext";
 import {
@@ -5922,6 +5927,9 @@ export default function AdminV2OpportunityWorkUnitPage() {
                 : undefined;
             lastQueueOpportunityIdRef.current = id;
             markDrawerRowClickStart();
+            // Manual click wins: cancel the background prewarm backlog so it never competes with
+            // or overwrites the clicked subject. The clicked row warms immediately below.
+            cancelBackgroundDrawerVmPrewarm("manual_selection");
             warmQueueRowOpportunityVm(id, opportunityWorkspaceContext ?? null, "queue_row_click");
             prefetchOpportunityDrawerOnRowIntent(id, opportunityWorkspaceContext ?? undefined, opportunityQueuePreviewSeed);
             const openParams = buildOpportunityDrawerOpenParams(id);
@@ -6880,6 +6888,18 @@ export default function AdminV2OpportunityWorkUnitPage() {
         },
         workUnitMarkResetKey,
     );
+
+    // Prewarm contention gate: hold background VM prewarm (visible rows + related person/child
+    // graph) during the Work Unit primary reveal — only the default subject VM loads in that
+    // window. Released at coordinated_reveal_ready, then drained one-at-a-time (concurrency 1).
+    // Warm/seeded path opens already-done, so it flushes immediately without a hold.
+    useEffect(() => {
+        if (wuCoordinatedRevealDone) {
+            endWorkUnitPrimaryReveal();
+        } else {
+            beginWorkUnitPrimaryReveal();
+        }
+    }, [workUnitMarkResetKey, wuCoordinatedRevealDone]);
 
     // Resume continuity: when arriving via the Resume affordance, restore queue scroll once rows
     // are painted for the matching work unit + lane. URL still drives subject/lane selection.

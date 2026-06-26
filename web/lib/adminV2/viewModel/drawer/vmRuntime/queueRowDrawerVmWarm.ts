@@ -3,6 +3,7 @@ import { opportunityDrawerHardCutoverEnabled } from "@/lib/adminV2/viewModel/dra
 import { prepareDrawerViewModelDeduped } from "@/lib/adminV2/viewModel/drawer/drawerModelSwapNavigation";
 import { logDrawerVmRuntimeDiagnostic } from "@/lib/adminV2/viewModel/drawer/drawerVmRuntimeDiagnostics";
 import { tracePlatformPrefetch } from "@/lib/perf/platformSurfacePerfTrace";
+import { scheduleDrawerVmPrewarm } from "@/lib/adminV2/runtime/preload/drawerVmPrewarmScheduler";
 
 export const QUEUE_ROW_VM_WARM_CAP = 5;
 const QUEUE_ROW_WARM_OPEN_SOURCE = "queue_row_vm_warm";
@@ -66,7 +67,13 @@ export function warmQueueRowOpportunityVm(
         });
 }
 
-/** Warm first N visible opportunity queue rows after lane reveal. */
+/**
+ * Warm first N visible opportunity queue rows after lane reveal.
+ *
+ * Background prewarm — must never compete with the primary reveal. Each row is routed through
+ * {@link scheduleDrawerVmPrewarm}, which holds them until `coordinated_reveal_ready` and then
+ * drains one at a time (concurrency cap = 1). Runtime flag OFF = legacy immediate fire.
+ */
 export function warmVisibleQueueRowOpportunityVms(
     opportunityIds: string[],
     workspaceContext: OpportunityDrawerIntentContext | null | undefined,
@@ -74,6 +81,10 @@ export function warmVisibleQueueRowOpportunityVms(
 ): void {
     const unique = [...new Set(opportunityIds.map((id) => id.trim()).filter(Boolean))].slice(0, cap);
     for (const id of unique) {
-        warmQueueRowOpportunityVm(id, workspaceContext, "wu_visible_rows");
+        scheduleDrawerVmPrewarm({
+            key: `oppvm:${id}`,
+            reason: "wu_visible_rows",
+            run: () => warmQueueRowOpportunityVm(id, workspaceContext, "wu_visible_rows"),
+        });
     }
 }

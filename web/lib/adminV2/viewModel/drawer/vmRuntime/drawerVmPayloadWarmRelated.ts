@@ -3,19 +3,30 @@ import type { AdminDrawerState, DrawerStackItem } from "@/contexts/AdminDrawerCo
 import { logDrawerVmRuntimeDiagnostic } from "@/lib/adminV2/viewModel/drawer/drawerVmRuntimeDiagnostics";
 import { logDrawerVmRuntime } from "@/lib/adminV2/viewModel/drawer/vmRuntime/drawerVmRuntimeLog";
 import { warmRelatedDrawerGraph } from "@/lib/adminV2/viewModel/drawer/vmRuntime/warmRelatedDrawerGraph";
+import { scheduleDrawerVmPrewarm } from "@/lib/adminV2/runtime/preload/drawerVmPrewarmScheduler";
 
 const scheduledWarmKeys = new Set<string>();
 
+/**
+ * Related person/child graph warm is background prewarm — route it through the central scheduler
+ * so it is held during the Work Unit primary reveal (no person/child VM composes competing with
+ * the default subject) and drained one-at-a-time after coordinated reveal. Runtime flag OFF keeps
+ * the legacy microtask behavior.
+ */
 function scheduleDrawerVmWarmTask(task: () => void, key: string): void {
     if (scheduledWarmKeys.has(key)) return;
     scheduledWarmKeys.add(key);
 
-    queueMicrotask(() => {
-        try {
-            task();
-        } catch {
-            scheduledWarmKeys.delete(key);
-        }
+    scheduleDrawerVmPrewarm({
+        key: `related:${key}`,
+        reason: "related_graph",
+        run: () => {
+            try {
+                task();
+            } catch {
+                scheduledWarmKeys.delete(key);
+            }
+        },
     });
 }
 

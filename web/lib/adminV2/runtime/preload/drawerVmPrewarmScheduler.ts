@@ -1,0 +1,161 @@
+/**
+ * Drawer VM prewarm scheduler — Alloy OS Work Unit overfetch / contention guard.
+ *
+ * Problem this solves: during Work Unit entry, background VM prewarm (visible queue rows,
+ * related person/child graph) fired in parallel with no concurrency cap, competing with the
+ * actual primary reveal (bootstrap + active lane + default subject VM). Staging logs showed
+ * 4–5 `/view-models/drawer/opportunity/*` composes racing the queue + bootstrap.
+ *
+ * Core law: **prewarm must never compete with the primary reveal.**
+ *
+ * Contract (runtime flag ON):
+ * - While the Work Unit primary reveal is active, every prewarm task is DEFERRED (queued),
+ *   never executed. Only the default operational subject VM (opened directly via the drawer
+ *   context, NOT through this scheduler) loads during primary reveal.
+ * - After `coordinated_reveal_ready` (caller invokes {@link endWorkUnitPrimaryReveal}), the
+ *   queue drains **one task at a time** (concurrency cap = 1) — no parallel stampede.
+ * - A manual row click cancels the backlog ({@link cancelBackgroundDrawerVmPrewarm}); the
+ *   clicked subject loads immediately on its own path and pending prewarm never overwrites it.
+ *
+ * Runtime flag OFF: this is a transparent passthrough — tasks fire immediately, preserving the
+ * legacy parallel prefetch behavior exactly.
+ *
+ * Observational only: this schedules existing warm helpers; it changes no payload readiness,
+ * cache key, request-ownership, or reveal gate. Dev/staging perf marks are gated to non-prod.
+ */
+
+import { ALLOY_OS_RUNTIME_ENABLED } from "@/lib/adminV2/runtime/alloyOsRuntimeFlag";
+import { emitPerf, perfDevDetailEnabled } from "@/lib/perf/perfNamespaceLog";
+
+export const DRAWER_VM_PREWARM_CONCURRENCY_CAP = 1;
+
+export type DrawerVmPrewarmTask = {
+    /** Stable dedupe key (e.g. `oppvm:<id>`); repeated enqueues for the same key are ignored. */
+    key: string;
+    /** Readable cause for logs (e.g. `wu_visible_rows`, `related_graph`). */
+    reason: string;
+    /** The actual warm execution — typically an existing `prepareDrawerViewModelDeduped` wrapper. */
+    run: () => unknown | Promise<unknown>;
+};
+
+let primaryRevealActive = false;
+let running = 0;
+const queue: DrawerVmPrewarmTask[] = [];
+const queuedKeys = new Set<string>();
+/** Keys already started this work-unit session — avoids re-enqueue churn across renders. */
+const startedKeys = new Set<string>();
+
+function log(phase: string, payload: Record<string, unknown> = {}): void {
+    if (!perfDevDetailEnabled()) return;
+    emitPerf("prefetch", phase, payload);
+}
+
+/**
+ * Begin the Work Unit primary reveal window. All prewarm enqueued while this is active is held
+ * until {@link endWorkUnitPrimaryReveal}. Call on Work Unit entry (per work-unit reset).
+ */
+export function beginWorkUnitPrimaryReveal(): void {
+    if (!ALLOY_OS_RUNTIME_ENABLED) return;
+    primaryRevealActive = true;
+    // New Work Unit context — drop any stale backlog from a prior work unit so it cannot drain
+    // against the new reveal. In-flight tasks already settle into their own deduped caches.
+    queue.length = 0;
+    queuedKeys.clear();
+    startedKeys.clear();
+}
+
+/**
+ * Coordinated reveal completed — release the deferred prewarm queue and drain one task at a time.
+ */
+export function endWorkUnitPrimaryReveal(): void {
+    if (!primaryRevealActive && queue.length === 0) return;
+    primaryRevealActive = false;
+    log("prewarm_reveal_ready_flush", { count: queue.length });
+    pump();
+}
+
+/** True while the primary reveal window is holding prewarm (test/diagnostic helper). */
+export function isWorkUnitPrimaryRevealActive(): boolean {
+    return primaryRevealActive;
+}
+
+/** Current deferred queue depth (test/diagnostic helper). */
+export function drawerVmPrewarmQueueDepth(): number {
+    return queue.length;
+}
+
+/**
+ * Schedule a background drawer VM prewarm. Deferred while the primary reveal is active;
+ * otherwise drained one-at-a-time. Passthrough (immediate) when the runtime flag is OFF.
+ */
+export function scheduleDrawerVmPrewarm(task: DrawerVmPrewarmTask): void {
+    // Flag OFF → legacy behavior: fire immediately, no gating, no cap.
+    if (!ALLOY_OS_RUNTIME_ENABLED) {
+        void runTask(task);
+        return;
+    }
+    if (typeof window === "undefined") return;
+    if (startedKeys.has(task.key) || queuedKeys.has(task.key)) return;
+
+    queuedKeys.add(task.key);
+    queue.push(task);
+
+    if (primaryRevealActive) {
+        log("prewarm_deferred_primary_reveal", { reason: task.reason });
+        log("prewarm_queue_depth", { count: queue.length });
+        return;
+    }
+    pump();
+}
+
+/**
+ * Manual row click (or any explicit subject selection) — cancel the background backlog so the
+ * clicked subject wins immediately and pending prewarm cannot overwrite the active subject.
+ * In-flight tasks are allowed to settle (their results are deduped/cached, never applied as the
+ * active subject), but nothing further is started.
+ */
+export function cancelBackgroundDrawerVmPrewarm(reason: string = "manual_selection"): void {
+    if (queue.length === 0) return;
+    log("prewarm_cancelled_manual_selection", { reason, count: queue.length });
+    queue.length = 0;
+    queuedKeys.clear();
+}
+
+function runTask(task: DrawerVmPrewarmTask): Promise<void> {
+    return Promise.resolve()
+        .then(() => task.run())
+        .then(
+            () => undefined,
+            () => undefined,
+        );
+}
+
+function pump(): void {
+    if (primaryRevealActive) {
+        log("prewarm_skipped_active_reveal", { count: queue.length });
+        return;
+    }
+    while (running < DRAWER_VM_PREWARM_CONCURRENCY_CAP) {
+        const next = queue.shift();
+        if (!next) return;
+        queuedKeys.delete(next.key);
+        startedKeys.add(next.key);
+        running += 1;
+        log("prewarm_started", { reason: next.reason });
+        log("drawer_vm_prewarm_concurrency", { count: running });
+        void runTask(next).finally(() => {
+            running -= 1;
+            // One-at-a-time: only advance after the current compose settles (no stampede).
+            pump();
+        });
+    }
+}
+
+/** Test-only: restore pristine scheduler state between cases. */
+export function resetDrawerVmPrewarmSchedulerForTests(): void {
+    primaryRevealActive = false;
+    running = 0;
+    queue.length = 0;
+    queuedKeys.clear();
+    startedKeys.clear();
+}
