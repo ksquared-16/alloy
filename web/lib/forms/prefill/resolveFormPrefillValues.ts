@@ -9,6 +9,7 @@ import {
     mergeDefinitionAndLinkPrefillMaps,
     PREFILL_SOURCE_PATH_RE,
 } from "@/lib/forms/prefill/prefillFieldMap";
+import { buildCanonicalPrefillFieldMap } from "@/lib/forms/prefill/canonicalPrefillMap";
 import {
     CONTACT_COMPAT_SELECT,
     CUSTOMER_CANONICAL_ADMIN_SELECT,

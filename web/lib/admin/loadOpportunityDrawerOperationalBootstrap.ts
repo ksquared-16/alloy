@@ -15,6 +15,7 @@ import type { AdminRouteGateSuccess } from "@/lib/admin/adminRouteGate";
 import type { RecordLayoutConfigJson } from "@/lib/recordChrome/types";
 import { OPPORTUNITY_CANONICAL_ADMIN_SELECT } from "@/lib/fields/canonicalEntitySelectColumns";
 import { tryEvaluateDrawerRecordReadiness } from "@/lib/completion/readinessDrawerBootstrap";
+import { createReadinessMemoScope } from "@/lib/completion/readinessEvaluationMemo";
 import type { ReadinessResult } from "@/lib/completion/readinessTypes";
 
 export type LoadOpportunityDrawerBootstrapParams = {
