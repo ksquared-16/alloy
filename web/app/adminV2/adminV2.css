@@ -873,24 +873,38 @@ html[data-adminv2-workspace-shell="v2"] .bos-rail-header [data-command-surface-r
   margin-top: 6px;
 }
 
-html[data-adminv2-workspace-shell="v2"] .bos-rail-scroll {
+/* Upper assistant cards — bounded, never take over the rail. */
+html[data-adminv2-workspace-shell="v2"] .bos-rail-upper {
+  flex: 0 0 auto;
+  min-height: 0;
+  max-height: min(40vh, 320px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Conversation/thread region — flexes to fill all remaining height above the composer. */
+html[data-adminv2-workspace-shell="v2"] .bos-rail-conversation-region {
   flex: 1 1 auto;
   min-height: 0;
-  overflow-y: hidden !important;
   display: flex;
   flex-direction: column;
 }
 
 html[data-adminv2-workspace-shell="v2"] [data-command-surface-rail-starters="true"] {
-  flex: 1 1 auto;
+  flex: 0 0 auto;
   min-height: 0;
-  overflow-y: auto;
-  overscroll-behavior: contain;
 }
 
 html[data-adminv2-workspace-shell="v2"] .bos-rail-attention {
   margin-bottom: 6px;
   padding: 8px 8px;
+}
+
+html[data-adminv2-workspace-shell="v2"] .bos-rail-attention--empty {
+  margin-bottom: 4px;
+  padding: 2px 8px;
 }
 
 html[data-adminv2-workspace-shell="v2"] .bos-rail-starters {
@@ -905,7 +919,7 @@ html[data-adminv2-workspace-shell="v2"] [data-command-surface-rail-starters="tru
   gap: 4px;
 }
 
-html[data-adminv2-workspace-shell="v2"] [data-command-surface-rail-conversation-preview="true"] {
+html[data-adminv2-workspace-shell="v2"] [data-command-surface-rail-conversation-header="true"] {
   flex-shrink: 0;
   padding-top: 2px;
   padding-bottom: 2px;
@@ -917,13 +931,10 @@ html[data-adminv2-workspace-shell="v2"] [data-command-surface-rail-composer="tru
   padding-bottom: 6px;
 }
 
-html[data-adminv2-workspace-shell="v2"] [data-adminv2-bos-rail-overlay="true"] [data-command-surface-thread-panel="true"] {
-  flex-shrink: 1;
+/* Thread scroll — fills the conversation region; no fixed cap so it flexes with rail height. */
+html[data-adminv2-workspace-shell="v2"] [data-adminv2-bos-rail-overlay="true"] [data-command-surface-rail-conversation="true"] [data-command-surface-thread-panel="true"] {
+  flex: 1 1 auto;
   min-height: 0;
-}
-
-html[data-adminv2-workspace-shell="v2"] [data-adminv2-bos-rail-overlay="true"] [data-command-surface-thread-panel="true"] > div {
-  max-height: min(20vh, 120px);
 }
 
 @keyframes adminv2-ambient-orbit {

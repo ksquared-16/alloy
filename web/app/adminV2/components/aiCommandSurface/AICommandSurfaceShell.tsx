@@ -29,7 +29,7 @@ import OperationalActiveRecordChip from "@/app/adminV2/components/bos/Operationa
 import {
   BosRailAttentionSection,
   BosRailComposer,
-  BosRailConversationPreview,
+  BosRailConversationHeader,
   BosRailHeader,
   BosRailStarterCards,
 } from "@/app/adminV2/components/aiCommandSurface/bosRail/BosRailPresentation";
@@ -2127,8 +2127,9 @@ export default function AICommandSurfaceShell({
     [proposeWorkflowAssistBody]
   );
 
-  const threadScrollMaxClass =
-    presentation === "rail" ? "max-h-[min(28vh,200px)]" : "max-h-[min(52vh,440px)]";
+  // Rail thread no longer uses a fixed cap (flexes to fill the conversation region);
+  // only the bottom-bar presentation applies a max-height to its thread scroll.
+  const threadScrollMaxClass = "max-h-[min(52vh,440px)]";
   const threadPanelMinHeightCollapsedPx =
     presentation === "rail"
       ? COMMAND_SURFACE_RAIL_THREAD_PANEL_MIN_HEIGHT_COLLAPSED_PX
@@ -2190,69 +2191,64 @@ export default function AICommandSurfaceShell({
       {presentation === "rail" ?
         <>
           <BosRailHeader contextDisplayLine={bosContextDisplayLine} statusLabel={threadStatusLabel} />
-          <div className="bos-rail-scroll flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain">
+          <div className="bos-rail-upper shrink-0">
             <BosRailAttentionSection attention={bosRailAttention} onCta={onBosRailAttentionCta} />
             {hasThread ? null : (
               <BosRailStarterCards suggestions={bosRailStarterSuggestions} onPick={pickStarterSuggestion} />
             )}
+          </div>
+          <div
+            className="bos-rail-conversation-region flex min-h-0 flex-1 flex-col overflow-hidden"
+            data-command-surface-rail-conversation="true"
+          >
             {hasThread ?
-              <div
-                className="mx-3 mb-2 overflow-hidden rounded-lg border"
-                style={{ borderColor: derived.border, backgroundColor: neutral.surface }}
-                data-command-surface-thread-panel="true"
-              >
-                {threadExpanded ?
-                  <div
-                    ref={threadScrollRef}
-                    className={`${threadScrollMaxClass} overflow-y-auto`}
-                    style={{ minHeight: `${threadScrollMinHeightPx}px` }}
-                  >
-                    {shouldShowInlineThreadBusyIndicator({ busy, turns: thread.turns }) ?
-                      <div
-                        className="px-3 py-2 text-[11px]"
-                        style={{ color: CMD.textSupporting }}
-                        data-command-surface-inline-busy="true"
-                        aria-hidden
-                      >
-                        {threadStatusLabel ?? "Processing…"}
-                      </div>
-                    :   null}
-                    <CommandSurfaceThread
-                      turns={thread.turns}
-                      busy={busy}
-                      activeOperationalEntityId={activeOperationalEntityId}
-                      onPickCandidate={(turnId, candidate, intent) => confirmTaskAssistTarget(turnId, candidate, intent)}
-                      onConfirmCandidate={confirmTaskAssistTarget}
-                      onConfirmFuzzySuggestion={(_turnId, candidate, intent) => confirmTaskAssistTarget("", candidate, intent)}
-                      onClarificationChip={onClarificationChip}
-                      onToggleActionCard={(turnId) => setThread((prev) => toggleActionCardExpanded(prev, turnId))}
-                      onToggleTaskAssistMoreOptions={onToggleTaskAssistMoreOptions}
-                      renderJobLayoutCardActions={renderJobLayoutCardActions}
-                      workflowAssistMutation={workflowAssistMutationsAllowed ? workflowAssistMutation : undefined}
-                      workflowAssistMutationBlockedReason={workflowAssistMutationBlockedReasonShell}
-                      workflowAssistMutationsAllowed={workflowAssistMutationsAllowed}
-                      workflowAssistCapabilitiesPending={workflowAssistCapabilitiesPending}
-                      onReviewConfigProposal={onReviewConfigProposal}
-                      onWorkflowAssistProposeEdit={onWorkflowAssistProposeEdit}
-                      debugReviewNavigation={debugReviewNavigation}
-                      onConfirmConfigFieldSetup={(command, payload) =>
-                        void confirmConfigLayoutFieldSetup(command, payload)
-                      }
-                      onApproveConfigProposal={(proposalId) => void approveAndApplyConfigProposal(proposalId)}
-                      configAssistCanApproveAndApply={configAssistCanApproveAndApply}
-                      configAssistCapabilitiesPending={configAssistCapabilitiesPending}
-                      onExecutionReceipt={appendExecutionReceipt}
-                    />
-                  </div>
-                :   null}
-              </div>
+              <>
+                <BosRailConversationHeader onClear={() => clearConversation()} />
+                <div
+                  ref={threadScrollRef}
+                  className="min-h-0 flex-1 overflow-y-auto overscroll-contain"
+                  data-command-surface-thread-panel="true"
+                >
+                  {shouldShowInlineThreadBusyIndicator({ busy, turns: thread.turns }) ?
+                    <div
+                      className="px-3 py-2 text-[11px]"
+                      style={{ color: CMD.textSupporting }}
+                      data-command-surface-inline-busy="true"
+                      aria-hidden
+                    >
+                      {threadStatusLabel ?? "Processing…"}
+                    </div>
+                  :   null}
+                  <CommandSurfaceThread
+                    turns={thread.turns}
+                    busy={busy}
+                    activeOperationalEntityId={activeOperationalEntityId}
+                    onPickCandidate={(turnId, candidate, intent) => confirmTaskAssistTarget(turnId, candidate, intent)}
+                    onConfirmCandidate={confirmTaskAssistTarget}
+                    onConfirmFuzzySuggestion={(_turnId, candidate, intent) => confirmTaskAssistTarget("", candidate, intent)}
+                    onClarificationChip={onClarificationChip}
+                    onToggleActionCard={(turnId) => setThread((prev) => toggleActionCardExpanded(prev, turnId))}
+                    onToggleTaskAssistMoreOptions={onToggleTaskAssistMoreOptions}
+                    renderJobLayoutCardActions={renderJobLayoutCardActions}
+                    workflowAssistMutation={workflowAssistMutationsAllowed ? workflowAssistMutation : undefined}
+                    workflowAssistMutationBlockedReason={workflowAssistMutationBlockedReasonShell}
+                    workflowAssistMutationsAllowed={workflowAssistMutationsAllowed}
+                    workflowAssistCapabilitiesPending={workflowAssistCapabilitiesPending}
+                    onReviewConfigProposal={onReviewConfigProposal}
+                    onWorkflowAssistProposeEdit={onWorkflowAssistProposeEdit}
+                    debugReviewNavigation={debugReviewNavigation}
+                    onConfirmConfigFieldSetup={(command, payload) =>
+                      void confirmConfigLayoutFieldSetup(command, payload)
+                    }
+                    onApproveConfigProposal={(proposalId) => void approveAndApplyConfigProposal(proposalId)}
+                    configAssistCanApproveAndApply={configAssistCanApproveAndApply}
+                    configAssistCapabilitiesPending={configAssistCapabilitiesPending}
+                    onExecutionReceipt={appendExecutionReceipt}
+                  />
+                </div>
+              </>
             :   null}
           </div>
-          <BosRailConversationPreview
-            preview={threadPreview}
-            hasThread={hasThread}
-            onExpandThread={() => setThreadExpanded(true)}
-          />
           <BosRailComposer
             value={commandText}
             busy={busy}

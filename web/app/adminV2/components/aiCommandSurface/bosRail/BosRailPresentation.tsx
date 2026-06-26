@@ -1,6 +1,6 @@
 "use client";
 
-import type { RefObject } from "react";
+import { useState, type RefObject } from "react";
 import { AlertTriangle, ChevronRight, Send } from "lucide-react";
 
 import { BosHeader } from "@/app/adminV2/components/bos/identity/BosHeader";
@@ -116,35 +116,54 @@ export function BosRailAttentionSection(props: {
 
     return (
         <div
-            className="bos-rail-attention mx-2 mb-2.5 rounded-lg border px-2.5 py-2"
-            style={{
-                borderColor: derived.border,
-                backgroundColor: "rgba(246, 248, 252, 0.9)",
-            }}
+            className="bos-rail-attention bos-rail-attention--empty mx-2 mb-1.5 flex items-center gap-1.5 px-2.5 py-1"
             data-command-surface-rail-attention="true"
             data-command-surface-rail-attention-empty="true"
         >
-            <p className="text-[11px] font-semibold" style={{ color: CMD.textBody }}>
+            <span className="text-[11px] font-semibold" style={{ color: CMD.textLabel }}>
                 Attention
-            </p>
-            <p className="mt-0.5 text-[12px] leading-snug" style={{ color: CMD.textSupporting }}>
-                No urgent issues detected
-            </p>
+            </span>
+            <span className="text-[11px]" style={{ color: CMD.textSupporting }}>
+                · No urgent issues
+            </span>
         </div>
     );
 }
+
+/** Upper assistant cards stay bounded — show at most this many before "View all". */
+const BOS_RAIL_MAX_VISIBLE_STARTERS = 3;
 
 export function BosRailStarterCards(props: {
     suggestions: readonly CommandSurfaceRailStarterSuggestion[];
     onPick: (prompt: string) => void;
 }) {
+    const [showAll, setShowAll] = useState(false);
+    const hasOverflow = props.suggestions.length > BOS_RAIL_MAX_VISIBLE_STARTERS;
+    const visibleSuggestions =
+        hasOverflow && !showAll ?
+            props.suggestions.slice(0, BOS_RAIL_MAX_VISIBLE_STARTERS)
+        :   props.suggestions;
+
     return (
         <div className="bos-rail-starters px-2 pb-2" data-command-surface-rail-starters="true">
-            <p className="mb-2 text-[11px] font-medium" style={{ color: CMD.textSupporting }}>
-                Here are some ways I can help
-            </p>
+            <div className="mb-2 flex items-center justify-between gap-2">
+                <p className="text-[11px] font-medium" style={{ color: CMD.textSupporting }}>
+                    Here are some ways I can help
+                </p>
+                {hasOverflow ?
+                    <button
+                        type="button"
+                        className="text-[10px] font-medium underline-offset-2 hover:underline"
+                        style={{ color: palette.bendPine }}
+                        data-command-surface-rail-starters-toggle="true"
+                        onClick={() => setShowAll((prev) => !prev)}
+                    >
+                        {showAll ? "Show less" : `View all (${props.suggestions.length})`}
+                    </button>
+                :   null}
+            </div>
             <div className="flex flex-col gap-1.5">
-                {props.suggestions.map((suggestion) => (
+                {visibleSuggestions.map((suggestion) => (
                     <button
                         key={suggestion.prompt}
                         type="button"
@@ -219,6 +238,30 @@ export function BosRailConversationPreview(props: {
                     No conversation yet
                 </p>
             }
+        </div>
+    );
+}
+
+export function BosRailConversationHeader(props: { onClear?: () => void }) {
+    return (
+        <div
+            className="bos-rail-conversation-header shrink-0 flex items-center justify-between gap-2 px-2 pb-1 pt-1"
+            data-command-surface-rail-conversation-header="true"
+        >
+            <p className="text-[11px] font-medium" style={{ color: CMD.textSupporting }}>
+                Recent conversation
+            </p>
+            {props.onClear ?
+                <button
+                    type="button"
+                    className="text-[10px] font-medium underline-offset-2 hover:underline"
+                    style={{ color: CMD.textLabel }}
+                    data-command-surface-rail-clear="true"
+                    onClick={props.onClear}
+                >
+                    Clear
+                </button>
+            :   null}
         </div>
     );
 }
