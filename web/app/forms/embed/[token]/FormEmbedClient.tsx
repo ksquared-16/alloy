@@ -23,6 +23,17 @@ import {
     type FamilyGuidedPlan,
 } from "@/lib/forms/familyGuidedPlan";
 import { partitionFieldsByScope } from "@/lib/forms/fieldScope";
+import {
+    IntakeFrame,
+    IntakeCard,
+    IntakeProgress,
+    IntakeHeading,
+    IntakeChips,
+    IntakePacketChecklist,
+    IntakeFooter,
+    IntakeCompletion,
+    IntakeNotice,
+} from "./ParentIntakeShell";
 
 type ResolvePacketMeta = {
     packet_session_id: string;
@@ -369,87 +380,69 @@ export function FormEmbedClient({
 
     if (phase === "loading") {
         return (
-            <div className="flex min-h-[200px] items-center justify-center p-6 text-sm text-neutral-600">
-                {advancingToNextPacketStep ? "Loading next step…" : "Loading form…"}
-            </div>
+            <IntakeFrame previewBanner={showPreviewBanner ? <PreviewBanner /> : null}>
+                <IntakeNotice>{advancingToNextPacketStep ? "Loading next step…" : "Loading…"}</IntakeNotice>
+            </IntakeFrame>
         );
     }
 
     if (phase === "error") {
         return (
-            <div className="p-6 text-center text-sm text-red-700">
-                {message ?? "Unable to load this form."}
-                <div className="mt-1 text-[11px] text-neutral-400">link token length: {token.length}</div>
-            </div>
+            <IntakeFrame previewBanner={showPreviewBanner ? <PreviewBanner /> : null}>
+                <IntakeNotice tone="error">
+                    <span>{message ?? "Unable to load this form."}</span>
+                </IntakeNotice>
+            </IntakeFrame>
         );
     }
 
     if (packetAlreadyDone) {
         return (
-            <div className="min-h-screen bg-neutral-50">
-                {showPreviewBanner ? <PreviewBanner /> : null}
-                <div className="mx-auto max-w-lg px-4 py-16">
-                    <div className="rounded-2xl border border-emerald-200 bg-white px-8 py-12 text-center shadow-md">
-                        <h1 className="text-xl font-semibold text-neutral-900">Packet already completed</h1>
-                        <p className="mt-4 text-sm leading-relaxed text-neutral-700">
-                            This enrollment packet has already been submitted. You can close this window.
-                        </p>
-                    </div>
-                </div>
-            </div>
+            <IntakeFrame
+                packetName={packetProgress?.packet_name}
+                previewBanner={showPreviewBanner ? <PreviewBanner /> : null}
+            >
+                <IntakeCompletion
+                    tone="neutral"
+                    title="Packet already completed"
+                    body="This packet has already been submitted. You can close this window."
+                />
+            </IntakeFrame>
         );
     }
 
     if (packetFinalThankYou) {
         return (
-            <div className="min-h-screen bg-neutral-50">
-                {showPreviewBanner ? <PreviewBanner /> : null}
-                <div className="mx-auto max-w-lg px-4 py-16">
-                    <div className="rounded-2xl border border-emerald-200 bg-white px-8 py-12 text-center shadow-md">
-                        <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-emerald-100 text-2xl text-emerald-800">
-                            ✓
-                        </div>
-                        <h1 className="text-xl font-semibold text-neutral-900">Thank you — packet complete.</h1>
-                        <p className="mt-4 text-sm leading-relaxed text-neutral-700">
-                            You&apos;ve finished every form in this packet. Our staff will review your submissions and
-                            follow up if anything else is needed.
-                        </p>
-                        <p className="mt-6 text-xs text-neutral-500">You can close this window.</p>
-                    </div>
-                </div>
-            </div>
+            <IntakeFrame
+                packetName={packetProgress?.packet_name}
+                previewBanner={showPreviewBanner ? <PreviewBanner /> : null}
+            >
+                <IntakeCompletion
+                    title="All done — thank you."
+                    body="You've finished every form in this packet. Our staff will review your submissions and follow up if anything else is needed."
+                    hint="You can close this window."
+                />
+            </IntakeFrame>
         );
     }
 
     if (!schema) {
         return (
-            <div className="flex min-h-[200px] items-center justify-center p-6 text-sm text-neutral-600">
-                Loading form…
-            </div>
+            <IntakeFrame previewBanner={showPreviewBanner ? <PreviewBanner /> : null}>
+                <IntakeNotice>Loading…</IntakeNotice>
+            </IntakeFrame>
         );
     }
 
     if (submitted) {
         return (
-            <div className="min-h-screen bg-neutral-50">
-                {showPreviewBanner ? <PreviewBanner /> : null}
-                <div className="mx-auto max-w-lg px-4 py-16">
-                    <div className="rounded-2xl border border-emerald-200 bg-white px-8 py-12 text-center shadow-md">
-                        <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-emerald-100 text-2xl text-emerald-800">
-                            ✓
-                        </div>
-                        <h1 className="text-xl font-semibold text-neutral-900">Thank you — your form was submitted.</h1>
-                        <p className="mt-4 text-sm leading-relaxed text-neutral-700">
-                            Your answers were received. Our staff will review your submission and follow up if anything
-                            else is needed.
-                        </p>
-                        <p className="mt-6 text-xs text-neutral-500">
-                            You can close this window. If you were filling this out in preview mode, you may start again
-                            from Alloy admin.
-                        </p>
-                    </div>
-                </div>
-            </div>
+            <IntakeFrame previewBanner={showPreviewBanner ? <PreviewBanner /> : null}>
+                <IntakeCompletion
+                    title="Thank you — your form was submitted."
+                    body="Your answers were received. Our staff will review your submission and follow up if anything else is needed."
+                    hint="You can close this window."
+                />
+            </IntakeFrame>
         );
     }
 
@@ -503,61 +496,29 @@ export function FormEmbedClient({
     };
 
     const summaries = packetProgress?.step_summaries ?? [];
-    const currentStepNum = packetProgress ? packetProgress.current_sequence_index + 1 : 0;
-    const remaining = packetProgress
-        ? summaries.filter((s) => s.sequence_index > packetProgress.current_sequence_index)
-        : [];
+    const showPacketChecklist = packetProgress != null && summaries.length > 0;
+    const famPhase = famStep
+        ? famStep.kind === "household"
+            ? "Household"
+            : famStep.kind === "signature"
+              ? "Sign"
+              : (famStep.child?.label ?? "Child")
+        : undefined;
 
     return (
-        <div className="min-h-screen bg-white">
-            {showPreviewBanner ? <PreviewBanner /> : null}
-            <div className={clsx("mx-auto max-w-xl px-3 pt-4 pb-16", submitting && "pointer-events-none opacity-90")}>
-                {packetProgress && summaries.length > 0 ? (
-                    <div className="mb-4 rounded-lg border border-neutral-200 bg-neutral-50 px-3 py-3 text-sm text-neutral-800">
-                        <p className="font-semibold text-neutral-900">
-                            Step {currentStepNum} of {packetProgress.total_steps}
-                            {packetProgress.packet_name ? ` · ${packetProgress.packet_name}` : ""}
-                        </p>
-                        <p className="mt-1 text-neutral-700">
-                            Now:{" "}
-                            <span className="font-medium">
-                                {summaries.find((s) => s.sequence_index === packetProgress.current_sequence_index)
-                                    ?.form_name ?? "This form"}
-                            </span>
-                        </p>
-                        {remaining.length > 0 ? (
-                            <div className="mt-2 border-t border-neutral-200 pt-2">
-                                <p className="text-xs font-semibold uppercase tracking-wide text-neutral-500">Still to do</p>
-                                <ol className="mt-1 list-decimal space-y-0.5 pl-5 text-xs text-neutral-700">
-                                    {remaining.map((s) => (
-                                        <li key={s.sequence_index}>{s.form_name}</li>
-                                    ))}
-                                </ol>
-                            </div>
-                        ) : (
-                            <p className="mt-2 text-xs text-neutral-600">This is the last form in the packet.</p>
-                        )}
-                    </div>
-                ) : null}
-                {familyMode && famStep ? (
-                    <div>
-                        <div className="mb-3 flex items-center justify-between text-xs text-neutral-500">
-                            <span className="font-medium text-neutral-700">
-                                {famStep.kind === "household" ? "Household" : famStep.kind === "signature" ? "Sign" : famStep.child?.label ?? "Child"}
-                            </span>
-                            <span className="flex items-center gap-2">
-                                <span>Step {famIdx + 1} of {familySteps.length}</span>
-                                <span className="flex gap-1.5">
-                                    {familySteps.map((s, i) => (
-                                        <span key={s.key} className={clsx("h-1.5 w-5 rounded-full", i <= famIdx ? "bg-neutral-800" : "bg-neutral-200")} />
-                                    ))}
-                                </span>
-                            </span>
-                        </div>
-                        <div className="mb-4">
-                            <h2 className="text-base font-semibold text-neutral-900">{famStep.title}</h2>
-                            {famStep.subtitle ? <p className="mt-1 text-sm text-neutral-600">{famStep.subtitle}</p> : null}
-                        </div>
+        <IntakeFrame
+            packetName={packetProgress?.packet_name}
+            previewBanner={showPreviewBanner ? <PreviewBanner /> : null}
+            contentClassName={clsx(submitting && "pointer-events-none opacity-90")}
+        >
+            {familyMode && famStep ? (
+                <div key={`fam-${famIdx}`} className="parent-intake-step-in">
+                    <IntakeProgress phaseLabel={famPhase} stepIndex={famIdx} total={familySteps.length} />
+                    {showPacketChecklist ? (
+                        <IntakePacketChecklist steps={summaries} currentIndex={packetProgress.current_sequence_index} />
+                    ) : null}
+                    <IntakeCard>
+                        <IntakeHeading title={famStep.title} subtitle={famStep.subtitle} />
                         {famStep.kind === "child" && famStep.child ? (
                             <FormEngineRenderer
                                 schema={subSchemaForFieldsGrouped(schema, famStep.fieldIds, famStep.title)}
@@ -581,57 +542,38 @@ export function FormEmbedClient({
                                 validationErrors={validationErrors ?? undefined}
                             />
                         )}
-                        <div className="mt-8 space-y-3 border-t border-neutral-200 pt-6">
-                            {errorLines.length ? (
-                                <ul className="list-disc space-y-1 rounded-md border border-red-100 bg-red-50/80 px-4 py-3 pl-7 text-left text-sm text-red-800">
-                                    {errorLines.map((line, i) => <li key={i}>{line}</li>)}
-                                </ul>
-                            ) : null}
-                            {message ? <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-center text-sm text-amber-950">{message}</p> : null}
-                            <div className="flex items-center gap-3">
-                                {famIdx > 0 ? (
-                                    <button type="button" className="rounded-lg border border-neutral-300 px-4 py-2.5 text-sm font-medium text-neutral-600" onClick={() => setFamilyStepIdx((i) => Math.max(0, i - 1))}>Back</button>
-                                ) : null}
-                                {famIsLast ? (
-                                    <button type="button" disabled={submitting || !submissionId} aria-busy={submitting} className="flex-1 rounded-lg bg-neutral-900 py-3 text-sm font-semibold text-white shadow-sm disabled:cursor-not-allowed disabled:bg-neutral-400" onClick={() => void handleSubmit()}>
-                                        {submitting ? "Submitting…" : "Confirm & submit"}
-                                    </button>
-                                ) : (
-                                    <button type="button" disabled={!submissionId} className="flex-1 rounded-lg bg-neutral-900 py-3 text-sm font-semibold text-white shadow-sm disabled:cursor-not-allowed disabled:bg-neutral-400" onClick={() => setFamilyStepIdx((i) => Math.min(familySteps.length - 1, i + 1))}>
-                                        Continue
-                                    </button>
-                                )}
-                            </div>
-                        </div>
-                    </div>
-                ) : packetProgress && !guidedPlan ? (
-                    <div className="py-10 text-center text-sm text-neutral-500">Preparing your steps…</div>
-                ) : guided && guidedStep ? (
-                    <div>
-                        <div className="mb-3 flex items-center justify-between text-xs text-neutral-500">
-                            <span className="font-medium text-neutral-700">{PHASE_LABEL[guidedStep.kind] ?? "Step"}</span>
-                            <span className="flex items-center gap-2">
-                                <span>Step {stepIdx + 1} of {guidedSteps.length}</span>
-                                <span className="flex gap-1.5">
-                                    {guidedSteps.map((s, i) => (
-                                        <span key={s.key} className={clsx("h-1.5 w-5 rounded-full", i <= stepIdx ? "bg-neutral-800" : "bg-neutral-200")} />
-                                    ))}
-                                </span>
-                            </span>
-                        </div>
-
+                        <IntakeFooter
+                            errorLines={errorLines}
+                            message={message}
+                            onBack={famIdx > 0 ? () => setFamilyStepIdx((i) => Math.max(0, i - 1)) : undefined}
+                            primaryLabel={famIsLast ? (submitting ? "Submitting…" : "Confirm & submit") : "Continue"}
+                            onPrimary={
+                                famIsLast
+                                    ? () => void handleSubmit()
+                                    : () => setFamilyStepIdx((i) => Math.min(familySteps.length - 1, i + 1))
+                            }
+                            primaryDisabled={famIsLast ? submitting || !submissionId : !submissionId}
+                            primaryBusy={famIsLast && submitting}
+                        />
+                    </IntakeCard>
+                </div>
+            ) : packetProgress && !guidedPlan ? (
+                <IntakeNotice>Preparing your steps…</IntakeNotice>
+            ) : guided && guidedStep ? (
+                <div key={`guided-${stepIdx}`} className="parent-intake-step-in">
+                    <IntakeProgress phaseLabel={PHASE_LABEL[guidedStep.kind] ?? "Step"} stepIndex={stepIdx} total={guidedSteps.length} />
+                    {showPacketChecklist ? (
+                        <IntakePacketChecklist steps={summaries} currentIndex={packetProgress.current_sequence_index} />
+                    ) : null}
+                    <IntakeCard>
                         {stepIdx === 0 && guidedPlan ? (
-                            <div className="mb-4 flex flex-wrap gap-2 text-xs">
-                                {guidedPlan.counts.known > 0 ? <span className="rounded-full bg-emerald-50 px-3 py-1 text-emerald-800">{guidedPlan.counts.known} already filled in</span> : null}
-                                {guidedPlan.counts.missing > 0 ? <span className="rounded-full bg-amber-50 px-3 py-1 text-amber-800">{guidedPlan.counts.missing} to add</span> : null}
-                                {guidedPlan.counts.uploads > 0 ? <span className="rounded-full bg-sky-50 px-3 py-1 text-sky-800">{guidedPlan.counts.uploads} to sign/upload</span> : null}
-                            </div>
+                            <IntakeChips
+                                known={guidedPlan.counts.known}
+                                missing={guidedPlan.counts.missing}
+                                uploads={guidedPlan.counts.uploads}
+                            />
                         ) : null}
-
-                        <div className="mb-4">
-                            <h2 className="text-base font-semibold text-neutral-900">{guidedStep.title}</h2>
-                            {guidedStep.subtitle ? <p className="mt-1 text-sm text-neutral-600">{guidedStep.subtitle}</p> : null}
-                        </div>
+                        <IntakeHeading title={guidedStep.title} subtitle={guidedStep.subtitle} />
                         <FormEngineRenderer
                             schema={subSchemaForFieldsGrouped(schema, guidedStep.fieldIds, guidedStep.title)}
                             payload={payload}
@@ -642,65 +584,49 @@ export function FormEmbedClient({
                             variant="embed"
                             validationErrors={validationErrors ?? undefined}
                         />
-
-                        <div className="mt-8 space-y-3 border-t border-neutral-200 pt-6">
-                            {errorLines.length ? (
-                                <ul className="list-disc space-y-1 rounded-md border border-red-100 bg-red-50/80 px-4 py-3 pl-7 text-left text-sm text-red-800">
-                                    {errorLines.map((line, i) => <li key={i}>{line}</li>)}
-                                </ul>
-                            ) : null}
-                            {message ? <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-center text-sm text-amber-950">{message}</p> : null}
-                            <div className="flex items-center gap-3">
-                                {stepIdx > 0 ? (
-                                    <button type="button" className="rounded-lg border border-neutral-300 px-4 py-2.5 text-sm font-medium text-neutral-600" onClick={() => setGuidedStepIdx((i) => Math.max(0, i - 1))}>
-                                        Back
-                                    </button>
-                                ) : null}
-                                {isLastStep ? (
-                                    <button type="button" disabled={submitting || !submissionId} aria-busy={submitting} className="flex-1 rounded-lg bg-neutral-900 py-3 text-sm font-semibold text-white shadow-sm disabled:cursor-not-allowed disabled:bg-neutral-400" onClick={() => void handleSubmit()}>
-                                        {submitting ? "Submitting…" : "Confirm & submit"}
-                                    </button>
-                                ) : (
-                                    <button type="button" disabled={!submissionId} className="flex-1 rounded-lg bg-neutral-900 py-3 text-sm font-semibold text-white shadow-sm disabled:cursor-not-allowed disabled:bg-neutral-400" onClick={() => setGuidedStepIdx((i) => Math.min(guidedSteps.length - 1, i + 1))}>
-                                        Continue
-                                    </button>
-                                )}
-                            </div>
-                        </div>
-                    </div>
-                ) : (
-                    <>
-                        {/* Single-form (non-packet) experience — unchanged. */}
-                        <FormEngineRenderer
-                            schema={schema}
-                            payload={payload}
-                            onChange={(next) => {
-                                setValidationErrors(null);
-                                setMessage(null);
-                                setPayload(next);
-                                void persistDraft(next);
-                            }}
-                            mode="edit"
-                            optionValuesByFieldId={optionValuesByFieldId}
-                            optionChoicesByFieldId={optionChoicesByFieldId}
-                            variant="embed"
-                            validationErrors={validationErrors ?? undefined}
+                        <IntakeFooter
+                            errorLines={errorLines}
+                            message={message}
+                            onBack={stepIdx > 0 ? () => setGuidedStepIdx((i) => Math.max(0, i - 1)) : undefined}
+                            primaryLabel={isLastStep ? (submitting ? "Submitting…" : "Confirm & submit") : "Continue"}
+                            onPrimary={
+                                isLastStep
+                                    ? () => void handleSubmit()
+                                    : () => setGuidedStepIdx((i) => Math.min(guidedSteps.length - 1, i + 1))
+                            }
+                            primaryDisabled={isLastStep ? submitting || !submissionId : !submissionId}
+                            primaryBusy={isLastStep && submitting}
                         />
-                        <div className="mt-10 space-y-4 border-t border-neutral-200 pt-8">
-                            {errorLines.length ? (
-                                <ul className="list-disc space-y-1 rounded-md border border-red-100 bg-red-50/80 px-4 py-3 pl-7 text-left text-sm text-red-800">
-                                    {errorLines.map((line, i) => <li key={i}>{line}</li>)}
-                                </ul>
-                            ) : null}
-                            {message ? <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-center text-sm text-amber-950">{message}</p> : null}
-                            <button type="button" disabled={submitting || !submissionId} aria-busy={submitting} className="w-full rounded-lg bg-neutral-900 py-3.5 text-sm font-semibold text-white shadow-sm disabled:cursor-not-allowed disabled:bg-neutral-400" onClick={() => void handleSubmit()}>
-                                {submitting ? "Submitting…" : "Submit"}
-                            </button>
-                            <p className="text-center text-xs text-neutral-500">Scroll up to review your answers before submitting.</p>
-                        </div>
-                    </>
-                )}
-            </div>
-        </div>
+                    </IntakeCard>
+                </div>
+            ) : (
+                <IntakeCard>
+                    {/* Single-form (non-packet) experience — same renderer, premium shell. */}
+                    <FormEngineRenderer
+                        schema={schema}
+                        payload={payload}
+                        onChange={(next) => {
+                            setValidationErrors(null);
+                            setMessage(null);
+                            setPayload(next);
+                            void persistDraft(next);
+                        }}
+                        mode="edit"
+                        optionValuesByFieldId={optionValuesByFieldId}
+                        optionChoicesByFieldId={optionChoicesByFieldId}
+                        variant="embed"
+                        validationErrors={validationErrors ?? undefined}
+                    />
+                    <IntakeFooter
+                        errorLines={errorLines}
+                        message={message}
+                        primaryLabel={submitting ? "Submitting…" : "Submit"}
+                        onPrimary={() => void handleSubmit()}
+                        primaryDisabled={submitting || !submissionId}
+                        primaryBusy={submitting}
+                    />
+                </IntakeCard>
+            )}
+        </IntakeFrame>
     );
 }
