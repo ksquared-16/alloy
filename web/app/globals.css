@@ -1146,3 +1146,25 @@ body {
 .alloy-book-v2-step-in {
   animation: alloy-book-v2-step-in 0.3s ease-out;
 }
+
+/* Parent intake — calm step transition (premium guided journey). */
+@keyframes parent-intake-step-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.parent-intake-step-in {
+  animation: parent-intake-step-in 0.32s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .parent-intake-step-in {
+    animation: none;
+  }
+}

@@ -6,7 +6,6 @@ import {
     ChevronDown,
     ChevronRight,
     Home,
-    Layers,
     PanelLeftClose,
     PanelLeft,
     Settings,
@@ -20,7 +19,6 @@ import {
     isCanonicalFormsPath,
     normalizeToCanonicalAdminPath,
 } from "@/lib/admin/canonicalAdminRoutes";
-import { dispatchAdminV2OpenProcessingModal } from "@/lib/adminV2/workspaceModalEvents";
 import { parseOperatorWorkUnitPath } from "@/lib/admin/canonicalOperatorRoutes";
 import type { OperatorLifecycleLandingCard } from "@/lib/admin/buildOperatorLifecycleLanding";
 import {
@@ -33,10 +31,10 @@ import { AdminV2NavLink } from "@/app/adminV2/components/navigation/AdminV2NavLi
 import {
     SidebarAnalyticsNavItem,
     SidebarInboxNavItem,
+    SidebarProcessingNavItem,
     SidebarTasksNavItem,
 } from "@/app/adminV2/components/SidebarModalNavItems";
 import { appendWorkspaceSiteToPath, readStickyWorkspaceSiteIdForNavigation } from "@/lib/adminV2/workspaceSiteFilterClient";
-import { WORK_VIEW_PILL_SECTION_LABEL } from "@/lib/adminV2/runtime/configurationRuntimeConvergenceFlag";
 import SidebarConfigurationModeNav from "@/app/adminV2/components/SidebarConfigurationModeNav";
 
 const WORKSPACE = CANONICAL_OPERATOR_BASE;
@@ -146,28 +144,7 @@ function SidebarNav({
         </AdminV2NavLink>
     );
 
-    // POS-FP-W: Processing is the operator-facing entry (replaces the Forms nav slot).
-    // It opens as a context-preserving workspace modal (Communications doctrine) — a nav
-    // button that dispatches the open event, not a route navigation. Forms/library/composer
-    // remain reachable inside Processing later; Forms is no longer the primary nav label.
-    const processingLink = (
-        <button
-            type="button"
-            title="Processing"
-            aria-label="Processing"
-            onClick={() => dispatchAdminV2OpenProcessingModal()}
-            className={collapsed ? "adminv2-sidebar-rail-link" : EXPANDED_PRIMARY_LINK}
-        >
-            {collapsed ? (
-                <Layers size={20} strokeWidth={1.75} />
-            ) : (
-                <span className="inline-flex items-center gap-2">
-                    <Layers size={16} strokeWidth={1.75} />
-                    Processing
-                </span>
-            )}
-        </button>
-    );
+    const processingLink = <SidebarProcessingNavItem collapsed={collapsed} />;
 
     const tasksLink = <SidebarTasksNavItem collapsed={collapsed} />;
 
@@ -195,17 +172,14 @@ function SidebarNav({
     );
 
     const lifecycleNavExpanded = (
-        <div className="pt-2 min-h-0">
-            <div className="adminv2-sidebar-section-label mb-1 px-2 text-[11px] font-semibold tracking-wide">
-                Business Processes
-            </div>
+        <>
             {lifecycleLoading ? (
                 <p className="adminv2-sidebar-muted px-2 py-2 text-xs" aria-busy="true">
-                    Loading business processes…
+                    Loading processes…
                 </p>
             ) : null}
             {!lifecycleLoading && lifecycleCards.length === 0 ? (
-                <p className="adminv2-sidebar-muted px-2 py-2 text-xs">No business processes configured.</p>
+                <p className="adminv2-sidebar-muted px-2 py-2 text-xs">No processes configured.</p>
             ) : null}
             <div className="space-y-1">
                 {lifecycleCards.map((lifecycle) => {
@@ -259,17 +233,11 @@ function SidebarNav({
                                 </AdminV2NavLink>
                             </div>
                             {isExpanded && lifecycle.workQueues.length ? (
-                                <div className="ml-8 border-l pl-2.5">
-                                    <p
-                                        className="adminv2-sidebar-queue-group-label px-2 pb-0.5 pt-1 text-[10px] font-semibold uppercase tracking-wide text-white/45"
-                                        aria-hidden
-                                    >
-                                        {WORK_VIEW_PILL_SECTION_LABEL}
-                                    </p>
+                                <div className="ml-8 border-l border-white/10 pl-2.5">
                                     <ul
-                                        className="adminv2-sidebar-queue-list list-none space-y-0.5"
+                                        className="adminv2-sidebar-queue-list list-none space-y-0.5 pt-0.5"
                                         role="group"
-                                        aria-label={`${lifecycle.label} ${WORK_VIEW_PILL_SECTION_LABEL}`}
+                                        aria-label={`${lifecycle.label} work views`}
                                     >
                                     {lifecycle.workQueues.map((entry) => {
                                         const childHref = workspaceHref(entry.href);
@@ -311,7 +279,7 @@ function SidebarNav({
                     );
                 })}
             </div>
-        </div>
+        </>
     );
 
     return (
@@ -386,19 +354,21 @@ function SidebarNav({
                     </div>
                 </nav>
             ) : (
-                <div className="adminv2-sidebar-body flex min-h-0 flex-1 flex-col gap-2 overflow-hidden px-2 pb-3 text-[13px]">
-                    <div className="shrink-0 space-y-1 pt-1">
-                        {!onSettings ? homeLink : null}
-                        {!onSettings ?
-                            <>
-                                {tasksLink}
-                                {inboxLink}
-                                {analyticsLink}
-                                {processingLink}
-                            </>
-                        :   null}
+                <div className="adminv2-sidebar-body flex min-h-0 flex-1 flex-col overflow-hidden px-2 pb-3 text-[13px]">
+                    <div className="min-h-0 flex-1 overflow-y-auto pt-1">
+                        <div className="space-y-1">
+                            {!onSettings ? homeLink : null}
+                            {!onSettings ?
+                                <>
+                                    {tasksLink}
+                                    {inboxLink}
+                                    {analyticsLink}
+                                    {processingLink}
+                                    {lifecycleNavExpanded}
+                                </>
+                            :   <SidebarConfigurationModeNav collapsed={false} />}
+                        </div>
                     </div>
-                    <div className="min-h-0 flex-1 overflow-y-auto">{onSettings ? <SidebarConfigurationModeNav collapsed={false} /> : lifecycleNavExpanded}</div>
                     <div className="adminv2-sidebar-footer shrink-0 border-t pt-2">
                         {settingsLink}
                     </div>

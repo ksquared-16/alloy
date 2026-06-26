@@ -2,7 +2,7 @@
 
 import type { ReactNode } from "react";
 import { usePathname } from "next/navigation";
-import { ClipboardList, Inbox, ListChecks, BarChart3 } from "lucide-react";
+import { ClipboardList, Inbox, ListChecks, BarChart3, Layers } from "lucide-react";
 
 import { AdminV2NavLink } from "@/app/adminV2/components/navigation/AdminV2NavLink";
 import { prefetchWorkspaceOperationalTasks } from "@/lib/agent/taskAssist/operationalTasksWorkspaceCache";
@@ -16,6 +16,7 @@ import {
     dispatchAdminV2OpenInboxModal,
     dispatchAdminV2OpenTasksPanel,
     dispatchAdminV2OpenAnalyticsModal,
+    dispatchAdminV2OpenProcessingModal,
 } from "@/lib/adminV2/workspaceModalEvents";
 
 const EXPANDED_PRIMARY_LINK = "adminv2-sidebar-primary-link block w-full rounded-md px-2 py-1.5 font-medium";
@@ -215,6 +216,21 @@ export function SidebarAnalyticsNavItem({ collapsed }: { collapsed: boolean }) {
                 void warmOipAnalyticsModal();
                 dispatchAdminV2OpenAnalyticsModal();
             }}
+        />
+    );
+}
+
+/** POS intake workspace — operator application alongside Tasks, Inbox, and Analytics. */
+export function SidebarProcessingNavItem({ collapsed }: { collapsed: boolean }) {
+    return (
+        <SidebarModalNavButton
+            collapsed={collapsed}
+            title="Processing — intake, documents, and forms"
+            label="Processing"
+            icon={<Layers size={collapsed ? 20 : 16} strokeWidth={1.75} className="shrink-0" />}
+            badge={null}
+            dataAttr="processing"
+            onClick={() => dispatchAdminV2OpenProcessingModal()}
         />
     );
 }
