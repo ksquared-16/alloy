@@ -57,7 +57,6 @@ type Props = {
   workspaceKpiStrip?: KPIVm[] | undefined;
   oipResolved?: ResolvedMetricMap;
   kpiStripPlaceholder?: boolean;
-  workspaceRollupRefined?: boolean;
   departmentsPending?: boolean;
   deptTileStatsPending?: boolean;
   kpiQuietReserveOnly?: boolean;

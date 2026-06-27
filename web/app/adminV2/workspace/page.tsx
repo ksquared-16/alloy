@@ -74,6 +74,7 @@ import {
     workspaceRevealShellReady,
     workspaceRevealTileCountsReady,
 } from "@/lib/adminV2/workspaceRevealGate";
+import { composeWorkspaceSurfaceViewModel } from "@/lib/adminV2/runtime/surface/workspaceSurfaceViewModel";
 import { prefetchVisibleDepartmentAboveFoldBundles } from "@/lib/adminV2/prefetchAdminV2AboveFold";
 import { alloyPerfSet } from "@/lib/perf/alloyPerfGlobal";
 import type { OperatorLifecycleLandingCard } from "@/lib/admin/buildOperatorLifecycleLanding";
@@ -533,6 +534,10 @@ export default function AdminV2WorkspaceIndexPage() {
         const shell_ready = workspaceRevealShellReady({
             bootstrap_loading: loading && !cachePrimed,
             departments_resolved,
+            // Warm-return atomic commit: lifecycle landing tiles restore synchronously from the
+            // module/session snapshot, so a committed surface reveals immediately without a cold
+            // loading-gate flash. Empty (true cold) → falls through to bootstrap readiness.
+            surface_snapshot_committed: lifecycleCards.length > 0,
         });
         const department_tiles_ready = workspaceRevealDepartmentTilesReady({
             bootstrap_loading: loading && !cachePrimed,
@@ -553,9 +558,32 @@ export default function AdminV2WorkspaceIndexPage() {
             kpi_region_ready: workspaceRevealKpiRegionReady(),
             actions_ready: workspaceRevealActionsReady(),
         });
-    }, [loading, departments.length, fetchSettledEmpty, metrics, workspaceCachePrimed]);
+    }, [loading, departments.length, fetchSettledEmpty, metrics, workspaceCachePrimed, lifecycleCards.length]);
 
-    const workspaceAboveFoldPageReady = workspaceRevealGate.above_fold_ready;
+    // Surface ViewModel ownership: /workspace composes ONE above-fold WorkspaceSurfaceViewModel
+    // (WS-02 header, WS-03 health, WS-04 pulse, WS-05 tiles, WS-06 tile KPIs, WS-01 resume, WS-07
+    // rail) from the existing loader/cache outputs. The VM owns surface readiness; components present
+    // its sections. `reveal.canCommit` IS the authoritative reveal gate (`above_fold_ready`) — no
+    // second gate is introduced — and KPI/count values patch quietly after commit.
+    const workspaceSurfaceVm = useMemo(
+        () =>
+            composeWorkspaceSurfaceViewModel({
+                gate: workspaceRevealGate,
+                orgName: orgNameFromContext,
+                // WS-03/04/06 always occupy their final snapshot/default slot (KPI snapshot law).
+                healthSnapshotAvailable: true,
+                operationalPulseSnapshotAvailable: true,
+                tileKpiSnapshotAvailable: true,
+                processTileCount: lifecycleCards.length,
+                resumeAvailable: true,
+                rightRailAvailable: true,
+                warmFromCache: workspaceCachePrimed,
+                warmFromSession: lifecycleCards.length > 0,
+            }),
+        [workspaceRevealGate, orgNameFromContext, lifecycleCards.length, workspaceCachePrimed],
+    );
+    const workspaceSurfaceReady = workspaceSurfaceVm.reveal.canCommit;
+    const workspaceAboveFoldPageReady = workspaceSurfaceReady;
 
     useEffect(() => {
         markWorkspaceRevealGatePhases(workspaceRevealGate, { org_id: orgId });
@@ -679,7 +707,7 @@ export default function AdminV2WorkspaceIndexPage() {
         );
     }
 
-    if (!workspaceAboveFoldPageReady) {
+    if (!workspaceSurfaceReady) {
         return <WorkspacePageLoadingGate orgName={orgNameFromContext} />;
     }
 
@@ -696,7 +724,6 @@ export default function AdminV2WorkspaceIndexPage() {
                 workspaceKpiStrip={workspaceKpiStripWithOip}
                 kpiStripPlaceholder={workspaceKpiPlacementPending || oipFetchPending}
                 kpiQuietReserveOnly={workspaceKpiPlacementPending}
-                workspaceRollupRefined={workspaceRollupRefined}
                 departmentsPending={false}
                 deptTileStatsPending={false}
                 lifecycleCards={lifecycleCardsWithOip}

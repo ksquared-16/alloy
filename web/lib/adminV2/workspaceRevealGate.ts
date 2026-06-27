@@ -98,7 +98,17 @@ export function computeWorkspaceRevealGate(input: WorkspaceRevealGateInput): Wor
 export function workspaceRevealShellReady(input: {
     bootstrap_loading: boolean;
     departments_resolved: boolean;
+    /**
+     * Atomic Surface Commit warm-return: the workspace is an operator lifecycle-landing surface
+     * whose tiles (and KPI snapshot) restore synchronously from the in-memory / session snapshot.
+     * When that committed surface is present, the shell is ready to reveal immediately and reuse
+     * the last committed snapshot — the dept bootstrap re-fetch refines values quietly afterward.
+     * Without it (true cold first load), readiness still waits on the bootstrap settling so the
+     * coordinated loading gate is shown once, never a partial surface.
+     */
+    surface_snapshot_committed?: boolean;
 }): boolean {
+    if (input.surface_snapshot_committed) return true;
     return input.departments_resolved && !input.bootstrap_loading;
 }
 

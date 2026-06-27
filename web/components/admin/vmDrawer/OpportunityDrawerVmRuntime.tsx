@@ -1,12 +1,20 @@
 "use client";
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { usePathname } from "next/navigation";
 import clsx from "clsx";
 import OpportunityDrawerProofLayoutHeader from "@/components/admin/vmDrawer/OpportunityDrawerProofLayoutHeader";
 import OpportunityFocusPanelHeader from "@/components/admin/focusPanel/OpportunityFocusPanelHeader";
 import FocusPanelCompactHeader from "@/components/admin/focusPanel/FocusPanelCompactHeader";
 import OpportunityFocusPanelModeBody from "@/components/admin/focusPanel/OpportunityFocusPanelModeBody";
 import { useAlloyOsRuntimeSplitActive } from "@/lib/adminV2/runtime/useAlloyOsRuntimeSplitActive";
+import {
+    ALLOY_OS_RUNTIME_ENABLED,
+    alloyOsRuntimeSplitActive,
+    isWorkUnitQueueSurfacePath,
+} from "@/lib/adminV2/runtime/alloyOsRuntimeFlag";
+import { useActiveRuntimePerspective } from "@/lib/adminV2/runtime/perspective/RuntimePerspectiveContext";
+import { runtimePerspectiveAttrValue } from "@/lib/adminV2/runtime/perspective/deriveRuntimePerspective";
 import { useFocusPanelMode } from "@/lib/adminV2/runtime/focusPanel/useFocusPanelMode";
 import { useFocusPanelModePrewarm } from "@/lib/adminV2/runtime/focusPanel/useFocusPanelModePrewarm";
 import EntityDrawerOperatingShell from "@/components/admin/drawer/EntityDrawerOperatingShell";
@@ -24,6 +32,7 @@ import { useAdminAuth } from "@/contexts/AdminAuthContext";
 import { useAdminDrawer } from "@/contexts/AdminDrawerContext";
 import { formatOpportunityInquiryDrawerTitle } from "@/lib/admin/drawer/opportunityInquiryDrawerTitle";
 import { isDrawerHeaderAttentionVisible } from "@/lib/admin/drawer/drawerHeaderAttentionPresentation";
+import { resolveFocusPanelSubjectReveal } from "@/lib/admin/drawer/focusPanelSubjectReveal";
 import { buildOpportunityVmLifecycleRailModel } from "@/lib/adminV2/viewModel/drawer/vmRuntime/buildOpportunityVmLifecycleRailModel";
 import { resolvePortalRecordManageAccess } from "@/lib/admin/adminPortalRolePick";
 import { resolveOpportunityVmStatusCanMutate } from "@/lib/adminV2/viewModel/drawer/vmRuntime/resolveOpportunityVmStatusCanMutate";
@@ -95,7 +104,29 @@ export default function OpportunityDrawerVmRuntime() {
         useOpportunityDrawerVmPayload();
     const [drawerTab, setDrawerTab] = useState<DrawerTabKey>("overview");
     const layoutCutoverHeader = isLayoutRuntimeHardCutoverActiveClient();
-    const focusPanelActive = useAlloyOsRuntimeSplitActive();
+    const pathname = usePathname();
+    const activeRuntimePerspective = useActiveRuntimePerspective();
+    // Atomic Surface Commit (WU-07). `useAlloyOsRuntimeSplitActive` reads the `<html>` split
+    // attribute, which `AlloyOsRuntimeSplitController` writes in a layout effect →
+    // MutationObserver → re-render. For the frame between a subject opening and that attribute
+    // propagating, the attribute reads false, so the Focus Panel shell would mount a frame LATE
+    // and the legacy centered opening overlay would flash — the queue (compressed via its own
+    // synchronous `splitRenderActive` bridge) would paint before the docked Focus Panel.
+    //
+    // Compute the split intent synchronously from the SAME inputs the controller uses
+    // (`alloyOsRuntimeSplitActive`), so the Focus Panel shell mounts (with its seeded subject
+    // header) and the centered overlay is suppressed in the SAME commit the queue compresses and
+    // the controller sets the split attribute + geometry. This never diverges from the controller
+    // (identical inputs) and is inert off a work-unit surface, without an active perspective, or
+    // with no open drawer — so non-split drawer/modal presentation is unchanged.
+    const focusPanelSplitIntent =
+        ALLOY_OS_RUNTIME_ENABLED &&
+        alloyOsRuntimeSplitActive({
+            perspectiveActive: Boolean(runtimePerspectiveAttrValue(activeRuntimePerspective)),
+            drawerOpen: drawer.type != null,
+            onWorkUnitSurface: isWorkUnitQueueSurfacePath(pathname),
+        });
+    const focusPanelActive = useAlloyOsRuntimeSplitActive() || focusPanelSplitIntent;
     const { mode: focusPanelMode, setMode: setFocusPanelMode } = useFocusPanelMode({
         subjectId: drawer.type === "opportunities" ? drawer.id : null,
     });
@@ -619,15 +650,33 @@ export default function OpportunityDrawerVmRuntime() {
             drawerTab !== "overview" ||
             overviewLayoutShellReady);
 
-    /** Runtime-on: mount Focus Panel shell as soon as subject id is selected (payload may still warm). */
+    // Runtime-on: mount the Focus Panel shell as soon as a subject id is selected — independent of
+    // `isOpportunityDrawerOpening` and the (lagging) `drawerVmRender` commit target. While a runtime
+    // subject is selected the shell must stay open so the seed/pending header owns the identity; if
+    // this required `!isOpportunityDrawerOpening`, a row→row switch could drop the header for a frame
+    // and let `Drawer` fall back to the stale legacy `title` block from the prior subject.
     const focusPanelShellOpen =
-        focusPanelActive &&
-        Boolean(drawer.type === "opportunities" && drawer.id) &&
-        !isOpportunityDrawerOpening &&
-        drawerVmRender.type === "opportunities" &&
-        Boolean(drawerVmRender.id);
+        focusPanelActive && drawer.type === "opportunities" && Boolean(drawer.id);
 
-    const focusPanelPayloadPending = focusPanelShellOpen && !drawerOpen;
+    // Subject identity must switch on click BEFORE the payload resolves (see
+    // resolveFocusPanelSubjectReveal). The displayed payload's subject (`record.id`) lags the
+    // selected subject (`drawer.id`) on initial open AND on a row→row switch (prior payload held
+    // while the new one warms). Previously the pending signal keyed off `!drawerOpen`, which is
+    // false during a switch (the held payload still satisfies drawerOpen) → the header showed the
+    // stale subject until the network resolved.
+    const selectedSubjectId =
+        drawer.type === "opportunities" && drawer.id != null ? String(drawer.id) : null;
+    const displayedSubjectId =
+        record != null && (record as { id?: unknown }).id != null
+            ? String((record as { id?: unknown }).id)
+            : null;
+    const { subjectResolved: focusPanelSubjectResolved, subjectPending: focusPanelPayloadPending } =
+        resolveFocusPanelSubjectReveal({
+            shellOpen: focusPanelShellOpen,
+            hasDisplayVm: Boolean(displayVm),
+            selectedSubjectId,
+            displayedSubjectId,
+        });
 
     const drawerShellIsOpen = focusPanelActive ? focusPanelShellOpen : drawerOpen;
 
@@ -653,7 +702,16 @@ export default function OpportunityDrawerVmRuntime() {
     );
 
     const composedFocusPanelHeader = useMemo(() => {
-        if (!focusPanelActive || !committedVisible || !drawer.id || !displayVm || !headerRecord) {
+        // Only render the full (payload-backed) header once the displayed payload matches the
+        // selected subject — otherwise the seed header (below) owns the switched identity.
+        if (
+            !focusPanelActive ||
+            !committedVisible ||
+            !drawer.id ||
+            !displayVm ||
+            !headerRecord ||
+            !focusPanelSubjectResolved
+        ) {
             return undefined;
         }
         return (
@@ -689,6 +747,7 @@ export default function OpportunityDrawerVmRuntime() {
         drawer.opportunityQueuePreviewSeed,
         displayVm,
         headerRecord,
+        focusPanelSubjectResolved,
         drawerTitle,
         opportunitySingular,
         statusLabel,
@@ -706,7 +765,9 @@ export default function OpportunityDrawerVmRuntime() {
     ]);
 
     const focusPanelPendingHeader = useMemo(() => {
-        if (!focusPanelPayloadPending || !drawer.id) return undefined;
+        // Seed header is the sole visible subject-identity owner until the displayed payload matches
+        // the selected subject — not gated on drawerOpen, opening phase, or payload pending flags.
+        if (!focusPanelActive || !drawer.id || focusPanelSubjectResolved) return undefined;
         const seed = drawer.opportunityQueuePreviewSeed;
         const subjectTitle = seed?.title?.trim() || opportunitySingular;
         return (
@@ -719,7 +780,8 @@ export default function OpportunityDrawerVmRuntime() {
             />
         );
     }, [
-        focusPanelPayloadPending,
+        focusPanelActive,
+        focusPanelSubjectResolved,
         drawer.id,
         drawer.opportunityQueuePreviewSeed,
         opportunitySingular,
@@ -730,7 +792,8 @@ export default function OpportunityDrawerVmRuntime() {
 
     const composedProofHeader = useMemo(() => {
         if (focusPanelActive) {
-            if (focusPanelPayloadPending) return focusPanelPendingHeader;
+            // Runtime Focus Panel: seed owns identity until resolved; payload header only after match.
+            if (!focusPanelSubjectResolved) return focusPanelPendingHeader;
             return composedFocusPanelHeader;
         }
         if (!layoutCutoverHeader || !committedVisible || !drawer.id || !displayVm || !headerRecord) return undefined;
@@ -766,7 +829,7 @@ export default function OpportunityDrawerVmRuntime() {
         );
     }, [
         focusPanelActive,
-        focusPanelPayloadPending,
+        focusPanelSubjectResolved,
         focusPanelPendingHeader,
         composedFocusPanelHeader,
         layoutCutoverHeader,
@@ -797,7 +860,7 @@ export default function OpportunityDrawerVmRuntime() {
         queueNavigationControls,
     ]);
 
-    const drawerTitleNode = drawerTitle;
+    const drawerTitleNode = focusPanelActive && drawer.id ? null : drawerTitle;
 
     return (
         <>
@@ -905,7 +968,6 @@ export default function OpportunityDrawerVmRuntime() {
                                     mode={focusPanelMode}
                                     displayVm={displayVm}
                                     drawerId={String(displayVm.entity.id)}
-                                    opportunitySingular={opportunitySingular}
                                     record={record}
                                     drawerTitle={drawerTitle}
                                     statusLabel={statusLabel}

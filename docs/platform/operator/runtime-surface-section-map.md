@@ -2,6 +2,8 @@
 
 Status: active · Owner: operator runtime · Source of truth (code): `web/lib/perf/alloySectionMap.ts`
 
+**Related:** [`surface-view-model-composition.md`](./surface-view-model-composition.md) — the per-route Surface ViewModels that group these sections into one committable bundle.
+
 Every visible region of the **Work Unit** operating surface and the **Workspace** surface has a
 stable section identifier. When someone says "Section WU-04 loads late" or "WS-06 is blank," the
 identifier resolves immediately to a component owner, data source, loading gate, cache source,
@@ -15,6 +17,37 @@ reveal rule, and whether it should block the surface.
 - **Any new surface section must register an entry** in `alloySectionMap.ts` and appear in this doc.
 - This is documentation + diagnostics only — no redesign, no new runtime primitive. `blocking`
   records the readiness contract for diagnosis; it is not a runtime switch.
+
+## Atomic Surface Commit law
+
+A route or click may not reveal a Workspace or Work Unit operating surface in pieces. **Data may
+load asynchronously; visible surface ownership may not.** Every above-fold section must either be
+present in its final placement with snapshot/default content, or be hidden behind one coordinated
+surface gate. No section may pop in later, change layout ownership, or briefly render legacy
+presentation.
+
+There is exactly **one surface-commit decision per route** — an existing reveal gate, not a new
+primitive:
+
+| Route | Commit owner (single gate) | Atomic bundle (committed together) | Allowed to patch after commit |
+| --- | --- | --- | --- |
+| `/workspace` | `workspaceSurfaceReady` (alias of `workspaceRevealGate.above_fold_ready`; `web/app/adminV2/workspace/page.tsx`) | WS-02 header, WS-03 health, WS-04 pulse, WS-05 tiles, WS-06 tile KPIs | WS-03 / WS-04 / WS-06 KPI values (quiet patch, never 0-as-stand-in) |
+| `/workspace/work-unit/:slug` | `workUnitSurfaceReady` (alias of `resolveWorkUnitPageContentReady`; work-unit `page.tsx`) | WU-01 header, WU-02 KPI strip, WU-03 pills, WU-05 condensed queue / stable preparing, WU-07 Focus Panel shell + seeded subject header, WU-08 mode control, active WU-09 | WU-02 KPI values; WU-07 / WU-09 card payloads inside the already-mounted frame |
+
+Mechanics that make the commit atomic (no per-frame leaks):
+
+- **Workspace warm return:** `workspaceRevealShellReady({ surface_snapshot_committed })` reveals the
+  last committed lifecycle-landing surface immediately when its tiles restored synchronously from the
+  module/session snapshot — the dept bootstrap refines values quietly. True cold first load still
+  shows the coordinated loading gate once.
+- **Work Unit Focus Panel (WU-07):** `OpportunityDrawerVmRuntime` derives `focusPanelActive =
+  useAlloyOsRuntimeSplitActive() || focusPanelSplitIntent`, where `focusPanelSplitIntent` is computed
+  synchronously from the same inputs as `AlloyOsRuntimeSplitController` (`alloyOsRuntimeSplitActive`).
+  The Focus Panel shell mounts and the legacy centered opening overlay is suppressed in the **same
+  commit** the queue compresses — not after the `<html>` split attribute round-trips through the
+  MutationObserver. The compressed queue uses the analogous synchronous `splitRenderActive` bridge.
+- **No legacy presentation in runtime:** no full-width queue rows, no centered record loader, no KPI
+  or pill shuffle, no Focus-Panel-after-queue.
 
 ## Diagnostics
 

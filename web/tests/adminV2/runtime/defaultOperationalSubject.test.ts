@@ -161,7 +161,12 @@ describe("Operational Mode default runtime integration guards", () => {
 
     it("compressed queue renders when split is active", () => {
         const queue = readSrc("app/adminV2/components/workspace/blocks/QueueBlock.tsx");
-        expect(queue).toContain("splitActive && crm");
+        // The compressed fork now keys off `compressedRowPresentation` (= `splitRenderActive`, which
+        // includes the active split, OR the runtime operational-entry lock). `splitActive` is still
+        // the underlying DOM-attribute signal that feeds it.
+        expect(queue).toContain("compressedRowPresentation && crm");
+        expect(queue).toContain("const splitRenderActive =");
+        expect(queue).toContain("splitActive");
         expect(queue).toContain("CompressedQueueRow");
     });
 

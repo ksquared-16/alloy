@@ -14,7 +14,6 @@ export function WorkspaceRootColdShell() {
             metrics={null}
             metricsLoading
             kpiStripPlaceholder
-            workspaceRollupRefined={false}
             departmentsPending
         />
     );

@@ -1777,6 +1777,15 @@ function WorkUnitQueueLane({
   // once a subject is selected; it does not touch queue data, empty semantics, or reveal gates.
   const splitRenderActive =
     splitActive || (ALLOY_OS_RUNTIME_ENABLED && Boolean(openDrawerOpportunityId));
+  // WU-05 single presentation owner. In Alloy OS runtime mode compressed rows are the ONLY allowed
+  // presentation — the legacy full-width branch (LayoutRuntimeQueueRowView / CrmCompactQueuePreview)
+  // is quarantined behind flag-off, so no stale phase / pre-split frame can flash it. `splitActive`
+  // and the operational-entry signal remain as flag-off-safe contributors (and feed the active-row
+  // highlight). Queue data, empty/known-empty semantics, and skeletons are untouched (handled before
+  // the row map); `crm` is still required for compression.
+  const runtimeQueuePresentationLocked = ALLOY_OS_RUNTIME_ENABLED && operationalEntry != null;
+  const compressedRowPresentation =
+    ALLOY_OS_RUNTIME_ENABLED || splitRenderActive || runtimeQueuePresentationLocked;
   const listShellRef = useRef<HTMLDivElement>(null);
   const [refreshMinHeightPx, setRefreshMinHeightPx] = useState<number>();
   /** Client-only collapsed waitlist program/room groups (placement sections). */
@@ -2109,7 +2118,7 @@ function WorkUnitQueueLane({
                 data-ws-wu-urgency={tier}
                 data-ws-needs-attention={attentionAccent ? "true" : undefined}
                 data-queue-row-active={
-                  splitRenderActive &&
+                  compressedRowPresentation &&
                   // Immediate selection: a clicked-but-not-yet-committed row (model-swap VM wait)
                   // owns the active highlight right away; otherwise fall back to the open drawer id.
                   // Suppresses the stale prior-subject highlight while a click is pending (WU-05).
@@ -2141,7 +2150,7 @@ function WorkUnitQueueLane({
                     Opening…
                   </span>
                 ) : null}
-                {splitRenderActive && crm ?
+                {compressedRowPresentation && crm ?
                     <>
                       {(() => {
                         const cue =

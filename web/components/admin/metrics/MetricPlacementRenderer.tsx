@@ -1,12 +1,17 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { ANALYTICS_V2_SNAPSHOTS_UPDATED } from "@/app/adminV2/settings/analytics/platformBuilderEvents";
 import { MetricVisualRenderer } from "@/components/admin/metrics/MetricVisualRenderer";
 import { placementRenderToEvaluation } from "@/lib/metrics/platform/renderMetricPlacements";
 import type { MetricPlacementRenderItem } from "@/lib/metrics/platform/renderMetricPlacements";
 import { fetchMetricRenderBundle } from "@/lib/metrics/platform/fetchMetricRender";
+import {
+    metricRenderItemsHaveValues,
+    readMetricRenderBundleCache,
+    writeMetricRenderBundleCache,
+} from "@/lib/metrics/platform/metricRenderBundleCache";
 
 type Props = {
     surface: string;
@@ -16,7 +21,14 @@ type Props = {
     contextId?: string | null;
     layout?: "grid" | "row" | "inline";
     className?: string;
+    /** Owner when the slot has resolved with no configured placements (e.g. OIP fallback). */
     emptyFallback?: ReactNode;
+    /**
+     * Stable reserve shown ONLY while the bundle is still loading and nothing is seeded — holds the
+     * slot's final placement (e.g. "—") so a cold paint is never empty and resolved values patch in
+     * place. Distinct from `emptyFallback` so a resolved-empty slot does not show a reserve forever.
+     */
+    loadingReserve?: ReactNode;
 };
 
 export function MetricPlacementRenderer({
@@ -28,20 +40,43 @@ export function MetricPlacementRenderer({
     layout = "grid",
     className = "",
     emptyFallback = null,
+    loadingReserve = null,
 }: Props) {
-    const [items, setItems] = useState<MetricPlacementRenderItem[]>([]);
-    const [loading, setLoading] = useState(true);
+    // Seed from the warm snapshot so the slot paints its final placement immediately on a warm
+    // navigation/return; the cold first paint has no snapshot and falls back to `emptyFallback`.
+    const [items, setItems] = useState<MetricPlacementRenderItem[]>(
+        () => readMetricRenderBundleCache({ surface, surfaceKey, placementZone, contextType, contextId }) ?? [],
+    );
+    const [loading, setLoading] = useState(
+        () => readMetricRenderBundleCache({ surface, surfaceKey, placementZone, contextType, contextId }) == null,
+    );
+    const itemsRef = useRef(items);
+    itemsRef.current = items;
 
     const load = useCallback(async () => {
-        setLoading(true);
-        const bundle = await fetchMetricRenderBundle({
-            surface,
-            surfaceKey,
-            placementZone,
-            contextType,
-            contextId,
-        });
-        setItems(bundle.items);
+        const cacheKey = { surface, surfaceKey, placementZone, contextType, contextId };
+        // Re-seed from this key's snapshot so an in-place param change (e.g. contextId) paints the
+        // matching cached placement immediately and never shows the prior key's stale items. Cold
+        // for this key → show the section's reserve fallback, not stale content.
+        const seeded = readMetricRenderBundleCache(cacheKey);
+        if (seeded) {
+            setItems(seeded);
+            setLoading(false);
+        } else {
+            setItems([]);
+            setLoading(true);
+        }
+        const bundle = await fetchMetricRenderBundle(cacheKey);
+        // Single-owner guard: never replace a populated (value-bearing) slot with value-less fresh
+        // items — that would flash resolved values back to "—". Adopt the fresh bundle only when it
+        // carries values, or when the current slot has nothing populated to protect. Otherwise keep
+        // the displayed values and leave the snapshot cache intact.
+        const freshHasValues = metricRenderItemsHaveValues(bundle.items);
+        const currentHasValues = metricRenderItemsHaveValues(itemsRef.current);
+        if (freshHasValues || !currentHasValues) {
+            writeMetricRenderBundleCache(cacheKey, bundle.items);
+            setItems(bundle.items);
+        }
         setLoading(false);
     }, [surface, surfaceKey, placementZone, contextType, contextId]);
 
@@ -55,11 +90,11 @@ export function MetricPlacementRenderer({
         return () => window.removeEventListener(ANALYTICS_V2_SNAPSHOTS_UPDATED, onSnapshotsUpdated);
     }, [load]);
 
-    // KPI snapshot law: occupy final placement immediately. While the render bundle is still
-    // loading (or resolves empty), render the snapshot/default fallback so the slot holds its
-    // final layout from first paint; swap to resolved items in place when they arrive. Rendering
-    // an empty container during load (the prior behavior) caused a late KPI card to pop in.
-    if (!items.length) return emptyFallback ?? null;
+    // KPI snapshot law: occupy final placement immediately and keep a single visible owner.
+    // - items present  → platform placements own the slot (warm seed or resolved).
+    // - loading + empty → stable reserve (holds final placement; never an empty cold paint).
+    // - resolved empty  → `emptyFallback` owner (e.g. OIP strip) only when no placements exist.
+    if (!items.length) return loading ? (loadingReserve ?? emptyFallback ?? null) : (emptyFallback ?? null);
 
     const layoutClass =
         layout === "row" ? "flex flex-wrap gap-2"

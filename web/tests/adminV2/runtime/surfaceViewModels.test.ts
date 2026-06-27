@@ -110,6 +110,27 @@ describe("WorkspaceSurfaceViewModel", () => {
         const vm = composeWorkspaceSurfaceViewModel({ gate: workspaceGate({ shell: true, tiles: true }), ...base });
         expect(vm.patch.allowedAfterCommit).toContain("WS-06");
     });
+
+    it("provides stable KPI/health slots before resolved values (slots present, non-blocking, patch-in-place)", () => {
+        // No snapshot yet (cold values) — slots must still exist and must NOT block the commit or
+        // appear as late objects: WS-03/04/06 are present, non-blocking, and patch after commit.
+        const vm = composeWorkspaceSurfaceViewModel({
+            gate: workspaceGate({ shell: true, tiles: true }),
+            ...base,
+            healthSnapshotAvailable: false,
+            operationalPulseSnapshotAvailable: false,
+            tileKpiSnapshotAvailable: false,
+        });
+        expect(vm.reveal.canCommit).toBe(true);
+        expect(vm.sections.healthKpi).toBeDefined();
+        expect(vm.sections.operationalPulse).toBeDefined();
+        expect(vm.sections.tileKpi).toBeDefined();
+        for (const id of ["WS-03", "WS-04", "WS-06"]) {
+            expect(vm.reveal.nonBlockingSectionIds).toContain(id);
+            expect(vm.reveal.blockingSectionIds).not.toContain(id);
+            expect(vm.patch.allowedAfterCommit).toContain(id);
+        }
+    });
 });
 
 describe("WorkUnitSurfaceViewModel", () => {
@@ -180,6 +201,26 @@ describe("WorkUnitSurfaceViewModel", () => {
             const vm = composeWorkUnitSurfaceViewModel({ pageContentReady: true, ...base, queueState: state });
             expect(["rows", "empty", "preparing"]).toContain(vm.sections.queue.state);
         }
+    });
+
+    it("keeps WU-02 (KPI) and WU-03 (pills) separate and stable — pills never hold KPI content", () => {
+        // KPI strip is a snapshot slot (non-blocking, patches in place); pills are a distinct
+        // blocking section that commits with the header. They are independent sections, so the KPI
+        // strip resolving cannot reshuffle the pills row.
+        const vm = composeWorkUnitSurfaceViewModel({
+            pageContentReady: true,
+            ...base,
+            kpiSnapshotAvailable: false,
+        });
+        expect(vm.sections.kpi).not.toBe(vm.sections.workViewPills);
+        expect(vm.sections.workViewPills.count).toBe(4);
+        // KPI is non-blocking + patch-after-commit; pills commit with the header (blocking).
+        expect(vm.reveal.nonBlockingSectionIds).toContain("WU-02");
+        expect(vm.patch.allowedAfterCommit).toContain("WU-02");
+        expect(vm.reveal.blockingSectionIds).toContain("WU-03");
+        expect(vm.patch.allowedAfterCommit).not.toContain("WU-03");
+        // WU-01 header + WU-03 pills commit together (both blocking).
+        expect(vm.reveal.blockingSectionIds).toEqual(expect.arrayContaining(["WU-01", "WU-03"]));
     });
 });
 

@@ -37,6 +37,9 @@ import {
 import { appendWorkspaceSiteToPath, readStickyWorkspaceSiteIdForNavigation } from "@/lib/adminV2/workspaceSiteFilterClient";
 import { useActiveAdminV2WorkspaceModal } from "@/lib/adminV2/useActiveWorkspaceModal";
 import SidebarConfigurationModeNav from "@/app/adminV2/components/SidebarConfigurationModeNav";
+import { readInboxUnreadCountCache } from "@/lib/adminV2/inboxNavUnreadCache";
+import { readOperationalTasksNavCountsCache } from "@/lib/adminV2/operationalTasksNavCountsCache";
+import { composeShellNavigationSurfaceViewModel } from "@/lib/adminV2/runtime/surface/shellNavigationSurfaceViewModel";
 
 const WORKSPACE = CANONICAL_OPERATOR_BASE;
 const SETTINGS_HREF = CANONICAL_ADMIN_BASE;
@@ -126,6 +129,34 @@ function SidebarNav({
             return next;
         });
     }, []);
+
+    // ShellNavigationSurfaceViewModel — the persistent left nav is mounted ABOVE the route (in
+    // AdminV2Shell) so it commits once and never remounts across workspace/work-unit navigation.
+    // This VM formalizes that ownership: items + active route + modal launchers compose one stable
+    // surface; count badges are descriptive snapshots read from the SAME warm caches the reactive
+    // badge hooks write (no duplicate fetch) and patch quietly in place. Diagnostics only — does not
+    // gate nav rendering.
+    const shellNavVm = useMemo(() => {
+        const tasks = readOperationalTasksNavCountsCache("open");
+        return composeShellNavigationSurfaceViewModel({
+            // Standing items: home + settings + 4 modal launchers + one entry per lifecycle process.
+            itemCount: 2 + 4 + lifecycleCards.length,
+            activeRouteKey:
+                activeModal != null
+                    ? `modal:${activeModal}`
+                    : workUnitSlug != null
+                      ? `work_unit:${workUnitSlug}`
+                      : path,
+            activeRouteResolvable: path.length > 0,
+            launcherKeys: ["inbox", "processing", "tasks", "analytics"],
+            inboxUnread: readInboxUnreadCountCache(),
+            workItems: tasks ? tasks.open + tasks.due_soon + tasks.overdue : null,
+            processing: null,
+            notifications: null,
+            collapsed,
+            warmFromSession: lifecycleCards.length > 0,
+        });
+    }, [path, workUnitSlug, activeModal, collapsed, lifecycleCards.length]);
 
     const homeHref = workspaceHref(WORKSPACE);
     const railWidth = collapsed ? 56 : 280;
@@ -291,6 +322,10 @@ function SidebarNav({
     return (
         <aside
             data-adminv2-sidebar="true"
+            data-shell-nav-surface="true"
+            data-shell-nav-ready={shellNavVm.reveal.canCommit ? "true" : "false"}
+            data-shell-nav-source={shellNavVm.source}
+            data-shell-nav-version={String(shellNavVm.version)}
             className="adminv2-sidebar-shell relative z-[100] flex flex-col flex-shrink-0 min-h-0 border-r transition-[width] duration-200 ease-out overflow-hidden"
             style={{
                 width: railWidth,

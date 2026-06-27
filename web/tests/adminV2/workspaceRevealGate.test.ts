@@ -39,6 +39,27 @@ describe("workspaceRevealGate", () => {
         ).toBe(true);
     });
 
+    it("shell_ready immediately on warm return when a surface snapshot is committed (atomic commit)", () => {
+        // Warm return: lifecycle tiles restored synchronously → reveal the committed surface
+        // immediately even though the dept bootstrap is still loading (it refines quietly).
+        expect(
+            workspaceRevealShellReady({
+                bootstrap_loading: true,
+                departments_resolved: false,
+                surface_snapshot_committed: true,
+            })
+        ).toBe(true);
+        // True cold first load (no committed snapshot) still waits on the bootstrap settling so the
+        // coordinated loading gate is shown once — never a partial surface.
+        expect(
+            workspaceRevealShellReady({
+                bootstrap_loading: true,
+                departments_resolved: false,
+                surface_snapshot_committed: false,
+            })
+        ).toBe(false);
+    });
+
     it("department_tiles_ready allows lifecycle landing without departments", () => {
         expect(
             workspaceRevealDepartmentTilesReady({

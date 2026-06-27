@@ -7,6 +7,7 @@ import type { MetricKey } from "@/lib/kpi/types";
 import { filterOperationalPulseKpis } from "@/lib/kpi/workspaceKpiPresentation";
 import { oipSummaryLabel } from "@/lib/metrics/oipOperatorCopy";
 import { MetricPlacementRenderer } from "@/components/admin/metrics/MetricPlacementRenderer";
+import { ALLOY_OS_RUNTIME_ENABLED } from "@/lib/adminV2/runtime/alloyOsRuntimeFlag";
 
 function metricKeyFromKpiId(id: string): string | null {
     if (!id.startsWith("oip.")) return null;
@@ -71,10 +72,26 @@ type Props = {
     loading?: boolean;
 };
 
+/** Stable "—" reserve that holds the pulse row's final placement during a cold load (never empty). */
+function PulseSlotReserve() {
+    return (
+        <div
+            className="flex flex-wrap items-baseline gap-x-6 gap-y-2"
+            data-workspace-pulse-reserve="true"
+            aria-hidden="true"
+        >
+            {[0, 1, 2].map((i) => (
+                <InlinePulseMetric key={i} label="" value="" loading />
+            ))}
+        </div>
+    );
+}
+
 /** Compact horizontal operational pulse — attention signals, not dashboard tiles. */
 export function WorkspaceOperationalPulseStrip({ kpis, oipResolved, loading = false }: Props) {
-    const fallback =
-        kpis.length ?
+    // Legacy-only: OIP pulse fallback when platform resolves with no configured placements.
+    const legacyOipFallback =
+        !ALLOY_OS_RUNTIME_ENABLED && kpis.length ?
             <KpiPulseFallback kpis={kpis} oipResolved={oipResolved} loading={loading} />
         :   null;
 
@@ -89,6 +106,7 @@ export function WorkspaceOperationalPulseStrip({ kpis, oipResolved, loading = fa
                 placementZone="primary_metrics"
                 layout="inline"
                 className="gap-x-6 gap-y-2"
+                loadingReserve={<PulseSlotReserve />}
             />
             <MetricPlacementRenderer
                 surface="workspace_header"
@@ -96,7 +114,8 @@ export function WorkspaceOperationalPulseStrip({ kpis, oipResolved, loading = fa
                 placementZone="secondary_metrics"
                 layout="inline"
                 className="gap-x-6 gap-y-2"
-                emptyFallback={fallback}
+                loadingReserve={<PulseSlotReserve />}
+                emptyFallback={legacyOipFallback}
             />
         </div>
     );

@@ -47,6 +47,27 @@ describe("Work Unit operational reveal — legacy overlay quarantine", () => {
         expect(runtime).toMatch(/isOpen=\{drawerShellIsOpen\}/);
     });
 
+    it("Focus Panel shell mounts on subject selection independent of isOpportunityDrawerOpening (no legacy title fallback)", () => {
+        const runtime = readSrc("components/admin/vmDrawer/OpportunityDrawerVmRuntime.tsx");
+        // The shell-open predicate must not gate on the opening flag or the lagging render target,
+        // otherwise a row→row switch drops the seed header for a frame and Drawer falls back to the
+        // stale legacy `title` block from the prior subject.
+        const shellDef = runtime.slice(
+            runtime.indexOf("const focusPanelShellOpen ="),
+            runtime.indexOf("const focusPanelShellOpen =") + 160,
+        );
+        expect(shellDef).toContain("focusPanelActive");
+        expect(shellDef).toContain('drawer.type === "opportunities"');
+        expect(shellDef).toContain("Boolean(drawer.id)");
+        expect(shellDef).not.toContain("isOpportunityDrawerOpening");
+        expect(shellDef).not.toContain("drawerVmRender");
+        // Composed (payload) header only renders once the displayed subject matches the selection.
+        expect(runtime).toContain("focusPanelSubjectResolved");
+        // Drawer swaps the legacy title block out whenever a composed sticky header is present.
+        const drawer = readSrc("components/admin/Drawer.tsx");
+        expect(drawer).toContain("const headerBlock = composedStickyHeader ?");
+    });
+
     it("QueueBlock keeps rows clickable once a subject drawer id is selected", () => {
         const queue = readSrc("app/adminV2/components/workspace/blocks/QueueBlock.tsx");
         expect(queue).toContain("!openDrawerOpportunityId");

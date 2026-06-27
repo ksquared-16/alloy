@@ -103,13 +103,10 @@ export function WorkUnitCommandSurface({
                             contextId={workUnitId}
                             layout="row"
                             className="adminv2-os-context__kpi-placement"
-                            emptyFallback={
-                                <AlloyOsInlineKpiStrip
-                                    kpis={kpis}
-                                    oipResolved={oipResolved}
-                                    loading={kpiStripPlaceholder}
-                                />
-                            }
+                            // Runtime: platform placements are the sole visible KPI owner. OIP values
+                            // may feed data elsewhere but must not render a competing UI that platform
+                            // placements then replace with "—".
+                            loadingReserve={<WorkspaceQuietKpiReserve id="wu-kpi-quiet-reserve" />}
                         />
                     </div>
                 :   null}

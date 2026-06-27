@@ -41,6 +41,23 @@ describe("Opportunity Focus Panel activation wiring", () => {
         );
     });
 
+    it("bridges Focus Panel shell to synchronous split intent (atomic commit, no attr-lag flash)", () => {
+        const runtime = readSrc("components/admin/vmDrawer/OpportunityDrawerVmRuntime.tsx");
+        // focusPanelActive must be the union of the async attribute and the synchronous intent so
+        // the Focus Panel shell mounts + the centered opening overlay is suppressed in the SAME
+        // commit the queue compresses — not a MutationObserver round-trip later.
+        expect(runtime).toContain("focusPanelSplitIntent");
+        expect(runtime).toMatch(
+            /const focusPanelActive\s*=\s*useAlloyOsRuntimeSplitActive\(\)\s*\|\|\s*focusPanelSplitIntent/,
+        );
+        // The intent mirrors the controller's exact decision inputs (no divergence).
+        expect(runtime).toContain("alloyOsRuntimeSplitActive({");
+        expect(runtime).toContain("isWorkUnitQueueSurfacePath(pathname)");
+        expect(runtime).toContain("runtimePerspectiveAttrValue(activeRuntimePerspective)");
+        // Centered opening overlay stays quarantined from split (no centered record loader).
+        expect(runtime).toContain("!focusPanelActive");
+    });
+
     it("Focus Panel header and mode switch expose regression markers", () => {
         const header = readSrc("components/admin/focusPanel/FocusPanelCompactHeader.tsx");
         expect(header).toContain('data-alloy-os-focus-panel-header="true"');

@@ -22,6 +22,8 @@ This is **not** another doctrine document. It is the **synthesis** that converts
 
 > **Runtime diagnostics:** every visible surface region has a stable section id (`WU-00`…`WU-15`, `WS-00`…`WS-10`). See the [Runtime Surface Section Map](./runtime-surface-section-map.md) for owners, data sources, blocking/snapshot contracts, and the `data-alloy-section-id` / `[perf:section]` diagnostics used during QA.
 
+> **Surface ownership:** each route composes one above-fold **Surface ViewModel** that owns readiness; components present its sections. See [Surface ViewModel Composition](./surface-view-model-composition.md) for the `workspaceSurfaceReady` / `workUnitSurfaceReady` / shell-nav commit contracts and what patches after commit.
+
 ---
 
 ## Part 1 — Runtime Philosophy
@@ -374,6 +376,54 @@ Implementation          expresses   the mockups
 ```
 
 No implementation or visual decision may **redefine the runtime**. If a mockup or implementation needs behavior this spec doesn't allow, the spec is amended first (through doctrine), then mockups, then code.
+
+---
+
+## Part 16 — Alloy OS Runtime V1 Milestone (June 2026)
+
+**Status: Runtime V1 architecture complete.** The runtime is now considered architecturally
+finished. Future work is **product completion and polish**, not runtime architecture. No new reveal
+primitive, loader, cache layer, or coordination layer should be introduced to "fix" runtime feel —
+the ownership model below is the answer.
+
+**Presentation ownership model (canonical):** Each route composes one above-fold **Surface
+ViewModel** (`shell_nav`, `workspace`, `work_unit`) that owns surface readiness; components present
+its sections and never decide readiness independently. See
+[Surface ViewModel Composition](./surface-view-model-composition.md). Runtime ownership has been
+**consolidated** — for every visible region exactly one renderer is authoritative (no fallback +
+legacy + metric + OIP + cache + payload owners competing for the same slot).
+
+**Canonical operating model:** **Queue → Focus Panel.** The queue is a preview/selection surface; a
+row click commits a **Subject** into the Focus Panel. The **Focus Panel shell owns subject
+identity** — on click the selected-row seed becomes the visible subject **synchronously**, before
+any payload resolves. The legacy drawer-title fallback is unreachable while a runtime subject is
+selected. **Cards hydrate after the shell commits**, inside the already-switched shell; a slower or
+stale payload can never change the visible subject identity (latest click wins).
+
+### Completed
+
+- Surface ViewModel architecture (presentation ownership)
+- Queue-first operational mode
+- Default operational subject (auto-open, manual-selection guarded)
+- Focus Panel shell
+- Subject identity ownership (seed-first, payload hydrates after commit)
+- Runtime section map (`WU-00…`, `WS-00…` + `data-alloy-section-id` / `[perf:section]`)
+- Runtime ownership cleanup (single authoritative renderer per region)
+- Performance stabilization (coordinated reveal, prewarm throttling)
+- Warm navigation (hold prior committed surface on warm transition)
+- Resume affordance
+- Idle session framework
+
+### Remaining (intentional — completion & polish, not redesign)
+
+- Final card implementations (System 5 archetypes/templates/content)
+- KPI ownership completion (finish platform-placement convergence across all KPI slots)
+- Experience Builder integration (runtime editing of surfaces/cards)
+- Embedded workspace completion (Activity-mode embedded surfaces)
+- Runtime Polish V2 (transition refinement only)
+
+These items are feature completion and refinement on top of the frozen runtime spine. They do not
+reopen the architecture.
 
 ---
 

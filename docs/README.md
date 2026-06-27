@@ -16,6 +16,10 @@ For behavior-changing work, include **`docs/platform/governance/design-and-opera
 
 **Runtime Surface Section Map (diagnostics):** Every visible region of the Work Unit and Workspace surfaces has a stable section id (`WU-00`…`WU-15`, `WS-00`…`WS-10`) with owner, data source, cache, and blocking/snapshot contract in **`platform/operator/runtime-surface-section-map.md`** (code source of truth: `web/lib/perf/alloySectionMap.ts`). Use `data-alloy-section-id` and `[perf:section]` logs to diagnose load/reveal issues by section id.
 
+**Surface ViewModel Composition (ownership):** Each route composes one above-fold Surface ViewModel that owns readiness; components present its sections and never decide surface readiness. See **`platform/operator/surface-view-model-composition.md`** for the shell-nav / `/workspace` / work-unit commit contracts (code: `web/lib/adminV2/runtime/surface/*`) and what patches quietly after commit.
+
+**Alloy OS Runtime V1 (architecture complete — June 2026):** The operator runtime is architecturally finished. Surface ViewModels are the presentation ownership model, runtime ownership is consolidated (one authoritative renderer per region), **Queue → Focus Panel** is the canonical operating model, the **Focus Panel shell owns subject identity** (clicked-row seed commits synchronously; cards hydrate after shell commit). Remaining work is **product completion and polish** — final card implementations, KPI ownership completion, Experience Builder integration, embedded-workspace completion, and Runtime Polish V2 — **not** architectural redesign. Milestone notes: **`platform/operator/alloy-runtime-specification.md`** (Part 16).
+
 **Presentation Runtime (unifying presentation architecture):** How every operator surface — queue row, Focus Panel, dashboard, document, POS, portal — becomes one **Design Surface** authored in one **Experience Builder**, built renderer-first on three axes (composition: Design Surface → Zone → Card → Slot → Renderer; selection: Perspective; audience: Viewpoint), with Analytics as a Dashboard category, is defined in **`platform/operator/presentation-runtime-doctrine.md`** (design stage). Full sprint: `sprints/06_2026/presentation-runtime-architecture/`.
 
 ---
@@ -59,6 +63,12 @@ Start here: **`platform/foundation/system-overview.md`**
 15. `platform/operator/alloy-visual-language.md` — **visual doctrine** (how the model looks/feels; bridge into mockups)
 16. `platform/operator/alloy-runtime-specification.md` — **runtime specification** (synthesis; read before building any domain)
 17. `platform/operator/alloy-os-runtime-completion.md` — **Runtime Completion & Freeze** (✅ runtime complete; ownership matrix, config handoff, final verdict — start here for runtime status)
+16a. `platform/operator/operational-grammar.md` — **Alloy Operational Grammar** (foundation: operators answer operational questions; cards are answers; platform hierarchy)
+16b. `platform/operator/card-language.md` — **Alloy Card Language** (how every card behaves: anatomy, evidence hierarchy, density, interaction, color)
+16c. `platform/operator/card-archetypes.md` — **Alloy Card Archetypes** (reusable operational patterns; Identity = Household reference card)
+16d. `platform/operator/operational-context-boundary.md` — **Operational Context Boundary** (runtime spine: Queue → Operational Context → Focus Panel → Cards; replaces "drawer" as the conceptual boundary)
+16e. `platform/operator/household-reference-card.md` — **Household Reference Card** (Identity archetype **design freeze**: all states/densities, interaction + performance models, visual hierarchy, mock challenges)
+16f. `platform/operator/focus-panel-runtime-cutover-report.md` — **Focus Panel Runtime Cutover** (migration report: one Focus Panel; drawer dependency ledger classified internal-compat vs needs-migration; staged removal D0→G)
 17. `platform/operator/universal-card-system.md` — **Universal Card System** (System 4 design freeze)
 18. `platform/operator/operational-surface-design-system.md` — **Operational Surface Design System** (System 5 — **approved/frozen** June 2026)
 19. `platform/operator/universal-card-archetypes.md` — **Universal Card Archetypes** (System 5A — implemented)

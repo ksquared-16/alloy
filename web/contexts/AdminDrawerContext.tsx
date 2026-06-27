@@ -875,6 +875,11 @@ export function AdminDrawerProvider({ children }: { children: ReactNode }) {
                         null,
                 };
                 pendingModelSwapParamsRef.current = swapParams;
+                // Subject identity must switch synchronously on row click — the async VM preload /
+                // commit path must never be the visible owner of header identity. Without this,
+                // drawer.id + opportunityQueuePreviewSeed lag until commitDrawerModelSwap completes
+                // while the queue row already highlights the clicked subject (WU-05 vs WU-07 split).
+                applyDrawerTargetNavigation(swapParams, { skipStackPush: true });
                 const pendingKey = drawerLinkPendingKeyFromOpenParams(swapParams);
                 logDrawerTargetCachePeek(swapParams, "model_swap");
                 logDrawerHardTrace("child_model_swap_start", "contexts/AdminDrawerContext.tsx", {
@@ -949,6 +954,7 @@ export function AdminDrawerProvider({ children }: { children: ReactNode }) {
             proceedSwap();
         },
         [
+            applyDrawerTargetNavigation,
             beginDrawerLinkPending,
             commitDrawerModelSwap,
             drawer,

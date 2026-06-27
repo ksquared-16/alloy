@@ -385,6 +385,7 @@ import {
     workUnitKpiStripShowsPlaceholder,
     workUnitPageContentReady as resolveWorkUnitPageContentReady,
 } from "@/lib/adminV2/workUnitPageRevealPolicy";
+import { composeWorkUnitSurfaceViewModel } from "@/lib/adminV2/runtime/surface/workUnitSurfaceViewModel";
 import { WorkUnitWorkspaceColdShell } from "@/components/admin/workspace/WorkUnitWorkspaceColdShell";
 import { logAdminV2LegacyFanOut } from "@/lib/adminV2/runtime/adminV2LegacyFanOutDiagnostics";
 import { alloyPerfGet, alloyPerfSet } from "@/lib/perf/alloyPerfGlobal";
@@ -6907,6 +6908,11 @@ export default function AdminV2OpportunityWorkUnitPage() {
 
     const operationalSurfaceReady = operationalRevealPhaseReady || operationalRevealFallbackElapsed;
 
+    // Single per-route Atomic Surface Commit owner for /workspace/work-unit/:slug. The whole
+    // above-fold bundle (WU-01 header, WU-02 KPI strip, WU-03 pills, WU-05 condensed queue / stable
+    // preparing state) commits behind this one decision; on the cold path it additionally waits for
+    // the operational surface (subject + Focus Panel shell coherent) so WU-07 reveals WITH the
+    // queue, never after. The WorkUnitSurfaceViewModel (composed below) owns this readiness.
     const workUnitPageContentReady = resolveWorkUnitPageContentReady({
         shell_ready: workUnitShellReady,
         critical_bundle_ready: workUnitAboveFoldPageReady,
@@ -7475,6 +7481,64 @@ export default function AdminV2OpportunityWorkUnitPage() {
         [handleQueueTabChange, handleAttentionBucketSelect, handleQueuePillIntent]
     );
 
+    // Surface ViewModel ownership: /workspace/work-unit/:slug composes ONE above-fold
+    // WorkUnitSurfaceViewModel from the operational bootstrap + queue/lane reveal + default subject
+    // seed. The VM owns surface readiness (`reveal.canCommit` IS `workUnitPageContentReady` — no
+    // second gate) and seeds only the Focus Panel SHELL subject (WU-07) + mode control (WU-08).
+    // Focus Panel CARD composition (System 5, WU-09/10/11) is out of scope and patches after commit
+    // inside the seeded shell.
+    const workUnitOperationalSubjectId =
+        drawer.type === "opportunities" && drawer.id != null
+            ? String(drawer.id)
+            : slugRoute?.routeRecordId ?? null;
+    const workUnitSurfaceVm = useMemo(
+        () =>
+            composeWorkUnitSurfaceViewModel({
+                pageContentReady: workUnitPageContentReady,
+                title: slugRoute?.workUnitName ?? wuName,
+                departmentTitle: deptName,
+                kpiSnapshotAvailable: workUnitKpiHasSnapshotSurface,
+                workViewPillCount: queueSummaries?.length ?? 0,
+                queueHeaderAvailable: true,
+                queueState:
+                    operationalEntryRevealSnapshot.phase === "preparing" ? "preparing" : "rows",
+                queueRowCount: queueDisplayItemsRef.current.length,
+                operationalSubjectId: workUnitOperationalSubjectId,
+                focusPanelShellSeeded: workUnitOperationalSubjectId != null,
+                focusPanelSubjectId: workUnitOperationalSubjectId,
+                modeControlActiveMode: null,
+                rightRailAvailable: true,
+                bosRailAvailable: true,
+                warmFromSession: workUnitPageSeededFromCache,
+                warmFromBootstrap: !workUnitPageSeededFromCache && workUnitPageContentReady,
+            }),
+        [
+            workUnitPageContentReady,
+            slugRoute?.workUnitName,
+            wuName,
+            deptName,
+            workUnitKpiHasSnapshotSurface,
+            queueSummaries?.length,
+            operationalEntryRevealSnapshot.phase,
+            workUnitOperationalSubjectId,
+            workUnitPageSeededFromCache,
+        ],
+    );
+    const workUnitSurfaceReady = workUnitSurfaceVm.reveal.canCommit;
+
+    // Cold shell is for TRUE cold entry only — no warm seed and no surface has committed yet in this
+    // mount. Once a surface commits, a warm slug→slug transition (where `workUnitSurfaceReady` briefly
+    // flips false) holds the already-committed surface instead of re-mounting the skeleton, so valid
+    // displayed data is never cleared before the replacement Surface VM commits.
+    const [workUnitSurfaceEverCommitted, setWorkUnitSurfaceEverCommitted] = useState(false);
+    useEffect(() => {
+        if (workUnitSurfaceReady && !workUnitSurfaceEverCommitted) {
+            setWorkUnitSurfaceEverCommitted(true);
+        }
+    }, [workUnitSurfaceReady, workUnitSurfaceEverCommitted]);
+    const showWorkUnitColdShell =
+        !workUnitSurfaceReady && !workUnitPageSeededFromCache && !workUnitSurfaceEverCommitted;
+
     return (
         <WorkspaceChrome
             variant="bridge"
@@ -7490,7 +7554,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
         >
             {error && !workUnitShellReady ? (
                 <p className="text-sm text-alloy-ember px-1 py-4">{error}</p>
-            ) : !workUnitPageContentReady ? (
+            ) : showWorkUnitColdShell ? (
                 <WorkUnitWorkspaceColdShell
                     workUnitTitle={slugRoute?.workUnitName ?? wuName}
                     departmentTitle={deptName}
