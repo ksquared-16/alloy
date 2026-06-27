@@ -55,7 +55,11 @@ export function MetricPlacementRenderer({
         return () => window.removeEventListener(ANALYTICS_V2_SNAPSHOTS_UPDATED, onSnapshotsUpdated);
     }, [load]);
 
-    if (!loading && !items.length) return emptyFallback ?? null;
+    // KPI snapshot law: occupy final placement immediately. While the render bundle is still
+    // loading (or resolves empty), render the snapshot/default fallback so the slot holds its
+    // final layout from first paint; swap to resolved items in place when they arrive. Rendering
+    // an empty container during load (the prior behavior) caused a late KPI card to pop in.
+    if (!items.length) return emptyFallback ?? null;
 
     const layoutClass =
         layout === "row" ? "flex flex-wrap gap-2"

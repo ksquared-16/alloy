@@ -1768,6 +1768,15 @@ function WorkUnitQueueLane({
     operationalEntry?.phase === "preparing" &&
     !splitActive &&
     !openDrawerOpportunityId;
+  // WU-05 full-width flash bridge. `splitActive` is read from the `<html>` runtime-split DOM
+  // attribute, which the split controller sets in a layout effect → MutationObserver → re-render.
+  // For the frame between a subject opening and that attribute propagating, `splitActive` is still
+  // false while `openDrawerOpportunityId` is already set — the old code painted legacy full-width
+  // rows in that gap. In runtime mode an open/opening operational subject means the split IS the
+  // presentation, so render compressed rows immediately. This never renders expanded legacy rows
+  // once a subject is selected; it does not touch queue data, empty semantics, or reveal gates.
+  const splitRenderActive =
+    splitActive || (ALLOY_OS_RUNTIME_ENABLED && Boolean(openDrawerOpportunityId));
   const listShellRef = useRef<HTMLDivElement>(null);
   const [refreshMinHeightPx, setRefreshMinHeightPx] = useState<number>();
   /** Client-only collapsed waitlist program/room groups (placement sections). */
@@ -2100,7 +2109,7 @@ function WorkUnitQueueLane({
                 data-ws-wu-urgency={tier}
                 data-ws-needs-attention={attentionAccent ? "true" : undefined}
                 data-queue-row-active={
-                  splitActive &&
+                  splitRenderActive &&
                   // Immediate selection: a clicked-but-not-yet-committed row (model-swap VM wait)
                   // owns the active highlight right away; otherwise fall back to the open drawer id.
                   // Suppresses the stale prior-subject highlight while a click is pending (WU-05).
@@ -2132,7 +2141,7 @@ function WorkUnitQueueLane({
                     Opening…
                   </span>
                 ) : null}
-                {splitActive && crm ?
+                {splitRenderActive && crm ?
                     <>
                       {(() => {
                         const cue =

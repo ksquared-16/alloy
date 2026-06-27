@@ -70,13 +70,16 @@ export function WorkspaceRootShell({
   workspaceKpiStrip,
   oipResolved,
   kpiStripPlaceholder = false,
-  workspaceRollupRefined = false,
   lifecycleCards = [],
   lifecycleCardsPending = false,
 }: Props) {
   const displayName = (orgName && orgName.trim()) || "Your organization";
   const defaultDepartmentId = lifecycleCards[0]?.departmentId ?? null;
-  const showHeader = workspaceRollupRefined && (workspaceKpiStrip?.length || kpiStripPlaceholder);
+  // WS-02/03/04 occupy final placement immediately and reveal together with the WS-05 tiles.
+  // The command header (org title + health + operational pulse) renders its final layout now;
+  // KPI/health values patch in place as the rollup/OIP snapshot warms (`kpiStripPlaceholder`).
+  // Previously this band was gated behind `workspaceRollupRefined`, so tiles painted first and
+  // the header popped in late — a phased reveal the snapshot law forbids.
 
   return (
     <WorkspaceShellLayout
@@ -89,7 +92,6 @@ export function WorkspaceRootShell({
       containLead={null}
       primaryColumn={
         <>
-          {showHeader ?
             <div
               className="adminv2-ws-root-kpi-zone px-0 pb-1"
               data-workspace-zone="command-header"
@@ -101,7 +103,6 @@ export function WorkspaceRootShell({
                 loading={kpiStripPlaceholder}
               />
             </div>
-          :   null}
 
             <section
                 className={`adminv2-ws-root-departments-zone ${WS_ZONE_MT.operationalSurfacesFromPulse}`}

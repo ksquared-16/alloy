@@ -27,13 +27,17 @@ describe("Alloy OS workspace shell regression guards", () => {
         expect(shell).not.toContain("CompressedQueueRow");
     });
 
-    it("QueueBlock swaps to CompressedQueueRow only when split is active", () => {
+    it("QueueBlock swaps to CompressedQueueRow only when split (or split intent) is active", () => {
         const block = readSrc("app/adminV2/components/workspace/blocks/QueueBlock.tsx");
         expect(block).toContain("useAlloyOsRuntimeSplitActive");
         expect(block).toContain("CompressedQueueRow");
         expect(block).toContain("resolveCompressedQueueRowDisplay");
         expect(block).toContain("data-queue-row-active");
-        expect(block).toMatch(/splitActive && crm\s*\?/);
+        // Compressed rows fork on `splitRenderActive`, which is `splitActive` OR the synchronous
+        // runtime split-intent (open operational subject) — bridging the one frame before the
+        // `<html>` split attribute propagates so the legacy full-width rows never flash (WU-05).
+        expect(block).toMatch(/splitRenderActive && crm\s*\?/);
+        expect(block).toMatch(/const splitRenderActive\s*=\s*\n?\s*splitActive \|\|/);
     });
 
     it("Focus Panel activation stays isolated from workspace shell files", () => {
