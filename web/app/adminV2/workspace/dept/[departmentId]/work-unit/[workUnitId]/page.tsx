@@ -142,6 +142,7 @@ import {
     logWorkUnitBootstrapBreakdown,
 } from "@/lib/perf/adminV2BootstrapBreakdown";
 import { perfWorkUnitLoad } from "@/lib/perf/adminV2PerfLog";
+import { perfIntent } from "@/lib/perf/perfNamespaceLog";
 import { peelBootstrapServerPerf } from "@/lib/workspace/bootstrapServerPerfEnvelope";
 import {
     markWorkUnitAboveFoldCoordinated,
@@ -3990,7 +3991,13 @@ export default function AdminV2OpportunityWorkUnitPage() {
                                 setQueueItems(primaryPayload);
                                 setQueueItemsError(null);
                                 setQueueItemsRoute(pl.route);
-                                setQueueItemsLoading(inlineIncomplete);
+                                // Phase 3 — single queue source: bootstrap already delivered the primary-lane
+                                // reveal rows (server-side `getWorkUnitQueuePreviewRows`). Paint them as the
+                                // reveal with NO loading shell, even when the lane has more rows beyond the
+                                // inlined slice — the queue is revealed; the remainder is enrichment, not a
+                                // blocking gap. This prevents the cold-entry duplicate `/api/admin/queues/...`
+                                // (immediate `initialLaneReveal` + chained `backgroundListRefresh`).
+                                setQueueItemsLoading(false);
                                 suppressQueueFetchEffectOnceRef.current = true;
                                 const primaryAb =
                                     authoritativePrimary.trim().toLowerCase() === "needs_attention"
@@ -4006,24 +4013,26 @@ export default function AdminV2OpportunityWorkUnitPage() {
                                 );
                                 primaryLaneRowsSettledOnceRef.current = true;
                                 primaryLaneHydratedInline = true;
-                                if (inlineIncomplete) {
-                                    void fetchQueueItemsRef.current(workUnitId, pillKey, qs, {
-                                        initialLaneReveal: true,
-                                        ...(primaryAb ? { attentionBucketOverride: primaryAb } : {}),
-                                    });
-                                } else {
-                                    // Bootstrap inlined queue_reveal rows are complete — defer queue_list
-                                    // enrichment until idle so the active lane is not competing with a duplicate fetch.
-                                    scheduleAdminV2BackgroundWork(
-                                        () => {
-                                            void fetchQueueItemsRef.current(workUnitId, pillKey, qs, {
-                                                quietStaleRefresh: true,
-                                                ...(primaryAb ? { attentionBucketOverride: primaryAb } : {}),
-                                            });
-                                        },
-                                        { idleTimeoutMs: 1500, fallbackMs: 250 }
-                                    );
-                                }
+                                // At most ONE primary-lane request before reveal: zero here (bootstrap
+                                // inlined the rows). Enrichment runs once, quietly, AFTER reveal at idle —
+                                // stale-while-refresh, never a competing pre-reveal fetch. `inlineIncomplete`
+                                // (summary count > inlined rows) only changes how soon the quiet refresh runs.
+                                tracePlatformPrefetch("wu_queue_bootstrap_inline_hydrate", {
+                                    work_unit_id: workUnitId,
+                                    queue_key: authoritativePrimary,
+                                    detail: inlineIncomplete ? "incomplete_defer_refresh" : "complete_defer_refresh",
+                                });
+                                scheduleAdminV2BackgroundWork(
+                                    () => {
+                                        void fetchQueueItemsRef.current(workUnitId, pillKey, qs, {
+                                            quietStaleRefresh: true,
+                                            ...(primaryAb ? { attentionBucketOverride: primaryAb } : {}),
+                                        });
+                                    },
+                                    inlineIncomplete
+                                        ? { idleTimeoutMs: 400, fallbackMs: 120 }
+                                        : { idleTimeoutMs: 1500, fallbackMs: 250 }
+                                );
                                 if (typeof window !== "undefined" && typeof performance !== "undefined") {
                                     const laneAt = performance.now();
                                     alloyPerfSet("work_unit_primary_lane_ready", laneAt);
@@ -5887,8 +5896,15 @@ export default function AdminV2OpportunityWorkUnitPage() {
 
     const openWorkUnitQueueRecord = useCallback(
         (itemId: string, entityType: "opportunity" | "job" | "schedule", source: string) => {
-            if (source !== DEFAULT_OPERATIONAL_SUBJECT_OPEN_SOURCE) {
+            const manualSelection = source !== DEFAULT_OPERATIONAL_SUBJECT_OPEN_SOURCE;
+            if (manualSelection) {
                 markManualOperationalSubjectSelection();
+                perfIntent("manual_row_click", {
+                    work_unit_id: workUnitId,
+                    queue_key: selectedQueueKeyRef.current,
+                    entity_type: entityType,
+                    record_id: itemId.trim() || null,
+                });
             }
             const id = itemId.trim();
             if (!id) {
@@ -5951,8 +5967,17 @@ export default function AdminV2OpportunityWorkUnitPage() {
                 setQueueRowOpenPendingOpportunityId(id);
             }
             openDrawer(openParams);
+            if (manualSelection) {
+                // Selected subject is now authoritative — a later background prewarm completion
+                // must not overwrite it (cancel above + manual ref in the auto-open resolver).
+                perfIntent("selected_subject_set", {
+                    work_unit_id: workUnitId,
+                    opportunity_id: id,
+                    cache_hit: Boolean(vmPeek),
+                });
+            }
         },
-        [buildOpportunityDrawerOpenParams, openDrawer, opportunityWorkspaceContext]
+        [buildOpportunityDrawerOpenParams, openDrawer, opportunityWorkspaceContext, workUnitId]
     );
 
     useWorkUnitDefaultOperationalSubjectAutoOpen({
@@ -6573,7 +6598,15 @@ export default function AdminV2OpportunityWorkUnitPage() {
             return { ...base, kpis: [] };
         }
         if (wuPlacementRows === undefined && !showOipOnlyKpiStrip) {
-            return { ...base, kpis: [] };
+            // Addendum B — KPI snapshot rule: placements have not resolved yet (bootstrap had none,
+            // first fetch in flight). Occupy the final KPI placement immediately with the default
+            // snapshot rather than an empty strip that pops in later. Real placement values patch in
+            // place once `wuPlacementRows` resolves (memo recompute) — no late card, no layout shift.
+            const snapshot = buildDefaultWorkUnitKpis(workUnitKpiContext).map((k) => ({
+                ...k,
+                label: applyEntityLabelToOperatorCopy(k.label, entityLabels),
+            }));
+            return { ...base, kpis: snapshot };
         }
         const rawKpis =
             showOipOnlyKpiStrip
@@ -6926,10 +6959,20 @@ export default function AdminV2OpportunityWorkUnitPage() {
         setWuCoordinatedRevealDone(true);
     }, [workUnitAboveFoldPageReady, operationalSurfaceReady, wuCoordinatedRevealDone]);
 
-    const workUnitKpiStripPlaceholder = workUnitKpiStripShowsPlaceholder({
+    const workUnitKpiStripPlaceholderRaw = workUnitKpiStripShowsPlaceholder({
         kpi_metrics_pending: workUnitKpiMetricsPending,
         lane_reveal_settled: workUnitLaneReveal.settled,
     });
+    // Addendum B — KPI snapshot rule: under Alloy OS runtime the strip already renders the default
+    // snapshot in its final placement while live placements load, so never shimmer over it. Values
+    // patch in place quietly (same pattern as the rail automations telemetry). OIP-only strips still
+    // shimmer because they have no default snapshot to show.
+    const workUnitKpiHasSnapshotSurface =
+        !suppressWorkUnitKpiStrip && !showOipOnlyKpiStrip && Boolean(workUnitKpiContext);
+    const workUnitKpiStripPlaceholder =
+        ALLOY_OS_RUNTIME_ENABLED && workUnitKpiHasSnapshotSurface
+            ? false
+            : workUnitKpiStripPlaceholderRaw;
 
     const workUnitRoutePipeline = useMemo(
         () =>

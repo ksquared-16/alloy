@@ -25,7 +25,7 @@
  */
 
 import { ALLOY_OS_RUNTIME_ENABLED } from "@/lib/adminV2/runtime/alloyOsRuntimeFlag";
-import { emitPerf, perfDevDetailEnabled } from "@/lib/perf/perfNamespaceLog";
+import { emitPerf, perfDevDetailEnabled, perfIntent } from "@/lib/perf/perfNamespaceLog";
 
 export const DRAWER_VM_PREWARM_CONCURRENCY_CAP = 1;
 
@@ -44,6 +44,13 @@ const queue: DrawerVmPrewarmTask[] = [];
 const queuedKeys = new Set<string>();
 /** Keys already started this work-unit session — avoids re-enqueue churn across renders. */
 const startedKeys = new Set<string>();
+let bootLogged = false;
+/**
+ * Bumped on manual cancel / new work-unit reveal. A task that started under a prior epoch and
+ * settles after a cancel is a stale background completion — its result is discarded (the warm
+ * caches dedupe it) and never applied as the active subject.
+ */
+let epoch = 0;
 
 function log(phase: string, payload: Record<string, unknown> = {}): void {
     if (!perfDevDetailEnabled()) return;
@@ -51,14 +58,27 @@ function log(phase: string, payload: Record<string, unknown> = {}): void {
 }
 
 /**
+ * One-time boot signal (dev/staging only): confirms THIS scheduler build is deployed and which
+ * runtime mode it is operating in. Emits `[perf:prefetch] scheduler_active runtime=<bool>` so a
+ * staging trace can verify the throttle is live (vs. a stale build still firing parallel warms).
+ */
+export function logDrawerVmPrewarmSchedulerBoot(): void {
+    if (bootLogged) return;
+    bootLogged = true;
+    log("scheduler_active", { runtime: ALLOY_OS_RUNTIME_ENABLED });
+}
+
+/**
  * Begin the Work Unit primary reveal window. All prewarm enqueued while this is active is held
  * until {@link endWorkUnitPrimaryReveal}. Call on Work Unit entry (per work-unit reset).
  */
 export function beginWorkUnitPrimaryReveal(): void {
+    logDrawerVmPrewarmSchedulerBoot();
     if (!ALLOY_OS_RUNTIME_ENABLED) return;
     primaryRevealActive = true;
     // New Work Unit context — drop any stale backlog from a prior work unit so it cannot drain
     // against the new reveal. In-flight tasks already settle into their own deduped caches.
+    epoch += 1;
     queue.length = 0;
     queuedKeys.clear();
     startedKeys.clear();
@@ -115,6 +135,9 @@ export function scheduleDrawerVmPrewarm(task: DrawerVmPrewarmTask): void {
  * active subject), but nothing further is started.
  */
 export function cancelBackgroundDrawerVmPrewarm(reason: string = "manual_selection"): void {
+    // Bump the epoch even if the queue is empty: an in-flight task started before this manual
+    // selection must be treated as stale when it settles (it cannot overwrite the clicked subject).
+    epoch += 1;
     if (queue.length === 0) return;
     log("prewarm_cancelled_manual_selection", { reason, count: queue.length });
     queue.length = 0;
@@ -122,12 +145,19 @@ export function cancelBackgroundDrawerVmPrewarm(reason: string = "manual_selecti
 }
 
 function runTask(task: DrawerVmPrewarmTask): Promise<void> {
+    const startedEpoch = epoch;
     return Promise.resolve()
         .then(() => task.run())
         .then(
             () => undefined,
             () => undefined,
-        );
+        )
+        .finally(() => {
+            if (startedEpoch !== epoch) {
+                // Completed after a manual selection / new reveal — discard, never apply as subject.
+                perfIntent("stale_completion_ignored", { reason: "prewarm_epoch_changed" });
+            }
+        });
 }
 
 function pump(): void {
@@ -158,4 +188,6 @@ export function resetDrawerVmPrewarmSchedulerForTests(): void {
     queue.length = 0;
     queuedKeys.clear();
     startedKeys.clear();
+    bootLogged = false;
+    epoch = 0;
 }

@@ -7,7 +7,15 @@
  * exclude operator/PII fields (names, emails, full records, raw payloads).
  */
 
-export type PerfNamespace = "drawer" | "queue" | "work-unit" | "cache" | "prefetch" | "save" | "settings";
+export type PerfNamespace =
+    | "drawer"
+    | "queue"
+    | "work-unit"
+    | "cache"
+    | "prefetch"
+    | "save"
+    | "settings"
+    | "intent";
 
 const BLOCKED_KEYS = new Set([
     "email",
@@ -169,6 +177,15 @@ export function perfSave(phase: string, payload: Record<string, unknown> = {}): 
 
 export function perfSettings(phase: string, payload: Record<string, unknown> = {}): void {
     emitPerf("settings", phase, payload);
+}
+
+/**
+ * Operator intent boundary (dev/staging): manual row click, selected-subject set, stale completion
+ * ignored, default-resolver blocked by manual selection. One line per intent event — never in a loop.
+ */
+export function perfIntent(phase: string, payload: Record<string, unknown> = {}): void {
+    if (!perfDevDetailEnabled()) return;
+    emitPerf("intent", phase, payload);
 }
 
 export function perfRoot(phase: string, payload: Record<string, unknown> = {}): void {

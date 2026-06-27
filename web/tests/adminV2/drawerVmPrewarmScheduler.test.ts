@@ -10,6 +10,7 @@ import {
     drawerVmPrewarmQueueDepth,
     endWorkUnitPrimaryReveal,
     isWorkUnitPrimaryRevealActive,
+    logDrawerVmPrewarmSchedulerBoot,
     resetDrawerVmPrewarmSchedulerForTests,
     scheduleDrawerVmPrewarm,
 } from "@/lib/adminV2/runtime/preload/drawerVmPrewarmScheduler";
@@ -114,6 +115,43 @@ describe("drawerVmPrewarmScheduler (runtime flag ON)", () => {
         expect(run2).not.toHaveBeenCalled();
     });
 
+    it("logs stale_completion_ignored when an in-flight task settles after a manual cancel", async () => {
+        const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+        // Not in a reveal window — the task starts draining immediately and stays in-flight.
+        const d1 = deferred();
+        const run1 = vi.fn(() => d1.promise);
+        scheduleDrawerVmPrewarm({ key: "oppvm:inflight", reason: "wu_visible_rows", run: run1 });
+        await flush();
+        expect(run1).toHaveBeenCalledTimes(1);
+
+        // Operator clicks a row mid-flight: bump the epoch so the in-flight completion is stale.
+        cancelBackgroundDrawerVmPrewarm("manual_selection");
+        d1.resolve();
+        await flush();
+
+        const staleCall = warn.mock.calls.find(
+            (call) =>
+                call[0] === "[perf:intent]" &&
+                typeof call[1] === "object" &&
+                (call[1] as Record<string, unknown>).phase === "stale_completion_ignored",
+        );
+        expect(staleCall).toBeTruthy();
+    });
+
+    it("does not flag a normal completion as stale when no manual cancel occurred", async () => {
+        const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+        const run = vi.fn();
+        scheduleDrawerVmPrewarm({ key: "oppvm:normal", reason: "wu_visible_rows", run });
+        await flush();
+        expect(run).toHaveBeenCalledTimes(1);
+        const staleCall = warn.mock.calls.find(
+            (call) =>
+                call[0] === "[perf:intent]" &&
+                (call[1] as Record<string, unknown>)?.phase === "stale_completion_ignored",
+        );
+        expect(staleCall).toBeFalsy();
+    });
+
     it("dedupes repeated enqueues for the same key", async () => {
         beginWorkUnitPrimaryReveal();
         const run = vi.fn();
@@ -125,6 +163,21 @@ describe("drawerVmPrewarmScheduler (runtime flag ON)", () => {
         endWorkUnitPrimaryReveal();
         await flush();
         expect(run).toHaveBeenCalledTimes(1);
+    });
+
+    it("emits a one-time scheduler_active boot log (deployment confirmation)", () => {
+        const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+        logDrawerVmPrewarmSchedulerBoot();
+        logDrawerVmPrewarmSchedulerBoot(); // idempotent — only one boot line
+
+        const bootCalls = warn.mock.calls.filter(
+            (call) =>
+                call[0] === "[perf:prefetch]" &&
+                typeof call[1] === "object" &&
+                (call[1] as Record<string, unknown>).phase === "scheduler_active",
+        );
+        expect(bootCalls).toHaveLength(1);
+        expect((bootCalls[0]?.[1] as Record<string, unknown>).runtime).toBe(true);
     });
 
     it("emits a readable deferral reason mark (dev/staging only)", () => {

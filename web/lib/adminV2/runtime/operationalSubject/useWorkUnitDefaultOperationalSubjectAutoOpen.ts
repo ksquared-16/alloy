@@ -10,6 +10,7 @@ import {
     resolveDefaultOperationalSubjectStrategyForWorkUnit,
 } from "@/lib/adminV2/runtime/operationalSubject/resolveDefaultOperationalSubject";
 import { perfAlloyOsRuntimeMark } from "@/lib/perf/adminV2PerfLog";
+import { perfIntent } from "@/lib/perf/perfNamespaceLog";
 
 const AUTO_OPEN_SOURCE = "default_operational_subject";
 
@@ -62,7 +63,16 @@ export function useWorkUnitDefaultOperationalSubjectAutoOpen(params: Params): vo
 
         const openDrawerId =
             params.drawerType && params.drawerId != null ? String(params.drawerId).trim() : "";
-        if (openDrawerId && manualSelectionRef.current) return;
+        if (openDrawerId && manualSelectionRef.current) {
+            // Manual click wins: a subject is already open by operator intent — never let the
+            // default resolver re-open or overwrite it.
+            perfIntent("default_resolver_blocked_manual_selection", {
+                work_unit_id: params.workUnitId,
+                queue_key: params.activeQueueKey,
+                opportunity_id: openDrawerId,
+            });
+            return;
+        }
 
         const entityType: EntityType =
             params.queueEntityType === "job" || params.queueEntityType === "schedule"
@@ -83,7 +93,13 @@ export function useWorkUnitDefaultOperationalSubjectAutoOpen(params: Params): vo
             }
         }
 
-        if (manualSelectionRef.current) return;
+        if (manualSelectionRef.current) {
+            perfIntent("default_resolver_blocked_manual_selection", {
+                work_unit_id: params.workUnitId,
+                queue_key: params.activeQueueKey,
+            });
+            return;
+        }
         if (autoOpenedLaneRef.current === laneKey) return;
 
         const strategy = resolveDefaultOperationalSubjectStrategyForWorkUnit(params.workUnitKey);

@@ -58,7 +58,9 @@ describe("Work Unit operational reveal — legacy overlay quarantine", () => {
             "lib/adminV2/runtime/operationalSubject/useWorkUnitDefaultOperationalSubjectAutoOpen.ts",
         );
         expect(hook).toContain("manualSelectionRef");
-        expect(hook).toContain("if (manualSelectionRef.current) return");
+        expect(hook).toContain("if (manualSelectionRef.current)");
+        // Manual selection short-circuits the default resolver and logs the blocked-intent reason.
+        expect(hook).toContain("default_resolver_blocked_manual_selection");
         expect(hook).toContain("alloy-os-manual-operational-subject");
     });
 
@@ -80,5 +82,59 @@ describe("Work Unit operational reveal — legacy overlay quarantine", () => {
         expect(queue).toMatch(
             /operationalModePreparing[\s\S]*!openDrawerOpportunityId/,
         );
+    });
+});
+
+const WORK_UNIT_PAGE = "app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page.tsx";
+
+describe("Phase 3 — single queue source (bootstrap-inline hydrate)", () => {
+    it("paints bootstrap-inlined rows with no loading shell and a single deferred refresh", () => {
+        const page = readSrc(WORK_UNIT_PAGE);
+        // Inline hydrate no longer flips loading on by completeness, and never fires an immediate
+        // second `initialLaneReveal` for the inlined lane — only one quiet refresh after reveal.
+        expect(page).toContain("wu_queue_bootstrap_inline_hydrate");
+        expect(page).toContain("complete_defer_refresh");
+        expect(page).toContain("incomplete_defer_refresh");
+        // The deferred refresh is a quietStaleRefresh (stale-while-refresh AFTER reveal).
+        expect(page).toMatch(/primaryLaneHydratedInline = true;[\s\S]*quietStaleRefresh: true/);
+    });
+});
+
+describe("Phase 5 — queue click intent instrumentation", () => {
+    it("emits manual_row_click + selected_subject_set on operator row clicks", () => {
+        const page = readSrc(WORK_UNIT_PAGE);
+        expect(page).toContain('perfIntent("manual_row_click"');
+        expect(page).toContain('perfIntent("selected_subject_set"');
+        // Manual click cancels the background prewarm backlog so it can't overwrite the subject.
+        expect(page).toMatch(/manual_row_click[\s\S]*cancelBackgroundDrawerVmPrewarm|cancelBackgroundDrawerVmPrewarm[\s\S]*selected_subject_set/);
+    });
+
+    it("default resolver logs the blocked-by-manual-selection intent", () => {
+        const hook = readSrc(
+            "lib/adminV2/runtime/operationalSubject/useWorkUnitDefaultOperationalSubjectAutoOpen.ts",
+        );
+        expect(hook).toContain('perfIntent("default_resolver_blocked_manual_selection"');
+    });
+
+    it("scheduler bumps an epoch to ignore stale background completions", () => {
+        const sched = readSrc("lib/adminV2/runtime/preload/drawerVmPrewarmScheduler.ts");
+        expect(sched).toContain("epoch += 1");
+        expect(sched).toContain('perfIntent("stale_completion_ignored"');
+    });
+});
+
+describe("Addendum B — WUC KPI snapshot rule", () => {
+    it("renders a default KPI snapshot in final placement while live placements load", () => {
+        const page = readSrc(WORK_UNIT_PAGE);
+        // Loading branch returns a default snapshot, not an empty strip that pops in later.
+        expect(page).toMatch(
+            /wuPlacementRows === undefined && !showOipOnlyKpiStrip\)\s*\{[\s\S]*buildDefaultWorkUnitKpis\(workUnitKpiContext\)/,
+        );
+    });
+
+    it("suppresses the shimmer placeholder under runtime when a snapshot surface exists", () => {
+        const page = readSrc(WORK_UNIT_PAGE);
+        expect(page).toContain("workUnitKpiHasSnapshotSurface");
+        expect(page).toMatch(/ALLOY_OS_RUNTIME_ENABLED && workUnitKpiHasSnapshotSurface\s*\n?\s*\?\s*false/);
     });
 });
