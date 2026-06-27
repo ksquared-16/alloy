@@ -144,8 +144,8 @@ export default function LayoutIntegrityReportPanel() {
                     Checks whether <strong>field definitions</strong> and the <strong>effective drawer layout</strong> for the
                     selected entity reference valid fields and drawer sections. Read-only — it does not change configuration. Fix
                     findings in{" "}
-                    <Link href="/admin/settings/layouts" className="font-medium text-alloy-pine hover:underline">
-                        Layouts
+                    <Link href="/settings/surfaces" className="font-medium text-alloy-pine hover:underline">
+                        Surfaces
                     </Link>{" "}
                     (drawer composition) or{" "}
                     <Link href="/admin/settings/fields" className="font-medium text-alloy-pine hover:underline">

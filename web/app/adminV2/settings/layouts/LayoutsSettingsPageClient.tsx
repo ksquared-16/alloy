@@ -15,7 +15,7 @@ export default function LayoutsSettingsPageClient() {
         <Suspense
             fallback={
                 <div className="rounded-xl border border-alloy-forge/12 bg-white/90 px-5 py-8 text-sm text-alloy-midnight/55">
-                    Loading layout editor…
+                    Loading surface editor…
                 </div>
             }
         >
@@ -75,7 +75,7 @@ function LayoutsSettingsPageClientInner() {
                         className="inline-flex items-center gap-1 text-xs font-medium text-alloy-pine hover:underline"
                         data-testid="layouts-back-to-gallery"
                     >
-                        ← Back to layout gallery
+                        ← Back to surface gallery
                     </button>
                     <div className="rounded-xl border border-alloy-forge/12 bg-white/90 p-1 shadow-sm">
                         <LayoutConfigClient adminV2Chrome hideLayoutCatalog initialSelectedId={layoutId} />
@@ -147,7 +147,7 @@ function LayoutsSettingsPageClientInner() {
                         Surface gallery
                     </h2>
                     <p className="mt-0.5 text-xs text-alloy-midnight/45">
-                        Create, duplicate, edit, and publish layout documents. Assign published layouts to process stages
+                        Create, duplicate, edit, and publish surfaces. Assign published surfaces to process stages
                         from{" "}
                         <Link href={ADMIN_V2_SETTINGS_PROCESSES_PATH} className="font-medium text-alloy-pine hover:underline">
                             Settings → Processes
@@ -160,12 +160,12 @@ function LayoutsSettingsPageClientInner() {
 
             <details className="rounded-lg border border-dashed border-alloy-forge/20 bg-alloy-stone/[0.03] px-3 py-2">
                 <summary className="cursor-pointer text-xs font-medium text-alloy-midnight/55">
-                    Advanced layout builder (internal fallback)
+                    Advanced surface builder (internal fallback)
                 </summary>
                 <div className="mt-3 space-y-2">
                     {!showLegacyBuilder ?
                         <p className="text-xs text-alloy-midnight/50">
-                            Opens the full section/row builder used during Layout V2 foundation.{" "}
+                            Opens the full section/row builder used during the Surfaces foundation.{" "}
                             <Link href={`${base}?legacy=1`} className="font-medium text-alloy-pine hover:underline">
                                 Open legacy builder
                             </Link>

@@ -289,8 +289,15 @@ export const ADMIN_AI_ACTIVITY_HREF = `${CANONICAL_ADMIN_BASE}/ai-activity` as c
 /** Product nav — settings sub-surfaces (`/settings/...`). */
 export const ADMIN_SETTINGS_SUBPATH_PREFIX = CANONICAL_SETTINGS_BASE;
 
-/** Product nav — Settings → Layouts gallery (Experience Builder). */
-export const LAYOUTS_SETTINGS_HREF = `${ADMIN_SETTINGS_SUBPATH_PREFIX}/layouts` as const;
+/** Product nav — Settings → Surfaces (Experience Builder / Design Surfaces). */
+export const SURFACES_SETTINGS_HREF = `${ADMIN_SETTINGS_SUBPATH_PREFIX}/surfaces` as const;
+
+/**
+ * @deprecated Product IA renamed Layouts → Surfaces. Repointed to the canonical
+ * `/settings/surfaces` route; prefer `SURFACES_SETTINGS_HREF`. Kept so existing
+ * imports keep linking to the canonical surface (no `/settings/layouts` in nav).
+ */
+export const LAYOUTS_SETTINGS_HREF = SURFACES_SETTINGS_HREF;
 
 /** Build `/settings/:subpath` for product nav (never `/adminV2/settings/...`). */
 export function adminSettingsSubpathHref(subpath: string): string {

@@ -3,9 +3,11 @@
  */
 
 export function isExperienceBuilderStudioPath(pathname: string): boolean {
+    // Canonical user-facing route is `/settings/surfaces`. `/settings/layouts`
+    // is retained only as a redirect source (back-compat); detect both.
     return (
-        pathname.includes("/settings/layouts")
-        || pathname.endsWith("/settings/layouts")
+        pathname.includes("/settings/surfaces")
+        || pathname.includes("/settings/layouts")
     );
 }
 

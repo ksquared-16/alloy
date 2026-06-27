@@ -1843,28 +1843,38 @@ html[data-alloy-os-runtime="on"]
   margin: 0;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 1px;
 }
 
 .alloy-os-ucard__profile-row {
   display: grid;
-  grid-template-columns: minmax(7rem, 38%) 1fr;
-  gap: 8px;
+  grid-template-columns: minmax(6.5rem, 36%) 1fr;
+  gap: 10px;
   align-items: baseline;
+  padding: 4px 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--alloy-os-border, #e5e9ef) 45%, transparent);
+}
+
+.alloy-os-ucard__profile-row:last-of-type {
+  border-bottom: none;
 }
 
 .alloy-os-ucard__profile-label {
   margin: 0;
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 600;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
   color: var(--alloy-os-text-secondary, #4b5563);
 }
 
 .alloy-os-ucard__profile-value {
   margin: 0;
-  font-size: 12px;
-  font-weight: 500;
+  font-size: 12.5px;
+  font-weight: 600;
+  line-height: 1.3;
   color: var(--alloy-os-midnight, #273f52);
+  word-break: break-word;
 }
 
 .alloy-os-ucard__profile-value--missing {
@@ -1908,6 +1918,208 @@ html[data-alloy-os-runtime="on"]
 
 .alloy-os-ucard__collection-overflow {
   margin-top: 2px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--alloy-os-text-secondary, #4b5563);
+}
+
+/* Household operational card (Identity archetype) — Use Case 1.
+   Calm white card; semantic color only (amber = needs attention). */
+.alloy-os-household {
+  display: contents;
+}
+
+.alloy-os-household__summary {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.alloy-os-household__primary,
+.alloy-os-household__row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.alloy-os-household__avatar {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 8%, #fff);
+  color: var(--alloy-os-midnight, #273f52);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+}
+
+.alloy-os-household__row-main {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  flex: 1 1 auto;
+}
+
+.alloy-os-household__row-name {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--alloy-os-midnight, #273f52);
+}
+
+.alloy-os-household__row-detail {
+  font-size: 11px;
+  color: var(--alloy-os-text-secondary, #4b5563);
+  word-break: break-word;
+}
+
+.alloy-os-household__row-detail--missing {
+  color: #b45309;
+}
+
+.alloy-os-household__row-role {
+  flex-shrink: 0;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--alloy-os-text-secondary, #4b5563);
+}
+
+.alloy-os-household__row-role--primary {
+  padding: 1px 6px;
+  border-radius: 999px;
+  text-transform: none;
+  letter-spacing: 0;
+  background: color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 12%, #fff);
+  color: var(--alloy-os-bend-pine, #00a283);
+}
+
+.alloy-os-household__row-status {
+  flex-shrink: 0;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--alloy-os-bend-pine, #00a283);
+  text-align: right;
+}
+
+.alloy-os-household__stats {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.alloy-os-household__stat {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+  padding: 3px 8px;
+  border: 1px solid var(--alloy-os-border, #e5e9ef);
+  border-radius: 6px;
+  background: var(--alloy-os-surface, #fff);
+  cursor: pointer;
+  font: inherit;
+}
+
+.alloy-os-household__stat:hover {
+  border-color: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 25%, transparent);
+}
+
+.alloy-os-household__stat-count {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--alloy-os-midnight, #273f52);
+}
+
+.alloy-os-household__stat-label {
+  font-size: 11px;
+  color: var(--alloy-os-text-secondary, #4b5563);
+}
+
+.alloy-os-household__pref {
+  margin: 0;
+  font-size: 11px;
+  color: var(--alloy-os-text-secondary, #4b5563);
+}
+
+.alloy-os-household__missing,
+.alloy-os-household__warning {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 600;
+  color: #b45309;
+}
+
+.alloy-os-household__groups {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.alloy-os-household__group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.alloy-os-household__group-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  padding: 2px 0;
+  border: none;
+  background: none;
+  cursor: pointer;
+  font: inherit;
+  border-bottom: 1px solid color-mix(in srgb, var(--alloy-os-border, #e5e9ef) 55%, transparent);
+}
+
+.alloy-os-household__group-title {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--alloy-os-text-secondary, #4b5563);
+}
+
+.alloy-os-household__group-count {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--alloy-os-bend-pine, #00a283);
+}
+
+.alloy-os-household__rows {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding-top: 2px;
+}
+
+.alloy-os-household__focused {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.alloy-os-household__focused-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.alloy-os-household__overflow {
   font-size: 11px;
   font-weight: 600;
   color: var(--alloy-os-text-secondary, #4b5563);

@@ -27,9 +27,9 @@ describe("Settings index IA — Configuration Runtime domains", () => {
         expect(processes?.emphasis).toBe(true);
     });
 
-    it("Layouts tile lives under Experience", () => {
+    it("Surfaces tile lives under Experience as Layouts", () => {
         const experience = CONFIGURATION_WORKSPACE_DOMAINS.find((d) => d.id === "experience");
-        expect(experience?.items.some((i) => i.href === "/settings/layouts" && i.label === "Layouts")).toBe(true);
+        expect(experience?.items.some((i) => i.href === "/settings/surfaces" && i.label === "Surfaces")).toBe(true);
     });
 
     it("journey guide links to Processes not Business Processes", () => {

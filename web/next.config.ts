@@ -32,6 +32,13 @@ const nextConfig: NextConfig = {
       { source: "/admin", destination: "/settings", permanent: false },
       { source: "/admin/settings", destination: "/settings", permanent: false },
       { source: "/admin/settings/:path*", destination: "/settings/:path*", permanent: false },
+      /**
+       * Surfaces rename — `/settings/layouts` is no longer product IA. Canonical
+       * user-facing route is `/settings/surfaces`. Storage terms (entity_layouts,
+       * LayoutDoc, surface, layout_key) are unchanged implementation details.
+       */
+      { source: "/settings/layouts", destination: "/settings/surfaces", permanent: false },
+      { source: "/settings/layouts/:path*", destination: "/settings/surfaces/:path*", permanent: false },
     ];
   },
   async rewrites() {
@@ -43,7 +50,16 @@ const nextConfig: NextConfig = {
       },
       /**
        * Configuration Runtime Phase 2A — canonical Settings URLs.
+       *
+       * Surfaces workspace: the canonical user-facing route `/settings/surfaces`
+       * serves the Surfaces Configuration page (Context → Queue → Workspace).
+       * Must precede the generic `/settings/:path*` rewrite so it matches first.
+       * URL stays `/settings/surfaces` (rewrite, not redirect), so `usePathname()`
+       * sees it. The legacy `/adminV2/settings/layouts` tree remains as
+       * compatibility for queue/drawer layout authoring, but is no longer product IA.
        */
+      { source: "/settings/surfaces", destination: "/adminV2/settings/surfaces" },
+      { source: "/settings/surfaces/:path*", destination: "/adminV2/settings/surfaces/:path*" },
       { source: "/settings", destination: "/adminV2/settings" },
       { source: "/settings/:path*", destination: "/adminV2/settings/:path*" },
       /**

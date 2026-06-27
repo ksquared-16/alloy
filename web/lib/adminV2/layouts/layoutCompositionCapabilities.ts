@@ -122,7 +122,7 @@ export function resolveLayoutCompositionCapabilities(
     if (input.entity === "schedule") {
         return readOnlyEntity(
             "schedule",
-            "Schedule drawer composition uses layout blocks and global templates. Editing from Layouts is not supported in this phase."
+            "Schedule drawer composition uses layout blocks and global templates. Editing from Surfaces is not supported in this phase."
         );
     }
     if (input.entity === "person") {
@@ -141,7 +141,7 @@ export function resolveLayoutCompositionCapabilities(
             allowedMutationClasses: [],
             primaryBosCapability: LAYOUT_COMPOSITION_PRIMARY_BOS_CAPABILITY,
             readOnlyReason:
-                "Person drawer layouts use Runtime v1 operating variants (child, parent, generic). Review effective variants below. Editing from Layouts is deferred to a later phase.",
+                "Person drawer layouts use Runtime v1 operating variants (child, parent, generic). Review effective variants below. Editing from Surfaces is deferred to a later phase.",
         };
     }
     return readOnlyEntity(

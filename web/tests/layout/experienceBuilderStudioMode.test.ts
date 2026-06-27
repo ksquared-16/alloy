@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest";
 import { isExperienceBuilderStudioActive, isExperienceBuilderStudioPath } from "@/lib/layout/experienceBuilderStudioMode";
 
 describe("experienceBuilderStudioMode", () => {
-    it("detects layouts settings paths", () => {
+    it("detects surfaces (and legacy layouts) settings paths", () => {
+        expect(isExperienceBuilderStudioPath("/settings/surfaces")).toBe(true);
+        expect(isExperienceBuilderStudioPath("/adminV2/settings/surfaces")).toBe(true);
         expect(isExperienceBuilderStudioPath("/admin/settings/layouts")).toBe(true);
         expect(isExperienceBuilderStudioPath("/adminV2/settings/layouts")).toBe(true);
         expect(isExperienceBuilderStudioPath("/admin/settings/fields")).toBe(false);

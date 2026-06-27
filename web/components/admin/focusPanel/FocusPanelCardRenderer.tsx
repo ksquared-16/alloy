@@ -3,6 +3,7 @@
 import clsx from "clsx";
 
 import ArchetypeCardBody from "@/components/admin/focusPanel/ArchetypeCardBody";
+import HouseholdCard from "@/components/admin/focusPanel/cards/HouseholdCard";
 import UniversalCard from "@/components/admin/focusPanel/UniversalCard";
 import ProofDoctrineLifecycleRail from "@/components/layout/proofShell/ProofDoctrineLifecycleRail";
 import OpportunityDrawerVmTabPanes from "@/components/admin/vmDrawer/OpportunityDrawerVmTabPanes";
@@ -63,6 +64,14 @@ export default function FocusPanelCardRenderer({
     receded = false,
 }: Props) {
     if (!model.visible) return null;
+
+    // Household is the first operational reference card (Identity archetype). It
+    // owns its collapsed → expanded → focused-evidence perspective state locally
+    // and assembles its answer from the already-loaded record — no fetch on
+    // expand. It therefore bypasses the generic profile-payload body.
+    if (model.key === "household") {
+        return <HouseholdCard model={model} record={record} receded={receded} />;
+    }
 
     const lifecycleRailModel = buildOpportunityVmLifecycleRailModel({ displayVm, drawerId });
     const drillDownAllowed = model.density === "standard" || model.density === "expanded";

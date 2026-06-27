@@ -733,7 +733,12 @@ function buildCardModels(input: {
     return map;
 }
 
-const SUMMARY_GRID: FocusPanelCardGridSpec = {
+/**
+ * Hardcoded Summary composition. Exported as the single source of truth for the
+ * config-driven slice: `buildFocusPanelSummaryDefaultDoc()` re-encodes this grid
+ * into a `LayoutDoc`, and the parity test asserts the round-trip is identical.
+ */
+export const SUMMARY_GRID: FocusPanelCardGridSpec = {
     rows: [
         {
             cells: [
@@ -760,6 +765,22 @@ const SUMMARY_GRID: FocusPanelCardGridSpec = {
                 { key: "communications", span: 1, density: "compact", tier: "context" },
                 { key: "documents", span: 1, density: "compact", tier: "context" },
             ],
+        },
+    ],
+};
+
+/**
+ * Household Card reference evaluation grid (Use Case 1).
+ *
+ * Suppresses unrelated Summary cards so the operational Household card is the
+ * single visible proof-of-concept. Gated by
+ * `isFocusPanelHouseholdReferenceOnlyEnabledClient()` — never the default
+ * composition. Household renders full-width and expanded-capable.
+ */
+export const HOUSEHOLD_REFERENCE_SUMMARY_GRID: FocusPanelCardGridSpec = {
+    rows: [
+        {
+            cells: [{ key: "household", span: "row", density: "expanded", tier: "reference" }],
         },
     ],
 };

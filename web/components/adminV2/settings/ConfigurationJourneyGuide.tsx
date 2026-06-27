@@ -14,7 +14,7 @@ export default function ConfigurationJourneyGuide() {
             <ConfigRuntimeSectionHeader>Configuration flow</ConfigRuntimeSectionHeader>
             <h2 className="mt-1 text-base font-semibold text-alloy-midnight">How configuration fits together</h2>
             <p className="mt-2 max-w-3xl text-sm leading-relaxed text-alloy-midnight/60">
-                Processes is the operational spine — stages, Work Views, missions, and required info. Layouts
+                Processes is the operational spine — stages, Work Views, missions, and required info. Surfaces
                 (Experience Builder) owns queue rows and Focus Panel presentation. Fields and Statuses are canonical
                 catalogs configured in their own settings surfaces.
             </p>
@@ -29,7 +29,7 @@ export default function ConfigurationJourneyGuide() {
                 <span className="text-alloy-midnight/30" aria-hidden>→</span>
                 <span className="rounded-lg bg-alloy-pine/12 px-3 py-1.5 text-alloy-pine">Processes</span>
                 <span className="text-alloy-midnight/30" aria-hidden>→</span>
-                <span className="rounded-lg bg-alloy-pine/12 px-3 py-1.5 text-alloy-pine">Layouts</span>
+                <span className="rounded-lg bg-alloy-pine/12 px-3 py-1.5 text-alloy-pine">Surfaces</span>
                 <span className="text-alloy-midnight/30" aria-hidden>→</span>
                 <span className="rounded-lg bg-alloy-midnight/8 px-3 py-1.5">Runtime</span>
             </div>

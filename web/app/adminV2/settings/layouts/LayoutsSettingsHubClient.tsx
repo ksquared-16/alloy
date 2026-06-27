@@ -17,7 +17,7 @@ import {
 function layoutsBasePath(pathname: string): string {
     if (pathname.startsWith("/admin/v2/settings")) return "/admin/v2/settings/layouts";
     if (pathname.startsWith("/adminv2/settings")) return "/adminv2/settings/layouts";
-    return "/settings/layouts";
+    return "/settings/surfaces";
 }
 
 export default function LayoutsSettingsHubClient({ initialEntity }: { initialEntity?: string }) {
@@ -51,7 +51,7 @@ export default function LayoutsSettingsHubClient({ initialEntity }: { initialEnt
                 tabs={entityTabs}
                 activeKey={entity}
                 onSelect={onEntityChange}
-                aria-label="Record type for layouts"
+                aria-label="Record type for surfaces"
             />
 
             <RecordDrawerCompositionWorkspace entity={entity} entityLabel={entityLabel} />
@@ -62,7 +62,7 @@ export default function LayoutsSettingsHubClient({ initialEntity }: { initialEnt
                 onToggle={(e) => setIntegrityOpen((e.target as HTMLDetailsElement).open)}
             >
                 <summary className="cursor-pointer px-4 py-3 text-xs font-medium text-alloy-midnight/65">
-                    Layout integrity check (optional)
+                    Surface integrity check (optional)
                 </summary>
                 <div className="border-t border-alloy-forge/10 px-1 pb-2">
                     <LayoutIntegrityReportPanel />

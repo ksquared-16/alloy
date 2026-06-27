@@ -23,7 +23,7 @@ export default function LayoutRuntimeQueueRowErrorCard({
             data-layout-runtime-queue-row-reason={reason ?? ""}
         >
             <span className="font-semibold">Layout row couldn’t render</span>
-            <span className="text-amber-900">— configured in Settings → Layouts; legacy card not shown.</span>
+            <span className="text-amber-900">— configured in Settings → Surfaces; legacy card not shown.</span>
             {STAGING_DEBUG && reason ? <code className="ml-auto font-mono text-[11px]">{reason}{queueRowKey ? ` · ${queueRowKey}` : ""}</code> : null}
         </div>
     );

@@ -97,7 +97,7 @@ function crumbsForPath(path: string): Crumb[] {
     }
 
     if (tail === "/users-roles" || tail.startsWith("/users-roles/")) {
-        base.push({ label: "Users & Roles", href: null });
+        base.push({ label: "Access", href: null });
         return base;
     }
 
@@ -108,6 +108,16 @@ function crumbsForPath(path: string): Crumb[] {
 
     if (tail === "/fields" || tail.startsWith("/fields")) {
         base.push({ label: "Fields", href: null });
+        return base;
+    }
+
+    if (
+        tail === "/surfaces" ||
+        tail.startsWith("/surfaces/") ||
+        tail === "/layouts" ||
+        tail.startsWith("/layouts/")
+    ) {
+        base.push({ label: "Surfaces", href: null });
         return base;
     }
 

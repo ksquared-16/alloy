@@ -116,7 +116,7 @@ function SurfaceGalleryCard({
                 {!isComingSoon ?
                     <div className="space-y-2 rounded-lg border border-alloy-forge/10 bg-alloy-stone/[0.03] px-3 py-2.5 text-xs text-alloy-midnight/70">
                         <div className="flex flex-wrap items-center gap-2">
-                            <span className="font-medium text-alloy-midnight/80">Live layout</span>
+                            <span className="font-medium text-alloy-midnight/80">Live surface</span>
                             {published ?
                                 <>
                                     {statusBadge("published")}
@@ -125,7 +125,7 @@ function SurfaceGalleryCard({
                                     </span>
                                     <span className="text-alloy-midnight/45">· {formatWhen(published.publishedAt)}</span>
                                 </>
-                            :   <span className="text-alloy-midnight/50">No org-published layout yet — using platform default</span>}
+                            :   <span className="text-alloy-midnight/50">No org-published surface yet — using platform default</span>}
                         </div>
                         {latestDraft ?
                             <div className="flex flex-wrap items-center gap-2">
@@ -149,7 +149,7 @@ function SurfaceGalleryCard({
                             className="rounded-lg border border-alloy-pine/30 bg-alloy-pine px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:bg-alloy-pine/90 disabled:cursor-not-allowed disabled:opacity-50"
                             data-testid={`layout-gallery-open-${entry.surface_key}`}
                         >
-                            {busy === "open" ? "Opening…" : published || latestDraft ? "Open / Edit" : "Start layout"}
+                            {busy === "open" ? "Opening…" : published || latestDraft ? "Open / Edit" : "Start surface"}
                         </button>
                         <button
                             type="button"
@@ -184,7 +184,7 @@ function SurfaceGalleryCard({
                         Version history
                     </p>
                     {summary.orgVersions.length === 0 ?
-                        <p className="text-xs text-alloy-midnight/50">No org layouts saved yet.</p>
+                        <p className="text-xs text-alloy-midnight/50">No org surfaces saved yet.</p>
                     :   (
                         <ul className="space-y-1.5">
                             {summary.orgVersions.map((row) => {
@@ -255,13 +255,13 @@ export default function LayoutGalleryClient({
             ]);
             if (regRes.status === 401 || regRes.status === 403 || listRes.status === 401 || listRes.status === 403) {
                 setForbidden(true);
-                setError("You need admin access to configure layouts.");
+                setError("You need admin access to configure surfaces.");
                 return;
             }
             const regJson = (await regRes.json().catch(() => ({}))) as SurfaceRegistryApiResponse & { error?: string };
             if (!regRes.ok) throw new Error(regJson.error ?? "Failed to load surface registry");
             const listJson = (await listRes.json().catch(() => ({}))) as ListResponse & { error?: string };
-            if (!listRes.ok) throw new Error(listJson.error ?? "Failed to load layouts");
+            if (!listRes.ok) throw new Error(listJson.error ?? "Failed to load surfaces");
             setRegistry(regJson);
             setRecords(listJson.records ?? []);
         } catch (e) {
@@ -329,7 +329,7 @@ export default function LayoutGalleryClient({
                 throw new Error("Admin access is required.");
             }
             const json = (await res.json().catch(() => ({}))) as EntityLayoutRecord & { error?: string };
-            if (!res.ok) throw new Error(json.error ?? "Could not create layout");
+            if (!res.ok) throw new Error(json.error ?? "Could not create surface");
             return json;
         },
         [],
@@ -374,7 +374,7 @@ export default function LayoutGalleryClient({
                     body: JSON.stringify({}),
                 });
                 const dupJson = (await dupRes.json().catch(() => ({}))) as EntityLayoutRecord & { error?: string };
-                if (!dupRes.ok) throw new Error(dupJson.error ?? "Could not create draft from published layout");
+                if (!dupRes.ok) throw new Error(dupJson.error ?? "Could not create draft from published surface");
                 await load();
                 onOpenEditor(dupJson.id);
             } catch (e) {
@@ -444,7 +444,7 @@ export default function LayoutGalleryClient({
                 className="rounded-xl border border-alloy-forge/12 bg-white/90 px-5 py-8 text-sm text-alloy-midnight/55"
                 data-testid="layout-gallery-loading"
             >
-                Loading layout gallery…
+                Loading surface gallery…
             </div>
         );
     }
@@ -513,7 +513,7 @@ export default function LayoutGalleryClient({
                             Coming soon
                         </h2>
                         <p className="mt-0.5 text-[11px] leading-snug text-alloy-midnight/45">
-                            Same layout model — visual editor rolling out surface by surface.
+                            Same underlying model — visual editor rolling out surface by surface.
                         </p>
                     </div>
                     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">

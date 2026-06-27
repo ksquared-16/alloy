@@ -45,7 +45,7 @@ export default function LayoutVisualEditorRouter({ layoutId, basePath, onBack, o
             <div className="space-y-3 p-4" data-testid="layout-visual-editor-router-error">
                 <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">{error}</p>
                 <button type="button" onClick={onBack} className="text-xs font-medium text-alloy-pine hover:underline">
-                    ← Back to layout gallery
+                    ← Back to surface gallery
                 </button>
             </div>
         );

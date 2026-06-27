@@ -28,7 +28,7 @@ export default function LegacyWorkflowV1LayoutEditorBanner({ showFieldPlacementN
         >
             {readOnly ?
                 <>
-                    <strong>Read-only — layout composition moved to Layout Gallery.</strong>{" "}
+                    <strong>Read-only — surface composition moved to the Surface gallery.</strong>{" "}
                     {LEGACY_OPPORTUNITY_LAYOUT_WRITE_BLOCKED_MESSAGE}
                 </>
             :   <>
@@ -36,8 +36,8 @@ export default function LegacyWorkflowV1LayoutEditorBanner({ showFieldPlacementN
                     <code className="font-mono text-[10px]">record_drawer_layouts</code> and may be superseded by{" "}
                 </>
             }
-            <Link href="/admin/settings/layouts" className="font-medium text-alloy-pine underline">
-                Settings → Layout Gallery
+            <Link href="/settings/surfaces" className="font-medium text-alloy-pine underline">
+                Settings → Surfaces
             </Link>
             {!readOnly ? " (opportunity drawer visual editor). Until migration completes, edits in both places can conflict." : null}
             {showFieldPlacementNote ?

@@ -43,8 +43,8 @@ function LayoutsSettingsPageShellInner({ initialEntityType }: Props) {
         <div className={SETTINGS_PAGE_SHELL_COMPACT_CLASS} data-testid="settings-layouts-page">
             <SettingsPageHeader
                 variant="hero"
-                title="Layouts"
-                subtitle="Experience → Record Experience. Configure how operational surfaces appear in the product — drawers, queue rows, and workspaces."
+                title="Surfaces"
+                subtitle="Design Surfaces. Configure how operational surfaces appear in the product — drawers, queue rows, and workspaces."
             />
             <p
                 className="-mt-2 rounded-lg border border-alloy-forge/10 bg-alloy-pine/[0.04] px-3 py-2 text-xs leading-relaxed text-alloy-midnight/65"
@@ -60,7 +60,7 @@ function LayoutsSettingsPageShellInner({ initialEntityType }: Props) {
             <Suspense
                 fallback={
                     <div className="rounded-xl border border-alloy-forge/12 bg-white/90 px-5 py-8 text-sm text-alloy-midnight/55">
-                        Loading layout gallery…
+                        Loading surface gallery…
                     </div>
                 }
             >
@@ -69,7 +69,7 @@ function LayoutsSettingsPageShellInner({ initialEntityType }: Props) {
 
             <details className="rounded-lg border border-alloy-stone/30 bg-white/70 px-3 py-2">
                 <summary className="cursor-pointer text-xs font-medium text-alloy-midnight/60">
-                    Effective layout inspector (read-only resolution debug)
+                    Effective surface inspector (read-only resolution debug)
                 </summary>
                 <div className="mt-3 space-y-2">
                     <EffectiveLayoutInspectorClient
@@ -77,8 +77,8 @@ function LayoutsSettingsPageShellInner({ initialEntityType }: Props) {
                         initialSurface="drawer"
                     />
                     <p className="text-xs text-alloy-midnight/55">
-                        <Link href="/admin/settings/layouts/effective" className="text-alloy-pine underline">
-                            Full-screen effective layout inspector
+                        <Link href="/settings/surfaces/effective" className="text-alloy-pine underline">
+                            Full-screen effective surface inspector
                         </Link>
                     </p>
                 </div>
@@ -89,7 +89,7 @@ function LayoutsSettingsPageShellInner({ initialEntityType }: Props) {
 
 export default function LayoutsSettingsPageShell(props: Props) {
     return (
-        <Suspense fallback={<div className="px-4 py-8 text-sm text-alloy-midnight/55">Loading layouts…</div>}>
+        <Suspense fallback={<div className="px-4 py-8 text-sm text-alloy-midnight/55">Loading surfaces…</div>}>
             <LayoutsSettingsPageShellInner {...props} />
         </Suspense>
     );

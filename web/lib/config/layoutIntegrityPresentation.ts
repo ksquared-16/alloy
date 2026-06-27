@@ -119,7 +119,7 @@ export function fixLinksForIssue(issue: LayoutIntegrityIssue): LayoutIntegrityFi
         issue.code === "duplicate_field_placement" ||
         issue.code === "required_on_layout_not_visible"
     ) {
-        links.push({ href: "/admin/settings/layouts", label: "Layouts" });
+        links.push({ href: "/settings/surfaces", label: "Surfaces" });
     }
     if (issue.code === "option_field_no_active_options") {
         links.push({ href: "/admin/settings/option-sets", label: "Option sets" });

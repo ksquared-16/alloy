@@ -34,6 +34,6 @@ describe("canonical settings routes — Configuration Runtime Phase 2A", () => {
             true,
         );
         expect(hrefs).toContain("/settings/processes");
-        expect(hrefs).toContain("/settings/layouts");
+        expect(hrefs).toContain("/settings/surfaces");
     });
 });

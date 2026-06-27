@@ -22,9 +22,9 @@ export const CONFIGURATION_RUNTIME_FORBIDDEN_SETTINGS_ROUTES = [
 /** Doctrine strings — drift-prevention tests assert these remain in hub/nav config. */
 export const CONFIGURATION_RUNTIME_OWNERSHIP_COPY = {
     businessProcessesSpine:
-        "Operational spine: stages, Work Views, missions, required info, attention, and process actions.",
+        "Stages, Work Views, operating plan, process actions, and process health.",
     layoutsPresentation:
-        "Experience Builder: queue rows, Focus Panel drawer layouts, and field placement on surfaces.",
+        "Queue rows, Focus Panel presentation, and where actions appear on each surface.",
     fieldsCanonical:
         "Canonical field catalog and formats — owned by the Fields & Field Formats sprint.",
     statusesCanonical:
@@ -57,7 +57,7 @@ export type ConfigurationWorkspaceDomain = {
 
 export const CONFIGURATION_WORKSPACE_HUB_TITLE = "Configuration";
 export const CONFIGURATION_WORKSPACE_HUB_SUBTITLE =
-    "Processes is the operational spine. Layouts (Experience Builder) owns presentation. Fields and Statuses are canonical catalogs — configure them there, then assign and compose in processes and layouts.";
+    "Fields define data. Processes define behavior. Surfaces define presentation. Access controls who can change what.";
 
 /** Ordered setup journey — guidance only, not a wizard. */
 export const CONFIGURATION_JOURNEY_STEPS = [
@@ -70,21 +70,20 @@ export const CONFIGURATION_JOURNEY_STEPS = [
     {
         step: 2,
         label: "Data Model",
-        summary: "Fields & Field Formats (sprint) and option sets define what you track.",
+        summary: "Fields and statuses define operator vocabulary.",
         href: settings("fields"),
     },
     {
         step: 3,
         label: "Operations",
-        summary:
-            "Processes: stages, Work Views, missions, required info, attention, and process actions.",
+        summary: "Processes: stages, Work Views, operating plan, and process actions.",
         href: settings("processes"),
     },
     {
         step: 4,
         label: "Experience",
-        summary: "Layouts (Experience Builder): queue rows, Focus Panel presentation, and forms.",
-        href: settings("layouts"),
+        summary: "Layouts: queue rows, Focus Panel presentation, and surface placement.",
+        href: settings("surfaces"),
     },
 ] as const;
 
@@ -101,8 +100,8 @@ export const CONFIGURATION_WORKSPACE_DOMAINS: readonly ConfigurationWorkspaceDom
             },
             {
                 href: settings("users-roles"),
-                label: "Users & access",
-                description: "Staff, roles, and data access.",
+                label: "Access",
+                description: "Users, roles, permission groups, and location or department scope.",
             },
             {
                 href: settings("communications"),
@@ -128,6 +127,11 @@ export const CONFIGURATION_WORKSPACE_DOMAINS: readonly ConfigurationWorkspaceDom
                 description: CONFIGURATION_RUNTIME_OWNERSHIP_COPY.fieldsCanonical,
             },
             {
+                href: settings("statuses"),
+                label: "Statuses",
+                description: CONFIGURATION_RUNTIME_OWNERSHIP_COPY.statusesCanonical,
+            },
+            {
                 href: settings("option-sets"),
                 label: "Option sets",
                 description: "Static and reference-backed dropdown vocabulary for fields.",
@@ -148,7 +152,7 @@ export const CONFIGURATION_WORKSPACE_DOMAINS: readonly ConfigurationWorkspaceDom
     {
         id: "operations",
         label: "Operations",
-        description: "Processes is the operational spine.",
+        description: "Processes owns when operators use actions.",
         items: [
             {
                 href: settings("processes"),
@@ -157,18 +161,8 @@ export const CONFIGURATION_WORKSPACE_DOMAINS: readonly ConfigurationWorkspaceDom
                 emphasis: true,
             },
             {
-                href: settings("statuses"),
-                label: "Statuses",
-                description: CONFIGURATION_RUNTIME_OWNERSHIP_COPY.statusesCanonical,
-            },
-            {
-                href: settings("actions"),
-                label: "Action buttons",
-                description: "Action definitions and placements.",
-            },
-            {
                 href: "/admin/workflows",
-                label: "Automations",
+                label: "Automation",
                 description: "Workflow triggers and automated changes.",
             },
             {
@@ -191,8 +185,8 @@ export const CONFIGURATION_WORKSPACE_DOMAINS: readonly ConfigurationWorkspaceDom
         description: "Experience Builder owns queue and Focus Panel presentation.",
         items: [
             {
-                href: settings("layouts"),
-                label: "Layouts",
+                href: settings("surfaces"),
+                label: "Surfaces",
                 description: CONFIGURATION_RUNTIME_OWNERSHIP_COPY.layoutsPresentation,
             },
             {
@@ -247,12 +241,18 @@ export const CONFIGURATION_WORKSPACE_ADVANCED_ITEMS: readonly ConfigurationWorks
 
 export function configurationWorkspaceDomainForPath(pathname: string): ConfigurationWorkspaceDomainId | null {
     const normalized = pathname.replace(/\/$/, "") || CANONICAL_SETTINGS_BASE;
-    const path =
+    const canonical =
         normalized === "/admin" || normalized === "/admin/settings"
             ? CANONICAL_SETTINGS_BASE
             : normalized.startsWith("/admin/settings/")
               ? `${CANONICAL_SETTINGS_BASE}${normalized.slice("/admin/settings".length)}`
               : normalized;
+    // Surfaces rename — legacy `/settings/layouts` still resolves to the Surfaces
+    // (Experience) domain so active-state highlighting survives the redirect hop.
+    const path =
+        canonical === `${CANONICAL_SETTINGS_BASE}/layouts` || canonical.startsWith(`${CANONICAL_SETTINGS_BASE}/layouts/`)
+            ? `${CANONICAL_SETTINGS_BASE}/surfaces${canonical.slice(`${CANONICAL_SETTINGS_BASE}/layouts`.length)}`
+            : canonical;
 
     for (const domain of CONFIGURATION_WORKSPACE_DOMAINS) {
         for (const item of domain.items) {

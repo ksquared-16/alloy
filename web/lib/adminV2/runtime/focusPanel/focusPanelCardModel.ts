@@ -127,6 +127,15 @@ export type FocusPanelCardModel = {
     visible: boolean;
 };
 
+/**
+ * One placed card in the grid. `key` is the platform-owned card TYPE (drives the
+ * model + renderer). `instanceKey` is the stable per-placement id (defaults to the
+ * type) so the same type can be duplicated without colliding React keys.
+ */
+export type FocusPanelCardGridCell = Pick<FocusPanelCardModel, "key" | "span" | "density" | "tier"> & {
+    instanceKey?: string;
+};
+
 export type FocusPanelCardGridSpec = {
-    rows: { cells: Pick<FocusPanelCardModel, "key" | "span" | "density" | "tier">[] }[];
+    rows: { cells: FocusPanelCardGridCell[] }[];
 };
