@@ -123,8 +123,15 @@ Do **not** bulk-rename composed payload, cache keys, prefetch, or queue reveal g
 
 ---
 
+## Sunset position
+
+The Focus Panel is the **canonical operator surface**; the drawer is reveal/open-state **infrastructure** only. Drawer/tab overview, LayoutDoc drawer authoring, and the lead summary blueprint are legacy/transitional and frozen to new product investment. Universal Cards absorb drawer sections over time. Sunset status matrix, freeze rule, and the editing gap blocker: [`drawer-sunset-roadmap.md`](./drawer-sunset-roadmap.md).
+
+---
+
 ## Related
 
+- [`drawer-sunset-roadmap.md`](./drawer-sunset-roadmap.md) — **sunset matrix + freeze rule + editing gap** (convergence lock)
 - [`focus-panel-edit-information-doctrine.md`](./focus-panel-edit-information-doctrine.md)
 - [`operational-mode-default-state-doctrine.md`](./operational-mode-default-state-doctrine.md)
 - [`operational-surface-design-system.md`](./operational-surface-design-system.md)

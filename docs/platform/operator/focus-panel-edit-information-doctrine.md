@@ -14,6 +14,23 @@ The Focus Panel is the operational command surface for a subject record. Cards a
 
 ---
 
+## Current-state blocker (June 2026)
+
+When **`focusPanelActive`** is on, `OpportunityDrawerVmRuntime` renders the Focus Panel body **instead of** the LayoutDoc overview, so the `LayoutRuntime*` operational edit stack (`LayoutRuntimeBlockEditProvider`, inline field controls, `drawerOperatingSaveCoordinator`, `EditablePersonContactCard`, inquiry children grid, relationship action buttons) is **not mounted**. The Focus Panel is therefore **read-only for most operational data** today.
+
+**Next implementation priority (in order) — not "more cards":**
+
+1. Card expansion (runtime)
+2. Focused item state (selected child / contact / document / task)
+3. Card-level actions (section / row / contact, not header-only)
+4. Inline operational editing (port `LayoutRuntime*` edit behavior into cards)
+5. Save / dirty behavior
+6. Collection editing
+
+**First editable card: Household.** **Second: Children.** Rationale and full sunset sequencing: [`drawer-sunset-roadmap.md`](./drawer-sunset-roadmap.md).
+
+---
+
 ## Non-goals (this phase)
 
 - No full inline edit system across all card types.

@@ -186,7 +186,8 @@ Schema for a generalized Design Surface document, grid-engine internals, Viewpoi
 | Full sprint (rationale, mockups, inventory, phasing) | [`../../sprints/06_2026/presentation-runtime-architecture/`](../../sprints/06_2026/presentation-runtime-architecture/) |
 | Interaction spine | [`canonical-interaction-model.md`](./canonical-interaction-model.md) |
 | Card primitive / archetypes / interaction / templates | [`universal-card-system.md`](./universal-card-system.md), [`universal-card-archetypes.md`](./universal-card-archetypes.md), [`card-interaction-expansion-doctrine.md`](./card-interaction-expansion-doctrine.md), [`card-content-template-field-inclusion-doctrine.md`](./card-content-template-field-inclusion-doctrine.md) |
-| LayoutDoc authoring (reference implementation) | [`experience-builder-doctrine.md`](./experience-builder-doctrine.md) |
+| LayoutDoc authoring (reference implementation; **drawer authoring is transitional legacy**) | [`experience-builder-doctrine.md`](./experience-builder-doctrine.md) |
+| Drawer sunset / Focus Panel convergence (sunset matrix + freeze rule + editing gap) | [`drawer-sunset-roadmap.md`](./drawer-sunset-roadmap.md) |
 | Analytics / metrics | [`../modules/operational-intelligence-platform.md`](../modules/operational-intelligence-platform.md) |
 | Configuration ownership / mode | [`../../system/configuration-ownership-doctrine.md`](../../system/configuration-ownership-doctrine.md), [`../../system/configuration-mode-doctrine.md`](../../system/configuration-mode-doctrine.md) |
 | Visual language / typography | [`alloy-visual-language.md`](./alloy-visual-language.md), [`../../system/typography-and-presentation-doctrine.md`](../../system/typography-and-presentation-doctrine.md) |

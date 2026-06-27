@@ -71,10 +71,11 @@ Start here: **`platform/foundation/system-overview.md`**
 26. `platform/operator/workspace-v3-operational-surface-doctrine.md` — **Workspace V3 — Operational Surface launcher** (storytelling, Work View deep links)
 27. `platform/operator/queue-system.md`
 28. `platform/operator/drawer-system.md`
-29. `platform/operator/operational-action-doctrine.md` — **Operational Actions** (status via action pipeline; Manage/rail catalog alignment; invariant example)
-30. `platform/operator/experience-builder-doctrine.md` — LayoutDoc, builder, queue v3, actions/widgets
-31. `platform/operator/presentation-runtime-doctrine.md` — **Presentation Runtime** (unifying umbrella: Design Surfaces, Experience Builder, renderer-first model, three axes — composition/Perspective/Viewpoint, Analytics-as-Dashboard, ownership + lifecycle; design stage)
-32. `platform/operator/business-process-layout-assignments.md` — BP stage layout routing
+29. `platform/operator/drawer-sunset-roadmap.md` — **Drawer Sunset & Focus Panel Convergence** (sunset status matrix, freeze rule, editing-gap blocker, Household-then-Children targets — convergence lock)
+30. `platform/operator/operational-action-doctrine.md` — **Operational Actions** (status via action pipeline; Manage/rail catalog alignment; invariant example)
+31. `platform/operator/experience-builder-doctrine.md` — LayoutDoc, builder, queue v3, actions/widgets
+32. `platform/operator/presentation-runtime-doctrine.md` — **Presentation Runtime** (unifying umbrella: Design Surfaces, Experience Builder, renderer-first model, three axes — composition/Perspective/Viewpoint, Analytics-as-Dashboard, ownership + lifecycle; design stage)
+33. `platform/operator/business-process-layout-assignments.md` — BP stage layout routing
 
 ### 4. Platform modules (load when touching area)
 

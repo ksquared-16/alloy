@@ -14,6 +14,12 @@ Experience Builder is the **canonical visual surface builder**. Operators config
 
 Lead/Opportunity drawer is the **reference implementation**. Person, Child, and Queue surfaces reuse the same contracts (see [surface cloning plan](./experience-builder-surface-cloning-plan.md)).
 
+> **Convergence direction (locked):** Experience Builder's future target is **configuring card-composed surfaces** (Focus Panel Universal Cards via the Surfaces editor), **not drawer sections**. LayoutDoc **drawer** authoring (drawer overview sections + tab-body inline edit) is **transitional legacy** and must not receive new product investment. The **freeze rule** below and the sunset status matrix live in [`drawer-sunset-roadmap.md`](./drawer-sunset-roadmap.md). Queue row authoring (v3) is unaffected.
+
+### Freeze rule
+
+No new operator-facing product behavior should be added to **drawer overview**, **drawer tabs**, **lead summary blueprint**, or **`entityPresentation` drawer surfaces** unless required as temporary compatibility. Specify new behavior as **Focus Panel card behavior**.
+
 ---
 
 ## Core doctrine

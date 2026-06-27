@@ -2,6 +2,8 @@
 
 **Status:** Canonical infrastructure doc (June 2026). **Product vocabulary:** operators work in the **Focus Panel** on an **operational subject** — see [`focus-panel-architecture-vocabulary.md`](./focus-panel-architecture-vocabulary.md). This file documents payload/VM infrastructure that still uses *drawer* in module names during migration.
 
+> **Convergence position (locked):** The **Focus Panel is the canonical operator surface.** The drawer shell remains only as **reveal / open-state infrastructure**. Drawer/tab overview and LayoutDoc drawer authoring are **legacy/transitional** and must not receive new product investment. Universal Cards absorb drawer sections over time. See the **freeze rule** and **sunset status matrix** in [`drawer-sunset-roadmap.md`](./drawer-sunset-roadmap.md).
+
 Entity detail architecture, VM ownership, and navigation semantics.
 
 ---
@@ -18,13 +20,13 @@ Drawers are **operational workspaces** for record detail — opened from queue r
 
 ## Runtime matrix
 
-| Entity | Runtime | Maturity |
-|--------|---------|----------|
-| Opportunity | `OpportunityDrawerVmRuntime` | **Canonical** |
-| Person / Child | `PersonsDrawerVmRuntime` | **Transitional** (VM flag default OFF) |
-| Other | `AdminEntityDrawerLegacy` | **Legacy** — shrinking |
+| Entity | Runtime | Maturity | Focus Panel body |
+|--------|---------|----------|------------------|
+| Opportunity | `OpportunityDrawerVmRuntime` | **Canonical** | **Yes** (when split active) |
+| Person / Child | `PersonsDrawerVmRuntime` | **Transitional** (VM flag default OFF) | **No** — required before drawer UX retires |
+| Other (location, job, …) | `AdminEntityDrawerLegacy` | **Legacy** — shrinking | **No** — location operating surface unresolved |
 
-Router: `AdminEntityDrawer.tsx`.
+Router: `AdminEntityDrawer.tsx`. Sunset status per area: [`drawer-sunset-roadmap.md`](./drawer-sunset-roadmap.md).
 
 ---
 
@@ -62,6 +64,8 @@ Linked navigation (person ↔ opportunity): hold prior payload until swap ready.
 
 Settings layouts drive drawer composition. Effective policy on GET; PATCH enforcement on opportunity (layout-aware).
 
+> **Transitional:** LayoutDoc **drawer** authoring (drawer overview sections, inline edit on the tab body) is legacy compatibility. The non-Focus-Panel overview body is a fallback only. New operational behavior is specified as **Focus Panel card behavior** — see [`drawer-sunset-roadmap.md`](./drawer-sunset-roadmap.md). Note: when `focusPanelActive` is on, the LayoutDoc operational edit stack is **not mounted** (Focus Panel is currently read-only for most operational data).
+
 **Experience Builder** (visual layout authoring) is documented in:
 
 - `experience-builder-doctrine.md` — builder + runtime contracts (inline edit, contacts, related lists)
@@ -87,6 +91,7 @@ Header slot for assist — proposals require human approve/apply. No autonomous 
 
 ## Related
 
+- `./drawer-sunset-roadmap.md` — **sunset status matrix + freeze rule + editing gap** (convergence lock)
 - `./focus-panel-architecture-vocabulary.md` — **Focus Panel lexical layers** (product terms vs drawer infrastructure)
 - `./operational-mode-default-state-doctrine.md` — auto-open Focus Panel on Work Unit entry
 - `./canonical-interaction-model.md` — universal drawer (Truth / Attention / Frame), Modes, Cards

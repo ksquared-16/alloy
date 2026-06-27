@@ -39,11 +39,13 @@ Each Work Unit will configure a **Default Operational Subject Strategy**. Platfo
 
 ## Truth boundary (locked)
 
-Queue rows MAY: render labels, sort/filter, select entity, navigate to drawer.
+Queue rows MAY: render labels, sort/filter, select entity, open the **Focus Panel** on that subject.
 
-Queue rows MUST NOT: drive business logic, workflows, actions, financial math, identity resolution, or drawer authority.
+Queue rows MUST NOT: drive business logic, workflows, actions, financial math, identity resolution, or surface authority.
 
 **Pattern:** Queue → select → entity GET → act.
+
+> **Open target (convergence):** Queue row opens resolve to a **Focus Panel card context**, not generic drawer tabs. Future intent: child/contact opens focus the relevant card and item (Children/Household card, selected item). The drawer shell is the reveal/open-state infrastructure behind the Focus Panel — see [`drawer-sunset-roadmap.md`](./drawer-sunset-roadmap.md). Person/Child Focus Panel bodies are required before their queue opens fully leave legacy drawer UX.
 
 ---
 
@@ -141,6 +143,7 @@ Queue row API latency (~800ms–1s) is known backend debt — not a reveal regre
 
 ## Related
 
+- `./drawer-sunset-roadmap.md` — queue/search opens target Focus Panel card states (convergence lock)
 - `./operational-mode-default-state-doctrine.md` — default Operational Mode, subject resolution, Browse Mode retirement
 - `./canonical-interaction-model.md` — Perspective / Queue / Row primitives
 - `./interaction-grammar.md` — queues do not own data; Previous/Next follows current filtered queue

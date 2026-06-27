@@ -11,6 +11,14 @@ This document is the **platform entry point** for the Universal Card System. The
 
 ---
 
+## Convergence position (locked)
+
+The Universal Card is the **future composition unit** of the canonical operator surface, the **Focus Panel**. **Universal Cards absorb drawer sections over time** — drawer/tab overview and LayoutDoc drawer sections are legacy/transitional, and new operational behavior is specified as card behavior, not drawer-section behavior. See the freeze rule and sunset status matrix in [`drawer-sunset-roadmap.md`](./drawer-sunset-roadmap.md).
+
+> **Editing gap (highest-risk blocker):** When `focusPanelActive` is on, the LayoutDoc operational edit stack is **not mounted**, so the Focus Panel is currently **read-only for most operational data**. The next implementation priority is the editing/interaction substrate (card expansion → focused item state → card-level actions → inline editing → save/dirty → collection editing), **not more cards**. First editable card: **Household**; second: **Children**. Detail: [`drawer-sunset-roadmap.md`](./drawer-sunset-roadmap.md) and [`focus-panel-edit-information-doctrine.md`](./focus-panel-edit-information-doctrine.md).
+
+---
+
 ## What a card is
 
 A **Universal Card** is a reusable **business primitive** — not a field container. It answers **one operational question** and may contain fields, widgets, actions, metrics, related records, or workflow entry points.
