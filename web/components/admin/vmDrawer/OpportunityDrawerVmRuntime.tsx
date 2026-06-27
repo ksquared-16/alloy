@@ -968,6 +968,7 @@ export default function OpportunityDrawerVmRuntime() {
                                     mode={focusPanelMode}
                                     displayVm={displayVm}
                                     drawerId={String(displayVm.entity.id)}
+                                    opportunitySingular={opportunitySingular}
                                     record={record}
                                     drawerTitle={drawerTitle}
                                     statusLabel={statusLabel}
