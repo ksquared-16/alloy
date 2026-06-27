@@ -59,7 +59,8 @@ Admin, public, webhook, and worker boundaries for the platform.
 
 ## Expanded reference
 
-`../../system/api-contracts.md` — transitional detailed route table.
+- **`../../api/README.md`** — first-class API documentation: per-domain references, generated full route inventory (`../../api/api-index.md`, all 456 `web/app/api/**` handlers), and the API documentation audit. Start here for the complete surface.
+- `../../system/api-contracts.md` — transitional detailed route table.
 
 ---
 

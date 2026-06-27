@@ -108,6 +108,7 @@ Start here: **`platform/foundation/system-overview.md`**
 | Documentation rules | `platform/governance/documentation-governance.md` |
 | Agent repo boundaries | `governance/agent-repo-boundaries.md` |
 | API contracts | `platform/governance/api-contracts.md` |
+| **API documentation (full inventory)** | `api/README.md` — per-domain reference + generated route index + audit |
 | Roles & permissions | `platform/governance/roles-and-permissions.md` |
 | Implementation patterns | `platform/governance/implementation-patterns.md` |
 | Deployment | `platform/governance/deployment-and-environments.md` |
