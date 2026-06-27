@@ -20,6 +20,7 @@ import {
 } from "@/lib/admin/enrollmentOperationalSurfaceLanding";
 import { OperationalSurfaceCover } from "@/components/admin/workspace/OperationalSurfaceCover";
 import { OipKpiIcon } from "@/components/admin/workspace/OipKpiIcon";
+import { alloySectionDomAttrs } from "@/lib/perf/alloySectionMap";
 import { oipDomainVisualTokens, oipProcessAccentKey } from "@/lib/metrics/oipKpiCardVisualSystem";
 import { oipProcessIconKey } from "@/lib/metrics/oipKpiIcons";
 import { WS_LAYOUT, WS_LAYOUT_ATTR } from "@/lib/workspace/workspaceLayoutSystem";
@@ -146,7 +147,11 @@ function LegacyProcessNavTile({
                         </h3>
                     </div>
 
-                    <div className="mt-2.5" data-ws-business-process-performance="true">
+                    <div
+                        className="mt-2.5"
+                        data-ws-business-process-performance="true"
+                        {...alloySectionDomAttrs("WS-06")}
+                    >
                         <MetricPlacementRenderer
                             surface="business_process_tile"
                             surfaceKey={resolveMetricSurfaceKey({ processKey: lifecycle.processKey })}
@@ -341,6 +346,7 @@ export function WorkspaceRootLifecycleGrid({ lifecycles, pending = false }: Prop
             className={WS_LAYOUT.processNavGrid}
             data-ws-layout={WS_LAYOUT_ATTR.processNavGrid}
             data-ws-business-process-grid
+            {...alloySectionDomAttrs("WS-05")}
         >
             {lifecycles.map((lifecycle) => {
                 const clickedKey = `lifecycle:${lifecycle.id}`;

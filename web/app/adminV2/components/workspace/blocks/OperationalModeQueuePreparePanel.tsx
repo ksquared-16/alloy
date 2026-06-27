@@ -1,5 +1,7 @@
 "use client";
 
+import { alloySectionDomAttrs } from "@/lib/perf/alloySectionMap";
+
 type Props = {
     message: string;
 };
@@ -12,6 +14,7 @@ export default function OperationalModeQueuePreparePanel({ message }: Props) {
             role="status"
             aria-live="polite"
             data-operational-mode-prepare="true"
+            {...alloySectionDomAttrs("WU-06")}
         >
             <div className="alloy-os-operational-mode-prepare__panel">
                 <p className="alloy-os-operational-mode-prepare__message">{message}</p>

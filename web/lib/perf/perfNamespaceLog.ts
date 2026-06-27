@@ -15,7 +15,8 @@ export type PerfNamespace =
     | "prefetch"
     | "save"
     | "settings"
-    | "intent";
+    | "intent"
+    | "section";
 
 const BLOCKED_KEYS = new Set([
     "email",
@@ -122,7 +123,9 @@ function isSafeKey(key: string): boolean {
         key === "url" ||
         key === "mark_count" ||
         key === "section_count" ||
-        key === "section_id"
+        key === "section_id" ||
+        key === "section_name" ||
+        key === "blocking"
     );
 }
 
@@ -190,6 +193,27 @@ export function perfIntent(phase: string, payload: Record<string, unknown> = {})
 
 export function perfRoot(phase: string, payload: Record<string, unknown> = {}): void {
     emitPerf(null, phase, payload);
+}
+
+export type AlloySectionStatus = "pending" | "ready" | "stale" | "refresh" | "error";
+
+/**
+ * Surface section load boundary (dev/staging only). One line per status transition for a
+ * numbered section (see `alloySectionMap.ts`) — never in a render loop.
+ *
+ *   [perf:section] WU-02 { status: 'ready', source: 'bootstrap', blocking: false, since_nav_ms: 312 }
+ */
+export function perfSection(
+    sectionId: string,
+    status: AlloySectionStatus,
+    payload: {
+        source?: string;
+        blocking?: boolean;
+        since_nav_ms?: number;
+    } & Record<string, unknown> = {}
+): void {
+    if (!perfDevDetailEnabled()) return;
+    emitPerf("section", sectionId, { status, ...payload });
 }
 
 /** Shadow / cutover / DOM trace — opt-in only (`ADMIN_PERF_TRACE=1` or drawer runtime debug). */

@@ -72,6 +72,8 @@ import { WorkUnitQueueLaneRowSkeleton } from "@/components/admin/workspace/WorkU
 import RelatedRecordDrawerIconButton from "@/components/admin/drawer/RelatedRecordDrawerIconButton";
 import { useAdminDrawerOptional } from "@/contexts/AdminDrawerContext";
 import { ALLOY_OS_RUNTIME_ENABLED } from "@/lib/adminV2/runtime/alloyOsRuntimeFlag";
+import { alloySectionDomAttrs } from "@/lib/perf/alloySectionMap";
+import { perfIntent } from "@/lib/perf/perfNamespaceLog";
 import { useOperationalModeEntryOptional } from "@/lib/adminV2/runtime/operationalSubject/OperationalModeEntryContext";
 import { useAlloyOsRuntimeSplitActive } from "@/lib/adminV2/runtime/useAlloyOsRuntimeSplitActive";
 import OperationalModeQueuePreparePanel from "@/app/adminV2/components/workspace/blocks/OperationalModeQueuePreparePanel";
@@ -1965,6 +1967,7 @@ function WorkUnitQueueLane({
           }`}
           aria-busy={Boolean(queue.rowsRefreshing)}
           role="list"
+          {...alloySectionDomAttrs("WU-05")}
         >
         {operationalModePreparing ?
             <OperationalModeQueuePreparePanel message={operationalEntry.message} />
@@ -2097,7 +2100,14 @@ function WorkUnitQueueLane({
                 data-ws-wu-urgency={tier}
                 data-ws-needs-attention={attentionAccent ? "true" : undefined}
                 data-queue-row-active={
-                  splitActive && openDrawerOpportunityId && openDrawerOpportunityId === actionEntityId ?
+                  splitActive &&
+                  // Immediate selection: a clicked-but-not-yet-committed row (model-swap VM wait)
+                  // owns the active highlight right away; otherwise fall back to the open drawer id.
+                  // Suppresses the stale prior-subject highlight while a click is pending (WU-05).
+                  (rowOpenPending ||
+                    (!queueRowOpenPendingOpportunityId &&
+                      Boolean(openDrawerOpportunityId) &&
+                      openDrawerOpportunityId === actionEntityId)) ?
                       "true"
                   :   undefined
                 }
@@ -2106,6 +2116,7 @@ function WorkUnitQueueLane({
                 aria-busy={rowOpenPending ? true : undefined}
                 onMouseEnter={() => prefetchOpportunityQueueRowIntent(queue, actionEntityId, opportunityDrawerWorkspaceContext)}
                 onMouseDown={() => {
+                  perfIntent("click_down", { section_id: "WU-05", record_id: actionEntityId });
                   prefetchOpportunityQueueRowIntent(queue, actionEntityId, opportunityDrawerWorkspaceContext);
                   if (queue.queueEntityType === "opportunity") {
                     prefetchOpportunityDrawerFullOnRowIntent(actionEntityId);

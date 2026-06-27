@@ -16,6 +16,7 @@ import { ADMINV2_COMMAND_SURFACE_Z } from "@/components/admin/Drawer";
 import { isWorkspaceCommandRailBosHost } from "@/lib/bos/bosRailOverlayAnchor";
 import { useBosRailOverlayAnchorStyle } from "@/lib/bos/useBosRailOverlayAnchorStyle";
 import { useBosRailOverlayDrawerDocumentFlag } from "@/lib/bos/useBosRailOverlayDrawerDocumentFlag";
+import { alloySectionDomAttrs } from "@/lib/perf/alloySectionMap";
 
 const CommandRailBosHostContext = createContext<((el: HTMLElement | null) => void) | null>(null);
 
@@ -76,6 +77,7 @@ export function CommandRailBosMount({ children }: { children: ReactNode }) {
                         data-adminv2-bos-rail-overlay="true"
                         className="adminv2-bos-rail-overlay pointer-events-auto flex min-h-0 flex-col"
                         style={{ ...overlayStyle, zIndex: ADMINV2_COMMAND_SURFACE_Z }}
+                        {...alloySectionDomAttrs("WU-14")}
                     >
                         {dockContent}
                     </div>,

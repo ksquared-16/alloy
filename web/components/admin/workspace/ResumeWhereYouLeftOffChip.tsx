@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { RotateCcw, X } from "lucide-react";
 
 import { useWorkspaceOrg } from "@/contexts/WorkspaceOrgContext";
+import { alloySectionDomAttrs } from "@/lib/perf/alloySectionMap";
 import {
     buildResumeHref,
     buildResumeLabel,
@@ -56,6 +57,7 @@ export function ResumeWhereYouLeftOffChip() {
         <div
             data-adminv2-resume-affordance="true"
             className="mb-3 flex items-center gap-2"
+            {...alloySectionDomAttrs("WS-01")}
         >
             <button
                 type="button"

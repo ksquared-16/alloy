@@ -20,6 +20,8 @@ This is **not** another doctrine document. It is the **synthesis** that converts
 
 > **Vocabulary note:** **Subject** and **Mission** are the operator-facing names for what the Canonical Interaction Model calls **Record of Attention** and **Context Frame** (both now in the glossary). **Summary / Work / Activity** are the **canonical runtime vocabulary** for the three drawer **Modes** (earlier drafts used Overview / Operations / Activity). The concepts are identical across docs. See [Part 2](#part-2--runtime-spine).
 
+> **Runtime diagnostics:** every visible surface region has a stable section id (`WU-00`…`WU-15`, `WS-00`…`WS-10`). See the [Runtime Surface Section Map](./runtime-surface-section-map.md) for owners, data sources, blocking/snapshot contracts, and the `data-alloy-section-id` / `[perf:section]` diagnostics used during QA.
+
 ---
 
 ## Part 1 — Runtime Philosophy

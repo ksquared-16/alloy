@@ -8,6 +8,7 @@ import {
 import { runCoreSurfacePreload } from "@/lib/adminV2/coreSurfacePreloadRegistry";
 import { scheduleAdminV2BackgroundWork } from "@/lib/workspace/adminV2DeferBackgroundWork";
 import { perfAlloyOsRuntimeMark } from "@/lib/perf/adminV2PerfLog";
+import { alloySectionDomAttrs } from "@/lib/perf/alloySectionMap";
 import { useIdleSessionLogout } from "@/lib/adminV2/runtime/useIdleSessionLogout";
 import { usePathname, useSearchParams } from "next/navigation";
 import { neutral, derived, palette } from "@/styles/tokens/colors";
@@ -191,6 +192,7 @@ function AdminV2ShellInner({
             data-adminv2-workspace-shell="v2"
             data-adminv2-settings-mode={isSettingsRoute ? "true" : undefined}
             data-adminv2-sidebar-collapsed={sidebarCollapsed ? "true" : "false"}
+            {...alloySectionDomAttrs("WU-00")}
           >
             <Sidebar collapsed={sidebarCollapsed} onToggle={toggleSidebarCollapsed} />
             <div className="flex flex-1 flex-col min-w-0 min-h-0 overflow-hidden">

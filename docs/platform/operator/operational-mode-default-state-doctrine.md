@@ -4,7 +4,7 @@
 **Status:** Approved / frozen (June 2026) — operational entry implemented  
 **Authority:** Runtime behavior law for Work Unit entry, queue presentation, and Default Operational Subject resolution.
 
-**Related:** [`alloy-runtime-specification.md`](./alloy-runtime-specification.md) · [`alloy-os-runtime-completion.md`](./alloy-os-runtime-completion.md) · [`queue-system.md`](./queue-system.md) · [`operational-surface-design-system.md`](./operational-surface-design-system.md) (System 5)
+**Related:** [`alloy-runtime-specification.md`](./alloy-runtime-specification.md) · [`alloy-os-runtime-completion.md`](./alloy-os-runtime-completion.md) · [`queue-system.md`](./queue-system.md) · [`operational-surface-design-system.md`](./operational-surface-design-system.md) (System 5) · [`runtime-surface-section-map.md`](./runtime-surface-section-map.md) (section ids + reveal/blocking diagnostics)
 
 ---
 

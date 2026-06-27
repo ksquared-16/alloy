@@ -65,8 +65,10 @@ export function useWorkUnitDefaultOperationalSubjectAutoOpen(params: Params): vo
             params.drawerType && params.drawerId != null ? String(params.drawerId).trim() : "";
         if (openDrawerId && manualSelectionRef.current) {
             // Manual click wins: a subject is already open by operator intent — never let the
-            // default resolver re-open or overwrite it.
-            perfIntent("default_resolver_blocked_manual_selection", {
+            // default resolver re-open or overwrite it (the default resolver result is stale).
+            perfIntent("stale_ignored", {
+                section_id: "WU-05",
+                reason: "default_resolver_blocked_manual_selection",
                 work_unit_id: params.workUnitId,
                 queue_key: params.activeQueueKey,
                 opportunity_id: openDrawerId,
@@ -94,7 +96,9 @@ export function useWorkUnitDefaultOperationalSubjectAutoOpen(params: Params): vo
         }
 
         if (manualSelectionRef.current) {
-            perfIntent("default_resolver_blocked_manual_selection", {
+            perfIntent("stale_ignored", {
+                section_id: "WU-05",
+                reason: "default_resolver_blocked_manual_selection",
                 work_unit_id: params.workUnitId,
                 queue_key: params.activeQueueKey,
             });

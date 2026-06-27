@@ -6,6 +6,7 @@ import FocusPanelCardGrid from "@/components/admin/focusPanel/FocusPanelCardGrid
 import FocusPanelCardRenderer from "@/components/admin/focusPanel/FocusPanelCardRenderer";
 import OpportunityFocusPanelEmbeddedWorkspace from "@/components/admin/focusPanel/OpportunityFocusPanelEmbeddedWorkspace";
 import { deriveOpportunityFocusPanelPresentation } from "@/lib/adminV2/runtime/focusPanel/deriveOpportunityFocusPanelCards";
+import { alloySectionDomAttrs } from "@/lib/perf/alloySectionMap";
 import type { FocusPanelMode } from "@/lib/adminV2/runtime/focusPanel/focusPanelMode";
 import type { FocusPanelCardKey } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardModel";
 import type { OpportunityDrawerViewModel } from "@/lib/adminV2/viewModel/drawer/types";
@@ -94,6 +95,7 @@ export default function OpportunityFocusPanelModeGrid({
             aria-labelledby={`focus-panel-mode-tab-${mode}`}
             data-focus-panel-mode={mode}
             data-focus-panel-work-state={mode === "work" && workflowActive ? "active" : undefined}
+            {...alloySectionDomAttrs(mode === "work" ? "WU-10" : "WU-09")}
         >
             <FocusPanelCardGrid
                 rows={gridRows}

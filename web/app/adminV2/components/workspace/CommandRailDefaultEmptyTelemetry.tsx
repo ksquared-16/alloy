@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { GitBranch } from "lucide-react";
+import { alloySectionDomAttrs } from "@/lib/perf/alloySectionMap";
 
 /** Collapsed Workflow Telemetry (0) — header always visible when no telemetry is registered. */
 export function CommandRailDefaultEmptyTelemetry() {
@@ -13,6 +14,7 @@ export function CommandRailDefaultEmptyTelemetry() {
             data-adminv2-command-rail-telemetry-section="true"
             data-ws-component="automation_telemetry"
             aria-label="Workflow Telemetry"
+            {...alloySectionDomAttrs("WS-08")}
         >
             <button
                 type="button"

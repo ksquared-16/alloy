@@ -9,6 +9,7 @@ import { MetricPlacementRenderer } from "@/components/admin/metrics/MetricPlacem
 import { WS_LAYOUT, WS_LAYOUT_ATTR } from "@/lib/workspace/workspaceLayoutSystem";
 import { WorkspaceQuietKpiReserve } from "@/components/admin/workspace/WorkspaceQuietLoadingReserve";
 import { ALLOY_OS_RUNTIME_ENABLED } from "@/lib/adminV2/runtime/alloyOsRuntimeFlag";
+import { alloySectionDomAttrs } from "@/lib/perf/alloySectionMap";
 import { oipMetricDisplayValue } from "@/lib/metrics/oipKpiObjectPresentation";
 import { oipSummaryLabel } from "@/lib/metrics/oipOperatorCopy";
 import { oipMetricKeyForStripKey } from "@/lib/kpi/oipBridge";
@@ -76,7 +77,11 @@ export function WorkUnitCommandSurface({
 
     if (ALLOY_OS_RUNTIME_ENABLED) {
         return (
-            <div className="adminv2-os-context" data-alloy-os-work-unit-context="true">
+            <div
+                className="adminv2-os-context"
+                data-alloy-os-work-unit-context="true"
+                {...alloySectionDomAttrs("WU-01")}
+            >
                 {processLine ?
                     <div className="adminv2-os-context__row adminv2-os-context__title-row">
                         <h1 className="adminv2-os-context__title" data-work-unit-process-label="true">
@@ -88,6 +93,7 @@ export function WorkUnitCommandSurface({
                     <div
                         className="adminv2-os-context__row adminv2-os-context__kpi-strip"
                         data-workspace-zone="kpi-tiles"
+                        {...alloySectionDomAttrs("WU-02")}
                     >
                         <MetricPlacementRenderer
                             surface="work_unit_header"
@@ -112,6 +118,7 @@ export function WorkUnitCommandSurface({
                         className="adminv2-os-context__row adminv2-os-context__perspective-rail"
                         data-alloy-os-context-perspective-rail="true"
                         data-ws-command-pills="true"
+                        {...alloySectionDomAttrs("WU-03")}
                     >
                         {stagePills}
                     </div>

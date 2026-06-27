@@ -6,6 +6,7 @@ import type { WorkspaceHealthSummary } from "@/lib/metrics/workspaceHealthSummar
 import { OipHealthStrip } from "@/components/admin/workspace/OipHealthStrip";
 import { WorkspaceOperationalPulseStrip } from "@/components/admin/workspace/layout/WorkspaceOperationalPulseStrip";
 import { WS_LAYOUT, WS_LAYOUT_ATTR, WS_ORG_PULSE_BAND_CLASS } from "@/lib/workspace/workspaceLayoutSystem";
+import { alloySectionDomAttrs } from "@/lib/perf/alloySectionMap";
 
 type Props = {
     health: WorkspaceHealthSummary;
@@ -32,6 +33,7 @@ export function WorkspaceHealthPulseSection({
             data-ws-command-banner="true"
             data-workspace-health-pulse="true"
             data-workspace-org-pulse-band="true"
+            {...alloySectionDomAttrs("WS-02")}
         >
             <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
                 {orgName ?
@@ -48,7 +50,11 @@ export function WorkspaceHealthPulseSection({
                     </div>
                 :   null}
 
-                <div className="min-w-0" data-workspace-zone="health-snapshot">
+                <div
+                    className="min-w-0"
+                    data-workspace-zone="health-snapshot"
+                    {...alloySectionDomAttrs("WS-03")}
+                >
                     <h2 id="workspace-org-pulse-heading" className="sr-only">
                         Organization Pulse
                     </h2>
@@ -61,6 +67,7 @@ export function WorkspaceHealthPulseSection({
             <div
                 className="border-t border-alloy-midnight/[0.06] pt-2"
                 data-workspace-zone="operational-pulse"
+                {...alloySectionDomAttrs("WS-04")}
             >
                 <h3 id="workspace-operational-pulse-heading" className="sr-only">
                     Operational Pulse

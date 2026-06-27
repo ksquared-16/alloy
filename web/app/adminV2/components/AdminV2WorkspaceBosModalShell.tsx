@@ -15,6 +15,7 @@ import {
     ADMINV2_DRAWER_PANEL_Z,
 } from "@/components/admin/Drawer";
 import { BOS_ACTION_WORKSPACE_OPEN_ATTR } from "@/lib/bos/bosRailPresentationFlags";
+import { alloySectionDomAttrs } from "@/lib/perf/alloySectionMap";
 import {
     DRAWER_BACKDROP_LEFT_CSS_VAR,
     DRAWER_BACKDROP_RIGHT_CSS_VAR,
@@ -138,6 +139,7 @@ export default function AdminV2WorkspaceBosModalShell({
                 data-adminv2-drawer="true"
                 data-adminv2-workspace-bos-modal="true"
                 data-adminv2-bos-modal={dataModalAttr}
+                {...alloySectionDomAttrs("WU-15")}
                 className={`adminv2-drawer-modal-panel adminv2-drawer-shell-inset pointer-events-auto fixed flex max-h-[min(920px,100%)] flex-col overflow-hidden rounded-2xl border border-solid shadow-2xl animate-in fade-in zoom-in-[0.99] duration-300 adminv2-drawer-modal-panel--bos-rail ${panelClassName}`.trim()}
                 style={panelStyle}
                 onClick={(e) => e.stopPropagation()}

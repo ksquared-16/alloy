@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 
 import ActionsBlock from "@/app/adminV2/components/workspace/blocks/ActionsBlock";
 import { CommandRailCollapsibleActionsSection } from "@/app/adminV2/components/workspace/CommandRailCollapsibleActionsSection";
+import { alloySectionDomAttrs } from "@/lib/perf/alloySectionMap";
 import type { ActionsVm } from "@/lib/ui-v2/workspace-types";
 import type { WorkspaceActionHandler } from "@/lib/ui-v2/workspace-actions";
 
@@ -41,6 +42,7 @@ export function WorkspaceCommandRailActionsSection({
             <section
                 className="adminv2-ws-actions-rail adminv2-ws-actions-rail--dept-panel adminv2-ws-command-section--primary"
                 data-ws-command-rail-actions-surface={surface}
+                {...(surface === "work_unit" ? alloySectionDomAttrs("WU-12") : surface === "company" ? alloySectionDomAttrs("WS-07") : {})}
                 {...(slotTestId ? { "data-testid": slotTestId } : {})}
                 {...(slotState ? { "data-wu-above-fold-state": slotState } : {})}
                 aria-busy={loading}

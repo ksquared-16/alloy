@@ -5900,6 +5900,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
             if (manualSelection) {
                 markManualOperationalSubjectSelection();
                 perfIntent("manual_row_click", {
+                    section_id: "WU-05",
                     work_unit_id: workUnitId,
                     queue_key: selectedQueueKeyRef.current,
                     entity_type: entityType,
@@ -5908,6 +5909,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
             }
             const id = itemId.trim();
             if (!id) {
+                perfIntent("blocked", { section_id: "WU-05", reason: "empty_item_id" });
                 logAdminV2QueueRowClick({
                     phase: "open_drawer",
                     itemId,
@@ -5917,6 +5919,15 @@ export default function AdminV2OpportunityWorkUnitPage() {
                     extra: { reason: "empty_item_id" },
                 });
                 return;
+            }
+            if (manualSelection) {
+                // Immediate selection: the clicked subject is authoritative the moment the click
+                // lands — visual selection + pending highlight update before any VM payload resolves.
+                perfIntent("row_selected", {
+                    section_id: "WU-05",
+                    work_unit_id: workUnitId,
+                    opportunity_id: id,
+                });
             }
             logAdminV2QueueRowClick({
                 phase: "open_drawer",
@@ -5966,11 +5977,18 @@ export default function AdminV2OpportunityWorkUnitPage() {
             if (!vmPeek) {
                 setQueueRowOpenPendingOpportunityId(id);
             }
+            perfIntent("open_requested", {
+                section_id: "WU-05",
+                work_unit_id: workUnitId,
+                opportunity_id: id,
+                cache_hit: Boolean(vmPeek),
+            });
             openDrawer(openParams);
             if (manualSelection) {
                 // Selected subject is now authoritative — a later background prewarm completion
                 // must not overwrite it (cancel above + manual ref in the auto-open resolver).
                 perfIntent("selected_subject_set", {
+                    section_id: "WU-05",
                     work_unit_id: workUnitId,
                     opportunity_id: id,
                     cache_hit: Boolean(vmPeek),

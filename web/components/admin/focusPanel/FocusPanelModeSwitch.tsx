@@ -7,6 +7,7 @@ import {
     FOCUS_PANEL_MODE_LABELS,
     type FocusPanelMode,
 } from "@/lib/adminV2/runtime/focusPanel/focusPanelMode";
+import { alloySectionDomAttrs } from "@/lib/perf/alloySectionMap";
 
 type Props = {
     activeMode: FocusPanelMode;
@@ -22,6 +23,7 @@ export default function FocusPanelModeSwitch({ activeMode, onModeChange }: Props
             aria-label="Focus Panel mode"
             data-focus-panel-mode-switch="true"
             data-alloy-os-focus-panel-mode-switch="true"
+            {...alloySectionDomAttrs("WU-08")}
         >
             {FOCUS_PANEL_MODES.map((mode) => {
                 const active = mode === activeMode;

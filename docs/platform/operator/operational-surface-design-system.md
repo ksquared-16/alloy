@@ -4,6 +4,8 @@
 **Status:** Approved / frozen (June 2026) — canonical platform doctrine  
 **Authority:** Visual and compositional law for every operational surface in Alloy OS.
 
+> **Diagnostics:** each surface region is identified by a stable section id — see the [Runtime Surface Section Map](./runtime-surface-section-map.md) (`WU-00`…`WU-15`, `WS-00`…`WS-10`).
+
 ---
 
 ## Position in the Alloy OS system stack

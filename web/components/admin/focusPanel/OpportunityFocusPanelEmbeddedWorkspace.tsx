@@ -11,6 +11,7 @@ import {
 } from "@/lib/adminV2/runtime/focusPanel/embeddedWorkspaceTabs";
 import type { OpportunityDrawerViewModel } from "@/lib/adminV2/viewModel/drawer/types";
 import type { DrawerTabKey } from "@/lib/entityPresentation";
+import { alloySectionDomAttrs } from "@/lib/perf/alloySectionMap";
 
 type Props = {
     drawerId: string;
@@ -63,6 +64,7 @@ export default function OpportunityFocusPanelEmbeddedWorkspace({
             data-focus-panel-mode="activity"
             role="tabpanel"
             aria-labelledby="focus-panel-mode-tab-activity"
+            {...alloySectionDomAttrs("WU-11")}
         >
             <div
                 className="alloy-os-activity-workspace__nav"

@@ -7,6 +7,7 @@ import Link from "next/link";
 import { shouldDisableAdminV2LinkPrefetch } from "@/app/adminV2/components/navigation/adminV2HeavyRoutePrefetch";
 import type { WorkflowScopePartitionV1 } from "@/lib/workflows/workflowScopeMetadata";
 import { WORKSPACE_AUTOMATION_METADATA_GAP_NOTE } from "@/lib/workspace/workspaceAutomationWorkflowFilter";
+import { alloySectionDomAttrs } from "@/lib/perf/alloySectionMap";
 import "@/app/adminV2/components/workspace/workspace.css";
 
 export type AutomationWorkflowKpis = {
@@ -107,6 +108,7 @@ function WorkUnitRailTelemetryBlock(props: {
             data-ws-component="automation_telemetry"
             data-ws-automation-telemetry-expanded={expanded ? "true" : "false"}
             aria-label="Workflow Telemetry"
+            {...alloySectionDomAttrs("WU-13")}
         >
             <button
                 type="button"

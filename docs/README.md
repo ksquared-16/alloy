@@ -6,11 +6,15 @@
 
 For behavior-changing work, include **`docs/platform/governance/design-and-operational-doctrine.md`** in context.
 
-**Cross-cutting UX model:** How every operational domain (Enrollment, Attendance, Scheduling, Billing, Staffing, Subsidy, POS, Capacity, Compliance) shares one architecture — five planes, Operations/Records split, progressive drawers, tabs-vs-actions — is defined in **`platform/operational-ux-doctrine.md`**.
+**Cross-cutting UX model:** How every operational domain (Enrollment, Attendance, Scheduling, Billing, Staffing, Subsidy, POS, Capacity, Compliance) shares one architecture — five planes, Operations/Records split, progressive drawers, tabs-vs-actions — is defined in **`platform/operational-ux-doctrine.md`** (the **surface axis**).
+
+**Cross-cutting truth model:** The complementary **truth-flow axis** — Configuration → Operational Intent → Operational Expectations (derived) → Operational Facts (immutable) → Operational Consequences (financial) — is defined in **`platform/operational-truth-flow-doctrine.md`**. It locks: expectations are derived/non-authoritative; financials derive from facts (billing generalizes before childcare billing); facts are immutable + effective-dated; childcare builds only on the committed enrollment foundation; job-vertical schedule/financial tables are off-limits to childcare.
 
 **Canonical interaction model:** The single operator spine every domain inherits — **Workspace → Perspective → Queue → Row → Drawer → Context Frame → Mode → Card → Section → Field** — plus the one universal drawer (Record of Truth / Record of Attention / Context Frame) is defined in **`platform/operator/canonical-interaction-model.md`**, with laws in **`platform/operator/interaction-grammar.md`** and the lived flow in **`platform/operator/operator-story.md`**. How that model should **look and feel** (the bridge into mockups) is **`platform/operator/alloy-visual-language.md`**.
 
 **Runtime Specification (read before building any operational domain):** The synthesis of all interaction/visual doctrine into one implementation-ready spec is **`platform/operator/alloy-runtime-specification.md`**. *The Runtime Specification is the implementation bridge between doctrine and visual mockups* — it freezes behavior; mockups express it; implementation expresses the mockups.
+
+**Runtime Surface Section Map (diagnostics):** Every visible region of the Work Unit and Workspace surfaces has a stable section id (`WU-00`…`WU-15`, `WS-00`…`WS-10`) with owner, data source, cache, and blocking/snapshot contract in **`platform/operator/runtime-surface-section-map.md`** (code source of truth: `web/lib/perf/alloySectionMap.ts`). Use `data-alloy-section-id` and `[perf:section]` logs to diagnose load/reveal issues by section id.
 
 **Presentation Runtime (unifying presentation architecture):** How every operator surface — queue row, Focus Panel, dashboard, document, POS, portal — becomes one **Design Surface** authored in one **Experience Builder**, built renderer-first on three axes (composition: Design Surface → Zone → Card → Slot → Renderer; selection: Perspective; audience: Viewpoint), with Analytics as a Dashboard category, is defined in **`platform/operator/presentation-runtime-doctrine.md`** (design stage). Full sprint: `sprints/06_2026/presentation-runtime-architecture/`.
 
@@ -47,7 +51,8 @@ Start here: **`platform/foundation/system-overview.md`**
 
 ### 3. Operator experience
 
-11. `platform/operational-ux-doctrine.md` — **operational UX architecture** (five planes, Operations/Records, progressive drawers, tabs vs actions)
+11. `platform/operational-ux-doctrine.md` — **operational UX architecture / surface axis** (five planes, Operations/Records, progressive drawers, tabs vs actions)
+11b. `platform/operational-truth-flow-doctrine.md` — **truth-flow axis** (Configuration → Intent → Expectations → Facts → Consequences; complementary to the planes)
 12. `platform/operator/canonical-interaction-model.md` — **canonical interaction spine** (Workspace → … → Field; one universal drawer)
 13. `platform/operator/interaction-grammar.md` — **interaction laws** (records own truth, projections observe, cards talk through records)
 14. `platform/operator/operator-story.md` — **lived operator experience** (open → work → interrupt → return)
@@ -79,6 +84,8 @@ Start here: **`platform/foundation/system-overview.md`**
 | Communications | `platform/modules/communications-platform.md` |
 | Actions & workflows | `platform/modules/actions-and-workflows.md` |
 | Configuration | `platform/modules/configuration-platform.md` |
+| Attendance (L4 facts — doctrine) | `platform/modules/attendance-system.md` |
+| Billing & financials platform (L5 — doctrine) | `platform/modules/billing-financials-platform.md` |
 | AI / BOS | `platform/modules/ai-platform.md` |
 | Operational intelligence | `platform/modules/operational-intelligence-platform.md` |
 

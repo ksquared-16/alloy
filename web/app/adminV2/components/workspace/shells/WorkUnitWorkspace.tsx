@@ -21,6 +21,7 @@ import { WorkspaceShellLayout } from "@/components/admin/workspace/WorkspaceShel
 import { ALLOY_OS_RUNTIME_ENABLED } from "@/lib/adminV2/runtime/alloyOsRuntimeFlag";
 import { resolveCompressedQueueHeader } from "@/lib/adminV2/runtime/compressedQueueHeader";
 import { CompressedQueueHeader } from "@/app/adminV2/components/workspace/blocks/CompressedQueueHeader";
+import { alloySectionDomAttrs } from "@/lib/perf/alloySectionMap";
 
 type Props = {
   model: WorkUnitWorkspaceModel;
@@ -223,7 +224,11 @@ export default function WorkUnitWorkspace({
                   ) : null}
                   {recordFilterBar ?
                     ALLOY_OS_RUNTIME_ENABLED ?
-                        <div className="adminv2-os-queue-header" data-alloy-os-queue-header="true">
+                        <div
+                            className="adminv2-os-queue-header"
+                            data-alloy-os-queue-header="true"
+                            {...alloySectionDomAttrs("WU-04")}
+                        >
                             {compressedQueueHeader ?
                                 <CompressedQueueHeader {...compressedQueueHeader} />
                             :   null}

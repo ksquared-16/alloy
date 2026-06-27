@@ -109,11 +109,14 @@ describe("Phase 5 — queue click intent instrumentation", () => {
         expect(page).toMatch(/manual_row_click[\s\S]*cancelBackgroundDrawerVmPrewarm|cancelBackgroundDrawerVmPrewarm[\s\S]*selected_subject_set/);
     });
 
-    it("default resolver logs the blocked-by-manual-selection intent", () => {
+    it("default resolver logs the blocked-by-manual-selection intent as a stale_ignored event", () => {
         const hook = readSrc(
             "lib/adminV2/runtime/operationalSubject/useWorkUnitDefaultOperationalSubjectAutoOpen.ts",
         );
-        expect(hook).toContain('perfIntent("default_resolver_blocked_manual_selection"');
+        // Section-map intent vocabulary: the superseded default-resolver result is a WU-05 stale ignore.
+        expect(hook).toContain('perfIntent("stale_ignored"');
+        expect(hook).toContain('section_id: "WU-05"');
+        expect(hook).toContain('reason: "default_resolver_blocked_manual_selection"');
     });
 
     it("scheduler bumps an epoch to ignore stale background completions", () => {
