@@ -9,7 +9,10 @@ import {
     lifecycleBuilderFromDepartmentMetadata,
     lifecycleWorkspaceTileDescription,
 } from "@/lib/lifecycle/lifecycleBuilderConfig";
-import { ENROLLMENT_STAGE_QUEUE_KEYS } from "@/lib/lifecycle/enrollmentProcessStageQueueKeys";
+import {
+    ENROLLMENT_STAGE_QUEUE_KEYS,
+    operatorWorkUnitKeyForPipelineQueueKey,
+} from "@/lib/lifecycle/enrollmentProcessStageQueueKeys";
 import { isLifecycleStageWorkUnitKey } from "@/lib/lifecycle/lifecycleStageWorkUnit";
 import { operatorWorkUnitHrefFromKey } from "@/lib/admin/canonicalOperatorRoutes";
 import {
@@ -24,7 +27,6 @@ import {
 import {
     deriveOperationalViewsFromQueueDefinition,
 } from "@/lib/adminV2/runtime/perspective/mergeOperationalViewMetadata";
-import { buildOperationalViewPreviewRuntimeHref } from "@/lib/adminV2/runtime/perspective/mergeOperationalViewMetadata";
 import { resolveOperationalViewsForWorkUnit } from "@/lib/adminV2/runtime/perspective/resolveStageOperationalViews";
 import type {
     OperationalSurfaceStory,
@@ -183,16 +185,15 @@ function workViewNavEntriesForDepartment(args: {
                 || a.queue_key.localeCompare(b.queue_key),
         )
         .map((row) => {
-            const href =
-                buildOperationalViewPreviewRuntimeHref({
-                    departmentId: args.departmentId,
-                    workUnitId: targetWu.id,
-                    queueKey: row.queue_key,
-                }) ?? operatorWorkUnitHrefFromKey(platformKey);
+            // Phase 2 route canonicalization: each work-view lane resolves to its own operator
+            // work-unit slug (`/workspace/work-unit/:slug`), matching the builder/pipeline nav path.
+            // The previous dept/uuid preview href routed through `/adminV2`→`/admin` and produced
+            // duplicate dept-route RSC loads per click (plus an unrouted `/workspace/dept/…` 404).
+            const laneKey = operatorWorkUnitKeyForPipelineQueueKey(row.queue_key) ?? platformKey;
             return {
                 label: row.label?.trim() || row.queue_key,
-                platformKey,
-                href,
+                platformKey: laneKey,
+                href: operatorWorkUnitHrefFromKey(laneKey),
             };
         });
 }

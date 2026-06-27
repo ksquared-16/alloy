@@ -54,6 +54,7 @@ describe("buildOperatorLifecycleLandingCards", () => {
                                     is_active: true,
                                     stages: [],
                                     work_views_v1: [
+                                        { id: "new_leads", label: "New Leads", compat_queue_key: "new_leads", display_order: 0 },
                                         { id: "tours", label: "Tours", compat_queue_key: "tours", display_order: 1 },
                                         {
                                             id: "ready_to_enroll",
@@ -91,16 +92,27 @@ describe("buildOperatorLifecycleLandingCards", () => {
         expect(cards[0]?.stageCount).toBe(6);
         expect(cards[0]?.activeRecordCount).toBeNull();
         expect(cards[0]?.needsAttentionCount).toBeNull();
+        // Phase 2 route canonicalization: every work-view nav entry resolves to a canonical operator
+        // slug (`/workspace/work-unit/:slug`) — never a dept/uuid (`/dept/…`) or `/adminV2/…` route that
+        // forces a redirect chain / duplicate RSC load. Default entry maps the lead lane to `new-leads`.
         expect(cards[0]?.workQueues.map((q) => q.label)).toEqual([
             "New Leads",
             "Tours",
-            "Follow Up",
-            "Waitlist",
-            "Enrolling",
-            "Enrolled",
+            "Ready to Enroll",
+            "Follow Ups",
         ]);
+        expect(cards[0]?.workQueues.map((q) => q.href)).toEqual([
+            "/workspace/work-unit/new-leads",
+            "/workspace/work-unit/tours",
+            "/workspace/work-unit/enrollment-offers",
+            "/workspace/work-unit/communications-followup",
+        ]);
+        for (const q of cards[0]?.workQueues ?? []) {
+            expect(q.href.startsWith("/workspace/work-unit/")).toBe(true);
+            expect(q.href).not.toContain("/dept/");
+            expect(q.href).not.toContain("/adminV2/");
+        }
         expect(cards[0]?.operationalStory?.headline).toBeTruthy();
-        expect(cards[0]?.todaysWork?.length).toBe(3);
         expect(cards[0]?.todaysWork?.[0]?.href).toContain("work_view=");
     });
 

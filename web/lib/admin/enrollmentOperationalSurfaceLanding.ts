@@ -2,10 +2,7 @@
  * Enrollment-only Operational Surface data for Workspace processNavTile cover page.
  */
 
-import {
-    normalizeOperatorPathname,
-    operatorWorkUnitHrefFromKey,
-} from "@/lib/admin/canonicalOperatorRoutes";
+import { operatorWorkUnitHrefFromKey } from "@/lib/admin/canonicalOperatorRoutes";
 import { parseOperatorWorkUnitEntryHref } from "@/lib/admin/operatorWorkUnitEntryWarm";
 import type {
     OperatorLifecycleLandingCard,
@@ -371,6 +368,20 @@ function resolveWorkViewHref(args: {
     entryHref: string;
 }): string {
     void args.entryHref;
+    // Canonical operator route (Phase 2 route canonicalization): always emit the routable slug
+    // surface `/workspace/work-unit/:slug?work_view=…&queue=…`. The previous dept/uuid preview href,
+    // once run through `normalizeOperatorPathname`, became `/workspace/dept/…` — a shape that has NO
+    // `next.config` rewrite and 404s, then forces a retry on the compat route (duplicate RSC loads).
+    if (args.workUnit.key?.trim()) {
+        return buildCanonicalOperationalWorkViewHref({
+            workUnitPlatformKey: args.workUnit.key,
+            workViewId: args.workViewId,
+            queueKey: args.queueKey,
+        });
+    }
+
+    // No platform key to build a slug — fall back to the routable compat dept route under
+    // `/admin/workspace` (served by the `/admin/:path*` rewrite). Never normalize to `/workspace/dept/…`.
     if (args.workUnit.id) {
         const fromPreview =
             buildOperationalViewPreviewRuntimeHref({
@@ -380,7 +391,7 @@ function resolveWorkViewHref(args: {
                 queueKey: args.queueKey,
             }) ?? null;
         if (fromPreview) {
-            return normalizeOperatorPathname(fromPreview);
+            return fromPreview.replace(/^\/adminV2\//, "/admin/");
         }
     }
 
