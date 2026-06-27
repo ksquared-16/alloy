@@ -14,7 +14,7 @@ export const SYSTEM5_CARD_ICON: Partial<Record<FocusPanelCardKey, string>> = {
     readiness_kpi: "ShieldCheck",
     health: "HeartPulse",
     tour_summary: "Calendar",
-    household: "Users",
+    household: "Home",
     children: "Baby",
     communications: "MessageSquare",
     documents: "FileText",

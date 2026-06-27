@@ -11,10 +11,12 @@ import {
     type HouseholdEvidenceGroupKey,
 } from "@/lib/adminV2/runtime/focusPanel/household/buildHouseholdCardEvidence";
 import type { FocusPanelCardModel } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardModel";
+import type { OperationalContext } from "@/lib/adminV2/runtime/operationalContext/types";
 
 type Props = {
     model: FocusPanelCardModel;
-    record: Record<string, unknown>;
+    /** Forward-facing card boundary — Household observes this, never the drawer VM. */
+    context: OperationalContext;
     receded?: boolean;
 };
 
@@ -31,25 +33,33 @@ const COLLAPSED_PREVIEW_GROUPS = 4;
  * @see docs/platform/operator/card-archetypes.md (Identity)
  * @see docs/platform/operator/card-interaction-expansion-doctrine.md (System 5B — Expand)
  */
-export default function HouseholdCard({ model, record, receded = false }: Props) {
+export default function HouseholdCard({ model, context, receded = false }: Props) {
     const evidence = useMemo(
-        () => buildHouseholdCardEvidence(record, model.title),
-        [record, model.title],
+        () => buildHouseholdCardEvidence(context),
+        [context],
     );
+
+    // Permission outcome is resolved upstream and observed here — the card never
+    // authorizes independently (no card-level permission fetch).
+    const maskedChannels = context.capabilities.maskedChannels;
+    // Empty: nothing composed yet (no primary, no groups, no children).
+    const isEmpty =
+        !evidence.primaryContact && evidence.groups.length === 0 && evidence.childCount === 0;
 
     const [expanded, setExpanded] = useState(false);
     const [focusedGroup, setFocusedGroup] = useState<HouseholdEvidenceGroupKey | null>(null);
 
-    const focused = focusedGroup
+    const focused = !isEmpty && focusedGroup
         ? evidence.groups.find((g) => g.key === focusedGroup) ?? null
         : null;
 
-    const density = expanded || focused ? "expanded" : "compact";
+    const density = !isEmpty && (expanded || focused) ? "expanded" : "compact";
     const hasWarning = Boolean(evidence.missingCriticalWarning);
     const statusTone = hasWarning ? "at-risk" : "neutral";
     const statusChip = hasWarning ? "Needs contact" : null;
 
     const footerAction =
+        isEmpty ? null :
         focused ? (
             <button
                 type="button"
@@ -80,15 +90,19 @@ export default function HouseholdCard({ model, record, receded = false }: Props)
         ) : null;
 
     let body: React.ReactNode;
-    let perspective: "collapsed" | "expanded" | "focused";
-    if (focused) {
+    let perspective: "collapsed" | "expanded" | "focused" | "empty";
+    if (isEmpty) {
+        perspective = "empty";
+        body = <EmptyBody />;
+    } else if (focused) {
         perspective = "focused";
-        body = <FocusedGroupBody group={focused} />;
+        body = <FocusedGroupBody group={focused} masked={maskedChannels} />;
     } else if (expanded) {
         perspective = "expanded";
         body = (
             <ExpandedBody
                 groups={evidence.groups}
+                masked={maskedChannels}
                 onFocusGroup={(key) => setFocusedGroup(key)}
             />
         );
@@ -97,6 +111,7 @@ export default function HouseholdCard({ model, record, receded = false }: Props)
         body = (
             <CollapsedBody
                 evidence={evidence}
+                masked={maskedChannels}
                 onPreviewGroup={(key) => {
                     setExpanded(true);
                     setFocusedGroup(key);
@@ -134,15 +149,30 @@ export default function HouseholdCard({ model, record, receded = false }: Props)
     );
 }
 
+function EmptyBody() {
+    return (
+        <div className="alloy-os-household__summary" data-household-empty="true">
+            <p className="alloy-os-household__row-detail">No household linked to this record yet</p>
+        </div>
+    );
+}
+
 function CollapsedBody({
     evidence,
+    masked,
     onPreviewGroup,
 }: {
     evidence: ReturnType<typeof buildHouseholdCardEvidence>;
+    masked: boolean;
     onPreviewGroup: (key: HouseholdEvidenceGroupKey) => void;
 }) {
     const allStats: { key: HouseholdEvidenceGroupKey; label: string; count: number }[] = [
         { key: "children", label: "Children", count: evidence.childCount },
+        {
+            key: "other_parent_guardian",
+            label: "Other parents",
+            count: evidence.otherParentGuardianCount,
+        },
         {
             key: "household_members",
             label: "Additional contacts",
@@ -164,10 +194,14 @@ function CollapsedBody({
     return (
         <div className="alloy-os-household__summary">
             {evidence.primaryContact ? (
-                <ContactLine contact={evidence.primaryContact} channelFallback={{
-                    phone: evidence.primaryPhone,
-                    email: evidence.primaryEmail,
-                }} />
+                <ContactLine
+                    contact={evidence.primaryContact}
+                    masked={masked}
+                    channelFallback={{
+                        phone: evidence.primaryPhone,
+                        email: evidence.primaryEmail,
+                    }}
+                />
             ) : (
                 <p className="alloy-os-household__missing" data-household-missing="primary">
                     Primary contact needed
@@ -210,11 +244,21 @@ function CollapsedBody({
     );
 }
 
+function AddressLine({ address }: { address: string }) {
+    return (
+        <p className="alloy-os-household__address" data-household-address="true">
+            {address}
+        </p>
+    );
+}
+
 function ExpandedBody({
     groups,
+    masked,
     onFocusGroup,
 }: {
     groups: HouseholdEvidenceGroup[];
+    masked: boolean;
     onFocusGroup: (key: HouseholdEvidenceGroupKey) => void;
 }) {
     return (
@@ -234,14 +278,20 @@ function ExpandedBody({
                         <span className="alloy-os-household__group-title">{group.title}</span>
                         <span className="alloy-os-household__group-count">{group.count} →</span>
                     </button>
-                    <GroupRows group={group} limit={COLLAPSED_PREVIEW_GROUPS} />
+                    <GroupRows group={group} masked={masked} limit={COLLAPSED_PREVIEW_GROUPS} />
                 </section>
             ))}
         </div>
     );
 }
 
-function FocusedGroupBody({ group }: { group: HouseholdEvidenceGroup }) {
+function FocusedGroupBody({
+    group,
+    masked,
+}: {
+    group: HouseholdEvidenceGroup;
+    masked: boolean;
+}) {
     return (
         <div
             className="alloy-os-household__focused"
@@ -251,15 +301,20 @@ function FocusedGroupBody({ group }: { group: HouseholdEvidenceGroup }) {
                 <span className="alloy-os-household__group-title">{group.title}</span>
                 <span className="alloy-os-household__group-count">{group.count}</span>
             </div>
-            <GroupRows group={group} />
+            <GroupRows group={group} masked={masked} />
         </div>
     );
 }
 
-function GroupRows({ group, limit }: { group: HouseholdEvidenceGroup; limit?: number }) {
+function GroupRows({ group, masked, limit }: { group: HouseholdEvidenceGroup; masked: boolean; limit?: number }) {
+    if (group.key === "address" && group.addressLine) {
+        return <AddressLine address={group.addressLine} />;
+    }
+
     if (group.children.length > 0) {
         const visible = limit ? group.children.slice(0, limit) : group.children;
         const overflow = group.children.length - visible.length;
+        // Children are belonging-only: name (+ count). No age/program/room/status.
         return (
             <div className="alloy-os-household__rows">
                 {visible.map((child) => (
@@ -269,13 +324,7 @@ function GroupRows({ group, limit }: { group: HouseholdEvidenceGroup; limit?: nu
                         </span>
                         <span className="alloy-os-household__row-main min-w-0">
                             <span className="alloy-os-household__row-name">{child.name}</span>
-                            {child.detail ? (
-                                <span className="alloy-os-household__row-detail">{child.detail}</span>
-                            ) : null}
                         </span>
-                        {child.status ? (
-                            <span className="alloy-os-household__row-status">{child.status}</span>
-                        ) : null}
                     </div>
                 ))}
                 {overflow > 0 ? (
@@ -290,7 +339,7 @@ function GroupRows({ group, limit }: { group: HouseholdEvidenceGroup; limit?: nu
     return (
         <div className="alloy-os-household__rows">
             {visible.map((contact) => (
-                <ContactRow key={contact.personId || contact.name} contact={contact} />
+                <ContactRow key={contact.personId || contact.name} contact={contact} masked={masked} />
             ))}
             {overflow > 0 ? (
                 <div className="alloy-os-household__overflow">+{overflow} more</div>
@@ -299,7 +348,7 @@ function GroupRows({ group, limit }: { group: HouseholdEvidenceGroup; limit?: nu
     );
 }
 
-function ContactRow({ contact }: { contact: HouseholdEvidenceContact }) {
+function ContactRow({ contact, masked }: { contact: HouseholdEvidenceContact; masked: boolean }) {
     const channel = contact.phone ?? contact.email;
     return (
         <div className="alloy-os-household__row" data-household-contact={contact.personId || undefined}>
@@ -308,7 +357,11 @@ function ContactRow({ contact }: { contact: HouseholdEvidenceContact }) {
             </span>
             <span className="alloy-os-household__row-main min-w-0">
                 <span className="alloy-os-household__row-name">{contact.name}</span>
-                {channel ? (
+                {masked ? (
+                    <span className="alloy-os-household__row-detail alloy-os-household__row-detail--locked">
+                        Contact details restricted
+                    </span>
+                ) : channel ? (
                     <span className="alloy-os-household__row-detail">{channel}</span>
                 ) : null}
             </span>
@@ -328,9 +381,11 @@ function ContactRow({ contact }: { contact: HouseholdEvidenceContact }) {
 
 function ContactLine({
     contact,
+    masked,
     channelFallback,
 }: {
     contact: HouseholdEvidenceContact;
+    masked: boolean;
     channelFallback: { phone: string | null; email: string | null };
 }) {
     const phone = contact.phone ?? channelFallback.phone;
@@ -348,7 +403,11 @@ function ContactLine({
                         Primary
                     </span>
                 </span>
-                {channel ? (
+                {masked ? (
+                    <span className="alloy-os-household__row-detail alloy-os-household__row-detail--locked">
+                        Contact details restricted
+                    </span>
+                ) : channel ? (
                     <span className="alloy-os-household__row-detail">{channel}</span>
                 ) : (
                     <span className="alloy-os-household__row-detail alloy-os-household__row-detail--missing">

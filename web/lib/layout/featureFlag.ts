@@ -258,22 +258,6 @@ export function isFocusPanelLayoutRuntimeEnabledClient(): boolean {
 }
 
 /**
- * Household Card reference evaluation surface (Use Case 1).
- *
- * When ON, the Opportunity Focus Panel **Summary** grid is replaced with a
- * household-only reference composition so the new operational Household card can
- * be evaluated without unrelated demo/placeholder cards. The drawer/Focus Panel
- * shell, header, mode switch, and BOS/Actions chrome are untouched (they are not
- * grid cards). This does NOT delete any canonical card — it is a narrow,
- * reversible composition override for evaluation only.
- *
- * Default: OFF. Opt-in via `NEXT_PUBLIC_FOCUS_PANEL_HOUSEHOLD_REFERENCE=1`.
- */
-export function isFocusPanelHouseholdReferenceOnlyEnabledClient(): boolean {
-    return readFlag(process.env.NEXT_PUBLIC_FOCUS_PANEL_HOUSEHOLD_REFERENCE, false);
-}
-
-/**
  * Non-production default for drawer summary strip boundary.
  * Production stays off until explicitly enabled; staging/preview/dev default on.
  */

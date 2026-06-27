@@ -11,7 +11,6 @@ type Props = {
     mode: FocusPanelMode;
     displayVm: OpportunityDrawerViewModel;
     drawerId: string;
-    opportunitySingular: string;
     record: Record<string, unknown>;
     drawerTitle: string;
     statusLabel: string | null;
@@ -24,7 +23,6 @@ export default function OpportunityFocusPanelModeBody({
     mode,
     displayVm,
     drawerId,
-    opportunitySingular,
     record,
     drawerTitle,
     statusLabel,
@@ -41,7 +39,6 @@ export default function OpportunityFocusPanelModeBody({
             drawerId={drawerId}
             record={record}
             title={drawerTitle}
-            opportunitySingular={opportunitySingular}
             perspective={perspective}
             statusLabel={statusLabel}
             canMutate={canMutate}

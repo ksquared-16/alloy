@@ -769,22 +769,6 @@ export const SUMMARY_GRID: FocusPanelCardGridSpec = {
     ],
 };
 
-/**
- * Household Card reference evaluation grid (Use Case 1).
- *
- * Suppresses unrelated Summary cards so the operational Household card is the
- * single visible proof-of-concept. Gated by
- * `isFocusPanelHouseholdReferenceOnlyEnabledClient()` — never the default
- * composition. Household renders full-width and expanded-capable.
- */
-export const HOUSEHOLD_REFERENCE_SUMMARY_GRID: FocusPanelCardGridSpec = {
-    rows: [
-        {
-            cells: [{ key: "household", span: "row", density: "expanded", tier: "reference" }],
-        },
-    ],
-};
-
 const WORK_GRID_SPLIT: FocusPanelCardGridSpec = {
     rows: [
         { cells: [{ key: "attention", span: "row", density: "compact", tier: "attention" }] },

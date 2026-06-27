@@ -83,6 +83,8 @@ The next implementation priority is **not "more cards."** It is the editing/inte
 
 ### First editable card: **Household Card**
 
+> **Frozen design:** [`household-reference-card.md`](./household-reference-card.md) (Identity archetype reference — all states/densities, interaction + performance models). Cards build against the [`operational-context-boundary.md`](./operational-context-boundary.md) spine (Queue → Operational Context → Focus Panel → Cards), not "drawer".
+
 Proves the hardest drawer migration path:
 
 - primary contact

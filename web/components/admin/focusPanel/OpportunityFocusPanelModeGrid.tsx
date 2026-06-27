@@ -5,11 +5,8 @@ import { useMemo } from "react";
 import FocusPanelCardGrid from "@/components/admin/focusPanel/FocusPanelCardGrid";
 import FocusPanelCardRenderer from "@/components/admin/focusPanel/FocusPanelCardRenderer";
 import OpportunityFocusPanelEmbeddedWorkspace from "@/components/admin/focusPanel/OpportunityFocusPanelEmbeddedWorkspace";
-import {
-    deriveOpportunityFocusPanelPresentation,
-    HOUSEHOLD_REFERENCE_SUMMARY_GRID,
-} from "@/lib/adminV2/runtime/focusPanel/deriveOpportunityFocusPanelCards";
-import { isFocusPanelHouseholdReferenceOnlyEnabledClient } from "@/lib/layout/featureFlag";
+import { deriveOpportunityFocusPanelPresentation } from "@/lib/adminV2/runtime/focusPanel/deriveOpportunityFocusPanelCards";
+import { buildOperationalContext } from "@/lib/adminV2/runtime/operationalContext/buildOperationalContext";
 import {
     deriveFocusPanelGridFromLayoutDoc,
     deriveFocusPanelInstanceMap,
@@ -34,7 +31,6 @@ type Props = {
     drawerId: string;
     record: Record<string, unknown>;
     title: string;
-    opportunitySingular: string;
     perspective: RuntimePerspective | null;
     statusLabel: string | null;
     canMutate: boolean;
@@ -49,7 +45,6 @@ export default function OpportunityFocusPanelModeGrid({
     drawerId,
     record,
     title,
-    opportunitySingular,
     perspective,
     statusLabel,
     canMutate,
@@ -69,15 +64,11 @@ export default function OpportunityFocusPanelModeGrid({
         [mode, displayVm, record, title, perspective, statusLabel],
     );
 
-    // Household Card reference evaluation surface (Use Case 1): when the narrow
-    // flag is on, Summary shows ONLY the operational Household card so it can be
-    // evaluated cleanly. Bypasses the configurable LayoutDoc path entirely.
-    const householdReferenceOnly =
-        mode === "summary" && isFocusPanelHouseholdReferenceOnlyEnabledClient();
-
     // Summary is the configurable surface: read the org's PUBLISHED LayoutDoc (or
     // the code-built default — visually identical) and resolve per-instance config.
-    const isSummary = mode === "summary" && !householdReferenceOnly;
+    // The Household card is part of this canonical composition (no flag, no
+    // reference-only override).
+    const isSummary = mode === "summary";
     const publishedDoc = usePublishedFocusPanelSummaryDoc(isSummary);
     const activeDoc = isSummary ? publishedDoc ?? FOCUS_PANEL_SUMMARY_DEFAULT_DOC : null;
     const instanceMap = useMemo(
@@ -85,11 +76,26 @@ export default function OpportunityFocusPanelModeGrid({
         [activeDoc],
     );
     const grid = useMemo(() => {
-        if (householdReferenceOnly) return HOUSEHOLD_REFERENCE_SUMMARY_GRID;
         if (!isSummary || !activeDoc) return defaultGrid;
         const derived = deriveFocusPanelGridFromLayoutDoc(activeDoc);
         return derived.rows.length > 0 ? derived : defaultGrid;
-    }, [householdReferenceOnly, isSummary, activeDoc, defaultGrid]);
+    }, [isSummary, activeDoc, defaultGrid]);
+
+    // Adapter seam: composed subject payload → Operational Context. Cards consume
+    // this boundary, never the drawer VM directly. Built once; observed by cards.
+    const operationalContext = useMemo(
+        () =>
+            buildOperationalContext({
+                subjectId: drawerId,
+                title,
+                subjectVm: displayVm,
+                truth: record,
+                perspective,
+                statusLabel,
+                canMutate,
+            }),
+        [drawerId, title, displayVm, record, perspective, statusLabel, canMutate],
+    );
 
     const workflowActive = Boolean(
         displayVm.workspace.work_intent_runtime?.state === "open" ||
@@ -161,19 +167,15 @@ export default function OpportunityFocusPanelModeGrid({
                     return (
                         <FocusPanelCardRenderer
                             model={model}
-                            displayVm={displayVm}
-                            drawerId={drawerId}
-                            record={record}
-                            opportunitySingular={opportunitySingular}
-                            canMutate={canMutate}
+                            context={operationalContext}
                             focusPanelMode={mode}
-                            onSelectTab={onSelectTab}
                             onPrimaryAction={(key) => {
                                 if (key === "primary_next_action" && displayVm.actions.header_menu[0]) {
                                     onHeaderAction?.(displayVm.actions.header_menu[0]);
                                 }
                             }}
                             receded={receded}
+                            compat={{ subjectVm: displayVm, onSelectTab }}
                         />
                     );
                 }}

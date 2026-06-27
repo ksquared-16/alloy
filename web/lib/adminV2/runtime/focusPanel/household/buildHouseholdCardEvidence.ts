@@ -5,33 +5,37 @@
  * Archetype: Identity.
  *
  * ARCHITECTURE LAW: this card owns no truth and never fetches. It assembles an
- * operational answer by *observing* the already-loaded Opportunity Focus Panel
- * record (`OpportunityDrawerViewModel.above_fold.record`). Every projection here
- * is pure over `record` — `resolveOpportunityDrawerHouseholdContacts`,
- * `mapRawInquiryChildrenToDrawerRows`, and the flattened `person.*` paint fields.
+ * operational answer by *observing* the `OperationalContext` (the forward-facing
+ * card boundary) — specifically `context.truth`, the composed subject record. The
+ * card never consumes drawer terminology. Contact rows are assembled from raw
+ * `_opportunity_persons` / `_customer_persons` (via `buildOpportunityFamilyContactRows`)
+ * so parent/guardian adults are never hidden by drawer projection filters.
  * Collapsed → Expanded → Focused Evidence is local UI perspective state only;
  * none of it triggers I/O.
  *
- * @see docs/platform/operator/operational-grammar.md
- * @see docs/platform/operator/card-language.md
- * @see docs/platform/operator/card-archetypes.md
- * @see docs/platform/operator/card-interaction-expansion-doctrine.md (System 5B — Expand)
+ * @see docs/platform/operator/operational-context-boundary.md
+ * @see docs/platform/operator/household-reference-card.md
  */
 
+import {
+    buildOpportunityFamilyContactRows,
+    resolveLeadSummaryPrimaryPersonId,
+} from "@/lib/admin/drawer/opportunityFamilyContactsOrdering";
 import { mapRawInquiryChildrenToDrawerRows } from "@/lib/admin/drawer/inquiryChildrenDrawerRows";
 import {
     formatDrawerHouseholdContactRoleLabel,
-    resolveOpportunityDrawerHouseholdContacts,
     type DrawerHouseholdContactRow,
 } from "@/lib/layout/runtime/resolveDrawerHouseholdContacts";
-import type { ProofRuntimeRecord } from "@/lib/layout/runtime/proofRecordContext";
 import {
     PERSON_DRAWER_HOUSEHOLD_BILLING_ROLES,
     PERSON_DRAWER_HOUSEHOLD_EMERGENCY_ROLES,
+    PERSON_DRAWER_HOUSEHOLD_PARENT_GUARDIAN_ROLES,
     PERSON_DRAWER_HOUSEHOLD_PICKUP_ROLES,
     normPersonDrawerHouseholdRole,
 } from "@/lib/admin/person/personDrawerHouseholdRoles";
+import { personDrawerHouseholdInitials } from "@/lib/admin/person/personDrawerHouseholdDisplay";
 import { resolveLeadDrawerHeaderContext } from "@/lib/layout/runtime/resolveLeadDrawerHeaderContext";
+import type { OperationalContext } from "@/lib/adminV2/runtime/operationalContext/types";
 
 /** One contact row, normalized for card presentation (no person-level fetch). */
 export type HouseholdEvidenceContact = {
@@ -44,31 +48,37 @@ export type HouseholdEvidenceContact = {
     initials: string;
 };
 
-/** One child row, projected from `_inquiry_children` (already loaded). */
+/**
+ * One child row inside Household — BELONGING-ONLY. Name only (count is the group
+ * count). Household never carries child operational truth (age, program, room,
+ * schedule, enrollment status) — that belongs to the Children card.
+ */
 export type HouseholdEvidenceChild = {
     id: string;
     name: string;
-    detail: string | null;
-    status: string | null;
 };
 
 /** Stable focusable evidence-group identifiers. */
 export type HouseholdEvidenceGroupKey =
     | "primary_contact"
-    | "children"
+    | "other_parent_guardian"
     | "household_members"
     | "emergency_contacts"
     | "authorized_pickups"
+    | "children"
+    | "address"
     | "billing_contact";
 
 export type HouseholdEvidenceGroup = {
     key: HouseholdEvidenceGroupKey;
     title: string;
-    /** Contact-shaped rows (adults). Empty for child groups. */
+    /** Contact-shaped rows (adults). Empty for child/address groups. */
     contacts: HouseholdEvidenceContact[];
     /** Child-shaped rows. Empty for adult groups. */
     children: HouseholdEvidenceChild[];
     count: number;
+    /** Address-only group: formatted line when key === "address". */
+    addressLine?: string | null;
 };
 
 export type HouseholdCardEvidence = {
@@ -81,7 +91,10 @@ export type HouseholdCardEvidence = {
     primaryEmail: string | null;
     /** Preferred contact method, only when present in the loaded record (else null → documented gap). */
     preferredContactMethod: string | null;
+    /** Household location (reachability) — single line, only when real data is present (never faked). */
+    address: string | null;
     childCount: number;
+    otherParentGuardianCount: number;
     additionalContactCount: number;
     emergencyContactCount: number;
     authorizedPickupCount: number;
@@ -118,53 +131,126 @@ function toEvidenceContact(row: DrawerHouseholdContactRow): HouseholdEvidenceCon
     };
 }
 
-function classifyRole(roleType: string | null): "emergency" | "pickup" | "billing" | "guardian" {
+type ContactBucket = "other_parent_guardian" | "additional" | "emergency" | "pickup" | "billing";
+
+/**
+ * Classify a non-primary adult into an evidence bucket.
+ * Parent/guardian roles surface in "Other Parent / Guardian" — never hidden because
+ * a primary contact is already resolved (the drawer projection filter excludes
+ * role=parent when primary exists; Household reads raw family rows instead).
+ */
+function classifyContactBucket(roleType: string | null): ContactBucket {
     const role = normPersonDrawerHouseholdRole(roleType);
     if (PERSON_DRAWER_HOUSEHOLD_EMERGENCY_ROLES.has(role)) return "emergency";
     if (PERSON_DRAWER_HOUSEHOLD_PICKUP_ROLES.has(role)) return "pickup";
     if (PERSON_DRAWER_HOUSEHOLD_BILLING_ROLES.has(role)) return "billing";
-    return "guardian";
-}
-
-function childDetail(row: ReturnType<typeof mapRawInquiryChildrenToDrawerRows>[number]): string | null {
-    const parts: string[] = [];
-    const age = trimOrNull(row.age);
-    if (age) parts.push(/\D/.test(age) ? age : `Age ${age}`);
-    const program = trimOrNull(row.desired_program_label) ?? trimOrNull(row.desired_program_type);
-    if (program) parts.push(program);
-    return parts.length > 0 ? parts.join(" · ") : null;
+    if (PERSON_DRAWER_HOUSEHOLD_PARENT_GUARDIAN_ROLES.has(role)) {
+        // primary_contact / primary roles on non-primary persons still land here
+        // only when they aren't the resolved primary (excluded by person_id upstream).
+        if (role === "primary_contact" || role === "primary") return "other_parent_guardian";
+        return "other_parent_guardian";
+    }
+    return "additional";
 }
 
 /**
- * Assemble the Household operational answer from the loaded opportunity record.
- * Pure projection — safe to call inside render/useMemo; performs no I/O.
+ * Household location line (reachability facet). Composed only from address fields
+ * already present on the observed record — returns null when unavailable.
  */
-export function buildHouseholdCardEvidence(
+function buildAddressLine(record: Record<string, unknown>): string | null {
+    const pick = (...keys: string[]): string | null => {
+        for (const key of keys) {
+            const value = trimOrNull(record[key]);
+            if (value) return value;
+        }
+        return null;
+    };
+    const line1 = pick("person.primary_address_line1", "person.address_line1");
+    const city = pick("person.primary_address_city", "person.city");
+    const state = pick("person.primary_address_state", "person.state");
+    const postal = pick("person.primary_address_postal_code", "person.postal_code");
+
+    const cityState = [city, state].filter(Boolean).join(", ");
+    const tail = [cityState || null, postal].filter(Boolean).join(" ");
+    const parts = [line1, tail || null].filter(Boolean);
+    return parts.length > 0 ? parts.join(" · ") : null;
+}
+
+function buildPrimaryContact(
     record: Record<string, unknown>,
-    fallbackTitle?: string,
-): HouseholdCardEvidence {
+    primaryPersonId: string | null,
+): HouseholdEvidenceContact | null {
+    const familyRows = buildOpportunityFamilyContactRows(record);
+    const familyPrimary = primaryPersonId
+        ? familyRows.find((r) => r.person_id === primaryPersonId)
+        : null;
+
+    const name =
+        trimOrNull(record["person.primary_contact_name"]) ??
+        trimOrNull(familyPrimary?.name) ??
+        null;
+    if (!name) return null;
+
+    const phone =
+        trimOrNull(record["person.primary_phone"]) ??
+        trimOrNull(familyPrimary?.phone) ??
+        trimOrNull(record["person.secondary_phone"]);
+    const email =
+        trimOrNull(record["person.primary_email"]) ??
+        trimOrNull(familyPrimary?.email) ??
+        trimOrNull(record["person.secondary_email"]);
+
+    return {
+        personId: primaryPersonId ?? "primary",
+        name,
+        roleLabel: "Primary",
+        isPrimary: true,
+        phone,
+        email,
+        initials: personDrawerHouseholdInitials(name),
+    };
+}
+
+/**
+ * Assemble the Household operational answer by observing the Operational Context.
+ * Pure projection over `context.truth` — safe inside render/useMemo; no I/O.
+ */
+export function buildHouseholdCardEvidence(context: OperationalContext): HouseholdCardEvidence {
+    const record = context.truth;
     const header = resolveLeadDrawerHeaderContext(record);
     const householdLabel =
-        trimOrNull(header.householdLabel) ?? trimOrNull(fallbackTitle) ?? "Household";
+        trimOrNull(header.householdLabel) ?? trimOrNull(context.subject.label) ?? "Household";
 
-    // Observe the already-loaded household projection (no fetch). Pull the full
-    // list so counts/groups are complete; presentation slices happen in the card.
-    const projection = resolveOpportunityDrawerHouseholdContacts(record as ProofRuntimeRecord, {
-        maxVisible: Number.MAX_SAFE_INTEGER,
-    });
-    const contacts = projection.contacts;
+    const primaryPersonId = resolveLeadSummaryPrimaryPersonId(record);
+    const primaryContact = buildPrimaryContact(record, primaryPersonId);
 
-    const primaryRow = contacts.find((c) => c.is_primary) ?? null;
-    const primaryContact = primaryRow ? toEvidenceContact(primaryRow) : null;
+    // Read ALL family rows — do NOT use resolveOpportunityDrawerHouseholdContacts
+    // which filters out role=parent when a primary is resolved.
+    const familyRows = buildOpportunityFamilyContactRows(record);
 
-    const nonPrimary = contacts.filter((c) => !c.is_primary);
+    const otherParentGuardianRows: HouseholdEvidenceContact[] = [];
+    const additionalRows: HouseholdEvidenceContact[] = [];
     const emergencyRows: HouseholdEvidenceContact[] = [];
     const pickupRows: HouseholdEvidenceContact[] = [];
     const billingRows: HouseholdEvidenceContact[] = [];
-    const guardianRows: HouseholdEvidenceContact[] = [];
-    for (const row of nonPrimary) {
-        const evidence = toEvidenceContact(row);
-        switch (classifyRole(row.role_type)) {
+
+    for (const row of familyRows) {
+        // Never duplicate the resolved primary person in any other group.
+        if (primaryPersonId && row.person_id === primaryPersonId) continue;
+
+        const drawerRow: DrawerHouseholdContactRow = {
+            person_id: row.person_id,
+            display_name: trimOrNull(row.name) ?? "Unnamed",
+            role_type: row.role_type,
+            role_label: formatDrawerHouseholdContactRoleLabel(row.role_type),
+            is_primary: false,
+            phone: trimOrNull(row.phone),
+            email: trimOrNull(row.email),
+            initials: personDrawerHouseholdInitials(trimOrNull(row.name) ?? "Unnamed"),
+        };
+        const evidence = toEvidenceContact(drawerRow);
+
+        switch (classifyContactBucket(row.role_type)) {
             case "emergency":
                 emergencyRows.push(evidence);
                 break;
@@ -174,36 +260,31 @@ export function buildHouseholdCardEvidence(
             case "billing":
                 billingRows.push(evidence);
                 break;
+            case "other_parent_guardian":
+                otherParentGuardianRows.push(evidence);
+                break;
             default:
-                guardianRows.push(evidence);
+                additionalRows.push(evidence);
                 break;
         }
     }
 
+    // Children are belonging-only: names + count. No age/program/room/schedule/status.
     const childRows = mapRawInquiryChildrenToDrawerRows(
         (record._inquiry_children as unknown[]) ?? [],
     ).map<HouseholdEvidenceChild>((row) => ({
         id: row.id || row.display_name || "child",
         name: trimOrNull(row.display_name) ?? trimOrNull(row.first_name) ?? "Child",
-        detail: childDetail(row),
-        status: trimOrNull(row.outcome_status_label) ?? trimOrNull(row.outcome_status_key),
     }));
 
-    const primaryPhone =
-        primaryContact?.phone ??
-        trimOrNull(record["person.primary_phone"]) ??
-        trimOrNull(record["person.secondary_phone"]);
-    const primaryEmail =
-        primaryContact?.email ??
-        trimOrNull(record["person.primary_email"]) ??
-        trimOrNull(record["person.secondary_email"]);
+    const primaryPhone = primaryContact?.phone ?? trimOrNull(record["person.primary_phone"]);
+    const primaryEmail = primaryContact?.email ?? trimOrNull(record["person.primary_email"]);
 
-    // Preferred contact method: only surfaced when the loaded record already
-    // carries it. There is no canonical preference field on the opportunity VM
-    // today (documented gap) — never invent one.
     const preferredContactMethod =
         trimOrNull(record["person.preferred_contact_method"]) ??
         trimOrNull(record["person.contact_preference"]);
+
+    const address = buildAddressLine(record);
 
     const groups: HouseholdEvidenceGroup[] = [];
     if (primaryContact) {
@@ -215,22 +296,22 @@ export function buildHouseholdCardEvidence(
             count: 1,
         });
     }
-    if (childRows.length > 0) {
+    if (otherParentGuardianRows.length > 0) {
         groups.push({
-            key: "children",
-            title: "Children",
-            contacts: [],
-            children: childRows,
-            count: childRows.length,
+            key: "other_parent_guardian",
+            title: "Other parent / guardian",
+            contacts: otherParentGuardianRows,
+            children: [],
+            count: otherParentGuardianRows.length,
         });
     }
-    if (guardianRows.length > 0) {
+    if (additionalRows.length > 0) {
         groups.push({
             key: "household_members",
             title: "Additional contacts",
-            contacts: guardianRows,
+            contacts: additionalRows,
             children: [],
-            count: guardianRows.length,
+            count: additionalRows.length,
         });
     }
     if (emergencyRows.length > 0) {
@@ -251,6 +332,25 @@ export function buildHouseholdCardEvidence(
             count: pickupRows.length,
         });
     }
+    if (childRows.length > 0) {
+        groups.push({
+            key: "children",
+            title: "Children",
+            contacts: [],
+            children: childRows,
+            count: childRows.length,
+        });
+    }
+    if (address) {
+        groups.push({
+            key: "address",
+            title: "Address",
+            contacts: [],
+            children: [],
+            count: 1,
+            addressLine: address,
+        });
+    }
     if (billingRows.length > 0) {
         groups.push({
             key: "billing_contact",
@@ -262,16 +362,12 @@ export function buildHouseholdCardEvidence(
     }
 
     const childCount = childRows.length;
-    const additionalContactCount = guardianRows.length;
+    const otherParentGuardianCount = otherParentGuardianRows.length;
+    const additionalContactCount = additionalRows.length;
     const emergencyContactCount = emergencyRows.length;
     const authorizedPickupCount = pickupRows.length;
 
-    const answerLine = buildAnswerLine({
-        primaryContact,
-        childCount,
-        additionalContactCount,
-        householdLabel,
-    });
+    const answerLine = buildAnswerLine({ primaryContact, childCount });
 
     const missingCriticalWarning =
         !primaryContact ? "No primary contact on file"
@@ -290,7 +386,9 @@ export function buildHouseholdCardEvidence(
         primaryPhone,
         primaryEmail,
         preferredContactMethod,
+        address,
         childCount,
+        otherParentGuardianCount,
         additionalContactCount,
         emergencyContactCount,
         authorizedPickupCount,
@@ -303,8 +401,6 @@ export function buildHouseholdCardEvidence(
 function buildAnswerLine(input: {
     primaryContact: HouseholdEvidenceContact | null;
     childCount: number;
-    additionalContactCount: number;
-    householdLabel: string;
 }): string {
     const { primaryContact, childCount } = input;
     if (!primaryContact) {

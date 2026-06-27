@@ -10,21 +10,41 @@ import OpportunityDrawerVmTabPanes from "@/components/admin/vmDrawer/Opportunity
 import { buildOpportunityVmLifecycleRailModel } from "@/lib/adminV2/viewModel/drawer/vmRuntime/buildOpportunityVmLifecycleRailModel";
 import type { FocusPanelCardKey, FocusPanelCardModel } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardModel";
 import type { FocusPanelMode } from "@/lib/adminV2/runtime/focusPanel/focusPanelMode";
+import type { OperationalContext } from "@/lib/adminV2/runtime/operationalContext/types";
 import { system5ArchetypeSuppressesFooterAction } from "@/lib/adminV2/runtime/focusPanel/system5CardArchetypes";
-import type { OpportunityDrawerViewModel } from "@/lib/adminV2/viewModel/drawer/types";
+import type { OperationalSubjectViewModel } from "@/lib/adminV2/viewModel/drawer/types";
 import type { DrawerTabKey } from "@/lib/entityPresentation";
+
+/**
+ * INTERNAL COMPATIBILITY ONLY — isolated drawer/VM drill dependencies for the four
+ * not-yet-migrated cards (`workflow_steps` / `timeline` / `documents` / `notes`).
+ * This is deliberately NOT part of the main card contract: pure cards (Household and
+ * every archetype-payload card) never read it. It is removed entirely once the drill
+ * cards are re-projected from `OperationalContext` (Phase D1).
+ *
+ * @see focus-panel-runtime-cutover-report.md
+ */
+export type FocusPanelCardCompat = {
+    /** Composed subject VM — consumed only by the lifecycle-rail + drawer-tab drill cards. */
+    subjectVm: OperationalSubjectViewModel;
+    /** Drawer-tab drill navigation — migrates out with the tab-pane cards. */
+    onSelectTab: (tab: DrawerTabKey) => void;
+};
 
 type Props = {
     model: FocusPanelCardModel;
-    displayVm: OpportunityDrawerViewModel;
-    drawerId: string;
-    record: Record<string, unknown>;
-    opportunitySingular: string;
-    canMutate: boolean;
+    /**
+     * Canonical card boundary. Subject identity (`context.subject.id`) and observed
+     * truth (`context.truth`) come from here — cards never take a separate `drawerId`
+     * or `record`. @see operational-context-boundary.md
+     */
+    context: OperationalContext;
+    /** Card composition mode (Summary / Work / Activity) — presentation, not subject-shaped. */
     focusPanelMode: FocusPanelMode;
-    onSelectTab: (tab: DrawerTabKey) => void;
     onPrimaryAction?: (key: FocusPanelCardKey) => void;
     receded?: boolean;
+    /** Internal compatibility wrapper — see {@link FocusPanelCardCompat}. Pure cards ignore it. */
+    compat: FocusPanelCardCompat;
 };
 
 function CardFooterAction({
@@ -53,27 +73,33 @@ function CardFooterAction({
 /** Renders one Universal Card by System 5A archetype — body is drill detail or structured payload. */
 export default function FocusPanelCardRenderer({
     model,
-    displayVm,
-    drawerId,
-    record,
-    opportunitySingular,
-    canMutate,
+    context,
     focusPanelMode,
-    onSelectTab,
     onPrimaryAction,
     receded = false,
+    compat,
 }: Props) {
     if (!model.visible) return null;
 
     // Household is the first operational reference card (Identity archetype). It
-    // owns its collapsed → expanded → focused-evidence perspective state locally
-    // and assembles its answer from the already-loaded record — no fetch on
-    // expand. It therefore bypasses the generic profile-payload body.
+    // observes the Operational Context (not the drawer VM), owns its collapsed →
+    // expanded → focused-evidence perspective state locally, and assembles its
+    // answer from `context.truth` — no fetch on expand. It therefore bypasses the
+    // generic profile-payload body. NOTE: pure cards read only `model` + `context`.
     if (model.key === "household") {
-        return <HouseholdCard model={model} record={record} receded={receded} />;
+        return <HouseholdCard model={model} context={context} receded={receded} />;
     }
 
-    const lifecycleRailModel = buildOpportunityVmLifecycleRailModel({ displayVm, drawerId });
+    // Subject identity + observed truth derive from the Operational Context. Only the
+    // not-yet-migrated drill cards below reach into the compat wrapper for the legacy
+    // lifecycle rail + drawer-tab panes (Phase D1).
+    const drawerId = context.subject.id;
+    const record = context.truth;
+
+    const lifecycleRailModel = buildOpportunityVmLifecycleRailModel({
+        displayVm: compat.subjectVm,
+        drawerId,
+    });
     const drillDownAllowed = model.density === "standard" || model.density === "expanded";
     const suppressFooter = system5ArchetypeSuppressesFooterAction(model.archetype);
     const isLauncher = model.archetype === "launcher";
@@ -99,7 +125,7 @@ export default function FocusPanelCardRenderer({
                         drawerId={drawerId}
                         drawerTab="activity"
                         record={record}
-                        onSelectTab={onSelectTab}
+                        onSelectTab={compat.onSelectTab}
                     />
                 );
             }
@@ -111,7 +137,7 @@ export default function FocusPanelCardRenderer({
                         drawerId={drawerId}
                         drawerTab="documents"
                         record={record}
-                        onSelectTab={onSelectTab}
+                        onSelectTab={compat.onSelectTab}
                     />
                 );
             }
@@ -123,7 +149,7 @@ export default function FocusPanelCardRenderer({
                         drawerId={drawerId}
                         drawerTab="notes"
                         record={record}
-                        onSelectTab={onSelectTab}
+                        onSelectTab={compat.onSelectTab}
                     />
                 );
             }
