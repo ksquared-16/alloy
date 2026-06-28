@@ -13,6 +13,7 @@ import { MetricSparkline } from "@/components/admin/metrics/MetricSparkline";
 import { MetricScorecard, type ScorecardMetric } from "@/components/admin/metrics/MetricScorecard";
 import { MetricHealthCard } from "@/components/admin/metrics/MetricHealthCard";
 import { MetricBreakdownCard, type MetricBreakdownSegment } from "@/components/admin/metrics/MetricBreakdownCard";
+import type { MetricCardDensity } from "@/components/admin/metrics/MetricCardShell";
 
 export type MetricVisualRendererProps = {
     placement: ResolvedMetricPlacement;
@@ -24,6 +25,12 @@ export type MetricVisualRendererProps = {
     scorecardMetrics?: ScorecardMetric[];
     /** Dimension segments for the breakdown (bar_chart) renderer. */
     breakdownSegments?: MetricBreakdownSegment[];
+    /**
+     * Card chrome density. Header / tile strips pass "compact" so the re-chromed
+     * cards stay light in the Workspace / Focus Panel context; dashboards keep the
+     * standard (premium) treatment. Presentation only.
+     */
+    density?: MetricCardDensity;
 };
 
 /**
@@ -47,6 +54,7 @@ export function MetricVisualRenderer({
     trendComparison,
     scorecardMetrics,
     breakdownSegments,
+    density = "standard",
 }: MetricVisualRendererProps) {
     const viz = placement.visualization;
     const label = (viz.display_config as { labelOverride?: string }).labelOverride ?? viz.label;
@@ -65,6 +73,7 @@ export function MetricVisualRenderer({
                     accent={accent}
                     fill={fill}
                     metrics={scorecardMetrics}
+                    density={density}
                 />
             );
         case "gauge":
@@ -77,6 +86,7 @@ export function MetricVisualRenderer({
                     loading={loading}
                     accent={accent}
                     fill={fill}
+                    density={density}
                 />
             );
         case "bar_chart":
@@ -88,6 +98,7 @@ export function MetricVisualRenderer({
                     loading={loading}
                     accent={accent}
                     fill={fill}
+                    density={density}
                 />
             );
         case "kpi_card":
@@ -99,6 +110,7 @@ export function MetricVisualRenderer({
                     loading={loading}
                     accent={accent}
                     fill={fill}
+                    density={density}
                 />
             );
         case "trend_card":
@@ -112,6 +124,7 @@ export function MetricVisualRenderer({
                     accent={accent}
                     fill={fill}
                     direction={trendComparison?.direction}
+                    density={density}
                 />
             );
         case "chip":
@@ -132,6 +145,7 @@ export function MetricVisualRenderer({
                     loading={loading}
                     accent={accent}
                     fill={fill}
+                    density={density}
                 />
             );
         case "line_chart":
@@ -152,6 +166,7 @@ export function MetricVisualRenderer({
                     loading={loading}
                     accent={accent}
                     fill={fill}
+                    density={density}
                 />
             );
     }

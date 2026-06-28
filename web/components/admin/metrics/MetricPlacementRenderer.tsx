@@ -101,6 +101,11 @@ export function MetricPlacementRenderer({
         : layout === "inline" ? "flex flex-wrap items-center gap-2"
         : "grid gap-2 sm:grid-cols-2 lg:grid-cols-3";
 
+    // Header / tile strips (inline, row) stay compact so the re-chromed cards keep a
+    // light footprint in the Workspace / Focus Panel chrome; dashboards (grid) get the
+    // standard treatment. Visual only — does not affect readiness/ownership.
+    const density = layout === "grid" ? "standard" : "compact";
+
     return (
         <div className={`${layoutClass} ${className}`} data-metric-placement-renderer={surface}>
             {items.map((item) => (
@@ -111,6 +116,7 @@ export function MetricPlacementRenderer({
                     loading={loading}
                     sparklinePoints={item.sparklinePoints}
                     trendComparison={item.comparison}
+                    density={density}
                 />
             ))}
         </div>

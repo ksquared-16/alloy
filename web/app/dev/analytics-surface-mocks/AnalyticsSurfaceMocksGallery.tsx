@@ -186,24 +186,49 @@ export default function AnalyticsSurfaceMocksGallery() {
                     <header className="border-b border-alloy-stone/15 px-5 py-4">
                         <p className="text-[11px] font-semibold uppercase tracking-wide text-alloy-pine">Surface Independence</p>
                         <h2 className="mt-1 text-xl font-semibold tracking-tight text-alloy-midnight">Density examples</h2>
-                        <p className="mt-1 text-sm text-alloy-midnight/55">The same metric card at compact (header/tile) and standard (dashboard) density.</p>
+                        <p className="mt-1 text-sm text-alloy-midnight/55">
+                            One card language across contexts. Header / tile strips render compact (light footprint in
+                            Workspace / Focus Panel chrome); dashboards render standard. MetricPlacementRenderer picks
+                            density from layout automatically.
+                        </p>
                     </header>
-                    <div className="flex flex-wrap items-start gap-4 bg-alloy-stone/[0.04] p-5">
-                        <div className="w-[200px]" data-density="compact">
-                            <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-alloy-midnight/45">Compact</p>
-                            <MetricKpiCard label={DENSITY_EXAMPLE.label} value={DENSITY_EXAMPLE.value} status={DENSITY_EXAMPLE.status} accent={DENSITY_EXAMPLE.accent} density="compact" />
+                    <div className="space-y-6 bg-alloy-stone/[0.04] p-5">
+                        <div data-density-context="header-strip">
+                            <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-alloy-midnight/45">
+                                Header strip — compact (inline / row layout)
+                            </p>
+                            <div className="flex flex-wrap items-stretch gap-2">
+                                <div className="w-[180px]">
+                                    <MetricKpiCard label="Tours today" value="11" status="healthy" accent="enrollment" density="compact" />
+                                </div>
+                                <div className="w-[180px]">
+                                    <MetricKpiCard label={DENSITY_EXAMPLE.label} value={DENSITY_EXAMPLE.value} status={DENSITY_EXAMPLE.status} accent={DENSITY_EXAMPLE.accent} density="compact" />
+                                </div>
+                                <div className="w-[210px]">
+                                    <MetricTrendCard label="MRR" value="$418k" status="healthy" accent="communications" density="compact" sparklinePoints={[360, 388, 405, 418]} />
+                                </div>
+                                <div className="w-[200px]">
+                                    <MetricHealthCard label="Org health" value="84" score={84} status="healthy" accent="enrollment" density="compact" />
+                                </div>
+                            </div>
                         </div>
-                        <div className="w-[260px]" data-density="standard">
-                            <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-alloy-midnight/45">Standard</p>
-                            <MetricKpiCard
-                                label={DENSITY_EXAMPLE.label}
-                                value={DENSITY_EXAMPLE.value}
-                                status={DENSITY_EXAMPLE.status}
-                                accent={DENSITY_EXAMPLE.accent}
-                                question={DENSITY_EXAMPLE.question}
-                                density="standard"
-                                footer={drillFooter("Affected sites")}
-                            />
+                        <div className="flex flex-wrap items-start gap-4" data-density-context="dashboard-tile">
+                            <div className="w-[200px]" data-density="compact">
+                                <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-alloy-midnight/45">Compact</p>
+                                <MetricKpiCard label={DENSITY_EXAMPLE.label} value={DENSITY_EXAMPLE.value} status={DENSITY_EXAMPLE.status} accent={DENSITY_EXAMPLE.accent} density="compact" />
+                            </div>
+                            <div className="w-[260px]" data-density="standard">
+                                <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-alloy-midnight/45">Standard (dashboard)</p>
+                                <MetricKpiCard
+                                    label={DENSITY_EXAMPLE.label}
+                                    value={DENSITY_EXAMPLE.value}
+                                    status={DENSITY_EXAMPLE.status}
+                                    accent={DENSITY_EXAMPLE.accent}
+                                    question={DENSITY_EXAMPLE.question}
+                                    density="standard"
+                                    footer={drillFooter("Affected sites")}
+                                />
+                            </div>
                         </div>
                     </div>
                 </section>

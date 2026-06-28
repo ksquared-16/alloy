@@ -88,6 +88,18 @@ describe("MetricVisualRenderer dispatch", () => {
         );
         expect(html).toContain('data-metric-visual="kpi_card"');
     });
+
+    it("defaults to standard density and forwards compact density to the card", () => {
+        const standard = renderToStaticMarkup(
+            <MetricVisualRenderer placement={placement("kpi_card")} evaluation={evaluation()} />,
+        );
+        expect(standard).toContain('data-metric-density="standard"');
+
+        const compact = renderToStaticMarkup(
+            <MetricVisualRenderer placement={placement("kpi_card")} evaluation={evaluation()} density="compact" />,
+        );
+        expect(compact).toContain('data-metric-density="compact"');
+    });
 });
 
 describe("MetricHealthCard", () => {
@@ -101,6 +113,16 @@ describe("MetricHealthCard", () => {
     it("falls back to a health-band fill when no score is given (no recompute)", () => {
         const html = renderToStaticMarkup(<MetricHealthCard label="Org health" value="—" status="critical" />);
         expect(html).toContain('data-metric-gauge-fill="25"');
+    });
+
+    it("shrinks the gauge ring in compact (header) density", () => {
+        const standard = renderToStaticMarkup(<MetricHealthCard label="Org health" value="84" score={84} status="healthy" />);
+        expect(standard).toContain('width="64"');
+        const compact = renderToStaticMarkup(
+            <MetricHealthCard label="Org health" value="84" score={84} status="healthy" density="compact" />,
+        );
+        expect(compact).toContain('width="44"');
+        expect(compact).toContain('data-metric-density="compact"');
     });
 });
 

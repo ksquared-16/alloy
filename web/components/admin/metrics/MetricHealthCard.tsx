@@ -61,7 +61,11 @@ export function MetricHealthCard({
 }: Props) {
     const health = normalizeOipHealthStatus(status);
     const pct = clampScore(score, health);
-    const radius = 26;
+    // Gauge shrinks in compact (header) density so it stays light in the Workspace chrome.
+    const dim = density === "compact" ? 44 : 64;
+    const center = dim / 2;
+    const stroke = density === "compact" ? 5 : 7;
+    const radius = center - stroke - 2;
     const circumference = 2 * Math.PI * radius;
     const dashOffset = circumference * (1 - pct / 100);
     const valueSize = density === "compact" ? "text-xl" : "text-2xl";
@@ -79,26 +83,26 @@ export function MetricHealthCard({
         >
             <div className="flex items-center gap-3">
                 <svg
-                    width="64"
-                    height="64"
-                    viewBox="0 0 64 64"
+                    width={dim}
+                    height={dim}
+                    viewBox={`0 0 ${dim} ${dim}`}
                     aria-hidden="true"
                     className={RING_COLOR[health]}
                     data-metric-gauge-fill={Math.round(pct)}
                 >
-                    <circle cx="32" cy="32" r={radius} fill="none" stroke="currentColor" strokeOpacity="0.14" strokeWidth="7" />
+                    <circle cx={center} cy={center} r={radius} fill="none" stroke="currentColor" strokeOpacity="0.14" strokeWidth={stroke} />
                     {loading ? null : (
                         <circle
-                            cx="32"
-                            cy="32"
+                            cx={center}
+                            cy={center}
                             r={radius}
                             fill="none"
                             stroke="currentColor"
-                            strokeWidth="7"
+                            strokeWidth={stroke}
                             strokeLinecap="round"
                             strokeDasharray={circumference}
                             strokeDashoffset={dashOffset}
-                            transform="rotate(-90 32 32)"
+                            transform={`rotate(-90 ${center} ${center})`}
                         />
                     )}
                 </svg>
