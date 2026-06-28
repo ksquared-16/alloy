@@ -241,7 +241,7 @@ Registered Capability → What can Alloy do?         web/lib/adminV2/actions/act
    ↓
 Placement             → Where do operators see it?  action_placements (config)
    ↓
-Context Resolution    → How is the subject resolved? web/lib/adminV2/actions/invocationContext.ts
+Context Resolution    → How is the subject resolved? web/lib/platform/commands/invocationContext.ts
    ↓
 Eligibility → Required Subjects → Required Inputs → Preview → Confirmation
    ↓
@@ -267,7 +267,7 @@ subjects + required inputs + preview + execution + audit + refresh.**
 
 ### Operator-facing command states
 
-`web/lib/adminV2/actions/commandState.ts` (`describeCommandState`). A command never fails as a
+`web/lib/platform/commands/commandState.ts` (`describeCommandState`). A command never fails as a
 raw technical error where a user decision is needed:
 
 | State | Operator copy (example) |
@@ -288,7 +288,7 @@ Reference commands through the registered runtime: `update_status`, `create_lead
 
 ### Operational Intent (human) vs Capability (technical)
 
-Operators think in **intent**, not capability. `web/lib/adminV2/actions/operationalIntent.ts`
+Operators think in **intent**, not capability. `web/lib/platform/commands/operationalIntent.ts`
 maps the operator-facing verb to the technical capability it invokes:
 
 | Operator intent | Capability |
@@ -304,7 +304,7 @@ to operators. `OperationalIntent` = `intentKey`, `title`, `description`, `defaul
 ### Operational Flow (reusable stages)
 
 A command is a guided flow composed from reusable stages
-(`web/lib/adminV2/actions/commandFlow.ts` → `buildCommandFlow`):
+(`web/lib/platform/commands/commandFlow.ts` → `buildCommandFlow`):
 
 ```
 resolve_context → resolve_subject → resolve_required_inputs → resolve_constraints
@@ -324,7 +324,7 @@ flows over one runtime.
 ### Create Lead — first visible command flow (V4)
 
 Create Lead is the first operator-visible Operational Command Flow.
-`web/lib/adminV2/actions/createLead/createLeadCommandModel.ts` (`deriveCreateLeadCommandState`)
+`web/lib/platform/commands/createLead/createLeadCommandModel.ts` (`deriveCreateLeadCommandState`)
 is a **read-only view-model over the runtime** — it derives stage, operator state/copy,
 known/missing inputs, preview, and a standardized success descriptor, but never mutates.
 
@@ -344,7 +344,7 @@ documented follow-up — see `docs/sprints/06_2026/create_lead_command_flow_audi
 ### Command Surface — platform-owned shell (V5)
 
 The **Command Surface** is the reusable, **platform-owned** UI/runtime shell for completing an
-Operational Intent (`web/lib/adminV2/actions/surface/*`). `deriveCommandSurfaceState` normalizes
+Operational Intent (`web/lib/platform/commands/surface/*`). `deriveCommandSurfaceState` normalizes
 a command snapshot into fixed anatomy: header (title/description/context chips/stage), body
 (subject selector · input fields · preview · blocker · confirmation), footer (primary/secondary),
 and success/failure. The shell is identical across variants — **work_unit, focus_panel_manage,

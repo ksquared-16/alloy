@@ -1,7 +1,9 @@
 "use client";
 
-import { useCallback, useState, type ReactNode } from "react";
+import { useCallback, useRef, useState, type ReactNode } from "react";
 import { Zap } from "lucide-react";
+
+import { CommandRailFloatingMenu } from "@/app/adminV2/components/workspace/CommandRailFloatingMenu";
 
 type Props = {
     actionCount: number | null;
@@ -11,15 +13,23 @@ type Props = {
 };
 
 /**
- * Compact collapsible Actions section above BOS dock in the workspace command rail.
- * Collapsed by default — BOS remains the primary expanded surface.
+ * Compact collapsible Actions section above the BOS dock in the workspace command rail.
+ *
+ * Collapsed by default — BOS remains the primary expanded surface. When expanded, the actions
+ * body renders in a platform floating menu ({@link CommandRailFloatingMenu}) portaled to
+ * `document.body` and anchored to this trigger. This keeps the in-rail section a fixed-height
+ * trigger (so opening never reflows the BOS overlay anchor) and floats the menu above the BOS
+ * command surface instead of being covered by or clipped within the rail layout.
  */
 export function CommandRailCollapsibleActionsSection({ actionCount, children, loading = false }: Props) {
     const [expanded, setExpanded] = useState(false);
+    const triggerRef = useRef<HTMLButtonElement | null>(null);
 
     const toggle = useCallback(() => {
         setExpanded((prev) => !prev);
     }, []);
+
+    const close = useCallback(() => setExpanded(false), []);
 
     const countLabel =
         loading || actionCount == null ? ""
@@ -33,9 +43,11 @@ export function CommandRailCollapsibleActionsSection({ actionCount, children, lo
             aria-label="Actions"
         >
             <button
+                ref={triggerRef}
                 type="button"
                 className="adminv2-ws-command-rail-actions-trigger"
                 aria-expanded={expanded}
+                aria-haspopup="menu"
                 onClick={toggle}
                 data-command-rail-actions-toggle="true"
             >
@@ -47,11 +59,16 @@ export function CommandRailCollapsibleActionsSection({ actionCount, children, lo
                     {expanded ? "▼" : "▶"}
                 </span>
             </button>
-            {expanded ?
-                <div className="adminv2-ws-command-rail-actions-body" data-command-rail-actions-body="true">
-                    {children}
-                </div>
-            :   null}
+            <CommandRailFloatingMenu
+                anchorEl={triggerRef.current}
+                open={expanded}
+                onClose={close}
+                ariaLabel="Actions"
+                className="adminv2-ws-command-rail-actions-body adminv2-ws-command-rail-actions-body--floating"
+                bodyDataAttr={{ "data-command-rail-actions-body": "true" }}
+            >
+                {children}
+            </CommandRailFloatingMenu>
         </section>
     );
 }

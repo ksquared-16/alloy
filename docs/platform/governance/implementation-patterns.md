@@ -72,7 +72,7 @@ eligibility + required subjects + required inputs + preview + execution + audit 
 - **Placement** = where it appears (config): logical placements `work_unit_actions`,
   `focus_panel_manage`, `queue_row_menu`, `bos_recommendations`.
 - **Context resolution** = how the subject is resolved
-  (`web/lib/adminV2/actions/invocationContext.ts`): `current_record`, `user_selection`,
+  (`web/lib/platform/commands/invocationContext.ts`): `current_record`, `user_selection`,
   `queue_selection`, `suggested_record`, `bos_proposal`, `open`. Work Unit commands have
   **no inherited subject yet** (not `entityId = null`) and a **required subject** the operator
   resolves; a suggested record is optional context, never authoritative.

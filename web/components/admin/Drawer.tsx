@@ -38,6 +38,13 @@ export const ADMINV2_SHELL_CHROME_Z = 100;
  * Above entity drawer panel (70) and drawer popovers (~85); below shell chrome (100).
  */
 export const ADMINV2_COMMAND_SURFACE_Z = 90;
+/**
+ * Floating platform rail menus (Work Unit Actions dropdown, future rail popovers) portaled to
+ * `document.body`. Must overlay the BOS command surface (90) so a rail menu is never clipped or
+ * covered by the BOS dock; stays below shell chrome (100). Use for any rail-anchored floating
+ * menu rather than inline expansion, so opening a menu never reflows the BOS overlay anchor.
+ */
+export const ADMINV2_RAIL_MENU_Z = 95;
 /** Matches `TopNavBar` `h-[3.75rem]`. */
 export const ADMINV2_SHELL_HEADER_INSET = "3.75rem";
 /** Matches workspace `pb-[96px]` + command surface `bottom-2` lift. */

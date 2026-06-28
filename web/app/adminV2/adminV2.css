@@ -255,9 +255,10 @@ html[data-adminv2-workspace-shell="v2"] .adminv2-ws-command-rail-actions-trigger
 }
 
 html[data-adminv2-workspace-shell="v2"] .adminv2-ws-command-rail-actions-section--expanded .adminv2-ws-command-rail-actions-trigger {
-  border-radius: 9px 9px 0 0;
+  /* Body now floats in a portal, so the trigger keeps full radius even when expanded. */
+  border-radius: 9px;
   border-bottom: none;
-  background: #ffffff;
+  background: rgba(39, 63, 82, 0.04);
 }
 
 html[data-adminv2-workspace-shell="v2"] .adminv2-ws-command-rail-actions-trigger:hover {
@@ -273,6 +274,20 @@ html[data-adminv2-workspace-shell="v2"] .adminv2-ws-command-rail-actions-trigger
 html[data-adminv2-workspace-shell="v2"] .adminv2-ws-command-rail-actions-body {
   padding: 8px 8px 10px;
   background: #ffffff;
+}
+
+/* Floating rail menu — detached panel portaled above the BOS command surface. */
+.adminv2-ws-command-rail-floating-menu {
+  border: 1px solid var(--adminv2-container-border-rail, rgba(39, 63, 82, 0.2));
+  border-radius: 10px;
+  background: #ffffff;
+  box-shadow:
+    0 12px 32px rgba(39, 63, 82, 0.16),
+    0 2px 6px rgba(39, 63, 82, 0.08);
+}
+
+.adminv2-ws-command-rail-actions-body--floating {
+  border-radius: 10px;
 }
 
 /* Persistent command rail — executable action rows (icon + label + chevron) */

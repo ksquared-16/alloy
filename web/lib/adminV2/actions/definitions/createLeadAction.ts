@@ -20,7 +20,7 @@ import {
     buildCreateLeadEligibility,
     buildCreateLeadPreview,
     trimmedValue as trimmed,
-} from "@/lib/adminV2/actions/createLead/createLeadRequiredInputs";
+} from "@/lib/platform/commands/createLead/createLeadRequiredInputs";
 
 export { CREATE_LEAD_ACTION_KEY };
 

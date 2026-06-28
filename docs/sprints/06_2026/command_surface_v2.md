@@ -4,12 +4,12 @@
 V1 model (`command_surface_v1.md`, commit `b0de6360`). **No new Create Lead system, no BOS
 fork, no execution fork, no modal rewrite.**
 
-**Code anchors:**
-- `web/components/adminV2/actions/surface/CommandSurfaceShell.tsx` — platform-owned presentational shell (first UI)
-- `web/lib/adminV2/actions/surface/useCommandSurfaceController.ts` — platform-owned lifecycle; **execution injected**
-- `web/lib/adminV2/actions/surface/commandSurfacePresentation.ts` — operator UX contract (pure copy)
-- `web/lib/adminV2/actions/surface/deriveCommandSurfaceState.ts` — V1 state derivation (unchanged)
-- `web/lib/adminV2/actions/createLead/createLeadCommandModel.ts` — reference command snapshot
+**Code anchors** (platform namespace — see `adminv2_namespace_audit.md`):
+- `web/components/platform/commands/CommandSurfaceShell.tsx`
+- `web/lib/platform/commands/surface/useCommandSurfaceController.ts`
+- `web/lib/platform/commands/surface/commandSurfacePresentation.ts`
+- `web/lib/platform/commands/surface/deriveCommandSurfaceState.ts`
+- `web/lib/platform/commands/createLead/createLeadCommandModel.ts`
 
 > **What does an Operational Command feel like to an operator?** A short, guided panel: a clear
 > intent title, where they are in the flow, what's known, what's still needed in plain language,

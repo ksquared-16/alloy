@@ -11,7 +11,7 @@
  */
 
 import { isKnownActionKey, resolveActionKey } from "@/lib/adminV2/actions/actionRegistry";
-import { isLogicalActionPlacement } from "@/lib/adminV2/actions/invocationContext";
+import { isLogicalActionPlacement } from "@/lib/platform/commands/invocationContext";
 
 export type ConfiguredActionValidation = {
     actionKey: string;
