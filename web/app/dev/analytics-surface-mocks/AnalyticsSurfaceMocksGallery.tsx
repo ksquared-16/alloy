@@ -19,6 +19,7 @@ import {
     type AnalyticsSurfaceFixture,
     type PreviewGridSpan,
 } from "./fixtures";
+import { SLICE2_SURFACES } from "./slice2/surfaces";
 
 const SPAN_CLASS: Record<PreviewGridSpan, string> = {
     3: "col-span-12 sm:col-span-6 lg:col-span-3",
@@ -116,7 +117,7 @@ export function PreviewMetricCard({ card }: { card: AnalyticsMetricCardFixture }
 
 function SurfaceBlock({ surface }: { surface: AnalyticsSurfaceFixture }) {
     return (
-        <section className="rounded-2xl border border-alloy-stone/15 bg-white shadow-sm" data-analytics-preview-surface={surface.id}>
+        <section id={surface.id} className="scroll-mt-4 rounded-2xl border border-alloy-stone/15 bg-white shadow-sm" data-analytics-preview-surface={surface.id}>
             <header className="border-b border-alloy-stone/15 px-5 py-4">
                 <p className="text-[11px] font-semibold uppercase tracking-wide text-alloy-pine">{surface.context}</p>
                 <h2 className="mt-1 text-xl font-semibold tracking-tight text-alloy-midnight">{surface.title}</h2>
@@ -144,22 +145,49 @@ function SurfaceBlock({ surface }: { surface: AnalyticsSurfaceFixture }) {
 }
 
 export default function AnalyticsSurfaceMocksGallery() {
+    const tileSurfaces = ANALYTICS_SURFACE_FIXTURES.map((s) => ({ id: s.id, label: s.title }));
+
     return (
         <div className="min-h-screen bg-alloy-stone/[0.06] px-6 py-8">
             <div className="mx-auto max-w-[1200px] space-y-8">
                 <header>
                     <p className="text-[11px] font-semibold uppercase tracking-wide text-alloy-pine">Dev preview · not production</p>
-                    <h1 className="mt-1 text-2xl font-semibold tracking-tight text-alloy-midnight">Analytics Surface Preview</h1>
-                    <p className="mt-2 max-w-2xl text-sm text-alloy-midnight/60">
-                        Dashboard Design Surfaces composed from the Metric archetype and the shared Renderer catalog
-                        (KPI · Trend · Comparison · Health · Breakdown · Scorecard · Chip). Values are static fixtures —
-                        calculation stays in OIP. Source of truth:{" "}
+                    <h1 className="mt-1 text-2xl font-semibold tracking-tight text-alloy-midnight">Analytics Operational Intelligence Preview</h1>
+                    <p className="mt-2 max-w-3xl text-sm text-alloy-midnight/60">
+                        Analytics is not a tile grid. These surfaces support the full loop —{" "}
+                        <span className="font-semibold text-alloy-midnight/75">Measure → Understand → Decide → Act → Measure again</span>:
+                        narrative executive summaries, diagnostic drilldowns into affected work, command and optimization
+                        centers, reporting outputs, and real x/y charts with deterministic drill destinations. Values are
+                        static fixtures — calculation stays in OIP. Source of truth:{" "}
                         <code className="rounded bg-white px-1 py-0.5 text-xs">
-                            docs/sprints/06_2026/analytics-operational-intelligence-platform/mockups
+                            docs/sprints/06_2026/analytics-operational-intelligence-platform
                         </code>
                         .
                     </p>
+                    <nav className="mt-4 flex flex-wrap gap-1.5" aria-label="Surface sections">
+                        {[...SLICE2_SURFACES.map((s) => ({ id: s.id, label: s.label })), ...tileSurfaces].map((s) => (
+                            <a
+                                key={s.id}
+                                href={`#${s.id}`}
+                                className="rounded-full border border-alloy-stone/20 bg-white px-2.5 py-1 text-[11px] font-medium text-alloy-midnight/70 hover:border-alloy-pine/40 hover:text-alloy-pine"
+                            >
+                                {s.label}
+                            </a>
+                        ))}
+                    </nav>
                 </header>
+
+                {SLICE2_SURFACES.map(({ id, Component }) => (
+                    <Component key={id} />
+                ))}
+
+                <div className="rounded-2xl border border-dashed border-alloy-stone/25 bg-white/60 px-5 py-3">
+                    <p className="text-[11px] font-semibold uppercase tracking-wide text-alloy-pine">Card Language reference</p>
+                    <p className="mt-0.5 text-sm text-alloy-midnight/55">
+                        The metric-tile surfaces below remain the compact Card Language baseline (Slice 1 / 1.5). Analytics
+                        composes these into the richer surfaces above.
+                    </p>
+                </div>
 
                 {ANALYTICS_SURFACE_FIXTURES.map((surface) => (
                     <SurfaceBlock key={surface.id} surface={surface} />
