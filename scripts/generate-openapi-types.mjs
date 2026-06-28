@@ -128,9 +128,16 @@ function jsdoc(schema) {
     return `/** ${oneLine} */\n`;
 }
 
-async function main() {
-    const yaml = await loadYaml();
-    const doc = yaml.load(readFileSync(specPath, "utf8"));
+/**
+ * Pure renderer: given a parsed OpenAPI doc, return the full contents of the generated
+ * TypeScript module. No filesystem side effects — used by both the CLI below and the
+ * contract test (`web/tests/api/openapiContract.test.ts`) to assert the committed file is
+ * up to date and deterministic.
+ *
+ * @param {Record<string, any>} doc Parsed OpenAPI document.
+ * @returns {string} The `alloyApiTypes.ts` file contents.
+ */
+export function renderTypeModule(doc) {
     const schemas = doc?.components?.schemas ?? {};
     const names = Object.keys(schemas);
 
@@ -152,7 +159,14 @@ async function main() {
         return `${jsdoc(schema)}export type ${name} = ${toType(schema, 0)};`;
     });
 
-    const body = `${header}\n${blocks.join("\n\n")}\n`;
+    return `${header}\n${blocks.join("\n\n")}\n`;
+}
+
+async function main() {
+    const yaml = await loadYaml();
+    const doc = yaml.load(readFileSync(specPath, "utf8"));
+    const body = renderTypeModule(doc);
+    const count = Object.keys(doc?.components?.schemas ?? {}).length;
 
     mkdirSync(outDir, { recursive: true });
     writeFileSync(outPath, body, "utf8");
@@ -160,11 +174,15 @@ async function main() {
     console.log("✅ Generated TypeScript types");
     console.log(`   source : docs/api/openapi/alloy-api.v0.yaml`);
     console.log(`   output : web/lib/api/generated/alloyApiTypes.ts`);
-    console.log(`   types  : ${names.length}`);
+    console.log(`   types  : ${count}`);
 }
 
-main().catch((err) => {
-    console.error("❌ Type generation failed:");
-    console.error(`   ${err?.stack ?? err}`);
-    process.exit(1);
-});
+// Only run the CLI when invoked directly (not when imported by tests).
+const invokedDirectly = process.argv[1] && pathToFileURL(process.argv[1]).href === import.meta.url;
+if (invokedDirectly) {
+    main().catch((err) => {
+        console.error("❌ Type generation failed:");
+        console.error(`   ${err?.stack ?? err}`);
+        process.exit(1);
+    });
+}
