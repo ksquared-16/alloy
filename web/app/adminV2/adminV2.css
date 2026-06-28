@@ -563,17 +563,33 @@ html[data-adminv2-workspace-shell="v2"] .adminv2-drawer-modal-panel--bos-rail:no
  *
  * Classification is by workspace type (the operational marker), never by feature name.
  * Geometry vars are measured in `web/lib/bos/operationalWorkspaceGeometry.ts`.
+ *
+ * The panel occupies ~90% of the band (`--operational-workspace-fill`), inset evenly so a
+ * clickable backdrop margin remains on every side to dismiss the surface.
  */
 html[data-adminv2-workspace-shell="v2"] .operational-workspace-surface[data-operational-workspace="true"],
 html[data-adminv2-workspace-shell="v2"][data-alloy-os-runtime-split="true"]
   .operational-workspace-surface[data-operational-workspace="true"] {
-  left: var(--operational-workspace-left, var(--adminv2-drawer-computed-left)) !important;
-  width: var(--operational-workspace-width, var(--adminv2-drawer-computed-width)) !important;
-  max-width: var(--operational-workspace-width, none) !important;
+  --operational-workspace-fill: 0.9;
+  --operational-workspace-inset-x: calc(
+    var(--operational-workspace-width, 0px) * (1 - var(--operational-workspace-fill)) / 2
+  );
+  --operational-workspace-inset-y: 2.5vh;
+  left: calc(
+    var(--operational-workspace-left, var(--adminv2-drawer-computed-left)) +
+      var(--operational-workspace-inset-x)
+  ) !important;
+  width: calc(
+    var(--operational-workspace-width, var(--adminv2-drawer-computed-width)) *
+      var(--operational-workspace-fill)
+  ) !important;
+  max-width: calc(
+    var(--operational-workspace-width, 100%) * var(--operational-workspace-fill)
+  ) !important;
   right: auto !important;
   transform: none !important;
-  top: var(--adminv2-drawer-inset-top) !important;
-  bottom: var(--ws-shell-bottom-safe, 16px) !important;
+  top: calc(var(--adminv2-drawer-inset-top) + var(--operational-workspace-inset-y)) !important;
+  bottom: calc(var(--ws-shell-bottom-safe, 16px) + var(--operational-workspace-inset-y)) !important;
   height: auto !important;
   max-height: none !important;
   border: 1px solid var(--adminv2-container-border-drawer, rgba(39, 63, 82, 0.28)) !important;

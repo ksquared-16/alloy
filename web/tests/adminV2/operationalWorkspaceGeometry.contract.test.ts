@@ -15,7 +15,7 @@ function read(rel: string): string {
  * never capped or centered, and is excluded from drawer / Focus Panel / split geometry.
  */
 describe("Operational Workspace Geometry — platform contract", () => {
-    it("the operational CSS rule fills the band without cap or centering", () => {
+    it("the operational CSS rule derives width from the measured band without fixed cap or centering", () => {
         const css = read("app/adminV2/adminV2.css");
         const rule =
             css.match(
@@ -23,10 +23,13 @@ describe("Operational Workspace Geometry — platform contract", () => {
             )?.[0] ?? "";
         expect(rule).toContain("--operational-workspace-left");
         expect(rule).toContain("--operational-workspace-width");
-        expect(rule).toContain("max-width: var(--operational-workspace-width, none) !important");
+        // Width + max-width are derived from the measured band (scaled by the fill ratio), not a fixed px cap.
+        expect(rule).toContain("--operational-workspace-fill");
+        expect(rule).toMatch(/max-width:\s*calc\([\s\S]*?--operational-workspace-width/);
         expect(rule).toContain("transform: none !important");
-        // Never width-capped: the only max-width comes from the measured band variable.
+        // Never width-capped at a fixed pixel value.
         expect(rule).not.toMatch(/max-width:\s*1280px/);
+        expect(rule).not.toMatch(/max-width:\s*80rem/);
     });
 
     it("entity drawer + Focus Panel geometry rules exclude operational workspaces", () => {
