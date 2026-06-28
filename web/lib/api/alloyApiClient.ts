@@ -308,27 +308,29 @@ function makeReferenceDataResource(
     basePath: string
 ) {
     return {
-        /** GET (list) */
-        async list(params?: {
+        /**
+         * GET (list). The v0 contract type is `ReferenceDataItem` (loosely typed); a concrete
+         * family may pass a narrower row type (e.g. `list<CustomerPersonRoleType>()`) since the
+         * route returns the full row.
+         */
+        async list<T = ReferenceDataItem>(params?: {
             all?: "true" | "1";
             industry_id?: string;
             vertical_id?: string;
-        }): Promise<ReferenceDataItem[]> {
-            const data = await request<{ items: ReferenceDataItem[] }>("GET", basePath, { query: params });
+        }): Promise<T[]> {
+            const data = await request<{ items: T[] }>("GET", basePath, { query: params });
             return data.items;
         },
         /** POST (create) */
-        async create(input: ReferenceDataCreate): Promise<ReferenceDataItem> {
-            const data = await request<{ item: ReferenceDataItem }>("POST", basePath, { body: input });
+        async create<T = ReferenceDataItem>(input: ReferenceDataCreate): Promise<T> {
+            const data = await request<{ item: T }>("POST", basePath, { body: input });
             return data.item;
         },
         /** PATCH (update) */
-        async update(id: string, input: ReferenceDataUpdate): Promise<ReferenceDataItem> {
-            const data = await request<{ item: ReferenceDataItem }>(
-                "PATCH",
-                `${basePath}/${encodeURIComponent(id)}`,
-                { body: input }
-            );
+        async update<T = ReferenceDataItem>(id: string, input: ReferenceDataUpdate): Promise<T> {
+            const data = await request<{ item: T }>("PATCH", `${basePath}/${encodeURIComponent(id)}`, {
+                body: input,
+            });
             return data.item;
         },
         /**

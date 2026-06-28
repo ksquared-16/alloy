@@ -106,12 +106,40 @@ all against a mocked `fetch` (no network, no DB).
 cd web && npx vitest run tests/api/alloyApiClient.test.ts
 ```
 
+## First app consumer migration
+
+The first active consumer migrated to the generated internal client is
+**`web/app/legacy-admin/system/customer-person-roles/CustomerPersonRolesClient.tsx`** (the Person
+Roles settings surface), chosen because it is active, non-legacy, low-throughput, and sits on the
+already-normalized `customer-person-role-types` reference-data family.
+
+What changed:
+
+- `fetch(...)` + manual `res.json()` / `data.items` / `data.item` unwrap → typed calls:
+  - list: `api.referenceData.customerPersonRoleTypes.list<CustomerPersonRoleType>(showAll ? { all: "true" } : undefined)`
+  - create: `api.referenceData.customerPersonRoleTypes.create({ key, label, … })`
+  - update: `api.referenceData.customerPersonRoleTypes.update(id, { … })`
+- Error handling now flows through `AlloyApiError`. **UI behavior is preserved**: the list error
+  banner still shows the server message, and the create modal still maps a `409` to the inline
+  field error (falling back to `"Key already exists."`). Loading/saving states are unchanged.
+- The consumer keeps its richer domain row type via the client's optional generic
+  (`list<CustomerPersonRoleType>()`); the default contract type remains `ReferenceDataItem`, so the
+  v0 surface is unchanged.
+
+Proof tests: `web/tests/api/customerPersonRolesClientMigration.test.ts` exercise the exact
+no-arg-client path the component uses against a stubbed global `fetch` — success unwrap into typed
+rows, the `showAll` query toggle, a normalized failure throwing `AlloyApiError` (stable message +
+preserved `correlationId`), the `409` → inline-error mapping, and a `@ts-expect-error` proving an
+invalid create payload fails the TypeScript compile (verified in the tsc program, not just at
+runtime).
+
 ## Migration posture
 
-This client is the **preferred** way to call normalized v0 routes in **new** code and tests.
-Existing consumers stay as-is until intentionally migrated; the helpers they already use
-(`unwrapEntityRecord`, `apiOk`/`apiError`, etc.) remain valid. As more families pass the gate and
-join the spec, regenerate the types and extend the client.
+This client is the **preferred** way to call normalized v0 routes in **new** code and tests, and is
+now **proven in one active consumer** (above). Remaining consumers stay as-is until intentionally
+migrated; the helpers they already use (`unwrapEntityRecord`, `apiOk`/`apiError`, etc.) remain
+valid. As more families pass the gate and join the spec, regenerate the types and extend the
+client.
 
 ## Related
 

@@ -6,6 +6,7 @@ import SectionCard from "@/components/admin/SectionCard";
 import SettingsPageHeader from "@/components/adminV2/settings/SettingsPageHeader";
 import { useAdminAuth } from "@/contexts/AdminAuthContext";
 import { useAdminVertical } from "@/contexts/AdminVerticalContext";
+import { createAlloyApiClient, AlloyApiError } from "@/lib/api/alloyApiClient";
 import type { CustomerPersonRoleType } from "@/app/api/admin/customer-person-role-types/route";
 
 const KEY_REGEX = /^[a-z0-9_]{2,64}$/;
@@ -48,13 +49,13 @@ export default function CustomerPersonRolesClient({
         setLoading(true);
         setError(null);
         try {
-            const url = showAll ? "/api/admin/customer-person-role-types?all=true" : "/api/admin/customer-person-role-types";
-            const res = await fetch(url);
-            const json = await res.json().catch(() => ({}));
-            if (!res.ok) throw new Error((json as { error?: { message?: string } }).error?.message ?? "Failed to load");
-            setItems((json as { data?: { items?: CustomerPersonRoleType[] } }).data?.items ?? []);
+            const api = createAlloyApiClient();
+            const items = await api.referenceData.customerPersonRoleTypes.list<CustomerPersonRoleType>(
+                showAll ? { all: "true" } : undefined
+            );
+            setItems(items);
         } catch (e) {
-            setError((e as Error).message);
+            setError(e instanceof Error ? e.message : "Failed to load");
             setItems([]);
         } finally {
             setLoading(false);
@@ -120,37 +121,31 @@ export default function CustomerPersonRolesClient({
         setModalSaving(true);
         setModalError(null);
         try {
+            const api = createAlloyApiClient();
             if (modalId) {
-                const res = await fetch(`/api/admin/customer-person-role-types/${modalId}`, {
-                    method: "PATCH",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                        label: modalLabel.trim() || null,
-                        description: modalDescription.trim() || null,
-                        sort_order: modalSortOrder,
-                        is_active: modalActive,
-                    }),
+                await api.referenceData.customerPersonRoleTypes.update(modalId, {
+                    label: modalLabel.trim() || null,
+                    description: modalDescription.trim() || null,
+                    sort_order: modalSortOrder,
+                    is_active: modalActive,
                 });
-                const json = await res.json().catch(() => ({}));
-                if (!res.ok) throw new Error((json as { error?: { message?: string } }).error?.message ?? "Update failed");
             } else {
-                const res = await fetch("/api/admin/customer-person-role-types", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
+                try {
+                    await api.referenceData.customerPersonRoleTypes.create({
                         key,
-                        label: modalLabel.trim() || null,
-                        description: modalDescription.trim() || null,
+                        label: modalLabel.trim(),
+                        description: modalDescription.trim() || undefined,
                         sort_order: modalSortOrder,
                         is_active: modalActive,
-                    }),
-                });
-                const json = await res.json().catch(() => ({}));
-                if (res.status === 409) {
-                    setModalError((json as { error?: { message?: string } }).error?.message ?? "Key already exists.");
-                    return;
+                    });
+                } catch (e) {
+                    // Preserve the inline conflict UX (set field error, keep modal open).
+                    if (e instanceof AlloyApiError && e.status === 409) {
+                        setModalError(e.message || "Key already exists.");
+                        return;
+                    }
+                    throw e instanceof AlloyApiError ? new Error(e.message || "Create failed") : e;
                 }
-                if (!res.ok) throw new Error((json as { error?: { message?: string } }).error?.message ?? "Create failed");
             }
             setModalOpen(false);
             await fetchItems();

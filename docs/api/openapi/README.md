@@ -7,7 +7,8 @@ This folder holds Alloy's **internal** OpenAPI specification.
 
 A typed internal TypeScript client is **generated from this spec** — see
 [`../internal-typescript-client.md`](../internal-typescript-client.md)
-(`web/lib/api/generated/alloyApiTypes.ts` + the hand-written `web/lib/api/alloyApiClient.ts`).
+(`web/lib/api/generated/alloyApiTypes.ts` + the hand-written `web/lib/api/alloyApiClient.ts`). The
+first active consumer (the Person Roles settings surface) is now migrated to it as a proof.
 
 ## What this is — and is not
 

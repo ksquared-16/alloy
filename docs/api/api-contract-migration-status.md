@@ -48,7 +48,7 @@ is inconsistent, and do **not** normalize a route consumed only by a lower tier.
 | `/api/admin/analytics/metrics/[id]/snapshot` | POST | ✅ Full | `apiOk({ evaluation, snapshot_id })`; `INTERNAL` on snapshot failure. |
 | `/api/admin/analytics/metrics/[id]/trend` | GET | ✅ Full | `apiOk({ series, comparison })`; `NOT_FOUND` / `VALIDATION_ERROR`. |
 | `/api/admin/entity/[type]/[id]` | GET | ✅ Full | Phase 2D. Success = `apiOk({ entity })` for every entity type + the `{ _create: true }` new-record sentinel; opportunity surfaces (`drawer_visible` / `drawer_primary` / `full` / `relationship_member_persons`) wrap the same way and preserve the `X-Alloy-*` perf headers. All errors via `apiError`. Active consumers unwrap `json.data.entity` (shared `unwrapEntityRecord`). |
-| `/api/admin/customer-person-role-types` (+ `/[id]`) | GET, POST, PATCH, DELETE | ✅ Full | Phase 2F. GET = `apiOk({ items })`; POST/PATCH = `apiOk({ item })`; DELETE = `apiError("NOT_IMPLEMENTED", …, 405)`. Errors `BAD_REQUEST` / `FORBIDDEN` / `NOT_FOUND` / `CONFLICT` / `INTERNAL` via `apiError`; status codes preserved. Consumer unwraps `json.data.items` / `json.error?.message`. |
+| `/api/admin/customer-person-role-types` (+ `/[id]`) | GET, POST, PATCH, DELETE | ✅ Full | Phase 2F. GET = `apiOk({ items })`; POST/PATCH = `apiOk({ item })`; DELETE = `apiError("NOT_IMPLEMENTED", …, 405)`. Errors `BAD_REQUEST` / `FORBIDDEN` / `NOT_FOUND` / `CONFLICT` / `INTERNAL` via `apiError`; status codes preserved. **Phase 3C:** consumer migrated off hand-written fetch to the typed client (`api.referenceData.customerPersonRoleTypes.*`). |
 | `/api/admin/person-relationship-type-settings` (+ `/[id]`) | GET, POST, PATCH, DELETE | ✅ Full | Phase 2F. Identical contract to `customer-person-role-types` above (same shape, same codes). Consumer unwraps `json.data.items` / `json.error?.message`. |
 
 ## Active consumers migrated for `actions/execute` (Phase 2B)
@@ -110,7 +110,7 @@ Each has a single, structurally-identical settings client (embedded in active ad
 chrome — **not** the legacy drawer), and the shared `lib/admin/personTypeSettings.ts` is
 fetch-free pure helpers (constants + option resolvers), so it needed no change.
 
-- `web/app/legacy-admin/system/customer-person-roles/CustomerPersonRolesClient.tsx` — unwraps `json.data.items` (GET) and `json.error?.message` (all error reads, incl. the 409 conflict). POST/PATCH success bodies were never read.
+- `web/app/legacy-admin/system/customer-person-roles/CustomerPersonRolesClient.tsx` — **Phase 3C: migrated to the generated internal client** (`createAlloyApiClient().referenceData.customerPersonRoleTypes.list/create/update`). Errors flow through `AlloyApiError`; UI behavior (error banner, 409 → inline modal error, loading/saving states) preserved. First active consumer on the typed client — see [`internal-typescript-client.md`](internal-typescript-client.md). Previously (2F) unwrapped `json.data.items` / `json.error?.message` directly.
 - `web/app/legacy-admin/system/person-relationship-types/PersonRelationshipTypesClient.tsx` — same unwrap pattern.
 
 > The clients' separate `/api/admin/industries` fetch (`{ industries }`) is a **different,
