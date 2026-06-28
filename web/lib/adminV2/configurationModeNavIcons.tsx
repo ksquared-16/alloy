@@ -1,6 +1,7 @@
 import type { LucideIcon } from "lucide-react";
 import {
     BarChart3,
+    Banknote,
     GitBranch,
     LayoutGrid,
     Mail,
@@ -24,6 +25,7 @@ const ICONS: Record<ConfigurationModeNavIcon, LucideIcon> = {
     security: Shield,
     locations: MapPin,
     communications: Mail,
+    financials: Banknote,
 };
 
 export function configurationModeNavLucideIcon(icon: ConfigurationModeNavIcon): LucideIcon {

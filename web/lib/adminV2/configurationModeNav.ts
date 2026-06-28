@@ -16,7 +16,8 @@ export type ConfigurationModeNavIcon =
     | "integrations"
     | "security"
     | "locations"
-    | "communications";
+    | "communications"
+    | "financials";
 
 export type ConfigurationModeNavItem = {
     href: string;
@@ -94,6 +95,18 @@ export const CONFIGURATION_MODE_NAV_GROUPS: readonly ConfigurationModeNavGroup[]
                 description: "Where operators see actions — Design Surfaces for queue rows, Focus Panel, and cards.",
                 icon: "layouts",
                 testId: "config-mode-nav-surfaces",
+            },
+        ],
+    },
+    {
+        label: "Financials",
+        items: [
+            {
+                href: settings("financials"),
+                label: "Financials",
+                description: "Rate plans, charge preview, and GL configuration. Read-only in V1.",
+                icon: "financials",
+                testId: "config-mode-nav-financials",
             },
         ],
     },

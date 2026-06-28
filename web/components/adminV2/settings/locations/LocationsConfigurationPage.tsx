@@ -10,6 +10,7 @@ import {
     ConfigurationQueueItem,
     ConfigurationShell,
 } from "@/components/adminV2/settings/configurationRuntime/ConfigurationModeLayout";
+import LocationOperationalRulesPanel from "@/components/adminV2/settings/locations/LocationOperationalRulesPanel";
 import LocationProgramDetailPanel from "@/components/adminV2/settings/locations/LocationProgramDetailPanel";
 import LocationRoomDetailPanel from "@/components/adminV2/settings/locations/LocationRoomDetailPanel";
 import LocationScheduleTemplateDetailPanel from "@/components/adminV2/settings/locations/LocationScheduleTemplateDetailPanel";
@@ -25,6 +26,7 @@ function sectionListTitle(section: (typeof LOCATION_CONFIG_SECTIONS)[number]["ke
     if (section === "locations") return "Locations";
     if (section === "programs") return "Programs";
     if (section === "rooms") return "Rooms";
+    if (section === "operational_rules") return "Operational Rules";
     return "Schedule Templates";
 }
 
@@ -32,6 +34,7 @@ function sectionEmptyListCopy(section: (typeof LOCATION_CONFIG_SECTIONS)[number]
     if (section === "locations") return "No locations yet. Add a campus to get started.";
     if (section === "programs") return "No programs yet. Programs are configured per location.";
     if (section === "rooms") return "No rooms yet. Add classrooms under a location.";
+    if (section === "operational_rules") return "Operational rules are shown in the workspace.";
     return "No schedule templates yet.";
 }
 
@@ -60,8 +63,10 @@ export default function LocationsConfigurationPage() {
         setSchedulePatterns,
     } = useLocationsConfigurationSettings();
 
+    // Create drawer is quarantined to the Locations section only (create-only) and
+    // marked for removal once inline create lands (Operational Configuration V1).
     const contextActions =
-        canMutate ?
+        canMutate && section === "locations" ?
             <ConfigurationPrimaryButton
                 className="config-primary-btn--sm"
                 data-testid="locations-add-location"
@@ -140,6 +145,9 @@ export default function LocationsConfigurationPage() {
                 />
             );
         }
+        if (section === "operational_rules") {
+            return <LocationOperationalRulesPanel siteLabelById={siteLabelById} />;
+        }
         if (section === "rooms") {
             const parentSiteId = selectedRoom?.parent_location_id ?? "";
             return (
@@ -185,7 +193,11 @@ export default function LocationsConfigurationPage() {
                 </p>
             :   null}
 
-            <ConfigurationShell testId="locations-configuration-shell" queueColumn={sectionQueue} listColumn={itemList}>
+            <ConfigurationShell
+                testId="locations-configuration-shell"
+                queueColumn={sectionQueue}
+                listColumn={section === "operational_rules" ? undefined : itemList}
+            >
                 {workspace}
             </ConfigurationShell>
         </div>
