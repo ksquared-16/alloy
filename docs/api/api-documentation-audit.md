@@ -138,7 +138,7 @@ Stable, well-scoped, read-oriented surfaces that could anchor a v1 public API on
 1. **Normalize the response envelope** to a single `{ ok, data?, error?, correlation_id? }` contract (model: actions/execute + analytics error helper). Prerequisite for any public API. — **✅ foundation + representative slice done (Phase 2).** Remaining: incrementally migrate the rest, batch by consumer coupling (next batch below).
 2. **Org-scoping guard test** — fail CI when a tenant route reads/writes a tenant table without an `org_id` filter or FK assertion. — **◑ spike landed (advisory).** Promote to CI gate after triaging the global warning list.
 3. **Schema-first request validation** on write routes (extend the analytics platform pattern). — pending (preflight now schema-validated as a model).
-4. **Then** author **OpenAPI** (Phase 3) for the public-candidate subset only (§9). Holding OpenAPI back is deliberate: today's mixed envelopes would produce a misleading spec. Start once the envelope migration covers the public-candidate subset.
+4. **Then** author **OpenAPI** (Phase 3) for the normalized pillars only — **OpenAPI v0 = Actions + Analytics Metrics + Entity Read** (the three families now fully on the envelope). Holding OpenAPI back for the rest is deliberate: today's mixed envelopes would produce a misleading spec. Eligibility, the explicit exclusion list, and the per-family readiness checklist are defined in [`openapi-readiness.md`](openapi-readiness.md).
 5. **Production guard audit** for §8 internal/bootstrap/dev routes. — pending.
 
 ### Recommended next migration batch

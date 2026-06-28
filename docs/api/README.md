@@ -13,6 +13,7 @@
 | [`api-index.md`](api-index.md) | **Generated** master table of all `web/app/api/**` route handlers (method, path, auth signal, validation signal, service-role, writes/events, stability, tables). Regenerate with `node scripts/generate-api-inventory.mjs`. |
 | [`api-response-contract.md`](api-response-contract.md) | **Phase 2** standard response envelope (`ApiSuccess`/`ApiFailure`), helpers, error-code + correlation-id conventions, and migration status. |
 | [`api-contract-migration-status.md`](api-contract-migration-status.md) | **Live migration tracker** — normalization priority order, migrated routes, active consumers, and legacy/sunset surfaces (OpenAPI deferred until internally consistent). |
+| [`openapi-readiness.md`](openapi-readiness.md) | **OpenAPI readiness gate** — what is normalized today, what is still legacy, the OpenAPI v0 eligible surface, what is explicitly excluded, and the checklist a route family must clear before it enters a spec. |
 | [`actions-execute-envelope-audit.md`](actions-execute-envelope-audit.md) | `POST /api/admin/actions/execute` consumer inventory + envelope normalization plan (Phase 2B). |
 | [`admin-configuration-api.md`](admin-configuration-api.md) | Configuration control plane — fields, layouts, option sets, statuses, pricing, RBAC, users, org settings |
 | [`workspace-api.md`](workspace-api.md) | Workspace, queues, work units, focus-panel/drawer view models, analytics/metrics, global search |

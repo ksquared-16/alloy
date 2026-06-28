@@ -1,7 +1,7 @@
 # Alloy API Response Contract
 
 **Status:** Phase 2 (Contract Normalization) — foundation established, representative slice migrated.
-**OpenAPI:** Deferred to Phase 3, after broader envelope normalization.
+**OpenAPI:** Deferred to Phase 3. Eligibility + the readiness gate are defined in [`openapi-readiness.md`](openapi-readiness.md).
 
 This document defines the standard Alloy API response envelope, the helpers that
 produce it, the error-code and correlation-id conventions, and the current
