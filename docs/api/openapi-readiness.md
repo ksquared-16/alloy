@@ -1,9 +1,9 @@
 # Alloy API — OpenAPI Readiness Gate
 
-**Status:** Phase 2E (Contract Consolidation). This is the canonical decision doc for
+**Status:** Phase 3 finalized — **API Platform Complete**. This is the canonical decision doc for
 **when** and **for what** Alloy generates OpenAPI. It consolidates the contract work
-already completed (Actions → Analytics Metrics → Entity Read) and defines the exact
-readiness bar a route family must clear before it enters an OpenAPI spec.
+already completed (Actions → Analytics Metrics → Entity Read → reference-data families) and
+defines the exact readiness bar a route family must clear before it enters an OpenAPI spec.
 
 > **The v0 spec now exists:** [`openapi/alloy-api.v0.yaml`](openapi/alloy-api.v0.yaml) (see
 > [`openapi/README.md`](openapi/README.md)). It documents exactly the gate-passing families
@@ -21,11 +21,52 @@ readiness bar a route family must clear before it enters an OpenAPI spec.
 > else is excluded by default until it clears the gate.
 
 Related: [`api-architecture.md`](api-architecture.md) (governing doctrine — §8 is the OpenAPI doctrine) ·
+[`api-platform-governance.md`](api-platform-governance.md) (Definition of Done, admission, lifecycle, CI) ·
 [`api-data-access-performance.md`](api-data-access-performance.md) (pagination/sync/freshness schemas required in the spec — §11) ·
 [`api-response-contract.md`](api-response-contract.md) (the envelope + helpers) ·
 [`api-contract-migration-status.md`](api-contract-migration-status.md) (live per-route tracker) ·
 [`api-documentation-audit.md`](api-documentation-audit.md) (findings + recommendations) ·
+[`internal-typescript-client.md`](internal-typescript-client.md) (generated client) ·
 [`api-index.md`](api-index.md) (generated full inventory).
+
+---
+
+## 0. Platform Complete vs Platform Expansion
+
+As of Phase 3 finalization, the **internal API Platform is complete**. "Complete" means the
+**foundation** exists and is self-governing — not that every route is normalized. The distinction
+matters because it changes how future work is classified and prioritized.
+
+**Platform Complete (foundation — done):**
+
+- API inventory + first-class documentation (`docs/api/`).
+- Standard response contract + shared helpers (`apiOk` / `apiError` / `apiZodError`).
+- API architecture doctrine + data-access/freshness/performance doctrine.
+- Live migration tracker + this readiness gate.
+- OpenAPI v0 spec for the gate-passing families.
+- Generated TypeScript types + a thin typed internal client (`AlloyApiError`).
+- ≥1 production consumer migrated as proof.
+- Contract test suite (`web/tests/api/openapiContract.test.ts`) + envelope/client tests.
+- Self-governing CI command (`cd web && npm run api:check`).
+- Governance doctrine ([`api-platform-governance.md`](api-platform-governance.md)) defining the
+  Definition of Done and the API lifecycle.
+
+**Platform Expansion (additions — not foundational):**
+
+These are **valuable but optional additions** that ride on the finished foundation. None of them
+are required to call the platform complete, and none should reopen foundational work:
+
+- New normalized route families (e.g. the `{ <plural> }` list-route batch, sibling analytics).
+- New OpenAPI additions (each must clear the gate in §6 and the DoD in governance).
+- Migrating more existing consumers to the typed client.
+- Future SDK / public `/api/v1` surface (after a public-contract review).
+- Future developer portal.
+- Future GraphQL or alternate transport (if ever).
+
+> **Operating rule going forward:** API Platform work is now **paused**. When it resumes, the
+> default mode is **expansion** — apply the readiness gate (§6) and the Definition of Done
+> (governance §1), run `npm run api:check`, and add to the spec/client/tests. Do **not** treat
+> expansion as a reason to re-litigate the foundation.
 
 ---
 

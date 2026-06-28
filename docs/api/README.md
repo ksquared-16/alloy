@@ -11,6 +11,8 @@
 | File | Contents |
 |------|----------|
 | [`api-architecture.md`](api-architecture.md) | **Doctrine** — the governing API platform architecture: principles, surface taxonomy, response/error contract, auth & org-scoping rules, versioning, consumer doctrine, the OpenAPI gate, SDK direction, and governance. Read this first for any API work. |
+| [`api-platform-governance.md`](api-platform-governance.md) | **Doctrine** — the platform operating contract: Definition of Done, OpenAPI admission, contract/correlation/pagination/freshness/versioning requirements, legacy & public-API policy, the self-governing CI command (`npm run api:check`), the API lifecycle, and the maturity snapshot. |
+| [`internal-typescript-client.md`](internal-typescript-client.md) | **Generated client** — internal v0 TypeScript client (`web/lib/api/alloyApiClient.ts` + generated `alloyApiTypes.ts`), behavior contract, and the first migrated consumer. |
 | [`api-data-access-performance.md`](api-data-access-performance.md) | **Doctrine** — data access, freshness classes, pagination standard, bulk access, incremental sync, real-time/event model, exports, performance SLOs, caching, and anti-patterns. How data is read, synced, paged, and kept fresh. |
 | [`openapi/`](openapi/) | **Internal OpenAPI v0** — `openapi/alloy-api.v0.yaml` (spec for the normalized, gate-passing surface) + `openapi/README.md`. Internal contract artifact for humans/agents/tests/SDKs; not a public portal. Validate with `node scripts/validate-openapi.mjs`. |
 | [`api-index.md`](api-index.md) | **Generated** master table of all `web/app/api/**` route handlers (method, path, auth signal, validation signal, service-role, writes/events, stability, tables). Regenerate with `node scripts/generate-api-inventory.mjs`. |

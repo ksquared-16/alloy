@@ -49,6 +49,8 @@
         "debug:waitlist:opportunity": "tsx --tsconfig tsconfig.json scripts/debugWaitlistOpportunity.ts",
         "typecheck": "tsc -p tsconfig.json",
         "typecheck:build": "tsc -p tsconfig.build.json --noEmit",
+        "api:check": "node ../scripts/api-platform-check.mjs",
+        "api:generate-types": "node ../scripts/generate-openapi-types.mjs",
         "dev:seed:access-validation": "tsx --tsconfig tsconfig.json scripts/seedAccessValidationDemo.ts",
         "validate:ai-openai-local": "tsx --tsconfig tsconfig.json scripts/validateOpenAiEnrichmentLocal.ts",
         "test:tenant:e2e": "vitest run tests/admin/tenantEndToEnd.test.ts",

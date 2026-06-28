@@ -245,6 +245,9 @@ The path from contract to client, each step gated on the previous:
 - **Every normalized route uses the shared helpers** — no hand-built envelopes on migrated
   routes.
 - **Every OpenAPI route passes the readiness gate** — no exceptions, no "spec it and fix later."
+- **The platform self-checks in CI** — `cd web && npm run api:check` runs OpenAPI validation,
+  generated-types freshness + determinism, the OpenAPI contract suite (incl. orphan detection),
+  envelope tests, and typed-client tests. See [`api-platform-governance.md`](api-platform-governance.md) §8.
 - **`api-index.md` remains the inventory** (generated; regenerate only from a clean tree).
 - **`api-contract-migration-status.md` remains the progress tracker** (priority order, migrated
   routes, active consumers, sunset list).
@@ -259,8 +262,9 @@ The path from contract to client, each step gated on the previous:
 - [`README.md`](README.md) — API documentation index + invariants
 - [`api-data-access-performance.md`](api-data-access-performance.md) — data access, freshness, pagination, sync, caching & performance doctrine
 - [`api-response-contract.md`](api-response-contract.md) — envelope + helper spec
+- [`api-platform-governance.md`](api-platform-governance.md) — Definition of Done, admission, lifecycle, CI (`npm run api:check`)
 - [`api-contract-migration-status.md`](api-contract-migration-status.md) — progress tracker
-- [`openapi-readiness.md`](openapi-readiness.md) — OpenAPI eligibility gate
+- [`openapi-readiness.md`](openapi-readiness.md) — OpenAPI eligibility gate + Platform Complete vs Expansion
 - [`internal-typescript-client.md`](internal-typescript-client.md) — generated internal TS client (v0)
 - [`api-documentation-audit.md`](api-documentation-audit.md) — findings + recommendations
 - [`../platform/foundation/architecture.md`](../platform/foundation/architecture.md) — system context

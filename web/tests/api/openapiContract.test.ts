@@ -212,3 +212,114 @@ describe("OpenAPI v0 — internal client exposes exactly the v0 families", () =>
         }
     });
 });
+
+describe("OpenAPI v0 — request bodies (where applicable)", () => {
+    const withBody = operations.filter((e) => e.op.requestBody);
+
+    it.each(withBody.map((e) => [describeOp(e), e] as const))(
+        "%s requestBody declares an application/json schema",
+        (_label, entry) => {
+            const rb = entry.op.requestBody as { content?: Record<string, { schema?: unknown }> };
+            const schema = rb.content?.["application/json"]?.schema;
+            expect(schema, "request schema present").toBeTruthy();
+        }
+    );
+
+    it("every mutation operation that should carry a body declares one", () => {
+        // copyMetric (no body) and the two DELETEs are intentionally body-less.
+        const mustHaveBody = new Set([
+            "preflightAction",
+            "executeAction",
+            "createMetric",
+            "updateMetric",
+            "previewMetric",
+            "snapshotMetric",
+            "createCustomerPersonRoleType",
+            "updateCustomerPersonRoleType",
+            "createPersonRelationshipTypeSetting",
+            "updatePersonRelationshipTypeSetting",
+        ]);
+        for (const entry of operations) {
+            const id = String(entry.op.operationId);
+            if (mustHaveBody.has(id)) {
+                expect(entry.op.requestBody, `${id} should declare a requestBody`).toBeTruthy();
+            }
+        }
+    });
+});
+
+describe("OpenAPI v0 — generated client mirrors operations (no orphans)", () => {
+    const api = createAlloyApiClient({ fetch: (async () => ({})) as never });
+
+    // Canonical map: client method path -> spec operationId. This is the contract that keeps the
+    // hand-written client and the spec from drifting in either direction.
+    const CLIENT_OPERATION_MAP: Record<string, string> = {
+        "actions.inventory": "getActionsInventory",
+        "actions.preflight": "preflightAction",
+        "actions.execute": "executeAction",
+        "metrics.list": "listMetrics",
+        "metrics.create": "createMetric",
+        "metrics.get": "getMetric",
+        "metrics.update": "updateMetric",
+        "metrics.copy": "copyMetric",
+        "metrics.preview": "previewMetric",
+        "metrics.snapshot": "snapshotMetric",
+        "metrics.trend": "getMetricTrend",
+        "entity.get": "getEntityRecord",
+        "referenceData.customerPersonRoleTypes.list": "listCustomerPersonRoleTypes",
+        "referenceData.customerPersonRoleTypes.create": "createCustomerPersonRoleType",
+        "referenceData.customerPersonRoleTypes.update": "updateCustomerPersonRoleType",
+        "referenceData.customerPersonRoleTypes.remove": "deleteCustomerPersonRoleType",
+        "referenceData.personRelationshipTypeSettings.list": "listPersonRelationshipTypeSettings",
+        "referenceData.personRelationshipTypeSettings.create": "createPersonRelationshipTypeSetting",
+        "referenceData.personRelationshipTypeSettings.update": "updatePersonRelationshipTypeSetting",
+        "referenceData.personRelationshipTypeSettings.remove": "deletePersonRelationshipTypeSetting",
+    };
+
+    const specOperationIds = new Set(operations.map((e) => String(e.op.operationId)));
+
+    // Reflectively collect every function leaf under the client's operation families.
+    function collectClientMethodPaths(): string[] {
+        const families = ["actions", "metrics", "entity", "referenceData"] as const;
+        const paths: string[] = [];
+        const root = api as unknown as Record<string, unknown>;
+        for (const family of families) {
+            const node = root[family] as Record<string, unknown>;
+            for (const [key, value] of Object.entries(node)) {
+                if (typeof value === "function") {
+                    paths.push(`${family}.${key}`);
+                } else if (value && typeof value === "object") {
+                    // one nested level (referenceData.<resource>.<method>)
+                    for (const [subKey, subVal] of Object.entries(value as Record<string, unknown>)) {
+                        if (typeof subVal === "function") paths.push(`${family}.${key}.${subKey}`);
+                    }
+                }
+            }
+        }
+        return paths.sort();
+    }
+
+    it("every client method maps to a real spec operationId", () => {
+        for (const opId of Object.values(CLIENT_OPERATION_MAP)) {
+            expect(specOperationIds.has(opId), `mapped operationId not in spec: ${opId}`).toBe(true);
+        }
+    });
+
+    it("every spec operation is covered by exactly one client method (no orphan operations)", () => {
+        const mapped = new Set(Object.values(CLIENT_OPERATION_MAP));
+        expect([...specOperationIds].sort()).toEqual([...mapped].sort());
+    });
+
+    it("every mapped client method path resolves to a function on the client", () => {
+        for (const methodPath of Object.keys(CLIENT_OPERATION_MAP)) {
+            const fn = methodPath.split(".").reduce<unknown>((node, key) => {
+                return node && typeof node === "object" ? (node as Record<string, unknown>)[key] : undefined;
+            }, api);
+            expect(typeof fn, methodPath).toBe("function");
+        }
+    });
+
+    it("the client exposes no operation methods beyond the mapped operations (no orphan client methods)", () => {
+        expect(collectClientMethodPaths()).toEqual(Object.keys(CLIENT_OPERATION_MAP).sort());
+    });
+});
