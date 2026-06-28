@@ -6,11 +6,25 @@
 export const FOCUS_PANEL_MODES = ["summary", "work", "activity"] as const;
 export type FocusPanelMode = (typeof FOCUS_PANEL_MODES)[number];
 
+/**
+ * Operator-facing mode labels. The `summary` mode IS the operating surface where
+ * the Core Four live, so it reads as **Work** (the operator operates here). The
+ * legacy `work` split-view mode is retained for compat but no longer surfaced as a
+ * separate tab — it was duplicative with `summary`. The cards own
+ * overview → evidence → focus → edit themselves, so there is no need for a third tab.
+ */
 export const FOCUS_PANEL_MODE_LABELS: Record<FocusPanelMode, string> = {
-    summary: "Summary",
+    summary: "Work",
     work: "Work",
     activity: "Activity",
 };
+
+/**
+ * Modes shown in the mode switch. Temporary two-mode model: **Work** (the Core Four
+ * operating surface, key `summary`) + **Activity** (timeline / comms / documents).
+ * The legacy `work` split view is hidden — merged into Work.
+ */
+export const FOCUS_PANEL_SWITCH_MODES: readonly FocusPanelMode[] = ["summary", "activity"];
 
 export function isFocusPanelMode(value: unknown): value is FocusPanelMode {
     return typeof value === "string" && (FOCUS_PANEL_MODES as readonly string[]).includes(value);
@@ -31,7 +45,8 @@ export function drawerTabToFocusPanelMode(tab: string): FocusPanelMode {
         case "related":
             return "activity";
         default:
-            return "work";
+            // Legacy split "work" view is merged into the Work surface (summary).
+            return "summary";
     }
 }
 

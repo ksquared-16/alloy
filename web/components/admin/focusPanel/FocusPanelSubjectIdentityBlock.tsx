@@ -2,25 +2,22 @@
 
 import { Users } from "lucide-react";
 
-import type {
-    FocusPanelContextChip,
-    FocusPanelMissionDisplay,
-} from "@/lib/adminV2/runtime/focusPanel/focusPanelDisplayLabels";
+import type { FocusPanelContextChip } from "@/lib/adminV2/runtime/focusPanel/focusPanelDisplayLabels";
 
 export type FocusPanelSubjectIdentityBlockProps = {
     subjectTitle: string;
     contextChips: FocusPanelContextChip[];
-    mission?: FocusPanelMissionDisplay | null;
 };
 
 /**
- * Branded subject identity — icon tile, title, context chips, structured mission.
- * Connects to System 5 card chip language below.
+ * Branded subject identity — icon tile, title, and read-only context chips
+ * (status / process / location). The header intentionally carries NO mission /
+ * action cue: the operating cue lives in the Current Work card so the header does
+ * not compete with the cards below.
  */
 export default function FocusPanelSubjectIdentityBlock({
     subjectTitle,
     contextChips,
-    mission,
 }: FocusPanelSubjectIdentityBlockProps) {
     return (
         <div
@@ -65,20 +62,6 @@ export default function FocusPanelSubjectIdentityBlock({
                                 {chip.label}
                             </span>
                         ))}
-                    </div>
-                :   null}
-                {mission?.value ?
-                    <div
-                        className="alloy-os-fp-header-compact__mission-row"
-                        data-focus-panel-mission="true"
-                    >
-                        <span className="alloy-os-fp-header-compact__mission-label">Mission</span>
-                        <span className="alloy-os-fp-header-compact__mission-value">{mission.value}</span>
-                        {mission.supporting?.trim() ?
-                            <span className="alloy-os-fp-header-compact__mission-support">
-                                {mission.supporting.trim()}
-                            </span>
-                        :   null}
                     </div>
                 :   null}
             </div>

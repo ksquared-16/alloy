@@ -4,8 +4,13 @@ import { useMemo, useState } from "react";
 import clsx from "clsx";
 
 import UniversalCard from "@/components/admin/focusPanel/UniversalCard";
-import { buildCurrentWorkCardEvidence } from "@/lib/adminV2/runtime/focusPanel/currentWork/buildCurrentWorkCardEvidence";
+import CardInlineOverlay from "@/components/admin/focusPanel/cards/CardInlineOverlay";
+import {
+    buildCurrentWorkCardEvidence,
+    inferWorkItemOwner,
+} from "@/lib/adminV2/runtime/focusPanel/currentWork/buildCurrentWorkCardEvidence";
 import type { FocusPanelCardModel } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardModel";
+import type { FocusPanelCoordination } from "@/lib/adminV2/runtime/focusPanel/focusPanelCoordination";
 import type {
     OperationalContext,
     OperationalWorkItem,
@@ -15,107 +20,73 @@ type Props = {
     model: FocusPanelCardModel;
     context: OperationalContext;
     receded?: boolean;
+    /** Owner card: receives cross-card handoffs to a specific work item. */
+    coordination?: FocusPanelCoordination;
 };
 
 /**
  * Current Work operational card (Work archetype). Answers "What needs to happen
- * next on this record?". Overview shows the single most-urgent item; Evidence
- * expands the full work list; Focused shows one item's detail — all local UI over
- * `context.signals.work` (no fetch on expand).
+ * next on this record?". It INSTRUCTS — it never becomes a centered Focus Card.
+ * Collapsed, it shows the 2-second answer (primary item + due). The full queue
+ * appears as a card-anchored INLINE OVERLAY that covers the card below WITHOUT
+ * moving the base surface. Clicking an item HANDS OFF to the card that OWNS its
+ * truth (Contact family → Household, enrollment → Children); ownerless items are
+ * inert guidance. Pure over `context.signals.work` (no fetch).
  *
  * @see docs/platform/operator/card-archetypes.md (Work)
+ * @see docs/sprints/06_2026/focus-panel-inline-overlay-finalization
  */
-export default function CurrentWorkCard({ model, context, receded = false }: Props) {
+export default function CurrentWorkCard({ model, context, receded = false, coordination }: Props) {
     const evidence = useMemo(() => buildCurrentWorkCardEvidence(context), [context]);
+    const [overlayOpen, setOverlayOpen] = useState(false);
 
-    const [expanded, setExpanded] = useState(false);
-    const [focusedId, setFocusedId] = useState<string | null>(null);
+    const openWorkItem = (item: OperationalWorkItem) => {
+        const owner = inferWorkItemOwner(item);
+        if (owner && coordination) {
+            setOverlayOpen(false);
+            coordination.requestFocus(owner.card, owner.focus);
+        }
+    };
 
-    const focused =
-        !evidence.isEmpty && focusedId
-            ? evidence.items.find((i) => i.id === focusedId) ?? null
-            : null;
+    const hasItems = !evidence.isEmpty && evidence.items.length > 0;
 
-    const density = !evidence.isEmpty && (expanded || focused) ? "expanded" : "compact";
-
-    const footerAction = evidence.isEmpty ? null : focused ? (
-        <button
-            type="button"
-            className="alloy-os-ucard__action alloy-os-ucard__action--system5"
-            onClick={() => setFocusedId(null)}
-            data-work-action="back"
-        >
-            ← All work
-        </button>
-    ) : expanded ? (
-        <button
-            type="button"
-            className="alloy-os-ucard__action alloy-os-ucard__action--system5"
-            onClick={() => setExpanded(false)}
-            data-work-action="collapse"
-        >
-            Show less
-        </button>
-    ) : evidence.items.length > 1 ? (
-        <button
-            type="button"
-            className="alloy-os-ucard__action alloy-os-ucard__action--system5"
-            onClick={() => setExpanded(true)}
-            data-work-action="expand"
-        >
-            View work →
-        </button>
+    // Collapsed body = the 2-second answer only (the insight + supporting line carry
+    // the primary item and its due). The full queue lives in the inline overlay.
+    const body = evidence.isEmpty ? (
+        <div className="alloy-os-household__summary" data-work-empty="true">
+            <p className="alloy-os-household__row-detail">All caught up — nothing needs action</p>
+        </div>
     ) : null;
 
-    let body: React.ReactNode;
-    let perspective: "collapsed" | "expanded" | "focused" | "empty";
-    if (evidence.isEmpty) {
-        perspective = "empty";
-        body = (
-            <div className="alloy-os-household__summary" data-work-empty="true">
-                <p className="alloy-os-household__row-detail">All caught up — nothing needs action</p>
-            </div>
-        );
-    } else if (focused) {
-        perspective = "focused";
-        body = <FocusedWorkItem item={focused} />;
-    } else if (expanded) {
-        perspective = "expanded";
-        body = (
-            <div className="alloy-os-household__rows" data-work-list>
-                {evidence.items.map((item) => (
-                    <WorkRow key={item.id} item={item} onFocus={() => setFocusedId(item.id)} />
-                ))}
-            </div>
-        );
-    } else {
-        perspective = "collapsed";
-        body =
-            evidence.items.length > 0 ? (
-                <div className="alloy-os-household__rows" data-work-primary>
-                    {evidence.items.slice(0, 1).map((item) => (
-                        <WorkRow key={item.id} item={item} onFocus={() => setFocusedId(item.id)} />
-                    ))}
-                </div>
-            ) : null;
-    }
+    const footerAction = hasItems ? (
+        <button
+            type="button"
+            className="alloy-os-ucard__action alloy-os-ucard__action--system5"
+            onClick={() => setOverlayOpen((v) => !v)}
+            data-work-action="view"
+            aria-expanded={overlayOpen}
+        >
+            View →
+        </button>
+    ) : null;
 
     return (
         <div
             className="alloy-os-household alloy-os-currentwork"
             data-work-card="true"
-            data-work-card-perspective={perspective}
+            data-work-card-perspective={evidence.isEmpty ? "empty" : "diagnostic"}
+            data-fp-overlay-open={overlayOpen ? "true" : undefined}
         >
             <UniversalCard
                 title={model.title}
                 insight={evidence.answerLine}
-                supportingInsight={perspective === "collapsed" ? evidence.supportingLine : null}
+                supportingInsight={evidence.supportingLine}
                 iconName={model.iconName}
                 tier={model.tier}
                 archetype="status"
                 statusChip={evidence.statusChip}
                 statusTone={evidence.statusTone}
-                density={density}
+                density="compact"
                 gridSpan={model.span}
                 data-universal-card-key={model.key}
                 receded={receded}
@@ -123,6 +94,22 @@ export default function CurrentWorkCard({ model, context, receded = false }: Pro
             >
                 {body}
             </UniversalCard>
+            <CardInlineOverlay
+                open={overlayOpen && hasItems}
+                onClose={() => setOverlayOpen(false)}
+                title="Current work"
+                dataOverlay="current-work"
+            >
+                <div className="alloy-os-household__rows" data-work-list>
+                    {evidence.items.map((item) => (
+                        <WorkRow
+                            key={item.id}
+                            item={item}
+                            onFocus={inferWorkItemOwner(item) ? () => openWorkItem(item) : undefined}
+                        />
+                    ))}
+                </div>
+            </CardInlineOverlay>
         </div>
     );
 }
@@ -133,17 +120,12 @@ function workTone(item: OperationalWorkItem): "risk" | "work" | "neutral" {
     return "neutral";
 }
 
-function WorkRow({ item, onFocus }: { item: OperationalWorkItem; onFocus: () => void }) {
+function WorkRow({ item, onFocus }: { item: OperationalWorkItem; onFocus?: () => void }) {
     const tone = workTone(item);
     const lead = item.urgency === "overdue" ? "!" : item.state === "open" ? "●" : "○";
-    return (
-        <button
-            type="button"
-            className="alloy-os-household__row alloy-os-currentwork__row"
-            data-work-row={item.id}
-            data-work-tone={tone}
-            onClick={onFocus}
-        >
+    const pointsTo = onFocus ? inferWorkItemOwner(item) : null;
+    const inner = (
+        <>
             <span
                 className={clsx("alloy-os-household__avatar", `alloy-os-card-lead--${tone}`)}
                 aria-hidden
@@ -163,37 +145,33 @@ function WorkRow({ item, onFocus }: { item: OperationalWorkItem; onFocus: () => 
                     </span>
                 ) : null}
             </span>
-        </button>
+            {pointsTo ? (
+                <span className="alloy-os-readiness__pointer" aria-hidden>
+                    {pointsTo.card === "household" ? "Household" : "Children"} →
+                </span>
+            ) : null}
+        </>
     );
-}
-
-function FocusedWorkItem({ item }: { item: OperationalWorkItem }) {
-    const rows: { label: string; value: string | null }[] = [
-        { label: "Due", value: item.dueLabel },
-        { label: "Source", value: item.source },
-        {
-            label: "Type",
-            value: item.kind === "stage_work" ? "Stage work" : "Operational task",
-        },
-        {
-            label: "State",
-            value: item.state === "open" ? "Open" : item.state === "completed" ? "Completed" : "Planned",
-        },
-    ];
-    const present = rows.filter((r) => r.value);
+    if (onFocus) {
+        return (
+            <button
+                type="button"
+                className="alloy-os-household__row alloy-os-currentwork__row"
+                data-work-row={item.id}
+                data-work-tone={tone}
+                onClick={onFocus}
+            >
+                {inner}
+            </button>
+        );
+    }
     return (
-        <div className="alloy-os-household__focused" data-work-focused={item.id}>
-            <div className="alloy-os-household__focused-header">
-                <span className="alloy-os-household__group-title">{item.label}</span>
-            </div>
-            <div className="alloy-os-card-kv alloy-os-card-kv--stack">
-                {present.map((r) => (
-                    <span key={r.label}>
-                        <b>{r.label}</b>
-                        {r.value}
-                    </span>
-                ))}
-            </div>
+        <div
+            className="alloy-os-household__row alloy-os-currentwork__row"
+            data-work-row={item.id}
+            data-work-tone={tone}
+        >
+            {inner}
         </div>
     );
 }

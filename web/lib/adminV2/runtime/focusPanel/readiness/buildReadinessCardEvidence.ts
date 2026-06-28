@@ -12,6 +12,7 @@
  */
 
 import { buildChildrenCardEvidence } from "@/lib/adminV2/runtime/focusPanel/children/buildChildrenCardEvidence";
+import type { FocusPanelCardKey } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardModel";
 import type { OperationalContext } from "@/lib/adminV2/runtime/operationalContext/types";
 
 export type ReadinessVerdict = "ready" | "almost" | "blocked" | "unknown";
@@ -22,6 +23,16 @@ export type ReadinessFactor = {
     label: string;
     status: ReadinessFactorStatus;
     detail: string | null;
+    /**
+     * The card that OWNS this fact. Readiness only references — clicking an
+     * incomplete factor hands off to the owner card (Perspective Change), never
+     * edits here. Null when no single owner card exists (informational only).
+     */
+    ownerCard: FocusPanelCardKey | null;
+    /** Focus target inside the owner card (child id / group key); null = just open. */
+    ownerFocus: string | null;
+    /** Short noun for diagnosis copy ("program", "primary contact"). */
+    shortLabel: string;
 };
 
 export type ReadinessCardEvidence = {
@@ -67,9 +78,9 @@ export function buildReadinessCardEvidence(context: OperationalContext): Readine
     const activeChildren = childrenEvidence.children.filter(
         (c) => c.statusTone !== "risk",
     );
-    const missingProgram = activeChildren.filter((c) => !c.program).length;
-    const missingSchedule = activeChildren.filter((c) => !c.schedule).length;
-    const missingStart = activeChildren.filter((c) => !c.startDate).length;
+    const missingProgram = activeChildren.filter((c) => !c.program);
+    const missingSchedule = activeChildren.filter((c) => !c.schedule);
+    const missingStart = activeChildren.filter((c) => !c.startDate);
 
     const factors: ReadinessFactor[] = [];
 
@@ -78,6 +89,10 @@ export function buildReadinessCardEvidence(context: OperationalContext): Readine
         label: "Primary contact",
         status: primaryContactName ? "complete" : "incomplete",
         detail: primaryContactName ?? "Add a primary contact",
+        // Household owns contact truth — point there to resolve.
+        ownerCard: "household",
+        ownerFocus: "primary_contact",
+        shortLabel: "primary contact",
     });
 
     factors.push({
@@ -88,31 +103,47 @@ export function buildReadinessCardEvidence(context: OperationalContext): Readine
             childCount > 0
                 ? `${childCount} child${childCount === 1 ? "" : "ren"}`
                 : "Add a child",
+        ownerCard: "children",
+        ownerFocus: null,
+        shortLabel: "a child",
     });
 
     // Program / schedule / start only assessable once at least one child exists.
+    // Children owns these — point to the first child still missing the field.
     if (childCount > 0) {
         factors.push({
             key: "program",
             label: "Program selected",
-            status: missingProgram === 0 ? "complete" : "incomplete",
-            detail: missingProgram === 0 ? "All children" : `${missingProgram} missing`,
+            status: missingProgram.length === 0 ? "complete" : "incomplete",
+            detail:
+                missingProgram.length === 0 ? "All children" : `${missingProgram.length} missing`,
+            ownerCard: "children",
+            ownerFocus: missingProgram[0]?.id ?? null,
+            shortLabel: "program",
         });
         factors.push({
             key: "schedule",
             label: "Schedule selected",
-            status: missingSchedule === 0 ? "complete" : "incomplete",
-            detail: missingSchedule === 0 ? "All children" : `${missingSchedule} missing`,
+            status: missingSchedule.length === 0 ? "complete" : "incomplete",
+            detail:
+                missingSchedule.length === 0 ? "All children" : `${missingSchedule.length} missing`,
+            ownerCard: "children",
+            ownerFocus: missingSchedule[0]?.id ?? null,
+            shortLabel: "schedule",
         });
         factors.push({
             key: "start_date",
             label: "Desired start",
-            status: missingStart === 0 ? "complete" : "incomplete",
-            detail: missingStart === 0 ? "Set" : `${missingStart} missing`,
+            status: missingStart.length === 0 ? "complete" : "incomplete",
+            detail: missingStart.length === 0 ? "Set" : `${missingStart.length} missing`,
+            ownerCard: "children",
+            ownerFocus: missingStart[0]?.id ?? null,
+            shortLabel: "start date",
         });
     }
 
-    // Real attention blockers (e.g. "Immunization record missing").
+    // Real attention blockers (e.g. "Immunization record missing"). No single
+    // Core-Four owner today — informational diagnosis only (no handoff target).
     if (attention.needsAttention && attention.primaryReason) {
         factors.push({
             key: "attention",
@@ -122,6 +153,9 @@ export function buildReadinessCardEvidence(context: OperationalContext): Readine
                 attention.reasonCount > 1
                     ? `+${attention.reasonCount - 1} more signal${attention.reasonCount - 1 === 1 ? "" : "s"}`
                     : "Blocks advancing",
+            ownerCard: null,
+            ownerFocus: null,
+            shortLabel: attention.primaryReason,
         });
     }
 
@@ -152,13 +186,29 @@ export function buildReadinessCardEvidence(context: OperationalContext): Readine
     let statusChip: string | null;
     let statusTone: ReadinessCardEvidence["statusTone"];
 
+    // Diagnosis phrasing: lead with WHAT is missing (a noun list), not a percentage
+    // or a task title. Readiness describes the condition; owners hold the verbs.
+    const diagnose = (statuses: ReadinessFactorStatus[]): string => {
+        const nouns = factors
+            .filter((f) => statuses.includes(f.status))
+            .map((f) => f.shortLabel);
+        if (nouns.length === 0) return "";
+        if (nouns.length === 1) return nouns[0]!;
+        if (nouns.length === 2) return `${nouns[0]} and ${nouns[1]}`;
+        return `${nouns.slice(0, -1).join(", ")}, and ${nouns[nouns.length - 1]}`;
+    };
+
+    const capitalize = (text: string): string =>
+        text.length > 0 ? text.charAt(0).toUpperCase() + text.slice(1) : text;
+
     if (verdict === "unknown") {
         answerLine = "Not enough info to assess";
         supportingLine = "Add contact + children to score";
         statusChip = null;
         statusTone = "neutral";
     } else if (verdict === "blocked") {
-        answerLine = attention.primaryReason ?? "Blocked before enrollment";
+        const blockingNouns = diagnose(["blocked"]);
+        answerLine = blockingNouns ? `Blocked — ${blockingNouns}` : "Blocked before enrollment";
         supportingLine =
             blockers.length > 0
                 ? `${blockers.length} item${blockers.length === 1 ? "" : "s"} before advancing`
@@ -171,8 +221,9 @@ export function buildReadinessCardEvidence(context: OperationalContext): Readine
         statusChip = "Ready";
         statusTone = "ready";
     } else {
-        answerLine = `${score}% ready to advance`;
-        supportingLine = `${completeCount} of ${totalCount} signals complete`;
+        const missingNouns = diagnose(["incomplete"]);
+        answerLine = missingNouns ? `${capitalize(missingNouns)} needed` : "Almost ready";
+        supportingLine = `${completeCount} of ${totalCount} ready${score != null ? ` · ${score}%` : ""}`;
         statusChip = "Almost";
         statusTone = "at-risk";
     }

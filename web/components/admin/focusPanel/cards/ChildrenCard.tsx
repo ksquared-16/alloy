@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import clsx from "clsx";
 
 import UniversalCard from "@/components/admin/focusPanel/UniversalCard";
@@ -9,13 +9,22 @@ import {
     type ChildrenEvidenceChild,
 } from "@/lib/adminV2/runtime/focusPanel/children/buildChildrenCardEvidence";
 import type { FocusPanelCardModel } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardModel";
+import {
+    useReportPerspective,
+    useDismissSignal,
+    type FocusPanelCoordination,
+    type FocusPanelPerspectiveLevel,
+} from "@/lib/adminV2/runtime/focusPanel/focusPanelCoordination";
 import type { OperationalContext } from "@/lib/adminV2/runtime/operationalContext/types";
+import CardEditPlaceholder from "@/components/admin/focusPanel/cards/CardEditPlaceholder";
 
 type Props = {
     model: FocusPanelCardModel;
     /** Forward-facing card boundary — Children observes this, never the drawer VM. */
     context: OperationalContext;
     receded?: boolean;
+    /** Owner card: receives cross-card handoffs (e.g. from Readiness). */
+    coordination?: FocusPanelCoordination;
 };
 
 /**
@@ -29,29 +38,78 @@ type Props = {
  *
  * @see docs/platform/operator/card-archetypes.md (Collection)
  */
-export default function ChildrenCard({ model, context, receded = false }: Props) {
+export default function ChildrenCard({ model, context, receded = false, coordination }: Props) {
     const evidence = useMemo(() => buildChildrenCardEvidence(context), [context]);
 
     const [expanded, setExpanded] = useState(false);
     const [focusedId, setFocusedId] = useState<string | null>(null);
+    const [editing, setEditing] = useState(false);
+
+    // Cross-card handoff: when Readiness (or another card) points here, open the
+    // requested child as a Perspective Change (expand + focus). No fetch.
+    const request = coordination?.request;
+    const requestNonce = request?.card === "children" ? request.nonce : null;
+    useEffect(() => {
+        if (request?.card !== "children") return;
+        setExpanded(true);
+        setFocusedId(request.focus ?? null);
+        setEditing(false);
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- nonce gates re-apply
+    }, [requestNonce]);
 
     const isEmpty = evidence.count === 0;
     const focused =
         !isEmpty && focusedId ? evidence.children.find((c) => c.id === focusedId) ?? null : null;
 
+    const focusChild = (id: string) => {
+        setFocusedId(id);
+        setEditing(false);
+    };
+
+    // Report depth so the host raises this card above the surface. ANY open state
+    // (roster expand, a focused child, edit) elevates as a centered Focus Card — a
+    // truth card NEVER expands height inline (no row reflow).
+    const level: FocusPanelPerspectiveLevel =
+        editing && focused ? "edit" : focused || expanded ? "focused" : "base";
+    useReportPerspective(coordination, "children", level);
+    useDismissSignal(coordination, "children", () => {
+        setEditing(false);
+        setFocusedId(null);
+        setExpanded(false);
+    });
+
     const density = !isEmpty && (expanded || focused) ? "expanded" : "compact";
     const statusTone = evidence.hasAttention ? "at-risk" : "neutral";
     const statusChip = isEmpty ? null : evidence.hasAttention ? "Needs info" : `${evidence.count}`;
 
-    const footerAction = isEmpty ? null : focused ? (
+    const footerAction = isEmpty ? null : editing && focused ? (
         <button
             type="button"
             className="alloy-os-ucard__action alloy-os-ucard__action--system5"
-            onClick={() => setFocusedId(null)}
-            data-children-action="back"
+            onClick={() => setEditing(false)}
+            data-children-action="cancel-edit"
         >
-            ← All children
+            ← Back to {focused.name.split(" ")[0]}
         </button>
+    ) : focused ? (
+        <div className="alloy-os-card-nav">
+            <button
+                type="button"
+                className="alloy-os-ucard__action alloy-os-ucard__action--system5"
+                onClick={() => setFocusedId(null)}
+                data-children-action="back"
+            >
+                ← All children
+            </button>
+            <button
+                type="button"
+                className="alloy-os-ucard__action alloy-os-ucard__action--system5"
+                onClick={() => setEditing(true)}
+                data-children-edit-trigger={focused.id}
+            >
+                {deeperEditLabel(focused)} →
+            </button>
+        </div>
     ) : expanded ? (
         <button
             type="button"
@@ -59,7 +117,7 @@ export default function ChildrenCard({ model, context, receded = false }: Props)
             onClick={() => setExpanded(false)}
             data-children-action="collapse"
         >
-            Show less
+            ← Back to panel
         </button>
     ) : (
         <button
@@ -73,7 +131,7 @@ export default function ChildrenCard({ model, context, receded = false }: Props)
     );
 
     let body: React.ReactNode;
-    let perspective: "collapsed" | "expanded" | "focused" | "empty";
+    let perspective: "collapsed" | "expanded" | "focused" | "edit" | "empty";
     if (isEmpty) {
         perspective = "empty";
         body = (
@@ -82,8 +140,8 @@ export default function ChildrenCard({ model, context, receded = false }: Props)
             </div>
         );
     } else if (focused) {
-        perspective = "focused";
-        body = <FocusedChild child={focused} />;
+        perspective = editing ? "edit" : "focused";
+        body = <FocusedChild child={focused} editing={editing} />;
     } else if (expanded) {
         perspective = "expanded";
         body = (
@@ -92,7 +150,7 @@ export default function ChildrenCard({ model, context, receded = false }: Props)
                     <ChildEvidenceBlock
                         key={child.id}
                         child={child}
-                        onFocus={() => setFocusedId(child.id)}
+                        onFocus={() => focusChild(child.id)}
                     />
                 ))}
             </div>
@@ -105,7 +163,7 @@ export default function ChildrenCard({ model, context, receded = false }: Props)
                     <ChildSummaryRow
                         key={child.id}
                         child={child}
-                        onFocus={() => setFocusedId(child.id)}
+                        onFocus={() => focusChild(child.id)}
                     />
                 ))}
             </div>
@@ -158,7 +216,8 @@ function ChildSummaryRow({
     child: ChildrenEvidenceChild;
     onFocus: () => void;
 }) {
-    const detail = [child.dobAge, child.program].filter(Boolean).join(" · ");
+    // Answer-first: the operational sentence (or what's missing), age as metadata.
+    const detail = child.detailLine ?? child.missingLine;
     return (
         <button
             type="button"
@@ -171,33 +230,41 @@ function ChildSummaryRow({
             </span>
             <span className="alloy-os-household__row-main min-w-0">
                 <span className="alloy-os-household__row-name">{child.name}</span>
-                {detail ? <span className="alloy-os-household__row-detail">{detail}</span> : null}
+                {detail ? (
+                    <span
+                        className={clsx(
+                            "alloy-os-household__row-detail",
+                            !child.detailLine && child.missingLine && "alloy-os-card-detail--risk",
+                        )}
+                    >
+                        {detail}
+                    </span>
+                ) : null}
             </span>
             <StatusPill child={child} />
         </button>
     );
 }
 
-function ChildKvGrid({ child, stacked }: { child: ChildrenEvidenceChild; stacked?: boolean }) {
-    const fields: { label: string; value: string | null }[] = [
-        { label: "DOB / age", value: child.dobAge },
-        { label: "Program", value: child.program },
-        { label: "Room", value: child.room },
-        { label: "Schedule", value: child.schedule },
-        { label: "Start", value: child.startDate },
-    ];
-    const present = fields.filter((f) => f.value);
-    if (present.length === 0) {
-        return <p className="alloy-os-household__row-detail">No operational detail set yet</p>;
-    }
+/** Operational evidence as a sentence + quiet metadata — not a labeled field grid. */
+function ChildEvidenceSentence({ child }: { child: ChildrenEvidenceChild }) {
     return (
-        <div className={clsx("alloy-os-card-kv", stacked && "alloy-os-card-kv--stack")}>
-            {present.map((f) => (
-                <span key={f.label}>
-                    <b>{f.label}</b>
-                    {f.value}
-                </span>
-            ))}
+        <div className="alloy-os-card-evidence" data-children-evidence-sentence={child.id}>
+            {child.detailLine ? (
+                <p className="alloy-os-card-evidence__line">{child.detailLine}</p>
+            ) : (
+                <p className="alloy-os-card-evidence__line alloy-os-card-evidence__line--muted">
+                    No program or schedule set yet
+                </p>
+            )}
+            {child.missingLine ? (
+                <p className="alloy-os-card-evidence__line alloy-os-card-detail--risk">
+                    {child.missingLine}
+                </p>
+            ) : null}
+            {child.dobAge ? (
+                <p className="alloy-os-card-evidence__meta">{child.dobAge}</p>
+            ) : null}
         </div>
     );
 }
@@ -236,21 +303,53 @@ function ChildEvidenceBlock({
                 <span className="alloy-os-household__group-title">{child.name}</span>
                 <StatusPill child={child} />
             </button>
-            <ChildKvGrid child={child} />
+            <ChildEvidenceSentence child={child} />
             <ChildFlags child={child} />
         </section>
     );
 }
 
-function FocusedChild({ child }: { child: ChildrenEvidenceChild }) {
+/** Directional deeper-action label — names the most relevant editable gap. */
+function deeperEditLabel(child: ChildrenEvidenceChild): string {
+    if (!child.program) return "Set program";
+    if (!child.schedule) return "Resolve schedule";
+    if (!child.startDate) return "Set desired start";
+    return "Edit enrollment";
+}
+
+function FocusedChild({
+    child,
+    editing,
+}: {
+    child: ChildrenEvidenceChild;
+    editing: boolean;
+}) {
     return (
-        <div className="alloy-os-household__focused" data-children-focused-child={child.id}>
+        <div
+            className="alloy-os-household__focused"
+            data-children-focused-child={child.id}
+            data-children-edit={editing ? "true" : undefined}
+        >
             <div className="alloy-os-household__focused-header">
                 <span className="alloy-os-household__group-title">{child.name}</span>
                 <StatusPill child={child} />
             </div>
-            <ChildKvGrid child={child} stacked />
-            <ChildFlags child={child} />
+            {editing ? (
+                <CardEditPlaceholder
+                    title={`Edit ${child.name.split(" ")[0]}'s enrollment`}
+                    fields={[
+                        { label: "Program", value: child.program },
+                        { label: "Room", value: child.room },
+                        { label: "Schedule", value: child.schedule },
+                        { label: "Desired start", value: child.startDate },
+                    ]}
+                />
+            ) : (
+                <>
+                    <ChildEvidenceSentence child={child} />
+                    <ChildFlags child={child} />
+                </>
+            )}
         </div>
     );
 }

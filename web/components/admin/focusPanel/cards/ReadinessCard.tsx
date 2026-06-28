@@ -4,132 +4,101 @@ import { useMemo, useState } from "react";
 import clsx from "clsx";
 
 import UniversalCard from "@/components/admin/focusPanel/UniversalCard";
+import CardInlineOverlay from "@/components/admin/focusPanel/cards/CardInlineOverlay";
 import {
     buildReadinessCardEvidence,
     type ReadinessFactor,
 } from "@/lib/adminV2/runtime/focusPanel/readiness/buildReadinessCardEvidence";
 import type { FocusPanelCardModel } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardModel";
+import type { FocusPanelCoordination } from "@/lib/adminV2/runtime/focusPanel/focusPanelCoordination";
 import type { OperationalContext } from "@/lib/adminV2/runtime/operationalContext/types";
 
 type Props = {
     model: FocusPanelCardModel;
     context: OperationalContext;
     receded?: boolean;
+    /** Readiness emits cross-card handoffs to owner cards (it never edits). */
+    coordination?: FocusPanelCoordination;
 };
 
 /**
  * Readiness operational card (Intelligence archetype). Answers "Is this family
- * ready to advance?". Overview shows the verdict + honest completion gauge;
- * Evidence reveals the contributing factor checklist; Focused shows one blocker.
- * Pure derivation over the Operational Context — no scoring fetch.
+ * ready to advance?". It is a DIAGNOSTIC card: it never becomes a centered Focus
+ * Card. Collapsed, it shows the 2-second answer (verdict + gauge + a concise
+ * status line). Deeper evidence (the factor checklist + owner pointers) appears as
+ * a card-anchored INLINE OVERLAY that covers the card below WITHOUT moving the base
+ * surface. Clicking an incomplete factor HANDS OFF to the card that OWNS that truth
+ * (Children / Household). Pure derivation over the Operational Context — no fetch.
  *
  * @see docs/platform/operator/card-archetypes.md (Intelligence)
+ * @see docs/sprints/06_2026/focus-panel-inline-overlay-finalization
  */
-export default function ReadinessCard({ model, context, receded = false }: Props) {
+export default function ReadinessCard({ model, context, receded = false, coordination }: Props) {
     const evidence = useMemo(() => buildReadinessCardEvidence(context), [context]);
+    const [overlayOpen, setOverlayOpen] = useState(false);
 
-    const [expanded, setExpanded] = useState(false);
-    const [focusedKey, setFocusedKey] = useState<string | null>(null);
+    // A diagnosis points to its OWNER card instead of editing locally. The overlay
+    // closes as it hands off so it recedes cleanly behind the new Focus Card. With no
+    // owner (a generic signal) the row is inert — Readiness never opens its own card.
+    const handleFactor = (factor: ReadinessFactor) => {
+        if (factor.status === "complete") return;
+        if (factor.ownerCard && coordination) {
+            setOverlayOpen(false);
+            coordination.requestFocus(factor.ownerCard, factor.ownerFocus);
+        }
+    };
 
-    const focused =
-        !evidence.isEmpty && focusedKey
-            ? evidence.factors.find((f) => f.key === focusedKey) ?? null
-            : null;
-
-    const density = !evidence.isEmpty && (expanded || focused) ? "expanded" : "compact";
     const gaugeTone =
         evidence.statusTone === "blocked" ? "risk"
         : evidence.statusTone === "ready" ? "positive"
         : "metric";
 
-    const footerAction = evidence.isEmpty ? null : focused ? (
+    const hasFactors = !evidence.isEmpty && evidence.factors.length > 0;
+
+    // Collapsed body = the 2-second answer only: the gauge. No checklist by default.
+    const body = evidence.isEmpty ? (
+        <div className="alloy-os-household__summary" data-readiness-empty="true">
+            <p className="alloy-os-household__row-detail">
+                Add a primary contact and a child to score readiness
+            </p>
+        </div>
+    ) : evidence.score != null ? (
+        <div className="alloy-os-readiness__body" data-readiness-gauge>
+            <Gauge value={evidence.score} tone={gaugeTone} />
+        </div>
+    ) : null;
+
+    // The deeper view (factor checklist + owner pointers) lives in the inline overlay.
+    const footerAction = hasFactors ? (
         <button
             type="button"
             className="alloy-os-ucard__action alloy-os-ucard__action--system5"
-            onClick={() => setFocusedKey(null)}
-            data-readiness-action="back"
-        >
-            ← Readiness
-        </button>
-    ) : expanded ? (
-        <button
-            type="button"
-            className="alloy-os-ucard__action alloy-os-ucard__action--system5"
-            onClick={() => setExpanded(false)}
-            data-readiness-action="collapse"
-        >
-            Show less
-        </button>
-    ) : evidence.factors.length > 0 ? (
-        <button
-            type="button"
-            className="alloy-os-ucard__action alloy-os-ucard__action--system5"
-            onClick={() => setExpanded(true)}
-            data-readiness-action="expand"
+            onClick={() => setOverlayOpen((v) => !v)}
+            data-readiness-action="view"
+            aria-expanded={overlayOpen}
         >
             View readiness →
         </button>
     ) : null;
 
-    let body: React.ReactNode;
-    let perspective: "collapsed" | "expanded" | "focused" | "empty";
-    if (evidence.isEmpty) {
-        perspective = "empty";
-        body = (
-            <div className="alloy-os-household__summary" data-readiness-empty="true">
-                <p className="alloy-os-household__row-detail">
-                    Add a primary contact and a child to score readiness
-                </p>
-            </div>
-        );
-    } else if (focused) {
-        perspective = "focused";
-        body = <FocusedFactor factor={focused} />;
-    } else if (expanded) {
-        perspective = "expanded";
-        body = (
-            <div className="alloy-os-readiness__body" data-readiness-checklist>
-                {evidence.score != null ? <Gauge value={evidence.score} tone={gaugeTone} /> : null}
-                <div className="alloy-os-household__rows">
-                    {evidence.factors.map((factor) => (
-                        <FactorRow
-                            key={factor.key}
-                            factor={factor}
-                            onFocus={
-                                factor.status !== "complete" ? () => setFocusedKey(factor.key) : undefined
-                            }
-                        />
-                    ))}
-                </div>
-            </div>
-        );
-    } else {
-        perspective = "collapsed";
-        body =
-            evidence.score != null ? (
-                <div className="alloy-os-readiness__body" data-readiness-gauge>
-                    <Gauge value={evidence.score} tone={gaugeTone} />
-                </div>
-            ) : null;
-    }
-
     return (
         <div
             className="alloy-os-household alloy-os-readiness"
             data-readiness-card="true"
-            data-readiness-card-perspective={perspective}
+            data-readiness-card-perspective={evidence.isEmpty ? "empty" : "diagnostic"}
             data-readiness-verdict={evidence.verdict}
+            data-fp-overlay-open={overlayOpen ? "true" : undefined}
         >
             <UniversalCard
                 title={model.title}
                 insight={evidence.answerLine}
-                supportingInsight={perspective === "collapsed" ? evidence.supportingLine : null}
+                supportingInsight={evidence.supportingLine}
                 iconName={model.iconName}
                 tier={model.tier}
                 archetype="metric"
                 statusChip={evidence.statusChip}
                 statusTone={evidence.statusTone}
-                density={density}
+                density="compact"
                 gridSpan={model.span}
                 data-universal-card-key={model.key}
                 receded={receded}
@@ -137,6 +106,26 @@ export default function ReadinessCard({ model, context, receded = false }: Props
             >
                 {body}
             </UniversalCard>
+            <CardInlineOverlay
+                open={overlayOpen && hasFactors}
+                onClose={() => setOverlayOpen(false)}
+                title="Readiness"
+                dataOverlay="readiness"
+            >
+                <div className="alloy-os-household__rows" data-readiness-checklist>
+                    {evidence.factors.map((factor) => (
+                        <FactorRow
+                            key={factor.key}
+                            factor={factor}
+                            onFocus={
+                                factor.status !== "complete" && factor.ownerCard
+                                    ? () => handleFactor(factor)
+                                    : undefined
+                            }
+                        />
+                    ))}
+                </div>
+            </CardInlineOverlay>
         </div>
     );
 }
@@ -164,8 +153,16 @@ function factorLead(status: ReadinessFactor["status"]): string {
     return "○";
 }
 
+const OWNER_LABEL: Record<string, string> = {
+    household: "Household",
+    children: "Children",
+    current_work: "Current Work",
+};
+
 function FactorRow({ factor, onFocus }: { factor: ReadinessFactor; onFocus?: () => void }) {
     const tone = factorTone(factor.status);
+    // A pointer hint only when the factor hands off to an owner card.
+    const pointsTo = onFocus && factor.ownerCard ? OWNER_LABEL[factor.ownerCard] ?? null : null;
     const content = (
         <>
             <span
@@ -187,6 +184,11 @@ function FactorRow({ factor, onFocus }: { factor: ReadinessFactor; onFocus?: () 
                     </span>
                 ) : null}
             </span>
+            {pointsTo ? (
+                <span className="alloy-os-readiness__pointer" aria-hidden>
+                    {pointsTo} →
+                </span>
+            ) : null}
         </>
     );
     if (onFocus) {
@@ -209,24 +211,6 @@ function FactorRow({ factor, onFocus }: { factor: ReadinessFactor; onFocus?: () 
             data-readiness-status={factor.status}
         >
             {content}
-        </div>
-    );
-}
-
-function FocusedFactor({ factor }: { factor: ReadinessFactor }) {
-    return (
-        <div className="alloy-os-household__focused" data-readiness-focused={factor.key}>
-            <div className="alloy-os-household__focused-header">
-                <span className="alloy-os-household__group-title">{factor.label}</span>
-            </div>
-            <p className="alloy-os-household__row-detail">
-                {factor.status === "blocked"
-                    ? "This blocks advancing to enrolled."
-                    : "This is still incomplete on the record."}
-            </p>
-            {factor.detail ? (
-                <p className="alloy-os-household__row-detail">{factor.detail}</p>
-            ) : null}
         </div>
     );
 }

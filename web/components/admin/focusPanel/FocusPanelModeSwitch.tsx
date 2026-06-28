@@ -3,7 +3,7 @@
 import clsx from "clsx";
 
 import {
-    FOCUS_PANEL_MODES,
+    FOCUS_PANEL_SWITCH_MODES,
     FOCUS_PANEL_MODE_LABELS,
     type FocusPanelMode,
 } from "@/lib/adminV2/runtime/focusPanel/focusPanelMode";
@@ -14,7 +14,11 @@ type Props = {
     onModeChange: (mode: FocusPanelMode) => void;
 };
 
-/** Integrated Summary / Work / Activity mode switch (Concept B). */
+/**
+ * Two-mode switch: **Work** (Core Four operating surface) + **Activity**.
+ * The legacy split "Work" view is merged into Work — the cards own
+ * overview/evidence/focus/edit, so a third tab was duplicative.
+ */
 export default function FocusPanelModeSwitch({ activeMode, onModeChange }: Props) {
     return (
         <div
@@ -25,8 +29,9 @@ export default function FocusPanelModeSwitch({ activeMode, onModeChange }: Props
             data-alloy-os-focus-panel-mode-switch="true"
             {...alloySectionDomAttrs("WU-08")}
         >
-            {FOCUS_PANEL_MODES.map((mode) => {
-                const active = mode === activeMode;
+            {FOCUS_PANEL_SWITCH_MODES.map((mode) => {
+                // The legacy `work` mode collapses onto the Work tab (`summary`).
+                const active = mode === activeMode || (mode === "summary" && activeMode === "work");
                 return (
                     <button
                         key={mode}

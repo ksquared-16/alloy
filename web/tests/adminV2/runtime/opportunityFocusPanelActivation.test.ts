@@ -63,9 +63,11 @@ describe("Opportunity Focus Panel activation wiring", () => {
         expect(header).toContain('data-alloy-os-focus-panel-header="true"');
         const modeSwitch = readSrc("components/admin/focusPanel/FocusPanelModeSwitch.tsx");
         expect(modeSwitch).toContain('data-alloy-os-focus-panel-mode-switch="true"');
-        expect(modeSwitch).toContain("Summary");
-        expect(modeSwitch).toContain("Work");
-        expect(modeSwitch).toContain("Activity");
+        // Two-mode model: Work (Core Four surface) + Activity. Legacy split Work merged.
+        expect(modeSwitch).toContain("FOCUS_PANEL_SWITCH_MODES");
+        const modeDefs = readSrc("lib/adminV2/runtime/focusPanel/focusPanelMode.ts");
+        expect(modeDefs).toContain('summary: "Work"');
+        expect(modeDefs).toContain('FOCUS_PANEL_SWITCH_MODES: readonly FocusPanelMode[] = ["summary", "activity"]');
     });
 
     it("Focus Panel body derives business-question card keys", () => {

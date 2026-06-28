@@ -11,12 +11,35 @@
  * @see docs/platform/operator/card-archetypes.md (Work)
  */
 
+import type { FocusPanelCardKey } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardModel";
 import type {
     OperationalContext,
     OperationalWorkItem,
 } from "@/lib/adminV2/runtime/operationalContext/types";
 
 export type CurrentWorkStatusTone = "due" | "blocked" | "ready" | "neutral";
+
+/** Where a work item's truth lives, so Current Work can hand off instead of editing. */
+export type WorkItemOwner = { card: FocusPanelCardKey; focus: string | null };
+
+/**
+ * Current Work is a coordinating card: a work item should route to the card that
+ * OWNS the underlying truth rather than open an editing workspace here. We infer the
+ * owner conservatively from the item label — only obvious contact/enrollment intents
+ * route; anything ambiguous returns null (the item expands inline). Pure + testable.
+ */
+export function inferWorkItemOwner(item: OperationalWorkItem): WorkItemOwner | null {
+    const label = item.label.toLowerCase();
+    // Reaching the family → Household owns contact truth.
+    if (/\b(call|contact|reach|phone|email|follow[\s-]?up|text|message)\b/.test(label)) {
+        return { card: "household", focus: "primary_contact" };
+    }
+    // Enrollment/program/schedule for a child → Children owns operational truth.
+    if (/\b(program|schedule|enroll|enrollment|child|roster|placement)\b/.test(label)) {
+        return { card: "children", focus: null };
+    }
+    return null;
+}
 
 export type CurrentWorkCardEvidence = {
     primary: OperationalWorkItem | null;

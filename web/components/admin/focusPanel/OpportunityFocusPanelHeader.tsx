@@ -4,12 +4,10 @@ import { useMemo } from "react";
 
 import FocusPanelCompactHeader from "@/components/admin/focusPanel/FocusPanelCompactHeader";
 import { OpportunityDrawerHeaderControls } from "@/components/admin/opportunity/OpportunityDrawerHeaderControls";
-import { useActiveRuntimePerspective } from "@/lib/adminV2/runtime/perspective/RuntimePerspectiveContext";
 import {
     buildFocusPanelContextChips,
     formatFocusPanelDisplayLabel,
     resolveFocusPanelLocationChip,
-    resolveFocusPanelMissionDisplay,
     resolveFocusPanelProcessLabel,
 } from "@/lib/adminV2/runtime/focusPanel/focusPanelDisplayLabels";
 import { FOCUS_PANEL_HEADER_BOS_LABEL } from "@/lib/adminV2/runtime/focusPanel/focusPanelHeaderActions";
@@ -67,10 +65,6 @@ export default function OpportunityFocusPanelHeader({
     onDismissActionPreflightBlocked,
     registryActionFeedback,
 }: OpportunityFocusPanelHeaderProps) {
-    const perspective = useActiveRuntimePerspective();
-    const stageRuntime = displayVm.workspace.stage_work_runtime;
-    const stageContext = displayVm.workspace.stage_context;
-
     const subjectManageActions = useMemo(
         () => buildSubjectManageMenuFromResolvedActions(displayVm.actions.header_menu),
         [displayVm.actions.header_menu],
@@ -94,16 +88,6 @@ export default function OpportunityFocusPanelHeader({
                 locationLabel,
             }),
         [currentStatusKey, locationLabel, processLabel, readOnlyStatusLabel],
-    );
-
-    const mission = useMemo(
-        () =>
-            resolveFocusPanelMissionDisplay({
-                perspectiveMission: perspective?.defaultMission,
-                stagePurpose: stageRuntime?.purpose,
-                stageContextPurpose: stageContext?.purpose,
-            }),
-        [perspective?.defaultMission, stageContext?.purpose, stageRuntime?.purpose],
     );
 
     const secondaryActions = (
@@ -136,7 +120,6 @@ export default function OpportunityFocusPanelHeader({
         <FocusPanelCompactHeader
             subjectTitle={title}
             contextChips={contextChips}
-            mission={mission}
             secondaryActions={secondaryActions}
             activeMode={activeMode}
             onModeChange={onModeChange}

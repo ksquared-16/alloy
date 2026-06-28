@@ -6,15 +6,11 @@ import { X } from "lucide-react";
 import FocusPanelModeSwitch from "@/components/admin/focusPanel/FocusPanelModeSwitch";
 import FocusPanelSubjectIdentityBlock from "@/components/admin/focusPanel/FocusPanelSubjectIdentityBlock";
 import type { FocusPanelMode } from "@/lib/adminV2/runtime/focusPanel/focusPanelMode";
-import type {
-    FocusPanelContextChip,
-    FocusPanelMissionDisplay,
-} from "@/lib/adminV2/runtime/focusPanel/focusPanelDisplayLabels";
+import type { FocusPanelContextChip } from "@/lib/adminV2/runtime/focusPanel/focusPanelDisplayLabels";
 
 export type FocusPanelCompactHeaderProps = {
     subjectTitle: string;
     contextChips: FocusPanelContextChip[];
-    mission?: FocusPanelMissionDisplay | null;
     secondaryActions?: ReactNode | null;
     activeMode: FocusPanelMode;
     onModeChange: (mode: FocusPanelMode) => void;
@@ -28,7 +24,6 @@ export type FocusPanelCompactHeaderProps = {
 export default function FocusPanelCompactHeader({
     subjectTitle,
     contextChips,
-    mission,
     secondaryActions,
     activeMode,
     onModeChange,
@@ -49,7 +44,6 @@ export default function FocusPanelCompactHeader({
                 <FocusPanelSubjectIdentityBlock
                     subjectTitle={subjectTitle}
                     contextChips={contextChips}
-                    mission={mission}
                 />
                 <div
                     className="alloy-os-fp-header-compact__rail shrink-0"

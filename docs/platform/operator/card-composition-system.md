@@ -3,7 +3,8 @@
 **Status:** Platform doctrine (June 2026). The composition layer between **cards** and the **Experience Builder**.
 **Follows:** [`operational-grammar.md`](./operational-grammar.md) · [`card-language.md`](./card-language.md) · [`card-archetypes.md`](./card-archetypes.md) · [`operational-context-boundary.md`](./operational-context-boundary.md).
 **Feeds:** [`experience-builder-doctrine.md`](./experience-builder-doctrine.md) (Surface Definitions compose cards using this system).
-**Code model (declarative, unwired):** `web/lib/adminV2/runtime/focusPanel/cardCompositionModel.ts`.
+**Code model (declarative):** `web/lib/adminV2/runtime/focusPanel/cardCompositionModel.ts`.
+**Engine (wired, V1):** `web/lib/adminV2/runtime/focusPanel/composition/composeFocusPanelSurface.ts` — see [`docs/sprints/06_2026/focus-panel-composition-engine-v1`](../../sprints/06_2026/focus-panel-composition-engine-v1/README.md).
 
 > We have designed Operational Grammar, Card Language, Card Archetypes, Operational Context, Subject Change, and Perspective Change. The missing layer is **how cards compose into a Focus Panel**. This document defines that system. It introduces **no new interaction primitives and no new architecture** — it is the rulebook a future layout engine and the Experience Builder use to turn a set of cards into one operational experience.
 
@@ -172,7 +173,19 @@ Card Preferences    ─┘            ▲
                           Available width (responsive columns)
 ```
 
-The engine is **deterministic** and produces grid rows the existing
+> **Implementation status — Composition Engine V1 (June 2026).**
+> `composeFocusPanelSurface()` is the wired, deterministic engine. It supersedes
+> the uniform 1–4 column grid with a finer **12-unit** base so cards claim
+> genuinely different widths. It composes **interlocking lanes** (a dominant
+> Heavy/anchor lane beside a balancing support lane, natural heights) when the
+> surface is wide, and a composed **stack** (full-width anchors, paired support)
+> when narrow. The numbered algorithm below is the conceptual spec; V1 realizes
+> steps 1–8 via lane composition rather than row equalization (cards keep natural
+> heights so they interlock — §6 “row rhythm” relaxes to “lane interlock”). Depth
+> (Focus Cards) and inline overlays are unchanged. See the sprint README for
+> measured lane widths (operator panel 745px → primary 467 / support 234).
+
+The engine is **deterministic** and produces a composition the existing
 `FocusPanelCardGrid` can render. Algorithm:
 
 1. **Resolve preferences.** For each card, merge platform default ⊕ Surface override

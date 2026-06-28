@@ -1,0 +1,15 @@
+{
+  "readinessChecklistVisibleCollapsed": 0,
+  "readinessOverlayOpen": 1,
+  "readinessScrim": 0,
+  "belowCardBeforeTop": 569,
+  "belowCardAfterTop": 569,
+  "belowCardMoved": false,
+  "readinessHandoffElevated": "children",
+  "currentWorkOverlayOpen": 1,
+  "currentWorkScrim": 0,
+  "cwBelowMoved": false,
+  "currentWorkOverlayAfterEsc": 0,
+  "householdElevated": "household",
+  "childrenElevated": "children"
+}

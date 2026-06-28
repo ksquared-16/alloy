@@ -35,6 +35,14 @@ export type ChildrenEvidenceChild = {
     statusTone: ChildStatusTone;
     /** Missing operational essentials (program / schedule / start) for this child. */
     needsAttention: boolean;
+    /**
+     * One operational sentence of present facts — "Preschool · North Room · M–F ·
+     * starts Aug 2026" — answer-first evidence, NOT a labeled field grid. Null when
+     * nothing operational is set yet.
+     */
+    detailLine: string | null;
+    /** Short "what's missing" sentence for attention children, null when complete. */
+    missingLine: string | null;
     /** Real flags only (medical/document); empty when none present. */
     flags: ChildEvidenceFlag[];
 };
@@ -111,6 +119,7 @@ export function buildChildrenCardEvidence(context: OperationalContext): Children
     const children: ChildrenEvidenceChild[] = rows.map((row, index) => {
         const name = childName(row);
         const program = trimOrNull(row.desired_program_label);
+        const room = trimOrNull(row.program_room_cohort_label) ?? trimOrNull(row.location_label);
         const schedule = trimOrNull(row.desired_schedule_label);
         const startDate = trimOrNull(row.desired_start_date);
         const statusLabel = trimOrNull(row.outcome_status_label);
@@ -118,18 +127,45 @@ export function buildChildrenCardEvidence(context: OperationalContext): Children
         const declined = statusKey?.toLowerCase().includes("declin") ?? false;
         // Active children need the enrollment essentials; declined children do not.
         const needsAttention = !declined && (!program || !schedule || !startDate);
+
+        // Answer-first evidence sentence (present facts only, no labels).
+        const detailParts = [
+            program,
+            room,
+            schedule,
+            startDate ? `starts ${startDate}` : null,
+        ].filter(Boolean) as string[];
+        const detailLine = detailParts.length > 0 ? detailParts.join(" · ") : null;
+
+        // "What's still needed" diagnosis for attention children.
+        const missing = [
+            !program ? "program" : null,
+            !schedule ? "schedule" : null,
+            !startDate ? "start date" : null,
+        ].filter(Boolean) as string[];
+        const missingLine =
+            !declined && missing.length > 0
+                ? `Needs ${
+                      missing.length === 1
+                          ? missing[0]
+                          : `${missing.slice(0, -1).join(", ")} & ${missing[missing.length - 1]}`
+                  }`
+                : null;
+
         return {
             id: trimOrNull(row.id) ?? trimOrNull(row.person_id) ?? `child-${index}`,
             name,
             initial: name.charAt(0).toUpperCase(),
             dobAge: dobAgeLine(row.dob, row.age),
             program,
-            room: trimOrNull(row.program_room_cohort_label) ?? trimOrNull(row.location_label),
+            room,
             schedule,
             startDate,
             status: statusLabel ?? (statusKey ? statusKey : null),
             statusTone: statusTone(statusKey),
             needsAttention,
+            detailLine,
+            missingLine,
             flags: [],
         };
     });

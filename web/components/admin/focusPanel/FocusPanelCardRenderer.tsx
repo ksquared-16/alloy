@@ -13,6 +13,7 @@ import OpportunityDrawerVmTabPanes from "@/components/admin/vmDrawer/Opportunity
 import { buildOpportunityVmLifecycleRailModel } from "@/lib/adminV2/viewModel/drawer/vmRuntime/buildOpportunityVmLifecycleRailModel";
 import type { FocusPanelCardKey, FocusPanelCardModel } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardModel";
 import type { FocusPanelMode } from "@/lib/adminV2/runtime/focusPanel/focusPanelMode";
+import type { FocusPanelCoordination } from "@/lib/adminV2/runtime/focusPanel/focusPanelCoordination";
 import type { OperationalContext } from "@/lib/adminV2/runtime/operationalContext/types";
 import { system5ArchetypeSuppressesFooterAction } from "@/lib/adminV2/runtime/focusPanel/system5CardArchetypes";
 import type { OperationalSubjectViewModel } from "@/lib/adminV2/viewModel/drawer/types";
@@ -46,6 +47,8 @@ type Props = {
     focusPanelMode: FocusPanelMode;
     onPrimaryAction?: (key: FocusPanelCardKey) => void;
     receded?: boolean;
+    /** Cross-card handoff orchestration (Perspective Change on owner cards). */
+    coordination?: FocusPanelCoordination;
     /** Internal compatibility wrapper — see {@link FocusPanelCardCompat}. Pure cards ignore it. */
     compat: FocusPanelCardCompat;
 };
@@ -80,6 +83,7 @@ export default function FocusPanelCardRenderer({
     focusPanelMode,
     onPrimaryAction,
     receded = false,
+    coordination,
     compat,
 }: Props) {
     if (!model.visible) return null;
@@ -90,20 +94,21 @@ export default function FocusPanelCardRenderer({
     // answer from `context.truth` — no fetch on expand. It therefore bypasses the
     // generic profile-payload body. NOTE: pure cards read only `model` + `context`.
     if (model.key === "household") {
-        return <HouseholdCard model={model} context={context} receded={receded} />;
+        return <HouseholdCard model={model} context={context} receded={receded} coordination={coordination} />;
     }
 
     // Core Four operational cards — pure cards on the Operational Context boundary.
     // Each owns its collapsed → expanded → focused perspective locally and derives
     // its answer from `context` (truth + projected signals). No fetch on expand.
+    // `coordination` lets a referencing card hand off focus here (Perspective Change).
     if (model.key === "children") {
-        return <ChildrenCard model={model} context={context} receded={receded} />;
+        return <ChildrenCard model={model} context={context} receded={receded} coordination={coordination} />;
     }
     if (model.key === "current_work") {
-        return <CurrentWorkCard model={model} context={context} receded={receded} />;
+        return <CurrentWorkCard model={model} context={context} receded={receded} coordination={coordination} />;
     }
     if (model.key === "readiness_kpi") {
-        return <ReadinessCard model={model} context={context} receded={receded} />;
+        return <ReadinessCard model={model} context={context} receded={receded} coordination={coordination} />;
     }
 
     // Subject identity + observed truth derive from the Operational Context. Only the

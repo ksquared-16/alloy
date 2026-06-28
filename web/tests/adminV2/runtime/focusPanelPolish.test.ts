@@ -136,11 +136,14 @@ describe("Focus Panel header composition guards", () => {
         expect(opportunity).not.toContain("primaryHeaderAction={");
     });
 
-    it("mission uses structured mission row classes", () => {
-        const header = readSrc("components/admin/focusPanel/FocusPanelSubjectIdentityBlock.tsx");
-        expect(header).toContain("alloy-os-fp-header-compact__mission-row");
-        expect(header).toContain("alloy-os-fp-header-compact__mission-label");
-        expect(header).toContain("alloy-os-fp-header-compact__mission-value");
+    it("header carries no mission/action cue (it must not compete with the cards)", () => {
+        const identity = readSrc("components/admin/focusPanel/FocusPanelSubjectIdentityBlock.tsx");
+        expect(identity).not.toContain("alloy-os-fp-header-compact__mission-row");
+        expect(identity).not.toContain("alloy-os-fp-header-compact__mission-value");
+        expect(identity).not.toContain(">Mission<");
+        const opportunity = readSrc("components/admin/focusPanel/OpportunityFocusPanelHeader.tsx");
+        expect(opportunity).not.toContain("resolveFocusPanelMissionDisplay");
+        expect(opportunity).not.toContain("mission={");
     });
 
     it("BOS header label is BOS with default variant and Manage remains present", () => {

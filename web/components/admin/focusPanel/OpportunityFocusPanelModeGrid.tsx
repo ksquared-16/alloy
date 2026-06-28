@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import FocusPanelCardGrid from "@/components/admin/focusPanel/FocusPanelCardGrid";
 import FocusPanelCardRenderer from "@/components/admin/focusPanel/FocusPanelCardRenderer";
@@ -16,6 +16,14 @@ import {
     type FocusPanelCardConfig,
 } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardConfigModel";
 import { FOCUS_PANEL_SUMMARY_DEFAULT_DOC } from "@/lib/adminV2/runtime/focusPanel/buildFocusPanelSummaryDefaultDoc";
+import type { CompositionCardInput } from "@/lib/adminV2/runtime/focusPanel/composition/composeFocusPanelSurface";
+import {
+    isElevatedLevel,
+    type FocusPanelActiveDepth,
+    type FocusPanelCoordination,
+    type FocusPanelDismissSignal,
+    type FocusPanelFocusRequest,
+} from "@/lib/adminV2/runtime/focusPanel/focusPanelCoordination";
 import { usePublishedFocusPanelSummaryDoc } from "@/lib/adminV2/runtime/focusPanel/usePublishedFocusPanelSummaryDoc";
 import { alloySectionDomAttrs } from "@/lib/perf/alloySectionMap";
 import type { FocusPanelMode } from "@/lib/adminV2/runtime/focusPanel/focusPanelMode";
@@ -97,6 +105,68 @@ export default function OpportunityFocusPanelModeGrid({
         [drawerId, title, displayVm, record, perspective, statusLabel, canMutate],
     );
 
+    // Cross-card handoff orchestration: a referencing card (e.g. Readiness) asks an
+    // owner card (e.g. Children) to open a Perspective. We record the request with a
+    // monotonic nonce, scroll the owner card into view, and let it apply the focus.
+    // This is NOT a new primitive — it coordinates existing local perspective state.
+    const gridContainerRef = useRef<HTMLDivElement>(null);
+    const [focusRequest, setFocusRequest] = useState<FocusPanelFocusRequest | null>(null);
+    const focusNonceRef = useRef(0);
+    const requestFocus = useCallback<FocusPanelCoordination["requestFocus"]>((card, focus) => {
+        focusNonceRef.current += 1;
+        setFocusRequest({ card, focus, nonce: focusNonceRef.current });
+        if (typeof window !== "undefined") {
+            window.requestAnimationFrame(() => {
+                const target = gridContainerRef.current?.querySelector(
+                    `[data-focus-panel-grid-cell="${card}"]`,
+                );
+                target?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+            });
+        }
+    }, []);
+    // In-panel depth layer: a card reports when it opens deep (focused / edit). The
+    // host raises that card and recedes the rest — no route, no drawer, no modal.
+    const [activeDepth, setActiveDepth] = useState<FocusPanelActiveDepth | null>(null);
+    const reportPerspective = useCallback<NonNullable<FocusPanelCoordination["reportPerspective"]>>(
+        (card, level) => {
+            setActiveDepth((prev) => {
+                if (isElevatedLevel(level)) return { card, level };
+                // Receding/leaving: only clear if this card owned the active layer.
+                return prev?.card === card ? null : prev;
+            });
+        },
+        [],
+    );
+    // Return-to-base: backdrop click / ESC asks the active card to collapse. The card
+    // resets its local state → reports "base" → activeDepth clears → overlay dismisses.
+    const [dismissed, setDismissed] = useState<FocusPanelDismissSignal | null>(null);
+    const dismissNonceRef = useRef(0);
+    const dismiss = useCallback<NonNullable<FocusPanelCoordination["dismiss"]>>((card) => {
+        dismissNonceRef.current += 1;
+        setDismissed({ card, nonce: dismissNonceRef.current });
+    }, []);
+    const coordination = useMemo<FocusPanelCoordination>(
+        () => ({ request: focusRequest, requestFocus, activeDepth, reportPerspective, dismissed, dismiss }),
+        [focusRequest, requestFocus, activeDepth, reportPerspective, dismissed, dismiss],
+    );
+    const elevatedCellKey = activeDepth?.card ?? null;
+
+    // ESC returns the focused/edit card to its base Work surface. Captured before the
+    // drawer's own ESC-to-close handler and stopped, so ESC dismisses the depth layer
+    // FIRST and does not also close the whole record. Only active while a card is deep.
+    useEffect(() => {
+        if (!activeDepth) return;
+        const onKey = (event: KeyboardEvent) => {
+            if (event.key !== "Escape") return;
+            event.preventDefault();
+            event.stopPropagation();
+            event.stopImmediatePropagation();
+            dismiss(activeDepth.card);
+        };
+        window.addEventListener("keydown", onKey, true);
+        return () => window.removeEventListener("keydown", onKey, true);
+    }, [activeDepth, dismiss]);
+
     const workflowActive = Boolean(
         displayVm.workspace.work_intent_runtime?.state === "open" ||
             displayVm.workspace.stage_work_runtime?.primary?.state === "open",
@@ -133,6 +203,20 @@ export default function OpportunityFocusPanelModeGrid({
         [grid, cards],
     );
 
+    // Composition Engine input — Summary is COMPOSED from card semantics (lanes /
+    // stack), not laid out as equal grid cells. Reading order + visibility stay
+    // config-driven (gridRows); the engine owns grouping + width. Work and other
+    // modes keep the legacy responsive grid.
+    const composeCards = useMemo<CompositionCardInput[] | null>(() => {
+        if (!isSummary) return null;
+        return gridRows.flatMap((row) =>
+            row.cells.map((cell) => ({
+                key: cell.key,
+                typeKey: (cellResolution.get(cell.key)?.typeKey ?? cell.key) as FocusPanelCardKey,
+            })),
+        );
+    }, [isSummary, gridRows, cellResolution]);
+
     if (mode === "activity") {
         return (
             <OpportunityFocusPanelEmbeddedWorkspace
@@ -146,6 +230,7 @@ export default function OpportunityFocusPanelModeGrid({
 
     return (
         <div
+            ref={gridContainerRef}
             id={`focus-panel-mode-${mode}`}
             role="tabpanel"
             aria-labelledby={`focus-panel-mode-tab-${mode}`}
@@ -155,8 +240,13 @@ export default function OpportunityFocusPanelModeGrid({
         >
             <FocusPanelCardGrid
                 rows={gridRows}
+                composeCards={composeCards}
                 className={mode === "work" ? "alloy-os-focus-panel-grid--work" : undefined}
                 dataFocusPanelSplitLayout={mode === "work" ? "true" : undefined}
+                elevatedCellKey={elevatedCellKey}
+                onBackdropClick={() => {
+                    if (activeDepth) dismiss(activeDepth.card);
+                }}
                 renderCell={(key) => {
                     const resolution = cellResolution.get(key);
                     const typeKey = (resolution?.typeKey ?? key) as FocusPanelCardKey;
@@ -175,6 +265,7 @@ export default function OpportunityFocusPanelModeGrid({
                                 }
                             }}
                             receded={receded}
+                            coordination={coordination}
                             compat={{ subjectVm: displayVm, onSelectTab }}
                         />
                     );

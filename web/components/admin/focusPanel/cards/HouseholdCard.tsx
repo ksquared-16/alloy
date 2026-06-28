@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import clsx from "clsx";
 
 import UniversalCard from "@/components/admin/focusPanel/UniversalCard";
@@ -11,6 +11,12 @@ import {
     type HouseholdEvidenceGroupKey,
 } from "@/lib/adminV2/runtime/focusPanel/household/buildHouseholdCardEvidence";
 import type { FocusPanelCardModel } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardModel";
+import {
+    useReportPerspective,
+    useDismissSignal,
+    type FocusPanelCoordination,
+    type FocusPanelPerspectiveLevel,
+} from "@/lib/adminV2/runtime/focusPanel/focusPanelCoordination";
 import type { OperationalContext } from "@/lib/adminV2/runtime/operationalContext/types";
 
 type Props = {
@@ -18,6 +24,8 @@ type Props = {
     /** Forward-facing card boundary — Household observes this, never the drawer VM. */
     context: OperationalContext;
     receded?: boolean;
+    /** Owner card: receives cross-card handoffs (e.g. from Readiness / Current Work). */
+    coordination?: FocusPanelCoordination;
 };
 
 const COLLAPSED_PREVIEW_GROUPS = 4;
@@ -33,7 +41,7 @@ const COLLAPSED_PREVIEW_GROUPS = 4;
  * @see docs/platform/operator/card-archetypes.md (Identity)
  * @see docs/platform/operator/card-interaction-expansion-doctrine.md (System 5B — Expand)
  */
-export default function HouseholdCard({ model, context, receded = false }: Props) {
+export default function HouseholdCard({ model, context, receded = false, coordination }: Props) {
     const evidence = useMemo(
         () => buildHouseholdCardEvidence(context),
         [context],
@@ -49,9 +57,41 @@ export default function HouseholdCard({ model, context, receded = false }: Props
     const [expanded, setExpanded] = useState(false);
     const [focusedGroup, setFocusedGroup] = useState<HouseholdEvidenceGroupKey | null>(null);
 
+    // Cross-card handoff: when another card points here (e.g. Readiness "primary
+    // contact"), open the requested evidence group as a Perspective Change. No fetch.
+    const request = coordination?.request;
+    const requestNonce = request?.card === "household" ? request.nonce : null;
+    useEffect(() => {
+        if (request?.card !== "household") return;
+        setExpanded(true);
+        setFocusedGroup((request.focus as HouseholdEvidenceGroupKey | null) ?? null);
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- nonce gates re-apply
+    }, [requestNonce]);
+
     const focused = !isEmpty && focusedGroup
         ? evidence.groups.find((g) => g.key === focusedGroup) ?? null
         : null;
+
+    // ANY open state (expanded household, a focused group) elevates as a centered
+    // Focus Card — Household never expands height inline (no row reflow).
+    const level: FocusPanelPerspectiveLevel = focused || expanded ? "focused" : "base";
+    useReportPerspective(coordination, "household", level);
+    useDismissSignal(coordination, "household", () => {
+        setFocusedGroup(null);
+        setExpanded(false);
+    });
+
+    // Household children are belonging-only. Clicking a child hands off to the
+    // Children card (which owns operational truth) — a Perspective Change, no fetch.
+    // Household collapses itself as it hands off so it recedes cleanly to its base
+    // footprint (no leftover expanded height reflowing behind the new Focus Card).
+    const openChild = coordination
+        ? (childId: string) => {
+              setExpanded(false);
+              setFocusedGroup(null);
+              coordination.requestFocus("children", childId);
+          }
+        : undefined;
 
     const density = !isEmpty && (expanded || focused) ? "expanded" : "compact";
     const hasWarning = Boolean(evidence.missingCriticalWarning);
@@ -76,7 +116,7 @@ export default function HouseholdCard({ model, context, receded = false }: Props
                 onClick={() => setExpanded(false)}
                 data-household-action="collapse"
             >
-                Show less
+                ← Back to panel
             </button>
         ) : evidence.groups.length > 0 ? (
             <button
@@ -96,7 +136,7 @@ export default function HouseholdCard({ model, context, receded = false }: Props
         body = <EmptyBody />;
     } else if (focused) {
         perspective = "focused";
-        body = <FocusedGroupBody group={focused} masked={maskedChannels} />;
+        body = <FocusedGroupBody group={focused} masked={maskedChannels} onOpenChild={openChild} />;
     } else if (expanded) {
         perspective = "expanded";
         body = (
@@ -104,6 +144,7 @@ export default function HouseholdCard({ model, context, receded = false }: Props
                 groups={evidence.groups}
                 masked={maskedChannels}
                 onFocusGroup={(key) => setFocusedGroup(key)}
+                onOpenChild={openChild}
             />
         );
     } else {
@@ -190,23 +231,38 @@ function CollapsedBody({
         },
     ];
     const stats = allStats.filter((s) => s.count > 0);
+    // The primary contact NAME is already the card answer (insight). Collapsed
+    // evidence shows reachability (how to reach them) + the address — never repeats
+    // the name.
+    const channel = masked
+        ? "Contact details restricted"
+        : [evidence.primaryPhone, evidence.primaryEmail].filter(Boolean).join(" · ") || null;
+    // Missing-emergency warning hands off to the emergency group; missing-primary
+    // has no group yet, so it just opens the card.
+    const warningTarget: HouseholdEvidenceGroupKey | null =
+        evidence.emergencyContactCount === 0 && evidence.primaryContact
+            ? "emergency_contacts"
+            : "primary_contact";
 
     return (
         <div className="alloy-os-household__summary">
             {evidence.primaryContact ? (
-                <ContactLine
-                    contact={evidence.primaryContact}
-                    masked={masked}
-                    channelFallback={{
-                        phone: evidence.primaryPhone,
-                        email: evidence.primaryEmail,
-                    }}
-                />
+                <p
+                    className={clsx(
+                        "alloy-os-household__channel",
+                        !channel && "alloy-os-household__channel--missing",
+                    )}
+                    data-household-channel="true"
+                >
+                    {channel ?? "No contact channel on file"}
+                </p>
             ) : (
                 <p className="alloy-os-household__missing" data-household-missing="primary">
                     Primary contact needed
                 </p>
             )}
+
+            {evidence.address ? <AddressLine address={evidence.address} /> : null}
 
             {stats.length > 0 ? (
                 <ul className="alloy-os-household__stats" data-household-stats>
@@ -233,12 +289,14 @@ function CollapsedBody({
             ) : null}
 
             {evidence.missingCriticalWarning ? (
-                <p
-                    className="alloy-os-household__warning"
+                <button
+                    type="button"
+                    className="alloy-os-household__warning alloy-os-household__warning--action"
                     data-household-warning="true"
+                    onClick={() => onPreviewGroup(warningTarget)}
                 >
-                    {evidence.missingCriticalWarning}
-                </p>
+                    {evidence.missingCriticalWarning} →
+                </button>
             ) : null}
         </div>
     );
@@ -256,10 +314,12 @@ function ExpandedBody({
     groups,
     masked,
     onFocusGroup,
+    onOpenChild,
 }: {
     groups: HouseholdEvidenceGroup[];
     masked: boolean;
     onFocusGroup: (key: HouseholdEvidenceGroupKey) => void;
+    onOpenChild?: (childId: string) => void;
 }) {
     return (
         <div className="alloy-os-household__groups" data-household-groups>
@@ -278,7 +338,12 @@ function ExpandedBody({
                         <span className="alloy-os-household__group-title">{group.title}</span>
                         <span className="alloy-os-household__group-count">{group.count} →</span>
                     </button>
-                    <GroupRows group={group} masked={masked} limit={COLLAPSED_PREVIEW_GROUPS} />
+                    <GroupRows
+                        group={group}
+                        masked={masked}
+                        limit={COLLAPSED_PREVIEW_GROUPS}
+                        onOpenChild={onOpenChild}
+                    />
                 </section>
             ))}
         </div>
@@ -288,9 +353,11 @@ function ExpandedBody({
 function FocusedGroupBody({
     group,
     masked,
+    onOpenChild,
 }: {
     group: HouseholdEvidenceGroup;
     masked: boolean;
+    onOpenChild?: (childId: string) => void;
 }) {
     return (
         <div
@@ -301,12 +368,22 @@ function FocusedGroupBody({
                 <span className="alloy-os-household__group-title">{group.title}</span>
                 <span className="alloy-os-household__group-count">{group.count}</span>
             </div>
-            <GroupRows group={group} masked={masked} />
+            <GroupRows group={group} masked={masked} onOpenChild={onOpenChild} />
         </div>
     );
 }
 
-function GroupRows({ group, masked, limit }: { group: HouseholdEvidenceGroup; masked: boolean; limit?: number }) {
+function GroupRows({
+    group,
+    masked,
+    limit,
+    onOpenChild,
+}: {
+    group: HouseholdEvidenceGroup;
+    masked: boolean;
+    limit?: number;
+    onOpenChild?: (childId: string) => void;
+}) {
     if (group.key === "address" && group.addressLine) {
         return <AddressLine address={group.addressLine} />;
     }
@@ -314,19 +391,43 @@ function GroupRows({ group, masked, limit }: { group: HouseholdEvidenceGroup; ma
     if (group.children.length > 0) {
         const visible = limit ? group.children.slice(0, limit) : group.children;
         const overflow = group.children.length - visible.length;
-        // Children are belonging-only: name (+ count). No age/program/room/status.
+        // Children are belonging-only here: name + reachability. Operational truth
+        // (program/schedule/status) lives in the Children card — clicking hands off.
         return (
             <div className="alloy-os-household__rows">
-                {visible.map((child) => (
-                    <div key={child.id} className="alloy-os-household__row">
-                        <span className="alloy-os-household__avatar" aria-hidden>
-                            {child.name.charAt(0).toUpperCase()}
-                        </span>
-                        <span className="alloy-os-household__row-main min-w-0">
-                            <span className="alloy-os-household__row-name">{child.name}</span>
-                        </span>
-                    </div>
-                ))}
+                <p className="alloy-os-household__group-caption" data-household-children-caption="true">
+                    Belonging only — open Children for enrollment detail
+                </p>
+                {visible.map((child) =>
+                    onOpenChild ? (
+                        <button
+                            key={child.id}
+                            type="button"
+                            className="alloy-os-household__row alloy-os-household__row--child-link"
+                            onClick={() => onOpenChild(child.id)}
+                            data-household-child={child.id}
+                        >
+                            <span className="alloy-os-household__avatar" aria-hidden>
+                                {child.name.charAt(0).toUpperCase()}
+                            </span>
+                            <span className="alloy-os-household__row-main min-w-0">
+                                <span className="alloy-os-household__row-name">{child.name}</span>
+                            </span>
+                            <span className="alloy-os-readiness__pointer" aria-hidden>
+                                Children →
+                            </span>
+                        </button>
+                    ) : (
+                        <div key={child.id} className="alloy-os-household__row">
+                            <span className="alloy-os-household__avatar" aria-hidden>
+                                {child.name.charAt(0).toUpperCase()}
+                            </span>
+                            <span className="alloy-os-household__row-main min-w-0">
+                                <span className="alloy-os-household__row-name">{child.name}</span>
+                            </span>
+                        </div>
+                    ),
+                )}
                 {overflow > 0 ? (
                     <div className="alloy-os-household__overflow">+{overflow} more</div>
                 ) : null}
@@ -375,46 +476,6 @@ function ContactRow({ contact, masked }: { contact: HouseholdEvidenceContact; ma
                     {contact.roleLabel}
                 </span>
             ) : null}
-        </div>
-    );
-}
-
-function ContactLine({
-    contact,
-    masked,
-    channelFallback,
-}: {
-    contact: HouseholdEvidenceContact;
-    masked: boolean;
-    channelFallback: { phone: string | null; email: string | null };
-}) {
-    const phone = contact.phone ?? channelFallback.phone;
-    const email = contact.email ?? channelFallback.email;
-    const channel = [phone, email].filter(Boolean).join(" · ");
-    return (
-        <div className="alloy-os-household__primary" data-household-primary>
-            <span className="alloy-os-household__avatar" aria-hidden>
-                {contact.initials}
-            </span>
-            <span className="alloy-os-household__row-main min-w-0">
-                <span className="alloy-os-household__row-name">
-                    {contact.name}
-                    <span className="alloy-os-household__row-role alloy-os-household__row-role--primary">
-                        Primary
-                    </span>
-                </span>
-                {masked ? (
-                    <span className="alloy-os-household__row-detail alloy-os-household__row-detail--locked">
-                        Contact details restricted
-                    </span>
-                ) : channel ? (
-                    <span className="alloy-os-household__row-detail">{channel}</span>
-                ) : (
-                    <span className="alloy-os-household__row-detail alloy-os-household__row-detail--missing">
-                        No contact channel on file
-                    </span>
-                )}
-            </span>
         </div>
     );
 }
