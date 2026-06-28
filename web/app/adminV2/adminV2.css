@@ -489,8 +489,9 @@ html[data-adminv2-bos-rail-overlay-drawer="true"] [data-adminv2-bos-rail-overlay
   max-width: var(--adminv2-bos-overlay-effective-width, var(--adminv2-bos-overlay-width)) !important;
 }
 
-/* BOS-rail drawer — modal framing (outer margin) + unified workspace edge toward BOS */
-html[data-adminv2-workspace-shell="v2"] .adminv2-drawer-modal-panel--bos-rail.adminv2-drawer-shell-inset {
+/* BOS-rail drawer — modal framing (outer margin) + unified workspace edge toward BOS.
+ * Operational Workspaces are excluded — they use Operational Workspace Geometry (below). */
+html[data-adminv2-workspace-shell="v2"] .adminv2-drawer-modal-panel--bos-rail.adminv2-drawer-shell-inset:not([data-operational-workspace="true"]) {
   top: calc(var(--adminv2-drawer-inset-top) + var(--adminv2-drawer-outer-margin, 24px));
   bottom: calc(var(--adminv2-drawer-inset-bottom) + var(--adminv2-drawer-outer-margin, 24px));
 }
@@ -535,13 +536,46 @@ html[data-adminv2-workspace-shell="v2"][data-adminv2-bos-rail-overlay-drawer="tr
   border-left-color: rgba(0, 162, 131, 0.12);
 }
 
-/* Modal entity drawers — positioned via workspace-safe rectangle CSS vars (no viewport fallback) */
-html[data-adminv2-workspace-shell="v2"] .adminv2-drawer-modal-panel--bos-rail {
+/* Modal entity drawers — positioned via workspace-safe rectangle CSS vars (no viewport fallback).
+ * Operational Workspaces are excluded — they use Operational Workspace Geometry (below). */
+html[data-adminv2-workspace-shell="v2"] .adminv2-drawer-modal-panel--bos-rail:not([data-operational-workspace="true"]) {
   left: var(--adminv2-drawer-computed-left) !important;
   width: var(--adminv2-drawer-computed-width) !important;
   max-width: var(--adminv2-drawer-computed-width) !important;
   transform: none !important;
   right: auto !important;
+  border: 1px solid var(--adminv2-container-border-drawer, rgba(39, 63, 82, 0.28)) !important;
+  box-shadow:
+    0 12px 40px rgba(39, 63, 82, 0.08),
+    0 2px 8px rgba(39, 63, 82, 0.04);
+}
+
+/* ── Operational Workspace Geometry (platform-level) ─────────────────────────────────
+ * Operational Workspaces (Communications, Processing, Work Items, Operational Intelligence,
+ * Create Lead, and any future operational surface) are PEERS of the sidebar / workspace
+ * context / BOS rail — not entity drawers, Focus Panels, or queue children. They own the
+ * full operational canvas and are never width-capped or horizontally centered.
+ *
+ *   left   = sidebar.right + clearance   (--operational-workspace-left, measured)
+ *   width  = band to BOS rail            (--operational-workspace-width, measured)
+ *   top    = below the application header (--adminv2-drawer-inset-top)
+ *   bottom = viewport bottom + workspace safe padding (--ws-shell-bottom-safe)
+ *
+ * Classification is by workspace type (the operational marker), never by feature name.
+ * Geometry vars are measured in `web/lib/bos/operationalWorkspaceGeometry.ts`.
+ */
+html[data-adminv2-workspace-shell="v2"] .operational-workspace-surface[data-operational-workspace="true"],
+html[data-adminv2-workspace-shell="v2"][data-alloy-os-runtime-split="true"]
+  .operational-workspace-surface[data-operational-workspace="true"] {
+  left: var(--operational-workspace-left, var(--adminv2-drawer-computed-left)) !important;
+  width: var(--operational-workspace-width, var(--adminv2-drawer-computed-width)) !important;
+  max-width: var(--operational-workspace-width, none) !important;
+  right: auto !important;
+  transform: none !important;
+  top: var(--adminv2-drawer-inset-top) !important;
+  bottom: var(--ws-shell-bottom-safe, 16px) !important;
+  height: auto !important;
+  max-height: none !important;
   border: 1px solid var(--adminv2-container-border-drawer, rgba(39, 63, 82, 0.28)) !important;
   box-shadow:
     0 12px 40px rgba(39, 63, 82, 0.08),

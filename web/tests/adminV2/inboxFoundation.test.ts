@@ -42,7 +42,8 @@ describe("Inbox foundation UI contracts", () => {
         expect(modal).not.toContain("useRouter");
         expect(modal).not.toContain("Open full inbox");
         expect(shell).toContain("adminv2-drawer-modal-panel--bos-rail");
-        expect(shell).toContain("measureAndApplyDrawerWorkspaceGeometry");
+        expect(shell).toContain("useOperationalWorkspaceGeometry");
+        expect(shell).toContain("OPERATIONAL_WORKSPACE_SURFACE_CLASS");
         expect(shell).toContain('data-adminv2-drawer="true"');
     });
 

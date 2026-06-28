@@ -63,7 +63,7 @@ describe("My tasks modal UX", () => {
         expect(src).toContain("fetchOperationalTasksSummary");
         expect(src).toContain('data-adminv2-tasks-summary="true"');
         expect(shell).toContain("adminv2-drawer-modal-panel--bos-rail");
-        expect(shell).toContain("measureAndApplyDrawerWorkspaceGeometry");
+        expect(shell).toContain("useOperationalWorkspaceGeometry");
     });
 
     it("task cards use friendly source labels not raw task_assist", () => {

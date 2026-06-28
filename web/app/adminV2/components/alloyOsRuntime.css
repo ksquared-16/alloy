@@ -621,11 +621,13 @@ html[data-alloy-os-runtime-split="true"]
 
 /* (2) Focus Panel consumes full operational-surface height as a docked peer — top/bottom
  *     align with the queue + BOS. Overrides the modal "+ outer-margin" inset so the panel
- *     is a peer column (Queue | Focus Panel | BOS), not a floating centered drawer. */
+ *     is a peer column (Queue | Focus Panel | BOS), not a floating centered drawer.
+ *     Operational Workspaces are excluded — they own the full operational canvas and must
+ *     never dock inside the condensed queue / Focus Panel column. */
 html[data-alloy-os-runtime-split="true"]
-  .adminv2-drawer-modal-panel--bos-rail.adminv2-drawer-shell-inset,
+  .adminv2-drawer-modal-panel--bos-rail.adminv2-drawer-shell-inset:not([data-operational-workspace="true"]),
 html[data-adminv2-workspace-shell="v2"][data-alloy-os-runtime-split="true"]
-  .adminv2-drawer-modal-panel--bos-rail.adminv2-drawer-shell-inset {
+  .adminv2-drawer-modal-panel--bos-rail.adminv2-drawer-shell-inset:not([data-operational-workspace="true"]) {
   top: var(--alloy-os-op-surface-top) !important;
   bottom: var(--alloy-os-op-surface-bottom) !important;
   height: auto !important;
@@ -1032,7 +1034,7 @@ html[data-alloy-os-runtime-split="true"]
  * header (top driven by --adminv2-drawer-inset-top, set to the header bottom by the
  * controller). Internal body scroll + visible tabs/close are unchanged structurally.
  */
-html[data-alloy-os-runtime-split="true"] .adminv2-drawer-modal-panel--bos-rail {
+html[data-alloy-os-runtime-split="true"] .adminv2-drawer-modal-panel--bos-rail:not([data-operational-workspace="true"]) {
   box-shadow: var(--alloy-os-elevation-2, 0 4px 12px rgba(20, 25, 34, 0.08)) !important;
   animation: alloy-os-focus-panel-in var(--alloy-os-motion-focus-panel, 220ms) ease both;
 }
@@ -2407,4 +2409,727 @@ html[data-alloy-os-runtime="on"]
 html[data-alloy-os-runtime-split="true"]
   [data-adminv2-record-modal-scroll]:has([data-alloy-os-focus-panel="true"]) {
   padding: 0;
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+ * Core Four Coherence Pass (June 2026)
+ * Make the four cards read as one operating system: stronger answer hierarchy,
+ * quieter chrome, sentence evidence, cross-card pointer affordance.
+ * @see docs/sprints/06_2026/core-four-coherence-pass
+ * ════════════════════════════════════════════════════════════════════════ */
+
+/* — Answer-first hierarchy: insight dominates, supporting recedes — */
+.alloy-os-ucard__insight {
+  font-size: 13.5px;
+  line-height: 1.4;
+}
+.alloy-os-ucard--tier-reference .alloy-os-ucard__insight,
+.alloy-os-ucard[data-card-role="reference"] .alloy-os-ucard__insight {
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--alloy-os-midnight, #273f52);
+}
+.alloy-os-ucard__supporting {
+  font-size: 11.5px;
+  line-height: 1.4;
+  color: var(--alloy-os-text-tertiary, #9ca3af);
+}
+
+/* — Calmer chrome: hairline borders, soften tier left-rails in Overview — */
+.alloy-os-focus-panel-grid:not(.alloy-os-focus-panel-grid--work) .alloy-os-ucard {
+  border-color: color-mix(in srgb, var(--alloy-os-border, #e5e9ef) 75%, transparent);
+  border-radius: 12px;
+}
+.alloy-os-focus-panel-grid:not(.alloy-os-focus-panel-grid--work)
+  .alloy-os-ucard[data-card-role="reference"],
+.alloy-os-focus-panel-grid:not(.alloy-os-focus-panel-grid--work)
+  .alloy-os-ucard[data-card-role="context"] {
+  border-left-width: 1px;
+}
+/* Decision/work accent rail: thinner, calmer than the System-5 3px bar. */
+.alloy-os-focus-panel-grid:not(.alloy-os-focus-panel-grid--work)
+  .alloy-os-ucard[data-card-role="critical"],
+.alloy-os-focus-panel-grid:not(.alloy-os-focus-panel-grid--work)
+  .alloy-os-ucard[data-card-role="active-work"] {
+  border-left-width: 2px;
+}
+
+/* — Footer demotion: expand/collapse is a quiet inline affordance, no slab — */
+.alloy-os-ucard__footer {
+  border-top: none;
+  padding-top: 0;
+  padding-bottom: 10px;
+}
+.alloy-os-ucard__action {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0;
+  opacity: 0.85;
+}
+.alloy-os-ucard__action:hover {
+  opacity: 1;
+}
+
+/* — Evidence rhythm: roomier rows, calmer dividers — */
+.alloy-os-household__rows {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.alloy-os-household__row {
+  padding-block: 4px;
+  line-height: 1.4;
+}
+.alloy-os-household__row-detail {
+  line-height: 1.4;
+}
+
+/* — Sentence evidence (replaces labeled KV grids in Children / Current Work) — */
+.alloy-os-card-evidence {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 2px 0 4px;
+}
+.alloy-os-card-evidence__line {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--alloy-os-midnight, #273f52);
+}
+.alloy-os-card-evidence__line--muted {
+  color: var(--alloy-os-text-tertiary, #9ca3af);
+}
+.alloy-os-card-evidence__meta {
+  margin: 0;
+  font-size: 11px;
+  color: var(--alloy-os-text-tertiary, #9ca3af);
+}
+
+/* — Household: reachability channel line + clickable missing-state — */
+.alloy-os-household__channel {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.4;
+  color: var(--alloy-os-text-secondary, #4b5563);
+}
+.alloy-os-household__channel--missing {
+  color: #b45309;
+}
+.alloy-os-household__warning--action {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border: none;
+  background: transparent;
+  padding: 2px 0;
+  cursor: pointer;
+  text-align: left;
+}
+.alloy-os-household__warning--action:hover {
+  text-decoration: underline;
+}
+
+/* — Readiness: cross-card pointer affordance (factor → owner card) — */
+.alloy-os-readiness__pointer {
+  flex-shrink: 0;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  color: var(--alloy-os-bend-pine, #00a283);
+  opacity: 0.85;
+  white-space: nowrap;
+}
+.alloy-os-readiness__row:hover .alloy-os-readiness__pointer {
+  opacity: 1;
+}
+
+/* — Shell calmness: lighter header band + tighter mode switch — */
+.alloy-os-fp-header-compact__band {
+  background: transparent;
+  min-height: 48px;
+}
+.alloy-os-focus-panel-mode-switch__tab {
+  padding: 3px 11px;
+  font-size: 10.5px;
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+ * Focus Panel OS Parity Pass (June 2026)
+ * In-panel depth layer, edit-ready UI, Household↔Children handoff, and visual
+ * parity refinements bringing the runtime closer to the approved mocks.
+ * @see docs/sprints/06_2026/focus-panel-os-parity-pass
+ * ════════════════════════════════════════════════════════════════════════ */
+
+/* — In-panel DEPTH layer: the focused/edit card comes forward, CENTERED in the
+ * Focus Panel canvas, with the rest receding behind a scrim. No route, no drawer,
+ * no disconnected modal — an in-panel layer anchored to the panel band (vars), with
+ * viewport fallbacks so the dev harness centers on the page. */
+
+/* Premium easing tokens for the depth transition (calm ease-out, slight settle). */
+:root {
+  --alloy-os-fp-depth-ease: cubic-bezier(0.22, 0.61, 0.36, 1);
+  --alloy-os-fp-depth-ms: 240ms;
+
+  /* ── Focus Panel surface spacing system (one composed surface) ──
+   * Explicit tokens so gutters, padding, radius, and elevation are locked and
+   * consistent — no random margins, no disconnected islands. */
+  --alloy-os-fp-pad: 16px;          /* panel inner padding */
+  --alloy-os-fp-gap-x: 12px;        /* card gap — horizontal */
+  --alloy-os-fp-gap-y: 12px;        /* card gap — vertical */
+  --alloy-os-fp-card-radius: 14px;  /* card + overlay corner radius */
+  --alloy-os-fp-overlay-offset: 6px;/* gap between a card and its inline overlay */
+  --alloy-os-fp-overlay-shadow:
+    0 1px 0 0 rgba(255, 255, 255, 0.8) inset,
+    0 2px 6px -2px rgba(15, 23, 42, 0.12),
+    0 18px 40px -16px rgba(15, 23, 42, 0.3),
+    0 0 0 1px rgba(15, 23, 42, 0.06);
+  --alloy-os-fp-focus-shadow:
+    0 1px 0 0 rgba(255, 255, 255, 0.7) inset,
+    0 2px 8px -3px rgba(15, 23, 42, 0.16),
+    0 24px 44px -22px rgba(15, 23, 42, 0.34),
+    0 56px 110px -44px rgba(15, 23, 42, 0.5);
+}
+
+/* The grid becomes the depth canvas: the focused card + scrim anchor to it so they
+ * CENTER in the Focus Panel column. (The panel content lives inside a
+ * `container-type` element, which is a containing block — so viewport-fixed vars
+ * mis-place the overlay. Anchoring to the grid is robust in both operator + dev.) */
+.alloy-os-focus-panel-grid[data-fp-depth="active"] {
+  position: relative;
+}
+
+/* Backdrop scrim — covers the whole canvas; click returns to base Work surface.
+ * Soft-GLASS treatment: a light frosted veil (not a heavy gray modal). The canvas
+ * stays understandable behind a gentle white blur + slight desaturation, so the
+ * focused card reads as "zoomed in front of", not "a modal opened over". */
+.alloy-os-fp-depth-scrim {
+  position: absolute;
+  inset: 0;
+  min-height: 100%;
+  z-index: 55;
+  border: 0;
+  padding: 0;
+  margin: 0;
+  cursor: pointer;
+  background: rgba(248, 250, 252, 0.5);
+  backdrop-filter: blur(8px) saturate(0.85) brightness(1.02);
+  -webkit-backdrop-filter: blur(8px) saturate(0.85) brightness(1.02);
+  animation: alloy-os-fp-scrim-in var(--alloy-os-fp-depth-ms) var(--alloy-os-fp-depth-ease) both;
+}
+@keyframes alloy-os-fp-scrim-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* Receded base cards: pull back in depth — dim + desaturate ONLY. They must NOT
+ * move (no transform), so the canvas stays exactly where the operator left it. */
+.alloy-os-focus-panel-grid[data-fp-depth="active"]
+  .alloy-os-focus-panel-grid__cell:not([data-fp-elevated="true"]) {
+  opacity: 0.5;
+  filter: saturate(0.72) brightness(0.99);
+  transition:
+    opacity var(--alloy-os-fp-depth-ms) var(--alloy-os-fp-depth-ease),
+    filter var(--alloy-os-fp-depth-ms) var(--alloy-os-fp-depth-ease);
+  pointer-events: none;
+}
+
+/* The elevated cell STAYS IN GRID FLOW (NOT positioned) so its row holds its slot and
+ * no neighbor reflows. Its height is reserved inline by the grid (JS) so the row can't
+ * collapse. Only the CARD inside lifts out into the depth layer. We deliberately do NOT
+ * make the cell a positioned ancestor — the card must anchor to the grid (the canvas),
+ * not the narrow cell. */
+.alloy-os-focus-panel-grid[data-fp-depth="active"]
+  .alloy-os-focus-panel-grid__cell[data-fp-elevated="true"] {
+  pointer-events: none;
+}
+.alloy-os-focus-panel-grid[data-fp-depth="active"]
+  .alloy-os-focus-panel-grid__cell[data-fp-elevated="true"]
+  > * {
+  pointer-events: none;
+}
+
+/* The focused/edit card: lifted out of the cell, CENTERED horizontally in the Focus
+ * Panel canvas, larger with real breathing room. A distinct layer — not an inline
+ * expand. Anchored to the grid (position: relative above) so centering is robust. */
+.alloy-os-focus-panel-grid[data-fp-depth="active"]
+  .alloy-os-focus-panel-grid__cell[data-fp-elevated="true"]
+  .alloy-os-ucard {
+  position: absolute;
+  top: 22px;
+  left: 0;
+  right: 0;
+  margin-inline: auto;
+  width: min(560px, calc(100% - 32px));
+  height: max-content;
+  min-height: 252px;
+  max-height: min(82vh, calc(100% - 32px));
+  overflow-y: auto;
+  z-index: 60;
+  pointer-events: auto;
+  background: var(--alloy-os-surface, #fff);
+  border-color: transparent;
+  border-radius: 20px;
+  transform-origin: center center;
+  box-shadow:
+    0 1px 0 0 rgba(255, 255, 255, 0.7) inset,
+    0 2px 8px -3px rgba(15, 23, 42, 0.16),
+    0 24px 44px -22px rgba(15, 23, 42, 0.34),
+    0 56px 110px -44px rgba(15, 23, 42, 0.5),
+    0 0 0 1px color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 24%, transparent),
+    0 0 0 5px color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 10%, transparent);
+  animation: alloy-os-fp-card-zoom var(--alloy-os-fp-depth-ms) var(--alloy-os-fp-depth-ease) both;
+}
+/* Focused card typography + spacing step up so it reads as a different layer. */
+.alloy-os-focus-panel-grid[data-fp-depth="active"]
+  .alloy-os-focus-panel-grid__cell[data-fp-elevated="true"]
+  .alloy-os-ucard
+  .alloy-os-ucard__header {
+  padding: 20px 24px 12px;
+  gap: 12px;
+}
+.alloy-os-focus-panel-grid[data-fp-depth="active"]
+  .alloy-os-focus-panel-grid__cell[data-fp-elevated="true"]
+  .alloy-os-ucard
+  .alloy-os-ucard__body {
+  padding: 4px 24px 8px;
+}
+.alloy-os-focus-panel-grid[data-fp-depth="active"]
+  .alloy-os-focus-panel-grid__cell[data-fp-elevated="true"]
+  .alloy-os-ucard
+  .alloy-os-ucard__footer {
+  padding: 8px 24px 18px;
+}
+.alloy-os-focus-panel-grid[data-fp-depth="active"]
+  .alloy-os-focus-panel-grid__cell[data-fp-elevated="true"]
+  .alloy-os-ucard
+  .alloy-os-ucard__insight {
+  font-size: 18px;
+  line-height: 1.3;
+  margin-top: 6px;
+}
+.alloy-os-focus-panel-grid[data-fp-depth="active"]
+  .alloy-os-focus-panel-grid__cell[data-fp-elevated="true"]
+  .alloy-os-ucard
+  .alloy-os-ucard__title {
+  font-size: 11px;
+}
+/* Zoom-from-origin: the card flies from its place on the canvas (the cell it came
+ * from, via --fp-from-* set by the grid) and grows into the centered Focus Card.
+ * Falls back to a gentle scale-up if the offsets aren't measured yet. */
+@keyframes alloy-os-fp-card-zoom {
+  from {
+    opacity: 0.4;
+    transform:
+      translate(var(--fp-from-x, 0px), var(--fp-from-y, 14px))
+      scale(var(--fp-from-scale, 0.9));
+  }
+  to {
+    opacity: 1;
+    transform: translate(0, 0) scale(1);
+  }
+}
+
+/* Keep the Focus Panel shell (identity + mode switch) crisp above the scrim. */
+.alloy-os-fp-header-compact {
+  position: relative;
+  z-index: 70;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .alloy-os-fp-depth-scrim,
+  .alloy-os-focus-panel-grid[data-fp-depth="active"]
+    .alloy-os-focus-panel-grid__cell[data-fp-elevated="true"]
+    .alloy-os-ucard {
+    animation: none;
+  }
+  .alloy-os-focus-panel-grid[data-fp-depth="active"]
+    .alloy-os-focus-panel-grid__cell:not([data-fp-elevated="true"]) {
+    transition: none;
+  }
+}
+
+/* — One directional navigation language everywhere — */
+/* Footer nav row: back on the LEFT (←), go-deeper on the RIGHT (→). Same size and
+ * weight for every link so depth is read by DIRECTION, not by button styling. */
+.alloy-os-card-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+}
+.alloy-os-card-nav--end {
+  justify-content: flex-end;
+}
+.alloy-os-card-evidence__actions {
+  margin-top: 10px;
+}
+/* Every directional link shares one treatment (deeper-link == footer action). */
+.alloy-os-card-deeper-link,
+.alloy-os-ucard__action {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 0;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  color: var(--alloy-os-bend-pine, #00a283);
+  background: none;
+  border: 0;
+  border-radius: 0;
+  opacity: 1;
+  cursor: pointer;
+}
+.alloy-os-card-deeper-link:hover,
+.alloy-os-ucard__action:hover {
+  background: none;
+  color: color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 80%, #000);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+/* Edit preview = clean value rows, NOT gray input boxes. Reads like the focused
+ * evidence with field labels; mutation seam lands here later. */
+.alloy-os-card-edit {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 2px 0 0;
+}
+.alloy-os-card-edit__title {
+  margin: 0 0 4px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--alloy-os-midnight, #273f52);
+}
+.alloy-os-card-edit__fields {
+  display: flex;
+  flex-direction: column;
+}
+.alloy-os-card-edit__field {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 9px 0;
+}
+.alloy-os-card-edit__field + .alloy-os-card-edit__field {
+  border-top: 1px solid color-mix(in srgb, var(--alloy-os-border, #e5e9ef) 70%, transparent);
+}
+.alloy-os-card-edit__label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--alloy-os-text-tertiary, #9ca3af);
+  white-space: nowrap;
+}
+.alloy-os-card-edit__value {
+  font-size: 13px;
+  font-weight: 600;
+  text-align: right;
+  color: var(--alloy-os-midnight, #273f52);
+}
+.alloy-os-card-edit__value--empty {
+  font-weight: 500;
+  font-style: italic;
+  color: var(--alloy-os-text-tertiary, #b6bdc8);
+}
+.alloy-os-card-edit__notice {
+  margin: 8px 0 0;
+  font-size: 10.5px;
+  color: var(--alloy-os-text-tertiary, #9ca3af);
+}
+
+/* — Household → Children handoff (belonging vs operational truth) — */
+.alloy-os-household__group-caption {
+  margin: 0 0 4px;
+  font-size: 10.5px;
+  font-style: italic;
+  color: var(--alloy-os-text-tertiary, #9ca3af);
+}
+.alloy-os-household__row--child-link {
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  border: none;
+  border-radius: 7px;
+  cursor: pointer;
+  padding-inline: 4px;
+  margin-inline: -4px;
+  transition: background 120ms ease;
+}
+.alloy-os-household__row--child-link:hover {
+  background: color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 7%, transparent);
+}
+.alloy-os-household__row--child-link:hover .alloy-os-readiness__pointer {
+  opacity: 1;
+}
+
+/* — Visual parity refinements vs approved mocks — */
+/* Calmer icon tile: smaller, quieter than the prior heavy chip. */
+.alloy-os-ucard__header {
+  gap: 9px;
+  padding: 11px 13px 8px;
+}
+.alloy-os-ucard__body {
+  padding: 0 13px 11px;
+}
+.alloy-os-ucard__footer {
+  padding: 0 13px 11px;
+}
+/* Title: quiet category label; the insight is the loud line. */
+.alloy-os-ucard__title {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--alloy-os-text-tertiary, #9ca3af);
+}
+.alloy-os-ucard--tier-reference .alloy-os-ucard__title,
+.alloy-os-ucard[data-card-role="reference"] .alloy-os-ucard__title,
+.alloy-os-ucard--tier-attention .alloy-os-ucard__title,
+.alloy-os-ucard--tier-work .alloy-os-ucard__title,
+.alloy-os-ucard--tier-metric .alloy-os-ucard__title,
+.alloy-os-ucard[data-universal-card-key="readiness_kpi"] .alloy-os-ucard__title,
+.alloy-os-ucard[data-universal-card-key="current_work"] .alloy-os-ucard__title {
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--alloy-os-text-tertiary, #9ca3af);
+  font-weight: 700;
+}
+/* Answer line owns the visual weight. */
+.alloy-os-ucard__insight {
+  margin-top: 4px;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--alloy-os-midnight, #273f52);
+}
+/* Evidence density: comfortable rows, hairline separation only where needed. */
+.alloy-os-children__row,
+.alloy-os-household__row--child-link {
+  border-radius: 7px;
+}
+.alloy-os-child-block {
+  padding-block: 8px;
+}
+.alloy-os-child-block + .alloy-os-child-block {
+  border-top: 1px solid color-mix(in srgb, var(--alloy-os-border, #e5e9ef) 70%, transparent);
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+ * Focus Panel Canvas Finalization (June 2026)
+ * Make the surface read as ONE operational canvas, not a left/right column grid:
+ * a calmer outer frame, distinct row rhythm, and a quiet seam between rows.
+ * @see docs/sprints/06_2026/focus-panel-canvas-finalization
+ * ════════════════════════════════════════════════════════════════════════ */
+
+/* Canvas frame: one calm WHITE-ON-WHITE surface (no gray/blue canvas tint). Locked
+ * gutters from the spacing tokens; cards take their NATURAL height (puzzle pieces
+ * fit together — supporting cards are not stretched to match Children). */
+.alloy-os-focus-panel-grid:not(.alloy-os-focus-panel-grid--work) {
+  column-gap: var(--alloy-os-fp-gap-x);
+  row-gap: var(--alloy-os-fp-gap-y);
+  padding: var(--alloy-os-fp-pad);
+  background: var(--alloy-os-surface, #fff);
+  align-items: start;
+}
+/* Override the equal-height row rhythm: natural heights, not stretched cells. */
+.alloy-os-focus-panel-grid:not(.alloy-os-focus-panel-grid--work)
+  .alloy-os-focus-panel-grid__cell {
+  align-items: start;
+}
+
+/* Cards read as soft SURFACES on the white canvas: a quiet hairline + soft shadow
+ * (no hard outline) so the answers feel like one composed workspace. */
+.alloy-os-focus-panel-grid:not(.alloy-os-focus-panel-grid--work) .alloy-os-ucard {
+  border-color: transparent;
+  border-radius: var(--alloy-os-fp-card-radius);
+  background: var(--alloy-os-surface, #fff);
+  box-shadow:
+    0 0 0 1px rgba(15, 23, 42, 0.05),
+    0 1px 2px rgba(15, 23, 42, 0.04),
+    0 4px 12px -8px rgba(15, 23, 42, 0.12);
+  transition: box-shadow 160ms ease;
+}
+/* Keep the left accent rails legible even without the box border. */
+.alloy-os-focus-panel-grid:not(.alloy-os-focus-panel-grid--work)
+  .alloy-os-ucard[data-card-role="critical"],
+.alloy-os-focus-panel-grid:not(.alloy-os-focus-panel-grid--work)
+  .alloy-os-ucard[data-card-role="active-work"] {
+  box-shadow:
+    inset 2px 0 0 0 color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 55%, transparent),
+    0 0 0 1px rgba(15, 23, 42, 0.04),
+    0 1px 2px rgba(15, 23, 42, 0.04),
+    0 4px 12px -8px rgba(15, 23, 42, 0.14);
+}
+
+/* When NOT in a depth layer, a gentle hover lift communicates the cards are live
+ * surfaces of one canvas (suppressed entirely while a card is elevated). */
+.alloy-os-focus-panel-grid:not([data-fp-depth="active"]):not(.alloy-os-focus-panel-grid--work)
+  .alloy-os-focus-panel-grid__cell:hover
+  .alloy-os-ucard {
+  box-shadow:
+    0 0 0 1px rgba(15, 23, 42, 0.05),
+    0 2px 4px rgba(15, 23, 42, 0.05),
+    0 10px 22px -12px rgba(15, 23, 42, 0.22);
+}
+@media (prefers-reduced-motion: reduce) {
+  .alloy-os-focus-panel-grid:not(.alloy-os-focus-panel-grid--work) .alloy-os-ucard {
+    transition: none;
+  }
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+ * Composition Engine V1 (June 2026)
+ * The Summary surface is COMPOSED from card semantics — interlocking lanes (a
+ * dominant anchor lane beside a balancing support lane, DIFFERENT widths) or a
+ * composed stack when narrow — NOT a uniform N-column grid of equal cells.
+ * Cards keep their natural height so the lanes interlock like puzzle pieces.
+ * Depth (Focus Cards) + inline overlays are unchanged; only base placement moves.
+ * @see docs/sprints/06_2026/focus-panel-composition-engine-v1
+ * ════════════════════════════════════════════════════════════════════════ */
+
+/* The composed surface is a plain block frame; the canvas inside owns layout.
+ * (Overrides the legacy `display: grid` so lane/stack composition takes over.) */
+.alloy-os-focus-panel-grid--composed {
+  display: block;
+  padding: var(--alloy-os-fp-pad);
+  background: var(--alloy-os-surface, #fff);
+}
+
+/* LANES: a dominant anchor lane beside a balancing support lane. Lane widths are
+ * asymmetric (flex-grow = the engine's column units), so Household/Children read
+ * as the lead column and Readiness/Current Work balance the remaining space. */
+.alloy-os-fp-canvas--lanes {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--alloy-os-fp-gap-x);
+}
+.alloy-os-fp-lane {
+  display: flex;
+  flex-direction: column;
+  gap: var(--alloy-os-fp-gap-y);
+  min-width: 0;
+}
+
+/* STACK: anchors take the full row; support cards pair beneath them at half
+ * width — a different rhythm than the heavy cards, so the column still reads as
+ * a composition (not four identical stacked widgets). */
+.alloy-os-fp-canvas--stack {
+  display: grid;
+  grid-template-columns: repeat(var(--alloy-os-fp-units, 12), minmax(0, 1fr));
+  column-gap: var(--alloy-os-fp-gap-x);
+  row-gap: var(--alloy-os-fp-gap-y);
+  align-items: start;
+}
+
+/* Composed cells take their card's NATURAL height (no equal-height stretch) so
+ * the lanes interlock. Each cell fills its lane / its grid span. */
+.alloy-os-focus-panel-grid--composed .alloy-os-focus-panel-grid__cell {
+  display: flex;
+  align-items: flex-start;
+  min-width: 0;
+}
+.alloy-os-focus-panel-grid--composed .alloy-os-focus-panel-grid__cell > * {
+  width: 100%;
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+ * Focus Panel Inline Overlay Finalization (June 2026)
+ * Diagnostic / action cards (Readiness, Current Work) reveal deeper evidence as a
+ * card-anchored dropdown that COVERS the card below WITHOUT moving the base surface.
+ * Not a modal, not a Focus Card, not route navigation — card-local overlay depth.
+ * @see docs/sprints/06_2026/focus-panel-inline-overlay-finalization
+ * ════════════════════════════════════════════════════════════════════════ */
+
+/* The diagnostic-card wrapper is normally `display: contents` (no box). For inline
+ * overlays it must be a real positioning anchor, so on the Summary surface these two
+ * wrappers become a block box that exactly fills the cell (no visual change — the
+ * card still provides all chrome). This is set ALWAYS (not just while open) so there
+ * is no display toggle / reflow at the moment the overlay opens. */
+.alloy-os-focus-panel-grid:not(.alloy-os-focus-panel-grid--work) .alloy-os-readiness,
+.alloy-os-focus-panel-grid:not(.alloy-os-focus-panel-grid--work) .alloy-os-currentwork {
+  display: block;
+  position: relative;
+}
+/* When its overlay is open the card lifts above neighbours so the dropdown can paint
+ * over the card below it. The card footprint is unchanged — only the absolute overlay
+ * extends downward. */
+.alloy-os-readiness[data-fp-overlay-open="true"],
+.alloy-os-currentwork[data-fp-overlay-open="true"] {
+  z-index: 40;
+}
+
+/* Invisible click-out catcher — NO harsh scrim for inline overlays. */
+.alloy-os-card-overlay__backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1;
+  border: 0;
+  margin: 0;
+  padding: 0;
+  background: transparent;
+  cursor: default;
+}
+
+/* The anchored dropdown: starts just below the card and extends down over the card
+ * beneath it. Absolute → the grid never reflows; the base surface stays put. */
+.alloy-os-card-overlay {
+  position: absolute;
+  z-index: 2;
+  top: calc(100% + var(--alloy-os-fp-overlay-offset));
+  left: 0;
+  right: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: min(60vh, 420px);
+  overflow-y: auto;
+  padding: 12px 14px 10px;
+  background: var(--alloy-os-surface, #fff);
+  border-radius: var(--alloy-os-fp-card-radius);
+  box-shadow: var(--alloy-os-fp-overlay-shadow);
+  transform-origin: top center;
+  animation: alloy-os-card-overlay-in 180ms var(--alloy-os-fp-depth-ease) both;
+}
+/* Flip upward when there is no room below (e.g. the bottom card of the panel): the
+ * dropdown opens above the card instead of falling off-screen. */
+.alloy-os-card-overlay[data-overlay-direction="up"] {
+  top: auto;
+  bottom: calc(100% + var(--alloy-os-fp-overlay-offset));
+  transform-origin: bottom center;
+}
+@keyframes alloy-os-card-overlay-in {
+  from { opacity: 0; transform: translateY(-6px) scale(0.99); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+.alloy-os-card-overlay__title {
+  margin: 0;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--alloy-os-text-tertiary, #9ca3af);
+}
+.alloy-os-card-overlay__body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.alloy-os-card-overlay__foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-top: 4px;
+}
+.alloy-os-card-overlay__foot:has(> :only-child) {
+  justify-content: flex-start;
+}
+@media (prefers-reduced-motion: reduce) {
+  .alloy-os-card-overlay {
+    animation: none;
+  }
 }

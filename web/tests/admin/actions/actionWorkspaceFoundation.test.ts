@@ -36,7 +36,8 @@ describe("action workspace foundation", () => {
         const paste = read("components/admin/actions/ActionWorkspacePasteCanvas.tsx");
         const gather = read("components/admin/actions/ActionWorkspaceGatherFields.tsx");
         expect(bos).toContain('presentation = "workspace-drawer"');
-        expect(bos).toContain("measureAndApplyActionWorkspaceGeometry");
+        expect(bos).toContain("useOperationalWorkspaceGeometry");
+        expect(bos).toContain("OPERATIONAL_WORKSPACE_SURFACE_CLASS");
         expect(bos).toContain("data-adminv2-drawer");
         expect(bos).toContain("adminv2-drawer-modal-panel--bos-rail");
         expect(bos).toContain("BOS_ACTION_WORKSPACE_FORGE_PERIMETER_STYLE");

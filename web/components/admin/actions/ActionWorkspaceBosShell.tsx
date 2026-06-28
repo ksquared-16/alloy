@@ -1,7 +1,7 @@
 "use client";
 
 import { X } from "lucide-react";
-import { useEffect, useLayoutEffect, type CSSProperties, type MouseEvent, type ReactNode } from "react";
+import { useEffect, type CSSProperties, type MouseEvent, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 
 import { BosHeader } from "@/app/adminV2/components/bos/identity/BosHeader";
@@ -13,10 +13,6 @@ import {
 } from "@/components/admin/Drawer";
 import { useActionWorkspaceOpenDocumentFlag } from "@/lib/bos/useActionWorkspaceOpenDocumentFlag";
 import type { ActionWorkspaceStep } from "@/lib/admin/actions/actionWorkspaceTypes";
-import {
-    clearActionWorkspaceGeometryIfIdle,
-    measureAndApplyActionWorkspaceGeometry,
-} from "@/lib/admin/actions/actionWorkspaceGeometry";
 import { ACTION_WORKSPACE_LAYER_Z } from "@/lib/admin/actions/actionWorkspaceLayer";
 import {
     BOS_ACTION_WORKSPACE_FORGE_PERIMETER_STYLE,
@@ -37,12 +33,14 @@ import {
     BOS_WORKSPACE_WIDTH,
     CREATE_LEAD_WORKSPACE_TITLE,
 } from "@/lib/admin/actions/bosWorkspaceShell";
+import { DRAWER_BACKDROP_LEFT_CSS_VAR } from "@/lib/bos/drawerWorkspaceGeometry";
 import {
-    DRAWER_BACKDROP_LEFT_CSS_VAR,
-    DRAWER_COMPUTED_LEFT_CSS_VAR,
-    DRAWER_COMPUTED_WIDTH_CSS_VAR,
-    isDrawerGeometryProbeActive,
-} from "@/lib/bos/drawerWorkspaceGeometry";
+    OPERATIONAL_WORKSPACE_ATTR,
+    OPERATIONAL_WORKSPACE_LEFT_CSS_VAR,
+    OPERATIONAL_WORKSPACE_SURFACE_CLASS,
+    OPERATIONAL_WORKSPACE_WIDTH_CSS_VAR,
+} from "@/lib/bos/operationalWorkspaceGeometry";
+import { useOperationalWorkspaceGeometry } from "@/lib/bos/useOperationalWorkspaceGeometry";
 import { LAYOUT_RUNTIME_DRAWER_OUTER_BORDER } from "@/lib/layout/runtime/layoutRuntimeSurfaceStyles";
 import { neutral } from "@/styles/tokens/colors";
 import { ActionWorkspaceStepRail } from "@/components/admin/actions/ActionWorkspaceStepRail";
@@ -93,11 +91,8 @@ export function ActionWorkspaceBosShell({
     const workspaceDrawer = presentation === "workspace-drawer";
     useActionWorkspaceOpenDocumentFlag(open, presentation === "overlay" ? "overlay" : "embedded");
 
-    useLayoutEffect(() => {
-        if (!open || embedded || !workspaceDrawer) return;
-        if (isDrawerGeometryProbeActive()) return;
-        measureAndApplyActionWorkspaceGeometry();
-    }, [open, embedded, workspaceDrawer]);
+    // Operational Workspace Geometry — shared platform layout (sidebar → BOS rail band).
+    useOperationalWorkspaceGeometry(open && !embedded && workspaceDrawer);
 
     useEffect(() => {
         if (!open || embedded) return;
@@ -106,25 +101,6 @@ export function ActionWorkspaceBosShell({
             document.body.style.overflow = "";
         };
     }, [open, embedded]);
-
-    useLayoutEffect(() => {
-        if (!open || embedded || !workspaceDrawer) return;
-        const remeasure = () => {
-            if (isDrawerGeometryProbeActive()) return;
-            measureAndApplyActionWorkspaceGeometry();
-        };
-        window.addEventListener("resize", remeasure);
-        const sidebar = document.querySelector("[data-adminv2-sidebar='true']");
-        const ro = typeof ResizeObserver !== "undefined" ? new ResizeObserver(remeasure) : null;
-        if (sidebar && ro) ro.observe(sidebar);
-        const bos = document.querySelector("[data-adminv2-bos-rail-overlay='true']");
-        if (bos && ro) ro.observe(bos);
-        return () => {
-            window.removeEventListener("resize", remeasure);
-            ro?.disconnect();
-            clearActionWorkspaceGeometryIfIdle();
-        };
-    }, [open, embedded, workspaceDrawer]);
 
     useEffect(() => {
         if (!open || embedded) return;
@@ -300,9 +276,9 @@ export function ActionWorkspaceBosShell({
             borderRightColor: LAYOUT_RUNTIME_DRAWER_OUTER_BORDER,
             borderBottomColor: LAYOUT_RUNTIME_DRAWER_OUTER_BORDER,
             borderLeftColor: LAYOUT_RUNTIME_DRAWER_OUTER_BORDER,
-            left: `var(${DRAWER_COMPUTED_LEFT_CSS_VAR})`,
-            width: `var(${DRAWER_COMPUTED_WIDTH_CSS_VAR})`,
-            maxWidth: `var(${DRAWER_COMPUTED_WIDTH_CSS_VAR})`,
+            left: `var(${OPERATIONAL_WORKSPACE_LEFT_CSS_VAR})`,
+            width: `var(${OPERATIONAL_WORKSPACE_WIDTH_CSS_VAR})`,
+            maxWidth: `var(${OPERATIONAL_WORKSPACE_WIDTH_CSS_VAR})`,
             transform: "none",
             right: "auto",
             borderRadius: BOS_WORKSPACE_RADIUS,
@@ -349,8 +325,9 @@ export function ActionWorkspaceBosShell({
                     data-action-workspace-bos-drawer="true"
                     data-action-workspace-shell="bos"
                     data-action-workspace-presentation={presentation}
+                    {...{ [OPERATIONAL_WORKSPACE_ATTR]: "true" }}
                     data-testid={dataTestId}
-                    className="adminv2-drawer-modal-panel adminv2-drawer-shell-inset pointer-events-auto fixed flex max-h-[min(920px,100%)] min-h-0 flex-col overflow-hidden rounded-2xl border border-solid shadow-2xl adminv2-drawer-modal-panel--bos-rail action-workspace-bos-drawer-panel"
+                    className={`adminv2-drawer-modal-panel adminv2-drawer-shell-inset pointer-events-auto fixed flex max-h-[min(920px,100%)] min-h-0 flex-col overflow-hidden rounded-2xl border border-solid shadow-2xl adminv2-drawer-modal-panel--bos-rail action-workspace-bos-drawer-panel ${OPERATIONAL_WORKSPACE_SURFACE_CLASS}`}
                     style={panelStyle}
                     onClick={(e) => e.stopPropagation()}
                 >
