@@ -5,6 +5,7 @@
 > build against it reliably (typed client ergonomics, predictable error handling).
 >
 > Governing doctrine (principles, taxonomy, governance): [`api-architecture.md`](api-architecture.md).
+> Data access, freshness, pagination, sync, caching & performance: [`api-data-access-performance.md`](api-data-access-performance.md).
 > Canonical contract + helpers: [`api-response-contract.md`](api-response-contract.md).
 > OpenAPI eligibility + the readiness gate: [`openapi-readiness.md`](openapi-readiness.md).
 > Full route inventory: [`api-index.md`](api-index.md) / [`api-inventory.json`](api-inventory.json).

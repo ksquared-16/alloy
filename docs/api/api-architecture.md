@@ -9,7 +9,9 @@ the SDK direction, and the governance that keeps it coherent.
 > [`api-response-contract.md`](api-response-contract.md) is the **contract spec** (envelope +
 > helpers), [`api-contract-migration-status.md`](api-contract-migration-status.md) is the
 > **progress tracker**, [`openapi-readiness.md`](openapi-readiness.md) is the **eligibility
-> gate**, and [`api-index.md`](api-index.md) is the **generated inventory**. When this doc and
+> gate**, [`api-data-access-performance.md`](api-data-access-performance.md) is the **data-access
+> & performance doctrine** (pagination, sync, freshness, caching, SLOs), and
+> [`api-index.md`](api-index.md) is the **generated inventory**. When this doc and
 > a companion disagree, this doc states the intent and the companion is corrected to match.
 
 ---
@@ -251,6 +253,7 @@ The path from contract to client, each step gated on the previous:
 ## Related
 
 - [`README.md`](README.md) — API documentation index + invariants
+- [`api-data-access-performance.md`](api-data-access-performance.md) — data access, freshness, pagination, sync, caching & performance doctrine
 - [`api-response-contract.md`](api-response-contract.md) — envelope + helper spec
 - [`api-contract-migration-status.md`](api-contract-migration-status.md) — progress tracker
 - [`openapi-readiness.md`](openapi-readiness.md) — OpenAPI eligibility gate

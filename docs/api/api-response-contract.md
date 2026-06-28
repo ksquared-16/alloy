@@ -7,7 +7,7 @@ This document defines the standard Alloy API response envelope, the helpers that
 produce it, the error-code and correlation-id conventions, and the current
 migration status. It is the source of truth for new and migrated routes.
 
-Related: [`api-architecture.md`](./api-architecture.md) (governing doctrine — §3 response contract, §4 error doctrine) · [`README.md`](./README.md) · [`api-documentation-audit.md`](./api-documentation-audit.md) · [`api-index.md`](./api-index.md)
+Related: [`api-architecture.md`](./api-architecture.md) (governing doctrine — §3 response contract, §4 error doctrine) · [`api-data-access-performance.md`](./api-data-access-performance.md) (pagination/sync/freshness shapes that extend this envelope) · [`README.md`](./README.md) · [`api-documentation-audit.md`](./api-documentation-audit.md) · [`api-index.md`](./api-index.md)
 
 ---
 

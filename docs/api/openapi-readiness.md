@@ -11,6 +11,7 @@ readiness bar a route family must clear before it enters an OpenAPI spec.
 > else is excluded by default until it clears the gate.
 
 Related: [`api-architecture.md`](api-architecture.md) (governing doctrine — §8 is the OpenAPI doctrine) ·
+[`api-data-access-performance.md`](api-data-access-performance.md) (pagination/sync/freshness schemas required in the spec — §11) ·
 [`api-response-contract.md`](api-response-contract.md) (the envelope + helpers) ·
 [`api-contract-migration-status.md`](api-contract-migration-status.md) (live per-route tracker) ·
 [`api-documentation-audit.md`](api-documentation-audit.md) (findings + recommendations) ·
