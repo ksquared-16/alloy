@@ -98,6 +98,13 @@ required subject — never the highlighted row by default); Focus Panel / queue 
 actionable command state (needs subject / needs input / preview / confirm) rather than a raw
 error. See `../modules/actions-and-workflows.md` § Operational Command Runtime.
 
+Operators complete a placed command through the **platform-owned Command Surface** — a single
+reusable shell (header/body/footer/success/failure) that is identical across the Work Unit rail,
+Focus Panel Manage, queue row, and BOS. A stage's configuration influences command *content*
+(availability, labels, required inputs, constraints, copy) but never the surface layout,
+lifecycle, or component structure. See `../modules/actions-and-workflows.md` § Command Surface
+and `docs/sprints/06_2026/command_surface_v1.md`.
+
 ---
 
 ## Record (authoritative detail)

@@ -341,6 +341,25 @@ known/missing inputs, preview, and a standardized success descriptor, but never 
 Server-side required-input parity with stage intake-spec `field_rules` (notably location) is a
 documented follow-up — see `docs/sprints/06_2026/create_lead_command_flow_audit.md` § Phase 6.
 
+### Command Surface — platform-owned shell (V5)
+
+The **Command Surface** is the reusable, **platform-owned** UI/runtime shell for completing an
+Operational Intent (`web/lib/adminV2/actions/surface/*`). `deriveCommandSurfaceState` normalizes
+a command snapshot into fixed anatomy: header (title/description/context chips/stage), body
+(subject selector · input fields · preview · blocker · confirmation), footer (primary/secondary),
+and success/failure. The shell is identical across variants — **work_unit, focus_panel_manage,
+queue_row, bos** — which are variants over the same snapshot, not separate systems.
+
+- **Platform owns** layout, stage order, lifecycle, preview/confirm/success/failure patterns,
+  and BOS↔manual convergence.
+- **Config influences content only** via `CommandSurfaceConfigInfluence` (title/description/
+  confirm/blocker copy + availability/placement/order/required inputs/constraints). Config can
+  never alter shell anatomy or render custom components.
+- The surface model is **read-only** — it prepares UI state, never executes. Create Lead is the
+  reference command; Update Status maps onto the same model with no new shell code.
+
+See `docs/sprints/06_2026/command_surface_v1.md`.
+
 ## Rules
 
 - Meaningful business mutations should use event/workflow path where product already does

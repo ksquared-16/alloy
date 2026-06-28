@@ -73,6 +73,13 @@ phone or email"). BOS confirms and executes through the **same** registered `cre
 action and execute route as manual entry. See
 `docs/sprints/06_2026/create_lead_command_flow_audit.md`.
 
+**BOS uses the platform Command Surface, not a separate UI runtime (V5).** A BOS proposal is
+just a command snapshot fed to the same platform-owned Command Surface
+(`surface/deriveCommandSurfaceState.ts`) as manual/Work Unit/Focus Panel — the `bos` variant.
+The shell anatomy, preview/confirm/success patterns, and execution path are identical; only the
+entry point (and how much context arrives pre-resolved) differs. See
+`docs/sprints/06_2026/command_surface_v1.md`.
+
 ---
 
 ## Capabilities registry

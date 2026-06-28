@@ -60,6 +60,10 @@ export function logicalPlacementForPhysicalSurface(input: {
             return "focus_panel_manage";
         case "queue_row":
             return "queue_row_menu";
+        case "bos":
+        case "bos_rail":
+        case "bos_recommendations":
+            return "bos_recommendations";
         case "work_unit":
         case "department":
         case "workspace":

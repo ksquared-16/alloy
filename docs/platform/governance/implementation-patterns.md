@@ -97,6 +97,13 @@ eligibility + required subjects + required inputs + preview + execution + audit 
   view-model and both submit the same payload through the registered action's execute route —
   never a per-surface mutation path. Read-only eligibility/preview derivation is shared between
   the registered action and the view-model (one source of truth).
+- **Command Surface is platform-owned** (`surface/deriveCommandSurfaceState.ts`): the shell
+  anatomy (header/body/footer/success/failure), stage order, and action patterns are fixed by
+  the platform and identical across work_unit / focus_panel_manage / queue_row / bos variants.
+  Configuration influences **content only** through `CommandSurfaceConfigInfluence` (labels,
+  description, confirm/blocker copy) — never layout, stage order, lifecycle, or components.
+  Do not build per-command or per-config bespoke command UIs; feed a command snapshot to the
+  shared surface model instead.
 
 Avoid: per-surface inline `fetch('/actions/execute')`, parallel mutation APIs for the
 same intent, client components that mutate operational truth directly, modeling Work Unit
