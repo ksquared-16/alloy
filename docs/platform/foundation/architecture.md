@@ -116,5 +116,6 @@ See `../governance/deployment-and-environments.md`.
 
 - `system-overview.md`
 - `../core/business-process-system.md`
+- `../../api/api-architecture.md` (API platform doctrine — the API layer is the platform boundary)
 - `../../system/repository-state-2026-06.md` (point-in-time snapshot)
 - `docs/schema/` (generated schema reference)

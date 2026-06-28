@@ -10,6 +10,7 @@
 
 | File | Contents |
 |------|----------|
+| [`api-architecture.md`](api-architecture.md) | **Doctrine** — the governing API platform architecture: principles, surface taxonomy, response/error contract, auth & org-scoping rules, versioning, consumer doctrine, the OpenAPI gate, SDK direction, and governance. Read this first for any API work. |
 | [`api-index.md`](api-index.md) | **Generated** master table of all `web/app/api/**` route handlers (method, path, auth signal, validation signal, service-role, writes/events, stability, tables). Regenerate with `node scripts/generate-api-inventory.mjs`. |
 | [`api-response-contract.md`](api-response-contract.md) | **Phase 2** standard response envelope (`ApiSuccess`/`ApiFailure`), helpers, error-code + correlation-id conventions, and migration status. |
 | [`api-contract-migration-status.md`](api-contract-migration-status.md) | **Live migration tracker** — normalization priority order, migrated routes, active consumers, and legacy/sunset surfaces (OpenAPI deferred until internally consistent). |

@@ -10,7 +10,8 @@ readiness bar a route family must clear before it enters an OpenAPI spec.
 > envelope, have their active consumers unwrapping it, and have contract tests. Everything
 > else is excluded by default until it clears the gate.
 
-Related: [`api-response-contract.md`](api-response-contract.md) (the envelope + helpers) ·
+Related: [`api-architecture.md`](api-architecture.md) (governing doctrine — §8 is the OpenAPI doctrine) ·
+[`api-response-contract.md`](api-response-contract.md) (the envelope + helpers) ·
 [`api-contract-migration-status.md`](api-contract-migration-status.md) (live per-route tracker) ·
 [`api-documentation-audit.md`](api-documentation-audit.md) (findings + recommendations) ·
 [`api-index.md`](api-index.md) (generated full inventory).
