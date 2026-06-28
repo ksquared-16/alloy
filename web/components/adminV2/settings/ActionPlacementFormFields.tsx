@@ -116,7 +116,7 @@ export default function ActionPlacementFormFields({
 
             {needsSection ? (
                 <label className="block text-xs sm:col-span-2">
-                    <span className="mb-0.5 block font-medium text-alloy-midnight/70">Drawer section key</span>
+                    <span className="mb-0.5 block font-medium text-alloy-midnight/70">Record section key</span>
                     <input
                         type="text"
                         value={sectionKey}

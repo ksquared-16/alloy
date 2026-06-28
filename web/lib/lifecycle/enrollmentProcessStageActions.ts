@@ -118,8 +118,8 @@ export function lifecycleOperatorPlacementLabel(
     departmentId: string | null,
     workUnitId: string | null
 ): string {
-    if (surface === "record_header" && slot === "primary") return "Drawer";
-    if (surface === "record_header" && slot === "secondary") return "Drawer";
+    if (surface === "record_header" && slot === "primary") return "Focus Panel";
+    if (surface === "record_header" && slot === "secondary") return "Focus Panel";
     if (surface === "record_header" && slot === "overflow") return "Overflow Menu";
     if (surface === "queue_row" || surface === "queue_header") return "Work Unit Queue Row";
     if (surface === "work_unit" || (surface === "right_rail" && workUnitId)) return "Work Unit Right Rail";
@@ -142,7 +142,7 @@ function placementOperatorLabel(surface: string, departmentId: string | null, wo
         return "Workspace Rail";
     }
     if (surface === "record_drawer" || surface === "record_header" || surface === "record_section") {
-        return "Drawer Actions";
+        return "Record actions";
     }
     if (surface === "queue_row" || surface === "queue_header") return "Queue Row";
     return base;

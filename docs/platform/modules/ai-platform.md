@@ -38,6 +38,33 @@ action keys, and the server remains authoritative for validation, eligibility, r
 inputs, mutation, audit, and result. Reference implementation: `create_lead` (dedicated
 BOS rail apply UI is follow-up). See `actions-and-workflows.md` § Action Runtime contract.
 
+BOS is a **placement**, not a separate command system. A BOS recommendation invokes the
+same registered Operational Command as any other surface; its context resolution is
+`bos_proposal` (BOS proposes a subject/payload, the operator confirms — never a silent
+assumption). One capability, many placements, one runtime — see `invocationContext.ts`.
+
+BOS is the eventual primary interface, but it must use the same runtime as manual UI.
+Manual UI matters because it teaches the command model:
+
+- **Work Unit Actions** = "what can I do from this operational context?"
+- **Focus Panel Manage** = "what can I do to this selected record?"
+- **BOS** = propose/complete the same commands conversationally.
+
+**BOS progressively removes flow stages.** A command is a flow of reusable stages
+(`commandFlow.ts`); BOS is an entry point that arrives with more stages already resolved, so
+fewer remain — the runtime stays identical:
+
+```
+Manual:        resolve_subject → resolve_inputs → preview → execute
+Focus Panel:                     resolve_inputs → preview → execute
+BOS:                                              preview → execute
+BOS (resolved):                                             execute
+```
+
+BOS never skips eligibility, confirmation policy, audit, or refresh — it only pre-resolves
+subject and inputs conversationally. See
+`docs/sprints/06_2026/operational_command_runtime_v3.md`.
+
 ---
 
 ## Capabilities registry

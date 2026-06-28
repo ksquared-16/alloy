@@ -66,7 +66,7 @@ describe("enrollmentProcessStageActions", () => {
         expect(rows.map((r) => r.key)).toEqual(["schedule_tour"]);
         expect(rows[0]?.operational_note).toContain("Partially");
         expect(rows[0]?.placements[0]?.placement_id).toBe("placement-1");
-        expect(rows[0]?.placements[0]?.surface_label).toBe("Drawer");
+        expect(rows[0]?.placements[0]?.surface_label).toBe("Focus Panel");
     });
 
     it("includePlacedActions shows actions with placements outside catalog stage", () => {

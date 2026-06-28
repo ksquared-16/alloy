@@ -243,3 +243,56 @@ the inconsistency is *which* route, not direct DB writes.
   required inputs, mutation, audit, and result.
 - **BOS suggests/proposes; user confirms; server executes** — through the same registry executor as manual UI.
 - **Process required info informs eligibility/blockers; status transitions are validated server-side.**
+
+---
+
+## 8. Runtime V2 — Placement, Context, Execution Convergence (June 2026)
+
+Canonical model: **one registered action → many placements → many invocation contexts → one execution runtime.**
+
+| Layer | Owns | Code |
+|---|---|---|
+| Registered Action | Capability (handler, payload, eligibility, preview, execute, audit) | `web/lib/adminV2/actions/actionRegistry.ts` |
+| Action Placement | Presentation (where/visibility/order/label/confirmation) | `action_placements` + `web/lib/admin/actions/actionPlacementPresentation.ts` |
+| Invocation Context | How the target record is resolved | `web/lib/adminV2/actions/invocationContext.ts` |
+| Execution Runtime | Eligibility → preview → execute → audit → refresh | `web/lib/adminV2/actions/actionExecutor.ts` |
+
+**Logical placements** (decoupled from physical `action_placements.surface`): `work_unit_actions`, `focus_panel_manage`, `queue_row_menu`, `bos_recommendations`.
+
+### Operational Command Runtime (refined model — June 2026)
+
+The Actions Runtime is the **Operational Command Runtime**. Every operational mutation is a command:
+registered capability + placement + **context resolution** + eligibility + **required subjects** +
+required inputs + preview + execution + audit + refresh.
+
+**Context resolution** (`ContextResolution`, replaces the weaker `record_inherited` / `entityId=null` model):
+`current_record`, `user_selection`, `queue_selection`, `suggested_record`, `bos_proposal`, `open`.
+
+**Required subject** (`RequiredSubject`): `none`, `opportunity`, `person`, `child`, `case`, `multiple_opportunities`
+(derived via `requiredSubjectForAction`).
+
+Default mapping (`resolveContextResolution`): no required subject → `open`; `focus_panel_manage` /
+`queue_row_menu` → `current_record`; `work_unit_actions` → `user_selection`; `bos_recommendations` →
+`bos_proposal`. A Work Unit command has **no inherited subject yet** (not `entityId = null`); a suggested
+record (last-opened, BOS) is **optional context, never the authoritative subject** — `resolveCommandSubject`
+returns `needs_subject` for every selection/proposal resolution even when a suggestion exists.
+
+**Operator command states** (`commandState.ts` → `describeCommandState`): `available`, `disabled_blocked`,
+`needs_subject`, `needs_required_input`, `preview_ready`, `confirmation_required`, `executing`, `success`,
+`failure`. `operatorErrorCopy` maps technical errors (e.g. `entity_id required`) to user decisions so a
+command never fails as a raw stack trace where the operator must choose a subject or supply input.
+
+### Phase 1 risk dispositions
+
+| # | Item | Disposition | Evidence / file paths |
+|---|---|---|---|
+| 1 | Legacy `update_status_add_note` | **Retired** | Removed `UpdateStatusAddNoteModal` render + inline `/api/admin/actions/execute` POST and import in `web/components/admin/AdminEntityDrawerLegacy.tsx`; stale `open_form` form_key now shows a "moved" message instead of opening nothing. Status changes run exclusively via the registered Update Status action (`ChangeEnrollmentStatusModal` + `enrollment-status-transition` runtime). |
+| 2 | `confirm_tour` | **Registered** | `web/lib/adminV2/actions/definitions/confirmTourAction.ts` + registry entry. Routes through `runRegisteredAction`, delegating to the canonical `executeAdminAction` confirm_tour handler (`executeConfirmTourAction`). Client transport in `applyRegistryResolvedActionClient.ts` updated to the canonical string-`error` envelope. |
+| 3 | Duplicate inline execute helpers | **Partially converged; rest deferred** | `confirm_tour` special-case now hits the registered runtime. **Deferred (documented):** legacy-drawer inline execute blocks (`AdminEntityDrawerLegacy.tsx` ~L19184–19389 schedule_tour/record_tour_outcome/contact_attempted/mark_lost/add_note modal submits), `useOpportunityDrawerVmRegistryModals.tsx:113` local executor, and work-unit page modal submits (`page.tsx` ContactAttempted/AddNote ~L7655/L7736). These live in protected/legacy drawer surfaces; converge alongside a dedicated drawer-runtime task to avoid reveal regressions. |
+| 4 | Parallel action routes | **Documented (intentional domain executors)** | `enrollment-status-transition/{context,preflight,execute}` and `relationship-actions/execute` are domain executors for `update_enrollment_status` / relationship keys; they remain authoritative. `record-actions/route.ts` is a **legacy catalog read** (GET only, no execute). Convergence target: register `update_enrollment_status` as an executor delegating to the enrollment route. |
+| 5 | Person drawer Manage stubs | **Documented (deferred, low risk)** | `web/lib/admin/recordManage/buildRecordManageMenu.ts` person/child items are `enabled: false` ("Coming soon"); they cannot silently fire. Latent footgun: legacy opportunity header `delete_lead` is enabled with a no-op `onManageSelect` (`AdminEntityDrawerLegacy.tsx`) — only reachable on legacy-admin. Hide or wire before enabling. |
+
+### Surfaces already conformant (verified, no change needed)
+
+- **Focus Panel Manage already owns record-scoped actions** — `OpportunityFocusPanelHeader` → `OpportunityDrawerHeaderControls` → `RecordDrawerManageMenu` fed by `displayVm.actions.header_menu`, executed `surface: record_header`, `entityId: drawer.id` (record_inherited).
+- **Work Unit Actions Rail is Work-Unit-scoped** — catalog resolved with `surface=work_unit`, `entityId=null`; available actions do **not** change with queue selection. Record-requiring actions now prompt for a record when none is selected instead of leaking a technical error (`page.tsx` rail branch), and `schedule_tour` opens a record picker.

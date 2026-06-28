@@ -79,7 +79,7 @@ export default function ActionPlacementGuidedEditor({ open, mode, seed, onClose,
     const submitCreate = async () => {
         if (!canMutate || !seed.definitionId) return;
         if (surfaceRequiresSectionKey(surface) && !sectionKey.trim()) {
-            setError("Choose which drawer section this button belongs in.");
+            setError("Choose which record section this action appears in.");
             return;
         }
         setSubmitting(true);
@@ -113,7 +113,7 @@ export default function ActionPlacementGuidedEditor({ open, mode, seed, onClose,
     const submitEdit = async () => {
         if (!canMutate || !seed.placementId) return;
         if (surfaceRequiresSectionKey(surface) && !sectionKey.trim()) {
-            setError("Choose which drawer section this button belongs in.");
+            setError("Choose which record section this action appears in.");
             return;
         }
         setSubmitting(true);
@@ -217,7 +217,7 @@ export default function ActionPlacementGuidedEditor({ open, mode, seed, onClose,
 
                     {surfaceRequiresSectionKey(surface) ? (
                         <label className="block text-xs">
-                            <span className="mb-1 block font-medium text-alloy-midnight/70">Drawer section</span>
+                            <span className="mb-1 block font-medium text-alloy-midnight/70">Record section</span>
                             <input
                                 type="text"
                                 value={sectionKey}
@@ -227,7 +227,7 @@ export default function ActionPlacementGuidedEditor({ open, mode, seed, onClose,
                                 disabled={submitting}
                             />
                             <span className="mt-0.5 block text-[11px] text-alloy-midnight/45">
-                                Match a section from Record layouts (drawer body).
+                                Match a section from Record layouts (record body).
                             </span>
                         </label>
                     ) : null}

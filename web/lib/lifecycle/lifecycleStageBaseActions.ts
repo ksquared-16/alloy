@@ -36,19 +36,23 @@ export type LifecycleActionPlacementOption = {
     slot: string;
 };
 
-/** Operator-facing placement labels for Lifecycle Builder. */
+/**
+ * Operator-facing placement labels for Lifecycle Builder.
+ * Placement = where an action appears. Record-scoped surfaces present in the Focus Panel,
+ * not a "drawer"; configuration places actions, it does not create executable behavior.
+ */
 export const LIFECYCLE_ACTION_PLACEMENTS: readonly LifecycleActionPlacementOption[] = [
-    { id: "drawer", label: "Drawer", surface: "record_header", slot: "primary" },
+    { id: "drawer", label: "Focus Panel", surface: "record_header", slot: "primary" },
     { id: "queue_row", label: "Work Unit Queue Row", surface: "queue_row", slot: "row_inline" },
     { id: "work_unit_rail", label: "Work Unit Right Rail", surface: "work_unit", slot: "primary" },
     { id: "department_rail", label: "Department Right Rail", surface: "department", slot: "primary" },
     { id: "workspace_root", label: "Workspace root", surface: "workspace", slot: "primary" },
-    { id: "overflow", label: "Overflow Menu", surface: "record_header", slot: "overflow" },
+    { id: "overflow", label: "Focus Panel Manage", surface: "record_header", slot: "overflow" },
 ] as const;
 
 /** Activation wizard — user-facing placement labels. */
 export const LIFECYCLE_ACTIVATION_ACTION_PLACEMENTS: readonly LifecycleActionPlacementOption[] = [
-    { id: "overflow", label: "Drawer Actions menu", surface: "record_header", slot: "overflow" },
+    { id: "overflow", label: "Focus Panel Manage", surface: "record_header", slot: "overflow" },
     { id: "queue_row", label: "Work Unit Queue row", surface: "queue_row", slot: "row_inline" },
     { id: "work_unit_rail", label: "Work Unit right rail", surface: "work_unit", slot: "primary" },
     { id: "department_rail", label: "Department right rail", surface: "department", slot: "primary" },

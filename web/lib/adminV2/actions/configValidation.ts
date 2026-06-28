@@ -11,6 +11,7 @@
  */
 
 import { isKnownActionKey, resolveActionKey } from "@/lib/adminV2/actions/actionRegistry";
+import { isLogicalActionPlacement } from "@/lib/adminV2/actions/invocationContext";
 
 export type ConfiguredActionValidation = {
     actionKey: string;
@@ -68,6 +69,41 @@ export function assertConfiguredActionKeys(actionKeys: readonly string[]): Confi
         console.warn(`[actions/config] ${invalid.length} configured action(s) reference unknown keys.`);
     }
     return invalid;
+}
+
+export type ConfiguredPlacementValidation = {
+    actionKey: string;
+    placement: string;
+    ok: boolean;
+    reason?: string;
+};
+
+/**
+ * Validate a configured placement: the action key must be known AND the placement must
+ * be a recognized logical placement. Invalid placements are a configuration error.
+ */
+export function validateConfiguredPlacement(actionKey: string, placement: string): ConfiguredPlacementValidation {
+    if (!isKnownActionKey(actionKey)) {
+        return { actionKey, placement, ok: false, reason: `Unknown action key "${actionKey}".` };
+    }
+    if (!isLogicalActionPlacement(placement)) {
+        return { actionKey, placement, ok: false, reason: `Unknown placement "${placement}" for action "${actionKey}".` };
+    }
+    return { actionKey, placement, ok: true };
+}
+
+/**
+ * Assert a configured placement is valid. Throws in dev/test; warns in production so
+ * broken placements never render as working actions.
+ */
+export function assertConfiguredPlacement(actionKey: string, placement: string): void {
+    const result = validateConfiguredPlacement(actionKey, placement);
+    if (result.ok) return;
+    const message = `[actions/config] ${result.reason}`;
+    if (isStrictEnv()) {
+        throw new Error(result.reason);
+    }
+    console.warn(message);
 }
 
 /**

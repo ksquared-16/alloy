@@ -230,12 +230,104 @@ Fresh **Create Lead** (June 2026) writes:
 
 ---
 
+## Operational Command Runtime
+
+**Every operational mutation in Alloy is an Operational Command.** A command is a registered
+platform capability; it exists independently of where it appears. The Actions Runtime is the
+Operational Command Runtime — manual UI and BOS are placements over the same runtime.
+
+```
+Registered Capability → What can Alloy do?         web/lib/adminV2/actions/actionRegistry.ts
+   ↓
+Placement             → Where do operators see it?  action_placements (config)
+   ↓
+Context Resolution    → How is the subject resolved? web/lib/adminV2/actions/invocationContext.ts
+   ↓
+Eligibility → Required Subjects → Required Inputs → Preview → Confirmation
+   ↓
+Execution → Audit → Refresh                          actionExecutor.ts
+```
+
+Command = **registered capability + placement + context resolution + eligibility + required
+subjects + required inputs + preview + execution + audit + refresh.**
+
+- **One registered capability per command.** Never duplicate a command because it appears on another surface.
+- **Logical placements:** `work_unit_actions`, `focus_panel_manage`, `queue_row_menu`, `bos_recommendations` (decoupled from the physical `action_placements.surface` enum via `logicalPlacementForPhysicalSurface`).
+- **Context resolution** (`ContextResolution`): `current_record`, `user_selection`, `queue_selection`, `suggested_record`, `bos_proposal`, `open`. A Work Unit rail command is **not** `entityId = null` — it has *no inherited subject yet* and a *required subject* the operator must resolve. A suggested record (last-opened, BOS) is optional context, **never** the authoritative subject.
+- **Required subject** (`RequiredSubject`): `none`, `opportunity`, `person`, `child`, `case`, `multiple_opportunities`. Derived from the capability via `requiredSubjectForAction`.
+- **Shared invocation contract:** every surface resolves context via `resolveCommandContext` and executes via `runRegisteredAction` / `resolveActionEligibility`. No execution path diverges by surface.
+
+| Command + placement | Context resolution | Required subject | Operator sees |
+|---|---|---|---|
+| `schedule_tour` @ work_unit_actions | `user_selection` | opportunity | choose a family first |
+| `schedule_tour` @ focus_panel_manage | `current_record` | opportunity | scheduling flow for selected family |
+| `create_lead` @ work_unit_actions | `open` | none | create-lead form / BOS intake |
+| `update_status` @ focus_panel_manage | `current_record` | opportunity | allowed transitions for selected record |
+| `update_status` @ work_unit_actions | `user_selection` (or hidden) | opportunity | choose a record, then update status |
+
+### Operator-facing command states
+
+`web/lib/adminV2/actions/commandState.ts` (`describeCommandState`). A command never fails as a
+raw technical error where a user decision is needed:
+
+| State | Operator copy (example) |
+|---|---|
+| available | runnable |
+| disabled_blocked | "This status cannot be changed from Tour Scheduled to Enrolled yet." |
+| needs_subject | "Choose a family before running \"Schedule Tour\"." |
+| needs_required_input | "Missing required information: child date of birth." |
+| preview_ready | "Review what this command will do, then confirm." |
+| confirmation_required | "Confirm to run \"Update Status\"." |
+| executing | "Schedule Tour…" |
+| success | "Lead created. Opening record." / "Tour confirmed." |
+| failure | recovery copy (`operatorErrorCopy`), not a stack trace |
+
+- **Configuration owns presentation** (placement, visibility, order, labels, confirmation copy). **Runtime owns execution** (context, eligibility, required inputs, preview, execute, audit, refresh). **The platform owns capabilities.**
+
+Reference commands through the registered runtime: `update_status`, `create_lead`, `confirm_tour`.
+
+### Operational Intent (human) vs Capability (technical)
+
+Operators think in **intent**, not capability. `web/lib/adminV2/actions/operationalIntent.ts`
+maps the operator-facing verb to the technical capability it invokes:
+
+| Operator intent | Capability |
+|---|---|
+| "Schedule Tour" | `schedule_tour` |
+| "Move Forward" | `update_status` |
+| "Enroll Child" | `assign_room` + `create_contract` + `generate_documents` + … (fan-out) |
+
+One intent may resolve to many capabilities. The runtime never exposes implementation detail
+to operators. `OperationalIntent` = `intentKey`, `title`, `description`, `defaultCapability`,
+`supportedCapabilities`, `supportedSubjects`, `supportedProcesses`, `maturity`.
+
+### Operational Flow (reusable stages)
+
+A command is a guided flow composed from reusable stages
+(`web/lib/adminV2/actions/commandFlow.ts` → `buildCommandFlow`):
+
+```
+resolve_context → resolve_subject → resolve_required_inputs → resolve_constraints
+  → preview → confirm → execute → success
+```
+
+The **runtime** decides the current stage from the resolved snapshot; the **UI** renders the
+stage the runtime points to. The same command from a richer entry point has more stages
+already complete — Work Unit opens at `resolve_subject`, Focus Panel at
+`resolve_required_inputs`, BOS at `preview`. No execution path diverges by surface; surfaces
+only differ by how much context arrives pre-resolved. See
+`docs/sprints/06_2026/operational_command_runtime_v3.md`.
+
+There are no buttons, drawer actions, or dialog mutations — only commands, placements, and
+flows over one runtime.
+
 ## Rules
 
 - Meaningful business mutations should use event/workflow path where product already does
 - Completion guardrails on lifecycle execute paths
 - Workflow events: JWT SELECT-only; inserts via service role
 - Do not bypass state machines, permissions, or audit for operational writes
+- Configuration places actions; it never creates executable behavior. Configured keys + placements must resolve to a registered capability (`validateConfiguredPlacement`) or be hidden/disabled.
 
 ---
 

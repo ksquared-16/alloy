@@ -64,8 +64,37 @@ hints, confirmation copy). Config never owns executable behavior.
   (`resolveActionEligibility`) returns blockers, available transitions, required inputs,
   and an optional preview.
 
+**Operational Command Runtime — one capability, many placements, one runtime.** Every
+operational mutation is a command: registered capability + placement + context resolution +
+eligibility + required subjects + required inputs + preview + execution + audit + refresh.
+
+- **Capability** = the registered command (platform).
+- **Placement** = where it appears (config): logical placements `work_unit_actions`,
+  `focus_panel_manage`, `queue_row_menu`, `bos_recommendations`.
+- **Context resolution** = how the subject is resolved
+  (`web/lib/adminV2/actions/invocationContext.ts`): `current_record`, `user_selection`,
+  `queue_selection`, `suggested_record`, `bos_proposal`, `open`. Work Unit commands have
+  **no inherited subject yet** (not `entityId = null`) and a **required subject** the operator
+  resolves; a suggested record is optional context, never authoritative.
+- **Required subject:** `none | opportunity | person | child | case | multiple_opportunities`.
+- **Operator states** (`commandState.ts` → `describeCommandState`): available,
+  disabled_blocked, needs_subject, needs_required_input, preview_ready, confirmation_required,
+  executing, success, failure. Never surface a raw technical error where a user decision is
+  needed — map it with `operatorErrorCopy`.
+- **Shared invocation contract:** all surfaces call `resolveCommandContext` then the same
+  runtime. Do not duplicate a command because it appears on another surface.
+- **Operational Intent vs capability** (`operationalIntent.ts`): operators choose an intent
+  ("Move Forward"); the runtime resolves it to a capability (`update_status`). One intent may
+  fan out to many capabilities. Never expose capability keys to operators.
+- **Operational Flow** (`commandFlow.ts` → `buildCommandFlow`): a command is a guided flow of
+  reusable stages (`resolve_context → resolve_subject → resolve_required_inputs →
+  resolve_constraints → preview → confirm → execute → success`). The runtime picks the current
+  stage from the resolved snapshot; the UI renders it. Richer entry points (Focus Panel, BOS)
+  arrive with more stages already complete.
+
 Avoid: per-surface inline `fetch('/actions/execute')`, parallel mutation APIs for the
-same intent, or client components that mutate operational truth directly.
+same intent, client components that mutate operational truth directly, modeling Work Unit
+commands as `entityId = null`, or duplicating a capability per placement.
 
 ---
 

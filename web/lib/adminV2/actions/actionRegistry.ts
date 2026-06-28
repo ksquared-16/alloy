@@ -16,9 +16,10 @@ import { canonicalActionDefinition } from "@/lib/admin/actions/canonicalActionRe
 import type { RegisteredAction } from "@/lib/adminV2/actions/actionTypes";
 import { updateStatusAction } from "@/lib/adminV2/actions/definitions/updateStatusAction";
 import { createLeadAction } from "@/lib/adminV2/actions/definitions/createLeadAction";
+import { confirmTourAction } from "@/lib/adminV2/actions/definitions/confirmTourAction";
 
 /** Actions with fully code-owned, executable handlers. */
-const REGISTERED_ACTION_LIST: RegisteredAction[] = [updateStatusAction, createLeadAction];
+const REGISTERED_ACTION_LIST: RegisteredAction[] = [updateStatusAction, createLeadAction, confirmTourAction];
 
 const REGISTERED_ACTIONS: Map<string, RegisteredAction> = new Map(
     REGISTERED_ACTION_LIST.map((a) => [a.actionKey, a])

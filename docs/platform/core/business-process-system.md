@@ -88,6 +88,16 @@ enforces `status_transition_rules`, and returns required inputs/blockers before 
 mutation. Config controls which actions appear and their copy; code owns the executable
 semantics. See `../modules/actions-and-workflows.md` § Action Runtime contract.
 
+A stage **places** commands; it does not own them. Every operational mutation is an
+**Operational Command** (registered capability). The same command (e.g. `schedule_tour`,
+`update_status`) may appear on a Work Unit rail, the Focus Panel Manage control, or a queue
+row — one capability, many placements. How the subject is resolved is the **context
+resolution**: Work Unit = `user_selection` (no inherited subject; the operator chooses a
+required subject — never the highlighted row by default); Focus Panel / queue row =
+`current_record`. Every surface executes through the one runtime, and operators always see an
+actionable command state (needs subject / needs input / preview / confirm) rather than a raw
+error. See `../modules/actions-and-workflows.md` § Operational Command Runtime.
+
 ---
 
 ## Record (authoritative detail)

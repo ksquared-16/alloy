@@ -36,7 +36,7 @@ export function WorkspaceCommandRailShell({
                 <section
                     className="adminv2-ws-actions-rail adminv2-ws-actions-rail--dept-panel adminv2-ws-command-section--primary"
                     data-drawer-command-rail-actions="true"
-                    aria-label="Drawer actions"
+                    aria-label="Record actions"
                 >
                     <DrawerRegistryActionsRail
                         actions={drawerRailActions.actions}

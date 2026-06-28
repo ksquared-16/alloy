@@ -29,14 +29,14 @@ export const SETTINGS_SURFACE_OPTIONS: readonly SettingsSurfaceOption[] = [
     {
         value: "record_header",
         label: "Record header",
-        description: "Top of the record drawer when viewing a record.",
+        description: "Top of the record (Focus Panel header) when viewing a record.",
         requiresSectionKey: false,
     },
     {
         value: "record_section",
         label: "Record section",
         description:
-            "Inside a specific drawer section. Use the section key from Record layouts (for example details or inquiry_children).",
+            "Inside a specific record section (Focus Panel card). Use the section key from Record layouts (for example details or inquiry_children).",
         requiresSectionKey: true,
     },
     {
@@ -82,6 +82,19 @@ const PREFERRED_SLOTS_BY_SURFACE: Partial<Record<ActionSurface, readonly ActionS
     right_rail: ["right_rail", "primary", "overflow"],
     workspace: ["primary", "right_rail", "secondary", "overflow"],
 };
+
+export function operatorConfigurationSurfaceLabel(surface: string): string {
+    if (surface === "queue_row") return "Queue row";
+    if (surface === "record_header") return "Focus Panel header";
+    if (surface === "record_section") return "Focus Panel card";
+    if (surface === "right_rail") return "BOS rail";
+    if (surface === "workspace") return "Workspace context";
+    return settingsSurfaceLabel(surface);
+}
+
+export function operatorConfigurationSurfaceDescription(surface: string): string | undefined {
+    return settingsSurfaceOption(surface)?.description;
+}
 
 export function settingsSurfaceOption(surface: string): SettingsSurfaceOption | undefined {
     return SETTINGS_SURFACE_OPTIONS.find((o) => o.value === surface);
