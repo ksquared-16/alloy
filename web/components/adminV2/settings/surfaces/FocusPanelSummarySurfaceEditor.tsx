@@ -9,6 +9,7 @@ import FocusPanelCardRenderer from "@/components/admin/focusPanel/FocusPanelCard
 import FocusPanelEditableCardFrame from "@/components/admin/focusPanel/FocusPanelEditableCardFrame";
 import FocusPanelSummaryEditBar from "@/components/admin/focusPanel/FocusPanelSummaryEditBar";
 import { buildDemoFocusPanelSummaryViewModel } from "@/lib/adminV2/runtime/focusPanel/demoFocusPanelSummaryViewModel";
+import { buildOperationalContext } from "@/lib/adminV2/runtime/operationalContext/buildOperationalContext";
 import { deriveOpportunityFocusPanelPresentation } from "@/lib/adminV2/runtime/focusPanel/deriveOpportunityFocusPanelCards";
 import { FOCUS_PANEL_SUMMARY_DEFAULT_DOC } from "@/lib/adminV2/runtime/focusPanel/buildFocusPanelSummaryDefaultDoc";
 import {
@@ -60,6 +61,21 @@ export default function FocusPanelSummarySurfaceEditor() {
                 perspective: null,
                 statusLabel: "Tour scheduled",
             }).cards,
+        [vm, record],
+    );
+
+    // Preview canvas observes the same Operational Context boundary the runtime uses.
+    const previewContext = useMemo(
+        () =>
+            buildOperationalContext({
+                subjectId: String(vm.entity.id),
+                title: vm.header.title,
+                subjectVm: vm,
+                truth: record,
+                perspective: null,
+                statusLabel: "Tour scheduled",
+                canMutate: false,
+            }),
         [vm, record],
     );
 
@@ -375,13 +391,9 @@ export default function FocusPanelSummarySurfaceEditor() {
                                     const card = (
                                         <FocusPanelCardRenderer
                                             model={model}
-                                            displayVm={vm}
-                                            drawerId={String(vm.entity.id)}
-                                            record={record}
-                                            opportunitySingular="Enrollment"
-                                            canMutate={false}
+                                            context={previewContext}
                                             focusPanelMode="summary"
-                                            onSelectTab={() => {}}
+                                            compat={{ subjectVm: vm, onSelectTab: () => {} }}
                                         />
                                     );
                                     return (

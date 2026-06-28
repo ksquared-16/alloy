@@ -4,6 +4,9 @@ import clsx from "clsx";
 
 import ArchetypeCardBody from "@/components/admin/focusPanel/ArchetypeCardBody";
 import HouseholdCard from "@/components/admin/focusPanel/cards/HouseholdCard";
+import ChildrenCard from "@/components/admin/focusPanel/cards/ChildrenCard";
+import CurrentWorkCard from "@/components/admin/focusPanel/cards/CurrentWorkCard";
+import ReadinessCard from "@/components/admin/focusPanel/cards/ReadinessCard";
 import UniversalCard from "@/components/admin/focusPanel/UniversalCard";
 import ProofDoctrineLifecycleRail from "@/components/layout/proofShell/ProofDoctrineLifecycleRail";
 import OpportunityDrawerVmTabPanes from "@/components/admin/vmDrawer/OpportunityDrawerVmTabPanes";
@@ -88,6 +91,19 @@ export default function FocusPanelCardRenderer({
     // generic profile-payload body. NOTE: pure cards read only `model` + `context`.
     if (model.key === "household") {
         return <HouseholdCard model={model} context={context} receded={receded} />;
+    }
+
+    // Core Four operational cards — pure cards on the Operational Context boundary.
+    // Each owns its collapsed → expanded → focused perspective locally and derives
+    // its answer from `context` (truth + projected signals). No fetch on expand.
+    if (model.key === "children") {
+        return <ChildrenCard model={model} context={context} receded={receded} />;
+    }
+    if (model.key === "current_work") {
+        return <CurrentWorkCard model={model} context={context} receded={receded} />;
+    }
+    if (model.key === "readiness_kpi") {
+        return <ReadinessCard model={model} context={context} receded={receded} />;
     }
 
     // Subject identity + observed truth derive from the Operational Context. Only the

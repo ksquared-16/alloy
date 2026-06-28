@@ -1983,6 +1983,18 @@ html[data-alloy-os-runtime="on"]
   color: #b45309;
 }
 
+.alloy-os-household__row-detail--locked {
+  color: var(--alloy-os-text-tertiary, #9ca3af);
+  font-style: italic;
+}
+
+.alloy-os-household__address {
+  margin: 0 0 2px;
+  font-size: 11px;
+  color: var(--alloy-os-text-secondary, #4b5563);
+  word-break: break-word;
+}
+
 .alloy-os-household__row-role {
   flex-shrink: 0;
   font-size: 10px;
@@ -2123,6 +2135,166 @@ html[data-alloy-os-runtime="on"]
   font-size: 11px;
   font-weight: 600;
   color: var(--alloy-os-text-secondary, #4b5563);
+}
+
+/* ── Core Four shared card primitives (Children / Current Work / Readiness) ── */
+
+/* Clickable rows reset to plain row appearance. */
+.alloy-os-children__row,
+.alloy-os-currentwork__row,
+.alloy-os-readiness__row {
+  width: 100%;
+  border: none;
+  background: none;
+  text-align: left;
+  cursor: pointer;
+  padding: 1px 0;
+  border-radius: 6px;
+}
+
+.alloy-os-children__row:hover,
+.alloy-os-currentwork__row:hover,
+.alloy-os-readiness__row:hover {
+  background: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 4%, transparent);
+}
+
+/* Status / role pill (children status, etc.). */
+.alloy-os-card-pill {
+  flex-shrink: 0;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 8%, #fff);
+  color: var(--alloy-os-text-secondary, #4b5563);
+  white-space: nowrap;
+}
+.alloy-os-card-pill--positive {
+  background: color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 14%, #fff);
+  color: var(--alloy-os-bend-pine, #00a283);
+}
+.alloy-os-card-pill--work {
+  background: color-mix(in srgb, #2563eb 12%, #fff);
+  color: #2563eb;
+}
+.alloy-os-card-pill--risk {
+  background: color-mix(in srgb, #dc2626 12%, #fff);
+  color: #dc2626;
+}
+
+/* Avatar / lead glyph tints (work + readiness lead, child evidence). */
+.alloy-os-card-lead--positive {
+  background: color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 14%, #fff);
+  color: var(--alloy-os-bend-pine, #00a283);
+}
+.alloy-os-card-lead--work {
+  background: color-mix(in srgb, #2563eb 12%, #fff);
+  color: #2563eb;
+}
+.alloy-os-card-lead--risk {
+  background: color-mix(in srgb, #dc2626 12%, #fff);
+  color: #dc2626;
+}
+
+.alloy-os-card-detail--risk {
+  color: #dc2626;
+}
+
+/* Key/value detail grid (per-child operational facts, focused work item). */
+.alloy-os-card-kv {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 5px 12px;
+}
+.alloy-os-card-kv--stack {
+  grid-template-columns: 1fr;
+}
+.alloy-os-card-kv span {
+  display: flex;
+  flex-direction: column;
+  font-size: 12px;
+  color: var(--alloy-os-midnight, #273f52);
+}
+.alloy-os-card-kv b {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--alloy-os-text-tertiary, #9ca3af);
+  margin-bottom: 1px;
+}
+
+/* Real flags (medical/document) — rendered only when present. */
+.alloy-os-card-flags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 6px;
+}
+.alloy-os-card-flag {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 1px 7px;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 8%, #fff);
+  color: var(--alloy-os-text-secondary, #4b5563);
+}
+.alloy-os-card-flag--risk {
+  background: color-mix(in srgb, #dc2626 12%, #fff);
+  color: #dc2626;
+}
+.alloy-os-card-flag--positive {
+  background: color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 14%, #fff);
+  color: var(--alloy-os-bend-pine, #00a283);
+}
+
+/* Per-child evidence block (expanded Children). */
+.alloy-os-child-block {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 8px 0;
+  border-top: 1px solid color-mix(in srgb, var(--alloy-os-midnight, #273f52) 8%, transparent);
+}
+.alloy-os-child-block:first-child {
+  border-top: none;
+  padding-top: 2px;
+}
+
+/* Readiness gauge (honest completion bar). */
+.alloy-os-readiness__body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.alloy-os-gauge {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.alloy-os-gauge__track {
+  flex: 1;
+  height: 7px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 8%, #fff);
+  overflow: hidden;
+}
+.alloy-os-gauge__fill {
+  height: 100%;
+  border-radius: 999px;
+  background: #7c3aed;
+  transition: width 200ms ease;
+}
+.alloy-os-gauge[data-tone="risk"] .alloy-os-gauge__fill {
+  background: #dc2626;
+}
+.alloy-os-gauge[data-tone="positive"] .alloy-os-gauge__fill {
+  background: var(--alloy-os-bend-pine, #00a283);
+}
+.alloy-os-gauge__value {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--alloy-os-midnight, #273f52);
 }
 
 .alloy-os-ucard__status-issues {

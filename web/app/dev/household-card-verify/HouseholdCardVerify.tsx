@@ -7,8 +7,14 @@
  */
 
 import HouseholdCard from "@/components/admin/focusPanel/cards/HouseholdCard";
+import ChildrenCard from "@/components/admin/focusPanel/cards/ChildrenCard";
+import CurrentWorkCard from "@/components/admin/focusPanel/cards/CurrentWorkCard";
+import ReadinessCard from "@/components/admin/focusPanel/cards/ReadinessCard";
 import type { FocusPanelCardModel } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardModel";
-import type { OperationalContext } from "@/lib/adminV2/runtime/operationalContext/types";
+import type {
+    OperationalContext,
+    OperationalContextSignals,
+} from "@/lib/adminV2/runtime/operationalContext/types";
 import "@/app/adminV2/components/alloyOsRuntime.css";
 
 const MODEL: FocusPanelCardModel = {
@@ -23,12 +29,26 @@ const MODEL: FocusPanelCardModel = {
     visible: true,
 };
 
-function ctx(truth: Record<string, unknown>, opts?: { masked?: boolean; label?: string }): OperationalContext {
+function cardModel(key: FocusPanelCardModel["key"], title: string, iconName: string): FocusPanelCardModel {
+    return { ...MODEL, key, title, iconName };
+}
+
+const EMPTY_SIGNALS: OperationalContextSignals = {
+    work: { primary: null, items: [], openCount: 0, overdueCount: 0, nextActionLabel: null },
+    attention: { needsAttention: false, primaryReason: null, reasonCount: 0 },
+    tour: { scheduled: false, startAt: null, statusLabel: null },
+};
+
+function ctx(
+    truth: Record<string, unknown>,
+    opts?: { masked?: boolean; label?: string; signals?: OperationalContextSignals },
+): OperationalContext {
     return {
         subject: { type: "opportunity", id: String(truth.id ?? "opp"), label: opts?.label ?? "Household" },
         businessProcess: { key: "enrollment", label: "Tour scheduled", stageKey: "tour" },
         perspective: { missionLabel: "Confirm enrollment readiness" },
         truth,
+        signals: opts?.signals ?? EMPTY_SIGNALS,
         capabilities: { canMutate: true, maskedChannels: opts?.masked ?? false },
         status: "ready",
     };
@@ -82,6 +102,25 @@ const MISSING_EMERGENCY: Record<string, unknown> = {
 
 const EMPTY: Record<string, unknown> = { id: "opp-empty", _opportunity_persons: [], _inquiry_children: [] };
 
+const CORE_FOUR_SIGNALS: OperationalContextSignals = {
+    work: {
+        primary: { id: "t1", label: "Confirm tour booking", state: "open", dueLabel: "Due today", dueAt: "2026-06-27", urgency: "today", source: "BOS Assist", kind: "task" },
+        items: [
+            { id: "t1", label: "Confirm tour booking", state: "open", dueLabel: "Due today", dueAt: "2026-06-27", urgency: "today", source: "BOS Assist", kind: "task" },
+            { id: "t2", label: "Send enrollment packet", state: "open", dueLabel: "Due Jun 30", dueAt: "2026-06-30", urgency: "upcoming", source: "workflow", kind: "task" },
+        ],
+        openCount: 2,
+        overdueCount: 0,
+        nextActionLabel: "Advance to enrolled",
+    },
+    attention: { needsAttention: true, primaryReason: "Immunization record missing", reasonCount: 1 },
+    tour: { scheduled: true, startAt: "2026-06-27T10:00:00Z", statusLabel: "confirmed" },
+};
+
+const CHILDREN_MODEL = cardModel("children", "Children", "users");
+const WORK_MODEL = cardModel("current_work", "Current work", "check");
+const READINESS_MODEL = cardModel("readiness_kpi", "Readiness", "gauge");
+
 function Panel({ label, children }: { label: string; children: React.ReactNode }) {
     return (
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
@@ -106,6 +145,19 @@ export default function HouseholdCardVerify() {
             <Panel label="Missing emergency"><HouseholdCard model={MODEL} context={ctx(MISSING_EMERGENCY, { label: "Smith Household" })} /></Panel>
             <Panel label="Permission limited (masked channels)"><HouseholdCard model={MODEL} context={ctx(FULL, { masked: true, label: "Johnson Household" })} /></Panel>
             <Panel label="Empty"><HouseholdCard model={MODEL} context={ctx(EMPTY, { label: "New record" })} /></Panel>
+
+            <div style={{ width: "100%", maxWidth: 880, marginTop: 24 }}>
+                <h2 style={{ fontSize: 18, fontWeight: 700, margin: "0 0 6px" }}>Core Four — production cards on one Operational Context</h2>
+                <p style={{ fontSize: 13, color: "#475569", margin: 0 }}>
+                    Real <code>Household</code>, <code>Children</code>, <code>Current Work</code>, and{" "}
+                    <code>Readiness</code> rendered from the SAME fixture context (truth + projected signals).
+                    Each owns its expand/focus perspective locally.
+                </p>
+            </div>
+            <Panel label="Household"><HouseholdCard model={MODEL} context={ctx(FULL, { label: "Johnson Household", signals: CORE_FOUR_SIGNALS })} /></Panel>
+            <Panel label="Children"><ChildrenCard model={CHILDREN_MODEL} context={ctx(FULL, { label: "Johnson Household", signals: CORE_FOUR_SIGNALS })} /></Panel>
+            <Panel label="Current Work"><CurrentWorkCard model={WORK_MODEL} context={ctx(FULL, { label: "Johnson Household", signals: CORE_FOUR_SIGNALS })} /></Panel>
+            <Panel label="Readiness"><ReadinessCard model={READINESS_MODEL} context={ctx(FULL, { label: "Johnson Household", signals: CORE_FOUR_SIGNALS })} /></Panel>
         </div>
     );
 }

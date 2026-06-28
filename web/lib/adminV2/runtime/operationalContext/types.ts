@@ -47,6 +47,62 @@ export type OperationalContextStatus =
     | "error"
     | "permission_limited";
 
+/**
+ * Operational signals — the composed-but-not-flat operational truth cards observe.
+ *
+ * `truth` is the subject's field bag (the above-fold record). Some operational
+ * facts are not flat record fields — open work, attention, scheduled tour — they
+ * are composed upstream. The adapter (`buildOperationalContext`) projects them
+ * here so Work / Intelligence cards observe the Operational Context, never the
+ * drawer VM. These are read-once derivations; cards never fetch or recompute.
+ */
+export type OperationalWorkItemState = "open" | "completed" | "planned";
+export type OperationalWorkUrgency = "overdue" | "today" | "upcoming" | null;
+export type OperationalWorkItemKind = "stage_work" | "task";
+
+export type OperationalWorkItem = {
+    id: string;
+    label: string;
+    state: OperationalWorkItemState;
+    /** Human due label ("Due today", "Overdue 2 days", "Due Jun 30"), null when none. */
+    dueLabel: string | null;
+    /** Raw due timestamp/date, null when none. */
+    dueAt: string | null;
+    urgency: OperationalWorkUrgency;
+    /** Origin ("BOS Assist", "workflow", "manual"), null when unknown. */
+    source: string | null;
+    kind: OperationalWorkItemKind;
+};
+
+export type OperationalWorkSignal = {
+    /** Most-urgent open item — the single answer for Current Work overview. */
+    primary: OperationalWorkItem | null;
+    /** All open/active work items (stage work + operational tasks). */
+    items: OperationalWorkItem[];
+    openCount: number;
+    overdueCount: number;
+    /** Configured next action label (header action), null when none. */
+    nextActionLabel: string | null;
+};
+
+export type OperationalAttentionSignal = {
+    needsAttention: boolean;
+    primaryReason: string | null;
+    reasonCount: number;
+};
+
+export type OperationalTourSignal = {
+    scheduled: boolean;
+    startAt: string | null;
+    statusLabel: string | null;
+};
+
+export type OperationalContextSignals = {
+    work: OperationalWorkSignal;
+    attention: OperationalAttentionSignal;
+    tour: OperationalTourSignal;
+};
+
 export type OperationalContext = {
     subject: OperationalSubjectRef;
     businessProcess: OperationalBusinessProcess;
@@ -57,6 +113,11 @@ export type OperationalContext = {
      * above-fold record during migration.)
      */
     truth: Record<string, unknown>;
+    /**
+     * Projected operational signals (work / attention / tour) for cards whose
+     * answer is not a flat record field. @see OperationalContextSignals.
+     */
+    signals: OperationalContextSignals;
     capabilities: OperationalContextCapabilities;
     status: OperationalContextStatus;
 };

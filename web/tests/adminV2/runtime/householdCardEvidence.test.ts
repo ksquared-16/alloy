@@ -13,6 +13,11 @@ function ctx(truth: Record<string, unknown>, label = "Household"): OperationalCo
         businessProcess: { key: null, label: null, stageKey: null },
         perspective: null,
         truth,
+        signals: {
+            work: { primary: null, items: [], openCount: 0, overdueCount: 0, nextActionLabel: null },
+            attention: { needsAttention: false, primaryReason: null, reasonCount: 0 },
+            tour: { scheduled: false, startAt: null, statusLabel: null },
+        },
         capabilities: { canMutate: true, maskedChannels: false },
         status: "ready",
     };

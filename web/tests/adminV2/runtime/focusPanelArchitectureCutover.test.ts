@@ -278,3 +278,44 @@ describe("Phase D1/D2 — card renderer contract is context-first, compat isolat
         expect(editor).toContain("compat={{ subjectVm: vm, onSelectTab: () => {} }}");
     });
 });
+
+describe("Phase D3 — Core Four are pure cards on the Operational Context", () => {
+    const renderer = readSrc("components/admin/focusPanel/FocusPanelCardRenderer.tsx");
+
+    it("renderer wires Children / Current Work / Readiness as pure cards (model + context)", () => {
+        expect(renderer).toContain("<ChildrenCard model={model} context={context}");
+        expect(renderer).toContain("<CurrentWorkCard model={model} context={context}");
+        expect(renderer).toContain("<ReadinessCard model={model} context={context}");
+    });
+
+    it("pure card paths return before any compat / drawer access", () => {
+        const drawerIdIdx = renderer.indexOf("const drawerId = context.subject.id");
+        for (const key of ['model.key === "children"', 'model.key === "current_work"', 'model.key === "readiness_kpi"']) {
+            const idx = renderer.indexOf(key);
+            expect(idx).toBeGreaterThan(-1);
+            expect(drawerIdIdx).toBeGreaterThan(idx);
+        }
+    });
+
+    it.each([
+        "components/admin/focusPanel/cards/ChildrenCard.tsx",
+        "components/admin/focusPanel/cards/CurrentWorkCard.tsx",
+        "components/admin/focusPanel/cards/ReadinessCard.tsx",
+    ])("%s observes OperationalContext and excludes drawer terminology", (file) => {
+        const card = readSrc(file);
+        expect(card).toContain("OperationalContext");
+        expect(card).not.toContain("displayVm");
+        expect(card).not.toContain("drawerId");
+        expect(card).not.toContain("DrawerTabKey");
+        expect(card).not.toContain("LayoutDoc");
+    });
+
+    it("adapter projects work / attention / tour signals onto the context", () => {
+        const adapter = readSrc("lib/adminV2/runtime/operationalContext/buildOperationalContext.ts");
+        expect(adapter).toContain("buildOperationalContextSignals");
+        expect(adapter).toContain("signals:");
+        const types = readSrc("lib/adminV2/runtime/operationalContext/types.ts");
+        expect(types).toContain("OperationalContextSignals");
+        expect(types).toContain("signals: OperationalContextSignals");
+    });
+});
