@@ -399,6 +399,22 @@ Resolves the §10 open questions into ratifiable decisions. Format per question:
 
 ---
 
+## 12. P3.1 status — built (June 2026)
+
+The five gating decisions (§11 Q5/Q6/Q7/Q9/Q11) are **implemented** as additive substrate generalization. Authoritative as-built lives in [`../../platform/modules/billing-financials-platform.md`](../../platform/modules/billing-financials-platform.md) → "P3.1 as-built". Summary:
+
+- **Migration:** `supabase/migrations/20260630120000_financial_substrate_generalization_p3_1.sql` — applies cleanly + idempotently; functionally verified on a local DB (job compat, draft recalc, post, blocked mutation/void/delete, status advance, `source_charge_id` correction, `source_present`/`charge_category`/`billable_source_type` CHECKs).
+- **Tables generalized:** `charges`, `ledger_transactions`, `gl_journal_lines` (generic `billable_source_*`); `charges` also gains additive `charge_category`. **One ledger, one GL** — no new financial tables.
+- **`charges.job_id` relaxed to nullable** + backfilled to `('job', job_id)`; `charges_source_present_chk` keeps a source identity mandatory.
+- **Immutability:** `enforce_childcare_charge_immutability` trigger (childcare + posted only); job rows unaffected.
+- **Write posture:** `RESTRICTIVE` `*_childcare_write_rolegate` policies on the three tables; server-only service `web/lib/financials/childcareChargeService.ts` (no client money-write path).
+- **Currency:** substrate already carries currency; no structural change; rate-plan `currency_code` lands with P3.2.
+- **Tests:** `web/tests/financials/financialSubstrateGeneralizationMigration.test.ts` + `web/tests/financials/childcareChargeService.test.ts` (15 cases, green).
+
+Deferred sub-phases unchanged: rate plans (P3.2), service agreements / responsibility parties (P3.3), cadence/proration (P3.4), subsidy seam (P3.5), invoices/deposits (P3.6).
+
+---
+
 ## When this memo must be updated
 
 Open questions §10 are resolved (recorded in §11); the resolution-chain doctrine is promoted into `billing-financials-platform.md`; or any P3 sub-phase moves from plan to implementation (record the as-built there).

@@ -97,12 +97,15 @@ public,charge_line_items_job_line_item_id_fkey,FOREIGN KEY,public,charge_line_it
 public,charge_line_items_org_id_fkey,FOREIGN KEY,public,charge_line_items,FOREIGN KEY (org_id) REFERENCES orgs(id) ON DELETE RESTRICT,false,false
 public,charge_line_items_pkey,PRIMARY KEY,public,charge_line_items,PRIMARY KEY (id),false,false
 public,charges_amount_cents_nonzero_chk,CHECK,public,charges,CHECK (amount_cents <> 0),false,false
+public,charges_billable_source_type_chk,CHECK,public,charges,"CHECK (billable_source_type IS NULL OR (billable_source_type = ANY (ARRAY['job'::text, 'enrollment_agreement'::text])))",false,false
+public,charges_charge_category_chk,CHECK,public,charges,"CHECK (charge_category IS NULL OR (charge_category = ANY (ARRAY['tuition'::text, 'deposit'::text, 'consumable_fee'::text, 'late_pickup'::text, 'one_time'::text, 'discount'::text, 'credit'::text, 'adjustment'::text, 'fee'::text, 'subsidy_offset'::text])))",false,false
 public,charges_charge_type_chk,CHECK,public,charges,"CHECK (charge_type = ANY (ARRAY['service'::text, 'fee'::text, 'adjustment'::text, 'cancellation_fee'::text]))",false,false
 public,charges_job_id_fkey,FOREIGN KEY,public,charges,FOREIGN KEY (job_id) REFERENCES jobs(id) ON DELETE RESTRICT,false,false
 public,charges_org_id_fkey,FOREIGN KEY,public,charges,FOREIGN KEY (org_id) REFERENCES orgs(id) ON DELETE RESTRICT,false,false
 public,charges_pkey,PRIMARY KEY,public,charges,PRIMARY KEY (id),false,false
 public,charges_schedule_id_fkey,FOREIGN KEY,public,charges,FOREIGN KEY (schedule_id) REFERENCES schedules(id) ON DELETE SET NULL,false,false
 public,charges_source_charge_id_fkey,FOREIGN KEY,public,charges,FOREIGN KEY (source_charge_id) REFERENCES charges(id) ON DELETE SET NULL,false,false
+public,charges_source_present_chk,CHECK,public,charges,CHECK (job_id IS NOT NULL OR billable_source_type IS NOT NULL AND billable_source_id IS NOT NULL),false,false
 public,charges_status_chk,CHECK,public,charges,"CHECK (status = ANY (ARRAY['draft'::text, 'posted'::text, 'partially_paid'::text, 'paid'::text, 'void'::text]))",false,false
 public,charges_subscription_id_fkey,FOREIGN KEY,public,charges,FOREIGN KEY (subscription_id) REFERENCES customer_subscriptions(id) ON DELETE SET NULL,false,false
 public,child_attendance_events_actor_person_id_fkey,FOREIGN KEY,public,child_attendance_events,FOREIGN KEY (actor_person_id) REFERENCES persons(id) ON DELETE SET NULL,false,false
@@ -503,6 +506,7 @@ public,gl_journal_entries_pkey,PRIMARY KEY,public,gl_journal_entries,PRIMARY KEY
 public,gl_journal_entries_reversal_of_entry_id_fkey,FOREIGN KEY,public,gl_journal_entries,FOREIGN KEY (reversal_of_entry_id) REFERENCES gl_journal_entries(id) ON DELETE SET NULL,false,false
 public,gl_journal_entries_status_check,CHECK,public,gl_journal_entries,"CHECK (status = ANY (ARRAY['draft'::text, 'posted'::text, 'void'::text]))",false,false
 public,gl_journal_lines_account_id_fkey,FOREIGN KEY,public,gl_journal_lines,FOREIGN KEY (account_id) REFERENCES gl_accounts(id) ON DELETE RESTRICT,false,false
+public,gl_journal_lines_billable_source_type_chk,CHECK,public,gl_journal_lines,"CHECK (billable_source_type IS NULL OR (billable_source_type = ANY (ARRAY['job'::text, 'enrollment_agreement'::text])))",false,false
 public,gl_journal_lines_credit_nonneg,CHECK,public,gl_journal_lines,CHECK (credit_cents >= 0),false,false
 public,gl_journal_lines_customer_id_fkey,FOREIGN KEY,public,gl_journal_lines,FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE SET NULL,false,false
 public,gl_journal_lines_debit_credit_chk,CHECK,public,gl_journal_lines,CHECK (debit_cents >= 0 AND credit_cents >= 0 AND NOT (debit_cents > 0 AND credit_cents > 0) AND NOT (debit_cents = 0 AND credit_cents = 0)),false,false
@@ -550,6 +554,7 @@ public,jobs_primary_person_fk,FOREIGN KEY,public,jobs,FOREIGN KEY (primary_perso
 public,jobs_vertical_id_fkey,FOREIGN KEY,public,jobs,FOREIGN KEY (vertical_id) REFERENCES verticals(id) ON DELETE RESTRICT,false,false
 public,jobs_work_unit_id_fkey,FOREIGN KEY,public,jobs,FOREIGN KEY (work_unit_id) REFERENCES work_units(id) ON DELETE SET NULL,false,false
 public,ledger_transactions_amount_cents_check,CHECK,public,ledger_transactions,CHECK (amount_cents >= 0),false,false
+public,ledger_transactions_billable_source_type_chk,CHECK,public,ledger_transactions,"CHECK (billable_source_type IS NULL OR (billable_source_type = ANY (ARRAY['job'::text, 'enrollment_agreement'::text])))",false,false
 public,ledger_transactions_customer_id_fkey,FOREIGN KEY,public,ledger_transactions,FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE SET NULL,false,false
 public,ledger_transactions_direction_chk,CHECK,public,ledger_transactions,"CHECK (direction = ANY (ARRAY['in'::text, 'out'::text]))",false,false
 public,ledger_transactions_job_id_fkey,FOREIGN KEY,public,ledger_transactions,FOREIGN KEY (job_id) REFERENCES jobs(id) ON DELETE SET NULL,false,false

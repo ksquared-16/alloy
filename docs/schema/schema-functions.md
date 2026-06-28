@@ -2,7 +2,7 @@
 
 **Status:** Generated reference. **Do not edit by hand.**
 
-**Generated:** 2026-06-28 · **Function count:** 2910
+**Generated:** 2026-06-28 · **Function count:** 2948
 
 | Schema | Function | Return type | Security |
 |--------|----------|-------------|----------|
@@ -539,6 +539,38 @@
 | `  cents := round(base_cents * pct)::int;` | `` | — | — |
 | `  return public.round_to_nearest_5_cents(cents);` | `` | — | — |
 | `end;` | `` | — | — |
+| `$function$` | `` | — | — |
+| `public` | `` | — | — |
+| ` RETURNS trigger` | `` | — | — |
+| ` LANGUAGE plpgsql` | `` | — | — |
+| `AS $function$` | `` | — | — |
+| `BEGIN` | `` | — | — |
+| `    IF TG_OP = 'DELETE' THEN` | `` | — | — |
+| `        IF OLD.billable_source_type = 'enrollment_agreement' AND OLD.status <> 'draft' THEN` | `` | — | — |
+| `                USING ERRCODE = '0A000';` | `` | — | — |
+| `        END IF;` | `` | — | — |
+| `        RETURN OLD;` | `` | — | — |
+| `    END IF;` | `` | — | — |
+| `public` | `` | — | — |
+| `    -- UPDATE: only governs posted childcare charges; drafts and job rows pass.` | `` | — | — |
+| `    IF OLD.billable_source_type = 'enrollment_agreement' AND OLD.status <> 'draft' THEN` | `` | — | — |
+| `        IF NEW.amount_cents IS DISTINCT FROM OLD.amount_cents` | `` | — | — |
+| `            OR NEW.charge_category IS DISTINCT FROM OLD.charge_category` | `` | — | — |
+| `            OR NEW.charge_type IS DISTINCT FROM OLD.charge_type` | `` | — | — |
+| `            OR NEW.currency_code IS DISTINCT FROM OLD.currency_code` | `` | — | — |
+| `            OR NEW.billable_source_type IS DISTINCT FROM OLD.billable_source_type` | `` | — | — |
+| `            OR NEW.billable_source_id IS DISTINCT FROM OLD.billable_source_id` | `` | — | — |
+| `            OR NEW.source_charge_id IS DISTINCT FROM OLD.source_charge_id` | `` | — | — |
+| `            OR NEW.service_date IS DISTINCT FROM OLD.service_date THEN` | `` | — | — |
+| `                USING ERRCODE = '0A000';` | `` | — | — |
+| `        END IF;` | `` | — | — |
+| `        -- Status may advance among posted states (driven by payments) but never` | `` | — | — |
+| `                USING ERRCODE = '0A000';` | `` | — | — |
+| `        END IF;` | `` | — | — |
+| `    END IF;` | `` | — | — |
+| `public` | `` | — | — |
+| `    RETURN NEW;` | `` | — | — |
+| `END;` | `` | — | — |
 | `$function$` | `` | — | — |
 | `public` | `` | — | — |
 | ` RETURNS trigger` | `` | — | — |
@@ -2621,6 +2653,7 @@
 | `    ('ops.schedules.read'` | ` 'View schedules'` | — | — |
 | `    ('admin.users.read'` | ` 'View users'` | — | — |
 | `    ('ops.workflows.read'` | ` 'View workflows'` | — | — |
+| `        IF NEW.status IS DISTINCT FROM OLD.status AND NEW.status = ANY (ARRAY['draft'::text` | ` 'void'::text]) THEN` | — | — |
 | `    'SELECT COALESCE(MAX(%I)` | ` 0::bigint) + 1 FROM public.%I WHERE org_id = $1'` | — | — |
 | `        coalesce((p_queue_definition->>'version')::integer` | ` 0)` | — | — |
 | `        coalesce((p_config->>'version')::integer` | ` 0)` | — | — |
@@ -2748,6 +2781,7 @@
 | `      values (new.customer_id` | ` new.vertical_id` | — | — |
 | `    RAISE EXCEPTION 'jobs.work_unit_id % does not reference an existing work unit'` | ` NEW.work_unit_id` | — | — |
 | `    RAISE EXCEPTION 'opportunities.work_unit_id % does not reference an existing work unit'` | ` NEW.work_unit_id` | — | — |
+| `        -- revert to draft or void in place (void = a reversal row` | ` not an edit).` | — | — |
 | `        SELECT o.org_id` | ` o.customer_id` | — | — |
 | `    SELECT o.org_id` | ` o.customer_id` | — | — |
 | `    SELECT o.org_id` | ` o.customer_id` | — | — |
@@ -2756,6 +2790,9 @@
 | `        INTO ocm_org` | ` ocm_opp` | — | — |
 | `        SELECT ocm.org_id` | ` ocm.opportunity_id` | — | — |
 | `        SELECT ocm.org_id` | ` ocm.opportunity_id` | — | — |
+| `            RAISE EXCEPTION 'posted childcare charge % is immutable: DELETE not allowed; record a reversal/credit/replacement via source_charge_id'` | ` OLD.id` | — | — |
+| `            RAISE EXCEPTION 'posted childcare charge % is immutable: financial fields cannot change in place; record a reversal/credit/replacement via source_charge_id'` | ` OLD.id` | — | — |
+| `            RAISE EXCEPTION 'posted childcare charge % cannot transition to % in place; record a reversal via source_charge_id'` | ` OLD.id` | — | — |
 | `        RAISE EXCEPTION 'opportunity_customer_members: org_id mismatch (row %` | ` opp %)'` | — | — |
 | `        INTO opp_org` | ` opp_customer` | — | — |
 | `    INTO opp_org` | ` opp_customer` | — | — |
@@ -2849,6 +2886,7 @@
 | `public` | `claim_due_communication_scheduled_sends` | communication_scheduled_sends | false |
 | `public` | `current_org_id` | uuid | true |
 | `public` | `discounted_cents` | integer | false |
+| `public` | `enforce_childcare_charge_immutability` | trigger | false |
 | `public` | `enforce_communication_scheduled_sends_org_matches_entities` | trigger | false |
 | `public` | `enforce_form_definition_versions_immutability` | trigger | false |
 | `public` | `enforce_form_submissions_submitted_immutability` | trigger | false |

@@ -2,7 +2,7 @@
 
 **Status:** Generated reference. **Do not edit by hand.**
 
-**Generated:** 2026-06-28 · **Trigger count:** 193
+**Generated:** 2026-06-28 · **Trigger count:** 195
 
 | Table | Trigger | Event | Function |
 |-------|---------|-------|----------|
@@ -12,6 +12,8 @@
 | `assignments` | `trg_assignments_updated_at` | UPDATE BEFORE | CREATE TRIGGER trg_assignments_updated_at BEFORE UPDATE ON assignments FOR EACH  |
 | `campaigns` | `trg_campaigns_updated_at` | UPDATE BEFORE | CREATE TRIGGER trg_campaigns_updated_at BEFORE UPDATE ON campaigns FOR EACH ROW  |
 | `charges` | `trg_charges_updated_at` | UPDATE BEFORE | CREATE TRIGGER trg_charges_updated_at BEFORE UPDATE ON charges FOR EACH ROW EXEC |
+| `charges` | `trg_enforce_childcare_charge_immutability` | DELETE BEFORE | CREATE TRIGGER trg_enforce_childcare_charge_immutability BEFORE DELETE OR UPDATE |
+| `charges` | `trg_enforce_childcare_charge_immutability` | UPDATE BEFORE | CREATE TRIGGER trg_enforce_childcare_charge_immutability BEFORE DELETE OR UPDATE |
 | `child_attendance_events` | `trg_prevent_child_attendance_events_mutation` | DELETE BEFORE | CREATE TRIGGER trg_prevent_child_attendance_events_mutation BEFORE DELETE OR UPD |
 | `child_attendance_events` | `trg_prevent_child_attendance_events_mutation` | UPDATE BEFORE | CREATE TRIGGER trg_prevent_child_attendance_events_mutation BEFORE DELETE OR UPD |
 | `child_attendance_events` | `trg_validate_child_attendance_events_consistency` | INSERT BEFORE | CREATE TRIGGER trg_validate_child_attendance_events_consistency BEFORE INSERT ON |

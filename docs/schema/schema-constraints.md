@@ -2,7 +2,7 @@
 
 **Status:** Generated reference. **Do not edit by hand.**
 
-**Generated:** 2026-06-28 · **Constraint count:** 978
+**Generated:** 2026-06-28 · **Constraint count:** 983
 
 | Table | Name | Type | Definition |
 |-------|------|------|------------|
@@ -104,12 +104,15 @@
 | `charge_line_items` | `charge_line_items_org_id_fkey` | FOREIGN KEY | FOREIGN KEY (org_id) REFERENCES orgs(id) ON DELETE RESTRICT |
 | `charge_line_items` | `charge_line_items_pkey` | PRIMARY KEY | PRIMARY KEY (id) |
 | `charges` | `charges_amount_cents_nonzero_chk` | CHECK | CHECK (amount_cents <> 0) |
+| `charges` | `charges_billable_source_type_chk` | CHECK | CHECK (billable_source_type IS NULL OR (billable_source_type = ANY (ARRAY['job'::text, 'enrollment_a |
+| `charges` | `charges_charge_category_chk` | CHECK | CHECK (charge_category IS NULL OR (charge_category = ANY (ARRAY['tuition'::text, 'deposit'::text, 'c |
 | `charges` | `charges_charge_type_chk` | CHECK | CHECK (charge_type = ANY (ARRAY['service'::text, 'fee'::text, 'adjustment'::text, 'cancellation_fee' |
 | `charges` | `charges_job_id_fkey` | FOREIGN KEY | FOREIGN KEY (job_id) REFERENCES jobs(id) ON DELETE RESTRICT |
 | `charges` | `charges_org_id_fkey` | FOREIGN KEY | FOREIGN KEY (org_id) REFERENCES orgs(id) ON DELETE RESTRICT |
 | `charges` | `charges_pkey` | PRIMARY KEY | PRIMARY KEY (id) |
 | `charges` | `charges_schedule_id_fkey` | FOREIGN KEY | FOREIGN KEY (schedule_id) REFERENCES schedules(id) ON DELETE SET NULL |
 | `charges` | `charges_source_charge_id_fkey` | FOREIGN KEY | FOREIGN KEY (source_charge_id) REFERENCES charges(id) ON DELETE SET NULL |
+| `charges` | `charges_source_present_chk` | CHECK | CHECK (job_id IS NOT NULL OR billable_source_type IS NOT NULL AND billable_source_id IS NOT NULL) |
 | `charges` | `charges_status_chk` | CHECK | CHECK (status = ANY (ARRAY['draft'::text, 'posted'::text, 'partially_paid'::text, 'paid'::text, 'voi |
 | `charges` | `charges_subscription_id_fkey` | FOREIGN KEY | FOREIGN KEY (subscription_id) REFERENCES customer_subscriptions(id) ON DELETE SET NULL |
 | `child_attendance_events` | `child_attendance_events_actor_person_id_fkey` | FOREIGN KEY | FOREIGN KEY (actor_person_id) REFERENCES persons(id) ON DELETE SET NULL |
@@ -510,6 +513,7 @@
 | `gl_journal_entries` | `gl_journal_entries_reversal_of_entry_id_fkey` | FOREIGN KEY | FOREIGN KEY (reversal_of_entry_id) REFERENCES gl_journal_entries(id) ON DELETE SET NULL |
 | `gl_journal_entries` | `gl_journal_entries_status_check` | CHECK | CHECK (status = ANY (ARRAY['draft'::text, 'posted'::text, 'void'::text])) |
 | `gl_journal_lines` | `gl_journal_lines_account_id_fkey` | FOREIGN KEY | FOREIGN KEY (account_id) REFERENCES gl_accounts(id) ON DELETE RESTRICT |
+| `gl_journal_lines` | `gl_journal_lines_billable_source_type_chk` | CHECK | CHECK (billable_source_type IS NULL OR (billable_source_type = ANY (ARRAY['job'::text, 'enrollment_a |
 | `gl_journal_lines` | `gl_journal_lines_credit_nonneg` | CHECK | CHECK (credit_cents >= 0) |
 | `gl_journal_lines` | `gl_journal_lines_customer_id_fkey` | FOREIGN KEY | FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE SET NULL |
 | `gl_journal_lines` | `gl_journal_lines_debit_credit_chk` | CHECK | CHECK (debit_cents >= 0 AND credit_cents >= 0 AND NOT (debit_cents > 0 AND credit_cents > 0) AND NOT |
@@ -557,6 +561,7 @@
 | `jobs` | `jobs_vertical_id_fkey` | FOREIGN KEY | FOREIGN KEY (vertical_id) REFERENCES verticals(id) ON DELETE RESTRICT |
 | `jobs` | `jobs_work_unit_id_fkey` | FOREIGN KEY | FOREIGN KEY (work_unit_id) REFERENCES work_units(id) ON DELETE SET NULL |
 | `ledger_transactions` | `ledger_transactions_amount_cents_check` | CHECK | CHECK (amount_cents >= 0) |
+| `ledger_transactions` | `ledger_transactions_billable_source_type_chk` | CHECK | CHECK (billable_source_type IS NULL OR (billable_source_type = ANY (ARRAY['job'::text, 'enrollment_a |
 | `ledger_transactions` | `ledger_transactions_customer_id_fkey` | FOREIGN KEY | FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE SET NULL |
 | `ledger_transactions` | `ledger_transactions_direction_chk` | CHECK | CHECK (direction = ANY (ARRAY['in'::text, 'out'::text])) |
 | `ledger_transactions` | `ledger_transactions_job_id_fkey` | FOREIGN KEY | FOREIGN KEY (job_id) REFERENCES jobs(id) ON DELETE SET NULL |

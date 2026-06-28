@@ -2,7 +2,7 @@
 
 **Status:** Generated reference. **Do not edit by hand.**
 
-**Generated:** 2026-06-28 · **Index count:** 863
+**Generated:** 2026-06-28 · **Index count:** 867
 
 | Table | Index | Unique | Definition |
 |-------|-------|--------|------------|
@@ -92,6 +92,8 @@
 | `charge_line_items` | `idx_charge_line_items_org_charge` | false | CREATE INDEX idx_charge_line_items_org_charge ON charge_line_items USING btree (org_id, charge_id) |
 | `charge_line_items` | `idx_charge_line_items_org_job_line_item_id_partial` | false | CREATE INDEX idx_charge_line_items_org_job_line_item_id_partial ON charge_line_items USING btree (org_id, job_line_item_ |
 | `charges` | `charges_pkey` | true | CREATE UNIQUE INDEX charges_pkey ON charges USING btree (id) |
+| `charges` | `idx_charges_org_billable_source_partial` | false | CREATE INDEX idx_charges_org_billable_source_partial ON charges USING btree (org_id, billable_source_type, billable_sour |
+| `charges` | `idx_charges_org_charge_category_partial` | false | CREATE INDEX idx_charges_org_charge_category_partial ON charges USING btree (org_id, charge_category) WHERE charge_categ |
 | `charges` | `idx_charges_org_charge_type` | false | CREATE INDEX idx_charges_org_charge_type ON charges USING btree (org_id, charge_type) |
 | `charges` | `idx_charges_org_due_date` | false | CREATE INDEX idx_charges_org_due_date ON charges USING btree (org_id, due_date) |
 | `charges` | `idx_charges_org_job` | false | CREATE INDEX idx_charges_org_job ON charges USING btree (org_id, job_id) |
@@ -413,6 +415,7 @@
 | `gl_journal_lines` | `gl_journal_lines_org_account_idx` | false | CREATE INDEX gl_journal_lines_org_account_idx ON gl_journal_lines USING btree (org_id, account_id) |
 | `gl_journal_lines` | `gl_journal_lines_org_job_idx` | false | CREATE INDEX gl_journal_lines_org_job_idx ON gl_journal_lines USING btree (org_id, job_id) |
 | `gl_journal_lines` | `gl_journal_lines_pkey` | true | CREATE UNIQUE INDEX gl_journal_lines_pkey ON gl_journal_lines USING btree (id) |
+| `gl_journal_lines` | `idx_gl_journal_lines_org_billable_source_partial` | false | CREATE INDEX idx_gl_journal_lines_org_billable_source_partial ON gl_journal_lines USING btree (org_id, billable_source_t |
 | `gl_journal_lines` | `ux_gl_journal_lines_entry_line` | true | CREATE UNIQUE INDEX ux_gl_journal_lines_entry_line ON gl_journal_lines USING btree (entry_id, line_no) |
 | `home_types` | `home_types_key_key` | true | CREATE UNIQUE INDEX home_types_key_key ON home_types USING btree (key) |
 | `home_types` | `home_types_pkey` | true | CREATE UNIQUE INDEX home_types_pkey ON home_types USING btree (id) |
@@ -452,6 +455,7 @@
 | `jobs` | `jobs_org_status_idx` | false | CREATE INDEX jobs_org_status_idx ON jobs USING btree (org_id, status_key) |
 | `jobs` | `jobs_pkey` | true | CREATE UNIQUE INDEX jobs_pkey ON jobs USING btree (id) |
 | `jobs` | `ux_jobs_org_job_number` | true | CREATE UNIQUE INDEX ux_jobs_org_job_number ON jobs USING btree (org_id, job_number) |
+| `ledger_transactions` | `idx_ledger_transactions_org_billable_source_partial` | false | CREATE INDEX idx_ledger_transactions_org_billable_source_partial ON ledger_transactions USING btree (org_id, billable_so |
 | `ledger_transactions` | `ledger_transactions_pkey` | true | CREATE UNIQUE INDEX ledger_transactions_pkey ON ledger_transactions USING btree (id) |
 | `ledger_transactions` | `ledger_tx_org_job_idx` | false | CREATE INDEX ledger_tx_org_job_idx ON ledger_transactions USING btree (org_id, job_id) |
 | `ledger_transactions` | `ledger_tx_org_occurred_idx` | false | CREATE INDEX ledger_tx_org_occurred_idx ON ledger_transactions USING btree (org_id, occurred_at) |

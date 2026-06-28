@@ -85,6 +85,8 @@ public,charge_line_items,charge_line_items_pkey,true,true,btree,CREATE UNIQUE IN
 public,charge_line_items,idx_charge_line_items_org_charge,false,false,btree,"CREATE INDEX idx_charge_line_items_org_charge ON charge_line_items USING btree (org_id, charge_id)"
 public,charge_line_items,idx_charge_line_items_org_job_line_item_id_partial,false,false,btree,"CREATE INDEX idx_charge_line_items_org_job_line_item_id_partial ON charge_line_items USING btree (org_id, job_line_item_id) WHERE job_line_item_id IS NOT NULL"
 public,charges,charges_pkey,true,true,btree,CREATE UNIQUE INDEX charges_pkey ON charges USING btree (id)
+public,charges,idx_charges_org_billable_source_partial,false,false,btree,"CREATE INDEX idx_charges_org_billable_source_partial ON charges USING btree (org_id, billable_source_type, billable_source_id) WHERE billable_source_type IS NOT NULL"
+public,charges,idx_charges_org_charge_category_partial,false,false,btree,"CREATE INDEX idx_charges_org_charge_category_partial ON charges USING btree (org_id, charge_category) WHERE charge_category IS NOT NULL"
 public,charges,idx_charges_org_charge_type,false,false,btree,"CREATE INDEX idx_charges_org_charge_type ON charges USING btree (org_id, charge_type)"
 public,charges,idx_charges_org_due_date,false,false,btree,"CREATE INDEX idx_charges_org_due_date ON charges USING btree (org_id, due_date)"
 public,charges,idx_charges_org_job,false,false,btree,"CREATE INDEX idx_charges_org_job ON charges USING btree (org_id, job_id)"
@@ -406,6 +408,7 @@ public,gl_journal_lines,gl_journal_lines_entry_idx,false,false,btree,"CREATE IND
 public,gl_journal_lines,gl_journal_lines_org_account_idx,false,false,btree,"CREATE INDEX gl_journal_lines_org_account_idx ON gl_journal_lines USING btree (org_id, account_id)"
 public,gl_journal_lines,gl_journal_lines_org_job_idx,false,false,btree,"CREATE INDEX gl_journal_lines_org_job_idx ON gl_journal_lines USING btree (org_id, job_id)"
 public,gl_journal_lines,gl_journal_lines_pkey,true,true,btree,CREATE UNIQUE INDEX gl_journal_lines_pkey ON gl_journal_lines USING btree (id)
+public,gl_journal_lines,idx_gl_journal_lines_org_billable_source_partial,false,false,btree,"CREATE INDEX idx_gl_journal_lines_org_billable_source_partial ON gl_journal_lines USING btree (org_id, billable_source_type, billable_source_id) WHERE billable_source_type IS NOT NULL"
 public,gl_journal_lines,ux_gl_journal_lines_entry_line,true,false,btree,"CREATE UNIQUE INDEX ux_gl_journal_lines_entry_line ON gl_journal_lines USING btree (entry_id, line_no)"
 public,home_types,home_types_key_key,true,false,btree,CREATE UNIQUE INDEX home_types_key_key ON home_types USING btree (key)
 public,home_types,home_types_pkey,true,true,btree,CREATE UNIQUE INDEX home_types_pkey ON home_types USING btree (id)
@@ -445,6 +448,7 @@ public,jobs,jobs_discount_program_id_idx,false,false,btree,CREATE INDEX jobs_dis
 public,jobs,jobs_org_status_idx,false,false,btree,"CREATE INDEX jobs_org_status_idx ON jobs USING btree (org_id, status_key)"
 public,jobs,jobs_pkey,true,true,btree,CREATE UNIQUE INDEX jobs_pkey ON jobs USING btree (id)
 public,jobs,ux_jobs_org_job_number,true,false,btree,"CREATE UNIQUE INDEX ux_jobs_org_job_number ON jobs USING btree (org_id, job_number)"
+public,ledger_transactions,idx_ledger_transactions_org_billable_source_partial,false,false,btree,"CREATE INDEX idx_ledger_transactions_org_billable_source_partial ON ledger_transactions USING btree (org_id, billable_source_type, billable_source_id) WHERE billable_source_type IS NOT NULL"
 public,ledger_transactions,ledger_transactions_pkey,true,true,btree,CREATE UNIQUE INDEX ledger_transactions_pkey ON ledger_transactions USING btree (id)
 public,ledger_transactions,ledger_tx_org_job_idx,false,false,btree,"CREATE INDEX ledger_tx_org_job_idx ON ledger_transactions USING btree (org_id, job_id)"
 public,ledger_transactions,ledger_tx_org_occurred_idx,false,false,btree,"CREATE INDEX ledger_tx_org_occurred_idx ON ledger_transactions USING btree (org_id, occurred_at)"

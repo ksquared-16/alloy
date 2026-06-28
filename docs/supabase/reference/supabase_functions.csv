@@ -579,6 +579,44 @@ begin
 end;
 $function$
 "
+public,enforce_childcare_charge_immutability,function,plpgsql,VOLATILE,false,,trigger,"CREATE OR REPLACE FUNCTION public.enforce_childcare_charge_immutability()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+BEGIN
+    IF TG_OP = 'DELETE' THEN
+        IF OLD.billable_source_type = 'enrollment_agreement' AND OLD.status <> 'draft' THEN
+            RAISE EXCEPTION 'posted childcare charge % is immutable: DELETE not allowed; record a reversal/credit/replacement via source_charge_id', OLD.id
+                USING ERRCODE = '0A000';
+        END IF;
+        RETURN OLD;
+    END IF;
+
+    -- UPDATE: only governs posted childcare charges; drafts and job rows pass.
+    IF OLD.billable_source_type = 'enrollment_agreement' AND OLD.status <> 'draft' THEN
+        IF NEW.amount_cents IS DISTINCT FROM OLD.amount_cents
+            OR NEW.charge_category IS DISTINCT FROM OLD.charge_category
+            OR NEW.charge_type IS DISTINCT FROM OLD.charge_type
+            OR NEW.currency_code IS DISTINCT FROM OLD.currency_code
+            OR NEW.billable_source_type IS DISTINCT FROM OLD.billable_source_type
+            OR NEW.billable_source_id IS DISTINCT FROM OLD.billable_source_id
+            OR NEW.source_charge_id IS DISTINCT FROM OLD.source_charge_id
+            OR NEW.service_date IS DISTINCT FROM OLD.service_date THEN
+            RAISE EXCEPTION 'posted childcare charge % is immutable: financial fields cannot change in place; record a reversal/credit/replacement via source_charge_id', OLD.id
+                USING ERRCODE = '0A000';
+        END IF;
+        -- Status may advance among posted states (driven by payments) but never
+        -- revert to draft or void in place (void = a reversal row, not an edit).
+        IF NEW.status IS DISTINCT FROM OLD.status AND NEW.status = ANY (ARRAY['draft'::text, 'void'::text]) THEN
+            RAISE EXCEPTION 'posted childcare charge % cannot transition to % in place; record a reversal via source_charge_id', OLD.id, NEW.status
+                USING ERRCODE = '0A000';
+        END IF;
+    END IF;
+
+    RETURN NEW;
+END;
+$function$
+"
 public,enforce_communication_scheduled_sends_org_matches_entities,function,plpgsql,VOLATILE,false,,trigger,"CREATE OR REPLACE FUNCTION public.enforce_communication_scheduled_sends_org_matches_entities()
  RETURNS trigger
  LANGUAGE plpgsql

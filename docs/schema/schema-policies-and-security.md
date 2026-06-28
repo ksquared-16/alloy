@@ -2,7 +2,7 @@
 
 **Status:** Generated reference. **Do not edit by hand.**
 
-**Generated:** 2026-06-28 · **RLS policy count:** 568
+**Generated:** 2026-06-28 · **RLS policy count:** 571
 
 ## Posture
 
@@ -175,6 +175,7 @@
 
 | Policy | Command | Roles | USING / WITH CHECK (truncated) |
 |--------|---------|-------|--------------------------------|
+| `charges_childcare_write_rolegate` | ALL | {authenticated} | — |
 | `charges_insert_same_org` | INSERT | {authenticated} | — |
 | `charges_select_same_org` | SELECT | {authenticated} | — |
 | `charges_update_same_org` | UPDATE | {authenticated} | — |
@@ -755,6 +756,7 @@
 
 | Policy | Command | Roles | USING / WITH CHECK (truncated) |
 |--------|---------|-------|--------------------------------|
+| `gl_journal_lines_childcare_write_rolegate` | ALL | {authenticated} | — |
 | `gl_journal_lines_delete_same_org` | DELETE | {authenticated} | — |
 | `gl_journal_lines_insert_same_org` | INSERT | {authenticated} | — |
 | `gl_journal_lines_select_same_org` | SELECT | {authenticated} | — |
@@ -821,6 +823,7 @@
 
 | Policy | Command | Roles | USING / WITH CHECK (truncated) |
 |--------|---------|-------|--------------------------------|
+| `ledger_transactions_childcare_write_rolegate` | ALL | {authenticated} | — |
 | `ledger_transactions_delete_same_org` | DELETE | {authenticated} | — |
 | `ledger_transactions_insert_same_org` | INSERT | {authenticated} | — |
 | `ledger_transactions_select_same_org` | SELECT | {authenticated} | — |

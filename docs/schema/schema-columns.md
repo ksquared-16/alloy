@@ -2,7 +2,7 @@
 
 **Status:** Generated reference. **Do not edit by hand.**
 
-**Generated:** 2026-06-28 · **Column count:** 2523
+**Generated:** 2026-06-28 · **Column count:** 2530
 
 Columns for `public` schema tables, grouped alphabetically by table.
 
@@ -368,7 +368,7 @@ Columns for `public` schema tables, grouped alphabetically by table.
 |--------|------|----------|--------|
 | `id` | uuid | NO | gen_random_uuid() |
 | `org_id` | uuid | NO | — |
-| `job_id` | uuid | NO | — |
+| `job_id` | uuid | YES | — |
 | `schedule_id` | uuid | YES | — |
 | `subscription_id` | uuid | YES | — |
 | `source_charge_id` | uuid | YES | — |
@@ -384,6 +384,9 @@ Columns for `public` schema tables, grouped alphabetically by table.
 | `metadata` | jsonb | NO | '{}'::jsonb |
 | `created_at` | timestamp with time zone | NO | now() |
 | `updated_at` | timestamp with time zone | NO | now() |
+| `charge_category` | text | YES | — |
+| `billable_source_type` | text | YES | — |
+| `billable_source_id` | uuid | YES | — |
 
 ## `child_attendance_events`
 
@@ -1766,6 +1769,8 @@ Columns for `public` schema tables, grouped alphabetically by table.
 | `vendor_id` | uuid | YES | — |
 | `metadata` | jsonb | NO | '{}'::jsonb |
 | `created_at` | timestamp with time zone | NO | now() |
+| `billable_source_type` | text | YES | — |
+| `billable_source_id` | uuid | YES | — |
 
 ## `home_types`
 
@@ -1949,6 +1954,8 @@ Columns for `public` schema tables, grouped alphabetically by table.
 | `journal_entry_id` | uuid | YES | — |
 | `metadata` | jsonb | NO | '{}'::jsonb |
 | `created_at` | timestamp with time zone | NO | now() |
+| `billable_source_type` | text | YES | — |
+| `billable_source_id` | uuid | YES | — |
 
 ## `location_program_categories`
 
