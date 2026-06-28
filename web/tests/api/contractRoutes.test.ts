@@ -35,7 +35,10 @@ function makeQuery(result: { data: unknown; error: unknown }) {
 
 const supabaseStub = { from: () => makeQuery({ data: [], error: null }) };
 
-vi.mock("@/lib/adminAuth", () => ({ requireAdminOrOps: vi.fn(async () => null) }));
+vi.mock("@/lib/adminAuth", () => ({
+    requireAdminOrOps: vi.fn(async () => null),
+    logAdminAudit: vi.fn(),
+}));
 vi.mock("@/lib/admin/getAdminContext", () => ({
     getAdminContextCached: vi.fn(async () => ({ ok: true, orgId: "org-1", userId: "user-1", role: "admin" })),
     adminContextFailureResponse: vi.fn(() => new Response(JSON.stringify({ error: "auth" }), { status: 401 })),
@@ -78,6 +81,9 @@ import { POST as preflightPOST } from "@/app/api/admin/actions/preflight/route";
 import { GET as inventoryGET } from "@/app/api/admin/actions/inventory/route";
 import { POST as executePOST } from "@/app/api/admin/actions/execute/route";
 import { GET as entityGET } from "@/app/api/admin/entity/[type]/[id]/route";
+import { GET as roleTypesGET, POST as roleTypesPOST } from "@/app/api/admin/customer-person-role-types/route";
+import { PATCH as roleTypePATCH, DELETE as roleTypeDELETE } from "@/app/api/admin/customer-person-role-types/[id]/route";
+import { GET as relTypesGET } from "@/app/api/admin/person-relationship-type-settings/route";
 import { executeAdminAction } from "@/lib/admin/actions/executeAdminAction";
 import { CORRELATION_ID_HEADER } from "@/lib/api/correlationId";
 
@@ -284,6 +290,89 @@ describe("GET /api/admin/entity/[type]/[id] (error envelope)", () => {
     });
 });
 
+describe("list routes: customer-person-role-types + person-relationship-type-settings (Phase 2F)", () => {
+    it("GET returns ok: true with data.items + correlation id", async () => {
+        const res = await roleTypesGET(getReq());
+        expect(res.status).toBe(200);
+        const body = await res.json();
+        expect(body.ok).toBe(true);
+        expect(Array.isArray(body.data.items)).toBe(true);
+        expect(typeof body.correlation_id).toBe("string");
+        expect(res.headers.get(CORRELATION_ID_HEADER)).toBe(body.correlation_id);
+    });
+
+    it("GET propagates an incoming correlation id", async () => {
+        const res = await roleTypesGET(getReq({ [CORRELATION_ID_HEADER]: "trace-roles" }));
+        const body = await res.json();
+        expect(body.correlation_id).toBe("trace-roles");
+        expect(res.headers.get(CORRELATION_ID_HEADER)).toBe("trace-roles");
+    });
+
+    it("sibling GET (relationship types) wraps data.items the same way", async () => {
+        const res = await relTypesGET(getReq());
+        expect(res.status).toBe(200);
+        const body = await res.json();
+        expect(body.ok).toBe(true);
+        expect(Array.isArray(body.data.items)).toBe(true);
+    });
+
+    it("POST success returns ok: true with data.item", async () => {
+        const res = await roleTypesPOST(jsonReq({ key: "primary_contact", label: "Primary Contact" }));
+        expect(res.status).toBe(200);
+        const body = await res.json();
+        expect(body.ok).toBe(true);
+        expect("item" in body.data).toBe(true);
+        expect(typeof body.correlation_id).toBe("string");
+    });
+
+    it("POST missing key returns a BAD_REQUEST envelope (not a bare string)", async () => {
+        const res = await roleTypesPOST(jsonReq({}));
+        expect(res.status).toBe(400);
+        const body = await res.json();
+        expect(typeof body).toBe("object");
+        expect(body.ok).toBe(false);
+        expect(body.error.code).toBe("BAD_REQUEST");
+        expect(typeof body.error.message).toBe("string");
+    });
+
+    it("POST invalid JSON returns a BAD_REQUEST envelope", async () => {
+        const res = await roleTypesPOST(jsonReq("{not json"));
+        expect(res.status).toBe(400);
+        const body = await res.json();
+        expect(body.ok).toBe(false);
+        expect(body.error.code).toBe("BAD_REQUEST");
+        expect(body.error.message).toBe("Invalid JSON");
+    });
+
+    it("PATCH with no allowed fields returns a BAD_REQUEST envelope", async () => {
+        const res = await roleTypePATCH(jsonReq({}), { params: Promise.resolve({ id: "role-1" }) });
+        expect(res.status).toBe(400);
+        const body = await res.json();
+        expect(body.ok).toBe(false);
+        expect(body.error.code).toBe("BAD_REQUEST");
+        expect(body.error.message).toBe("No allowed fields to update");
+    });
+
+    it("PATCH success returns ok: true with data.item", async () => {
+        const res = await roleTypePATCH(jsonReq({ label: "Renamed" }), {
+            params: Promise.resolve({ id: "role-1" }),
+        });
+        expect(res.status).toBe(200);
+        const body = await res.json();
+        expect(body.ok).toBe(true);
+        expect("item" in body.data).toBe(true);
+    });
+
+    it("DELETE returns a NOT_IMPLEMENTED envelope with preserved 405 status", async () => {
+        const res = await roleTypeDELETE();
+        expect(res.status).toBe(405);
+        const body = await res.json();
+        expect(body.ok).toBe(false);
+        expect(body.error.code).toBe("NOT_IMPLEMENTED");
+        expect(typeof body.correlation_id).toBe("string");
+    });
+});
+
 // ---------------------------------------------------------------------------
 // Static source contract assertions (no DB needed).
 // ---------------------------------------------------------------------------
@@ -342,6 +431,23 @@ describe("static contract: migrated routes", () => {
         expect(opp).toContain("apiOk(");
         // The `full` surface builds the envelope JSON string directly (single serialize).
         expect(opp).toContain('"ok":true,"data":{"entity":');
+    });
+
+    it("Phase 2F list routes emit the envelope via apiOk/apiError (no bare record or { error: string })", () => {
+        const files = [
+            "app/api/admin/customer-person-role-types/route.ts",
+            "app/api/admin/customer-person-role-types/[id]/route.ts",
+            "app/api/admin/person-relationship-type-settings/route.ts",
+            "app/api/admin/person-relationship-type-settings/[id]/route.ts",
+        ];
+        for (const rel of files) {
+            const src = read(rel);
+            expect(src).toContain('from "@/lib/api/apiResponse"');
+            expect(src).toContain("apiOk(");
+            expect(src).toContain("apiError(");
+            // No legacy responses remain (bare `{ error: string }` or bare record via NextResponse).
+            expect(src).not.toMatch(/NextResponse\.json\(/);
+        }
     });
 
     it("execute route emits the envelope via apiOk/apiError and no legacy { error: string } body", () => {

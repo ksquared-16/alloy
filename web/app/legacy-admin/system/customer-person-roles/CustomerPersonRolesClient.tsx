@@ -51,8 +51,8 @@ export default function CustomerPersonRolesClient({
             const url = showAll ? "/api/admin/customer-person-role-types?all=true" : "/api/admin/customer-person-role-types";
             const res = await fetch(url);
             const json = await res.json().catch(() => ({}));
-            if (!res.ok) throw new Error((json as { error?: string }).error ?? "Failed to load");
-            setItems((json as { items?: CustomerPersonRoleType[] }).items ?? []);
+            if (!res.ok) throw new Error((json as { error?: { message?: string } }).error?.message ?? "Failed to load");
+            setItems((json as { data?: { items?: CustomerPersonRoleType[] } }).data?.items ?? []);
         } catch (e) {
             setError((e as Error).message);
             setItems([]);
@@ -132,7 +132,7 @@ export default function CustomerPersonRolesClient({
                     }),
                 });
                 const json = await res.json().catch(() => ({}));
-                if (!res.ok) throw new Error((json as { error?: string }).error ?? "Update failed");
+                if (!res.ok) throw new Error((json as { error?: { message?: string } }).error?.message ?? "Update failed");
             } else {
                 const res = await fetch("/api/admin/customer-person-role-types", {
                     method: "POST",
@@ -147,10 +147,10 @@ export default function CustomerPersonRolesClient({
                 });
                 const json = await res.json().catch(() => ({}));
                 if (res.status === 409) {
-                    setModalError((json as { error?: string }).error ?? "Key already exists.");
+                    setModalError((json as { error?: { message?: string } }).error?.message ?? "Key already exists.");
                     return;
                 }
-                if (!res.ok) throw new Error((json as { error?: string }).error ?? "Create failed");
+                if (!res.ok) throw new Error((json as { error?: { message?: string } }).error?.message ?? "Create failed");
             }
             setModalOpen(false);
             await fetchItems();

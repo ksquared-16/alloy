@@ -1,7 +1,8 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { resolveOptionsByIndustry, resolveOptionsByVertical } from "@/lib/admin/personTypeSettings";
+import { apiOk, apiError } from "@/lib/api/apiResponse";
 
 const KEY_REGEX = /^[a-z0-9_]{2,64}$/;
 
@@ -21,18 +22,29 @@ export type PersonRelationshipTypeSetting = {
     updated_at: string | null;
 };
 
+/**
+ * Configurable person relationship type settings (list/create).
+ *
+ * Phase 2F contract (migrated): every response uses the standard envelope
+ * (`apiOk` / `apiError`). Success: `{ ok, data: { items } }` (GET) and
+ * `{ ok, data: { item } }` (POST). HTTP status codes are preserved.
+ * @see docs/api/api-response-contract.md
+ */
+
 /** GET: list person_relationship_type_settings for current org. Industry-driven: when active_only=true, uses org.industry_id to resolve options. Optional ?industry_id= override, ?vertical_id= for secondary. */
 export async function GET(request: NextRequest) {
     const ctx = await getAdminContextCached();
     if (!ctx.ok) {
-        return NextResponse.json(
-            { error: ctx.status === 401 ? "Unauthorized" : "Forbidden" },
-            { status: ctx.status }
+        return apiError(
+            ctx.status === 401 ? "UNAUTHORIZED" : "FORBIDDEN",
+            ctx.status === 401 ? "Unauthorized" : "Forbidden",
+            ctx.status,
+            undefined,
+            { request }
         );
     }
 
     const { searchParams } = new URL(request.url);
-    const activeOnly = searchParams.get("active_only") === "true";
     const showAll = searchParams.get("all") === "true" || searchParams.get("all") === "1";
     const industryIdParam = searchParams.get("industry_id")?.trim() || null;
     const verticalId = searchParams.get("vertical_id")?.trim() || null;
@@ -64,7 +76,7 @@ export async function GET(request: NextRequest) {
     const { data: rows, error } = await q.order("sort_order", { ascending: true }).order("label", { ascending: true });
 
     if (error) {
-        return NextResponse.json({ error: error.message }, { status: 500 });
+        return apiError("INTERNAL", error.message, 500, undefined, { request });
     }
 
     let items: PersonRelationshipTypeSetting[] = (rows ?? []).map((r: Record<string, unknown>) => ({
@@ -89,27 +101,30 @@ export async function GET(request: NextRequest) {
         items = resolveOptionsByVertical(items, verticalId);
     }
 
-    return NextResponse.json({ items });
+    return apiOk({ items }, { request });
 }
 
 /** POST: create person_relationship_type_setting. Admin only. */
 export async function POST(request: NextRequest) {
     const ctx = await getAdminContextCached();
     if (!ctx.ok) {
-        return NextResponse.json(
-            { error: ctx.status === 401 ? "Unauthorized" : "Forbidden" },
-            { status: ctx.status }
+        return apiError(
+            ctx.status === 401 ? "UNAUTHORIZED" : "FORBIDDEN",
+            ctx.status === 401 ? "Unauthorized" : "Forbidden",
+            ctx.status,
+            undefined,
+            { request }
         );
     }
     if (ctx.role !== "admin") {
-        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+        return apiError("FORBIDDEN", "Forbidden", 403, undefined, { request });
     }
 
     let body: { key?: string; label?: string; description?: string; sort_order?: number; is_active?: boolean } = {};
     try {
         body = (await request.json()) as typeof body;
     } catch {
-        return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
+        return apiError("BAD_REQUEST", "Invalid JSON", 400, undefined, { request });
     }
 
     const keyRaw = typeof body.key === "string" ? body.key.trim() : "";
@@ -120,15 +135,19 @@ export async function POST(request: NextRequest) {
     const is_active = body.is_active !== false;
 
     if (!key) {
-        return NextResponse.json({ error: "key is required" }, { status: 400 });
+        return apiError("BAD_REQUEST", "key is required", 400, undefined, { request });
     }
     if (!KEY_REGEX.test(key)) {
-        return NextResponse.json({
-            error: "key must be 2–64 characters, lowercase letters, numbers, and underscores only",
-        }, { status: 400 });
+        return apiError(
+            "BAD_REQUEST",
+            "key must be 2–64 characters, lowercase letters, numbers, and underscores only",
+            400,
+            undefined,
+            { request }
+        );
     }
     if (!label) {
-        return NextResponse.json({ error: "label is required" }, { status: 400 });
+        return apiError("BAD_REQUEST", "label is required", 400, undefined, { request });
     }
 
     const supabase = createAdminClient();
@@ -152,13 +171,16 @@ export async function POST(request: NextRequest) {
     if (error) {
         const code = (error as { code?: string }).code;
         if (code === "23505") {
-            return NextResponse.json(
-                { error: "A relationship type with this key already exists for this org" },
-                { status: 409 }
+            return apiError(
+                "CONFLICT",
+                "A relationship type with this key already exists for this org",
+                409,
+                undefined,
+                { request }
             );
         }
-        return NextResponse.json({ error: error.message }, { status: 400 });
+        return apiError("BAD_REQUEST", error.message, 400, undefined, { request });
     }
 
-    return NextResponse.json(created);
+    return apiOk({ item: created }, { request });
 }

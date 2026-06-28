@@ -49,8 +49,8 @@ export default function PersonRelationshipTypesClient({
             const url = showAll ? "/api/admin/person-relationship-type-settings?all=true" : "/api/admin/person-relationship-type-settings";
             const res = await fetch(url);
             const json = await res.json().catch(() => ({}));
-            if (!res.ok) throw new Error((json as { error?: string }).error ?? "Failed to load");
-            setItems((json as { items?: PersonRelationshipTypeSetting[] }).items ?? []);
+            if (!res.ok) throw new Error((json as { error?: { message?: string } }).error?.message ?? "Failed to load");
+            setItems((json as { data?: { items?: PersonRelationshipTypeSetting[] } }).data?.items ?? []);
         } catch (e) {
             setError((e as Error).message);
             setItems([]);
@@ -130,7 +130,7 @@ export default function PersonRelationshipTypesClient({
                     }),
                 });
                 const json = await res.json().catch(() => ({}));
-                if (!res.ok) throw new Error((json as { error?: string }).error ?? "Update failed");
+                if (!res.ok) throw new Error((json as { error?: { message?: string } }).error?.message ?? "Update failed");
             } else {
                 const res = await fetch("/api/admin/person-relationship-type-settings", {
                     method: "POST",
@@ -145,10 +145,10 @@ export default function PersonRelationshipTypesClient({
                 });
                 const json = await res.json().catch(() => ({}));
                 if (res.status === 409) {
-                    setModalError((json as { error?: string }).error ?? "Key already exists.");
+                    setModalError((json as { error?: { message?: string } }).error?.message ?? "Key already exists.");
                     return;
                 }
-                if (!res.ok) throw new Error((json as { error?: string }).error ?? "Create failed");
+                if (!res.ok) throw new Error((json as { error?: { message?: string } }).error?.message ?? "Create failed");
             }
             setModalOpen(false);
             await fetchItems();

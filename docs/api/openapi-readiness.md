@@ -41,11 +41,13 @@ unwrapping in lockstep and contract tests in `web/tests/api/`. All use the share
 | **Actions** | `actions/execute`, `actions/preflight`, `actions/inventory` | POST, POST, GET | `data.execution_result` / `data` (preflight) / `data.items` | 2B |
 | **Analytics Metrics** | `analytics/metrics`, `metrics/[id]`, `…/copy`, `…/preview`, `…/snapshot`, `…/trend` | GET, POST, PATCH | `data.{items,adapters}` / `data.item` / `data.evaluation` / `data.{evaluation,snapshot_id}` / `data.{series,comparison}` | 2C |
 | **Entity Read** | `entity/[type]/[id]` | GET | `data.entity` (record shape preserved verbatim; incl. `{ _create: true }`) | 2D |
+| **Config reference data** | `customer-person-role-types` (+`/[id]`), `person-relationship-type-settings` (+`/[id]`) | GET, POST, PATCH, DELETE | `data.items` (GET) / `data.item` (POST/PATCH) | 2F |
 
-**Audit result (Phase 2E):** of 461 `app/api/**/route.ts` handlers, exactly **10** import the
-envelope helpers — and they are precisely these pillar routes (plus the two supporting libs
-`lib/admin/opportunityEntityRecord.ts` and `lib/metrics/platform/adminApiHelpers.ts`). There
-are **no partial or accidental adopters** elsewhere: the normalized set is clean and bounded.
+**Audit result (updated Phase 2F):** of 461 `app/api/**/route.ts` handlers, exactly **14** import
+the envelope helpers — the three core pillars plus the two Phase 2F config reference-data families
+(4 route files), plus the two supporting libs `lib/admin/opportunityEntityRecord.ts` and
+`lib/metrics/platform/adminApiHelpers.ts`. There are **no partial or accidental adopters**
+elsewhere: the normalized set is clean and bounded.
 
 Failure envelopes for all three pillars use stable SCREAMING_SNAKE_CASE codes
 (`BAD_REQUEST`, `VALIDATION_ERROR`, `FORBIDDEN`, `NOT_FOUND`, `CONFLICT`, `INTERNAL`, plus the
@@ -60,9 +62,11 @@ Everything **not** in §2 is still on a pre-contract shape and is **not** an Ope
 This is expected — Phase 2 intentionally migrated a representative slice, not the whole
 surface. The major buckets:
 
-- **Mixed CRUD list/object routes** (~the bulk of the 451 remaining handlers): `{ <plural>: [...] }`
+- **Mixed CRUD list/object routes** (~the bulk of the remaining handlers): `{ <plural>: [...] }`
   lists and bare resource objects (persons, customers, jobs, schedules, locations, vendors,
-  subscriptions, payments/financials, tours, processing, child-*, placement-candidates).
+  subscriptions, payments/financials, tours, processing, child-*, placement-candidates). The
+  mechanical normalization of this bucket has **started** (Phase 2F took the two config
+  reference-data families above); the rest still carry the legacy shapes.
 - **Sibling analytics routes** not yet normalized: `visualizations`, `placements`, `rollups`,
   `render`, `snapshots/run`, `surfaces`. The shared `MetricSetupFlow` `writeRecord` helper is
   deliberately **envelope-tolerant** (`json.data?.item ?? json.item`) because it still writes
@@ -94,6 +98,8 @@ read/do-work oriented, and already consumed through a single unwrap path:
 | `POST /api/admin/analytics/metrics/[id]/snapshot` | POST | `data.{evaluation,snapshot_id}`. |
 | `GET /api/admin/analytics/metrics/[id]/trend` | GET | `data.{series,comparison}`. |
 | `GET /api/admin/entity/[type]/[id]` | GET | `data.entity`; record shape preserved verbatim. Opportunity surfaces (`drawer_visible`/`drawer_primary`/`full`/`relationship_member_persons`) wrap identically and add `X-Alloy-*` perf headers (document as response headers). |
+| `/api/admin/customer-person-role-types` (+ `/[id]`) | GET, POST, PATCH, DELETE | Config reference data (Phase 2F). `data.items` / `data.item`; DELETE = `NOT_IMPLEMENTED` (405). |
+| `/api/admin/person-relationship-type-settings` (+ `/[id]`) | GET, POST, PATCH, DELETE | Config reference data (Phase 2F). Identical contract to the row above. |
 
 **Spec conventions for v0:**
 - Components: shared `ApiSuccess<T>` / `ApiFailure` schemas; reuse the §3 error-code enum from
