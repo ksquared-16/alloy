@@ -430,6 +430,21 @@ Deferred sub-phases unchanged: **Charge Resolution** (emits draft childcare char
 
 ---
 
+## 14. P3.3 status — built (June 2026)
+
+Draft **Charge Resolution** + a **minimum responsibility shape** are **implemented**. Authoritative as-built lives in [`../../platform/modules/billing-financials-platform.md`](../../platform/modules/billing-financials-platform.md) → "P3.3 as-built". Summary:
+
+- **No migration.** P3.3 adds no schema. It composes existing substrate (`charges.metadata`, `charge_category='tuition'`, `billable_source_type='enrollment_agreement'`, `currency_code`, `service_date`) and committed-enrollment relationships. Responsibility is resolved from the agreement's canonical household/account (`customer_id`, falling back to `customer_member_id`) and stamped on `charge.metadata.responsibility`.
+- **Pure read model:** `web/lib/financials/chargeResolution/{scheduleBasis,billableQuantity,responsibility,resolveDraftCharges}.ts`. Maps `schedule_pattern → schedule_basis`, derives billable quantity per `rate_basis` × `calculation_strategy` (`scheduled` from schedule intent, `attendance_actual` from P2 facts, `hybrid` = scheduled fallback flagged, `fixed` = flat, `hourly` requires explicit hours), and composes a deterministic `DraftChargeIntent` with `resolution_key = tuition:{agreement}:{period}:{schedule_basis}:{rate_rule}`.
+- **Service (DB):** `web/lib/financials/chargeResolution/draftChargeResolutionService.ts` — idempotent upsert through `childcareChargeService`: create draft → recalc draft in place when amount changes → `unchanged` when identical → **`skipped_posted`** (posted charges never mutated). Non-billable resolutions return a structured `unresolved` reason and write nothing.
+- **Tests:** `web/tests/financials/chargeResolution/{resolveDraftCharges,draftChargeResolutionService}.test.ts` (28 cases, green): scheduled monthly/daily tuition, 3/4/5-day & full/half-day rule selection, monthly/daily/hourly basis handling, idempotency, draft recalculation, posted-not-modified, `attendance_actual` from facts, responsibility attribution, and boundary guards (no charge when unresolved, no job coupling in metadata).
+
+**Hard boundary held:** Charge Resolution emits **draft** charges only; no invoices, AR, ledger, payments, subsidy/expected-subsidy AR, UI, or job coupling. Financial Resolution stays separate from Posting.
+
+Deferred sub-phases: **Financial Resolution depth** — split / subsidy / guardian-specific responsibility and a first-class `service_agreement` / `responsibility_party` table (later P3.3+/P3.5); cadence/proration policy (P3.4); subsidy seam (P3.5); invoices/deposits and Posting (P3.6).
+
+---
+
 ## When this memo must be updated
 
 Open questions §10 are resolved (recorded in §11); the resolution-chain doctrine is promoted into `billing-financials-platform.md`; or any P3 sub-phase moves from plan to implementation (record the as-built there).
