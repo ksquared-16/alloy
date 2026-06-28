@@ -20,7 +20,8 @@ defines the exact readiness bar a route family must clear before it enters an Op
 > envelope, have their active consumers unwrapping it, and have contract tests. Everything
 > else is excluded by default until it clears the gate.
 
-Related: [`api-architecture.md`](api-architecture.md) (governing doctrine — §8 is the OpenAPI doctrine) ·
+Related: [`api-platform-completion.md`](api-platform-completion.md) (foundation closeout record) ·
+[`api-architecture.md`](api-architecture.md) (governing doctrine — §8 is the OpenAPI doctrine) ·
 [`api-platform-governance.md`](api-platform-governance.md) (Definition of Done, admission, lifecycle, CI) ·
 [`api-data-access-performance.md`](api-data-access-performance.md) (pagination/sync/freshness schemas required in the spec — §11) ·
 [`api-response-contract.md`](api-response-contract.md) (the envelope + helpers) ·

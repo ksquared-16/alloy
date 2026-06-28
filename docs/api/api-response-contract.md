@@ -165,8 +165,6 @@ UI needs to render a blocked-action panel travels under `error.details`:
 
 Other execute failures derive their code from the preserved HTTP status
 (`BAD_REQUEST`, `NOT_FOUND`, `CONFLICT`, `VALIDATION_ERROR`, `INTERNAL`, …).
-- **analytics POST/PATCH** share builder-panel consumers with the non-migrated
-  `[id]` route; migrating one side alone would break the shared consumer.
 
 ---
 

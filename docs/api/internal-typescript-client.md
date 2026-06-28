@@ -4,6 +4,10 @@ Alloy ships a small **internal** TypeScript client generated from the OpenAPI v0
 ([`openapi/alloy-api.v0.yaml`](openapi/alloy-api.v0.yaml)). Its job is to stop hand-writing
 `fetch` + envelope-unwrap + error-handling logic for the normalized API families.
 
+> **Status:** part of the **complete** internal API Platform foundation
+> ([`api-platform-completion.md`](api-platform-completion.md)). This client is the **preferred path
+> for new normalized consumers**; broadening it to more families is expansion work.
+
 > **Internal, partial, gradual.** This is **not** a public SDK and not a published package. The
 > spec is **v0** and intentionally incomplete — only route families that pass the
 > [OpenAPI readiness gate](openapi-readiness.md) are available. App migration to the client is

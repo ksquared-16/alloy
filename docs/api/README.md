@@ -1,6 +1,10 @@
 # Alloy API documentation
 
-**Status:** First-class inventory (June 2026). Documentation-first — describes the **current** HTTP surface, does not propose new behavior.
+**Status:** ✅ **Internal API Platform foundation complete** (Phase 3 closeout). Future API work is
+**expansion**, not foundation. OpenAPI v0 is internal and partial by design; the generated client is
+the preferred path for new normalized consumers; `cd web && npm run api:check` is the platform
+validation command. A **public** developer platform (`/api/v1`, SDK, portal) is future work, not
+current scope. See [`api-platform-completion.md`](api-platform-completion.md).
 
 **Purpose:** Make Alloy's API surface visible, reviewable, and maintainable, and to provide a clean foundation for a future public / developer API. APIs are the platform contract: AI/config agents, future integrations, and humans should all speak through the same documented surface.
 
@@ -10,6 +14,7 @@
 
 | File | Contents |
 |------|----------|
+| [`api-platform-completion.md`](api-platform-completion.md) | **Closeout** — the record that the internal API Platform foundation is complete: what exists (doctrine/implementation/guardrails), the OpenAPI v0 families, what remains as expansion (not gaps), and why API foundation work pauses here. |
 | [`api-architecture.md`](api-architecture.md) | **Doctrine** — the governing API platform architecture: principles, surface taxonomy, response/error contract, auth & org-scoping rules, versioning, consumer doctrine, the OpenAPI gate, SDK direction, and governance. Read this first for any API work. |
 | [`api-platform-governance.md`](api-platform-governance.md) | **Doctrine** — the platform operating contract: Definition of Done, OpenAPI admission, contract/correlation/pagination/freshness/versioning requirements, legacy & public-API policy, the self-governing CI command (`npm run api:check`), the API lifecycle, and the maturity snapshot. |
 | [`internal-typescript-client.md`](internal-typescript-client.md) | **Generated client** — internal v0 TypeScript client (`web/lib/api/alloyApiClient.ts` + generated `alloyApiTypes.ts`), behavior contract, and the first migrated consumer. |
@@ -120,6 +125,7 @@ Rewrites `docs/api/api-index.md` and `docs/api/api-inventory.json` from current 
 
 ## Related
 
+- `docs/platform/platform-capabilities.md` — capability model (API-first doctrine for new modules)
 - `docs/platform/governance/api-contracts.md` — canonical representative map
 - `docs/platform/foundation/architecture.md` — system context
 - `docs/platform/governance/roles-and-permissions.md` — capability vs visibility model

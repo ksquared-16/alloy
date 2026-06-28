@@ -10,6 +10,10 @@ drift silently.
 
 Read alongside:
 
+- [`api-platform-completion.md`](api-platform-completion.md) — the foundation closeout record
+  (what exists, OpenAPI v0 families, what remains as expansion, why we pause).
+- [`../platform/platform-capabilities.md`](../platform/platform-capabilities.md) — the capability
+  model new operational modules should be designed against (API-first).
 - [`api-architecture.md`](api-architecture.md) — governing architecture (principles, taxonomy,
   error doctrine, versioning, OpenAPI doctrine, SDK direction).
 - [`api-response-contract.md`](api-response-contract.md) — the envelope + helpers.

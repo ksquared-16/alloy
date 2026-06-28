@@ -261,6 +261,7 @@ The path from contract to client, each step gated on the previous:
 
 - [`README.md`](README.md) — API documentation index + invariants
 - [`api-data-access-performance.md`](api-data-access-performance.md) — data access, freshness, pagination, sync, caching & performance doctrine
+- [`api-platform-completion.md`](api-platform-completion.md) — foundation closeout (what exists, what remains as expansion)
 - [`api-response-contract.md`](api-response-contract.md) — envelope + helper spec
 - [`api-platform-governance.md`](api-platform-governance.md) — Definition of Done, admission, lifecycle, CI (`npm run api:check`)
 - [`api-contract-migration-status.md`](api-contract-migration-status.md) — progress tracker
