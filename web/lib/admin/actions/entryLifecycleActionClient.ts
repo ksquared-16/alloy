@@ -15,7 +15,6 @@ export type ExecuteEntryLifecycleActionBody = {
 
 export async function postAdminActionExecute(body: ExecuteEntryLifecycleActionBody): Promise<{
     ok: boolean;
-    error?: string;
     execution_result?: Record<string, unknown> & { opportunity_id?: string };
 }> {
     const res = await fetch("/api/admin/actions/execute", {
@@ -26,13 +25,13 @@ export async function postAdminActionExecute(body: ExecuteEntryLifecycleActionBo
     });
     const json = (await res.json().catch(() => ({}))) as {
         ok?: boolean;
-        error?: string;
-        execution_result?: Record<string, unknown> & { opportunity_id?: string };
+        data?: { execution_result?: Record<string, unknown> & { opportunity_id?: string } };
+        error?: { message?: string };
     };
-    if (!res.ok || !json.ok) {
-        throw new Error(json.error ?? "Action failed");
+    if (!res.ok || json.ok === false) {
+        throw new Error(json.error?.message ?? "Action failed");
     }
-    return { ok: true, execution_result: json.execution_result, error: json.error };
+    return { ok: true, execution_result: json.data?.execution_result };
 }
 
 export async function executeCreateLeadFromModal(input: {

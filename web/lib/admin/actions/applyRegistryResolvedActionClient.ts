@@ -368,6 +368,8 @@ export async function applyRegistryResolvedActionClient(
 
         if (actionKey === "confirm_tour" || intent === "confirm_tour") {
             if (!eid) return { ok: false, error: "entity_id required" };
+            // confirm_tour is a registered action; this POST routes through the canonical
+            // Actions Runtime (runRegisteredAction) which returns a string `error` envelope.
             const res = await fetch("/api/admin/actions/execute", {
                 method: "POST",
                 credentials: "include",
@@ -379,9 +381,14 @@ export async function applyRegistryResolvedActionClient(
                     context: host.context,
                 }),
             });
-            const json = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string };
-            if (!res.ok || !json.ok) {
-                return { ok: false, error: json.error ?? "Confirm tour failed" };
+            const json = (await res.json().catch(() => ({}))) as {
+                ok?: boolean;
+                error?: string | { message?: string };
+            };
+            if (!res.ok || json.ok === false) {
+                const message =
+                    typeof json.error === "string" ? json.error : json.error?.message ?? "Confirm tour failed";
+                return { ok: false, error: message };
             }
             if (host.invalidate) host.invalidate({ entity_type: "opportunity", entity_id: eid, action_key: "confirm_tour" });
             else host.router.refresh();
@@ -619,23 +626,29 @@ export async function applyRegistryResolvedActionClient(
     });
     const json = (await res.json().catch(() => ({}))) as {
         ok?: boolean;
-        error?: string;
-        completion_requirements?: RequirementValidationResult;
-        action_preflight?: import("@/lib/admin/actions/actionPreflightPresentation").ActionPreflightUiPayload;
-        execution_result?: Record<string, unknown> & {
-            kind?: string;
-            href?: string;
-            drawer?: { defaultSurface?: string | null };
-            workflow_run_id?: string;
+        error?: {
+            message?: string;
+            details?: {
+                completion_requirements?: RequirementValidationResult;
+                action_preflight?: import("@/lib/admin/actions/actionPreflightPresentation").ActionPreflightUiPayload;
+            };
+        };
+        data?: {
+            execution_result?: Record<string, unknown> & {
+                kind?: string;
+                href?: string;
+                drawer?: { defaultSurface?: string | null };
+                workflow_run_id?: string;
+            };
         };
     };
-    if (!res.ok || !json.ok) {
-        const completion = json.completion_requirements;
-        const preflight = json.action_preflight;
+    if (!res.ok || json.ok === false) {
+        const completion = json.error?.details?.completion_requirements;
+        const preflight = json.error?.details?.action_preflight;
         const summary =
             preflight?.summary ||
             (completion ? formatRequirementValidationSummary(completion) : "") ||
-            json.error ||
+            json.error?.message ||
             "Execute failed";
         console.warn("[applyRegistryResolvedActionClient] execute failed", summary);
         dispatchActionPreflightBlocked({
@@ -652,7 +665,7 @@ export async function applyRegistryResolvedActionClient(
             action_preflight: preflight,
         };
     }
-    const er = json.execution_result;
+    const er = json.data?.execution_result;
     if (er?.kind === "open_drawer") {
         if (er.drawer?.defaultSurface === "quote_intake") {
             host.openDrawer({ type: "opportunities", id: entityId, defaultOpportunitySurface: "quote_intake" });

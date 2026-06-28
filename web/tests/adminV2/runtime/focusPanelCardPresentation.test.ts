@@ -51,7 +51,7 @@ describe("Focus Panel Universal Card presentation", () => {
         expect(spec).toContain('historical: "history"');
     });
 
-    it("summary grid uses business-question card keys, not layout section names", () => {
+    it("summary overview is scoped to the Core Four operational cards", () => {
         const { grid } = deriveOpportunityFocusPanelPresentation({
             mode: "summary",
             displayVm: baseVm,
@@ -62,11 +62,32 @@ describe("Focus Panel Universal Card presentation", () => {
         });
 
         const keys = grid.rows.flatMap((row) => row.cells.map((c) => c.key));
-        expect(keys).toContain("attention");
-        expect(keys).toContain("current_mission");
-        expect(keys).toContain("household");
-        expect(keys).not.toContain("source");
-        expect(keys).not.toContain("overview");
+        expect(keys).toEqual(["household", "readiness_kpi", "children", "current_work"]);
+        // Suppressed (not deleted) from Overview for the Core Four validation pass.
+        expect(keys).not.toContain("attention");
+        expect(keys).not.toContain("current_mission");
+        expect(keys).not.toContain("communications");
+        expect(keys).not.toContain("documents");
+        expect(keys).not.toContain("tour_summary");
+        expect(keys).not.toContain("health");
+    });
+
+    it("Core Four footprints drive cell widths (no flat span:1)", () => {
+        const { grid } = deriveOpportunityFocusPanelPresentation({
+            mode: "summary",
+            displayVm: baseVm,
+            record: {},
+            title: "Smith Family",
+            perspective: null,
+            statusLabel: "New",
+        });
+        const spanByKey = new Map(
+            grid.rows.flatMap((row) => row.cells.map((c) => [c.key, c.span] as const)),
+        );
+        expect(spanByKey.get("household")).toBe(2); // wide
+        expect(spanByKey.get("children")).toBe(2); // wide
+        expect(spanByKey.get("readiness_kpi")).toBe(1); // medium
+        expect(spanByKey.get("current_work")).toBe(1); // narrow
     });
 
     it("hides primary next action card when header action is present", () => {

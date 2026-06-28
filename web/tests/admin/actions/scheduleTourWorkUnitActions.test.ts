@@ -149,7 +149,7 @@ describe("applyRegistryResolvedActionClient schedule tour", () => {
         const openForm = vi.fn();
         global.fetch = vi.fn().mockResolvedValue({
             ok: true,
-            json: async () => ({ ok: true, execution_result: { kind: "noop" } }),
+            json: async () => ({ ok: true, data: { execution_result: { kind: "noop" } }, correlation_id: "cid-test" }),
         }) as typeof fetch;
 
         await applyRegistryResolvedActionClient(scheduleTourAction, {

@@ -6190,7 +6190,13 @@ export default function AdminV2OpportunityWorkUnitPage() {
                     },
                 });
                 if (!out.ok && out.error) {
-                    setActionSurfaceError(out.error);
+                    // Work Unit rail actions are not bound to a record; if a record is required
+                    // and none is selected, prompt for one instead of leaking a technical error.
+                    setActionSurfaceError(
+                        out.error === "entity_id required"
+                            ? "Select a record from the queue to run this action."
+                            : out.error,
+                    );
                 }
                 const wf = out.ok ? out.execution_result?.workflow_run_id : undefined;
                 if (typeof wf === "string" && wf.trim()) {
@@ -6403,26 +6409,28 @@ export default function AdminV2OpportunityWorkUnitPage() {
                 });
                 const json = (await res.json().catch(() => ({}))) as {
                     ok?: boolean;
-                    error?: string;
-                    execution_result?: {
-                        kind?: string;
-                        href?: string;
-                        drawer?: { defaultSurface?: string | null };
-                        workflow_run_id?: string;
+                    data?: {
+                        execution_result?: {
+                            kind?: string;
+                            href?: string;
+                            drawer?: { defaultSurface?: string | null };
+                            workflow_run_id?: string;
+                        };
                     };
+                    error?: { message?: string };
                 };
-                if (!res.ok || !json.ok) {
+                if (!res.ok || json.ok === false) {
                     logAdminV2QueueRowClick({
                         phase: "registry_action",
                         itemId: action.itemId,
                         actionId: action.actionId,
                         queueKey: selectedQueueKeyRef.current,
                         handlerReached: "registry_execute_failed",
-                        extra: { error: json.error ?? res.status },
+                        extra: { error: json.error?.message ?? res.status },
                     });
                     return;
                 }
-                const er = json.execution_result;
+                const er = json.data?.execution_result;
                 if (er?.kind === "start_workflow" && typeof er.workflow_run_id === "string" && er.workflow_run_id.trim()) {
                     setActionFeedback(`Workflow run ${er.workflow_run_id.trim().slice(0, 8)}… completed.`);
                 }
@@ -7668,8 +7676,11 @@ export default function AdminV2OpportunityWorkUnitPage() {
                                     payload,
                                 }),
                             });
-                            const json = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string };
-                            if (!res.ok || !json.ok) throw new Error(json.error ?? "Update failed");
+                            const json = (await res.json().catch(() => ({}))) as {
+                                ok?: boolean;
+                                error?: { message?: string };
+                            };
+                            if (!res.ok || json.ok === false) throw new Error(json.error?.message ?? "Update failed");
                             invalidate({
                                 entity_type: "opportunity",
                                 entity_id: contactAttemptedTargetId,
@@ -7749,8 +7760,11 @@ export default function AdminV2OpportunityWorkUnitPage() {
                                     payload: { note: payload.note },
                                 }),
                             });
-                            const json = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string };
-                            if (!res.ok || !json.ok) throw new Error(json.error ?? "Add note failed");
+                            const json = (await res.json().catch(() => ({}))) as {
+                                ok?: boolean;
+                                error?: { message?: string };
+                            };
+                            if (!res.ok || json.ok === false) throw new Error(json.error?.message ?? "Add note failed");
                             invalidate({
                                 entity_type: "opportunity",
                                 entity_id: addNoteTargetId,

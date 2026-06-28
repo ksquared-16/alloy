@@ -124,20 +124,24 @@ async function executeOpportunityHeaderAction(params: {
     });
     const json = (await res.json().catch(() => ({}))) as {
         ok?: boolean;
-        error?: string;
-        action_preflight?: ActionPreflightUiPayload;
-        completion_requirements?: import("@/lib/completion/requirementValidationTypes").RequirementValidationResult;
-        execution_result?: Record<string, unknown>;
+        data?: { execution_result?: Record<string, unknown> };
+        error?: {
+            message?: string;
+            details?: {
+                action_preflight?: ActionPreflightUiPayload;
+                completion_requirements?: import("@/lib/completion/requirementValidationTypes").RequirementValidationResult;
+            };
+        };
     };
-    if (!res.ok || !json.ok) {
+    if (!res.ok || json.ok === false) {
         return {
             ok: false,
-            error: resolveOpportunityRegistryActionErrorMessage(json.error),
-            action_preflight: json.action_preflight,
-            completion_requirements: json.completion_requirements,
+            error: resolveOpportunityRegistryActionErrorMessage(json.error?.message),
+            action_preflight: json.error?.details?.action_preflight,
+            completion_requirements: json.error?.details?.completion_requirements,
         };
     }
-    return { ok: true, execution_result: json.execution_result };
+    return { ok: true, execution_result: json.data?.execution_result };
 }
 
 /**

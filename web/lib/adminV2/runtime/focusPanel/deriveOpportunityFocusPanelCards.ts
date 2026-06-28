@@ -17,7 +17,9 @@ import type {
 } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardModel";
 import type { RuntimePerspective } from "@/lib/adminV2/runtime/perspective/deriveRuntimePerspective";
 import {
+    footprintToGridSpan,
     system5DefaultActionForCard,
+    system5FootprintForCard,
     system5IconForCard,
 } from "@/lib/adminV2/runtime/focusPanel/system5OperationalSurfaceSpec";
 import { system5ArchetypeForCard } from "@/lib/adminV2/runtime/focusPanel/system5CardArchetypes";
@@ -734,36 +736,49 @@ function buildCardModels(input: {
 }
 
 /**
- * Hardcoded Summary composition. Exported as the single source of truth for the
- * config-driven slice: `buildFocusPanelSummaryDefaultDoc()` re-encodes this grid
- * into a `LayoutDoc`, and the parity test asserts the round-trip is identical.
+ * Overview (Summary) composition — Core Four validation pass.
+ *
+ * Scoped intentionally to the four production operational cards so the operating
+ * model can be evaluated cleanly:
+ *   Household (wide) · Children (wide) · Current Work (narrow) · Readiness (medium)
+ *
+ * Why Now, Current Mission, Enrollment Health, Tour, Communications and Documents
+ * are NOT deleted — their card models are still built (and used by Work / Activity
+ * and the Experience Builder catalog). They are temporarily suppressed from the
+ * Overview grid while we converge the Core Four visual rhythm.
+ *
+ * Cell widths come from the archetype footprint system (`system5FootprintForCard`),
+ * not a flat `span: 1`. Each row pairs a wide identity/collection card with its
+ * adjacent assessment/work card so the Overview holds a calm two-row rhythm at the
+ * verified three-column width.
+ *
+ * Exported as the single source of truth for the config-driven slice:
+ * `buildFocusPanelSummaryDefaultDoc()` re-encodes this grid into a `LayoutDoc`,
+ * and the parity test asserts the round-trip is identical.
  */
+const summaryCell = (
+    key: FocusPanelCardKey,
+    density: FocusPanelCardGridSpec["rows"][number]["cells"][number]["density"],
+    tier: FocusPanelCardGridSpec["rows"][number]["cells"][number]["tier"],
+) => ({
+    key,
+    span: footprintToGridSpan(system5FootprintForCard(key)),
+    density,
+    tier,
+});
+
 export const SUMMARY_GRID: FocusPanelCardGridSpec = {
     rows: [
         {
             cells: [
-                { key: "attention", span: 1, density: "compact", tier: "attention" },
-                { key: "current_mission", span: 1, density: "compact", tier: "work" },
-                { key: "current_work", span: 1, density: "compact", tier: "work" },
-                { key: "health", span: 1, density: "compact", tier: "metric" },
+                summaryCell("household", "standard", "reference"),
+                summaryCell("readiness_kpi", "compact", "metric"),
             ],
         },
         {
             cells: [
-                { key: "readiness_kpi", span: 1, density: "compact", tier: "metric" },
-                { key: "tour_summary", span: 1, density: "compact", tier: "context" },
-            ],
-        },
-        {
-            cells: [
-                { key: "household", span: 1, density: "compact", tier: "reference" },
-                { key: "children", span: 1, density: "compact", tier: "reference" },
-            ],
-        },
-        {
-            cells: [
-                { key: "communications", span: 1, density: "compact", tier: "context" },
-                { key: "documents", span: 1, density: "compact", tier: "context" },
+                summaryCell("children", "standard", "reference"),
+                summaryCell("current_work", "compact", "work"),
             ],
         },
     ],

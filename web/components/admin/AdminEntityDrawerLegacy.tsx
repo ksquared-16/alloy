@@ -95,7 +95,6 @@ import {
     ADMINV2_OPEN_TOUR_OUTCOME_MODAL,
     ADMINV2_OPEN_TOUR_SCHEDULE_MODAL,
 } from "@/lib/tours/actions/tourBookingActionClient";
-import { UpdateStatusAddNoteModal } from "@/components/admin/opportunity/actions/UpdateStatusAddNoteModal";
 import { AddPersonModal } from "@/components/admin/opportunity/actions/AddPersonModal";
 import { AddInquiryChildModal } from "@/components/admin/opportunity/actions/AddInquiryChildModal";
 import {
@@ -4470,6 +4469,11 @@ export function AdminEntityDrawerLegacy() {
                     openAddPersonModal(resolveAddPersonActionKey({ actionKey: a.key, formKey }));
                     return;
                 }
+                if (formKey === "update_status_add_note") {
+                    // Retired form: surface a clear message instead of opening nothing.
+                    setSaveError("Status changes have moved. Open this record in the workspace to update its status.");
+                    return;
+                }
                 if (formKey) setActionFormState({ form_key: formKey, action: a, executeContext: { surface: "record_header" } });
                 return;
             }
@@ -4566,31 +4570,38 @@ export function AdminEntityDrawerLegacy() {
                 });
                 const json = (await res.json().catch(() => ({}))) as {
                     ok?: boolean;
-                    error?: string;
-                    action_preflight?: ActionPreflightUiPayload;
-                    completion_requirements?: import("@/lib/completion/requirementValidationTypes").RequirementValidationResult;
-                    execution_result?: Record<string, unknown> & {
-                        row?: Record<string, unknown>;
-                        kind?: string;
-                        workflow_run_id?: string;
+                    data?: {
+                        execution_result?: Record<string, unknown> & {
+                            row?: Record<string, unknown>;
+                            kind?: string;
+                            workflow_run_id?: string;
+                        };
+                    };
+                    error?: {
+                        message?: string;
+                        details?: {
+                            action_preflight?: ActionPreflightUiPayload;
+                            completion_requirements?: import("@/lib/completion/requirementValidationTypes").RequirementValidationResult;
+                        };
                     };
                 };
-                if (!res.ok || !json.ok) {
-                    if (json.action_preflight) {
+                if (!res.ok || json.ok === false) {
+                    const preflight = json.error?.details?.action_preflight;
+                    if (preflight) {
                         dispatchActionPreflightBlocked({
                             action_key: a.key,
                             opportunity_id: drawer.id,
-                            error: json.error,
-                            completion_requirements: json.completion_requirements,
-                            action_preflight: json.action_preflight,
+                            error: json.error?.message,
+                            completion_requirements: json.error?.details?.completion_requirements,
+                            action_preflight: preflight,
                         });
                     } else {
-                        setSaveError(json.error ?? "Action failed");
+                        setSaveError(json.error?.message ?? "Action failed");
                     }
                     return;
                 }
                 opportunityDrawerActionPreflight.clearBlocked();
-                const er = json.execution_result;
+                const er = json.data?.execution_result;
                 if (er?.kind === "start_workflow" && typeof er.workflow_run_id === "string" && er.workflow_run_id.trim()) {
                     const rid = er.workflow_run_id.trim();
                     setRegistryActionFeedback({
@@ -19188,17 +19199,19 @@ export function AdminEntityDrawerLegacy() {
                             });
                             const json = (await res.json().catch(() => ({}))) as {
                                 ok?: boolean;
-                                error?: string;
-                                execution_result?: Record<string, unknown> & {
-                                    row?: Record<string, unknown>;
-                                    kind?: string;
-                                    workflow_run_id?: string;
+                                data?: {
+                                    execution_result?: Record<string, unknown> & {
+                                        row?: Record<string, unknown>;
+                                        kind?: string;
+                                        workflow_run_id?: string;
+                                    };
                                 };
+                                error?: { message?: string };
                             };
-                            if (!res.ok || !json.ok) {
-                                throw new Error(json.error ?? "Action failed");
+                            if (!res.ok || json.ok === false) {
+                                throw new Error(json.error?.message ?? "Action failed");
                             }
-                            const er = json.execution_result;
+                            const er = json.data?.execution_result;
                             if (er?.kind === "start_workflow" && typeof er.workflow_run_id === "string" && er.workflow_run_id.trim()) {
                                 const rid = er.workflow_run_id.trim();
                                 setRegistryActionFeedback({
@@ -19246,9 +19259,12 @@ export function AdminEntityDrawerLegacy() {
                                     payload: { outcome: payload.outcome },
                                 }),
                             });
-                            const json = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string };
-                            if (!res.ok || !json.ok) {
-                                throw new Error(json.error ?? "Action failed");
+                            const json = (await res.json().catch(() => ({}))) as {
+                                ok?: boolean;
+                                error?: { message?: string };
+                            };
+                            if (!res.ok || json.ok === false) {
+                                throw new Error(json.error?.message ?? "Action failed");
                             }
                             setActionFormState(null);
                             refetch();
@@ -19288,13 +19304,13 @@ export function AdminEntityDrawerLegacy() {
                             });
                             const json = (await res.json().catch(() => ({}))) as {
                                 ok?: boolean;
-                                error?: string;
-                                execution_result?: Record<string, unknown> & { row?: Record<string, unknown> };
+                                data?: { execution_result?: Record<string, unknown> & { row?: Record<string, unknown> } };
+                                error?: { message?: string };
                             };
-                            if (!res.ok || !json.ok) {
-                                throw new Error(json.error ?? "Action failed");
+                            if (!res.ok || json.ok === false) {
+                                throw new Error(json.error?.message ?? "Action failed");
                             }
-                            const row = json.execution_result?.row;
+                            const row = json.data?.execution_result?.row;
                             if (row && typeof row === "object") {
                                 setData((prev) => (prev && typeof prev === "object" ? { ...prev, ...row } : prev));
                             }
@@ -19340,13 +19356,13 @@ export function AdminEntityDrawerLegacy() {
                             });
                             const json = (await res.json().catch(() => ({}))) as {
                                 ok?: boolean;
-                                error?: string;
-                                execution_result?: Record<string, unknown> & { row?: Record<string, unknown> };
+                                data?: { execution_result?: Record<string, unknown> & { row?: Record<string, unknown> } };
+                                error?: { message?: string };
                             };
-                            if (!res.ok || !json.ok) {
-                                throw new Error(json.error ?? "Action failed");
+                            if (!res.ok || json.ok === false) {
+                                throw new Error(json.error?.message ?? "Action failed");
                             }
-                            const row = json.execution_result?.row;
+                            const row = json.data?.execution_result?.row;
                             if (row && typeof row === "object") {
                                 setData((prev) => (prev && typeof prev === "object" ? { ...prev, ...row } : prev));
                             }
@@ -19388,13 +19404,13 @@ export function AdminEntityDrawerLegacy() {
                             });
                             const json = (await res.json().catch(() => ({}))) as {
                                 ok?: boolean;
-                                error?: string;
-                                execution_result?: Record<string, unknown> & { row?: Record<string, unknown> };
+                                data?: { execution_result?: Record<string, unknown> & { row?: Record<string, unknown> } };
+                                error?: { message?: string };
                             };
-                            if (!res.ok || !json.ok) {
-                                throw new Error(json.error ?? "Action failed");
+                            if (!res.ok || json.ok === false) {
+                                throw new Error(json.error?.message ?? "Action failed");
                             }
-                            const row = json.execution_result?.row;
+                            const row = json.data?.execution_result?.row;
                             if (row && typeof row === "object") {
                                 setData((prev) => (prev && typeof prev === "object" ? { ...prev, ...row } : prev));
                             }
@@ -19408,76 +19424,14 @@ export function AdminEntityDrawerLegacy() {
                         }
                     }}
                 />
-                <UpdateStatusAddNoteModal
-                    open={actionFormState?.form_key === "update_status_add_note"}
-                    onClose={() => setActionFormState(null)}
-                    title={actionFormState?.action?.label ?? "Update status"}
-                    initialStatusKey={(() => {
-                        if (!data || typeof data !== "object") return null;
-                        const v = (data as { status_key?: unknown }).status_key;
-                        const s = v != null ? String(v).trim() : "";
-                        return s || null;
-                    })()}
-                    statusOptions={(statusDefsForDrawer ?? [])
-                        .filter((s) => s.is_active !== false)
-                        .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
-                        .map((s) => ({
-                            value: String(s.status_key ?? ""),
-                            label: String(s.status_label ?? s.status_key ?? ""),
-                        }))}
-                    transitionContext={{
-                        entityType: "opportunities",
-                        departmentId: opportunityWorkUnitDepartmentId,
-                        workUnitId:
-                            data && typeof data === "object" && (data as { work_unit_id?: unknown }).work_unit_id != null
-                                ? String((data as { work_unit_id?: unknown }).work_unit_id)
-                                : null,
-                        actionKey: actionFormState?.action?.key ? String(actionFormState.action.key) : "update_status_add_note",
-                    }}
-                    onSubmit={async (payload) => {
-                        if (!drawer.id || drawer.id === "new" || drawer.type !== "opportunities") return;
-                        const actionKey = actionFormState?.action?.key ? String(actionFormState.action.key) : "update_status_add_note";
-                        setOpportunityActionLoading(actionKey);
-                        setSaveError(null);
-                        try {
-                            const workUnitId =
-                                data && typeof data === "object" && (data as { work_unit_id?: unknown }).work_unit_id != null
-                                    ? String((data as { work_unit_id?: unknown }).work_unit_id)
-                                    : null;
-                            const res = await fetch("/api/admin/actions/execute", {
-                                method: "POST",
-                                credentials: "include",
-                                headers: { "Content-Type": "application/json" },
-                                body: JSON.stringify({
-                                    action_key: actionKey,
-                                    entity_type: "opportunity",
-                                    entity_id: drawer.id,
-                                    context: { surface: "record_header", work_unit_id: workUnitId },
-                                    payload,
-                                }),
-                            });
-                            const json = (await res.json().catch(() => ({}))) as {
-                                ok?: boolean;
-                                error?: string;
-                                execution_result?: Record<string, unknown> & { row?: Record<string, unknown> };
-                            };
-                            if (!res.ok || !json.ok) {
-                                throw new Error(json.error ?? "Action failed");
-                            }
-                            const row = json.execution_result?.row;
-                            if (row && typeof row === "object") {
-                                setData((prev) => (prev && typeof prev === "object" ? { ...prev, ...row } : prev));
-                            }
-                            setActionFormState(null);
-                            refetch();
-                            window.dispatchEvent(
-                                new CustomEvent("adminv2:opportunity-updated", { detail: { id: drawer.id, action_key: actionKey } })
-                            );
-                        } finally {
-                            setOpportunityActionLoading(null);
-                        }
-                    }}
-                />
+                {/*
+                  * Retired (Actions Runtime V2): the legacy `update_status_add_note` modal +
+                  * inline POST to /api/admin/actions/execute is removed. Status changes now run
+                  * exclusively through the registered Update Status action (ChangeEnrollmentStatusModal
+                  * + enrollment-status-transition runtime) on the VM drawer. Migration
+                  * 20260622220000 repointed this action's form_key to `update_enrollment_status`,
+                  * so this modal no longer opened on live AdminV2 and 400'd on legacy-admin.
+                  */}
                 <AddPersonModal
                     open={!!addPersonState}
                     title="Add person"

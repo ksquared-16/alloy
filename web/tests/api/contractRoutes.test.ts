@@ -77,6 +77,7 @@ import { POST as preflightPOST } from "@/app/api/admin/actions/preflight/route";
 import { GET as inventoryGET } from "@/app/api/admin/actions/inventory/route";
 import { POST as executePOST } from "@/app/api/admin/actions/execute/route";
 import { GET as entityGET } from "@/app/api/admin/entity/[type]/[id]/route";
+import { executeAdminAction } from "@/lib/admin/actions/executeAdminAction";
 import { CORRELATION_ID_HEADER } from "@/lib/api/correlationId";
 
 type AnyReq = Parameters<typeof preflightPOST>[0];
@@ -162,28 +163,81 @@ describe("GET /api/admin/actions/inventory (full contract)", () => {
     });
 });
 
-describe("POST /api/admin/actions/execute (additive contract)", () => {
-    it("success carries canonical data + legacy fields + correlation id", async () => {
+describe("POST /api/admin/actions/execute (full contract)", () => {
+    it("success returns ok: true with canonical data + correlation id (no legacy top-level)", async () => {
         const res = await executePOST(
             jsonReq({ action_key: "noop_action", entity_type: "opportunity", entity_id: "opp-1" })
         );
         expect(res.status).toBe(200);
         const body = await res.json();
         expect(body.ok).toBe(true);
-        // canonical
         expect(body.data.execution_result).toEqual({ kind: "noop" });
-        // legacy (preserved for ~15 existing consumers)
-        expect(body.execution_result).toEqual({ kind: "noop" });
+        // Phase 2B: legacy top-level mirror is gone — data is the only payload location.
+        expect(body.execution_result).toBeUndefined();
         expect(body.correlation_id).toBe("exec-cid");
         expect(res.headers.get(CORRELATION_ID_HEADER)).toBe("exec-cid");
     });
 
-    it("bad request returns an object body (never a bare string)", async () => {
+    it("validation failure (missing fields) returns a normalized error envelope", async () => {
         const res = await executePOST(jsonReq({}));
         expect(res.status).toBe(400);
         const body = await res.json();
         expect(typeof body).toBe("object");
         expect(body).not.toBeNull();
+        expect(body.ok).toBe(false);
+        expect(body.error.code).toBe("BAD_REQUEST");
+        expect(typeof body.error.message).toBe("string");
+        // never a bare string error
+        expect(typeof body.error).toBe("object");
+        expect(typeof body.correlation_id).toBe("string");
+    });
+
+    it("invalid JSON returns a normalized error envelope (never a bare string)", async () => {
+        const res = await executePOST(jsonReq("{not json"));
+        expect(res.status).toBe(400);
+        const body = await res.json();
+        expect(body.ok).toBe(false);
+        expect(body.error.code).toBe("BAD_REQUEST");
+        expect(body.error.message).toBe("Invalid JSON");
+    });
+
+    it("execution failure returns the normalized envelope with preserved status + details", async () => {
+        vi.mocked(executeAdminAction).mockResolvedValueOnce({
+            ok: false,
+            correlation_id: "exec-cid",
+            error: "Not found",
+            status: 404,
+            completion_requirements: { ok: false, requirements: [] } as never,
+        });
+        const res = await executePOST(
+            jsonReq({ action_key: "noop_action", entity_type: "opportunity", entity_id: "missing" })
+        );
+        expect(res.status).toBe(404);
+        const body = await res.json();
+        expect(body.ok).toBe(false);
+        // carries completion context → stable ACTION_BLOCKED code
+        expect(body.error.code).toBe("ACTION_BLOCKED");
+        expect(body.error.message).toBe("Not found");
+        expect(body.error.details.completion_requirements).toBeTruthy();
+        expect(body.correlation_id).toBe("exec-cid");
+        expect(res.headers.get(CORRELATION_ID_HEADER)).toBe("exec-cid");
+    });
+
+    it("plain execution failure (no requirements) maps status to a stable code", async () => {
+        vi.mocked(executeAdminAction).mockResolvedValueOnce({
+            ok: false,
+            correlation_id: "exec-cid",
+            error: "Unsupported entity_type",
+            status: 400,
+        });
+        const res = await executePOST(
+            jsonReq({ action_key: "noop_action", entity_type: "opportunity", entity_id: "opp-1" })
+        );
+        expect(res.status).toBe(400);
+        const body = await res.json();
+        expect(body.ok).toBe(false);
+        expect(body.error.code).toBe("BAD_REQUEST");
+        expect(body.error.details).toBeUndefined();
     });
 });
 
@@ -224,6 +278,7 @@ describe("static contract: migrated routes", () => {
         const files = [
             "app/api/admin/actions/preflight/route.ts",
             "app/api/admin/actions/inventory/route.ts",
+            "app/api/admin/actions/execute/route.ts",
             "app/api/admin/entity/[type]/[id]/route.ts",
         ];
         for (const rel of files) {
@@ -233,5 +288,14 @@ describe("static contract: migrated routes", () => {
             expect(src).not.toMatch(/NextResponse\.json\(\s*"Not found"/);
             expect(src).not.toMatch(/NextResponse\.json\([^,{)]*\|\| "Not found"/);
         }
+    });
+
+    it("execute route emits the envelope via apiOk/apiError and no legacy { error: string } body", () => {
+        const src = read("app/api/admin/actions/execute/route.ts");
+        expect(src).toContain('from "@/lib/api/apiResponse"');
+        expect(src).toContain("apiOk(");
+        expect(src).toContain("apiError(");
+        // No bare-string error responses remain.
+        expect(src).not.toMatch(/NextResponse\.json\(\s*\{\s*error:\s*"/);
     });
 });

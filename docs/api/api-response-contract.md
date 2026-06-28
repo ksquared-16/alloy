@@ -127,16 +127,38 @@ Routes may introduce additional domain-specific codes; reuse the baseline where 
 | `/api/admin/actions/inventory` | GET | **Full** | `apiOk({ items })`; 3 client consumers updated in lockstep. |
 | `/api/admin/analytics/metrics` | GET | **Full (GET only)** | `apiOk({ items, adapters })`; `fetchMetricDefinitions` unwraps `data`. POST/PATCH deferred (shared builder-panel consumers). |
 | `/api/admin/entity/[type]/[id]` | GET | **Errors only** | All error exits use `apiError` (resolves bare-string finding); status codes preserved. Success payload stays the legacy bare record (high drawer fan-out) — future batch. |
-| `/api/admin/actions/execute` | POST | **Additive** | Success adds canonical `data` + `correlation_id` while preserving legacy top-level fields (~15 consumers). Failure/bad-request bodies preserved; full cutover is next batch. |
+| `/api/admin/actions/execute` | POST | **Full** | Phase 2B: success is canonical `data` only (legacy top-level mirror dropped); all failures use `apiError`. Action-blocked failures carry preflight context under `error.details` with the stable `ACTION_BLOCKED` code. All 15 consumers updated in lockstep. See `actions-execute-envelope-audit.md`. |
 
 ### Why some routes are partial
 
-- **execute** has ~15 client call sites reading top-level fields, and its legacy
-  failure `error` is a *string* (collides with the canonical `error` object). A
-  breaking cutover would violate the "no breaking UI" non-goal, so success is
-  migrated additively and failure is deferred.
 - **entity GET** success is the bare record consumed by every drawer; only the
   error envelope (the documented audit finding) is normalized here.
+
+### Action-blocked failures (`ACTION_BLOCKED`)
+
+`POST /api/admin/actions/execute` returns the stable code `ACTION_BLOCKED` when an
+action is rejected by unmet completion/preflight requirements. The rich context the
+UI needs to render a blocked-action panel travels under `error.details`:
+
+```jsonc
+{
+  "ok": false,
+  "error": {
+    "code": "ACTION_BLOCKED",
+    "message": "Add a classroom before approving enrollment.",
+    "details": {
+      "completion_requirements": { /* RequirementValidationResult */ },
+      "effective_requirements": { /* EffectiveRequirementsResult */ },
+      "action_preflight": { /* ActionPreflightUiPayload */ },
+      "blockers": [ /* runtime blocker codes */ ]
+    }
+  },
+  "correlation_id": "…"
+}
+```
+
+Other execute failures derive their code from the preserved HTTP status
+(`BAD_REQUEST`, `NOT_FOUND`, `CONFLICT`, `VALIDATION_ERROR`, `INTERNAL`, …).
 - **analytics POST/PATCH** share builder-panel consumers with the non-migrated
   `[id]` route; migrating one side alone would break the shared consumer.
 

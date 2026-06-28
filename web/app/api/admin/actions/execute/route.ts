@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 import { revalidateTag } from "next/cache";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
@@ -10,24 +10,40 @@ import { scopeDimensionsFromAccess } from "@/lib/admin/accessScope";
 import { CREATE_LEAD_ACTION_ENTITY_ID } from "@/lib/admin/actions/createLeadActionConstants";
 import { getRegisteredAction } from "@/lib/adminV2/actions/actionRegistry";
 import { runRegisteredAction } from "@/lib/adminV2/actions/actionExecutor";
-import { CORRELATION_ID_HEADER, resolveCorrelationId } from "@/lib/api/correlationId";
+import { apiOk, apiError } from "@/lib/api/apiResponse";
 
 /**
- * Phase 2 contract (transitional): success responses are additive — they include
- * the canonical `data` plus `correlation_id` and the `x-correlation-id` header,
- * while preserving the existing top-level fields (`execution_result`, etc.) that
- * ~15 client call sites still read. Failure/bad-request bodies are intentionally
- * left on the legacy shape until those consumers migrate (see audit / next batch).
+ * Phase 2B contract (fully migrated): this route emits the standard envelope.
+ *
+ * - Success: `{ ok: true, data: { execution_result, affected_id? }, correlation_id }`
+ * - Failure: `{ ok: false, error: { code, message, details? }, correlation_id }`
+ *
+ * Action-blocked failures (unmet completion/preflight requirements) use the stable
+ * `ACTION_BLOCKED` code and carry `completion_requirements` / `effective_requirements`
+ * / `action_preflight` / `blockers` under `error.details`. Auth-gate responses
+ * (401/403) remain owned by `requireAdminOrOps` / `adminContextFailureResponse`.
  * @see docs/api/api-response-contract.md
+ * @see docs/api/actions-execute-envelope-audit.md
  */
-function withCorrelation(
-    body: Record<string, unknown>,
-    correlationId: string,
-    init?: { status?: number }
-): NextResponse {
-    const res = NextResponse.json({ ...body, correlation_id: correlationId }, init);
-    res.headers.set(CORRELATION_ID_HEADER, correlationId);
-    return res;
+
+/** Map a preserved HTTP status to a stable error code for the failure envelope. */
+function codeForStatus(status: number): string {
+    switch (status) {
+        case 400:
+            return "BAD_REQUEST";
+        case 401:
+            return "UNAUTHORIZED";
+        case 403:
+            return "FORBIDDEN";
+        case 404:
+            return "NOT_FOUND";
+        case 409:
+            return "CONFLICT";
+        case 422:
+            return "VALIDATION_ERROR";
+        default:
+            return status >= 500 ? "INTERNAL" : "BAD_REQUEST";
+    }
 }
 
 type ExecuteBody = {
@@ -52,7 +68,7 @@ export async function POST(request: NextRequest) {
     try {
         body = (await request.json()) as ExecuteBody;
     } catch {
-        return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
+        return apiError("BAD_REQUEST", "Invalid JSON", 400, undefined, { request });
     }
 
     const actionKey = body.action_key != null ? String(body.action_key).trim() : "";
@@ -60,7 +76,9 @@ export async function POST(request: NextRequest) {
     let entityId = body.entity_id != null ? String(body.entity_id).trim() : "";
     const createLead = actionKey === "create_lead";
     if (!actionKey || !entityType || (!entityId && !createLead)) {
-        return NextResponse.json({ error: "action_key, entity_type, and entity_id are required" }, { status: 400 });
+        return apiError("BAD_REQUEST", "action_key, entity_type, and entity_id are required", 400, undefined, {
+            request,
+        });
     }
     if (createLead && !entityId) {
         entityId = CREATE_LEAD_ACTION_ENTITY_ID;
@@ -86,19 +104,20 @@ export async function POST(request: NextRequest) {
             console.warn("[admin-timing] POST /api/admin/actions/execute (runtime)", { ms: elapsed, action_key: actionKey, entity_type: entityType });
         }
         if (!runtimeResult.ok) {
-            return withCorrelation(
-                {
-                    ok: false,
-                    error: runtimeResult.error,
-                    execution_result: null,
-                    ...(runtimeResult.blockers ? { blockers: runtimeResult.blockers } : {}),
-                    ...(runtimeResult.completionRequirements ?
-                        { completion_requirements: runtimeResult.completionRequirements }
-                    :   {}),
-                    ...(runtimeResult.actionPreflight ? { action_preflight: runtimeResult.actionPreflight } : {}),
-                },
-                resolveCorrelationId(request, runtimeResult.correlationId),
-                { status: runtimeResult.status }
+            const details = {
+                ...(runtimeResult.blockers ? { blockers: runtimeResult.blockers } : {}),
+                ...(runtimeResult.completionRequirements ?
+                    { completion_requirements: runtimeResult.completionRequirements }
+                :   {}),
+                ...(runtimeResult.actionPreflight ? { action_preflight: runtimeResult.actionPreflight } : {}),
+            };
+            const blocked = Object.keys(details).length > 0;
+            return apiError(
+                blocked ? "ACTION_BLOCKED" : codeForStatus(runtimeResult.status),
+                runtimeResult.error || "Action failed",
+                runtimeResult.status,
+                blocked ? details : undefined,
+                { request, correlationId: runtimeResult.correlationId }
             );
         }
         try {
@@ -106,17 +125,12 @@ export async function POST(request: NextRequest) {
         } catch (e) {
             console.warn("[POST /api/admin/actions/execute] revalidateTag failed", e);
         }
-        return withCorrelation(
+        return apiOk(
             {
-                ok: true,
-                data: {
-                    execution_result: runtimeResult.result.detail,
-                    affected_id: runtimeResult.result.affectedId,
-                },
                 execution_result: runtimeResult.result.detail,
                 affected_id: runtimeResult.result.affectedId,
             },
-            resolveCorrelationId(request, runtimeResult.correlationId)
+            { request, correlationId: runtimeResult.correlationId }
         );
     }
 
@@ -133,21 +147,20 @@ export async function POST(request: NextRequest) {
     }
 
     if (!result.ok) {
-        return withCorrelation(
-            {
-                ok: false,
-                error: result.error,
-                execution_result: null,
-                ...(result.completion_requirements ?
-                    { completion_requirements: result.completion_requirements }
-                :   {}),
-                ...(result.effective_requirements ?
-                    { effective_requirements: result.effective_requirements }
-                :   {}),
-                ...(result.action_preflight ? { action_preflight: result.action_preflight } : {}),
-            },
-            resolveCorrelationId(request, result.correlation_id),
-            { status: result.status }
+        const details = {
+            ...(result.completion_requirements ?
+                { completion_requirements: result.completion_requirements }
+            :   {}),
+            ...(result.effective_requirements ? { effective_requirements: result.effective_requirements } : {}),
+            ...(result.action_preflight ? { action_preflight: result.action_preflight } : {}),
+        };
+        const blocked = Object.keys(details).length > 0;
+        return apiError(
+            blocked ? "ACTION_BLOCKED" : codeForStatus(result.status),
+            result.error || "Action failed",
+            result.status,
+            blocked ? details : undefined,
+            { request, correlationId: result.correlation_id }
         );
     }
     /** Bust action resolver cache so headers / queue rows refresh after mutations. */
@@ -157,12 +170,5 @@ export async function POST(request: NextRequest) {
         console.warn("[POST /api/admin/actions/execute] revalidateTag failed", e);
     }
 
-    return withCorrelation(
-        {
-            ok: true,
-            data: { execution_result: result.execution_result },
-            execution_result: result.execution_result,
-        },
-        resolveCorrelationId(request, result.correlation_id)
-    );
+    return apiOk({ execution_result: result.execution_result }, { request, correlationId: result.correlation_id });
 }

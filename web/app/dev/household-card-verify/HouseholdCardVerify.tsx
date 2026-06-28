@@ -10,6 +10,9 @@ import HouseholdCard from "@/components/admin/focusPanel/cards/HouseholdCard";
 import ChildrenCard from "@/components/admin/focusPanel/cards/ChildrenCard";
 import CurrentWorkCard from "@/components/admin/focusPanel/cards/CurrentWorkCard";
 import ReadinessCard from "@/components/admin/focusPanel/cards/ReadinessCard";
+import FocusPanelCardGrid from "@/components/admin/focusPanel/FocusPanelCardGrid";
+import { SUMMARY_GRID } from "@/lib/adminV2/runtime/focusPanel/deriveOpportunityFocusPanelCards";
+import { system5IconForCard } from "@/lib/adminV2/runtime/focusPanel/system5OperationalSurfaceSpec";
 import type { FocusPanelCardModel } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardModel";
 import type {
     OperationalContext,
@@ -121,6 +124,45 @@ const CHILDREN_MODEL = cardModel("children", "Children", "users");
 const WORK_MODEL = cardModel("current_work", "Current work", "check");
 const READINESS_MODEL = cardModel("readiness_kpi", "Readiness", "gauge");
 
+function compositionModel(key: FocusPanelCardModel["key"], title: string): FocusPanelCardModel {
+    const cell = SUMMARY_GRID.rows.flatMap((r) => r.cells).find((c) => c.key === key);
+    return {
+        ...MODEL,
+        key,
+        title,
+        iconName: system5IconForCard(key) ?? MODEL.iconName,
+        span: (cell?.span as FocusPanelCardModel["span"]) ?? 1,
+        density: (cell?.density as FocusPanelCardModel["density"]) ?? "standard",
+    };
+}
+
+/**
+ * Faithful Overview composition preview — the REAL `FocusPanelCardGrid` engine and
+ * the REAL `SUMMARY_GRID` footprint spans, rendering the production pure cards.
+ * Only the data is fixture. This mirrors the operator Summary surface composition.
+ */
+function OverviewComposition({ context }: { context: OperationalContext }) {
+    const rows = SUMMARY_GRID.rows.map((row) => ({
+        cells: row.cells.map((cell) => ({ key: cell.key, span: cell.span, density: cell.density })),
+    }));
+    return (
+        <FocusPanelCardGrid
+            rows={rows}
+            renderCell={(key) => {
+                if (key === "household")
+                    return <HouseholdCard model={compositionModel("household", "Household")} context={context} />;
+                if (key === "children")
+                    return <ChildrenCard model={compositionModel("children", "Children")} context={context} />;
+                if (key === "current_work")
+                    return <CurrentWorkCard model={compositionModel("current_work", "Current work")} context={context} />;
+                if (key === "readiness_kpi")
+                    return <ReadinessCard model={compositionModel("readiness_kpi", "Readiness")} context={context} />;
+                return null;
+            }}
+        />
+    );
+}
+
 function Panel({ label, children }: { label: string; children: React.ReactNode }) {
     return (
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
@@ -139,6 +181,18 @@ export default function HouseholdCardVerify() {
                     Real <code>HouseholdCard</code> rendered from fixture <code>OperationalContext</code> values.
                     Click <em>View household →</em> then an evidence group to verify Evidence / Focused locally (no fetch).
                 </p>
+            </div>
+
+            <div style={{ width: "100%" }} data-overview-composition="true">
+                <h2 style={{ fontSize: 18, fontWeight: 700, margin: "0 0 6px" }}>Overview composition — Core Four (real grid + footprints)</h2>
+                <p style={{ fontSize: 13, color: "#475569", margin: "0 0 12px", maxWidth: 880 }}>
+                    The production <code>FocusPanelCardGrid</code> driven by the real{" "}
+                    <code>SUMMARY_GRID</code> footprints: Household (wide) + Readiness (medium), then
+                    Children (wide) + Current Work (narrow). Rows equalize height for a calm rhythm.
+                </p>
+                <div className="alloy-os-runtime" style={{ width: 960, background: "#f6f8fc", border: "1px solid #e5e9ef", borderRadius: 12 }}>
+                    <OverviewComposition context={ctx(FULL, { label: "Johnson Household", signals: CORE_FOUR_SIGNALS })} />
+                </div>
             </div>
             <Panel label="Overview (full household + address)"><HouseholdCard model={MODEL} context={ctx(FULL, { label: "Johnson Household" })} /></Panel>
             <Panel label="Missing primary"><HouseholdCard model={MODEL} context={ctx(MISSING_PRIMARY, { label: "Pending Household" })} /></Panel>

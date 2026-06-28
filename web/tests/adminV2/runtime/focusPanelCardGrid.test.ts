@@ -6,6 +6,10 @@ import {
     resolveFocusPanelCellGridSpan,
     resolveFocusPanelSectionSpan,
 } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardGrid";
+import {
+    footprintToGridSpan,
+    system5FootprintForCard,
+} from "@/lib/adminV2/runtime/focusPanel/system5OperationalSurfaceSpec";
 
 describe("computeFocusPanelGridColumns", () => {
     it("returns 4 columns at wide panel width", () => {
@@ -39,6 +43,27 @@ describe("resolveFocusPanelSectionSpan", () => {
 
     it("maps communications to full row", () => {
         expect(resolveFocusPanelSectionSpan("communications")).toBe("row");
+    });
+});
+
+describe("card footprint system", () => {
+    it("assigns the documented Core Four default footprints", () => {
+        expect(system5FootprintForCard("household")).toBe("wide");
+        expect(system5FootprintForCard("children")).toBe("wide");
+        expect(system5FootprintForCard("readiness_kpi")).toBe("medium");
+        expect(system5FootprintForCard("current_work")).toBe("narrow");
+    });
+
+    it("maps footprints onto the current grid span vocabulary", () => {
+        expect(footprintToGridSpan("wide")).toBe(2);
+        expect(footprintToGridSpan("full")).toBe("row");
+        // narrow + medium both collapse to one column until the finer base lands.
+        expect(footprintToGridSpan("medium")).toBe(1);
+        expect(footprintToGridSpan("narrow")).toBe(1);
+    });
+
+    it("falls back to the default footprint for unconfigured cards", () => {
+        expect(system5FootprintForCard("notes")).toBe("medium");
     });
 });
 

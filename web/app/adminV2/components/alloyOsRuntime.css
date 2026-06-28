@@ -1446,9 +1446,27 @@ html[data-alloy-os-runtime="on"]
 .alloy-os-focus-panel-grid {
   display: grid;
   grid-template-columns: repeat(var(--alloy-os-fp-cols, 2), minmax(0, 1fr));
-  gap: 12px;
-  padding: 12px;
+  gap: 14px;
+  padding: 14px;
   align-items: start;
+}
+
+/*
+ * Overview (Summary) row rhythm — cards in the same grid row equalize height so
+ * the surface reads as calm aligned rows, not a masonry / Pinterest stagger.
+ * Work mode keeps `start` alignment (it evolves on its own cadence).
+ */
+.alloy-os-focus-panel-grid:not(.alloy-os-focus-panel-grid--work) {
+  align-items: stretch;
+}
+.alloy-os-focus-panel-grid:not(.alloy-os-focus-panel-grid--work)
+  .alloy-os-focus-panel-grid__cell {
+  display: flex;
+}
+.alloy-os-focus-panel-grid:not(.alloy-os-focus-panel-grid--work)
+  .alloy-os-focus-panel-grid__cell
+  > * {
+  width: 100%;
 }
 
 /* Universal Card — tier hierarchy + density (white-on-white, quiet borders) */

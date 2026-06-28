@@ -1,0 +1,22 @@
+{
+  "recordUrl": "http://127.0.0.1:3000/workspace/work-unit/lifecycle-lead/24d6b7c8-09d4-4c6b-b1f4-3dd8da4e4abc",
+  "slug": "lifecycle-lead",
+  "cells": [
+    {
+      "key": "household",
+      "span": "2"
+    },
+    {
+      "key": "readiness_kpi",
+      "span": "1"
+    },
+    {
+      "key": "children",
+      "span": "2"
+    },
+    {
+      "key": "current_work",
+      "span": "1"
+    }
+  ]
+}

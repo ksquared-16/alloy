@@ -22,7 +22,8 @@ describe("submitAddPersonFromDrawer", () => {
             ok: true,
             json: async () => ({
                 ok: true,
-                execution_result: { person_id: "person-9", opportunity_person_id: "op-1" },
+                data: { execution_result: { person_id: "person-9", opportunity_person_id: "op-1" } },
+                correlation_id: "cid-test",
             }),
         });
 
@@ -52,7 +53,11 @@ describe("submitAddPersonFromDrawer", () => {
     it("throws server error message", async () => {
         const fetchFn = vi.fn().mockResolvedValue({
             ok: false,
-            json: async () => ({ ok: false, error: "Not found" }),
+            json: async () => ({
+                ok: false,
+                error: { code: "NOT_FOUND", message: "Not found" },
+                correlation_id: "cid-test",
+            }),
         });
 
         await expect(

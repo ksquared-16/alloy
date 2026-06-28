@@ -2,7 +2,7 @@
 
 **Generated:** 2026-06-28 by `scripts/generate-api-inventory.mjs`. Do not edit by hand — re-run the script.
 
-**Routes:** 458 `route.ts` handlers under `web/app/api/**`.
+**Routes:** 460 `route.ts` handlers under `web/app/api/**`.
 
 This is a static, heuristic inventory. Columns are extracted from source text:
 
@@ -16,7 +16,7 @@ This is a static, heuristic inventory. Columns are extracted from source text:
 
 | Domain | Routes |
 |---|---|
-| [Admin / Configuration](admin-configuration-api.md) | 74 |
+| [Admin / Configuration](admin-configuration-api.md) | 76 |
 | [Workspace / Queue / Focus Panel](workspace-api.md) | 48 |
 | [Entity / Record / Resolver](entity-record-api.md) | 126 |
 | [Business Process / Status / Lifecycle](business-process-api.md) | 45 |
@@ -25,11 +25,11 @@ This is a static, heuristic inventory. Columns are extracted from source text:
 | [Communications](communications-api.md) | 39 |
 | [AI / BOS](ai-bos-api.md) | 23 |
 | [Internal / System / Diagnostics](internal-system-api.md) | 26 |
-| **Total** | **458** |
+| **Total** | **460** |
 
 | Stability | Routes |
 |---|---|
-| admin-only | 407 |
+| admin-only | 409 |
 | experimental | 8 |
 | internal | 13 |
 | public/tokenized | 27 |
@@ -44,6 +44,8 @@ Detailed conventions: [`admin-configuration-api.md`](admin-configuration-api.md)
 | GET | `/api/admin/activity` | admin-context, admin-or-ops | manual | y | — | y | admin-only | workflow_events |
 | GET POST | `/api/admin/addons` | admin-context | manual | y | y | — | admin-only | pricing_addons, verticals |
 | DELETE PATCH | `/api/admin/addons/[id]` | admin-context | manual | y | y | — | admin-only | pricing_addons |
+| GET POST | `/api/admin/childcare-attendance` | admin-context, admin-or-ops | manual | y | — | — | admin-only | — |
+| GET | `/api/admin/childcare-attendance/expected-vs-actual` | admin-context | manual | y | — | — | admin-only | — |
 | PUT | `/api/admin/config/field-definition-visibility` | admin-context | manual | y | — | — | admin-only | field_definitions |
 | GET | `/api/admin/config/layout-integrity` | admin-context | schema | y | — | — | admin-only | field_definitions, field_section_definitions, option_set_items, option_sets |
 | PUT | `/api/admin/config/record-overview-layout` | admin-context | manual | y | — | — | admin-only | — |

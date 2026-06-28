@@ -49,6 +49,8 @@ Every card classifies information into one of four levels, which prevents field 
 
 ## Operational Weight
 
+> The tier below is the **priority** dimension (how soon the operator must engage → reading **order**). It is distinct from **Composition Weight** (Heavy / Medium / Light = how much **area/emphasis** a card needs → **size**). Both feed the layout engine — see [`card-composition-system.md`](./card-composition-system.md).
+
 Cards have **operational** weight (not visual weight), which influences placement and density:
 
 | Tier | Meaning | Examples |

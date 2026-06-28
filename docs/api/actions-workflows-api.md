@@ -23,10 +23,12 @@ Source: `web/app/api/admin/actions/execute/route.ts`.
 
 - **Purpose:** Run a resolved action definition (v1).
 - **Auth:** `requireAdminOrOps` → `getAdminContextCached` → `getAdminAccessContextCached`.
-- **Body:** `{ action_key, entity_type, entity_id, context?: { surface?, department_id?, work_unit_id?, section_key? }, payload? }`. `create_lead` is special-cased (no `entity_id` required; uses a constant). Missing required fields → `400 { error }`.
-- **Side effects:** Delegates to `executeAdminAction(supabase, { orgId, userId, accessScope }, …)`. On success, busts the action resolver cache via `revalidateTag(adminActionsOrgTag(orgId))` so headers/queue rows refresh.
-- **Response:** Success `{ ok: true, data: { execution_result, affected_id? }, correlation_id, execution_result, affected_id? }`. Failure `{ ok: false, correlation_id, error, execution_result: null, completion_requirements?, effective_requirements?, action_preflight? }` with the result's HTTP status.
-- **Phase 2 (additive):** Success now also carries the canonical `data` plus the `x-correlation-id` header; the legacy top-level fields are preserved because ~15 client call sites read them. The **failure** envelope is intentionally still legacy (its `error` is a string, which collides with the canonical `error` object) — full cutover is the recommended next batch. See [`api-response-contract.md`](api-response-contract.md) §5.
+- **Body:** `{ action_key, entity_type, entity_id, context?: { surface?, department_id?, work_unit_id?, section_key? }, payload? }`. `create_lead` is special-cased (no `entity_id` required; uses a constant). Missing required fields → `400` `apiError("BAD_REQUEST", …)`.
+- **Side effects:** Delegates to `executeAdminAction(supabase, { orgId, userId, accessScope }, …)` (or `runRegisteredAction` for registered keys). On success, busts the action resolver cache via `revalidateTag(adminActionsOrgTag(orgId))` so headers/queue rows refresh.
+- **Response (Phase 2B — fully migrated):**
+  - **Success:** `{ ok: true, data: { execution_result, affected_id? }, correlation_id }` plus the `x-correlation-id` header. The payload lives **only** under `data` (the legacy top-level mirror was removed once all consumers migrated).
+  - **Failure:** `{ ok: false, error: { code, message, details? }, correlation_id }` with the result's preserved HTTP status. Unmet completion/preflight requirements use the stable `ACTION_BLOCKED` code and carry `completion_requirements` / `effective_requirements` / `action_preflight` / `blockers` under `error.details`; other failures derive their code from the status. Auth-gate responses (401/403) remain owned by the shared `requireAdminOrOps` / `adminContextFailureResponse` helpers.
+- **Consumers:** All 15 fetch call sites unwrap intentionally — `json.data?.execution_result` on success, `json.error?.message` on failure, and `json.error?.details?.{action_preflight,completion_requirements}` for blocked-action surfaces. See [`actions-execute-envelope-audit.md`](actions-execute-envelope-audit.md) and [`api-response-contract.md`](api-response-contract.md) §5.
 
 ### Resolve / preflight / catalog
 
@@ -78,7 +80,7 @@ These are **public/tokenized** — no admin session. They validate the token and
 ## Validation, envelopes & side effects
 
 - **Validation:** Manual body checks with `400` on most routes; `preflight` now uses a **zod** schema (`apiZodError`) as the contract model. Execution validates `action_key`/`entity_type`/`entity_id` and computes completion/effective requirements.
-- **Envelopes:** `preflight` and `inventory` use the standard `{ ok, data, correlation_id }` contract; `execute` is additively migrated (success); catalogs/lists still use `{ <name>: [...] }`. See [`api-response-contract.md`](api-response-contract.md).
+- **Envelopes:** `preflight`, `inventory`, and `execute` use the standard `{ ok, data, correlation_id }` / `{ ok, error, correlation_id }` contract (`execute` is fully migrated as of Phase 2B); other catalogs/lists still use `{ <name>: [...] }`. See [`api-response-contract.md`](api-response-contract.md).
 - **Side effects:** This is the platform's **side-effect hub** — workflow events, cache revalidation, and downstream effects all originate here. Meaningful effects must flow through these paths, not ad hoc writes.
 
 Source root: `web/app/api/admin/{actions,action-definitions,action-placements,record-actions,relationship-actions,workflows,workflow-runs,workflow-events}`, `web/app/api/{action,action-links}`.

@@ -48,7 +48,7 @@ describe("deriveOpportunityFocusPanelPresentation", () => {
         },
     });
 
-    it("summary grid leads with executive briefing cards", () => {
+    it("summary overview composes the Core Four in calm two-row rhythm", () => {
         const { grid, cards } = deriveOpportunityFocusPanelPresentation({
             mode: "summary",
             displayVm: baseVm,
@@ -68,8 +68,13 @@ describe("deriveOpportunityFocusPanelPresentation", () => {
         });
 
         const firstRowKeys = grid.rows[0]?.cells.map((c) => c.key) ?? [];
-        expect(firstRowKeys).toEqual(["attention", "current_mission", "current_work", "health"]);
+        const secondRowKeys = grid.rows[1]?.cells.map((c) => c.key) ?? [];
+        // Core Four validation pass: Overview pairs wide identity/collection cards
+        // with their adjacent assessment/work card.
+        expect(firstRowKeys).toEqual(["household", "readiness_kpi"]);
+        expect(secondRowKeys).toEqual(["children", "current_work"]);
 
+        // Card models for suppressed cards are still built (used by Work / catalog).
         expect(cards.get("attention")?.insight).toBe("Missing immunizations");
         expect(cards.get("health")?.insight).toBe("2 blockers before tour");
         expect(cards.get("readiness_kpi")?.insight).toBe("Missing immunizations");

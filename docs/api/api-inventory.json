@@ -258,7 +258,7 @@
     "rpcs": [],
     "domain": "Actions / Workflows",
     "stability": "admin-only",
-    "lines": 169
+    "lines": 175
   },
   {
     "apiPath": "/api/admin/actions/inventory",
@@ -1301,6 +1301,46 @@
     "domain": "Entity / Record / Resolver",
     "stability": "admin-only",
     "lines": 94
+  },
+  {
+    "apiPath": "/api/admin/childcare-attendance/expected-vs-actual",
+    "file": "web/app/api/admin/childcare-attendance/expected-vs-actual/route.ts",
+    "methods": [
+      "GET"
+    ],
+    "auth": [
+      "admin-context"
+    ],
+    "validation": "manual",
+    "serviceRole": true,
+    "writes": false,
+    "events": false,
+    "tables": [],
+    "rpcs": [],
+    "domain": "Admin / Configuration",
+    "stability": "admin-only",
+    "lines": 78
+  },
+  {
+    "apiPath": "/api/admin/childcare-attendance",
+    "file": "web/app/api/admin/childcare-attendance/route.ts",
+    "methods": [
+      "GET",
+      "POST"
+    ],
+    "auth": [
+      "admin-context",
+      "admin-or-ops"
+    ],
+    "validation": "manual",
+    "serviceRole": true,
+    "writes": false,
+    "events": false,
+    "tables": [],
+    "rpcs": [],
+    "domain": "Admin / Configuration",
+    "stability": "admin-only",
+    "lines": 103
   },
   {
     "apiPath": "/api/admin/communication-scheduled-sends/[id]",

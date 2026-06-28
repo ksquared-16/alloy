@@ -4,6 +4,63 @@
  */
 
 import type { FocusPanelCardKey, FocusPanelCardRole, FocusPanelCardTier } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardModel";
+import type { FocusPanelCardSpan } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardGrid";
+
+/**
+ * Card footprint — the *default width intent* of an archetype on the Overview
+ * grid. Composition no longer assumes every card is the same width.
+ *
+ * Vocabulary (design intent):
+ *   narrow  — a single answer / metric (Current Work, Tour)
+ *   medium  — a small assessment with supporting evidence (Readiness, Billing)
+ *   wide    — identity / collection that needs two columns (Household, Children, Communications)
+ *   full    — spans the whole row (Timeline, Activity)
+ *
+ * PROTOTYPE NOTE: the active responsive grid only expresses three integer
+ * widths (`1`, `2`, `"row"`). `narrow` and `medium` therefore both resolve to a
+ * single column today. A future finer column base (a 6-unit grid) would let
+ * `medium` sit visually between `narrow` and `wide`. See
+ * docs/sprints/06_2026/focus-panel-composition-review for the full recommendation.
+ */
+export type FocusPanelCardFootprint = "narrow" | "medium" | "wide" | "full";
+
+export const SYSTEM5_CARD_FOOTPRINT: Partial<Record<FocusPanelCardKey, FocusPanelCardFootprint>> = {
+    household: "wide",
+    children: "wide",
+    current_work: "narrow",
+    readiness_kpi: "medium",
+    tour_summary: "narrow",
+    communications: "wide",
+    documents: "wide",
+    timeline: "full",
+    attention: "narrow",
+    current_mission: "medium",
+    health: "medium",
+};
+
+export const SYSTEM5_DEFAULT_FOOTPRINT: FocusPanelCardFootprint = "medium";
+
+/** Default footprint for an archetype card (Experience Builder may override later). */
+export function system5FootprintForCard(key: FocusPanelCardKey): FocusPanelCardFootprint {
+    return SYSTEM5_CARD_FOOTPRINT[key] ?? SYSTEM5_DEFAULT_FOOTPRINT;
+}
+
+/**
+ * Map a footprint to the current grid span vocabulary.
+ * `narrow`/`medium` collapse to a single column until the finer column base lands.
+ */
+export function footprintToGridSpan(footprint: FocusPanelCardFootprint): FocusPanelCardSpan {
+    switch (footprint) {
+        case "full":
+            return "row";
+        case "wide":
+            return 2;
+        case "medium":
+        case "narrow":
+        default:
+            return 1;
+    }
+}
 
 /** Lucide icon names — resolved in UniversalCardIcon. */
 export const SYSTEM5_CARD_ICON: Partial<Record<FocusPanelCardKey, string>> = {

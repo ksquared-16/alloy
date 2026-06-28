@@ -68,20 +68,22 @@ export async function submitAddPersonFromDrawer(input: SubmitAddPersonInput): Pr
 
     const json = (await res.json().catch(() => ({}))) as {
         ok?: boolean;
-        error?: string;
-        execution_result?: {
-            person_id?: string;
-            customer_person_id?: string;
-            opportunity_person_id?: string;
-            existed?: boolean;
+        data?: {
+            execution_result?: {
+                person_id?: string;
+                customer_person_id?: string;
+                opportunity_person_id?: string;
+                existed?: boolean;
+            };
         };
+        error?: { message?: string };
     };
 
-    if (!res.ok || !json.ok) {
-        throw new Error(json.error ?? "Failed to add person.");
+    if (!res.ok || json.ok === false) {
+        throw new Error(json.error?.message ?? "Failed to add person.");
     }
 
-    const er = json.execution_result;
+    const er = json.data?.execution_result;
     const personId = er?.person_id?.trim();
     if (!personId) {
         throw new Error("Person was saved but the response did not include a person id.");
