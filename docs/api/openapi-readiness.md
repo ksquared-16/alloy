@@ -5,6 +5,10 @@
 already completed (Actions → Analytics Metrics → Entity Read) and defines the exact
 readiness bar a route family must clear before it enters an OpenAPI spec.
 
+> **The v0 spec now exists:** [`openapi/alloy-api.v0.yaml`](openapi/alloy-api.v0.yaml) (see
+> [`openapi/README.md`](openapi/README.md)). It documents exactly the gate-passing families
+> listed in §4 below. Validate with `node scripts/validate-openapi.mjs`.
+
 > **One-line policy:** OpenAPI is generated **only** for routes that already emit the
 > standard `{ ok, data, correlation_id }` / `{ ok, error: { code, message, details? }, correlation_id }`
 > envelope, have their active consumers unwrapping it, and have contract tests. Everything

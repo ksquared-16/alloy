@@ -292,6 +292,11 @@ it must include, as shared reusable components:
 families being specified. A spec that omits pagination/sync/freshness would misrepresent how the
 data actually behaves.
 
+> The internal **OpenAPI v0** spec exists at [`openapi/alloy-api.v0.yaml`](openapi/alloy-api.v0.yaml)
+> (see [`openapi/README.md`](openapi/README.md)). It defines `PageInfo`, `SyncMetadata`, and
+> `FreshnessClass` as shared components and annotates each operation with its freshness/SLO class,
+> even though the current bounded reference routes do not yet emit `page_info`.
+
 ---
 
 ## Related

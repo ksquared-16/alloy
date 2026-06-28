@@ -222,7 +222,8 @@ OpenAPI is generated **only** for route families that pass the readiness gate
 
 The path from contract to client, each step gated on the previous:
 
-1. **OpenAPI v0** for the gate-passing families (§8).
+1. **OpenAPI v0** for the gate-passing families (§8). _Done — the spec exists at
+   [`openapi/alloy-api.v0.yaml`](openapi/alloy-api.v0.yaml); see [`openapi/README.md`](openapi/README.md)._
 2. **Generated internal TypeScript client** from `v0` — typed methods over the normalized
    surface, used first by Alloy's own code and agents.
 3. **Typed request/response contracts** shared between client and tests so the envelope is

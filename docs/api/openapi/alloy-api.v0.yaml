@@ -1,0 +1,982 @@
+openapi: 3.1.0
+
+info:
+  title: Alloy Internal API
+  version: 0.0.0
+  x-spec-status: internal-v0
+  description: >
+    **Internal OpenAPI v0** for Alloy's normalized API surface. This is an internal
+    contract artifact for humans, Cursor/agents, tests, and future SDK generation — it is
+    **not** a public developer portal and is intentionally incomplete.
+
+
+    Only route families that pass the readiness gate are documented here (Actions,
+    Analytics Metrics, Entity Read, and the normalized reference-data config families).
+    See `docs/api/openapi-readiness.md` for the gate and `docs/api/openapi/README.md` for
+    framing.
+
+
+    Every response uses Alloy's standard envelope:
+    `{ ok: true, data, correlation_id }` on success and
+    `{ ok: false, error: { code, message, details? }, correlation_id }` on failure.
+  contact:
+    name: Alloy API docs
+    url: https://github.com/ksquared-16/alloy/tree/staging/docs/api
+
+servers:
+  - url: /
+    description: Same-origin Alloy app (internal).
+
+tags:
+  - name: Actions
+    description: Action runtime — inventory, preflight, execute.
+  - name: Analytics Metrics
+    description: Metric definitions and evaluation (preview, snapshot, trend, copy).
+  - name: Entity Read
+    description: Canonical single-record read behind drawers / focus panels.
+  - name: Reference Data
+    description: Configurable person-model reference data (role types, relationship types).
+
+# Internal surface: admin session cookie + org context resolved server-side.
+# Org scoping is enforced by the handler (service-role client bypasses RLS).
+security:
+  - adminSession: []
+
+paths:
+  /api/admin/actions/inventory:
+    get:
+      tags: [Actions]
+      operationId: getActionsInventory
+      summary: Read-only action registry inventory (definitions + placements).
+      description: |
+        Returns the resolved action definitions and placements visible to the caller's org.
+        **Freshness:** near-real-time. **SLO class:** simple list read.
+      parameters:
+        - { $ref: '#/components/parameters/CorrelationIdHeader' }
+        - name: surface
+          in: query
+          required: false
+          schema: { type: string }
+          description: Optional placement surface filter.
+        - name: entity_type
+          in: query
+          required: false
+          schema: { type: string }
+          description: Optional entity-type filter.
+      responses:
+        '200':
+          description: Inventory items.
+          headers:
+            x-correlation-id: { $ref: '#/components/headers/CorrelationId' }
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiSuccess'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        required: [items]
+                        properties:
+                          items:
+                            type: array
+                            items: { $ref: '#/components/schemas/ActionInventoryRow' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /api/admin/actions/preflight:
+    post:
+      tags: [Actions]
+      operationId: preflightAction
+      summary: Evaluate action execute requirements without mutating.
+      description: |
+        Runs requirement/preflight evaluation for an action against an entity and returns
+        whether it is executable. Does not mutate. **Freshness:** real-time.
+        **SLO class:** action execution preflight. Only `opportunity` entities are
+        supported in v0.
+      parameters:
+        - { $ref: '#/components/parameters/CorrelationIdHeader' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ActionPreflightRequest' }
+      responses:
+        '200':
+          description: Preflight evaluation.
+          headers:
+            x-correlation-id: { $ref: '#/components/headers/CorrelationId' }
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiSuccess'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/ActionPreflightResult' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+
+  /api/admin/actions/execute:
+    post:
+      tags: [Actions]
+      operationId: executeAction
+      summary: Run a resolved action definition.
+      description: |
+        Executes an action against an entity through the canonical action runtime.
+        **Freshness:** real-time (the call performs the mutation). **SLO class:** action
+        execution. Blocked actions (unmet completion/preflight requirements) return the
+        stable `ACTION_BLOCKED` code with context under `error.details`.
+      parameters:
+        - { $ref: '#/components/parameters/CorrelationIdHeader' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ActionExecuteRequest' }
+      responses:
+        '200':
+          description: Execution result.
+          headers:
+            x-correlation-id: { $ref: '#/components/headers/CorrelationId' }
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiSuccess'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/ActionExecuteResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422':
+          description: >
+            Action blocked or validation failure. Blocked actions use the `ACTION_BLOCKED`
+            code with `error.details` carrying completion/preflight context.
+          headers:
+            x-correlation-id: { $ref: '#/components/headers/CorrelationId' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiFailure' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /api/admin/analytics/metrics:
+    get:
+      tags: [Analytics Metrics]
+      operationId: listMetrics
+      summary: List metric definitions for the org (with source adapters).
+      description: '**Freshness:** near-real-time. **SLO class:** simple list read.'
+      parameters:
+        - { $ref: '#/components/parameters/CorrelationIdHeader' }
+      responses:
+        '200':
+          description: Metric definitions and available source adapters.
+          headers:
+            x-correlation-id: { $ref: '#/components/headers/CorrelationId' }
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiSuccess'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        required: [items, adapters]
+                        properties:
+                          items:
+                            type: array
+                            items: { $ref: '#/components/schemas/MetricDefinition' }
+                          adapters:
+                            type: array
+                            items: { type: object, additionalProperties: true }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    post:
+      tags: [Analytics Metrics]
+      operationId: createMetric
+      summary: Create a metric definition.
+      description: '**Freshness:** real-time. Validation failures return `VALIDATION_ERROR`.'
+      parameters:
+        - { $ref: '#/components/parameters/CorrelationIdHeader' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/MetricDefinitionCreate' }
+      responses:
+        '201':
+          description: Created metric definition.
+          headers:
+            x-correlation-id: { $ref: '#/components/headers/CorrelationId' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MetricItemResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+
+  /api/admin/analytics/metrics/{id}:
+    parameters:
+      - { $ref: '#/components/parameters/PathId' }
+    get:
+      tags: [Analytics Metrics]
+      operationId: getMetric
+      summary: Read a single metric definition.
+      description: '**Freshness:** near-real-time. **SLO class:** interactive record read.'
+      parameters:
+        - { $ref: '#/components/parameters/CorrelationIdHeader' }
+      responses:
+        '200':
+          description: Metric definition.
+          headers:
+            x-correlation-id: { $ref: '#/components/headers/CorrelationId' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MetricItemResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    patch:
+      tags: [Analytics Metrics]
+      operationId: updateMetric
+      summary: Update a metric definition.
+      description: >
+        Global (org-less) metric templates are read-only and return `FORBIDDEN`.
+        **Freshness:** real-time.
+      parameters:
+        - { $ref: '#/components/parameters/CorrelationIdHeader' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/MetricDefinitionUpdate' }
+      responses:
+        '200':
+          description: Updated metric definition.
+          headers:
+            x-correlation-id: { $ref: '#/components/headers/CorrelationId' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MetricItemResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+
+  /api/admin/analytics/metrics/{id}/copy:
+    parameters:
+      - { $ref: '#/components/parameters/PathId' }
+    post:
+      tags: [Analytics Metrics]
+      operationId: copyMetric
+      summary: Copy a metric definition into the caller's org.
+      parameters:
+        - { $ref: '#/components/parameters/CorrelationIdHeader' }
+      responses:
+        '200':
+          description: Copied metric.
+          headers:
+            x-correlation-id: { $ref: '#/components/headers/CorrelationId' }
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiSuccess'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        required: [item, copied]
+                        properties:
+                          item: { $ref: '#/components/schemas/MetricDefinition' }
+                          copied: { type: boolean }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /api/admin/analytics/metrics/{id}/preview:
+    parameters:
+      - { $ref: '#/components/parameters/PathId' }
+    post:
+      tags: [Analytics Metrics]
+      operationId: previewMetric
+      summary: Evaluate a metric without persisting a snapshot.
+      description: '**Freshness:** near-real-time.'
+      parameters:
+        - { $ref: '#/components/parameters/CorrelationIdHeader' }
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { type: object, additionalProperties: true }
+      responses:
+        '200':
+          description: Evaluation result.
+          headers:
+            x-correlation-id: { $ref: '#/components/headers/CorrelationId' }
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiSuccess'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        required: [evaluation]
+                        properties:
+                          evaluation: { $ref: '#/components/schemas/MetricEvaluation' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+
+  /api/admin/analytics/metrics/{id}/snapshot:
+    parameters:
+      - { $ref: '#/components/parameters/PathId' }
+    post:
+      tags: [Analytics Metrics]
+      operationId: snapshotMetric
+      summary: Evaluate a metric and persist a snapshot.
+      parameters:
+        - { $ref: '#/components/parameters/CorrelationIdHeader' }
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { type: object, additionalProperties: true }
+      responses:
+        '200':
+          description: Evaluation plus persisted snapshot id.
+          headers:
+            x-correlation-id: { $ref: '#/components/headers/CorrelationId' }
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiSuccess'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        required: [evaluation, snapshot_id]
+                        properties:
+                          evaluation: { $ref: '#/components/schemas/MetricEvaluation' }
+                          snapshot_id: { type: string }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /api/admin/analytics/metrics/{id}/trend:
+    parameters:
+      - { $ref: '#/components/parameters/PathId' }
+    get:
+      tags: [Analytics Metrics]
+      operationId: getMetricTrend
+      summary: Time-series trend for a metric with comparison.
+      description: '**Freshness:** near-real-time.'
+      parameters:
+        - { $ref: '#/components/parameters/CorrelationIdHeader' }
+      responses:
+        '200':
+          description: Trend series and comparison.
+          headers:
+            x-correlation-id: { $ref: '#/components/headers/CorrelationId' }
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiSuccess'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        required: [series, comparison]
+                        properties:
+                          series:
+                            type: array
+                            items: { type: object, additionalProperties: true }
+                          comparison: { type: object, additionalProperties: true }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+
+  /api/admin/entity/{type}/{id}:
+    parameters:
+      - name: type
+        in: path
+        required: true
+        description: Entity type. One of the allowed types (see schema enum).
+        schema: { $ref: '#/components/schemas/EntityType' }
+      - { $ref: '#/components/parameters/PathId' }
+    get:
+      tags: [Entity Read]
+      operationId: getEntityRecord
+      summary: Canonical single-record read behind drawers / focus panels.
+      description: |
+        Returns the composed record for one entity, wrapped as `data.entity`. The entity
+        payload shape is preserved verbatim (including `_`-prefixed display fields and, for
+        a new-record sentinel `id = "new"`, `{ _create: true }`). Opportunity surfaces add
+        `X-Alloy-*` performance headers. **Freshness:** real-time. **SLO class:**
+        interactive record read.
+      parameters:
+        - { $ref: '#/components/parameters/CorrelationIdHeader' }
+        - name: surface
+          in: query
+          required: false
+          schema: { type: string }
+          description: Optional record surface (default `full` for RRS-backed types).
+      responses:
+        '200':
+          description: The composed entity record.
+          headers:
+            x-correlation-id: { $ref: '#/components/headers/CorrelationId' }
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiSuccess'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        required: [entity]
+                        properties:
+                          entity: { $ref: '#/components/schemas/EntityRecord' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /api/admin/customer-person-role-types:
+    get:
+      tags: [Reference Data]
+      operationId: listCustomerPersonRoleTypes
+      summary: List customer-person role types for the org.
+      description: |
+        Industry-driven reference data. **Freshness:** archived/static (config catalog).
+        **SLO class:** simple list read.
+      parameters:
+        - { $ref: '#/components/parameters/CorrelationIdHeader' }
+        - { $ref: '#/components/parameters/RefDataAll' }
+        - { $ref: '#/components/parameters/RefDataIndustryId' }
+        - { $ref: '#/components/parameters/RefDataVerticalId' }
+      responses:
+        '200': { $ref: '#/components/responses/ReferenceDataList' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/InternalError' }
+    post:
+      tags: [Reference Data]
+      operationId: createCustomerPersonRoleType
+      summary: Create a customer-person role type (admin only).
+      parameters:
+        - { $ref: '#/components/parameters/CorrelationIdHeader' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ReferenceDataCreate' }
+      responses:
+        '200': { $ref: '#/components/responses/ReferenceDataItem' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /api/admin/customer-person-role-types/{id}:
+    parameters:
+      - { $ref: '#/components/parameters/PathId' }
+    patch:
+      tags: [Reference Data]
+      operationId: updateCustomerPersonRoleType
+      summary: Update a customer-person role type (admin only).
+      parameters:
+        - { $ref: '#/components/parameters/CorrelationIdHeader' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ReferenceDataUpdate' }
+      responses:
+        '200': { $ref: '#/components/responses/ReferenceDataItem' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    delete:
+      tags: [Reference Data]
+      operationId: deleteCustomerPersonRoleType
+      summary: Not supported — deactivate via PATCH `is_active=false`.
+      description: Always returns `NOT_IMPLEMENTED` (405). Records may reference the key.
+      responses:
+        '405': { $ref: '#/components/responses/NotImplemented' }
+
+  /api/admin/person-relationship-type-settings:
+    get:
+      tags: [Reference Data]
+      operationId: listPersonRelationshipTypeSettings
+      summary: List person relationship type settings for the org.
+      description: |
+        Industry-driven reference data. **Freshness:** archived/static (config catalog).
+        **SLO class:** simple list read.
+      parameters:
+        - { $ref: '#/components/parameters/CorrelationIdHeader' }
+        - { $ref: '#/components/parameters/RefDataAll' }
+        - { $ref: '#/components/parameters/RefDataIndustryId' }
+        - { $ref: '#/components/parameters/RefDataVerticalId' }
+      responses:
+        '200': { $ref: '#/components/responses/ReferenceDataList' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/InternalError' }
+    post:
+      tags: [Reference Data]
+      operationId: createPersonRelationshipTypeSetting
+      summary: Create a person relationship type setting (admin only).
+      parameters:
+        - { $ref: '#/components/parameters/CorrelationIdHeader' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ReferenceDataCreate' }
+      responses:
+        '200': { $ref: '#/components/responses/ReferenceDataItem' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /api/admin/person-relationship-type-settings/{id}:
+    parameters:
+      - { $ref: '#/components/parameters/PathId' }
+    patch:
+      tags: [Reference Data]
+      operationId: updatePersonRelationshipTypeSetting
+      summary: Update a person relationship type setting (admin only).
+      parameters:
+        - { $ref: '#/components/parameters/CorrelationIdHeader' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ReferenceDataUpdate' }
+      responses:
+        '200': { $ref: '#/components/responses/ReferenceDataItem' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    delete:
+      tags: [Reference Data]
+      operationId: deletePersonRelationshipTypeSetting
+      summary: Not supported — deactivate via PATCH `is_active=false`.
+      description: Always returns `NOT_IMPLEMENTED` (405). Records may reference the key.
+      responses:
+        '405': { $ref: '#/components/responses/NotImplemented' }
+
+components:
+  securitySchemes:
+    adminSession:
+      type: apiKey
+      in: cookie
+      name: alloy-admin-session
+      description: >
+        Authenticated Alloy admin/ops session. Org + scope context is resolved server-side;
+        out-of-scope reads return 404 (deny-by-default). This internal surface is not for
+        unauthenticated/tokenized callers.
+
+  parameters:
+    CorrelationIdHeader:
+      name: x-correlation-id
+      in: header
+      required: false
+      schema: { type: string }
+      description: >
+        Optional client-supplied correlation id. Echoed back in the body (`correlation_id`)
+        and the `x-correlation-id` response header; generated when absent.
+    PathId:
+      name: id
+      in: path
+      required: true
+      schema: { type: string }
+      description: Resource id.
+    RefDataAll:
+      name: all
+      in: query
+      required: false
+      schema: { type: string, enum: ['true', '1'] }
+      description: Return all configured rows (skip industry/active resolution).
+    RefDataIndustryId:
+      name: industry_id
+      in: query
+      required: false
+      schema: { type: string }
+      description: Override the org industry used to resolve options.
+    RefDataVerticalId:
+      name: vertical_id
+      in: query
+      required: false
+      schema: { type: string }
+      description: Secondary vertical scope for option resolution.
+
+  headers:
+    CorrelationId:
+      description: Correlation id for this response.
+      schema: { type: string }
+
+  responses:
+    BadRequest:
+      description: Malformed/invalid request.
+      headers: { x-correlation-id: { $ref: '#/components/headers/CorrelationId' } }
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ApiFailure' }
+    Unauthorized:
+      description: Missing/invalid auth.
+      headers: { x-correlation-id: { $ref: '#/components/headers/CorrelationId' } }
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ApiFailure' }
+    Forbidden:
+      description: Authenticated but not permitted (or out-of-scope).
+      headers: { x-correlation-id: { $ref: '#/components/headers/CorrelationId' } }
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ApiFailure' }
+    NotFound:
+      description: Resource not found / not readable in scope.
+      headers: { x-correlation-id: { $ref: '#/components/headers/CorrelationId' } }
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ApiFailure' }
+    Conflict:
+      description: State conflict (e.g. duplicate key).
+      headers: { x-correlation-id: { $ref: '#/components/headers/CorrelationId' } }
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ApiFailure' }
+    ValidationError:
+      description: Schema/validation failure (`VALIDATION_ERROR`; zod issues under `details`).
+      headers: { x-correlation-id: { $ref: '#/components/headers/CorrelationId' } }
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ApiFailure' }
+    NotImplemented:
+      description: Endpoint not implemented.
+      headers: { x-correlation-id: { $ref: '#/components/headers/CorrelationId' } }
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ApiFailure' }
+    InternalError:
+      description: Unexpected server error.
+      headers: { x-correlation-id: { $ref: '#/components/headers/CorrelationId' } }
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ApiFailure' }
+    ReferenceDataList:
+      description: Reference-data items.
+      headers: { x-correlation-id: { $ref: '#/components/headers/CorrelationId' } }
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/ApiSuccess'
+              - type: object
+                properties:
+                  data:
+                    type: object
+                    required: [items]
+                    properties:
+                      items:
+                        type: array
+                        items: { $ref: '#/components/schemas/ReferenceDataItem' }
+    ReferenceDataItem:
+      description: A single reference-data item.
+      headers: { x-correlation-id: { $ref: '#/components/headers/CorrelationId' } }
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/ApiSuccess'
+              - type: object
+                properties:
+                  data:
+                    type: object
+                    required: [item]
+                    properties:
+                      item: { $ref: '#/components/schemas/ReferenceDataItem' }
+
+  schemas:
+    # ---- Envelope primitives ----
+    CorrelationId:
+      type: string
+      description: >
+        Request/response correlation id. Always present on normalized routes, in the body
+        (`correlation_id`) and the `x-correlation-id` response header.
+      example: c-1a2b3c4d
+
+    ApiError:
+      type: object
+      required: [code, message]
+      properties:
+        code:
+          type: string
+          description: Stable, machine-readable SCREAMING_SNAKE_CASE code. Branch on this.
+          examples: [BAD_REQUEST, VALIDATION_ERROR, FORBIDDEN, NOT_FOUND, CONFLICT, ACTION_BLOCKED, NOT_IMPLEMENTED, INTERNAL]
+        message:
+          type: string
+          description: Human-facing message. May change; never branch on it.
+        details:
+          description: Optional sanitized structured context (e.g. zod issues, blocked-action requirements).
+
+    ApiSuccess:
+      type: object
+      required: [ok, data, correlation_id]
+      properties:
+        ok: { type: boolean, const: true }
+        data:
+          description: Operation payload. Specific operations narrow this object.
+          type: object
+        correlation_id: { $ref: '#/components/schemas/CorrelationId' }
+
+    ApiFailure:
+      type: object
+      required: [ok, error, correlation_id]
+      properties:
+        ok: { type: boolean, const: false }
+        error: { $ref: '#/components/schemas/ApiError' }
+        correlation_id: { $ref: '#/components/schemas/CorrelationId' }
+
+    # ---- Data-access doctrine primitives (forward-looking; see api-data-access-performance.md) ----
+    FreshnessClass:
+      type: string
+      description: Declared freshness expectation for a read route family.
+      enum: [real-time, near-real-time, batch-tolerant, archived]
+
+    PageInfo:
+      type: object
+      description: >
+        Standard pagination block for list endpoints (cursor-preferred). Current v0 list/
+        reference routes are bounded archived/static catalogs and do not yet emit this;
+        new or large list families adopt it.
+      required: [has_more, limit]
+      properties:
+        next_cursor:
+          type: string
+          description: Opaque cursor for the next page; present iff has_more is true.
+        has_more: { type: boolean }
+        limit: { type: integer }
+
+    SyncMetadata:
+      type: object
+      description: Incremental-sync resume metadata (forward-looking).
+      required: [cursor, high_watermark]
+      properties:
+        cursor: { type: string, description: Opaque resume token for the next sync call. }
+        high_watermark: { type: string, description: Stable monotonic resume point (timestamp/sequence). }
+
+    # ---- Actions ----
+    ActionInventoryRow:
+      type: object
+      description: One action definition paired with a placement.
+      properties:
+        definition: { type: object, additionalProperties: true }
+        placement: { type: object, additionalProperties: true }
+
+    ActionPreflightRequest:
+      type: object
+      required: [action_key, entity_type, entity_id]
+      properties:
+        action_key: { type: string, minLength: 1 }
+        entity_type: { type: string, minLength: 1, description: 'Only opportunity is supported in v0.' }
+        entity_id: { type: string, minLength: 1 }
+        context:
+          type: object
+          properties:
+            department_id: { type: [string, 'null'] }
+            work_unit_id: { type: [string, 'null'] }
+        payload:
+          type: object
+          additionalProperties: true
+
+    ActionPreflightResult:
+      type: object
+      required: [executable]
+      properties:
+        executable: { type: boolean }
+        effective_requirements: { type: object, additionalProperties: true }
+        completion_requirements: { type: object, additionalProperties: true }
+        bos_preflight: { type: object, additionalProperties: true }
+
+    ActionExecuteRequest:
+      type: object
+      required: [action_key, entity_type]
+      description: >
+        `entity_id` is required except for `create_lead` (which supplies a sentinel id).
+      properties:
+        action_key: { type: string, minLength: 1 }
+        entity_type: { type: string, minLength: 1 }
+        entity_id: { type: string }
+        context:
+          type: object
+          properties:
+            surface: { type: string }
+            department_id: { type: [string, 'null'] }
+            work_unit_id: { type: [string, 'null'] }
+            section_key: { type: [string, 'null'] }
+        payload:
+          type: object
+          additionalProperties: true
+
+    ActionExecuteResponse:
+      type: object
+      required: [execution_result]
+      properties:
+        execution_result:
+          description: Action-specific result detail.
+        affected_id:
+          type: string
+          description: Id of the primary affected record, when applicable.
+
+    # ---- Analytics Metrics ----
+    MetricDefinition:
+      type: object
+      description: A metric definition row (shape governed by the metric platform schema).
+      additionalProperties: true
+      properties:
+        id: { type: string }
+        org_id: { type: [string, 'null'] }
+        key: { type: string }
+        label: { type: string }
+        category: { type: string }
+        source_type: { type: string }
+        source_key: { type: string }
+        aggregation: { type: string }
+        unit: { type: string }
+        status: { type: string }
+        is_kpi: { type: boolean }
+        version: { type: integer }
+
+    MetricDefinitionCreate:
+      type: object
+      required: [key, label, source_type, source_key, aggregation]
+      additionalProperties: true
+      properties:
+        key: { type: string }
+        label: { type: string }
+        description: { type: string }
+        category: { type: string }
+        entity_scope: { type: string }
+        source_type: { type: string }
+        source_key: { type: string }
+        aggregation: { type: string }
+        unit: { type: string }
+        is_kpi: { type: boolean }
+        status: { type: string, enum: [draft, published] }
+
+    MetricDefinitionUpdate:
+      type: object
+      description: Partial update; only provided fields are changed.
+      additionalProperties: true
+
+    MetricItemResponse:
+      allOf:
+        - $ref: '#/components/schemas/ApiSuccess'
+        - type: object
+          properties:
+            data:
+              type: object
+              required: [item]
+              properties:
+                item: { $ref: '#/components/schemas/MetricDefinition' }
+
+    MetricEvaluation:
+      type: object
+      description: Evaluated metric result (server-computed values, labels, sparkline).
+      additionalProperties: true
+
+    # ---- Entity Read ----
+    EntityType:
+      type: string
+      enum:
+        - jobs
+        - opportunities
+        - contacts
+        - customers
+        - customer_members
+        - persons
+        - schedules
+        - discount_redemptions
+        - workflows
+        - vendors
+        - subscriptions
+        - locations
+        - payments
+        - service_offerings
+        - service_plan_templates
+        - addons
+        - documents
+
+    EntityRecord:
+      type: object
+      description: >
+        Composed entity record. Shape varies by type and is preserved verbatim from the
+        underlying resolver, including `_`-prefixed display fields (`_status_display`,
+        `_counts`, `_linked_*`, `_rrs`, …). For the new-record sentinel (`id = "new"`),
+        this is `{ "_create": true }`.
+      additionalProperties: true
+
+    # ---- Reference Data ----
+    ReferenceDataItem:
+      type: object
+      description: A configurable person-model reference-data row.
+      required: [id, key]
+      properties:
+        id: { type: string }
+        org_id: { type: string }
+        key: { type: string }
+        label: { type: [string, 'null'] }
+        description: { type: [string, 'null'] }
+        sort_order: { type: integer }
+        is_system: { type: boolean }
+        is_active: { type: boolean }
+        metadata: { type: [object, 'null'], additionalProperties: true }
+        industry_id: { type: [string, 'null'] }
+        vertical_id: { type: [string, 'null'] }
+        created_at: { type: string }
+        updated_at: { type: [string, 'null'] }
+
+    ReferenceDataCreate:
+      type: object
+      required: [key, label]
+      properties:
+        key: { type: string, description: 'Lowercase a-z0-9_ , 2–64 chars.' }
+        label: { type: string }
+        description: { type: string }
+        sort_order: { type: integer, default: 100 }
+        is_active: { type: boolean, default: true }
+
+    ReferenceDataUpdate:
+      type: object
+      description: Partial update; `key` is not editable.
+      properties:
+        label: { type: [string, 'null'] }
+        description: { type: [string, 'null'] }
+        sort_order: { type: integer }
+        is_active: { type: boolean }
