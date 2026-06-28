@@ -120,6 +120,9 @@ Routes may introduce additional domain-specific codes; reuse the baseline where 
 > Phase 2 intentionally migrates a small, representative slice — not all 456 routes.
 > The goal is to prove the contract across action execution, preflight, list/read,
 > validation failure, and not-found / forbidden / bad-request — without breaking UI.
+>
+> **Live tracker (priority order + legacy/sunset surfaces):**
+> [`api-contract-migration-status.md`](api-contract-migration-status.md).
 
 | Route | Method | Migration | Notes |
 | --- | --- | --- | --- |
