@@ -77,8 +77,14 @@ action and execute route as manual entry. See
 just a command snapshot fed to the same platform-owned Command Surface
 (`surface/deriveCommandSurfaceState.ts`) as manual/Work Unit/Focus Panel — the `bos` variant.
 The shell anatomy, preview/confirm/success patterns, and execution path are identical; only the
-entry point (and how much context arrives pre-resolved) differs. See
-`docs/sprints/06_2026/command_surface_v1.md`.
+entry point (and how much context arrives pre-resolved) differs.
+
+**Operator-visible wiring (V2).** BOS renders the same `CommandSurfaceShell` driven by
+`useCommandSurfaceController`: it parses lead info → known inputs → the shared Create Lead
+command model → surface preview/missing-inputs → confirm. Confirm executes through the existing
+`/api/admin/actions/execute` registered `create_lead` (injected into the controller). BOS must
+not create leads through a private path, own its own command lifecycle, or bypass surface state.
+See `docs/sprints/06_2026/command_surface_v2.md` (and `command_surface_v1.md`).
 
 ---
 

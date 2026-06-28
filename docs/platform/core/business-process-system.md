@@ -102,8 +102,11 @@ Operators complete a placed command through the **platform-owned Command Surface
 reusable shell (header/body/footer/success/failure) that is identical across the Work Unit rail,
 Focus Panel Manage, queue row, and BOS. A stage's configuration influences command *content*
 (availability, labels, required inputs, constraints, copy) but never the surface layout,
-lifecycle, or component structure. See `../modules/actions-and-workflows.md` § Command Surface
-and `docs/sprints/06_2026/command_surface_v1.md`.
+lifecycle, or component structure. The shell is now implemented (`CommandSurfaceShell` +
+`useCommandSurfaceController`, Create Lead reference); execution is injected through the existing
+registered-action route, so the BPS never gains a parallel mutation path. See
+`../modules/actions-and-workflows.md` § Command Surface and
+`docs/sprints/06_2026/command_surface_v2.md`.
 
 ---
 

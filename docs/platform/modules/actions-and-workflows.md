@@ -358,7 +358,18 @@ queue_row, bos** — which are variants over the same snapshot, not separate sys
 - The surface model is **read-only** — it prepares UI state, never executes. Create Lead is the
   reference command; Update Status maps onto the same model with no new shell code.
 
-See `docs/sprints/06_2026/command_surface_v1.md`.
+**First operator-visible UI (V2).** `CommandSurfaceShell.tsx` is the platform-owned
+presentational component that renders the surface state into the fixed anatomy for every
+variant and command; `useCommandSurfaceController.ts` owns the operator lifecycle (idle →
+executing → success/failure) and re-derives the surface on each input edit. **Execution is
+injected** into the controller — it never mutates directly; callers wire it to the existing
+registered-action route, so BOS, manual, and Work Unit converge on one lifecycle without
+forking execution. `commandSurfacePresentation.ts` provides the operator copy contract and a
+guard (`isOperatorSafeCopy`) proving no payload keys / action keys / runtime enums leak.
+`CreateLeadModal.tsx` is protected and not rewritten; convergence is at the model level with
+modal-body convergence documented as the next step.
+
+See `docs/sprints/06_2026/command_surface_v2.md` (and `command_surface_v1.md`).
 
 ## Rules
 

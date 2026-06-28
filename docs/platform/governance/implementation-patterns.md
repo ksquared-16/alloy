@@ -104,6 +104,13 @@ eligibility + required subjects + required inputs + preview + execution + audit 
   description, confirm/blocker copy) — never layout, stage order, lifecycle, or components.
   Do not build per-command or per-config bespoke command UIs; feed a command snapshot to the
   shared surface model instead.
+- **Command Surface UI is presentational; lifecycle injects execution** (V2). Render with
+  `CommandSurfaceShell.tsx` (no command state, callbacks injected) and drive the lifecycle with
+  `useCommandSurfaceController.ts`, which holds inputs/phase and re-derives the surface but takes
+  `execute` as an **injected** function. Wire `execute` to the existing registered-action route
+  (e.g. `executeCreateLeadFromModal` / `POST /api/admin/actions/execute`) — never call a mutation
+  API from the shell/controller. This is how BOS/manual/Work Unit share one lifecycle without
+  forking execution. Operator copy must pass `isOperatorSafeCopy` (no payload/action keys).
 
 Avoid: per-surface inline `fetch('/actions/execute')`, parallel mutation APIs for the
 same intent, client components that mutate operational truth directly, modeling Work Unit
