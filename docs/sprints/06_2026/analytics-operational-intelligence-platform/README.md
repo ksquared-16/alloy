@@ -36,6 +36,7 @@ Analytics never ends with a chart. It ends with operational work.
 | 1 | Product Architecture (IA, doctrine, navigation, surface hierarchy, metric hierarchy, roll-up, OI model, reporting model, Metric Card Language) | [`01-product-architecture.md`](./01-product-architecture.md) |
 | 2 | High-fidelity visual concepts (10 mockups) | [`mockups/`](./mockups/) |
 | 3 | Implementation / convergence strategy | [`03-implementation-strategy.md`](./03-implementation-strategy.md) |
+| 4 | **Runtime convergence analysis** (providers, context, drill, actions, backend matrix, dependency report, implementation order) | [`04-runtime-convergence.md`](./04-runtime-convergence.md) |
 
 ### Phase 2 mockup index
 
@@ -51,6 +52,20 @@ Analytics never ends with a chart. It ends with operational work.
 | 8 | Optimization Center (Enrollment Capacity) | [`mockups/08-optimization-center.html`](./mockups/08-optimization-center.html) |
 | 9 | Metric Card Gallery | [`mockups/09-metric-card-gallery.html`](./mockups/09-metric-card-gallery.html) |
 | 10 | Responsive behavior | [`mockups/10-responsive.html`](./mockups/10-responsive.html) |
+
+---
+
+## Implementation slices (status)
+
+| Slice | Scope | Status |
+|---|---|---|
+| 1 | Metric Card Language re-chrome + Dashboard category + dev preview | ✅ Merged (`0a6d0bf7`) |
+| 1.5 | Header density compatibility + visual QA | ✅ Merged (`ca0ad6a7`) |
+| 2 | Surface composition beyond KPI tiles (charts, filters, drill grammar, command/report/optimization previews) | ✅ Merged (`8433f5ef`) |
+| 3 | Runtime convergence analysis — architecture roadmap, no broad implementation | ✅ [`04-runtime-convergence.md`](./04-runtime-convergence.md) |
+| 4+ | Wire real data (Phase A–E in convergence doc) | 🔜 Next execution |
+
+Dev preview: `/dev/analytics-surface-mocks` (404 in production).
 
 ---
 
