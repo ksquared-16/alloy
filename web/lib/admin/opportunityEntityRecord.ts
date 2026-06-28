@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
+import { apiOk, apiError } from "@/lib/api/apiResponse";
+import { CORRELATION_ID_HEADER, resolveCorrelationId } from "@/lib/api/correlationId";
 import { attachDirectFkRelationshipDisplays } from "@/lib/admin/relationshipDisplayAttach";
 import { attachFieldDefinitionsAndValues } from "@/lib/admin/entityFieldRegistryAttach";
 import { fetchEffectiveRecordDrawerLayout } from "@/lib/admin/effectiveRecordDrawerLayout";
@@ -866,6 +868,7 @@ async function respondOpportunityRelationshipMemberOverlay(
     metadata?: Record<string, unknown> | null;
   },
   opportunityRouteStartedAt: number,
+  request: NextRequest,
 ): Promise<NextResponse> {
   const hydrateGraphTimings: Record<string, number> = {};
   const oppMeta =
@@ -1064,14 +1067,16 @@ async function respondOpportunityRelationshipMemberOverlay(
 
   const serverRouteMs = Date.now() - opportunityRouteStartedAt;
 
-  return NextResponse.json(payload, {
-    status: 200,
-    headers: {
-      "content-type": "application/json; charset=utf-8",
-      "X-Alloy-Entity-Surface": "relationship_member_persons",
-      "X-Alloy-Server-Duration": String(serverRouteMs),
+  return apiOk(
+    { entity: payload },
+    {
+      request,
+      headers: {
+        "X-Alloy-Entity-Surface": "relationship_member_persons",
+        "X-Alloy-Server-Duration": String(serverRouteMs),
+      },
     },
-  });
+  );
 }
 
 /**
@@ -1358,10 +1363,16 @@ export async function respondOpportunityEntityGet(
         .eq("org_id", orgId)
         .single(),
   );
-  if (error || !data)
-    return NextResponse.json(error?.message || "Not found", {
-      status: error?.code === "PGRST116" ? 404 : 500,
-    });
+  if (error || !data) {
+    const status = error?.code === "PGRST116" ? 404 : 500;
+    return apiError(
+      status === 404 ? "NOT_FOUND" : "INTERNAL",
+      error?.message || "Not found",
+      status,
+      undefined,
+      { request },
+    );
+  }
   const opp = data as Record<string, unknown> & {
     status_key?: string | null;
     status?: string | null;
@@ -1380,7 +1391,7 @@ export async function respondOpportunityEntityGet(
       location_id: opp.location_id ?? null,
     }))
   ) {
-    return NextResponse.json("Not found", { status: 404 });
+    return apiError("NOT_FOUND", "Not found", 404, undefined, { request });
   }
   const out: Record<string, unknown> = { ...data };
   const surfaceParamEarly = (request.nextUrl.searchParams.get("surface") ?? "")
@@ -1394,6 +1405,7 @@ export async function respondOpportunityEntityGet(
       id,
       opp,
       opportunityRouteStartedAt,
+      request,
     );
   }
 
@@ -1438,13 +1450,17 @@ export async function respondOpportunityEntityGet(
         source: "network",
       });
     }
-    return NextResponse.json(vis, {
-      headers: {
-        "X-Alloy-Entity-Surface": "drawer_visible",
-        "X-Alloy-Opp-Enrich": enrichHeaderV,
-        "X-Alloy-Server-Duration": String(serverRouteMsV),
+    return apiOk(
+      { entity: vis },
+      {
+        request,
+        headers: {
+          "X-Alloy-Entity-Surface": "drawer_visible",
+          "X-Alloy-Opp-Enrich": enrichHeaderV,
+          "X-Alloy-Server-Duration": String(serverRouteMsV),
+        },
       },
-    });
+    );
   }
 
   if (surfaceParamEarly === "drawer_primary" || surfaceParamEarly === "drawer_initial") {
@@ -1540,13 +1556,17 @@ export async function respondOpportunityEntityGet(
         payload_bytes: Buffer.byteLength(JSON.stringify(out), "utf8"),
       });
     }
-    return NextResponse.json(out, {
-      headers: {
-        "X-Alloy-Entity-Surface": out._record_surface as string,
-        "X-Alloy-Opp-Enrich": enrichHeaderPrimary,
-        "X-Alloy-Server-Duration": String(serverRouteMsPrimary),
+    return apiOk(
+      { entity: out },
+      {
+        request,
+        headers: {
+          "X-Alloy-Entity-Surface": out._record_surface as string,
+          "X-Alloy-Opp-Enrich": enrichHeaderPrimary,
+          "X-Alloy-Server-Duration": String(serverRouteMsPrimary),
+        },
       },
-    });
+    );
   }
 
   const enrichStartedAt = Date.now();
@@ -2395,10 +2415,17 @@ export async function respondOpportunityEntityGet(
     });
   }
 
-  return new NextResponse(bodyJson, {
+  // Wrap in the standard success envelope without re-serializing the (large) `out`
+  // record: `bodyJson` is reused verbatim inside `data.entity`. @see apiResponse.ts
+  const correlationId = resolveCorrelationId(request);
+  const envelopeJson = `{"ok":true,"data":{"entity":${bodyJson}},"correlation_id":${JSON.stringify(
+    correlationId,
+  )}}`;
+  return new NextResponse(envelopeJson, {
     status: 200,
     headers: {
       "content-type": "application/json; charset=utf-8",
+      [CORRELATION_ID_HEADER]: correlationId,
       "X-Alloy-Entity-Surface": "full",
       "X-Alloy-Opp-Enrich": enrichHeader,
       "X-Alloy-Server-Duration": String(serverRouteMs),

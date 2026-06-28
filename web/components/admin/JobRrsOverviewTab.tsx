@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { derived, neutral } from "@/styles/tokens/colors";
 import type { ResolvedRecordPayload } from "@/lib/rrs/types";
+import { unwrapEntityRecord } from "@/lib/api/unwrapEntityRecord";
 
 function formatRrsValue(v: unknown): string {
     if (v == null) return "—";
@@ -18,6 +19,11 @@ function parseEntityError(json: unknown, res: Response): string {
     if (typeof json === "string" && json.trim()) return json;
     if (json && typeof json === "object" && "error" in json) {
         const e = (json as { error?: unknown }).error;
+        // Standard failure envelope: { ok:false, error: { code, message }, correlation_id }.
+        if (e && typeof e === "object" && typeof (e as { message?: unknown }).message === "string") {
+            const m = (e as { message: string }).message.trim();
+            if (m) return m;
+        }
         if (typeof e === "string" && e.trim()) return e;
     }
     return res.status === 404 ? "Not found" : "Failed to load";
@@ -44,7 +50,9 @@ export default function JobRrsOverviewTab({
                 const res = await fetch(`/api/admin/entity/jobs/${encodeURIComponent(jobId)}?surface=overview`);
                 const json: unknown = await res.json().catch(() => null);
                 if (!res.ok) throw new Error(parseEntityError(json, res));
-                const rrs = json && typeof json === "object" ? (json as { _rrs?: ResolvedRecordPayload })._rrs : undefined;
+                // API contract: { ok, data: { entity }, correlation_id }; _rrs lives on the entity.
+                const entity = unwrapEntityRecord(json);
+                const rrs = entity ? (entity as { _rrs?: ResolvedRecordPayload })._rrs : undefined;
                 if (!rrs) throw new Error("No _rrs in response");
                 if (!cancelled) setPayload(rrs);
             } catch (e) {

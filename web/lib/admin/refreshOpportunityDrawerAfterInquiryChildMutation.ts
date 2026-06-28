@@ -13,6 +13,7 @@ import { invalidateDrawerViewModelCacheForEntity } from "@/lib/adminV2/viewModel
 import { dispatchDrawerLayoutRuntimeBodyInvalidate } from "@/lib/layout/runtime/drawerLayoutRuntimeBodyInvalidate";
 import { invalidateDrawerLayoutRuntimeBodyCacheForEntity } from "@/lib/layout/runtime/drawerLayoutRuntimeBodySessionCache";
 import { workspaceDataFetchInit } from "@/lib/workspace/workspaceDataFetch";
+import { unwrapEntityRecord } from "@/lib/api/unwrapEntityRecord";
 
 export type RefreshOpportunityDrawerAfterInquiryChildInput = {
     opportunityId: string;
@@ -65,7 +66,8 @@ async function logDrawerVisibleInquiryChildrenAudit(opportunityId: string): Prom
         });
         return -1;
     }
-    const record = (await res.json().catch(() => null)) as Record<string, unknown> | null;
+    // API contract: { ok, data: { entity }, correlation_id }.
+    const record = unwrapEntityRecord(await res.json().catch(() => null));
     const inquiryChildren = Array.isArray(record?._inquiry_children) ? record!._inquiry_children : [];
     logAddChildDevTrace("[action.add_child:drawer_patch]", {
         opportunityId,

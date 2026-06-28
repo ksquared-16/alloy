@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { adminPerfEnabled, adminPerfNow, logAdminPerf } from "@/lib/admin/perfTrace";
@@ -24,15 +24,17 @@ import { resolveRecordSurfaceParam } from "@/lib/rrs/surfaces";
 import { respondOpportunityEntityGet } from "@/lib/admin/opportunityEntityRecord";
 import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
 import { assertEntityDrawerRecordReadable, scopeDimensionsFromAccess } from "@/lib/admin/accessScope";
-import { apiError } from "@/lib/api/apiResponse";
+import { apiError, apiOk } from "@/lib/api/apiResponse";
 
 /**
- * Phase 2 contract (partial): error responses use the standard failure envelope
- * (`{ ok: false, error: { code, message }, correlation_id }`) via the helpers
- * below — this resolves the audit's bare-string-error finding. HTTP status codes
- * are preserved exactly. The success payload remains the legacy bare record object
- * (consumed by every drawer); migrating success is a coordinated future batch.
+ * Phase 2D contract (fully migrated): every response uses the standard envelope.
+ * - Success: `{ ok: true, data: { entity }, correlation_id }` — the entity payload
+ *   shape is preserved verbatim inside `data.entity` (including the `{ _create: true }`
+ *   new-record sentinel). Active consumers unwrap `json.data.entity`.
+ * - Failure: `{ ok: false, error: { code, message }, correlation_id }` — HTTP status
+ *   codes are preserved exactly.
  * @see docs/api/api-response-contract.md
+ * @see docs/api/api-contract-migration-status.md
  */
 function entityNotFound(message = "Not found") {
     return apiError("NOT_FOUND", message, 404);
@@ -42,6 +44,10 @@ function entityBadRequest(message: string) {
 }
 function entityServerError(message = "Failed to fetch entity") {
     return apiError("INTERNAL", message, 500);
+}
+/** Standard success envelope for entity reads: `{ ok, data: { entity }, correlation_id }`. */
+function entityOk(entity: unknown, request: NextRequest) {
+    return apiOk({ entity }, { request });
 }
 /** Map a Supabase error to the prior status semantics (PGRST116 = no rows → 404, else 500). */
 function entitySupabaseError(
@@ -159,7 +165,7 @@ async function getEntityImpl(
 
         if (type === "jobs") {
             if (id === "new") {
-                return NextResponse.json({ _create: true });
+                return entityOk({ _create: true }, request);
             }
             const surface = resolveRecordSurfaceParam(request.nextUrl.searchParams.get("surface"), "full");
             const resolved = await resolveJobRecord(supabase, orgId, id, surface);
@@ -167,14 +173,14 @@ async function getEntityImpl(
                 const status = resolved.notFound ? 404 : 500;
                 return entityStatusError(resolved.message || "Not found", status);
             }
-            return NextResponse.json({ ...resolved.flat, _rrs: resolved.rrs });
+            return entityOk({ ...resolved.flat, _rrs: resolved.rrs }, request);
         }
         if (type === "opportunities") {
             return respondOpportunityEntityGet(supabase, orgId, id, request, scopeDim);
         }
         if (type === "contacts") {
             if (id === "new") {
-                return NextResponse.json({ _create: true });
+                return entityOk({ _create: true }, request);
             }
             const { data, error } = await supabase.from("contacts").select("*").eq("id", id).eq("org_id", orgId).single();
             if (error || !data) return entitySupabaseError(error);
@@ -226,7 +232,7 @@ async function getEntityImpl(
                     .single();
                 if (vendor) _contact_vendor = { id: vendor.id, name: vendor.name ?? null, vendor_status_id: vendor.vendor_status_id ?? null, created_at: vendor.created_at };
             }
-            return NextResponse.json({
+            return entityOk({
                 ...data,
                 _contact_vendor,
                 _linked_customer_name,
@@ -235,7 +241,7 @@ async function getEntityImpl(
                 _person: _person ?? null,
                 _person_id,
                 _person_name,
-            });
+            }, request);
         }
         if (type === "customers") {
             const { data, error } = await supabase.from("customers").select("*").eq("id", id).eq("org_id", orgId).single();
@@ -337,11 +343,11 @@ async function getEntityImpl(
             }
             await attachFieldDefinitionsAndValues(supabase, out, "customers", id);
             await attachDirectFkRelationshipDisplays(supabase, orgId, "customers", out);
-            return NextResponse.json(out);
+            return entityOk(out, request);
         }
         if (type === "schedules") {
             if (id === "new") {
-                return NextResponse.json({ _create: true });
+                return entityOk({ _create: true }, request);
             }
             const { data: schedule, error } = await supabase.from("schedules").select("*").eq("id", id).eq("org_id", orgId).single();
             if (error || !schedule) return entitySupabaseError(error);
@@ -601,7 +607,7 @@ async function getEntityImpl(
             await attachFieldDefinitionsAndValues(supabase, out, "schedules", id);
             await attachDirectFkRelationshipDisplays(supabase, orgId, "schedules", out);
             computeScheduleHydratedDisplay(out);
-            return NextResponse.json(out);
+            return entityOk(out, request);
         }
         if (type === "locations") {
             const { data: location, error } = await supabase
@@ -728,7 +734,7 @@ async function getEntityImpl(
 
             await attachFieldDefinitionsAndValues(supabase, out, "locations", id);
             await attachDirectFkRelationshipDisplays(supabase, orgId, "locations", out);
-            return NextResponse.json(out);
+            return entityOk(out, request);
         }
         if (type === "discount_redemptions") {
             const dr = await assertDiscountRedemptionInOrg(supabase, id, orgId);
@@ -805,21 +811,21 @@ async function getEntityImpl(
                 const j = job as { title?: string | null; service_key?: string | null; job_number_for_customer?: string | null } | null;
                 out._job_label = j ? ((j.title && String(j.title).trim()) || (j.service_key && String(j.service_key).trim()) || (j.job_number_for_customer && String(j.job_number_for_customer).trim()) || `Job #${(redemption.job_id as string).slice(-6)}`) : null;
             } else out._job_label = null;
-            return NextResponse.json(out);
+            return entityOk(out, request);
         }
         if (type === "workflows") {
             if (id === "new") {
-                return NextResponse.json({ _create: true });
+                return entityOk({ _create: true }, request);
             }
             const { data: wf, error: wErr } = await supabase.from("workflows").select("*").eq("id", id).eq("org_id", orgId).single();
             if (wErr || !wf) return entitySupabaseError(wErr);
             const { data: cond } = await supabase.from("workflow_conditions").select("*").eq("workflow_id", id);
             const { data: acts } = await supabase.from("workflow_actions").select("*").eq("workflow_id", id).order("action_order", { ascending: true });
-            return NextResponse.json({
+            return entityOk({
                 ...wf,
                 _conditions: cond ?? [],
                 _actions: acts ?? [],
-            });
+            }, request);
         }
         if (type === "vendors") {
             const { data: vendor, error: vErr } = await supabase.from("vendors").select("*").eq("id", id).eq("org_id", orgId).single();
@@ -951,7 +957,7 @@ async function getEntityImpl(
 
             await attachFieldDefinitionsAndValues(supabase, out, "vendors", id);
             await attachDirectFkRelationshipDisplays(supabase, orgId, "vendors", out);
-            return NextResponse.json(out);
+            return entityOk(out, request);
         }
         if (type === "subscriptions") {
             const { data: sub, error: subErr } = await supabase.from("customer_subscriptions").select("*").eq("id", id).eq("org_id", orgId).single();
@@ -1002,7 +1008,7 @@ async function getEntityImpl(
             } else {
                 out._vertical_name = null;
             }
-            return NextResponse.json(out);
+            return entityOk(out, request);
         }
 
         if (type === "documents") {
@@ -1093,7 +1099,7 @@ async function getEntityImpl(
             const exStatus = (row.extraction_status as string | null) ?? (row.ai_extraction_status as string | null) ?? null;
             out._ai_extraction_status = exStatus;
             out._uploaded_by = (row.uploaded_by as string | null) ?? null;
-            return NextResponse.json(out);
+            return entityOk(out, request);
         }
 
         if (type === "payments") {
@@ -1179,11 +1185,11 @@ async function getEntityImpl(
             const paySk = payment.status_key ?? null;
             const legacyDisplay = await resolveStatusLabel(supabase, orgId, "payments", paySk);
             out._status_display = (canon && canonicalLabels[canon]) || legacyDisplay || canon || paySk || null;
-            return NextResponse.json(out);
+            return entityOk(out, request);
         }
         if (type === "customer_members") {
             if (id === "new") {
-                return NextResponse.json({ _create: true });
+                return entityOk({ _create: true }, request);
             }
             const { data: row, error: rowErr } = await supabase
                 .from("customer_members")
@@ -1274,12 +1280,12 @@ async function getEntityImpl(
                     is_active: l.is_active ?? true,
                 };
             });
-            return NextResponse.json(out);
+            return entityOk(out, request);
         }
 
         if (type === "persons") {
             if (id === "new") {
-                return NextResponse.json({ _create: true });
+                return entityOk({ _create: true }, request);
             }
             const _buildStart = Date.now();
             const _pt = new Map<string, number>();
@@ -1456,7 +1462,7 @@ async function getEntityImpl(
             ]);
 
             logPersonPayloadBuildTiming(id, _pt, Date.now() - _buildStart);
-            return NextResponse.json(out);
+            return entityOk(out, request);
         }
 
         if (type === "service_offerings") {
@@ -1471,7 +1477,7 @@ async function getEntityImpl(
             } else {
                 out._vertical_name = null;
             }
-            return NextResponse.json(out);
+            return entityOk(out, request);
         }
 
         if (type === "service_plan_templates") {
@@ -1489,7 +1495,7 @@ async function getEntityImpl(
             out._status_display = tplOrgId
                 ? await resolveStatusLabel(supabase, tplOrgId, "service_plan_templates", tplSk)
                 : tplSk;
-            return NextResponse.json(out);
+            return entityOk(out, request);
         }
 
         if (type === "addons") {
@@ -1504,7 +1510,7 @@ async function getEntityImpl(
             } else {
                 out._vertical_name = null;
             }
-            return NextResponse.json(out);
+            return entityOk(out, request);
         }
 
         return entityBadRequest("Invalid type");

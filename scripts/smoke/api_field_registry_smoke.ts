@@ -68,6 +68,12 @@ async function api(path: string, init?: RequestInit): Promise<{ status: number; 
     return { status: res.status, json };
 }
 
+/** Phase 2D entity-read envelope: GET returns { ok, data: { entity }, correlation_id }. */
+function entityRecord(json: unknown): Record<string, unknown> {
+    const entity = (json as { data?: { entity?: unknown } } | null)?.data?.entity;
+    return entity && typeof entity === "object" ? (entity as Record<string, unknown>) : {};
+}
+
 function recordNumberOk(drawerType: string, row: Record<string, unknown>): boolean {
     const key = RECORD_KEYS[drawerType];
     if (!key) return false;
@@ -96,7 +102,7 @@ async function runEntityGetChecks(): Promise<void> {
         const path = `/api/admin/entity/${drawerType}/${id}`;
         const { status, json } = await api(path);
         assert(status === 200, `${path} expected 200, got ${status}: ${JSON.stringify(json)}`);
-        const row = json as Record<string, unknown>;
+        const row = entityRecord(json);
         assert(recordNumberOk(drawerType, row), `${path}: expected native ${RECORD_KEYS[drawerType]}`);
         assert(Array.isArray(row._field_definitions), `${path}: _field_definitions must be an array`);
         assert(
@@ -122,7 +128,7 @@ async function runPersonPatchRoundTrip(): Promise<void> {
     const { status: g1, json: j1 } = await api(getPath);
     assert(g1 === 200, `GET person before patch: ${g1}`);
 
-    const before = j1 as Record<string, unknown>;
+    const before = entityRecord(j1);
     const originalPhone =
         before.phone === null || before.phone === undefined ? "" : String(before.phone);
 
@@ -137,7 +143,7 @@ async function runPersonPatchRoundTrip(): Promise<void> {
 
     const { status: g2, json: j2 } = await api(getPath);
     assert(g2 === 200, "GET person after system PATCH");
-    assert(String((j2 as Record<string, unknown>).phone) === newPhone, "system phone not persisted on entity GET");
+    assert(String(entityRecord(j2).phone) === newPhone, "system phone not persisted on entity GET");
 
     await api(`/api/admin/persons/${personId}`, {
         method: "PATCH",
@@ -155,7 +161,7 @@ async function runPersonPatchRoundTrip(): Promise<void> {
 
         const { status: g3, json: j3 } = await api(getPath);
         assert(g3 === 200, "GET person after custom PATCH");
-        const after = j3 as Record<string, unknown>;
+        const after = entityRecord(j3);
         const seen = after[CUSTOM_FIELD_KEY];
         assert(
             String(seen ?? "") === customVal,

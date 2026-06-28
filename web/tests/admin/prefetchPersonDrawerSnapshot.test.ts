@@ -24,9 +24,14 @@ describe("prefetchPersonDrawerSnapshot", () => {
     });
 
     it("stores valid persons snapshot with matching id", async () => {
+        // Phase 2D contract: entity reads return { ok, data: { entity }, correlation_id }.
         dedupeAdminFetch.mockResolvedValue({
             ok: true,
-            json: async () => ({ id: "p1", first_name: "Ada", last_name: "Lovelace", email: "ada@example.com" }),
+            json: async () => ({
+                ok: true,
+                data: { entity: { id: "p1", first_name: "Ada", last_name: "Lovelace", email: "ada@example.com" } },
+                correlation_id: "cid-1",
+            }),
         });
 
         prefetchPersonDrawerSnapshot("p1", { source: "opportunity_drawer_idle" });
@@ -43,7 +48,7 @@ describe("prefetchPersonDrawerSnapshot", () => {
     it("dedupes repeated prefetches for the same person id", async () => {
         dedupeAdminFetch.mockResolvedValue({
             ok: true,
-            json: async () => ({ id: "p1", first_name: "Ada" }),
+            json: async () => ({ ok: true, data: { entity: { id: "p1", first_name: "Ada" } }, correlation_id: "cid-1" }),
         });
 
         prefetchPersonDrawerSnapshot("p1");
@@ -56,7 +61,7 @@ describe("prefetchPersonDrawerSnapshot", () => {
     it("fetchPersonDrawerEntityCoalesced joins in-flight prefetch", async () => {
         dedupeAdminFetch.mockResolvedValue({
             ok: true,
-            json: async () => ({ id: "p1", first_name: "Coalesced" }),
+            json: async () => ({ ok: true, data: { entity: { id: "p1", first_name: "Coalesced" } }, correlation_id: "cid-1" }),
         });
 
         prefetchPersonDrawerSnapshot("p1");
@@ -78,7 +83,7 @@ describe("prefetchPersonDrawerSnapshot", () => {
     it("does not cache person snapshot when response id mismatches", async () => {
         dedupeAdminFetch.mockResolvedValue({
             ok: true,
-            json: async () => ({ id: "other", first_name: "Wrong" }),
+            json: async () => ({ ok: true, data: { entity: { id: "other", first_name: "Wrong" } }, correlation_id: "cid-1" }),
         });
 
         prefetchPersonDrawerSnapshot("p1");

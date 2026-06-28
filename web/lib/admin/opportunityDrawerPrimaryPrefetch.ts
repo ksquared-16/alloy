@@ -5,6 +5,7 @@ import type { OpportunityWorkspaceContext } from "@/contexts/AdminDrawerContext"
 import type { OpportunityDrawerQueuePreviewSeed } from "@/lib/admin/opportunityDrawerQueuePreviewSeed";
 import { dedupeAdminFetch } from "@/lib/workspace/workspaceAdminFetchDedupe";
 import { workspaceDataFetchInit } from "@/lib/workspace/workspaceDataFetch";
+import { unwrapEntityRecord } from "@/lib/api/unwrapEntityRecord";
 
 const DRAWER_PRIMARY_CACHE_TTL_MS = 8_000;
 
@@ -67,8 +68,9 @@ export async function fetchOpportunityDrawerPrimaryEntity(
             if (!res.ok) {
                 throw new Error(res.status === 404 ? "Not found" : "drawer_primary_failed");
             }
-            const json = (await res.json().catch(() => null)) as Record<string, unknown> | null;
-            if (!json || typeof json !== "object") {
+            // API contract: { ok, data: { entity }, correlation_id }.
+            const json = unwrapEntityRecord(await res.json().catch(() => null));
+            if (!json) {
                 throw new Error("drawer_primary_invalid");
             }
             if (String(json.id ?? "").trim() !== cacheKey) {

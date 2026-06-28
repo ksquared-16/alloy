@@ -80,11 +80,11 @@ The structural risk across the whole surface: **442/456 routes use a service-rol
 
 Confirmed inconsistency:
 
-- **Success shapes vary:** bare resource object (`entity/[type]/[id]`), `{ <plural>: [...] }` lists, `{ items, adapters }` (analytics), `{ ok: true, … }` (actions/BOS). ~146 routes use an `{ ok }` envelope; list/object routes do not.
-- **Error shapes vary:** ~394 routes return `{ error: string }` + status, but some return a **bare JSON string** body (`NextResponse.json("Not found", { status: 404 })` in `entity/[type]/[id]`), and action routes return `{ ok:false, error, correlation_id }`.
+- **Success shapes vary:** `{ <plural>: [...] }` lists, `{ items, adapters }` (analytics), `{ ok: true, … }` (actions/BOS + the now-migrated `entity/[type]/[id]`, which returns `{ ok, data: { entity }, correlation_id }` as of Phase 2D). ~146 routes use an `{ ok }` envelope; list/object routes do not.
+- **Error shapes vary:** ~394 routes return `{ error: string }` + status, but some return a **bare JSON string** body (the former `NextResponse.json("Not found", …)` in `entity/[type]/[id]` and `respondOpportunityEntityGet` are now migrated to `apiError`), and action routes return `{ ok:false, error, correlation_id }`.
 - **Impact:** A future public API or typed client cannot rely on one envelope.
 - **Recommendation (Phase 2):** Adopt a single response contract. The **`{ ok, data?, error?, correlation_id? }`** shape used by `POST /api/admin/actions/execute` and the BOS routes is the best in-repo model; the analytics platform's `zodErrorResponse` is the best error model. Do not retrofit broadly in this sprint.
-- **Phase 2 status — contract established.** Shared helpers (`apiOk`/`apiError`/`apiZodError`) in `web/lib/api/` define the canonical `{ ok, data, correlation_id }` / `{ ok, error: { code, message, details? }, correlation_id }` envelope. Migrated slice: `actions/preflight` (full), `actions/inventory` (full), the whole `analytics/metrics` family (full — `metrics`, `metrics/[id]`, `copy`, `preview`, `snapshot`, `trend`; active builder/settings consumers migrated), `entity/[type]/[id]` (errors only — **bare-string finding resolved**; status codes preserved), `actions/execute` (**full — Phase 2B**: success + all failures normalized, `ACTION_BLOCKED` for unmet requirements, all 15 consumers migrated; see [`actions-execute-envelope-audit.md`](actions-execute-envelope-audit.md)). Per-route status: [`api-response-contract.md`](api-response-contract.md) §5 and [`api-contract-migration-status.md`](api-contract-migration-status.md).
+- **Phase 2 status — contract established.** Shared helpers (`apiOk`/`apiError`/`apiZodError`) in `web/lib/api/` define the canonical `{ ok, data, correlation_id }` / `{ ok, error: { code, message, details? }, correlation_id }` envelope. Migrated slice: `actions/preflight` (full), `actions/inventory` (full), the whole `analytics/metrics` family (full — `metrics`, `metrics/[id]`, `copy`, `preview`, `snapshot`, `trend`; active builder/settings consumers migrated), `entity/[type]/[id]` (**full — Phase 2D**: success wraps the unchanged record in `data.entity`, opportunity surfaces keep their `X-Alloy-*` perf headers, all active consumers unwrap via `unwrapEntityRecord`), `actions/execute` (**full — Phase 2B**: success + all failures normalized, `ACTION_BLOCKED` for unmet requirements, all 15 consumers migrated; see [`actions-execute-envelope-audit.md`](actions-execute-envelope-audit.md)). Per-route status: [`api-response-contract.md`](api-response-contract.md) §5 and [`api-contract-migration-status.md`](api-contract-migration-status.md).
 
 ---
 
@@ -115,7 +115,7 @@ Stable, well-scoped, read-oriented surfaces that could anchor a v1 public API on
 
 | Candidate | Why |
 |-----------|-----|
-| `GET /api/admin/entity/[type]/[id]` | Canonical record read; well-scoped; clear contract (needs envelope normalization + field allow-listing) |
+| `GET /api/admin/entity/[type]/[id]` | Canonical record read; well-scoped; envelope normalized (Phase 2D); remaining prep is field allow-listing |
 | `GET /api/admin/global-search` | Cohesive, scoped search contract |
 | Actions: `GET /api/admin/actions`, `POST /api/admin/actions/{preflight,execute}` | Already use the cleanest `{ ok, correlation_id }` envelope; natural "do work" API |
 | Analytics platform (`/api/admin/analytics/*`) | Best validation + structured envelopes already |
@@ -145,7 +145,7 @@ Stable, well-scoped, read-oriented surfaces that could anchor a v1 public API on
 
 - ~~`actions/execute` **failure** envelope + its ~15 client call sites~~ — **✅ done (Phase 2B).** Route + all consumers migrated; `ACTION_BLOCKED` carries preflight context under `error.details`.
 - ~~`analytics/metrics` **POST/PATCH** + `metrics/[id]` together, with `MetricBuilderPanel` / `MetricSetupFlow` updated in lockstep.~~ — **✅ done.** Whole `analytics/metrics` family (`metrics`, `metrics/[id]`, `copy`, `preview`, `snapshot`, `trend`) normalized; active builder/settings consumers unwrap the envelope.
-- `entity/[type]/[id]` **success** payload (high drawer fan-out — coordinate with the AdminV2 runtime reveal suite).
+- ~~`entity/[type]/[id]` **success** payload (high drawer fan-out — coordinate with the AdminV2 runtime reveal suite).~~ — **✅ done (Phase 2D).** Success wraps the unchanged record in `data.entity`; opportunity surfaces keep perf headers; person prefetch / composed payload / opportunity primary+full prefetch / inquiry-children refresh / job RRS overview / legacy drawer (mechanical) consumers unwrap via `unwrapEntityRecord`.
 - List routes returning `{ <plural>: [...] }` (low coupling, high count) — good mechanical batch.
 
 > OpenAPI remains **Phase 3**, after the envelope migration reaches the public-candidate subset.

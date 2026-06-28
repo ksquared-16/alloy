@@ -13,6 +13,7 @@ import {
     type PersonPrefetchSource,
 } from "@/lib/admin/prefetchPersonDrawerSnapshot";
 import type { PersonDrawerOpenSeed } from "@/lib/admin/drawer/personDrawerOpenSeed";
+import { unwrapEntityRecord } from "@/lib/api/unwrapEntityRecord";
 
 export type ComposedPersonDrawerPayloadLoadContext = Omit<
     ComposedPersonDrawerPayloadContext,
@@ -82,7 +83,8 @@ async function fetchComposedPersonDrawerPayload(
     try {
         const res = await fetch(`/api/admin/entity/persons/${encodeURIComponent(id)}`);
         if (!res.ok) return;
-        const json = (await res.json().catch(() => null)) as Record<string, unknown> | null;
+        // API contract: { ok, data: { entity }, correlation_id }.
+        const json = unwrapEntityRecord(await res.json().catch(() => null));
         if (!json || !entityDataMatchesDrawer(json, id, "persons")) return;
         putDrawerEntitySnapshot("persons", id, json);
         if (payloadReady(json, ctx)) return;

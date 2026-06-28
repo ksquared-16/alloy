@@ -336,6 +336,7 @@ import {
     isDrawerHeaderAttentionVisible,
 } from "@/lib/admin/drawer/drawerHeaderAttentionPresentation";
 import { fetchPersonDrawerEntityCoalesced, isPersonDrawerSnapshotWarm } from "@/lib/admin/prefetchPersonDrawerSnapshot";
+import { unwrapEntityRecord } from "@/lib/api/unwrapEntityRecord";
 import { installPersonDrawerDevDirectOpen } from "@/lib/admin/drawer/personDrawerDevDirectOpen";
 import { prefetchLinkedPersonsFromOpportunityRecord } from "@/lib/admin/drawer/prefetchLinkedPersonsFromOpportunityRecord";
 import {
@@ -2429,7 +2430,8 @@ export function AdminEntityDrawerLegacy() {
                 captureDrawerEntityResponsePerf(res);
                 if (!res.ok) throw new Error(res.status === 404 ? "Not found" : "Failed to load");
                 if (drawer.type === "opportunities") logOpportunityEnrichHeaderFromResponse(res);
-                return res.json();
+                // API contract: { ok, data: { entity }, correlation_id } → unwrap to bare record.
+                return res.json().then((b) => unwrapEntityRecord(b) ?? {});
             })
             .then((json) => {
                 if (drawerEntityTargetKeyRef.current !== requestedTargetKey) return;
@@ -3186,7 +3188,8 @@ export function AdminEntityDrawerLegacy() {
                     captureDrawerEntityResponsePerf(res);
                     if (!res.ok) throw new Error(res.status === 404 ? "Not found" : "Failed to load");
                     if (drawer.type === "opportunities") logOpportunityEnrichHeaderFromResponse(res);
-                    return res.json();
+                    // API contract: { ok, data: { entity }, correlation_id } → unwrap to bare record.
+                    return res.json().then((b) => unwrapEntityRecord(b) ?? {});
                 })
                 .then((json) => {
                     if (drawerEntityTargetKeyRef.current !== requestedTargetKey) return;
@@ -3415,7 +3418,8 @@ export function AdminEntityDrawerLegacy() {
                 captureDrawerEntityResponsePerf(res);
                 if (!res.ok) throw new Error(res.status === 404 ? "Not found" : "Failed to load");
                 logOpportunityEnrichHeaderFromResponse(res);
-                return res.json();
+                // API contract: { ok, data: { entity }, correlation_id } → unwrap to bare record.
+                return res.json().then((b) => unwrapEntityRecord(b) ?? {});
             })
             .then((json) => {
                 if (String((json as { id?: unknown }).id ?? "") !== hydrateId) return;
@@ -3499,7 +3503,8 @@ export function AdminEntityDrawerLegacy() {
                 captureDrawerEntityResponsePerf(res);
                 if (!res.ok) throw new Error(res.status === 404 ? "Not found" : "Failed to load");
                 logOpportunityEnrichHeaderFromResponse(res);
-                return res.json();
+                // API contract: { ok, data: { entity }, correlation_id } → unwrap to bare record.
+                return res.json().then((b) => unwrapEntityRecord(b) ?? {});
             })
             .then((json) => {
                 if (String((json as { id?: unknown }).id ?? "") !== hydrateId) return;
@@ -3653,7 +3658,8 @@ export function AdminEntityDrawerLegacy() {
                 captureDrawerEntityResponsePerf(res);
                 if (!res.ok) throw new Error(String(res.status));
                 logOpportunityEnrichHeaderFromResponse(res);
-                return res.json();
+                // API contract: { ok, data: { entity }, correlation_id } → unwrap to bare record.
+                return res.json().then((b) => unwrapEntityRecord(b) ?? {});
             })
             .then((json) => {
                 if (String((json as { id?: unknown }).id ?? "") !== String(drawer.id)) {

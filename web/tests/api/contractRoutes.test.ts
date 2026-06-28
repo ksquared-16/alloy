@@ -46,6 +46,7 @@ vi.mock("@/lib/admin/getAdminAccessContext", () => ({
 vi.mock("@/lib/admin/accessScope", () => ({
     assertEntityDrawerRecordReadable: vi.fn(async () => false),
     scopeDimensionsFromAccess: vi.fn(() => ({})),
+    assertOpportunityInAccessScope: vi.fn(async () => true),
 }));
 vi.mock("@/lib/supabaseAdmin", () => ({ createAdminClient: vi.fn(() => supabaseStub) }));
 vi.mock("next/cache", () => ({ revalidateTag: vi.fn() }));
@@ -260,6 +261,27 @@ describe("GET /api/admin/entity/[type]/[id] (error envelope)", () => {
         expect(body.ok).toBe(false);
         expect(body.error.code).toBe("BAD_REQUEST");
     });
+
+    it("returns the success envelope { ok, data: { entity }, correlation_id } for a new-record sentinel", async () => {
+        // `persons/new` short-circuits the drawer scope gate and returns the `_create`
+        // sentinel — the simplest success path that needs no DB row.
+        const res = await entityGET(getReq(), { params: Promise.resolve({ type: "persons", id: "new" }) });
+        expect(res.status).toBe(200);
+        const body = await res.json();
+        expect(body.ok).toBe(true);
+        expect(body.data.entity).toEqual({ _create: true });
+        expect(typeof body.correlation_id).toBe("string");
+        expect(res.headers.get(CORRELATION_ID_HEADER)).toBe(body.correlation_id);
+    });
+
+    it("propagates an incoming correlation id on the success envelope", async () => {
+        const res = await entityGET(getReq({ [CORRELATION_ID_HEADER]: "trace-entity" }), {
+            params: Promise.resolve({ type: "persons", id: "new" }),
+        });
+        const body = await res.json();
+        expect(body.correlation_id).toBe("trace-entity");
+        expect(res.headers.get(CORRELATION_ID_HEADER)).toBe("trace-entity");
+    });
 });
 
 // ---------------------------------------------------------------------------
@@ -292,6 +314,7 @@ describe("static contract: migrated routes", () => {
             "app/api/admin/actions/inventory/route.ts",
             "app/api/admin/actions/execute/route.ts",
             "app/api/admin/entity/[type]/[id]/route.ts",
+            "lib/admin/opportunityEntityRecord.ts",
             "app/api/admin/analytics/metrics/route.ts",
             "app/api/admin/analytics/metrics/[id]/route.ts",
         ];
@@ -302,6 +325,23 @@ describe("static contract: migrated routes", () => {
             expect(src).not.toMatch(/NextResponse\.json\(\s*"Not found"/);
             expect(src).not.toMatch(/NextResponse\.json\([^,{)]*\|\| "Not found"/);
         }
+    });
+
+    it("entity read emits the success envelope via entityOk/apiOk (data.entity, no bare record)", () => {
+        const route = read("app/api/admin/entity/[type]/[id]/route.ts");
+        expect(route).toContain('from "@/lib/api/apiResponse"');
+        // Success path wraps the record in { entity } via the local entityOk helper.
+        expect(route).toContain("apiOk({ entity }");
+        expect(route).toContain("entityOk(");
+        // No success path returns a bare record via NextResponse.json anymore.
+        expect(route).not.toMatch(/NextResponse\.json\(/);
+
+        // The opportunity surfaces helper wraps every surface in the envelope too.
+        const opp = read("lib/admin/opportunityEntityRecord.ts");
+        expect(opp).toContain('from "@/lib/api/apiResponse"');
+        expect(opp).toContain("apiOk(");
+        // The `full` surface builds the envelope JSON string directly (single serialize).
+        expect(opp).toContain('"ok":true,"data":{"entity":');
     });
 
     it("execute route emits the envelope via apiOk/apiError and no legacy { error: string } body", () => {

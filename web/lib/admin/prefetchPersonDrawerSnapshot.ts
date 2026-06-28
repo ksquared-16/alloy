@@ -8,6 +8,7 @@ import {
 import { PERSON_DRAWER_CHILD_PRESENTATION_EMPHASIS } from "@/lib/admin/person/personDrawerChildChrome";
 import { PERSON_DRAWER_GUARDIAN_PRESENTATION_EMPHASIS } from "@/lib/admin/person/personDrawerParentChrome";
 import { putDrawerEntitySnapshot, peekDrawerEntitySnapshot } from "@/lib/admin/drawerEntitySnapshotCache";
+import { unwrapEntityRecord } from "@/lib/api/unwrapEntityRecord";
 
 import { dedupeAdminFetch } from "@/lib/workspace/workspaceAdminFetchDedupe";
 import { workspaceDataFetchInit } from "@/lib/workspace/workspaceDataFetch";
@@ -70,8 +71,10 @@ export function prefetchPersonDrawerSnapshot(
     const p = dedupeAdminFetch(url, init)
         .then(async (res) => {
             if (!res.ok) return;
-            const json = (await res.json().catch(() => null)) as Record<string, unknown> | null;
-            if (json && typeof json === "object" && entityDataMatchesDrawer(json, id, "persons")) {
+            // API contract: { ok, data: { entity }, correlation_id }. Unwrap to the
+            // bare person record so the snapshot cache keeps storing the same shape.
+            const json = unwrapEntityRecord(await res.json().catch(() => null));
+            if (json && entityDataMatchesDrawer(json, id, "persons")) {
                 putDrawerEntitySnapshot("persons", id, stampPrefetchOpenSeed(json, openSeed));
             }
         })
@@ -117,8 +120,9 @@ export async function fetchPersonDrawerEntityCoalesced(
     const fetchP = dedupeAdminFetch(url, init)
         .then(async (res) => {
             if (!res.ok) return;
-            const json = (await res.json().catch(() => null)) as Record<string, unknown> | null;
-            if (json && typeof json === "object" && entityDataMatchesDrawer(json, id, "persons")) {
+            // API contract: { ok, data: { entity }, correlation_id }.
+            const json = unwrapEntityRecord(await res.json().catch(() => null));
+            if (json && entityDataMatchesDrawer(json, id, "persons")) {
                 putDrawerEntitySnapshot("persons", id, stampPrefetchOpenSeed(json, opts?.openSeed));
             }
         })

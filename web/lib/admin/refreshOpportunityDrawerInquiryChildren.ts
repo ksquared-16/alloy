@@ -9,6 +9,7 @@ import { logAddChildDevTrace } from "@/lib/admin/actions/logAddChildDevTrace";
 import { mergeInquiryChildrenPreservingOptimistic } from "@/lib/admin/mergeInquiryChildrenPreservingOptimistic";
 import { dispatchOpportunityQueueUpdated } from "@/lib/admin/opportunityQueueRefreshEvent";
 import { workspaceDataFetchInit } from "@/lib/workspace/workspaceDataFetch";
+import { unwrapEntityRecord } from "@/lib/api/unwrapEntityRecord";
 
 export type RefreshOpportunityInquiryChildrenResult = {
     ok: boolean;
@@ -33,8 +34,9 @@ export async function refreshOpportunityDrawerInquiryChildren(
     );
     if (!res.ok) return { ok: false };
 
-    const record = (await res.json().catch(() => null)) as Record<string, unknown> | null;
-    if (!record || typeof record !== "object") return { ok: false };
+    // API contract: { ok, data: { entity }, correlation_id }.
+    const record = unwrapEntityRecord(await res.json().catch(() => null));
+    if (!record) return { ok: false };
 
     const inquiryChildren = Array.isArray(record._inquiry_children) ? record._inquiry_children : [];
 

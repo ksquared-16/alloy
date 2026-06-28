@@ -129,13 +129,16 @@ Routes may introduce additional domain-specific codes; reuse the baseline where 
 | `/api/admin/actions/preflight` | POST | **Full** | New zod body schema → `apiZodError`; success via `apiOk`. No client consumers. |
 | `/api/admin/actions/inventory` | GET | **Full** | `apiOk({ items })`; 3 client consumers updated in lockstep. |
 | `/api/admin/analytics/metrics` (+ `/[id]`, `copy`, `preview`, `snapshot`, `trend`) | GET, POST, PATCH | **Full** | Analytics family normalized. `apiOk`/`apiError`; validation via `metricValidationError`. Active builder/settings consumers (`MetricBuilderPanel`, `MetricSetupFlow`, `fetchMetricPlatform`, `fetchMetricRender`) unwrap the envelope. See [`api-contract-migration-status.md`](api-contract-migration-status.md). |
-| `/api/admin/entity/[type]/[id]` | GET | **Errors only** | All error exits use `apiError` (resolves bare-string finding); status codes preserved. Success payload stays the legacy bare record (high drawer fan-out) — future batch. |
+| `/api/admin/entity/[type]/[id]` | GET | **Full** | Phase 2D: success = `apiOk({ entity })` for every entity type + `{ _create: true }`; opportunity surfaces wrap identically and keep `X-Alloy-*` perf headers; all errors via `apiError` (status codes preserved). Active consumers unwrap `json.data.entity` (shared `unwrapEntityRecord`). See [`api-contract-migration-status.md`](api-contract-migration-status.md). |
 | `/api/admin/actions/execute` | POST | **Full** | Phase 2B: success is canonical `data` only (legacy top-level mirror dropped); all failures use `apiError`. Action-blocked failures carry preflight context under `error.details` with the stable `ACTION_BLOCKED` code. All 15 consumers updated in lockstep. See `actions-execute-envelope-audit.md`. |
 
 ### Why some routes are partial
 
-- **entity GET** success is the bare record consumed by every drawer; only the
-  error envelope (the documented audit finding) is normalized here.
+- **entity GET** is now **fully** migrated (Phase 2D): success wraps the unchanged
+  record in `data.entity`. The envelope is an outer wrapper only — consumers unwrap
+  before feeding drawer readiness predicates / snapshot caches, so composed-payload
+  reveal gates are unchanged. The high-throughput `full` opportunity surface builds the
+  envelope JSON string directly to keep serialization single-pass.
 
 ### Action-blocked failures (`ACTION_BLOCKED`)
 
