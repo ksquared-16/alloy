@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>05 — Workspace Header Metrics</title>
+<link rel="stylesheet" href="_shared.css" />
+</head>
+<body>
+<div class="frame">
+  <div class="label"><span class="dot"></span>Embedded Metrics <span>Workspace header — same Metric cards, micro density</span></div>
+  <div class="body">
+    <div class="bos">
+      <div class="logo"></div>
+      <div class="bos-i on">⌂</div><div class="bos-i">▦</div><div class="bos-i">📈</div><div class="bos-i">✉</div>
+      <div class="bos-i" style="margin-top:auto">⚙</div>
+    </div>
+    <div class="surface">
+      <div class="surface-head">
+        <div class="titles">
+          <div class="crumbs"><span>Workspace</span><span class="sep">›</span><span class="here">Command Center</span></div>
+          <h2>Embedded · Workspace Header</h2>
+          <div class="sub">Metrics come to the operator. The header hosts the Pulse roll-up + primary KPIs at micro/compact density — identical cards to the Intelligence surfaces.</div>
+        </div>
+      </div>
+      <div class="surface-body">
+
+        <div class="demo-shell">
+          <div class="demo-cap">Runtime · Workspace Command Center (surface = workspace_header)</div>
+          <div class="ws-header">
+            <div style="display:flex; align-items:flex-start; gap:14px">
+              <div style="flex:1">
+                <div class="ws-title">Bright Futures · Command Center</div>
+                <div class="ws-sub">4 sites · 412 enrolled · Tuesday, 9:42 AM</div>
+              </div>
+              <div class="hstrip" style="max-width:430px">
+                <div class="hpill" style="padding:9px 12px"><div class="hdot good" style="width:30px;height:30px;font-size:13px">▲</div><div><div class="ht">Business</div><div class="hv" style="font-size:14px">Strong</div></div></div>
+                <div class="hpill" style="padding:9px 12px"><div class="hdot warn" style="width:30px;height:30px;font-size:13px">!</div><div><div class="ht">Operational</div><div class="hv" style="font-size:14px">Watch</div></div></div>
+                <div class="hpill" style="padding:9px 12px"><div class="hdot good" style="width:30px;height:30px;font-size:13px">◆</div><div><div class="ht">Enrollment</div><div class="hv" style="font-size:14px">91</div></div></div>
+              </div>
+            </div>
+            <div class="kpi-strip">
+              <div class="kpi-mini t-good"><div class="kl"><span class="tdot good"></span>Active leads</div><div class="kv">248</div><div class="kd up">▲ 12%</div></div>
+              <div class="kpi-mini t-warn"><div class="kl"><span class="tdot warn"></span>Tour conversion</div><div class="kv">38%</div><div class="kd down">▼ 5 pts</div></div>
+              <div class="kpi-mini t-crit"><div class="kl"><span class="tdot crit"></span>Needs attention</div><div class="kv">7</div><div class="kd down">▼ 5</div></div>
+              <div class="kpi-mini t-good"><div class="kl"><span class="tdot good"></span>Capacity fill</div><div class="kv">87%</div><div class="kd up">▲ 3</div></div>
+              <div class="kpi-mini t-fin"><div class="kl"><span class="tdot fin"></span>MRR</div><div class="kv">$418k</div><div class="kd up">▲ 6%</div></div>
+            </div>
+          </div>
+          <div style="padding:16px 22px; border-top:1px solid var(--line-soft); color:var(--forge-70); font-size:12px">↓ Business process tiles &amp; today's work below…</div>
+        </div>
+
+        <div class="grid">
+          <div class="s6">
+            <div class="zone-head"><h3>Behavior · Observe → Navigate</h3></div>
+            <div class="callout">A header KPI is <b>micro density</b>: label · value · tone dot · delta. Hover reveals the comparison; click drills to the same target as its full-surface twin (e.g. Tour conversion → affected sites → tour queue → family).</div>
+            <div class="note" style="margin-top:10px">Tone follows operational state, not module identity (green healthy · amber attention · red blocked · blue financial). Null renders as an em-dash reserve — never <b>0</b> — preserving the runtime no-false-empty rule.</div>
+          </div>
+          <div class="s6">
+            <div class="zone-head"><h3>Cold / loading reserve</h3></div>
+            <div class="demo-shell" style="margin:0">
+              <div class="demo-cap">Reveal gate · pre-snapshot</div>
+              <div style="padding:16px; display:flex; gap:10px">
+                <div class="kpi-mini" style="opacity:.6"><div class="kl">Active leads</div><div class="kv" style="color:var(--midnight-46)">—</div></div>
+                <div class="kpi-mini" style="opacity:.6"><div class="kl">Tour conversion</div><div class="kv" style="color:var(--midnight-46)">—</div></div>
+                <div class="kpi-mini" style="opacity:.6"><div class="kl">Needs attention</div><div class="kv" style="color:var(--midnight-46)">—</div></div>
+              </div>
+            </div>
+            <div class="note" style="margin-top:10px">Quiet reserve holds geometry stable; values warm-swap in without layout shift (protected runtime behavior).</div>
+          </div>
+        </div>
+        <div class="note">Surface binding: <code>workspace_header</code> · zones <code>primary_metrics</code> / <code>secondary_metrics</code> · today's <code>WorkspaceOperationalPulseStrip</code> + <code>OipHealthStrip</code> converge onto these Metric cards.</div>
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

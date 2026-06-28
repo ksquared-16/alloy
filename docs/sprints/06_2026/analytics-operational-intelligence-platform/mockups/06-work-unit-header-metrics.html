@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>06 — Work Unit Header Metrics</title>
+<link rel="stylesheet" href="_shared.css" />
+</head>
+<body>
+<div class="frame">
+  <div class="label"><span class="dot"></span>Embedded Metrics <span>Work Unit header — the work stream's own scorecard</span></div>
+  <div class="body">
+    <div class="bos">
+      <div class="logo"></div>
+      <div class="bos-i on">⌂</div><div class="bos-i">▦</div><div class="bos-i">📈</div><div class="bos-i">✉</div>
+      <div class="bos-i" style="margin-top:auto">⚙</div>
+    </div>
+    <div class="surface">
+      <div class="surface-head">
+        <div class="titles">
+          <div class="crumbs"><span>Workspace</span><span class="sep">›</span><span>Growth</span><span class="sep">›</span><span class="here">New Inquiries</span></div>
+          <h2>Embedded · Work Unit Header</h2>
+          <div class="sub">A work unit measures its own throughput. These KPIs scope to this queue and answer "how is this work stream performing?" — and they roll up into Enrollment Intelligence.</div>
+        </div>
+      </div>
+      <div class="surface-body">
+
+        <div class="demo-shell">
+          <div class="demo-cap">Runtime · Work Unit command surface (surface = work_unit_header · zone = header_metrics)</div>
+          <div class="ws-header">
+            <div style="display:flex; align-items:center; gap:12px">
+              <div style="flex:1">
+                <div class="ws-sub" style="margin:0 0 2px">Enrollment · Growth</div>
+                <div class="ws-title">New Inquiries</div>
+              </div>
+              <div class="fp-modes"><span class="on">Cases</span><span>Tours</span><span>Needs attention</span></div>
+            </div>
+            <div class="kpi-strip">
+              <div class="kpi-mini t-good"><div class="kl"><span class="tdot good"></span>In queue</div><div class="kv">48</div><div class="kd flat">— steady</div></div>
+              <div class="kpi-mini t-warn"><div class="kl"><span class="tdot warn"></span>Avg response</div><div class="kv">4.2h</div><div class="kd down">▼ target 2h</div></div>
+              <div class="kpi-mini t-good"><div class="kl"><span class="tdot good"></span>Booked today</div><div class="kv">11</div><div class="kd up">▲ 3</div></div>
+              <div class="kpi-mini t-crit"><div class="kl"><span class="tdot crit"></span>Aging &gt; 48h</div><div class="kv">5</div><div class="kd down">▼ resolve</div></div>
+            </div>
+          </div>
+          <div style="padding:0">
+            <div class="rowlist">
+              <div class="rl"><div class="av">SC</div><div class="rl-main"><div class="rl-t">Sarah Chen · New inquiry</div><div class="rl-s">Web search · 2 children · no contact 18h</div></div><span class="rl-chip" style="background:var(--warn-bg);color:var(--warn)">Call due</span></div>
+              <div class="rl"><div class="av">MR</div><div class="rl-main"><div class="rl-t">Marcus Reed · New inquiry</div><div class="rl-s">Referral · 1 child · contacted</div></div><span class="rl-chip" style="background:var(--good-bg);color:var(--good)">Tour set</span></div>
+              <div class="rl"><div class="av">PA</div><div class="rl-main"><div class="rl-t">Priya Anand · New inquiry</div><div class="rl-s">Walk-in · aging 52h</div></div><span class="rl-chip" style="background:var(--crit-bg);color:var(--crit)">Overdue</span></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="grid">
+          <div class="s7">
+            <div class="zone-head"><h3>Roll-up &amp; drill in both directions</h3></div>
+            <div class="flow" style="margin-bottom:12px">
+              <span class="step">Org</span><span class="ar">→</span><span class="step">Enrollment</span><span class="ar">→</span><span class="step on">New Inquiries (this WU)</span><span class="ar">→</span><span class="step">Queue</span><span class="ar">→</span><span class="step">Record</span>
+            </div>
+            <div class="callout">"Avg response 4.2h" here is the same metric that appears as a <b>bottleneck bar</b> in Operational Intelligence and contributes to <b>Tour conversion</b> in Executive Performance. One definition, three densities, one drill target.</div>
+          </div>
+          <div class="s5">
+            <div class="zone-head"><h3>Card contract (this strip)</h3></div>
+            <div class="mcard" style="gap:6px">
+              <div class="mc-meta"><b>Question:</b> Is this work stream keeping pace?</div>
+              <div class="mc-meta"><b>Grain:</b> opportunity (lead)</div>
+              <div class="mc-meta"><b>Scope:</b> work_unit = New Inquiries</div>
+              <div class="mc-meta"><b>Threshold:</b> response_max = 2h</div>
+              <div class="mc-meta"><b>Drill:</b> → this queue, filtered to aging &gt; 48h</div>
+              <div class="mc-meta"><b>Surfaces:</b> work_unit_header, OI bottlenecks, dept page</div>
+            </div>
+          </div>
+        </div>
+        <div class="note">Surface binding: <code>work_unit_header</code> · today's <code>WorkUnitCommandSurface</code> (runtime-performance protected). Header convergence is gated behind the perf test suite (Phase 3).</div>
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

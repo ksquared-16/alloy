@@ -27,7 +27,12 @@ export type SurfaceConfigObject = {
     subtitle?: string;
     /** When set, selecting the object opens this editor; otherwise it is catalogued only. */
     editor?: SurfaceEditorKind;
+    /** Catalogued (non-editor) surfaces may link to a read-only preview of the composition. */
+    previewHref?: string;
 };
+
+/** Dev-only preview of the Analytics / Dashboard surface composition + Metric Card language. */
+const ANALYTICS_SURFACE_PREVIEW_HREF = "/dev/analytics-surface-mocks";
 
 export const SURFACE_CONFIG_SECTIONS: readonly SurfaceConfigSection[] = [
     { key: "focus-panels", label: "Focus Panels" },
@@ -36,7 +41,7 @@ export const SURFACE_CONFIG_SECTIONS: readonly SurfaceConfigSection[] = [
     { key: "dashboards", label: "Dashboards & Analytics" },
 ];
 
-const SURFACE_OBJECTS: Record<SurfaceConfigSectionKey, SurfaceConfigObject[]> = {
+export const SURFACE_OBJECTS: Record<SurfaceConfigSectionKey, SurfaceConfigObject[]> = {
     "focus-panels": [
         {
             id: "enrollment-focus-panel-summary",
@@ -47,7 +52,36 @@ const SURFACE_OBJECTS: Record<SurfaceConfigSectionKey, SurfaceConfigObject[]> = 
     ],
     "queue-rows": [],
     workspaces: [],
-    dashboards: [],
+    // Dashboard / Analytics Design Surfaces. Catalogued from the Analytics OIP
+    // surface inventory; composition is previewable (dev) ahead of an in-place
+    // editor. Each reuses the Metric archetype + shared Renderer catalog — there
+    // is no separate dashboard configuration model.
+    dashboards: [
+        {
+            id: "executive-performance",
+            title: "Executive Performance",
+            subtitle: "Org health, growth, financial, forecast",
+            previewHref: ANALYTICS_SURFACE_PREVIEW_HREF,
+        },
+        {
+            id: "operational-intelligence",
+            title: "Operational Intelligence",
+            subtitle: "Today: pulse, attention, bottlenecks",
+            previewHref: ANALYTICS_SURFACE_PREVIEW_HREF,
+        },
+        {
+            id: "enrollment-intelligence",
+            title: "Enrollment Intelligence",
+            subtitle: "Funnel, conversion, capacity",
+            previewHref: ANALYTICS_SURFACE_PREVIEW_HREF,
+        },
+        {
+            id: "financial-performance",
+            title: "Financial Performance",
+            subtitle: "Revenue, AR, margin",
+            previewHref: ANALYTICS_SURFACE_PREVIEW_HREF,
+        },
+    ],
 };
 
 export function useSurfacesConfigurationSettings() {

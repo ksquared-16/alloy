@@ -2,6 +2,7 @@
 
 import {
     ConfigurationContext,
+    ConfigurationDetailCard,
     ConfigurationEmptyState,
     ConfigurationQueue,
     ConfigurationQueueItem,
@@ -29,6 +30,8 @@ export default function SurfacesConfigurationPage() {
 
     const editing = Boolean(selectedObject?.editor);
     const activeSectionLabel = sections.find((s) => s.key === section)?.label ?? "";
+    // Catalogued (non-editor) surface with a composition preview — e.g. Dashboard / Analytics.
+    const previewObject = selectedObject && !selectedObject.editor && selectedObject.previewHref ? selectedObject : null;
 
     return (
         <div className="process-config-page min-h-0 flex-1" data-testid="surfaces-configuration-page">
@@ -115,15 +118,38 @@ export default function SurfacesConfigurationPage() {
                         </ConfigurationQueue>
                     }
                 >
-                    <ConfigurationEmptyState
-                        testId="surfaces-workspace-empty"
-                        title={`${activeSectionLabel} surfaces`}
-                        description={
-                            listItems.length === 0
-                                ? sectionEmptyListCopy(section)
-                                : "Select a Design Surface to open the editor. The canvas renders the live runtime with editing layered on top."
-                        }
-                    />
+                    {previewObject ? (
+                        <ConfigurationDetailCard testId="surfaces-dashboard-preview" title={previewObject.title}>
+                            <div className="space-y-3">
+                                <p className="config-typo-sublabel">
+                                    {previewObject.subtitle ? `${previewObject.subtitle}. ` : ""}
+                                    Analytics is a Dashboard Design Surface — composed from the Metric archetype and the
+                                    shared Renderer catalog. An in-place editor lands in a later slice; preview the
+                                    composition and visual language below.
+                                </p>
+                                <a
+                                    href={previewObject.previewHref}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    data-testid="surfaces-dashboard-preview-link"
+                                    className="inline-flex items-center gap-1.5 rounded-lg bg-alloy-pine px-3 py-1.5 text-xs font-semibold text-white hover:bg-alloy-pine/90"
+                                >
+                                    Open Analytics surface preview
+                                    <span aria-hidden="true">→</span>
+                                </a>
+                            </div>
+                        </ConfigurationDetailCard>
+                    ) : (
+                        <ConfigurationEmptyState
+                            testId="surfaces-workspace-empty"
+                            title={`${activeSectionLabel} surfaces`}
+                            description={
+                                listItems.length === 0
+                                    ? sectionEmptyListCopy(section)
+                                    : "Select a Design Surface to open the editor. The canvas renders the live runtime with editing layered on top."
+                            }
+                        />
+                    )}
                 </ConfigurationShell>
             )}
         </div>

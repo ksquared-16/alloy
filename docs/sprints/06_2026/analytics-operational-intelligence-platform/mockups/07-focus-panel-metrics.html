@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>07 — Focus Panel Metrics</title>
+<link rel="stylesheet" href="_shared.css" />
+</head>
+<body>
+<div class="frame">
+  <div class="label"><span class="dot"></span>Embedded Metrics <span>Focus Panel — record-scoped metric cards beside operational cards</span></div>
+  <div class="body">
+    <div class="bos">
+      <div class="logo"></div>
+      <div class="bos-i on">⌂</div><div class="bos-i">▦</div><div class="bos-i">📈</div><div class="bos-i">✉</div>
+      <div class="bos-i" style="margin-top:auto">⚙</div>
+    </div>
+    <div class="surface">
+      <div class="surface-head">
+        <div class="titles">
+          <div class="crumbs"><span>Work Unit</span><span class="sep">›</span><span>Focus Panel</span><span class="sep">›</span><span class="here">Chen household</span></div>
+          <h2>Embedded · Focus Panel Metrics</h2>
+          <div class="sub">At the record, metrics scope to one subject. They sit in the same grid as Household, Children, and Current Work — one Card Language, no separate analytics widget.</div>
+        </div>
+      </div>
+      <div class="surface-body">
+        <div class="demo-shell">
+          <div class="demo-cap">Runtime · Focus Panel (surface = drawer/focus_panel)</div>
+          <div class="fp">
+            <div class="fp-top">
+              <div class="fp-subject">Chen Household · New inquiry</div>
+              <div class="fp-modes"><span class="on">Summary</span><span>Work</span><span>Activity</span></div>
+            </div>
+            <div style="padding:16px; background:var(--canvas)">
+              <div class="grid">
+                <!-- Intelligence (Readiness) -->
+                <div class="mcard t-warn s3">
+                  <div class="ins-head" style="color:var(--intel)">◆ Readiness</div>
+                  <div class="mc-value" style="font-size:26px">62<span class="unit">%</span></div>
+                  <div class="mc-meta">3 of 8 steps complete</div>
+                  <div class="mc-why">Blocked on <b>immunization form</b>.</div>
+                  <div class="mc-foot"><span class="drill"><span class="arr">→</span> Complete steps</span></div>
+                </div>
+                <!-- Household -->
+                <div class="mcard s3" style="--neutral:var(--forge)">
+                  <div class="mc-head"><span class="mc-label">Household</span></div>
+                  <div class="mc-meta"><b>Sarah Chen</b> · primary</div>
+                  <div class="mc-meta">2 children · 3 contacts</div>
+                  <div class="mc-foot"><span class="drill"><span class="arr">→</span> Open household</span></div>
+                </div>
+                <!-- Metric: account health -->
+                <div class="mcard t-fin s3">
+                  <div class="mc-head"><span class="mc-q">Account standing?</span><span class="tone fin">Current</span></div>
+                  <div class="mc-value" style="font-size:26px">$0</div>
+                  <div class="mc-meta">Balance · autopay on</div>
+                  <div class="mc-foot"><span class="drill"><span class="arr">→</span> Billing</span></div>
+                </div>
+                <!-- Metric: this family vs cohort (benchmark) -->
+                <div class="mcard t-good s3">
+                  <div class="mc-head"><span class="mc-label">Time in stage</span><span class="tone good">Fast</span></div>
+                  <div class="mc-value" style="font-size:26px">2<span class="unit">d</span></div>
+                  <div class="mc-meta">vs 5d cohort median</div>
+                  <svg class="spark" viewBox="0 0 160 30" preserveAspectRatio="none"><polyline fill="none" stroke="#10805f" stroke-width="2.5" points="0,22 53,18 106,12 160,8"/></svg>
+                </div>
+
+                <!-- Current work spanning -->
+                <div class="mcard t-crit s6">
+                  <div class="mc-head"><span class="mc-label">Current work</span><span class="tone crit">Due today</span></div>
+                  <div class="mc-meta" style="font-size:13px;color:var(--midnight)"><b>Confirm tour · Thursday 10:00</b></div>
+                  <div class="mc-meta">+ Send immunization form reminder</div>
+                  <div class="mc-foot"><button class="btn btn-pine btn-sm">Confirm tour</button><span class="mc-act">2 more</span></div>
+                </div>
+                <!-- Children -->
+                <div class="mcard s6" style="--neutral:var(--forge)">
+                  <div class="mc-head"><span class="mc-label">Children</span><span class="mc-act">2</span></div>
+                  <div class="rowlist" style="margin:2px -16px -14px">
+                    <div class="rl" style="padding:9px 16px"><div class="av">EC</div><div class="rl-main"><div class="rl-t">Emma Chen · 2y</div><div class="rl-s">Toddler · seeking Sept</div></div><span class="drill"><span class="arr">→</span></span></div>
+                    <div class="rl" style="padding:9px 16px"><div class="av">LC</div><div class="rl-main"><div class="rl-t">Liam Chen · 4y</div><div class="rl-s">Preschool · seeking Sept</div></div><span class="drill"><span class="arr">→</span></span></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="callout">Two cards here are <b>Metric archetype</b> (Account standing, Time in stage) and one is <b>Intelligence</b> (Readiness). They share the grid, spacing, tone language, and drill grammar with Household/Children/Current Work. A metric at the record is the same primitive as a metric in Executive Performance — only the <b>scope</b> (this subject) and <b>density</b> differ.</div>
+        <div class="note">Record-grain metrics use comparison-to-cohort (Benchmark renderer) to keep a single number meaningful: "2d vs 5d cohort median" answers What + Why on one line.</div>
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

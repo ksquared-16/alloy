@@ -1,13 +1,10 @@
 "use client";
 
-import { normalizeOipHealthStatus, oipHealthStatusChipClass, oipHealthStatusLabel } from "@/lib/metrics/oipStatusPresentation";
+import type { ReactNode } from "react";
+
 import type { MetricHealthState, MetricTrendDirection } from "@/lib/metrics/platform/types";
-import {
-    normalizeMetricVisualFill,
-    resolveMetricCardSurface,
-    resolveMetricVisualAccent,
-    type MetricVisualFill,
-} from "@/lib/metrics/platform/metricVisualAccent";
+import type { MetricVisualFill } from "@/lib/metrics/platform/metricVisualAccent";
+import { MetricCardShell, type MetricCardDensity } from "@/components/admin/metrics/MetricCardShell";
 import { MetricSparkline } from "@/components/admin/metrics/MetricSparkline";
 
 type Props = {
@@ -20,11 +17,10 @@ type Props = {
     fill?: MetricVisualFill | string;
     /** Optional explicit direction; otherwise computed from sparkline history. */
     direction?: MetricTrendDirection;
+    question?: string | null;
+    density?: MetricCardDensity;
+    footer?: ReactNode;
 };
-
-function normalizeStatus(status: MetricHealthState | string) {
-    return normalizeOipHealthStatus(status);
-}
 
 /** Trend direction is derived from history, never operator-picked. */
 export function deriveTrendDirection(points: number[] | undefined): MetricTrendDirection {
@@ -48,43 +44,47 @@ export function MetricTrendCard({
     accent = "enrollment",
     fill,
     direction,
+    question,
+    density = "standard",
+    footer,
 }: Props) {
-    const visual = resolveMetricVisualAccent(accent);
-    const fillMode = normalizeMetricVisualFill(fill);
     const computedDirection = direction ?? deriveTrendDirection(sparklinePoints);
     const directionClass =
         computedDirection === "up" ? "text-alloy-juniper"
         : computedDirection === "down" ? "text-alloy-ember"
         : "text-alloy-midnight/40";
+    const valueSize = density === "compact" ? "text-xl" : "text-2xl";
 
     return (
-        <div
-            className={`min-w-0 rounded-lg border-l-[3px] ${visual.rail} ${resolveMetricCardSurface(visual, fillMode)} p-3 shadow-[0_1px_2px_rgba(15,23,42,0.04)]`}
-            data-metric-visual="trend_card"
-            data-metric-accent={visual.key}
-            data-metric-fill={fillMode}
+        <MetricCardShell
+            visual="trend_card"
+            label={label}
+            question={question}
+            status={status}
+            accent={accent}
+            fill={fill}
+            density={density}
+            footer={footer}
         >
-            <div className="flex items-start justify-between gap-2">
-                <p className={`min-w-0 flex-1 truncate text-[11px] font-semibold uppercase tracking-wide ${visual.text}`} title={label}>
-                    {label}
+            <div className="flex items-baseline gap-1.5">
+                <p className={`truncate font-semibold tabular-nums text-alloy-midnight ${valueSize}`}>
+                    {loading ? "…" : value}
                 </p>
-                <span className={`shrink-0 rounded-md border px-1.5 py-0.5 text-[9px] font-semibold ${oipHealthStatusChipClass(normalizeStatus(status))}`}>
-                    {oipHealthStatusLabel(normalizeStatus(status))}
-                </span>
-            </div>
-            <div className="mt-2 flex items-baseline gap-1.5">
-                <p className="truncate text-xl font-semibold tabular-nums text-alloy-midnight">{loading ? "…" : value}</p>
-                {!loading && sparklinePoints?.length ?
-                    <span className={`text-xs font-semibold ${directionClass}`} aria-hidden="true" data-trend-direction={computedDirection}>
+                {!loading && sparklinePoints?.length ? (
+                    <span
+                        className={`text-xs font-semibold ${directionClass}`}
+                        aria-hidden="true"
+                        data-trend-direction={computedDirection}
+                    >
                         {DIRECTION_GLYPH[computedDirection]}
                     </span>
-                :   null}
+                ) : null}
             </div>
-            {sparklinePoints?.length ?
-                <div className="mt-2">
+            {sparklinePoints?.length ? (
+                <div>
                     <MetricSparkline label="" points={sparklinePoints} compact />
                 </div>
-            :   null}
-        </div>
+            ) : null}
+        </MetricCardShell>
     );
 }

@@ -1,13 +1,11 @@
 "use client";
 
+import type { ReactNode } from "react";
+
 import type { MetricTrendComparison } from "@/lib/metrics/platform/types";
 import { formatDeltaPercent } from "@/lib/metrics/platform/metricFormatters";
-import {
-    normalizeMetricVisualFill,
-    resolveMetricCardSurface,
-    resolveMetricVisualAccent,
-    type MetricVisualFill,
-} from "@/lib/metrics/platform/metricVisualAccent";
+import type { MetricVisualFill } from "@/lib/metrics/platform/metricVisualAccent";
+import { MetricCardShell, MetricCardValue, type MetricCardDensity } from "@/components/admin/metrics/MetricCardShell";
 
 type Props = {
     label: string;
@@ -16,11 +14,25 @@ type Props = {
     loading?: boolean;
     accent?: string;
     fill?: MetricVisualFill | string;
+    /** Baseline label shown after the delta (defaults to "prior period"). */
+    baselineLabel?: string;
+    question?: string | null;
+    density?: MetricCardDensity;
+    footer?: ReactNode;
 };
 
-export function MetricComparisonCard({ label, value, comparison, loading = false, accent = "enrollment", fill }: Props) {
-    const visual = resolveMetricVisualAccent(accent);
-    const fillMode = normalizeMetricVisualFill(fill);
+export function MetricComparisonCard({
+    label,
+    value,
+    comparison,
+    loading = false,
+    accent = "enrollment",
+    fill,
+    baselineLabel = "prior period",
+    question,
+    density = "standard",
+    footer,
+}: Props) {
     const delta = comparison?.deltaPercent;
     const sentiment = comparison?.sentiment ?? "neutral";
     const deltaClass =
@@ -29,19 +41,22 @@ export function MetricComparisonCard({ label, value, comparison, loading = false
         : "text-alloy-midnight/50";
 
     return (
-        <div
-            className={`min-w-0 rounded-lg border-l-[3px] ${visual.rail} ${resolveMetricCardSurface(visual, fillMode)} p-3`}
-            data-metric-visual="comparison"
-            data-metric-accent={visual.key}
-            data-metric-fill={fillMode}
+        <MetricCardShell
+            visual="comparison"
+            label={label}
+            question={question}
+            accent={accent}
+            fill={fill}
+            density={density}
+            showHealthChip={false}
+            footer={footer}
         >
-            <p className={`truncate text-[11px] font-semibold uppercase tracking-wide ${visual.text}`} title={label}>{label}</p>
-            <p className="mt-2 truncate text-xl font-semibold tabular-nums text-alloy-midnight">{loading ? "…" : value}</p>
-            {comparison && delta != null ?
-                <p className={`mt-1 text-xs font-medium tabular-nums ${deltaClass}`}>
-                    {formatDeltaPercent(delta)} vs prior period
+            <MetricCardValue value={value} loading={loading} density={density} />
+            {comparison && delta != null ? (
+                <p className={`text-xs font-medium tabular-nums ${deltaClass}`}>
+                    {formatDeltaPercent(delta)} vs {baselineLabel}
                 </p>
-            :   null}
-        </div>
+            ) : null}
+        </MetricCardShell>
     );
 }

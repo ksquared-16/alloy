@@ -11,6 +11,8 @@ import { MetricTrendCard } from "@/components/admin/metrics/MetricTrendCard";
 import { MetricChip } from "@/components/admin/metrics/MetricChip";
 import { MetricSparkline } from "@/components/admin/metrics/MetricSparkline";
 import { MetricScorecard, type ScorecardMetric } from "@/components/admin/metrics/MetricScorecard";
+import { MetricHealthCard } from "@/components/admin/metrics/MetricHealthCard";
+import { MetricBreakdownCard, type MetricBreakdownSegment } from "@/components/admin/metrics/MetricBreakdownCard";
 
 export type MetricVisualRendererProps = {
     placement: ResolvedMetricPlacement;
@@ -20,7 +22,22 @@ export type MetricVisualRendererProps = {
     trendComparison?: MetricTrendComparison | null;
     /** Additional metric rows for scorecard bodies (label + value). */
     scorecardMetrics?: ScorecardMetric[];
+    /** Dimension segments for the breakdown (bar_chart) renderer. */
+    breakdownSegments?: MetricBreakdownSegment[];
 };
+
+/**
+ * Gauge fill is presentation only: percent/rate metrics map their resolved value
+ * to 0–100; everything else lets the Health card derive the ring from health state.
+ * Never recomputes the metric.
+ */
+function deriveGaugeScore(evaluation: MetricEvaluationResult | null): number | null {
+    if (!evaluation || evaluation.value == null || !Number.isFinite(evaluation.value)) return null;
+    if (evaluation.unit === "percent" || evaluation.unit === "rate") {
+        return Math.max(0, Math.min(100, evaluation.value * 100));
+    }
+    return null;
+}
 
 export function MetricVisualRenderer({
     placement,
@@ -29,6 +46,7 @@ export function MetricVisualRenderer({
     sparklinePoints,
     trendComparison,
     scorecardMetrics,
+    breakdownSegments,
 }: MetricVisualRendererProps) {
     const viz = placement.visualization;
     const label = (viz.display_config as { labelOverride?: string }).labelOverride ?? viz.label;
@@ -49,8 +67,30 @@ export function MetricVisualRenderer({
                     metrics={scorecardMetrics}
                 />
             );
-        case "kpi_card":
         case "gauge":
+            return (
+                <MetricHealthCard
+                    label={label}
+                    value={evaluation?.formattedValue ?? "—"}
+                    status={evaluation?.healthState ?? "unknown"}
+                    score={deriveGaugeScore(evaluation)}
+                    loading={loading}
+                    accent={accent}
+                    fill={fill}
+                />
+            );
+        case "bar_chart":
+            return (
+                <MetricBreakdownCard
+                    label={label}
+                    segments={breakdownSegments}
+                    status={evaluation?.healthState ?? "unknown"}
+                    loading={loading}
+                    accent={accent}
+                    fill={fill}
+                />
+            );
+        case "kpi_card":
             return (
                 <MetricKpiCard
                     label={label}
