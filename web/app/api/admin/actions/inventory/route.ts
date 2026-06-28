@@ -1,9 +1,15 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { requireAdminOrOps } from "@/lib/adminAuth";
+import { apiOk, apiError } from "@/lib/api/apiResponse";
 
 export const dynamic = "force-dynamic";
+
+/**
+ * Phase 2 contract: this route emits the standard envelope
+ * (`{ ok, data: { items }, correlation_id }`). @see docs/api/api-response-contract.md
+ */
 
 type InventoryRow = {
     definition: {
@@ -91,7 +97,7 @@ export async function GET(request: NextRequest) {
     };
 
     const { data: placementsRaw, error: pErr } = await pQuery;
-    if (pErr) return NextResponse.json({ error: pErr.message }, { status: 500 });
+    if (pErr) return apiError("INTERNAL", pErr.message, 500, undefined, { request });
 
     const placements = (placementsRaw ?? []) as unknown as PlacementRow[];
     const defIds = Array.from(new Set(placements.map((p) => String(p.action_definition_id ?? "")))).filter(Boolean);
@@ -128,7 +134,7 @@ export async function GET(request: NextRequest) {
         .in("id", defIds.length ? defIds : ["00000000-0000-0000-0000-000000000000"])
         .or(`org_id.is.null,org_id.eq.${ctx.orgId}`);
 
-    if (dErr) return NextResponse.json({ error: dErr.message }, { status: 500 });
+    if (dErr) return apiError("INTERNAL", dErr.message, 500, undefined, { request });
 
     const defs = (defsRaw ?? []) as unknown as DefRow[];
     const defsById = new Map<string, DefRow>();
@@ -169,6 +175,6 @@ export async function GET(request: NextRequest) {
         });
     }
 
-    return NextResponse.json({ items: rows });
+    return apiOk({ items: rows }, { request });
 }
 

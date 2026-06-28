@@ -5,10 +5,17 @@ import { validateMetricDefinitionCreate } from "@/lib/metrics/platform/metricDef
 import { validateSourceAggregation, validateSourceFilters, validateSourceDimensions } from "@/lib/metrics/platform/metricSourceRegistry";
 import { loadMetricDefinitionsForOrg } from "@/lib/metrics/platform/placementResolver";
 import { listMetricSourceAdapters } from "@/lib/metrics/platform/metricSourceRegistry";
+import { apiOk } from "@/lib/api/apiResponse";
 
 export const dynamic = "force-dynamic";
 
-export async function GET() {
+/**
+ * Phase 2 contract: GET emits the standard envelope
+ * (`{ ok, data: { items, adapters }, correlation_id }`). POST/PATCH remain on the
+ * legacy shape pending a coordinated builder-panel migration.
+ * @see docs/api/api-response-contract.md
+ */
+export async function GET(request: NextRequest) {
     const gate = await requireAnalyticsV2AdminContext();
     if (!gate.ok) return gate.response;
 
@@ -16,7 +23,7 @@ export async function GET() {
     const items = await loadMetricDefinitionsForOrg(supabase, gate.ctx.orgId);
     const adapters = listMetricSourceAdapters();
 
-    return NextResponse.json({ items, adapters });
+    return apiOk({ items, adapters }, { request });
 }
 
 export async function POST(request: NextRequest) {

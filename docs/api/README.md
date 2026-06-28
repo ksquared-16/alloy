@@ -11,6 +11,7 @@
 | File | Contents |
 |------|----------|
 | [`api-index.md`](api-index.md) | **Generated** master table of all `web/app/api/**` route handlers (method, path, auth signal, validation signal, service-role, writes/events, stability, tables). Regenerate with `node scripts/generate-api-inventory.mjs`. |
+| [`api-response-contract.md`](api-response-contract.md) | **Phase 2** standard response envelope (`ApiSuccess`/`ApiFailure`), helpers, error-code + correlation-id conventions, and migration status. |
 | [`admin-configuration-api.md`](admin-configuration-api.md) | Configuration control plane — fields, layouts, option sets, statuses, pricing, RBAC, users, org settings |
 | [`workspace-api.md`](workspace-api.md) | Workspace, queues, work units, focus-panel/drawer view models, analytics/metrics, global search |
 | [`entity-record-api.md`](entity-record-api.md) | Entity GET/resolver, CRM records (persons, customers, opportunities, jobs, schedules, vendors, financials, tours) |
@@ -66,12 +67,12 @@ Routes compose a small set of server helpers. The detected helper per route is i
 - **Runtime:** Next.js App Router route handlers (`export async function GET/POST/PATCH/PUT/DELETE`). A few routes re-export handlers from a sibling (`export { GET } from "…"`) as compatibility aliases.
 - **Data client:** Server-only `createAdminClient()` (service role). Public booking uses `createServiceRoleClient()` with a resolved public org. **Never** exposed to the browser.
 - **Validation:** Mostly **manual** (parse JSON, check required fields, `400` on missing). The analytics platform and a few newer routes use **schema validators** (`validate*`, `zodErrorResponse`) or **zod**. The validation signal per route is in [`api-index.md`](api-index.md).
-- **Response envelopes:** **Not uniform.** Common shapes:
+- **Response envelopes:** Historically **not uniform**. Legacy shapes still in the wild:
   - Bare resource object (`GET /api/admin/entity/[type]/[id]` returns the row plus `_`-prefixed display fields).
   - `{ items: [...] }` / `{ <plural>: [...] }` for lists.
   - `{ ok: true, ... }` / `{ ok: false, error, correlation_id }` for action-style routes.
-  - `{ error: string }` with an HTTP status for failures — but some routes return a **bare JSON string** (`"Not found"`).
-  - This inconsistency is tracked in the [audit](api-documentation-audit.md); normalizing it is a Phase 2 candidate.
+  - `{ error: string }` with an HTTP status for failures — and some routes returned a **bare JSON string** (`"Not found"`).
+  - **Phase 2 standardizes this** into a single envelope (`{ ok, data, correlation_id }` / `{ ok, error: { code, message }, correlation_id }`) via shared helpers in `web/lib/api/`. See [`api-response-contract.md`](api-response-contract.md) for the contract and per-route migration status. A representative slice is migrated; full normalization is incremental.
 
 ---
 

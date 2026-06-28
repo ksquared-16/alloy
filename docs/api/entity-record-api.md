@@ -31,7 +31,7 @@ Source: `web/app/api/admin/entity/[type]/[id]/route.ts`.
   - *Global / catalog* (no org on primary table): `verticals`, `discount_codes`, `assignment_statuses`, `job_statuses`, `location_types` (joins only); `addons` → `pricing_addons` (vertical-scoped).
   - `discount_redemptions` has no `org_id`; access allowed when any linked customer/job/opportunity/contact is in caller org.
 - **Response:** Bare record object enriched with `_`-prefixed display fields (`_status_display`, `_primary_contact_name`, `_counts`, `_linked_*`, etc.). Opportunities delegate to `respondOpportunityEntityGet`; jobs to `resolveJobRecord` (RRS) and include `_rrs`. `id === "new"` returns `{ _create: true }`.
-- **Error modes:** `400` invalid type/id; `404` not found / out of scope (often a **bare string** `"Not found"`); `500` on unexpected failure (`{ error: "Failed to fetch entity" }`). Envelope inconsistency (bare string vs `{ error }`) is noted in the [audit](api-documentation-audit.md).
+- **Error modes (Phase 2 migrated):** all error exits now use the standard failure envelope `{ ok: false, error: { code, message }, correlation_id }` via `apiError` — `400 BAD_REQUEST` (invalid type/id), `404 NOT_FOUND` (not found / out of scope), `500 INTERNAL` (unexpected). **HTTP status codes are preserved exactly**; the bare-string `"Not found"` body is gone. The **success** path remains the legacy bare record object (consumed by every drawer) — migrating success is a coordinated future batch. See [`api-response-contract.md`](api-response-contract.md).
 - **Surface param:** `?surface=` resolves record surface (`full` default) for RRS-backed types.
 - **Perf:** Wrapped by an `ADMIN_PERF_TRACE` timing passthrough; person payload build is timed.
 
@@ -73,6 +73,6 @@ Each family follows: `GET`/`POST` on the collection, `GET`/`PATCH`/`DELETE` on `
 
 - **Widening entity GET responses** affects every drawer and RRS consumer — coordinate with drawer VM contracts (`docs/system/drawer-doctrine.md`, AdminV2 performance doctrine).
 - `contacts` is **compatibility infrastructure**; prefer `persons` + `customer_persons` for human identity (project doctrine).
-- Bare-string error bodies and mixed envelopes are concentrated in this domain — see [audit](api-documentation-audit.md).
+- The canonical entity GET error envelope is now standardized (Phase 2); remaining mixed **success** envelopes in this domain are tracked in the [audit](api-documentation-audit.md).
 
 Source root: `web/app/api/admin/` (entity, persons, contacts, customers, opportunities, jobs, schedules, locations, vendors, subscriptions, payments, financials, tours, processing, child-*, placement-candidates).

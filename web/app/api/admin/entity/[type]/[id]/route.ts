@@ -24,6 +24,38 @@ import { resolveRecordSurfaceParam } from "@/lib/rrs/surfaces";
 import { respondOpportunityEntityGet } from "@/lib/admin/opportunityEntityRecord";
 import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
 import { assertEntityDrawerRecordReadable, scopeDimensionsFromAccess } from "@/lib/admin/accessScope";
+import { apiError } from "@/lib/api/apiResponse";
+
+/**
+ * Phase 2 contract (partial): error responses use the standard failure envelope
+ * (`{ ok: false, error: { code, message }, correlation_id }`) via the helpers
+ * below — this resolves the audit's bare-string-error finding. HTTP status codes
+ * are preserved exactly. The success payload remains the legacy bare record object
+ * (consumed by every drawer); migrating success is a coordinated future batch.
+ * @see docs/api/api-response-contract.md
+ */
+function entityNotFound(message = "Not found") {
+    return apiError("NOT_FOUND", message, 404);
+}
+function entityBadRequest(message: string) {
+    return apiError("BAD_REQUEST", message, 400);
+}
+function entityServerError(message = "Failed to fetch entity") {
+    return apiError("INTERNAL", message, 500);
+}
+/** Map a Supabase error to the prior status semantics (PGRST116 = no rows → 404, else 500). */
+function entitySupabaseError(
+    err: { code?: string | null; message?: string | null } | null | undefined,
+    fallback = "Not found"
+) {
+    const message = err?.message || fallback;
+    return err?.code === "PGRST116" ? entityNotFound(message) : entityServerError(message);
+}
+/** Preserve a precomputed status while emitting the standard failure envelope. */
+function entityStatusError(message: string, status: number) {
+    const code = status === 404 ? "NOT_FOUND" : status >= 500 ? "INTERNAL" : "BAD_REQUEST";
+    return apiError(code, message, status);
+}
 
 /**
  * Drawer entity org model:
@@ -104,7 +136,7 @@ async function getEntityImpl(
 ) {
     const { type, id } = await params;
     if (!id || !ENTITY_TYPES.includes(type as (typeof ENTITY_TYPES)[number])) {
-        return NextResponse.json({ error: "Invalid type or id" }, { status: 400 });
+        return entityBadRequest("Invalid type or id");
     }
 
     try {
@@ -121,7 +153,7 @@ async function getEntityImpl(
         const skipDrawerScopeGate = id === "new" || type === "opportunities" || type === "addons";
         if (!skipDrawerScopeGate) {
             if (!(await assertEntityDrawerRecordReadable(supabase, orgId, scopeDim, type, id))) {
-                return NextResponse.json("Not found", { status: 404 });
+                return entityNotFound();
             }
         }
 
@@ -133,7 +165,7 @@ async function getEntityImpl(
             const resolved = await resolveJobRecord(supabase, orgId, id, surface);
             if (!resolved.ok) {
                 const status = resolved.notFound ? 404 : 500;
-                return NextResponse.json(resolved.message || "Not found", { status });
+                return entityStatusError(resolved.message || "Not found", status);
             }
             return NextResponse.json({ ...resolved.flat, _rrs: resolved.rrs });
         }
@@ -145,7 +177,7 @@ async function getEntityImpl(
                 return NextResponse.json({ _create: true });
             }
             const { data, error } = await supabase.from("contacts").select("*").eq("id", id).eq("org_id", orgId).single();
-            if (error || !data) return NextResponse.json(error?.message || "Not found", { status: error?.code === "PGRST116" ? 404 : 500 });
+            if (error || !data) return entitySupabaseError(error);
             const contact = data as { customer_id?: string | null; vendor_id?: string | null; person_id?: string | null };
             let _person: Record<string, unknown> | null = null;
             let _person_id: string | null = null;
@@ -207,7 +239,7 @@ async function getEntityImpl(
         }
         if (type === "customers") {
             const { data, error } = await supabase.from("customers").select("*").eq("id", id).eq("org_id", orgId).single();
-            if (error || !data) return NextResponse.json(error?.message || "Not found", { status: error?.code === "PGRST116" ? 404 : 500 });
+            if (error || !data) return entitySupabaseError(error);
             const out: Record<string, unknown> = { ...data };
             const primaryContactId = (data as { primary_contact_id?: string | null }).primary_contact_id;
             const verticalId = (data as { vertical_id?: string | null }).vertical_id;
@@ -312,7 +344,7 @@ async function getEntityImpl(
                 return NextResponse.json({ _create: true });
             }
             const { data: schedule, error } = await supabase.from("schedules").select("*").eq("id", id).eq("org_id", orgId).single();
-            if (error || !schedule) return NextResponse.json(error?.message || "Not found", { status: error?.code === "PGRST116" ? 404 : 500 });
+            if (error || !schedule) return entitySupabaseError(error);
             const out: Record<string, unknown> = { ...schedule };
             const scheduleLocationId = (schedule as { location_id?: string | null }).location_id;
             const jobId = (schedule as { job_id?: string }).job_id;
@@ -579,7 +611,7 @@ async function getEntityImpl(
                 .eq("org_id", orgId)
                 .single();
             if (error || !location) {
-                return NextResponse.json(error?.code === "PGRST116" ? "Not found" : error?.message ?? "Not found", { status: 404 });
+                return entityNotFound(error?.code === "PGRST116" ? "Not found" : error?.message ?? "Not found");
             }
             const out: Record<string, unknown> = { ...location };
             const locSk = (location as { status_key?: string | null }).status_key;
@@ -700,7 +732,7 @@ async function getEntityImpl(
         }
         if (type === "discount_redemptions") {
             const dr = await assertDiscountRedemptionInOrg(supabase, id, orgId);
-            if (!dr.ok) return NextResponse.json("Not found", { status: 404 });
+            if (!dr.ok) return entityNotFound();
             const redemption = dr.row as Record<string, unknown> & {
                 discount_code_id: string;
                 customer_id?: string | null;
@@ -780,7 +812,7 @@ async function getEntityImpl(
                 return NextResponse.json({ _create: true });
             }
             const { data: wf, error: wErr } = await supabase.from("workflows").select("*").eq("id", id).eq("org_id", orgId).single();
-            if (wErr || !wf) return NextResponse.json(wErr?.message || "Not found", { status: wErr?.code === "PGRST116" ? 404 : 500 });
+            if (wErr || !wf) return entitySupabaseError(wErr);
             const { data: cond } = await supabase.from("workflow_conditions").select("*").eq("workflow_id", id);
             const { data: acts } = await supabase.from("workflow_actions").select("*").eq("workflow_id", id).order("action_order", { ascending: true });
             return NextResponse.json({
@@ -791,7 +823,7 @@ async function getEntityImpl(
         }
         if (type === "vendors") {
             const { data: vendor, error: vErr } = await supabase.from("vendors").select("*").eq("id", id).eq("org_id", orgId).single();
-            if (vErr || !vendor) return NextResponse.json(vErr?.message || "Not found", { status: vErr?.code === "PGRST116" ? 404 : 500 });
+            if (vErr || !vendor) return entitySupabaseError(vErr);
             const v = vendor as Record<string, unknown> & {
                 status_key?: string | null;
                 status?: string | null;
@@ -923,7 +955,7 @@ async function getEntityImpl(
         }
         if (type === "subscriptions") {
             const { data: sub, error: subErr } = await supabase.from("customer_subscriptions").select("*").eq("id", id).eq("org_id", orgId).single();
-            if (subErr || !sub) return NextResponse.json(subErr?.message || "Not found", { status: subErr?.code === "PGRST116" ? 404 : 500 });
+            if (subErr || !sub) return entitySupabaseError(subErr);
             const out: Record<string, unknown> = { ...sub };
             const cadence = (sub as { cadence?: string }).cadence ?? "month";
             const interval = Math.max(1, Number((sub as { interval?: number }).interval) || 1);
@@ -981,7 +1013,7 @@ async function getEntityImpl(
                 .eq("org_id", orgId)
                 .maybeSingle();
             if (docErr || !doc) {
-                return NextResponse.json(docErr?.message || "Not found", { status: docErr?.code === "PGRST116" ? 404 : 500 });
+                return entitySupabaseError(docErr);
             }
             const row = doc as Record<string, unknown>;
             const out: Record<string, unknown> = { ...row };
@@ -1066,7 +1098,7 @@ async function getEntityImpl(
 
         if (type === "payments") {
             const { data, error } = await supabase.from("payments").select("*").eq("id", id).eq("org_id", orgId).single();
-            if (error || !data) return NextResponse.json(error?.message || "Not found", { status: error?.code === "PGRST116" ? 404 : 500 });
+            if (error || !data) return entitySupabaseError(error);
             const payment = data as Record<string, unknown> & {
                 customer_id?: string | null;
                 job_id?: string | null;
@@ -1160,7 +1192,7 @@ async function getEntityImpl(
                 .eq("org_id", orgId)
                 .maybeSingle();
             if (rowErr || !row) {
-                return NextResponse.json(rowErr?.code === "PGRST116" ? "Not found" : rowErr?.message ?? "Not found", { status: 404 });
+                return entityNotFound(rowErr?.code === "PGRST116" ? "Not found" : rowErr?.message ?? "Not found");
             }
             const out: Record<string, unknown> = { ...row };
             const personId = (row as { person_id?: string | null }).person_id ?? null;
@@ -1261,7 +1293,7 @@ async function getEntityImpl(
                 .eq("org_id", orgId)
                 .maybeSingle();
             if (personErr || !personRow) {
-                return NextResponse.json(personErr?.code === "PGRST116" ? "Not found" : personErr?.message ?? "Not found", { status: 404 });
+                return entityNotFound(personErr?.code === "PGRST116" ? "Not found" : personErr?.message ?? "Not found");
             }
             const out: Record<string, unknown> = { ...personRow };
             const p = personRow as { full_name?: string | null; first_name?: string | null; last_name?: string | null };
@@ -1429,7 +1461,7 @@ async function getEntityImpl(
 
         if (type === "service_offerings") {
             const { data, error } = await supabase.from("service_offerings").select("*").eq("id", id).eq("org_id", orgId).single();
-            if (error || !data) return NextResponse.json(error?.message || "Not found", { status: error?.code === "PGRST116" ? 404 : 500 });
+            if (error || !data) return entitySupabaseError(error);
             const row = data as Record<string, unknown> & { vertical_id?: string | null };
             const out: Record<string, unknown> = { ...row };
             out._updated = (row.updated_at as string) ?? (row.created_at as string) ?? null;
@@ -1444,7 +1476,7 @@ async function getEntityImpl(
 
         if (type === "service_plan_templates") {
             const { data, error } = await supabase.from("service_plan_templates").select("*").eq("id", id).eq("org_id", orgId).single();
-            if (error || !data) return NextResponse.json(error?.message || "Not found", { status: error?.code === "PGRST116" ? 404 : 500 });
+            if (error || !data) return entitySupabaseError(error);
             const row = data as Record<string, unknown> & { recurrence_unit?: string | null; recurrence_interval?: number | null };
             const out: Record<string, unknown> = { ...row };
             out._updated = (row.updated_at as string) ?? (row.created_at as string) ?? null;
@@ -1462,7 +1494,7 @@ async function getEntityImpl(
 
         if (type === "addons") {
             const { data, error } = await supabase.from("pricing_addons").select("*").eq("id", id).single();
-            if (error || !data) return NextResponse.json(error?.message || "Not found", { status: error?.code === "PGRST116" ? 404 : 500 });
+            if (error || !data) return entitySupabaseError(error);
             const row = data as Record<string, unknown> & { vertical_id?: string | null };
             const out: Record<string, unknown> = { ...row };
             out._updated = (row.updated_at as string) ?? (row.created_at as string) ?? null;
@@ -1475,10 +1507,10 @@ async function getEntityImpl(
             return NextResponse.json(out);
         }
 
-        return NextResponse.json({ error: "Invalid type" }, { status: 400 });
+        return entityBadRequest("Invalid type");
     } catch (e: unknown) {
         console.error("[ADMIN_ENTITY]", e);
-        return NextResponse.json({ error: "Failed to fetch entity" }, { status: 500 });
+        return entityServerError();
     }
 }
 

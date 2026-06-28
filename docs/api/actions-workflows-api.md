@@ -25,17 +25,18 @@ Source: `web/app/api/admin/actions/execute/route.ts`.
 - **Auth:** `requireAdminOrOps` → `getAdminContextCached` → `getAdminAccessContextCached`.
 - **Body:** `{ action_key, entity_type, entity_id, context?: { surface?, department_id?, work_unit_id?, section_key? }, payload? }`. `create_lead` is special-cased (no `entity_id` required; uses a constant). Missing required fields → `400 { error }`.
 - **Side effects:** Delegates to `executeAdminAction(supabase, { orgId, userId, accessScope }, …)`. On success, busts the action resolver cache via `revalidateTag(adminActionsOrgTag(orgId))` so headers/queue rows refresh.
-- **Response:** Success `{ ok: true, correlation_id, execution_result }`. Failure `{ ok: false, correlation_id, error, execution_result: null, completion_requirements?, effective_requirements?, action_preflight? }` with the result's HTTP status. This `{ ok, correlation_id }` envelope is a good normalization target for the rest of the surface.
+- **Response:** Success `{ ok: true, data: { execution_result, affected_id? }, correlation_id, execution_result, affected_id? }`. Failure `{ ok: false, correlation_id, error, execution_result: null, completion_requirements?, effective_requirements?, action_preflight? }` with the result's HTTP status.
+- **Phase 2 (additive):** Success now also carries the canonical `data` plus the `x-correlation-id` header; the legacy top-level fields are preserved because ~15 client call sites read them. The **failure** envelope is intentionally still legacy (its `error` is a string, which collides with the canonical `error` object) — full cutover is the recommended next batch. See [`api-response-contract.md`](api-response-contract.md) §5.
 
 ### Resolve / preflight / catalog
 
 | Path | Methods | Purpose |
 |------|---------|---------|
 | `/api/admin/actions` | GET | Resolve actions for a surface/context |
-| `/api/admin/actions/preflight` | POST | Preflight an action (requirements without executing) |
+| `/api/admin/actions/preflight` | POST | Preflight an action (requirements without executing) — **Phase 2 migrated:** zod-validated body → `apiZodError`; success `{ ok, data: { effective_requirements, completion_requirements, bos_preflight, executable }, correlation_id }` |
 | `/api/admin/actions/right-rail-bundle` | GET | Right rail + work-unit + department surfaces in one auth pass (`loadAdminRouteGate`) |
 | `/api/admin/actions/workspace-root-bundle` | GET | Workspace-root action bundle |
-| `/api/admin/actions/inventory` | GET | Action inventory (Settings) |
+| `/api/admin/actions/inventory` | GET | Action inventory (Settings) — **Phase 2 migrated:** `{ ok, data: { items }, correlation_id }` |
 | `/api/admin/actions/definition-catalog` | GET | Catalog of definable actions |
 | `/api/admin/action-definitions/[id]` | PATCH | Edit an action definition |
 | `/api/admin/action-placements` , `/[id]` | POST PATCH DELETE | Create/edit placements (catalog row only) |
@@ -76,8 +77,8 @@ These are **public/tokenized** — no admin session. They validate the token and
 
 ## Validation, envelopes & side effects
 
-- **Validation:** Manual body checks with `400`. Execution validates `action_key`/`entity_type`/`entity_id` and computes completion/effective requirements.
-- **Envelopes:** Execution uses the `{ ok, correlation_id, … }` envelope; catalogs/lists use `{ <name>: [...] }`.
+- **Validation:** Manual body checks with `400` on most routes; `preflight` now uses a **zod** schema (`apiZodError`) as the contract model. Execution validates `action_key`/`entity_type`/`entity_id` and computes completion/effective requirements.
+- **Envelopes:** `preflight` and `inventory` use the standard `{ ok, data, correlation_id }` contract; `execute` is additively migrated (success); catalogs/lists still use `{ <name>: [...] }`. See [`api-response-contract.md`](api-response-contract.md).
 - **Side effects:** This is the platform's **side-effect hub** — workflow events, cache revalidation, and downstream effects all originate here. Meaningful effects must flow through these paths, not ad hoc writes.
 
 Source root: `web/app/api/admin/{actions,action-definitions,action-placements,record-actions,relationship-actions,workflows,workflow-runs,workflow-events}`, `web/app/api/{action,action-links}`.

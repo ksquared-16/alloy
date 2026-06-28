@@ -219,6 +219,27 @@
     "lines": 53
   },
   {
+    "apiPath": "/api/admin/actions/eligibility",
+    "file": "web/app/api/admin/actions/eligibility/route.ts",
+    "methods": [
+      "POST"
+    ],
+    "auth": [
+      "access-scope",
+      "admin-context",
+      "admin-or-ops"
+    ],
+    "validation": "manual",
+    "serviceRole": true,
+    "writes": false,
+    "events": false,
+    "tables": [],
+    "rpcs": [],
+    "domain": "Actions / Workflows",
+    "stability": "admin-only",
+    "lines": 66
+  },
+  {
     "apiPath": "/api/admin/actions/execute",
     "file": "web/app/api/admin/actions/execute/route.ts",
     "methods": [
@@ -237,7 +258,7 @@
     "rpcs": [],
     "domain": "Actions / Workflows",
     "stability": "admin-only",
-    "lines": 93
+    "lines": 169
   },
   {
     "apiPath": "/api/admin/actions/inventory",
@@ -260,7 +281,7 @@
     "rpcs": [],
     "domain": "Actions / Workflows",
     "stability": "admin-only",
-    "lines": 175
+    "lines": 181
   },
   {
     "apiPath": "/api/admin/actions/preflight",
@@ -272,7 +293,7 @@
       "admin-context",
       "admin-or-ops"
     ],
-    "validation": "manual",
+    "validation": "zod",
     "serviceRole": true,
     "writes": false,
     "events": false,
@@ -280,7 +301,7 @@
     "rpcs": [],
     "domain": "Actions / Workflows",
     "stability": "admin-only",
-    "lines": 65
+    "lines": 79
   },
   {
     "apiPath": "/api/admin/actions/right-rail-bundle",
@@ -925,7 +946,7 @@
     "rpcs": [],
     "domain": "Workspace / Queue / Focus Panel",
     "stability": "admin-only",
-    "lines": 80
+    "lines": 87
   },
   {
     "apiPath": "/api/admin/analytics/placements/[id]",
@@ -3580,7 +3601,7 @@
       "access-scope",
       "admin-context"
     ],
-    "validation": "manual",
+    "validation": "none",
     "serviceRole": true,
     "writes": false,
     "events": false,
@@ -3625,7 +3646,7 @@
     "rpcs": [],
     "domain": "Entity / Record / Resolver",
     "stability": "admin-only",
-    "lines": 1497
+    "lines": 1529
   },
   {
     "apiPath": "/api/admin/field-definitions/[id]",
@@ -5701,6 +5722,25 @@
     "domain": "Workspace / Queue / Focus Panel",
     "stability": "admin-only",
     "lines": 102
+  },
+  {
+    "apiPath": "/api/admin/operational-expectations",
+    "file": "web/app/api/admin/operational-expectations/route.ts",
+    "methods": [
+      "GET"
+    ],
+    "auth": [
+      "admin-context"
+    ],
+    "validation": "manual",
+    "serviceRole": true,
+    "writes": false,
+    "events": false,
+    "tables": [],
+    "rpcs": [],
+    "domain": "Admin / Configuration",
+    "stability": "admin-only",
+    "lines": 81
   },
   {
     "apiPath": "/api/admin/operational-tasks/[id]",

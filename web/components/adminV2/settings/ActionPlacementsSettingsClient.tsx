@@ -102,7 +102,12 @@ export default function ActionPlacementsSettingsClient() {
                 fetch("/api/admin/actions/inventory", { credentials: "include" }),
                 fetch("/api/admin/actions/definition-catalog", { credentials: "include" }),
             ]);
-            const invJ = (await invRes.json().catch(() => ({}))) as { items?: InventoryItem[]; error?: string };
+            // Inventory route uses the API response contract: { ok, data: { items }, ... }.
+            // definition-catalog is not yet migrated, so it still returns { definitions }.
+            const invJ = (await invRes.json().catch(() => ({}))) as {
+                data?: { items?: InventoryItem[] };
+                error?: { message?: string };
+            };
             const catJ = (await catRes.json().catch(() => ({}))) as {
                 definitions?: ActionCatalogDefinition[];
                 error?: string;
@@ -110,13 +115,13 @@ export default function ActionPlacementsSettingsClient() {
             setCatalog(catJ.definitions ?? []);
             if (!invRes.ok) {
                 setRows([]);
-                setError(invJ.error ?? "Failed to load placements");
+                setError(invJ.error?.message ?? "Failed to load placements");
                 if (!catRes.ok) {
                     setError((prev) => prev ?? catJ.error ?? "Failed to load action catalog");
                 }
                 return;
             }
-            setRows((invJ.items ?? []).map(toEditorRow));
+            setRows((invJ.data?.items ?? []).map(toEditorRow));
             setError(catRes.ok ? null : catJ.error ?? null);
         } catch (e) {
             setRows([]);

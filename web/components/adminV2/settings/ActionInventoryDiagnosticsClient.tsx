@@ -22,21 +22,24 @@ export default function ActionInventoryDiagnosticsClient() {
         (async () => {
             try {
                 const res = await fetch("/api/admin/actions/inventory", { credentials: "include" });
+                // API response contract: { ok, data: { items }, ... } / { ok, error: { message } }
                 const j = (await res.json().catch(() => ({}))) as {
-                    items?: Array<{
-                        definition: ActionInventoryRow["definition"] & { id?: string };
-                        placement: ActionInventoryRow["placement"] & { id?: string };
-                    }>;
-                    error?: string;
+                    data?: {
+                        items?: Array<{
+                            definition: ActionInventoryRow["definition"] & { id?: string };
+                            placement: ActionInventoryRow["placement"] & { id?: string };
+                        }>;
+                    };
+                    error?: { message?: string };
                 };
                 if (cancelled) return;
                 if (!res.ok) {
                     setItems([]);
-                    setError(j.error ?? "Failed to load");
+                    setError(j.error?.message ?? "Failed to load");
                     return;
                 }
                 setItems(
-                    (j.items ?? []).map((r) => ({
+                    (j.data?.items ?? []).map((r) => ({
                         definition: {
                             key: r.definition.key,
                             label: r.definition.label,

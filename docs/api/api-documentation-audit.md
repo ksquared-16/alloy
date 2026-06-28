@@ -5,6 +5,11 @@
 
 **Outcome goal:** Make the surface reviewable. This is a findings list and a Phase 2 plan, not a remediation.
 
+> **Phase 2 update (Contract Normalization, June 2026):** The standard response
+> envelope, shared helpers, tests, and an org-scoping guard spike now exist, and a
+> representative route slice is migrated. See [`api-response-contract.md`](api-response-contract.md).
+> Findings below are annotated with their Phase 2 status.
+
 ---
 
 ## 1. Coverage summary
@@ -67,6 +72,7 @@ The structural risk across the whole surface: **442/456 routes use a service-rol
 - **Highest-attention reads** (return data joined across entities): `/api/admin/entity/[type]/[id]`, `/api/admin/global-search`, `/api/admin/related/[entity]/[id]`, document/payment reads. These already use `assertEntityDrawerRecordReadable` / `assertRowOrg`; keep those assertions on any new branch/type.
 - **Org-less primary tables** (`discount_redemptions`, `pricing_addons`, catalog tables) rely on FK-chain or vertical scoping — document the rule per type (started in [`entity-record-api.md`](entity-record-api.md)).
 - **Recommendation:** Add a lint/test that flags a tenant `.from(...)` read without a corresponding `org_id` filter in route handlers (Phase 2).
+- **Phase 2 status — spike landed.** `scripts/auditOrgScopingGuard.mjs` is a heuristic scan that flags service-role routes touching tenant tables without a visible org-scope signal. It is **advisory** (does not fail CI); `tests/api/orgScopingGuard.test.ts` only enforces that the migrated subset is clean. First run flagged 2 advisory candidates to verify (`/api/admin/subscriptions/[id]`, `/api/book-v2/availability`) — likely scope enforced in helpers (false positives). Promoting this to a CI gate is a later phase.
 
 ---
 
@@ -78,6 +84,7 @@ Confirmed inconsistency:
 - **Error shapes vary:** ~394 routes return `{ error: string }` + status, but some return a **bare JSON string** body (`NextResponse.json("Not found", { status: 404 })` in `entity/[type]/[id]`), and action routes return `{ ok:false, error, correlation_id }`.
 - **Impact:** A future public API or typed client cannot rely on one envelope.
 - **Recommendation (Phase 2):** Adopt a single response contract. The **`{ ok, data?, error?, correlation_id? }`** shape used by `POST /api/admin/actions/execute` and the BOS routes is the best in-repo model; the analytics platform's `zodErrorResponse` is the best error model. Do not retrofit broadly in this sprint.
+- **Phase 2 status — contract established.** Shared helpers (`apiOk`/`apiError`/`apiZodError`) in `web/lib/api/` define the canonical `{ ok, data, correlation_id }` / `{ ok, error: { code, message, details? }, correlation_id }` envelope. Migrated slice: `actions/preflight` (full), `actions/inventory` (full), `analytics/metrics` GET (full), `entity/[type]/[id]` (errors only — **bare-string finding resolved**; status codes preserved), `actions/execute` (additive success + correlation id, failure preserved for ~15 consumers). Per-route status: [`api-response-contract.md`](api-response-contract.md) §5.
 
 ---
 
@@ -128,10 +135,17 @@ Stable, well-scoped, read-oriented surfaces that could anchor a v1 public API on
 
 ## 11. Phase 2 recommendations (priority order)
 
-1. **Normalize the response envelope** to a single `{ ok, data?, error?, correlation_id? }` contract (model: actions/execute + analytics error helper). Prerequisite for any public API.
-2. **Org-scoping guard test** — fail CI when a tenant route reads/writes a tenant table without an `org_id` filter or FK assertion.
-3. **Schema-first request validation** on write routes (extend the analytics platform pattern).
-4. **Then** author **OpenAPI** for the public-candidate subset only (§9). Holding OpenAPI to Phase 2 is deliberate: today's mixed envelopes and bare-string errors would produce a misleading spec. Start with entity read, global search, and the actions API once §1–3 land.
-5. **Production guard audit** for §8 internal/bootstrap/dev routes.
+1. **Normalize the response envelope** to a single `{ ok, data?, error?, correlation_id? }` contract (model: actions/execute + analytics error helper). Prerequisite for any public API. — **✅ foundation + representative slice done (Phase 2).** Remaining: incrementally migrate the rest, batch by consumer coupling (next batch below).
+2. **Org-scoping guard test** — fail CI when a tenant route reads/writes a tenant table without an `org_id` filter or FK assertion. — **◑ spike landed (advisory).** Promote to CI gate after triaging the global warning list.
+3. **Schema-first request validation** on write routes (extend the analytics platform pattern). — pending (preflight now schema-validated as a model).
+4. **Then** author **OpenAPI** (Phase 3) for the public-candidate subset only (§9). Holding OpenAPI back is deliberate: today's mixed envelopes would produce a misleading spec. Start once the envelope migration covers the public-candidate subset.
+5. **Production guard audit** for §8 internal/bootstrap/dev routes. — pending.
 
-> OpenAPI is intentionally **not** produced in this sprint — the route shapes are not yet uniform enough to generate an honest spec. Recommend it as Phase 2 after envelope normalization.
+### Recommended next migration batch
+
+- `actions/execute` **failure** envelope + its ~15 client call sites (the only blocker is the legacy string `error`; migrate route + consumers together).
+- `analytics/metrics` **POST/PATCH** + `metrics/[id]` together, with `MetricBuilderPanel` / `MetricSetupFlow` updated in lockstep.
+- `entity/[type]/[id]` **success** payload (high drawer fan-out — coordinate with the AdminV2 runtime reveal suite).
+- List routes returning `{ <plural>: [...] }` (low coupling, high count) — good mechanical batch.
+
+> OpenAPI remains **Phase 3**, after the envelope migration reaches the public-candidate subset.

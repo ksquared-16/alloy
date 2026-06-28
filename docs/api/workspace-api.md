@@ -51,11 +51,11 @@ The `v2/view-models/*` handlers are one-line `export { GET } from "…"` re-expo
 |--------|------|---------|------|
 | GET | `/api/admin/metrics/resolve` , `/trends` , `/kpi-targets` | Operator KPI strips | admin-context |
 | POST | `/api/admin/metrics/snapshots/write` | Persist metric snapshots | admin-context |
-| GET/POST | `/api/admin/analytics/metrics` , `/[id]` (+ `copy`/`preview`/`trend`/`snapshot`) | Analytics V2 metric definitions | `requireAnalyticsV2Admin*` |
+| GET/POST | `/api/admin/analytics/metrics` , `/[id]` (+ `copy`/`preview`/`trend`/`snapshot`) | Analytics V2 metric definitions — **GET Phase 2 migrated:** `{ ok, data: { items, adapters }, correlation_id }` (POST/PATCH deferred) | `requireAnalyticsV2Admin*` |
 | GET/POST | `/api/admin/analytics/{placements,rollups,visualizations,surfaces}` | Analytics placements & rollups | `requireAnalyticsV2Admin*` |
 | POST | `/api/admin/analytics/render` , `/snapshots/run` | Render / batch snapshot | `requireAnalyticsV2Admin*` |
 
-The analytics platform is the **best-validated** corner of the API: it uses schema validators (`validateMetricDefinitionCreate`, `validateSource*`) and `zodErrorResponse`, and returns `{ items, adapters }` / structured error envelopes. It is a good reference for normalizing the rest of the surface.
+The analytics platform is the **best-validated** corner of the API: it uses schema validators (`validateMetricDefinitionCreate`, `validateSource*`) and `zodErrorResponse`. **Phase 2:** `GET /api/admin/analytics/metrics` now returns the standard `{ ok, data: { items, adapters }, correlation_id }` envelope (its sole consumer, `fetchMetricDefinitions`, unwraps `data`); POST/PATCH stay on the legacy `{ item }` / `{ error }` shape pending a coordinated builder-panel migration. See [`api-response-contract.md`](api-response-contract.md).
 
 ### Global search
 
@@ -70,7 +70,7 @@ The analytics platform is the **best-validated** corner of the API: it uses sche
 ## Validation, envelopes & side effects
 
 - **Validation:** Query-param driven (`department_id`, `work_unit_id`, `surface`, `q`, `limit`) with `400` on missing required params. Analytics uses schema validators.
-- **Envelopes:** Lists return `{ <name>: [...] }` (e.g. `{ actions }`, `{ items, adapters }`); view models return their VM object. Reasonably consistent within this domain.
+- **Envelopes:** Lists return `{ <name>: [...] }` (e.g. `{ actions }`); view models return their VM object. `analytics/metrics` GET is migrated to the standard `{ ok, data, correlation_id }` contract.
 - **Side effects:** Mostly reads. `metrics/snapshots/write`, `analytics/snapshots/run`, and KPI placement writes persist data; action/queue reads call `revalidateTag` indirectly via the actions domain.
 
 Source root: `web/app/api/admin/{work-units,queues,workspace,view-models,v2/view-models,layout-runtime,layout-proof,metrics,analytics,global-search,operational-enrollment}`.

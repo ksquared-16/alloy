@@ -1,8 +1,8 @@
 # API index (generated)
 
-**Generated:** 2026-06-27 by `scripts/generate-api-inventory.mjs`. Do not edit by hand — re-run the script.
+**Generated:** 2026-06-28 by `scripts/generate-api-inventory.mjs`. Do not edit by hand — re-run the script.
 
-**Routes:** 456 `route.ts` handlers under `web/app/api/**`.
+**Routes:** 458 `route.ts` handlers under `web/app/api/**`.
 
 This is a static, heuristic inventory. Columns are extracted from source text:
 
@@ -16,20 +16,20 @@ This is a static, heuristic inventory. Columns are extracted from source text:
 
 | Domain | Routes |
 |---|---|
-| [Admin / Configuration](admin-configuration-api.md) | 73 |
+| [Admin / Configuration](admin-configuration-api.md) | 74 |
 | [Workspace / Queue / Focus Panel](workspace-api.md) | 48 |
 | [Entity / Record / Resolver](entity-record-api.md) | 126 |
 | [Business Process / Status / Lifecycle](business-process-api.md) | 45 |
-| [Actions / Workflows](actions-workflows-api.md) | 30 |
+| [Actions / Workflows](actions-workflows-api.md) | 31 |
 | [Documents / Forms](documents-forms-api.md) | 46 |
 | [Communications](communications-api.md) | 39 |
 | [AI / BOS](ai-bos-api.md) | 23 |
 | [Internal / System / Diagnostics](internal-system-api.md) | 26 |
-| **Total** | **456** |
+| **Total** | **458** |
 
 | Stability | Routes |
 |---|---|
-| admin-only | 405 |
+| admin-only | 407 |
 | experimental | 8 |
 | internal | 13 |
 | public/tokenized | 27 |
@@ -71,6 +71,7 @@ Detailed conventions: [`admin-configuration-api.md`](admin-configuration-api.md)
 | GET | `/api/admin/industries` | admin-context | none | y | — | — | admin-only | industries |
 | GET | `/api/admin/industries/[id]` | admin-context | manual | y | — | — | admin-only | industries, industry_default_entity_labels |
 | GET | `/api/admin/lifecycle-catalog` | route-gate | none | y | — | — | admin-only | — |
+| GET | `/api/admin/operational-expectations` | admin-context | manual | y | — | — | admin-only | — |
 | GET POST | `/api/admin/option-sets` | admin-context | schema | y | y | — | admin-only | option_set_items, option_sets |
 | GET PATCH DELETE | `/api/admin/option-sets/[setKey]` | admin-context | schema | y | y | — | admin-only | option_set_items, option_sets |
 | POST | `/api/admin/option-sets/[setKey]/items` | admin-context | manual | y | y | — | admin-only | option_set_items, option_sets |
@@ -200,7 +201,7 @@ Detailed conventions: [`entity-record-api.md`](entity-record-api.md).
 | PATCH | `/api/admin/customers/[id]` | admin-context, admin-or-ops | manual | y | y | — | admin-only | customers |
 | PATCH | `/api/admin/customers/[id]/household-primary-contact` | admin-context, admin-or-ops | manual | y | — | — | admin-only | — |
 | GET | `/api/admin/deletion-eligibility` | admin-context | manual | — | — | — | admin-only | — |
-| GET | `/api/admin/entity/[type]/[id]` | access-scope, admin-context | manual | y | — | — | admin-only | access_methods, assignment_statuses, assignments, cleaning_job_details, contacts, customer_member_contact_roles, +30 |
+| GET | `/api/admin/entity/[type]/[id]` | access-scope, admin-context | none | y | — | — | admin-only | access_methods, assignment_statuses, assignments, cleaning_job_details, contacts, customer_member_contact_roles, +30 |
 | GET POST | `/api/admin/financials/accounts` | admin-context | manual | y | y | — | admin-only | gl_accounts |
 | GET PATCH | `/api/admin/financials/accounts/[id]` | admin-context | manual | y | y | — | admin-only | gl_accounts |
 | GET | `/api/admin/financials/job/[id]` | access-scope, admin-context | manual | y | — | — | admin-only | gl_account_mappings, gl_journal_entries, gl_journal_lines, jobs, schedules |
@@ -371,9 +372,10 @@ Detailed conventions: [`actions-workflows-api.md`](actions-workflows-api.md).
 | PATCH DELETE | `/api/admin/action-placements/[id]` | admin-context | schema | y | y | y | admin-only | action_placements |
 | GET | `/api/admin/actions` | route-gate | schema | y | — | — | admin-only | work_units |
 | GET | `/api/admin/actions/definition-catalog` | admin-context, admin-or-ops | none | y | — | — | admin-only | action_definitions |
+| POST | `/api/admin/actions/eligibility` | access-scope, admin-context, admin-or-ops | manual | y | — | — | admin-only | — |
 | POST | `/api/admin/actions/execute` | access-scope, admin-context, admin-or-ops | schema | y | — | y | admin-only | — |
 | GET | `/api/admin/actions/inventory` | admin-context, admin-or-ops | none | y | — | — | admin-only | action_definitions, action_placements |
-| POST | `/api/admin/actions/preflight` | admin-context, admin-or-ops | manual | y | — | — | admin-only | — |
+| POST | `/api/admin/actions/preflight` | admin-context, admin-or-ops | zod | y | — | — | admin-only | — |
 | GET | `/api/admin/actions/right-rail-bundle` | route-gate | manual | — | — | — | admin-only | — |
 | GET | `/api/admin/actions/workspace-root-bundle` | route-gate | none | — | — | — | admin-only | — |
 | GET | `/api/admin/record-actions` | admin-context | manual | y | — | — | admin-only | record_actions |

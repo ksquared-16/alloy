@@ -38,7 +38,11 @@ export async function previewMetricDefinition(
 export async function fetchMetricDefinitions(): Promise<{ items: unknown[]; adapters: unknown[] }> {
     const res = await fetch("/api/admin/analytics/metrics", { credentials: "include" });
     if (!res.ok) return { items: [], adapters: [] };
-    return res.json();
+    // API response contract: { ok, data: { items, adapters }, correlation_id }.
+    const json = (await res.json().catch(() => null)) as {
+        data?: { items?: unknown[]; adapters?: unknown[] };
+    } | null;
+    return { items: json?.data?.items ?? [], adapters: json?.data?.adapters ?? [] };
 }
 
 export async function fetchMetricVisualizations(): Promise<{ items: unknown[] }> {
