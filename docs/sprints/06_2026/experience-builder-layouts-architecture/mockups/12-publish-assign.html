@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>12 — Publish and assign</title>
+  <link rel="stylesheet" href="_shared.css" />
+  <style>
+    .pub-panel { max-width:480px; background:white; border:1px solid rgba(89,103,139,0.14); border-radius:12px; padding:16px; }
+    .where-row { display:flex; justify-content:space-between; padding:10px 0; border-bottom:1px solid rgba(89,103,139,0.08); font-size:13px; }
+    .where-row a { color:var(--pine); font-weight:600; text-decoration:none; }
+  </style>
+</head>
+<body>
+<div class="frame">
+  <div class="label">Publish & Assign <span>draft → published · where used</span></div>
+  <div class="body">
+    <div class="bos"><div class="bos-i on">▦</div></div>
+    <div class="config-page">
+      <div class="shell"><div class="workspace">
+        <div class="ws-toolbar">
+          <h2>Enrollment · Lead · Summary</h2>
+          <span class="pill pill-draft">Draft v4</span>
+          <button class="btn-ghost">Discard draft</button>
+          <button class="btn-pine">Publish layout</button>
+        </div>
+        <div class="ws-body">
+          <div class="pub-panel">
+            <div style="font-size:11px;font-weight:600;text-transform:uppercase;color:var(--forge-70);margin-bottom:12px">Publish</div>
+            <p style="font-size:13px;margin-bottom:12px">Publishing creates version 4. Operators on assigned work views will see changes after publish.</p>
+            <div style="display:flex;gap:8px"><button class="btn-pine">Publish now</button><button class="btn-ghost">Preview as operator</button></div>
+          </div>
+          <div class="pub-panel" style="margin-top:16px">
+            <div style="font-size:11px;font-weight:600;text-transform:uppercase;color:var(--forge-70);margin-bottom:12px">Where used</div>
+            <div class="where-row"><span>Hot Leads · Work View</span><a href="#">Open in Processes →</a></div>
+            <div class="where-row"><span>Enrollment · Stage default</span><a href="#">Open in Processes →</a></div>
+            <div class="where-row"><span>Org default · Lead Summary</span><span style="color:var(--forge-70)">This layout</span></div>
+          </div>
+          <div class="callout" style="max-width:480px">Assignment happens in Processes — not in the builder. Builder shows read-only links.</div>
+        </div>
+      </div></div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

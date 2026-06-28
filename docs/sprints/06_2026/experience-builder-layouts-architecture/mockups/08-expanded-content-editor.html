@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>08 — Expanded content editor</title>
+  <link rel="stylesheet" href="_shared.css" />
+  <style>
+    .slot-tabs { display:flex; gap:4px; margin-bottom:12px; }
+    .slot-tab { padding:6px 12px; border-radius:8px; font-size:12px; font-weight:600; border:1px solid rgba(89,103,139,0.14); }
+    .slot-tab.on { background:var(--pine-soft); border-color:var(--pine-border); color:var(--pine); }
+    .slot-pane { border:1px dashed rgba(89,103,139,0.2); border-radius:10px; padding:12px; min-height:80px; }
+  </style>
+</head>
+<body>
+<div class="frame">
+  <div class="label">Expanded Content <span>collapsed slots vs expanded slots</span></div>
+  <div class="body">
+    <div class="bos"><div class="bos-i on">▦</div></div>
+    <div class="config-page">
+      <div class="shell"><div class="workspace">
+        <div class="ws-toolbar"><h2>Billing card · expansion</h2></div>
+        <div class="ws-body">
+          <div class="card span-8">
+            <div class="card-h"><div class="ico">$</div><div><div class="title">Billing</div><div class="sub">Expand enabled · default collapsed</div></div></div>
+            <div class="slot-tabs"><span class="slot-tab on">Collapsed (3 fields)</span><span class="slot-tab">Expanded (4 fields)</span></div>
+            <div class="slot-pane">
+              <div class="field-row"><span class="lbl">Balance</span><span class="val">$1,240.00</span></div>
+              <div class="field-row"><span class="lbl">Next invoice</span><span class="val">Apr 15</span></div>
+              <div class="field-row"><span class="lbl">Status</span><span class="val">Current</span></div>
+              <div class="add-slot" style="margin-top:8px;padding:8px">+ Add to collapsed</div>
+            </div>
+            <p style="font-size:11px;color:var(--forge-70);margin-top:12px">Expanded shows: invoice history · payments · credits · adjustments</p>
+          </div>
+        </div>
+      </div></div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

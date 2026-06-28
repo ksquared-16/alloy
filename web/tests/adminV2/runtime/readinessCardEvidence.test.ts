@@ -78,9 +78,30 @@ describe("buildReadinessCardEvidence", () => {
         expect(evidence.score).toBeLessThan(100);
         expect(evidence.blockers).toContain("Schedule selected");
         expect(evidence.blockers).toContain("Desired start");
+        // Diagnosis copy leads with WHAT is missing (nouns), not a percentage.
+        expect(evidence.answerLine).toContain("needed");
+        expect(evidence.answerLine.toLowerCase()).toContain("schedule");
+        expect(evidence.answerLine).not.toMatch(/^\d+% ready/);
     });
 
-    it("is blocked when a real attention blocker is present", () => {
+    it("points each incomplete factor at its owner card (Readiness references, never edits)", () => {
+        const evidence = buildReadinessCardEvidence(
+            ctx({
+                id: "opp-1",
+                _inquiry_children: [child({ id: "c1" })],
+            }),
+        );
+        const primary = evidence.factors.find((f) => f.key === "primary_contact");
+        expect(primary?.ownerCard).toBe("household");
+        expect(primary?.ownerFocus).toBe("primary_contact");
+
+        const program = evidence.factors.find((f) => f.key === "program");
+        expect(program?.ownerCard).toBe("children");
+        // Points at the specific child still missing the program.
+        expect(program?.ownerFocus).toBe("c1");
+    });
+
+    it("is blocked when a real attention blocker is present (diagnosis framing)", () => {
         const evidence = buildReadinessCardEvidence(
             ctx(
                 {
@@ -94,8 +115,11 @@ describe("buildReadinessCardEvidence", () => {
             ),
         );
         expect(evidence.verdict).toBe("blocked");
-        expect(evidence.answerLine).toBe("Immunization record missing");
+        expect(evidence.answerLine).toBe("Blocked — Immunization record missing");
         expect(evidence.statusTone).toBe("blocked");
+        // Attention has no Core-Four owner — informational only, no handoff target.
+        const attention = evidence.factors.find((f) => f.key === "attention");
+        expect(attention?.ownerCard).toBeNull();
     });
 
     it("derives entirely from the Operational Context — no drawer VM", () => {

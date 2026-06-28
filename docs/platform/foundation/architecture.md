@@ -2,6 +2,8 @@
 
 **Status:** Canonical (June 2026 rebaseline). Describes **current** platform architecture — not sprint history.
 
+> **Runtime convergence note (June 2026).** The operator runtime has converged on a **View Model–first** ownership model: each route composes one above-fold **Surface ViewModel** that owns reveal (`reveal.canCommit`), and the operator works a **condensed queue → Focus Panel** surface. The "drawer VM / composed drawer payload" stack referenced below is the **protected reveal/payload infrastructure that sits *behind* the Focus Panel** — not a competing product surface, and not a path to expand. Canonical source: [`../operator/surface-view-model-composition.md`](../operator/surface-view-model-composition.md), [`../operator/alloy-runtime-specification.md`](../operator/alloy-runtime-specification.md) (Part 16), [`../operator/focus-panel-runtime-cutover-report.md`](../operator/focus-panel-runtime-cutover-report.md), and the locked [`../../system/adminv2-runtime-performance-doctrine.md`](../../system/adminv2-runtime-performance-doctrine.md). **Legacy loading paths must not be expanded.**
+
 ---
 
 ## System context
@@ -70,10 +72,10 @@ Queue row (preview)
     → select entity
     → GET /api/admin/entity/[type]/[id]
     → composed drawer payload (evaluateComposedDrawerPayload)
-    → drawer VM render
+    → drawer VM render  →  buildOperationalContext() → Focus Panel cards
 ```
 
-Opportunity VM is canonical; Person/Child VM cutover in progress.
+Opportunity VM is canonical; Person/Child VM cutover in progress. The composed payload + drawer VM is **reveal/payload infrastructure**; the operator-facing surface is the **Focus Panel** (one runtime, one operational subject) composed via `buildOperationalContext()`. See [`../operator/focus-panel-runtime-cutover-report.md`](../operator/focus-panel-runtime-cutover-report.md) and [`../operator/operational-context-boundary.md`](../operator/operational-context-boundary.md). Do not add new drawer-product surfaces or new queue-row renderers outside the condensed path.
 
 ---
 

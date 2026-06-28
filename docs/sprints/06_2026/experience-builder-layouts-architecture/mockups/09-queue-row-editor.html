@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>09 — Queue row editor</title>
+  <link rel="stylesheet" href="_shared.css" />
+  <style>
+    .slot-list { display:flex; flex-direction:column; gap:8px; max-width:360px; }
+    .slot { display:flex; align-items:center; gap:10px; padding:10px 12px; border:1px solid rgba(89,103,139,0.14); border-radius:10px; background:white; }
+    .slot .k { font-size:11px; font-weight:600; text-transform:uppercase; color:var(--forge-70); width:100px; }
+    .slot .v { flex:1; font-size:13px; font-weight:500; }
+    .preview-col { flex:1; padding:20px; background:#fafbfc; }
+  </style>
+</head>
+<body>
+<div class="frame">
+  <div class="label">Queue Row Editor <span>slots — not card grid</span></div>
+  <div class="body">
+    <div class="bos"><div class="bos-i on">▦</div></div>
+    <div class="config-page">
+      <div class="shell">
+        <aside class="queue-col">
+          <div class="queue-label">Variant</div>
+          <div class="q-item on"><div class="t">Comfortable</div></div>
+          <div class="q-item"><div class="t">Compressed</div></div>
+          <div class="q-item"><div class="t">Expanded preview</div></div>
+          <div class="queue-label" style="margin-top:16px">Slots</div>
+          <div class="slot-list">
+            <div class="slot"><span class="k">Primary</span><span class="v">Lead name</span></div>
+            <div class="slot"><span class="k">Secondary</span><span class="v">Program · Location</span></div>
+            <div class="slot"><span class="k">Chips</span><span class="v">Stage, Tour date</span></div>
+            <div class="slot"><span class="k">Status</span><span class="v">Enrollment status</span></div>
+            <div class="slot"><span class="k">Attention</span><span class="v">Indicator</span></div>
+            <div class="slot"><span class="k">Timestamp</span><span class="v">Last activity</span></div>
+          </div>
+        </aside>
+        <div class="preview-col">
+          <div class="queue-label">Live row preview</div>
+          <div class="qrow" style="margin-top:8px">
+            <div class="av"></div>
+            <div class="lines"><div class="l1">Sarah Chen</div><div class="l2">Toddler · Downtown</div></div>
+            <span class="chip">Tour Thu</span>
+            <span class="chip">New</span>
+          </div>
+          <p class="hint">Uses queue_record_layout v3 — separate from Focus Panel cards.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

@@ -66,6 +66,9 @@ describe("buildChildrenCardEvidence", () => {
         expect(emma.statusTone).toBe("positive");
         expect(emma.startDate).toBe("2025-08-26");
         expect(emma.needsAttention).toBe(false);
+        // Answer-first sentence evidence (no labeled field grid).
+        expect(emma.detailLine).toBe("Preschool · Sunflower · M–F · Full day · starts 2025-08-26");
+        expect(emma.missingLine).toBeNull();
         expect(evidence.enrolledCount).toBe(1);
     });
 
@@ -80,6 +83,9 @@ describe("buildChildrenCardEvidence", () => {
         );
         const noah = evidence.children[0]!;
         expect(noah.needsAttention).toBe(true);
+        // "What's still needed" diagnosis sentence for an attention child.
+        expect(noah.missingLine).toBe("Needs program, schedule & start date");
+        expect(noah.detailLine).toBeNull();
         expect(noah.statusTone).toBe("work");
         expect(evidence.waitlistedCount).toBe(1);
         expect(evidence.attentionCount).toBe(1);

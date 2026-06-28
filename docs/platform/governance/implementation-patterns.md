@@ -126,13 +126,33 @@ commands as `entityId = null`, or duplicating a capability per placement.
 
 ---
 
-## Drawer VM
+## Surface ViewModel (canonical reveal ownership)
+
+The **preferred / canonical** runtime pattern. Each route composes **one** above-fold Surface
+ViewModel that owns reveal; components render its sections and never decide readiness.
+
+- Compose a Surface VM (`shell_nav` / `workspace` / `work_unit`) over the **existing** loader,
+  session cache, bootstrap, and reveal gate — **no new fetch, no new skeleton layer, no new reveal
+  primitive**. `reveal.canCommit` is the single commit decision per route.
+- Above-fold sections are present in final placement (snapshot/default content) or hidden behind the
+  one surface gate — never popped in late, never re-owned, never briefly legacy.
+- Patch non-blocking values (KPI/counts/cards/rail) **in place** after commit; never re-stage.
+- Exactly **one** authoritative renderer per above-fold region; legacy/fallback owners are deleted
+  or quarantined behind flag-off — **do not expand legacy loaders**.
+- Code: `web/lib/adminV2/runtime/surface/*`. Canonical doc:
+  `../operator/surface-view-model-composition.md` + `../operator/runtime-surface-section-map.md`.
+
+## Drawer VM (reveal/payload infrastructure behind the Focus Panel)
+
+The drawer VM is **not** a product surface — it is the protected reveal/payload layer that the
+**Focus Panel** (`buildOperationalContext()`) renders from. Do not add new drawer-product surfaces.
 
 - Wait for composed payload readiness before above-fold reveal
 - Request signature / stale-response guards on apply
 - Warm navigation: prefetch on intent, hold body on linked swap
 
-Locked: `../../system/adminv2-runtime-performance-doctrine.md`
+Locked: `../../system/adminv2-runtime-performance-doctrine.md`. Convergence:
+`../operator/focus-panel-runtime-cutover-report.md`.
 
 ---
 

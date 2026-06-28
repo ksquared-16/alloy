@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>02 — Surface selector</title>
+  <link rel="stylesheet" href="_shared.css" />
+</head>
+<body>
+<div class="frame">
+  <div class="label">New Layout <span>Step 1 — Choose surface + entity</span></div>
+  <div class="body">
+    <div class="bos"><div class="bos-i on">▦</div></div>
+    <div class="config-page">
+      <div class="ctx"><div><h1>New Layout</h1><p>Choose where this layout applies in runtime.</p></div></div>
+      <div class="shell">
+        <aside class="queue-col" style="width:320px">
+          <div class="queue-label">1 · Surface</div>
+          <div class="q-item on"><div class="t">Focus Panel · Summary</div><div class="s">Overview cards for a record</div></div>
+          <div class="q-item"><div class="t">Focus Panel · Work</div><div class="s">Tasks, steps, automations</div></div>
+          <div class="q-item"><div class="t">Focus Panel · Activity</div><div class="s">System timeline — read-only in v1</div></div>
+          <div class="q-item"><div class="t">Queue Row · Comfortable</div><div class="s">Default work-unit queue row</div></div>
+          <div class="queue-label" style="margin-top:16px">2 · Entity</div>
+          <div class="q-item on"><div class="t">Lead</div></div>
+          <div class="q-item"><div class="t">Person</div></div>
+          <div class="q-item"><div class="t">Child</div></div>
+          <div class="q-item"><div class="t">Waitlist candidate</div></div>
+        </aside>
+        <div class="workspace">
+          <div class="ws-toolbar"><h2>Start from</h2></div>
+          <div class="ws-body">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;max-width:720px">
+              <div class="card" style="padding:20px;cursor:default;border-color:var(--pine-border);background:var(--pine-soft)">
+                <div style="font-weight:600;font-size:15px;margin-bottom:6px">Template — Enrollment Lead Summary</div>
+                <div class="config-typo-sublabel" style="font-size:12px;color:var(--forge-70)">Attention · Household · Children · Tour · Readiness</div>
+              </div>
+              <div class="card" style="padding:20px">
+                <div style="font-weight:600;font-size:15px;margin-bottom:6px">Blank layout</div>
+                <div style="font-size:12px;color:var(--forge-70)">No cards yet — add from blueprint catalog</div>
+              </div>
+            </div>
+            <div class="callout" style="margin-top:20px">Suggested name: <strong>Enrollment · Lead · Focus Panel Summary</strong></div>
+            <div style="margin-top:20px;display:flex;gap:8px"><button class="btn-ghost">Cancel</button><button class="btn-pine">Create layout</button></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>
