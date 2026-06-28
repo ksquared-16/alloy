@@ -1,11 +1,12 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
 import { adminContextFailureResponse } from "@/lib/admin/getAdminContext";
 import { scopeDimensionsFromAccess } from "@/lib/admin/accessScope";
-import { requireAnalyticsV2AdminContext, zodErrorResponse } from "@/lib/metrics/platform/adminApiHelpers";
+import { requireAnalyticsV2AdminContext, metricValidationError } from "@/lib/metrics/platform/adminApiHelpers";
 import { loadMetricDefinitionById } from "@/lib/metrics/platform/placementResolver";
 import { evaluateMetricDefinition } from "@/lib/metrics/platform/metricEvaluator";
+import { apiOk, apiError } from "@/lib/api/apiResponse";
 
 export const dynamic = "force-dynamic";
 
@@ -18,7 +19,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
     const { id } = await context.params;
     const supabase = createAdminClient();
     const definition = await loadMetricDefinitionById(supabase, gate.ctx.orgId, id);
-    if (!definition) return NextResponse.json({ error: "Not found" }, { status: 404 });
+    if (!definition) return apiError("NOT_FOUND", "Not found", 404, undefined, { request });
 
     let body: Record<string, unknown> = {};
     try {
@@ -41,8 +42,8 @@ export async function POST(request: NextRequest, context: RouteContext) {
             },
             accessScope: scopeDimensionsFromAccess(access),
         });
-        return NextResponse.json({ evaluation });
+        return apiOk({ evaluation }, { request });
     } catch (e) {
-        return zodErrorResponse(e);
+        return metricValidationError(e, request);
     }
 }

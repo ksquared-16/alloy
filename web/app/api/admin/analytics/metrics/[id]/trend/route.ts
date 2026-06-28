@@ -1,6 +1,6 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
-import { requireAnalyticsV2AdminContext, zodErrorResponse } from "@/lib/metrics/platform/adminApiHelpers";
+import { requireAnalyticsV2AdminContext, metricValidationError } from "@/lib/metrics/platform/adminApiHelpers";
 import { loadMetricDefinitionById } from "@/lib/metrics/platform/placementResolver";
 import { getMetricPlatformSnapshotSeries } from "@/lib/metrics/platform/metricSnapshots";
 import { comparePeriodOverPeriod } from "@/lib/metrics/platform/metricTrends";
@@ -8,19 +8,20 @@ import { evaluateMetricDefinition } from "@/lib/metrics/platform/metricEvaluator
 import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
 import { adminContextFailureResponse } from "@/lib/admin/getAdminContext";
 import { scopeDimensionsFromAccess } from "@/lib/admin/accessScope";
+import { apiOk, apiError } from "@/lib/api/apiResponse";
 
 export const dynamic = "force-dynamic";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
-export async function GET(_request: NextRequest, context: RouteContext) {
+export async function GET(request: NextRequest, context: RouteContext) {
     const gate = await requireAnalyticsV2AdminContext();
     if (!gate.ok) return gate.response;
 
     const { id } = await context.params;
     const supabase = createAdminClient();
     const definition = await loadMetricDefinitionById(supabase, gate.ctx.orgId, id);
-    if (!definition) return NextResponse.json({ error: "Not found" }, { status: 404 });
+    if (!definition) return apiError("NOT_FOUND", "Not found", 404, undefined, { request });
 
     const series = await getMetricPlatformSnapshotSeries(supabase, {
         orgId: gate.ctx.orgId,
@@ -47,16 +48,19 @@ export async function GET(_request: NextRequest, context: RouteContext) {
             });
             comparison = comparePeriodOverPeriod({ current, previous: null, target: definition.target_config });
         } catch (e) {
-            return zodErrorResponse(e);
+            return metricValidationError(e, request);
         }
     }
 
-    return NextResponse.json({
-        series: series.map((s) => ({
-            computed_at: s.computed_at,
-            value: s.value,
-            health_state: s.health_state,
-        })),
-        comparison,
-    });
+    return apiOk(
+        {
+            series: series.map((s) => ({
+                computed_at: s.computed_at,
+                value: s.value,
+                health_state: s.health_state,
+            })),
+            comparison,
+        },
+        { request }
+    );
 }

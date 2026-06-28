@@ -79,8 +79,13 @@ async function writeRecord<T>(url: string, method: "POST" | "PATCH", body: unkno
         body: JSON.stringify(body),
     });
     if (!res.ok) return null;
-    const data = (await res.json()) as { item: T };
-    return data.item;
+    // Envelope-tolerant: metrics routes return { ok, data: { item }, correlation_id };
+    // visualizations/placements are not yet migrated and return legacy { item }.
+    const json = (await res.json().catch(() => null)) as {
+        data?: { item?: T };
+        item?: T;
+    } | null;
+    return json?.data?.item ?? json?.item ?? null;
 }
 
 export default function MetricSetupFlow({ open, onClose, onComplete }: Props) {

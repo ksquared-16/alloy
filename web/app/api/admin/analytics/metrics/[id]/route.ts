@@ -1,24 +1,29 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
-import { requireAnalyticsV2AdminContext, requireAnalyticsV2AdminMutate, zodErrorResponse } from "@/lib/metrics/platform/adminApiHelpers";
+import {
+    requireAnalyticsV2AdminContext,
+    requireAnalyticsV2AdminMutate,
+    metricValidationError,
+} from "@/lib/metrics/platform/adminApiHelpers";
 import { validateMetricDefinitionUpdate } from "@/lib/metrics/platform/metricDefinitionSchema";
 import { loadMetricDefinitionById } from "@/lib/metrics/platform/placementResolver";
 import { validateSourceAggregation, validateSourceFilters, validateSourceDimensions } from "@/lib/metrics/platform/metricSourceRegistry";
+import { apiOk, apiError } from "@/lib/api/apiResponse";
 
 export const dynamic = "force-dynamic";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
-export async function GET(_request: NextRequest, context: RouteContext) {
+export async function GET(request: NextRequest, context: RouteContext) {
     const gate = await requireAnalyticsV2AdminContext();
     if (!gate.ok) return gate.response;
 
     const { id } = await context.params;
     const supabase = createAdminClient();
     const item = await loadMetricDefinitionById(supabase, gate.ctx.orgId, id);
-    if (!item) return NextResponse.json({ error: "Not found" }, { status: 404 });
+    if (!item) return apiError("NOT_FOUND", "Not found", 404, undefined, { request });
 
-    return NextResponse.json({ item });
+    return apiOk({ item }, { request });
 }
 
 export async function PATCH(request: NextRequest, context: RouteContext) {
@@ -28,22 +33,25 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
     const { id } = await context.params;
     const supabase = createAdminClient();
     const existing = await loadMetricDefinitionById(supabase, gate.ctx.orgId, id);
-    if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
+    if (!existing) return apiError("NOT_FOUND", "Not found", 404, undefined, { request });
     if (existing.org_id == null) {
-        return NextResponse.json(
-            { error: "Global metric templates are read-only. Create an org-owned metric to edit or publish." },
-            { status: 403 }
+        return apiError(
+            "FORBIDDEN",
+            "Global metric templates are read-only. Create an org-owned metric to edit or publish.",
+            403,
+            undefined,
+            { request }
         );
     }
     if (existing.org_id !== gate.ctx.orgId) {
-        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+        return apiError("FORBIDDEN", "Forbidden", 403, undefined, { request });
     }
 
     let body: unknown;
     try {
         body = await request.json();
     } catch {
-        return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
+        return apiError("BAD_REQUEST", "Invalid JSON", 400, undefined, { request });
     }
 
     try {
@@ -67,9 +75,9 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
             .select("*")
             .single();
 
-        if (error) return NextResponse.json({ error: error.message }, { status: 400 });
-        return NextResponse.json({ item: data });
+        if (error) return apiError("BAD_REQUEST", error.message, 400, undefined, { request });
+        return apiOk({ item: data }, { request });
     } catch (e) {
-        return zodErrorResponse(e);
+        return metricValidationError(e, request);
     }
 }

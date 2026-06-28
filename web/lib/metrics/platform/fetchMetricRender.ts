@@ -43,7 +43,12 @@ export async function copyMetricToOrg(metricId: string): Promise<{ item: unknown
         credentials: "include",
     });
     if (!res.ok) return null;
-    return res.json();
+    // API response contract: { ok, data: { item, copied }, correlation_id }.
+    const json = (await res.json().catch(() => null)) as {
+        data?: { item?: unknown; copied?: boolean };
+    } | null;
+    if (!json?.data) return null;
+    return { item: json.data.item, copied: json.data.copied ?? false };
 }
 
 export async function copyVisualizationToOrg(

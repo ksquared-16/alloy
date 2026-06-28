@@ -31,8 +31,11 @@ export async function previewMetricDefinition(
         body: JSON.stringify(params ?? {}),
     });
     if (!res.ok) return null;
-    const data = (await res.json()) as { evaluation: MetricEvaluationResult };
-    return data.evaluation;
+    // API response contract: { ok, data: { evaluation }, correlation_id }.
+    const json = (await res.json().catch(() => null)) as {
+        data?: { evaluation?: MetricEvaluationResult };
+    } | null;
+    return json?.data?.evaluation ?? null;
 }
 
 export async function fetchMetricDefinitions(): Promise<{ items: unknown[]; adapters: unknown[] }> {

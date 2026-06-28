@@ -1,19 +1,24 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
-import { requireAnalyticsV2AdminContext, requireAnalyticsV2AdminMutate, zodErrorResponse } from "@/lib/metrics/platform/adminApiHelpers";
+import {
+    requireAnalyticsV2AdminContext,
+    requireAnalyticsV2AdminMutate,
+    metricValidationError,
+} from "@/lib/metrics/platform/adminApiHelpers";
 import { validateMetricDefinitionCreate } from "@/lib/metrics/platform/metricDefinitionSchema";
 import { validateSourceAggregation, validateSourceFilters, validateSourceDimensions } from "@/lib/metrics/platform/metricSourceRegistry";
 import { loadMetricDefinitionsForOrg } from "@/lib/metrics/platform/placementResolver";
 import { listMetricSourceAdapters } from "@/lib/metrics/platform/metricSourceRegistry";
-import { apiOk } from "@/lib/api/apiResponse";
+import { apiOk, apiError } from "@/lib/api/apiResponse";
 
 export const dynamic = "force-dynamic";
 
 /**
- * Phase 2 contract: GET emits the standard envelope
- * (`{ ok, data: { items, adapters }, correlation_id }`). POST/PATCH remain on the
- * legacy shape pending a coordinated builder-panel migration.
- * @see docs/api/api-response-contract.md
+ * Phase 2B contract (fully migrated): the metrics family emits the standard envelope.
+ * - Success: `{ ok: true, data, correlation_id }`
+ * - Failure: `{ ok: false, error: { code, message, details? }, correlation_id }`
+ * Auth-gate responses (`gate.response`) remain owned by the shared analytics admin
+ * gate. @see docs/api/api-response-contract.md
  */
 export async function GET(request: NextRequest) {
     const gate = await requireAnalyticsV2AdminContext();
@@ -34,7 +39,7 @@ export async function POST(request: NextRequest) {
     try {
         body = await request.json();
     } catch {
-        return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
+        return apiError("BAD_REQUEST", "Invalid JSON", 400, undefined, { request });
     }
 
     try {
@@ -78,9 +83,9 @@ export async function POST(request: NextRequest) {
             .select("*")
             .single();
 
-        if (error) return NextResponse.json({ error: error.message }, { status: 400 });
-        return NextResponse.json({ item: data }, { status: 201 });
+        if (error) return apiError("BAD_REQUEST", error.message, 400, undefined, { request });
+        return apiOk({ item: data }, { request, status: 201 });
     } catch (e) {
-        return zodErrorResponse(e);
+        return metricValidationError(e, request);
     }
 }

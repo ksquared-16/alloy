@@ -268,10 +268,22 @@ describe("GET /api/admin/entity/[type]/[id] (error envelope)", () => {
 describe("static contract: migrated routes", () => {
     const read = (rel: string) => readFileSync(path.join(WEB_ROOT, rel), "utf8");
 
-    it("analytics GET emits the envelope via apiOk", () => {
-        const src = read("app/api/admin/analytics/metrics/route.ts");
-        expect(src).toContain('from "@/lib/api/apiResponse"');
-        expect(src).toMatch(/return apiOk\(\{ items, adapters \}/);
+    it("analytics metrics family emits the envelope via apiOk/apiError (fully migrated)", () => {
+        const files = [
+            "app/api/admin/analytics/metrics/route.ts",
+            "app/api/admin/analytics/metrics/[id]/route.ts",
+            "app/api/admin/analytics/metrics/[id]/copy/route.ts",
+            "app/api/admin/analytics/metrics/[id]/preview/route.ts",
+            "app/api/admin/analytics/metrics/[id]/snapshot/route.ts",
+            "app/api/admin/analytics/metrics/[id]/trend/route.ts",
+        ];
+        for (const rel of files) {
+            const src = read(rel);
+            expect(src).toContain('from "@/lib/api/apiResponse"');
+            expect(src).toContain("apiOk(");
+            // No legacy bare `{ error: string }` bodies remain.
+            expect(src).not.toMatch(/NextResponse\.json\(\s*\{\s*error:\s*"/);
+        }
     });
 
     it("migrated error routes never serialize a bare string error body", () => {
@@ -280,6 +292,8 @@ describe("static contract: migrated routes", () => {
             "app/api/admin/actions/inventory/route.ts",
             "app/api/admin/actions/execute/route.ts",
             "app/api/admin/entity/[type]/[id]/route.ts",
+            "app/api/admin/analytics/metrics/route.ts",
+            "app/api/admin/analytics/metrics/[id]/route.ts",
         ];
         for (const rel of files) {
             const src = read(rel);

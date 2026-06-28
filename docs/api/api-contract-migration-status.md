@@ -38,7 +38,12 @@ is inconsistent, and do **not** normalize a route consumed only by a lower tier.
 | `/api/admin/actions/execute` | POST | ✅ Full | Phase 2B. Success = canonical `data` only; all failures via `apiError`; `ACTION_BLOCKED` carries preflight context under `error.details`. All active consumers migrated. See [`actions-execute-envelope-audit.md`](actions-execute-envelope-audit.md). |
 | `/api/admin/actions/preflight` | POST | ✅ Full | Zod body schema → `apiZodError`; success via `apiOk`. |
 | `/api/admin/actions/inventory` | GET | ✅ Full | `apiOk({ items })`; consumers updated in lockstep. |
-| `/api/admin/analytics/metrics` | GET | ✅ Full (GET only) | POST/PATCH deferred (shared builder-panel consumers). |
+| `/api/admin/analytics/metrics` | GET, POST | ✅ Full | Analytics family normalization. `apiOk`/`apiError`; validation via `metricValidationError` (real message in `error.message`, zod issues in `error.details`). |
+| `/api/admin/analytics/metrics/[id]` | GET, PATCH | ✅ Full | `NOT_FOUND` / `FORBIDDEN` / `VALIDATION_ERROR` / `BAD_REQUEST` envelopes. |
+| `/api/admin/analytics/metrics/[id]/copy` | POST | ✅ Full | `apiOk({ item, copied })`; `NOT_FOUND` / `BAD_REQUEST` failures. |
+| `/api/admin/analytics/metrics/[id]/preview` | POST | ✅ Full | `apiOk({ evaluation })`; `NOT_FOUND` / `VALIDATION_ERROR`. |
+| `/api/admin/analytics/metrics/[id]/snapshot` | POST | ✅ Full | `apiOk({ evaluation, snapshot_id })`; `INTERNAL` on snapshot failure. |
+| `/api/admin/analytics/metrics/[id]/trend` | GET | ✅ Full | `apiOk({ series, comparison })`; `NOT_FOUND` / `VALIDATION_ERROR`. |
 | `/api/admin/entity/[type]/[id]` | GET | ◑ Errors only | All error exits via `apiError`; success payload still the legacy bare record (high active-drawer fan-out). |
 
 ## Active consumers migrated for `actions/execute` (Phase 2B)
@@ -54,6 +59,21 @@ These are all **active** workspace / VM-runtime surfaces (priority 1–2):
 Each unwraps intentionally: `json.data?.execution_result` on success, `json.error?.message`
 on failure, and `json.error?.details?.{action_preflight,completion_requirements}` for
 blocked-action surfaces.
+
+## Active consumers migrated for analytics metrics
+
+All **active** analytics builder/settings surfaces (priority 3) unwrap the envelope:
+
+- `web/app/adminV2/settings/analytics/MetricBuilderPanel.tsx` — direct POST/PATCH to `metrics` / `metrics/[id]`; reads `json.data.item`, `json.error?.message`.
+- `web/lib/metrics/platform/fetchMetricPlatform.ts` — `fetchMetricDefinitions` (`json.data.{items,adapters}`), `previewMetricDefinition` (`json.data.evaluation`).
+- `web/lib/metrics/platform/fetchMetricRender.ts` — `copyMetricToOrg` (`json.data.{item,copied}`).
+- `web/app/adminV2/settings/analytics/MetricSetupFlow.tsx` — shared `writeRecord<T>` helper is **envelope-tolerant** (`json.data?.item ?? json.item`) because it also writes to the not-yet-migrated `visualizations` / `placements` sibling routes.
+
+> Sibling analytics routes (`visualizations`, `placements`, `rollups`, `render`,
+> `snapshots/run`, `surfaces`) are **not** part of this batch and remain on the legacy
+> shape. The shared `zodErrorResponse` / `requireAnalyticsV2AdminMutate` helpers are
+> unchanged for them; the migrated metrics routes use `metricValidationError` and
+> `apiError` instead.
 
 ## Legacy / sunset surfaces
 

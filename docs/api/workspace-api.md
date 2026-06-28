@@ -51,11 +51,11 @@ The `v2/view-models/*` handlers are one-line `export { GET } from "…"` re-expo
 |--------|------|---------|------|
 | GET | `/api/admin/metrics/resolve` , `/trends` , `/kpi-targets` | Operator KPI strips | admin-context |
 | POST | `/api/admin/metrics/snapshots/write` | Persist metric snapshots | admin-context |
-| GET/POST | `/api/admin/analytics/metrics` , `/[id]` (+ `copy`/`preview`/`trend`/`snapshot`) | Analytics V2 metric definitions — **GET Phase 2 migrated:** `{ ok, data: { items, adapters }, correlation_id }` (POST/PATCH deferred) | `requireAnalyticsV2Admin*` |
+| GET/POST | `/api/admin/analytics/metrics` , `/[id]` (+ `copy`/`preview`/`trend`/`snapshot`) | Analytics V2 metric definitions — **fully migrated:** standard `{ ok, data, correlation_id }` / `{ ok:false, error, correlation_id }` envelope on every method | `requireAnalyticsV2Admin*` |
 | GET/POST | `/api/admin/analytics/{placements,rollups,visualizations,surfaces}` | Analytics placements & rollups | `requireAnalyticsV2Admin*` |
 | POST | `/api/admin/analytics/render` , `/snapshots/run` | Render / batch snapshot | `requireAnalyticsV2Admin*` |
 
-The analytics platform is the **best-validated** corner of the API: it uses schema validators (`validateMetricDefinitionCreate`, `validateSource*`) and `zodErrorResponse`. **Phase 2:** `GET /api/admin/analytics/metrics` now returns the standard `{ ok, data: { items, adapters }, correlation_id }` envelope (its sole consumer, `fetchMetricDefinitions`, unwraps `data`); POST/PATCH stay on the legacy `{ item }` / `{ error }` shape pending a coordinated builder-panel migration. See [`api-response-contract.md`](api-response-contract.md).
+The analytics platform is the **best-validated** corner of the API: it uses schema validators (`validateMetricDefinitionCreate`, `validateSource*`). **Phase 2B:** the entire `analytics/metrics` family (`metrics`, `metrics/[id]`, `copy`, `preview`, `snapshot`, `trend`) now returns the standard `{ ok, data, correlation_id }` / `{ ok:false, error: { code, message, details? }, correlation_id }` envelope. Validation errors flow through `metricValidationError` (real message in `error.message`, zod issues in `error.details`). Active consumers (`MetricBuilderPanel`, `MetricSetupFlow`, `fetchMetricPlatform`, `fetchMetricRender`) unwrap the envelope; the sibling `placements`/`visualizations`/`rollups`/`render`/`snapshots/run` routes are a later batch and still use `zodErrorResponse`. See [`api-response-contract.md`](api-response-contract.md) and [`api-contract-migration-status.md`](api-contract-migration-status.md).
 
 ### Global search
 
@@ -70,7 +70,7 @@ The analytics platform is the **best-validated** corner of the API: it uses sche
 ## Validation, envelopes & side effects
 
 - **Validation:** Query-param driven (`department_id`, `work_unit_id`, `surface`, `q`, `limit`) with `400` on missing required params. Analytics uses schema validators.
-- **Envelopes:** Lists return `{ <name>: [...] }` (e.g. `{ actions }`); view models return their VM object. `analytics/metrics` GET is migrated to the standard `{ ok, data, correlation_id }` contract.
+- **Envelopes:** Lists return `{ <name>: [...] }` (e.g. `{ actions }`); view models return their VM object. The full `analytics/metrics` family is migrated to the standard `{ ok, data, correlation_id }` contract.
 - **Side effects:** Mostly reads. `metrics/snapshots/write`, `analytics/snapshots/run`, and KPI placement writes persist data; action/queue reads call `revalidateTag` indirectly via the actions domain.
 
 Source root: `web/app/api/admin/{work-units,queues,workspace,view-models,v2/view-models,layout-runtime,layout-proof,metrics,analytics,global-search,operational-enrollment}`.

@@ -84,7 +84,7 @@ Confirmed inconsistency:
 - **Error shapes vary:** ~394 routes return `{ error: string }` + status, but some return a **bare JSON string** body (`NextResponse.json("Not found", { status: 404 })` in `entity/[type]/[id]`), and action routes return `{ ok:false, error, correlation_id }`.
 - **Impact:** A future public API or typed client cannot rely on one envelope.
 - **Recommendation (Phase 2):** Adopt a single response contract. The **`{ ok, data?, error?, correlation_id? }`** shape used by `POST /api/admin/actions/execute` and the BOS routes is the best in-repo model; the analytics platform's `zodErrorResponse` is the best error model. Do not retrofit broadly in this sprint.
-- **Phase 2 status — contract established.** Shared helpers (`apiOk`/`apiError`/`apiZodError`) in `web/lib/api/` define the canonical `{ ok, data, correlation_id }` / `{ ok, error: { code, message, details? }, correlation_id }` envelope. Migrated slice: `actions/preflight` (full), `actions/inventory` (full), `analytics/metrics` GET (full), `entity/[type]/[id]` (errors only — **bare-string finding resolved**; status codes preserved), `actions/execute` (**full — Phase 2B**: success + all failures normalized, `ACTION_BLOCKED` for unmet requirements, all 15 consumers migrated; see [`actions-execute-envelope-audit.md`](actions-execute-envelope-audit.md)). Per-route status: [`api-response-contract.md`](api-response-contract.md) §5.
+- **Phase 2 status — contract established.** Shared helpers (`apiOk`/`apiError`/`apiZodError`) in `web/lib/api/` define the canonical `{ ok, data, correlation_id }` / `{ ok, error: { code, message, details? }, correlation_id }` envelope. Migrated slice: `actions/preflight` (full), `actions/inventory` (full), the whole `analytics/metrics` family (full — `metrics`, `metrics/[id]`, `copy`, `preview`, `snapshot`, `trend`; active builder/settings consumers migrated), `entity/[type]/[id]` (errors only — **bare-string finding resolved**; status codes preserved), `actions/execute` (**full — Phase 2B**: success + all failures normalized, `ACTION_BLOCKED` for unmet requirements, all 15 consumers migrated; see [`actions-execute-envelope-audit.md`](actions-execute-envelope-audit.md)). Per-route status: [`api-response-contract.md`](api-response-contract.md) §5 and [`api-contract-migration-status.md`](api-contract-migration-status.md).
 
 ---
 
@@ -144,7 +144,7 @@ Stable, well-scoped, read-oriented surfaces that could anchor a v1 public API on
 ### Recommended next migration batch
 
 - ~~`actions/execute` **failure** envelope + its ~15 client call sites~~ — **✅ done (Phase 2B).** Route + all consumers migrated; `ACTION_BLOCKED` carries preflight context under `error.details`.
-- `analytics/metrics` **POST/PATCH** + `metrics/[id]` together, with `MetricBuilderPanel` / `MetricSetupFlow` updated in lockstep.
+- ~~`analytics/metrics` **POST/PATCH** + `metrics/[id]` together, with `MetricBuilderPanel` / `MetricSetupFlow` updated in lockstep.~~ — **✅ done.** Whole `analytics/metrics` family (`metrics`, `metrics/[id]`, `copy`, `preview`, `snapshot`, `trend`) normalized; active builder/settings consumers unwrap the envelope.
 - `entity/[type]/[id]` **success** payload (high drawer fan-out — coordinate with the AdminV2 runtime reveal suite).
 - List routes returning `{ <plural>: [...] }` (low coupling, high count) — good mechanical batch.
 

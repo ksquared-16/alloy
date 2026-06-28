@@ -165,17 +165,26 @@ export default function MetricBuilderPanel({ canEdit }: Props) {
                           body: JSON.stringify(payload),
                       });
 
-            if (!res.ok) {
-                const data = (await res.json()) as { error?: string };
-                setError(data.error ?? "Save failed");
+            // API response contract: { ok, data: { item }, correlation_id } / { ok:false, error: { message } }.
+            const json = (await res.json().catch(() => null)) as {
+                ok?: boolean;
+                data?: { item?: MetricDefinitionRow };
+                error?: { message?: string };
+            } | null;
+            if (!res.ok || json?.ok === false) {
+                setError(json?.error?.message ?? "Save failed");
                 return;
             }
-            const data = (await res.json()) as { item: MetricDefinitionRow };
-            setSelectedId(data.item.id);
-            setWorkingId(data.item.id);
-            setIsEditing(data.item.status === "draft");
+            const item = json?.data?.item;
+            if (!item) {
+                setError("Save failed");
+                return;
+            }
+            setSelectedId(item.id);
+            setWorkingId(item.id);
+            setIsEditing(item.status === "draft");
             await load();
-            if (status === "active") await runMetricSnapshots({ metric_definition_ids: [data.item.id] });
+            if (status === "active") await runMetricSnapshots({ metric_definition_ids: [item.id] });
             if (fromModal) {
                 // Keep the modal open after Save draft so a follow-up Publish updates the
                 // same record; close it once published.
