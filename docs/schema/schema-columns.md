@@ -2,7 +2,7 @@
 
 **Status:** Generated reference. **Do not edit by hand.**
 
-**Generated:** 2026-06-12 · **Column count:** 2028
+**Generated:** 2026-06-28 · **Column count:** 2523
 
 Columns for `public` schema tables, grouped alphabetically by table.
 
@@ -66,13 +66,13 @@ Columns for `public` schema tables, grouped alphabetically by table.
 | `entity_type` | text | YES | — |
 | `department_id` | uuid | YES | — |
 | `work_unit_id` | uuid | YES | — |
-| `section_key` | text | YES | — |
 | `order_index` | integer | NO | 100 |
 | `display_style` | text | NO | 'button'::text |
 | `condition_config` | jsonb | NO | '{}'::jsonb |
 | `is_active` | boolean | NO | true |
 | `created_at` | timestamp with time zone | NO | now() |
 | `updated_at` | timestamp with time zone | NO | now() |
+| `section_key` | text | YES | — |
 
 ## `activity_log`
 
@@ -199,6 +199,75 @@ Columns for `public` schema tables, grouped alphabetically by table.
 | `after_hash` | text | NO | — |
 | `created_at` | timestamp with time zone | NO | now() |
 
+## `announcement_deliveries`
+
+| Column | Type | Nullable | Default |
+|--------|------|----------|--------|
+| `id` | uuid | NO | gen_random_uuid() |
+| `org_id` | uuid | NO | — |
+| `announcement_id` | uuid | NO | — |
+| `person_id` | uuid | YES | — |
+| `message_id` | uuid | YES | — |
+| `status` | text | YES | — |
+| `delivered_at` | timestamp with time zone | YES | — |
+| `opened_at` | timestamp with time zone | YES | — |
+| `clicked_at` | timestamp with time zone | YES | — |
+| `created_at` | timestamp with time zone | NO | now() |
+| `metadata` | jsonb | NO | '{}'::jsonb |
+
+## `announcement_recipients`
+
+| Column | Type | Nullable | Default |
+|--------|------|----------|--------|
+| `id` | uuid | NO | gen_random_uuid() |
+| `org_id` | uuid | NO | — |
+| `announcement_id` | uuid | NO | — |
+| `person_id` | uuid | YES | — |
+| `channel` | text | NO | — |
+| `address` | text | YES | — |
+| `consent_state` | text | YES | — |
+| `suppressed_reason` | text | YES | — |
+| `status` | text | NO | 'pending'::text |
+| `communication_message_id` | uuid | YES | — |
+| `created_at` | timestamp with time zone | NO | now() |
+| `communication_scheduled_send_id` | uuid | YES | — |
+
+## `announcement_targets`
+
+| Column | Type | Nullable | Default |
+|--------|------|----------|--------|
+| `id` | uuid | NO | gen_random_uuid() |
+| `org_id` | uuid | NO | — |
+| `announcement_id` | uuid | NO | — |
+| `target_spec` | jsonb | NO | '{}'::jsonb |
+| `resolved_count` | integer | YES | — |
+| `created_at` | timestamp with time zone | NO | now() |
+
+## `announcements`
+
+| Column | Type | Nullable | Default |
+|--------|------|----------|--------|
+| `id` | uuid | NO | gen_random_uuid() |
+| `org_id` | uuid | NO | — |
+| `title` | text | NO | — |
+| `channel_set` | jsonb | NO | '[]'::jsonb |
+| `classification` | text | YES | — |
+| `status` | text | NO | 'draft'::text |
+| `template_id` | uuid | YES | — |
+| `subject` | text | YES | — |
+| `body` | text | YES | — |
+| `scheduled_at` | timestamp with time zone | YES | — |
+| `created_by_user_id` | uuid | YES | — |
+| `created_at` | timestamp with time zone | NO | now() |
+| `updated_at` | timestamp with time zone | NO | now() |
+| `created_by` | uuid | YES | — |
+| `channels` | ARRAY | NO | '{}'::text[] |
+| `body_format` | text | NO | 'text'::text |
+| `send_at` | timestamp with time zone | YES | — |
+| `sent_at` | timestamp with time zone | YES | — |
+| `archived_at` | timestamp with time zone | YES | — |
+| `metadata` | jsonb | NO | '{}'::jsonb |
+
 ## `app_users`
 
 | Column | Type | Nullable | Default |
@@ -243,6 +312,28 @@ Columns for `public` schema tables, grouped alphabetically by table.
 | `updated_at` | timestamp with time zone | YES | — |
 | `org_id` | uuid | NO | — |
 | `status_key` | text | YES | — |
+
+## `business_process_layout_assignments`
+
+| Column | Type | Nullable | Default |
+|--------|------|----------|--------|
+| `id` | uuid | NO | gen_random_uuid() |
+| `org_id` | uuid | NO | — |
+| `business_process_key` | text | NO | — |
+| `stage_key` | text | YES | — |
+| `status_key` | text | YES | — |
+| `surface_key` | text | NO | — |
+| `entity_type` | text | NO | — |
+| `surface` | text | NO | — |
+| `layout_key` | text | NO | — |
+| `entity_layout_id` | uuid | YES | — |
+| `priority` | integer | NO | 0 |
+| `is_active` | boolean | NO | true |
+| `version` | integer | NO | 1 |
+| `metadata` | jsonb | NO | '{}'::jsonb |
+| `created_by` | uuid | YES | — |
+| `created_at` | timestamp with time zone | NO | now() |
+| `updated_at` | timestamp with time zone | YES | — |
 
 ## `campaigns`
 
@@ -294,6 +385,184 @@ Columns for `public` schema tables, grouped alphabetically by table.
 | `created_at` | timestamp with time zone | NO | now() |
 | `updated_at` | timestamp with time zone | NO | now() |
 
+## `child_attendance_events`
+
+| Column | Type | Nullable | Default |
+|--------|------|----------|--------|
+| `id` | uuid | NO | gen_random_uuid() |
+| `org_id` | uuid | NO | — |
+| `enrollment_agreement_id` | uuid | NO | — |
+| `customer_member_id` | uuid | NO | — |
+| `site_location_id` | uuid | NO | — |
+| `event_kind` | text | NO | — |
+| `entry_type` | text | NO | 'original'::text |
+| `corrects_event_id` | uuid | YES | — |
+| `event_at` | timestamp with time zone | NO | — |
+| `service_date` | date | NO | — |
+| `room_location_id` | uuid | YES | — |
+| `from_room_location_id` | uuid | YES | — |
+| `to_room_location_id` | uuid | YES | — |
+| `actor_type` | text | NO | — |
+| `actor_user_id` | uuid | YES | — |
+| `actor_person_id` | uuid | YES | — |
+| `actor_label` | text | YES | — |
+| `source_type` | text | NO | 'operator_action'::text |
+| `source_key` | text | NO | 'operator_action'::text |
+| `reason_key` | text | YES | — |
+| `note` | text | YES | — |
+| `metadata` | jsonb | NO | '{}'::jsonb |
+| `created_by` | uuid | YES | — |
+| `created_at` | timestamp with time zone | NO | now() |
+
+## `child_enrollment_agreements`
+
+| Column | Type | Nullable | Default |
+|--------|------|----------|--------|
+| `id` | uuid | NO | gen_random_uuid() |
+| `org_id` | uuid | NO | — |
+| `opportunity_id` | uuid | YES | — |
+| `opportunity_customer_member_id` | uuid | YES | — |
+| `customer_member_id` | uuid | NO | — |
+| `customer_id` | uuid | YES | — |
+| `person_id` | uuid | YES | — |
+| `site_location_id` | uuid | NO | — |
+| `status` | text | NO | — |
+| `start_date` | date | YES | — |
+| `end_date` | date | YES | — |
+| `activation_policy_key` | text | YES | — |
+| `source_key` | text | NO | 'manual'::text |
+| `metadata` | jsonb | NO | '{}'::jsonb |
+| `created_by` | uuid | YES | — |
+| `updated_by` | uuid | YES | — |
+| `created_at` | timestamp with time zone | NO | now() |
+| `updated_at` | timestamp with time zone | NO | now() |
+
+## `child_placements`
+
+| Column | Type | Nullable | Default |
+|--------|------|----------|--------|
+| `id` | uuid | NO | gen_random_uuid() |
+| `org_id` | uuid | NO | — |
+| `enrollment_agreement_id` | uuid | NO | — |
+| `customer_member_id` | uuid | NO | — |
+| `site_location_id` | uuid | NO | — |
+| `program_category_id` | uuid | YES | — |
+| `room_location_id` | uuid | YES | — |
+| `start_date` | date | NO | — |
+| `end_date` | date | YES | — |
+| `status` | text | NO | — |
+| `reason_key` | text | YES | — |
+| `source_key` | text | NO | 'operator'::text |
+| `supersedes_placement_id` | uuid | YES | — |
+| `metadata` | jsonb | NO | '{}'::jsonb |
+| `created_by` | uuid | YES | — |
+| `updated_by` | uuid | YES | — |
+| `created_at` | timestamp with time zone | NO | now() |
+| `updated_at` | timestamp with time zone | NO | now() |
+
+## `childcare_capacity_rules`
+
+| Column | Type | Nullable | Default |
+|--------|------|----------|--------|
+| `id` | uuid | NO | gen_random_uuid() |
+| `org_id` | uuid | NO | — |
+| `scope_type` | text | NO | — |
+| `site_location_id` | uuid | YES | — |
+| `program_category_id` | uuid | YES | — |
+| `room_location_id` | uuid | YES | — |
+| `age_group_key` | text | YES | — |
+| `capacity_kind` | text | NO | — |
+| `capacity` | integer | NO | — |
+| `effective_start` | date | NO | — |
+| `effective_end` | date | YES | — |
+| `source_key` | text | NO | 'config'::text |
+| `metadata` | jsonb | NO | '{}'::jsonb |
+| `created_by` | uuid | YES | — |
+| `updated_by` | uuid | YES | — |
+| `created_at` | timestamp with time zone | NO | now() |
+| `updated_at` | timestamp with time zone | NO | now() |
+
+## `childcare_operating_windows`
+
+| Column | Type | Nullable | Default |
+|--------|------|----------|--------|
+| `id` | uuid | NO | gen_random_uuid() |
+| `org_id` | uuid | NO | — |
+| `scope_type` | text | NO | — |
+| `site_location_id` | uuid | YES | — |
+| `program_category_id` | uuid | YES | — |
+| `room_location_id` | uuid | YES | — |
+| `weekday` | smallint | NO | — |
+| `open_time` | time without time zone | NO | — |
+| `close_time` | time without time zone | NO | — |
+| `effective_start` | date | NO | — |
+| `effective_end` | date | YES | — |
+| `source_key` | text | NO | 'config'::text |
+| `metadata` | jsonb | NO | '{}'::jsonb |
+| `created_by` | uuid | YES | — |
+| `updated_by` | uuid | YES | — |
+| `created_at` | timestamp with time zone | NO | now() |
+| `updated_at` | timestamp with time zone | NO | now() |
+
+## `childcare_ratio_rule_tiers`
+
+| Column | Type | Nullable | Default |
+|--------|------|----------|--------|
+| `id` | uuid | NO | gen_random_uuid() |
+| `org_id` | uuid | NO | — |
+| `ratio_rule_id` | uuid | NO | — |
+| `max_children` | integer | NO | — |
+| `required_staff` | integer | NO | — |
+| `sort_order` | integer | NO | 100 |
+| `metadata` | jsonb | NO | '{}'::jsonb |
+| `created_at` | timestamp with time zone | NO | now() |
+| `updated_at` | timestamp with time zone | NO | now() |
+
+## `childcare_ratio_rules`
+
+| Column | Type | Nullable | Default |
+|--------|------|----------|--------|
+| `id` | uuid | NO | gen_random_uuid() |
+| `org_id` | uuid | NO | — |
+| `scope_type` | text | NO | — |
+| `site_location_id` | uuid | YES | — |
+| `program_category_id` | uuid | YES | — |
+| `room_location_id` | uuid | YES | — |
+| `age_group_key` | text | YES | — |
+| `jurisdiction_key` | text | YES | — |
+| `effective_start` | date | NO | — |
+| `effective_end` | date | YES | — |
+| `source_key` | text | NO | 'config'::text |
+| `metadata` | jsonb | NO | '{}'::jsonb |
+| `created_by` | uuid | YES | — |
+| `updated_by` | uuid | YES | — |
+| `created_at` | timestamp with time zone | NO | now() |
+| `updated_at` | timestamp with time zone | NO | now() |
+
+## `childcare_schedule_rules`
+
+| Column | Type | Nullable | Default |
+|--------|------|----------|--------|
+| `id` | uuid | NO | gen_random_uuid() |
+| `org_id` | uuid | NO | — |
+| `scope_type` | text | NO | — |
+| `site_location_id` | uuid | YES | — |
+| `program_category_id` | uuid | YES | — |
+| `room_location_id` | uuid | YES | — |
+| `age_group_key` | text | YES | — |
+| `eligible_schedule_type_keys` | ARRAY | YES | — |
+| `eligible_age_group_keys` | ARRAY | YES | — |
+| `min_days_per_week` | smallint | YES | — |
+| `max_days_per_week` | smallint | YES | — |
+| `effective_start` | date | NO | — |
+| `effective_end` | date | YES | — |
+| `source_key` | text | NO | 'config'::text |
+| `metadata` | jsonb | NO | '{}'::jsonb |
+| `created_by` | uuid | YES | — |
+| `updated_by` | uuid | YES | — |
+| `created_at` | timestamp with time zone | NO | now() |
+| `updated_at` | timestamp with time zone | NO | now() |
+
 ## `cleaning_job_addons`
 
 | Column | Type | Nullable | Default |
@@ -330,6 +599,26 @@ Columns for `public` schema tables, grouped alphabetically by table.
 | `position` | integer | NO | 0 |
 | `is_active` | boolean | NO | true |
 
+## `communication_delivery_events`
+
+| Column | Type | Nullable | Default |
+|--------|------|----------|--------|
+| `id` | uuid | NO | gen_random_uuid() |
+| `org_id` | uuid | NO | — |
+| `message_id` | uuid | NO | — |
+| `event_type` | text | NO | — |
+| `provider` | text | YES | — |
+| `occurred_at` | timestamp with time zone | NO | now() |
+| `payload` | jsonb | NO | '{}'::jsonb |
+| `recipient_id` | uuid | YES | — |
+| `channel` | text | YES | — |
+| `provider_message_id` | text | YES | — |
+| `provider_event_id` | text | YES | — |
+| `event_status` | text | YES | — |
+| `received_at` | timestamp with time zone | NO | now() |
+| `raw_payload` | jsonb | NO | '{}'::jsonb |
+| `metadata` | jsonb | NO | '{}'::jsonb |
+
 ## `communication_message_reads`
 
 | Column | Type | Nullable | Default |
@@ -338,6 +627,34 @@ Columns for `public` schema tables, grouped alphabetically by table.
 | `message_id` | uuid | NO | — |
 | `user_id` | uuid | NO | — |
 | `read_at` | timestamp with time zone | NO | now() |
+
+## `communication_message_recipients`
+
+| Column | Type | Nullable | Default |
+|--------|------|----------|--------|
+| `id` | uuid | NO | gen_random_uuid() |
+| `org_id` | uuid | NO | — |
+| `message_id` | uuid | NO | — |
+| `person_id` | uuid | YES | — |
+| `address` | text | YES | — |
+| `recipient_role` | text | NO | 'to'::text |
+| `status` | text | YES | — |
+| `delivered_at` | timestamp with time zone | YES | — |
+| `opened_at` | timestamp with time zone | YES | — |
+| `clicked_at` | timestamp with time zone | YES | — |
+| `replied_at` | timestamp with time zone | YES | — |
+| `created_at` | timestamp with time zone | NO | now() |
+| `metadata` | jsonb | NO | '{}'::jsonb |
+| `recipient_key` | text | YES | — |
+| `channel` | text | YES | — |
+| `provider` | text | YES | — |
+| `provider_message_id` | text | YES | — |
+| `queued_at` | timestamp with time zone | YES | — |
+| `sent_at` | timestamp with time zone | YES | — |
+| `bounced_at` | timestamp with time zone | YES | — |
+| `complained_at` | timestamp with time zone | YES | — |
+| `failed_at` | timestamp with time zone | YES | — |
+| `last_event_at` | timestamp with time zone | YES | — |
 
 ## `communication_messages`
 
@@ -363,6 +680,40 @@ Columns for `public` schema tables, grouped alphabetically by table.
 | `sent_at` | timestamp with time zone | YES | — |
 | `delivered_at` | timestamp with time zone | YES | — |
 | `subject` | text | YES | — |
+| `opened_at` | timestamp with time zone | YES | — |
+| `clicked_at` | timestamp with time zone | YES | — |
+| `replied_at` | timestamp with time zone | YES | — |
+
+## `communication_preference_events`
+
+| Column | Type | Nullable | Default |
+|--------|------|----------|--------|
+| `id` | uuid | NO | gen_random_uuid() |
+| `org_id` | uuid | NO | — |
+| `person_id` | uuid | NO | — |
+| `category` | text | NO | — |
+| `from_state` | text | YES | — |
+| `to_state` | text | NO | — |
+| `source` | text | YES | — |
+| `method` | text | YES | — |
+| `actor_user_id` | uuid | YES | — |
+| `occurred_at` | timestamp with time zone | NO | now() |
+| `metadata` | jsonb | NO | '{}'::jsonb |
+
+## `communication_preferences`
+
+| Column | Type | Nullable | Default |
+|--------|------|----------|--------|
+| `id` | uuid | NO | gen_random_uuid() |
+| `org_id` | uuid | NO | — |
+| `person_id` | uuid | NO | — |
+| `category` | text | NO | — |
+| `state` | text | NO | 'unset'::text |
+| `source` | text | YES | — |
+| `method` | text | YES | — |
+| `updated_by_user_id` | uuid | YES | — |
+| `created_at` | timestamp with time zone | NO | now() |
+| `updated_at` | timestamp with time zone | NO | now() |
 
 ## `communication_provider_bindings`
 
@@ -393,7 +744,7 @@ Columns for `public` schema tables, grouped alphabetically by table.
 | `created_by` | uuid | NO | — |
 | `proposal_id` | uuid | YES | — |
 | `entity_type` | text | NO | 'opportunities'::text |
-| `entity_id` | uuid | NO | — |
+| `entity_id` | uuid | YES | — |
 | `recipient_person_id` | uuid | NO | — |
 | `channel` | text | NO | — |
 | `subject_snapshot` | text | YES | — |
@@ -410,6 +761,58 @@ Columns for `public` schema tables, grouped alphabetically by table.
 | `claim_token` | uuid | YES | — |
 | `created_at` | timestamp with time zone | NO | now() |
 | `updated_at` | timestamp with time zone | NO | now() |
+| `announcement_id` | uuid | YES | — |
+
+## `communication_snippets`
+
+| Column | Type | Nullable | Default |
+|--------|------|----------|--------|
+| `id` | uuid | NO | gen_random_uuid() |
+| `org_id` | uuid | NO | — |
+| `name` | text | NO | — |
+| `body` | text | NO | — |
+| `category` | text | YES | — |
+| `created_by_user_id` | uuid | YES | — |
+| `created_at` | timestamp with time zone | NO | now() |
+| `updated_at` | timestamp with time zone | NO | now() |
+
+## `communication_template_versions`
+
+| Column | Type | Nullable | Default |
+|--------|------|----------|--------|
+| `id` | uuid | NO | gen_random_uuid() |
+| `org_id` | uuid | NO | — |
+| `template_id` | uuid | NO | — |
+| `version` | integer | NO | — |
+| `subject` | text | YES | — |
+| `body` | text | YES | — |
+| `body_format` | text | NO | 'html'::text |
+| `variables` | jsonb | NO | '[]'::jsonb |
+| `created_by_user_id` | uuid | YES | — |
+| `created_at` | timestamp with time zone | NO | now() |
+| `version_number` | integer | YES | — |
+| `token_paths` | ARRAY | NO | '{}'::text[] |
+| `metadata` | jsonb | NO | '{}'::jsonb |
+| `created_by` | uuid | YES | — |
+
+## `communication_templates`
+
+| Column | Type | Nullable | Default |
+|--------|------|----------|--------|
+| `id` | uuid | NO | gen_random_uuid() |
+| `org_id` | uuid | NO | — |
+| `name` | text | NO | — |
+| `channel` | text | NO | — |
+| `category` | text | YES | 'general'::text |
+| `approval_status` | text | NO | 'draft'::text |
+| `current_version_id` | uuid | YES | — |
+| `created_by_user_id` | uuid | YES | — |
+| `created_at` | timestamp with time zone | NO | now() |
+| `updated_at` | timestamp with time zone | NO | now() |
+| `description` | text | YES | — |
+| `status` | text | YES | 'draft'::text |
+| `created_by` | uuid | YES | — |
+| `updated_by` | uuid | YES | — |
 
 ## `communication_threads`
 
@@ -425,6 +828,16 @@ Columns for `public` schema tables, grouped alphabetically by table.
 | `metadata` | jsonb | NO | '{}'::jsonb |
 | `created_at` | timestamp with time zone | NO | now() |
 | `updated_at` | timestamp with time zone | NO | now() |
+| `archived_at` | timestamp with time zone | YES | — |
+| `last_message_at` | timestamp with time zone | YES | — |
+| `assigned_user_id` | uuid | YES | — |
+| `assigned_team_id` | uuid | YES | — |
+| `assignment_state` | text | NO | 'unassigned'::text |
+| `attention_state` | text | YES | — |
+| `first_response_at` | timestamp with time zone | YES | — |
+| `sla_due_at` | timestamp with time zone | YES | — |
+| `sla_state` | text | YES | — |
+| `last_read_at` | timestamp with time zone | YES | — |
 
 ## `config_layout_assist_proposals`
 
@@ -502,6 +915,21 @@ Columns for `public` schema tables, grouped alphabetically by table.
 | `archived_by` | uuid | YES | — |
 | `status_key` | text | YES | — |
 | `person_id` | uuid | YES | — |
+
+## `conversation_assignment_events`
+
+| Column | Type | Nullable | Default |
+|--------|------|----------|--------|
+| `id` | uuid | NO | gen_random_uuid() |
+| `org_id` | uuid | NO | — |
+| `thread_id` | uuid | NO | — |
+| `action` | text | NO | — |
+| `from_user_id` | uuid | YES | — |
+| `to_user_id` | uuid | YES | — |
+| `to_team_id` | uuid | YES | — |
+| `actor_user_id` | uuid | YES | — |
+| `occurred_at` | timestamp with time zone | NO | now() |
+| `metadata` | jsonb | NO | '{}'::jsonb |
 
 ## `customer_member_contact_roles`
 
@@ -1000,6 +1428,27 @@ Columns for `public` schema tables, grouped alphabetically by table.
 | `plural` | text | NO | — |
 | `created_at` | timestamp with time zone | NO | now() |
 | `updated_at` | timestamp with time zone | YES | — |
+
+## `entity_layouts`
+
+| Column | Type | Nullable | Default |
+|--------|------|----------|--------|
+| `id` | uuid | NO | gen_random_uuid() |
+| `org_id` | uuid | YES | — |
+| `industry_key` | text | YES | — |
+| `entity_type` | text | NO | — |
+| `surface` | text | NO | — |
+| `layout_key` | text | NO | 'default'::text |
+| `name` | text | NO | 'Untitled layout'::text |
+| `version` | integer | NO | 1 |
+| `status` | text | NO | 'draft'::text |
+| `is_system_default` | boolean | NO | false |
+| `doc` | jsonb | NO | '{}'::jsonb |
+| `metadata` | jsonb | NO | '{}'::jsonb |
+| `created_by` | uuid | YES | — |
+| `created_at` | timestamp with time zone | NO | now() |
+| `updated_at` | timestamp with time zone | YES | — |
+| `published_at` | timestamp with time zone | YES | — |
 
 ## `external_mappings`
 
@@ -1501,6 +1950,21 @@ Columns for `public` schema tables, grouped alphabetically by table.
 | `metadata` | jsonb | NO | '{}'::jsonb |
 | `created_at` | timestamp with time zone | NO | now() |
 
+## `location_program_categories`
+
+| Column | Type | Nullable | Default |
+|--------|------|----------|--------|
+| `id` | uuid | NO | gen_random_uuid() |
+| `org_id` | uuid | NO | — |
+| `location_id` | uuid | NO | — |
+| `key` | text | NO | — |
+| `label` | text | NO | — |
+| `sort_order` | integer | NO | 100 |
+| `is_active` | boolean | NO | true |
+| `metadata` | jsonb | NO | '{}'::jsonb |
+| `created_at` | timestamp with time zone | NO | now() |
+| `updated_at` | timestamp with time zone | YES | — |
+
 ## `location_tags`
 
 | Column | Type | Nullable | Default |
@@ -1609,14 +2073,135 @@ Columns for `public` schema tables, grouped alphabetically by table.
 | `to_contact_id` | uuid | YES | — |
 | `to_phone` | text | YES | — |
 
+## `metric_definitions`
+
+| Column | Type | Nullable | Default |
+|--------|------|----------|--------|
+| `id` | uuid | NO | gen_random_uuid() |
+| `org_id` | uuid | YES | — |
+| `key` | text | NO | — |
+| `label` | text | NO | — |
+| `description` | text | NO | ''::text |
+| `category` | text | NO | 'general'::text |
+| `entity_scope` | text | NO | 'org'::text |
+| `source_type` | text | NO | — |
+| `source_key` | text | NO | — |
+| `aggregation` | text | NO | — |
+| `numerator_config` | jsonb | YES | — |
+| `denominator_config` | jsonb | YES | — |
+| `filter_config` | jsonb | NO | '{}'::jsonb |
+| `dimension_config` | jsonb | NO | '{}'::jsonb |
+| `default_period_config` | jsonb | NO | '{"days": 30, "kind": "rolling", "version": 1}'::jsonb |
+| `unit` | text | NO | 'none'::text |
+| `precision` | integer | NO | 0 |
+| `is_kpi` | boolean | NO | false |
+| `target_config` | jsonb | YES | — |
+| `threshold_config` | jsonb | YES | — |
+| `status` | text | NO | 'draft'::text |
+| `version` | integer | NO | 1 |
+| `created_at` | timestamp with time zone | NO | now() |
+| `updated_at` | timestamp with time zone | NO | now() |
+| `created_by` | uuid | YES | — |
+| `updated_by` | uuid | YES | — |
+
+## `metric_placements`
+
+| Column | Type | Nullable | Default |
+|--------|------|----------|--------|
+| `id` | uuid | NO | gen_random_uuid() |
+| `org_id` | uuid | NO | — |
+| `visualization_id` | uuid | NO | — |
+| `surface` | text | NO | — |
+| `surface_key` | text | NO | 'default'::text |
+| `placement_zone` | text | NO | 'overview'::text |
+| `context_config` | jsonb | NO | '{"version": 1}'::jsonb |
+| `visibility_config` | jsonb | NO | '{"version": 1, "visible": true}'::jsonb |
+| `sort_order` | integer | NO | 0 |
+| `status` | text | NO | 'draft'::text |
+| `version` | integer | NO | 1 |
+| `created_at` | timestamp with time zone | NO | now() |
+| `updated_at` | timestamp with time zone | NO | now() |
+
+## `metric_platform_snapshots`
+
+| Column | Type | Nullable | Default |
+|--------|------|----------|--------|
+| `id` | uuid | NO | gen_random_uuid() |
+| `org_id` | uuid | NO | — |
+| `metric_definition_id` | uuid | NO | — |
+| `context_type` | text | NO | 'org'::text |
+| `context_id` | uuid | YES | — |
+| `period_start` | timestamp with time zone | NO | — |
+| `period_end` | timestamp with time zone | NO | — |
+| `granularity` | text | NO | 'day'::text |
+| `value` | double precision | YES | — |
+| `numerator_value` | double precision | YES | — |
+| `denominator_value` | double precision | YES | — |
+| `dimension_values` | jsonb | YES | — |
+| `health_state` | text | NO | 'unknown'::text |
+| `computed_at` | timestamp with time zone | NO | — |
+| `created_at` | timestamp with time zone | NO | now() |
+
+## `metric_rollups`
+
+| Column | Type | Nullable | Default |
+|--------|------|----------|--------|
+| `id` | uuid | NO | gen_random_uuid() |
+| `org_id` | uuid | NO | — |
+| `key` | text | NO | — |
+| `label` | text | NO | — |
+| `rollup_type` | text | NO | — |
+| `child_metric_config` | jsonb | NO | '{"metrics": [], "version": 1}'::jsonb |
+| `context_scope` | text | NO | 'org'::text |
+| `weight_config` | jsonb | YES | — |
+| `threshold_config` | jsonb | YES | — |
+| `status` | text | NO | 'draft'::text |
+| `version` | integer | NO | 1 |
+| `created_at` | timestamp with time zone | NO | now() |
+| `updated_at` | timestamp with time zone | NO | now() |
+
+## `metric_snapshots`
+
+| Column | Type | Nullable | Default |
+|--------|------|----------|--------|
+| `id` | uuid | NO | gen_random_uuid() |
+| `org_id` | uuid | NO | — |
+| `metric_key` | text | NO | — |
+| `window_key` | text | NO | — |
+| `scope_type` | text | NO | 'org'::text |
+| `scope_id` | uuid | YES | — |
+| `dimension_key` | text | YES | — |
+| `dimension_value` | text | YES | — |
+| `value_numeric` | double precision | YES | — |
+| `value_json` | jsonb | NO | '{}'::jsonb |
+| `computed_at` | timestamp with time zone | NO | — |
+| `created_at` | timestamp with time zone | NO | now() |
+
+## `metric_visualizations`
+
+| Column | Type | Nullable | Default |
+|--------|------|----------|--------|
+| `id` | uuid | NO | gen_random_uuid() |
+| `org_id` | uuid | YES | — |
+| `metric_definition_id` | uuid | NO | — |
+| `key` | text | NO | — |
+| `label` | text | NO | — |
+| `visualization_type` | text | NO | — |
+| `style_config` | jsonb | NO | '{"version": 1}'::jsonb |
+| `display_config` | jsonb | NO | '{"version": 1}'::jsonb |
+| `version` | integer | NO | 1 |
+| `status` | text | NO | 'draft'::text |
+| `created_at` | timestamp with time zone | NO | now() |
+| `updated_at` | timestamp with time zone | NO | now() |
+
 ## `operational_tasks`
 
 | Column | Type | Nullable | Default |
 |--------|------|----------|--------|
 | `id` | uuid | NO | gen_random_uuid() |
 | `org_id` | uuid | NO | — |
-| `entity_type` | text | NO | 'opportunities'::text |
-| `entity_id` | uuid | NO | — |
+| `entity_type` | text | YES | — |
+| `entity_id` | uuid | YES | — |
 | `assigned_to_user_id` | uuid | YES | — |
 | `created_by` | uuid | NO | — |
 | `title` | text | NO | — |
@@ -1694,6 +2279,7 @@ Columns for `public` schema tables, grouped alphabetically by table.
 | `desired_start_date` | date | YES | — |
 | `location_id` | uuid | YES | — |
 | `program_room_cohort_key` | text | YES | — |
+| `desired_program_category_id` | uuid | YES | — |
 
 ## `opportunity_persons`
 
@@ -1740,6 +2326,7 @@ Columns for `public` schema tables, grouped alphabetically by table.
 | `sort_order` | integer | NO | 0 |
 | `created_at` | timestamp with time zone | NO | now() |
 | `updated_at` | timestamp with time zone | YES | — |
+| `config` | jsonb | NO | '{}'::jsonb |
 
 ## `org_settings`
 
@@ -2188,6 +2775,34 @@ Columns for `public` schema tables, grouped alphabetically by table.
 | `dimension_value_id` | uuid | YES | — |
 | `tier_key` | text | NO | — |
 
+## `processing_case_sources`
+
+| Column | Type | Nullable | Default |
+|--------|------|----------|--------|
+| `id` | uuid | NO | gen_random_uuid() |
+| `org_id` | uuid | NO | — |
+| `processing_case_id` | uuid | NO | — |
+| `source_kind` | text | NO | — |
+| `source_id` | uuid | NO | — |
+| `role` | text | NO | 'related'::text |
+| `linked_at` | timestamp with time zone | NO | now() |
+| `metadata` | jsonb | NO | '{}'::jsonb |
+| `created_at` | timestamp with time zone | NO | now() |
+
+## `processing_cases`
+
+| Column | Type | Nullable | Default |
+|--------|------|----------|--------|
+| `id` | uuid | NO | gen_random_uuid() |
+| `org_id` | uuid | NO | — |
+| `status` | text | NO | 'received'::text |
+| `case_type` | text | YES | — |
+| `status_changed_at` | timestamp with time zone | NO | now() |
+| `metadata` | jsonb | NO | '{}'::jsonb |
+| `created_at` | timestamp with time zone | NO | now() |
+| `updated_at` | timestamp with time zone | YES | — |
+| `archived_at` | timestamp with time zone | YES | — |
+
 ## `quotes`
 
 | Column | Type | Nullable | Default |
@@ -2307,6 +2922,44 @@ Columns for `public` schema tables, grouped alphabetically by table.
 | `created_at` | timestamp with time zone | NO | now() |
 | `updated_at` | timestamp with time zone | YES | — |
 
+## `schedule_assignments`
+
+| Column | Type | Nullable | Default |
+|--------|------|----------|--------|
+| `id` | uuid | NO | gen_random_uuid() |
+| `org_id` | uuid | NO | — |
+| `enrollment_agreement_id` | uuid | NO | — |
+| `schedule_pattern_id` | uuid | NO | — |
+| `customer_member_id` | uuid | NO | — |
+| `start_date` | date | NO | — |
+| `end_date` | date | YES | — |
+| `status` | text | NO | — |
+| `assignment_kind` | text | NO | 'base'::text |
+| `source_key` | text | NO | 'operator'::text |
+| `supersedes_assignment_id` | uuid | YES | — |
+| `metadata` | jsonb | NO | '{}'::jsonb |
+| `created_by` | uuid | YES | — |
+| `updated_by` | uuid | YES | — |
+| `created_at` | timestamp with time zone | NO | now() |
+| `updated_at` | timestamp with time zone | NO | now() |
+
+## `schedule_patterns`
+
+| Column | Type | Nullable | Default |
+|--------|------|----------|--------|
+| `id` | uuid | NO | gen_random_uuid() |
+| `org_id` | uuid | NO | — |
+| `site_location_id` | uuid | NO | — |
+| `key` | text | NO | — |
+| `label` | text | NO | — |
+| `schedule_type_key` | text | NO | — |
+| `weekdays` | ARRAY | NO | — |
+| `sort_order` | integer | NO | 100 |
+| `is_active` | boolean | NO | true |
+| `metadata` | jsonb | NO | '{}'::jsonb |
+| `created_at` | timestamp with time zone | NO | now() |
+| `updated_at` | timestamp with time zone | YES | — |
+
 ## `schedule_statuses`
 
 | Column | Type | Nullable | Default |
@@ -2420,6 +3073,18 @@ Columns for `public` schema tables, grouped alphabetically by table.
 | `metadata` | jsonb | NO | '{}'::jsonb |
 | `created_at` | timestamp with time zone | NO | now() |
 | `updated_at` | timestamp with time zone | YES | — |
+
+## `sla_events`
+
+| Column | Type | Nullable | Default |
+|--------|------|----------|--------|
+| `id` | uuid | NO | gen_random_uuid() |
+| `org_id` | uuid | NO | — |
+| `thread_id` | uuid | NO | — |
+| `sla_type` | text | NO | — |
+| `state` | text | NO | — |
+| `occurred_at` | timestamp with time zone | NO | now() |
+| `metadata` | jsonb | NO | '{}'::jsonb |
 
 ## `sqft_bands`
 

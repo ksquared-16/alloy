@@ -141,6 +141,7 @@ Enrollment lifecycle references placement decisions; placement table owns histor
 
 ## Related docs
 
+- `docs/platform/operational-truth-flow-doctrine.md` — truth-flow axis; this committed foundation is **L2 Operational Intent**
 - `docs/system/field-model-convergence-doctrine.md` — field_definitions + option_source
 - `docs/system/configuration-workspace-v1-doctrine.md` — operator configuration workspace
 - `web/lib/fields/enrollmentPlacementDoctrine.ts` — code-level program model constants

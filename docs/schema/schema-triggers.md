@@ -2,7 +2,7 @@
 
 **Status:** Generated reference. **Do not edit by hand.**
 
-**Generated:** 2026-06-12 · **Trigger count:** 159
+**Generated:** 2026-06-28 · **Trigger count:** 193
 
 | Table | Trigger | Event | Function |
 |-------|---------|-------|----------|
@@ -12,9 +12,34 @@
 | `assignments` | `trg_assignments_updated_at` | UPDATE BEFORE | CREATE TRIGGER trg_assignments_updated_at BEFORE UPDATE ON assignments FOR EACH  |
 | `campaigns` | `trg_campaigns_updated_at` | UPDATE BEFORE | CREATE TRIGGER trg_campaigns_updated_at BEFORE UPDATE ON campaigns FOR EACH ROW  |
 | `charges` | `trg_charges_updated_at` | UPDATE BEFORE | CREATE TRIGGER trg_charges_updated_at BEFORE UPDATE ON charges FOR EACH ROW EXEC |
+| `child_attendance_events` | `trg_prevent_child_attendance_events_mutation` | DELETE BEFORE | CREATE TRIGGER trg_prevent_child_attendance_events_mutation BEFORE DELETE OR UPD |
+| `child_attendance_events` | `trg_prevent_child_attendance_events_mutation` | UPDATE BEFORE | CREATE TRIGGER trg_prevent_child_attendance_events_mutation BEFORE DELETE OR UPD |
+| `child_attendance_events` | `trg_validate_child_attendance_events_consistency` | INSERT BEFORE | CREATE TRIGGER trg_validate_child_attendance_events_consistency BEFORE INSERT ON |
+| `child_enrollment_agreements` | `trg_child_enrollment_agreements_updated_at` | UPDATE BEFORE | CREATE TRIGGER trg_child_enrollment_agreements_updated_at BEFORE UPDATE ON child |
+| `child_enrollment_agreements` | `trg_validate_child_enrollment_agreements_consistency` | INSERT BEFORE | CREATE TRIGGER trg_validate_child_enrollment_agreements_consistency BEFORE INSER |
+| `child_enrollment_agreements` | `trg_validate_child_enrollment_agreements_consistency` | UPDATE BEFORE | CREATE TRIGGER trg_validate_child_enrollment_agreements_consistency BEFORE INSER |
+| `child_placements` | `trg_child_placements_updated_at` | UPDATE BEFORE | CREATE TRIGGER trg_child_placements_updated_at BEFORE UPDATE ON child_placements |
+| `child_placements` | `trg_validate_child_placements_consistency` | INSERT BEFORE | CREATE TRIGGER trg_validate_child_placements_consistency BEFORE INSERT OR UPDATE |
+| `child_placements` | `trg_validate_child_placements_consistency` | UPDATE BEFORE | CREATE TRIGGER trg_validate_child_placements_consistency BEFORE INSERT OR UPDATE |
+| `childcare_capacity_rules` | `trg_childcare_capacity_rules_updated_at` | UPDATE BEFORE | CREATE TRIGGER trg_childcare_capacity_rules_updated_at BEFORE UPDATE ON childcar |
+| `childcare_capacity_rules` | `trg_validate_childcare_capacity_rules_scope` | INSERT BEFORE | CREATE TRIGGER trg_validate_childcare_capacity_rules_scope BEFORE INSERT OR UPDA |
+| `childcare_capacity_rules` | `trg_validate_childcare_capacity_rules_scope` | UPDATE BEFORE | CREATE TRIGGER trg_validate_childcare_capacity_rules_scope BEFORE INSERT OR UPDA |
+| `childcare_operating_windows` | `trg_childcare_operating_windows_updated_at` | UPDATE BEFORE | CREATE TRIGGER trg_childcare_operating_windows_updated_at BEFORE UPDATE ON child |
+| `childcare_operating_windows` | `trg_validate_childcare_operating_windows_scope` | INSERT BEFORE | CREATE TRIGGER trg_validate_childcare_operating_windows_scope BEFORE INSERT OR U |
+| `childcare_operating_windows` | `trg_validate_childcare_operating_windows_scope` | UPDATE BEFORE | CREATE TRIGGER trg_validate_childcare_operating_windows_scope BEFORE INSERT OR U |
+| `childcare_ratio_rule_tiers` | `trg_childcare_ratio_rule_tiers_updated_at` | UPDATE BEFORE | CREATE TRIGGER trg_childcare_ratio_rule_tiers_updated_at BEFORE UPDATE ON childc |
+| `childcare_ratio_rules` | `trg_childcare_ratio_rules_updated_at` | UPDATE BEFORE | CREATE TRIGGER trg_childcare_ratio_rules_updated_at BEFORE UPDATE ON childcare_r |
+| `childcare_ratio_rules` | `trg_validate_childcare_ratio_rules_scope` | INSERT BEFORE | CREATE TRIGGER trg_validate_childcare_ratio_rules_scope BEFORE INSERT OR UPDATE  |
+| `childcare_ratio_rules` | `trg_validate_childcare_ratio_rules_scope` | UPDATE BEFORE | CREATE TRIGGER trg_validate_childcare_ratio_rules_scope BEFORE INSERT OR UPDATE  |
+| `childcare_schedule_rules` | `trg_childcare_schedule_rules_updated_at` | UPDATE BEFORE | CREATE TRIGGER trg_childcare_schedule_rules_updated_at BEFORE UPDATE ON childcar |
+| `childcare_schedule_rules` | `trg_validate_childcare_schedule_rules_scope` | INSERT BEFORE | CREATE TRIGGER trg_validate_childcare_schedule_rules_scope BEFORE INSERT OR UPDA |
+| `childcare_schedule_rules` | `trg_validate_childcare_schedule_rules_scope` | UPDATE BEFORE | CREATE TRIGGER trg_validate_childcare_schedule_rules_scope BEFORE INSERT OR UPDA |
+| `communication_messages` | `trg_comm_messages_bump_thread_last_message` | INSERT AFTER | CREATE TRIGGER trg_comm_messages_bump_thread_last_message AFTER INSERT ON commun |
 | `communication_scheduled_sends` | `trg_comm_sched_sends_org_scope` | INSERT BEFORE | CREATE TRIGGER trg_comm_sched_sends_org_scope BEFORE INSERT OR UPDATE OF org_id, |
 | `communication_scheduled_sends` | `trg_comm_sched_sends_org_scope` | UPDATE BEFORE | CREATE TRIGGER trg_comm_sched_sends_org_scope BEFORE INSERT OR UPDATE OF org_id, |
 | `communication_scheduled_sends` | `trg_comm_sched_sends_updated_at` | UPDATE BEFORE | CREATE TRIGGER trg_comm_sched_sends_updated_at BEFORE UPDATE ON communication_sc |
+| `communication_template_versions` | `trg_sync_communication_template_version_legacy` | INSERT BEFORE | CREATE TRIGGER trg_sync_communication_template_version_legacy BEFORE INSERT OR U |
+| `communication_template_versions` | `trg_sync_communication_template_version_legacy` | UPDATE BEFORE | CREATE TRIGGER trg_sync_communication_template_version_legacy BEFORE INSERT OR U |
 | `config_layout_assist_proposals` | `trg_config_layout_assist_proposals_updated_at` | UPDATE BEFORE | CREATE TRIGGER trg_config_layout_assist_proposals_updated_at BEFORE UPDATE ON co |
 | `contacts` | `trg_contacts_updated_at` | UPDATE BEFORE | CREATE TRIGGER trg_contacts_updated_at BEFORE UPDATE ON contacts FOR EACH ROW EX |
 | `customer_members` | `trg_customer_members_updated_at` | UPDATE BEFORE | CREATE TRIGGER trg_customer_members_updated_at BEFORE UPDATE ON customer_members |
@@ -123,11 +148,20 @@
 | `pricing_recurring_prices` | `trg_pricing_rec_updated_at` | UPDATE BEFORE | CREATE TRIGGER trg_pricing_rec_updated_at BEFORE UPDATE ON pricing_recurring_pri |
 | `pricing_services` | `trg_pricing_services_updated_at` | UPDATE BEFORE | CREATE TRIGGER trg_pricing_services_updated_at BEFORE UPDATE ON pricing_services |
 | `pricing_square_footage_tiers` | `trg_pricing_sqft_updated_at` | UPDATE BEFORE | CREATE TRIGGER trg_pricing_sqft_updated_at BEFORE UPDATE ON pricing_square_foota |
+| `processing_cases` | `trg_processing_cases_updated_at` | UPDATE BEFORE | CREATE TRIGGER trg_processing_cases_updated_at BEFORE UPDATE ON processing_cases |
 | `quotes` | `trg_quotes_updated_at` | UPDATE BEFORE | CREATE TRIGGER trg_quotes_updated_at BEFORE UPDATE ON quotes FOR EACH ROW EXECUT |
 | `record_drawer_layouts` | `trg_record_drawer_layouts_updated_at` | UPDATE BEFORE | CREATE TRIGGER trg_record_drawer_layouts_updated_at BEFORE UPDATE ON record_draw |
 | `recurrence_plans` | `trg_recurrence_updated_at` | UPDATE BEFORE | CREATE TRIGGER trg_recurrence_updated_at BEFORE UPDATE ON recurrence_plans FOR E |
 | `role_definitions` | `trg_role_definitions_updated_at` | UPDATE BEFORE | CREATE TRIGGER trg_role_definitions_updated_at BEFORE UPDATE ON role_definitions |
 | `role_permission_grants` | `trg_role_permission_grants_updated_at` | UPDATE BEFORE | CREATE TRIGGER trg_role_permission_grants_updated_at BEFORE UPDATE ON role_permi |
+| `schedule_assignments` | `trg_schedule_assignments_updated_at` | UPDATE BEFORE | CREATE TRIGGER trg_schedule_assignments_updated_at BEFORE UPDATE ON schedule_ass |
+| `schedule_assignments` | `trg_validate_schedule_assignments_consistency` | INSERT BEFORE | CREATE TRIGGER trg_validate_schedule_assignments_consistency BEFORE INSERT OR UP |
+| `schedule_assignments` | `trg_validate_schedule_assignments_consistency` | UPDATE BEFORE | CREATE TRIGGER trg_validate_schedule_assignments_consistency BEFORE INSERT OR UP |
+| `schedule_patterns` | `trg_schedule_patterns_updated_at` | UPDATE BEFORE | CREATE TRIGGER trg_schedule_patterns_updated_at BEFORE UPDATE ON schedule_patter |
+| `schedule_patterns` | `trg_validate_schedule_patterns_consistency` | INSERT BEFORE | CREATE TRIGGER trg_validate_schedule_patterns_consistency BEFORE INSERT OR UPDAT |
+| `schedule_patterns` | `trg_validate_schedule_patterns_consistency` | UPDATE BEFORE | CREATE TRIGGER trg_validate_schedule_patterns_consistency BEFORE INSERT OR UPDAT |
+| `schedule_patterns` | `trg_validate_schedule_patterns_weekdays` | INSERT BEFORE | CREATE TRIGGER trg_validate_schedule_patterns_weekdays BEFORE INSERT OR UPDATE O |
+| `schedule_patterns` | `trg_validate_schedule_patterns_weekdays` | UPDATE BEFORE | CREATE TRIGGER trg_validate_schedule_patterns_weekdays BEFORE INSERT OR UPDATE O |
 | `schedules` | `trg_assign_org_record_number_schedules` | INSERT BEFORE | CREATE TRIGGER trg_assign_org_record_number_schedules BEFORE INSERT ON schedules |
 | `schedules` | `trg_prevent_completed_schedule_history_rewrite` | UPDATE BEFORE | CREATE TRIGGER trg_prevent_completed_schedule_history_rewrite BEFORE UPDATE ON s |
 | `schedules` | `trg_schedules_updated_at` | UPDATE BEFORE | CREATE TRIGGER trg_schedules_updated_at BEFORE UPDATE ON schedules FOR EACH ROW  |

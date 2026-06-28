@@ -1,0 +1,153 @@
+# Billing and financials platform
+
+**Status:** Canonical module doctrine (June 2026). Defines how **Operational Consequences (L5)** — charges, invoices, payments, ledger, GL — derive from operational facts, and locks the decision to **generalize billing before building childcare billing**. **The five P3.1 implementation gates are ratified (June 2026)** — see "Ratified P3.1 implementation gates" below. Schema/runtime are **not** built in this doctrine pass.
+
+> **Layer:** Billing is **L5 Operational Consequences** in [`../operational-truth-flow-doctrine.md`](../operational-truth-flow-doctrine.md). It derives from **L4 Operational Facts** (attendance, delivered service), targets **L3 Expectations** (expected tuition/revenue) for variance, and reads **L1 Configuration** (rate rules). It never derives directly from enrollment/intent.
+
+> **Companion (current state, supplemental):** [`../../product/billing-and-financials.md`](../../product/billing-and-financials.md) documents the billing/payments/GL stack **as wired today**. This doc is the forward platform doctrine. Where they differ, this doc is the canonical direction and the supplemental is the as-built record.
+
+---
+
+## The problem this doctrine fixes
+
+Today's billing stack is welded to the cleaning/services (jobs) vertical:
+
+- `charges.job_id` is **NOT NULL** — every receivable charge requires a job.
+- `gl_journal_lines` and `ledger_transactions` reference `job_id`.
+- There is **no `invoices` table** (referenced only in CHECK constraints as a "ghost" entity type).
+- Pricing tables (`pricing_*`, `service_pricing_rules`) are job/service-vertical oriented.
+
+Childcare billing must derive from the **committed enrollment foundation** and **attendance facts** — not from jobs. Two paths were considered: (a) build a parallel childcare billing model, or (b) generalize the existing stack first. **Decision: generalize first.** A parallel model becomes permanent debt and creates two competing notions of money, ledger, and GL.
+
+---
+
+## Ratified decision: generalize before childcare billing
+
+**No childcare billing is built until the financial core is generalized off `job_id`.**
+
+The generalization introduces a **billable source** (financial-responsibility) abstraction so that charges, ledger transactions, and GL lines can reference *what is being billed for* polymorphically, of which a `job` is one kind and an **enrollment agreement (with attendance/schedule facts)** is another.
+
+```mermaid
+flowchart TB
+  subgraph sources [Billable sources - polymorphic]
+    job[Job - services vertical]
+    agr[Enrollment agreement + attendance facts - childcare]
+  end
+  charge[Charge - billable_source_type / id]
+  inv[Invoice / statement - optional grouping]
+  pay[Payment + allocation]
+  ledger[Ledger transaction]
+  gl[GL journal entry / lines]
+  job --> charge
+  agr --> charge
+  charge --> inv
+  charge --> ledger
+  pay --> ledger
+  ledger --> gl
+```
+
+### Generalization principles
+
+1. **Billable source is polymorphic, not job-anchored.** Charges (and the ledger/GL rows derived from them) reference a billable source by `{type, id}`. `job` and `enrollment_agreement` are two source kinds; neither is privileged in the schema. `charges.job_id NOT NULL` is relaxed to a nullable, with the polymorphic reference as the canonical link.
+2. **Charges derive from operational facts.** A childcare charge is created from an attendance fact (or a delivered scheduled service) against an agreement — never from the act of enrolling. Enrollment creates a commitment (L2); a fact (L4) creates the billable event; the charge (L5) derives from the fact. See [`./attendance-system.md`](./attendance-system.md).
+3. **Rate resolution reads L1 rules.** Charge amounts resolve from first-class **rate rules** (L1 config), not from job pricing tables and not from JSON. Tuition is not modeled as a program type.
+4. **One ledger, one GL.** There is a single `ledger_transactions` / `gl_*` stack for the org. Childcare does not get a second ledger; GL lines gain enrollment/agreement dimensions rather than being tied to `job_id`.
+5. **Immutability + audit.** Financial consequences are append-oriented and auditable. Corrections follow the same effective-dated discipline as facts (reversals/credit notes are new entries, not in-place edits). Money is never computed only in the browser; financial side effects run server-side with org scoping and audit trails.
+6. **Events drive posting.** Charge creation and posting flow through the event/workflow spine (`emitEvent` → `workflow_events` → `workflowRun`), consistent with [`./actions-and-workflows.md`](./actions-and-workflows.md).
+
+---
+
+## Expected vs actual revenue (L3 ↔ L5)
+
+- **Expected tuition / subsidy / revenue** are **L3 derived** projections of commitments and rate rules — never stored as authoritative rows. See [`../operational-truth-flow-doctrine.md`](../operational-truth-flow-doctrine.md) (L3).
+- **Actual revenue** is the L5 consequence derived from facts.
+- Variance (expected vs actual) is an observational read model over L3 and L5; BOS may explain balances and predict delinquency, **proposing**; humans approve.
+
+---
+
+## Childcare boundary
+
+- Childcare billing references the **committed enrollment foundation** (`child_enrollment_agreements`, `child_placements`, `schedule_assignments`) and **attendance facts** — never the OCM proposal alone, never `opportunities.location_id`.
+- **Do not** wrap an enrolled child in a `job` to reuse job billing.
+- **Do not** introduce a parallel childcare ledger/GL or a second charges model.
+- Per [`../../platform_convergence/child_namespace_decision.md`](../../platform_convergence/child_namespace_decision.md) §6, billing data lives on its **own** billing/charge participation entity via a **billing-child context**; never extend `inquiry_child`.
+
+---
+
+## Sequencing (not built in this pass)
+
+Recorded for the phased plan; no schema/runtime here:
+
+1. Generalize the financial core (billable source on charges/ledger/GL; relax `job_id`; introduce invoice/statement grouping if needed).
+2. First-class **rate rules** (L1) as the charge-amount source.
+3. Childcare charges derived from attendance facts against agreements.
+4. Statements / AR aging and customer balance as derived/projected surfaces.
+
+---
+
+## Ratified P3.1 implementation gates (June 2026)
+
+These five decisions are **locked**. They gate **P3.1 — generalize the financial core** (the migration that makes childcare a first-class billable source). They constrain the *posting substrate* (`charges`, `ledger_transactions`, `gl_journal_lines`); everything above the substrate stays deferred (see "Explicitly deferred" below). Full rationale, alternatives, migration/back-compat analysis, and decision language: [`../../sprints/06_2026/operational_execution_p3_financial_resolution_planning.md`](../../sprints/06_2026/operational_execution_p3_financial_resolution_planning.md) §11.
+
+**Hard rule across all five: no job-vertical regression.** Each gate is additive (nullable columns) or scoped to the childcare path; existing job-billing schema, RLS, and write flows are unchanged in P3.1. A job-vertical cutover (immutability, RLS tightening) is a separate, later, explicit decision — never an accidental side effect.
+
+1. **Additive `charge_category` taxonomy.** Add a nullable `charge_category` with its own CHECK vocabulary (`tuition, deposit, consumable_fee, late_pickup, one_time, discount, credit, adjustment, subsidy_offset`) as the canonical financial taxonomy. The legacy `charge_type` and its `{service, fee, adjustment}` CHECK are **frozen for compatibility** — not expanded. Childcare charges set `charge_category` (plus a compatible `charge_type` for legacy readers).
+
+2. **Childcare posted-charge immutability.** `draft`/unposted charge *intents* may be recalculated or replaced freely. A **`posted` childcare charge is never updated in place.** Post-posting corrections are **new rows linked by `source_charge_id`** — reversal, credit, or replacement charge. Enforced by a status-scoped guard for `billable_source_type='enrollment_agreement'`; the job vertical's existing mutability is unchanged.
+
+3. **Childcare financial write posture (server-side + role-gated).** All childcare financial writes are **server-side only** and gated by `has_org_role(org_id, ARRAY['owner','admin','ops','manager'])`, aligning with the P1/P2 posture. **No broad `authenticated` client writes for money**; money is never computed in the browser. New childcare financial tables use org SELECT / role INSERT / `service_role` ALL / no UPDATE-DELETE grants. Existing job `charges` policies are unchanged in P3.1.
+
+4. **Generic billable-source dimension on ledger/GL.** Add a generic, nullable `billable_source_type` / `billable_source_id` dimension to `ledger_transactions` and `gl_journal_lines` (both already allow null `job_id`). This supports `job` and `enrollment_agreement` sources in **one ledger, one GL** — no second ledger, no childcare-specific FK. GL account mappings (tuition/subsidy/deposit) are reserved for a later sub-phase.
+
+5. **Currency posture.** **Single currency per org** for P3. Rate plans carry an explicit `currency_code` (default = org currency) from day one so multi-currency is not blocked by a future breaking change; cross-currency composition is a validation error. No FX/conversion in P3.
+
+### Explicitly deferred (NOT part of P3.1)
+
+- **Invoices / statement grouping** — charges remain the receivable unit; a statement grouping (if needed) and any first-class `invoices` entity are deferred (P3.6 / product policy).
+- **Subsidy** — Processing-owned intake, authorization storage, claims, and settlement are deferred. P3 ships only a `SubsidyAuthorization` consumption interface. **Expected subsidy is L3-derived and is never booked as AR before a claim/posting.**
+- **Deposits modeling** (held-liability GL + recognition), **responsibility parties / split**, and **cadence / proration policy** are deferred to their sub-phases (P3.6 / P3.3 / P3.4).
+
+### Stage separation reaffirmed
+
+**Posting is separate from Financial Resolution.** Rate Resolution (what pricing applies) → Charge Resolution (what becomes a charge) → Financial Resolution (who owes what) are derived/recomputable; **Posting** (immutable charges, statements, claims, payments, ledger, GL) is the only stage that writes authoritative financial truth. These do not collapse into "billing logic."
+
+---
+
+## What not to do
+
+- Do not build childcare billing before the financial core is generalized off `job_id`.
+- Do not anchor childcare charges, ledger, or GL on `job_id`, or wrap children in jobs.
+- Do not create a second ledger/GL or a parallel charges model for childcare.
+- Do not derive charges from enrollment/intent; derive them from operational facts.
+- Do not store "expected revenue/tuition" as authoritative rows — it is derived (L3).
+- Do not encode rate rules only in JSON, or compute money in the browser.
+- Do not expand the legacy `charge_type` CHECK; add financial taxonomy on `charge_category` (P3.1 gate 1).
+- Do not update a posted childcare charge in place; correct via `source_charge_id` reversal/credit/replacement (P3.1 gate 2).
+- Do not allow broad `authenticated` client writes for childcare money; writes are server-side + `has_org_role` (P3.1 gate 3).
+- Do not add a childcare-specific ledger FK or a second ledger/GL; use the generic billable-source dimension (P3.1 gate 4).
+- Do not book expected subsidy as AR before a claim/posting; expected subsidy is L3-derived.
+- Do not collapse Rate / Charge / Financial Resolution into Posting — Posting is the only authoritative-write stage.
+- Do not regress job-vertical schema, RLS, or write flows when generalizing (gates are additive or childcare-scoped).
+
+---
+
+## Cross-references
+
+| Concern | Doctrine |
+|---------|----------|
+| Truth-flow layers (Billing = L5) | [`../operational-truth-flow-doctrine.md`](../operational-truth-flow-doctrine.md) |
+| Attendance facts (what billing derives from) | [`./attendance-system.md`](./attendance-system.md) |
+| Committed enrollment foundation | [`../core/placement-system.md`](../core/placement-system.md) |
+| Child namespace per module (billing-child context) | [`../../platform_convergence/child_namespace_decision.md`](../../platform_convergence/child_namespace_decision.md) |
+| Action / event spine (posting path) | [`./actions-and-workflows.md`](./actions-and-workflows.md) |
+| Billing as wired today (supplemental) | [`../../product/billing-and-financials.md`](../../product/billing-and-financials.md) |
+| Financial RLS / payment-method security | [`../../audits/supabase-schema-alignment-audit.md`](../../audits/supabase-schema-alignment-audit.md) |
+
+---
+
+## When this doc must be updated
+
+- The billable-source abstraction or the generalization decision changes.
+- Charge derivation (facts → charges) or rate-rule sourcing changes.
+- Invoice/statement modeling is introduced.
+- Billing moves from doctrine to implemented schema/runtime (record the model here).

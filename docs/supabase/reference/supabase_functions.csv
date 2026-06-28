@@ -503,6 +503,19 @@ AS $function$
   WHERE r.detail IS NOT NULL;
 $function$
 "
+public,bump_communication_thread_last_message_at,function,plpgsql,VOLATILE,false,,trigger,"CREATE OR REPLACE FUNCTION public.bump_communication_thread_last_message_at()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+BEGIN
+    UPDATE public.communication_threads
+    SET last_message_at = NEW.created_at,
+        updated_at = NOW()
+    WHERE id = NEW.thread_id;
+    RETURN NEW;
+END;
+$function$
+"
 public,claim_due_communication_scheduled_sends,function,plpgsql,VOLATILE,false,"p_limit integer, p_now timestamp with time zone, p_org_id uuid",communication_scheduled_sends,"CREATE OR REPLACE FUNCTION public.claim_due_communication_scheduled_sends(p_limit integer, p_now timestamp with time zone, p_org_id uuid DEFAULT NULL::uuid)
  RETURNS SETOF communication_scheduled_sends
  LANGUAGE plpgsql
@@ -519,6 +532,7 @@ BEGIN
         WHERE css.status = 'pending'::text
           AND css.scheduled_for <= p_now
           AND css.communication_message_id IS NULL
+          AND css.source = ANY (ARRAY['task_assist'::text, 'tour_scheduling'::text])  -- announcement execution: Phase 3
           AND (p_org_id IS NULL OR css.org_id = p_org_id)
         ORDER BY css.scheduled_for ASC, css.id ASC
         FOR UPDATE OF css SKIP LOCKED
@@ -721,6 +735,10 @@ AS $function$
 DECLARE
     opp_org uuid;
 BEGIN
+    IF NEW.entity_id IS NULL THEN
+        RETURN NEW;
+    END IF;
+
     SELECT o.org_id INTO opp_org FROM public.opportunities o WHERE o.id = NEW.entity_id;
     IF opp_org IS NULL OR opp_org <> NEW.org_id THEN
         RAISE EXCEPTION 'operational_tasks: entity org mismatch' USING ERRCODE = '23514';
@@ -1291,6 +1309,16 @@ begin
 end;
 $function$
 "
+public,prevent_child_attendance_events_mutation,function,plpgsql,VOLATILE,false,,trigger,"CREATE OR REPLACE FUNCTION public.prevent_child_attendance_events_mutation()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+BEGIN
+    RAISE EXCEPTION 'child_attendance_events is append-only: % is not allowed. Record a correction or reversal event instead.', TG_OP
+        USING ERRCODE = '0A000';
+END;
+$function$
+"
 public,prevent_completed_schedule_history_rewrite,function,plpgsql,VOLATILE,false,,trigger,"CREATE OR REPLACE FUNCTION public.prevent_completed_schedule_history_rewrite()
  RETURNS trigger
  LANGUAGE plpgsql
@@ -1441,6 +1469,20 @@ BEGIN
     END IF;
 
     NEW.updated_at := now();
+    RETURN NEW;
+END;
+$function$
+"
+public,sync_communication_template_version_legacy,function,plpgsql,VOLATILE,false,,trigger,"CREATE OR REPLACE FUNCTION public.sync_communication_template_version_legacy()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+BEGIN
+    IF NEW.version_number IS NOT NULL AND (NEW.version IS NULL OR NEW.version <> NEW.version_number) THEN
+        NEW.version := NEW.version_number;
+    ELSIF NEW.version IS NOT NULL AND NEW.version_number IS NULL THEN
+        NEW.version_number := NEW.version;
+    END IF;
     RETURN NEW;
 END;
 $function$
@@ -1802,6 +1844,343 @@ AS $function$
     where au.id = auth.uid()
       and au.org_id = target_org_id
   );
+$function$
+"
+public,validate_child_attendance_events_consistency,function,plpgsql,VOLATILE,false,,trigger,"CREATE OR REPLACE FUNCTION public.validate_child_attendance_events_consistency()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+DECLARE
+    agr_org uuid;
+    agr_member uuid;
+    agr_site uuid;
+    site_org uuid;
+    site_type text;
+    r_org uuid;
+    r_type text;
+    r_parent uuid;
+    c_org uuid;
+    c_agreement uuid;
+BEGIN
+    SELECT a.org_id, a.customer_member_id, a.site_location_id
+    INTO agr_org, agr_member, agr_site
+    FROM public.child_enrollment_agreements a
+    WHERE a.id = NEW.enrollment_agreement_id;
+
+    IF agr_org IS NULL THEN
+        RAISE EXCEPTION 'child_attendance_events: enrollment_agreement_id % not found', NEW.enrollment_agreement_id
+            USING ERRCODE = '23503';
+    END IF;
+    IF agr_org <> NEW.org_id THEN
+        RAISE EXCEPTION 'child_attendance_events: agreement org mismatch' USING ERRCODE = '23514';
+    END IF;
+    IF agr_member <> NEW.customer_member_id THEN
+        RAISE EXCEPTION 'child_attendance_events: customer_member_id does not match agreement' USING ERRCODE = '23514';
+    END IF;
+    IF NEW.site_location_id <> agr_site THEN
+        RAISE EXCEPTION 'child_attendance_events: site_location_id must match agreement site' USING ERRCODE = '23514';
+    END IF;
+
+    SELECT l.org_id, l.location_type INTO site_org, site_type
+    FROM public.locations l WHERE l.id = NEW.site_location_id;
+    IF site_org IS NULL OR site_org <> NEW.org_id OR site_type IS DISTINCT FROM 'site' THEN
+        RAISE EXCEPTION 'child_attendance_events: invalid site_location_id %', NEW.site_location_id USING ERRCODE = '23514';
+    END IF;
+
+    -- Any referenced room must be a unit under the agreement site.
+    IF NEW.room_location_id IS NOT NULL OR NEW.from_room_location_id IS NOT NULL OR NEW.to_room_location_id IS NOT NULL THEN
+        FOR r_org, r_type, r_parent IN
+            SELECT l.org_id, l.location_type, l.parent_location_id
+            FROM public.locations l
+            WHERE l.id = ANY (ARRAY[NEW.room_location_id, NEW.from_room_location_id, NEW.to_room_location_id])
+        LOOP
+            IF r_org IS DISTINCT FROM NEW.org_id OR r_type IS DISTINCT FROM 'unit' THEN
+                RAISE EXCEPTION 'child_attendance_events: room must be a unit in the same org' USING ERRCODE = '23514';
+            END IF;
+            IF r_parent IS DISTINCT FROM NEW.site_location_id THEN
+                RAISE EXCEPTION 'child_attendance_events: room must be a child of the agreement site' USING ERRCODE = '23514';
+            END IF;
+        END LOOP;
+    END IF;
+
+    -- Correction/reversal target must be a prior event in the same org + agreement.
+    IF NEW.corrects_event_id IS NOT NULL THEN
+        SELECT e.org_id, e.enrollment_agreement_id INTO c_org, c_agreement
+        FROM public.child_attendance_events e WHERE e.id = NEW.corrects_event_id;
+        IF c_org IS NULL THEN
+            RAISE EXCEPTION 'child_attendance_events: corrects_event_id % not found', NEW.corrects_event_id USING ERRCODE = '23503';
+        END IF;
+        IF c_org <> NEW.org_id OR c_agreement <> NEW.enrollment_agreement_id THEN
+            RAISE EXCEPTION 'child_attendance_events: correction must target an event on the same org and agreement' USING ERRCODE = '23514';
+        END IF;
+    END IF;
+
+    RETURN NEW;
+END;
+$function$
+"
+public,validate_child_enrollment_agreements_consistency,function,plpgsql,VOLATILE,false,,trigger,"CREATE OR REPLACE FUNCTION public.validate_child_enrollment_agreements_consistency()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+DECLARE
+    opp_org uuid;
+    opp_customer uuid;
+    ocm_org uuid;
+    ocm_opp uuid;
+    ocm_member uuid;
+    mem_org uuid;
+    mem_customer uuid;
+    mem_person uuid;
+    person_org uuid;
+    site_org uuid;
+    site_type text;
+BEGIN
+    SELECT cm.org_id, cm.customer_id, cm.person_id
+    INTO mem_org, mem_customer, mem_person
+    FROM public.customer_members cm
+    WHERE cm.id = NEW.customer_member_id;
+
+    IF mem_org IS NULL THEN
+        RAISE EXCEPTION 'child_enrollment_agreements: customer_member_id % not found', NEW.customer_member_id
+            USING ERRCODE = '23503';
+    END IF;
+    IF mem_org <> NEW.org_id THEN
+        RAISE EXCEPTION 'child_enrollment_agreements: customer_member org mismatch'
+            USING ERRCODE = '23514';
+    END IF;
+
+    IF NEW.customer_id IS NULL THEN
+        NEW.customer_id := mem_customer;
+    ELSIF NEW.customer_id <> mem_customer THEN
+        RAISE EXCEPTION 'child_enrollment_agreements: customer_id does not match customer_member'
+            USING ERRCODE = '23514';
+    END IF;
+
+    IF NEW.person_id IS NULL THEN
+        NEW.person_id := mem_person;
+    ELSIF NEW.person_id IS DISTINCT FROM mem_person THEN
+        RAISE EXCEPTION 'child_enrollment_agreements: person_id does not match customer_member'
+            USING ERRCODE = '23514';
+    END IF;
+
+    IF NEW.opportunity_id IS NOT NULL THEN
+        SELECT o.org_id, o.customer_id
+        INTO opp_org, opp_customer
+        FROM public.opportunities o
+        WHERE o.id = NEW.opportunity_id;
+
+        IF opp_org IS NULL THEN
+            RAISE EXCEPTION 'child_enrollment_agreements: opportunity_id % not found', NEW.opportunity_id
+                USING ERRCODE = '23503';
+        END IF;
+        IF opp_org <> NEW.org_id THEN
+            RAISE EXCEPTION 'child_enrollment_agreements: opportunity org mismatch'
+                USING ERRCODE = '23514';
+        END IF;
+        IF NEW.customer_id IS NOT NULL AND opp_customer IS NOT NULL AND NEW.customer_id <> opp_customer THEN
+            RAISE EXCEPTION 'child_enrollment_agreements: opportunity customer mismatch'
+                USING ERRCODE = '23514';
+        END IF;
+    END IF;
+
+    IF NEW.opportunity_customer_member_id IS NOT NULL THEN
+        SELECT ocm.org_id, ocm.opportunity_id, ocm.customer_member_id
+        INTO ocm_org, ocm_opp, ocm_member
+        FROM public.opportunity_customer_members ocm
+        WHERE ocm.id = NEW.opportunity_customer_member_id;
+
+        IF ocm_org IS NULL THEN
+            RAISE EXCEPTION 'child_enrollment_agreements: opportunity_customer_member_id % not found',
+                NEW.opportunity_customer_member_id
+                USING ERRCODE = '23503';
+        END IF;
+        IF ocm_org <> NEW.org_id THEN
+            RAISE EXCEPTION 'child_enrollment_agreements: OCM org mismatch'
+                USING ERRCODE = '23514';
+        END IF;
+        IF NEW.opportunity_id IS NOT NULL AND ocm_opp <> NEW.opportunity_id THEN
+            RAISE EXCEPTION 'child_enrollment_agreements: OCM opportunity mismatch'
+                USING ERRCODE = '23514';
+        END IF;
+        IF ocm_member <> NEW.customer_member_id THEN
+            RAISE EXCEPTION 'child_enrollment_agreements: OCM customer_member mismatch'
+                USING ERRCODE = '23514';
+        END IF;
+    END IF;
+
+    SELECT l.org_id, l.location_type
+    INTO site_org, site_type
+    FROM public.locations l
+    WHERE l.id = NEW.site_location_id;
+
+    IF site_org IS NULL THEN
+        RAISE EXCEPTION 'child_enrollment_agreements: site_location_id % not found', NEW.site_location_id
+            USING ERRCODE = '23503';
+    END IF;
+    IF site_org <> NEW.org_id THEN
+        RAISE EXCEPTION 'child_enrollment_agreements: site org mismatch'
+            USING ERRCODE = '23514';
+    END IF;
+    IF site_type IS DISTINCT FROM 'site' THEN
+        RAISE EXCEPTION 'child_enrollment_agreements: site_location_id % must be location_type site (got %)',
+            NEW.site_location_id, site_type
+            USING ERRCODE = '23514';
+    END IF;
+
+    RETURN NEW;
+END;
+$function$
+"
+public,validate_child_placements_consistency,function,plpgsql,VOLATILE,false,,trigger,"CREATE OR REPLACE FUNCTION public.validate_child_placements_consistency()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+DECLARE
+    agr_org uuid;
+    agr_member uuid;
+    agr_site uuid;
+    site_org uuid;
+    site_type text;
+    room_org uuid;
+    room_type text;
+    room_parent uuid;
+    prog_org uuid;
+    prog_site uuid;
+BEGIN
+    SELECT a.org_id, a.customer_member_id, a.site_location_id
+    INTO agr_org, agr_member, agr_site
+    FROM public.child_enrollment_agreements a
+    WHERE a.id = NEW.enrollment_agreement_id;
+
+    IF agr_org IS NULL THEN
+        RAISE EXCEPTION 'child_placements: enrollment_agreement_id % not found', NEW.enrollment_agreement_id
+            USING ERRCODE = '23503';
+    END IF;
+    IF agr_org <> NEW.org_id THEN
+        RAISE EXCEPTION 'child_placements: agreement org mismatch'
+            USING ERRCODE = '23514';
+    END IF;
+    IF agr_member <> NEW.customer_member_id THEN
+        RAISE EXCEPTION 'child_placements: customer_member_id does not match agreement'
+            USING ERRCODE = '23514';
+    END IF;
+
+    IF NEW.site_location_id <> agr_site THEN
+        RAISE EXCEPTION 'child_placements: site_location_id must match agreement site'
+            USING ERRCODE = '23514';
+    END IF;
+
+    SELECT l.org_id, l.location_type
+    INTO site_org, site_type
+    FROM public.locations l
+    WHERE l.id = NEW.site_location_id;
+
+    IF site_org IS NULL OR site_org <> NEW.org_id OR site_type IS DISTINCT FROM 'site' THEN
+        RAISE EXCEPTION 'child_placements: invalid site_location_id %', NEW.site_location_id
+            USING ERRCODE = '23514';
+    END IF;
+
+    IF NEW.program_category_id IS NOT NULL THEN
+        SELECT lpc.org_id, lpc.location_id
+        INTO prog_org, prog_site
+        FROM public.location_program_categories lpc
+        WHERE lpc.id = NEW.program_category_id;
+
+        IF prog_org IS NULL THEN
+            RAISE EXCEPTION 'child_placements: program_category_id % not found', NEW.program_category_id
+                USING ERRCODE = '23503';
+        END IF;
+        IF prog_org <> NEW.org_id OR prog_site <> NEW.site_location_id THEN
+            RAISE EXCEPTION 'child_placements: program_category must belong to placement site'
+                USING ERRCODE = '23514';
+        END IF;
+    END IF;
+
+    IF NEW.room_location_id IS NOT NULL THEN
+        SELECT l.org_id, l.location_type, l.parent_location_id
+        INTO room_org, room_type, room_parent
+        FROM public.locations l
+        WHERE l.id = NEW.room_location_id;
+
+        IF room_org IS NULL THEN
+            RAISE EXCEPTION 'child_placements: room_location_id % not found', NEW.room_location_id
+                USING ERRCODE = '23503';
+        END IF;
+        IF room_org <> NEW.org_id OR room_type IS DISTINCT FROM 'unit' THEN
+            RAISE EXCEPTION 'child_placements: room_location_id % must be location_type unit', NEW.room_location_id
+                USING ERRCODE = '23514';
+        END IF;
+        IF room_parent IS DISTINCT FROM NEW.site_location_id THEN
+            RAISE EXCEPTION 'child_placements: room % must be child of site %',
+                NEW.room_location_id, NEW.site_location_id
+                USING ERRCODE = '23514';
+        END IF;
+    END IF;
+
+    RETURN NEW;
+END;
+$function$
+"
+public,validate_childcare_config_scope,function,plpgsql,VOLATILE,false,,trigger,"CREATE OR REPLACE FUNCTION public.validate_childcare_config_scope()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+DECLARE
+    site_org uuid;
+    site_type text;
+    prog_org uuid;
+    room_org uuid;
+    room_type text;
+    room_parent uuid;
+BEGIN
+    IF NEW.site_location_id IS NOT NULL THEN
+        SELECT l.org_id, l.location_type INTO site_org, site_type
+        FROM public.locations l WHERE l.id = NEW.site_location_id;
+        IF site_org IS NULL THEN
+            RAISE EXCEPTION 'childcare config scope: site_location_id % not found', NEW.site_location_id
+                USING ERRCODE = '23503';
+        END IF;
+        IF site_org <> NEW.org_id THEN
+            RAISE EXCEPTION 'childcare config scope: site org mismatch' USING ERRCODE = '23514';
+        END IF;
+        IF site_type IS DISTINCT FROM 'site' THEN
+            RAISE EXCEPTION 'childcare config scope: site_location_id % must be location_type site (got %)',
+                NEW.site_location_id, site_type USING ERRCODE = '23514';
+        END IF;
+    END IF;
+
+    IF NEW.program_category_id IS NOT NULL THEN
+        SELECT lpc.org_id INTO prog_org
+        FROM public.location_program_categories lpc WHERE lpc.id = NEW.program_category_id;
+        IF prog_org IS NULL THEN
+            RAISE EXCEPTION 'childcare config scope: program_category_id % not found', NEW.program_category_id
+                USING ERRCODE = '23503';
+        END IF;
+        IF prog_org <> NEW.org_id THEN
+            RAISE EXCEPTION 'childcare config scope: program category org mismatch' USING ERRCODE = '23514';
+        END IF;
+    END IF;
+
+    IF NEW.room_location_id IS NOT NULL THEN
+        SELECT l.org_id, l.location_type, l.parent_location_id
+        INTO room_org, room_type, room_parent
+        FROM public.locations l WHERE l.id = NEW.room_location_id;
+        IF room_org IS NULL THEN
+            RAISE EXCEPTION 'childcare config scope: room_location_id % not found', NEW.room_location_id
+                USING ERRCODE = '23503';
+        END IF;
+        IF room_org <> NEW.org_id THEN
+            RAISE EXCEPTION 'childcare config scope: room org mismatch' USING ERRCODE = '23514';
+        END IF;
+        IF room_type IS DISTINCT FROM 'unit' THEN
+            RAISE EXCEPTION 'childcare config scope: room_location_id % must be location_type unit (got %)',
+                NEW.room_location_id, room_type USING ERRCODE = '23514';
+        END IF;
+    END IF;
+
+    RETURN NEW;
+END;
 $function$
 "
 public,validate_form_packet_items_form_org,function,plpgsql,VOLATILE,false,,trigger,"CREATE OR REPLACE FUNCTION public.validate_form_packet_items_form_org()
@@ -2242,6 +2621,108 @@ BEGIN
         RAISE EXCEPTION 'placement_overrides: program_room_cohort_key must match candidate cohort'
             USING ERRCODE = '23514';
     END IF;
+    RETURN NEW;
+END;
+$function$
+"
+public,validate_schedule_assignments_consistency,function,plpgsql,VOLATILE,false,,trigger,"CREATE OR REPLACE FUNCTION public.validate_schedule_assignments_consistency()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+DECLARE
+    agr_org uuid;
+    agr_member uuid;
+    agr_site uuid;
+    pat_org uuid;
+    pat_site uuid;
+BEGIN
+    SELECT a.org_id, a.customer_member_id, a.site_location_id
+    INTO agr_org, agr_member, agr_site
+    FROM public.child_enrollment_agreements a
+    WHERE a.id = NEW.enrollment_agreement_id;
+
+    IF agr_org IS NULL THEN
+        RAISE EXCEPTION 'schedule_assignments: enrollment_agreement_id % not found', NEW.enrollment_agreement_id
+            USING ERRCODE = '23503';
+    END IF;
+    IF agr_org <> NEW.org_id THEN
+        RAISE EXCEPTION 'schedule_assignments: agreement org mismatch'
+            USING ERRCODE = '23514';
+    END IF;
+    IF agr_member <> NEW.customer_member_id THEN
+        RAISE EXCEPTION 'schedule_assignments: customer_member_id does not match agreement'
+            USING ERRCODE = '23514';
+    END IF;
+
+    SELECT sp.org_id, sp.site_location_id
+    INTO pat_org, pat_site
+    FROM public.schedule_patterns sp
+    WHERE sp.id = NEW.schedule_pattern_id;
+
+    IF pat_org IS NULL THEN
+        RAISE EXCEPTION 'schedule_assignments: schedule_pattern_id % not found', NEW.schedule_pattern_id
+            USING ERRCODE = '23503';
+    END IF;
+    IF pat_org <> NEW.org_id OR pat_site <> agr_site THEN
+        RAISE EXCEPTION 'schedule_assignments: schedule_pattern must belong to agreement site'
+            USING ERRCODE = '23514';
+    END IF;
+
+    RETURN NEW;
+END;
+$function$
+"
+public,validate_schedule_patterns_consistency,function,plpgsql,VOLATILE,false,,trigger,"CREATE OR REPLACE FUNCTION public.validate_schedule_patterns_consistency()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+DECLARE
+    site_org uuid;
+    site_type text;
+BEGIN
+    SELECT l.org_id, l.location_type
+    INTO site_org, site_type
+    FROM public.locations l
+    WHERE l.id = NEW.site_location_id;
+
+    IF site_org IS NULL THEN
+        RAISE EXCEPTION 'schedule_patterns: site_location_id % not found', NEW.site_location_id
+            USING ERRCODE = '23503';
+    END IF;
+    IF site_org <> NEW.org_id THEN
+        RAISE EXCEPTION 'schedule_patterns: site org mismatch'
+            USING ERRCODE = '23514';
+    END IF;
+    IF site_type IS DISTINCT FROM 'site' THEN
+        RAISE EXCEPTION 'schedule_patterns: site_location_id % must be location_type site (got %)',
+            NEW.site_location_id, site_type
+            USING ERRCODE = '23514';
+    END IF;
+
+    RETURN NEW;
+END;
+$function$
+"
+public,validate_schedule_patterns_weekdays,function,plpgsql,VOLATILE,false,,trigger,"CREATE OR REPLACE FUNCTION public.validate_schedule_patterns_weekdays()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+DECLARE
+    d smallint;
+BEGIN
+    IF NEW.weekdays IS NULL OR cardinality(NEW.weekdays) = 0 THEN
+        RAISE EXCEPTION 'schedule_patterns.weekdays must be non-empty'
+            USING ERRCODE = '23514';
+    END IF;
+
+    FOREACH d IN ARRAY NEW.weekdays
+    LOOP
+        IF d < 0 OR d > 6 THEN
+            RAISE EXCEPTION 'schedule_patterns.weekdays element % out of range 0-6', d
+                USING ERRCODE = '23514';
+        END IF;
+    END LOOP;
+
     RETURN NEW;
 END;
 $function$

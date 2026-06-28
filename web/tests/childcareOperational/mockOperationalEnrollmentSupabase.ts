@@ -20,6 +20,7 @@ export type OperationalEnrollmentMockStore = {
     child_placements: Row[];
     schedule_patterns: Row[];
     schedule_assignments: Row[];
+    child_attendance_events: Row[];
     locations: Row[];
     location_program_categories: Row[];
     customer_members: Row[];
@@ -36,6 +37,7 @@ export function createOperationalEnrollmentMockStore(
         child_placements: seed?.child_placements ?? [],
         schedule_patterns: seed?.schedule_patterns ?? [],
         schedule_assignments: seed?.schedule_assignments ?? [],
+        child_attendance_events: seed?.child_attendance_events ?? [],
         locations: seed?.locations ?? [],
         location_program_categories: seed?.location_program_categories ?? [],
         customer_members: seed?.customer_members ?? [],

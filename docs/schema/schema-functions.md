@@ -2,7 +2,7 @@
 
 **Status:** Generated reference. **Do not edit by hand.**
 
-**Generated:** 2026-06-12 · **Function count:** 2429
+**Generated:** 2026-06-28 · **Function count:** 2910
 
 | Schema | Function | Return type | Security |
 |--------|----------|-------------|----------|
@@ -471,6 +471,18 @@
 | `  WHERE r.detail IS NOT NULL;` | `` | — | — |
 | `$function$` | `` | — | — |
 | `public` | `` | — | — |
+| ` RETURNS trigger` | `` | — | — |
+| ` LANGUAGE plpgsql` | `` | — | — |
+| `AS $function$` | `` | — | — |
+| `BEGIN` | `` | — | — |
+| `    UPDATE public.communication_threads` | `` | — | — |
+| `    SET last_message_at = NEW.created_at` | `` | — | — |
+| `        updated_at = NOW()` | `` | — | — |
+| `    WHERE id = NEW.thread_id;` | `` | — | — |
+| `    RETURN NEW;` | `` | — | — |
+| `END;` | `` | — | — |
+| `$function$` | `` | — | — |
+| `public` | `` | — | — |
 | ` RETURNS SETOF communication_scheduled_sends` | `` | — | — |
 | ` LANGUAGE plpgsql` | `` | — | — |
 | `AS $function$` | `` | — | — |
@@ -678,6 +690,10 @@
 | `DECLARE` | `` | — | — |
 | `    opp_org uuid;` | `` | — | — |
 | `BEGIN` | `` | — | — |
+| `    IF NEW.entity_id IS NULL THEN` | `` | — | — |
+| `        RETURN NEW;` | `` | — | — |
+| `    END IF;` | `` | — | — |
+| `public` | `` | — | — |
 | `    SELECT o.org_id INTO opp_org FROM public.opportunities o WHERE o.id = NEW.entity_id;` | `` | — | — |
 | `    IF opp_org IS NULL OR opp_org <> NEW.org_id THEN` | `` | — | — |
 | `        RAISE EXCEPTION 'operational_tasks: entity org mismatch' USING ERRCODE = '23514';` | `` | — | — |
@@ -1173,6 +1189,14 @@
 | ` RETURNS trigger` | `` | — | — |
 | ` LANGUAGE plpgsql` | `` | — | — |
 | `AS $function$` | `` | — | — |
+| `BEGIN` | `` | — | — |
+| `        USING ERRCODE = '0A000';` | `` | — | — |
+| `END;` | `` | — | — |
+| `$function$` | `` | — | — |
+| `public` | `` | — | — |
+| ` RETURNS trigger` | `` | — | — |
+| ` LANGUAGE plpgsql` | `` | — | — |
+| `AS $function$` | `` | — | — |
 | `begin` | `` | — | — |
 | `  -- Only enforce for updates` | `` | — | — |
 | `  if (tg_op <> 'UPDATE') then` | `` | — | — |
@@ -1276,6 +1300,19 @@
 | `    END IF;` | `` | — | — |
 | `public` | `` | — | — |
 | `    NEW.updated_at := now();` | `` | — | — |
+| `    RETURN NEW;` | `` | — | — |
+| `END;` | `` | — | — |
+| `$function$` | `` | — | — |
+| `public` | `` | — | — |
+| ` RETURNS trigger` | `` | — | — |
+| ` LANGUAGE plpgsql` | `` | — | — |
+| `AS $function$` | `` | — | — |
+| `BEGIN` | `` | — | — |
+| `    IF NEW.version_number IS NOT NULL AND (NEW.version IS NULL OR NEW.version <> NEW.version_number) THEN` | `` | — | — |
+| `        NEW.version := NEW.version_number;` | `` | — | — |
+| `    ELSIF NEW.version IS NOT NULL AND NEW.version_number IS NULL THEN` | `` | — | — |
+| `        NEW.version_number := NEW.version;` | `` | — | — |
+| `    END IF;` | `` | — | — |
 | `    RETURN NEW;` | `` | — | — |
 | `END;` | `` | — | — |
 | `$function$` | `` | — | — |
@@ -1598,6 +1635,295 @@
 | `    where au.id = auth.uid()` | `` | — | — |
 | `      and au.org_id = target_org_id` | `` | — | — |
 | `  );` | `` | — | — |
+| `$function$` | `` | — | — |
+| `public` | `` | — | — |
+| ` RETURNS trigger` | `` | — | — |
+| ` LANGUAGE plpgsql` | `` | — | — |
+| `AS $function$` | `` | — | — |
+| `DECLARE` | `` | — | — |
+| `    agr_org uuid;` | `` | — | — |
+| `    agr_member uuid;` | `` | — | — |
+| `    agr_site uuid;` | `` | — | — |
+| `    site_org uuid;` | `` | — | — |
+| `    site_type text;` | `` | — | — |
+| `    r_org uuid;` | `` | — | — |
+| `    r_type text;` | `` | — | — |
+| `    r_parent uuid;` | `` | — | — |
+| `    c_org uuid;` | `` | — | — |
+| `    c_agreement uuid;` | `` | — | — |
+| `BEGIN` | `` | — | — |
+| `    FROM public.child_enrollment_agreements a` | `` | — | — |
+| `    WHERE a.id = NEW.enrollment_agreement_id;` | `` | — | — |
+| `public` | `` | — | — |
+| `    IF agr_org IS NULL THEN` | `` | — | — |
+| `            USING ERRCODE = '23503';` | `` | — | — |
+| `    END IF;` | `` | — | — |
+| `    IF agr_org <> NEW.org_id THEN` | `` | — | — |
+| `        RAISE EXCEPTION 'child_attendance_events: agreement org mismatch' USING ERRCODE = '23514';` | `` | — | — |
+| `    END IF;` | `` | — | — |
+| `    IF agr_member <> NEW.customer_member_id THEN` | `` | — | — |
+| `        RAISE EXCEPTION 'child_attendance_events: customer_member_id does not match agreement' USING ERRCODE = '23514';` | `` | — | — |
+| `    END IF;` | `` | — | — |
+| `    IF NEW.site_location_id <> agr_site THEN` | `` | — | — |
+| `        RAISE EXCEPTION 'child_attendance_events: site_location_id must match agreement site' USING ERRCODE = '23514';` | `` | — | — |
+| `    END IF;` | `` | — | — |
+| `public` | `` | — | — |
+| `    FROM public.locations l WHERE l.id = NEW.site_location_id;` | `` | — | — |
+| `    IF site_org IS NULL OR site_org <> NEW.org_id OR site_type IS DISTINCT FROM 'site' THEN` | `` | — | — |
+| `    END IF;` | `` | — | — |
+| `public` | `` | — | — |
+| `    -- Any referenced room must be a unit under the agreement site.` | `` | — | — |
+| `    IF NEW.room_location_id IS NOT NULL OR NEW.from_room_location_id IS NOT NULL OR NEW.to_room_location_id IS NOT NULL THEN` | `` | — | — |
+| `            FROM public.locations l` | `` | — | — |
+| `        LOOP` | `` | — | — |
+| `            IF r_org IS DISTINCT FROM NEW.org_id OR r_type IS DISTINCT FROM 'unit' THEN` | `` | — | — |
+| `                RAISE EXCEPTION 'child_attendance_events: room must be a unit in the same org' USING ERRCODE = '23514';` | `` | — | — |
+| `            END IF;` | `` | — | — |
+| `            IF r_parent IS DISTINCT FROM NEW.site_location_id THEN` | `` | — | — |
+| `                RAISE EXCEPTION 'child_attendance_events: room must be a child of the agreement site' USING ERRCODE = '23514';` | `` | — | — |
+| `            END IF;` | `` | — | — |
+| `        END LOOP;` | `` | — | — |
+| `    END IF;` | `` | — | — |
+| `public` | `` | — | — |
+| `    -- Correction/reversal target must be a prior event in the same org + agreement.` | `` | — | — |
+| `    IF NEW.corrects_event_id IS NOT NULL THEN` | `` | — | — |
+| `        FROM public.child_attendance_events e WHERE e.id = NEW.corrects_event_id;` | `` | — | — |
+| `        IF c_org IS NULL THEN` | `` | — | — |
+| `        END IF;` | `` | — | — |
+| `        IF c_org <> NEW.org_id OR c_agreement <> NEW.enrollment_agreement_id THEN` | `` | — | — |
+| `            RAISE EXCEPTION 'child_attendance_events: correction must target an event on the same org and agreement' USING ERRCODE = '23514';` | `` | — | — |
+| `        END IF;` | `` | — | — |
+| `    END IF;` | `` | — | — |
+| `public` | `` | — | — |
+| `    RETURN NEW;` | `` | — | — |
+| `END;` | `` | — | — |
+| `$function$` | `` | — | — |
+| `public` | `` | — | — |
+| ` RETURNS trigger` | `` | — | — |
+| ` LANGUAGE plpgsql` | `` | — | — |
+| `AS $function$` | `` | — | — |
+| `DECLARE` | `` | — | — |
+| `    opp_org uuid;` | `` | — | — |
+| `    opp_customer uuid;` | `` | — | — |
+| `    ocm_org uuid;` | `` | — | — |
+| `    ocm_opp uuid;` | `` | — | — |
+| `    ocm_member uuid;` | `` | — | — |
+| `    mem_org uuid;` | `` | — | — |
+| `    mem_customer uuid;` | `` | — | — |
+| `    mem_person uuid;` | `` | — | — |
+| `    person_org uuid;` | `` | — | — |
+| `    site_org uuid;` | `` | — | — |
+| `    site_type text;` | `` | — | — |
+| `BEGIN` | `` | — | — |
+| `    FROM public.customer_members cm` | `` | — | — |
+| `    WHERE cm.id = NEW.customer_member_id;` | `` | — | — |
+| `public` | `` | — | — |
+| `    IF mem_org IS NULL THEN` | `` | — | — |
+| `            USING ERRCODE = '23503';` | `` | — | — |
+| `    END IF;` | `` | — | — |
+| `    IF mem_org <> NEW.org_id THEN` | `` | — | — |
+| `        RAISE EXCEPTION 'child_enrollment_agreements: customer_member org mismatch'` | `` | — | — |
+| `            USING ERRCODE = '23514';` | `` | — | — |
+| `    END IF;` | `` | — | — |
+| `public` | `` | — | — |
+| `    IF NEW.customer_id IS NULL THEN` | `` | — | — |
+| `        NEW.customer_id := mem_customer;` | `` | — | — |
+| `    ELSIF NEW.customer_id <> mem_customer THEN` | `` | — | — |
+| `        RAISE EXCEPTION 'child_enrollment_agreements: customer_id does not match customer_member'` | `` | — | — |
+| `            USING ERRCODE = '23514';` | `` | — | — |
+| `    END IF;` | `` | — | — |
+| `public` | `` | — | — |
+| `    IF NEW.person_id IS NULL THEN` | `` | — | — |
+| `        NEW.person_id := mem_person;` | `` | — | — |
+| `    ELSIF NEW.person_id IS DISTINCT FROM mem_person THEN` | `` | — | — |
+| `        RAISE EXCEPTION 'child_enrollment_agreements: person_id does not match customer_member'` | `` | — | — |
+| `            USING ERRCODE = '23514';` | `` | — | — |
+| `    END IF;` | `` | — | — |
+| `public` | `` | — | — |
+| `    IF NEW.opportunity_id IS NOT NULL THEN` | `` | — | — |
+| `        FROM public.opportunities o` | `` | — | — |
+| `        WHERE o.id = NEW.opportunity_id;` | `` | — | — |
+| `public` | `` | — | — |
+| `        IF opp_org IS NULL THEN` | `` | — | — |
+| `                USING ERRCODE = '23503';` | `` | — | — |
+| `        END IF;` | `` | — | — |
+| `        IF opp_org <> NEW.org_id THEN` | `` | — | — |
+| `            RAISE EXCEPTION 'child_enrollment_agreements: opportunity org mismatch'` | `` | — | — |
+| `                USING ERRCODE = '23514';` | `` | — | — |
+| `        END IF;` | `` | — | — |
+| `        IF NEW.customer_id IS NOT NULL AND opp_customer IS NOT NULL AND NEW.customer_id <> opp_customer THEN` | `` | — | — |
+| `            RAISE EXCEPTION 'child_enrollment_agreements: opportunity customer mismatch'` | `` | — | — |
+| `                USING ERRCODE = '23514';` | `` | — | — |
+| `        END IF;` | `` | — | — |
+| `    END IF;` | `` | — | — |
+| `public` | `` | — | — |
+| `    IF NEW.opportunity_customer_member_id IS NOT NULL THEN` | `` | — | — |
+| `        FROM public.opportunity_customer_members ocm` | `` | — | — |
+| `        WHERE ocm.id = NEW.opportunity_customer_member_id;` | `` | — | — |
+| `public` | `` | — | — |
+| `        IF ocm_org IS NULL THEN` | `` | — | — |
+| `            RAISE EXCEPTION 'child_enrollment_agreements: opportunity_customer_member_id % not found'` | `` | — | — |
+| `                NEW.opportunity_customer_member_id` | `` | — | — |
+| `                USING ERRCODE = '23503';` | `` | — | — |
+| `        END IF;` | `` | — | — |
+| `        IF ocm_org <> NEW.org_id THEN` | `` | — | — |
+| `            RAISE EXCEPTION 'child_enrollment_agreements: OCM org mismatch'` | `` | — | — |
+| `                USING ERRCODE = '23514';` | `` | — | — |
+| `        END IF;` | `` | — | — |
+| `        IF NEW.opportunity_id IS NOT NULL AND ocm_opp <> NEW.opportunity_id THEN` | `` | — | — |
+| `            RAISE EXCEPTION 'child_enrollment_agreements: OCM opportunity mismatch'` | `` | — | — |
+| `                USING ERRCODE = '23514';` | `` | — | — |
+| `        END IF;` | `` | — | — |
+| `        IF ocm_member <> NEW.customer_member_id THEN` | `` | — | — |
+| `            RAISE EXCEPTION 'child_enrollment_agreements: OCM customer_member mismatch'` | `` | — | — |
+| `                USING ERRCODE = '23514';` | `` | — | — |
+| `        END IF;` | `` | — | — |
+| `    END IF;` | `` | — | — |
+| `public` | `` | — | — |
+| `    FROM public.locations l` | `` | — | — |
+| `    WHERE l.id = NEW.site_location_id;` | `` | — | — |
+| `public` | `` | — | — |
+| `    IF site_org IS NULL THEN` | `` | — | — |
+| `            USING ERRCODE = '23503';` | `` | — | — |
+| `    END IF;` | `` | — | — |
+| `    IF site_org <> NEW.org_id THEN` | `` | — | — |
+| `        RAISE EXCEPTION 'child_enrollment_agreements: site org mismatch'` | `` | — | — |
+| `            USING ERRCODE = '23514';` | `` | — | — |
+| `    END IF;` | `` | — | — |
+| `    IF site_type IS DISTINCT FROM 'site' THEN` | `` | — | — |
+| `        RAISE EXCEPTION 'child_enrollment_agreements: site_location_id % must be location_type site (got %)'` | `` | — | — |
+| `            USING ERRCODE = '23514';` | `` | — | — |
+| `    END IF;` | `` | — | — |
+| `public` | `` | — | — |
+| `    RETURN NEW;` | `` | — | — |
+| `END;` | `` | — | — |
+| `$function$` | `` | — | — |
+| `public` | `` | — | — |
+| ` RETURNS trigger` | `` | — | — |
+| ` LANGUAGE plpgsql` | `` | — | — |
+| `AS $function$` | `` | — | — |
+| `DECLARE` | `` | — | — |
+| `    agr_org uuid;` | `` | — | — |
+| `    agr_member uuid;` | `` | — | — |
+| `    agr_site uuid;` | `` | — | — |
+| `    site_org uuid;` | `` | — | — |
+| `    site_type text;` | `` | — | — |
+| `    room_org uuid;` | `` | — | — |
+| `    room_type text;` | `` | — | — |
+| `    room_parent uuid;` | `` | — | — |
+| `    prog_org uuid;` | `` | — | — |
+| `    prog_site uuid;` | `` | — | — |
+| `BEGIN` | `` | — | — |
+| `    FROM public.child_enrollment_agreements a` | `` | — | — |
+| `    WHERE a.id = NEW.enrollment_agreement_id;` | `` | — | — |
+| `public` | `` | — | — |
+| `    IF agr_org IS NULL THEN` | `` | — | — |
+| `            USING ERRCODE = '23503';` | `` | — | — |
+| `    END IF;` | `` | — | — |
+| `    IF agr_org <> NEW.org_id THEN` | `` | — | — |
+| `        RAISE EXCEPTION 'child_placements: agreement org mismatch'` | `` | — | — |
+| `            USING ERRCODE = '23514';` | `` | — | — |
+| `    END IF;` | `` | — | — |
+| `    IF agr_member <> NEW.customer_member_id THEN` | `` | — | — |
+| `        RAISE EXCEPTION 'child_placements: customer_member_id does not match agreement'` | `` | — | — |
+| `            USING ERRCODE = '23514';` | `` | — | — |
+| `    END IF;` | `` | — | — |
+| `public` | `` | — | — |
+| `    IF NEW.site_location_id <> agr_site THEN` | `` | — | — |
+| `        RAISE EXCEPTION 'child_placements: site_location_id must match agreement site'` | `` | — | — |
+| `            USING ERRCODE = '23514';` | `` | — | — |
+| `    END IF;` | `` | — | — |
+| `public` | `` | — | — |
+| `    FROM public.locations l` | `` | — | — |
+| `    WHERE l.id = NEW.site_location_id;` | `` | — | — |
+| `public` | `` | — | — |
+| `    IF site_org IS NULL OR site_org <> NEW.org_id OR site_type IS DISTINCT FROM 'site' THEN` | `` | — | — |
+| `            USING ERRCODE = '23514';` | `` | — | — |
+| `    END IF;` | `` | — | — |
+| `public` | `` | — | — |
+| `    IF NEW.program_category_id IS NOT NULL THEN` | `` | — | — |
+| `        FROM public.location_program_categories lpc` | `` | — | — |
+| `        WHERE lpc.id = NEW.program_category_id;` | `` | — | — |
+| `public` | `` | — | — |
+| `        IF prog_org IS NULL THEN` | `` | — | — |
+| `                USING ERRCODE = '23503';` | `` | — | — |
+| `        END IF;` | `` | — | — |
+| `        IF prog_org <> NEW.org_id OR prog_site <> NEW.site_location_id THEN` | `` | — | — |
+| `            RAISE EXCEPTION 'child_placements: program_category must belong to placement site'` | `` | — | — |
+| `                USING ERRCODE = '23514';` | `` | — | — |
+| `        END IF;` | `` | — | — |
+| `    END IF;` | `` | — | — |
+| `public` | `` | — | — |
+| `    IF NEW.room_location_id IS NOT NULL THEN` | `` | — | — |
+| `        FROM public.locations l` | `` | — | — |
+| `        WHERE l.id = NEW.room_location_id;` | `` | — | — |
+| `public` | `` | — | — |
+| `        IF room_org IS NULL THEN` | `` | — | — |
+| `                USING ERRCODE = '23503';` | `` | — | — |
+| `        END IF;` | `` | — | — |
+| `        IF room_org <> NEW.org_id OR room_type IS DISTINCT FROM 'unit' THEN` | `` | — | — |
+| `                USING ERRCODE = '23514';` | `` | — | — |
+| `        END IF;` | `` | — | — |
+| `        IF room_parent IS DISTINCT FROM NEW.site_location_id THEN` | `` | — | — |
+| `            RAISE EXCEPTION 'child_placements: room % must be child of site %'` | `` | — | — |
+| `                USING ERRCODE = '23514';` | `` | — | — |
+| `        END IF;` | `` | — | — |
+| `    END IF;` | `` | — | — |
+| `public` | `` | — | — |
+| `    RETURN NEW;` | `` | — | — |
+| `END;` | `` | — | — |
+| `$function$` | `` | — | — |
+| `public` | `` | — | — |
+| ` RETURNS trigger` | `` | — | — |
+| ` LANGUAGE plpgsql` | `` | — | — |
+| `AS $function$` | `` | — | — |
+| `DECLARE` | `` | — | — |
+| `    site_org uuid;` | `` | — | — |
+| `    site_type text;` | `` | — | — |
+| `    prog_org uuid;` | `` | — | — |
+| `    room_org uuid;` | `` | — | — |
+| `    room_type text;` | `` | — | — |
+| `    room_parent uuid;` | `` | — | — |
+| `BEGIN` | `` | — | — |
+| `    IF NEW.site_location_id IS NOT NULL THEN` | `` | — | — |
+| `        FROM public.locations l WHERE l.id = NEW.site_location_id;` | `` | — | — |
+| `        IF site_org IS NULL THEN` | `` | — | — |
+| `                USING ERRCODE = '23503';` | `` | — | — |
+| `        END IF;` | `` | — | — |
+| `        IF site_org <> NEW.org_id THEN` | `` | — | — |
+| `            RAISE EXCEPTION 'childcare config scope: site org mismatch' USING ERRCODE = '23514';` | `` | — | — |
+| `        END IF;` | `` | — | — |
+| `        IF site_type IS DISTINCT FROM 'site' THEN` | `` | — | — |
+| `            RAISE EXCEPTION 'childcare config scope: site_location_id % must be location_type site (got %)'` | `` | — | — |
+| `        END IF;` | `` | — | — |
+| `    END IF;` | `` | — | — |
+| `public` | `` | — | — |
+| `    IF NEW.program_category_id IS NOT NULL THEN` | `` | — | — |
+| `        SELECT lpc.org_id INTO prog_org` | `` | — | — |
+| `        FROM public.location_program_categories lpc WHERE lpc.id = NEW.program_category_id;` | `` | — | — |
+| `        IF prog_org IS NULL THEN` | `` | — | — |
+| `                USING ERRCODE = '23503';` | `` | — | — |
+| `        END IF;` | `` | — | — |
+| `        IF prog_org <> NEW.org_id THEN` | `` | — | — |
+| `            RAISE EXCEPTION 'childcare config scope: program category org mismatch' USING ERRCODE = '23514';` | `` | — | — |
+| `        END IF;` | `` | — | — |
+| `    END IF;` | `` | — | — |
+| `public` | `` | — | — |
+| `    IF NEW.room_location_id IS NOT NULL THEN` | `` | — | — |
+| `        FROM public.locations l WHERE l.id = NEW.room_location_id;` | `` | — | — |
+| `        IF room_org IS NULL THEN` | `` | — | — |
+| `                USING ERRCODE = '23503';` | `` | — | — |
+| `        END IF;` | `` | — | — |
+| `        IF room_org <> NEW.org_id THEN` | `` | — | — |
+| `            RAISE EXCEPTION 'childcare config scope: room org mismatch' USING ERRCODE = '23514';` | `` | — | — |
+| `        END IF;` | `` | — | — |
+| `        IF room_type IS DISTINCT FROM 'unit' THEN` | `` | — | — |
+| `            RAISE EXCEPTION 'childcare config scope: room_location_id % must be location_type unit (got %)'` | `` | — | — |
+| `        END IF;` | `` | — | — |
+| `    END IF;` | `` | — | — |
+| `public` | `` | — | — |
+| `    RETURN NEW;` | `` | — | — |
+| `END;` | `` | — | — |
 | `$function$` | `` | — | — |
 | `public` | `` | — | — |
 | ` RETURNS trigger` | `` | — | — |
@@ -1993,6 +2319,94 @@
 | ` LANGUAGE plpgsql` | `` | — | — |
 | `AS $function$` | `` | — | — |
 | `DECLARE` | `` | — | — |
+| `    agr_org uuid;` | `` | — | — |
+| `    agr_member uuid;` | `` | — | — |
+| `    agr_site uuid;` | `` | — | — |
+| `    pat_org uuid;` | `` | — | — |
+| `    pat_site uuid;` | `` | — | — |
+| `BEGIN` | `` | — | — |
+| `    FROM public.child_enrollment_agreements a` | `` | — | — |
+| `    WHERE a.id = NEW.enrollment_agreement_id;` | `` | — | — |
+| `public` | `` | — | — |
+| `    IF agr_org IS NULL THEN` | `` | — | — |
+| `            USING ERRCODE = '23503';` | `` | — | — |
+| `    END IF;` | `` | — | — |
+| `    IF agr_org <> NEW.org_id THEN` | `` | — | — |
+| `        RAISE EXCEPTION 'schedule_assignments: agreement org mismatch'` | `` | — | — |
+| `            USING ERRCODE = '23514';` | `` | — | — |
+| `    END IF;` | `` | — | — |
+| `    IF agr_member <> NEW.customer_member_id THEN` | `` | — | — |
+| `        RAISE EXCEPTION 'schedule_assignments: customer_member_id does not match agreement'` | `` | — | — |
+| `            USING ERRCODE = '23514';` | `` | — | — |
+| `    END IF;` | `` | — | — |
+| `public` | `` | — | — |
+| `    FROM public.schedule_patterns sp` | `` | — | — |
+| `    WHERE sp.id = NEW.schedule_pattern_id;` | `` | — | — |
+| `public` | `` | — | — |
+| `    IF pat_org IS NULL THEN` | `` | — | — |
+| `            USING ERRCODE = '23503';` | `` | — | — |
+| `    END IF;` | `` | — | — |
+| `    IF pat_org <> NEW.org_id OR pat_site <> agr_site THEN` | `` | — | — |
+| `        RAISE EXCEPTION 'schedule_assignments: schedule_pattern must belong to agreement site'` | `` | — | — |
+| `            USING ERRCODE = '23514';` | `` | — | — |
+| `    END IF;` | `` | — | — |
+| `public` | `` | — | — |
+| `    RETURN NEW;` | `` | — | — |
+| `END;` | `` | — | — |
+| `$function$` | `` | — | — |
+| `public` | `` | — | — |
+| ` RETURNS trigger` | `` | — | — |
+| ` LANGUAGE plpgsql` | `` | — | — |
+| `AS $function$` | `` | — | — |
+| `DECLARE` | `` | — | — |
+| `    site_org uuid;` | `` | — | — |
+| `    site_type text;` | `` | — | — |
+| `BEGIN` | `` | — | — |
+| `    FROM public.locations l` | `` | — | — |
+| `    WHERE l.id = NEW.site_location_id;` | `` | — | — |
+| `public` | `` | — | — |
+| `    IF site_org IS NULL THEN` | `` | — | — |
+| `            USING ERRCODE = '23503';` | `` | — | — |
+| `    END IF;` | `` | — | — |
+| `    IF site_org <> NEW.org_id THEN` | `` | — | — |
+| `        RAISE EXCEPTION 'schedule_patterns: site org mismatch'` | `` | — | — |
+| `            USING ERRCODE = '23514';` | `` | — | — |
+| `    END IF;` | `` | — | — |
+| `    IF site_type IS DISTINCT FROM 'site' THEN` | `` | — | — |
+| `        RAISE EXCEPTION 'schedule_patterns: site_location_id % must be location_type site (got %)'` | `` | — | — |
+| `            USING ERRCODE = '23514';` | `` | — | — |
+| `    END IF;` | `` | — | — |
+| `public` | `` | — | — |
+| `    RETURN NEW;` | `` | — | — |
+| `END;` | `` | — | — |
+| `$function$` | `` | — | — |
+| `public` | `` | — | — |
+| ` RETURNS trigger` | `` | — | — |
+| ` LANGUAGE plpgsql` | `` | — | — |
+| `AS $function$` | `` | — | — |
+| `DECLARE` | `` | — | — |
+| `    d smallint;` | `` | — | — |
+| `BEGIN` | `` | — | — |
+| `    IF NEW.weekdays IS NULL OR cardinality(NEW.weekdays) = 0 THEN` | `` | — | — |
+| `        RAISE EXCEPTION 'schedule_patterns.weekdays must be non-empty'` | `` | — | — |
+| `            USING ERRCODE = '23514';` | `` | — | — |
+| `    END IF;` | `` | — | — |
+| `public` | `` | — | — |
+| `    FOREACH d IN ARRAY NEW.weekdays` | `` | — | — |
+| `    LOOP` | `` | — | — |
+| `        IF d < 0 OR d > 6 THEN` | `` | — | — |
+| `                USING ERRCODE = '23514';` | `` | — | — |
+| `        END IF;` | `` | — | — |
+| `    END LOOP;` | `` | — | — |
+| `public` | `` | — | — |
+| `    RETURN NEW;` | `` | — | — |
+| `END;` | `` | — | — |
+| `$function$` | `` | — | — |
+| `public` | `` | — | — |
+| ` RETURNS trigger` | `` | — | — |
+| ` LANGUAGE plpgsql` | `` | — | — |
+| `AS $function$` | `` | — | — |
+| `DECLARE` | `` | — | — |
 | `    loc_org uuid;` | `` | — | — |
 | `BEGIN` | `` | — | — |
 | `    IF NEW.location_id IS NULL THEN` | `` | — | — |
@@ -2186,6 +2600,7 @@
 | ` SET search_path TO 'public'` | ` 'pg_temp'` | — | — |
 | `        NEW.schedule_number := public.next_org_scoped_record_number(NEW.org_id` | ` 'schedule');` | — | — |
 | `    ('ops.messaging.write'` | ` 'Send/manage messages'` | — | — |
+| `          AND css.source = ANY (ARRAY['task_assist'::text` | ` 'tour_scheduling'::text])  -- announcement execution: Phase 3` | — | — |
 | `    before_h := encode(extensions.digest(convert_to(cur::text` | ` 'UTF8')` | — | — |
 | `    after_h := encode(extensions.digest(convert_to(p_queue_definition::text` | ` 'UTF8')` | — | — |
 | `        before_h := encode(extensions.digest(convert_to('{}'::jsonb::text` | ` 'UTF8')` | — | — |
@@ -2217,12 +2632,19 @@
 | `    return query select 9000` | ` 1000; -- job 11+` | — | — |
 | `    return query select 8000` | ` 2000; -- jobs 2-10` | — | — |
 | `    return query select 7000` | ` 3000; -- job 1` | — | — |
+| `    SELECT a.org_id` | ` a.customer_member_id` | — | — |
+| `    SELECT a.org_id` | ` a.customer_member_id` | — | — |
+| `    SELECT a.org_id` | ` a.customer_member_id` | — | — |
+| `    INTO agr_org` | ` agr_member` | — | — |
+| `    INTO agr_org` | ` agr_member` | — | — |
+| `    INTO agr_org` | ` agr_member` | — | — |
 | `  select contractor_bps` | ` alloy_bps` | — | — |
 | ` RETURNS TABLE(contractor_bps integer` | ` alloy_bps integer)` | — | — |
 | `  -- If the OLD row is completed` | ` block historical rewrites` | — | — |
 | `    SELECT c.org_id` | ` c.opportunity_id INTO cand_org` | — | — |
 | `    SELECT c.org_id` | ` c.program_room_cohort_key` | — | — |
 | `    INTO cand_org` | ` cand_cohort` | — | — |
+| `    SELECT cm.org_id` | ` cm.customer_id` | — | — |
 | `    SELECT cm.org_id` | ` cm.customer_id` | — | — |
 | `        SELECT cm.org_id` | ` cm.customer_id` | — | — |
 | `    SELECT rol.id` | ` coalesce(rol.config` | — | — |
@@ -2231,7 +2653,9 @@
 | `  -- processing_fee: Dr Processing Fees` | ` Cr Stripe Clearing` | — | — |
 | `        ORDER BY css.scheduled_for ASC` | ` css.id ASC` | — | — |
 | `    INTO layout_id` | ` cur` | — | — |
+| `            RAISE EXCEPTION 'schedule_patterns.weekdays element % out of range 0-6'` | ` d` | — | — |
 | `            NEW.org_id` | ` d_org` | — | — |
+| `        SELECT e.org_id` | ` e.enrollment_agreement_id INTO c_org` | — | — |
 | `  -- prefer gross_price_cents if provided` | ` else fall back to estimated_total_cents.` | — | — |
 | `    -- If the opportunity is linked to a family/customer` | ` enforce member belongs to same family.` | — | — |
 | `        INSERT INTO public.record_overview_layouts (org_id` | ` entity_type` | — |  is_active) |
@@ -2247,19 +2671,34 @@
 | `        'is_visible_in_table'` | ` fd.is_visible_in_table` | — | — |
 | `    SELECT g.org_id` | ` g.opportunity_id INTO grp_org` | — | — |
 | `      RAISE EXCEPTION 'next_org_scoped_record_number: unknown entity % (expected customer` | ` job` |  p_entity; |  vendor |
+| `            SELECT l.org_id` | ` l.location_type` | — | — |
 | `    SELECT l.org_id` | ` l.location_type` | — | — |
+| `    SELECT l.org_id` | ` l.location_type` | — | — |
+| `        SELECT l.org_id` | ` l.location_type` | — | — |
+| `        SELECT l.org_id` | ` l.location_type` | — | — |
+| `    SELECT l.org_id` | ` l.location_type` | — | — |
+| `    SELECT l.org_id` | ` l.location_type` | — | — |
+| `    SELECT l.org_id` | ` l.location_type INTO site_org` | — | — |
+| `        SELECT l.org_id` | ` l.location_type INTO site_org` | — | — |
 | `  insert into public.permission_keys (key` | ` label` | — | — |
 | `            NEW.org_id` | ` loc_org` | — | — |
 | `    INTO loc_org` | ` loc_type` | — | — |
 | `            NEW.location_id` | ` loc_type` | — | — |
+| `        SELECT lpc.org_id` | ` lpc.location_id` | — | — |
+| `    INTO mem_org` | ` mem_customer` | — | — |
 | `    INTO mem_org` | ` mem_customer` | — | — |
 | `        RAISE EXCEPTION 'opportunity_customer_members: customer_member.customer_id % does not match opportunity.customer_id %'` | ` mem_customer` | — | — |
 | `        INTO mem_org` | ` mem_customer` | — | — |
 | `        RAISE EXCEPTION 'opportunity_customer_members: org_id mismatch (row %` | ` member %)'` | — | — |
+| `            RAISE EXCEPTION 'child_attendance_events: corrects_event_id % not found'` | ` NEW.corrects_event_id USING ERRCODE = '23503';` | — | — |
+| `        RAISE EXCEPTION 'child_enrollment_agreements: customer_member_id % not found'` | ` NEW.customer_member_id` | — | — |
 | `            RAISE EXCEPTION 'placement_candidates: customer_member_id % not found'` | ` NEW.customer_member_id` | — | — |
 | `        RAISE EXCEPTION 'opportunity_customer_members: customer_member_id % not found'` | ` NEW.customer_member_id;` | — | — |
 | `        RAISE EXCEPTION 'user_department_access: department_id % does not exist'` | ` NEW.department_id` | — | — |
 | `        RAISE EXCEPTION 'form_submission_documents: document_id % not found'` | ` NEW.document_id;` | — | — |
+| `        RAISE EXCEPTION 'child_attendance_events: enrollment_agreement_id % not found'` | ` NEW.enrollment_agreement_id` | — | — |
+| `        RAISE EXCEPTION 'child_placements: enrollment_agreement_id % not found'` | ` NEW.enrollment_agreement_id` | — | — |
+| `        RAISE EXCEPTION 'schedule_assignments: enrollment_agreement_id % not found'` | ` NEW.enrollment_agreement_id` | — | — |
 | `        RAISE EXCEPTION 'task_assist_proposals: entity_id % not found'` | ` NEW.entity_id USING ERRCODE = '23503';` | — | — |
 | `  v_gross := coalesce(new.gross_price_cents` | ` new.estimated_total_cents);` | — | — |
 | `  new.full_name := nullif(trim(concat_ws(' '` | ` new.first_name` | — | — |
@@ -2270,11 +2709,13 @@
 | `        RAISE EXCEPTION 'form_submission_documents: submission % not found'` | ` NEW.form_submission_id;` | — | — |
 | `        RAISE EXCEPTION 'form_submission_signatures: submission % not found'` | ` NEW.form_submission_id;` | — | — |
 | `            RAISE EXCEPTION 'tour_bookings: form_submission_id % not found'` | ` NEW.form_submission_id;` | — | — |
+| `            WHERE l.id = ANY (ARRAY[NEW.room_location_id` | ` NEW.from_room_location_id` | — | — |
 | `        RAISE EXCEPTION 'user_site_access: location_id % does not exist'` | ` NEW.location_id` | — | — |
 | `        RAISE EXCEPTION 'tour_availability_rules: location_id % not found'` | ` NEW.location_id;` | — | — |
 | `        RAISE EXCEPTION 'tour_bookings: location_id % not found'` | ` NEW.location_id;` | — | — |
 | `        RAISE EXCEPTION 'tour_public_booking_links: location_id % not found'` | ` NEW.location_id;` | — | — |
 | `            RAISE EXCEPTION 'placement_candidates: opportunity_customer_member_id % not found'` | ` NEW.opportunity_customer_member_id` | — | — |
+| `            RAISE EXCEPTION 'child_enrollment_agreements: opportunity_id % not found'` | ` NEW.opportunity_id` | — | — |
 | `        RAISE EXCEPTION 'placement_candidates: opportunity_id % not found'` | ` NEW.opportunity_id` | — | — |
 | `        RAISE EXCEPTION 'placement_link_groups: opportunity_id % not found'` | ` NEW.opportunity_id USING ERRCODE = '23503';` | — | — |
 | `        RAISE EXCEPTION 'opportunity_customer_members: opportunity_id % not found'` | ` NEW.opportunity_id;` | — | — |
@@ -2289,18 +2730,34 @@
 | `        RAISE EXCEPTION 'placement_link_group_members: candidate % not found'` | ` NEW.placement_candidate_id USING ERRCODE = '23503';` | — | — |
 | `        RAISE EXCEPTION 'placement_overrides: candidate % not found'` | ` NEW.placement_candidate_id USING ERRCODE = '23503';` | — | — |
 | `        RAISE EXCEPTION 'placement_link_group_members: group % not found'` | ` NEW.placement_link_group_id USING ERRCODE = '23503';` | — | — |
+| `            RAISE EXCEPTION 'child_placements: program_category_id % not found'` | ` NEW.program_category_id` | — | — |
+| `            RAISE EXCEPTION 'childcare config scope: program_category_id % not found'` | ` NEW.program_category_id` | — | — |
 | `            RAISE EXCEPTION 'tour_bookings: rescheduled_from_booking_id % not found'` | ` NEW.rescheduled_from_booking_id;` | — | — |
+| `            RAISE EXCEPTION 'child_placements: room_location_id % not found'` | ` NEW.room_location_id` | — | — |
+| `            RAISE EXCEPTION 'child_placements: room_location_id % must be location_type unit'` | ` NEW.room_location_id` | — | — |
+| `            RAISE EXCEPTION 'childcare config scope: room_location_id % not found'` | ` NEW.room_location_id` | — | — |
+| `        RAISE EXCEPTION 'schedule_assignments: schedule_pattern_id % not found'` | ` NEW.schedule_pattern_id` | — | — |
 | `            RAISE EXCEPTION 'placement_candidates: site_id % not found'` | ` NEW.site_id USING ERRCODE = '23503';` | — | — |
+| `        RAISE EXCEPTION 'child_enrollment_agreements: site_location_id % not found'` | ` NEW.site_location_id` | — | — |
+| `        RAISE EXCEPTION 'child_placements: invalid site_location_id %'` | ` NEW.site_location_id` | — | — |
+| `                NEW.room_location_id` | ` NEW.site_location_id` | — | — |
+| `            RAISE EXCEPTION 'childcare config scope: site_location_id % not found'` | ` NEW.site_location_id` | — | — |
+| `        RAISE EXCEPTION 'schedule_patterns: site_location_id % not found'` | ` NEW.site_location_id` | — | — |
+| `        RAISE EXCEPTION 'child_attendance_events: invalid site_location_id %'` | ` NEW.site_location_id USING ERRCODE = '23514';` | — | — |
 | `  values (new.customer_id` | ` new.vertical_id` | — | — |
 | `      values (new.customer_id` | ` new.vertical_id` | — | — |
 | `    RAISE EXCEPTION 'jobs.work_unit_id % does not reference an existing work unit'` | ` NEW.work_unit_id` | — | — |
 | `    RAISE EXCEPTION 'opportunities.work_unit_id % does not reference an existing work unit'` | ` NEW.work_unit_id` | — | — |
+| `        SELECT o.org_id` | ` o.customer_id` | — | — |
 | `    SELECT o.org_id` | ` o.customer_id` | — | — |
 | `    SELECT o.org_id` | ` o.customer_id` | — | — |
 | `    SELECT o.org_id` | ` o.customer_id INTO opp_org` | — | — |
 | `        INTO ocm_org` | ` ocm_opp` | — | — |
+| `        INTO ocm_org` | ` ocm_opp` | — | — |
+| `        SELECT ocm.org_id` | ` ocm.opportunity_id` | — | — |
 | `        SELECT ocm.org_id` | ` ocm.opportunity_id` | — | — |
 | `        RAISE EXCEPTION 'opportunity_customer_members: org_id mismatch (row %` | ` opp %)'` | — | — |
+| `        INTO opp_org` | ` opp_customer` | — | — |
 | `    INTO opp_org` | ` opp_customer` | — | — |
 | `    INTO opp_org` | ` opp_customer` | — | — |
 | `        RAISE EXCEPTION 'opportunity_persons: org_id mismatch (row %` | ` opportunity %)'` | — | — |
@@ -2322,12 +2779,15 @@
 | `  SELECT p.slice_kind` | ` p.service_key` | — |  p.matrix_cents |
 | `  SELECT p.slice_kind` | ` p.service_key` | — |  p.matrix_cents |
 | `    raise exception 'Parent location org_id % does not match child org_id %'` | ` parent_org` | — | — |
+| `    INTO pat_org` | ` pat_site` | — | — |
 | `        RAISE EXCEPTION 'opportunity_persons: org_id mismatch (row %` | ` person %)'` | — | — |
 | `    SELECT pf.id` | ` pf.frequency_label` | — | — |
 | `        ORDER BY pm.sort_order NULLS LAST` | ` pm.id` | — | — |
 | `        ORDER BY pm.sort_order NULLS LAST` | ` pm.id` | — | — |
 | `  ORDER BY pm.sort_order NULLS LAST` | ` pm.id` | — | — |
 | `  ORDER BY pm.sort_order NULLS LAST` | ` pm.id` | — | — |
+| `        INTO prog_org` | ` prog_site` | — | — |
+| `        FOR r_org` | ` r_type` | — | — |
 | `  SELECT 'recurring'::text` | ` r.service_key` | — |  r.matrix_cents |
 | `  -- idempotent: if already posted` | ` return existing` | — | — |
 | `  insert into public.role_definitions (org_id` | ` role_key` | — | — |
@@ -2337,10 +2797,21 @@
 | `  on conflict (org_id` | ` role_key` | — | — |
 | `  on conflict (org_id` | ` role_key) do nothing;` | — | — |
 | `  insert into public.user_profiles (id` | ` role)` | — | — |
+| `        INTO room_org` | ` room_type` | — | — |
+| `        INTO room_org` | ` room_type` | — | — |
+| `                NEW.room_location_id` | ` room_type USING ERRCODE = '23514';` | — | — |
 | ` RETURNS TABLE(slice_kind text` | ` service_key text` | — |  matrix_cents integer |
+| `    INTO site_org` | ` site_type` | — | — |
+| `            NEW.site_location_id` | ` site_type` | — | — |
+| `    INTO site_org` | ` site_type` | — | — |
+| `    INTO site_org` | ` site_type` | — | — |
+| `            NEW.site_location_id` | ` site_type` | — | — |
+| `                NEW.site_location_id` | ` site_type USING ERRCODE = '23514';` | — | — |
 | `  SELECT ps.service_offering_id` | ` so.org_id` | — | — |
+| `    SELECT sp.org_id` | ` sp.site_location_id` | — | — |
 | `  SELECT st.id` | ` st.dimension_value_id INTO v_sqft_tier_id` | — | — |
 | `    SELECT st.id AS tier_id` | ` st.tier_key` | — | — |
+| `    RAISE EXCEPTION 'child_attendance_events is append-only: % is not allowed. Record a correction or reversal event instead.'` | ` TG_OP` | — | — |
 | `      RAISE EXCEPTION 'trg_assign_org_scoped_record_number: unexpected table %'` | ` TG_TABLE_NAME::text;` | — | — |
 | `    into v_contractor_bps` | ` v_alloy_bps` | — | — |
 | `      (v_tx.org_id` | ` v_entry_id` |  v_tx.job_id |  0 |
@@ -2374,6 +2845,7 @@
 | `public` | `agent_v1_commit_record_overview_layout_apply` | jsonb | true |
 | `public` | `agent_v2_commit_field_visibility_apply` | jsonb | true |
 | `public` | `audit_cleaning_quote_pricing_matrix_legacy_parity` | record | true |
+| `public` | `bump_communication_thread_last_message_at` | trigger | false |
 | `public` | `claim_due_communication_scheduled_sends` | communication_scheduled_sends | false |
 | `public` | `current_org_id` | uuid | true |
 | `public` | `discounted_cents` | integer | false |
@@ -2396,6 +2868,7 @@
 | `public` | `next_org_scoped_record_number` | bigint | true |
 | `public` | `post_ledger_transaction` | uuid | true |
 | `public` | `post_payment_to_ledger` | void | true |
+| `public` | `prevent_child_attendance_events_mutation` | trigger | false |
 | `public` | `prevent_completed_schedule_history_rewrite` | trigger | false |
 | `public` | `round_to_nearest_5_cents` | integer | false |
 | `public` | `scaled_base_cents` | integer | false |
@@ -2403,6 +2876,7 @@
 | `public` | `set_person_full_name` | trigger | false |
 | `public` | `set_updated_at` | trigger | false |
 | `public` | `set_updated_at_opportunities` | trigger | false |
+| `public` | `sync_communication_template_version_legacy` | trigger | false |
 | `public` | `sync_form_definition_versions_org_id` | trigger | false |
 | `public` | `sync_form_packet_items_org_from_packet` | trigger | false |
 | `public` | `sync_form_packet_session_items_org_from_session` | trigger | false |
@@ -2416,6 +2890,10 @@
 | `public` | `trg_jobs_increment_completed_counter` | trigger | false |
 | `public` | `trg_post_payment_to_ledger` | trigger | false |
 | `public` | `user_belongs_to_org` | boolean | true |
+| `public` | `validate_child_attendance_events_consistency` | trigger | false |
+| `public` | `validate_child_enrollment_agreements_consistency` | trigger | false |
+| `public` | `validate_child_placements_consistency` | trigger | false |
+| `public` | `validate_childcare_config_scope` | trigger | false |
 | `public` | `validate_form_packet_items_form_org` | trigger | false |
 | `public` | `validate_form_packet_session_items_packet_match` | trigger | false |
 | `public` | `validate_form_packet_session_items_submission_org` | trigger | false |
@@ -2429,6 +2907,9 @@
 | `public` | `validate_placement_link_group_members_consistency` | trigger | false |
 | `public` | `validate_placement_link_groups_consistency` | trigger | false |
 | `public` | `validate_placement_overrides_consistency` | trigger | false |
+| `public` | `validate_schedule_assignments_consistency` | trigger | false |
+| `public` | `validate_schedule_patterns_consistency` | trigger | false |
+| `public` | `validate_schedule_patterns_weekdays` | trigger | false |
 | `public` | `validate_tour_availability_rules_location_org` | trigger | false |
 | `public` | `validate_tour_booking_org_integrity` | trigger | false |
 | `public` | `validate_tour_public_booking_link_scope` | trigger | false |

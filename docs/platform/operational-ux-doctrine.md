@@ -4,6 +4,8 @@
 
 This document is **doctrine, not implementation detail**. It explains *why* Alloy does not need a per-domain UX redesign: every operational domain plugs into the same five-plane model, the same Operations/Records split, and the same progressive-drawer rules. Enrollment is the proof case, not a special case.
 
+> **Orthogonal axis:** This doc defines the **surface axis** — *where* an operator stands when they act (the five planes). The complementary **truth-flow axis** — *what is true and what it derives from* (Configuration -> Intent -> Expectations -> Facts -> Consequences) — is defined in [`./operational-truth-flow-doctrine.md`](./operational-truth-flow-doctrine.md). The two axes compose; neither replaces the other. The Planning plane and "Expectations" are detailed there (Expectations are derived/non-authoritative).
+
 > **Companion doctrine:** This doc covers the **planes and domains** (why one architecture serves all domains). The **canonical interaction spine** an operator traverses — Workspace → Perspective → Queue → Row → Drawer → Context Frame → Mode → Card → Section → Field, and the one universal drawer (Record of Truth / Record of Attention / Context Frame) — is defined in [`./operator/canonical-interaction-model.md`](./operator/canonical-interaction-model.md), with laws in [`./operator/interaction-grammar.md`](./operator/interaction-grammar.md) and the lived flow in [`./operator/operator-story.md`](./operator/operator-story.md). The progressive **tabs vs. actions** rules below are the current expression of what the interaction model frames as **Modes** (Summary / Work / Activity) and **Cards** (per-domain surfaces within Work); the Hidden / Startable / Active states carry forward unchanged.
 
 ---
@@ -187,6 +189,7 @@ None of these requires a new navigation spine, a new "record module," or a new d
 
 | Concern | Doctrine |
 |---------|----------|
+| Truth-flow axis (Configuration -> Intent -> Expectations -> Facts -> Consequences) | `./operational-truth-flow-doctrine.md` |
 | Canonical interaction spine / primitives | `./operator/canonical-interaction-model.md` |
 | Interaction laws / grammar | `./operator/interaction-grammar.md` |
 | Lived operator experience | `./operator/operator-story.md` |

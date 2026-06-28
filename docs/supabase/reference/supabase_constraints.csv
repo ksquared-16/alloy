@@ -51,6 +51,25 @@ public,agent_v2_field_visibility_proposals_field_definition_id_fkey,FOREIGN KEY,
 public,agent_v2_field_visibility_proposals_org_id_fkey,FOREIGN KEY,public,agent_v2_field_visibility_proposals,FOREIGN KEY (org_id) REFERENCES orgs(id) ON DELETE CASCADE,false,false
 public,agent_v2_field_visibility_proposals_pkey,PRIMARY KEY,public,agent_v2_field_visibility_proposals,PRIMARY KEY (id),false,false
 public,ux_agent_v2_fv_proposals_proposal_id,UNIQUE,public,agent_v2_field_visibility_proposals,UNIQUE (proposal_id),false,false
+public,announcement_deliveries_announcement_id_fkey,FOREIGN KEY,public,announcement_deliveries,FOREIGN KEY (announcement_id) REFERENCES announcements(id) ON DELETE CASCADE,false,false
+public,announcement_deliveries_message_id_fkey,FOREIGN KEY,public,announcement_deliveries,FOREIGN KEY (message_id) REFERENCES communication_messages(id) ON DELETE SET NULL,false,false
+public,announcement_deliveries_org_id_fkey,FOREIGN KEY,public,announcement_deliveries,FOREIGN KEY (org_id) REFERENCES orgs(id) ON DELETE CASCADE,false,false
+public,announcement_deliveries_pkey,PRIMARY KEY,public,announcement_deliveries,PRIMARY KEY (id),false,false
+public,announcement_recipients_announcement_id_fkey,FOREIGN KEY,public,announcement_recipients,FOREIGN KEY (announcement_id) REFERENCES announcements(id) ON DELETE CASCADE,false,false
+public,announcement_recipients_channel_check,CHECK,public,announcement_recipients,"CHECK (channel = ANY (ARRAY['email'::text, 'sms'::text, 'in_app'::text]))",false,false
+public,announcement_recipients_communication_message_id_fkey,FOREIGN KEY,public,announcement_recipients,FOREIGN KEY (communication_message_id) REFERENCES communication_messages(id) ON DELETE SET NULL,false,false
+public,announcement_recipients_communication_scheduled_send_id_fkey,FOREIGN KEY,public,announcement_recipients,FOREIGN KEY (communication_scheduled_send_id) REFERENCES communication_scheduled_sends(id) ON DELETE SET NULL,false,false
+public,announcement_recipients_consent_state_check,CHECK,public,announcement_recipients,"CHECK (consent_state = ANY (ARRAY['opted_in'::text, 'opted_out'::text, 'unset'::text]))",false,false
+public,announcement_recipients_org_id_fkey,FOREIGN KEY,public,announcement_recipients,FOREIGN KEY (org_id) REFERENCES orgs(id) ON DELETE CASCADE,false,false
+public,announcement_recipients_pkey,PRIMARY KEY,public,announcement_recipients,PRIMARY KEY (id),false,false
+public,announcement_recipients_status_check,CHECK,public,announcement_recipients,"CHECK (status = ANY (ARRAY['pending'::text, 'scheduled'::text, 'skipped'::text, 'sent'::text, 'failed'::text]))",false,false
+public,announcement_recipients_uq,UNIQUE,public,announcement_recipients,"UNIQUE (announcement_id, person_id, channel)",false,false
+public,announcement_targets_announcement_id_fkey,FOREIGN KEY,public,announcement_targets,FOREIGN KEY (announcement_id) REFERENCES announcements(id) ON DELETE CASCADE,false,false
+public,announcement_targets_org_id_fkey,FOREIGN KEY,public,announcement_targets,FOREIGN KEY (org_id) REFERENCES orgs(id) ON DELETE CASCADE,false,false
+public,announcement_targets_pkey,PRIMARY KEY,public,announcement_targets,PRIMARY KEY (id),false,false
+public,announcements_org_id_fkey,FOREIGN KEY,public,announcements,FOREIGN KEY (org_id) REFERENCES orgs(id) ON DELETE CASCADE,false,false
+public,announcements_pkey,PRIMARY KEY,public,announcements,PRIMARY KEY (id),false,false
+public,announcements_template_id_fkey,FOREIGN KEY,public,announcements,FOREIGN KEY (template_id) REFERENCES communication_templates(id) ON DELETE SET NULL,false,false
 public,app_users_auth_user_id_key,UNIQUE,public,app_users,UNIQUE (auth_user_id),false,false
 public,app_users_id_fkey,FOREIGN KEY,public,app_users,FOREIGN KEY (id) REFERENCES auth.users(id) ON DELETE CASCADE,false,false
 public,app_users_org_id_fkey,FOREIGN KEY,public,app_users,FOREIGN KEY (org_id) REFERENCES orgs(id) ON DELETE RESTRICT,false,false
@@ -66,6 +85,11 @@ public,assignments_pkey,PRIMARY KEY,public,assignments,PRIMARY KEY (id),false,fa
 public,assignments_schedule_id_fkey,FOREIGN KEY,public,assignments,FOREIGN KEY (schedule_id) REFERENCES schedules(id) ON DELETE CASCADE,false,false
 public,assignments_vendor_id_fkey,FOREIGN KEY,public,assignments,FOREIGN KEY (vendor_id) REFERENCES vendors(id) ON DELETE RESTRICT,false,false
 public,assignments_vendor_user_id_fkey,FOREIGN KEY,public,assignments,FOREIGN KEY (vendor_user_id) REFERENCES vendor_users(id) ON DELETE SET NULL,false,false
+public,business_process_layout_assignments_entity_layout_id_fkey,FOREIGN KEY,public,business_process_layout_assignments,FOREIGN KEY (entity_layout_id) REFERENCES entity_layouts(id) ON DELETE SET NULL,false,false
+public,business_process_layout_assignments_org_id_fkey,FOREIGN KEY,public,business_process_layout_assignments,FOREIGN KEY (org_id) REFERENCES orgs(id) ON DELETE CASCADE,false,false
+public,business_process_layout_assignments_pkey,PRIMARY KEY,public,business_process_layout_assignments,PRIMARY KEY (id),false,false
+public,business_process_layout_assignments_surface_check,CHECK,public,business_process_layout_assignments,"CHECK (surface = ANY (ARRAY['drawer'::text, 'queue'::text]))",false,false
+public,business_process_layout_assignments_version_check,CHECK,public,business_process_layout_assignments,CHECK (version >= 1),false,false
 public,campaigns_pkey,PRIMARY KEY,public,campaigns,PRIMARY KEY (id),false,false
 public,charge_line_items_amount_cents_nonzero_chk,CHECK,public,charge_line_items,CHECK (amount_cents <> 0),false,false
 public,charge_line_items_charge_id_fkey,FOREIGN KEY,public,charge_line_items,FOREIGN KEY (charge_id) REFERENCES charges(id) ON DELETE CASCADE,false,false
@@ -81,6 +105,90 @@ public,charges_schedule_id_fkey,FOREIGN KEY,public,charges,FOREIGN KEY (schedule
 public,charges_source_charge_id_fkey,FOREIGN KEY,public,charges,FOREIGN KEY (source_charge_id) REFERENCES charges(id) ON DELETE SET NULL,false,false
 public,charges_status_chk,CHECK,public,charges,"CHECK (status = ANY (ARRAY['draft'::text, 'posted'::text, 'partially_paid'::text, 'paid'::text, 'void'::text]))",false,false
 public,charges_subscription_id_fkey,FOREIGN KEY,public,charges,FOREIGN KEY (subscription_id) REFERENCES customer_subscriptions(id) ON DELETE SET NULL,false,false
+public,child_attendance_events_actor_person_id_fkey,FOREIGN KEY,public,child_attendance_events,FOREIGN KEY (actor_person_id) REFERENCES persons(id) ON DELETE SET NULL,false,false
+public,child_attendance_events_actor_type_check,CHECK,public,child_attendance_events,"CHECK (actor_type = ANY (ARRAY['staff'::text, 'parent'::text, 'guardian'::text, 'emergency_contact'::text, 'system'::text]))",false,false
+public,child_attendance_events_corrects_event_id_fkey,FOREIGN KEY,public,child_attendance_events,FOREIGN KEY (corrects_event_id) REFERENCES child_attendance_events(id) ON DELETE RESTRICT,false,false
+public,child_attendance_events_customer_member_id_fkey,FOREIGN KEY,public,child_attendance_events,FOREIGN KEY (customer_member_id) REFERENCES customer_members(id) ON DELETE RESTRICT,false,false
+public,child_attendance_events_enrollment_agreement_id_fkey,FOREIGN KEY,public,child_attendance_events,FOREIGN KEY (enrollment_agreement_id) REFERENCES child_enrollment_agreements(id) ON DELETE CASCADE,false,false
+public,child_attendance_events_entry_link_shape,CHECK,public,child_attendance_events,"CHECK (entry_type = 'original'::text AND corrects_event_id IS NULL OR (entry_type = ANY (ARRAY['correction'::text, 'reversal'::text])) AND corrects_event_id IS NOT NULL)",false,false
+public,child_attendance_events_entry_type_check,CHECK,public,child_attendance_events,"CHECK (entry_type = ANY (ARRAY['original'::text, 'correction'::text, 'reversal'::text]))",false,false
+public,child_attendance_events_event_kind_check,CHECK,public,child_attendance_events,"CHECK (event_kind = ANY (ARRAY['check_in'::text, 'check_out'::text, 'absence'::text, 'present'::text, 'room_transfer'::text, 'schedule_override'::text]))",false,false
+public,child_attendance_events_from_room_location_id_fkey,FOREIGN KEY,public,child_attendance_events,FOREIGN KEY (from_room_location_id) REFERENCES locations(id) ON DELETE SET NULL,false,false
+public,child_attendance_events_no_self_reference,CHECK,public,child_attendance_events,CHECK (corrects_event_id IS NULL OR corrects_event_id <> id),false,false
+public,child_attendance_events_org_id_fkey,FOREIGN KEY,public,child_attendance_events,FOREIGN KEY (org_id) REFERENCES orgs(id) ON DELETE CASCADE,false,false
+public,child_attendance_events_pkey,PRIMARY KEY,public,child_attendance_events,PRIMARY KEY (id),false,false
+public,child_attendance_events_presence_room,CHECK,public,child_attendance_events,"CHECK ((event_kind <> ALL (ARRAY['check_in'::text, 'present'::text])) OR room_location_id IS NOT NULL)",false,false
+public,child_attendance_events_room_location_id_fkey,FOREIGN KEY,public,child_attendance_events,FOREIGN KEY (room_location_id) REFERENCES locations(id) ON DELETE SET NULL,false,false
+public,child_attendance_events_site_location_id_fkey,FOREIGN KEY,public,child_attendance_events,FOREIGN KEY (site_location_id) REFERENCES locations(id) ON DELETE RESTRICT,false,false
+public,child_attendance_events_source_key_nonempty,CHECK,public,child_attendance_events,CHECK (char_length(btrim(source_key)) > 0),false,false
+public,child_attendance_events_source_type_check,CHECK,public,child_attendance_events,"CHECK (source_type = ANY (ARRAY['operator_action'::text, 'staff_workspace'::text, 'parent_portal'::text, 'processing_import'::text, 'system'::text]))",false,false
+public,child_attendance_events_to_room_location_id_fkey,FOREIGN KEY,public,child_attendance_events,FOREIGN KEY (to_room_location_id) REFERENCES locations(id) ON DELETE SET NULL,false,false
+public,child_attendance_events_transfer_rooms,CHECK,public,child_attendance_events,CHECK (event_kind <> 'room_transfer'::text OR from_room_location_id IS NOT NULL AND to_room_location_id IS NOT NULL),false,false
+public,child_enrollment_agreements_customer_id_fkey,FOREIGN KEY,public,child_enrollment_agreements,FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE SET NULL,false,false
+public,child_enrollment_agreements_customer_member_id_fkey,FOREIGN KEY,public,child_enrollment_agreements,FOREIGN KEY (customer_member_id) REFERENCES customer_members(id) ON DELETE RESTRICT,false,false
+public,child_enrollment_agreements_end_after_start,CHECK,public,child_enrollment_agreements,CHECK (end_date IS NULL OR start_date IS NULL OR end_date >= start_date),false,false
+public,child_enrollment_agreements_opportunity_customer_member_id_fkey,FOREIGN KEY,public,child_enrollment_agreements,FOREIGN KEY (opportunity_customer_member_id) REFERENCES opportunity_customer_members(id) ON DELETE SET NULL,false,false
+public,child_enrollment_agreements_opportunity_id_fkey,FOREIGN KEY,public,child_enrollment_agreements,FOREIGN KEY (opportunity_id) REFERENCES opportunities(id) ON DELETE SET NULL,false,false
+public,child_enrollment_agreements_org_id_fkey,FOREIGN KEY,public,child_enrollment_agreements,FOREIGN KEY (org_id) REFERENCES orgs(id) ON DELETE CASCADE,false,false
+public,child_enrollment_agreements_person_id_fkey,FOREIGN KEY,public,child_enrollment_agreements,FOREIGN KEY (person_id) REFERENCES persons(id) ON DELETE SET NULL,false,false
+public,child_enrollment_agreements_pkey,PRIMARY KEY,public,child_enrollment_agreements,PRIMARY KEY (id),false,false
+public,child_enrollment_agreements_site_location_id_fkey,FOREIGN KEY,public,child_enrollment_agreements,FOREIGN KEY (site_location_id) REFERENCES locations(id) ON DELETE RESTRICT,false,false
+public,child_enrollment_agreements_source_key_nonempty,CHECK,public,child_enrollment_agreements,CHECK (char_length(btrim(source_key)) > 0),false,false
+public,child_enrollment_agreements_status_check,CHECK,public,child_enrollment_agreements,"CHECK (status = ANY (ARRAY['pending_start'::text, 'active'::text, 'ending'::text, 'ended'::text, 'canceled'::text]))",false,false
+public,child_placements_customer_member_id_fkey,FOREIGN KEY,public,child_placements,FOREIGN KEY (customer_member_id) REFERENCES customer_members(id) ON DELETE RESTRICT,false,false
+public,child_placements_end_after_start,CHECK,public,child_placements,CHECK (end_date IS NULL OR end_date >= start_date),false,false
+public,child_placements_enrollment_agreement_id_fkey,FOREIGN KEY,public,child_placements,FOREIGN KEY (enrollment_agreement_id) REFERENCES child_enrollment_agreements(id) ON DELETE CASCADE,false,false
+public,child_placements_org_id_fkey,FOREIGN KEY,public,child_placements,FOREIGN KEY (org_id) REFERENCES orgs(id) ON DELETE CASCADE,false,false
+public,child_placements_pkey,PRIMARY KEY,public,child_placements,PRIMARY KEY (id),false,false
+public,child_placements_program_category_id_fkey,FOREIGN KEY,public,child_placements,FOREIGN KEY (program_category_id) REFERENCES location_program_categories(id) ON DELETE SET NULL,false,false
+public,child_placements_room_location_id_fkey,FOREIGN KEY,public,child_placements,FOREIGN KEY (room_location_id) REFERENCES locations(id) ON DELETE SET NULL,false,false
+public,child_placements_site_location_id_fkey,FOREIGN KEY,public,child_placements,FOREIGN KEY (site_location_id) REFERENCES locations(id) ON DELETE RESTRICT,false,false
+public,child_placements_source_key_nonempty,CHECK,public,child_placements,CHECK (char_length(btrim(source_key)) > 0),false,false
+public,child_placements_status_check,CHECK,public,child_placements,"CHECK (status = ANY (ARRAY['planned'::text, 'active'::text, 'ending'::text, 'ended'::text, 'superseded'::text, 'canceled'::text]))",false,false
+public,child_placements_supersedes_placement_id_fkey,FOREIGN KEY,public,child_placements,FOREIGN KEY (supersedes_placement_id) REFERENCES child_placements(id) ON DELETE SET NULL,false,false
+public,childcare_capacity_rules_capacity_kind_check,CHECK,public,childcare_capacity_rules,"CHECK (capacity_kind = ANY (ARRAY['physical'::text, 'licensed'::text, 'operational'::text]))",false,false
+public,childcare_capacity_rules_capacity_nonneg,CHECK,public,childcare_capacity_rules,CHECK (capacity >= 0),false,false
+public,childcare_capacity_rules_end_after_start,CHECK,public,childcare_capacity_rules,CHECK (effective_end IS NULL OR effective_end >= effective_start),false,false
+public,childcare_capacity_rules_org_id_fkey,FOREIGN KEY,public,childcare_capacity_rules,FOREIGN KEY (org_id) REFERENCES orgs(id) ON DELETE CASCADE,false,false
+public,childcare_capacity_rules_pkey,PRIMARY KEY,public,childcare_capacity_rules,PRIMARY KEY (id),false,false
+public,childcare_capacity_rules_program_category_id_fkey,FOREIGN KEY,public,childcare_capacity_rules,FOREIGN KEY (program_category_id) REFERENCES location_program_categories(id) ON DELETE CASCADE,false,false
+public,childcare_capacity_rules_room_location_id_fkey,FOREIGN KEY,public,childcare_capacity_rules,FOREIGN KEY (room_location_id) REFERENCES locations(id) ON DELETE CASCADE,false,false
+public,childcare_capacity_rules_scope_shape,CHECK,public,childcare_capacity_rules,CHECK (scope_type = 'org'::text AND site_location_id IS NULL AND program_category_id IS NULL AND room_location_id IS NULL OR scope_type = 'site'::text AND site_location_id IS NOT NULL AND program_category_id IS NULL AND room_location_id IS NULL OR scope_type = 'program'::text AND program_category_id IS NOT NULL AND site_location_id IS NULL AND room_location_id IS NULL OR scope_type = 'room'::text AND room_location_id IS NOT NULL AND site_location_id IS NULL AND program_category_id IS NULL),false,false
+public,childcare_capacity_rules_scope_type_check,CHECK,public,childcare_capacity_rules,"CHECK (scope_type = ANY (ARRAY['org'::text, 'site'::text, 'program'::text, 'room'::text]))",false,false
+public,childcare_capacity_rules_site_location_id_fkey,FOREIGN KEY,public,childcare_capacity_rules,FOREIGN KEY (site_location_id) REFERENCES locations(id) ON DELETE CASCADE,false,false
+public,childcare_operating_windows_end_after_start,CHECK,public,childcare_operating_windows,CHECK (effective_end IS NULL OR effective_end >= effective_start),false,false
+public,childcare_operating_windows_org_id_fkey,FOREIGN KEY,public,childcare_operating_windows,FOREIGN KEY (org_id) REFERENCES orgs(id) ON DELETE CASCADE,false,false
+public,childcare_operating_windows_pkey,PRIMARY KEY,public,childcare_operating_windows,PRIMARY KEY (id),false,false
+public,childcare_operating_windows_program_category_id_fkey,FOREIGN KEY,public,childcare_operating_windows,FOREIGN KEY (program_category_id) REFERENCES location_program_categories(id) ON DELETE CASCADE,false,false
+public,childcare_operating_windows_room_location_id_fkey,FOREIGN KEY,public,childcare_operating_windows,FOREIGN KEY (room_location_id) REFERENCES locations(id) ON DELETE CASCADE,false,false
+public,childcare_operating_windows_scope_shape,CHECK,public,childcare_operating_windows,CHECK (scope_type = 'org'::text AND site_location_id IS NULL AND program_category_id IS NULL AND room_location_id IS NULL OR scope_type = 'site'::text AND site_location_id IS NOT NULL AND program_category_id IS NULL AND room_location_id IS NULL OR scope_type = 'program'::text AND program_category_id IS NOT NULL AND site_location_id IS NULL AND room_location_id IS NULL OR scope_type = 'room'::text AND room_location_id IS NOT NULL AND site_location_id IS NULL AND program_category_id IS NULL),false,false
+public,childcare_operating_windows_scope_type_check,CHECK,public,childcare_operating_windows,"CHECK (scope_type = ANY (ARRAY['org'::text, 'site'::text, 'program'::text, 'room'::text]))",false,false
+public,childcare_operating_windows_site_location_id_fkey,FOREIGN KEY,public,childcare_operating_windows,FOREIGN KEY (site_location_id) REFERENCES locations(id) ON DELETE CASCADE,false,false
+public,childcare_operating_windows_time_order,CHECK,public,childcare_operating_windows,CHECK (close_time > open_time),false,false
+public,childcare_operating_windows_weekday_range,CHECK,public,childcare_operating_windows,CHECK (weekday >= 0 AND weekday <= 6),false,false
+public,childcare_ratio_rule_tiers_max_children_positive,CHECK,public,childcare_ratio_rule_tiers,CHECK (max_children > 0),false,false
+public,childcare_ratio_rule_tiers_org_id_fkey,FOREIGN KEY,public,childcare_ratio_rule_tiers,FOREIGN KEY (org_id) REFERENCES orgs(id) ON DELETE CASCADE,false,false
+public,childcare_ratio_rule_tiers_pkey,PRIMARY KEY,public,childcare_ratio_rule_tiers,PRIMARY KEY (id),false,false
+public,childcare_ratio_rule_tiers_ratio_rule_id_fkey,FOREIGN KEY,public,childcare_ratio_rule_tiers,FOREIGN KEY (ratio_rule_id) REFERENCES childcare_ratio_rules(id) ON DELETE CASCADE,false,false
+public,childcare_ratio_rule_tiers_required_staff_positive,CHECK,public,childcare_ratio_rule_tiers,CHECK (required_staff > 0),false,false
+public,childcare_ratio_rule_tiers_unique_threshold,UNIQUE,public,childcare_ratio_rule_tiers,"UNIQUE (ratio_rule_id, max_children)",false,false
+public,childcare_ratio_rules_end_after_start,CHECK,public,childcare_ratio_rules,CHECK (effective_end IS NULL OR effective_end >= effective_start),false,false
+public,childcare_ratio_rules_org_id_fkey,FOREIGN KEY,public,childcare_ratio_rules,FOREIGN KEY (org_id) REFERENCES orgs(id) ON DELETE CASCADE,false,false
+public,childcare_ratio_rules_pkey,PRIMARY KEY,public,childcare_ratio_rules,PRIMARY KEY (id),false,false
+public,childcare_ratio_rules_program_category_id_fkey,FOREIGN KEY,public,childcare_ratio_rules,FOREIGN KEY (program_category_id) REFERENCES location_program_categories(id) ON DELETE CASCADE,false,false
+public,childcare_ratio_rules_room_location_id_fkey,FOREIGN KEY,public,childcare_ratio_rules,FOREIGN KEY (room_location_id) REFERENCES locations(id) ON DELETE CASCADE,false,false
+public,childcare_ratio_rules_scope_shape,CHECK,public,childcare_ratio_rules,CHECK (scope_type = 'org'::text AND site_location_id IS NULL AND program_category_id IS NULL AND room_location_id IS NULL OR scope_type = 'site'::text AND site_location_id IS NOT NULL AND program_category_id IS NULL AND room_location_id IS NULL OR scope_type = 'program'::text AND program_category_id IS NOT NULL AND site_location_id IS NULL AND room_location_id IS NULL OR scope_type = 'room'::text AND room_location_id IS NOT NULL AND site_location_id IS NULL AND program_category_id IS NULL),false,false
+public,childcare_ratio_rules_scope_type_check,CHECK,public,childcare_ratio_rules,"CHECK (scope_type = ANY (ARRAY['org'::text, 'site'::text, 'program'::text, 'room'::text]))",false,false
+public,childcare_ratio_rules_site_location_id_fkey,FOREIGN KEY,public,childcare_ratio_rules,FOREIGN KEY (site_location_id) REFERENCES locations(id) ON DELETE CASCADE,false,false
+public,childcare_schedule_rules_days_range,CHECK,public,childcare_schedule_rules,CHECK ((min_days_per_week IS NULL OR min_days_per_week >= 0 AND min_days_per_week <= 7) AND (max_days_per_week IS NULL OR max_days_per_week >= 0 AND max_days_per_week <= 7) AND (min_days_per_week IS NULL OR max_days_per_week IS NULL OR max_days_per_week >= min_days_per_week)),false,false
+public,childcare_schedule_rules_end_after_start,CHECK,public,childcare_schedule_rules,CHECK (effective_end IS NULL OR effective_end >= effective_start),false,false
+public,childcare_schedule_rules_org_id_fkey,FOREIGN KEY,public,childcare_schedule_rules,FOREIGN KEY (org_id) REFERENCES orgs(id) ON DELETE CASCADE,false,false
+public,childcare_schedule_rules_pkey,PRIMARY KEY,public,childcare_schedule_rules,PRIMARY KEY (id),false,false
+public,childcare_schedule_rules_program_category_id_fkey,FOREIGN KEY,public,childcare_schedule_rules,FOREIGN KEY (program_category_id) REFERENCES location_program_categories(id) ON DELETE CASCADE,false,false
+public,childcare_schedule_rules_room_location_id_fkey,FOREIGN KEY,public,childcare_schedule_rules,FOREIGN KEY (room_location_id) REFERENCES locations(id) ON DELETE CASCADE,false,false
+public,childcare_schedule_rules_scope_shape,CHECK,public,childcare_schedule_rules,CHECK (scope_type = 'org'::text AND site_location_id IS NULL AND program_category_id IS NULL AND room_location_id IS NULL OR scope_type = 'site'::text AND site_location_id IS NOT NULL AND program_category_id IS NULL AND room_location_id IS NULL OR scope_type = 'program'::text AND program_category_id IS NOT NULL AND site_location_id IS NULL AND room_location_id IS NULL OR scope_type = 'room'::text AND room_location_id IS NOT NULL AND site_location_id IS NULL AND program_category_id IS NULL),false,false
+public,childcare_schedule_rules_scope_type_check,CHECK,public,childcare_schedule_rules,"CHECK (scope_type = ANY (ARRAY['org'::text, 'site'::text, 'program'::text, 'room'::text]))",false,false
+public,childcare_schedule_rules_site_location_id_fkey,FOREIGN KEY,public,childcare_schedule_rules,FOREIGN KEY (site_location_id) REFERENCES locations(id) ON DELETE CASCADE,false,false
 public,cleaning_job_addons_addon_type_id_fkey,FOREIGN KEY,public,cleaning_job_addons,FOREIGN KEY (addon_type_id) REFERENCES addon_types(id) ON DELETE RESTRICT,false,false
 public,cleaning_job_addons_job_id_fkey,FOREIGN KEY,public,cleaning_job_addons,FOREIGN KEY (job_id) REFERENCES jobs(id) ON DELETE CASCADE,false,false
 public,cleaning_job_addons_pkey,PRIMARY KEY,public,cleaning_job_addons,"PRIMARY KEY (job_id, addon_type_id)",false,false
@@ -90,9 +198,17 @@ public,cleaning_job_details_pkey,PRIMARY KEY,public,cleaning_job_details,PRIMARY
 public,cleaning_job_details_service_type_id_fkey,FOREIGN KEY,public,cleaning_job_details,FOREIGN KEY (service_type_id) REFERENCES cleaning_service_types(id) ON DELETE SET NULL,false,false
 public,cleaning_service_types_key_key,UNIQUE,public,cleaning_service_types,UNIQUE (key),false,false
 public,cleaning_service_types_pkey,PRIMARY KEY,public,cleaning_service_types,PRIMARY KEY (id),false,false
+public,communication_delivery_events_message_id_fkey,FOREIGN KEY,public,communication_delivery_events,FOREIGN KEY (message_id) REFERENCES communication_messages(id) ON DELETE CASCADE,false,false
+public,communication_delivery_events_org_id_fkey,FOREIGN KEY,public,communication_delivery_events,FOREIGN KEY (org_id) REFERENCES orgs(id) ON DELETE CASCADE,false,false
+public,communication_delivery_events_pkey,PRIMARY KEY,public,communication_delivery_events,PRIMARY KEY (id),false,false
+public,communication_delivery_events_recipient_id_fkey,FOREIGN KEY,public,communication_delivery_events,FOREIGN KEY (recipient_id) REFERENCES communication_message_recipients(id) ON DELETE SET NULL,false,false
 public,communication_message_reads_message_id_fkey,FOREIGN KEY,public,communication_message_reads,FOREIGN KEY (message_id) REFERENCES communication_messages(id) ON DELETE CASCADE,false,false
 public,communication_message_reads_org_id_fkey,FOREIGN KEY,public,communication_message_reads,FOREIGN KEY (org_id) REFERENCES orgs(id) ON DELETE CASCADE,false,false
 public,communication_message_reads_pkey,PRIMARY KEY,public,communication_message_reads,"PRIMARY KEY (message_id, user_id)",false,false
+public,communication_message_recipients_message_id_fkey,FOREIGN KEY,public,communication_message_recipients,FOREIGN KEY (message_id) REFERENCES communication_messages(id) ON DELETE CASCADE,false,false
+public,communication_message_recipients_org_id_fkey,FOREIGN KEY,public,communication_message_recipients,FOREIGN KEY (org_id) REFERENCES orgs(id) ON DELETE CASCADE,false,false
+public,communication_message_recipients_pkey,PRIMARY KEY,public,communication_message_recipients,PRIMARY KEY (id),false,false
+public,communication_message_recipients_recipient_role_check,CHECK,public,communication_message_recipients,"CHECK (recipient_role = ANY (ARRAY['to'::text, 'cc'::text, 'bcc'::text]))",false,false
 public,communication_messages_channel_check,CHECK,public,communication_messages,"CHECK (channel = ANY (ARRAY['sms'::text, 'email'::text, 'in_app'::text]))",false,false
 public,communication_messages_communication_provider_binding_id_fkey,FOREIGN KEY,public,communication_messages,FOREIGN KEY (communication_provider_binding_id) REFERENCES communication_provider_bindings(id) ON DELETE SET NULL,false,false
 public,communication_messages_direction_check,CHECK,public,communication_messages,"CHECK (direction = ANY (ARRAY['inbound'::text, 'outbound'::text]))",false,false
@@ -100,6 +216,11 @@ public,communication_messages_org_id_fkey,FOREIGN KEY,public,communication_messa
 public,communication_messages_pkey,PRIMARY KEY,public,communication_messages,PRIMARY KEY (id),false,false
 public,communication_messages_thread_id_fkey,FOREIGN KEY,public,communication_messages,FOREIGN KEY (thread_id) REFERENCES communication_threads(id) ON DELETE CASCADE,false,false
 public,communication_messages_workflow_run_id_fkey,FOREIGN KEY,public,communication_messages,FOREIGN KEY (workflow_run_id) REFERENCES workflow_runs(id) ON DELETE SET NULL,false,false
+public,communication_preference_events_org_id_fkey,FOREIGN KEY,public,communication_preference_events,FOREIGN KEY (org_id) REFERENCES orgs(id) ON DELETE CASCADE,false,false
+public,communication_preference_events_pkey,PRIMARY KEY,public,communication_preference_events,PRIMARY KEY (id),false,false
+public,communication_preferences_org_id_fkey,FOREIGN KEY,public,communication_preferences,FOREIGN KEY (org_id) REFERENCES orgs(id) ON DELETE CASCADE,false,false
+public,communication_preferences_person_category_uq,UNIQUE,public,communication_preferences,"UNIQUE (org_id, person_id, category)",false,false
+public,communication_preferences_pkey,PRIMARY KEY,public,communication_preferences,PRIMARY KEY (id),false,false
 public,communication_provider_bindings_channel_check,CHECK,public,communication_provider_bindings,"CHECK (channel = ANY (ARRAY['sms'::text, 'email'::text]))",false,false
 public,communication_provider_bindings_location_id_fkey,FOREIGN KEY,public,communication_provider_bindings,FOREIGN KEY (location_id) REFERENCES locations(id) ON DELETE SET NULL,false,false
 public,communication_provider_bindings_org_id_fkey,FOREIGN KEY,public,communication_provider_bindings,FOREIGN KEY (org_id) REFERENCES orgs(id) ON DELETE CASCADE,false,false
@@ -107,17 +228,33 @@ public,communication_provider_bindings_pkey,PRIMARY KEY,public,communication_pro
 public,communication_provider_bindings_scope_check,CHECK,public,communication_provider_bindings,"CHECK (scope = ANY (ARRAY['org'::text, 'location'::text, 'user'::text]))",false,false
 public,communication_provider_bindings_status_check,CHECK,public,communication_provider_bindings,"CHECK (status = ANY (ARRAY['active'::text, 'disabled'::text, 'pending_verification'::text]))",false,false
 public,chk_comm_sched_sends_schedule_after_approval,CHECK,public,communication_scheduled_sends,CHECK (scheduled_for > approved_at),false,false
+public,comm_sched_sends_source_entity_chk,CHECK,public,communication_scheduled_sends,"CHECK (source = 'announcement'::text AND announcement_id IS NOT NULL AND entity_type = 'announcements'::text OR (source = ANY (ARRAY['task_assist'::text, 'tour_scheduling'::text])) AND entity_id IS NOT NULL AND entity_type = 'opportunities'::text)",false,false
+public,communication_scheduled_sends_announcement_id_fkey,FOREIGN KEY,public,communication_scheduled_sends,FOREIGN KEY (announcement_id) REFERENCES announcements(id) ON DELETE CASCADE,false,false
 public,communication_scheduled_sends_channel_check,CHECK,public,communication_scheduled_sends,"CHECK (channel = ANY (ARRAY['sms'::text, 'email'::text]))",false,false
 public,communication_scheduled_sends_communication_message_id_fkey,FOREIGN KEY,public,communication_scheduled_sends,FOREIGN KEY (communication_message_id) REFERENCES communication_messages(id) ON DELETE SET NULL,false,false
 public,communication_scheduled_sends_communication_provider_bindi_fkey,FOREIGN KEY,public,communication_scheduled_sends,FOREIGN KEY (communication_provider_binding_id) REFERENCES communication_provider_bindings(id) ON DELETE SET NULL,false,false
 public,communication_scheduled_sends_entity_id_fkey,FOREIGN KEY,public,communication_scheduled_sends,FOREIGN KEY (entity_id) REFERENCES opportunities(id) ON DELETE CASCADE,false,false
-public,communication_scheduled_sends_entity_type_check,CHECK,public,communication_scheduled_sends,CHECK (entity_type = 'opportunities'::text),false,false
+public,communication_scheduled_sends_entity_type_check,CHECK,public,communication_scheduled_sends,"CHECK (entity_type = ANY (ARRAY['opportunities'::text, 'announcements'::text]))",false,false
 public,communication_scheduled_sends_org_id_fkey,FOREIGN KEY,public,communication_scheduled_sends,FOREIGN KEY (org_id) REFERENCES orgs(id) ON DELETE CASCADE,false,false
 public,communication_scheduled_sends_pkey,PRIMARY KEY,public,communication_scheduled_sends,PRIMARY KEY (id),false,false
 public,communication_scheduled_sends_proposal_id_fkey,FOREIGN KEY,public,communication_scheduled_sends,FOREIGN KEY (proposal_id) REFERENCES task_assist_proposals(id) ON DELETE SET NULL,false,false
 public,communication_scheduled_sends_recipient_person_id_fkey,FOREIGN KEY,public,communication_scheduled_sends,FOREIGN KEY (recipient_person_id) REFERENCES persons(id) ON DELETE RESTRICT,false,false
-public,communication_scheduled_sends_source_check,CHECK,public,communication_scheduled_sends,"CHECK (source = ANY (ARRAY['task_assist'::text, 'tour_scheduling'::text]))",false,false
+public,communication_scheduled_sends_source_check,CHECK,public,communication_scheduled_sends,"CHECK (source = ANY (ARRAY['task_assist'::text, 'tour_scheduling'::text, 'announcement'::text]))",false,false
 public,communication_scheduled_sends_status_check,CHECK,public,communication_scheduled_sends,"CHECK (status = ANY (ARRAY['pending'::text, 'claimed'::text, 'queued'::text, 'sent'::text, 'canceled'::text, 'failed'::text]))",false,false
+public,communication_snippets_org_id_fkey,FOREIGN KEY,public,communication_snippets,FOREIGN KEY (org_id) REFERENCES orgs(id) ON DELETE CASCADE,false,false
+public,communication_snippets_org_name_uq,UNIQUE,public,communication_snippets,"UNIQUE (org_id, name)",false,false
+public,communication_snippets_pkey,PRIMARY KEY,public,communication_snippets,PRIMARY KEY (id),false,false
+public,communication_template_versions_org_id_fkey,FOREIGN KEY,public,communication_template_versions,FOREIGN KEY (org_id) REFERENCES orgs(id) ON DELETE CASCADE,false,false
+public,communication_template_versions_pkey,PRIMARY KEY,public,communication_template_versions,PRIMARY KEY (id),false,false
+public,communication_template_versions_template_id_fkey,FOREIGN KEY,public,communication_template_versions,FOREIGN KEY (template_id) REFERENCES communication_templates(id) ON DELETE CASCADE,false,false
+public,communication_template_versions_template_version_uq,UNIQUE,public,communication_template_versions,"UNIQUE (template_id, version)",false,false
+public,communication_templates_approval_status_check,CHECK,public,communication_templates,"CHECK (approval_status = ANY (ARRAY['draft'::text, 'pending'::text, 'approved'::text]))",false,false
+public,communication_templates_channel_check,CHECK,public,communication_templates,"CHECK (channel = ANY (ARRAY['email'::text, 'sms'::text, 'in_app'::text]))",false,false
+public,communication_templates_org_id_fkey,FOREIGN KEY,public,communication_templates,FOREIGN KEY (org_id) REFERENCES orgs(id) ON DELETE CASCADE,false,false
+public,communication_templates_org_name_uq,UNIQUE,public,communication_templates,"UNIQUE (org_id, name)",false,false
+public,communication_templates_pkey,PRIMARY KEY,public,communication_templates,PRIMARY KEY (id),false,false
+public,communication_templates_status_check,CHECK,public,communication_templates,"CHECK (status = ANY (ARRAY['draft'::text, 'active'::text, 'archived'::text]))",false,false
+public,communication_threads_assignment_state_chk,CHECK,public,communication_threads,"CHECK (assignment_state = ANY (ARRAY['unassigned'::text, 'assigned'::text]))",false,false
 public,communication_threads_channel_check,CHECK,public,communication_threads,"CHECK (channel = ANY (ARRAY['sms'::text, 'email'::text, 'in_app'::text]))",false,false
 public,communication_threads_identity_uq,UNIQUE,public,communication_threads,"UNIQUE (org_id, primary_entity_type, primary_entity_id, channel, recipient_key)",false,false
 public,communication_threads_location_id_fkey,FOREIGN KEY,public,communication_threads,FOREIGN KEY (location_id) REFERENCES locations(id) ON DELETE SET NULL,false,false
@@ -136,6 +273,9 @@ public,contacts_org_id_fkey,FOREIGN KEY,public,contacts,FOREIGN KEY (org_id) REF
 public,contacts_pkey,PRIMARY KEY,public,contacts,PRIMARY KEY (id),false,false
 public,contacts_vendor_id_fkey,FOREIGN KEY,public,contacts,FOREIGN KEY (vendor_id) REFERENCES vendors(id) ON DELETE SET NULL,false,false
 public,fk_contacts_person_id,FOREIGN KEY,public,contacts,FOREIGN KEY (person_id) REFERENCES persons(id) ON DELETE SET NULL,false,false
+public,conversation_assignment_events_org_id_fkey,FOREIGN KEY,public,conversation_assignment_events,FOREIGN KEY (org_id) REFERENCES orgs(id) ON DELETE CASCADE,false,false
+public,conversation_assignment_events_pkey,PRIMARY KEY,public,conversation_assignment_events,PRIMARY KEY (id),false,false
+public,conversation_assignment_events_thread_id_fkey,FOREIGN KEY,public,conversation_assignment_events,FOREIGN KEY (thread_id) REFERENCES communication_threads(id) ON DELETE CASCADE,false,false
 public,customer_member_contact_roles_org_id_fkey,FOREIGN KEY,public,customer_member_contact_roles,FOREIGN KEY (org_id) REFERENCES orgs(id) ON DELETE CASCADE,false,false
 public,customer_member_contact_roles_pkey,PRIMARY KEY,public,customer_member_contact_roles,PRIMARY KEY (id),false,false
 public,customer_member_contact_roles_unique,UNIQUE,public,customer_member_contact_roles,"UNIQUE (org_id, role_key)",false,false
@@ -273,6 +413,12 @@ public,documents_pkey,PRIMARY KEY,public,documents,PRIMARY KEY (id),false,false
 public,entity_labels_org_id_fkey,FOREIGN KEY,public,entity_labels,FOREIGN KEY (org_id) REFERENCES orgs(id) ON DELETE CASCADE,false,false
 public,entity_labels_pkey,PRIMARY KEY,public,entity_labels,PRIMARY KEY (id),false,false
 public,entity_labels_unique,UNIQUE,public,entity_labels,"UNIQUE (org_id, entity_type)",false,false
+public,entity_layouts_org_entity_surface_key_version,UNIQUE,public,entity_layouts,"UNIQUE (org_id, entity_type, surface, layout_key, version)",false,false
+public,entity_layouts_org_id_fkey,FOREIGN KEY,public,entity_layouts,FOREIGN KEY (org_id) REFERENCES orgs(id) ON DELETE CASCADE,false,false
+public,entity_layouts_pkey,PRIMARY KEY,public,entity_layouts,PRIMARY KEY (id),false,false
+public,entity_layouts_status_check,CHECK,public,entity_layouts,"CHECK (status = ANY (ARRAY['draft'::text, 'published'::text]))",false,false
+public,entity_layouts_surface_check,CHECK,public,entity_layouts,"CHECK (surface = ANY (ARRAY['drawer'::text, 'queue'::text]))",false,false
+public,entity_layouts_version_check,CHECK,public,entity_layouts,CHECK (version >= 1),false,false
 public,external_mappings_pkey,PRIMARY KEY,public,external_mappings,PRIMARY KEY (id),false,false
 public,external_mappings_source_entity_type_external_id_key,UNIQUE,public,external_mappings,"UNIQUE (source, entity_type, external_id)",false,false
 public,field_definitions_org_id_fkey,FOREIGN KEY,public,field_definitions,FOREIGN KEY (org_id) REFERENCES orgs(id) ON DELETE CASCADE,false,false
@@ -414,6 +560,10 @@ public,ledger_transactions_pkey,PRIMARY KEY,public,ledger_transactions,PRIMARY K
 public,ledger_transactions_schedule_id_fkey,FOREIGN KEY,public,ledger_transactions,FOREIGN KEY (schedule_id) REFERENCES schedules(id) ON DELETE SET NULL,false,false
 public,ledger_transactions_status_check,CHECK,public,ledger_transactions,"CHECK (status = ANY (ARRAY['pending'::text, 'confirmed'::text, 'failed'::text, 'reversed'::text]))",false,false
 public,ledger_transactions_vendor_id_fkey,FOREIGN KEY,public,ledger_transactions,FOREIGN KEY (vendor_id) REFERENCES vendors(id) ON DELETE SET NULL,false,false
+public,location_program_categories_location_id_fkey,FOREIGN KEY,public,location_program_categories,FOREIGN KEY (location_id) REFERENCES locations(id) ON DELETE CASCADE,false,false
+public,location_program_categories_org_id_fkey,FOREIGN KEY,public,location_program_categories,FOREIGN KEY (org_id) REFERENCES orgs(id) ON DELETE CASCADE,false,false
+public,location_program_categories_org_location_key_unique,UNIQUE,public,location_program_categories,"UNIQUE (org_id, location_id, key)",false,false
+public,location_program_categories_pkey,PRIMARY KEY,public,location_program_categories,PRIMARY KEY (id),false,false
 public,location_tags_location_id_fkey,FOREIGN KEY,public,location_tags,FOREIGN KEY (location_id) REFERENCES locations(id) ON DELETE CASCADE,false,false
 public,location_tags_pkey,PRIMARY KEY,public,location_tags,"PRIMARY KEY (location_id, tag_id)",false,false
 public,location_tags_tag_id_fkey,FOREIGN KEY,public,location_tags,FOREIGN KEY (tag_id) REFERENCES tags(id) ON DELETE CASCADE,false,false
@@ -439,12 +589,37 @@ public,messages_outbox_org_id_fkey,FOREIGN KEY,public,messages_outbox,FOREIGN KE
 public,messages_outbox_pkey,PRIMARY KEY,public,messages_outbox,PRIMARY KEY (id),false,false
 public,messages_outbox_workflow_id_fkey,FOREIGN KEY,public,messages_outbox,FOREIGN KEY (workflow_id) REFERENCES workflows(id) ON DELETE SET NULL,false,false
 public,messages_outbox_workflow_run_id_fkey,FOREIGN KEY,public,messages_outbox,FOREIGN KEY (workflow_run_id) REFERENCES workflow_runs(id) ON DELETE SET NULL,false,false
+public,metric_definitions_entity_scope_check,CHECK,public,metric_definitions,"CHECK (entity_scope = ANY (ARRAY['org'::text, 'site'::text, 'department'::text, 'work_unit'::text, 'record'::text]))",false,false
+public,metric_definitions_org_id_fkey,FOREIGN KEY,public,metric_definitions,FOREIGN KEY (org_id) REFERENCES orgs(id) ON DELETE CASCADE,false,false
+public,metric_definitions_pkey,PRIMARY KEY,public,metric_definitions,PRIMARY KEY (id),false,false
+public,metric_definitions_status_check,CHECK,public,metric_definitions,"CHECK (status = ANY (ARRAY['draft'::text, 'active'::text, 'archived'::text]))",false,false
+public,metric_placements_org_id_fkey,FOREIGN KEY,public,metric_placements,FOREIGN KEY (org_id) REFERENCES orgs(id) ON DELETE CASCADE,false,false
+public,metric_placements_pkey,PRIMARY KEY,public,metric_placements,PRIMARY KEY (id),false,false
+public,metric_placements_status_check,CHECK,public,metric_placements,"CHECK (status = ANY (ARRAY['draft'::text, 'active'::text, 'archived'::text, 'hidden'::text]))",false,false
+public,metric_placements_surface_check,CHECK,public,metric_placements,"CHECK (surface = ANY (ARRAY['workspace_header'::text, 'business_process_tile'::text, 'work_unit_header'::text, 'drawer'::text, 'operational_intelligence'::text, 'dashboard'::text, 'report'::text, 'portal'::text, 'mobile'::text]))",false,false
+public,metric_placements_visualization_id_fkey,FOREIGN KEY,public,metric_placements,FOREIGN KEY (visualization_id) REFERENCES metric_visualizations(id) ON DELETE CASCADE,false,false
+public,metric_platform_snapshots_health_check,CHECK,public,metric_platform_snapshots,"CHECK (health_state = ANY (ARRAY['healthy'::text, 'warning'::text, 'critical'::text, 'unknown'::text]))",false,false
+public,metric_platform_snapshots_metric_definition_id_fkey,FOREIGN KEY,public,metric_platform_snapshots,FOREIGN KEY (metric_definition_id) REFERENCES metric_definitions(id) ON DELETE CASCADE,false,false
+public,metric_platform_snapshots_org_id_fkey,FOREIGN KEY,public,metric_platform_snapshots,FOREIGN KEY (org_id) REFERENCES orgs(id) ON DELETE CASCADE,false,false
+public,metric_platform_snapshots_pkey,PRIMARY KEY,public,metric_platform_snapshots,PRIMARY KEY (id),false,false
+public,metric_rollups_org_id_fkey,FOREIGN KEY,public,metric_rollups,FOREIGN KEY (org_id) REFERENCES orgs(id) ON DELETE CASCADE,false,false
+public,metric_rollups_pkey,PRIMARY KEY,public,metric_rollups,PRIMARY KEY (id),false,false
+public,metric_rollups_status_check,CHECK,public,metric_rollups,"CHECK (status = ANY (ARRAY['draft'::text, 'active'::text, 'archived'::text]))",false,false
+public,metric_rollups_type_check,CHECK,public,metric_rollups,"CHECK (rollup_type = ANY (ARRAY['sum'::text, 'avg'::text, 'weighted_avg'::text, 'best'::text, 'worst'::text, 'composite_score'::text, 'health_score'::text]))",false,false
+public,metric_snapshots_org_id_fkey,FOREIGN KEY,public,metric_snapshots,FOREIGN KEY (org_id) REFERENCES orgs(id) ON DELETE CASCADE,false,false
+public,metric_snapshots_pkey,PRIMARY KEY,public,metric_snapshots,PRIMARY KEY (id),false,false
+public,metric_snapshots_scope_type_check,CHECK,public,metric_snapshots,"CHECK (scope_type = ANY (ARRAY['org'::text, 'site'::text, 'department'::text, 'work_unit'::text]))",false,false
+public,metric_visualizations_metric_definition_id_fkey,FOREIGN KEY,public,metric_visualizations,FOREIGN KEY (metric_definition_id) REFERENCES metric_definitions(id) ON DELETE CASCADE,false,false
+public,metric_visualizations_org_id_fkey,FOREIGN KEY,public,metric_visualizations,FOREIGN KEY (org_id) REFERENCES orgs(id) ON DELETE CASCADE,false,false
+public,metric_visualizations_pkey,PRIMARY KEY,public,metric_visualizations,PRIMARY KEY (id),false,false
+public,metric_visualizations_status_check,CHECK,public,metric_visualizations,"CHECK (status = ANY (ARRAY['draft'::text, 'active'::text, 'archived'::text]))",false,false
+public,metric_visualizations_type_check,CHECK,public,metric_visualizations,"CHECK (visualization_type = ANY (ARRAY['kpi_card'::text, 'trend_card'::text, 'sparkline'::text, 'line_chart'::text, 'area_chart'::text, 'bar_chart'::text, 'comparison'::text, 'gauge'::text, 'scorecard'::text, 'table'::text, 'chip'::text]))",false,false
 public,operational_tasks_entity_id_fkey,FOREIGN KEY,public,operational_tasks,FOREIGN KEY (entity_id) REFERENCES opportunities(id) ON DELETE CASCADE,false,false
-public,operational_tasks_entity_type_check,CHECK,public,operational_tasks,CHECK (entity_type = 'opportunities'::text),false,false
+public,operational_tasks_entity_link_check,CHECK,public,operational_tasks,CHECK (entity_type IS NULL AND entity_id IS NULL OR entity_type = 'opportunities'::text AND entity_id IS NOT NULL),false,false
 public,operational_tasks_org_id_fkey,FOREIGN KEY,public,operational_tasks,FOREIGN KEY (org_id) REFERENCES orgs(id) ON DELETE CASCADE,false,false
 public,operational_tasks_pkey,PRIMARY KEY,public,operational_tasks,PRIMARY KEY (id),false,false
 public,operational_tasks_proposal_id_fkey,FOREIGN KEY,public,operational_tasks,FOREIGN KEY (proposal_id) REFERENCES task_assist_proposals(id) ON DELETE SET NULL,false,false
-public,operational_tasks_source_check,CHECK,public,operational_tasks,CHECK (source = 'task_assist'::text),false,false
+public,operational_tasks_source_check,CHECK,public,operational_tasks,"CHECK (source = ANY (ARRAY['task_assist'::text, 'manual'::text]))",false,false
 public,operational_tasks_status_check,CHECK,public,operational_tasks,"CHECK (status = ANY (ARRAY['open'::text, 'completed'::text, 'canceled'::text]))",false,false
 public,opportunities_customer_id_fkey,FOREIGN KEY,public,opportunities,FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE SET NULL,false,false
 public,opportunities_discount_code_id_fkey,FOREIGN KEY,public,opportunities,FOREIGN KEY (discount_code_id) REFERENCES discount_codes(id),false,false
@@ -459,6 +634,7 @@ public,opportunities_primary_person_fk,FOREIGN KEY,public,opportunities,FOREIGN 
 public,opportunities_vertical_id_fkey,FOREIGN KEY,public,opportunities,FOREIGN KEY (vertical_id) REFERENCES verticals(id) ON DELETE RESTRICT,false,false
 public,opportunities_work_unit_id_fkey,FOREIGN KEY,public,opportunities,FOREIGN KEY (work_unit_id) REFERENCES work_units(id),false,false
 public,opportunity_customer_members_customer_member_id_fkey,FOREIGN KEY,public,opportunity_customer_members,FOREIGN KEY (customer_member_id) REFERENCES customer_members(id) ON DELETE CASCADE,false,false
+public,opportunity_customer_members_desired_program_category_id_fkey,FOREIGN KEY,public,opportunity_customer_members,FOREIGN KEY (desired_program_category_id) REFERENCES location_program_categories(id) ON DELETE SET NULL,false,false
 public,opportunity_customer_members_opportunity_id_fkey,FOREIGN KEY,public,opportunity_customer_members,FOREIGN KEY (opportunity_id) REFERENCES opportunities(id) ON DELETE CASCADE,false,false
 public,opportunity_customer_members_org_id_fkey,FOREIGN KEY,public,opportunity_customer_members,FOREIGN KEY (org_id) REFERENCES orgs(id) ON DELETE CASCADE,false,false
 public,opportunity_customer_members_pkey,PRIMARY KEY,public,opportunity_customer_members,PRIMARY KEY (id),false,false
@@ -598,6 +774,14 @@ public,pricing_services_unique_vertical_service,UNIQUE,public,pricing_services,"
 public,pricing_services_vertical_id_fkey,FOREIGN KEY,public,pricing_services,FOREIGN KEY (vertical_id) REFERENCES verticals(id) ON DELETE CASCADE,false,false
 public,pricing_square_footage_tiers_pkey,PRIMARY KEY,public,pricing_square_footage_tiers,PRIMARY KEY (id),false,false
 public,pricing_square_footage_tiers_vertical_id_fkey,FOREIGN KEY,public,pricing_square_footage_tiers,FOREIGN KEY (vertical_id) REFERENCES verticals(id) ON DELETE CASCADE,false,false
+public,chk_pcs_role,CHECK,public,processing_case_sources,"CHECK (role = ANY (ARRAY['primary'::text, 'related'::text]))",false,false
+public,chk_pcs_source_kind,CHECK,public,processing_case_sources,"CHECK (source_kind = ANY (ARRAY['form_submission'::text, 'form_packet_session'::text, 'document'::text, 'upload'::text, 'email_attachment'::text, 'import'::text, 'recreated_document'::text]))",false,false
+public,processing_case_sources_org_id_fkey,FOREIGN KEY,public,processing_case_sources,FOREIGN KEY (org_id) REFERENCES orgs(id) ON DELETE CASCADE,false,false
+public,processing_case_sources_pkey,PRIMARY KEY,public,processing_case_sources,PRIMARY KEY (id),false,false
+public,processing_case_sources_processing_case_id_fkey,FOREIGN KEY,public,processing_case_sources,FOREIGN KEY (processing_case_id) REFERENCES processing_cases(id) ON DELETE CASCADE,false,false
+public,chk_processing_cases_status,CHECK,public,processing_cases,"CHECK (status = ANY (ARRAY['received'::text, 'processing'::text, 'needs_review'::text, 'needs_resolution'::text, 'ready'::text, 'completed'::text, 'archived'::text]))",false,false
+public,processing_cases_org_id_fkey,FOREIGN KEY,public,processing_cases,FOREIGN KEY (org_id) REFERENCES orgs(id) ON DELETE CASCADE,false,false
+public,processing_cases_pkey,PRIMARY KEY,public,processing_cases,PRIMARY KEY (id),false,false
 public,chk_quotes_amounts_nonnegative,CHECK,public,quotes,CHECK ((subtotal_cents IS NULL OR subtotal_cents >= 0) AND discount_cents >= 0 AND tax_cents >= 0 AND (total_cents IS NULL OR total_cents >= 0) AND (recurring_total_cents IS NULL OR recurring_total_cents >= 0)),false,false
 public,quotes_job_id_fkey,FOREIGN KEY,public,quotes,FOREIGN KEY (job_id) REFERENCES jobs(id) ON DELETE SET NULL,false,false
 public,quotes_opportunity_id_fkey,FOREIGN KEY,public,quotes,FOREIGN KEY (opportunity_id) REFERENCES opportunities(id) ON DELETE CASCADE,false,false
@@ -625,6 +809,24 @@ public,role_permission_grants_pkey,PRIMARY KEY,public,role_permission_grants,PRI
 public,role_permission_grants_role_definitions_fkey,FOREIGN KEY,public,role_permission_grants,"FOREIGN KEY (org_id, role_key) REFERENCES role_definitions(org_id, role_key) ON DELETE CASCADE",false,false
 public,role_permission_grants_role_fk,FOREIGN KEY,public,role_permission_grants,"FOREIGN KEY (org_id, role_key) REFERENCES role_definitions(org_id, role_key) ON DELETE CASCADE",false,false
 public,role_permission_grants_unique,UNIQUE,public,role_permission_grants,"UNIQUE (org_id, role_key, permission_key)",false,false
+public,schedule_assignments_assignment_kind_check,CHECK,public,schedule_assignments,CHECK (assignment_kind = ANY (ARRAY['base'::text])),false,false
+public,schedule_assignments_customer_member_id_fkey,FOREIGN KEY,public,schedule_assignments,FOREIGN KEY (customer_member_id) REFERENCES customer_members(id) ON DELETE RESTRICT,false,false
+public,schedule_assignments_end_after_start,CHECK,public,schedule_assignments,CHECK (end_date IS NULL OR end_date >= start_date),false,false
+public,schedule_assignments_enrollment_agreement_id_fkey,FOREIGN KEY,public,schedule_assignments,FOREIGN KEY (enrollment_agreement_id) REFERENCES child_enrollment_agreements(id) ON DELETE CASCADE,false,false
+public,schedule_assignments_org_id_fkey,FOREIGN KEY,public,schedule_assignments,FOREIGN KEY (org_id) REFERENCES orgs(id) ON DELETE CASCADE,false,false
+public,schedule_assignments_pkey,PRIMARY KEY,public,schedule_assignments,PRIMARY KEY (id),false,false
+public,schedule_assignments_schedule_pattern_id_fkey,FOREIGN KEY,public,schedule_assignments,FOREIGN KEY (schedule_pattern_id) REFERENCES schedule_patterns(id) ON DELETE RESTRICT,false,false
+public,schedule_assignments_source_key_nonempty,CHECK,public,schedule_assignments,CHECK (char_length(btrim(source_key)) > 0),false,false
+public,schedule_assignments_status_check,CHECK,public,schedule_assignments,"CHECK (status = ANY (ARRAY['planned'::text, 'active'::text, 'ending'::text, 'ended'::text, 'superseded'::text, 'canceled'::text]))",false,false
+public,schedule_assignments_supersedes_assignment_id_fkey,FOREIGN KEY,public,schedule_assignments,FOREIGN KEY (supersedes_assignment_id) REFERENCES schedule_assignments(id) ON DELETE SET NULL,false,false
+public,schedule_patterns_key_nonempty,CHECK,public,schedule_patterns,CHECK (char_length(btrim(key)) > 0),false,false
+public,schedule_patterns_label_nonempty,CHECK,public,schedule_patterns,CHECK (char_length(btrim(label)) > 0),false,false
+public,schedule_patterns_org_id_fkey,FOREIGN KEY,public,schedule_patterns,FOREIGN KEY (org_id) REFERENCES orgs(id) ON DELETE CASCADE,false,false
+public,schedule_patterns_org_site_key_unique,UNIQUE,public,schedule_patterns,"UNIQUE (org_id, site_location_id, key)",false,false
+public,schedule_patterns_pkey,PRIMARY KEY,public,schedule_patterns,PRIMARY KEY (id),false,false
+public,schedule_patterns_schedule_type_key_nonempty,CHECK,public,schedule_patterns,CHECK (char_length(btrim(schedule_type_key)) > 0),false,false
+public,schedule_patterns_site_location_id_fkey,FOREIGN KEY,public,schedule_patterns,FOREIGN KEY (site_location_id) REFERENCES locations(id) ON DELETE CASCADE,false,false
+public,schedule_patterns_weekdays_nonempty,CHECK,public,schedule_patterns,CHECK (cardinality(weekdays) > 0),false,false
 public,schedule_statuses_key_key,UNIQUE,public,schedule_statuses,UNIQUE (key),false,false
 public,schedule_statuses_pkey,PRIMARY KEY,public,schedule_statuses,PRIMARY KEY (id),false,false
 public,schedule_tags_pkey,PRIMARY KEY,public,schedule_tags,"PRIMARY KEY (schedule_id, tag_id)",false,false
@@ -650,6 +852,9 @@ public,service_pricing_rules_pkey,PRIMARY KEY,public,service_pricing_rules,PRIMA
 public,service_pricing_rules_service_offering_id_fkey,FOREIGN KEY,public,service_pricing_rules,FOREIGN KEY (service_offering_id) REFERENCES service_offerings(id) ON DELETE CASCADE,false,false
 public,service_pricing_rules_service_plan_template_id_fkey,FOREIGN KEY,public,service_pricing_rules,FOREIGN KEY (service_plan_template_id) REFERENCES service_plan_templates(id) ON DELETE SET NULL,false,false
 public,service_pricing_rules_vertical_id_fkey,FOREIGN KEY,public,service_pricing_rules,FOREIGN KEY (vertical_id) REFERENCES verticals(id) ON DELETE SET NULL,false,false
+public,sla_events_org_id_fkey,FOREIGN KEY,public,sla_events,FOREIGN KEY (org_id) REFERENCES orgs(id) ON DELETE CASCADE,false,false
+public,sla_events_pkey,PRIMARY KEY,public,sla_events,PRIMARY KEY (id),false,false
+public,sla_events_thread_id_fkey,FOREIGN KEY,public,sla_events,FOREIGN KEY (thread_id) REFERENCES communication_threads(id) ON DELETE CASCADE,false,false
 public,sqft_bands_key_key,UNIQUE,public,sqft_bands,UNIQUE (key),false,false
 public,sqft_bands_pkey,PRIMARY KEY,public,sqft_bands,PRIMARY KEY (id),false,false
 public,status_definitions_org_id_fkey,FOREIGN KEY,public,status_definitions,FOREIGN KEY (org_id) REFERENCES orgs(id) ON DELETE CASCADE,false,false

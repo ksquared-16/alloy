@@ -4,15 +4,15 @@
 
 **Regenerate:** `npm run export:supabase-schema` then `node scripts/generate-schema-docs.mjs`
 
-**Generated:** 2026-06-12
+**Generated:** 2026-06-28
 
 ## Summary
 
 | Kind | Count |
 |------|------:|
-| Base tables (`public`) | 165 |
+| Base tables (`public`) | 199 |
 | Views (`public`) | 7 |
-| Tables with RLS enabled | 165 |
+| Tables with RLS enabled | 199 |
 
 ## Base tables
 
@@ -31,23 +31,44 @@
 | `agent_v1_record_layout_proposals` | true | false | 2 |
 | `agent_v2_field_visibility_apply_audit` | true | false | 2 |
 | `agent_v2_field_visibility_proposals` | true | false | 2 |
+| `announcement_deliveries` | true | false | 2 |
+| `announcement_recipients` | true | false | 2 |
+| `announcement_targets` | true | false | 2 |
+| `announcements` | true | false | 2 |
 | `app_users` | true | false | 2 |
 | `assignment_statuses` | true | false | 1 |
 | `assignments` | true | false | 1 |
+| `business_process_layout_assignments` | true | false | 2 |
 | `campaigns` | true | false | 1 |
 | `charge_line_items` | true | false | 4 |
 | `charges` | true | false | 4 |
+| `child_attendance_events` | true | false | 3 |
+| `child_enrollment_agreements` | true | false | 3 |
+| `child_placements` | true | false | 3 |
+| `childcare_capacity_rules` | true | false | 5 |
+| `childcare_operating_windows` | true | false | 5 |
+| `childcare_ratio_rule_tiers` | true | false | 5 |
+| `childcare_ratio_rules` | true | false | 5 |
+| `childcare_schedule_rules` | true | false | 5 |
 | `cleaning_job_addons` | true | false | 1 |
 | `cleaning_job_details` | true | false | 1 |
 | `cleaning_service_types` | true | false | 1 |
+| `communication_delivery_events` | true | false | 2 |
 | `communication_message_reads` | true | false | 2 |
+| `communication_message_recipients` | true | false | 2 |
 | `communication_messages` | true | false | 2 |
+| `communication_preference_events` | true | false | 2 |
+| `communication_preferences` | true | false | 2 |
 | `communication_provider_bindings` | true | false | 2 |
 | `communication_scheduled_sends` | true | false | 4 |
+| `communication_snippets` | true | false | 2 |
+| `communication_template_versions` | true | false | 2 |
+| `communication_templates` | true | false | 2 |
 | `communication_threads` | true | false | 2 |
 | `config_layout_assist_proposals` | true | false | 4 |
 | `contact_tags` | true | false | 1 |
 | `contacts` | true | false | 4 |
+| `conversation_assignment_events` | true | false | 2 |
 | `customer_member_contact_roles` | true | true | 3 |
 | `customer_member_contacts` | true | true | 3 |
 | `customer_member_relationship_types` | true | true | 6 |
@@ -74,6 +95,7 @@
 | `document_versions` | true | false | 4 |
 | `documents` | true | false | 4 |
 | `entity_labels` | true | true | 4 |
+| `entity_layouts` | true | false | 4 |
 | `external_mappings` | true | false | 1 |
 | `field_definitions` | true | false | 4 |
 | `field_section_definitions` | true | false | 4 |
@@ -101,11 +123,18 @@
 | `job_tags` | true | false | 1 |
 | `jobs` | true | false | 1 |
 | `ledger_transactions` | true | false | 5 |
+| `location_program_categories` | true | false | 5 |
 | `location_tags` | true | false | 1 |
 | `location_types` | true | true | 2 |
 | `locations` | true | false | 1 |
 | `messages` | true | false | 1 |
 | `messages_outbox` | true | true | 4 |
+| `metric_definitions` | true | false | 2 |
+| `metric_placements` | true | false | 2 |
+| `metric_platform_snapshots` | true | false | 2 |
+| `metric_rollups` | true | false | 2 |
+| `metric_snapshots` | true | false | 2 |
+| `metric_visualizations` | true | false | 2 |
 | `operational_tasks` | true | false | 4 |
 | `opportunities` | true | false | 1 |
 | `opportunity_customer_members` | true | false | 1 |
@@ -141,6 +170,8 @@
 | `pricing_recurring_prices` | true | false | 6 |
 | `pricing_services` | true | false | 6 |
 | `pricing_square_footage_tiers` | true | false | 6 |
+| `processing_case_sources` | true | false | 4 |
+| `processing_cases` | true | false | 4 |
 | `quotes` | true | false | 1 |
 | `record_actions` | true | false | 2 |
 | `record_drawer_layouts` | true | false | 5 |
@@ -149,6 +180,8 @@
 | `recurrence_plans` | true | false | 1 |
 | `role_definitions` | true | false | 3 |
 | `role_permission_grants` | true | true | 3 |
+| `schedule_assignments` | true | false | 3 |
+| `schedule_patterns` | true | false | 5 |
 | `schedule_statuses` | true | false | 1 |
 | `schedule_tags` | true | false | 1 |
 | `schedules` | true | false | 1 |
@@ -156,6 +189,7 @@
 | `service_plan_templates` | true | false | 4 |
 | `service_price_dimensions` | true | false | 4 |
 | `service_pricing_rules` | true | false | 4 |
+| `sla_events` | true | false | 2 |
 | `sqft_bands` | true | false | 1 |
 | `status_definitions` | true | true | 3 |
 | `status_transition_rules` | true | false | 2 |

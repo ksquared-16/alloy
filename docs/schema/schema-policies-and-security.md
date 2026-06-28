@@ -2,7 +2,7 @@
 
 **Status:** Generated reference. **Do not edit by hand.**
 
-**Generated:** 2026-06-12 · **RLS policy count:** 469
+**Generated:** 2026-06-28 · **RLS policy count:** 568
 
 ## Posture
 
@@ -102,6 +102,34 @@
 | `agent_v2_fv_proposals_insert_by_org_admin` | INSERT | {authenticated} | — |
 | `agent_v2_fv_proposals_select_by_org_role` | SELECT | {authenticated} | — |
 
+### `announcement_deliveries`
+
+| Policy | Command | Roles | USING / WITH CHECK (truncated) |
+|--------|---------|-------|--------------------------------|
+| `announcement_deliveries_select_org` | SELECT | {authenticated} | — |
+| `announcement_deliveries_service_all` | ALL | {authenticated} | — |
+
+### `announcement_recipients`
+
+| Policy | Command | Roles | USING / WITH CHECK (truncated) |
+|--------|---------|-------|--------------------------------|
+| `announcement_recipients_select_org` | SELECT | {authenticated} | — |
+| `announcement_recipients_service_all` | ALL | {authenticated} | — |
+
+### `announcement_targets`
+
+| Policy | Command | Roles | USING / WITH CHECK (truncated) |
+|--------|---------|-------|--------------------------------|
+| `announcement_targets_select_org` | SELECT | {authenticated} | — |
+| `announcement_targets_service_all` | ALL | {authenticated} | — |
+
+### `announcements`
+
+| Policy | Command | Roles | USING / WITH CHECK (truncated) |
+|--------|---------|-------|--------------------------------|
+| `announcements_select_org` | SELECT | {authenticated} | — |
+| `announcements_service_all` | ALL | {authenticated} | — |
+
 ### `app_users`
 
 | Policy | Command | Roles | USING / WITH CHECK (truncated) |
@@ -120,6 +148,13 @@
 | Policy | Command | Roles | USING / WITH CHECK (truncated) |
 |--------|---------|-------|--------------------------------|
 | `admin_ops_full_access` | ALL | {public} | — |
+
+### `business_process_layout_assignments`
+
+| Policy | Command | Roles | USING / WITH CHECK (truncated) |
+|--------|---------|-------|--------------------------------|
+| `bp_layout_assignments_mutate_by_org_admin` | ALL | {authenticated} | — |
+| `bp_layout_assignments_select_by_org_role` | SELECT | {authenticated} | — |
 
 ### `campaigns`
 
@@ -145,6 +180,80 @@
 | `charges_update_same_org` | UPDATE | {authenticated} | — |
 | `service role full access charges` | ALL | {service_role} | — |
 
+### `child_attendance_events`
+
+| Policy | Command | Roles | USING / WITH CHECK (truncated) |
+|--------|---------|-------|--------------------------------|
+| `child_attendance_events_insert_crm` | INSERT | {authenticated} | — |
+| `child_attendance_events_select_org` | SELECT | {authenticated} | — |
+| `child_attendance_events_service_all` | ALL | {authenticated} | — |
+
+### `child_enrollment_agreements`
+
+| Policy | Command | Roles | USING / WITH CHECK (truncated) |
+|--------|---------|-------|--------------------------------|
+| `child_enrollment_agreements_mutate_crm` | ALL | {authenticated} | — |
+| `child_enrollment_agreements_select_org` | SELECT | {authenticated} | — |
+| `child_enrollment_agreements_service_all` | ALL | {authenticated} | — |
+
+### `child_placements`
+
+| Policy | Command | Roles | USING / WITH CHECK (truncated) |
+|--------|---------|-------|--------------------------------|
+| `child_placements_mutate_crm` | ALL | {authenticated} | — |
+| `child_placements_select_org` | SELECT | {authenticated} | — |
+| `child_placements_service_all` | ALL | {authenticated} | — |
+
+### `childcare_capacity_rules`
+
+| Policy | Command | Roles | USING / WITH CHECK (truncated) |
+|--------|---------|-------|--------------------------------|
+| `childcare_capacity_rules_all_service_role` | ALL | {service_role} | — |
+| `childcare_capacity_rules_delete_org` | DELETE | {authenticated} | — |
+| `childcare_capacity_rules_insert_org` | INSERT | {authenticated} | — |
+| `childcare_capacity_rules_select_org` | SELECT | {authenticated} | — |
+| `childcare_capacity_rules_update_org` | UPDATE | {authenticated} | — |
+
+### `childcare_operating_windows`
+
+| Policy | Command | Roles | USING / WITH CHECK (truncated) |
+|--------|---------|-------|--------------------------------|
+| `childcare_operating_windows_all_service_role` | ALL | {service_role} | — |
+| `childcare_operating_windows_delete_org` | DELETE | {authenticated} | — |
+| `childcare_operating_windows_insert_org` | INSERT | {authenticated} | — |
+| `childcare_operating_windows_select_org` | SELECT | {authenticated} | — |
+| `childcare_operating_windows_update_org` | UPDATE | {authenticated} | — |
+
+### `childcare_ratio_rule_tiers`
+
+| Policy | Command | Roles | USING / WITH CHECK (truncated) |
+|--------|---------|-------|--------------------------------|
+| `childcare_ratio_rule_tiers_all_service_role` | ALL | {service_role} | — |
+| `childcare_ratio_rule_tiers_delete_org` | DELETE | {authenticated} | — |
+| `childcare_ratio_rule_tiers_insert_org` | INSERT | {authenticated} | — |
+| `childcare_ratio_rule_tiers_select_org` | SELECT | {authenticated} | — |
+| `childcare_ratio_rule_tiers_update_org` | UPDATE | {authenticated} | — |
+
+### `childcare_ratio_rules`
+
+| Policy | Command | Roles | USING / WITH CHECK (truncated) |
+|--------|---------|-------|--------------------------------|
+| `childcare_ratio_rules_all_service_role` | ALL | {service_role} | — |
+| `childcare_ratio_rules_delete_org` | DELETE | {authenticated} | — |
+| `childcare_ratio_rules_insert_org` | INSERT | {authenticated} | — |
+| `childcare_ratio_rules_select_org` | SELECT | {authenticated} | — |
+| `childcare_ratio_rules_update_org` | UPDATE | {authenticated} | — |
+
+### `childcare_schedule_rules`
+
+| Policy | Command | Roles | USING / WITH CHECK (truncated) |
+|--------|---------|-------|--------------------------------|
+| `childcare_schedule_rules_all_service_role` | ALL | {service_role} | — |
+| `childcare_schedule_rules_delete_org` | DELETE | {authenticated} | — |
+| `childcare_schedule_rules_insert_org` | INSERT | {authenticated} | — |
+| `childcare_schedule_rules_select_org` | SELECT | {authenticated} | — |
+| `childcare_schedule_rules_update_org` | UPDATE | {authenticated} | — |
+
 ### `cleaning_job_addons`
 
 | Policy | Command | Roles | USING / WITH CHECK (truncated) |
@@ -163,6 +272,13 @@
 |--------|---------|-------|--------------------------------|
 | `admin_ops_full_access` | ALL | {public} | — |
 
+### `communication_delivery_events`
+
+| Policy | Command | Roles | USING / WITH CHECK (truncated) |
+|--------|---------|-------|--------------------------------|
+| `communication_delivery_events_select_org` | SELECT | {authenticated} | — |
+| `communication_delivery_events_service_all` | ALL | {authenticated} | — |
+
 ### `communication_message_reads`
 
 | Policy | Command | Roles | USING / WITH CHECK (truncated) |
@@ -170,12 +286,33 @@
 | `communication_reads_select_org` | SELECT | {authenticated} | — |
 | `communication_reads_service_all` | ALL | {authenticated} | — |
 
+### `communication_message_recipients`
+
+| Policy | Command | Roles | USING / WITH CHECK (truncated) |
+|--------|---------|-------|--------------------------------|
+| `communication_message_recipients_select_org` | SELECT | {authenticated} | — |
+| `communication_message_recipients_service_all` | ALL | {authenticated} | — |
+
 ### `communication_messages`
 
 | Policy | Command | Roles | USING / WITH CHECK (truncated) |
 |--------|---------|-------|--------------------------------|
 | `communication_messages_select_org` | SELECT | {authenticated} | — |
 | `communication_messages_service_all` | ALL | {authenticated} | — |
+
+### `communication_preference_events`
+
+| Policy | Command | Roles | USING / WITH CHECK (truncated) |
+|--------|---------|-------|--------------------------------|
+| `communication_preference_events_select_org` | SELECT | {authenticated} | — |
+| `communication_preference_events_service_all` | ALL | {authenticated} | — |
+
+### `communication_preferences`
+
+| Policy | Command | Roles | USING / WITH CHECK (truncated) |
+|--------|---------|-------|--------------------------------|
+| `communication_preferences_select_org` | SELECT | {authenticated} | — |
+| `communication_preferences_service_all` | ALL | {authenticated} | — |
 
 ### `communication_provider_bindings`
 
@@ -192,6 +329,27 @@
 | `communication_scheduled_sends_select_org` | SELECT | {authenticated} | — |
 | `communication_scheduled_sends_service_all` | ALL | {authenticated} | — |
 | `communication_scheduled_sends_update_crm` | UPDATE | {authenticated} | — |
+
+### `communication_snippets`
+
+| Policy | Command | Roles | USING / WITH CHECK (truncated) |
+|--------|---------|-------|--------------------------------|
+| `communication_snippets_select_org` | SELECT | {authenticated} | — |
+| `communication_snippets_service_all` | ALL | {authenticated} | — |
+
+### `communication_template_versions`
+
+| Policy | Command | Roles | USING / WITH CHECK (truncated) |
+|--------|---------|-------|--------------------------------|
+| `communication_template_versions_select_org` | SELECT | {authenticated} | — |
+| `communication_template_versions_service_all` | ALL | {authenticated} | — |
+
+### `communication_templates`
+
+| Policy | Command | Roles | USING / WITH CHECK (truncated) |
+|--------|---------|-------|--------------------------------|
+| `communication_templates_select_org` | SELECT | {authenticated} | — |
+| `communication_templates_service_all` | ALL | {authenticated} | — |
 
 ### `communication_threads`
 
@@ -223,6 +381,13 @@
 | `contacts_insert_by_org_role` | INSERT | {public} | — |
 | `contacts_select_by_org_role` | SELECT | {public} | — |
 | `contacts_update_by_org_role` | UPDATE | {public} | — |
+
+### `conversation_assignment_events`
+
+| Policy | Command | Roles | USING / WITH CHECK (truncated) |
+|--------|---------|-------|--------------------------------|
+| `conversation_assignment_events_select_org` | SELECT | {authenticated} | — |
+| `conversation_assignment_events_service_all` | ALL | {authenticated} | — |
 
 ### `customer_member_contact_roles`
 
@@ -413,6 +578,15 @@
 | `entity_labels_select` | SELECT | {authenticated} | — |
 | `entity_labels_select_org_members` | SELECT | {public} | — |
 | `entity_labels_service_role` | ALL | {public} | — |
+
+### `entity_layouts`
+
+| Policy | Command | Roles | USING / WITH CHECK (truncated) |
+|--------|---------|-------|--------------------------------|
+| `entity_layouts_delete_by_org_role` | DELETE | {authenticated} | — |
+| `entity_layouts_insert_by_org_role` | INSERT | {authenticated} | — |
+| `entity_layouts_select_by_org_role` | SELECT | {authenticated} | — |
+| `entity_layouts_update_by_org_role` | UPDATE | {authenticated} | — |
 
 ### `external_mappings`
 
@@ -653,6 +827,16 @@
 | `ledger_transactions_update_same_org` | UPDATE | {authenticated} | — |
 | `service_role_full_access_ledger_transactions` | ALL | {service_role} | — |
 
+### `location_program_categories`
+
+| Policy | Command | Roles | USING / WITH CHECK (truncated) |
+|--------|---------|-------|--------------------------------|
+| `location_program_categories_all_service_role` | ALL | {service_role} | — |
+| `location_program_categories_delete_org` | DELETE | {authenticated} | — |
+| `location_program_categories_insert_org` | INSERT | {authenticated} | — |
+| `location_program_categories_select_org` | SELECT | {authenticated} | — |
+| `location_program_categories_update_org` | UPDATE | {authenticated} | — |
+
 ### `location_tags`
 
 | Policy | Command | Roles | USING / WITH CHECK (truncated) |
@@ -686,6 +870,48 @@
 | `messages_outbox_insert_service_role` | INSERT | {authenticated} | — |
 | `messages_outbox_select_org_members` | SELECT | {authenticated} | — |
 | `messages_outbox_update_service_role` | UPDATE | {authenticated} | — |
+
+### `metric_definitions`
+
+| Policy | Command | Roles | USING / WITH CHECK (truncated) |
+|--------|---------|-------|--------------------------------|
+| `metric_definitions_all_service_role` | ALL | {service_role} | — |
+| `metric_definitions_select_authenticated` | SELECT | {authenticated} | — |
+
+### `metric_placements`
+
+| Policy | Command | Roles | USING / WITH CHECK (truncated) |
+|--------|---------|-------|--------------------------------|
+| `metric_placements_all_service_role` | ALL | {service_role} | — |
+| `metric_placements_select_authenticated` | SELECT | {authenticated} | — |
+
+### `metric_platform_snapshots`
+
+| Policy | Command | Roles | USING / WITH CHECK (truncated) |
+|--------|---------|-------|--------------------------------|
+| `metric_platform_snapshots_all_service_role` | ALL | {service_role} | — |
+| `metric_platform_snapshots_select_authenticated` | SELECT | {authenticated} | — |
+
+### `metric_rollups`
+
+| Policy | Command | Roles | USING / WITH CHECK (truncated) |
+|--------|---------|-------|--------------------------------|
+| `metric_rollups_all_service_role` | ALL | {service_role} | — |
+| `metric_rollups_select_authenticated` | SELECT | {authenticated} | — |
+
+### `metric_snapshots`
+
+| Policy | Command | Roles | USING / WITH CHECK (truncated) |
+|--------|---------|-------|--------------------------------|
+| `metric_snapshots_all_service_role` | ALL | {service_role} | — |
+| `metric_snapshots_select_authenticated` | SELECT | {authenticated} | — |
+
+### `metric_visualizations`
+
+| Policy | Command | Roles | USING / WITH CHECK (truncated) |
+|--------|---------|-------|--------------------------------|
+| `metric_visualizations_all_service_role` | ALL | {service_role} | — |
+| `metric_visualizations_select_authenticated` | SELECT | {authenticated} | — |
 
 ### `operational_tasks`
 
@@ -977,6 +1203,24 @@
 | `pricing_sqft_read` | SELECT | {public} | — |
 | `pricing_sqft_write` | ALL | {public} | — |
 
+### `processing_case_sources`
+
+| Policy | Command | Roles | USING / WITH CHECK (truncated) |
+|--------|---------|-------|--------------------------------|
+| `processing_case_sources_delete_by_org_role` | DELETE | {authenticated} | — |
+| `processing_case_sources_insert_by_org_role` | INSERT | {authenticated} | — |
+| `processing_case_sources_select_by_org_role` | SELECT | {authenticated} | — |
+| `processing_case_sources_update_by_org_role` | UPDATE | {authenticated} | — |
+
+### `processing_cases`
+
+| Policy | Command | Roles | USING / WITH CHECK (truncated) |
+|--------|---------|-------|--------------------------------|
+| `processing_cases_delete_by_org_role` | DELETE | {authenticated} | — |
+| `processing_cases_insert_by_org_role` | INSERT | {authenticated} | — |
+| `processing_cases_select_by_org_role` | SELECT | {authenticated} | — |
+| `processing_cases_update_by_org_role` | UPDATE | {authenticated} | — |
+
 ### `quotes`
 
 | Policy | Command | Roles | USING / WITH CHECK (truncated) |
@@ -1039,6 +1283,24 @@
 | `role_permission_grants_select_org_members` | SELECT | {authenticated} | — |
 | `role_permission_grants_service_role_all` | ALL | {public} | — |
 
+### `schedule_assignments`
+
+| Policy | Command | Roles | USING / WITH CHECK (truncated) |
+|--------|---------|-------|--------------------------------|
+| `schedule_assignments_mutate_crm` | ALL | {authenticated} | — |
+| `schedule_assignments_select_org` | SELECT | {authenticated} | — |
+| `schedule_assignments_service_all` | ALL | {authenticated} | — |
+
+### `schedule_patterns`
+
+| Policy | Command | Roles | USING / WITH CHECK (truncated) |
+|--------|---------|-------|--------------------------------|
+| `schedule_patterns_all_service_role` | ALL | {service_role} | — |
+| `schedule_patterns_delete_org` | DELETE | {authenticated} | — |
+| `schedule_patterns_insert_org` | INSERT | {authenticated} | — |
+| `schedule_patterns_select_org` | SELECT | {authenticated} | — |
+| `schedule_patterns_update_org` | UPDATE | {authenticated} | — |
+
 ### `schedule_statuses`
 
 | Policy | Command | Roles | USING / WITH CHECK (truncated) |
@@ -1092,6 +1354,13 @@
 | `service_pricing_rules_insert_org` | INSERT | {authenticated} | — |
 | `service_pricing_rules_select_org` | SELECT | {authenticated} | — |
 | `service_pricing_rules_update_org` | UPDATE | {authenticated} | — |
+
+### `sla_events`
+
+| Policy | Command | Roles | USING / WITH CHECK (truncated) |
+|--------|---------|-------|--------------------------------|
+| `sla_events_select_org` | SELECT | {authenticated} | — |
+| `sla_events_service_all` | ALL | {authenticated} | — |
 
 ### `sqft_bands`
 
