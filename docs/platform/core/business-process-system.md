@@ -80,6 +80,14 @@ Stages render as **queue lanes** or **header pills** on the work-unit execution 
 
 **Outcome picker:** My Tasks **Complete** flow resolves stage outcomes via `GET /api/admin/lifecycle-builder/stage-work-outcomes` — human confirms before side effects.
 
+**Actions on a stage** are configured invocations of *registered capabilities* (action
+placements), not free-form buttons. **Status transitions are validated server-side** and
+**process required info informs eligibility/blockers**: the Action Runtime
+(`web/lib/adminV2/actions/`) resolves available transitions from `status_definitions`,
+enforces `status_transition_rules`, and returns required inputs/blockers before any
+mutation. Config controls which actions appear and their copy; code owns the executable
+semantics. See `../modules/actions-and-workflows.md` § Action Runtime contract.
+
 ---
 
 ## Record (authoritative detail)

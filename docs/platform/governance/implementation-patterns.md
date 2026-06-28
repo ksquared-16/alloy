@@ -46,6 +46,29 @@ Code owns: authorization, invariants, validation guardrails.
 
 ---
 
+## Action Runtime
+
+An **Action = configured invocation of a registered capability.** Config controls
+presentation + constraints (label, placement, order, visibility, scope, required-input
+hints, confirmation copy). Config never owns executable behavior.
+
+- Every executable action maps to a `RegisteredAction` in
+  `web/lib/adminV2/actions/actionRegistry.ts` (typed contract:
+  eligibility / required inputs / preview / execute / audit / result).
+- Manual UI and BOS-confirmed proposals execute through the **same** server path:
+  `runRegisteredAction` → validate → eligibility gate → delegate to invariant-owning
+  mutation helper. The runtime never writes directly.
+- Configured keys must be **known** (registered handler or canonical catalog). Unknown
+  keys fail loudly in dev/test (`assertConfiguredActionKeys`) and render disabled in prod.
+- Read-only checks before execute: `POST /api/admin/actions/eligibility`
+  (`resolveActionEligibility`) returns blockers, available transitions, required inputs,
+  and an optional preview.
+
+Avoid: per-surface inline `fetch('/actions/execute')`, parallel mutation APIs for the
+same intent, or client components that mutate operational truth directly.
+
+---
+
 ## Drawer VM
 
 - Wait for composed payload readiness before above-fold reveal

@@ -29,6 +29,48 @@ Tokenized public actions: `/api/action/[token]/consume` → event → workflows.
 | Relationship registry | `web/lib/admin/relationship/relationshipActionRegistry.ts` |
 | Layout action catalog | `web/lib/layout/layoutEditorActionCatalog.ts` |
 | DB catalog | `action_definitions`, `action_placements` |
+| **Action Runtime contract** | `web/lib/adminV2/actions/actionTypes.ts` |
+| **Action Registry** | `web/lib/adminV2/actions/actionRegistry.ts` |
+| **Runtime executor** | `web/lib/adminV2/actions/actionExecutor.ts` |
+| **Eligibility resolvers** | `web/lib/adminV2/actions/actionEligibility.ts` |
+| **Config validation** | `web/lib/adminV2/actions/configValidation.ts` |
+| **Eligibility API** | `POST /api/admin/actions/eligibility` |
+
+---
+
+## Action Runtime contract (Phase 2 — June 2026)
+
+**An Action is a configured invocation of a registered capability.** Config decides
+*where/when/how* an action appears; code decides *what an action is and how it runs*.
+
+- **Config controls:** label, description, placement, order, visibility, process/entity
+  scope, required-input hints, confirmation copy.
+- **Config cannot control:** raw mutation behavior, database tables, arbitrary payload
+  schemas, or unregistered event/action keys.
+
+Every executable action maps to a `RegisteredAction` in
+`web/lib/adminV2/actions/actionRegistry.ts`. Each registered action declares: `actionKey`,
+default label, supported entity types, supported process keys, required context, a
+code-owned payload schema (`validatePayload`), an `resolveEligibility` resolver
+(blockers + available transitions + required inputs), a `buildPreview` dry-run builder,
+an `execute` handler, audit metadata, and a structured result contract.
+
+**Single execution path.** Manual UI runs through `POST /api/admin/actions/execute`
+→ `runRegisteredAction` (server-authoritative). BOS confirmed proposals use the
+**same execute route** for registered keys (reference: `create_lead`); dedicated BOS
+rail apply UI remains follow-up. The executor enforces, in order:
+registered → context → payload schema → eligibility → (preview | execute). Mutations
+are delegated to invariant-owning modules (e.g. `updateOpportunityStatusWithEvent`,
+`executeCreateLeadAction`) — the runtime never forks business logic or writes directly.
+
+**Config alignment.** A configured action may only reference a *known* action key
+(registered handler **or** canonical catalog entry). Unknown keys fail loudly in
+dev/test (`assertConfiguredActionKeys`) and render disabled in production
+(`partitionConfiguredActionKeys`) — menus never render silently-broken actions.
+
+**Reference implementations:** `update_status` (generic case-grain status change,
+enrollment as first consumer) and `create_lead` (capture-first record creation).
+See `docs/sprints/06_2026/actions_runtime_audit.md` for the full audit and rollout plan.
 
 ---
 

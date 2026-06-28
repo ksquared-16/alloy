@@ -8,6 +8,27 @@ import { executeAdminAction } from "@/lib/admin/actions/executeAdminAction";
 import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
 import { scopeDimensionsFromAccess } from "@/lib/admin/accessScope";
 import { CREATE_LEAD_ACTION_ENTITY_ID } from "@/lib/admin/actions/createLeadActionConstants";
+import { getRegisteredAction } from "@/lib/adminV2/actions/actionRegistry";
+import { runRegisteredAction } from "@/lib/adminV2/actions/actionExecutor";
+import { CORRELATION_ID_HEADER, resolveCorrelationId } from "@/lib/api/correlationId";
+
+/**
+ * Phase 2 contract (transitional): success responses are additive — they include
+ * the canonical `data` plus `correlation_id` and the `x-correlation-id` header,
+ * while preserving the existing top-level fields (`execution_result`, etc.) that
+ * ~15 client call sites still read. Failure/bad-request bodies are intentionally
+ * left on the legacy shape until those consumers migrate (see audit / next batch).
+ * @see docs/api/api-response-contract.md
+ */
+function withCorrelation(
+    body: Record<string, unknown>,
+    correlationId: string,
+    init?: { status?: number }
+): NextResponse {
+    const res = NextResponse.json({ ...body, correlation_id: correlationId }, init);
+    res.headers.set(CORRELATION_ID_HEADER, correlationId);
+    return res;
+}
 
 type ExecuteBody = {
     action_key?: string;
@@ -47,7 +68,59 @@ export async function POST(request: NextRequest) {
 
     const t0 = Date.now();
     const supabase = createAdminClient();
-    const result = await executeAdminAction(supabase, { orgId: ctx.orgId, userId: ctx.userId, accessScope: scopeDimensionsFromAccess(access) }, {
+    const runtimeCtx = { orgId: ctx.orgId, userId: ctx.userId, accessScope: scopeDimensionsFromAccess(access) };
+
+    // Registered actions (e.g. update_status, create_lead) run through the canonical
+    // Action Runtime so manual UI and BOS execute through the same validated path.
+    // All other keys keep their existing executeAdminAction path unchanged.
+    if (getRegisteredAction(actionKey)) {
+        const runtimeResult = await runRegisteredAction(supabase, runtimeCtx, {
+            actionKey,
+            entityType,
+            entityId,
+            context: body.context,
+            payload: body.payload,
+        });
+        const elapsed = Date.now() - t0;
+        if (elapsed > 200) {
+            console.warn("[admin-timing] POST /api/admin/actions/execute (runtime)", { ms: elapsed, action_key: actionKey, entity_type: entityType });
+        }
+        if (!runtimeResult.ok) {
+            return withCorrelation(
+                {
+                    ok: false,
+                    error: runtimeResult.error,
+                    execution_result: null,
+                    ...(runtimeResult.blockers ? { blockers: runtimeResult.blockers } : {}),
+                    ...(runtimeResult.completionRequirements ?
+                        { completion_requirements: runtimeResult.completionRequirements }
+                    :   {}),
+                    ...(runtimeResult.actionPreflight ? { action_preflight: runtimeResult.actionPreflight } : {}),
+                },
+                resolveCorrelationId(request, runtimeResult.correlationId),
+                { status: runtimeResult.status }
+            );
+        }
+        try {
+            revalidateTag(adminActionsOrgTag(ctx.orgId), "max");
+        } catch (e) {
+            console.warn("[POST /api/admin/actions/execute] revalidateTag failed", e);
+        }
+        return withCorrelation(
+            {
+                ok: true,
+                data: {
+                    execution_result: runtimeResult.result.detail,
+                    affected_id: runtimeResult.result.affectedId,
+                },
+                execution_result: runtimeResult.result.detail,
+                affected_id: runtimeResult.result.affectedId,
+            },
+            resolveCorrelationId(request, runtimeResult.correlationId)
+        );
+    }
+
+    const result = await executeAdminAction(supabase, runtimeCtx, {
         actionKey,
         entityType,
         entityId,
@@ -60,10 +133,9 @@ export async function POST(request: NextRequest) {
     }
 
     if (!result.ok) {
-        return NextResponse.json(
+        return withCorrelation(
             {
                 ok: false,
-                correlation_id: result.correlation_id,
                 error: result.error,
                 execution_result: null,
                 ...(result.completion_requirements ?
@@ -74,6 +146,7 @@ export async function POST(request: NextRequest) {
                 :   {}),
                 ...(result.action_preflight ? { action_preflight: result.action_preflight } : {}),
             },
+            resolveCorrelationId(request, result.correlation_id),
             { status: result.status }
         );
     }
@@ -84,9 +157,12 @@ export async function POST(request: NextRequest) {
         console.warn("[POST /api/admin/actions/execute] revalidateTag failed", e);
     }
 
-    return NextResponse.json({
-        ok: true,
-        correlation_id: result.correlation_id,
-        execution_result: result.execution_result,
-    });
+    return withCorrelation(
+        {
+            ok: true,
+            data: { execution_result: result.execution_result },
+            execution_result: result.execution_result,
+        },
+        resolveCorrelationId(request, result.correlation_id)
+    );
 }
