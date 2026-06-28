@@ -8,6 +8,12 @@ readiness bar a route family must clear before it enters an OpenAPI spec.
 > **The v0 spec now exists:** [`openapi/alloy-api.v0.yaml`](openapi/alloy-api.v0.yaml) (see
 > [`openapi/README.md`](openapi/README.md)). It documents exactly the gate-passing families
 > listed in §4 below. Validate with `node scripts/validate-openapi.mjs`.
+>
+> **A typed internal client is generated from it:**
+> [`internal-typescript-client.md`](internal-typescript-client.md)
+> (`web/lib/api/generated/alloyApiTypes.ts` + `web/lib/api/alloyApiClient.ts`). New code/tests
+> calling gate-passing families should prefer it; regenerate types after any spec change with
+> `node scripts/generate-openapi-types.mjs`.
 
 > **One-line policy:** OpenAPI is generated **only** for routes that already emit the
 > standard `{ ok, data, correlation_id }` / `{ ok, error: { code, message, details? }, correlation_id }`

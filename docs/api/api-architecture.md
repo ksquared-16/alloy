@@ -225,7 +225,10 @@ The path from contract to client, each step gated on the previous:
 1. **OpenAPI v0** for the gate-passing families (§8). _Done — the spec exists at
    [`openapi/alloy-api.v0.yaml`](openapi/alloy-api.v0.yaml); see [`openapi/README.md`](openapi/README.md)._
 2. **Generated internal TypeScript client** from `v0` — typed methods over the normalized
-   surface, used first by Alloy's own code and agents.
+   surface, used first by Alloy's own code and agents. _Done — generated types
+   (`web/lib/api/generated/alloyApiTypes.ts`) + a thin hand-written wrapper
+   (`web/lib/api/alloyApiClient.ts`); see
+   [`internal-typescript-client.md`](internal-typescript-client.md)._
 3. **Typed request/response contracts** shared between client and tests so the envelope is
    enforced at compile time, not by convention.
 4. **Integration tests** that exercise the generated client against real handlers.
@@ -258,5 +261,6 @@ The path from contract to client, each step gated on the previous:
 - [`api-response-contract.md`](api-response-contract.md) — envelope + helper spec
 - [`api-contract-migration-status.md`](api-contract-migration-status.md) — progress tracker
 - [`openapi-readiness.md`](openapi-readiness.md) — OpenAPI eligibility gate
+- [`internal-typescript-client.md`](internal-typescript-client.md) — generated internal TS client (v0)
 - [`api-documentation-audit.md`](api-documentation-audit.md) — findings + recommendations
 - [`../platform/foundation/architecture.md`](../platform/foundation/architecture.md) — system context

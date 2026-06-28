@@ -5,6 +5,10 @@ This folder holds Alloy's **internal** OpenAPI specification.
 - [`alloy-api.v0.yaml`](alloy-api.v0.yaml) — the OpenAPI 3.1 spec for the normalized,
   gate-passing API surface.
 
+A typed internal TypeScript client is **generated from this spec** — see
+[`../internal-typescript-client.md`](../internal-typescript-client.md)
+(`web/lib/api/generated/alloyApiTypes.ts` + the hand-written `web/lib/api/alloyApiClient.ts`).
+
 ## What this is — and is not
 
 - **This is internal `v0`.** It exists as a contract artifact for **humans, Cursor/agents,
@@ -65,9 +69,9 @@ present under `web/node_modules`, so it adds no new dependency.
 
 ## Future path
 
-1. **OpenAPI v0** (this file) for gate-passing families.
+1. **OpenAPI v0** (this file) for gate-passing families. ✅ done
 2. **Generated internal TypeScript client** from v0 — typed methods used first by Alloy's own
-   code and agents.
+   code and agents. ✅ done — see [`../internal-typescript-client.md`](../internal-typescript-client.md)
 3. **Typed request/response contracts** shared with tests (compile-time envelope enforcement).
 4. **Integration tests** exercising the generated client against real handlers.
 5. **Mock server** derived from the spec for offline/agent development.
