@@ -419,11 +419,10 @@ import { ChangeEnrollmentStatusModal } from "@/components/admin/opportunity/acti
 import { enrollmentScopeFromQueuePreviewItem } from "@/lib/admin/enrollmentStatus/enrollmentScopeFromQueueItem";
 import type { EnrollmentStatusTransitionScope } from "@/lib/admin/enrollmentStatus/enrollmentStatusTransitionContract";
 import { ContactAttemptedModal } from "@/components/admin/opportunity/actions/ContactAttemptedModal";
-import { CreateLeadModal } from "@/components/admin/opportunity/actions/CreateLeadModal";
+import { CreateLeadCommandSurface } from "@/components/platform/commands/createLead/CreateLeadCommandSurface";
 import { MarkLostModal } from "@/components/admin/opportunity/actions/MarkLostModal";
 import { AddNoteModal } from "@/components/admin/opportunity/actions/AddNoteModal";
 import {
-    executeCreateLeadFromModal,
     executeMarkLostFromModal,
 } from "@/lib/admin/actions/entryLifecycleActionClient";
 import { formatActivityRelativeShort } from "@/lib/admin/activitySignals";
@@ -7695,21 +7694,22 @@ export default function AdminV2OpportunityWorkUnitPage() {
                         onDismiss={() => setScheduleTourPickerOpen(false)}
                         onSelectOpportunityId={openScheduleTourForOpportunity}
                     />
-                    <CreateLeadModal
+                    <CreateLeadCommandSurface
                         open={createLeadOpen}
                         departmentId={departmentId}
+                        workUnitId={workUnit?.id ?? null}
+                        surface="right_rail"
                         onClose={() => setCreateLeadOpen(false)}
-                        onSubmit={async (payload) => {
-                            const opportunityId = await executeCreateLeadFromModal({
-                                payload,
-                                departmentId,
-                                workUnitId: workUnit?.id ?? null,
-                                surface: "right_rail",
-                            });
-                            invalidate({ entity_type: "opportunity", entity_id: opportunityId, action_key: "create_lead" });
-                            return { opportunity_id: opportunityId };
+                        onRefresh={(success) => {
+                            for (const target of success.refreshTargets) {
+                                invalidate({
+                                    entity_type: target.entityType,
+                                    entity_id: target.entityId,
+                                    action_key: "create_lead",
+                                });
+                            }
                         }}
-                        onCreated={(opportunityId) => {
+                        onOpenCreatedRecord={(opportunityId) => {
                             openDrawer(buildOpportunityDrawerOpenParams(opportunityId));
                         }}
                     />

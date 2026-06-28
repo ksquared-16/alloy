@@ -4,12 +4,11 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { WorkspaceCommandRailActionsSection } from "@/app/adminV2/components/workspace/WorkspaceCommandRailActionsSection";
-import { CreateLeadModal } from "@/components/admin/opportunity/actions/CreateLeadModal";
+import { CreateLeadCommandSurface } from "@/components/platform/commands/createLead/CreateLeadCommandSurface";
 import WorkUnitScheduleTourRecordPickerModal from "@/components/admin/workspace/WorkUnitScheduleTourRecordPickerModal";
 import { useAdminDrawer } from "@/contexts/AdminDrawerContext";
 import { useWorkspaceSiteFilter } from "@/contexts/WorkspaceSiteFilterContext";
 import { applyRegistryResolvedActionClient } from "@/lib/admin/actions/applyRegistryResolvedActionClient";
-import { executeCreateLeadFromModal } from "@/lib/admin/actions/entryLifecycleActionClient";
 import { countActionsVm } from "@/lib/bos/countActionsVm";
 import type { ResolvedActionForClient } from "@/lib/admin/actions/types";
 import { fetchWorkspaceRootResolvedActions } from "@/lib/workspace/fetchWorkspaceRootResolvedActions";
@@ -132,20 +131,13 @@ export function WorkspaceRootActionsRail({ defaultDepartmentId = null }: Props) 
                 slotTestId="workspace-root-actions-rail"
             />
             {defaultDepartmentId ? (
-                <CreateLeadModal
+                <CreateLeadCommandSurface
                     open={createLeadOpen}
                     departmentId={defaultDepartmentId}
+                    workUnitId={null}
+                    surface="workspace"
                     onClose={() => setCreateLeadOpen(false)}
-                    onSubmit={async (payload) => {
-                        const opportunityId = await executeCreateLeadFromModal({
-                            payload,
-                            departmentId: defaultDepartmentId,
-                            workUnitId: null,
-                            surface: "workspace",
-                        });
-                        return { opportunity_id: opportunityId };
-                    }}
-                    onCreated={(opportunityId) => {
+                    onOpenCreatedRecord={(opportunityId) => {
                         openDrawer({ type: "opportunities", id: opportunityId });
                         router.refresh();
                     }}

@@ -39,10 +39,9 @@ import type { WorkspaceAction } from "@/lib/ui-v2/workspace-actions";
 import type { KPIVm } from "@/lib/ui-v2/workspace-types";
 import type { ResolvedActionForClient } from "@/lib/admin/actions/types";
 import { applyRegistryResolvedActionClient } from "@/lib/admin/actions/applyRegistryResolvedActionClient";
-import { CreateLeadModal } from "@/components/admin/opportunity/actions/CreateLeadModal";
+import { CreateLeadCommandSurface } from "@/components/platform/commands/createLead/CreateLeadCommandSurface";
 import WorkUnitScheduleTourRecordPickerModal from "@/components/admin/workspace/WorkUnitScheduleTourRecordPickerModal";
 import { openTourScheduleModalForOpportunity } from "@/lib/tours/actions/tourBookingActionClient";
-import { executeCreateLeadFromModal } from "@/lib/admin/actions/entryLifecycleActionClient";
 import {
     REGISTRY_RIGHT_RAIL_ACTION_ID_PREFIX,
     mergeEnrollmentRightRailActions,
@@ -2050,20 +2049,13 @@ export default function AdminV2WorkspaceDepartmentPage() {
                     }
                 />
             )}
-            <CreateLeadModal
+            <CreateLeadCommandSurface
                 open={createLeadOpen}
                 departmentId={departmentId}
+                workUnitId={primaryWorkUnit?.id ?? null}
+                surface="right_rail"
                 onClose={() => setCreateLeadOpen(false)}
-                onSubmit={async (payload) => {
-                    const opportunityId = await executeCreateLeadFromModal({
-                        payload,
-                        departmentId,
-                        workUnitId: primaryWorkUnit?.id ?? null,
-                        surface: "right_rail",
-                    });
-                    return { opportunity_id: opportunityId };
-                }}
-                onCreated={(opportunityId) => {
+                onOpenCreatedRecord={(opportunityId) => {
                     openDrawer({ type: "opportunities", id: opportunityId });
                     router.refresh();
                 }}

@@ -111,6 +111,14 @@ eligibility + required subjects + required inputs + preview + execution + audit 
   (e.g. `executeCreateLeadFromModal` / `POST /api/admin/actions/execute`) — never call a mutation
   API from the shell/controller. This is how BOS/manual/Work Unit share one lifecycle without
   forking execution. Operator copy must pass `isOperatorSafeCopy` (no payload/action keys).
+- **One shared client execution adapter per command; host owns execution, not the entry point**
+  (V3). Create Lead's reference: `executeCreateLeadCommand.ts` is the single client adapter
+  (POST `/api/admin/actions/execute` → registered `create_lead`, normalized to `ActionResult`),
+  reused by every entry point. The platform host `CreateLeadCommandSurface.tsx` wraps the
+  existing intake and owns execution + standardized success (`buildCreateLeadSuccess`); entry
+  points pass only context + open/refresh callbacks. When an existing intake is protected and
+  rich (e.g. `CreateLeadModal`), host it as the body and converge execution/success rather than
+  rewriting it — and document the visible-chrome swap as deferred.
 
 Avoid: per-surface inline `fetch('/actions/execute')`, parallel mutation APIs for the
 same intent, client components that mutate operational truth directly, modeling Work Unit

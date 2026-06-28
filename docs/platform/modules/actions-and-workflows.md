@@ -369,7 +369,16 @@ guard (`isOperatorSafeCopy`) proving no payload keys / action keys / runtime enu
 `CreateLeadModal.tsx` is protected and not rewritten; convergence is at the model level with
 modal-body convergence documented as the next step.
 
-See `docs/sprints/06_2026/command_surface_v2.md` (and `command_surface_v1.md`).
+**First end-to-end operator wiring (V3).** Every Create Lead entry point (Work Unit Actions,
+BOS-launched intake, manual rail) now renders the platform host
+`CreateLeadCommandSurface.tsx`, which hosts the unchanged `CreateLeadModal` as the intake body
+but owns execution and success. Execution runs through the single shared client adapter
+`executeCreateLeadCommand.ts` → `POST /api/admin/actions/execute` registered `create_lead`
+(no forked mutation path); success/refresh derive from `buildCreateLeadSuccess`. Replacing the
+modal's visible chrome with `CommandSurfaceShell` remains deferred to avoid regressing the rich
+intake.
+
+See `docs/sprints/06_2026/command_surface_v3.md`, `command_surface_v2.md`, `command_surface_v1.md`.
 
 ## Rules
 

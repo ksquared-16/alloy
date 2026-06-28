@@ -84,7 +84,15 @@ entry point (and how much context arrives pre-resolved) differs.
 command model → surface preview/missing-inputs → confirm. Confirm executes through the existing
 `/api/admin/actions/execute` registered `create_lead` (injected into the controller). BOS must
 not create leads through a private path, own its own command lifecycle, or bypass surface state.
-See `docs/sprints/06_2026/command_surface_v2.md` (and `command_surface_v1.md`).
+
+**End-to-end wiring (V3).** In the live runtime, BOS Create Lead is the same `CreateLeadModal`
+workspace (launched via the `adminv2:open-create-lead` listener) now hosted by the platform
+`CreateLeadCommandSurface`. So a BOS-launched Create Lead confirms through the **same** shared
+client adapter `executeCreateLeadCommand` → registered `create_lead` as manual/Work Unit, with
+standardized success. The command model still derives BOS preview (complete parse) vs missing
+required inputs (incomplete parse) in operator language. BOS remains an entry point, not its own
+mutation path. See `docs/sprints/06_2026/command_surface_v3.md`,
+`command_surface_v2.md`, `command_surface_v1.md`.
 
 ---
 
