@@ -6,6 +6,11 @@ no feature UI, no new product commands implemented.
 **Builds on:** the V2 runtime (registered capabilities, placements, context resolution,
 required subjects, eligibility, preview, execution, audit, refresh).
 
+**Followed by (V4):** Create Lead becomes the first operator-visible command flow built on
+this model — see `create_lead_command_flow_audit.md`. The V4 view-model
+(`createLeadCommandModel.ts`) is a read-only layer over this runtime; manual UI and BOS share
+it and both execute through the one registered `create_lead` action.
+
 **Code anchors:**
 - `web/lib/adminV2/actions/operationalIntent.ts` — Operational Intent layer
 - `web/lib/adminV2/actions/invocationContext.ts` — Context Resolution + Required Subject

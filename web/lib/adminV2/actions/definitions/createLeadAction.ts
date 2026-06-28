@@ -11,44 +11,18 @@ import { randomUUID } from "crypto";
 import { executeAdminAction } from "@/lib/admin/actions/executeAdminAction";
 import { CREATE_LEAD_ACTION_ENTITY_ID } from "@/lib/admin/actions/createLeadActionConstants";
 import {
-    eligible,
     toDelegateContext,
-    type ActionBlocker,
-    type ActionRequiredInput,
     type ActionResult,
     type RegisteredAction,
 } from "@/lib/adminV2/actions/actionTypes";
+import {
+    CREATE_LEAD_ACTION_KEY,
+    buildCreateLeadEligibility,
+    buildCreateLeadPreview,
+    trimmedValue as trimmed,
+} from "@/lib/adminV2/actions/createLead/createLeadRequiredInputs";
 
-export const CREATE_LEAD_ACTION_KEY = "create_lead";
-
-function trimmed(v: unknown): string {
-    return v != null ? String(v).trim() : "";
-}
-
-function leadName(payload: Record<string, unknown>): string {
-    const first = trimmed(payload.first_name);
-    const last = trimmed(payload.last_name);
-    return [first, last].filter(Boolean).join(" ").trim();
-}
-
-/**
- * Server-minimum required inputs. Stage-configured field rules add to this set as
- * config-supplied hints; the code-owned invariant (first/last + email|phone) lives
- * in `executeCreateLeadAction` and is enforced at execute regardless of config.
- */
-function createLeadBlockers(payload: Record<string, unknown>): ActionBlocker[] {
-    const blockers: ActionBlocker[] = [];
-    if (!trimmed(payload.first_name)) {
-        blockers.push({ code: "missing_required_input", message: "First name is required.", field: "first_name" });
-    }
-    if (!trimmed(payload.last_name)) {
-        blockers.push({ code: "missing_required_input", message: "Last name is required.", field: "last_name" });
-    }
-    if (!trimmed(payload.email) && !trimmed(payload.phone)) {
-        blockers.push({ code: "missing_required_input", message: "Phone or email is required.", field: "email" });
-    }
-    return blockers;
-}
+export { CREATE_LEAD_ACTION_KEY };
 
 export const createLeadAction: RegisteredAction = {
     actionKey: CREATE_LEAD_ACTION_KEY,
@@ -71,28 +45,11 @@ export const createLeadAction: RegisteredAction = {
     },
 
     async resolveEligibility({ payload }) {
-        const requiredInputs: ActionRequiredInput[] = [
-            { key: "first_name", label: "First name", type: "text", required: true },
-            { key: "last_name", label: "Last name", type: "text", required: true },
-            { key: "email", label: "Email", type: "email", required: false, hint: "Email or phone required." },
-            { key: "phone", label: "Phone", type: "phone", required: false, hint: "Email or phone required." },
-        ];
-        const blockers = createLeadBlockers(payload);
-        return eligible({ eligible: blockers.length === 0, blockers, requiredInputs });
+        return buildCreateLeadEligibility(payload);
     },
 
     async buildPreview({ payload }) {
-        const name = leadName(payload) || "(unnamed)";
-        const contact = trimmed(payload.email) || trimmed(payload.phone) || "(no contact)";
-        return {
-            summary: `Create a new lead for ${name}.`,
-            changes: [
-                `Create household + opportunity for ${name}`,
-                `Primary contact: ${contact}`,
-            ],
-            before: null,
-            after: { first_name: trimmed(payload.first_name), last_name: trimmed(payload.last_name) },
-        };
+        return buildCreateLeadPreview(payload);
     },
 
     async execute({ supabase, ctx, invocation, payload }): Promise<ActionResult> {

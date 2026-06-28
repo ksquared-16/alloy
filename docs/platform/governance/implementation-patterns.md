@@ -91,6 +91,12 @@ eligibility + required subjects + required inputs + preview + execution + audit 
   resolve_constraints → preview → confirm → execute → success`). The runtime picks the current
   stage from the resolved snapshot; the UI renders it. Richer entry points (Focus Panel, BOS)
   arrive with more stages already complete.
+- **Command view-models are read-only** (e.g. `createLead/createLeadCommandModel.ts` →
+  `deriveCreateLeadCommandState`): they derive stage/state/copy/known+missing inputs/preview/
+  success from known inputs, but never execute or mutate. Manual UI and BOS share one
+  view-model and both submit the same payload through the registered action's execute route —
+  never a per-surface mutation path. Read-only eligibility/preview derivation is shared between
+  the registered action and the view-model (one source of truth).
 
 Avoid: per-surface inline `fetch('/actions/execute')`, parallel mutation APIs for the
 same intent, client components that mutate operational truth directly, modeling Work Unit

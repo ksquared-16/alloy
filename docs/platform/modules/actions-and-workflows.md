@@ -321,6 +321,26 @@ only differ by how much context arrives pre-resolved. See
 There are no buttons, drawer actions, or dialog mutations — only commands, placements, and
 flows over one runtime.
 
+### Create Lead — first visible command flow (V4)
+
+Create Lead is the first operator-visible Operational Command Flow.
+`web/lib/adminV2/actions/createLead/createLeadCommandModel.ts` (`deriveCreateLeadCommandState`)
+is a **read-only view-model over the runtime** — it derives stage, operator state/copy,
+known/missing inputs, preview, and a standardized success descriptor, but never mutates.
+
+- Required subject = **none** → `resolve_subject` is skipped (capture-first).
+- Manual UI and BOS share the **same** view-model; BOS (`deriveCreateLeadCommandFromBosProposal`)
+  simply arrives with more inputs already parsed, and surfaces missing fields in operator
+  language. Both submit the same `executePayload` through the registered `create_lead` action
+  via `POST /api/admin/actions/execute` — there is no separate BOS mutation path.
+- Read-only eligibility/preview derivation lives in `createLead/createLeadRequiredInputs.ts` and
+  is shared by the registered action and the view-model (one source of truth).
+- Success is standardized by `createLead/createLeadSuccess.ts` (created id, next surface, refresh
+  targets, copy).
+
+Server-side required-input parity with stage intake-spec `field_rules` (notably location) is a
+documented follow-up — see `docs/sprints/06_2026/create_lead_command_flow_audit.md` § Phase 6.
+
 ## Rules
 
 - Meaningful business mutations should use event/workflow path where product already does

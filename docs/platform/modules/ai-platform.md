@@ -65,6 +65,14 @@ BOS never skips eligibility, confirmation policy, audit, or refresh — it only 
 subject and inputs conversationally. See
 `docs/sprints/06_2026/operational_command_runtime_v3.md`.
 
+**Create Lead (first visible flow, V4).** BOS Create Lead is not a separate flow — it builds
+on the existing parse/proposal behavior and feeds the parsed values into the shared command
+view-model (`deriveCreateLeadCommandFromBosProposal`). Complete parsed values arrive at
+preview/confirm; missing values surface in operator language ("I still need a last name and a
+phone or email"). BOS confirms and executes through the **same** registered `create_lead`
+action and execute route as manual entry. See
+`docs/sprints/06_2026/create_lead_command_flow_audit.md`.
+
 ---
 
 ## Capabilities registry
