@@ -441,6 +441,17 @@ Draft **Charge Resolution** + a **minimum responsibility shape** are **implement
 
 **Hard boundary held:** Charge Resolution emits **draft** charges only; no invoices, AR, ledger, payments, subsidy/expected-subsidy AR, UI, or job coupling. Financial Resolution stays separate from Posting.
 
+### P3.3.1 — Financial Charge Preview API (read-only, June 2026)
+
+A no-write preview path so future Configuration / Focus Panel surfaces can show financial resolution **before** posting. Named generically (financial, not childcare): the childcare/enrollment billable source is a billable-source-specific input, and the DTO names it generically (`billableSource.type = "enrollment_agreement"`).
+
+- **Service:** `previewDraftChargeForAgreementPeriod` (in `draftChargeResolutionService.ts`) performs the full resolution but writes nothing; `resolveDraftChargeForAgreementPeriod` (the write path) is refactored to build on it, so preview and write can never diverge. Preview also reports an advisory `wouldWrite` (`create | recalculate | unchanged | skipped_posted`).
+- **Presentation:** pure `buildDraftChargePreviewDto` (`previewDraftChargePresentation.ts`) → stable DTO with resolved rate, schedule basis, quantity, amount, currency, responsibility, resolution key, `wouldWrite`, existing-charge summary, and unresolved reasons.
+- **Route:** `GET /api/admin/financial-charge-preview` — financial role-gated (`requireAdminOrOps`) and org-scoped (`getAdminContextCached`); accepts `enrollment_agreement_id` (billable-source-specific) + `period_start` / `period_end` (+ optional `period_key`, `as_of`, `plan_key`, `age_group_key`). Read-only.
+- **Tests:** `web/tests/financials/chargeResolution/{previewDraftCharge,financialChargePreviewRoute}.test.ts` (10 cases, green): resolved preview shape, unresolved preview, **no writes** (charges store stays empty), no job coupling, and authorization posture (403 forbidden / 401 unauthenticated, write path never invoked).
+
+**Hard boundary held:** preview is read-only — no posting, invoices, AR, ledger/GL, payments, or UI; the drafting (write) path remains the separate, explicit surface.
+
 Deferred sub-phases: **Financial Resolution depth** — split / subsidy / guardian-specific responsibility and a first-class `service_agreement` / `responsibility_party` table (later P3.3+/P3.5); cadence/proration policy (P3.4); subsidy seam (P3.5); invoices/deposits and Posting (P3.6).
 
 ---

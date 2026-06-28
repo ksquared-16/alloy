@@ -29,6 +29,7 @@ import {
     type ChargeRow,
 } from "@/lib/financials/childcareChargeService";
 import { fetchResolvedRate } from "@/lib/financials/rates/rateConfigService";
+import type { ResolvedRate } from "@/lib/financials/rates/resolveRate";
 import { resolveScheduleBasis } from "@/lib/financials/chargeResolution/scheduleBasis";
 import { scheduledServiceDates } from "@/lib/financials/chargeResolution/billableQuantity";
 import { resolveChargeResponsibility } from "@/lib/financials/chargeResolution/responsibility";
@@ -175,15 +176,34 @@ function draftNeedsRecalc(existing: ChargeRow, intent: DraftChargeIntent): boole
     );
 }
 
+/** What a write would do for this resolution, computed without writing. */
+export type DraftChargeWriteIntent = "create" | "recalculate" | "unchanged" | "skipped_posted";
+
+export type DraftChargePreview =
+    | {
+          status: "resolved";
+          resolutionKey: string;
+          scheduleBasis: ScheduleBasis;
+          rate: ResolvedRate;
+          intent: DraftChargeIntent;
+          /** Existing charge matched by resolution_key (read-only), if any. */
+          existing: ChargeRow | null;
+          /** The outcome a write WOULD produce — purely advisory; nothing is written. */
+          wouldWrite: DraftChargeWriteIntent;
+      }
+    | { status: "unresolved"; reason: string };
+
 /**
- * Resolve and idempotently persist a single tuition draft charge for an
- * agreement + service period. Returns a structured outcome (never throws for a
- * non-billable resolution).
+ * Resolve a single tuition draft charge for an agreement + service period
+ * WITHOUT writing anything. Pure read path: it composes committed intent + the
+ * resolved rate + responsibility and reports what a write would do, but never
+ * creates, recalculates, or posts a charge. This is the preview substrate for
+ * Configuration / Focus Panel surfaces.
  */
-export async function resolveDraftChargeForAgreementPeriod(
+export async function previewDraftChargeForAgreementPeriod(
     supabase: SupabaseClient,
     args: ResolveDraftChargeArgs
-): Promise<DraftChargeOutcome> {
+): Promise<DraftChargePreview> {
     const orgId = args.orgId?.trim();
     const agreementId = args.enrollmentAgreementId?.trim();
     if (!orgId || !agreementId) {
@@ -255,34 +275,70 @@ export async function resolveDraftChargeForAgreementPeriod(
     if (!resolution.resolved) return { status: "unresolved", reason: resolution.reason };
 
     const existing = await findExistingByResolutionKey(supabase, orgId, agreementId, resolution.resolutionKey);
+    let wouldWrite: DraftChargeWriteIntent = "create";
     if (existing) {
-        if (existing.status !== "draft") {
-            return { status: "skipped_posted", charge: existing, resolutionKey: resolution.resolutionKey };
+        if (existing.status !== "draft") wouldWrite = "skipped_posted";
+        else wouldWrite = draftNeedsRecalc(existing, resolution) ? "recalculate" : "unchanged";
+    }
+
+    return {
+        status: "resolved",
+        resolutionKey: resolution.resolutionKey,
+        scheduleBasis,
+        rate,
+        intent: resolution,
+        existing,
+        wouldWrite,
+    };
+}
+
+/**
+ * Resolve and idempotently persist a single tuition draft charge for an
+ * agreement + service period. Returns a structured outcome (never throws for a
+ * non-billable resolution). Built on the no-write preview so write and preview
+ * never diverge.
+ */
+export async function resolveDraftChargeForAgreementPeriod(
+    supabase: SupabaseClient,
+    args: ResolveDraftChargeArgs
+): Promise<DraftChargeOutcome> {
+    const preview = await previewDraftChargeForAgreementPeriod(supabase, args);
+    if (preview.status === "unresolved") {
+        return { status: "unresolved", reason: preview.reason };
+    }
+
+    const { intent, existing, resolutionKey } = preview;
+    const orgId = args.orgId.trim();
+    const agreementId = args.enrollmentAgreementId.trim();
+
+    if (existing) {
+        if (preview.wouldWrite === "skipped_posted") {
+            return { status: "skipped_posted", charge: existing, resolutionKey };
         }
-        if (!draftNeedsRecalc(existing, resolution)) {
-            return { status: "unchanged", charge: existing, resolutionKey: resolution.resolutionKey };
+        if (preview.wouldWrite === "unchanged") {
+            return { status: "unchanged", charge: existing, resolutionKey };
         }
         const updated = await recalculateDraftCharge(supabase, {
             orgId,
             chargeId: existing.id,
-            amountCents: resolution.amountCents,
-            chargeCategory: resolution.chargeCategory,
-            serviceDate: resolution.serviceDate,
-            description: resolution.description,
-            metadata: resolution.metadata,
+            amountCents: intent.amountCents,
+            chargeCategory: intent.chargeCategory,
+            serviceDate: intent.serviceDate,
+            description: intent.description,
+            metadata: intent.metadata,
         });
-        return { status: "recalculated", charge: updated, resolutionKey: resolution.resolutionKey };
+        return { status: "recalculated", charge: updated, resolutionKey };
     }
 
     const created = await createChildcareDraftCharge(supabase, {
         orgId,
         enrollmentAgreementId: agreementId,
-        chargeCategory: resolution.chargeCategory,
-        amountCents: resolution.amountCents,
-        currencyCode: resolution.currencyCode,
-        serviceDate: resolution.serviceDate,
-        description: resolution.description,
-        metadata: resolution.metadata,
+        chargeCategory: intent.chargeCategory,
+        amountCents: intent.amountCents,
+        currencyCode: intent.currencyCode,
+        serviceDate: intent.serviceDate,
+        description: intent.description,
+        metadata: intent.metadata,
     });
-    return { status: "created", charge: created, resolutionKey: resolution.resolutionKey };
+    return { status: "created", charge: created, resolutionKey };
 }
