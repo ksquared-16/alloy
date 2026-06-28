@@ -10,9 +10,9 @@
 
 | Kind | Count |
 |------|------:|
-| Base tables (`public`) | 199 |
+| Base tables (`public`) | 201 |
 | Views (`public`) | 7 |
-| Tables with RLS enabled | 199 |
+| Tables with RLS enabled | 201 |
 
 ## Base tables
 
@@ -41,12 +41,14 @@
 | `business_process_layout_assignments` | true | false | 2 |
 | `campaigns` | true | false | 1 |
 | `charge_line_items` | true | false | 4 |
-| `charges` | true | false | 4 |
+| `charges` | true | false | 5 |
 | `child_attendance_events` | true | false | 3 |
 | `child_enrollment_agreements` | true | false | 3 |
 | `child_placements` | true | false | 3 |
 | `childcare_capacity_rules` | true | false | 5 |
 | `childcare_operating_windows` | true | false | 5 |
+| `childcare_rate_plans` | true | false | 5 |
+| `childcare_rate_rules` | true | false | 5 |
 | `childcare_ratio_rule_tiers` | true | false | 5 |
 | `childcare_ratio_rules` | true | false | 5 |
 | `childcare_schedule_rules` | true | false | 5 |
@@ -113,7 +115,7 @@
 | `gl_account_mappings` | true | false | 5 |
 | `gl_accounts` | true | false | 5 |
 | `gl_journal_entries` | true | false | 5 |
-| `gl_journal_lines` | true | false | 5 |
+| `gl_journal_lines` | true | false | 6 |
 | `home_types` | true | false | 1 |
 | `industries` | true | true | 1 |
 | `industry_default_entity_labels` | true | true | 1 |
@@ -122,7 +124,7 @@
 | `job_statuses` | true | false | 1 |
 | `job_tags` | true | false | 1 |
 | `jobs` | true | false | 1 |
-| `ledger_transactions` | true | false | 5 |
+| `ledger_transactions` | true | false | 6 |
 | `location_program_categories` | true | false | 5 |
 | `location_tags` | true | false | 1 |
 | `location_types` | true | true | 2 |

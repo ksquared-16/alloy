@@ -2,7 +2,7 @@
 
 **Status:** Generated reference. **Do not edit by hand.**
 
-**Generated:** 2026-06-28 · **Trigger count:** 195
+**Generated:** 2026-06-28 · **Trigger count:** 201
 
 | Table | Trigger | Event | Function |
 |-------|---------|-------|----------|
@@ -29,6 +29,12 @@
 | `childcare_operating_windows` | `trg_childcare_operating_windows_updated_at` | UPDATE BEFORE | CREATE TRIGGER trg_childcare_operating_windows_updated_at BEFORE UPDATE ON child |
 | `childcare_operating_windows` | `trg_validate_childcare_operating_windows_scope` | INSERT BEFORE | CREATE TRIGGER trg_validate_childcare_operating_windows_scope BEFORE INSERT OR U |
 | `childcare_operating_windows` | `trg_validate_childcare_operating_windows_scope` | UPDATE BEFORE | CREATE TRIGGER trg_validate_childcare_operating_windows_scope BEFORE INSERT OR U |
+| `childcare_rate_plans` | `trg_childcare_rate_plans_updated_at` | UPDATE BEFORE | CREATE TRIGGER trg_childcare_rate_plans_updated_at BEFORE UPDATE ON childcare_ra |
+| `childcare_rate_plans` | `trg_validate_childcare_rate_plans_scope` | INSERT BEFORE | CREATE TRIGGER trg_validate_childcare_rate_plans_scope BEFORE INSERT OR UPDATE O |
+| `childcare_rate_plans` | `trg_validate_childcare_rate_plans_scope` | UPDATE BEFORE | CREATE TRIGGER trg_validate_childcare_rate_plans_scope BEFORE INSERT OR UPDATE O |
+| `childcare_rate_rules` | `trg_childcare_rate_rules_updated_at` | UPDATE BEFORE | CREATE TRIGGER trg_childcare_rate_rules_updated_at BEFORE UPDATE ON childcare_ra |
+| `childcare_rate_rules` | `trg_validate_childcare_rate_rule` | INSERT BEFORE | CREATE TRIGGER trg_validate_childcare_rate_rule BEFORE INSERT OR UPDATE ON child |
+| `childcare_rate_rules` | `trg_validate_childcare_rate_rule` | UPDATE BEFORE | CREATE TRIGGER trg_validate_childcare_rate_rule BEFORE INSERT OR UPDATE ON child |
 | `childcare_ratio_rule_tiers` | `trg_childcare_ratio_rule_tiers_updated_at` | UPDATE BEFORE | CREATE TRIGGER trg_childcare_ratio_rule_tiers_updated_at BEFORE UPDATE ON childc |
 | `childcare_ratio_rules` | `trg_childcare_ratio_rules_updated_at` | UPDATE BEFORE | CREATE TRIGGER trg_childcare_ratio_rules_updated_at BEFORE UPDATE ON childcare_r |
 | `childcare_ratio_rules` | `trg_validate_childcare_ratio_rules_scope` | INSERT BEFORE | CREATE TRIGGER trg_validate_childcare_ratio_rules_scope BEFORE INSERT OR UPDATE  |

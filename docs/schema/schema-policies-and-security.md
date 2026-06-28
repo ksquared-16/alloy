@@ -2,7 +2,7 @@
 
 **Status:** Generated reference. **Do not edit by hand.**
 
-**Generated:** 2026-06-28 · **RLS policy count:** 571
+**Generated:** 2026-06-28 · **RLS policy count:** 581
 
 ## Posture
 
@@ -224,6 +224,26 @@
 | `childcare_operating_windows_insert_org` | INSERT | {authenticated} | — |
 | `childcare_operating_windows_select_org` | SELECT | {authenticated} | — |
 | `childcare_operating_windows_update_org` | UPDATE | {authenticated} | — |
+
+### `childcare_rate_plans`
+
+| Policy | Command | Roles | USING / WITH CHECK (truncated) |
+|--------|---------|-------|--------------------------------|
+| `childcare_rate_plans_all_service_role` | ALL | {service_role} | — |
+| `childcare_rate_plans_delete_org` | DELETE | {authenticated} | — |
+| `childcare_rate_plans_insert_org` | INSERT | {authenticated} | — |
+| `childcare_rate_plans_select_org` | SELECT | {authenticated} | — |
+| `childcare_rate_plans_update_org` | UPDATE | {authenticated} | — |
+
+### `childcare_rate_rules`
+
+| Policy | Command | Roles | USING / WITH CHECK (truncated) |
+|--------|---------|-------|--------------------------------|
+| `childcare_rate_rules_all_service_role` | ALL | {service_role} | — |
+| `childcare_rate_rules_delete_org` | DELETE | {authenticated} | — |
+| `childcare_rate_rules_insert_org` | INSERT | {authenticated} | — |
+| `childcare_rate_rules_select_org` | SELECT | {authenticated} | — |
+| `childcare_rate_rules_update_org` | UPDATE | {authenticated} | — |
 
 ### `childcare_ratio_rule_tiers`
 

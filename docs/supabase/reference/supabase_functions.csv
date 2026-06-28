@@ -2221,6 +2221,26 @@ BEGIN
 END;
 $function$
 "
+public,validate_childcare_rate_rule,function,plpgsql,VOLATILE,false,,trigger,"CREATE OR REPLACE FUNCTION public.validate_childcare_rate_rule()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+DECLARE
+    plan_org uuid;
+BEGIN
+    SELECT p.org_id INTO plan_org
+    FROM public.childcare_rate_plans p WHERE p.id = NEW.rate_plan_id;
+    IF plan_org IS NULL THEN
+        RAISE EXCEPTION 'childcare rate rule: rate_plan_id % not found', NEW.rate_plan_id
+            USING ERRCODE = '23503';
+    END IF;
+    IF plan_org <> NEW.org_id THEN
+        RAISE EXCEPTION 'childcare rate rule: org_id must match parent rate plan org' USING ERRCODE = '23514';
+    END IF;
+    RETURN NEW;
+END;
+$function$
+"
 public,validate_form_packet_items_form_org,function,plpgsql,VOLATILE,false,,trigger,"CREATE OR REPLACE FUNCTION public.validate_form_packet_items_form_org()
  RETURNS trigger
  LANGUAGE plpgsql

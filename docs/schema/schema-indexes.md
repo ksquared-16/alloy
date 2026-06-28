@@ -2,7 +2,7 @@
 
 **Status:** Generated reference. **Do not edit by hand.**
 
-**Generated:** 2026-06-28 · **Index count:** 867
+**Generated:** 2026-06-28 · **Index count:** 877
 
 | Table | Index | Unique | Definition |
 |-------|-------|--------|------------|
@@ -125,6 +125,16 @@
 | `childcare_operating_windows` | `childcare_operating_windows_pkey` | true | CREATE UNIQUE INDEX childcare_operating_windows_pkey ON childcare_operating_windows USING btree (id) |
 | `childcare_operating_windows` | `idx_childcare_operating_windows_org_scope` | false | CREATE INDEX idx_childcare_operating_windows_org_scope ON childcare_operating_windows USING btree (org_id, scope_type) |
 | `childcare_operating_windows` | `idx_childcare_operating_windows_org_site_weekday` | false | CREATE INDEX idx_childcare_operating_windows_org_site_weekday ON childcare_operating_windows USING btree (org_id, site_l |
+| `childcare_rate_plans` | `childcare_rate_plans_pkey` | true | CREATE UNIQUE INDEX childcare_rate_plans_pkey ON childcare_rate_plans USING btree (id) |
+| `childcare_rate_plans` | `idx_childcare_rate_plans_org_plan_key` | false | CREATE INDEX idx_childcare_rate_plans_org_plan_key ON childcare_rate_plans USING btree (org_id, plan_key) |
+| `childcare_rate_plans` | `idx_childcare_rate_plans_org_program` | false | CREATE INDEX idx_childcare_rate_plans_org_program ON childcare_rate_plans USING btree (org_id, program_category_id) WHER |
+| `childcare_rate_plans` | `idx_childcare_rate_plans_org_room` | false | CREATE INDEX idx_childcare_rate_plans_org_room ON childcare_rate_plans USING btree (org_id, room_location_id) WHERE room |
+| `childcare_rate_plans` | `idx_childcare_rate_plans_org_scope` | false | CREATE INDEX idx_childcare_rate_plans_org_scope ON childcare_rate_plans USING btree (org_id, scope_type) |
+| `childcare_rate_plans` | `idx_childcare_rate_plans_org_site` | false | CREATE INDEX idx_childcare_rate_plans_org_site ON childcare_rate_plans USING btree (org_id, site_location_id) WHERE site |
+| `childcare_rate_rules` | `childcare_rate_rules_pkey` | true | CREATE UNIQUE INDEX childcare_rate_rules_pkey ON childcare_rate_rules USING btree (id) |
+| `childcare_rate_rules` | `idx_childcare_rate_rules_org` | false | CREATE INDEX idx_childcare_rate_rules_org ON childcare_rate_rules USING btree (org_id) |
+| `childcare_rate_rules` | `idx_childcare_rate_rules_org_age_group` | false | CREATE INDEX idx_childcare_rate_rules_org_age_group ON childcare_rate_rules USING btree (org_id, age_group_key) WHERE ag |
+| `childcare_rate_rules` | `idx_childcare_rate_rules_plan_basis` | false | CREATE INDEX idx_childcare_rate_rules_plan_basis ON childcare_rate_rules USING btree (rate_plan_id, schedule_basis) |
 | `childcare_ratio_rule_tiers` | `childcare_ratio_rule_tiers_pkey` | true | CREATE UNIQUE INDEX childcare_ratio_rule_tiers_pkey ON childcare_ratio_rule_tiers USING btree (id) |
 | `childcare_ratio_rule_tiers` | `childcare_ratio_rule_tiers_unique_threshold` | true | CREATE UNIQUE INDEX childcare_ratio_rule_tiers_unique_threshold ON childcare_ratio_rule_tiers USING btree (ratio_rule_id |
 | `childcare_ratio_rule_tiers` | `idx_childcare_ratio_rule_tiers_rule` | false | CREATE INDEX idx_childcare_ratio_rule_tiers_rule ON childcare_ratio_rule_tiers USING btree (ratio_rule_id, max_children) |

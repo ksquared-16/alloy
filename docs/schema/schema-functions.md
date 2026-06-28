@@ -2,7 +2,7 @@
 
 **Status:** Generated reference. **Do not edit by hand.**
 
-**Generated:** 2026-06-28 · **Function count:** 2948
+**Generated:** 2026-06-28 · **Function count:** 2968
 
 | Schema | Function | Return type | Security |
 |--------|----------|-------------|----------|
@@ -1962,6 +1962,24 @@
 | ` LANGUAGE plpgsql` | `` | — | — |
 | `AS $function$` | `` | — | — |
 | `DECLARE` | `` | — | — |
+| `    plan_org uuid;` | `` | — | — |
+| `BEGIN` | `` | — | — |
+| `    SELECT p.org_id INTO plan_org` | `` | — | — |
+| `    FROM public.childcare_rate_plans p WHERE p.id = NEW.rate_plan_id;` | `` | — | — |
+| `    IF plan_org IS NULL THEN` | `` | — | — |
+| `            USING ERRCODE = '23503';` | `` | — | — |
+| `    END IF;` | `` | — | — |
+| `    IF plan_org <> NEW.org_id THEN` | `` | — | — |
+| `        RAISE EXCEPTION 'childcare rate rule: org_id must match parent rate plan org' USING ERRCODE = '23514';` | `` | — | — |
+| `    END IF;` | `` | — | — |
+| `    RETURN NEW;` | `` | — | — |
+| `END;` | `` | — | — |
+| `$function$` | `` | — | — |
+| `public` | `` | — | — |
+| ` RETURNS trigger` | `` | — | — |
+| ` LANGUAGE plpgsql` | `` | — | — |
+| `AS $function$` | `` | — | — |
+| `DECLARE` | `` | — | — |
 | `    def_org uuid;` | `` | — | — |
 | `    ver_form uuid;` | `` | — | — |
 | `    ver_org uuid;` | `` | — | — |
@@ -2765,6 +2783,7 @@
 | `        RAISE EXCEPTION 'placement_link_group_members: group % not found'` | ` NEW.placement_link_group_id USING ERRCODE = '23503';` | — | — |
 | `            RAISE EXCEPTION 'child_placements: program_category_id % not found'` | ` NEW.program_category_id` | — | — |
 | `            RAISE EXCEPTION 'childcare config scope: program_category_id % not found'` | ` NEW.program_category_id` | — | — |
+| `        RAISE EXCEPTION 'childcare rate rule: rate_plan_id % not found'` | ` NEW.rate_plan_id` | — | — |
 | `            RAISE EXCEPTION 'tour_bookings: rescheduled_from_booking_id % not found'` | ` NEW.rescheduled_from_booking_id;` | — | — |
 | `            RAISE EXCEPTION 'child_placements: room_location_id % not found'` | ` NEW.room_location_id` | — | — |
 | `            RAISE EXCEPTION 'child_placements: room_location_id % must be location_type unit'` | ` NEW.room_location_id` | — | — |
@@ -2932,6 +2951,7 @@
 | `public` | `validate_child_enrollment_agreements_consistency` | trigger | false |
 | `public` | `validate_child_placements_consistency` | trigger | false |
 | `public` | `validate_childcare_config_scope` | trigger | false |
+| `public` | `validate_childcare_rate_rule` | trigger | false |
 | `public` | `validate_form_packet_items_form_org` | trigger | false |
 | `public` | `validate_form_packet_session_items_packet_match` | trigger | false |
 | `public` | `validate_form_packet_session_items_submission_org` | trigger | false |

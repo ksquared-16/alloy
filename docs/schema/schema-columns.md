@@ -2,7 +2,7 @@
 
 **Status:** Generated reference. **Do not edit by hand.**
 
-**Generated:** 2026-06-28 · **Column count:** 2530
+**Generated:** 2026-06-28 · **Column count:** 2568
 
 Columns for `public` schema tables, grouped alphabetically by table.
 
@@ -498,6 +498,54 @@ Columns for `public` schema tables, grouped alphabetically by table.
 | `weekday` | smallint | NO | — |
 | `open_time` | time without time zone | NO | — |
 | `close_time` | time without time zone | NO | — |
+| `effective_start` | date | NO | — |
+| `effective_end` | date | YES | — |
+| `source_key` | text | NO | 'config'::text |
+| `metadata` | jsonb | NO | '{}'::jsonb |
+| `created_by` | uuid | YES | — |
+| `updated_by` | uuid | YES | — |
+| `created_at` | timestamp with time zone | NO | now() |
+| `updated_at` | timestamp with time zone | NO | now() |
+
+## `childcare_rate_plans`
+
+| Column | Type | Nullable | Default |
+|--------|------|----------|--------|
+| `id` | uuid | NO | gen_random_uuid() |
+| `org_id` | uuid | NO | — |
+| `scope_type` | text | NO | — |
+| `site_location_id` | uuid | YES | — |
+| `program_category_id` | uuid | YES | — |
+| `room_location_id` | uuid | YES | — |
+| `age_group_key` | text | YES | — |
+| `plan_key` | text | NO | — |
+| `label` | text | YES | — |
+| `currency_code` | text | NO | 'USD'::text |
+| `billing_basis` | text | NO | — |
+| `calculation_strategy` | text | NO | 'scheduled'::text |
+| `proration_method` | text | YES | — |
+| `billing_cadence` | text | YES | — |
+| `is_active` | boolean | NO | true |
+| `effective_start` | date | NO | — |
+| `effective_end` | date | YES | — |
+| `source_key` | text | NO | 'config'::text |
+| `metadata` | jsonb | NO | '{}'::jsonb |
+| `created_by` | uuid | YES | — |
+| `updated_by` | uuid | YES | — |
+| `created_at` | timestamp with time zone | NO | now() |
+| `updated_at` | timestamp with time zone | NO | now() |
+
+## `childcare_rate_rules`
+
+| Column | Type | Nullable | Default |
+|--------|------|----------|--------|
+| `id` | uuid | NO | gen_random_uuid() |
+| `org_id` | uuid | NO | — |
+| `rate_plan_id` | uuid | NO | — |
+| `schedule_basis` | text | NO | — |
+| `rate_basis` | text | NO | — |
+| `age_group_key` | text | YES | — |
+| `amount_cents` | bigint | NO | — |
 | `effective_start` | date | NO | — |
 | `effective_end` | date | YES | — |
 | `source_key` | text | NO | 'config'::text |

@@ -2,7 +2,7 @@
 
 **Status:** Generated reference. **Do not edit by hand.**
 
-**Generated:** 2026-06-28 · **Constraint count:** 983
+**Generated:** 2026-06-28 · **Constraint count:** 1004
 
 | Table | Name | Type | Definition |
 |-------|------|------|------------|
@@ -176,6 +176,27 @@
 | `childcare_operating_windows` | `childcare_operating_windows_site_location_id_fkey` | FOREIGN KEY | FOREIGN KEY (site_location_id) REFERENCES locations(id) ON DELETE CASCADE |
 | `childcare_operating_windows` | `childcare_operating_windows_time_order` | CHECK | CHECK (close_time > open_time) |
 | `childcare_operating_windows` | `childcare_operating_windows_weekday_range` | CHECK | CHECK (weekday >= 0 AND weekday <= 6) |
+| `childcare_rate_plans` | `childcare_rate_plans_billing_basis_check` | CHECK | CHECK (billing_basis = ANY (ARRAY['annual'::text, 'monthly'::text, 'weekly'::text, 'daily'::text, 's |
+| `childcare_rate_plans` | `childcare_rate_plans_billing_cadence_check` | CHECK | CHECK (billing_cadence IS NULL OR (billing_cadence = ANY (ARRAY['monthly'::text, 'semi_monthly'::tex |
+| `childcare_rate_plans` | `childcare_rate_plans_calculation_strategy_check` | CHECK | CHECK (calculation_strategy = ANY (ARRAY['scheduled'::text, 'attendance_actual'::text, 'hybrid'::tex |
+| `childcare_rate_plans` | `childcare_rate_plans_currency_nonempty` | CHECK | CHECK (char_length(btrim(currency_code)) > 0) |
+| `childcare_rate_plans` | `childcare_rate_plans_end_after_start` | CHECK | CHECK (effective_end IS NULL OR effective_end >= effective_start) |
+| `childcare_rate_plans` | `childcare_rate_plans_org_id_fkey` | FOREIGN KEY | FOREIGN KEY (org_id) REFERENCES orgs(id) ON DELETE CASCADE |
+| `childcare_rate_plans` | `childcare_rate_plans_pkey` | PRIMARY KEY | PRIMARY KEY (id) |
+| `childcare_rate_plans` | `childcare_rate_plans_plan_key_nonempty` | CHECK | CHECK (char_length(btrim(plan_key)) > 0) |
+| `childcare_rate_plans` | `childcare_rate_plans_program_category_id_fkey` | FOREIGN KEY | FOREIGN KEY (program_category_id) REFERENCES location_program_categories(id) ON DELETE CASCADE |
+| `childcare_rate_plans` | `childcare_rate_plans_proration_method_check` | CHECK | CHECK (proration_method IS NULL OR (proration_method = ANY (ARRAY['none'::text, 'daily'::text, 'cale |
+| `childcare_rate_plans` | `childcare_rate_plans_room_location_id_fkey` | FOREIGN KEY | FOREIGN KEY (room_location_id) REFERENCES locations(id) ON DELETE CASCADE |
+| `childcare_rate_plans` | `childcare_rate_plans_scope_shape` | CHECK | CHECK (scope_type = 'org'::text AND site_location_id IS NULL AND program_category_id IS NULL AND roo |
+| `childcare_rate_plans` | `childcare_rate_plans_scope_type_check` | CHECK | CHECK (scope_type = ANY (ARRAY['org'::text, 'site'::text, 'program'::text, 'room'::text])) |
+| `childcare_rate_plans` | `childcare_rate_plans_site_location_id_fkey` | FOREIGN KEY | FOREIGN KEY (site_location_id) REFERENCES locations(id) ON DELETE CASCADE |
+| `childcare_rate_rules` | `childcare_rate_rules_amount_nonneg` | CHECK | CHECK (amount_cents >= 0) |
+| `childcare_rate_rules` | `childcare_rate_rules_end_after_start` | CHECK | CHECK (effective_end IS NULL OR effective_end >= effective_start) |
+| `childcare_rate_rules` | `childcare_rate_rules_org_id_fkey` | FOREIGN KEY | FOREIGN KEY (org_id) REFERENCES orgs(id) ON DELETE CASCADE |
+| `childcare_rate_rules` | `childcare_rate_rules_pkey` | PRIMARY KEY | PRIMARY KEY (id) |
+| `childcare_rate_rules` | `childcare_rate_rules_rate_basis_check` | CHECK | CHECK (rate_basis = ANY (ARRAY['annual'::text, 'monthly'::text, 'weekly'::text, 'daily'::text, 'sess |
+| `childcare_rate_rules` | `childcare_rate_rules_rate_plan_id_fkey` | FOREIGN KEY | FOREIGN KEY (rate_plan_id) REFERENCES childcare_rate_plans(id) ON DELETE CASCADE |
+| `childcare_rate_rules` | `childcare_rate_rules_schedule_basis_check` | CHECK | CHECK (schedule_basis = ANY (ARRAY['full_day'::text, 'half_day'::text, 'three_day'::text, 'four_day' |
 | `childcare_ratio_rule_tiers` | `childcare_ratio_rule_tiers_max_children_positive` | CHECK | CHECK (max_children > 0) |
 | `childcare_ratio_rule_tiers` | `childcare_ratio_rule_tiers_org_id_fkey` | FOREIGN KEY | FOREIGN KEY (org_id) REFERENCES orgs(id) ON DELETE CASCADE |
 | `childcare_ratio_rule_tiers` | `childcare_ratio_rule_tiers_pkey` | PRIMARY KEY | PRIMARY KEY (id) |

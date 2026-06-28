@@ -1,6 +1,6 @@
 # Billing and financials platform
 
-**Status:** Canonical module doctrine (June 2026). Defines how **Operational Consequences (L5)** — charges, invoices, payments, ledger, GL — derive from operational facts, and locks the decision to **generalize billing before building childcare billing**. **The five P3.1 implementation gates are ratified and the substrate generalization is built (June 2026)** — see "Ratified P3.1 implementation gates" and "P3.1 as-built" below. Everything above the posting substrate (rate plans, service agreements, responsibility parties, invoices, subsidy) remains deferred.
+**Status:** Canonical module doctrine (June 2026). Defines how **Operational Consequences (L5)** — charges, invoices, payments, ledger, GL — derive from operational facts, and locks the decision to **generalize billing before building childcare billing**. **The five P3.1 implementation gates are ratified and built, and P3.2 rate configuration + Rate Resolution is built (June 2026)** — see "P3.2 as-built", "Ratified P3.1 implementation gates", and "P3.1 as-built" below. Charge Resolution, service agreements, responsibility parties, invoices, and subsidy remain deferred.
 
 > **Layer:** Billing is **L5 Operational Consequences** in [`../operational-truth-flow-doctrine.md`](../operational-truth-flow-doctrine.md). It derives from **L4 Operational Facts** (attendance, delivered service), targets **L3 Expectations** (expected tuition/revenue) for variance, and reads **L1 Configuration** (rate rules). It never derives directly from enrollment/intent.
 
@@ -111,6 +111,19 @@ These five decisions are **locked**. They gate **P3.1 — generalize the financi
 
 **Posting is separate from Financial Resolution.** Rate Resolution (what pricing applies) → Charge Resolution (what becomes a charge) → Financial Resolution (who owes what) are derived/recomputable; **Posting** (immutable charges, statements, claims, payments, ledger, GL) is the only stage that writes authoritative financial truth. These do not collapse into "billing logic."
 
+### P3.2 as-built (June 2026 — rate config + Rate Resolution)
+
+Migration `supabase/migrations/20260701120000_childcare_rate_plans_p3_2.sql` adds **pricing configuration (L1)** above the P3.1 substrate, plus a **pure Rate Resolution read model**. **Rate Resolution is not Charge Resolution** — it selects which plan/rule applies; it computes no charge, writes no `charges`/ledger/GL, and creates no AR/invoice/subsidy.
+
+- **`childcare_rate_plans`** — scoped (`org → site → program → room`, reusing `validate_childcare_config_scope`), age-group-narrowable, effective-dated container. Carries explicit `currency_code` (default `USD`), `billing_basis` (`annual|monthly|weekly|daily|session|hourly`), `calculation_strategy` (`scheduled|attendance_actual|hybrid|fixed`), `is_active`, and **hook-only** nullable `proration_method` / `billing_cadence` (reserved vocab, not implemented).
+- **`childcare_rate_rules`** — priced lines within a plan, keyed by `schedule_basis` (`full_day|half_day|three_day|four_day|five_day|hourly|drop_in`) and expressed in a `rate_basis` (same vocab as billing basis), age-group-narrowable, effective-dated, `amount_cents >= 0`. **Currency is inherited from the parent plan** (no per-rule currency) so a plan can never mix currencies. A trigger enforces `org_id` matches the parent plan.
+- **RLS:** config posture identical to the P1 rule tables (org SELECT for owner/admin/ops/manager; INSERT/UPDATE for owner/admin/ops; DELETE for owner/admin; `service_role` ALL).
+- **Resolution precedence:** plan = most-specific scope wins → age-group-specific → latest `effective_start` (delegated to the shared config resolver); rule = `schedule_basis` match → age-group-specific → latest `effective_start`.
+
+Code surface (all pure / read-only): `web/lib/financials/rates/rateTypes.ts` (vocab + row shapes), `web/lib/financials/rates/resolveRate.ts` (`resolveRatePlan` / `resolveRateRule` / `resolveRate`), `web/lib/financials/rates/rateConfigService.ts` (org-scoped fetchers + `fetchResolvedRate`). No charge generation, no posting, no UI.
+
+---
+
 ### P3.1 as-built (June 2026 — substrate generalized)
 
 Migration `supabase/migrations/20260630120000_financial_substrate_generalization_p3_1.sql` lands the five gates as **additive substrate** on the existing `charges` / `ledger_transactions` / `gl_journal_lines` tables. No new financial tables, no second ledger, no job regression.
@@ -140,6 +153,9 @@ Code surface: vocabularies/types in `web/lib/financials/billableSource.ts`; the 
 - Do not book expected subsidy as AR before a claim/posting; expected subsidy is L3-derived.
 - Do not collapse Rate / Charge / Financial Resolution into Posting — Posting is the only authoritative-write stage.
 - Do not regress job-vertical schema, RLS, or write flows when generalizing (gates are additive or childcare-scoped).
+- Do not let Rate Resolution write charges, post, or create AR — it only selects which rate plan/rule applies (P3.2).
+- Do not store currency per rate rule; currency lives on the rate plan and rules inherit it (no cross-currency plan).
+- Do not implement proration/cadence/discounts/credits/subsidy in rate config — they are reserved hooks until their sub-phases.
 
 ---
 

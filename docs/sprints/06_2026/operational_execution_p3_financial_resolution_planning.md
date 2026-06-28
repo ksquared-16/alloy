@@ -415,6 +415,21 @@ Deferred sub-phases unchanged: rate plans (P3.2), service agreements / responsib
 
 ---
 
+## 13. P3.2 status — built (June 2026)
+
+Rate configuration + **Rate Resolution** (pure read model) are **implemented**. Authoritative as-built lives in [`../../platform/modules/billing-financials-platform.md`](../../platform/modules/billing-financials-platform.md) → "P3.2 as-built". Summary:
+
+- **Migration:** `supabase/migrations/20260701120000_childcare_rate_plans_p3_2.sql` — applies cleanly + idempotently; functionally verified on a local DB (scope inheritance, vocab CHECKs, scope-shape, rule/plan org consistency, effective-range, hook vocab).
+- **Tables:** `childcare_rate_plans` (scoped, effective-dated, explicit `currency_code`, `billing_basis`, `calculation_strategy`, nullable proration/cadence hooks) and `childcare_rate_rules` (priced lines keyed by `schedule_basis` × `rate_basis`, currency inherited from plan). Reuses the P1 scope model + `validate_childcare_config_scope`. Config-posture RLS.
+- **Resolver (pure, no IO):** `web/lib/financials/rates/{rateTypes,resolveRate,rateConfigService}.ts`. `resolveRate` answers "given org/site/program/room/age-group/schedule basis/date → which plan + rule, at what amount/currency/basis", delegating plan precedence to the shared config resolver.
+- **Tests:** `web/tests/financials/rates/{resolveRate,rateConfigMigration}.test.ts` (19 cases, green): effective dating, inheritance/override, 3/4/5-day, full/half-day, weekly/monthly/annual/hourly/session, currency inheritance, no-plan/no-rule, age-group narrowing, and migration boundary guards (no charges/ledger/GL/AR/invoice writes, no job coupling).
+
+**Hard boundary held:** Rate Resolution ≠ Charge Resolution. Nothing in P3.2 writes `charges`, posts, or creates AR; proration/cadence/discounts/credits/subsidy are reserved hooks only.
+
+Deferred sub-phases unchanged: **Charge Resolution** (emits draft childcare charges through the P3.1 service — recommended P3.3), service agreements / responsibility parties (P3.3), cadence/proration (P3.4), subsidy seam (P3.5), invoices/deposits (P3.6).
+
+---
+
 ## When this memo must be updated
 
 Open questions §10 are resolved (recorded in §11); the resolution-chain doctrine is promoted into `billing-financials-platform.md`; or any P3 sub-phase moves from plan to implementation (record the as-built there).

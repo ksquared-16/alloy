@@ -28,6 +28,8 @@ public,child_enrollment_agreements,BASE TABLE,true,false,true
 public,child_placements,BASE TABLE,true,false,true
 public,childcare_capacity_rules,BASE TABLE,true,false,true
 public,childcare_operating_windows,BASE TABLE,true,false,true
+public,childcare_rate_plans,BASE TABLE,true,false,true
+public,childcare_rate_rules,BASE TABLE,true,false,true
 public,childcare_ratio_rule_tiers,BASE TABLE,true,false,true
 public,childcare_ratio_rules,BASE TABLE,true,false,true
 public,childcare_schedule_rules,BASE TABLE,true,false,true
