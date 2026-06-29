@@ -68,4 +68,15 @@ describe("operational consumption simulate route", () => {
     it("rejects an unknown action", async () => {
         expect((await route.POST(post({ action: "frobnicate", event_key: "enrollment.registration", source_entity_id: "a1" }))).status).toBe(400);
     });
+
+    it("accepts a schedule fact without an event_key (derives family from change kind)", async () => {
+        const res = await route.POST(post({ action: "preview", schedule_change_kind: "recurring", schedule_basis: "three_day", source_entity_id: "a1" }));
+        expect(res.status).toBe(200);
+        expect(svc.previewConsumption).toHaveBeenCalledWith(
+            expect.anything(),
+            orgId,
+            expect.objectContaining({ scheduleChangeKind: "recurring", scheduleBasis: "three_day", sourceFamily: "schedule" }),
+            "2026-06-29",
+        );
+    });
 });

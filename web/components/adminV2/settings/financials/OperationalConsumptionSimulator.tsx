@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { formatCurrencyCents } from "@/lib/adminV2/operationalConfig/configReadPresentation";
 import { ConfigurationDetailCard } from "@/components/adminV2/settings/configurationRuntime/ConfigurationModeLayout";
 import {
@@ -9,6 +9,7 @@ import {
     ConfigPrimaryButton,
     ConfigSecondaryButton,
     ConfigSelectInput,
+    ConfigNumberInput,
 } from "@/components/adminV2/settings/configurationRuntime/ConfigEditorPrimitives";
 import {
     ConfigField,
@@ -16,29 +17,61 @@ import {
     ConfigReadonlyNotice,
 } from "@/components/adminV2/settings/configurationRuntime/ConfigReadonlyPrimitives";
 
-const EVENT_KEY = "enrollment.registration";
-
 type MemberRow = { id: string; display_name: string | null; first_name: string | null; last_name: string | null };
 type AgreementRow = { id: string; status: string; start_date: string | null };
 
+/** A simulator scenario maps to a request payload shape. */
+type Scenario = {
+    key: string;
+    label: string;
+    eventKey?: string;
+    scheduleChangeKind?: string;
+    /** Whether a schedule basis selector is relevant. */
+    needsBasis?: boolean;
+    /** Whether prior-basis + proration day inputs are relevant. */
+    needsProration?: boolean;
+    needsPriorBasis?: boolean;
+};
+
+const SCENARIOS: Scenario[] = [
+    { key: "registration", label: "Registration Fee (Slice 1)", eventKey: "enrollment.registration" },
+    { key: "recurring", label: "Recurring Tuition (e.g. MWF)", scheduleChangeKind: "recurring", needsBasis: true },
+    { key: "temporary", label: "Temporary Schedule → Proration", scheduleChangeKind: "temporary", needsBasis: true, needsProration: true },
+    { key: "extra_day", label: "Extra Day → Drop-In rate", scheduleChangeKind: "extra_day" },
+    { key: "drop_in", label: "Drop-In", scheduleChangeKind: "drop_in" },
+    { key: "replacement", label: "Schedule Replacement → Credit + Tuition", scheduleChangeKind: "replacement", needsBasis: true, needsPriorBasis: true },
+    { key: "holiday_override", label: "Holiday Override (no impact)", scheduleChangeKind: "holiday_override" },
+    { key: "exception", label: "Schedule Exception (no impact)", scheduleChangeKind: "exception" },
+];
+
+const BASIS_OPTIONS = [
+    { value: "three_day", label: "3 days/week (e.g. MWF)" },
+    { value: "four_day", label: "4 days/week" },
+    { value: "five_day", label: "5 days/week" },
+];
+
+type CommercialObjectRef = { kind: string; label: string; detail: string; matched: boolean };
+type PolicyApplication = { policyType: string; scope: string | null; applied: boolean; effect: string };
 type ObligationView = {
+    obligationKind: string;
     amountCents: number | null;
     currencyCode: string;
     occursOn: string | null;
     billableOn: string | null;
+    periodStart: string | null;
     reviewRequired: boolean;
+    draftable: boolean;
     status: string;
-    responsibilityKey: string | null;
+    explanation: Record<string, unknown>;
 };
 type ConsumptionResult = {
-    eventType: { eventKey: string; label: string; sourceFamily: string; chargeTemplateKey: string | null; scope: string } | null;
-    matchedCommercial: { chargeTemplateKey: string; chargeTemplateLabel: string } | null;
-    resolution: {
-        event: { status: string; occursOn: string; idempotencyKey: string };
-        obligations: ObligationView[];
-    };
+    eventType: { eventKey: string; label: string; sourceFamily: string } | null;
+    interpretation: { scheduleChangeKind: string; noImpactReason: string | null } | null;
+    commercialObjectsUsed?: CommercialObjectRef[];
+    policiesApplied?: PolicyApplication[];
+    resolution: { event: { status: string; eventKey: string; occursOn: string }; obligations: ObligationView[] };
     chargePreview: { wouldWrite: string } | null;
-    persisted?: { consumptionEventId: string; resolvedObligationIds: string[]; draftChargeId: string | null; draftChargeStatus: string | null };
+    persisted?: { resolvedObligationIds: string[]; obligations: { obligationKind: string; draftChargeStatus: string | null }[] };
 };
 
 function memberLabel(m: MemberRow): string {
@@ -46,13 +79,19 @@ function memberLabel(m: MemberRow): string {
 }
 
 /**
- * Operational Consumption Simulator (Slice 1). Proves the platform boundary for
- * the first vertical: Enrollment Agreement Activated → Registration Fee
- * Consumption Event → Resolved Obligation → Draft Charge. Preview computes and
- * persists nothing; with an agreement, an operator can persist safe draft objects
- * (consumption event + obligation + draft charge). Never posts. No UUIDs shown.
+ * Operational Consumption Simulator (Slice 2). Proves the platform end-to-end:
+ *   Agreement → Schedule → Consumption Events → Commercial Objects Used →
+ *   Policies Applied → Resolved Obligations → Draft Charges.
+ * Every step explains WHY it happened, which Commercial objects matched, which
+ * policies applied, and why obligations were or were not created. Preview writes
+ * nothing; "Create draft" persists only safe draft objects. Never posts.
  */
 export default function OperationalConsumptionSimulator({ todayYmd }: { todayYmd: string }) {
+    const [scenarioKey, setScenarioKey] = useState("recurring");
+    const [basis, setBasis] = useState("three_day");
+    const [priorBasis, setPriorBasis] = useState("five_day");
+    const [proratedDays, setProratedDays] = useState("10");
+    const [periodDays, setPeriodDays] = useState("22");
     const [members, setMembers] = useState<MemberRow[]>([]);
     const [agreements, setAgreements] = useState<AgreementRow[]>([]);
     const [memberId, setMemberId] = useState("");
@@ -61,6 +100,8 @@ export default function OperationalConsumptionSimulator({ todayYmd }: { todayYmd
     const [draftMsg, setDraftMsg] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [busy, setBusy] = useState(false);
+
+    const scenario = useMemo(() => SCENARIOS.find((s) => s.key === scenarioKey) ?? SCENARIOS[0], [scenarioKey]);
 
     useEffect(() => {
         let active = true;
@@ -98,13 +139,25 @@ export default function OperationalConsumptionSimulator({ todayYmd }: { todayYmd
         try {
             const body: Record<string, unknown> = {
                 action,
-                event_key: EVENT_KEY,
-                source_family: "agreement",
                 source_entity_type: "child_enrollment_agreements",
                 source_entity_id: agreementId,
                 subject_type: "customer_member",
                 subject_id: memberId || null,
             };
+            if (scenario.eventKey) {
+                body.event_key = scenario.eventKey;
+                body.source_family = "agreement";
+            }
+            if (scenario.scheduleChangeKind) {
+                body.schedule_change_kind = scenario.scheduleChangeKind;
+                body.source_family = "schedule";
+                if (scenario.needsBasis) body.schedule_basis = basis;
+                if (scenario.needsPriorBasis) body.prior_schedule_basis = priorBasis;
+                if (scenario.needsProration) {
+                    body.prorated_days = Number(proratedDays);
+                    body.period_days = Number(periodDays);
+                }
+            }
             const res = await fetch("/api/admin/financial/consumption/simulate", {
                 method: "POST",
                 credentials: "include",
@@ -116,9 +169,8 @@ export default function OperationalConsumptionSimulator({ todayYmd }: { todayYmd
             setResult(json as ConsumptionResult);
             if (action === "draft") {
                 const p = (json as ConsumptionResult).persisted;
-                setDraftMsg(
-                    `Persisted consumption event + ${p?.resolvedObligationIds.length ?? 0} obligation(s); draft charge ${p?.draftChargeStatus ?? "—"} (idempotent — re-running recalculates, never posts).`,
-                );
+                const drafted = (p?.obligations ?? []).filter((o) => o.draftChargeStatus && o.draftChargeStatus !== "not_writable").length;
+                setDraftMsg(`Persisted consumption event + ${p?.resolvedObligationIds.length ?? 0} obligation(s); ${drafted} draft charge(s) (idempotent — re-running recalculates, never posts).`);
             }
         } catch (e) {
             setError(e instanceof Error ? e.message : "Simulation failed");
@@ -127,21 +179,21 @@ export default function OperationalConsumptionSimulator({ todayYmd }: { todayYmd
         }
     }
 
-    const obligation = result?.resolution.obligations[0] ?? null;
+    const obligations = result?.resolution.obligations ?? [];
 
     return (
         <div className="space-y-3" data-testid="consumption-simulator">
             <ConfigReadonlyNotice testId="consumption-simulator-notice">
-                <strong>Operational Consumption</strong> is runtime interpretation, not configuration. It reads an
-                operational fact and asks <em>what commercial meaning should exist</em>:
-                {" "}Enrollment Agreement Activated → Registration Fee Consumption Event → Resolved Obligation → Draft
-                Charge. It posts nothing — Posting stays the only authoritative money write.
+                <strong>Operational Consumption</strong> is runtime interpretation, not configuration. Operational
+                Scheduling answers <em>where should the child be?</em>; Consumption answers <em>what financially applies
+                because of that schedule?</em> — Agreement → Schedule → Consumption Events → Commercial objects → Policies
+                → Resolved Obligations → Draft Charges. It posts nothing.
             </ConfigReadonlyNotice>
 
-            <ConfigurationDetailCard title="Simulate — enrollment registration" testId="consumption-simulator-card">
+            <ConfigurationDetailCard title="Simulate — agreement + schedule consumption" testId="consumption-simulator-card">
                 <p className="config-typo-sublabel mb-3 text-alloy-forge/60">
-                    Pick a child + agreement, then preview the consumption of <code>{EVENT_KEY}</code> as of {todayYmd}.
-                    Preview writes nothing; “Create draft” persists only safe draft objects (still not posted).
+                    Pick a child + agreement and a scenario, then preview consumption as of {todayYmd}. Preview writes
+                    nothing; “Create draft” persists only safe draft objects (still not posted).
                 </p>
                 <div className="grid gap-3 sm:grid-cols-3">
                     <ConfigFieldLabel label="Child">
@@ -164,6 +216,35 @@ export default function OperationalConsumptionSimulator({ todayYmd }: { todayYmd
                             />
                         </ConfigFieldLabel>
                     ) : null}
+                    <ConfigFieldLabel label="Scenario">
+                        <ConfigSelectInput
+                            value={scenarioKey}
+                            onChange={(v) => { setScenarioKey(v); setResult(null); }}
+                            options={SCENARIOS.map((s) => ({ value: s.key, label: s.label }))}
+                            disabled={busy}
+                            testId="consumption-scenario"
+                        />
+                    </ConfigFieldLabel>
+                    {scenario.needsBasis ? (
+                        <ConfigFieldLabel label="Schedule (new)">
+                            <ConfigSelectInput value={basis} onChange={setBasis} options={BASIS_OPTIONS} disabled={busy} testId="consumption-basis" />
+                        </ConfigFieldLabel>
+                    ) : null}
+                    {scenario.needsPriorBasis ? (
+                        <ConfigFieldLabel label="Prior schedule">
+                            <ConfigSelectInput value={priorBasis} onChange={setPriorBasis} options={BASIS_OPTIONS} disabled={busy} testId="consumption-prior-basis" />
+                        </ConfigFieldLabel>
+                    ) : null}
+                    {scenario.needsProration ? (
+                        <>
+                            <ConfigFieldLabel label="Prorated days">
+                                <ConfigNumberInput value={proratedDays} onChange={setProratedDays} min="0" step="1" disabled={busy} testId="consumption-prorated-days" />
+                            </ConfigFieldLabel>
+                            <ConfigFieldLabel label="Period days">
+                                <ConfigNumberInput value={periodDays} onChange={setPeriodDays} min="1" step="1" disabled={busy} testId="consumption-period-days" />
+                            </ConfigFieldLabel>
+                        </>
+                    ) : null}
                 </div>
 
                 <div className="mt-3">
@@ -183,26 +264,76 @@ export default function OperationalConsumptionSimulator({ todayYmd }: { todayYmd
                 {draftMsg ? <p className="mt-2 config-typo-sublabel text-alloy-forge/70" data-testid="consumption-draft-msg">{draftMsg}</p> : null}
 
                 {result ? (
-                    <div className="mt-3 space-y-3" data-testid="consumption-result">
-                        <ConfigFieldGrid>
-                            <ConfigField label="Consumption event" value={result.eventType?.label ?? result.resolution.event.status} />
-                            <ConfigField label="Source family" value={result.eventType?.sourceFamily ?? "—"} />
-                            <ConfigField label="Event status" value={result.resolution.event.status} />
-                            <ConfigField label="Matched template" value={result.matchedCommercial?.chargeTemplateLabel ?? "none (no charge)"} />
-                        </ConfigFieldGrid>
-                        {obligation ? (
+                    <div className="mt-4 space-y-4" data-testid="consumption-result">
+                        {/* Consumption Event */}
+                        <section>
+                            <h4 className="config-typo-label mb-1">Consumption event</h4>
                             <ConfigFieldGrid>
-                                <ConfigField label="Obligation amount" value={obligation.amountCents != null ? formatCurrencyCents(obligation.amountCents, obligation.currencyCode) : "resolves at posting"} />
-                                <ConfigField label="Occurs on" value={obligation.occursOn} />
-                                <ConfigField label="Billable on" value={obligation.billableOn} />
-                                <ConfigField label="Responsibility" value={obligation.responsibilityKey ?? "default"} />
-                                <ConfigField label="Review required" value={obligation.reviewRequired ? "Yes" : "No"} />
-                                <ConfigField label="Obligation status" value={obligation.status} />
-                                <ConfigField label="Draft charge" value={result.chargePreview ? result.chargePreview.wouldWrite : "—"} />
+                                <ConfigField label="Event" value={result.eventType?.label ?? result.resolution.event.eventKey} />
+                                <ConfigField label="Source family" value={result.eventType?.sourceFamily ?? result.interpretation?.scheduleChangeKind ?? "—"} />
+                                <ConfigField label="Status" value={result.resolution.event.status} />
                             </ConfigFieldGrid>
-                        ) : (
-                            <p className="config-typo-sublabel text-amber-700">No obligation — this consumption event produces no charge.</p>
-                        )}
+                            {result.interpretation?.noImpactReason ? (
+                                <p className="mt-1 config-typo-sublabel text-amber-700" data-testid="consumption-no-impact">No financial impact: {result.interpretation.noImpactReason}</p>
+                            ) : null}
+                        </section>
+
+                        {/* Commercial objects used */}
+                        {result.commercialObjectsUsed && result.commercialObjectsUsed.length ? (
+                            <section data-testid="consumption-commercial">
+                                <h4 className="config-typo-label mb-1">Commercial objects used</h4>
+                                <ul className="config-typo-sublabel space-y-0.5 text-alloy-forge/80">
+                                    {result.commercialObjectsUsed.map((c, i) => (
+                                        <li key={i}>
+                                            <span className={c.matched ? "text-alloy-forge" : "text-amber-700"}>{c.matched ? "✓" : "✗"}</span> <strong>{c.kind}</strong>: {c.label} <span className="text-alloy-forge/50">· {c.detail}</span>
+                                        </li>
+                                    ))}
+                                </ul>
+                            </section>
+                        ) : null}
+
+                        {/* Policies applied */}
+                        {result.policiesApplied && result.policiesApplied.length ? (
+                            <section data-testid="consumption-policies">
+                                <h4 className="config-typo-label mb-1">Policies applied</h4>
+                                <ul className="config-typo-sublabel space-y-0.5 text-alloy-forge/80">
+                                    {result.policiesApplied.map((p, i) => (
+                                        <li key={i}>
+                                            <span className={p.applied ? "text-alloy-forge" : "text-alloy-forge/40"}>{p.applied ? "●" : "○"}</span> <strong>{p.policyType}</strong>{p.scope ? ` (${p.scope})` : ""}: {p.effect}
+                                        </li>
+                                    ))}
+                                </ul>
+                            </section>
+                        ) : null}
+
+                        {/* Resolved obligations */}
+                        <section data-testid="consumption-obligations">
+                            <h4 className="config-typo-label mb-1">Resolved obligations ({obligations.length})</h4>
+                            {obligations.length === 0 ? (
+                                <p className="config-typo-sublabel text-alloy-forge/60">No obligations — this consumption produces no charge.</p>
+                            ) : (
+                                <div className="space-y-2">
+                                    {obligations.map((o, i) => (
+                                        <div key={i} className="rounded-lg border border-alloy-mist/60 p-2" data-testid={`consumption-obligation-${o.obligationKind}`}>
+                                            <ConfigFieldGrid>
+                                                <ConfigField label="Kind" value={o.obligationKind} />
+                                                <ConfigField label="Amount" value={o.amountCents != null ? formatCurrencyCents(o.amountCents, o.currencyCode) : "not resolvable"} />
+                                                <ConfigField label="Occurs / billable" value={`${o.occursOn ?? "—"} → ${o.billableOn ?? "—"}`} />
+                                                <ConfigField label="Review" value={o.reviewRequired ? "Required" : "No"} />
+                                                <ConfigField label="Draft charge" value={o.draftable ? (result.chargePreview?.wouldWrite ?? "yes") : "preview only"} />
+                                                <ConfigField label="Status" value={o.status} />
+                                            </ConfigFieldGrid>
+                                            {typeof o.explanation?.directive_reason === "string" ? (
+                                                <p className="mt-1 config-typo-sublabel text-alloy-forge/60">Why: {o.explanation.directive_reason as string}</p>
+                                            ) : null}
+                                            {typeof o.explanation?.no_charge_reason === "string" ? (
+                                                <p className="mt-1 config-typo-sublabel text-amber-700">No charge: {o.explanation.no_charge_reason as string}</p>
+                                            ) : null}
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </section>
                     </div>
                 ) : null}
             </ConfigurationDetailCard>
