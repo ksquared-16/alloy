@@ -86,10 +86,11 @@ export function createOperationalEnrollmentMockSupabase(
         let orderCol: string | null = null;
         let orderAsc = true;
         let limitN: number | null = null;
-        let pendingInsert: Row | null = null;
+        let pendingInsert: Row | Row[] | null = null;
         let pendingUpdate: Row | null = null;
         let isUpdate = false;
         let isInsert = false;
+        let isDelete = false;
         let isSelect = false;
 
         const chain: Record<string, unknown> = {};
@@ -101,11 +102,47 @@ export function createOperationalEnrollmentMockSupabase(
             return chain;
         });
 
-        chain.insert = vi.fn((row: Row) => {
+        chain.insert = vi.fn((row: Row | Row[]) => {
             isInsert = true;
             pendingInsert = row;
             return chain;
         });
+
+        chain.delete = vi.fn(() => {
+            isDelete = true;
+            return chain;
+        });
+
+        function insertRows(payload: Row | Row[]): Row[] {
+            const list = Array.isArray(payload) ? payload : [payload];
+            const inserted: Row[] = [];
+            for (const item of list) {
+                counters[table] = (counters[table] ?? 0) + 1;
+                const now = new Date().toISOString();
+                const row = {
+                    ...item,
+                    id: item.id ?? nextId(table, counters[table]),
+                    created_at: now,
+                    updated_at: now,
+                    metadata: item.metadata ?? {},
+                };
+                tableRows(table).push(row);
+                inserted.push(row);
+            }
+            return inserted;
+        }
+
+        function deleteRows(): Row[] {
+            const rows = tableRows(table);
+            const removed: Row[] = [];
+            for (let i = rows.length - 1; i >= 0; i--) {
+                if (applyFilters([rows[i]], filters).length === 1) {
+                    removed.push(rows[i]);
+                    rows.splice(i, 1);
+                }
+            }
+            return removed;
+        }
 
         chain.update = vi.fn((row: Row) => {
             isUpdate = true;
@@ -150,18 +187,8 @@ export function createOperationalEnrollmentMockSupabase(
 
         chain.single = vi.fn(async () => {
             if (isInsert && pendingInsert) {
-                counters[table] = (counters[table] ?? 0) + 1;
-                const id = nextId(table, counters[table]);
-                const now = new Date().toISOString();
-                const row = {
-                    ...pendingInsert,
-                    id,
-                    created_at: now,
-                    updated_at: now,
-                    metadata: pendingInsert.metadata ?? {},
-                };
-                tableRows(table).push(row);
-                return { data: clone(row), error: null };
+                const inserted = insertRows(pendingInsert);
+                return { data: clone(inserted[0]), error: null };
             }
 
             if (isUpdate && pendingUpdate) {
@@ -189,6 +216,16 @@ export function createOperationalEnrollmentMockSupabase(
         });
 
         chain.then = (onFulfilled: (v: { data: Row[] | Row | null; error: null | { message: string } }) => unknown) => {
+            if (isInsert && pendingInsert) {
+                const inserted = insertRows(pendingInsert);
+                return Promise.resolve(onFulfilled({ data: clone(inserted), error: null }));
+            }
+
+            if (isDelete) {
+                const removed = deleteRows();
+                return Promise.resolve(onFulfilled({ data: clone(removed), error: null }));
+            }
+
             if (isUpdate && pendingUpdate) {
                 const rows = tableRows(table);
                 const idx = rows.findIndex((r) => applyFilters([r], filters).length === 1);

@@ -1,10 +1,12 @@
 /**
- * Operational Configuration V1 — Batch 0 (Read-Only Exposure).
+ * Operational Configuration V1 — Batch 0 (Read-Only Exposure) + Batch 1
+ * (Financials write + versioning).
  *
  * Structural guarantees: Financials is a first-class configuration domain with
- * generic naming, Financials + Locations expose the new read-only surfaces, the
- * read-only pages issue no write API calls, and the existing settings pages and
- * docs remain intact.
+ * generic naming; Financials rate plans/rules are authored via role-gated POST
+ * routes with a domain-generic versioning primitive; GL config and the Locations
+ * operational rules remain read-only; the existing settings pages and docs
+ * remain intact.
  */
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
@@ -56,11 +58,11 @@ describe("Batch 0 — Financials configuration surfaces", () => {
         expect(page).toContain('data-testid="financials-configuration-page"');
     });
 
-    it("rate plans view renders nested rate rules", () => {
-        const detail = read("components/adminV2/settings/financials/RatePlanDetailPanel.tsx");
-        expect(detail).toContain("Rate Rules");
-        expect(detail).toContain("rate_plan_id");
-        expect(detail).toContain("schedule_basis");
+    it("rate plans workspace renders nested rate rules (Batch 1 authoring)", () => {
+        const workspace = read("components/adminV2/settings/financials/RatePlanAuthoringWorkspace.tsx");
+        expect(workspace).toContain("rate_plan_id");
+        expect(workspace).toContain("schedule_basis");
+        expect(workspace).toContain("EffectiveDatedConfigurationEditor");
     });
 
     it("charge preview inspector calls the existing read-only preview API and labels itself preview-only", () => {
@@ -101,17 +103,17 @@ describe("Batch 0 — Locations operational rule sections", () => {
     });
 });
 
-describe("Batch 0 — read-only posture", () => {
+describe("Batch 0/1 — read-only posture (surfaces NOT yet writable)", () => {
+    // Financials rate plans/rules became writable in Batch 1; GL config and the
+    // Locations operational rules remain read-only until later batches.
     const readonlyFiles = [
-        "components/adminV2/settings/financials/FinancialsConfigurationPage.tsx",
-        "components/adminV2/settings/financials/RatePlanDetailPanel.tsx",
         "components/adminV2/settings/financials/GlConfigReadonlyView.tsx",
         "components/adminV2/settings/financials/useFinancialsConfigurationSettings.ts",
         "components/adminV2/settings/locations/LocationOperationalRulesPanel.tsx",
         "components/adminV2/settings/locations/useLocationOperationalRules.ts",
     ];
 
-    it("read-only financials/operational surfaces issue no write API calls", () => {
+    it("still-read-only surfaces issue no write API calls", () => {
         for (const rel of readonlyFiles) {
             const src = read(rel);
             expect(src).not.toMatch(/method:\s*["'](POST|PUT|PATCH|DELETE)["']/);
@@ -123,6 +125,42 @@ describe("Batch 0 — read-only posture", () => {
         expect(service).toContain("gl_accounts");
         expect(service).toContain("gl_account_mappings");
         expect(service).not.toMatch(/\.(insert|update|delete|upsert)\(/);
+    });
+});
+
+describe("Batch 1 — Financials write + versioning", () => {
+    it("rate plan + rate rule routes export POST authoring", () => {
+        expect(read("app/api/admin/financial/rate-plans/route.ts")).toMatch(/export async function POST/);
+        expect(read("app/api/admin/financial/rate-rules/route.ts")).toMatch(/export async function POST/);
+    });
+
+    it("authoring routes are role-gated (requireAdminOrOps)", () => {
+        for (const rel of [
+            "app/api/admin/financial/rate-plans/route.ts",
+            "app/api/admin/financial/rate-rules/route.ts",
+        ]) {
+            expect(read(rel)).toContain("requireAdminOrOps");
+        }
+    });
+
+    it("the write hook posts to the rate authoring routes", () => {
+        const hook = read("components/adminV2/settings/financials/useRateAuthoring.ts");
+        expect(hook).toMatch(/method:\s*["']POST["']/);
+        expect(hook).toContain("/api/admin/financial/rate-plans");
+        expect(hook).toContain("/api/admin/financial/rate-rules");
+    });
+
+    it("authoring service never touches charges/ledger/GL/posting (rate config only)", () => {
+        const svc = read("lib/financials/rates/rateAuthoringService.ts");
+        expect(svc).not.toMatch(/from\(["'](charges|ledger_transactions|gl_journal_lines|gl_accounts|invoices)["']\)/);
+    });
+
+    it("the versioning primitive is domain-generic (no rate/financial concepts baked in)", () => {
+        const versioning = read("lib/adminV2/operationalConfig/effectiveDatedVersioning.ts");
+        expect(versioning).toContain("VersionStatus");
+        expect(versioning).toContain("EffectiveDatedVersionRow");
+        // No rate/financial-specific identifiers — it must compose for any config domain.
+        expect(versioning).not.toMatch(/rate_plan|amount_cents|currency|billing_basis|schedule_basis/);
     });
 });
 
