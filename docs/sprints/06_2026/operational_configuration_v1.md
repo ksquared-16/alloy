@@ -391,3 +391,37 @@ Status: shipped. Versioned authoring for Rate Plans + Rate Rules inside the exis
 ### What remains intentionally unbuilt (Batch 1)
 
 Location/program **picker** for scoped plans (V1 takes scope-target IDs; org scope is the common case); Batch 2 Locations operational-rule authoring (capacity/ratio/operating windows/schedule) — already designed to reuse `EffectiveDatedConfigurationEditor` + `effectiveDatedVersioning`; posting, payments, financial responsibility, subsidy, and GL authoring (later phases).
+
+---
+
+## Phase 3 (Batch 2) — Locations Operational-Rule Write + Versioning (IMPLEMENTED)
+
+Status: shipped. Versioned authoring for the four Locations operational rule types exposed read-only in Batch 0 — **capacity rules, ratio rules (+ tiers), operating windows, and schedule/eligibility rules** — reusing the Phase 2 effective-dated primitives. **No migration:** the Phase 1 config-rule tables already carry `effective_start` / `effective_end` / `metadata` and RLS already permits scoped admin/ops writes.
+
+### Versioning model (identical discipline to rate authoring)
+
+- Each rule type has a logical **lineage** (rows sharing scope + dimension): capacity `(scope, age, capacity_kind)`, ratio `(scope, age, jurisdiction)`, operating window `(scope, weekday)`, schedule `(scope, age)`. Each row is one effective-dated version.
+- **Supersede / change-later, never overwrite:** "edit" = new version row; the prior row's `effective_end` is closed the day before (`planSupersede`). These tables have **no status / supersedes / is_active column**, so the prior-version link lives in `metadata.supersedes_id` and lifecycle status (Current / Scheduled / Superseded / Retired) is **derived** by `effectiveDatedVersioning.ts`.
+- **Retire** closes the effective window (non-destructive). **Void** hard-deletes a not-yet-started version and reopens its predecessor; refused once a version was ever effective.
+- **Ratio tiers version WITH their parent rule.** Tiers carry no effective dates: a new ratio version gets its own fresh tier set (carried forward from the prior version unless a new tier set is supplied); voiding a ratio version removes its tiers (explicit + FK cascade).
+
+### Runtime components
+
+- **`lib/childcareOperational/config/configRuleAuthoringService.ts`** — write service for all four types. A private generic engine (`supersedeRow` / `retireRow` / `voidScheduledRow`) holds the versioning invariants once; thin per-type functions supply value columns + a lineage predicate (+ ratio tier hooks).
+- **`app/api/admin/operational-config/{capacity-rules,ratio-rules,operating-windows,schedule-rules}/route.ts`** — `requireAdminOrOps`-gated POST routes dispatching `create | version | retire | void`.
+- **`EffectiveDatedConfigurationEditor`** — extended with an optional `extraForm` slot (structured sub-form versioned with the row) so ratio **tiers** author inside the same editor. Additive and backward-compatible with Phase 2.
+- **`components/adminV2/settings/locations/`** — `ConfigRuleAuthoringGroup` (generic: groups a category's rows into lineages and renders the shared editor per lineage + an add form), `RatioTierFields` (tier sub-form), `useLocationRuleAuthoring` (write hook). `LocationOperationalRulesPanel` now hosts inline authoring for all four categories (no drawers) and keeps the resolved-per-location inheritance preview; `LocationsConfigurationPage` passes `canMutate`.
+
+### Inheritance & scope
+
+Org default → Location → Program → Room precedence is unchanged (the authoritative `resolveConfigRule`). Scope is authored via a scope-type selector + a scope-target ID (org scope is the common case); a richer Program/Room picker is deferred but the services already accept all four scopes, so the data model does not block future Program/Room authoring.
+
+### Tests
+
+- `tests/childcareOperational/config/configRuleAuthoringService.test.ts` — create / version / retire / void for all four types; ratio tier create + version (explicit + carry-forward) + tier cleanup on void; **no-value-overwrite** (prior row value unchanged after a version, only `effective_end` closes); future version; void-scheduled + predecessor reopen; validation + scope/no-tier/duplicate-tier rejections.
+- `tests/childcareOperational/config/configRuleAuthoringRoutes.test.ts` — role gate, 401, unknown-action, actor wiring, and version/retire/void dispatch across all four routes; ratio tier pass-through.
+- `tests/adminV2/operationalConfigurationV1Batch0.test.ts` — Phase 3 posture: four routes export gated POST; panel hosts the shared editor with **no drawer pattern**; resolved preview retained; service writes only config-rule tables. The shared mock gained the five config-rule tables.
+
+### What remains intentionally unbuilt (Phase 3)
+
+Program/Room **scope picker** (id-based for now); date-specific closures/holiday calendar (operating windows bound weekly only); a unified resolved-preview for operating-window/schedule resolution (capacity + ratio are previewed today). Out of scope per directive: Posting, Payments, Subsidy, Financial Responsibility, GL authoring, Attendance UI, Focus Panel, Settings IA reorg.
