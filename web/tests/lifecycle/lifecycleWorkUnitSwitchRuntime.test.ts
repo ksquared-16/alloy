@@ -53,16 +53,15 @@ describe("waitlist candidate grain for lifecycle waitlist WU", () => {
 });
 
 describe("work unit page interaction wiring", () => {
-    it("uses in-page switch for lifecycle sibling pill navigation", () => {
+    it("navigates lifecycle sibling pills to canonical route, warm-prep preserved (in-page switch removed)", () => {
         const page = readLocal("app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page.tsx");
-        expect(page).toContain("replaceWorkUnitLocationHref(href)");
+        // Sibling switching is navigation; the warm-prep (switch flag + stable sibling list) stays so
+        // the destination mount hydrates instantly, but the in-page location/URL hack is gone.
+        expect(page).toContain("router.push(siblingNavHref)");
         expect(page).toContain("setLifecycleWorkUnitSwitchPreserveSiblingsFlag(true)");
         expect(page).toContain("hasLifecycleInPageWorkUnitSwitchFlag()");
-        expect(page).toContain("lifecyclePillSwitchRetainRowsRef");
-        expect(page).toContain("traceLifecyclePillQueueResult");
-        expect(page).not.toMatch(
-            /parseLifecycleWorkUnitNavChipKey[\s\S]{0,400}router\.push\(\s*appendWorkspaceSiteToPath/
-        );
+        expect(page).not.toContain("replaceWorkUnitLocationHref");
+        expect(page).not.toContain("setActiveWorkUnitId");
     });
 
     it("Schedule Tour rail opens record picker then tour modal", () => {

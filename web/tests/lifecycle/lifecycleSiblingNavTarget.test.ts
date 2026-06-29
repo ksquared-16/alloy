@@ -40,15 +40,13 @@ describe("Work-Unit compat page wires sibling switching to canonical navigation"
         "app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page.tsx",
     );
 
-    it("lifecycle sibling selection navigates via resolveLifecycleSiblingNavHref + router.push (not in-page state)", () => {
-        // The sibling switch resolves a canonical route and pushes to it, returning BEFORE the
-        // legacy in-page activeWorkUnitId switch path.
+    it("lifecycle sibling selection navigates via resolveLifecycleSiblingNavHref + router.push (no in-page switch)", () => {
+        // The sibling switch resolves a canonical route (keyed → slug, keyless → dept-nested) and
+        // navigates to it. The in-page activeWorkUnitId switcher has been removed entirely.
         expect(page).toContain("resolveLifecycleSiblingNavHref(siblingNavRow)");
-        expect(page).toMatch(/if \(siblingNavHref\) \{\s*router\.push\(siblingNavHref\);\s*return;/);
-        // The canonical-nav decision is positioned ahead of the in-page switch's queue mutation.
-        const navIdx = page.indexOf("if (siblingNavHref)");
-        const inPageIdx = page.indexOf('applyActiveLifecycleWorkUnitSelection(targetSelection, "lifecycleWuNav")');
-        expect(navIdx).toBeGreaterThan(-1);
-        expect(inPageIdx).toBeGreaterThan(navIdx);
+        expect(page).toMatch(/router\.push\(siblingNavHref\);\s*return;/);
+        expect(page).not.toContain("setActiveWorkUnitId");
+        expect(page).not.toContain("applyActiveLifecycleWorkUnitSelection");
+        expect(page).not.toContain("replaceWorkUnitLocationHref");
     });
 });

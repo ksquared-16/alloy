@@ -262,7 +262,6 @@ import {
     markLifecycleSiblingListStable,
     readLifecycleSiblingListStable,
     readLifecycleWorkUnitSwitchSnapshot,
-    replaceWorkUnitLocationHref,
     setLifecycleInPageWorkUnitSwitchFlag,
     setLifecycleWorkUnitSwitchPreserveSiblingsFlag,
     writeLifecycleWorkUnitSwitchSnapshot,
@@ -711,20 +710,23 @@ export default function AdminV2OpportunityWorkUnitPage() {
     const params = useParams();
     const departmentId = slugRoute?.departmentId ?? workspaceRouteParam(params.departmentId);
     const routeWorkUnitId = slugRoute?.workUnitId ?? workspaceRouteParam(params.workUnitId);
-    const [activeWorkUnitId, setActiveWorkUnitId] = useState(routeWorkUnitId);
     const activeLifecycleSelectionRef = useRef<ActiveLifecycleWorkUnitSelection>({
         workUnitId: routeWorkUnitId,
         queueKey: "",
         stageKey: null,
     });
+    // Switching → navigation: the effective work unit is route-owned. Each work unit is its own
+    // route entry + Route VM, and sibling switching is a navigation — so the route is always the
+    // source of truth and there is no local `activeWorkUnitId` switch state. The lifecycle
+    // selection ref still tracks the route work unit for queue fetch-dedup (it is shared with
+    // bootstrap/lane logic).
+    const workUnitId = routeWorkUnitId;
     useEffect(() => {
-        setActiveWorkUnitId(routeWorkUnitId);
         activeLifecycleSelectionRef.current = {
             ...activeLifecycleSelectionRef.current,
             workUnitId: routeWorkUnitId,
         };
     }, [routeWorkUnitId]);
-    const workUnitId = activeWorkUnitId;
     const router = useRouter();
     /** Frozen on work-unit mount — do not subscribe to Next search params (triggers RSC churn on query changes). */
     const initialLocationRef = useRef<ReturnType<typeof readWorkUnitInitialLocationParams> | null>(null);
@@ -1601,25 +1603,6 @@ export default function AdminV2OpportunityWorkUnitPage() {
         setSelectedQueueKeyTraced("work_view_bootstrap", ctx.queueKey);
         routeQueueSelectionRef.current = workUnitQueueSelectionFromPillKey(workUnitId, ctx.queueKey);
     }, [dept?.metadata, workUnitId, setSelectedQueueKeyTraced]);
-
-    /** Atomic lifecycle sibling pill transition — work unit id + primary queue key stay paired. */
-    const applyActiveLifecycleWorkUnitSelection = useCallback(
-        (selection: ActiveLifecycleWorkUnitSelection, source: string) => {
-            activeLifecycleSelectionRef.current = selection;
-            selectedQueueKeyRef.current = selection.queueKey;
-            skipNextQueueFetchEffectRef.current = true;
-            suppressQueueFetchEffectOnceRef.current = true;
-            setActiveWorkUnitId(selection.workUnitId);
-            setSelectedQueueKeyTraced(source, selection.queueKey);
-            routeQueueSelectionRef.current = workUnitQueueSelectionFromPillKey(
-                selection.workUnitId,
-                selection.queueKey
-            );
-            explicitRouteQueueLockedRef.current = false;
-            userLaneTouchedRef.current = false;
-        },
-        [setSelectedQueueKeyTraced]
-    );
 
     /**
      * Navigation reset + lane URL seed + optional shell cache (PERF-C-01).
@@ -2842,60 +2825,26 @@ export default function AdminV2OpportunityWorkUnitPage() {
             const lifecycleNavWuId = parseLifecycleWorkUnitNavChipKey(nextKey);
             if (lifecycleNavWuId) {
                 if (lifecycleNavWuId === workUnitId) return;
-                const href = buildWorkUnitHref({
-                    workspaceBase: WORKSPACE_BASE,
-                    departmentId,
-                    workUnitId: lifecycleNavWuId,
-                    selectedSiteId,
-                });
-                logLifecycleWorkUnitPillClick({
-                    phase: "click",
-                    from_work_unit_id: workUnitId,
-                    selected_work_unit_id: lifecycleNavWuId,
-                    shell_reload: false,
-                    sibling_list_refetch: false,
-                    navigation: "in_page",
-                });
+                // Switching → navigation (domain replacement): a lifecycle sibling work unit is its
+                // own route entry + Route VM. Selecting one NAVIGATES — keyed siblings to their
+                // canonical slug (/workspace/work-unit/:slug, server-resolved Route VM), keyless
+                // siblings to the dept-nested route — never an in-page activeWorkUnitId mutation.
+                // The warm-prep below (switch flag, FROM snapshot, stable sibling list) lets the
+                // destination mount hydrate instantly; the destination's own bootstrap owns the
+                // queue load.
+                const siblingNavRow = lifecycleSiblingWorkUnitsRef.current?.find(
+                    (s) => s.id === lifecycleNavWuId,
+                );
+                const siblingNavHref =
+                    resolveLifecycleSiblingNavHref(siblingNavRow) ??
+                    buildWorkUnitHref({
+                        workspaceBase: WORKSPACE_BASE,
+                        departmentId,
+                        workUnitId: lifecycleNavWuId,
+                        selectedSiteId,
+                    });
                 setLifecycleInPageWorkUnitSwitchFlag();
                 setLifecycleWorkUnitSwitchPreserveSiblingsFlag(true);
-                const targetSnap =
-                    orgId && departmentId
-                        ? readLifecycleWorkUnitSwitchSnapshot({
-                              orgId,
-                              departmentId,
-                              accessScopeFingerprint,
-                              workUnitId: lifecycleNavWuId,
-                          })
-                        : null;
-                const targetWuRow =
-                    targetSnap?.work_unit?.id === lifecycleNavWuId
-                        ? (targetSnap.work_unit as WorkUnitRow)
-                        : null;
-                const targetSelection = targetWuRow
-                    ? buildLifecycleWorkUnitPillSelection({
-                          id: lifecycleNavWuId,
-                          queue_definition: targetWuRow.queue_definition,
-                          metadata: targetWuRow.metadata,
-                      })
-                    : null;
-                const targetQueueKey = targetSelection?.queueKey ?? null;
-                const targetLoaderHint = targetSelection
-                    ? inferLifecycleQueueRowLoader({
-                          work_unit_id: targetSelection.workUnitId,
-                          queue_key: targetSelection.queueKey,
-                          work_unit_metadata: targetWuRow?.metadata,
-                      })
-                    : "pending_bootstrap";
-                if (targetWuRow) {
-                    setWorkUnit(targetWuRow);
-                    setDept(targetSnap!.department as DeptRow);
-                    setQueueSummaries((targetSnap!.queue_summaries ?? []) as QueueSummary[]);
-                    wuDeferredQueueKeysRef.current = targetSnap!.deferred_queue_keys ?? [];
-                    bootstrapWuRef.current = targetWuRow;
-                    workUnitDetailReadyRef.current = true;
-                    seededWorkUnitShellRef.current = true;
-                    setLoading(false);
-                }
                 if (orgId && workUnit && dept && departmentId) {
                     const primaryKey = resolveBootstrapPrimaryQueueKey(
                         workUnit,
@@ -2938,102 +2887,15 @@ export default function AdminV2OpportunityWorkUnitPage() {
                         });
                     }
                 }
-                // Slice 1 (switching → navigation): a lifecycle sibling work unit is its own
-                // route entry + Route VM. Navigate to its canonical slug instead of mutating
-                // activeWorkUnitId in place — the compat page stops acting as a client-side
-                // multi-work-unit switcher. The warm-prep above (in-page-switch flag, FROM
-                // snapshot, stable sibling list) lets the destination mount hydrate instantly.
-                // The in-page switcher below remains a fallback only when no platform key is
-                // resolvable (a sibling that cannot address a slug route).
-                const siblingNavRow = lifecycleSiblingWorkUnitsRef.current?.find(
-                    (s) => s.id === lifecycleNavWuId,
-                );
-                const siblingNavHref =
-                    resolveLifecycleSiblingNavHref(siblingNavRow) ??
-                    (targetWuRow?.key?.trim()
-                        ? operatorWorkUnitHrefFromKey(targetWuRow.key.trim())
-                        : null);
-                if (siblingNavHref) {
-                    router.push(siblingNavHref);
-                    return;
-                }
-                const fromQueueKeyBeforeSwitch = selectedQueueKeyRef.current;
-                if (targetSelection?.queueKey) {
-                    applyActiveLifecycleWorkUnitSelection(targetSelection, "lifecycleWuNav");
-                    void hydrateWorkUnitQueueRowActions();
-                } else {
-                    skipNextQueueFetchEffectRef.current = true;
-                    suppressQueueFetchEffectOnceRef.current = true;
-                    setActiveWorkUnitId(lifecycleNavWuId);
-                }
-                setWuQueueLaneAuthorityReady(true);
-                if (targetSelection?.queueKey) {
-                    const cachedLane = touchCachedQueueItemsForPill({
-                        cache: queueRowClientCacheRef.current,
-                        viewScopeFingerprint,
-                        workUnitId: targetSelection.workUnitId,
-                        pillKey: targetSelection.queueKey,
-                        attentionBucketKey: "",
-                        unmappedOnly: false,
-                        queueDefinition: targetWuRow?.queue_definition,
-                    });
-                    traceLifecyclePillQueueResult({
-                        phase: "click",
-                        from_work_unit_id: workUnitId,
-                        selected_work_unit_id: targetSelection.workUnitId,
-                        queue_key: targetSelection.queueKey,
-                        loader: targetLoaderHint,
-                        record_count: cachedLane
-                            ? Array.isArray(cachedLane.items)
-                                ? cachedLane.items.length
-                                : null
-                            : null,
-                        api_path: `/api/admin/queues/${targetSelection.workUnitId}/${targetSelection.queueKey}`,
-                    });
-                    if (cachedLane) {
-                        setQueueItems(cachedLane);
-                        setQueueItemsError(null);
-                        setQueueItemsLoading(false);
-                        lifecyclePillSwitchRetainRowsRef.current = false;
-                        setLifecyclePillRetainRows(false);
-                        void fetchQueueItems(
-                            targetSelection.workUnitId,
-                            targetSelection.queueKey,
-                            (targetSnap?.queue_summaries ?? null) as QueueSummary[] | null,
-                            { quietStaleRefresh: true, userInitiated: true }
-                        );
-                    } else {
-                        setQueueItems(null);
-                        queueRowsBufferRef.current = [];
-                        queueRowsBufferQueueKeyRef.current = null;
-                        queueRowsBufferWorkUnitIdRef.current = null;
-                        lifecyclePillSwitchRetainRowsRef.current = false;
-                        setLifecyclePillRetainRows(false);
-                        setQueueItemsLoading(true);
-                        void fetchQueueItems(
-                            targetSelection.workUnitId,
-                            targetSelection.queueKey,
-                            (targetSnap?.queue_summaries ?? null) as QueueSummary[] | null,
-                            {
-                                force: true,
-                                userInitiated: true,
-                                fromQueueKey: fromQueueKeyBeforeSwitch,
-                            }
-                        );
-                    }
-                } else {
-                    traceLifecyclePillQueueResult({
-                        phase: "click",
-                        from_work_unit_id: workUnitId,
-                        selected_work_unit_id: lifecycleNavWuId,
-                        queue_key: "",
-                        loader: targetLoaderHint,
-                        record_count: null,
-                        error: "no_primary_queue_key",
-                    });
-                    setQueueItemsLoading(true);
-                }
-                replaceWorkUnitLocationHref(href);
+                logLifecycleWorkUnitPillClick({
+                    phase: "click",
+                    from_work_unit_id: workUnitId,
+                    selected_work_unit_id: lifecycleNavWuId,
+                    shell_reload: false,
+                    sibling_list_refetch: false,
+                    navigation: "canonical_route",
+                });
+                router.push(siblingNavHref);
                 return;
             }
             const unmappedActive = opts?.unmappedActive ?? false;
@@ -3223,7 +3085,6 @@ export default function AdminV2OpportunityWorkUnitPage() {
             }
         },
         [
-            applyActiveLifecycleWorkUnitSelection,
             departmentId,
             dept,
             fetchQueueItems,
