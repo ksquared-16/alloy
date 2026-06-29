@@ -23,6 +23,29 @@ export function emptyLayout(): FocusPanelPublishedLayout {
     return { rows: [] };
 }
 
+/**
+ * A sensible starting layout from the present cards: pairs per row at 1/2 width, a
+ * trailing odd card full-width. Only a STARTING POINT shown in the builder — until
+ * the operator publishes, the runtime keeps its auto-composition default.
+ */
+export function defaultRowLayoutFromCards(cards: FocusPanelCardKey[]): FocusPanelPublishedLayout {
+    const unique = [...new Set(cards)];
+    const rows: { cells: FocusPanelLayoutCell[] }[] = [];
+    for (let i = 0; i < unique.length; i += 2) {
+        const pair = unique.slice(i, i + 2);
+        rows.push({
+            cells:
+                pair.length === 2
+                    ? [
+                          { width: "1/2", cards: [pair[0]!] },
+                          { width: "1/2", cards: [pair[1]!] },
+                      ]
+                    : [{ width: "full", cards: [pair[0]!] }],
+        });
+    }
+    return { rows };
+}
+
 /** Every card placed in the layout (reading order), for the catalog "already placed" state. */
 export function cardsInLayout(layout: FocusPanelPublishedLayout): FocusPanelCardKey[] {
     return layout.rows.flatMap((r) => r.cells.flatMap((c) => c.cards));

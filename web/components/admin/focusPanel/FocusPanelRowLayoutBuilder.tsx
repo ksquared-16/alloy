@@ -43,11 +43,13 @@ type Props = {
     catalog: { key: FocusPanelCardKey; label: string }[];
     /** Render a card for the live preview (the real card components). */
     renderCard: (key: FocusPanelCardKey) => ReactNode;
-    /** Persist the published layout (writes metadata + publishes). */
+    /** Notified on every layout edit (host tracks it for its own save/publish path). */
+    onChange?: (layout: FocusPanelPublishedLayout) => void;
+    /** Optional self-contained publish (dev harness). When absent the host owns publish. */
     onPublish?: (layout: FocusPanelPublishedLayout) => void;
 };
 
-export default function FocusPanelRowLayoutBuilder({ initialLayout, catalog, renderCard, onPublish }: Props) {
+export default function FocusPanelRowLayoutBuilder({ initialLayout, catalog, renderCard, onChange, onPublish }: Props) {
     const [layout, setLayout] = useState<FocusPanelPublishedLayout>(initialLayout);
     const [dragging, setDragging] = useState<CardLocation | null>(null);
     const [published, setPublished] = useState(false);
@@ -59,6 +61,7 @@ export default function FocusPanelRowLayoutBuilder({ initialLayout, catalog, ren
     const apply = (next: FocusPanelPublishedLayout) => {
         setLayout(next);
         setPublished(false);
+        onChange?.(next);
     };
 
     return (
@@ -71,17 +74,19 @@ export default function FocusPanelRowLayoutBuilder({ initialLayout, catalog, ren
                         <button type="button" className="alloy-os-rlb__btn" data-builder-add-row onClick={() => apply(addRow(layout))}>
                             + Add row
                         </button>
-                        <button
-                            type="button"
-                            className="alloy-os-rlb__btn alloy-os-rlb__btn--primary"
-                            data-builder-publish
-                            onClick={() => {
-                                onPublish?.(layout);
-                                setPublished(true);
-                            }}
-                        >
-                            {published ? "✓ Published" : "Publish"}
-                        </button>
+                        {onPublish ? (
+                            <button
+                                type="button"
+                                className="alloy-os-rlb__btn alloy-os-rlb__btn--primary"
+                                data-builder-publish
+                                onClick={() => {
+                                    onPublish(layout);
+                                    setPublished(true);
+                                }}
+                            >
+                                {published ? "✓ Published" : "Publish"}
+                            </button>
+                        ) : null}
                     </div>
                 </div>
 

@@ -96,3 +96,46 @@ describe("focusPanelPublishedLayoutOps", () => {
         ]);
     });
 });
+
+describe("settings editor persist/load round-trip (metadata + fallback)", () => {
+    it("save/publish carries the row layout in the summary doc metadata, runtime reads it", async () => {
+        const { buildSummaryDocFromOrder, readSummaryCardOrder } = await import(
+            "@/lib/adminV2/runtime/focusPanel/focusPanelSummaryDocOps"
+        );
+        const { FOCUS_PANEL_SUMMARY_DEFAULT_DOC } = await import(
+            "@/lib/adminV2/runtime/focusPanel/buildFocusPanelSummaryDefaultDoc"
+        );
+        const order = readSummaryCardOrder(FOCUS_PANEL_SUMMARY_DEFAULT_DOC);
+
+        // Author a layout in the builder, then build the doc the editor saves/publishes.
+        let l = addRow(emptyLayout());
+        l = addCardToRow(l, 0, "household", "1/2");
+        l = addCardToRow(l, 0, "readiness_kpi", "1/2");
+        l = stackCardInCell(l, 0, 1, "current_work");
+        const baseDoc = buildSummaryDocFromOrder(order);
+        const savedDoc = { ...baseDoc, metadata: withPublishedLayoutMetadata(baseDoc.metadata, l) };
+
+        // Card instances/config still persist (sections) AND the layout (metadata).
+        expect(savedDoc.sections.length).toBe(order.length);
+        const readBack = readFocusPanelPublishedLayout(savedDoc);
+        expect(readBack).toEqual(l);
+        const plan = planPublishedLayout(readBack!, 900);
+        expect(plan.rows[0]!.cells.map((c) => [c.widthUnits, c.cards])).toEqual([
+            [6, ["household"]],
+            [6, ["readiness_kpi", "current_work"]],
+        ]);
+    });
+
+    it("falls back to auto-composition when no layout is authored (no metadata)", async () => {
+        const { buildSummaryDocFromOrder, readSummaryCardOrder } = await import(
+            "@/lib/adminV2/runtime/focusPanel/focusPanelSummaryDocOps"
+        );
+        const { FOCUS_PANEL_SUMMARY_DEFAULT_DOC } = await import(
+            "@/lib/adminV2/runtime/focusPanel/buildFocusPanelSummaryDefaultDoc"
+        );
+        const order = readSummaryCardOrder(FOCUS_PANEL_SUMMARY_DEFAULT_DOC);
+        // Editor with rowLayout=null persists the plain doc (no layout metadata).
+        const doc = buildSummaryDocFromOrder(order);
+        expect(readFocusPanelPublishedLayout(doc)).toBeNull();
+    });
+});

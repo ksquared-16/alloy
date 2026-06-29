@@ -242,6 +242,18 @@ describe("Targeted contact editing + depth history (QA)", () => {
     });
 });
 
+describe("Row builder mounted in the settings editor (Composition V2)", () => {
+    it("FocusPanelSummarySurfaceEditor mounts the row builder + persists via the existing flow", () => {
+        const editor = readSrc("components/adminV2/settings/surfaces/FocusPanelSummarySurfaceEditor.tsx");
+        expect(editor).toContain("FocusPanelRowLayoutBuilder"); // mounted
+        expect(editor).toContain("readFocusPanelPublishedLayout"); // loads existing metadata
+        expect(editor).toContain("withPublishedLayoutMetadata"); // injects on save/publish
+        expect(editor).toContain("buildDocWithLayout"); // reused by save AND publish
+        expect(editor).toContain("saveFocusPanelSummaryDraft"); // existing draft path
+        expect(editor).toContain("publishFocusPanelSummary"); // existing publish path
+    });
+});
+
 describe("operational action doctrine", () => {
     it("documents pipeline and Withdraw Child invariant example", () => {
         const doc = readDoc("docs/platform/operator/operational-action-doctrine.md");
