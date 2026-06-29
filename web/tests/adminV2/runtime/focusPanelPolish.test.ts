@@ -188,6 +188,28 @@ describe("Focus Panel header composition guards", () => {
     });
 });
 
+describe("Enrollment Freeze — depth + overlay polish", () => {
+    it("focus cards have a reverse-zoom dismiss (closing) animation", () => {
+        const css = readSrc("app/adminV2/components/alloyOsRuntime.css");
+        expect(css).toContain("@keyframes alloy-os-fp-card-zoom-out");
+        expect(css).toContain('data-fp-closing="true"');
+        const grid = readSrc("components/admin/focusPanel/FocusPanelCardGrid.tsx");
+        expect(grid).toContain("data-fp-closing");
+        const host = readSrc("components/admin/focusPanel/OpportunityFocusPanelModeGrid.tsx");
+        expect(host).toContain("closing={closing}");
+    });
+
+    it("inline overlays open downward only — no upward variant", () => {
+        const css = readSrc("app/adminV2/components/alloyOsRuntime.css");
+        expect(css).not.toContain('data-overlay-direction="up"');
+        const overlay = readSrc("components/admin/focusPanel/cards/CardInlineOverlay.tsx");
+        // Direction is invariant ("down"); constrained space scrolls into view.
+        expect(overlay).toContain('data-overlay-direction="down"');
+        expect(overlay).toContain("scrollIntoView");
+        expect(overlay).not.toContain('"up"');
+    });
+});
+
 describe("operational action doctrine", () => {
     it("documents pipeline and Withdraw Child invariant example", () => {
         const doc = readDoc("docs/platform/operator/operational-action-doctrine.md");

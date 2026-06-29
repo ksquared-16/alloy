@@ -182,8 +182,12 @@ Card Preferences    ─┘            ▲
 > when narrow. The numbered algorithm below is the conceptual spec; V1 realizes
 > steps 1–8 via lane composition rather than row equalization (cards keep natural
 > heights so they interlock — §6 “row rhythm” relaxes to “lane interlock”). Depth
-> (Focus Cards) and inline overlays are unchanged. See the sprint README for
-> measured lane widths (operator panel 745px → primary 467 / support 234).
+> (Focus Cards) and inline overlays are unchanged.
+>
+> **Lane balance (Enrollment Freeze refinement).** A single support card may cede up
+> to 8/12 to the anchor; a **stacked support lane (2+ cards)** caps the anchor at
+> 7/12 so the support lane reads at ≥5/12 (~310px at the live 745px panel) instead of
+> a cramped 4/12 (~234px). The anchor stays clearly dominant either way.
 >
 > **Experience Builder overrides (now wired).** The engine's `overrides` param is
 > fed from per-card configuration: the Surfaces editor's Inspector → Composition tab

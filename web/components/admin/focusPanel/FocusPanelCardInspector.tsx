@@ -11,6 +11,7 @@ import {
     FOCUS_PANEL_CONDITION_OPERATOR_LABELS,
     FOCUS_PANEL_FIELD_RENDERERS,
     FOCUS_PANEL_FIELD_RENDERER_LABELS,
+    validateFocusPanelCardConfig,
     type FocusPanelCardCondition,
     type FocusPanelCardConfig,
     type FocusPanelCardField,
@@ -151,6 +152,10 @@ export default function FocusPanelCardInspector({
     const conditions = config.conditions ?? [];
     const conceptOptions = conceptOptionsForCard(baseModel.key);
 
+    // Evidence-group validation surfaced to the operator (#10): bindings, renderers,
+    // collection rows, and well-formed conditions. Empty/default config is valid.
+    const validation = useMemo(() => validateFocusPanelCardConfig(config), [config]);
+
     const collectionFields = fields.filter((f) => f.kind === "collection");
 
     const patchAppearance = (patch: Partial<NonNullable<FocusPanelCardConfig["appearance"]>>) =>
@@ -271,6 +276,24 @@ export default function FocusPanelCardInspector({
                     );
                 })}
             </div>
+
+            {!validation.ok ? (
+                <div
+                    className="mx-3 mt-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2"
+                    data-focus-panel-inspector-validation="invalid"
+                    data-focus-panel-validation-count={validation.issues.length}
+                    role="status"
+                >
+                    <p className="config-typo-field-label text-amber-800">Needs attention before publish</p>
+                    <ul className="mt-1 space-y-0.5">
+                        {validation.issues.map((issue) => (
+                            <li key={`${issue.scope}-${issue.ref}-${issue.message}`} className="config-typo-meta text-amber-800">
+                                {issue.message}
+                            </li>
+                        ))}
+                    </ul>
+                </div>
+            ) : null}
 
             <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-3" data-focus-panel-inspector-tab-panel={tab}>
                 {tab === "card" ?

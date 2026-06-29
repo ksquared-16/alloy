@@ -35,6 +35,9 @@ import type { RuntimePerspective } from "@/lib/adminV2/runtime/perspective/deriv
 import type { ResolvedActionForClient } from "@/lib/admin/actions/types";
 import type { DrawerTabKey } from "@/lib/entityPresentation";
 
+/** Reverse-zoom dismiss window — matches CSS `--alloy-os-fp-depth-ms` (240ms). */
+const FOCUS_PANEL_DEPTH_MS = 240;
+
 type Props = {
     mode: FocusPanelMode;
     displayVm: OpportunityDrawerViewModel;
@@ -139,14 +142,30 @@ export default function OpportunityFocusPanelModeGrid({
         },
         [],
     );
-    // Return-to-base: backdrop click / ESC asks the active card to collapse. The card
-    // resets its local state → reports "base" → activeDepth clears → overlay dismisses.
+    // Return-to-base: backdrop click / ESC asks the active card to collapse. To play
+    // the reverse-zoom, we hold the card elevated for one depth duration (`closing`)
+    // BEFORE resetting it — so the focused card flies back to its cell instead of
+    // snapping. After the window the card resets → reports "base" → activeDepth clears.
     const [dismissed, setDismissed] = useState<FocusPanelDismissSignal | null>(null);
+    const [closing, setClosing] = useState(false);
     const dismissNonceRef = useRef(0);
+    const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const dismiss = useCallback<NonNullable<FocusPanelCoordination["dismiss"]>>((card) => {
-        dismissNonceRef.current += 1;
-        setDismissed({ card, nonce: dismissNonceRef.current });
+        if (closeTimerRef.current) return; // already closing — ignore repeat dismiss
+        setClosing(true);
+        closeTimerRef.current = setTimeout(() => {
+            closeTimerRef.current = null;
+            dismissNonceRef.current += 1;
+            setDismissed({ card, nonce: dismissNonceRef.current });
+            setClosing(false);
+        }, FOCUS_PANEL_DEPTH_MS);
     }, []);
+    useEffect(
+        () => () => {
+            if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
+        },
+        [],
+    );
     const coordination = useMemo<FocusPanelCoordination>(
         () => ({ request: focusRequest, requestFocus, activeDepth, reportPerspective, dismissed, dismiss }),
         [focusRequest, requestFocus, activeDepth, reportPerspective, dismissed, dismiss],
@@ -268,6 +287,7 @@ export default function OpportunityFocusPanelModeGrid({
                 className={mode === "work" ? "alloy-os-focus-panel-grid--work" : undefined}
                 dataFocusPanelSplitLayout={mode === "work" ? "true" : undefined}
                 elevatedCellKey={elevatedCellKey}
+                closing={closing}
                 onBackdropClick={() => {
                     if (activeDepth) dismiss(activeDepth.card);
                 }}

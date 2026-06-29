@@ -41,6 +41,8 @@ type Props = {
     compositionOverrides?: Partial<Record<FocusPanelCardKey, Partial<CardCompositionPreference>>>;
     /** Cell raised in the in-panel depth layer; the rest recede. */
     elevatedCellKey?: string | null;
+    /** True during the reverse-zoom dismiss window (card still mounted + elevated). */
+    closing?: boolean;
     /** Clicking the depth backdrop returns to the base Work surface. */
     onBackdropClick?: () => void;
 };
@@ -61,6 +63,7 @@ export default function FocusPanelCardGrid({
     composeCards,
     compositionOverrides,
     elevatedCellKey,
+    closing,
     onBackdropClick,
 }: Props) {
     const containerRef = useRef<HTMLDivElement>(null);
@@ -196,6 +199,7 @@ export default function FocusPanelCardGrid({
                 data-fp-strategy={composition.strategy}
                 data-focus-panel-split-layout={dataFocusPanelSplitLayout}
                 data-fp-depth={elevatedCellKey ? "active" : undefined}
+                data-fp-closing={closing ? "true" : undefined}
                 style={{ ["--alloy-os-fp-units" as string]: composition.columnBase }}
             >
                 {scrim}

@@ -33,6 +33,7 @@ import type {
     FocusPanelCardModel,
     FocusPanelProfileField,
 } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardModel";
+import { isOperationalTruthCard } from "@/lib/adminV2/runtime/focusPanel/focusPanelCoordination";
 import { resolveConceptValue } from "@/lib/adminV2/runtime/focusPanel/focusPanelConceptCatalog";
 
 /** Field renderers (presentation, not data). */
@@ -186,6 +187,67 @@ export function isFocusPanelCardConfigEmpty(config: FocusPanelCardConfig | null 
     );
 }
 
+/** One operator-facing problem with a card's evidence-group configuration. */
+export type FocusPanelConfigIssue = {
+    /** Where the problem is, for the editor to anchor to. */
+    scope: "field" | "condition";
+    /** Field/condition identifier (field id, or condition index as string). */
+    ref: string;
+    message: string;
+};
+
+/**
+ * Validate a card's evidence-group configuration (the Inspector's Fields / Related
+ * lists / Conditions / Expansion output). Pure — returns the issues an operator must
+ * resolve before the surface is sound. Proves a published evidence group binds to
+ * real business concepts, renders with a known renderer, and carries well-formed
+ * conditions. Empty / default config is valid (no issues).
+ *
+ * @see docs/platform/operator/card-content-template-field-inclusion-doctrine.md
+ */
+export function validateFocusPanelCardConfig(
+    config: FocusPanelCardConfig | null | undefined,
+): { ok: boolean; issues: FocusPanelConfigIssue[] } {
+    const issues: FocusPanelConfigIssue[] = [];
+    if (!config) return { ok: true, issues };
+
+    const fields = config.fields ?? [];
+    const seen = new Set<string>();
+    for (const field of fields) {
+        if (seen.has(field.id)) {
+            issues.push({ scope: "field", ref: field.id, message: `Duplicate field "${field.label || field.id}".` });
+        }
+        seen.add(field.id);
+        if (!field.concept || field.concept.trim() === "") {
+            issues.push({ scope: "field", ref: field.id, message: `"${field.label || field.id}" is not bound to a business concept.` });
+        }
+        if (!FOCUS_PANEL_FIELD_RENDERERS.includes(field.renderer)) {
+            issues.push({ scope: "field", ref: field.id, message: `"${field.label || field.id}" uses an unknown renderer.` });
+        }
+        if (field.kind === "collection" && field.maxRows !== undefined && field.maxRows < 1) {
+            issues.push({ scope: "field", ref: field.id, message: `"${field.label || field.id}" must show at least one row.` });
+        }
+    }
+
+    (config.conditions ?? []).forEach((condition, index) => {
+        const ref = String(index);
+        if (!condition.concept || condition.concept.trim() === "") {
+            issues.push({ scope: "condition", ref, message: "A condition is not bound to a business concept." });
+        }
+        if (!FOCUS_PANEL_CONDITION_OPERATORS.includes(condition.operator)) {
+            issues.push({ scope: "condition", ref, message: "A condition uses an unknown operator." });
+        }
+        if (
+            (condition.operator === "is" || condition.operator === "is_not") &&
+            (!condition.value || condition.value.trim() === "")
+        ) {
+            issues.push({ scope: "condition", ref, message: "A comparison condition needs a value." });
+        }
+    });
+
+    return { ok: issues.length === 0, issues };
+}
+
 /**
  * Reduce a card's persisted config to the composition override the engine consumes
  * (`Partial<CardCompositionPreference>`), or `null` when nothing is overridden.
@@ -204,9 +266,32 @@ export function compositionOverrideFromConfig(
 }
 
 /**
+ * Validate (clamp) a composition override against the canvas rule. Diagnostic cards
+ * can never reach Focus/Workspace depth, so any depth override beyond Evidence on a
+ * non-truth card is clamped back to `in_place`. This is defense BEYOND the Inspector
+ * UI: a stale or hand-edited published config can never break the canvas rule.
+ *
+ * @see docs/platform/operator/operational-depth-doctrine.md (diagnostic cards top out at Evidence)
+ */
+export function clampCompositionOverride(
+    typeKey: FocusPanelCardKey,
+    override: Partial<CardCompositionPreference>,
+): Partial<CardCompositionPreference> {
+    if (
+        override.perspectiveExpansion &&
+        override.perspectiveExpansion !== "in_place" &&
+        !isOperationalTruthCard(typeKey)
+    ) {
+        return { ...override, perspectiveExpansion: "in_place" };
+    }
+    return override;
+}
+
+/**
  * Build the engine `overrides` map from placed cards + their config. Keyed by card
  * TYPE (composition is type-level in the engine); when the same type appears more
- * than once the declared fields merge (last wins per field).
+ * than once the declared fields merge (last wins per field). Each override is clamped
+ * to the canvas rule before it reaches the engine.
  */
 export function buildCompositionOverrides(
     entries: ReadonlyArray<{ typeKey: FocusPanelCardKey; config?: FocusPanelCardConfig | null }>,
@@ -215,7 +300,8 @@ export function buildCompositionOverrides(
     for (const entry of entries) {
         const override = compositionOverrideFromConfig(entry.config);
         if (!override) continue;
-        overrides[entry.typeKey] = { ...overrides[entry.typeKey], ...override };
+        const clamped = clampCompositionOverride(entry.typeKey, override);
+        overrides[entry.typeKey] = { ...overrides[entry.typeKey], ...clamped };
     }
     return overrides;
 }

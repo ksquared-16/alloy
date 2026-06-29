@@ -4,12 +4,15 @@ import { FOCUS_PANEL_SUMMARY_DEFAULT_DOC } from "@/lib/adminV2/runtime/focusPane
 import { deriveFocusPanelInstanceMap } from "@/lib/adminV2/runtime/focusPanel/deriveFocusPanelCardsFromLayoutDoc";
 import {
     buildCompositionOverrides,
+    clampCompositionOverride,
     composeEffectiveCardModel,
     compositionOverrideFromConfig,
     isFocusPanelCardConfigEmpty,
+    validateFocusPanelCardConfig,
     type FocusPanelCardConfig,
     type FocusPanelCardField,
 } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardConfigModel";
+import { composeFocusPanelSurface } from "@/lib/adminV2/runtime/focusPanel/composition/composeFocusPanelSurface";
 import { resolveConceptValue } from "@/lib/adminV2/runtime/focusPanel/focusPanelConceptCatalog";
 import {
     buildSummaryDocFromOrder,
@@ -215,5 +218,94 @@ describe("composition overrides (Experience Builder → engine)", () => {
         const currentWork = reread.find((c) => c.key === "current_work")!;
         expect(currentWork.config?.composition?.weight).toBe("heavy");
         expect(currentWork.config?.composition?.preferredRow).toBe("lead");
+    });
+});
+
+describe("Experience Builder composition validation (#9)", () => {
+    it("clamps a diagnostic card's depth override back to Evidence (canvas rule)", () => {
+        // Readiness is diagnostic — it can never reach Focus/Workspace depth.
+        expect(
+            clampCompositionOverride("readiness_kpi", { perspectiveExpansion: "takeover_row" }),
+        ).toEqual({ perspectiveExpansion: "in_place" });
+        expect(
+            clampCompositionOverride("current_work", { perspectiveExpansion: "takeover_surface" }),
+        ).toEqual({ perspectiveExpansion: "in_place" });
+    });
+
+    it("leaves a truth card's depth override intact", () => {
+        expect(
+            clampCompositionOverride("household", { perspectiveExpansion: "takeover_row" }),
+        ).toEqual({ perspectiveExpansion: "takeover_row" });
+    });
+
+    it("buildCompositionOverrides clamps invalid depth before it reaches the engine", () => {
+        const overrides = buildCompositionOverrides([
+            { typeKey: "readiness_kpi", config: { composition: { perspectiveExpansion: "takeover_row" } } },
+        ]);
+        expect(overrides.readiness_kpi?.perspectiveExpansion).toBe("in_place");
+    });
+
+    it("operator weight override round-trips through config and TAKES EFFECT in the engine", () => {
+        // Configure Current Work as heavy → it must join the anchor lane on compose.
+        const id = entryInstanceId(baseOrder.find((c) => c.key === "current_work")!);
+        const order = updateSummaryCardConfig(baseOrder, id, { composition: { weight: "heavy" } });
+        const reread = readSummaryCardOrder(buildSummaryDocFromOrder(order));
+        const overrides = buildCompositionOverrides(
+            reread.map((e) => ({ typeKey: e.key, config: e.config })),
+        );
+        expect(overrides.current_work?.weight).toBe("heavy");
+
+        const composition = composeFocusPanelSurface({
+            cards: reread.map((e) => ({ key: e.instanceId, typeKey: e.key })),
+            availableWidthPx: 760,
+            overrides,
+        });
+        const primary = composition.lanes.find((l) => l.role === "primary");
+        expect(primary?.cards.map((c) => c.typeKey)).toContain("current_work");
+    });
+});
+
+describe("Evidence-group config validation (#10)", () => {
+    it("treats empty / default config as valid", () => {
+        expect(validateFocusPanelCardConfig(undefined).ok).toBe(true);
+        expect(validateFocusPanelCardConfig({}).ok).toBe(true);
+        expect(validateFocusPanelCardConfig({ appearance: { titleOverride: "Family" } }).ok).toBe(true);
+    });
+
+    it("flags a field with no business-concept binding", () => {
+        const result = validateFocusPanelCardConfig({
+            fields: [{ id: "f1", label: "Phone", concept: "  ", renderer: "text", kind: "field", placement: "collapsed" }],
+        });
+        expect(result.ok).toBe(false);
+        expect(result.issues[0]).toMatchObject({ scope: "field", ref: "f1" });
+    });
+
+    it("flags a collection that shows zero rows and a duplicate field id", () => {
+        const result = validateFocusPanelCardConfig({
+            fields: [
+                { id: "c1", label: "Kids", concept: "Enrollment → Children → Summary", renderer: "count_expand", kind: "collection", placement: "collapsed", maxRows: 0 },
+                { id: "c1", label: "Kids again", concept: "Enrollment → Children → Summary", renderer: "count_expand", kind: "collection", placement: "collapsed", maxRows: 2 },
+            ],
+        });
+        expect(result.ok).toBe(false);
+        expect(result.issues.some((i) => i.message.includes("at least one row"))).toBe(true);
+        expect(result.issues.some((i) => i.message.includes("Duplicate"))).toBe(true);
+    });
+
+    it("flags a comparison condition missing a value", () => {
+        const result = validateFocusPanelCardConfig({
+            conditions: [{ kind: "visible_when", concept: "Enrollment → Children → Count", operator: "is" }],
+        });
+        expect(result.ok).toBe(false);
+        expect(result.issues[0]).toMatchObject({ scope: "condition", ref: "0" });
+    });
+
+    it("passes a well-formed evidence group + condition", () => {
+        const result = validateFocusPanelCardConfig({
+            fields: [{ id: "f1", label: "Phone", concept: "Enrollment → Primary Contact → Phone", renderer: "text", kind: "field", placement: "collapsed" }],
+            conditions: [{ kind: "visible_when", concept: "Enrollment → Children → Count", operator: "is", value: "2" }],
+        });
+        expect(result.ok).toBe(true);
+        expect(result.issues).toHaveLength(0);
     });
 });

@@ -2730,6 +2730,36 @@ html[data-alloy-os-runtime-split="true"]
   }
 }
 
+/* Reverse-zoom on dismiss: while closing, the depth stays "active" (positioning
+ * holds) and this flag swaps the entry animation for the inverse, so the focused
+ * card flies BACK to the cell it came from instead of snapping. The grid keeps the
+ * card mounted for one depth duration before clearing depth (host-coordinated). */
+.alloy-os-focus-panel-grid[data-fp-closing="true"]
+  .alloy-os-focus-panel-grid__cell[data-fp-elevated="true"]
+  .alloy-os-ucard {
+  animation: alloy-os-fp-card-zoom-out var(--alloy-os-fp-depth-ms) var(--alloy-os-fp-depth-ease) both;
+}
+@keyframes alloy-os-fp-card-zoom-out {
+  from {
+    opacity: 1;
+    transform: translate(0, 0) scale(1);
+  }
+  to {
+    opacity: 0.4;
+    transform:
+      translate(var(--fp-from-x, 0px), var(--fp-from-y, 14px))
+      scale(var(--fp-from-scale, 0.9));
+  }
+}
+/* The scrim fades back out in step with the reverse-zoom. */
+.alloy-os-focus-panel-grid[data-fp-closing="true"] .alloy-os-fp-depth-scrim {
+  animation: alloy-os-fp-scrim-out var(--alloy-os-fp-depth-ms) var(--alloy-os-fp-depth-ease) both;
+}
+@keyframes alloy-os-fp-scrim-out {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
 /* Keep the Focus Panel shell (identity + mode switch) crisp above the scrim. */
 .alloy-os-fp-header-compact {
   position: relative;
@@ -2740,7 +2770,11 @@ html[data-alloy-os-runtime-split="true"]
   .alloy-os-fp-depth-scrim,
   .alloy-os-focus-panel-grid[data-fp-depth="active"]
     .alloy-os-focus-panel-grid__cell[data-fp-elevated="true"]
-    .alloy-os-ucard {
+    .alloy-os-ucard,
+  .alloy-os-focus-panel-grid[data-fp-closing="true"]
+    .alloy-os-focus-panel-grid__cell[data-fp-elevated="true"]
+    .alloy-os-ucard,
+  .alloy-os-focus-panel-grid[data-fp-closing="true"] .alloy-os-fp-depth-scrim {
     animation: none;
   }
   .alloy-os-focus-panel-grid[data-fp-depth="active"]
@@ -3160,13 +3194,9 @@ html[data-alloy-os-runtime-split="true"]
   transform-origin: top center;
   animation: alloy-os-card-overlay-in 180ms var(--alloy-os-fp-depth-ease) both;
 }
-/* Flip upward when there is no room below (e.g. the bottom card of the panel): the
- * dropdown opens above the card instead of falling off-screen. */
-.alloy-os-card-overlay[data-overlay-direction="up"] {
-  top: auto;
-  bottom: calc(100% + var(--alloy-os-fp-overlay-offset));
-  transform-origin: bottom center;
-}
+/* Enrollment Freeze invariant: overlays only ever open DOWNWARD. There is no
+ * upward variant — when room is tight the panel scrolls (CardInlineOverlay) so the
+ * downward dropdown stays visible, rather than reversing direction. */
 @keyframes alloy-os-card-overlay-in {
   from { opacity: 0; transform: translateY(-6px) scale(0.99); }
   to { opacity: 1; transform: translateY(0) scale(1); }
