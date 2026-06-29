@@ -12,8 +12,8 @@ import { AdminViewerTimezoneProvider, type AdminViewerTimezoneValue } from "@/co
 import { WorkspaceOrgProvider } from "@/contexts/WorkspaceOrgContext";
 import WorkspaceSiteFilterPersistenceScopeBridge from "@/app/adminV2/workspace/WorkspaceSiteFilterPersistenceScopeBridge";
 import { OperationalModeEntryProvider } from "@/lib/adminV2/runtime/operationalSubject/OperationalModeEntryContext";
-import { WorkspaceFirstPaintSeedProvider } from "@/lib/adminV2/runtime/workspaceFirstPaintSeed";
-import type { OperatorLifecycleLandingCard } from "@/lib/admin/buildOperatorLifecycleLanding";
+import { WorkspaceRouteVmProvider } from "@/lib/adminV2/runtime/surface/workspaceRouteVmContext";
+import { EMPTY_WORKSPACE_ROUTE_VM, type WorkspaceRouteVm } from "@/lib/adminV2/runtime/surface/workspaceRouteVm";
 import type { CSSProperties, ReactNode } from "react";
 
 interface AdminV2WorkspaceClientProvidersProps {
@@ -35,8 +35,12 @@ interface AdminV2WorkspaceClientProvidersProps {
   initialViewerTimezone?: AdminViewerTimezoneValue;
   /** Org operational IANA for schedule defaults. */
   initialOperationalTimezoneIana?: string;
-  /** Server-resolved first-paint lifecycle landing cards for the /workspace index (Doctrine §5). */
-  initialLifecycleCards?: readonly OperatorLifecycleLandingCard[];
+  /**
+   * Canonical server-composed workspace Route VM (the single first-paint payload). Optional because
+   * this providers shell is also reused by non-index surfaces (e.g. `/adminV2/forms`) that have no
+   * workspace Route VM — they get the neutral empty VM.
+   */
+  workspaceRouteVm?: WorkspaceRouteVm;
 }
 
 export default function AdminV2WorkspaceClientProviders({
@@ -51,7 +55,7 @@ export default function AdminV2WorkspaceClientProviders({
   accessScopeFingerprint,
   initialViewerTimezone,
   initialOperationalTimezoneIana,
-  initialLifecycleCards = [],
+  workspaceRouteVm = EMPTY_WORKSPACE_ROUTE_VM,
 }: AdminV2WorkspaceClientProvidersProps) {
   const safeEmail = typeof userEmail === "string" && userEmail.length > 0 ? userEmail : "Unknown";
   const safeRole = typeof role === "string" ? role : "";
@@ -102,9 +106,9 @@ export default function AdminV2WorkspaceClientProviders({
                     className="adminv2-workspace-scroll-surface relative z-0 min-h-0 flex-1 px-4 py-3 sm:px-5"
                     style={workspaceScrollStyle}
                   >
-                    <WorkspaceFirstPaintSeedProvider initialLifecycleCards={initialLifecycleCards}>
+                    <WorkspaceRouteVmProvider value={workspaceRouteVm}>
                       {children}
-                    </WorkspaceFirstPaintSeedProvider>
+                    </WorkspaceRouteVmProvider>
                   </div>
                   <AdminEntityDrawer />
                 </div>

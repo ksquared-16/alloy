@@ -86,7 +86,7 @@ import {
     writeWorkspaceLifecycleCardsCache,
 } from "@/lib/workspace/workspaceContinuityPrefetch";
 import { peekOperatorLifecycleLandingCards } from "@/lib/admin/loadOperatorLifecycleLandingClient";
-import { useWorkspaceFirstPaintLifecycleSeed } from "@/lib/adminV2/runtime/workspaceFirstPaintSeed";
+import { useWorkspaceRouteVm } from "@/lib/adminV2/runtime/surface/workspaceRouteVmContext";
 import { ResumeWhereYouLeftOffChip } from "@/components/admin/workspace/ResumeWhereYouLeftOffChip";
 import { useAlloyOsRuntimeMarkOnce } from "@/lib/perf/useAlloyOsRuntimeMark";
 
@@ -132,10 +132,11 @@ function buildWorkspaceQuickRollup(
  * Department fetches may still run for KPI background rollup; tiles are lifecycle catalog driven.
  */
 export default function AdminV2WorkspaceIndexPage() {
-    // Server-seeded first-paint cards (Operational Runtime Doctrine Laws 1/3/5): present → the
-    // surface reveals once with tiles already in place (no "Preparing…" gate, no grid skeleton);
-    // empty → identical to prior client-only behavior.
-    const initialLifecycleCards = useWorkspaceFirstPaintLifecycleSeed();
+    // Canonical server-composed workspace Route VM owns the first-paint payload (Operational Runtime
+    // Doctrine Laws 1/3/5 / Final Runtime Architecture): tiles present at reveal (no "Preparing…"
+    // gate, no grid skeleton). Empty VM → identical to prior client-only behavior; the client effects
+    // below are refinement only.
+    const initialLifecycleCards = useWorkspaceRouteVm().firstPaint.lifecycleCards;
     const { orgName: orgNameFromContext, orgId, principalUserId, accessScopeFingerprint } = useWorkspaceOrg();
     const siteFilter = useWorkspaceSiteFilter();
     const selectedSiteId = siteFilter?.selectedSiteId ?? null;
