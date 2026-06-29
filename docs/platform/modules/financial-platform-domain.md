@@ -239,6 +239,8 @@ So "Field Trip scheduled today → charge created → billable in 3 weeks → in
 
 **As-built (Commercial Model Slice B, migration `20260703120000`):** the `financial_charge_templates` table is now the first-class, effective-dated config for this concept — `service_id`, `charge_category`, `trigger_type`/`trigger_key`, `amount_strategy`, `occurs_on_strategy`, `billable_on_strategy`/`billable_offset_days`, `default_gl_mapping_key`, `default_responsibility_key`, `review_required`. It is configuration only (posts nothing); Charge Events remain trigger facts and the Charge lifecycle/Posting are unchanged and still to come.
 
+**As-built (Operational Consumption Slice 1, migration `20260706120000`):** the *runtime contract* that interprets a trigger fact is now first-class — the **Consumption Event** (`consumption_events`), resolving to **Resolved Obligations** (`resolved_obligations`). The trigger fact still lives in `workflow_events`; "Charge Event" is retired only as a *runtime-contract name*, replaced by the Consumption Event, which carries the idempotent, recomputable interpretation and links (when drafted) to a `status='draft'` Charge. Consumption **consumes** the Slice D Charge Template resolver — it does not reimplement pricing — and posts nothing. See [`./operational-consumption-platform.md`](./operational-consumption-platform.md).
+
 ---
 
 ## 11. Financial periods — determination

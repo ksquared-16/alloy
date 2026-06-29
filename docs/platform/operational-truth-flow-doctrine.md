@@ -91,6 +91,7 @@ Canonical homes today: `locations` (`site` / `unit`), `location_program_categori
 - **Financials derive from operational facts, not from enrollment/intent directly, and not from the jobs vertical.** A child being enrolled does not create a charge; a recorded operational fact (attendance against an agreement, a scheduled service delivered) does.
 - Billing must be **generalized before childcare billing is built** — charges/ledger/GL reference a billable source (enrollment agreement + attendance facts), not `job_id`. See [`./modules/billing-financials-platform.md`](./modules/billing-financials-platform.md).
 - Consequences are append-oriented and auditable; corrections follow the same immutability discipline as Facts.
+- **The L4 → L5 bridge is its own layer: Operational Consumption.** Facts do not become Consequences by magic. The interpretation step — *given this fact, what commercial meaning should exist?* — is named and recorded as a first-class runtime object: a **Consumption Event** resolving to zero-or-more **Resolved Obligations**, which (only when drafted) link to a draft Charge. Consumption **consumes** the Commercial Model resolver; it posts nothing and never mutates authoritative money. The trigger fact stays in `workflow_events`; the Consumption Event is the canonical runtime *contract* on which Resolution builds. See [`./modules/operational-consumption-platform.md`](./modules/operational-consumption-platform.md).
 
 ---
 

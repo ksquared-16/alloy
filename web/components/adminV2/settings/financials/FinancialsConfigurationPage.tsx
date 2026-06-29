@@ -18,6 +18,7 @@ import {
 } from "@/components/adminV2/settings/configurationRuntime/ConfigReadonlyPrimitives";
 import { ConfigVersionBadge } from "@/components/adminV2/settings/configurationRuntime/ConfigEditorPrimitives";
 import FinancialChargePreviewInspector from "@/components/adminV2/settings/financials/FinancialChargePreviewInspector";
+import OperationalConsumptionSimulator from "@/components/adminV2/settings/financials/OperationalConsumptionSimulator";
 import AccountingConfigurationPanel from "@/components/adminV2/settings/financials/AccountingConfigurationPanel";
 import ServicesConfigurationPanel from "@/components/adminV2/settings/financials/ServicesConfigurationPanel";
 import {
@@ -282,6 +283,9 @@ export default function FinancialsConfigurationPage() {
         }
         if (section === "charge_preview") {
             return <FinancialChargePreviewInspector />;
+        }
+        if (section === "consumption") {
+            return <OperationalConsumptionSimulator todayYmd={today} />;
         }
         if (section === "rate_plans") {
             if (creatingPlan) {
