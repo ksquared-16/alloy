@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Surface Builder — Add card · Metric picker</title>
+<link rel="stylesheet" href="../../analytics-operational-intelligence-platform/mockups/_shared.css" />
+<style>
+  .scrim { position: absolute; inset: 0; background: rgba(26,35,50,0.42); display: flex; align-items: center; justify-content: center; }
+  .modal { width: 980px; max-height: 760px; background: var(--white); border-radius: var(--r-lg); box-shadow: var(--shadow-lg); overflow: hidden; display: flex; flex-direction: column; }
+  .m-head { padding: 16px 20px; border-bottom: 1px solid var(--line); display: flex; align-items: center; gap: 14px; }
+  .m-head .mt { font-size: 16px; font-weight: 650; }
+  .m-head .x { margin-left: auto; color: var(--midnight-46); font-size: 17px; }
+  .stepper { display: flex; align-items: center; gap: 8px; padding: 12px 20px; background: var(--canvas); border-bottom: 1px solid var(--line-soft); font-size: 12px; font-weight: 650; }
+  .stp { display: inline-flex; align-items: center; gap: 7px; padding: 5px 12px; border-radius: 999px; background: var(--white); border: 1px solid var(--line); color: var(--midnight-46); }
+  .stp .n { width: 17px; height: 17px; border-radius: 50%; background: rgba(89,103,139,0.16); color: var(--forge); display: flex; align-items: center; justify-content: center; font-size: 10px; }
+  .stp.done { color: var(--pine-strong); border-color: var(--pine-border); background: var(--pine-soft); }
+  .stp.done .n { background: var(--pine); color: white; }
+  .stp.on { color: var(--midnight); border-color: var(--midnight-46); }
+  .stp.on .n { background: var(--midnight); color: white; }
+  .stp .ar { color: var(--forge-70); opacity: .5; }
+  .m-body { flex: 1; display: flex; min-height: 0; }
+  .m-main { flex: 1; padding: 16px 20px; overflow: auto; }
+  .m-side { width: 312px; border-left: 1px solid var(--line); background: var(--canvas); padding: 16px 18px; display: flex; flex-direction: column; gap: 12px; }
+  .srch { width: 100%; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--r-sm); font-size: 13px; color: var(--midnight-46); background: var(--white); margin-bottom: 6px; display:flex; align-items:center; gap:8px;}
+  .mg { font-size: 10.5px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--forge-70); margin: 14px 4px 7px; }
+  .mrow { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border: 1px solid var(--line-soft); border-radius: var(--r-sm); margin-bottom: 6px; background: var(--white); }
+  .mrow.sel { border-color: var(--pine); box-shadow: 0 0 0 1px var(--pine), var(--shadow-sm); }
+  .mrow .mi { width: 30px; height: 30px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 14px; flex-shrink: 0; }
+  .mrow .mmain { flex: 1; min-width: 0; }
+  .mrow .ml { font-size: 13px; font-weight: 650; }
+  .mrow .mq { font-size: 11.5px; color: var(--forge-70); }
+  .mrow .mchip { font-size: 9.5px; font-weight: 700; padding: 2px 7px; border-radius: 999px; text-transform: uppercase; letter-spacing: 0.03em; }
+  .live { background: var(--good-bg); color: var(--good); }
+  .draftc { background: rgba(89,103,139,0.12); color: var(--forge); }
+  .m-foot { padding: 13px 20px; border-top: 1px solid var(--line); display: flex; align-items: center; gap: 10px; }
+  .prev-cap { font-size: 10.5px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--forge-70); }
+  .pv-note { font-size: 11.5px; color: var(--forge-70); line-height: 1.5; }
+  .pv-note b { color: var(--midnight); }
+</style>
+</head>
+<body>
+<div class="frame" style="min-height:780px">
+  <div class="label"><span class="dot"></span> Mockup · Add card — step 2 of 4 <span>— Metric picker (no implementation terms)</span></div>
+  <div class="body" style="position:relative; background:var(--canvas)">
+    <div class="scrim">
+      <div class="modal">
+        <div class="m-head"><span class="mt">Add card to Operational Pulse</span><span class="x">✕</span></div>
+        <div class="stepper">
+          <span class="stp done"><span class="n">✓</span> Card type</span><span class="ar">→</span>
+          <span class="stp on"><span class="n">2</span> Metric</span><span class="ar">→</span>
+          <span class="stp"><span class="n">3</span> Renderer</span><span class="ar">→</span>
+          <span class="stp"><span class="n">4</span> Configure</span>
+        </div>
+
+        <div class="m-body">
+          <div class="m-main">
+            <div class="srch">🔍 Search metrics — “tour”, “revenue”, “attention”…</div>
+
+            <div class="mg">Enrollment</div>
+            <div class="mrow sel">
+              <span class="mi" style="background:var(--good-bg);color:var(--good)">↗</span>
+              <span class="mmain"><span class="ml">Tour conversion</span><span class="mq">What share of scheduled tours actually completed?</span></span>
+              <span class="mchip live">Live</span>
+            </div>
+            <div class="mrow">
+              <span class="mi" style="background:var(--good-bg);color:var(--good)">＃</span>
+              <span class="mmain"><span class="ml">Lead demand</span><span class="mq">How many new enrollment opportunities this period?</span></span>
+              <span class="mchip live">Live</span>
+            </div>
+            <div class="mrow">
+              <span class="mi" style="background:var(--good-bg);color:var(--good)">◷</span>
+              <span class="mmain"><span class="ml">Time to schedule tour</span><span class="mq">How long to get a family onto a confirmed tour?</span></span>
+              <span class="mchip draftc">Available</span>
+            </div>
+
+            <div class="mg">Operations</div>
+            <div class="mrow">
+              <span class="mi" style="background:var(--warn-bg);color:var(--warn)">!</span>
+              <span class="mmain"><span class="ml">Needs attention</span><span class="mq">How many opportunities need operator attention now?</span></span>
+              <span class="mchip live">Live</span>
+            </div>
+            <div class="mrow">
+              <span class="mi" style="background:var(--crit-bg);color:var(--crit)">⏱</span>
+              <span class="mmain"><span class="ml">Overdue work</span><span class="mq">How much open work is past its due date?</span></span>
+              <span class="mchip live">Live</span>
+            </div>
+
+            <div class="mg">Communications</div>
+            <div class="mrow">
+              <span class="mi" style="background:var(--fin-bg);color:var(--fin)">✉</span>
+              <span class="mmain"><span class="ml">Delivery rate</span><span class="mq">What share of outbound messages were delivered?</span></span>
+              <span class="mchip live">Live</span>
+            </div>
+
+            <div class="mg">Financial · advanced</div>
+            <div class="mrow" style="opacity:.7">
+              <span class="mi" style="background:var(--fin-bg);color:var(--fin)">$</span>
+              <span class="mmain"><span class="ml">Revenue (MRR)</span><span class="mq">Needs a calculation — define in Operational Calculations.</span></span>
+              <span class="mchip draftc">Set up</span>
+            </div>
+          </div>
+
+          <div class="m-side">
+            <div class="prev-cap">Live preview</div>
+            <div class="mcard t-good" style="box-shadow:var(--shadow)">
+              <div class="mc-head"><span class="mc-label">Tour conversion</span><span class="tone good">On track</span></div>
+              <div class="mc-value">68<span class="unit">%</span></div>
+              <div class="mc-delta up">▲ 4 pts vs prior period</div>
+              <div class="mc-foot"><span class="drill"><span class="arr">↳</span> Tour queue</span></div>
+            </div>
+            <div class="pv-note">You picked the <b>KPI</b> card. Next, choose how <b>Tour conversion</b> renders — value, trend, gauge, or comparison.</div>
+            <div class="note" style="margin-top:auto">The metric’s formula, source, and thresholds live in <b style="color:var(--midnight)">Operational Calculations</b>. You never touch them here.</div>
+          </div>
+        </div>
+
+        <div class="m-foot">
+          <span class="btn btn-ghost">← Back</span>
+          <span style="margin-left:auto" class="prev-cap">Operational Intelligence · Operational Pulse</span>
+          <span class="btn btn-pine">Next: Renderer →</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>
+</content>

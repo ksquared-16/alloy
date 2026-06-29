@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Surface Builder — Configure card · Placement</title>
+<link rel="stylesheet" href="../../analytics-operational-intelligence-platform/mockups/_shared.css" />
+<style>
+  .scrim { position: absolute; inset: 0; background: rgba(26,35,50,0.42); display: flex; align-items: center; justify-content: center; }
+  .modal { width: 980px; background: var(--white); border-radius: var(--r-lg); box-shadow: var(--shadow-lg); overflow: hidden; display: flex; flex-direction: column; max-height: 800px; }
+  .m-head { padding: 16px 20px; border-bottom: 1px solid var(--line); display: flex; align-items: center; gap: 14px; }
+  .m-head .mt { font-size: 16px; font-weight: 650; }
+  .m-head .x { margin-left: auto; color: var(--midnight-46); font-size: 17px; }
+  .stepper { display: flex; align-items: center; gap: 8px; padding: 12px 20px; background: var(--canvas); border-bottom: 1px solid var(--line-soft); font-size: 12px; font-weight: 650; }
+  .stp { display: inline-flex; align-items: center; gap: 7px; padding: 5px 12px; border-radius: 999px; background: var(--white); border: 1px solid var(--line); color: var(--midnight-46); }
+  .stp .n { width: 17px; height: 17px; border-radius: 50%; background: rgba(89,103,139,0.16); color: var(--forge); display: flex; align-items: center; justify-content: center; font-size: 10px; }
+  .stp.done { color: var(--pine-strong); border-color: var(--pine-border); background: var(--pine-soft); }
+  .stp.done .n { background: var(--pine); color: white; }
+  .stp.on { color: var(--midnight); border-color: var(--midnight-46); }
+  .stp.on .n { background: var(--midnight); color: white; }
+  .stp .ar { color: var(--forge-70); opacity: .5; }
+  .m-body { flex: 1; display: flex; min-height: 0; }
+  .m-form { flex: 1; padding: 18px 22px; overflow: auto; }
+  .m-prev { width: 320px; border-left: 1px solid var(--line); background: var(--canvas); padding: 18px 20px; }
+  .fld { margin-bottom: 16px; }
+  .fld > label { display: block; font-size: 11px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--forge-70); margin-bottom: 6px; }
+  .inp { width: 100%; padding: 9px 12px; border: 1px solid var(--line); border-radius: var(--r-sm); font-size: 13px; background: var(--white); color: var(--midnight); }
+  .inp.muted { color: var(--midnight-46); display:flex; align-items:center; gap:8px; }
+  .seg2 { display: inline-flex; gap: 6px; flex-wrap: wrap; }
+  .rchip { display: inline-flex; align-items: center; gap: 6px; padding: 7px 11px; border-radius: var(--r-sm); border: 1px solid var(--line); font-size: 12.5px; font-weight: 600; color: var(--midnight-70); background: var(--white); }
+  .rchip.on { border-color: var(--pine); background: var(--pine-soft); color: var(--pine-strong); box-shadow: inset 0 0 0 1px var(--pine-border); }
+  .thr { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+  .thr .tc { border: 1px solid var(--line); border-radius: var(--r-sm); padding: 9px 10px; }
+  .thr .tc .tcl { font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .03em; display:flex; align-items:center; gap:5px; }
+  .thr .tc .tv { font-size: 15px; font-weight: 680; margin-top: 3px; }
+  .place { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; }
+  .pl { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--r-sm); background: var(--white); font-size: 12.5px; font-weight: 600; color: var(--midnight-70); }
+  .pl .ck { width: 18px; height: 18px; border-radius: 5px; border: 1.5px solid var(--line); display:flex; align-items:center; justify-content:center; font-size: 11px; color: var(--forge-70); flex-shrink:0;}
+  .pl.on { border-color: var(--pine-border); background: var(--pine-soft); color: var(--pine-strong); }
+  .pl.on .ck { background: var(--pine); border-color: var(--pine); color: white; }
+  .pl .ps { font-weight: 500; color: var(--forge-70); font-size: 11px; }
+  .m-foot { padding: 13px 20px; border-top: 1px solid var(--line); display: flex; align-items: center; gap: 10px; }
+  .prev-cap { font-size: 10.5px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--forge-70); margin-bottom: 10px; }
+</style>
+</head>
+<body>
+<div class="frame" style="min-height:820px">
+  <div class="label"><span class="dot"></span> Mockup · Add card — step 4 of 4 <span>— Configure + placement (placement belongs to the card)</span></div>
+  <div class="body" style="position:relative; background:var(--canvas)">
+    <div class="scrim">
+      <div class="modal">
+        <div class="m-head"><span class="mt">Configure card · Tour conversion</span><span class="x">✕</span></div>
+        <div class="stepper">
+          <span class="stp done"><span class="n">✓</span> Card type</span><span class="ar">→</span>
+          <span class="stp done"><span class="n">✓</span> Metric</span><span class="ar">→</span>
+          <span class="stp done"><span class="n">✓</span> Renderer</span><span class="ar">→</span>
+          <span class="stp on"><span class="n">4</span> Configure</span>
+        </div>
+
+        <div class="m-body">
+          <div class="m-form">
+            <div class="fld">
+              <label>Renderer</label>
+              <div class="seg2">
+                <span class="rchip">▦ KPI</span>
+                <span class="rchip on">📈 Trend</span>
+                <span class="rchip">◔ Gauge</span>
+                <span class="rchip">⇄ Comparison</span>
+                <span class="rchip">∿ Sparkline</span>
+              </div>
+            </div>
+
+            <div class="fld"><label>Card label</label><div class="inp">Tour conversion</div></div>
+            <div class="fld"><label>Question it answers</label><div class="inp muted">What share of scheduled tours actually completed?</div></div>
+
+            <div class="fld">
+              <label>Tone thresholds</label>
+              <div class="thr">
+                <div class="tc"><div class="tcl" style="color:var(--good)"><span class="tdot good"></span> Healthy ≥</div><div class="tv">60%</div></div>
+                <div class="tc"><div class="tcl" style="color:var(--warn)"><span class="tdot warn"></span> Watch ≥</div><div class="tv">45%</div></div>
+                <div class="tc"><div class="tcl" style="color:var(--crit)"><span class="tdot crit"></span> Critical &lt;</div><div class="tv">45%</div></div>
+              </div>
+            </div>
+
+            <div class="fld"><label>When clicked, drill to</label><div class="inp" style="display:flex;align-items:center"><span>Tour queue — filtered to scheduled tours</span><span style="margin-left:auto;color:var(--midnight-46)">▾</span></div></div>
+
+            <div class="fld" style="margin-bottom:6px">
+              <label>Appears on</label>
+              <div class="place">
+                <div class="pl on"><span class="ck">✓</span> Operational Intelligence <span class="ps">· this surface</span></div>
+                <div class="pl on"><span class="ck">✓</span> Workspace header <span class="ps">· compact</span></div>
+                <div class="pl"><span class="ck"></span> Work unit header</div>
+                <div class="pl"><span class="ck"></span> Executive Dashboard</div>
+                <div class="pl"><span class="ck"></span> Enrollment Intelligence</div>
+                <div class="pl"><span class="ck"></span> Reports</div>
+              </div>
+            </div>
+            <div class="note">One card, many surfaces. The platform records placement under the hood — you just choose where it shows.</div>
+          </div>
+
+          <div class="m-prev">
+            <div class="prev-cap">Live preview · Trend</div>
+            <div class="mcard t-good" style="box-shadow:var(--shadow)">
+              <div class="mc-head"><span class="mc-label">Tour conversion</span><span class="tone good">On track</span></div>
+              <div class="mc-value">68<span class="unit">%</span></div>
+              <svg class="spark tall" viewBox="0 0 220 64" preserveAspectRatio="none"><polyline points="0,52 30,48 60,40 90,44 120,30 150,26 180,18 220,12" fill="none" stroke="var(--good)" stroke-width="2.5"/></svg>
+              <div class="mc-delta up">▲ 4 pts vs prior period</div>
+              <div class="mc-foot"><span class="drill"><span class="arr">↳</span> Tour queue</span></div>
+            </div>
+            <div class="note" style="margin-top:14px; background:var(--pine-soft); color:var(--midnight-80)">Updates live as you edit. Renderer, thresholds, and drill all preview here.</div>
+          </div>
+        </div>
+
+        <div class="m-foot">
+          <span class="btn btn-ghost">← Back</span>
+          <span style="margin-left:auto" class="btn btn-ghost">Cancel</span>
+          <span class="btn btn-pine">Add card</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>
+</content>
