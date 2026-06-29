@@ -2841,6 +2841,72 @@ html[data-alloy-os-runtime-split="true"]
   color: var(--alloy-os-text-tertiary, #9ca3af);
 }
 
+/* — Live edit form (Household primary contact, Edit depth) — */
+.alloy-os-card-edit__form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.alloy-os-card-edit__row {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.alloy-os-card-edit__input {
+  width: 100%;
+  padding: 6px 9px;
+  font-size: 12.5px;
+  color: var(--alloy-os-text-primary, #111827);
+  background: var(--alloy-os-surface, #fff);
+  border: 1px solid var(--alloy-os-border, #e5e7eb);
+  border-radius: 7px;
+  transition: border-color 120ms ease;
+}
+.alloy-os-card-edit__input:focus {
+  outline: none;
+  border-color: var(--alloy-os-accent, #2f6f4f);
+}
+.alloy-os-card-edit__input:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+.alloy-os-card-edit__error {
+  margin: 8px 0 0;
+  font-size: 11px;
+  color: var(--alloy-os-danger, #b91c1c);
+}
+.alloy-os-card-edit__saved {
+  margin: 8px 0 0;
+  font-size: 11px;
+  color: var(--alloy-os-accent, #2f6f4f);
+}
+.alloy-os-card-edit__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 12px;
+}
+.alloy-os-card-edit__btn {
+  padding: 6px 14px;
+  font-size: 12px;
+  font-weight: 500;
+  border-radius: 7px;
+  border: 1px solid var(--alloy-os-border, #e5e7eb);
+  background: var(--alloy-os-surface, #fff);
+  color: var(--alloy-os-text-secondary, #4b5563);
+  cursor: pointer;
+  transition: background 120ms ease, border-color 120ms ease, opacity 120ms ease;
+}
+.alloy-os-card-edit__btn--primary {
+  border-color: var(--alloy-os-accent, #2f6f4f);
+  background: var(--alloy-os-accent, #2f6f4f);
+  color: #fff;
+}
+.alloy-os-card-edit__btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 /* — Household → Children handoff (belonging vs operational truth) — */
 .alloy-os-household__group-caption {
   margin: 0 0 4px;

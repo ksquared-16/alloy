@@ -17,6 +17,7 @@ import {
     type FocusPanelCardConfig,
 } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardConfigModel";
 import { FOCUS_PANEL_SUMMARY_DEFAULT_DOC } from "@/lib/adminV2/runtime/focusPanel/buildFocusPanelSummaryDefaultDoc";
+import { buildOpportunityFocusPanelMutation } from "@/lib/adminV2/runtime/focusPanel/focusPanelMutation";
 import type { CompositionCardInput } from "@/lib/adminV2/runtime/focusPanel/composition/composeFocusPanelSurface";
 import {
     isElevatedLevel,
@@ -152,6 +153,14 @@ export default function OpportunityFocusPanelModeGrid({
     );
     const elevatedCellKey = activeDepth?.card ?? null;
 
+    // Edit seam (Household V1): a separate injected save capability (NOT a write on
+    // the read-only Operational Context). Persists via the existing person PATCH path
+    // and broadcasts the existing record-patch events → VM merge → context recompose.
+    const mutation = useMemo(
+        () => buildOpportunityFocusPanelMutation({ canMutate, opportunityId: drawerId, truth: record }),
+        [canMutate, drawerId, record],
+    );
+
     // ESC returns the focused/edit card to its base Work surface. Captured before the
     // drawer's own ESC-to-close handler and stopped, so ESC dismisses the depth layer
     // FIRST and does not also close the whole record. Only active while a card is deep.
@@ -281,6 +290,7 @@ export default function OpportunityFocusPanelModeGrid({
                             }}
                             receded={receded}
                             coordination={coordination}
+                            mutation={mutation}
                             compat={{ subjectVm: displayVm, onSelectTab }}
                         />
                     );

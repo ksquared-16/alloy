@@ -4,12 +4,14 @@ import { useEffect, useMemo, useState } from "react";
 import clsx from "clsx";
 
 import UniversalCard from "@/components/admin/focusPanel/UniversalCard";
+import HouseholdContactEdit from "@/components/admin/focusPanel/cards/HouseholdContactEdit";
 import {
     buildHouseholdCardEvidence,
     type HouseholdEvidenceContact,
     type HouseholdEvidenceGroup,
     type HouseholdEvidenceGroupKey,
 } from "@/lib/adminV2/runtime/focusPanel/household/buildHouseholdCardEvidence";
+import { seedHouseholdContactValues } from "@/lib/adminV2/runtime/focusPanel/household/householdContactEditState";
 import type { FocusPanelCardModel } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardModel";
 import {
     useReportPerspective,
@@ -17,6 +19,7 @@ import {
     type FocusPanelCoordination,
     type FocusPanelPerspectiveLevel,
 } from "@/lib/adminV2/runtime/focusPanel/focusPanelCoordination";
+import type { FocusPanelMutation } from "@/lib/adminV2/runtime/focusPanel/focusPanelMutation";
 import type { OperationalContext } from "@/lib/adminV2/runtime/operationalContext/types";
 
 type Props = {
@@ -26,6 +29,8 @@ type Props = {
     receded?: boolean;
     /** Owner card: receives cross-card handoffs (e.g. from Readiness / Current Work). */
     coordination?: FocusPanelCoordination;
+    /** Injected save seam (Edit depth). Absent → card stays read-only. */
+    mutation?: FocusPanelMutation;
 };
 
 const COLLAPSED_PREVIEW_GROUPS = 4;
@@ -41,7 +46,7 @@ const COLLAPSED_PREVIEW_GROUPS = 4;
  * @see docs/platform/operator/card-archetypes.md (Identity)
  * @see docs/platform/operator/card-interaction-expansion-doctrine.md (System 5B — Expand)
  */
-export default function HouseholdCard({ model, context, receded = false, coordination }: Props) {
+export default function HouseholdCard({ model, context, receded = false, coordination, mutation }: Props) {
     const evidence = useMemo(
         () => buildHouseholdCardEvidence(context),
         [context],
@@ -56,6 +61,12 @@ export default function HouseholdCard({ model, context, receded = false, coordin
 
     const [expanded, setExpanded] = useState(false);
     const [focusedGroup, setFocusedGroup] = useState<HouseholdEvidenceGroupKey | null>(null);
+    const [editing, setEditing] = useState(false);
+
+    // Edit (a capability of Focus): seed the primary-contact draft from observed
+    // truth. Editable only when the operator may mutate AND a primary person exists.
+    const contactSeed = useMemo(() => seedHouseholdContactValues(context.truth), [context.truth]);
+    const canEditContact = Boolean(mutation?.canEdit && contactSeed.personId);
 
     // Cross-card handoff: when another card points here (e.g. Readiness "primary
     // contact"), open the requested evidence group as a Perspective Change. No fetch.
@@ -72,11 +83,13 @@ export default function HouseholdCard({ model, context, receded = false, coordin
         ? evidence.groups.find((g) => g.key === focusedGroup) ?? null
         : null;
 
-    // ANY open state (expanded household, a focused group) elevates as a centered
-    // Focus Card — Household never expands height inline (no row reflow).
-    const level: FocusPanelPerspectiveLevel = focused || expanded ? "focused" : "base";
+    // ANY open state elevates as a centered Focus Card — Household never expands
+    // height inline (no row reflow). Edit is the deepest state OF Focus.
+    const level: FocusPanelPerspectiveLevel =
+        editing && canEditContact ? "edit" : focused || expanded ? "focused" : "base";
     useReportPerspective(coordination, "household", level);
     useDismissSignal(coordination, "household", () => {
+        setEditing(false);
         setFocusedGroup(null);
         setExpanded(false);
     });
@@ -99,7 +112,8 @@ export default function HouseholdCard({ model, context, receded = false, coordin
     const statusChip = hasWarning ? "Needs contact" : null;
 
     const footerAction =
-        isEmpty ? null :
+        // Editing owns its own Cancel / Save controls — no card footer action.
+        isEmpty || editing ? null :
         focused ? (
             <button
                 type="button"
@@ -110,14 +124,29 @@ export default function HouseholdCard({ model, context, receded = false, coordin
                 ← All household evidence
             </button>
         ) : expanded ? (
-            <button
-                type="button"
-                className="alloy-os-ucard__action alloy-os-ucard__action--system5"
-                onClick={() => setExpanded(false)}
-                data-household-action="collapse"
-            >
-                ← Back to panel
-            </button>
+            <>
+                {canEditContact ? (
+                    <button
+                        type="button"
+                        className="alloy-os-ucard__action alloy-os-ucard__action--system5"
+                        onClick={() => {
+                            setFocusedGroup(null);
+                            setEditing(true);
+                        }}
+                        data-household-action="edit"
+                    >
+                        Edit contact
+                    </button>
+                ) : null}
+                <button
+                    type="button"
+                    className="alloy-os-ucard__action alloy-os-ucard__action--system5"
+                    onClick={() => setExpanded(false)}
+                    data-household-action="collapse"
+                >
+                    ← Back to panel
+                </button>
+            </>
         ) : evidence.groups.length > 0 ? (
             <button
                 type="button"
@@ -130,10 +159,21 @@ export default function HouseholdCard({ model, context, receded = false, coordin
         ) : null;
 
     let body: React.ReactNode;
-    let perspective: "collapsed" | "expanded" | "focused" | "empty";
+    let perspective: "collapsed" | "expanded" | "focused" | "edit" | "empty";
     if (isEmpty) {
         perspective = "empty";
         body = <EmptyBody />;
+    } else if (editing && canEditContact) {
+        perspective = "edit";
+        body = (
+            <HouseholdContactEdit
+                key={contactSeed.personId!}
+                personId={contactSeed.personId!}
+                initial={contactSeed.values}
+                save={mutation!.savePersonContact}
+                onClose={() => setEditing(false)}
+            />
+        );
     } else if (focused) {
         perspective = "focused";
         body = <FocusedGroupBody group={focused} masked={maskedChannels} onOpenChild={openChild} />;
