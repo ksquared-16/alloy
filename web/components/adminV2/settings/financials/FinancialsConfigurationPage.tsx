@@ -21,13 +21,13 @@ import FinancialChargePreviewInspector from "@/components/adminV2/settings/finan
 import AccountingConfigurationPanel from "@/components/adminV2/settings/financials/AccountingConfigurationPanel";
 import ServicesConfigurationPanel from "@/components/adminV2/settings/financials/ServicesConfigurationPanel";
 import {
-    FinancialPoliciesArea,
     FinancialResponsibilityArea,
     PaymentsConfigurationArea,
     PostingConfigurationArea,
     SubsidyConfigurationArea,
 } from "@/components/adminV2/settings/financials/FinancialDesignedAreas";
 import ChargeTemplatesConfigurationPanel from "@/components/adminV2/settings/financials/ChargeTemplatesConfigurationPanel";
+import FinancialPoliciesConfigurationPanel from "@/components/adminV2/settings/financials/FinancialPoliciesConfigurationPanel";
 import RatePlanAuthoringWorkspace from "@/components/adminV2/settings/financials/RatePlanAuthoringWorkspace";
 import CreateRatePlanForm from "@/components/adminV2/settings/financials/CreateRatePlanForm";
 import {
@@ -251,7 +251,16 @@ export default function FinancialsConfigurationPage() {
             return <ServicesConfigurationPanel canMutate={canMutate} />;
         }
         if (section === "financial_policies") {
-            return <FinancialPoliciesArea />;
+            return (
+                <FinancialPoliciesConfigurationPanel
+                    canMutate={canMutate}
+                    todayYmd={today}
+                    locationOptions={scopeOptions.sites.map((s) => ({ value: s.id, label: s.label }))}
+                    serviceOptions={services.filter((s) => s.isActive).map((s) => ({ value: s.id, label: s.label }))}
+                    ratePlanOptions={planLineages.map((l) => ({ value: l.working.id, label: (l.working.label ?? "").trim() || l.working.plan_key }))}
+                    labelFor={(id) => labelFor(id) ?? serviceLabelById.get(id) ?? planLineages.find((l) => l.working.id === id)?.working.label ?? undefined}
+                />
+            );
         }
         if (section === "charge_templates") {
             return <ChargeTemplatesConfigurationPanel canMutate={canMutate} todayYmd={today} />;

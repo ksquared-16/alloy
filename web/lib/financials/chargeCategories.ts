@@ -41,14 +41,42 @@ export const CHARGE_CATEGORY_GL_MAPPING_KEY: Record<ChargeCategory, string> = {
     subsidy_offset: "subsidy_offset_revenue",
 };
 
+/**
+ * Description + example per charge category (presentation). Charge categories are
+ * code-owned invariants (the DB CHECK + billableSource.ts define them); they are
+ * NOT tenant-editable. This metadata makes the vocabulary legible under Financials
+ * as code-owned reference configuration. See the Charge Category review in
+ * docs/sprints/06_2026/operational_configuration_v1.md.
+ */
+export const CHARGE_CATEGORY_REFERENCE: Record<ChargeCategory, { description: string; example: string }> = {
+    tuition: { description: "Recurring care/service tuition.", example: "Monthly Full-Time Care" },
+    deposit: { description: "Refundable or non-refundable deposit held at enrollment.", example: "Enrollment deposit" },
+    consumable_fee: { description: "Usage-based consumables.", example: "Diapers / supplies" },
+    late_pickup: { description: "Fee for picking up after closing.", example: "Late pickup fee" },
+    one_time: { description: "One-off charge tied to an event.", example: "Field trip" },
+    discount: { description: "Reduction applied to a charge (contra-revenue).", example: "Sibling discount" },
+    credit: { description: "Account credit owed to the family.", example: "Goodwill credit" },
+    adjustment: { description: "Manual correction to a charge.", example: "Billing correction" },
+    fee: { description: "General non-tuition fee.", example: "Registration / annual supply fee" },
+    subsidy_offset: { description: "Reduction covered by a third-party payer.", example: "Agency-funded portion" },
+};
+
 export function chargeCategoryLabel(category: string): string {
     return (CHARGE_CATEGORY_LABEL as Record<string, string>)[category] ?? category;
 }
 
-export function listChargeCategories(): { key: ChargeCategory; label: string; mappingKey: string }[] {
+export function listChargeCategories(): {
+    key: ChargeCategory;
+    label: string;
+    mappingKey: string;
+    description: string;
+    example: string;
+}[] {
     return CHARGE_CATEGORIES.map((key) => ({
         key,
         label: CHARGE_CATEGORY_LABEL[key],
         mappingKey: CHARGE_CATEGORY_GL_MAPPING_KEY[key],
+        description: CHARGE_CATEGORY_REFERENCE[key].description,
+        example: CHARGE_CATEGORY_REFERENCE[key].example,
     }));
 }

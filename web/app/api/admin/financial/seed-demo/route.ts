@@ -176,6 +176,56 @@ async function seedChargeTemplates(
     return created;
 }
 
+async function seedFinancialPolicies(
+    supabase: SupabaseClient,
+    orgId: string,
+    policies: ReturnType<typeof buildFinancialConfigDemoDataset>["policies"],
+    today: string,
+): Promise<number> {
+    const { data: existing } = await supabase
+        .from("financial_policies")
+        .select("policy_type, scope_type, service_id, rate_plan_id")
+        .eq("org_id", orgId);
+    const existingKeys = new Set(
+        ((existing ?? []) as { policy_type: string; scope_type: string; service_id: string | null; rate_plan_id: string | null }[]).map(
+            (p) => `${p.policy_type}|${p.scope_type}|${p.service_id ?? ""}|${p.rate_plan_id ?? ""}`,
+        ),
+    );
+    const { data: svcRows } = await supabase.from("financial_services").select("id, service_key").eq("org_id", orgId);
+    const serviceIdByKey = new Map<string, string>(((svcRows ?? []) as { id: string; service_key: string }[]).map((s) => [s.service_key, s.id]));
+    const { data: planRows } = await supabase.from("childcare_rate_plans").select("id, plan_key").eq("org_id", orgId);
+    const planIdByKey = new Map<string, string>(((planRows ?? []) as { id: string; plan_key: string }[]).map((p) => [p.plan_key, p.id]));
+    const effectiveStart = `${today.slice(0, 4)}-01-01`;
+    let created = 0;
+    for (const p of policies) {
+        const serviceId = p.serviceKey ? serviceIdByKey.get(p.serviceKey) ?? null : null;
+        const ratePlanId = p.ratePlanKey ? planIdByKey.get(p.ratePlanKey) ?? null : null;
+        if (p.scopeType === "service" && !serviceId) continue;
+        if (p.scopeType === "rate_plan" && !ratePlanId) continue;
+        const key = `${p.policyType}|${p.scopeType}|${serviceId ?? ""}|${ratePlanId ?? ""}`;
+        if (existingKeys.has(key)) continue;
+        const { error } = await supabase.from("financial_policies").insert({
+            org_id: orgId,
+            scope_type: p.scopeType,
+            location_id: null,
+            service_id: serviceId,
+            rate_plan_id: ratePlanId,
+            policy_type: p.policyType,
+            value: p.value,
+            is_active: true,
+            effective_start: effectiveStart,
+            effective_end: null,
+            source_key: "seed",
+            metadata: { seed: true },
+        });
+        if (!error) {
+            created += 1;
+            existingKeys.add(key);
+        }
+    }
+    return created;
+}
+
 export async function POST() {
     const forbidden = await requireAdminOrOps();
     if (forbidden) return forbidden;
@@ -203,6 +253,7 @@ export async function POST() {
         const mappings = await seedGlMappings(supabase, ctx.orgId, dataset.glMappings, gl.byCode);
         const ratePlans = await seedRatePlans(supabase, ctx.orgId, dataset.ratePlans);
         const chargeTemplates = await seedChargeTemplates(supabase, ctx.orgId, dataset.chargeTemplates, today);
+        const policies = await seedFinancialPolicies(supabase, ctx.orgId, dataset.policies, today);
 
         return NextResponse.json({
             seeded: {
@@ -212,6 +263,7 @@ export async function POST() {
                 ratePlans: ratePlans.plans,
                 rateRules: ratePlans.rules,
                 chargeTemplates,
+                policies,
             },
             idempotent: true,
         });

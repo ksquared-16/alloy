@@ -31,6 +31,7 @@ export type OperationalEnrollmentMockStore = {
     childcare_schedule_rules: Row[];
     financial_services: Row[];
     financial_charge_templates: Row[];
+    financial_policies: Row[];
     locations: Row[];
     location_program_categories: Row[];
     customer_members: Row[];
@@ -58,6 +59,7 @@ export function createOperationalEnrollmentMockStore(
         childcare_schedule_rules: seed?.childcare_schedule_rules ?? [],
         financial_services: seed?.financial_services ?? [],
         financial_charge_templates: seed?.financial_charge_templates ?? [],
+        financial_policies: seed?.financial_policies ?? [],
         locations: seed?.locations ?? [],
         location_program_categories: seed?.location_program_categories ?? [],
         customer_members: seed?.customer_members ?? [],

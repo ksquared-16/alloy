@@ -53,12 +53,22 @@ export type DemoChargeTemplate = {
     reviewRequired?: boolean;
 };
 
+export type DemoFinancialPolicy = {
+    policyType: string;
+    scopeType: "org" | "location" | "service" | "rate_plan";
+    /** Resolved at seed time: serviceKey → service_id, planKey → rate_plan_id. */
+    serviceKey?: string;
+    ratePlanKey?: string;
+    value: Record<string, unknown>;
+};
+
 export type FinancialConfigDemoDataset = {
     services: FinancialServiceInput[];
     glAccounts: DemoGlAccount[];
     glMappings: DemoGlMapping[];
     ratePlans: DemoRatePlan[];
     chargeTemplates: DemoChargeTemplate[];
+    policies: DemoFinancialPolicy[];
 };
 
 /**
@@ -155,5 +165,17 @@ export function buildFinancialConfigDemoDataset(pivotYear: number): FinancialCon
         { templateKey: "annual_supply_fee", label: "Annual Supply Fee", chargeCategory: "fee", triggerType: "manual", amountStrategy: "fixed", amountCents: 7500, occursOn: "now", billableOn: "immediate" },
     ];
 
-    return { services, glAccounts, glMappings, ratePlans, chargeTemplates };
+    const policies: DemoFinancialPolicy[] = [
+        { policyType: "proration", scopeType: "org", value: { method: "daily" } },
+        { policyType: "billing_cadence", scopeType: "org", value: { cadence: "monthly" } },
+        { policyType: "grace_period", scopeType: "org", value: { days: 5 } },
+        { policyType: "late_fee", scopeType: "org", value: { amount_cents: 2500, after_days: 10 } },
+        { policyType: "posting_review", scopeType: "org", value: { required: true } },
+        // Service-specific override: Before Care bills weekly.
+        { policyType: "billing_cadence", scopeType: "service", serviceKey: "before_care", value: { cadence: "weekly" } },
+        // Rate-plan-specific deposit on the standard tuition plan.
+        { policyType: "deposit", scopeType: "rate_plan", ratePlanKey: "standard_tuition", value: { amount_cents: 50000, refundable: true } },
+    ];
+
+    return { services, glAccounts, glMappings, ratePlans, chargeTemplates, policies };
 }

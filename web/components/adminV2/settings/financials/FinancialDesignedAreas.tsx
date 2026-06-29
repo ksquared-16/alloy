@@ -14,28 +14,6 @@ import { DesignedConfigurationSurface } from "@/components/adminV2/settings/fina
  * No runtime. No posting/payments/subsidy/responsibility behavior.
  */
 
-export function FinancialPoliciesArea({ children }: { children?: ReactNode }): ReactNode {
-    return (
-        <DesignedConfigurationSurface
-            testId="financials-policies"
-            title="Financial Policies"
-            decision="How does the organization apply money rules — proration, credits, fees, refunds?"
-            status="designed"
-            summary="Organization-wide rules that shape every charge. Not posting — policy."
-            groups={[
-                { heading: "Proration & cadence", decisions: ["Proration method", "Billing cadence", "Mid-period join/leave"] },
-                { heading: "Credits & adjustments", decisions: ["Vacation credits", "Credit policy", "Write-off policy", "Adjustment policy"] },
-                { heading: "Fees & deposits", decisions: ["NSF fees", "Grace periods", "Deposit policy"] },
-                { heading: "Lifecycle", decisions: ["Refund policy", "Withdrawal policy"] },
-            ]}
-            consumers={["Billing", "Posting", "Payments"]}
-            roadmap="Proration method and billing cadence are already effective-dated on each Rate Plan today (see Rate Plans → Plan settings). Organization-level policy authoring (credits, fees, refunds) persists to org configuration next."
-        >
-            {children}
-        </DesignedConfigurationSurface>
-    );
-}
-
 export function FinancialResponsibilityArea(): ReactNode {
     return (
         <DesignedConfigurationSurface

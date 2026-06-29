@@ -177,6 +177,8 @@ Financial Policy attaches at the most natural level — never org-only:
 | Discount eligibility | Service · Promotion |
 | Tax | Location (jurisdiction) · Service |
 
+**As-built (Commercial Model Slice C, migration `20260704120000`):** `financial_policies` is first-class, scoped (org / location / service / rate_plan; Agreement is the next dimension), and effective-dated, with a code-owned policy-type registry, typed `value` jsonb, and a pure most-specific-wins resolver. Configuration only — recomputable, posts nothing. **Charge Categories** were reviewed and kept **code-owned** (platform invariants), surfaced under Accounting as reference with GL-mapping status.
+
 ---
 
 ## 7. Relationships

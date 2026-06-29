@@ -107,4 +107,12 @@ describe("financialConfigDemoDataset", () => {
         const diapers = ds.chargeTemplates.find((t) => t.templateKey === "diapers")!;
         expect(diapers.amountStrategy).toBe("usage_derived");
     });
+
+    it("includes demo financial policies at multiple scopes", () => {
+        const ds = buildFinancialConfigDemoDataset(2026);
+        expect(ds.policies.length).toBeGreaterThanOrEqual(5);
+        expect(ds.policies.some((p) => p.scopeType === "org" && p.policyType === "proration")).toBe(true);
+        expect(ds.policies.some((p) => p.scopeType === "service")).toBe(true);
+        expect(ds.policies.some((p) => p.scopeType === "rate_plan")).toBe(true);
+    });
 });

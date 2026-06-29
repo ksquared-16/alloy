@@ -2,6 +2,7 @@
 
 import type { GlAccountMappingRow, GlAccountRow } from "@/lib/financials/gl/glConfigTypes";
 import { resolveChargeCategoryGlChain } from "@/lib/financials/accounting/resolveGlMapping";
+import { listChargeCategories } from "@/lib/financials/chargeCategories";
 import {
     ConfigurationContext,
     ConfigurationDetailCard,
@@ -23,6 +24,9 @@ export default function AccountingConfigurationPanel({
     glAccountMappings: GlAccountMappingRow[];
 }) {
     const chain = resolveChargeCategoryGlChain(glAccountMappings, glAccounts);
+    const refByKey = new Map(listChargeCategories().map((c) => [c.key, c]));
+    const categoryDescription = (key: string) => refByKey.get(key as never)?.description ?? "";
+    const categoryExample = (key: string) => refByKey.get(key as never)?.example ?? "";
 
     return (
         <div className="space-y-3" data-testid="financials-accounting">
@@ -59,6 +63,29 @@ export default function AccountingConfigurationPanel({
                                     Unmapped
                                 </span>
                             )}
+                        </li>
+                    ))}
+                </ul>
+            </ConfigurationDetailCard>
+
+            <ConfigurationDetailCard title="Charge Categories — code-owned reference" testId="financials-charge-categories">
+                <p className="config-typo-sublabel mb-2 text-alloy-forge/60">
+                    Charge categories are platform invariants (code-owned + a DB constraint), not tenant-editable — this
+                    keeps accounting and posting consistent across orgs. They are shown here for reference; each maps to a
+                    GL account (above).
+                </p>
+                <ul className="divide-y divide-alloy-stone/30">
+                    {chain.map((row) => (
+                        <li key={row.categoryKey} className="flex flex-wrap items-start justify-between gap-2 py-2" data-testid={`financials-charge-category-${row.categoryKey}`}>
+                            <div className="min-w-0">
+                                <p className="config-typo-field-value text-alloy-midnight">{row.categoryLabel}</p>
+                                <p className="config-typo-sublabel text-alloy-forge/60">
+                                    {categoryDescription(row.categoryKey)} · e.g. {categoryExample(row.categoryKey)}
+                                </p>
+                            </div>
+                            <span className={`config-typo-sublabel ${row.mapped ? "text-emerald-700" : "text-amber-700"}`}>
+                                {row.mapped ? "GL mapped" : "GL unmapped"}
+                            </span>
                         </li>
                     ))}
                 </ul>

@@ -515,3 +515,19 @@ Charge Templates are **configuration**; Charge Events are **trigger facts** (reu
 
 ### Next slice
 **Slice C — Financial Policies** (scoped Org→Location→Service→Rate Plan→Agreement, effective-dated) + Charge Categories review.
+
+---
+
+## Commercial Model — Slice C: Financial Policies + Charge Category review (IMPLEMENTED)
+
+Status: shipped. Financial Policies promoted from designed surface to **first-class, scoped, effective-dated configuration** with most-specific-wins resolution; Charge Categories reviewed and surfaced as **code-owned reference**. **Configuration only — policies post nothing** (resolution is recomputable; Posting remains the only authoritative money write).
+
+- **Migration `20260704120000_financial_policies.sql`** — first-class table: org-scoped with scope dimensions **org / location / service / rate_plan** (CHECK scope-shape + a `validate_financial_policy_scope` trigger enforcing org-consistency of each scope target), `policy_type` (CHECK over the registry), label/description, typed `value` jsonb, effective dating + is_active, audit; RLS mirrors the rate-plan tables. (Agreement scope is the documented next dimension.)
+- **Backend** — `financialPolicyTypes.ts` (code-owned **policy-type registry** + typed value validation + summaries), `resolveFinancialPolicy.ts` (pure **most-specific-wins** resolver: rate_plan > service > location > org, then latest effective_start; returns resolved policy + source scope + missing/fallback), `financialPolicyService.ts` (read + **supersede** create/version/retire/void; no in-place value overwrite; void reopens predecessor), and a role-gated `/api/admin/financial/policies` route.
+- **Configuration UI** — `FinancialPoliciesConfigurationPanel` (replaces the designed area): a dynamic **create form** (policy type drives typed controls — select / number / money / yes-no; scope chosen by label), per-lineage **version timeline** authoring via the shared editor (future version / retire / void / history), and a **resolved-at-org preview** per policy type with source-scope labels and a no-policy fallback. No IDs, no drawers.
+- **Charge Category review — outcome: keep code-owned.** Categories are platform invariants (code + DB CHECK); making them tenant-editable would fragment accounting/posting across orgs. They are now surfaced under **Accounting** as code-owned reference — label, description, example, and **GL-mapping status** (mapped/unmapped) — with the rationale shown. (`chargeCategories.ts` gained descriptions/examples.)
+- **Seed** — idempotent demo policies at multiple scopes: org proration/cadence/grace/late-fee/posting-review, a Service-scoped cadence override (Before Care → weekly), and a Rate-Plan-scoped deposit (Standard Tuition).
+- **Tests** — migration shape; scope validation; create/supersede/retire/void; no-overwrite; **most-specific-wins resolution**; typed value validation; service link; route gating; seed dataset shape; UI + charge-category-reference posture; no posting/ledger writes. 213 financials/config tests green.
+
+### Commercial Model complete
+Services → Rate Plans/Rules → **Charge Templates** → **Financial Policies**, with Accounting (GL chain + code-owned categories) and Charge Preview. The configuration trio is in place; the platform is ready for the Charge-lifecycle / Posting phase.

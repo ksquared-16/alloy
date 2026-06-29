@@ -115,6 +115,50 @@ describe("Commercial Model — Charge Templates (Slice B)", () => {
     });
 });
 
+describe("Commercial Model — Financial Policies (Slice C)", () => {
+    it("the financial_policies migration is scoped + effective-dated config (no posting/ledger)", () => {
+        const root2 = resolve(__dirname, "../../..");
+        const sql = readFileSync(resolve(root2, "supabase/migrations/20260704120000_financial_policies.sql"), "utf8");
+        expect(sql).toContain("CREATE TABLE IF NOT EXISTS public.financial_policies");
+        expect(sql).toContain("financial_policies_scope_shape");
+        expect(sql).toContain("effective_start");
+        expect(sql).toContain("validate_financial_policy_scope");
+        expect(sql).toContain("ENABLE ROW LEVEL SECURITY");
+        expect(sql).not.toMatch(/public\.(ledger_transactions|gl_journal_lines|invoices|payments|charges)\b/);
+    });
+
+    it("the policies route is role-gated POST authoring (create|version|retire|void)", () => {
+        const r = read("app/api/admin/financial/policies/route.ts");
+        expect(r).toMatch(/export async function POST/);
+        expect(r).toContain("requireAdminOrOps");
+        for (const a of ['"create"', '"version"', '"retire"', '"void"']) expect(r).toContain(a);
+    });
+
+    it("the policy service supersedes (no in-place overwrite) and writes only its table", () => {
+        const svc = read("lib/financials/policies/financialPolicyService.ts");
+        expect(svc).toContain("planSupersede");
+        expect(svc).toContain("supersedes_id");
+        expect(svc).not.toMatch(/from\(["'](charges|ledger_transactions|gl_journal_lines|invoices|payments)["']\)/);
+    });
+
+    it("the panel authors inline, resolves most-specific-wins, states it posts nothing, no IDs", () => {
+        const panel = read("components/adminV2/settings/financials/FinancialPoliciesConfigurationPanel.tsx");
+        expect(panel).toContain("EffectiveDatedConfigurationEditor");
+        expect(panel).toContain("resolveFinancialPolicy");
+        expect(panel).toContain("does not post money");
+        expect(panel).not.toMatch(/openDrawer|useAdminDrawer/);
+        const page = read("components/adminV2/settings/financials/FinancialsConfigurationPage.tsx");
+        expect(page).toContain("FinancialPoliciesConfigurationPanel");
+    });
+
+    it("Charge Categories are presented as code-owned reference with mapping status", () => {
+        const accounting = read("components/adminV2/settings/financials/AccountingConfigurationPanel.tsx");
+        expect(accounting).toContain("code-owned reference");
+        expect(accounting).toMatch(/not tenant-editable/i);
+        expect(accounting).toContain("listChargeCategories");
+    });
+});
+
 describe("Convergence — Charge Preview uses operational selectors (no UUIDs)", () => {
     const inspector = read("components/adminV2/settings/financials/FinancialChargePreviewInspector.tsx");
 
@@ -145,7 +189,7 @@ describe("Convergence — designed areas are consistent + no forbidden runtime",
     it("designed areas use the shared DesignedConfigurationSurface", () => {
         const areas = read("components/adminV2/settings/financials/FinancialDesignedAreas.tsx");
         expect(areas).toContain("DesignedConfigurationSurface");
-        for (const fn of ["PostingConfigurationArea", "PaymentsConfigurationArea", "SubsidyConfigurationArea", "FinancialResponsibilityArea", "FinancialPoliciesArea"]) {
+        for (const fn of ["PostingConfigurationArea", "PaymentsConfigurationArea", "SubsidyConfigurationArea", "FinancialResponsibilityArea"]) {
             expect(areas).toContain(fn);
         }
     });
