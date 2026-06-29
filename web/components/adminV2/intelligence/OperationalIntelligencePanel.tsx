@@ -4,7 +4,10 @@ import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { useWorkspaceSiteFilter } from "@/contexts/WorkspaceSiteFilterContext";
-import type { OperationalSurfaceModel } from "@/lib/analytics/runtime/operationalSurfaceModel";
+import {
+    isInternalDrillHref,
+    type OperationalSurfaceModel,
+} from "@/lib/analytics/runtime/operationalSurfaceModel";
 import { OperationalMetricCard } from "@/components/adminV2/intelligence/OperationalMetricCard";
 import { AnalyticsSection, DiagnosticPanel, AffectedWorkPanel } from "@/app/dev/analytics-surface-mocks/slice2/primitives";
 import { BarChart } from "@/app/dev/analytics-surface-mocks/slice2/charts";
@@ -39,7 +42,7 @@ export function OperationalIntelligencePanel() {
 
     const navigate = useCallback(
         (href: string | null | undefined) => {
-            if (href && href.startsWith("/")) router.push(href);
+            if (isInternalDrillHref(href)) router.push(href as string);
         },
         [router],
     );

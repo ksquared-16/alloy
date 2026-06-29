@@ -148,6 +148,11 @@ export function resolveSiteLabel(siteId: string | null, options: SiteOption[]): 
     return options.find((o) => o.id === siteId)?.label ?? "Selected site";
 }
 
+/** A drill href is navigable only when it is an internal app path (guards "#"/external). */
+export function isInternalDrillHref(href: string | null | undefined): boolean {
+    return typeof href === "string" && href.startsWith("/");
+}
+
 /** Accept a URL-supplied site id only when it is in the accessible option set (else null = All sites). */
 export function sanitizeSiteId(requestedSiteId: string | null | undefined, options: SiteOption[]): string | null {
     if (!requestedSiteId) return null;

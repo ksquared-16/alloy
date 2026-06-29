@@ -33,6 +33,10 @@ import {
     subscribeAdminV2WorkspaceModal,
     getAdminV2WorkspaceModalSnapshot,
 } from "@/lib/adminV2/workspaceModalCoordinator";
+import {
+    parseWorkspaceModalIntent,
+    WORKSPACE_MODAL_INTENT_PARAM,
+} from "@/lib/adminV2/workspaceModalIntent";
 
 function normalizeAdminPath(pathname: string): string {
   return normalizeToCanonicalAdminPath(pathname);
@@ -186,10 +190,10 @@ export default function TopNavBar() {
   useEffect(() => {
     if (typeof window === "undefined") return;
     const params = new URLSearchParams(window.location.search);
-    const requested = params.get("workspaceModal");
-    if (requested === "analytics") {
-      openWorkspaceModal("analytics");
-      params.delete("workspaceModal");
+    const intent = parseWorkspaceModalIntent(params);
+    if (intent) {
+      openWorkspaceModal(intent);
+      params.delete(WORKSPACE_MODAL_INTENT_PARAM);
       const qs = params.toString();
       window.history.replaceState(null, "", `${window.location.pathname}${qs ? `?${qs}` : ""}`);
     }
