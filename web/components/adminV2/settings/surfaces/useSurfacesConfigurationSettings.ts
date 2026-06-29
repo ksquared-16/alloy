@@ -29,6 +29,8 @@ export type SurfaceConfigObject = {
     editor?: SurfaceEditorKind;
     /** Catalogued (non-editor) surfaces may link to a read-only preview of the composition. */
     previewHref?: string;
+    /** When the surface has a live production route, link operators straight to it. */
+    liveHref?: string;
 };
 
 /** Dev-only preview of the Analytics / Dashboard surface composition + Metric Card language. */
@@ -68,6 +70,7 @@ export const SURFACE_OBJECTS: Record<SurfaceConfigSectionKey, SurfaceConfigObjec
             title: "Operational Intelligence",
             subtitle: "Today: pulse, attention, bottlenecks",
             previewHref: ANALYTICS_SURFACE_PREVIEW_HREF,
+            liveHref: "/adminV2/intelligence/operational",
         },
         {
             id: "enrollment-intelligence",

@@ -137,6 +137,16 @@ export default function SurfacesConfigurationPage() {
                                     Open Analytics surface preview
                                     <span aria-hidden="true">→</span>
                                 </a>
+                                {previewObject.liveHref ? (
+                                    <a
+                                        href={previewObject.liveHref}
+                                        data-testid="surfaces-dashboard-live-link"
+                                        className="ml-2 inline-flex items-center gap-1.5 rounded-lg border border-alloy-pine/30 px-3 py-1.5 text-xs font-semibold text-alloy-pine hover:bg-alloy-pine/[0.06]"
+                                    >
+                                        Open live surface
+                                        <span aria-hidden="true">→</span>
+                                    </a>
+                                ) : null}
                             </div>
                         </ConfigurationDetailCard>
                     ) : (

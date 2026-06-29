@@ -3,8 +3,10 @@ import { redirect } from "next/navigation";
 import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
 import { scopeDimensionsFromAccess } from "@/lib/admin/accessScope";
 import { createAdminClient } from "@/lib/supabaseAdmin";
+import { resolveOrgSiteLocationsForAdmin } from "@/lib/admin/resolveOrgSiteLocations";
 import { decodeAnalyticsFilters } from "@/lib/analytics/runtime/analyticsContextUrl";
 import { metricWindowFromPeriod } from "@/lib/analytics/runtime/metricWindow";
+import { siteAllowlistForScope, sanitizeSiteId } from "@/lib/analytics/runtime/operationalSurfaceModel";
 import { buildOperationalSurfaceModel } from "@/lib/analytics/runtime/operationalSurface";
 import type { AnalyticsContextScope } from "@/lib/analytics/runtime/AnalyticsContextProvider";
 import { OperationalIntelligenceClient } from "@/components/adminV2/intelligence/OperationalIntelligenceClient";
@@ -37,10 +39,16 @@ export default async function OperationalIntelligencePage({
 
     const filters = decodeAnalyticsFilters(params);
     const windowKey = metricWindowFromPeriod(filters.dateRange);
-    const siteId = filters.siteLocationIds?.[0] ?? null;
+    const compareOn = Boolean(filters.comparisonPeriod);
 
     const supabase = createAdminClient();
     const accessScope = scopeDimensionsFromAccess(access);
+
+    // Only accessible sites are listed; a URL-injected inaccessible site is ignored.
+    const siteOptions = await resolveOrgSiteLocationsForAdmin(supabase, access.orgId, {
+        allowedSiteLocationIds: siteAllowlistForScope(accessScope),
+    });
+    const siteId = sanitizeSiteId(filters.siteLocationIds?.[0] ?? null, siteOptions);
 
     const model = await buildOperationalSurfaceModel({
         supabase,
@@ -48,7 +56,8 @@ export default async function OperationalIntelligencePage({
         accessScope,
         windowKey,
         siteId,
-        siteLabel: siteId ? "1 site" : "All sites",
+        siteOptions,
+        compareOn,
     });
 
     const scope: AnalyticsContextScope = {

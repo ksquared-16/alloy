@@ -62,7 +62,7 @@ export function OperationalIntelligenceClient({
                     </div>
                 </header>
 
-                <OperationalFilterBar siteLabel={model.siteLabel} />
+                <OperationalFilterBar siteId={model.siteId} siteOptions={model.siteOptions} />
 
                 <AnalyticsSection eyebrow="Measure" title="Operational metrics" description="Resolved live from Operational Calculations (OIP). Each card drills into real work.">
                     <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-5" data-metric-grid="operational">
@@ -99,13 +99,18 @@ export function OperationalIntelligenceClient({
                     </div>
                 </AnalyticsSection>
 
-                {model.dataNotes.length ? (
-                    <ul className="space-y-1 rounded-xl border border-dashed border-alloy-stone/20 bg-white/60 p-3 text-[11px] text-alloy-midnight/55" data-analytics-data-notes="true">
+                <div className="rounded-xl border border-dashed border-alloy-stone/20 bg-white/60 p-3 text-[11px] text-alloy-midnight/55" data-analytics-data-notes="true">
+                    <p className="font-medium text-alloy-midnight/70" data-analytics-freshness={model.freshnessIso ?? "none"}>
+                        {model.freshnessIso
+                            ? `Data as of ${new Date(model.freshnessIso).toLocaleString()} · ${model.windowLabel}`
+                            : `Live · ${model.windowLabel}`}
+                    </p>
+                    <ul className="mt-1 space-y-1">
                         {model.dataNotes.map((note, i) => (
                             <li key={i}>· {note}</li>
                         ))}
                     </ul>
-                ) : null}
+                </div>
             </div>
         </AnalyticsContextProvider>
     );

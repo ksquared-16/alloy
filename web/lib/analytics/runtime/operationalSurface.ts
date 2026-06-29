@@ -14,6 +14,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { AdminAccessScopeDimensions } from "@/lib/admin/accessScope";
 import type { MetricTimeWindowKey, OipMetricKey } from "@/lib/metrics/types";
 import { resolveMetrics } from "@/lib/metrics/metricEngine";
+import { readMetricTrend } from "@/lib/metrics/snapshots/readMetricTrend";
 import { resolveMetricScopeFilter, applyOpportunityScopeToQuery } from "@/lib/metrics/scopeFilter";
 import { fetchEffectiveStatusDefinitions } from "@/lib/admin/statusDefinitionsResolve";
 import { getOperationalCalculation } from "@/lib/analytics/calculations/registry";
@@ -30,8 +31,11 @@ import {
     affectedWorkFromBreakdown,
     healthFromKpiStatus,
     tallyStatusCounts,
+    buildMetricComparison,
+    resolveSiteLabel,
     type OperationalMetricCard,
     type OperationalSurfaceModel,
+    type SiteOption,
 } from "@/lib/analytics/runtime/operationalSurfaceModel";
 
 /** Metrics shown on the Operational Intelligence surface (driven by the OC registry). */
@@ -52,7 +56,8 @@ export type BuildOperationalSurfaceParams = {
     accessScope: AdminAccessScopeDimensions;
     windowKey: MetricTimeWindowKey;
     siteId: string | null;
-    siteLabel: string;
+    siteOptions: SiteOption[];
+    compareOn: boolean;
 };
 
 /** Resolve a single workspace work-unit + department to drill into (best-effort). */
@@ -125,7 +130,8 @@ async function resolveOpportunityStatusCounts(
 export async function buildOperationalSurfaceModel(
     params: BuildOperationalSurfaceParams,
 ): Promise<OperationalSurfaceModel> {
-    const { supabase, orgId, accessScope, windowKey, siteId, siteLabel } = params;
+    const { supabase, orgId, accessScope, windowKey, siteId, siteOptions, compareOn } = params;
+    const siteLabel = resolveSiteLabel(siteId, siteOptions);
     const dataNotes: string[] = [];
 
     const ctx: AnalyticsContext = {
@@ -166,10 +172,35 @@ export async function buildOperationalSurfaceModel(
     });
     const resolvedByKey = new Map(resolved.map((r) => [r.metric.key, r]));
 
+    // Optional prior-period comparison — real snapshot deltas (metric_snapshots);
+    // honest "no prior snapshot yet" copy when history is sparse. Never fabricated.
+    const trendByKey = new Map<OipMetricKey, Awaited<ReturnType<typeof readMetricTrend>>>();
+    if (compareOn) {
+        const scopeType = siteId ? "site" : "org";
+        const trends = await Promise.all(
+            SURFACE_METRIC_KEYS.map((key) =>
+                readMetricTrend(supabase, { orgId, metricKey: key, windowKey, scopeType, scopeId: siteId }).catch(
+                    () => null,
+                ),
+            ),
+        );
+        SURFACE_METRIC_KEYS.forEach((key, i) => {
+            const t = trends[i];
+            if (t) trendByKey.set(key, t);
+        });
+        if (![...trendByKey.values()].some((t) => t.hasTrend)) {
+            dataNotes.push("Comparison is on, but no prior snapshots exist yet for this scope — deltas appear once snapshot history accrues.");
+        }
+    }
+
+    let freshnessIso: string | null = null;
+
     const metrics: OperationalMetricCard[] = SURFACE_METRIC_KEYS.map((key) => {
         const calc = getOperationalCalculation(key);
         const row = resolvedByKey.get(key);
         const drill = cardDrill(key);
+        const computedAt = row?.metric.computedAtIso ?? null;
+        if (computedAt && (!freshnessIso || computedAt > freshnessIso)) freshnessIso = computedAt;
         return {
             key,
             label: calc.label,
@@ -181,6 +212,7 @@ export async function buildOperationalSurfaceModel(
             bounded: calc.bounded,
             drillHref: drill.href,
             drillLabel: drill.label,
+            comparison: buildMetricComparison(trendByKey.get(key) ?? null, compareOn),
         };
     });
 
@@ -224,7 +256,11 @@ export async function buildOperationalSurfaceModel(
     return {
         windowKey,
         windowLabel: windowLabel(windowKey),
+        siteId,
         siteLabel,
+        siteOptions,
+        compareOn,
+        freshnessIso,
         metrics,
         breakdown: {
             title: "Open opportunities by status",

@@ -5,8 +5,18 @@
  * shell can import the types and tests can exercise the pure builders without a DB.
  */
 
-import type { MetricHealthState } from "@/lib/metrics/platform/types";
+import type { MetricHealthState, MetricTrendDirection } from "@/lib/metrics/platform/types";
 import type { MetricTimeWindowKey, OipMetricKey } from "@/lib/metrics/types";
+import type { AdminAccessScopeDimensions } from "@/lib/admin/accessScope";
+
+/** A prior-period comparison shown on a metric card (real, or honestly unavailable). */
+export type MetricComparisonDisplay = {
+    available: boolean;
+    label: string;
+    direction: MetricTrendDirection;
+};
+
+export type SiteOption = { id: string; label: string };
 
 export type OperationalMetricCard = {
     key: OipMetricKey;
@@ -21,6 +31,8 @@ export type OperationalMetricCard = {
     bounded: boolean;
     drillHref: string | null;
     drillLabel: string | null;
+    /** Prior-period comparison, present only when the operator enabled comparison. */
+    comparison?: MetricComparisonDisplay;
 };
 
 export type OperationalBreakdownBar = {
@@ -42,7 +54,12 @@ export type OperationalAffectedWorkItem = {
 export type OperationalSurfaceModel = {
     windowKey: MetricTimeWindowKey;
     windowLabel: string;
+    siteId: string | null;
     siteLabel: string;
+    siteOptions: SiteOption[];
+    compareOn: boolean;
+    /** Most recent metric computation time (ISO) for the freshness note. */
+    freshnessIso: string | null;
     metrics: OperationalMetricCard[];
     breakdown: {
         title: string;
@@ -96,6 +113,45 @@ export function tallyStatusCounts(statusKeys: Array<string | null | undefined>):
         map.set(key, (map.get(key) ?? 0) + 1);
     }
     return [...map.entries()].map(([statusKey, count]) => ({ statusKey, count }));
+}
+
+/** The minimal trend shape the comparison display needs (avoids importing snapshot types). */
+export type TrendForComparison = { hasTrend: boolean; trendLabel: string; direction: MetricTrendDirection } | null;
+
+/**
+ * Build a prior-period comparison display. Returns undefined when comparison is off,
+ * an honest "not available" state when there is no prior snapshot, and the real delta
+ * label otherwise. Never invents a delta.
+ */
+export function buildMetricComparison(
+    trend: TrendForComparison,
+    compareOn: boolean,
+): MetricComparisonDisplay | undefined {
+    if (!compareOn) return undefined;
+    if (!trend || !trend.hasTrend) {
+        return { available: false, label: "No prior snapshot yet", direction: "flat" };
+    }
+    return { available: true, label: trend.trendLabel, direction: trend.direction };
+}
+
+/** Resolve the access-scope site allowlist param (restricted → ids, all → null). No inaccessible exposure. */
+export function siteAllowlistForScope(accessScope: AdminAccessScopeDimensions): string[] | null {
+    if (accessScope.siteScope === "restricted") {
+        return accessScope.allowedSiteLocationIds ?? [];
+    }
+    return null;
+}
+
+/** Human label for the selected site ("All sites" when none, the matched label otherwise). */
+export function resolveSiteLabel(siteId: string | null, options: SiteOption[]): string {
+    if (!siteId) return "All sites";
+    return options.find((o) => o.id === siteId)?.label ?? "Selected site";
+}
+
+/** Accept a URL-supplied site id only when it is in the accessible option set (else null = All sites). */
+export function sanitizeSiteId(requestedSiteId: string | null | undefined, options: SiteOption[]): string | null {
+    if (!requestedSiteId) return null;
+    return options.some((o) => o.id === requestedSiteId) ? requestedSiteId : null;
 }
 
 /** Build the affected-work list from the top breakdown segments (real queues + counts). */

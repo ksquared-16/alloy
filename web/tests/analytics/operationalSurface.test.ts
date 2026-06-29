@@ -11,7 +11,13 @@ import {
     assembleBreakdownBars,
     affectedWorkFromBreakdown,
     healthFromKpiStatus,
+    buildMetricComparison,
+    siteAllowlistForScope,
+    resolveSiteLabel,
+    sanitizeSiteId,
+    type SiteOption,
 } from "@/lib/analytics/runtime/operationalSurfaceModel";
+import type { AdminAccessScopeDimensions } from "@/lib/admin/accessScope";
 
 describe("metricWindow mapping", () => {
     it("snaps period days to the nearest supported rolling window", () => {
@@ -97,5 +103,70 @@ describe("operational surface model helpers", () => {
         expect(healthFromKpiStatus("critical")).toBe("critical");
         expect(healthFromKpiStatus(undefined)).toBe("unknown");
         expect(healthFromKpiStatus("bogus")).toBe("unknown");
+    });
+});
+
+describe("comparison display (no fabricated deltas)", () => {
+    it("returns undefined when comparison is off", () => {
+        expect(buildMetricComparison({ hasTrend: true, trendLabel: "+3", direction: "up" }, false)).toBeUndefined();
+        expect(buildMetricComparison(null, false)).toBeUndefined();
+    });
+
+    it("is honestly unavailable when there is no prior snapshot", () => {
+        expect(buildMetricComparison(null, true)).toEqual({
+            available: false,
+            label: "No prior snapshot yet",
+            direction: "flat",
+        });
+        expect(buildMetricComparison({ hasTrend: false, trendLabel: "x", direction: "up" }, true)).toMatchObject({
+            available: false,
+        });
+    });
+
+    it("shows the real delta label/direction when a prior snapshot exists", () => {
+        expect(buildMetricComparison({ hasTrend: true, trendLabel: "+3 vs previous", direction: "up" }, true)).toEqual({
+            available: true,
+            label: "+3 vs previous",
+            direction: "up",
+        });
+    });
+});
+
+describe("site scope (no inaccessible exposure)", () => {
+    const sites: SiteOption[] = [
+        { id: "site-a", label: "Site A" },
+        { id: "site-b", label: "Site B" },
+    ];
+
+    function scope(over: Partial<AdminAccessScopeDimensions>): AdminAccessScopeDimensions {
+        return {
+            departmentScope: "all",
+            allowedDepartmentIds: null,
+            siteScope: "all",
+            allowedSiteLocationIds: null,
+            ...over,
+        };
+    }
+
+    it("passes null allowlist for unrestricted site scope and the explicit ids when restricted", () => {
+        expect(siteAllowlistForScope(scope({ siteScope: "all" }))).toBeNull();
+        expect(
+            siteAllowlistForScope(scope({ siteScope: "restricted", allowedSiteLocationIds: ["site-a"] })),
+        ).toEqual(["site-a"]);
+        // restricted with no ids → empty allowlist (exposes nothing), never null
+        expect(siteAllowlistForScope(scope({ siteScope: "restricted", allowedSiteLocationIds: null }))).toEqual([]);
+    });
+
+    it("sanitizes a URL site id against the accessible option set", () => {
+        expect(sanitizeSiteId("site-a", sites)).toBe("site-a");
+        expect(sanitizeSiteId("site-x", sites)).toBeNull(); // not in scope → All sites
+        expect(sanitizeSiteId(null, sites)).toBeNull();
+        expect(sanitizeSiteId("site-a", [])).toBeNull();
+    });
+
+    it("labels the selected site, falling back to All sites", () => {
+        expect(resolveSiteLabel(null, sites)).toBe("All sites");
+        expect(resolveSiteLabel("site-b", sites)).toBe("Site B");
+        expect(resolveSiteLabel("site-x", sites)).toBe("Selected site");
     });
 });
