@@ -62,6 +62,8 @@ export async function loadWorkUnitSlugRouteMetaServer(
         return {
             routeSlug: match.routeSlug,
             departmentId: match.departmentId,
+            departmentName:
+                departments.find((d) => d.id === match.departmentId)?.name ?? null,
             workUnitId: match.workUnitId,
             workUnitKey: match.workUnitKey,
             workUnitName: match.workUnitName,

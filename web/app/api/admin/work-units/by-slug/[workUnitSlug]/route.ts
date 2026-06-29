@@ -92,6 +92,7 @@ export async function GET(_request: NextRequest, { params }: RouteParams) {
         route_slug: match.routeSlug,
         work_unit_id: match.workUnitId,
         department_id: match.departmentId,
+        department_name: departments.find((d) => d.id === match.departmentId)?.name ?? null,
         work_unit_key: match.workUnitKey,
         work_unit_name: match.workUnitName,
         initial_queue_key: match.initialQueueKey,
