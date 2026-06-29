@@ -349,8 +349,10 @@ async function executeDeletes(
     }
 
     deleted[PROTECTED_LOCATIONS_TABLE_KEY] = 0;
-    deleted.work_units = await deleteByOr(supabase, "work_units", orgId, orDemo);
-    deleted.departments = await deleteByOr(supabase, "departments", orgId, orDemo);
+    // Configuration is preserved in enrollment_runtime_reset — work_units / departments are only
+    // removed by the default demo-metadata cleanup, never by the runtime enrollment reset.
+    deleted.work_units = idsOnly ? 0 : await deleteByOr(supabase, "work_units", orgId, orDemo);
+    deleted.departments = idsOnly ? 0 : await deleteByOr(supabase, "departments", orgId, orDemo);
 
     return deleted;
 }
@@ -412,6 +414,15 @@ async function main(): Promise<void> {
     }
 
     const ids = await resolveDemoIds(supabase, scope, orDemo);
+
+    if (scope.cleanupMode === ENROLLMENT_RUNTIME_RESET_MODE) {
+        console.log("--- enrollment_runtime_reset shared-reference guard ---\n");
+        console.log(`deletable_persons: ${ids.personIds.length}`);
+        console.log(`deletable_customers: ${ids.customerIds.length}`);
+        console.log(`preserved_shared_persons (linked to non-target records): ${ids.sharedPersonIds.length}`);
+        console.log(`preserved_shared_customers (linked to non-target records): ${ids.sharedCustomerIds.length}\n`);
+    }
+
     const before = await buildDemoCleanupCounts(supabase, scope, ids, orDemo);
 
     console.log("--- Pre-delete counts ---\n");

@@ -57,6 +57,10 @@ export type ResolvedDemoIds = {
     threadIds: string[];
     formSubmissionIds: string[];
     documentIds: string[];
+    /** enrollment_runtime_reset only — persons preserved because they are linked to non-target records. */
+    sharedPersonIds: string[];
+    /** enrollment_runtime_reset only — customers preserved because they are linked to non-target records. */
+    sharedCustomerIds: string[];
 };
 
 /** PostgREST `.or()` filter for metadata-tagged demo rows. */

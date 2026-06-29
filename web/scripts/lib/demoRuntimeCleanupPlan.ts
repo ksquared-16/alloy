@@ -12,6 +12,7 @@ import {
     type ResolvedDemoIds,
 } from "./demoRuntimeCleanupScope";
 import { buildEnrollmentResetSelection } from "./enrollmentRuntimeResetSelection";
+import { resolveEnrollmentResetSharedReferences } from "./enrollmentRuntimeResetSharedGuard";
 
 export { buildEnrollmentResetSelection } from "./enrollmentRuntimeResetSelection";
 export type { EnrollmentResetSelection, EnrollmentResetOpportunityRow } from "./enrollmentRuntimeResetSelection";
@@ -199,16 +200,20 @@ export async function resolveDemoIds(
     }
 
     const custList = [...customerIds];
+    const memberCustomerById = new Map<string, string>();
     for (const part of chunk(custList, 200)) {
         const { data: members, error: mErr } = await supabase
             .from("customer_members")
-            .select("id, person_id")
+            .select("id, person_id, customer_id")
             .eq("org_id", scope.orgId)
             .in("customer_id", part);
         if (mErr) throw new Error(`[customer_members expand] ${mErr.message}`);
         for (const r of members ?? []) {
-            const row = r as { id?: string; person_id?: string | null };
-            if (row.id) customerMemberIds.add(row.id);
+            const row = r as { id?: string; person_id?: string | null; customer_id?: string | null };
+            if (row.id) {
+                customerMemberIds.add(row.id);
+                if (row.customer_id) memberCustomerById.set(row.id, row.customer_id);
+            }
             if (row.person_id) personIds.add(row.person_id);
         }
         const { data: cps, error: cpErr } = await supabase
@@ -221,6 +226,32 @@ export async function resolveDemoIds(
             const pid = (r as { person_id?: string }).person_id;
             if (pid) personIds.add(pid);
         }
+    }
+
+    // enrollment_runtime_reset safety: only delete persons/customers linked exclusively to the
+    // target opportunities. Anything shared with a non-target record is preserved.
+    let deletableCustomerIds = custList;
+    let deletablePersonIds = [...personIds];
+    let deletableMemberIds = [...customerMemberIds];
+    let sharedPersonIds: string[] = [];
+    let sharedCustomerIds: string[] = [];
+    if (idsOnly) {
+        const partition = await resolveEnrollmentResetSharedReferences(
+            supabase,
+            scope.orgId,
+            opportunityIds,
+            [...personIds],
+            custList
+        );
+        const deletableCustSet = new Set(partition.deletableCustomerIds);
+        deletableCustomerIds = partition.deletableCustomerIds;
+        deletablePersonIds = partition.deletablePersonIds;
+        deletableMemberIds = deletableMemberIds.filter((mid) => {
+            const cid = memberCustomerById.get(mid);
+            return cid != null && deletableCustSet.has(cid);
+        });
+        sharedPersonIds = partition.sharedPersonIds;
+        sharedCustomerIds = partition.sharedCustomerIds;
     }
 
     const jobIds = new Set<string>();
@@ -284,7 +315,7 @@ export async function resolveDemoIds(
     for (const id of fsMeta) formSubmissionIds.add(id);
 
     const documentIds = new Set<string>();
-    const entityIdsForDocs = [...opportunityIds, ...personIds, ...customerIds];
+    const entityIdsForDocs = [...opportunityIds, ...deletablePersonIds, ...deletableCustomerIds];
     for (const part of chunk(entityIdsForDocs, 150)) {
         const { data, error } = await supabase.from("documents").select("id").eq("org_id", scope.orgId).in("entity_id", part);
         if (error) throw new Error(`[documents by entity] ${error.message}`);
@@ -296,14 +327,16 @@ export async function resolveDemoIds(
 
     return {
         opportunityIds,
-        customerIds: custList,
-        personIds: [...personIds],
-        customerMemberIds: [...customerMemberIds],
+        customerIds: deletableCustomerIds,
+        personIds: deletablePersonIds,
+        customerMemberIds: deletableMemberIds,
         jobIds: [...jobIds],
         scheduleIds: [...scheduleIds],
         threadIds: [...threadIds],
         formSubmissionIds: [...formSubmissionIds],
         documentIds: [...documentIds],
+        sharedPersonIds,
+        sharedCustomerIds,
     };
 }
 
@@ -477,8 +510,10 @@ export async function buildDemoCleanupCounts(
     counts.customers = cust.length;
     counts.persons = persons.length + (idsOnly ? 0 : await countRows(supabase, "persons", orgId, orDemo));
     counts[PROTECTED_LOCATIONS_TABLE_KEY] = await countRows(supabase, "locations", orgId, orDemo);
-    counts.work_units = await countRows(supabase, "work_units", orgId, orDemo);
-    counts.departments = await countRows(supabase, "departments", orgId, orDemo);
+    // Configuration is preserved in enrollment_runtime_reset — never count work_units / departments
+    // for deletion in that mode (they are only removed by the default demo-metadata cleanup).
+    counts.work_units = idsOnly ? 0 : await countRows(supabase, "work_units", orgId, orDemo);
+    counts.departments = idsOnly ? 0 : await countRows(supabase, "departments", orgId, orDemo);
 
     return counts;
 }

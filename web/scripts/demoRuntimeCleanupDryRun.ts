@@ -115,6 +115,19 @@ async function main(): Promise<void> {
     }
 
     const ids = await resolveDemoIds(supabase, scope, orDemo);
+
+    if (scope.cleanupMode === ENROLLMENT_RUNTIME_RESET_MODE) {
+        console.log("--- enrollment_runtime_reset shared-reference guard ---\n");
+        console.log(`deletable_persons: ${ids.personIds.length}`);
+        console.log(`deletable_customers: ${ids.customerIds.length}`);
+        console.log(
+            `preserved_shared_persons (linked to non-target records): ${ids.sharedPersonIds.length}`
+        );
+        console.log(
+            `preserved_shared_customers (linked to non-target records): ${ids.sharedCustomerIds.length}\n`
+        );
+    }
+
     const counts = await buildDemoCleanupCounts(supabase, scope, ids, orDemo);
 
     console.log("--- Table-by-table counts (rows that would be deleted) ---\n");

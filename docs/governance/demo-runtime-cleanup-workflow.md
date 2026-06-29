@@ -18,7 +18,7 @@ Required env:
 | Mode | `DEMO_CLEANUP_MODE` | Purpose |
 |------|---------------------|---------|
 | **Demo metadata cleanup** | *(unset / default)* | Delete rows tagged with demo seed metadata (`demo_seed_package`, `is_demo_data`, etc.). Narrow filters via `DEMO_SEED_PACKAGE` / `DEMO_SEED_RUN_ID` / `DEMO_SEED_FAMILY_KEY`. |
-| **Enrollment runtime reset** | `enrollment_runtime_reset` | Clear lead/enrollment queue runtime for the org: opportunities in lead statuses or on enrollment work units, plus FK-expanded customers/persons/tasks. Excludes golden-path seeds. Does **not** delete locations, config, or non-demo work units. |
+| **Enrollment runtime reset** | `enrollment_runtime_reset` | Clear lead/enrollment queue runtime for the org: opportunities in lead statuses or on enrollment work units, plus FK-expanded customers/persons/tasks/communications/documents/workflow runs. Excludes golden-path seeds. **Shared-reference guarded** (see below). Does **not** delete locations, fields/layouts/actions/workflows config, work units, or departments. |
 | **Communications orphan reset** | `communications_orphan_reset` | Delete communication rows with no valid primary entity (orphan threads/messages after entity deletes). Does **not** delete opportunities, customers, persons, locations, config, or work units. Excludes golden-path-linked threads. |
 
 ### Recommended tenant bootstrap reset sequence
@@ -64,6 +64,15 @@ Entity/family association:
 
 Orphan reset deletes threads whose primary entity is missing/invalid, plus attached messages/reads and unlinked scheduled sends.
 
+## Shared-reference guard (`enrollment_runtime_reset`)
+
+The enrollment reset resolves persons/customers by FK-expanding the selected (target) opportunities, then **filters out anything still linked to a non-target record** before deleting. Implemented in `web/scripts/lib/enrollmentRuntimeResetSharedGuard.ts` (`partitionSharedReferences` is the pure, unit-tested core).
+
+- A **customer** is preserved when any opportunity outside the target set references it.
+- A **person** is preserved when a non-target opportunity references it (`primary_person_id` or `opportunity_persons`), or it is linked to a customer that is not being deleted (a shared customer, or a customer entirely outside the candidate set).
+
+Dry-run and execute print `deletable_persons` / `deletable_customers` and `preserved_shared_persons` / `preserved_shared_customers` so shared records are visible before any delete. Only the **deletable** sets feed the per-table counts and deletes.
+
 ## Golden-path protection
 
 All explicit reset modes exclude records linked to `metadata.demo_seed_package = golden_path_enrollment_v1` or `metadata.seed_key LIKE golden_path%`.
@@ -71,8 +80,9 @@ All explicit reset modes exclude records linked to `metadata.demo_seed_package =
 ## Protected infrastructure (never deleted)
 
 - `locations` and location field values in default/demo modes
-- Platform configuration tables
-- Non-demo-tagged `work_units` / `departments` (demo-metadata `deleteByOr` only in default mode)
+- Platform configuration tables (fields / layouts / actions / workflows)
+- `work_units` / `departments` are **never** touched in `enrollment_runtime_reset`; demo-metadata `deleteByOr` removes demo-tagged ones only in default mode
+- Persons / customers shared with non-target records (see shared-reference guard)
 
 ## FK-safe delete orders
 
