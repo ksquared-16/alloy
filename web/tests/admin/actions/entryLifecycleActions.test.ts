@@ -260,6 +260,16 @@ describe("executeCreateLeadAction validation", () => {
         );
     });
 
+    it("writes lead status to the canonical opportunities.status_key location", async () => {
+        const sb = supabaseForCreate("vert-1");
+        const res = await executeCreateLeadAction(sb as never, ctx as never, {
+            merged: { first_name: "Ada", last_name: "Lovelace", email: "ada@example.com" },
+        });
+        expect(res.ok).toBe(true);
+        // Lead case status is owned by opportunities.status_key (statusCategoryRegistry "Lead Statuses").
+        expect(sb.getCapturedOppInsert()?.status_key).toBe("open");
+    });
+
     it("creates lead when org has no configured vertical", async () => {
         const sb = supabaseForCreate(null);
         const res = await executeCreateLeadAction(sb as never, ctx as never, {

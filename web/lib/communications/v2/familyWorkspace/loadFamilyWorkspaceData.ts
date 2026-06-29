@@ -31,7 +31,8 @@ export type RawOpportunityPerson = { person_id: string; role_type?: string | nul
 export type RawOpportunity = { id: string; name?: string | null; status_key?: string | null; pipeline_stage_id?: string | null; location_id?: string | null; primary_person_id?: string | null; customer_id?: string | null };
 export type RawRoleType = { key: string; label?: string | null };
 export type RawBinding = { id?: string | null; channel: string; provider?: string | null; status?: string | null; secret_ref?: string | null };
-export type RawCustomer = { id: string; name?: string | null; status?: string | null; status_key?: string | null; primary_contact_id?: string | null };
+// Canonical customer/household status is status_key; legacy `status` column was dropped from the live schema.
+export type RawCustomer = { id: string; name?: string | null; status_key?: string | null; primary_contact_id?: string | null };
 
 export type RawFamilyWorkspaceData = {
     customer: RawCustomer | null;
@@ -50,7 +51,7 @@ export async function loadFamilyWorkspaceData(
     customerId: string
 ): Promise<RawFamilyWorkspaceData> {
     const [customerRes, membersRes, customerPersonsRes, opportunitiesRes, roleTypesRes, bindingsRes] = await Promise.all([
-        supabase.from("customers").select("id, name, status, status_key, primary_contact_id").eq("org_id", orgId).eq("id", customerId).maybeSingle(),
+        supabase.from("customers").select("id, name, status_key, primary_contact_id").eq("org_id", orgId).eq("id", customerId).maybeSingle(),
         supabase.from("customer_members").select("id, person_id, display_name, first_name, last_name, dob, relationship, is_active, status_key").eq("org_id", orgId).eq("customer_id", customerId).eq("relationship", "child").eq("is_active", true).limit(CAP),
         supabase.from("customer_persons").select("person_id, role_type, is_primary, status, end_date").eq("org_id", orgId).eq("customer_id", customerId).limit(CAP),
         supabase.from("opportunities").select("id, name, status_key, pipeline_stage_id, location_id, primary_person_id, customer_id").eq("org_id", orgId).eq("customer_id", customerId).limit(CAP),

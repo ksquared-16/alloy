@@ -11,7 +11,7 @@ type CustomerRow = {
     created_at: string | null;
     updated_at: string | null;
     name: string | null;
-    status: string | null;
+    // Canonical customer/household status is status_key; legacy `status` column was dropped from the live schema.
     status_key: string | null;
     customer_type: string | null;
     primary_contact_id: string | null;
@@ -48,7 +48,7 @@ export async function GET(request: NextRequest) {
     const scopedCustomerIds = await fetchScopedCustomerIdsForRestrictedAdmin(supabase, ctx.orgId, dim);
 
     const selectCols =
-        "id, customer_number, created_at, updated_at, name, status, status_key, customer_type, primary_contact_id, vertical_id, org_id, metadata, stripe_customer_id, external_source, external_id, default_payment_method_id, payment_method_brand, payment_method_last4, setup_intent_id";
+        "id, customer_number, created_at, updated_at, name, status_key, customer_type, primary_contact_id, vertical_id, org_id, metadata, stripe_customer_id, external_source, external_id, default_payment_method_id, payment_method_brand, payment_method_last4, setup_intent_id";
     let q = supabase
         .from("customers")
         .select(selectCols, { count: "exact" })

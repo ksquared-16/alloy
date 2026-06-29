@@ -530,7 +530,9 @@ async function createAndLinkCustomer(
     name: customerName,
     // LEGACY_COMPAT: customers.primary_contact_id — keep for downstream UIs/workflows; pair with customer_persons when person id is known (caller uses ensureCustomerPersonsPrimaryLink).
     primary_contact_id: contactId,
-    status: "active",
+    // Canonical household/account status is customers.status_key (statusCategoryRegistry authoritative col).
+    // The legacy customers.status column was dropped from the live schema (PGRST204 on write). Do NOT reintroduce `status`.
+    status_key: "active",
     org_id: orgId,
     metadata: {
       source: "booking-resolver",

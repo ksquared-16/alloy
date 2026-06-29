@@ -73,7 +73,10 @@ export async function ensureCustomerForPersonNative(
 
     const payload: Record<string, unknown> = {
         name,
-        status: "active",
+        // Canonical household/account status lives on customers.status_key (statusCategoryRegistry
+        // authoritative col). The legacy customers.status column was dropped from the live schema —
+        // writing it triggers PGRST204. Do NOT reintroduce `status` here.
+        status_key: "active",
         metadata: {
             source: "book-v2-person-native",
             email: params.email ?? p.email ?? undefined,
