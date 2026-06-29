@@ -132,6 +132,23 @@ describe("workspace continuity + instant navigation pass 2", () => {
         expect(hit?.lifecycleCards?.[0]?.label).toBe("Enrollment");
     });
 
+    it("writeWorkspaceLifecycleCardsCache seeds a snapshot when none exists (work-unit return continuity)", () => {
+        // Deep-link straight into a work-unit (or in-memory module cache lost): no prior root cache.
+        expect(readWorkspaceRootCache("org-1", "user-1", "scope-a")).toBeFalsy();
+        // The work-unit's background revalidation persists lifecycle cards anyway...
+        writeWorkspaceLifecycleCardsCache(
+            { orgId: "org-1", principalUserId: "user-1", accessScopeFingerprint: "scope-a" },
+            [SAMPLE_CARD],
+        );
+        // ...so /workspace restores tiles synchronously on return and reveals once (no loading gate).
+        const restored = peekWorkspaceLifecycleCardsForRestore({
+            orgId: "org-1",
+            principalUserId: "user-1",
+            accessScopeFingerprint: "scope-a",
+        });
+        expect(restored?.[0]?.id).toBe("lc-1");
+    });
+
     it("commitFirst navigation commits before prepare finishes", async () => {
         const commit = vi.fn();
         let resolvePrepare: (() => void) | undefined;
