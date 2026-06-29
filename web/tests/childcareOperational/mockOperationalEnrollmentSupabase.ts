@@ -24,6 +24,11 @@ export type OperationalEnrollmentMockStore = {
     charges: Row[];
     childcare_rate_plans: Row[];
     childcare_rate_rules: Row[];
+    childcare_capacity_rules: Row[];
+    childcare_ratio_rules: Row[];
+    childcare_ratio_rule_tiers: Row[];
+    childcare_operating_windows: Row[];
+    childcare_schedule_rules: Row[];
     locations: Row[];
     location_program_categories: Row[];
     customer_members: Row[];
@@ -44,6 +49,11 @@ export function createOperationalEnrollmentMockStore(
         charges: seed?.charges ?? [],
         childcare_rate_plans: seed?.childcare_rate_plans ?? [],
         childcare_rate_rules: seed?.childcare_rate_rules ?? [],
+        childcare_capacity_rules: seed?.childcare_capacity_rules ?? [],
+        childcare_ratio_rules: seed?.childcare_ratio_rules ?? [],
+        childcare_ratio_rule_tiers: seed?.childcare_ratio_rule_tiers ?? [],
+        childcare_operating_windows: seed?.childcare_operating_windows ?? [],
+        childcare_schedule_rules: seed?.childcare_schedule_rules ?? [],
         locations: seed?.locations ?? [],
         location_program_categories: seed?.location_program_categories ?? [],
         customer_members: seed?.customer_members ?? [],

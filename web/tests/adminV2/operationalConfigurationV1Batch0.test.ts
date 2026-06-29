@@ -103,17 +103,17 @@ describe("Batch 0 — Locations operational rule sections", () => {
     });
 });
 
-describe("Batch 0/1 — read-only posture (surfaces NOT yet writable)", () => {
-    // Financials rate plans/rules became writable in Batch 1; GL config and the
-    // Locations operational rules remain read-only until later batches.
+describe("read-only posture (read loaders + surfaces NOT yet writable)", () => {
+    // Financials rate plans/rules (Batch 1) and Locations operational rules
+    // (Phase 3) became writable via dedicated authoring hooks. GL config remains
+    // read-only, and the read loaders stay GET-only (writes live in the hooks).
     const readonlyFiles = [
         "components/adminV2/settings/financials/GlConfigReadonlyView.tsx",
         "components/adminV2/settings/financials/useFinancialsConfigurationSettings.ts",
-        "components/adminV2/settings/locations/LocationOperationalRulesPanel.tsx",
         "components/adminV2/settings/locations/useLocationOperationalRules.ts",
     ];
 
-    it("still-read-only surfaces issue no write API calls", () => {
+    it("still-read-only surfaces + read loaders issue no write API calls", () => {
         for (const rel of readonlyFiles) {
             const src = read(rel);
             expect(src).not.toMatch(/method:\s*["'](POST|PUT|PATCH|DELETE)["']/);
@@ -161,6 +161,51 @@ describe("Batch 1 — Financials write + versioning", () => {
         expect(versioning).toContain("EffectiveDatedVersionRow");
         // No rate/financial-specific identifiers — it must compose for any config domain.
         expect(versioning).not.toMatch(/rate_plan|amount_cents|currency|billing_basis|schedule_basis/);
+    });
+});
+
+describe("Phase 3 — Locations operational-rule write + versioning", () => {
+    const routes = [
+        "app/api/admin/operational-config/capacity-rules/route.ts",
+        "app/api/admin/operational-config/ratio-rules/route.ts",
+        "app/api/admin/operational-config/operating-windows/route.ts",
+        "app/api/admin/operational-config/schedule-rules/route.ts",
+    ];
+
+    it("all four rule-type routes export role-gated POST authoring", () => {
+        for (const rel of routes) {
+            const src = read(rel);
+            expect(src).toMatch(/export async function POST/);
+            expect(src).toContain("requireAdminOrOps");
+        }
+    });
+
+    it("the Locations panel hosts inline authoring via the shared editor (no drawers)", () => {
+        const panel = read("components/adminV2/settings/locations/LocationOperationalRulesPanel.tsx");
+        expect(panel).toContain("ConfigRuleAuthoringGroup");
+        expect(panel).toContain("Capacity Rules");
+        expect(panel).toContain("Ratio Rules");
+        expect(panel).toContain("Operating Windows");
+        expect(panel).toContain("Schedule Rules");
+        expect(panel).toContain("Resolved per location");
+        // Inline authoring only — no edit drawer pattern in the operational rules surface.
+        expect(panel).not.toMatch(/openDrawer|useAdminDrawer/);
+    });
+
+    it("the authoring group composes the shared EffectiveDatedConfigurationEditor", () => {
+        const group = read("components/adminV2/settings/locations/ConfigRuleAuthoringGroup.tsx");
+        expect(group).toContain("EffectiveDatedConfigurationEditor");
+    });
+
+    it("the write hook posts to the operational-config routes", () => {
+        const hook = read("components/adminV2/settings/locations/useLocationRuleAuthoring.ts");
+        expect(hook).toMatch(/method:\s*["']POST["']/);
+        expect(hook).toContain("/api/admin/operational-config");
+    });
+
+    it("the authoring service writes only config-rule tables (no charges/ledger/GL/attendance)", () => {
+        const svc = read("lib/childcareOperational/config/configRuleAuthoringService.ts");
+        expect(svc).not.toMatch(/from\(["'](charges|ledger_transactions|gl_journal_lines|gl_accounts|child_attendance_events|invoices)["']\)/);
     });
 });
 
