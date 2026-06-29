@@ -83,7 +83,7 @@ Business Process
       → OIP resolver / source adapter (computes)         ← existing, frozen
       → metric_platform_snapshots (pre-computed)         ← existing, frozen
   → Metric Resolver (point / trend / breakdown)          ← existing + 1 new (breakdown)
-  → ResolvedVisualization (presentation-ready)
+  → Resolved surface model (presentation-ready)
   → Analytics Renderer / Card
   → Surface
 ```
@@ -92,7 +92,7 @@ The descriptor layer sits **above** OIP and **below** every consumer. It is the 
 
 - **Calculations do not compute.** They reference `OipMetricKey` and delegate to `evaluateMetricDefinition` / snapshot reads.
 - **Calculations are not surfaces.** A surface (Analytics dashboard, report, header) *requests* a calculation at a grain.
-- **The UI never knows where a calculation originates.** It asks for a key at a grain and receives a `ResolvedVisualization`.
+- **The UI never knows where a calculation originates.** It asks for a key at a grain and receives a presentation-ready result.
 
 ### 4.1 The runtime contract
 
@@ -101,13 +101,13 @@ A surface section asks the platform *what question, what scope, what grain, what
 ```
 Surface declaration
   → AnalyticsContext (org, access scope, filters, date range)
-  → AnalyticsVisualizationRequest (calculation key + grain + groupBy + drill)
+  → a request (calculation key + grain + groupBy + drill)
   → Provider dispatch (point / trend / breakdown / report / optimization)
-  → ResolvedVisualization (formatted value, health, comparison, segments, series, drill)
+  → resolved surface model (formatted value, health, comparison, segments, drill)
   → Renderer
 ```
 
-`AnalyticsContext`, `AnalyticsVisualizationRequest`, and `ResolvedVisualization` are defined in `web/lib/analytics/runtime/types.ts`. They **extend**, and never replace, `MetricEvaluationContext` / `MetricResolveContext` / `AdminAccessScopeDimensions`.
+`AnalyticsContext` is defined in `web/lib/analytics/runtime/types.ts`; the request and the resolved result are realized by the server model builder (`operationalSurface.ts` → `OperationalSurfaceModel`). They **extend**, and never replace, `MetricEvaluationContext` / `MetricResolveContext` / `AdminAccessScopeDimensions`.
 
 ### 4.2 Provider dispatch (no new engine)
 
@@ -168,10 +168,13 @@ The runtime is intentionally thin — it is wiring, not a framework.
 | Component | Path | Role |
 |---|---|---|
 | `OperationalCalculationRegistry` | `web/lib/analytics/calculations/registry.ts` | Catalog + lookup of governed descriptors |
-| `AnalyticsContext` | `web/lib/analytics/runtime/types.ts` + provider | Scope/filter flowing into every request |
-| `AnalyticsContext` URL codec | `web/lib/analytics/runtime/analyticsContextUrl.ts` | Linkable, back-button-safe filter state |
+| `AnalyticsContext` | `web/lib/analytics/runtime/types.ts` | Scope/filter envelope passed into every request |
 | `DrillResolver` | `web/lib/analytics/runtime/drillResolver.ts` | Calculation + selection → `NavigationIntent` |
+| Surface model builder | `web/lib/analytics/runtime/operationalSurface.ts` | Resolves metrics + breakdown + drills (server) |
+| Runtime surface | `web/components/adminV2/intelligence/OperationalIntelligencePanel.tsx` | Renders the model inside the Workspace → Analytics modal |
 | Metric resolvers | `web/lib/metrics/*` | Existing OIP computation (frozen) |
+
+**Surface model, not a routed page.** The Operational Intelligence runtime renders inside the existing Workspace → Analytics modal (client state), fed by `GET /api/admin/intelligence/operational` which wraps the server model builder. Configuration lives in Surfaces; routes are implementation details, not product surfaces.
 
 **Doctrine:** presentation never computes; context is server-trusted (never trust client `org_id`); every visualization declares grain; no metric dead-ends — a calculation either declares a drill or is explicitly `exploratoryOnly`.
 
@@ -181,7 +184,7 @@ The runtime is intentionally thin — it is wiring, not a framework.
 
 Consumers bind to a calculation **by key at a grain**, never to a resolver:
 
-- **Analytics** requests `{ key, grain, groupBy?, drill? }` and renders the `ResolvedVisualization`.
+- **Analytics** requests `{ key, grain, groupBy?, drill? }` and renders the resolved result.
 - **Headers / tiles** request point values through the existing placement pipeline.
 - **Focus Panel** requests record-grain values via Operational Context (`context_type=record`).
 - **Reports** request tabular period output.
@@ -199,7 +202,7 @@ Each consumer is declared on the descriptor so that a change to a calculation pr
 | Registry integrity | Every descriptor wraps a real `OipMetricKey`; declared grain/dimensions ⊆ source support; no orphan consumers. |
 | Resolver parity | A calculation's resolved value equals the OIP value for the same scope (no drift introduced by the descriptor layer). |
 | Drill resolution | Every non-`exploratoryOnly` calculation resolves a valid `NavigationIntent`; access scope respected. |
-| URL codec round-trip | `decode(encode(context)) === context` for all filter dimensions. |
+| Modal deep-link + drill guard | `?workspaceModal=analytics` opens the runtime modal; drills navigate internal paths only. |
 
 Tests live under `web/tests/analytics/`. Existing OIP/metric tests remain authoritative for the math itself.
 
@@ -233,7 +236,9 @@ Tests live under `web/tests/analytics/`. Existing OIP/metric tests remain author
 | Calculation descriptor type | `web/lib/analytics/calculations/types.ts` |
 | Calculation registry | `web/lib/analytics/calculations/registry.ts` |
 | Analytics runtime types | `web/lib/analytics/runtime/types.ts` |
-| AnalyticsContext URL codec | `web/lib/analytics/runtime/analyticsContextUrl.ts` |
+| Surface model builder | `web/lib/analytics/runtime/operationalSurface.ts` |
+| Runtime surface (modal) | `web/components/adminV2/intelligence/OperationalIntelligencePanel.tsx` |
+| Runtime data API | `web/app/api/admin/intelligence/operational/route.ts` |
 | DrillResolver | `web/lib/analytics/runtime/drillResolver.ts` |
 | OIP registry (wrapped) | `web/lib/metrics/registry.ts` |
 | OIP metric types | `web/lib/metrics/types.ts` |

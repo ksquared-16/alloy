@@ -1,11 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import {
-    metricWindowFromPeriod,
-    periodDaysForWindow,
-    windowLabel,
-    DEFAULT_ANALYTICS_WINDOW,
-} from "@/lib/analytics/runtime/metricWindow";
+import { periodDaysForWindow, windowLabel, ANALYTICS_WINDOW_OPTIONS } from "@/lib/analytics/runtime/metricWindow";
 import {
     tallyStatusCounts,
     assembleBreakdownBars,
@@ -20,22 +15,18 @@ import {
 import type { AdminAccessScopeDimensions } from "@/lib/admin/accessScope";
 
 describe("metricWindow mapping", () => {
-    it("snaps period days to the nearest supported rolling window", () => {
-        expect(metricWindowFromPeriod({ version: 1, kind: "rolling", days: 1 })).toBe("rolling_24h");
-        expect(metricWindowFromPeriod({ version: 1, kind: "rolling", days: 5 })).toBe("rolling_7d");
-        expect(metricWindowFromPeriod({ version: 1, kind: "rolling", days: 30 })).toBe("rolling_30d");
-        expect(metricWindowFromPeriod({ version: 1, kind: "rolling", days: 90 })).toBe("rolling_30d");
+    it("maps each supported window to its day count", () => {
+        expect(periodDaysForWindow("rolling_24h")).toBe(1);
+        expect(periodDaysForWindow("rolling_7d")).toBe(7);
+        expect(periodDaysForWindow("rolling_30d")).toBe(30);
     });
 
-    it("defaults when no days are present", () => {
-        expect(metricWindowFromPeriod(undefined)).toBe(DEFAULT_ANALYTICS_WINDOW);
-        expect(metricWindowFromPeriod({ version: 1, kind: "rolling" })).toBe(DEFAULT_ANALYTICS_WINDOW);
-    });
-
-    it("round-trips window → days → window", () => {
-        for (const w of ["rolling_24h", "rolling_7d", "rolling_30d"] as const) {
-            expect(metricWindowFromPeriod({ version: 1, kind: "rolling", days: periodDaysForWindow(w) })).toBe(w);
-        }
+    it("exposes exactly the three OIP-supported windows", () => {
+        expect(ANALYTICS_WINDOW_OPTIONS.map((o) => o.windowKey)).toEqual([
+            "rolling_24h",
+            "rolling_7d",
+            "rolling_30d",
+        ]);
     });
 
     it("labels windows", () => {
