@@ -8,7 +8,6 @@ import {
     type WorkspaceRootDepartmentRow,
     type WorkspaceRootDeptTileStats,
 } from "@/components/admin/workspace/WorkspaceRootDepartmentGrid";
-import { WorkspacePageLoadingGate } from "@/app/adminV2/components/workspace/WorkspacePageLoadingGate";
 import type { KPIVm } from "@/lib/ui-v2/workspace-types";
 import type { WorkspaceKpiPlacementRow } from "@/lib/kpi/types";
 import {
@@ -543,10 +542,11 @@ export default function AdminV2WorkspaceIndexPage() {
         const shell_ready = workspaceRevealShellReady({
             bootstrap_loading: loading && !cachePrimed,
             departments_resolved,
-            // Warm-return atomic commit: lifecycle landing tiles restore synchronously from the
-            // module/session snapshot, so a committed surface reveals immediately without a cold
-            // loading-gate flash. Empty (true cold) → falls through to bootstrap readiness.
             surface_snapshot_committed: lifecycleCards.length > 0,
+            // The workspace landing reveals its final structure from the server-composed Route VM +
+            // static chrome immediately; KPI/rollup/count values refine into reserved slots after.
+            // So the shell is always ready — no client-fetch wait, no loading gate.
+            operator_lifecycle_landing: true,
         });
         const department_tiles_ready = workspaceRevealDepartmentTilesReady({
             bootstrap_loading: loading && !cachePrimed,
@@ -716,10 +716,9 @@ export default function AdminV2WorkspaceIndexPage() {
         );
     }
 
-    if (!workspaceSurfaceReady) {
-        return <WorkspacePageLoadingGate orgName={orgNameFromContext} />;
-    }
-
+    // No loading gate: the surface reveals its final structure from the Route VM + Operational Shell
+    // immediately (deferred values refine in reserved slots). `workspaceSurfaceReady` is now always
+    // true for the lifecycle landing — retained only as a perf/diagnostic signal and a prefetch trigger.
     return (
         <>
             <ResumeWhereYouLeftOffChip />

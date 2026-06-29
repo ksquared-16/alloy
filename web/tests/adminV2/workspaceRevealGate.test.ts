@@ -60,6 +60,20 @@ describe("workspaceRevealGate", () => {
         ).toBe(false);
     });
 
+    it("shell_ready immediately for the operator lifecycle landing (Route VM reveal — gate retired)", () => {
+        // The landing is structurally data-independent: it reveals from the server-composed Route VM
+        // + static chrome at once, so the shell is ready even on a true cold load with no snapshot and
+        // the departments fetch still in flight. This is what made WorkspacePageLoadingGate unnecessary.
+        expect(
+            workspaceRevealShellReady({
+                bootstrap_loading: true,
+                departments_resolved: false,
+                surface_snapshot_committed: false,
+                operator_lifecycle_landing: true,
+            })
+        ).toBe(true);
+    });
+
     it("department_tiles_ready allows lifecycle landing without departments", () => {
         expect(
             workspaceRevealDepartmentTilesReady({

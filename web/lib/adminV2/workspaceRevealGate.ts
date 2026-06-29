@@ -103,11 +103,19 @@ export function workspaceRevealShellReady(input: {
      * whose tiles (and KPI snapshot) restore synchronously from the in-memory / session snapshot.
      * When that committed surface is present, the shell is ready to reveal immediately and reuse
      * the last committed snapshot — the dept bootstrap re-fetch refines values quietly afterward.
-     * Without it (true cold first load), readiness still waits on the bootstrap settling so the
-     * coordinated loading gate is shown once, never a partial surface.
      */
     surface_snapshot_committed?: boolean;
+    /**
+     * The operator lifecycle landing is a **structurally data-independent** surface: its chrome,
+     * tile grid frame, KPI band reserve, and context all render immediately from the server-composed
+     * Route VM + static layout, and the deferred KPI/rollup/count values patch into reserved slots
+     * without changing structure. The shell is therefore ready to reveal at once — it must not wait
+     * on the client departments fetch (that fetch is refinement, not first paint). This retires the
+     * pre-Route-VM dependence that the `WorkspacePageLoadingGate` was built around.
+     */
+    operator_lifecycle_landing?: boolean;
 }): boolean {
+    if (input.operator_lifecycle_landing) return true;
     if (input.surface_snapshot_committed) return true;
     return input.departments_resolved && !input.bootstrap_loading;
 }
