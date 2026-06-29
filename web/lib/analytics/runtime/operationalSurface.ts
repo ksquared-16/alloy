@@ -22,7 +22,9 @@ import { resolveMetrics } from "@/lib/metrics/metricEngine";
 import { readMetricTrend } from "@/lib/metrics/snapshots/readMetricTrend";
 import { resolveMetricScopeFilter, applyOpportunityScopeToQuery } from "@/lib/metrics/scopeFilter";
 import { fetchEffectiveStatusDefinitions } from "@/lib/admin/statusDefinitionsResolve";
+import { resolvePlacementsForSurface } from "@/lib/metrics/platform/placementResolver";
 import { getOperationalCalculation } from "@/lib/analytics/calculations/registry";
+import { isKnownOipMetricKey } from "@/lib/metrics/registry";
 import {
     resolveCalculationDrill,
     resolveDrill,
@@ -38,12 +40,17 @@ import {
     tallyStatusCounts,
     buildMetricComparison,
     resolveSiteLabel,
+    deriveConfiguredMetrics,
     type OperationalMetricCard,
     type OperationalSurfaceModel,
     type SiteOption,
 } from "@/lib/analytics/runtime/operationalSurfaceModel";
 
-/** Metrics shown on the Operational Intelligence surface (driven by the OC registry). */
+/**
+ * Default metric set when no placements are configured for `operational_intelligence`.
+ * When placements exist (Settings → Analytics → "Where it appears"), they drive the
+ * set/order/labels instead — configuration reaches the runtime modal.
+ */
 const SURFACE_METRIC_KEYS: readonly OipMetricKey[] = [
     "enrollment.lead_count",
     "enrollment.tour_conversion_rate",
@@ -51,6 +58,26 @@ const SURFACE_METRIC_KEYS: readonly OipMetricKey[] = [
     "ops.work_overdue_count",
     "comms.delivery_rate",
 ];
+
+/** Resolve the configured metric list from placements; empty when none are placed. */
+async function resolveConfiguredMetricList(
+    supabase: SupabaseClient,
+    orgId: string,
+): Promise<Array<{ key: OipMetricKey; label: string }>> {
+    try {
+        const placements = await resolvePlacementsForSurface({
+            supabase,
+            orgId,
+            surface: "operational_intelligence",
+        });
+        return deriveConfiguredMetrics(placements, isKnownOipMetricKey).map((m) => ({
+            key: m.key as OipMetricKey,
+            label: m.label,
+        }));
+    } catch {
+        return [];
+    }
+}
 
 const OPPORTUNITY_BREAKDOWN_CAP = 5000;
 const WORKSPACE_LANDING_HREF = "/adminV2/workspace";
@@ -161,7 +188,17 @@ export async function buildOperationalSurfaceModel(
         return { href: WORKSPACE_LANDING_HREF, label: "Open workspace" };
     }
 
-    // 1) Real OIP metric values.
+    // 1) Metric set: configured placements (Settings → Analytics → "Where it appears")
+    //    drive the set / order / labels; fall back to code defaults when none are placed.
+    const configured = await resolveConfiguredMetricList(supabase, orgId);
+    const metricsSource: "configured" | "default" = configured.length > 0 ? "configured" : "default";
+    const metricList: Array<{ key: OipMetricKey; label: string }> =
+        configured.length > 0
+            ? configured
+            : SURFACE_METRIC_KEYS.map((key) => ({ key, label: getOperationalCalculation(key).label }));
+    const metricKeys = metricList.map((m) => m.key);
+
+    // Real OIP metric values (live; honors the modal-local site/window filters).
     const resolved = await resolveMetrics({
         ctx: {
             supabase,
@@ -172,7 +209,7 @@ export async function buildOperationalSurfaceModel(
             dimensions: {},
             mode: "live",
         },
-        keys: [...SURFACE_METRIC_KEYS],
+        keys: metricKeys,
         includeKpi: true,
     });
     const resolvedByKey = new Map(resolved.map((r) => [r.metric.key, r]));
@@ -183,13 +220,13 @@ export async function buildOperationalSurfaceModel(
     if (compareOn) {
         const scopeType = siteId ? "site" : "org";
         const trends = await Promise.all(
-            SURFACE_METRIC_KEYS.map((key) =>
+            metricKeys.map((key) =>
                 readMetricTrend(supabase, { orgId, metricKey: key, windowKey, scopeType, scopeId: siteId }).catch(
                     () => null,
                 ),
             ),
         );
-        SURFACE_METRIC_KEYS.forEach((key, i) => {
+        metricKeys.forEach((key, i) => {
             const t = trends[i];
             if (t) trendByKey.set(key, t);
         });
@@ -200,7 +237,7 @@ export async function buildOperationalSurfaceModel(
 
     let freshnessIso: string | null = null;
 
-    const metrics: OperationalMetricCard[] = SURFACE_METRIC_KEYS.map((key) => {
+    const metrics: OperationalMetricCard[] = metricList.map(({ key, label }) => {
         const calc = getOperationalCalculation(key);
         const row = resolvedByKey.get(key);
         const drill = cardDrill(key);
@@ -208,7 +245,7 @@ export async function buildOperationalSurfaceModel(
         if (computedAt && (!freshnessIso || computedAt > freshnessIso)) freshnessIso = computedAt;
         return {
             key,
-            label: calc.label,
+            label,
             question: calc.questionAnswered,
             value: row?.metric.value ?? null,
             formattedValue: row?.metric.formattedValue ?? "—",
@@ -220,6 +257,12 @@ export async function buildOperationalSurfaceModel(
             comparison: buildMetricComparison(trendByKey.get(key) ?? null, compareOn),
         };
     });
+
+    dataNotes.push(
+        metricsSource === "configured"
+            ? `Metrics are configured in Settings → Analytics → "Where it appears" (${metricList.length} placed). Live in this modal.`
+            : `Showing default metrics — place metrics in Settings → Analytics → "Where it appears" to customize this modal.`,
+    );
 
     // 2) Real breakdown (open opportunities by status), with per-segment queue drills.
     const leadsContract = getDrillContract("enrollment.leads");
@@ -265,6 +308,7 @@ export async function buildOperationalSurfaceModel(
         siteLabel,
         siteOptions,
         compareOn,
+        metricsSource,
         freshnessIso,
         metrics,
         breakdown: {

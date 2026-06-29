@@ -58,6 +58,8 @@ export type OperationalSurfaceModel = {
     siteLabel: string;
     siteOptions: SiteOption[];
     compareOn: boolean;
+    /** Whether the metric set is driven by configured placements or code defaults. */
+    metricsSource: "configured" | "default";
     /** Most recent metric computation time (ISO) for the freshness note. */
     freshnessIso: string | null;
     metrics: OperationalMetricCard[];
@@ -151,6 +153,36 @@ export function resolveSiteLabel(siteId: string | null, options: SiteOption[]): 
 /** A drill href is navigable only when it is an internal app path (guards "#"/external). */
 export function isInternalDrillHref(href: string | null | undefined): boolean {
     return typeof href === "string" && href.startsWith("/");
+}
+
+/** Minimal shape of a resolved placement needed to derive a metric list (config-driven). */
+export type PlacementMetricInput = {
+    definition: { source_type: string; source_key: string; label?: string | null };
+    visualization?: { label?: string | null } | null;
+};
+
+/**
+ * Derive the ordered, de-duplicated metric list (key + display label) from configured
+ * `metric_placements` (surface=operational_intelligence). Only OIP-adapter placements
+ * whose source_key is a known metric key are used; placements arrive pre-ordered by
+ * sort_order. The display label prefers the visualization label, then the definition
+ * label, then the key. Pure — `isKnownKey` is injected to avoid importing the registry.
+ */
+export function deriveConfiguredMetrics(
+    placements: PlacementMetricInput[],
+    isKnownKey: (key: string) => boolean,
+): Array<{ key: string; label: string }> {
+    const seen = new Set<string>();
+    const out: Array<{ key: string; label: string }> = [];
+    for (const p of placements) {
+        if (p.definition.source_type !== "oip_adapter") continue;
+        const key = String(p.definition.source_key ?? "").trim();
+        if (!key || !isKnownKey(key) || seen.has(key)) continue;
+        seen.add(key);
+        const label = (p.visualization?.label || p.definition.label || key).trim();
+        out.push({ key, label });
+    }
+    return out;
 }
 
 /** Modal-local filter state for the Operational Intelligence runtime surface. */

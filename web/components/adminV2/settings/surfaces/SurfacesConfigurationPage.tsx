@@ -123,17 +123,27 @@ export default function SurfacesConfigurationPage() {
                             <div className="space-y-3">
                                 <p className="config-typo-sublabel">
                                     {previewObject.subtitle ? `${previewObject.subtitle}. ` : ""}
-                                    Analytics is a Dashboard Design Surface — composed from the Metric archetype and the
-                                    shared Renderer catalog. Configuration lives here in Surfaces; the live runtime opens
-                                    in the Workspace → Operational Intelligence modal. An in-place editor lands in a later
-                                    slice; preview the composition and visual language below.
+                                    Analytics is a Dashboard Design Surface composed from the Metric archetype and the
+                                    shared Renderer catalog. <strong>Configure</strong> which metrics appear (the placement
+                                    builder — placements drive the runtime modal); <strong>Open in Workspace</strong> for the
+                                    live Operational Intelligence modal. The mock surface is a dev/design preview only.
                                 </p>
                                 <div className="flex flex-wrap items-center gap-2">
+                                    {previewObject.configureHref ? (
+                                        <a
+                                            href={previewObject.configureHref}
+                                            data-testid="surfaces-dashboard-configure-link"
+                                            className="inline-flex items-center gap-1.5 rounded-lg bg-alloy-pine px-3 py-1.5 text-xs font-semibold text-white hover:bg-alloy-pine/90"
+                                        >
+                                            Configure
+                                            <span aria-hidden="true">→</span>
+                                        </a>
+                                    ) : null}
                                     {previewObject.liveHref ? (
                                         <a
                                             href={previewObject.liveHref}
                                             data-testid="surfaces-dashboard-live-link"
-                                            className="inline-flex items-center gap-1.5 rounded-lg bg-alloy-pine px-3 py-1.5 text-xs font-semibold text-white hover:bg-alloy-pine/90"
+                                            className="inline-flex items-center gap-1.5 rounded-lg border border-alloy-pine/40 px-3 py-1.5 text-xs font-semibold text-alloy-pine hover:bg-alloy-pine/[0.06]"
                                         >
                                             Open in Workspace
                                             <span aria-hidden="true">→</span>
@@ -144,9 +154,9 @@ export default function SurfacesConfigurationPage() {
                                         target="_blank"
                                         rel="noreferrer"
                                         data-testid="surfaces-dashboard-preview-link"
-                                        className="inline-flex items-center gap-1.5 rounded-lg border border-alloy-stone/25 px-3 py-1.5 text-xs font-semibold text-alloy-midnight/70 hover:bg-alloy-stone/[0.06]"
+                                        className="inline-flex items-center gap-1 text-[11px] font-medium text-alloy-midnight/45 underline-offset-2 hover:underline"
                                     >
-                                        Preview (mock surface)
+                                        Preview (mock surface, dev)
                                         <span aria-hidden="true">↗</span>
                                     </a>
                                 </div>

@@ -169,7 +169,11 @@ export function OperationalIntelligencePanel() {
             <AnalyticsSection
                 eyebrow="Measure"
                 title="Operational metrics"
-                description="Resolved live from Operational Calculations (OIP). Each card drills into real work."
+                description={
+                    model.metricsSource === "configured"
+                        ? "Configured in Settings → Analytics → Where it appears. Resolved live from OIP; each card drills into real work."
+                        : "Default set (no placements configured). Resolved live from OIP; each card drills into real work."
+                }
             >
                 <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-5" data-metric-grid="operational">
                     {model.metrics.map((card) => (

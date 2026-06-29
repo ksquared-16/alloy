@@ -10,7 +10,9 @@ import {
     siteAllowlistForScope,
     resolveSiteLabel,
     sanitizeSiteId,
+    deriveConfiguredMetrics,
     type SiteOption,
+    type PlacementMetricInput,
 } from "@/lib/analytics/runtime/operationalSurfaceModel";
 import type { AdminAccessScopeDimensions } from "@/lib/admin/accessScope";
 
@@ -159,5 +161,48 @@ describe("site scope (no inaccessible exposure)", () => {
         expect(resolveSiteLabel(null, sites)).toBe("All sites");
         expect(resolveSiteLabel("site-b", sites)).toBe("Site B");
         expect(resolveSiteLabel("site-x", sites)).toBe("Selected site");
+    });
+});
+
+describe("config-driven metric set (placements → runtime modal)", () => {
+    const known = new Set(["enrollment.tour_conversion_rate", "ops.needs_attention_count", "forms.completion_rate"]);
+    const isKnown = (k: string) => known.has(k);
+
+    const p = (source_key: string, opts: Partial<PlacementMetricInput["definition"]> & { viz?: string } = {}): PlacementMetricInput => ({
+        definition: { source_type: opts.source_type ?? "oip_adapter", source_key, label: opts.label ?? null },
+        visualization: opts.viz !== undefined ? { label: opts.viz } : undefined,
+    });
+
+    it("derives ordered, deduped OIP-adapter metrics with label preference", () => {
+        const result = deriveConfiguredMetrics(
+            [
+                p("enrollment.tour_conversion_rate", { viz: "Tour conversion" }),
+                p("ops.needs_attention_count", { label: "Needs attention (def)" }),
+                p("enrollment.tour_conversion_rate", { viz: "dup — dropped" }),
+                p("forms.completion_rate"),
+            ],
+            isKnown,
+        );
+        expect(result).toEqual([
+            { key: "enrollment.tour_conversion_rate", label: "Tour conversion" }, // viz label preferred
+            { key: "ops.needs_attention_count", label: "Needs attention (def)" }, // definition label fallback
+            { key: "forms.completion_rate", label: "forms.completion_rate" }, // key fallback
+        ]);
+    });
+
+    it("ignores non-OIP-adapter placements and unknown keys", () => {
+        const result = deriveConfiguredMetrics(
+            [
+                p("ops.needs_attention_count", { source_type: "queue_adapter" }), // not oip_adapter
+                p("not.a.real.key"), // unknown
+                p("forms.completion_rate", { viz: "Forms" }), // valid
+            ],
+            isKnown,
+        );
+        expect(result).toEqual([{ key: "forms.completion_rate", label: "Forms" }]);
+    });
+
+    it("returns [] when no placements (runtime falls back to defaults)", () => {
+        expect(deriveConfiguredMetrics([], isKnown)).toEqual([]);
     });
 });
