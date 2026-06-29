@@ -204,8 +204,10 @@ describe("lifecycleActiveWorkUnitSelection", () => {
 describe("work unit page atomic lifecycle selection wiring", () => {
     it("uses activeLifecycleSelectionRef and guard before queue fetch", () => {
         const page = read("app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page.tsx");
+        // The lifecycle selection ref + queue-fetch guards remain (queue-lane logic); the in-page
+        // `applyActiveLifecycleWorkUnitSelection` switch was removed when sibling switching became
+        // canonical navigation.
         expect(page).toContain("activeLifecycleSelectionRef");
-        expect(page).toContain("applyActiveLifecycleWorkUnitSelection");
         expect(page).toContain("guardLifecycleQueueFetchBeforeApi");
         expect(page).toContain("isWorkUnitQueuePillPrefetchable");
         expect(page).toContain("lifecycleSelectionStateMatchesRef");

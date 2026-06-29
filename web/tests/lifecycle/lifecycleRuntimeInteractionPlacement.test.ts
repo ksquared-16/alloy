@@ -32,22 +32,23 @@ describe("lifecycle runtime action placement isolation", () => {
     });
 });
 
-describe("lifecycle in-page work unit pill switch", () => {
-    it("uses history.replaceState and activeWorkUnitId without router.replace for sibling pills", () => {
+describe("lifecycle sibling work unit pill switch → canonical navigation", () => {
+    it("navigates lifecycle sibling pills to their own route entry (no in-page activeWorkUnitId switch)", () => {
         const page = readLocal("app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page.tsx");
-        expect(page).toContain("replaceWorkUnitLocationHref(href)");
-        expect(page).toContain("setActiveWorkUnitId(lifecycleNavWuId)");
-        expect(page).not.toMatch(
-            /parseLifecycleWorkUnitNavChipKey[\s\S]{0,600}router\.replace\(href/
-        );
+        // Each work unit is its own route entry + Route VM; a sibling pill navigates, never mutates
+        // local switch state.
+        expect(page).toContain("resolveLifecycleSiblingNavHref(siblingNavRow)");
+        expect(page).toContain("router.push(siblingNavHref)");
+        expect(page).not.toContain("setActiveWorkUnitId");
+        expect(page).not.toContain("replaceWorkUnitLocationHref");
     });
 
-    it("sibling pill click resolves target primary queue key and prefetches queue rows", () => {
+    it("sibling pill click navigates instead of switching in-page (destination route owns the queue load)", () => {
         const page = readLocal("app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page.tsx");
-        expect(page).toContain("resolveLifecycleWorkUnitPrimaryQueueKey");
-        expect(page).toContain('applyActiveLifecycleWorkUnitSelection(targetSelection, "lifecycleWuNav")');
-        expect(page).toMatch(/fetchQueueItems\(\s*targetSelection\.workUnitId,\s*targetSelection\.queueKey/);
         expect(page).toMatch(/lifecycleNavWuId === workUnitId\) return/);
+        expect(page).toContain("router.push(siblingNavHref)");
+        // no in-page selection/fetch for the switched-to sibling — that's the destination mount's job
+        expect(page).not.toContain('applyActiveLifecycleWorkUnitSelection(targetSelection, "lifecycleWuNav")');
     });
 
     it("preserves right rail on in-page lifecycle switch", () => {
