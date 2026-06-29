@@ -3,7 +3,9 @@ import { describe, expect, it } from "vitest";
 import { FOCUS_PANEL_SUMMARY_DEFAULT_DOC } from "@/lib/adminV2/runtime/focusPanel/buildFocusPanelSummaryDefaultDoc";
 import { deriveFocusPanelInstanceMap } from "@/lib/adminV2/runtime/focusPanel/deriveFocusPanelCardsFromLayoutDoc";
 import {
+    buildCompositionOverrides,
     composeEffectiveCardModel,
+    compositionOverrideFromConfig,
     isFocusPanelCardConfigEmpty,
     type FocusPanelCardConfig,
     type FocusPanelCardField,
@@ -173,5 +175,45 @@ describe("config round-trips through the LayoutDoc", () => {
         const map = deriveFocusPanelInstanceMap(FOCUS_PANEL_SUMMARY_DEFAULT_DOC);
         expect(map.get("household")?.typeKey).toBe("household");
         expect(map.get("household")?.config).toBeNull();
+    });
+});
+
+describe("composition overrides (Experience Builder → engine)", () => {
+    it("reduces a card's config to the engine override (only declared fields)", () => {
+        const override = compositionOverrideFromConfig({
+            composition: { weight: "heavy", perspectiveExpansion: "takeover_row" },
+        });
+        expect(override).toEqual({ weight: "heavy", perspectiveExpansion: "takeover_row" });
+    });
+
+    it("returns null when no composition is declared", () => {
+        expect(compositionOverrideFromConfig({ appearance: { titleOverride: "X" } })).toBeNull();
+        expect(compositionOverrideFromConfig(null)).toBeNull();
+        expect(compositionOverrideFromConfig({ composition: {} })).toBeNull();
+    });
+
+    it("builds an overrides map keyed by card type", () => {
+        const overrides = buildCompositionOverrides([
+            { typeKey: "current_work", config: { composition: { weight: "heavy" } } },
+            { typeKey: "children", config: { appearance: { titleOverride: "Kids" } } },
+            { typeKey: "readiness_kpi", config: null },
+        ]);
+        expect(overrides).toEqual({ current_work: { weight: "heavy" } });
+    });
+
+    it("counts a composition-only config as non-empty (so it persists)", () => {
+        expect(isFocusPanelCardConfigEmpty({ composition: { weight: "light" } })).toBe(false);
+        expect(isFocusPanelCardConfigEmpty({ composition: {} })).toBe(true);
+    });
+
+    it("persists composition through the LayoutDoc round-trip", () => {
+        const id = entryInstanceId(baseOrder.find((c) => c.key === "current_work")!);
+        const withComposition = updateSummaryCardConfig(baseOrder, id, {
+            composition: { weight: "heavy", preferredRow: "lead" },
+        });
+        const reread = readSummaryCardOrder(buildSummaryDocFromOrder(withComposition));
+        const currentWork = reread.find((c) => c.key === "current_work")!;
+        expect(currentWork.config?.composition?.weight).toBe("heavy");
+        expect(currentWork.config?.composition?.preferredRow).toBe("lead");
     });
 });

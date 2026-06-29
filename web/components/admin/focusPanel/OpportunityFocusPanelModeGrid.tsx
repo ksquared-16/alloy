@@ -12,6 +12,7 @@ import {
     deriveFocusPanelInstanceMap,
 } from "@/lib/adminV2/runtime/focusPanel/deriveFocusPanelCardsFromLayoutDoc";
 import {
+    buildCompositionOverrides,
     composeEffectiveCardModel,
     type FocusPanelCardConfig,
 } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardConfigModel";
@@ -217,6 +218,19 @@ export default function OpportunityFocusPanelModeGrid({
         );
     }, [isSummary, gridRows, cellResolution]);
 
+    // Composition overrides (Experience Builder): per-card weight / row / depth the
+    // published Surface Definition declared, fed to the engine so the operator surface
+    // composes per config. Keyed by card type; platform defaults fill the rest.
+    const compositionOverrides = useMemo(
+        () =>
+            isSummary
+                ? buildCompositionOverrides(
+                      Array.from(cellResolution.values()).map((r) => ({ typeKey: r.typeKey, config: r.config })),
+                  )
+                : undefined,
+        [isSummary, cellResolution],
+    );
+
     if (mode === "activity") {
         return (
             <OpportunityFocusPanelEmbeddedWorkspace
@@ -241,6 +255,7 @@ export default function OpportunityFocusPanelModeGrid({
             <FocusPanelCardGrid
                 rows={gridRows}
                 composeCards={composeCards}
+                compositionOverrides={compositionOverrides}
                 className={mode === "work" ? "alloy-os-focus-panel-grid--work" : undefined}
                 dataFocusPanelSplitLayout={mode === "work" ? "true" : undefined}
                 elevatedCellKey={elevatedCellKey}

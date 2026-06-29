@@ -21,8 +21,15 @@
  * surface is visually identical to the editable one.
  */
 
+import type {
+    CardCompositionPreference,
+    CardOperationalWeight,
+    CardPerspectiveExpansion,
+    CardPreferredRow,
+} from "@/lib/adminV2/runtime/focusPanel/cardCompositionModel";
 import type { FocusPanelCardDensity } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardGrid";
 import type {
+    FocusPanelCardKey,
     FocusPanelCardModel,
     FocusPanelProfileField,
 } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardModel";
@@ -126,18 +133,45 @@ export type FocusPanelCardExpansion = {
     default: FocusPanelFieldPlacement;
 };
 
+/**
+ * Composition overrides the Surface Definition declares for a card (Experience
+ * Builder). These are the subset of `CardCompositionPreference` an operator may
+ * tune — the rest stay platform defaults. They feed the engine's `overrides`
+ * param (`composeFocusPanelSurface`) so a published surface composes per config:
+ *
+ *   - `weight`               — visual emphasis (Heavy anchors a lane; Light orbits)
+ *   - `preferredRow`         — which band the card gravitates to
+ *   - `perspectiveExpansion` — the deepest depth it reaches (Evidence / Focus /
+ *                              Workspace — see operational-depth-doctrine.md)
+ *
+ * The platform still clamps these (diagnostic cards cannot reach Focus/Workspace);
+ * configuration recommends, the runtime enforces.
+ */
+export type FocusPanelCardComposition = {
+    weight?: CardOperationalWeight;
+    preferredRow?: CardPreferredRow;
+    perspectiveExpansion?: CardPerspectiveExpansion;
+};
+
 /** Complete per-card configuration persisted on the section metadata. */
 export type FocusPanelCardConfig = {
     appearance?: FocusPanelCardAppearance;
     fields?: FocusPanelCardField[];
     expansion?: FocusPanelCardExpansion;
     conditions?: FocusPanelCardCondition[];
+    composition?: FocusPanelCardComposition;
 };
+
+/** True when a composition override carries no declared field. */
+function isCompositionEmpty(composition: FocusPanelCardComposition | null | undefined): boolean {
+    if (!composition) return true;
+    return !composition.weight && !composition.preferredRow && !composition.perspectiveExpansion;
+}
 
 /** True when a config carries no meaningful content (avoid persisting empties). */
 export function isFocusPanelCardConfigEmpty(config: FocusPanelCardConfig | null | undefined): boolean {
     if (!config) return true;
-    const { appearance, fields, conditions, expansion } = config;
+    const { appearance, fields, conditions, expansion, composition } = config;
     const appearanceEmpty =
         !appearance ||
         ((!appearance.titleOverride || appearance.titleOverride.trim() === "") &&
@@ -147,8 +181,43 @@ export function isFocusPanelCardConfigEmpty(config: FocusPanelCardConfig | null 
         appearanceEmpty &&
         (fields?.length ?? 0) === 0 &&
         (conditions?.length ?? 0) === 0 &&
-        !expansion
+        !expansion &&
+        isCompositionEmpty(composition)
     );
+}
+
+/**
+ * Reduce a card's persisted config to the composition override the engine consumes
+ * (`Partial<CardCompositionPreference>`), or `null` when nothing is overridden.
+ * Only the declared fields win — the rest stay platform defaults.
+ */
+export function compositionOverrideFromConfig(
+    config: FocusPanelCardConfig | null | undefined,
+): Partial<CardCompositionPreference> | null {
+    const composition = config?.composition;
+    if (isCompositionEmpty(composition)) return null;
+    const override: Partial<CardCompositionPreference> = {};
+    if (composition!.weight) override.weight = composition!.weight;
+    if (composition!.preferredRow) override.preferredRow = composition!.preferredRow;
+    if (composition!.perspectiveExpansion) override.perspectiveExpansion = composition!.perspectiveExpansion;
+    return override;
+}
+
+/**
+ * Build the engine `overrides` map from placed cards + their config. Keyed by card
+ * TYPE (composition is type-level in the engine); when the same type appears more
+ * than once the declared fields merge (last wins per field).
+ */
+export function buildCompositionOverrides(
+    entries: ReadonlyArray<{ typeKey: FocusPanelCardKey; config?: FocusPanelCardConfig | null }>,
+): Partial<Record<FocusPanelCardKey, Partial<CardCompositionPreference>>> {
+    const overrides: Partial<Record<FocusPanelCardKey, Partial<CardCompositionPreference>>> = {};
+    for (const entry of entries) {
+        const override = compositionOverrideFromConfig(entry.config);
+        if (!override) continue;
+        overrides[entry.typeKey] = { ...overrides[entry.typeKey], ...override };
+    }
+    return overrides;
 }
 
 /** Resolve one configured field to a display value (honoring collection + state). */

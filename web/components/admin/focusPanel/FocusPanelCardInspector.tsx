@@ -21,6 +21,13 @@ import {
     type FocusPanelFieldRenderer,
 } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardConfigModel";
 import {
+    resolveCardCompositionPreference,
+    type CardOperationalWeight,
+    type CardPerspectiveExpansion,
+    type CardPreferredRow,
+} from "@/lib/adminV2/runtime/focusPanel/cardCompositionModel";
+import { isOperationalTruthCard } from "@/lib/adminV2/runtime/focusPanel/focusPanelCoordination";
+import {
     conceptOptionsForCard,
     defaultCardExpansion,
     defaultCardFields,
@@ -50,6 +57,7 @@ const INSPECTOR_TABS = [
     "fields",
     "related",
     "appearance",
+    "composition",
     "conditions",
     "expansion",
     "actions",
@@ -62,6 +70,7 @@ const TAB_LABELS: Record<InspectorTab, string> = {
     fields: "Fields",
     related: "Related lists",
     appearance: "Appearance",
+    composition: "Composition",
     conditions: "Conditions",
     expansion: "Expansion",
     actions: "Actions",
@@ -69,6 +78,32 @@ const TAB_LABELS: Record<InspectorTab, string> = {
 };
 
 const DENSITIES: readonly FocusPanelCardDensity[] = ["micro", "compact", "standard", "expanded"];
+
+/** Composition weight options (visual emphasis on the surface). */
+const WEIGHT_OPTIONS: readonly { value: CardOperationalWeight; label: string }[] = [
+    { value: "heavy", label: "Heavy — anchors a lane" },
+    { value: "medium", label: "Medium — supporting" },
+    { value: "light", label: "Light — compact companion" },
+];
+
+/** Preferred band of the surface a card gravitates to. */
+const ROW_OPTIONS: readonly { value: CardPreferredRow; label: string }[] = [
+    { value: "lead", label: "Lead" },
+    { value: "support", label: "Support" },
+    { value: "context", label: "Context" },
+    { value: "footer", label: "Footer" },
+];
+
+/**
+ * Depth ceiling, labeled by the Operational Depth Doctrine (Evidence / Focus /
+ * Workspace) rather than the underlying `perspectiveExpansion` keys.
+ * @see docs/platform/operator/operational-depth-doctrine.md
+ */
+const DEPTH_OPTIONS: readonly { value: CardPerspectiveExpansion; label: string; truthOnly: boolean }[] = [
+    { value: "in_place", label: "Evidence — see more in place", truthOnly: false },
+    { value: "takeover_row", label: "Focus — bring forward (+ edit)", truthOnly: true },
+    { value: "takeover_surface", label: "Workspace — large operational work", truthOnly: true },
+];
 
 type HistoryInfo = {
     publishedVersion: number | null;
@@ -120,6 +155,19 @@ export default function FocusPanelCardInspector({
 
     const patchAppearance = (patch: Partial<NonNullable<FocusPanelCardConfig["appearance"]>>) =>
         onChange({ ...config, appearance: { ...appearance, ...patch } });
+
+    // Composition: config override wins, else the card's platform-default preference.
+    const defaultPref = resolveCardCompositionPreference(baseModel.key);
+    const composition = config.composition ?? {};
+    const truthCard = isOperationalTruthCard(baseModel.key);
+    const effectiveWeight = composition.weight ?? defaultPref.weight;
+    const effectiveRow = composition.preferredRow ?? defaultPref.preferredRow;
+    // Diagnostic cards cannot reach Focus/Workspace — the runtime clamps them to
+    // Evidence, so the selector mirrors that (see operational-depth-doctrine.md).
+    const rawDepth = composition.perspectiveExpansion ?? defaultPref.perspectiveExpansion;
+    const effectiveDepth: CardPerspectiveExpansion = truthCard ? rawDepth : "in_place";
+    const patchComposition = (patch: Partial<NonNullable<FocusPanelCardConfig["composition"]>>) =>
+        onChange({ ...config, composition: { ...composition, ...patch } });
 
     const commitFields = (next: FocusPanelCardField[]) => onChange({ ...config, fields: next });
     const updateField = (id: string, patch: Partial<FocusPanelCardField>) =>
@@ -387,6 +435,69 @@ export default function FocusPanelCardInspector({
                             </select>
                         </Labeled>
                         <p className="config-typo-meta">Size applies live to the published workspace.</p>
+                    </div>
+                : tab === "composition" ?
+                    <div
+                        className="space-y-3"
+                        data-focus-panel-inspector-composition={effectiveWeight}
+                        data-focus-panel-composition-depth={effectiveDepth}
+                    >
+                        <Labeled label="Weight">
+                            <select
+                                data-testid="inspector-weight"
+                                className={FIELD}
+                                value={effectiveWeight}
+                                onChange={(e) =>
+                                    patchComposition({ weight: e.target.value as CardOperationalWeight })
+                                }
+                            >
+                                {WEIGHT_OPTIONS.map((o) => (
+                                    <option key={o.value} value={o.value}>
+                                        {o.label}
+                                    </option>
+                                ))}
+                            </select>
+                        </Labeled>
+                        <Labeled label="Reading band">
+                            <select
+                                data-testid="inspector-preferred-row"
+                                className={FIELD}
+                                value={effectiveRow}
+                                onChange={(e) =>
+                                    patchComposition({ preferredRow: e.target.value as CardPreferredRow })
+                                }
+                            >
+                                {ROW_OPTIONS.map((o) => (
+                                    <option key={o.value} value={o.value}>
+                                        {o.label}
+                                    </option>
+                                ))}
+                            </select>
+                        </Labeled>
+                        <Labeled label="Depth">
+                            <select
+                                data-testid="inspector-depth"
+                                className={FIELD}
+                                value={effectiveDepth}
+                                disabled={!truthCard}
+                                onChange={(e) =>
+                                    patchComposition({
+                                        perspectiveExpansion: e.target.value as CardPerspectiveExpansion,
+                                    })
+                                }
+                            >
+                                {DEPTH_OPTIONS.filter((o) => truthCard || !o.truthOnly).map((o) => (
+                                    <option key={o.value} value={o.value}>
+                                        {o.label}
+                                    </option>
+                                ))}
+                            </select>
+                        </Labeled>
+                        <p className="config-typo-meta">
+                            {truthCard
+                                ? "Weight and band shape how the engine composes lanes; depth sets how far this card opens. Applies live to the published workspace."
+                                : "Diagnostic cards stay at Evidence depth — they expand in place or hand off to the owning card, never becoming a Focus Card."}
+                        </p>
                     </div>
                 : tab === "conditions" ?
                     <div className="space-y-2">

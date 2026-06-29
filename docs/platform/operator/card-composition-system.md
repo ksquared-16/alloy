@@ -184,6 +184,14 @@ Card Preferences    ─┘            ▲
 > heights so they interlock — §6 “row rhythm” relaxes to “lane interlock”). Depth
 > (Focus Cards) and inline overlays are unchanged. See the sprint README for
 > measured lane widths (operator panel 745px → primary 467 / support 234).
+>
+> **Experience Builder overrides (now wired).** The engine's `overrides` param is
+> fed from per-card configuration: the Surfaces editor's Inspector → Composition tab
+> sets `weight` / `preferredRow` / depth (`perspectiveExpansion`), persisted on the
+> card's `LayoutSection` metadata and merged over platform defaults at compose time
+> (`buildCompositionOverrides` → `composeFocusPanelSurface`). So a published Surface
+> Definition composes per its configured weights — Enrollment is the first instance,
+> not a hardcode. Diagnostic cards are still clamped to Evidence depth by the runtime.
 
 The engine is **deterministic** and produces a composition the existing
 `FocusPanelCardGrid` can render. Algorithm:
@@ -220,6 +228,11 @@ The engine is **deterministic** and produces a composition the existing
 ---
 
 ## 7. Perspective expansion within composition
+
+> The three depths an operator descends through (Evidence / Focus / Workspace) are
+> defined in [`operational-depth-doctrine.md`](./operational-depth-doctrine.md). The
+> `perspectiveExpansion` values below are how composition realizes those depths:
+> `in_place` → Evidence, `takeover_row` → Focus, `takeover_surface` → Workspace.
 
 Perspective Change (local UI; no new context) interacts with composition via
 `perspectiveExpansion`:
