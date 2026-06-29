@@ -11,7 +11,7 @@ import {
     type HouseholdEvidenceGroup,
     type HouseholdEvidenceGroupKey,
 } from "@/lib/adminV2/runtime/focusPanel/household/buildHouseholdCardEvidence";
-import { seedHouseholdContactValues } from "@/lib/adminV2/runtime/focusPanel/household/householdContactEditState";
+import { seedHouseholdContactValuesForPerson } from "@/lib/adminV2/runtime/focusPanel/household/householdContactEditState";
 import type { FocusPanelCardModel } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardModel";
 import type {
     FocusPanelCoordination,
@@ -63,22 +63,29 @@ export default function HouseholdCard({ model, context, receded = false, coordin
 
     const [expanded, setExpanded] = useState(false);
     const [focusedGroup, setFocusedGroup] = useState<HouseholdEvidenceGroupKey | null>(null);
-    const [editing, setEditing] = useState(false);
+    // TARGETED editing: which specific person row is being edited (null = none). Editing
+    // is per-row, not card-wide — only the selected contact becomes an edit form.
+    const [editingPersonId, setEditingPersonId] = useState<string | null>(null);
     // Transient card-level confirmation after a successful contact save.
     const [justSaved, setJustSaved] = useState(false);
     const savedChipTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
     useEffect(() => () => { if (savedChipTimer.current) clearTimeout(savedChipTimer.current); }, []);
     const handleContactSaved = () => {
-        setEditing(false);
+        setEditingPersonId(null);
         setJustSaved(true);
         if (savedChipTimer.current) clearTimeout(savedChipTimer.current);
         savedChipTimer.current = setTimeout(() => setJustSaved(false), 2600);
     };
 
-    // Edit (a capability of Focus): seed the primary-contact draft from observed
-    // truth. Editable only when the operator may mutate AND a primary person exists.
-    const contactSeed = useMemo(() => seedHouseholdContactValues(context.truth), [context.truth]);
-    const canEditContact = Boolean(mutation?.canEdit && contactSeed.personId);
+    // Edit is a capability of Focus, targeted at one person row. Seed the draft for the
+    // selected person from observed truth. Each editable row owns its own affordance.
+    const canEdit = Boolean(mutation?.canEdit);
+    const editingSeed = useMemo(
+        () => (editingPersonId ? seedHouseholdContactValuesForPerson(context.truth, editingPersonId) : null),
+        [editingPersonId, context.truth],
+    );
+    const editing = Boolean(editingPersonId && editingSeed);
+    const onEditContact = canEdit ? (personId: string) => setEditingPersonId(personId) : undefined;
 
     // Cross-card handoff: when another card points here (e.g. Readiness "primary
     // contact"), open the requested evidence group as a Perspective Change. No fetch.
@@ -86,6 +93,8 @@ export default function HouseholdCard({ model, context, receded = false, coordin
     const requestNonce = request?.card === "household" ? request.nonce : null;
     useEffect(() => {
         if (request?.card !== "household") return;
+        // Re-opened (e.g. via Back from Children) → restore the requested focus state.
+        setEditingPersonId(null);
         setExpanded(true);
         setFocusedGroup((request.focus as HouseholdEvidenceGroupKey | null) ?? null);
         // eslint-disable-next-line react-hooks/exhaustive-deps -- nonce gates re-apply
@@ -98,10 +107,10 @@ export default function HouseholdCard({ model, context, receded = false, coordin
     // ANY open state elevates as a centered Focus Card — Household never expands
     // height inline (no row reflow). Edit is the deepest state OF Focus.
     const level: FocusPanelPerspectiveLevel =
-        editing && canEditContact ? "edit" : focused || expanded ? "focused" : "base";
+        editing ? "edit" : focused || expanded ? "focused" : "base";
     useReportPerspective(coordination, "household", level);
     useDismissSignal(coordination, "household", () => {
-        setEditing(false);
+        setEditingPersonId(null);
         setFocusedGroup(null);
         setExpanded(false);
     });
@@ -112,9 +121,12 @@ export default function HouseholdCard({ model, context, receded = false, coordin
     // footprint (no leftover expanded height reflowing behind the new Focus Card).
     const openChild = coordination
         ? (childId: string) => {
+              // Record where this handoff came FROM so Back returns to this exact
+              // Household state (focused group, or expanded when none).
+              const source = { card: "household" as const, focus: focusedGroup };
               setExpanded(false);
               setFocusedGroup(null);
-              coordination.requestFocus("children", childId);
+              coordination.requestFocus("children", childId, source);
           }
         : undefined;
 
@@ -137,29 +149,16 @@ export default function HouseholdCard({ model, context, receded = false, coordin
                 ← All household evidence
             </button>
         ) : expanded ? (
-            <>
-                {canEditContact ? (
-                    <button
-                        type="button"
-                        className="alloy-os-ucard__action alloy-os-ucard__action--system5"
-                        onClick={() => {
-                            setFocusedGroup(null);
-                            setEditing(true);
-                        }}
-                        data-household-action="edit"
-                    >
-                        Edit contact
-                    </button>
-                ) : null}
-                <button
-                    type="button"
-                    className="alloy-os-ucard__action alloy-os-ucard__action--system5"
-                    onClick={() => setExpanded(false)}
-                    data-household-action="collapse"
-                >
-                    ← Back to panel
-                </button>
-            </>
+            // Editing is targeted per-row (each contact owns its Edit affordance) — no
+            // card-wide Edit contact link here.
+            <button
+                type="button"
+                className="alloy-os-ucard__action alloy-os-ucard__action--system5"
+                onClick={() => setExpanded(false)}
+                data-household-action="collapse"
+            >
+                ← Back to panel
+            </button>
         ) : evidence.groups.length > 0 ? (
             <button
                 type="button"
@@ -176,21 +175,29 @@ export default function HouseholdCard({ model, context, receded = false, coordin
     if (isEmpty) {
         perspective = "empty";
         body = <EmptyBody />;
-    } else if (editing && canEditContact) {
+    } else if (editing && editingSeed) {
         perspective = "edit";
         body = (
             <HouseholdContactEdit
-                key={contactSeed.personId!}
-                personId={contactSeed.personId!}
-                initial={contactSeed.values}
+                key={editingSeed.personId}
+                personId={editingSeed.personId}
+                personName={editingSeed.name}
+                initial={editingSeed.values}
                 save={mutation!.savePersonContact}
-                onClose={() => setEditing(false)}
+                onClose={() => setEditingPersonId(null)}
                 onSaved={handleContactSaved}
             />
         );
     } else if (focused) {
         perspective = "focused";
-        body = <FocusedGroupBody group={focused} masked={maskedChannels} onOpenChild={openChild} />;
+        body = (
+            <FocusedGroupBody
+                group={focused}
+                masked={maskedChannels}
+                onOpenChild={openChild}
+                onEditContact={onEditContact}
+            />
+        );
     } else if (expanded) {
         perspective = "expanded";
         body = (
@@ -199,6 +206,7 @@ export default function HouseholdCard({ model, context, receded = false, coordin
                 masked={maskedChannels}
                 onFocusGroup={(key) => setFocusedGroup(key)}
                 onOpenChild={openChild}
+                onEditContact={onEditContact}
             />
         );
     } else {
@@ -369,11 +377,13 @@ function ExpandedBody({
     masked,
     onFocusGroup,
     onOpenChild,
+    onEditContact,
 }: {
     groups: HouseholdEvidenceGroup[];
     masked: boolean;
     onFocusGroup: (key: HouseholdEvidenceGroupKey) => void;
     onOpenChild?: (childId: string) => void;
+    onEditContact?: (personId: string) => void;
 }) {
     return (
         <div className="alloy-os-household__groups" data-household-groups>
@@ -397,6 +407,7 @@ function ExpandedBody({
                         masked={masked}
                         limit={COLLAPSED_PREVIEW_GROUPS}
                         onOpenChild={onOpenChild}
+                        onEditContact={onEditContact}
                     />
                 </section>
             ))}
@@ -408,10 +419,12 @@ function FocusedGroupBody({
     group,
     masked,
     onOpenChild,
+    onEditContact,
 }: {
     group: HouseholdEvidenceGroup;
     masked: boolean;
     onOpenChild?: (childId: string) => void;
+    onEditContact?: (personId: string) => void;
 }) {
     return (
         <div
@@ -422,7 +435,7 @@ function FocusedGroupBody({
                 <span className="alloy-os-household__group-title">{group.title}</span>
                 <span className="alloy-os-household__group-count">{group.count}</span>
             </div>
-            <GroupRows group={group} masked={masked} onOpenChild={onOpenChild} />
+            <GroupRows group={group} masked={masked} onOpenChild={onOpenChild} onEditContact={onEditContact} />
         </div>
     );
 }
@@ -432,11 +445,13 @@ function GroupRows({
     masked,
     limit,
     onOpenChild,
+    onEditContact,
 }: {
     group: HouseholdEvidenceGroup;
     masked: boolean;
     limit?: number;
     onOpenChild?: (childId: string) => void;
+    onEditContact?: (personId: string) => void;
 }) {
     if (group.key === "address" && group.addressLine) {
         return <AddressLine address={group.addressLine} />;
@@ -494,7 +509,12 @@ function GroupRows({
     return (
         <div className="alloy-os-household__rows">
             {visible.map((contact) => (
-                <ContactRow key={contact.personId || contact.name} contact={contact} masked={masked} />
+                <ContactRow
+                    key={contact.personId || contact.name}
+                    contact={contact}
+                    masked={masked}
+                    onEdit={onEditContact}
+                />
             ))}
             {overflow > 0 ? (
                 <div className="alloy-os-household__overflow">+{overflow} more</div>
@@ -503,8 +523,23 @@ function GroupRows({
     );
 }
 
-function ContactRow({ contact, masked }: { contact: HouseholdEvidenceContact; masked: boolean }) {
+/** A contact is editable when the card can mutate, the row has a REAL person id
+ *  (not the "primary" placeholder), and channels aren't permission-masked. */
+function isEditableContact(contact: HouseholdEvidenceContact, masked: boolean, onEdit?: (id: string) => void): boolean {
+    return Boolean(onEdit) && !masked && Boolean(contact.personId) && contact.personId !== "primary";
+}
+
+function ContactRow({
+    contact,
+    masked,
+    onEdit,
+}: {
+    contact: HouseholdEvidenceContact;
+    masked: boolean;
+    onEdit?: (personId: string) => void;
+}) {
     const channel = contact.phone ?? contact.email;
+    const editable = isEditableContact(contact, masked, onEdit);
     return (
         <div className="alloy-os-household__row" data-household-contact={contact.personId || undefined}>
             <span className="alloy-os-household__avatar" aria-hidden>
@@ -529,6 +564,18 @@ function ContactRow({ contact, masked }: { contact: HouseholdEvidenceContact; ma
                 >
                     {contact.roleLabel}
                 </span>
+            ) : null}
+            {editable ? (
+                <button
+                    type="button"
+                    className="alloy-os-household__row-edit"
+                    data-household-edit-contact={contact.personId}
+                    aria-label={`Edit ${contact.name}`}
+                    title={`Edit ${contact.name}`}
+                    onClick={() => onEdit!(contact.personId)}
+                >
+                    Edit
+                </button>
             ) : null}
         </div>
     );

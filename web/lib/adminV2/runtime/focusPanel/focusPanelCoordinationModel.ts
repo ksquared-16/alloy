@@ -46,11 +46,27 @@ export type FocusPanelDismissSignal = {
     nonce: number;
 };
 
+/**
+ * One entry in the card-depth history — where a card-to-card handoff ORIGINATED, so
+ * Back can return to that exact prior focus (e.g. Household focused-evidence → Child
+ * → Back → Household focused-evidence). Local Focus Panel state only: NOT routing,
+ * NOT drawer navigation. `focus` is the source card's own focus id (group key /
+ * null) the host re-issues to restore it.
+ */
+export type FocusPanelDepthEntry = {
+    card: FocusPanelCardKey;
+    focus: string | null;
+};
+
 export type FocusPanelCoordination = {
     /** The current handoff request, or null. */
     request: FocusPanelFocusRequest | null;
-    /** A referencing card emits a handoff to the owner card. */
-    requestFocus: (card: FocusPanelCardKey, focus: string | null) => void;
+    /**
+     * A referencing card emits a handoff to the owner card. `source` records where
+     * the handoff originated (the caller's current card + focus) so Back can return
+     * there — pushed onto the depth history.
+     */
+    requestFocus: (card: FocusPanelCardKey, focus: string | null, source?: FocusPanelDepthEntry) => void;
     /** Which card (if any) is currently raised in the depth layer. */
     activeDepth?: FocusPanelActiveDepth | null;
     /** A card reports its current perspective depth (orchestration, not a primitive). */
@@ -59,7 +75,27 @@ export type FocusPanelCoordination = {
     dismissed?: FocusPanelDismissSignal | null;
     /** Ask the active focused/edit card to collapse back to its base surface. */
     dismiss?: (card: FocusPanelCardKey) => void;
+    /** Top of the depth history — the focus a handoff came FROM, or null at the root. */
+    previousFocus?: FocusPanelDepthEntry | null;
+    /** Pop the depth history and return to the prior card/focus. No-op when empty. */
+    back?: () => void;
 };
+
+/** Operator-facing label for a card (used in "← Back to {label}" affordances). */
+export function focusPanelCardBackLabel(card: FocusPanelCardKey): string {
+    switch (card) {
+        case "household":
+            return "Household";
+        case "children":
+            return "Children";
+        case "communications":
+            return "Communications";
+        case "documents":
+            return "Documents";
+        default:
+            return "panel";
+    }
+}
 
 /** A perspective level that raises the card above the surface (depth layer). */
 export function isElevatedLevel(level: FocusPanelPerspectiveLevel): boolean {

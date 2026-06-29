@@ -23,6 +23,8 @@ import type {
 
 type Props = {
     personId: string;
+    /** Name of the contact being edited — titles the form ("Edit {name}"). */
+    personName?: string;
     initial: PersonContactValues;
     save: (personId: string, patch: PersonContactPatch) => Promise<FocusPanelSaveResult>;
     onClose: () => void;
@@ -41,7 +43,7 @@ const FIELD_ROWS: { key: keyof PersonContactValues; label: string; type: string 
     { key: "phone", label: "Phone", type: "tel" },
 ];
 
-export default function HouseholdContactEdit({ personId, initial, save, onClose, onSaved }: Props) {
+export default function HouseholdContactEdit({ personId, personName, initial, save, onClose, onSaved }: Props) {
     const [baseline, setBaseline] = useState<PersonContactValues>(initial);
     const [draft, setDraft] = useState<PersonContactValues>(initial);
     // idle → saving → saved (brief confirmation beat) → returns to the card view.
@@ -85,8 +87,10 @@ export default function HouseholdContactEdit({ personId, initial, save, onClose,
     };
 
     return (
-        <div className="alloy-os-card-edit" data-household-contact-edit="true">
-            <p className="alloy-os-card-edit__title">Edit primary contact</p>
+        <div className="alloy-os-card-edit" data-household-contact-edit="true" data-edit-person-id={personId}>
+            <p className="alloy-os-card-edit__title" data-household-edit-title="true">
+                {personName ? `Edit ${personName}` : "Edit contact"}
+            </p>
             <div className="alloy-os-card-edit__form">
                 {FIELD_ROWS.map((row) => (
                     <label key={row.key} className="alloy-os-card-edit__row" data-household-edit-field={row.key}>

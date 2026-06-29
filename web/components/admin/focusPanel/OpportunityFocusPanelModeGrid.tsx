@@ -24,6 +24,7 @@ import {
     isElevatedLevel,
     type FocusPanelActiveDepth,
     type FocusPanelCoordination,
+    type FocusPanelDepthEntry,
     type FocusPanelDismissSignal,
     type FocusPanelFocusRequest,
 } from "@/lib/adminV2/runtime/focusPanel/focusPanelCoordinationModel";
@@ -124,7 +125,11 @@ export default function OpportunityFocusPanelModeGrid({
     const gridContainerRef = useRef<HTMLDivElement>(null);
     const [focusRequest, setFocusRequest] = useState<FocusPanelFocusRequest | null>(null);
     const focusNonceRef = useRef(0);
-    const requestFocus = useCallback<FocusPanelCoordination["requestFocus"]>((card, focus) => {
+    // Card-depth history (local Focus Panel state — NOT routing/drawer). Each handoff
+    // pushes its source; Back pops and returns to the prior card/focus.
+    const depthHistoryRef = useRef<FocusPanelDepthEntry[]>([]);
+    const [previousFocus, setPreviousFocus] = useState<FocusPanelDepthEntry | null>(null);
+    const emitFocus = useCallback((card: FocusPanelCardKey, focus: string | null) => {
         focusNonceRef.current += 1;
         setFocusRequest({ card, focus, nonce: focusNonceRef.current });
         if (typeof window !== "undefined") {
@@ -136,6 +141,24 @@ export default function OpportunityFocusPanelModeGrid({
             });
         }
     }, []);
+    const requestFocus = useCallback<FocusPanelCoordination["requestFocus"]>(
+        (card, focus, source) => {
+            if (source) {
+                depthHistoryRef.current = [...depthHistoryRef.current, source];
+                setPreviousFocus(source);
+            }
+            emitFocus(card, focus);
+        },
+        [emitFocus],
+    );
+    const back = useCallback(() => {
+        const stack = depthHistoryRef.current;
+        const prev = stack[stack.length - 1];
+        if (!prev) return;
+        depthHistoryRef.current = stack.slice(0, -1);
+        setPreviousFocus(depthHistoryRef.current[depthHistoryRef.current.length - 1] ?? null);
+        emitFocus(prev.card, prev.focus);
+    }, [emitFocus]);
     // In-panel depth layer: a card reports when it opens deep (focused / edit). The
     // host raises that card and recedes the rest — no route, no drawer, no modal.
     const [activeDepth, setActiveDepth] = useState<FocusPanelActiveDepth | null>(null);
@@ -165,6 +188,9 @@ export default function OpportunityFocusPanelModeGrid({
             dismissNonceRef.current += 1;
             setDismissed({ card, nonce: dismissNonceRef.current });
             setClosing(false);
+            // Returning to the base panel ends the handoff chain.
+            depthHistoryRef.current = [];
+            setPreviousFocus(null);
         }, FOCUS_PANEL_DEPTH_MS);
     }, []);
     useEffect(
@@ -174,8 +200,8 @@ export default function OpportunityFocusPanelModeGrid({
         [],
     );
     const coordination = useMemo<FocusPanelCoordination>(
-        () => ({ request: focusRequest, requestFocus, activeDepth, reportPerspective, dismissed, dismiss }),
-        [focusRequest, requestFocus, activeDepth, reportPerspective, dismissed, dismiss],
+        () => ({ request: focusRequest, requestFocus, activeDepth, reportPerspective, dismissed, dismiss, previousFocus, back }),
+        [focusRequest, requestFocus, activeDepth, reportPerspective, dismissed, dismiss, previousFocus, back],
     );
     const elevatedCellKey = activeDepth?.card ?? null;
 

@@ -11,7 +11,10 @@
  * @see focusPanelMutation.ts (the save adapter that consumes the patch)
  */
 
-import { resolveLeadSummaryPrimaryPersonId } from "@/lib/admin/drawer/opportunityFamilyContactsOrdering";
+import {
+    buildOpportunityFamilyContactRows,
+    resolveLeadSummaryPrimaryPersonId,
+} from "@/lib/admin/drawer/opportunityFamilyContactsOrdering";
 import type { PersonContactPatch, PersonContactValues } from "@/lib/adminV2/runtime/focusPanel/focusPanelMutation";
 
 const CONTACT_FIELDS = ["first_name", "last_name", "email", "phone"] as const;
@@ -51,6 +54,43 @@ export function seedHouseholdContactValues(truth: Record<string, unknown>): Hous
             last_name: explicitLast || fromSplit.last_name,
             email: trimStr(truth["person.primary_email"]),
             phone: trimStr(truth["person.primary_phone"]),
+        },
+    };
+}
+
+export type HouseholdPersonSeed = {
+    personId: string;
+    /** Display name for the edit title ("Edit {name}"). */
+    name: string;
+    values: PersonContactValues;
+};
+
+/**
+ * Seed the editable draft for a SPECIFIC household person row (any contact, not just
+ * the primary). Reads that person's row from the contact arrays by id; prefers the
+ * richer namespaced primary keys when the person IS the primary. Pure. Returns null
+ * when the person can't be resolved (→ not editable).
+ */
+export function seedHouseholdContactValuesForPerson(
+    truth: Record<string, unknown>,
+    personId: string,
+): HouseholdPersonSeed | null {
+    const id = personId.trim();
+    if (!id) return null;
+    const row = buildOpportunityFamilyContactRows(truth).find((r) => r.person_id === id) ?? null;
+    const isPrimary = resolveLeadSummaryPrimaryPersonId(truth) === id;
+    if (!row && !isPrimary) return null;
+
+    const name = trimStr(row?.name) || trimStr(truth["person.primary_contact_name"]);
+    const split = splitName(name);
+    return {
+        personId: id,
+        name: name || "Contact",
+        values: {
+            first_name: (isPrimary && trimStr(truth.first_name)) || split.first_name,
+            last_name: (isPrimary && trimStr(truth.last_name)) || split.last_name,
+            email: trimStr(row?.email) || (isPrimary ? trimStr(truth["person.primary_email"]) : ""),
+            phone: trimStr(row?.phone) || (isPrimary ? trimStr(truth["person.primary_phone"]) : ""),
         },
     };
 }

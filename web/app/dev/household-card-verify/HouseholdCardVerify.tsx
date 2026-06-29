@@ -19,6 +19,7 @@ import {
     isElevatedLevel,
     type FocusPanelActiveDepth,
     type FocusPanelCoordination,
+    type FocusPanelDepthEntry,
     type FocusPanelDismissSignal,
     type FocusPanelFocusRequest,
 } from "@/lib/adminV2/runtime/focusPanel/focusPanelCoordinationModel";
@@ -26,7 +27,7 @@ import {
     mergePersonContactIntoFocusPanelTruth,
     type FocusPanelMutation,
 } from "@/lib/adminV2/runtime/focusPanel/focusPanelMutation";
-import { seedHouseholdContactValues } from "@/lib/adminV2/runtime/focusPanel/household/householdContactEditState";
+import { seedHouseholdContactValuesForPerson } from "@/lib/adminV2/runtime/focusPanel/household/householdContactEditState";
 import type { FocusPanelPublishedLayout } from "@/lib/adminV2/runtime/focusPanel/composition/focusPanelPublishedLayout";
 import type { FocusPanelCardKey, FocusPanelCardModel } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardModel";
 import type {
@@ -170,10 +171,30 @@ function OverviewComposition({ context }: { context: OperationalContext }) {
     // exercised in the harness so it is screenshot-able).
     const [request, setRequest] = useState<FocusPanelFocusRequest | null>(null);
     const nonceRef = useRef(0);
-    const requestFocus = useCallback<FocusPanelCoordination["requestFocus"]>((card, focus) => {
+    const depthHistoryRef = useRef<FocusPanelDepthEntry[]>([]);
+    const [previousFocus, setPreviousFocus] = useState<FocusPanelDepthEntry | null>(null);
+    const emitFocus = useCallback((card: FocusPanelCardKey, focus: string | null) => {
         nonceRef.current += 1;
         setRequest({ card, focus, nonce: nonceRef.current });
     }, []);
+    const requestFocus = useCallback<FocusPanelCoordination["requestFocus"]>(
+        (card, focus, source) => {
+            if (source) {
+                depthHistoryRef.current = [...depthHistoryRef.current, source];
+                setPreviousFocus(source);
+            }
+            emitFocus(card, focus);
+        },
+        [emitFocus],
+    );
+    const back = useCallback(() => {
+        const stack = depthHistoryRef.current;
+        const prev = stack[stack.length - 1];
+        if (!prev) return;
+        depthHistoryRef.current = stack.slice(0, -1);
+        setPreviousFocus(depthHistoryRef.current[depthHistoryRef.current.length - 1] ?? null);
+        emitFocus(prev.card, prev.focus);
+    }, [emitFocus]);
     const [activeDepth, setActiveDepth] = useState<FocusPanelActiveDepth | null>(null);
     const reportPerspective = useCallback<NonNullable<FocusPanelCoordination["reportPerspective"]>>(
         (card, level) => {
@@ -188,6 +209,8 @@ function OverviewComposition({ context }: { context: OperationalContext }) {
     const dismiss = useCallback<NonNullable<FocusPanelCoordination["dismiss"]>>((card) => {
         dismissNonceRef.current += 1;
         setDismissed({ card, nonce: dismissNonceRef.current });
+        depthHistoryRef.current = [];
+        setPreviousFocus(null);
     }, []);
 
     // Local (no-auth) save adapter: edits merge into the in-memory truth via the SAME
@@ -201,12 +224,12 @@ function OverviewComposition({ context }: { context: OperationalContext }) {
     const mutation = useMemo<FocusPanelMutation>(
         () => ({
             canEdit: true,
-            savePersonContact: async (_personId, patch) => {
+            savePersonContact: async (personId, patch) => {
                 setLiveTruth((prev) => {
-                    const cur = seedHouseholdContactValues(prev).values;
+                    const cur = seedHouseholdContactValuesForPerson(prev, personId)?.values;
                     const pick = (k: "first_name" | "last_name" | "email" | "phone") =>
-                        patch[k] !== undefined ? (patch[k] ?? "") : cur[k];
-                    return mergePersonContactIntoFocusPanelTruth(prev, {
+                        patch[k] !== undefined ? (patch[k] ?? "") : cur?.[k] ?? "";
+                    return mergePersonContactIntoFocusPanelTruth(prev, personId, {
                         first_name: pick("first_name"),
                         last_name: pick("last_name"),
                         email: pick("email"),
@@ -219,8 +242,8 @@ function OverviewComposition({ context }: { context: OperationalContext }) {
         [],
     );
     const coordination = useMemo<FocusPanelCoordination>(
-        () => ({ request, requestFocus, activeDepth, reportPerspective, dismissed, dismiss }),
-        [request, requestFocus, activeDepth, reportPerspective, dismissed, dismiss],
+        () => ({ request, requestFocus, activeDepth, reportPerspective, dismissed, dismiss, previousFocus, back }),
+        [request, requestFocus, activeDepth, reportPerspective, dismissed, dismiss, previousFocus, back],
     );
 
     useEffect(() => {
