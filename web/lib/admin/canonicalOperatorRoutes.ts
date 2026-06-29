@@ -29,6 +29,32 @@ export function legacyAdminWorkUnitHref(args: {
     return `${base}?queue=${encodeURIComponent(queueKey)}`;
 }
 
+/**
+ * Resolve where "Open Lead" sends the operator after Create Lead success.
+ *
+ * Canonical destination is the Work Unit Focus Panel for the new record
+ * (`/workspace/work-unit/:slug/:recordId`) — never the legacy adminV2 drawer. Precedence:
+ *   1. `owningWorkUnitKey` — the work unit that owns the new lead's status (status-aware), when known.
+ *   2. `currentWorkUnitKey` — the work unit the lead was created in.
+ *   3. Operator workspace home — safe fallback when no work unit can be resolved (record still
+ *      reachable from the workspace; no drawer route).
+ *
+ * Routing ownership lives here, in the workspace routing layer — Create Lead surfaces call this
+ * rather than building drawer params or hrefs themselves.
+ */
+export function resolveCreatedLeadFocusPanelHref(args: {
+    recordId: string | null | undefined;
+    owningWorkUnitKey?: string | null;
+    currentWorkUnitKey?: string | null;
+}): string {
+    const recordId = typeof args.recordId === "string" ? args.recordId.trim() : "";
+    const key =
+        (typeof args.owningWorkUnitKey === "string" ? args.owningWorkUnitKey.trim() : "") ||
+        (typeof args.currentWorkUnitKey === "string" ? args.currentWorkUnitKey.trim() : "");
+    if (!key) return OPERATOR_WORKSPACE_HREF;
+    return operatorWorkUnitHrefFromKey(key, recordId || null);
+}
+
 /** Admin / settings / config landing (not operator home). */
 export const ADMIN_CONFIG_LANDING_HREF = CANONICAL_ADMIN_BASE;
 

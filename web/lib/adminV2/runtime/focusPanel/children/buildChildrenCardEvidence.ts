@@ -13,6 +13,7 @@
  */
 
 import { mapRawInquiryChildrenToDrawerRows } from "@/lib/admin/drawer/inquiryChildrenDrawerRows";
+import { humanizeStatusKey } from "@/lib/admin/status/humanizeStatusKey";
 import type { OperationalContext } from "@/lib/adminV2/runtime/operationalContext/types";
 
 export type ChildStatusTone = "positive" | "work" | "risk" | "neutral";
@@ -161,7 +162,9 @@ export function buildChildrenCardEvidence(context: OperationalContext): Children
             room,
             schedule,
             startDate,
-            status: statusLabel ?? (statusKey ? statusKey : null),
+            // Prefer the projection's resolved label; if absent, humanize the key rather than
+            // showing a raw status key or UUID-like id as operator copy.
+            status: statusLabel ?? humanizeStatusKey(statusKey),
             statusTone: statusTone(statusKey),
             needsAttention,
             detailLine,

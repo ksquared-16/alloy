@@ -108,6 +108,48 @@ describe("buildChildrenCardEvidence", () => {
         expect(evidence.answerLine).toBe("3 children · 2 enrolled, 1 waitlisted");
     });
 
+    it("humanizes an unlabeled status key instead of showing the raw key", () => {
+        // Org missing a status_definitions label for `new_inquiry` on opportunity_customer_members.
+        const evidence = buildChildrenCardEvidence(
+            ctx({
+                id: "opp-1",
+                _inquiry_children: [{ id: "c1", display_name: "Ada Lovelace", outcome_status_key: "new_inquiry" }],
+            }),
+        );
+        const ada = evidence.children[0]!;
+        expect(ada.status).toBe("New Inquiry");
+        expect(ada.status).not.toBe("new_inquiry");
+    });
+
+    it("prefers the configured label over the key when both are present", () => {
+        const evidence = buildChildrenCardEvidence(
+            ctx({
+                id: "opp-1",
+                _inquiry_children: [
+                    {
+                        id: "c1",
+                        display_name: "Ada Lovelace",
+                        outcome_status_key: "new_inquiry",
+                        outcome_status_label: "Inquiry Received",
+                    },
+                ],
+            }),
+        );
+        expect(evidence.children[0]!.status).toBe("Inquiry Received");
+    });
+
+    it("never surfaces a UUID-like status id as operator copy", () => {
+        const evidence = buildChildrenCardEvidence(
+            ctx({
+                id: "opp-1",
+                _inquiry_children: [
+                    { id: "c1", display_name: "Ada Lovelace", outcome_status_key: "11111111-1111-4111-8111-111111111111" },
+                ],
+            }),
+        );
+        expect(evidence.children[0]!.status).toBeNull();
+    });
+
     it("does NOT import drawer VM types — it observes the Operational Context", () => {
         const source = readFileSync(
             path.join(process.cwd(), "lib/adminV2/runtime/focusPanel/children/buildChildrenCardEvidence.ts"),

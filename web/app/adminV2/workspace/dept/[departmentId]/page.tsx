@@ -1,6 +1,7 @@
 "use client";
 
 import { CANONICAL_ADMIN_WORKSPACE } from "@/lib/admin/canonicalAdminRoutes";
+import { resolveCreatedLeadFocusPanelHref } from "@/lib/admin/canonicalOperatorRoutes";
 
 import {
     useCallback,
@@ -422,11 +423,11 @@ export default function AdminV2WorkspaceDepartmentPage() {
         const list = deptWorkUnits ?? [];
         const pipeline =
             list.find((w) => (w.key ?? "").trim().toLowerCase() === "enrollment_pipeline") ?? null;
-        if (pipeline) return { id: pipeline.id };
+        if (pipeline) return { id: pipeline.id, key: pipeline.key };
         const na = list.find((w) => (w.key ?? "").trim().toLowerCase() === "needs_attention") ?? null;
-        if (na) return { id: na.id };
+        if (na) return { id: na.id, key: na.key };
         const first = list[0] ?? null;
-        return first ? { id: first.id } : null;
+        return first ? { id: first.id, key: first.key } : null;
     }, [deptWorkUnits]);
 
     /** Session cache → title only before paint; operational state clears until network confirms (PR-4.6). */
@@ -2056,8 +2057,13 @@ export default function AdminV2WorkspaceDepartmentPage() {
                 surface="right_rail"
                 onClose={() => setCreateLeadOpen(false)}
                 onOpenCreatedRecord={(opportunityId) => {
-                    openDrawer({ type: "opportunities", id: opportunityId });
-                    router.refresh();
+                    // Canonical: open the new lead in the Work Unit Focus Panel — not the legacy drawer.
+                    router.push(
+                        resolveCreatedLeadFocusPanelHref({
+                            recordId: opportunityId,
+                            currentWorkUnitKey: primaryWorkUnit?.key ?? null,
+                        }),
+                    );
                 }}
             />
             <WorkUnitScheduleTourRecordPickerModal

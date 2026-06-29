@@ -12,8 +12,8 @@ import {
 import {
   fetchEffectiveStatusDefinitionsTagged,
   displayLabelsFromDefinitions,
-  resolveDisplayFromLabelMap,
 } from "@/lib/admin/statusDefinitionsResolve";
+import { humanizeStatusKey } from "@/lib/admin/status/humanizeStatusKey";
 import type { FieldRegistryAttachMeta } from "@/lib/admin/entityFieldRegistryAttach";
 import { isUuidLike } from "@/lib/admin/overviewRelationshipLabels";
 import { resolveOpportunityStatusDisplay } from "@/lib/admin/drawer/opportunityStatusDisplayResolve";
@@ -394,8 +394,11 @@ function mapOcmJoinRowsToInquiryChildrenBlock(
       cohortKey ?
         (optionLabelFromBatchMap(optionLabelMap, "childcare_program_type", cohortKey) ?? cohortKey)
       : null;
+    // Prefer the configured status_definitions label; when the org lacks a definition for this
+    // key (e.g. `new_inquiry` on opportunity_customer_members), humanize the key rather than
+    // leaking the raw snake_case key to the operator. Never surface a raw key/id as the label.
     const outcomeStatusLabel = outcomeStatusKey
-      ? resolveDisplayFromLabelMap(ocmStatusLabelByKey, outcomeStatusKey, null)
+      ? (ocmStatusLabelByKey.get(outcomeStatusKey) ?? humanizeStatusKey(outcomeStatusKey))
       : null;
     const first_name = identity.first_name;
     const last_name = identity.last_name;

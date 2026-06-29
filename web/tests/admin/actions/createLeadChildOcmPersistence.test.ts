@@ -218,6 +218,8 @@ describe("applyCreateLeadChildParticipation", () => {
             desired_schedule_type: "full_day",
             program_room_cohort_key: ROOM_ID,
             desired_start_date: "2026-09-01",
+            // Per-child enrollment disposition uses the canonical lead status key, not a raw/invalid value.
+            outcome_status_key: "new_inquiry",
         });
     });
 });

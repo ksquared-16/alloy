@@ -242,7 +242,7 @@ import {
     traceLifecyclePillQueueResult,
     type LifecycleSiblingWorkUnitNavRow,
 } from "@/lib/lifecycle/lifecycleWorkUnitShellPills";
-import { operatorWorkUnitHrefFromKey } from "@/lib/admin/canonicalOperatorRoutes";
+import { operatorWorkUnitHrefFromKey, resolveCreatedLeadFocusPanelHref } from "@/lib/admin/canonicalOperatorRoutes";
 import {
     lifecycleSiblingHeaderPaintReady,
     lifecycleSiblingTotalsFromDeptSummaries,
@@ -7710,7 +7710,13 @@ export default function AdminV2OpportunityWorkUnitPage() {
                             }
                         }}
                         onOpenCreatedRecord={(opportunityId) => {
-                            openDrawer(buildOpportunityDrawerOpenParams(opportunityId));
+                            // Canonical: open the new lead in the Work Unit Focus Panel — not the legacy drawer.
+                            router.push(
+                                resolveCreatedLeadFocusPanelHref({
+                                    recordId: opportunityId,
+                                    currentWorkUnitKey: workUnit?.key ?? null,
+                                }),
+                            );
                         }}
                     />
                     <MarkLostModal

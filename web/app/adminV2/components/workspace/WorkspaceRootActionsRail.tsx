@@ -9,6 +9,7 @@ import WorkUnitScheduleTourRecordPickerModal from "@/components/admin/workspace/
 import { useAdminDrawer } from "@/contexts/AdminDrawerContext";
 import { useWorkspaceSiteFilter } from "@/contexts/WorkspaceSiteFilterContext";
 import { applyRegistryResolvedActionClient } from "@/lib/admin/actions/applyRegistryResolvedActionClient";
+import { resolveCreatedLeadFocusPanelHref } from "@/lib/admin/canonicalOperatorRoutes";
 import { countActionsVm } from "@/lib/bos/countActionsVm";
 import type { ResolvedActionForClient } from "@/lib/admin/actions/types";
 import { fetchWorkspaceRootResolvedActions } from "@/lib/workspace/fetchWorkspaceRootResolvedActions";
@@ -138,8 +139,14 @@ export function WorkspaceRootActionsRail({ defaultDepartmentId = null }: Props) 
                     surface="workspace"
                     onClose={() => setCreateLeadOpen(false)}
                     onOpenCreatedRecord={(opportunityId) => {
-                        openDrawer({ type: "opportunities", id: opportunityId });
-                        router.refresh();
+                        // Canonical: open the new lead in the operational workspace, not the legacy drawer.
+                        // No current work unit on the root rail → safe fallback to the workspace home.
+                        router.push(
+                            resolveCreatedLeadFocusPanelHref({
+                                recordId: opportunityId,
+                                currentWorkUnitKey: null,
+                            }),
+                        );
                     }}
                 />
             ) : null}
