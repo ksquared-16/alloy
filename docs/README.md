@@ -97,6 +97,7 @@ Start here: **`platform/foundation/system-overview.md`**
 | Actions & workflows | `platform/modules/actions-and-workflows.md` |
 | Configuration | `platform/modules/configuration-platform.md` |
 | Attendance (L4 facts — doctrine) | `platform/modules/attendance-system.md` |
+| Financial platform domain (canonical entities — frozen) | `platform/modules/financial-platform-domain.md` |
 | Billing & financials platform (L5 — doctrine) | `platform/modules/billing-financials-platform.md` |
 | AI / BOS | `platform/modules/ai-platform.md` |
 | Operational intelligence | `platform/modules/operational-intelligence-platform.md` |
