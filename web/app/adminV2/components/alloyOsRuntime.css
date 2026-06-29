@@ -2033,6 +2033,37 @@ html[data-alloy-os-runtime="on"]
   color: var(--alloy-os-bend-pine, #00a283);
 }
 
+/* Per-row edit affordance (targeted editing): quiet, discoverable on row hover /
+ * keyboard focus, always visible on touch. Each editable contact row owns one. */
+.alloy-os-household__row-edit {
+  flex-shrink: 0;
+  margin-left: 4px;
+  padding: 2px 8px;
+  border: 1px solid var(--alloy-os-border, #e5e7eb);
+  border-radius: 999px;
+  background: var(--alloy-os-surface, #fff);
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--alloy-os-text-secondary, #4b5563);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 120ms ease, border-color 120ms ease, color 120ms ease;
+}
+.alloy-os-household__row:hover .alloy-os-household__row-edit,
+.alloy-os-household__row:focus-within .alloy-os-household__row-edit,
+.alloy-os-household__row-edit:focus-visible {
+  opacity: 1;
+}
+.alloy-os-household__row-edit:hover {
+  border-color: var(--alloy-os-bend-pine, #00a283);
+  color: var(--alloy-os-bend-pine, #00a283);
+}
+@media (hover: none) {
+  .alloy-os-household__row-edit {
+    opacity: 1;
+  }
+}
+
 .alloy-os-household__row-status {
   flex-shrink: 0;
   font-size: 10px;
@@ -3134,6 +3165,109 @@ html[data-alloy-os-runtime-split="true"]
 }
 .alloy-os-focus-panel-grid--composed .alloy-os-focus-panel-grid__cell > * {
   width: 100%;
+}
+
+/* ── Row-based Experience Builder ── */
+.alloy-os-rlb {
+  display: grid;
+  grid-template-columns: 360px minmax(0, 1fr);
+  gap: 20px;
+  align-items: start;
+}
+.alloy-os-rlb__controls {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.alloy-os-rlb__controls-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.alloy-os-rlb__title { font-size: 13px; font-weight: 700; color: var(--alloy-os-text-primary, #111827); }
+.alloy-os-rlb__head-actions { display: flex; gap: 6px; }
+.alloy-os-rlb__btn {
+  padding: 5px 10px;
+  font-size: 12px;
+  font-weight: 500;
+  border: 1px solid var(--alloy-os-border, #e5e7eb);
+  border-radius: 7px;
+  background: var(--alloy-os-surface, #fff);
+  color: var(--alloy-os-text-secondary, #4b5563);
+  cursor: pointer;
+}
+.alloy-os-rlb__btn--primary { border-color: var(--alloy-os-accent, #2f6f4f); background: var(--alloy-os-accent, #2f6f4f); color: #fff; }
+.alloy-os-rlb__btn--ghost { border-style: dashed; }
+.alloy-os-rlb__empty { font-size: 12px; color: var(--alloy-os-text-tertiary, #9ca3af); margin: 4px 0; }
+.alloy-os-rlb__row {
+  border: 1px solid var(--alloy-os-border, #e5e7eb);
+  border-radius: 10px;
+  padding: 8px;
+  background: var(--alloy-os-surface, #fff);
+}
+.alloy-os-rlb__row-head { margin-bottom: 6px; }
+.alloy-os-rlb__row-label {
+  font-size: 10px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
+  color: var(--alloy-os-text-tertiary, #9ca3af);
+}
+.alloy-os-rlb__cells { display: flex; flex-wrap: wrap; gap: 8px; align-items: flex-start; }
+.alloy-os-rlb__cell {
+  flex: 1 1 120px;
+  min-width: 120px;
+  border: 1px solid var(--alloy-os-border, #e5e7eb);
+  border-radius: 8px;
+  padding: 7px 8px;
+  background: color-mix(in srgb, var(--alloy-os-accent, #2f6f4f) 4%, #fff);
+  cursor: grab;
+}
+.alloy-os-rlb__cell-head { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+.alloy-os-rlb__cell-name { font-size: 12px; font-weight: 600; color: var(--alloy-os-text-primary, #111827); }
+.alloy-os-rlb__remove {
+  border: 0; background: transparent; cursor: pointer; color: var(--alloy-os-text-tertiary, #9ca3af); font-size: 11px;
+}
+.alloy-os-rlb__widths { display: inline-flex; gap: 2px; margin-top: 6px; }
+.alloy-os-rlb__width {
+  padding: 2px 7px; font-size: 10.5px; font-weight: 600;
+  border: 1px solid var(--alloy-os-border, #e5e7eb); border-radius: 6px;
+  background: #fff; color: var(--alloy-os-text-secondary, #4b5563); cursor: pointer;
+}
+.alloy-os-rlb__width--active { border-color: var(--alloy-os-accent, #2f6f4f); background: var(--alloy-os-accent, #2f6f4f); color: #fff; }
+.alloy-os-rlb__stacked-note { font-size: 10px; color: var(--alloy-os-text-tertiary, #9ca3af); margin-top: 4px; display: inline-block; }
+.alloy-os-rlb__add-card { align-self: center; }
+.alloy-os-rlb__add-menu { display: flex; flex-direction: column; gap: 4px; padding: 6px 0; }
+.alloy-os-rlb__add-row-item { display: flex; gap: 6px; align-items: center; }
+.alloy-os-rlb__add-btn, .alloy-os-rlb__stack-btn {
+  padding: 3px 8px; font-size: 11px; border: 1px solid var(--alloy-os-border, #e5e7eb);
+  border-radius: 6px; background: #fff; cursor: pointer; color: var(--alloy-os-text-secondary, #4b5563);
+}
+.alloy-os-rlb__preview { display: flex; flex-direction: column; gap: 8px; }
+.alloy-os-rlb__preview-label {
+  font-size: 10px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
+  color: var(--alloy-os-text-tertiary, #9ca3af);
+}
+.alloy-os-rlb__preview-canvas {
+  border: 1px solid var(--alloy-os-border, #e5e7eb); border-radius: 12px; padding: 12px;
+  background: var(--alloy-os-surface, #fff);
+}
+
+/* PUBLISHED layout (operator source of truth): explicit rows of width-proportional
+ * cells; cards stack vertically inside a cell. Honors the published widths exactly;
+ * collapses to one column (each row a single full-width cell) when too narrow. */
+.alloy-os-fp-canvas--published {
+  display: flex;
+  flex-direction: column;
+  gap: var(--alloy-os-fp-gap-y);
+}
+.alloy-os-fp-published-row {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--alloy-os-fp-gap-x);
+}
+.alloy-os-fp-published-cell {
+  display: flex;
+  flex-direction: column;
+  gap: var(--alloy-os-fp-gap-y);
+  min-width: 0;
 }
 
 /* ════════════════════════════════════════════════════════════════════════

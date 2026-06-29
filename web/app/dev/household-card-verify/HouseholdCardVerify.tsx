@@ -19,9 +19,16 @@ import {
     isElevatedLevel,
     type FocusPanelActiveDepth,
     type FocusPanelCoordination,
+    type FocusPanelDepthEntry,
     type FocusPanelDismissSignal,
     type FocusPanelFocusRequest,
 } from "@/lib/adminV2/runtime/focusPanel/focusPanelCoordinationModel";
+import {
+    mergePersonContactIntoFocusPanelTruth,
+    type FocusPanelMutation,
+} from "@/lib/adminV2/runtime/focusPanel/focusPanelMutation";
+import { seedHouseholdContactValuesForPerson } from "@/lib/adminV2/runtime/focusPanel/household/householdContactEditState";
+import type { FocusPanelPublishedLayout } from "@/lib/adminV2/runtime/focusPanel/composition/focusPanelPublishedLayout";
 import type { FocusPanelCardKey, FocusPanelCardModel } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardModel";
 import type {
     OperationalContext,
@@ -164,10 +171,30 @@ function OverviewComposition({ context }: { context: OperationalContext }) {
     // exercised in the harness so it is screenshot-able).
     const [request, setRequest] = useState<FocusPanelFocusRequest | null>(null);
     const nonceRef = useRef(0);
-    const requestFocus = useCallback<FocusPanelCoordination["requestFocus"]>((card, focus) => {
+    const depthHistoryRef = useRef<FocusPanelDepthEntry[]>([]);
+    const [previousFocus, setPreviousFocus] = useState<FocusPanelDepthEntry | null>(null);
+    const emitFocus = useCallback((card: FocusPanelCardKey, focus: string | null) => {
         nonceRef.current += 1;
         setRequest({ card, focus, nonce: nonceRef.current });
     }, []);
+    const requestFocus = useCallback<FocusPanelCoordination["requestFocus"]>(
+        (card, focus, source) => {
+            if (source) {
+                depthHistoryRef.current = [...depthHistoryRef.current, source];
+                setPreviousFocus(source);
+            }
+            emitFocus(card, focus);
+        },
+        [emitFocus],
+    );
+    const back = useCallback(() => {
+        const stack = depthHistoryRef.current;
+        const prev = stack[stack.length - 1];
+        if (!prev) return;
+        depthHistoryRef.current = stack.slice(0, -1);
+        setPreviousFocus(depthHistoryRef.current[depthHistoryRef.current.length - 1] ?? null);
+        emitFocus(prev.card, prev.focus);
+    }, [emitFocus]);
     const [activeDepth, setActiveDepth] = useState<FocusPanelActiveDepth | null>(null);
     const reportPerspective = useCallback<NonNullable<FocusPanelCoordination["reportPerspective"]>>(
         (card, level) => {
@@ -182,10 +209,41 @@ function OverviewComposition({ context }: { context: OperationalContext }) {
     const dismiss = useCallback<NonNullable<FocusPanelCoordination["dismiss"]>>((card) => {
         dismissNonceRef.current += 1;
         setDismissed({ card, nonce: dismissNonceRef.current });
+        depthHistoryRef.current = [];
+        setPreviousFocus(null);
     }, []);
+
+    // Local (no-auth) save adapter: edits merge into the in-memory truth via the SAME
+    // production merge (`mergePersonContactIntoFocusPanelTruth`), so the card recomposes
+    // with the updated, formatted phone/email — demonstrating the live save loop.
+    const [liveTruth, setLiveTruth] = useState<Record<string, unknown>>(context.truth);
+    const liveContext = useMemo<OperationalContext>(
+        () => ({ ...context, truth: liveTruth, capabilities: { ...context.capabilities, canMutate: true } }),
+        [context, liveTruth],
+    );
+    const mutation = useMemo<FocusPanelMutation>(
+        () => ({
+            canEdit: true,
+            savePersonContact: async (personId, patch) => {
+                setLiveTruth((prev) => {
+                    const cur = seedHouseholdContactValuesForPerson(prev, personId)?.values;
+                    const pick = (k: "first_name" | "last_name" | "email" | "phone") =>
+                        patch[k] !== undefined ? (patch[k] ?? "") : cur?.[k] ?? "";
+                    return mergePersonContactIntoFocusPanelTruth(prev, personId, {
+                        first_name: pick("first_name"),
+                        last_name: pick("last_name"),
+                        email: pick("email"),
+                        phone: pick("phone"),
+                    });
+                });
+                return { ok: true };
+            },
+        }),
+        [],
+    );
     const coordination = useMemo<FocusPanelCoordination>(
-        () => ({ request, requestFocus, activeDepth, reportPerspective, dismissed, dismiss }),
-        [request, requestFocus, activeDepth, reportPerspective, dismissed, dismiss],
+        () => ({ request, requestFocus, activeDepth, reportPerspective, dismissed, dismiss, previousFocus, back }),
+        [request, requestFocus, activeDepth, reportPerspective, dismissed, dismiss, previousFocus, back],
     );
 
     useEffect(() => {
@@ -207,13 +265,43 @@ function OverviewComposition({ context }: { context: OperationalContext }) {
             }}
             renderCell={(key) => {
                 if (key === "household")
-                    return <HouseholdCard model={compositionModel("household", "Household")} context={context} coordination={coordination} />;
+                    return <HouseholdCard model={compositionModel("household", "Household")} context={liveContext} coordination={coordination} mutation={mutation} />;
                 if (key === "children")
-                    return <ChildrenCard model={compositionModel("children", "Children")} context={context} coordination={coordination} />;
+                    return <ChildrenCard model={compositionModel("children", "Children")} context={liveContext} coordination={coordination} />;
                 if (key === "current_work")
-                    return <CurrentWorkCard model={compositionModel("current_work", "Current work")} context={context} coordination={coordination} />;
+                    return <CurrentWorkCard model={compositionModel("current_work", "Current work")} context={liveContext} coordination={coordination} />;
                 if (key === "readiness_kpi")
-                    return <ReadinessCard model={compositionModel("readiness_kpi", "Readiness")} context={context} coordination={coordination} />;
+                    return <ReadinessCard model={compositionModel("readiness_kpi", "Readiness")} context={liveContext} coordination={coordination} />;
+                return null;
+            }}
+        />
+    );
+}
+
+/** Proves the runtime honors a PUBLISHED explicit layout (source of truth), not the
+ *  auto-composition default: Children 2/3 + Current Work 1/3 (row 1), Household 1/2 +
+ *  Readiness 1/2 (row 2). Same production grid, fed `publishedLayout`. */
+const DEMO_PUBLISHED_LAYOUT: FocusPanelPublishedLayout = {
+    rows: [
+        { cells: [{ width: "2/3", cards: ["children"] }, { width: "1/3", cards: ["current_work"] }] },
+        { cells: [{ width: "1/2", cards: ["household"] }, { width: "1/2", cards: ["readiness_kpi"] }] },
+    ],
+};
+
+function PublishedLayoutDemo({ context }: { context: OperationalContext }) {
+    return (
+        <FocusPanelCardGrid
+            rows={[]}
+            publishedLayout={DEMO_PUBLISHED_LAYOUT}
+            renderCell={(key) => {
+                if (key === "household")
+                    return <HouseholdCard model={compositionModel("household", "Household")} context={context} />;
+                if (key === "children")
+                    return <ChildrenCard model={compositionModel("children", "Children")} context={context} />;
+                if (key === "current_work")
+                    return <CurrentWorkCard model={compositionModel("current_work", "Current work")} context={context} />;
+                if (key === "readiness_kpi")
+                    return <ReadinessCard model={compositionModel("readiness_kpi", "Readiness")} context={context} />;
                 return null;
             }}
         />
@@ -250,6 +338,18 @@ export default function HouseholdCardVerify() {
                 </p>
                 <div className="alloy-os-runtime" style={{ width: 960, background: "#f6f8fc", border: "1px solid #e5e9ef", borderRadius: 12 }}>
                     <OverviewComposition context={ctx(FULL, { label: "Johnson Household", signals: CORE_FOUR_SIGNALS })} />
+                </div>
+            </div>
+
+            <div style={{ width: "100%" }} data-published-layout-demo="true">
+                <h2 style={{ fontSize: 18, fontWeight: 700, margin: "0 0 6px" }}>Published layout drives runtime (source of truth)</h2>
+                <p style={{ fontSize: 13, color: "#475569", margin: "0 0 12px", maxWidth: 880 }}>
+                    The SAME production grid fed an operator-<strong>published</strong> layout — Children 2/3 ·
+                    Current Work 1/3 (row 1), Household 1/2 · Readiness 1/2 (row 2). The runtime renders these
+                    exact rows/widths; auto-composition does NOT override a published layout.
+                </p>
+                <div className="alloy-os-runtime" style={{ width: 960, background: "#f6f8fc", border: "1px solid #e5e9ef", borderRadius: 12 }}>
+                    <PublishedLayoutDemo context={ctx(FULL, { label: "Johnson Household", signals: CORE_FOUR_SIGNALS })} />
                 </div>
             </div>
             <Panel label="Overview (full household + address)"><HouseholdCard model={MODEL} context={ctx(FULL, { label: "Johnson Household" })} /></Panel>

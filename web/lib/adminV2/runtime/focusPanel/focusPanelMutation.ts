@@ -25,6 +25,7 @@ import {
 } from "@/lib/admin/drawer/linkedRecordFieldEditing";
 import { dispatchOpportunityDrawerRecordPatch } from "@/lib/admin/opportunityDrawerTargetedRefresh";
 import { dispatchDrawerLayoutRuntimeBodyRecordPatch } from "@/lib/layout/runtime/drawerLayoutRuntimeBodyRecordPatch";
+import { resolveLeadSummaryPrimaryPersonId } from "@/lib/admin/drawer/opportunityFamilyContactsOrdering";
 
 /** Primary-contact/person fields editable on the Household card (V1). */
 export type PersonContactValues = {
@@ -71,33 +72,55 @@ function fullNameFrom(person: SavedPerson): string | null {
     );
 }
 
+/** Update the matching person's row (by `person_id`) inside a contact array. */
+function updateContactArray(value: unknown, personId: string, saved: SavedPerson): unknown {
+    if (!Array.isArray(value)) return value;
+    const fullName = fullNameFrom(saved);
+    return value.map((row) => {
+        if (!row || typeof row !== "object") return row;
+        const r = row as Record<string, unknown>;
+        if (trimOrNull(r.person_id) !== personId) return row;
+        const next: Record<string, unknown> = { ...r };
+        if (fullName) next.name = fullName;
+        if (saved.email !== undefined) next.email = trimOrNull(saved.email);
+        if (saved.phone !== undefined) next.phone = trimOrNull(saved.phone);
+        return next;
+    });
+}
+
 /**
  * Merge a saved person back into the Focus Panel subject truth so the Household card
- * recomposes to the new values. Pure — returns a NEW record. Updates BOTH:
- *   - the generic opportunity hydration (`applyPersonPatchToOpportunityHydration`)
- *     so drawer/queue mirrors stay correct, AND
- *   - the namespaced keys the Household evidence actually reads
- *     (`person.primary_contact_name` / `_email` / `_phone`, `_identity.primary_person.label`).
+ * recomposes to the new values for THAT person. Pure — returns a NEW record.
+ *
+ * Updates the edited person wherever they appear:
+ *   - their row in the contact arrays (`_opportunity_persons` / `_customer_persons`),
+ *     keyed by `person_id` — so ANY contact row recomposes, not just the primary; and
+ *   - when the edited person is the PRIMARY contact, also the namespaced primary keys
+ *     (`person.primary_contact_name` / `_email` / `_phone`), generic hydration, and
+ *     `_identity.primary_person.label` (the card's headline channel).
  */
 export function mergePersonContactIntoFocusPanelTruth(
     truth: Record<string, unknown>,
+    personId: string,
     saved: SavedPerson,
 ): Record<string, unknown> {
     const merged: Record<string, unknown> = { ...truth };
-    applyPersonPatchToOpportunityHydration(merged, saved);
+    merged._opportunity_persons = updateContactArray(merged._opportunity_persons, personId, saved);
+    merged._customer_persons = updateContactArray(merged._customer_persons, personId, saved);
 
-    const fullName = fullNameFrom(saved);
-    if (fullName) merged["person.primary_contact_name"] = fullName;
-    if (saved.email !== undefined) merged["person.primary_email"] = trimOrNull(saved.email);
-    if (saved.phone !== undefined) merged["person.primary_phone"] = trimOrNull(saved.phone);
-
-    // Keep the identity label in sync (header/answer-line consistency).
-    const identity = merged._identity as { primary_person?: { id?: unknown; label?: unknown } } | null | undefined;
-    if (fullName && identity && typeof identity === "object" && identity.primary_person) {
-        merged._identity = {
-            ...identity,
-            primary_person: { ...identity.primary_person, label: fullName },
-        };
+    if (personId === resolveLeadSummaryPrimaryPersonId(truth)) {
+        applyPersonPatchToOpportunityHydration(merged, saved);
+        const fullName = fullNameFrom(saved);
+        if (fullName) merged["person.primary_contact_name"] = fullName;
+        if (saved.email !== undefined) merged["person.primary_email"] = trimOrNull(saved.email);
+        if (saved.phone !== undefined) merged["person.primary_phone"] = trimOrNull(saved.phone);
+        const identity = merged._identity as { primary_person?: { id?: unknown; label?: unknown } } | null | undefined;
+        if (fullName && identity && typeof identity === "object" && identity.primary_person) {
+            merged._identity = {
+                ...identity,
+                primary_person: { ...identity.primary_person, label: fullName },
+            };
+        }
     }
 
     return merged;
@@ -124,12 +147,12 @@ export function buildOpportunityFocusPanelMutation(input: BuildFocusPanelMutatio
         canEdit: canMutate,
         savePersonContact: async (personId, patch) => {
             const id = personId.trim();
-            if (!id) return { ok: false, status: 400, error: "No primary person linked" };
+            if (!id) return { ok: false, status: 400, error: "No person to edit" };
 
             const res = await patchLinkedPersonFromOpportunityDrawer({ personId: id, body: patch, fetchFn });
             if (!res.ok) return { ok: false, status: res.status, error: res.error };
 
-            const merged = mergePersonContactIntoFocusPanelTruth(truth, res.json as SavedPerson);
+            const merged = mergePersonContactIntoFocusPanelTruth(truth, id, res.json as SavedPerson);
             dispatchOpportunityDrawerRecordPatch(opportunityId, merged);
             dispatchDrawerLayoutRuntimeBodyRecordPatch({
                 entityType: "opportunities",

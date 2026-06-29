@@ -5,6 +5,7 @@ import {
     householdContactDirty,
     householdContactPatch,
     seedHouseholdContactValues,
+    seedHouseholdContactValuesForPerson,
 } from "@/lib/adminV2/runtime/focusPanel/household/householdContactEditState";
 import { mergePersonContactIntoFocusPanelTruth } from "@/lib/adminV2/runtime/focusPanel/focusPanelMutation";
 import type { OperationalContext } from "@/lib/adminV2/runtime/operationalContext/types";
@@ -81,7 +82,7 @@ describe("card reflects refreshed truth (merge → recompose → evidence)", () 
         const before = buildHouseholdCardEvidence(contextFor(TRUTH));
         expect(before.primaryEmail).toBe("jordan@example.com");
 
-        const mergedTruth = mergePersonContactIntoFocusPanelTruth(TRUTH, {
+        const mergedTruth = mergePersonContactIntoFocusPanelTruth(TRUTH, "p-1", {
             first_name: "Jordan",
             last_name: "Smith",
             full_name: "Jordan Smith",
@@ -92,5 +93,68 @@ describe("card reflects refreshed truth (merge → recompose → evidence)", () 
         expect(after.primaryEmail).toBe("new@example.com");
         expect(after.primaryPhone).toBe("(555) 999-0000");
         expect(after.primaryContact?.name).toBe("Jordan Smith");
+    });
+});
+
+const MULTI_TRUTH: Record<string, unknown> = {
+    id: "opp-1",
+    _identity: { primary_person: { id: "p-1", label: "Peyton Manning" } },
+    "person.primary_contact_name": "Peyton Manning",
+    "person.primary_email": "peyton@example.com",
+    "person.primary_phone": "(555) 111-2222",
+    _opportunity_persons: [
+        { id: "op-1", person_id: "p-1", role_type: "primary_contact", name: "Peyton Manning", phone: "(555) 111-2222", email: "peyton@example.com" },
+        { id: "op-2", person_id: "p-2", role_type: "parent", name: "Lillie Manning", phone: "(555) 333-4444", email: "lillie@example.com" },
+    ],
+};
+
+describe("seedHouseholdContactValuesForPerson — targeted per-row editing", () => {
+    it("seeds the PRIMARY contact by id", () => {
+        const seed = seedHouseholdContactValuesForPerson(MULTI_TRUTH, "p-1");
+        expect(seed?.name).toBe("Peyton Manning");
+        expect(seed?.values).toMatchObject({ first_name: "Peyton", last_name: "Manning", email: "peyton@example.com" });
+    });
+
+    it("seeds a SECOND parent / additional contact by id (not the primary)", () => {
+        const seed = seedHouseholdContactValuesForPerson(MULTI_TRUTH, "p-2");
+        expect(seed?.personId).toBe("p-2");
+        expect(seed?.name).toBe("Lillie Manning");
+        expect(seed?.values).toMatchObject({ first_name: "Lillie", last_name: "Manning", email: "lillie@example.com", phone: "(555) 333-4444" });
+    });
+
+    it("returns null for an unknown / empty person", () => {
+        expect(seedHouseholdContactValuesForPerson(MULTI_TRUTH, "nope")).toBeNull();
+        expect(seedHouseholdContactValuesForPerson(MULTI_TRUTH, "  ")).toBeNull();
+    });
+});
+
+describe("mergePersonContactIntoFocusPanelTruth — updates the correct person", () => {
+    it("updates a SECOND contact's row by id without touching the primary keys", () => {
+        const merged = mergePersonContactIntoFocusPanelTruth(MULTI_TRUTH, "p-2", {
+            first_name: "Lillie",
+            last_name: "Manning-Smith",
+            full_name: "Lillie Manning-Smith",
+            email: "lillie.new@example.com",
+            phone: "(555) 999-0000",
+        });
+        const rows = merged._opportunity_persons as { person_id: string; name: string; email: string }[];
+        expect(rows.find((r) => r.person_id === "p-2")).toMatchObject({ name: "Lillie Manning-Smith", email: "lillie.new@example.com" });
+        // primary (p-1) untouched
+        expect(rows.find((r) => r.person_id === "p-1")?.name).toBe("Peyton Manning");
+        expect(merged["person.primary_email"]).toBe("peyton@example.com");
+        // original immutable
+        expect((MULTI_TRUTH._opportunity_persons as { email: string }[])[1]!.email).toBe("lillie@example.com");
+    });
+
+    it("updates the primary keys when the edited person IS the primary", () => {
+        const merged = mergePersonContactIntoFocusPanelTruth(MULTI_TRUTH, "p-1", {
+            first_name: "Peyton",
+            last_name: "Manning",
+            full_name: "Peyton Manning",
+            email: "peyton.new@example.com",
+        });
+        expect(merged["person.primary_email"]).toBe("peyton.new@example.com");
+        const rows = merged._opportunity_persons as { person_id: string; email: string }[];
+        expect(rows.find((r) => r.person_id === "p-1")?.email).toBe("peyton.new@example.com");
     });
 });

@@ -22,6 +22,27 @@ No new operator-facing product behavior should be added to **drawer overview**, 
 
 ---
 
+## Composition V2 — row-based Focus Panel authoring (June 2026)
+
+The Focus Panel Surfaces editor composes the panel **visually with rows and columns**,
+not abstract tokens. Pipeline:
+
+```
+Surface → Rows → Cards → Evidence Groups → Perspectives → Conditions → Actions → Published Runtime
+```
+
+- **Published layout is the source of truth.** The runtime renders the published rows/
+  widths exactly (responsive single-column collapse only). **Weight / partner / preferred
+  shape are recommendation defaults only** — the auto Composition Engine is the starting
+  point when nothing is published; it never overrides a published layout.
+- Width uses plain fractions (**Full / 1/2 / 1/3 / 2/3**); cards stack within a column;
+  the builder preview **is** the runtime grid. The layout persists on the Summary
+  `LayoutDoc` metadata (`focusPanelLayout`) via the existing draft/publish flow.
+- Full canonical state (incl. card editing + depth history + mutation model):
+  [`focus-panel-composition-v2-and-editing.md`](./focus-panel-composition-v2-and-editing.md).
+
+---
+
 ## Core doctrine
 
 | Rule | Detail |

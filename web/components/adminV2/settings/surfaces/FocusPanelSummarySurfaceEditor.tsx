@@ -6,7 +6,16 @@ import { ConfigurationPrimaryButton } from "@/components/adminV2/settings/config
 import FocusPanelCardGrid from "@/components/admin/focusPanel/FocusPanelCardGrid";
 import FocusPanelCardInspector from "@/components/admin/focusPanel/FocusPanelCardInspector";
 import FocusPanelCardRenderer from "@/components/admin/focusPanel/FocusPanelCardRenderer";
+import FocusPanelRowLayoutBuilder from "@/components/admin/focusPanel/FocusPanelRowLayoutBuilder";
 import FocusPanelEditableCardFrame from "@/components/admin/focusPanel/FocusPanelEditableCardFrame";
+import {
+    readFocusPanelPublishedLayout,
+    type FocusPanelPublishedLayout,
+} from "@/lib/adminV2/runtime/focusPanel/composition/focusPanelPublishedLayout";
+import {
+    defaultRowLayoutFromCards,
+    withPublishedLayoutMetadata,
+} from "@/lib/adminV2/runtime/focusPanel/composition/focusPanelPublishedLayoutOps";
 import FocusPanelSummaryEditBar from "@/components/admin/focusPanel/FocusPanelSummaryEditBar";
 import { buildDemoFocusPanelSummaryViewModel } from "@/lib/adminV2/runtime/focusPanel/demoFocusPanelSummaryViewModel";
 import { buildOperationalContext } from "@/lib/adminV2/runtime/operationalContext/buildOperationalContext";
@@ -93,6 +102,9 @@ export default function FocusPanelSummarySurfaceEditor() {
     const [layoutState, setLayoutState] = useState<FocusPanelSummaryLayoutState>({ draft: null, published: null });
     const [loaded, setLoaded] = useState(false);
     const [dirty, setDirty] = useState(false);
+    // Published row/width layout (Composition V2). Null → runtime keeps its auto
+    // composition default; once authored, the runtime renders exactly this.
+    const [rowLayout, setRowLayout] = useState<FocusPanelPublishedLayout | null>(null);
     const [saving, setSaving] = useState(false);
     const [publishing, setPublishing] = useState(false);
     const [statusNote, setStatusNote] = useState<string | null>(null);
@@ -107,6 +119,7 @@ export default function FocusPanelSummarySurfaceEditor() {
                 if (seedDoc) {
                     const seeded = readSummaryCardOrder(seedDoc);
                     if (seeded.length > 0) setOrder(seeded);
+                    setRowLayout(readFocusPanelPublishedLayout(seedDoc)); // existing layout, or null
                 }
                 setLoaded(true);
             })
@@ -129,11 +142,19 @@ export default function FocusPanelSummarySurfaceEditor() {
         [order],
     );
 
+    // The summary doc carries the card instances/config (from order) AND, when the
+    // operator has composed one, the published row/width layout in metadata that the
+    // runtime renders exactly. No authored layout → no metadata → auto fallback.
+    const buildDocWithLayout = useCallback(() => {
+        const doc = buildSummaryDocFromOrder(order);
+        return rowLayout ? { ...doc, metadata: withPublishedLayoutMetadata(doc.metadata, rowLayout) } : doc;
+    }, [order, rowLayout]);
+
     const handleSaveDraft = useCallback(async () => {
         setSaving(true);
         setStatusNote(null);
         try {
-            const saved = await saveFocusPanelSummaryDraft(layoutState, buildSummaryDocFromOrder(order));
+            const saved = await saveFocusPanelSummaryDraft(layoutState, buildDocWithLayout());
             setLayoutState((s) => ({ ...s, draft: { id: saved.id, version: saved.version, doc: saved.doc } }));
             setDirty(false);
             setStatusNote("Draft saved");
@@ -142,13 +163,13 @@ export default function FocusPanelSummarySurfaceEditor() {
         } finally {
             setSaving(false);
         }
-    }, [layoutState, order]);
+    }, [layoutState, buildDocWithLayout]);
 
     const handlePublish = useCallback(async () => {
         setPublishing(true);
         setStatusNote(null);
         try {
-            const draft = await saveFocusPanelSummaryDraft(layoutState, buildSummaryDocFromOrder(order));
+            const draft = await saveFocusPanelSummaryDraft(layoutState, buildDocWithLayout());
             const published = await publishFocusPanelSummary(draft.id);
             setLayoutState({
                 draft: null,
@@ -161,7 +182,7 @@ export default function FocusPanelSummarySurfaceEditor() {
         } finally {
             setPublishing(false);
         }
-    }, [layoutState, order]);
+    }, [layoutState, buildDocWithLayout]);
 
     const statusLabel = !loaded
         ? "Loading…"
@@ -316,6 +337,37 @@ export default function FocusPanelSummarySurfaceEditor() {
         </div>
     ) : null;
 
+    // Row-based composition builder (Composition V2): catalog from the catalog'd cards,
+    // seeded from the loaded layout or a default arrangement of the present cards.
+    const builderCatalog = useMemo(
+        () =>
+            FOCUS_PANEL_CARD_CATALOG.filter((e) => e.cardKey).map((e) => ({
+                key: e.cardKey as FocusPanelCardKey,
+                label: e.label,
+            })),
+        [],
+    );
+    const builderInitial = useMemo(
+        () => rowLayout ?? defaultRowLayoutFromCards(order.map((o) => o.key)),
+        // Seeded once on load; the builder is uncontrolled after mount (gated on `loaded`).
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+        [loaded],
+    );
+    const renderBuilderCard = useCallback(
+        (key: FocusPanelCardKey) => {
+            const model = cards.get(key);
+            return model ? (
+                <FocusPanelCardRenderer
+                    model={model}
+                    context={previewContext}
+                    focusPanelMode="summary"
+                    compat={{ subjectVm: vm, onSelectTab: () => {} }}
+                />
+            ) : null;
+        },
+        [cards, previewContext, vm],
+    );
+
     return (
         <div className="flex h-full min-h-0 flex-col gap-3" data-testid="focus-panel-summary-surface-editor">
             {/* Compact Configuration workspace toolbar — publish state + actions. */}
@@ -364,8 +416,25 @@ export default function FocusPanelSummarySurfaceEditor() {
 
             <FocusPanelSummaryEditBar onUndo={undo} canUndo={past.length > 0} onReset={reset} />
 
-            {/* Canvas + contextual Inspector. The canvas keeps the runtime Focus Panel
-                proportions (capped, centered); the Inspector opens beside it. */}
+            {/* Row-based composition (Composition V2): compose the Focus Panel with rows
+                and columns. This published layout drives the runtime exactly; the card
+                catalog + per-card config below remain for which cards exist + their
+                content. Save draft / Publish (toolbar) persist this layout in metadata. */}
+            {loaded ? (
+                <div className="process-config-setup-card overflow-hidden p-3" data-surface-row-builder="true">
+                    <FocusPanelRowLayoutBuilder
+                        initialLayout={builderInitial}
+                        catalog={builderCatalog}
+                        renderCard={renderBuilderCard}
+                        onChange={(l) => {
+                            setRowLayout(l);
+                            setDirty(true);
+                        }}
+                    />
+                </div>
+            ) : null}
+
+            {/* Card catalog + per-card config (which cards exist + their content). */}
             <div className="flex min-h-0 flex-1 gap-4">
                 <div className="flex min-w-0 flex-1 justify-center overflow-y-auto">
                     <div

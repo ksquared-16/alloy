@@ -210,6 +210,50 @@ describe("Enrollment Freeze — depth + overlay polish", () => {
     });
 });
 
+describe("Targeted contact editing + depth history (QA)", () => {
+    it("Household has per-row edit affordances, not a global Edit contact link", () => {
+        const card = readSrc("components/admin/focusPanel/cards/HouseholdCard.tsx");
+        expect(card).toContain("data-household-edit-contact"); // per-row affordance
+        expect(card).toContain("setEditingPersonId"); // targeted edit state
+        expect(card).not.toContain('data-household-action="edit"'); // global link removed
+        expect(card).toContain('requestFocus("children", childId, source)'); // handoff records source
+        const edit = readSrc("components/admin/focusPanel/cards/HouseholdContactEdit.tsx");
+        expect(edit).toContain("Edit ${personName}"); // edit names the target
+    });
+
+    it("child rows in Household do not use the edit path (belonging-only handoff)", () => {
+        const card = readSrc("components/admin/focusPanel/cards/HouseholdCard.tsx");
+        // child rows render via onOpenChild (handoff), never onEditContact / ContactRow.
+        expect(card).toContain("onOpenChild");
+        expect(card).toContain("Belonging only");
+    });
+
+    it("Children Back returns to the prior card via depth history", () => {
+        const children = readSrc("components/admin/focusPanel/cards/ChildrenCard.tsx");
+        expect(children).toContain('data-children-action="back-to-source"');
+        expect(children).toContain("coordination?.back?.()");
+        expect(children).toContain("focusPanelCardBackLabel");
+        const host = readSrc("components/admin/focusPanel/OpportunityFocusPanelModeGrid.tsx");
+        expect(host).toContain("depthHistoryRef"); // local stack
+        expect(host).toContain("previousFocus");
+        expect(host).toContain("back"); // back() + coordination.back
+        // No routing / drawer navigation for handoff back.
+        expect(host).not.toContain("router.push");
+    });
+});
+
+describe("Row builder mounted in the settings editor (Composition V2)", () => {
+    it("FocusPanelSummarySurfaceEditor mounts the row builder + persists via the existing flow", () => {
+        const editor = readSrc("components/adminV2/settings/surfaces/FocusPanelSummarySurfaceEditor.tsx");
+        expect(editor).toContain("FocusPanelRowLayoutBuilder"); // mounted
+        expect(editor).toContain("readFocusPanelPublishedLayout"); // loads existing metadata
+        expect(editor).toContain("withPublishedLayoutMetadata"); // injects on save/publish
+        expect(editor).toContain("buildDocWithLayout"); // reused by save AND publish
+        expect(editor).toContain("saveFocusPanelSummaryDraft"); // existing draft path
+        expect(editor).toContain("publishFocusPanelSummary"); // existing publish path
+    });
+});
+
 describe("operational action doctrine", () => {
     it("documents pipeline and Withdraw Child invariant example", () => {
         const doc = readDoc("docs/platform/operator/operational-action-doctrine.md");

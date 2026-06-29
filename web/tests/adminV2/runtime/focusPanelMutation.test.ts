@@ -38,7 +38,7 @@ function captureRecordPatch(): { events: CustomEvent[]; stop: () => void } {
 
 describe("mergePersonContactIntoFocusPanelTruth", () => {
     it("updates the keys the Household card reads, immutably", () => {
-        const merged = mergePersonContactIntoFocusPanelTruth(BASE_TRUTH, SAVED_PERSON);
+        const merged = mergePersonContactIntoFocusPanelTruth(BASE_TRUTH, "p-1", SAVED_PERSON);
         expect(merged["person.primary_contact_name"]).toBe("Jordan Smith");
         expect(merged["person.primary_email"]).toBe("new@example.com");
         expect(merged["person.primary_phone"]).toBe("(555) 999-0000");

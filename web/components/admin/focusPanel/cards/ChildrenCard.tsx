@@ -9,9 +9,10 @@ import {
     type ChildrenEvidenceChild,
 } from "@/lib/adminV2/runtime/focusPanel/children/buildChildrenCardEvidence";
 import type { FocusPanelCardModel } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardModel";
-import type {
-    FocusPanelCoordination,
-    FocusPanelPerspectiveLevel,
+import {
+    focusPanelCardBackLabel,
+    type FocusPanelCoordination,
+    type FocusPanelPerspectiveLevel,
 } from "@/lib/adminV2/runtime/focusPanel/focusPanelCoordinationModel";
 import {
     useDismissSignal,
@@ -84,6 +85,20 @@ export default function ChildrenCard({ model, context, receded = false, coordina
     const statusTone = evidence.hasAttention ? "at-risk" : "neutral";
     const statusChip = isEmpty ? null : evidence.hasAttention ? "Needs info" : `${evidence.count}`;
 
+    // Where a card-to-card handoff came FROM (e.g. Household). When set, Back returns
+    // to that prior card state instead of staying within Children / closing.
+    const backOrigin = editing ? null : coordination?.previousFocus ?? null;
+    const backToSourceButton = backOrigin ? (
+        <button
+            type="button"
+            className="alloy-os-ucard__action alloy-os-ucard__action--system5"
+            onClick={() => coordination?.back?.()}
+            data-children-action="back-to-source"
+        >
+            ← Back to {focusPanelCardBackLabel(backOrigin.card)}
+        </button>
+    ) : null;
+
     const footerAction = isEmpty ? null : editing && focused ? (
         <button
             type="button"
@@ -95,14 +110,16 @@ export default function ChildrenCard({ model, context, receded = false, coordina
         </button>
     ) : focused ? (
         <div className="alloy-os-card-nav">
-            <button
-                type="button"
-                className="alloy-os-ucard__action alloy-os-ucard__action--system5"
-                onClick={() => setFocusedId(null)}
-                data-children-action="back"
-            >
-                ← All children
-            </button>
+            {backToSourceButton ?? (
+                <button
+                    type="button"
+                    className="alloy-os-ucard__action alloy-os-ucard__action--system5"
+                    onClick={() => setFocusedId(null)}
+                    data-children-action="back"
+                >
+                    ← All children
+                </button>
+            )}
             <button
                 type="button"
                 className="alloy-os-ucard__action alloy-os-ucard__action--system5"
@@ -113,14 +130,16 @@ export default function ChildrenCard({ model, context, receded = false, coordina
             </button>
         </div>
     ) : expanded ? (
-        <button
-            type="button"
-            className="alloy-os-ucard__action alloy-os-ucard__action--system5"
-            onClick={() => setExpanded(false)}
-            data-children-action="collapse"
-        >
-            ← Back to panel
-        </button>
+        backToSourceButton ?? (
+            <button
+                type="button"
+                className="alloy-os-ucard__action alloy-os-ucard__action--system5"
+                onClick={() => setExpanded(false)}
+                data-children-action="collapse"
+            >
+                ← Back to panel
+            </button>
+        )
     ) : (
         <button
             type="button"
