@@ -96,21 +96,17 @@ import {
 import {
     operatorOperationalPerspectivesEnabled,
 } from "@/lib/adminV2/runtime/configurationRuntimeConvergenceFlag";
-import { deriveRuntimePerspective } from "@/lib/adminV2/runtime/perspective/deriveRuntimePerspective";
+import { useWorkUnitRuntimePerspective } from "@/lib/adminV2/runtime/perspective/useWorkUnitRuntimePerspective";
 import {
     applyOperationalViewsToPillSections,
     applyOperationalViewsToTabPlaceholders,
     buildOperationalViewHeaderSection,
-    deriveRuntimePerspectiveWithOperationalViews,
-    deriveOperationalViewsFromQueueDefinition,
     relabelPrimaryPillSectionWorkView,
 } from "@/lib/adminV2/runtime/perspective/mergeOperationalViewMetadata";
-import { resolveOperationalViewsForWorkUnit } from "@/lib/adminV2/runtime/perspective/resolveStageOperationalViews";
 import {
     resolveActiveWorkViewRuntimeContext,
     workViewRuntimeUrlParamsFromQueueKey,
 } from "@/lib/lifecycle/resolveWorkViewRuntimeContext";
-import { setActiveRuntimePerspective } from "@/lib/adminV2/runtime/perspective/RuntimePerspectiveContext";
 import { buildPrepareParamsFromOpenDrawer, peekDrawerViewModelPreloadSync } from "@/lib/adminV2/viewModel/drawer/drawerShellPinnedModelSwap";
 import { logDrawerVmRuntimeDiagnostic } from "@/lib/adminV2/viewModel/drawer/drawerVmRuntimeDiagnostics";
 import { warmQueueRowOpportunityVm } from "@/lib/adminV2/viewModel/drawer/vmRuntime/queueRowDrawerVmWarm";
@@ -941,19 +937,18 @@ export default function AdminV2OpportunityWorkUnitPage() {
 
     const workViewPerspectivesEnabled = operatorOperationalPerspectivesEnabled();
 
-    const stageOperationalViews = useMemo(() => {
-        if (!workViewPerspectivesEnabled) return [];
-        const fromConfig =
-            dept?.metadata ?
-                resolveOperationalViewsForWorkUnit({
-                    departmentMetadata: dept.metadata,
-                    workUnitMetadata: workUnit?.metadata,
-                    queueDefinition: workUnit?.queue_definition,
-                })
-            :   [];
-        if (fromConfig.length) return fromConfig;
-        return deriveOperationalViewsFromQueueDefinition(workUnit?.queue_definition);
-    }, [workViewPerspectivesEnabled, dept?.metadata, workUnit?.metadata, workUnit?.queue_definition]);
+    // Perspective derivation is owned by the canonical runtime hook — it resolves the operational
+    // views, derives the runtime perspective for the active lane, and publishes it to the global
+    // RuntimePerspectiveContext store. The page supplies its queue selection + metadata and consumes
+    // the returned operational views for pill/header layout (it no longer owns the derivation).
+    const { stageOperationalViews } = useWorkUnitRuntimePerspective({
+        workUnitId,
+        workUnit,
+        departmentMetadata: dept?.metadata,
+        selectedQueueKey,
+        attentionBucketKey,
+        workViewPerspectivesEnabled,
+    });
 
     const workViewRuntimeContext = useMemo(() => {
         if (!dept?.metadata) return null;
@@ -1533,34 +1528,6 @@ export default function AdminV2OpportunityWorkUnitPage() {
     const attentionBucketKeyRef = useRef("");
     attentionBucketKeyRef.current = attentionBucketKey;
 
-    useEffect(() => {
-        if (!ALLOY_OS_RUNTIME_ENABLED) return;
-        const wuId = workUnitId?.trim();
-        if (!wuId || !workUnit) {
-            setActiveRuntimePerspective(null);
-            return;
-        }
-        const deriveParams = {
-            workUnitId: wuId,
-            queueDefinition: workUnit.queue_definition,
-            activeQueueKey: selectedQueueKey,
-            attentionBucketKey: attentionBucketKey || null,
-            source: "pill" as const,
-        };
-        setActiveRuntimePerspective(
-            workViewPerspectivesEnabled && stageOperationalViews.length
-                ? deriveRuntimePerspectiveWithOperationalViews({
-                      ...deriveParams,
-                      operationalViews: stageOperationalViews,
-                  })
-                : deriveRuntimePerspective(deriveParams),
-        );
-    }, [workUnitId, workUnit, selectedQueueKey, attentionBucketKey, stageOperationalViews]);
-
-    useEffect(() => {
-        if (!ALLOY_OS_RUNTIME_ENABLED) return;
-        return () => setActiveRuntimePerspective(null);
-    }, [workUnitId]);
 
     const setSelectedQueueKeyTraced = useCallback((source: string, next: string | null) => {
         setSelectedQueueKey((prev) => {

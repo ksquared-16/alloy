@@ -16,12 +16,19 @@ describe("Opportunity Focus Panel activation wiring", () => {
         expect(shell).toContain("AlloyOsRuntimeSplitController");
     });
 
-    it("publishes runtime Perspective from the work-unit page", () => {
+    it("publishes runtime Perspective via the canonical hook (page delegates, does not own derivation)", () => {
         const page = readSrc(
             "app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page.tsx",
         );
-        expect(page).toContain("setActiveRuntimePerspective");
-        expect(page).toContain("deriveRuntimePerspective");
+        // The page delegates perspective derivation + publication to the canonical runtime hook
+        // instead of owning the deriveRuntimePerspective/setActiveRuntimePerspective effect.
+        expect(page).toContain("useWorkUnitRuntimePerspective(");
+        expect(page).not.toContain("setActiveRuntimePerspective");
+        expect(page).not.toContain("deriveRuntimePerspective");
+        // The canonical hook owns the derivation + store publication.
+        const hook = readSrc("lib/adminV2/runtime/perspective/useWorkUnitRuntimePerspective.ts");
+        expect(hook).toContain("setActiveRuntimePerspective");
+        expect(hook).toContain("deriveRuntimePerspective");
     });
 
     it("OpportunityDrawerVmRuntime gates Focus Panel on split active", () => {
