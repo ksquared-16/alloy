@@ -243,6 +243,7 @@ import {
     type LifecycleSiblingWorkUnitNavRow,
 } from "@/lib/lifecycle/lifecycleWorkUnitShellPills";
 import { operatorWorkUnitHrefFromKey, resolveCreatedLeadFocusPanelHref } from "@/lib/admin/canonicalOperatorRoutes";
+import { resolveLifecycleSiblingNavHref } from "@/lib/lifecycle/lifecycleSiblingNavTarget";
 import {
     lifecycleSiblingHeaderPaintReady,
     lifecycleSiblingTotalsFromDeptSummaries,
@@ -2936,6 +2937,25 @@ export default function AdminV2OpportunityWorkUnitPage() {
                             totalsByWorkUnitId: lifecycleSiblingTotalsById,
                         });
                     }
+                }
+                // Slice 1 (switching → navigation): a lifecycle sibling work unit is its own
+                // route entry + Route VM. Navigate to its canonical slug instead of mutating
+                // activeWorkUnitId in place — the compat page stops acting as a client-side
+                // multi-work-unit switcher. The warm-prep above (in-page-switch flag, FROM
+                // snapshot, stable sibling list) lets the destination mount hydrate instantly.
+                // The in-page switcher below remains a fallback only when no platform key is
+                // resolvable (a sibling that cannot address a slug route).
+                const siblingNavRow = lifecycleSiblingWorkUnitsRef.current?.find(
+                    (s) => s.id === lifecycleNavWuId,
+                );
+                const siblingNavHref =
+                    resolveLifecycleSiblingNavHref(siblingNavRow) ??
+                    (targetWuRow?.key?.trim()
+                        ? operatorWorkUnitHrefFromKey(targetWuRow.key.trim())
+                        : null);
+                if (siblingNavHref) {
+                    router.push(siblingNavHref);
+                    return;
                 }
                 const fromQueueKeyBeforeSwitch = selectedQueueKeyRef.current;
                 if (targetSelection?.queueKey) {
