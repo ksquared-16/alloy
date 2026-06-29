@@ -531,3 +531,21 @@ Status: shipped. Financial Policies promoted from designed surface to **first-cl
 
 ### Commercial Model complete
 Services → Rate Plans/Rules → **Charge Templates** → **Financial Policies**, with Accounting (GL chain + code-owned categories) and Charge Preview. The configuration trio is in place; the platform is ready for the Charge-lifecycle / Posting phase.
+
+---
+
+## Commercial Model — Slice D: Charge Lifecycle + template-driven draft resolution (IMPLEMENTED)
+
+Turns the configured Commercial Model into resolved **draft charge obligations**. Still **not Posting** — drafts are non-authoritative, write no AR/ledger/invoices, and recompute until Posting (separate) writes the money truth.
+
+- **Migration** `20260705120000_charge_lifecycle_template_link.sql` — additive `charges` columns `occurs_on`, `billable_on`, `charge_template_id` (→ `financial_charge_templates`), `service_id` (→ `financial_services`) + partial indexes. The frozen `status` / `charge_type` / `charge_category` CHECKs, RLS, and the posted-charge immutability trigger are **untouched**; **"scheduled" is derived** (`billable_on` in the future), not a new status. No parallel charge table.
+- **Resolution (pure, recomputable)** `lib/financials/chargeLifecycle/resolveChargeFromTemplate.ts` — a Charge Template + context → a **Charge intent**: occurs-on (now / event_date / service_period_start), billable-on (immediate / offset_days / next_billing_cycle), amount (fixed; rate/usage resolved when supplied else placeholder), charge category, GL mapping, responsibility, review, lifecycle status (scheduled vs draft), and a stable `tpl:<key>:<occurs_on>:<scope>` idempotency key.
+- **Lifecycle service** `chargeLifecycleService.ts` — `previewTemplateCharge` (no write) + `writeTemplateDraftCharge` (idempotent `status='draft'` only; create / recalculate / unchanged / **skipped_posted**). Consumes Services + Charge Templates + the **posting-review Financial Policy**. Reuses the `charges` substrate + `metadata.resolution_key` convention; never posts, never mutates a posted charge. Only fixed (resolvable) amounts write; rate/usage/attendance preview as placeholders.
+- **Route** `POST /api/admin/financial/charge-templates/simulate` (requireAdminOrOps) — `action=preview | draft`.
+- **UI** `ChargeTemplateSimulator` in the Charge Templates panel — operator picks template + occurs/event date + usage quantity + (optional Child → Agreement); output shows occurs-on, billable-on, amount strategy, category, GL, responsibility, review-required, would-create-draft, lifecycle status. No IDs. Draft write requires an agreement.
+- **Policy consumption** — posting-review is **consumed** (drives review-required). Billing cadence + proration are documented **hooks** (cadence informs `next_billing_cycle`; full proration math deferred to Posting). Billable offset is template-driven.
+- **Seed** — existing Slice-B demo templates already demonstrate the cases: `registration_fee` (immediate), `field_trip` (billable +21d), `late_pickup` (review-required), `diapers` (usage-derived placeholder), `annual_supply_fee` (scheduled/manual).
+- **Tests** — pure resolver (immediate / future billable-on / eligibility / lifecycle / idempotency key / review); service preview + idempotent draft write + recalculate + **posted-not-mutated** + template/occurs/billable linkage + policy consumption + no-agreement refusal; route gating + dispatch; migration-additive + simulator posture + no ledger/invoice/payment writes.
+
+### Charge lifecycle online
+Configuration (Services / Rate Plans / Charge Templates / Policies) now **feeds draft Charge Resolution**. Next phase: **Posting** — the authoritative, separate stage that turns approved drafts into posted charges + ledger/GL/AR.

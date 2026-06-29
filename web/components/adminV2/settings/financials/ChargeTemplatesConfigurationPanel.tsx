@@ -28,6 +28,7 @@ import {
 } from "@/components/adminV2/settings/configurationRuntime/EffectiveDatedConfigurationEditor";
 import { useChargeTemplates } from "@/components/adminV2/settings/financials/useChargeTemplates";
 import { useFinancialServices } from "@/components/adminV2/settings/financials/useFinancialServices";
+import ChargeTemplateSimulator from "@/components/adminV2/settings/financials/ChargeTemplateSimulator";
 
 /**
  * Charge Templates configuration (Commercial Model, Slice B). How an operational
@@ -154,6 +155,8 @@ export default function ChargeTemplatesConfigurationPanel({ canMutate, todayYmd 
                 <ConfigurationEmptyState testId="financials-charge-templates-loading" title="Loading charge templates" description="Fetching charge templates." />
             ) : (
                 <>
+                    {templates.length > 0 ? <ChargeTemplateSimulator templates={templates} /> : null}
+
                     {lineages.length === 0 && !canMutate ? (
                         <ConfigurationEmptyState
                             testId="financials-charge-templates-empty"

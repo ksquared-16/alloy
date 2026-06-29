@@ -159,6 +159,46 @@ describe("Commercial Model — Financial Policies (Slice C)", () => {
     });
 });
 
+describe("Commercial Model — Charge Lifecycle + draft resolution (Slice D)", () => {
+    it("the charge-lifecycle migration is additive (no status/trigger/RLS changes, no parallel table)", () => {
+        const root2 = resolve(__dirname, "../../..");
+        const sql = readFileSync(resolve(root2, "supabase/migrations/20260705120000_charge_lifecycle_template_link.sql"), "utf8");
+        expect(sql).toContain("ALTER TABLE public.charges");
+        expect(sql).toContain("occurs_on");
+        expect(sql).toContain("billable_on");
+        expect(sql).toContain("charge_template_id");
+        // frozen substrate untouched: no CREATE TABLE charges, no status CHECK edit, no trigger/RLS change
+        expect(sql).not.toMatch(/CREATE TABLE[^;]*charges/i);
+        expect(sql).not.toMatch(/charges_status_chk|enforce_childcare_charge_immutability|CREATE POLICY/i);
+    });
+
+    it("the simulate route is role-gated POST (preview | draft)", () => {
+        const r = read("app/api/admin/financial/charge-templates/simulate/route.ts");
+        expect(r).toMatch(/export async function POST/);
+        expect(r).toContain("requireAdminOrOps");
+        expect(r).toContain('"preview"');
+        expect(r).toContain('"draft"');
+    });
+
+    it("the lifecycle service writes only draft charges, idempotent, never posts/ledger/invoices", () => {
+        const svc = read("lib/financials/chargeLifecycle/chargeLifecycleService.ts");
+        expect(svc).toContain("resolution_key");
+        expect(svc).toContain('status: "draft"');
+        expect(svc).toContain("skipped_posted");
+        // no posting/ledger/invoice/payment writes
+        expect(svc).not.toMatch(/from\(["'](ledger_transactions|gl_journal_lines|invoices|payments|statements)["']\)/);
+        expect(svc).not.toMatch(/status:\s*["']posted["']/);
+    });
+
+    it("the simulator UI renders and calls the simulate API (no IDs)", () => {
+        const sim = read("components/adminV2/settings/financials/ChargeTemplateSimulator.tsx");
+        expect(sim).toContain("/api/admin/financial/charge-templates/simulate");
+        expect(sim).toMatch(/posts nothing|not posted/i);
+        const panel = read("components/adminV2/settings/financials/ChargeTemplatesConfigurationPanel.tsx");
+        expect(panel).toContain("ChargeTemplateSimulator");
+    });
+});
+
 describe("Convergence — Charge Preview uses operational selectors (no UUIDs)", () => {
     const inspector = read("components/adminV2/settings/financials/FinancialChargePreviewInspector.tsx");
 

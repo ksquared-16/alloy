@@ -179,6 +179,8 @@ Financial Policy attaches at the most natural level — never org-only:
 
 **As-built (Commercial Model Slice C, migration `20260704120000`):** `financial_policies` is first-class, scoped (org / location / service / rate_plan; Agreement is the next dimension), and effective-dated, with a code-owned policy-type registry, typed `value` jsonb, and a pure most-specific-wins resolver. Configuration only — recomputable, posts nothing. **Charge Categories** were reviewed and kept **code-owned** (platform invariants), surfaced under Accounting as reference with GL-mapping status.
 
+**As-built (Commercial Model Slice D, migration `20260705120000`):** the **Charge lifecycle** spine landed on the existing `charges` table — additive columns `occurs_on` / `billable_on` / `charge_template_id` / `service_id` (the frozen `status` / `charge_type` CHECKs, RLS, and the posted-charge immutability trigger untouched; "scheduled" is **derived** — `billable_on` in the future — not a new status). A pure, recomputable resolver turns a configured **Charge Template** + context into a draft/scheduled **Charge intent** (occurs-on, billable-on, amount, category, GL, responsibility, review, lifecycle status); the lifecycle service writes `status='draft'` rows **only**, idempotent on `metadata.resolution_key`, skipping any posted charge. It consumes Services, Charge Templates, and the posting-review Financial Policy, and is exercised end-to-end by a Charge Template Simulator under `/settings/financials`. **Charge Event remains a trigger fact** (`workflow_events`-first). Still **not Posting** — drafts are non-authoritative, write no AR/ledger/invoices, and recompute until Posting (separate, authoritative) writes the money truth.
+
 ---
 
 ## 7. Relationships
