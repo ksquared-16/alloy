@@ -56,8 +56,8 @@ function AnalyticsSettingsInner() {
     return (
         <div className={SETTINGS_PAGE_SHELL_CLASS} data-adminv2-analytics-settings="true">
             <SettingsPageHeader
-                title="Operational Intelligence"
-                subtitle="Configure calculations, display styles, and where metrics appear across the workspace."
+                title="Analytics Configuration"
+                subtitle="Metric definitions, sources, targets, and display — the admin builder behind Analytics. The operator runtime is the Workspace → Operational Intelligence modal; dashboard composition lives in Surfaces."
             />
 
             {canMutate ?
@@ -67,7 +67,7 @@ function AnalyticsSettingsInner() {
                 </div>
             :   null}
 
-            <SettingsEntityTabBar tabs={TABS} activeKey={isLegacy ? "calculations" : tab} onSelect={setTab} aria-label="Operational Intelligence sections" />
+            <SettingsEntityTabBar tabs={TABS} activeKey={isLegacy ? "calculations" : tab} onSelect={setTab} aria-label="Analytics configuration sections" />
             {activeSubtitle ? <p className="-mt-1 text-xs text-alloy-midnight/55">{activeSubtitle}</p> : null}
 
             <div className="mt-4" key={refreshKey}>

@@ -9,7 +9,6 @@ import {
 } from "@/app/adminV2/analytics/oipWorkspaceUi";
 import AlloyModeSwitch from "@/components/workspace/AlloyModeSwitch";
 import { Settings2 } from "lucide-react";
-import { OipOverviewStructure } from "@/components/admin/workspace/OipOverviewStructure";
 import { OperationalIntelligencePanel } from "@/components/adminV2/intelligence/OperationalIntelligencePanel";
 import {
     OipKpiObjectCard,
@@ -25,7 +24,6 @@ import {
 import type { ResolvedMetricMap } from "@/lib/metrics/fetchResolvedMetrics";
 import { getMetricDefinition } from "@/lib/metrics/registry";
 import { closeWorkspaceModal } from "@/lib/adminV2/workspaceModalCoordinator";
-import { computeWorkspaceHealthSummary } from "@/lib/metrics/workspaceHealthSummary";
 import {
     normalizeOipHealthStatus,
     oipHealthStatusChipClass,
@@ -248,7 +246,6 @@ export default function AnalyticsWorkspacePanel({ onRequestClose }: AnalyticsWor
     const allPacks = listMetricPacks();
     const availablePacks = allPacks.filter((pack) => pack.domainStatus === "available");
     const comingSoonPacks = allPacks.filter((pack) => pack.domainStatus === "coming_soon");
-    const health = computeWorkspaceHealthSummary(resolved);
     const siteLabel =
         selectedSiteId && siteFilter?.bootstrap?.sites?.length
             ? (siteFilter.bootstrap.sites.find((s) => s.id === selectedSiteId)?.label ?? "Selected site")
@@ -325,10 +322,7 @@ export default function AnalyticsWorkspacePanel({ onRequestClose }: AnalyticsWor
                                 {fetchError}
                             </p>
                         :   null}
-                        <OipOverviewStructure health={health} resolved={resolved} loading={loading} />
-                        <div className="mt-4 border-t border-alloy-stone/12 pt-4">
-                            <OperationalIntelligencePanel />
-                        </div>
+                        <OperationalIntelligencePanel />
                     </div>
                 : studioView === "playbooks" ?
                     <>

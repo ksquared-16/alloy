@@ -174,7 +174,15 @@ The runtime is intentionally thin — it is wiring, not a framework.
 | Runtime surface | `web/components/adminV2/intelligence/OperationalIntelligencePanel.tsx` | Renders the model inside the Workspace → Analytics modal |
 | Metric resolvers | `web/lib/metrics/*` | Existing OIP computation (frozen) |
 
-**Surface model, not a routed page.** The Operational Intelligence runtime renders inside the existing Workspace → Analytics modal (client state), fed by `GET /api/admin/intelligence/operational` which wraps the server model builder. Configuration lives in Surfaces; routes are implementation details, not product surfaces.
+**Surface model, not a routed page.** The Operational Intelligence runtime renders inside the existing Workspace → Analytics modal (client state), fed by `GET /api/admin/intelligence/operational` which wraps the server model builder. Routes are implementation details, not product surfaces.
+
+**Three distinct surfaces (do not conflate):**
+
+| Surface | Where | Purpose |
+|---|---|---|
+| **Runtime** | Workspace → Analytics modal ("Operational Intelligence") | Operators view/use live metrics, breakdown, drill |
+| **Dashboard config** | `/settings/surfaces` (Dashboards & Analytics) | Compose/preview Analytics surfaces; "Open in Workspace" deep-links to the runtime modal |
+| **Metric/admin builder** | `/settings/analytics` ("Analytics Configuration") | Metric definitions, sources, targets, rollups, snapshots — **not** the runtime product |
 
 **Doctrine:** presentation never computes; context is server-trusted (never trust client `org_id`); every visualization declares grain; no metric dead-ends — a calculation either declares a drill or is explicitly `exploratoryOnly`.
 

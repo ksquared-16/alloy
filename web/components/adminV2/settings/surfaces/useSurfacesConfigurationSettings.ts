@@ -71,9 +71,10 @@ export const SURFACE_OBJECTS: Record<SurfaceConfigSectionKey, SurfaceConfigObjec
             subtitle: "Today: pulse, attention, bottlenecks",
             previewHref: ANALYTICS_SURFACE_PREVIEW_HREF,
             // Runtime lives in the Workspace → Operational Intelligence modal, not a
-            // standalone page. This deep-link opens that modal; the route param is an
-            // implementation detail for modal state (see TopNavBar).
-            liveHref: "/adminV2?workspaceModal=analytics",
+            // standalone page. This deep-link lands on the canonical operator workspace
+            // (`/workspace` browser URL → AdminV2 tree) where TopNavBar reads the param
+            // and opens the modal. NB: `/adminV2` redirects to `/admin` and drops params.
+            liveHref: "/workspace?workspaceModal=analytics",
         },
         {
             id: "enrollment-intelligence",
