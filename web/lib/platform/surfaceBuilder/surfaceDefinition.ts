@@ -151,4 +151,8 @@ export type SurfaceDefinition = {
     persistence: SurfacePersistenceAdapter;
     /** Whether this surface persists immediately (no publish step), e.g. metric_placements. */
     immediatePersist?: boolean;
+    /** Operator-facing "where this appears" line for the builder toolbar. */
+    appearsIn?: string;
+    /** Link to the published live surface (the builder's "Open runtime"). */
+    runtimeHref?: string;
 };

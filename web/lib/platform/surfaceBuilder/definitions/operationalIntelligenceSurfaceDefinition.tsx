@@ -88,14 +88,22 @@ export const OPERATIONAL_INTELLIGENCE_INSPECTOR: InspectorSchema = {
             label: "Card",
             fields: [
                 { key: "title", label: "Title", kind: "text" },
-                { key: "question", label: "Question", kind: "textarea" },
+                { key: "description", label: "Description", kind: "textarea" },
+                { key: "visibility", label: "Visible on the surface", kind: "toggle" },
             ],
         },
-        { key: "content", label: "Content", fields: [{ key: "contentId", label: "Content", kind: "content" }] },
+        {
+            key: "content",
+            label: "Content",
+            fields: [
+                { key: "contentId", label: "Metric / calculation", kind: "content" },
+                { key: "question", label: "Question it answers", kind: "textarea" },
+            ],
+        },
         { key: "renderer", label: "Renderer", fields: [{ key: "rendererKey", label: "Renderer", kind: "renderer" }] },
         {
-            key: "configure",
-            label: "Configure",
+            key: "behavior",
+            label: "Behavior",
             fields: [
                 { key: "thresholds", label: "Tone thresholds", kind: "thresholds" },
                 {
@@ -105,42 +113,135 @@ export const OPERATIONAL_INTELLIGENCE_INSPECTOR: InspectorSchema = {
                     options: [
                         { value: "off", label: "Off" },
                         { value: "prior", label: "Prior period" },
+                        { value: "target", label: "Target" },
                     ],
                 },
                 { key: "drill", label: "Drill to", kind: "select", options: [{ value: "default", label: "Default queue" }] },
+                {
+                    key: "refresh",
+                    label: "Refresh",
+                    kind: "select",
+                    options: [
+                        { value: "live", label: "Live" },
+                        { value: "hourly", label: "Hourly" },
+                        { value: "daily", label: "Daily" },
+                    ],
+                },
             ],
         },
         {
-            key: "promote",
-            label: "Promote",
+            key: "placement",
+            label: "Placement",
             fields: [
-                { key: "promotedTo", label: "Promote to", kind: "promote", options: OPERATIONAL_INTELLIGENCE_PROMOTE_TARGETS },
+                { key: "promotedTo", label: "Where this appears", kind: "promote", options: OPERATIONAL_INTELLIGENCE_PROMOTE_TARGETS },
             ],
         },
     ],
 };
 
+const CARD_TYPE_DEFAULT_RENDERER: Record<string, string> = {
+    kpi: "kpi_card",
+    trend: "trend_card",
+    gauge: "gauge",
+    comparison: "comparison",
+    breakdown: "bar_chart",
+    table: "table",
+    health: "scorecard",
+    affected_work: "affected_work",
+};
+
+/** Renderer-specific body — the canvas reacts the instant the renderer changes. */
+function rendererBody(renderer: string, showCompare: boolean) {
+    const compare = showCompare ? (
+        <p className="text-[11px] font-medium text-alloy-midnight/40">vs prior period</p>
+    ) : null;
+    switch (renderer) {
+        case "trend_card":
+        case "sparkline":
+        case "line_chart":
+        case "area_chart":
+            return (
+                <>
+                    <MetricCardValue value="—" />
+                    <svg viewBox="0 0 220 40" preserveAspectRatio="none" className="h-9 w-full">
+                        <polyline points="0,28 40,22 80,26 120,16 160,22 200,12 220,16" fill="none" stroke="currentColor" strokeWidth="2.5" className="text-alloy-pine/40" />
+                    </svg>
+                    {compare}
+                </>
+            );
+        case "gauge":
+            return (
+                <div className="flex items-center gap-3">
+                    <svg width="56" height="56" viewBox="0 0 56 56"><circle cx="28" cy="28" r="22" fill="none" strokeWidth="7" className="stroke-alloy-stone/15" /><circle cx="28" cy="28" r="22" fill="none" strokeWidth="7" strokeDasharray="138" strokeDashoffset="48" strokeLinecap="round" transform="rotate(-90 28 28)" className="stroke-alloy-pine/45" /></svg>
+                    <MetricCardValue value="—" />
+                </div>
+            );
+        case "bar_chart":
+            return (
+                <div className="flex flex-col gap-1.5 pt-1">
+                    {[70, 90, 55].map((w, i) => (
+                        <div key={i} className="h-2 rounded-full bg-alloy-stone/10"><div className="h-full rounded-full bg-alloy-pine/35" style={{ width: `${w}%` }} /></div>
+                    ))}
+                </div>
+            );
+        case "comparison":
+            return (
+                <>
+                    <MetricCardValue value="—" />
+                    <p className="text-[11px] font-medium text-alloy-midnight/40">vs prior period</p>
+                </>
+            );
+        case "table":
+            return (
+                <div className="flex flex-col gap-1.5 pt-1">
+                    {[0, 1, 2].map((i) => (
+                        <div key={i} className="flex items-center justify-between border-b border-alloy-stone/10 pb-1 text-[11px] text-alloy-midnight/40"><span>Row {i + 1}</span><span>—</span></div>
+                    ))}
+                </div>
+            );
+        case "scorecard":
+            return (
+                <div className="flex items-center gap-2 pt-1">
+                    <span className="h-2.5 w-2.5 rounded-full bg-alloy-pine/40" />
+                    <span className="text-[12px] font-medium text-alloy-midnight/45">Status</span>
+                    <MetricCardValue value="—" />
+                </div>
+            );
+        case "affected_work":
+            return (
+                <div className="flex items-center gap-2 pt-1 text-[12px] font-medium text-alloy-midnight/45">
+                    <span>⚑</span> Affected work panel
+                </div>
+            );
+        default:
+            return (
+                <>
+                    <MetricCardValue value="—" />
+                    {compare}
+                </>
+            );
+    }
+}
+
 /**
- * Renders the real Operational Intelligence card chrome (the runtime MetricCardShell)
- * so the builder canvas shows actual cards, not rectangles. Values are dashes in the
- * builder (no live resolution at author time); the live values render in the runtime.
+ * Live preview that honors the card's config — renderer, title, question, and comparison
+ * all change the canvas card instantly (the inspector edits, the canvas reacts). Values
+ * are dashes at author time; real values render in the runtime.
  */
 const runtimeRenderer: SurfaceRuntimeRenderer = {
     renderCard: (instance, ctx) => {
         const calc = instance.contentId ? findOperationalCalculation(instance.contentId) : null;
+        const cfg = (instance.config ?? {}) as Record<string, unknown>;
+        const renderer = String(cfg.rendererKey ?? CARD_TYPE_DEFAULT_RENDERER[instance.cardTypeKey] ?? "kpi_card");
+        const title = String((typeof cfg.title === "string" && cfg.title) || ctx.contentLabel || "Choose content");
+        const question = (typeof cfg.question === "string" && cfg.question) ? cfg.question : (calc?.questionAnswered ?? null);
+        const dimmed = cfg.visibility === "off";
         return (
-            <MetricCardShell
-                label={ctx.contentLabel || "Choose content"}
-                visual="metric_scorecard"
-                question={calc?.questionAnswered ?? null}
-                status="unknown"
-                showHealthChip={false}
-            >
-                <MetricCardValue value="—" />
-                <p className="text-[10px] font-medium uppercase tracking-wide text-alloy-midnight/35">
-                    {instance.cardTypeKey} · preview
-                </p>
-            </MetricCardShell>
+            <div className={dimmed ? "opacity-45" : undefined}>
+                <MetricCardShell label={title} visual={`metric_${renderer}`} question={question} status="unknown" showHealthChip={false}>
+                    {rendererBody(renderer, cfg.comparison === "prior" || cfg.comparison === "target")}
+                </MetricCardShell>
+            </div>
         );
     },
 };
@@ -164,5 +265,7 @@ export function operationalIntelligenceSurfaceDefinition(
         runtimeRenderer,
         persistence,
         immediatePersist: true,
+        appearsIn: "Workspace → Analytics modal",
+        runtimeHref: "/workspace?workspaceModal=analytics",
     };
 }
