@@ -300,11 +300,7 @@ import {
 } from "@/lib/workspace/adminV2WorkspaceSessionCache";
 import { scheduleWorkspaceRootRevalidation } from "@/lib/workspace/workspaceContinuityPrefetch";
 import { markWorkUnitTransitionReady } from "@/lib/perf/workspaceContinuityPerf";
-import {
-    readWorkUnitShellDisplayTitleFromSessionCache,
-    resolveWorkUnitShellDisplayTitle,
-    WORK_UNIT_SHELL_DISPLAY_FALLBACK,
-} from "@/lib/workspace/workUnitShellDisplayTitle";
+import { WORK_UNIT_SHELL_DISPLAY_FALLBACK } from "@/lib/workspace/workUnitShellDisplayTitle";
 import type { QueueDefinitionV1 } from "@/lib/config/queueDefinitionSchema";
 import {
     getQueueUiConfig,
@@ -6462,42 +6458,15 @@ export default function AdminV2OpportunityWorkUnitPage() {
         ]
     );
 
-    const deptName = dept?.name?.trim() || "Department";
-
-    /** Hydration-safe: never read sessionStorage during render (SSR/client first paint must match). */
-    const [routeWorkUnitDisplayName, setRouteWorkUnitDisplayName] = useState(WORK_UNIT_SHELL_DISPLAY_FALLBACK);
-
-    useLayoutEffect(() => {
-        const fromWorkUnit = resolveWorkUnitShellDisplayTitle({
-            workUnitId,
-            workUnitName: workUnit?.id === workUnitId ? workUnit.name : null,
-        });
-        if (fromWorkUnit !== WORK_UNIT_SHELL_DISPLAY_FALLBACK) {
-            setRouteWorkUnitDisplayName(fromWorkUnit);
-            return;
-        }
-        if (!orgId || !departmentId || !workUnitId) {
-            setRouteWorkUnitDisplayName(WORK_UNIT_SHELL_DISPLAY_FALLBACK);
-            return;
-        }
-        const cached = readWorkUnitShellDisplayTitleFromSessionCache({
-            orgId,
-            departmentId,
-            workUnitId,
-            principalUserId,
-            accessScopeFingerprint,
-        });
-        setRouteWorkUnitDisplayName(cached ?? WORK_UNIT_SHELL_DISPLAY_FALLBACK);
-    }, [
-        workUnit,
-        workUnitId,
-        orgId,
-        departmentId,
-        principalUserId,
-        accessScopeFingerprint,
-    ]);
-
-    const wuName = routeWorkUnitDisplayName;
+    // Context/banner ownership belongs to the Work Unit Route VM (server-resolved). Each work unit
+    // is its own route entry, so `slugRoute` is authoritative for the active work unit; the fetched
+    // workUnit/dept are the fallback for the dept-nested route (which has no Route VM provider). The
+    // former local display-name state + session-cache warm-start was a switching artifact — it
+    // existed so an in-page work-unit switch could show the switched-to title before its work unit
+    // fetched — and is removed now that switching is navigation.
+    const deptName = slugRoute?.departmentName?.trim() || dept?.name?.trim() || "Department";
+    const wuName =
+        slugRoute?.workUnitName?.trim() || workUnit?.name?.trim() || WORK_UNIT_SHELL_DISPLAY_FALLBACK;
     const mergedWorkspaceModel = useMemo(() => {
         const base = queueModel ?? model;
         if (!base || !workUnitKpiContext) return base;

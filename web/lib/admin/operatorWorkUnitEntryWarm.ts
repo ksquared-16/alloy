@@ -20,6 +20,7 @@ type SlugResolvedPayload = {
     route_slug: string;
     work_unit_id: string;
     department_id: string;
+    department_name?: string | null;
     work_unit_key: string;
     work_unit_name: string;
     initial_queue_key: string | null;
@@ -36,6 +37,7 @@ function cacheEntryFromPayload(json: SlugResolvedPayload): WorkUnitSlugRouteCach
     return {
         routeSlug: json.route_slug,
         departmentId: json.department_id,
+        departmentName: json.department_name ?? null,
         workUnitId: json.work_unit_id,
         workUnitKey: json.work_unit_key,
         workUnitName: json.work_unit_name,

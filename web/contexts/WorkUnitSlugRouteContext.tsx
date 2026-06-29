@@ -5,6 +5,7 @@ import { createContext, useContext, type ReactNode } from "react";
 export type WorkUnitSlugRouteValue = {
     routeSlug: string;
     departmentId: string;
+    departmentName: string | null;
     workUnitId: string;
     workUnitKey: string;
     workUnitName: string;
