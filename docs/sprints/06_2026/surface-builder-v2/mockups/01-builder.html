@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Surface Builder V2 — builder</title>
+<link rel="stylesheet" href="../../analytics-operational-intelligence-platform/mockups/_shared.css" />
+<link rel="stylesheet" href="_builder.css" />
+</head>
+<body>
+<div class="frame">
+  <div class="label"><span class="dot"></span> Surface Builder V2 <span>— the canvas IS the preview · sections own the editing context · inspector edits, canvas reacts</span></div>
+  <div class="body">
+    <div class="bos"><div class="logo"></div><div class="bos-i">▦</div><div class="bos-i">◷</div><div class="bos-i">✦</div><div class="bos-i on">⚙</div></div>
+
+    <div class="bld">
+      <!-- top bar: what + where + mode + publish (never ambiguous) -->
+      <div class="bld-top">
+        <div class="ctx">
+          <div class="crumbs">Settings <span class="sep">›</span> Surfaces <span class="sep">›</span> <span class="here">Operational Intelligence</span></div>
+          <h2>Operational Intelligence</h2>
+          <div class="where">Appears in · Workspace → Analytics modal</div>
+        </div>
+        <div class="spacer"></div>
+        <div class="mode">
+          <span class="on"><span class="ic">✎</span> Editing</span>
+          <span><span class="ic">▷</span> Preview</span>
+          <span><span class="ic">◎</span> Runtime</span>
+        </div>
+        <div class="pub">
+          <span class="state draft"><span class="d"></span> Draft · 2 edits</span>
+          <span class="btn-pub">Publish</span>
+        </div>
+      </div>
+
+      <div class="panes">
+        <!-- LEFT: section tree -->
+        <div class="tree">
+          <div class="tree-head"><div class="eyebrow">Surface</div><div class="nm">Operational Intelligence</div></div>
+          <div class="tree-scroll">
+            <div class="sec active">
+              <div class="sec-head"><span class="car">▾</span><span class="snm">Overview</span><span class="cnt">3</span></div>
+              <div class="sec-cards">
+                <div class="tcard"><span class="gr">⠿</span><span class="ci">▦</span><span class="cl">Lead count</span></div>
+                <div class="tcard sel"><span class="gr">⠿</span><span class="ci">📈</span><span class="cl">Tour conversion %</span></div>
+                <div class="tcard"><span class="gr">⠿</span><span class="ci">▦</span><span class="cl">Needs attention</span></div>
+              </div>
+              <div class="addcard"><span class="pl">＋</span> Add card</div>
+            </div>
+            <div class="sec">
+              <div class="sec-head"><span class="car">▾</span><span class="snm">Health</span><span class="cnt">2</span></div>
+              <div class="sec-cards">
+                <div class="tcard"><span class="gr">⠿</span><span class="ci">✓</span><span class="cl">Workflow health</span></div>
+                <div class="tcard"><span class="gr">⠿</span><span class="ci">◔</span><span class="cl">Delivery rate</span></div>
+              </div>
+              <div class="addcard"><span class="pl">＋</span> Add card</div>
+            </div>
+            <div class="sec">
+              <div class="sec-head"><span class="car">▾</span><span class="snm">Trends</span><span class="cnt">1</span></div>
+              <div class="sec-cards">
+                <div class="tcard"><span class="gr">⠿</span><span class="ci">📈</span><span class="cl">Tours completed</span></div>
+              </div>
+              <div class="addcard"><span class="pl">＋</span> Add card</div>
+            </div>
+            <div class="sec">
+              <div class="sec-head"><span class="car">▸</span><span class="snm">Comparisons</span><span class="cnt">0</span></div>
+            </div>
+            <div class="sec">
+              <div class="sec-head"><span class="car">▸</span><span class="snm">Forecasts</span><span class="cnt">0</span></div>
+            </div>
+            <div class="sec">
+              <div class="sec-head"><span class="car">▸</span><span class="snm">Reports</span><span class="cnt">0</span></div>
+            </div>
+          </div>
+          <div class="tree-foot"><span>⌁</span> One builder · every surface</div>
+        </div>
+
+        <!-- CENTER: live canvas = the preview -->
+        <div class="cv">
+          <div class="cv-banner"><span class="ic">●</span> Live preview — edits render here instantly <span class="live">Editing Overview</span></div>
+          <div class="cv-scroll">
+            <div class="cv-zone">
+              <div class="cv-zone-head"><h3>Overview</h3><span class="zc">3 cards · the first thing operators see</span><span class="focus">Editing</span></div>
+              <div class="grid">
+                <!-- KPI -->
+                <div class="mcard s4 t-good float">
+                  <div class="mc-head"><span class="mc-label">Lead count</span><span class="tone good">Healthy</span></div>
+                  <div class="mc-value">142<span class="unit">leads</span></div>
+                  <div class="mc-delta up">▲ 12% vs prior 30d</div>
+                  <div class="mc-foot"><span class="drill">View leads <span class="arr">→</span></span></div>
+                </div>
+                <!-- SELECTED: trend -->
+                <div class="mcard s4 t-warn sel float">
+                  <span class="sel-tag">Selected</span>
+                  <div class="mc-tools"><span title="Drag">⠿</span><span title="Duplicate">⎘</span><span title="Delete">🗑</span></div>
+                  <div class="mc-head"><span class="mc-label">Tour conversion %</span><span class="tone warn">Watch</span></div>
+                  <div class="mc-value">58<span class="unit">%</span></div>
+                  <div class="mc-delta down">▼ 7 pts vs prior 30d</div>
+                  <svg class="spark tall" viewBox="0 0 240 64" preserveAspectRatio="none"><polyline points="0,20 40,16 80,24 120,18 160,30 200,38 240,42" fill="none" stroke="#b7791f" stroke-width="2.5"/></svg>
+                  <div class="mc-foot"><span class="drill">View tours <span class="arr">→</span></span></div>
+                </div>
+                <!-- KPI -->
+                <div class="mcard s4 t-risk float">
+                  <div class="mc-head"><span class="mc-label">Needs attention</span><span class="tone risk">At risk</span></div>
+                  <div class="mc-value">23<span class="unit">items</span></div>
+                  <div class="mc-meta">Across 4 work units</div>
+                  <div class="mc-foot"><span class="drill">Open queue <span class="arr">→</span></span></div>
+                </div>
+              </div>
+            </div>
+
+            <div class="cv-zone">
+              <div class="cv-zone-head"><h3>Health</h3><span class="zc">2 cards</span></div>
+              <div class="grid">
+                <div class="mcard s6 t-good float">
+                  <div class="mc-head"><span class="mc-label">Workflow health</span><span class="tone good">Healthy</span></div>
+                  <div class="gauge-wrap">
+                    <svg width="76" height="76" viewBox="0 0 76 76"><circle cx="38" cy="38" r="32" fill="none" stroke="rgba(89,103,139,0.12)" stroke-width="8"/><circle cx="38" cy="38" r="32" fill="none" stroke="#10805f" stroke-width="8" stroke-dasharray="201" stroke-dashoffset="36" stroke-linecap="round" transform="rotate(-90 38 38)"/></svg>
+                    <div><div class="mc-value" style="font-size:28px">96<span class="unit">%</span></div><div class="mc-meta">Workflows succeeding</div></div>
+                  </div>
+                </div>
+                <div class="mcard s6 t-good float">
+                  <div class="mc-head"><span class="mc-label">Delivery rate</span><span class="tone good">Healthy</span></div>
+                  <div class="bars" style="margin-top:4px">
+                    <div class="bar-row"><span class="bl">SMS</span><span class="bar-track"><span class="bar-fill" style="width:97%"></span></span><span class="bv">97%</span></div>
+                    <div class="bar-row"><span class="bl">Email</span><span class="bar-track"><span class="bar-fill" style="width:99%"></span></span><span class="bv">99%</span></div>
+                    <div class="bar-row"><span class="bl">Voice</span><span class="bar-track"><span class="bar-fill warn" style="width:88%"></span></span><span class="bv">88%</span></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- RIGHT: inspector -->
+        <div class="insp">
+          <div class="insp-head"><div class="pv">📈</div><div><div class="it">Tour conversion %</div><div class="is">Trend card · Overview</div></div></div>
+          <div class="insp-tabs"><span>Card</span><span>Content</span><span class="on">Renderer</span><span>Behavior</span><span>Placement</span></div>
+          <div class="insp-body">
+            <div class="fgroup">
+              <div class="gh">Renderer · changes the card instantly</div>
+              <div class="rchips">
+                <div class="rchip"><span class="ri">▦</span> KPI</div>
+                <div class="rchip on"><span class="ri">📈</span> Trend</div>
+                <div class="rchip"><span class="ri">◔</span> Gauge</div>
+                <div class="rchip"><span class="ri">▥</span> Chart</div>
+                <div class="rchip"><span class="ri">≣</span> Table</div>
+                <div class="rchip"><span class="ri">⇄</span> Comparison</div>
+                <div class="rchip"><span class="ri">✓</span> Health</div>
+                <div class="rchip"><span class="ri">◌</span> Sparkline</div>
+              </div>
+              <div class="hint">The canvas card already updated to the Trend renderer. No save, no reload.</div>
+            </div>
+            <div class="fgroup">
+              <div class="gh">Trend options</div>
+              <div class="field"><label>Window</label>
+                <div class="segmini"><span>7d</span><span class="on">30d</span><span>90d</span></div>
+              </div>
+              <div class="field"><label>Show</label>
+                <div class="segmini"><span class="on">Sparkline</span><span>Bars</span><span>Area</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

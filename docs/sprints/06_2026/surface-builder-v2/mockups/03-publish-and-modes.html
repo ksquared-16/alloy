@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Surface Builder V2 — publish & modes</title>
+<link rel="stylesheet" href="../../analytics-operational-intelligence-platform/mockups/_shared.css" />
+<link rel="stylesheet" href="_builder.css" />
+<style>
+  .page { width: 1040px; margin: 24px auto; }
+  .h { font-size: 15px; font-weight: 680; margin: 22px 6px 12px; }
+  .h:first-child { margin-top: 4px; }
+  .barwrap { background: var(--white); border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--shadow-sm); margin-bottom: 12px; overflow: hidden; }
+  .barwrap .bld-top { border-radius: 0; }
+  .barwrap .note { padding: 9px 18px; font-size: 12px; color: var(--forge-70); border-top: 1px solid var(--line-soft); background: var(--canvas); }
+  .barwrap .note b { color: var(--midnight); }
+  .modegrid { display: flex; gap: 12px; }
+  .mcardx { flex: 1; background: var(--white); border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--shadow-sm); overflow: hidden; }
+  .mcardx .cv-banner { border-bottom: 1px solid var(--line-soft); }
+  .mcardx .mx { padding: 14px 16px; }
+  .mcardx .mx b { font-size: 13px; }
+  .mcardx .mx p { font-size: 12px; color: var(--forge-70); margin-top: 4px; }
+  .toastrow { display: flex; gap: 14px; align-items: center; margin: 8px 6px 0; }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <div class="h">Three modes — I always know what I'm looking at</div>
+  <div class="modegrid">
+    <div class="mcardx">
+      <div class="cv-banner"><span class="ic">✎</span> Editing — inspector edits, canvas reacts <span class="live">Draft</span></div>
+      <div class="mx"><b>Editing</b><p>Tools, drag handles, Add card, selection. The working surface. Changes are local until you publish.</p></div>
+    </div>
+    <div class="mcardx">
+      <div class="cv-banner previewing"><span class="ic">▷</span> Preview — exactly what operators will see <span class="live">No edit chrome</span></div>
+      <div class="mx"><b>Preview</b><p>Same canvas, edit chrome hidden. A faithful dry run of the runtime, still using your unpublished draft.</p></div>
+    </div>
+    <div class="mcardx">
+      <div class="cv-banner" style="background:rgba(16,128,95,0.08); color:var(--good); border-color:rgba(16,128,95,0.25)"><span class="ic">◎</span> Runtime — the published, live surface <span class="live">Live</span></div>
+      <div class="mx"><b>Runtime</b><p>What's actually serving in Workspace → Analytics right now. Read-only; the source of truth.</p></div>
+    </div>
+  </div>
+
+  <div class="h">Publish — with confidence at every beat</div>
+
+  <div class="barwrap">
+    <div class="bld-top"><div class="ctx"><h2>Operational Intelligence</h2><div class="where">Appears in · Workspace → Analytics modal</div></div><div class="spacer"></div>
+      <div class="pub"><span class="state draft"><span class="d"></span> Draft · 2 unpublished edits</span><span class="btn-pub">Publish</span></div></div>
+    <div class="note"><b>1 · Draft</b> — the button is live and the pill counts exactly what will change. You always know there's something to publish.</div>
+  </div>
+
+  <div class="barwrap">
+    <div class="bld-top"><div class="ctx"><h2>Operational Intelligence</h2><div class="where">Appears in · Workspace → Analytics modal</div></div><div class="spacer"></div>
+      <div class="pub"><span class="state saving"><span class="d"></span> Saving…</span><span class="btn-pub is-clean">Publishing</span></div></div>
+    <div class="note"><b>2 · Saving</b> — immediate acknowledgement the moment you click. The button disables so there's no double-publish doubt.</div>
+  </div>
+
+  <div class="barwrap">
+    <div class="bld-top"><div class="ctx"><h2>Operational Intelligence</h2><div class="where">Appears in · Workspace → Analytics modal</div></div><div class="spacer"></div>
+      <div class="pub"><span class="state done"><span class="d"></span> Published ✓</span><span class="btn-pub is-clean">Published</span></div></div>
+    <div class="note"><b>3 · Published</b> — the draft pill flips to a green confirmation. The button goes quiet because there's nothing left to publish.</div>
+  </div>
+
+  <div class="barwrap">
+    <div class="bld-top"><div class="ctx"><h2>Operational Intelligence</h2><div class="where">Appears in · Workspace → Analytics modal</div></div><div class="spacer"></div>
+      <div class="pub"><span class="state runtime"><span class="d"></span> Runtime updated</span><span class="btn-pub is-clean">Published</span></div></div>
+    <div class="note"><b>4 · Runtime updated</b> — confirmation the live surface now reflects your change, with a one-click way to go see it.</div>
+  </div>
+
+  <div class="toastrow">
+    <div class="toast"><span class="tk">✓</span> Published — runtime updated. <a>Open Runtime →</a></div>
+    <span style="font-size:12px; color:var(--forge-70)">Answers “did Publish actually work?” and “why didn't runtime change?” before they're asked.</span>
+  </div>
+
+</div>
+</body>
+</html>
