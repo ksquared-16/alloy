@@ -292,10 +292,35 @@ export async function executeAdminAction(
 
     if (createLeadRequest) {
         const mergedCreate = mergePayload(def.payload_schema, input.payload);
-        const created = await executeCreateLeadAction(supabase, ctx, {
-            merged: mergedCreate,
-            context: input.context,
-        });
+        let created: Awaited<ReturnType<typeof executeCreateLeadAction>>;
+        try {
+            created = await executeCreateLeadAction(supabase, ctx, {
+                merged: mergedCreate,
+                context: input.context,
+            });
+        } catch (e) {
+            // executeCreateLeadAction throws (rather than returning EntryLifecycleActionError) when a
+            // downstream native insert fails — e.g. ensureCustomerForPersonNative on a stale/diverged
+            // schema. Translate to operator-safe copy and a highly searchable server log instead of an
+            // unhandled 500. Searchable on: action_key=create_lead + correlation_id.
+            const technical = e instanceof Error ? e.message : String(e);
+            const schemaOutOfSync = /PGRST204|schema cache|Could not find the .* column/i.test(technical);
+            console.error("[executeAdminAction] create_lead execution threw", {
+                action_key: actionKey,
+                correlation_id: correlationId,
+                org_id: ctx.orgId,
+                schema_out_of_sync: schemaOutOfSync,
+                error: technical,
+            });
+            return {
+                ok: false,
+                correlation_id: correlationId,
+                error: schemaOutOfSync
+                    ? "I couldn't create the lead because the record model is out of sync. This needs an admin fix."
+                    : "I couldn't create the lead. Review the information and try again.",
+                status: schemaOutOfSync ? 500 : 400,
+            };
+        }
         if (!created.ok) {
             return { ok: false, correlation_id: correlationId, error: created.error, status: created.status };
         }

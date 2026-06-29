@@ -31,7 +31,8 @@ export type RawOpportunityPerson = { person_id: string; role_type?: string | nul
 export type RawOpportunity = { id: string; name?: string | null; status_key?: string | null; pipeline_stage_id?: string | null; location_id?: string | null; primary_person_id?: string | null; customer_id?: string | null };
 export type RawRoleType = { key: string; label?: string | null };
 export type RawBinding = { id?: string | null; channel: string; provider?: string | null; status?: string | null; secret_ref?: string | null };
-export type RawCustomer = { id: string; name?: string | null; status?: string | null; status_key?: string | null; primary_contact_id?: string | null };
+// Canonical customer/household status is status_key; legacy `status` column was dropped from the live schema.
+export type RawCustomer = { id: string; name?: string | null; status_key?: string | null; primary_contact_id?: string | null };
 
 export type RawFamilyWorkspaceData = {
     customer: RawCustomer | null;

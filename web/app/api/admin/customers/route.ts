@@ -12,7 +12,7 @@ type CustomerRow = {
     created_at: string | null;
     updated_at: string | null;
     name: string | null;
-    status: string | null;
+    // Canonical customer/household status is status_key; legacy `status` column was dropped from the live schema.
     status_key: string | null;
     customer_type: string | null;
     primary_contact_id: string | null;
@@ -48,8 +48,7 @@ export async function GET(request: NextRequest) {
     const dim = scopeDimensionsFromAccess(access);
     const scopedCustomerIds = await fetchScopedCustomerIdsForRestrictedAdmin(supabase, ctx.orgId, dim);
 
-    const selectCols =
-        CUSTOMER_CANONICAL_LIST_SELECT;
+    const selectCols = CUSTOMER_CANONICAL_LIST_SELECT;
     let q = supabase
         .from("customers")
         .select(selectCols, { count: "exact" })
