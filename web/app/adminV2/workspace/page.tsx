@@ -62,18 +62,6 @@ import {
     resetRouteShellTrace,
     unregisterRouteLoadingOwner,
 } from "@/lib/adminV2/routeShellPipeline";
-import {
-    computeWorkspaceRevealGate,
-    markWorkspaceRevealGatePhases,
-    markWorkspaceRevealGateStart,
-    resetWorkspaceRevealGatePerf,
-    workspaceRevealActionsReady,
-    workspaceRevealDepartmentTilesReady,
-    workspaceRevealKpiRegionReady,
-    workspaceRevealShellReady,
-    workspaceRevealTileCountsReady,
-} from "@/lib/adminV2/workspaceRevealGate";
-import { composeWorkspaceSurfaceViewModel } from "@/lib/adminV2/runtime/surface/workspaceSurfaceViewModel";
 import { prefetchVisibleDepartmentAboveFoldBundles } from "@/lib/adminV2/prefetchAdminV2AboveFold";
 import { alloyPerfSet } from "@/lib/perf/alloyPerfGlobal";
 import type { OperatorLifecycleLandingCard } from "@/lib/admin/buildOperatorLifecycleLanding";
@@ -243,7 +231,6 @@ export default function AdminV2WorkspaceIndexPage() {
     }, [orgId, principalUserId, accessScopeFingerprint]);
 
     useLayoutEffect(() => {
-        resetWorkspaceRevealGatePerf();
         hydratedCacheRef.current = false;
         setWorkspaceCachePrimed(false);
         setFetchSettledEmpty(false);
@@ -281,7 +268,6 @@ export default function AdminV2WorkspaceIndexPage() {
 
         let applyResults = true;
         let cancelGrowthRollupDefer: () => void = () => undefined;
-        markWorkspaceRevealGateStart({ org_id: orgId });
 
         void (async () => {
             const routeStart = typeof performance !== "undefined" ? performance.now() : 0;
@@ -536,75 +522,19 @@ export default function AdminV2WorkspaceIndexPage() {
         };
     }, [orgId, principalUserId, accessScopeFingerprint, deptRefreshNonce]);
 
-    const workspaceRevealGate = useMemo(() => {
-        const cachePrimed = workspaceCachePrimed;
-        const departments_resolved = !loading || cachePrimed;
-        const shell_ready = workspaceRevealShellReady({
-            bootstrap_loading: loading && !cachePrimed,
-            departments_resolved,
-            surface_snapshot_committed: lifecycleCards.length > 0,
-            // The workspace landing reveals its final structure from the server-composed Route VM +
-            // static chrome immediately; KPI/rollup/count values refine into reserved slots after.
-            // So the shell is always ready — no client-fetch wait, no loading gate.
-            operator_lifecycle_landing: true,
-        });
-        const department_tiles_ready = workspaceRevealDepartmentTilesReady({
-            bootstrap_loading: loading && !cachePrimed,
-            has_departments: departments.length > 0,
-            fetch_settled_empty: fetchSettledEmpty,
-            operator_lifecycle_landing: true,
-        });
-        const tile_counts_ready = workspaceRevealTileCountsReady({
-            has_departments: departments.length > 0,
-            quick_rollup_applied: metrics !== null || cachePrimed,
-            fetch_settled_empty: fetchSettledEmpty,
-            operator_lifecycle_landing: true,
-        });
-        return computeWorkspaceRevealGate({
-            shell_ready,
-            department_tiles_ready,
-            tile_counts_ready,
-            kpi_region_ready: workspaceRevealKpiRegionReady(),
-            actions_ready: workspaceRevealActionsReady(),
-        });
-    }, [loading, departments.length, fetchSettledEmpty, metrics, workspaceCachePrimed, lifecycleCards.length]);
-
-    // Surface ViewModel ownership: /workspace composes ONE above-fold WorkspaceSurfaceViewModel
-    // (WS-02 header, WS-03 health, WS-04 pulse, WS-05 tiles, WS-06 tile KPIs, WS-01 resume, WS-07
-    // rail) from the existing loader/cache outputs. The VM owns surface readiness; components present
-    // its sections. `reveal.canCommit` IS the authoritative reveal gate (`above_fold_ready`) — no
-    // second gate is introduced — and KPI/count values patch quietly after commit.
-    const workspaceSurfaceVm = useMemo(
-        () =>
-            composeWorkspaceSurfaceViewModel({
-                gate: workspaceRevealGate,
-                orgName: orgNameFromContext,
-                // WS-03/04/06 always occupy their final snapshot/default slot (KPI snapshot law).
-                healthSnapshotAvailable: true,
-                operationalPulseSnapshotAvailable: true,
-                tileKpiSnapshotAvailable: true,
-                processTileCount: lifecycleCards.length,
-                resumeAvailable: true,
-                rightRailAvailable: true,
-                warmFromCache: workspaceCachePrimed,
-                warmFromSession: lifecycleCards.length > 0,
-            }),
-        [workspaceRevealGate, orgNameFromContext, lifecycleCards.length, workspaceCachePrimed],
-    );
-    const workspaceSurfaceReady = workspaceSurfaceVm.reveal.canCommit;
-    const workspaceAboveFoldPageReady = workspaceSurfaceReady;
+    // The workspace surface reveals immediately from the server-composed Route VM + Operational
+    // Shell (M1.3 deleted WorkspacePageLoadingGate). The client reveal-readiness layer
+    // (workspaceRevealGate / WorkspaceSurfaceViewModel / workspaceSurfaceReady / workspaceAboveFold)
+    // is therefore obsolete and removed — the surface is always above-fold-stable on mount; deferred
+    // KPI/count values still refine into their reserved slots below.
+    useEffect(() => {
+        if (!orgId) return;
+        markRouteFirstAboveFoldStable("workspace", { org_id: orgId, source: "route_vm" });
+    }, [orgId]);
 
     useEffect(() => {
-        markWorkspaceRevealGatePhases(workspaceRevealGate, { org_id: orgId });
-    }, [workspaceRevealGate, orgId]);
-
-    useEffect(() => {
-        if (!workspaceAboveFoldPageReady) return;
-        markRouteFirstAboveFoldStable("workspace", { org_id: orgId, source: "reveal_gate" });
-    }, [workspaceAboveFoldPageReady, orgId]);
-
-    useEffect(() => {
-        if (!workspaceAboveFoldPageReady || !orgId || departments.length === 0) return;
+        // Warm visible department above-fold bundles once the (refinement) departments list is in.
+        if (!orgId || departments.length === 0) return;
         return scheduleAdminV2BackgroundWork(
             () => {
                 prefetchVisibleDepartmentAboveFoldBundles(
@@ -619,7 +549,7 @@ export default function AdminV2WorkspaceIndexPage() {
             },
             { idleTimeoutMs: 2000, fallbackMs: 400 }
         );
-    }, [workspaceAboveFoldPageReady, orgId, departments, principalUserId, accessScopeFingerprint]);
+    }, [orgId, departments, principalUserId, accessScopeFingerprint]);
 
     const metricsResolved = useMemo(() => {
         if (!metrics) return null;
@@ -704,7 +634,8 @@ export default function AdminV2WorkspaceIndexPage() {
         [lifecycleCards, oipResolved]
     );
 
-    useAlloyOsRuntimeMarkOnce("workspace_ready", workspaceAboveFoldPageReady, {
+    // Surface is ready on mount (Route VM owns first paint); mark once for runtime instrumentation.
+    useAlloyOsRuntimeMarkOnce("workspace_ready", true, {
         surface: "workspace_root",
     });
 
@@ -716,9 +647,8 @@ export default function AdminV2WorkspaceIndexPage() {
         );
     }
 
-    // No loading gate: the surface reveals its final structure from the Route VM + Operational Shell
-    // immediately (deferred values refine in reserved slots). `workspaceSurfaceReady` is now always
-    // true for the lifecycle landing — retained only as a perf/diagnostic signal and a prefetch trigger.
+    // No loading gate, no client reveal-readiness layer: the surface reveals its final structure from
+    // the Route VM + Operational Shell immediately; deferred values refine in their reserved slots.
     return (
         <>
             <ResumeWhereYouLeftOffChip />

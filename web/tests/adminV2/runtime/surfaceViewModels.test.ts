@@ -266,10 +266,13 @@ describe("ShellNavigationSurfaceViewModel", () => {
 });
 
 describe("Surface VM wiring (ownership)", () => {
-    it("workspace page composes and consumes the WorkspaceSurfaceViewModel reveal", () => {
+    it("workspace page reveals from the server-composed Route VM (reveal-readiness layer removed)", () => {
         const page = readSrc("app/adminV2/workspace/page.tsx");
-        expect(page).toContain("composeWorkspaceSurfaceViewModel");
-        expect(page).toContain("workspaceSurfaceVm.reveal.canCommit");
+        // The client WorkspaceSurfaceViewModel / reveal-gate layer is retired — the page reveals from
+        // the canonical server-composed Route VM (the workspace Surface VM module is delete-eligible).
+        expect(page).toContain("useWorkspaceRouteVm");
+        expect(page).not.toContain("composeWorkspaceSurfaceViewModel");
+        expect(page).not.toContain("workspaceSurfaceVm.reveal.canCommit");
     });
 
     it("work-unit page composes and consumes the WorkUnitSurfaceViewModel reveal", () => {
