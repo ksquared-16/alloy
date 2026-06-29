@@ -50,9 +50,21 @@ describe("Batch 0 — Financials navigation domain", () => {
 describe("Batch 0 — Financials configuration surfaces", () => {
     const page = read("components/adminV2/settings/financials/FinancialsConfigurationPage.tsx");
 
-    it("landing page exposes Overview, Rate Plans, Charge Preview, GL Codes, GL Mappings", () => {
+    it("landing page exposes the decision-oriented financial areas (Convergence IA)", () => {
         const hook = read("components/adminV2/settings/financials/useFinancialsConfigurationSettings.ts");
-        for (const key of ["overview", "rate_plans", "charge_preview", "gl_codes", "gl_mappings"]) {
+        for (const key of [
+            "overview",
+            "services",
+            "rate_plans",
+            "financial_policies",
+            "charge_templates",
+            "accounting",
+            "posting",
+            "payments",
+            "financial_responsibility",
+            "subsidy",
+            "charge_preview",
+        ]) {
             expect(hook).toContain(key);
         }
         expect(page).toContain('data-testid="financials-configuration-page"');

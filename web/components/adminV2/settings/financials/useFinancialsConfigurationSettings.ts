@@ -7,20 +7,65 @@ import type {
 } from "@/lib/financials/rates/rateTypes";
 import type { GlAccountMappingRow, GlAccountRow } from "@/lib/financials/gl/glConfigTypes";
 
+/**
+ * Financials is organized around operational DECISIONS, not tables (Financial
+ * Configuration Convergence). The sections below read like "how my organization
+ * gets paid": what we sell, how we price it, the rules, how it posts, who pays.
+ */
 export type FinancialsConfigSection =
     | "overview"
+    | "services"
     | "rate_plans"
-    | "charge_preview"
-    | "gl_codes"
-    | "gl_mappings";
+    | "financial_policies"
+    | "charge_templates"
+    | "accounting"
+    | "posting"
+    | "payments"
+    | "financial_responsibility"
+    | "subsidy"
+    | "charge_preview";
 
-export const FINANCIALS_CONFIG_SECTIONS: { key: FinancialsConfigSection; label: string }[] = [
-    { key: "overview", label: "Overview" },
-    { key: "rate_plans", label: "Rate Plans" },
-    { key: "charge_preview", label: "Charge Preview" },
-    { key: "gl_codes", label: "GL Codes" },
-    { key: "gl_mappings", label: "GL Mappings" },
+export type FinancialsConfigSectionDef = { key: FinancialsConfigSection; label: string };
+export type FinancialsConfigGroup = { label: string; sections: FinancialsConfigSectionDef[] };
+
+/** Grouped navigation: each group is a stage of the get-paid lifecycle. */
+export const FINANCIALS_CONFIG_GROUPS: FinancialsConfigGroup[] = [
+    { label: "", sections: [{ key: "overview", label: "Overview" }] },
+    {
+        label: "What you sell",
+        sections: [
+            { key: "services", label: "Services" },
+            { key: "rate_plans", label: "Rate Plans" },
+        ],
+    },
+    {
+        label: "Money rules",
+        sections: [
+            { key: "financial_policies", label: "Financial Policies" },
+            { key: "charge_templates", label: "Charge Templates" },
+        ],
+    },
+    {
+        label: "Money movement",
+        sections: [
+            { key: "accounting", label: "Accounting" },
+            { key: "posting", label: "Posting" },
+            { key: "payments", label: "Payments" },
+        ],
+    },
+    {
+        label: "Who pays",
+        sections: [
+            { key: "financial_responsibility", label: "Financial Responsibility" },
+            { key: "subsidy", label: "Subsidy" },
+        ],
+    },
+    { label: "Tools", sections: [{ key: "charge_preview", label: "Charge Preview" }] },
 ];
+
+export const FINANCIALS_CONFIG_SECTIONS: FinancialsConfigSectionDef[] = FINANCIALS_CONFIG_GROUPS.flatMap(
+    (g) => g.sections,
+);
 
 type RateConfigResponse = {
     ratePlans?: ChildcareRatePlanRow[];

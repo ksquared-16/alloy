@@ -7,7 +7,9 @@ import type {
 } from "@/lib/financials/rates/rateTypes";
 import {
     BILLING_BASES,
+    BILLING_CADENCES,
     CALCULATION_STRATEGIES,
+    PRORATION_METHODS,
     RATE_BASES,
     SCHEDULE_BASES,
 } from "@/lib/financials/rates/rateTypes";
@@ -190,6 +192,20 @@ export default function RatePlanAuthoringWorkspace({
             options: toOptions(CALCULATION_STRATEGIES),
             defaultValue: workingPlan.calculation_strategy,
         },
+        {
+            key: "proration_method",
+            label: "Proration",
+            type: "select",
+            options: [{ value: "", label: "—" }, ...toOptions(PRORATION_METHODS)],
+            defaultValue: workingPlan.proration_method ?? "",
+        },
+        {
+            key: "billing_cadence",
+            label: "Billing cadence",
+            type: "select",
+            options: [{ value: "", label: "—" }, ...toOptions(BILLING_CADENCES)],
+            defaultValue: workingPlan.billing_cadence ?? "",
+        },
     ];
 
     // ---- New-rule editor (empty lineage) ----------------------------------
@@ -213,6 +229,8 @@ export default function RatePlanAuthoringWorkspace({
                     <ConfigField label="Currency" value={currency} />
                     <ConfigField label="Billing basis" value={workingPlan.billing_basis} />
                     <ConfigField label="Calculation strategy" value={workingPlan.calculation_strategy} />
+                    <ConfigField label="Proration" value={workingPlan.proration_method ?? "—"} />
+                    <ConfigField label="Billing cadence" value={workingPlan.billing_cadence ?? "—"} />
                     <ConfigField label="Age group" value={plan.age_group_key ?? "All"} />
                 </ConfigFieldGrid>
             </ConfigurationDetailCard>
@@ -240,6 +258,8 @@ export default function RatePlanAuthoringWorkspace({
                         currency_code: fields.currency_code,
                         billing_basis: fields.billing_basis,
                         calculation_strategy: fields.calculation_strategy,
+                        proration_method: fields.proration_method || null,
+                        billing_cadence: fields.billing_cadence || null,
                     });
                 }}
                 onRetire={async ({ effectiveEnd }) => {

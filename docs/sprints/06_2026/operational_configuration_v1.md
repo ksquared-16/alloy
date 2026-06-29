@@ -454,3 +454,30 @@ Status: shipped. A usability/QA phase — **no new backend write domain, no migr
 
 ### What remains intentionally unbuilt (Phase 4)
 A searchable/typeahead scope picker (current is a labeled dropdown — fine at small/medium scale); a unified resolved-preview for operating-window/schedule resolution (capacity + ratio + rate are previewed); date-specific closures. Out of scope per directive: Posting, Payments, Subsidy, GL write/edit, Focus Panel UI, Settings IA reorg.
+
+---
+
+## Financial Configuration Convergence (IMPLEMENTED)
+
+Status: shipped. Financials is reorganized from a table browser into a decision-oriented **configuration platform** — the home every future financial capability (Billing, Scheduling, Attendance, Processing, Posting, Payments, Subsidy, Accounting) consumes. **No new backend architecture / no migration**: real authoring reuses existing tables + the generic `org_settings.metadata` store; designed areas are framed surfaces with a clear roadmap.
+
+### Decision-oriented IA
+`/settings/financials` is grouped by the get-paid lifecycle (`FINANCIALS_CONFIG_GROUPS`): **What you sell** (Services, Rate Plans) · **Money rules** (Financial Policies, Charge Templates) · **Money movement** (Accounting, Posting, Payments) · **Who pays** (Financial Responsibility, Subsidy) · **Tools** (Charge Preview), plus Overview. Each area answers "what decision is the finance administrator making?"
+
+### Real / backed (authorable or live preview)
+- **Services** — a real, authorable catalog (what the org sells) persisted to `org_settings.metadata.financials.services` via a role-gated route + pure-validated store. No new table. The foundational financial object rates/templates/posting will attach to. (`financialServicesStore.ts`, `/api/admin/financial/services`, `ServicesConfigurationPanel`.)
+- **Rate Plans** — existing versioned authoring; now exposes **proration method + billing cadence** (already on the schema) as effective-dated plan settings, making the Financial Policies claim real.
+- **Charge Preview — redesigned**: operators select **Child → Enrollment Agreement → Service Period** (labeled dropdowns over `/api/admin/customer-members` + `/api/admin/child-enrollment-agreements`), no UUID entry. Still preview-only over the existing read API.
+- **Accounting** — resolved **Charge Category → GL Mapping → GL Account** chain (`resolveGlMapping.ts`, pure) + read-only GL accounts/mappings. GL authoring deferred (no safe write backend).
+- **Demo seed** — idempotent, admin-gated `/api/admin/financial/seed-demo` applies a representative dataset (Services, GL accounts/mappings, multi-version Rate Plans with historical/current/future) to the current org so screens are never empty. Pure dataset builder is unit-tested; the route skips anything already present.
+
+### Designed (consistent surfaces, roadmapped, no runtime)
+**Financial Policies, Charge Templates, Financial Responsibility, Posting, Payments, Subsidy** each render via the shared `DesignedConfigurationSurface`: the decision they own, the configuration structure that will live there, the downstream capabilities that consume it ("Consumed by"), and the backend roadmap. They feel intentional and show exactly where a future capability plugs in without a redesign. **No posting/payments/subsidy/responsibility runtime.**
+
+### Tests
+- `tests/financials/financialConvergenceUnits.test.ts` — charge-category labels/mapping keys; GL chain resolution (mapped/unmapped/inactive); services store pure helpers (slugify/validate/dedupe/parse); demo dataset shape (versions ordered, amounts tell a story, deterministic/idempotent).
+- `tests/financials/financialServicesRoute.test.ts` — role gate + create/update/set_active dispatch.
+- `tests/adminV2/financialConfigConvergence.test.ts` — grouped IA, page routes every area, Services real + inline (no drawers), Charge Preview operational selectors (no UUID entry), Accounting GL chain, designed areas consistent, **no writes to money tables**, seed admin-gated + idempotent.
+
+### What remains intentionally unbuilt
+Wiring rates to attach to a Service (Services is a catalog today; rate rules still key off schedule basis — recommended next backend pass); org-level policy/charge-template authoring (designed; persists to org config next); Posting/Payments/Subsidy/Responsibility runtime; GL authoring. No Focus Panel, Attendance UI, or Settings IA reorg.

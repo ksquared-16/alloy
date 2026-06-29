@@ -18,11 +18,20 @@ import {
 } from "@/components/adminV2/settings/configurationRuntime/ConfigReadonlyPrimitives";
 import { ConfigVersionBadge } from "@/components/adminV2/settings/configurationRuntime/ConfigEditorPrimitives";
 import FinancialChargePreviewInspector from "@/components/adminV2/settings/financials/FinancialChargePreviewInspector";
-import { GlCodesReadonlyView, GlMappingsReadonlyView } from "@/components/adminV2/settings/financials/GlConfigReadonlyView";
+import AccountingConfigurationPanel from "@/components/adminV2/settings/financials/AccountingConfigurationPanel";
+import ServicesConfigurationPanel from "@/components/adminV2/settings/financials/ServicesConfigurationPanel";
+import {
+    ChargeTemplatesArea,
+    FinancialPoliciesArea,
+    FinancialResponsibilityArea,
+    PaymentsConfigurationArea,
+    PostingConfigurationArea,
+    SubsidyConfigurationArea,
+} from "@/components/adminV2/settings/financials/FinancialDesignedAreas";
 import RatePlanAuthoringWorkspace from "@/components/adminV2/settings/financials/RatePlanAuthoringWorkspace";
 import CreateRatePlanForm from "@/components/adminV2/settings/financials/CreateRatePlanForm";
 import {
-    FINANCIALS_CONFIG_SECTIONS,
+    FINANCIALS_CONFIG_GROUPS,
     useFinancialsConfigurationSettings,
     type FinancialsConfigSection,
 } from "@/components/adminV2/settings/financials/useFinancialsConfigurationSettings";
@@ -35,8 +44,7 @@ import { describeScopeWithLabel } from "@/lib/adminV2/operationalConfig/configRe
 import { useScopeOptions } from "@/components/adminV2/settings/configurationRuntime/useScopeOptions";
 import type { ChildcareRatePlanRow } from "@/lib/financials/rates/rateTypes";
 
-const FINANCIALS_SUBTITLE =
-    "Rate plans, charge preview, and GL configuration. Versioned authoring for rate plans + rules — no posting, payments, or subsidy.";
+const FINANCIALS_SUBTITLE = "Configure how your organization gets paid — what you sell, how you price it, and how it posts.";
 
 function todayYmd(): string {
     return new Date().toISOString().slice(0, 10);
@@ -63,8 +71,26 @@ export default function FinancialsConfigurationPage() {
     const [section, setSection] = useState<FinancialsConfigSection>("overview");
     const [selectedLineageKey, setSelectedLineageKey] = useState<string | null>(null);
     const [creatingPlan, setCreatingPlan] = useState(false);
+    const [seeding, setSeeding] = useState(false);
+    const [seedMsg, setSeedMsg] = useState<string | null>(null);
 
     const today = todayYmd();
+
+    async function loadDemoData() {
+        setSeeding(true);
+        setSeedMsg(null);
+        try {
+            const res = await fetch("/api/admin/financial/seed-demo", { method: "POST", credentials: "include" });
+            const json = (await res.json().catch(() => ({}))) as { error?: string };
+            if (!res.ok) throw new Error(json.error ?? `Seed failed (${res.status})`);
+            setSeedMsg("Demo data loaded (idempotent — safe to re-run).");
+            await refresh();
+        } catch (e) {
+            setSeedMsg(e instanceof Error ? e.message : "Seed failed");
+        } finally {
+            setSeeding(false);
+        }
+    }
 
     // One entry per logical plan (lineage), represented by its working version.
     const planLineages = useMemo(() => {
@@ -90,15 +116,24 @@ export default function FinancialsConfigurationPage() {
     const selectedPlan = selectedLineage?.working ?? null;
 
     const sectionQueue = (
-        <ConfigurationQueue testId="financials-section-queue" title="Sections">
-            {FINANCIALS_CONFIG_SECTIONS.map((s) => (
-                <ConfigurationQueueItem
-                    key={s.key}
-                    active={s.key === section}
-                    title={s.label}
-                    onClick={() => setSection(s.key)}
-                    testId={`financials-section-${s.key}`}
-                />
+        <ConfigurationQueue testId="financials-section-queue" title="Financials">
+            {FINANCIALS_CONFIG_GROUPS.map((group) => (
+                <div key={group.label || "_root"} className={group.label ? "mt-2" : undefined}>
+                    {group.label ? (
+                        <p className="config-typo-sublabel px-1 pb-1 pt-1 text-[10px] uppercase tracking-wide text-alloy-forge/45">
+                            {group.label}
+                        </p>
+                    ) : null}
+                    {group.sections.map((s) => (
+                        <ConfigurationQueueItem
+                            key={s.key}
+                            active={s.key === section}
+                            title={s.label}
+                            onClick={() => setSection(s.key)}
+                            testId={`financials-section-${s.key}`}
+                        />
+                    ))}
+                </div>
             ))}
         </ConfigurationQueue>
     );
@@ -163,28 +198,69 @@ export default function FinancialsConfigurationPage() {
             return (
                 <div className="space-y-3" data-testid="financials-overview">
                     <ConfigReadonlyNotice testId="financials-overview-notice">
-                        Financials is a first-class configuration domain. Rate plans and rate rules are now authored with
-                        effective-dated versioning (create, future version, supersede, retire). Posting, payments,
-                        financial responsibility, and subsidy remain future write surfaces.
+                        This is how your organization gets paid. Configure the <strong>Services</strong> you sell, the
+                        <strong> Rate Plans</strong> that price them, the <strong>Policies</strong> and{" "}
+                        <strong>Charge Templates</strong> that shape charges, and how it all <strong>posts</strong>.
+                        Billing, Scheduling, Attendance, Posting, Payments, and Subsidy all resolve from this configuration.
                     </ConfigReadonlyNotice>
-                    <ConfigurationDetailCard title="What is configured">
+                    <ConfigurationDetailCard title="Configured today">
                         <ConfigFieldGrid>
                             <ConfigField label="Rate plans" value={planLineages.length} />
                             <ConfigField label="Rate rules" value={rateRules.length} />
-                            <ConfigField label="GL codes" value={glAccounts.length} />
+                            <ConfigField label="GL accounts" value={glAccounts.length} />
                             <ConfigField label="GL mappings" value={glAccountMappings.length} />
                         </ConfigFieldGrid>
                     </ConfigurationDetailCard>
-                    <ConfigurationDetailCard title="Future write surfaces">
-                        <ul className="list-disc space-y-1 pl-5 text-[13px] text-alloy-forge/75">
-                            <li>Charge Resolution drafting (posting)</li>
-                            <li>Payments and financial responsibility</li>
-                            <li>Subsidy</li>
-                            <li>GL code + GL mapping authoring</li>
-                        </ul>
-                    </ConfigurationDetailCard>
+                    {canMutate ? (
+                        <ConfigurationDetailCard title="Demo data" testId="financials-overview-seed">
+                            <p className="config-typo-sublabel mb-2 text-alloy-forge/70">
+                                Load a representative set of services, rate plans (with historical, current, and future
+                                versions), and GL accounts so every screen is QA-ready. Idempotent — safe to re-run.
+                            </p>
+                            <ConfigurationPrimaryButton
+                                className="config-primary-btn--sm"
+                                onClick={() => void loadDemoData()}
+                                disabled={seeding}
+                                data-testid="financials-overview-seed-btn"
+                            >
+                                {seeding ? "Loading…" : "Load demo data"}
+                            </ConfigurationPrimaryButton>
+                            {seedMsg ? (
+                                <p className="config-typo-sublabel mt-2 text-alloy-forge/70" data-testid="financials-overview-seed-msg">
+                                    {seedMsg}
+                                </p>
+                            ) : null}
+                        </ConfigurationDetailCard>
+                    ) : null}
                 </div>
             );
+        }
+        if (section === "services") {
+            return <ServicesConfigurationPanel canMutate={canMutate} />;
+        }
+        if (section === "financial_policies") {
+            return <FinancialPoliciesArea />;
+        }
+        if (section === "charge_templates") {
+            return <ChargeTemplatesArea />;
+        }
+        if (section === "accounting") {
+            return <AccountingConfigurationPanel glAccounts={glAccounts} glAccountMappings={glAccountMappings} />;
+        }
+        if (section === "posting") {
+            return <PostingConfigurationArea />;
+        }
+        if (section === "payments") {
+            return <PaymentsConfigurationArea />;
+        }
+        if (section === "financial_responsibility") {
+            return <FinancialResponsibilityArea />;
+        }
+        if (section === "subsidy") {
+            return <SubsidyConfigurationArea />;
+        }
+        if (section === "charge_preview") {
+            return <FinancialChargePreviewInspector />;
         }
         if (section === "rate_plans") {
             if (creatingPlan) {
@@ -214,13 +290,9 @@ export default function FinancialsConfigurationPage() {
                 />
             );
         }
-        if (section === "charge_preview") {
-            return <FinancialChargePreviewInspector />;
-        }
-        if (section === "gl_codes") {
-            return <GlCodesReadonlyView glAccounts={glAccounts} />;
-        }
-        return <GlMappingsReadonlyView glAccountMappings={glAccountMappings} glAccounts={glAccounts} />;
+        return (
+            <ConfigurationEmptyState testId="financials-unknown-section" title="Select a section" description="Choose a financials configuration area." />
+        );
     })();
 
     return (
