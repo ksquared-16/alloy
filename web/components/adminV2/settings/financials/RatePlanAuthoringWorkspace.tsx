@@ -17,7 +17,7 @@ import {
     type EffectiveDatedVersionRow,
 } from "@/lib/adminV2/operationalConfig/effectiveDatedVersioning";
 import {
-    describeScope,
+    describeScopeWithLabel,
     formatCurrencyCents,
     isScopeOverride,
 } from "@/lib/adminV2/operationalConfig/configReadPresentation";
@@ -96,6 +96,7 @@ export default function RatePlanAuthoringWorkspace({
     todayYmd,
     canMutate,
     authoring,
+    labelFor,
 }: {
     plan: ChildcareRatePlanRow | null;
     ratePlans: ChildcareRatePlanRow[];
@@ -103,7 +104,11 @@ export default function RatePlanAuthoringWorkspace({
     todayYmd: string;
     canMutate: boolean;
     authoring: RateAuthoring;
+    /** Resolve a scope-target id to a human label (Phase 4); identity if absent. */
+    labelFor?: (id: string) => string | undefined;
 }) {
+    const scopeLabel = (p: ChildcareRatePlanRow): string =>
+        describeScopeWithLabel(p, labelFor ?? (() => undefined));
     const planLineage = useMemo(
         () => (plan ? ratePlans.filter((p) => planLineageKey(p) === planLineageKey(plan)) : []),
         [plan, ratePlans],
@@ -200,11 +205,11 @@ export default function RatePlanAuthoringWorkspace({
             <ConfigurationDetailCard testId="financials-rate-plan-summary">
                 <div className="mb-3 flex flex-wrap items-center gap-2">
                     <h2 className="config-typo-workspace-title mr-1">{(plan.label ?? "").trim() || plan.plan_key}</h2>
-                    <ConfigScopeBadge label={describeScope(plan)} override={isScopeOverride(plan)} />
+                    <ConfigScopeBadge label={scopeLabel(plan)} override={isScopeOverride(plan)} />
                 </div>
                 <ConfigFieldGrid>
                     <ConfigField label="Plan key" value={plan.plan_key} />
-                    <ConfigField label="Scope" value={describeScope(plan)} />
+                    <ConfigField label="Scope" value={scopeLabel(plan)} />
                     <ConfigField label="Currency" value={currency} />
                     <ConfigField label="Billing basis" value={workingPlan.billing_basis} />
                     <ConfigField label="Calculation strategy" value={workingPlan.calculation_strategy} />

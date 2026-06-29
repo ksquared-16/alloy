@@ -425,3 +425,32 @@ Org default → Location → Program → Room precedence is unchanged (the autho
 ### What remains intentionally unbuilt (Phase 3)
 
 Program/Room **scope picker** (id-based for now); date-specific closures/holiday calendar (operating windows bound weekly only); a unified resolved-preview for operating-window/schedule resolution (capacity + ratio are previewed today). Out of scope per directive: Posting, Payments, Subsidy, Financial Responsibility, GL authoring, Attendance UI, Focus Panel, Settings IA reorg.
+
+---
+
+## Phase 4 — Scope Picker + Configuration QA Polish (IMPLEMENTED)
+
+Status: shipped. A usability/QA phase — **no new backend write domain, no migration.** It replaces raw scope-target-ID entry with a labeled scope picker, makes scope/resolved displays human-readable, and polishes the Financials + Locations authoring screens. Versioned/effective-dated authoring (Phase 2/3) is unchanged.
+
+### Scope picker
+- **`ScopePicker`** (`components/adminV2/settings/configurationRuntime/ScopePicker.tsx`) — reusable, labeled picker following the inheritance model **Org default → Location → Program → Room**. It shows human labels ("Austin Campus", "Toddler"), never UUIDs, and emits a structured `ScopeSelection`. `scopeSelectionToPayload` maps it to exactly the right scoped column (`site_location_id` / `program_category_id` / `room_location_id`); `isScopeSelectionComplete` guards submission.
+- **`useScopeOptions`** (read-only loader) fetches `/api/admin/locations?hierarchy=1` + program categories and returns site/program/room options (site-disambiguated labels), a short `labelFor(id)` resolver for badges, and `ageGroupOptions` (program-category keys as labeled age groups — age groups are program categories, not a free-text taxonomy).
+- Applied to: **Financials** `CreateRatePlanForm` (scope + age-group selects); **Locations** add forms for capacity / ratio / operating windows / schedule via `ConfigRuleAuthoringGroup` (the picker is composed into the add-form `extraForm`, alongside ratio tiers). The Phase 3 raw `scope_target_id` text entry is gone.
+
+### Label-aware scope display
+- **`describeScopeWithLabel(row, lookup)`** (pure) renders "Org default" / "Location: Austin Campus" / "Program: Toddler" / "Room: Toddler A", falling back to the generic override label when a target label is unavailable — so **no surface shows a raw UUID**. Used on the Financials plan queue + plan workspace and on every Locations rule timeline title.
+
+### Resolved-preview improvements
+- Locations "Resolved per location" now shows, per site: the resolved **capacity value + scope source label** (inherited "Org default" vs overridden), the resolved **ratio's tier selection** + source label, and an explicit **"no rule — fallback applies"** state. The Financials plan workspace keeps its resolved-rate-per-schedule-basis preview (rate rule selection on the current version).
+
+### Screen polish
+- Locations: grouped by rule type, clearer scope-source + effective-status labels, inline authoring preserved (no drawers), resolved-per-location preview retained.
+- Financials: scope labels on the plan queue + workspace, version-timeline clarity retained, nested rate-rule grouping retained, resolved-rate preview retained. Charge Preview remains a labeled read-only inspector; **GL Codes / GL Mappings remain read-only** (no safe write backend).
+
+### Tests
+- `tests/adminV2/scopePicker.test.tsx` — `scopeSelectionToPayload` emits correct `scope_type`/ids per scope; `isScopeSelectionComplete`; render tests assert the picker shows human labels (not UUIDs) and hides the target select for org scope.
+- `tests/adminV2/configScopePresentation.test.ts` — `describeScopeWithLabel` label/fallback behavior (never a raw UUID).
+- `tests/adminV2/operationalConfigurationV1Batch0.test.ts` (Phase 4 block) — picker reused by both domains, scope-options loader is GET-only, create form + Locations panel use picker values (no `scope_target_id`), scope shown with labels, still no drawers / no forbidden financial writes.
+
+### What remains intentionally unbuilt (Phase 4)
+A searchable/typeahead scope picker (current is a labeled dropdown — fine at small/medium scale); a unified resolved-preview for operating-window/schedule resolution (capacity + ratio + rate are previewed); date-specific closures. Out of scope per directive: Posting, Payments, Subsidy, GL write/edit, Focus Panel UI, Settings IA reorg.

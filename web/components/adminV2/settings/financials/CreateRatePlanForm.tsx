@@ -1,12 +1,11 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import {
     BILLING_BASES,
     CALCULATION_STRATEGIES,
     DEFAULT_RATE_CURRENCY_CODE,
 } from "@/lib/financials/rates/rateTypes";
-import { CONFIG_RULE_SCOPE_TYPES } from "@/lib/childcareOperational/config/configRuleTypes";
 import { ConfigurationDetailCard } from "@/components/adminV2/settings/configurationRuntime/ConfigurationModeLayout";
 import {
     ConfigButtonRow,
@@ -17,37 +16,41 @@ import {
     ConfigSelectInput,
     ConfigTextInput,
 } from "@/components/adminV2/settings/configurationRuntime/ConfigEditorPrimitives";
+import {
+    ORG_SCOPE_SELECTION,
+    ScopePicker,
+    isScopeSelectionComplete,
+    scopeSelectionToPayload,
+    type ScopeOptions,
+    type ScopeSelection,
+} from "@/components/adminV2/settings/configurationRuntime/ScopePicker";
 
 /**
- * Create a brand-new rate plan lineage (Operational Configuration V1, Batch 1).
- * Distinct from "create future version" — this authors the genesis version of a
- * new plan. Scope targets are id-based in V1 (org scope is the common case;
- * a location/program picker is a future enhancement). Rate rules are added on
- * the plan workspace once the plan exists.
+ * Create a brand-new rate plan lineage (Operational Configuration V1, Batch 1;
+ * scope picker + age-group select added Phase 4). Distinct from "create future
+ * version" — this authors the genesis version of a new plan. Scope is chosen via
+ * the labeled picker (no raw IDs). Rate rules are added on the plan workspace once
+ * the plan exists.
  */
 
 function humanize(value: string): string {
     return value.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
-const SCOPE_TARGET_FIELD: Record<string, string | null> = {
-    org: null,
-    site: "site_location_id",
-    program: "program_category_id",
-    room: "room_location_id",
-};
-
 export default function CreateRatePlanForm({
     busy,
+    scopeOptions,
+    ageGroupOptions,
     onCreate,
     onCancel,
 }: {
     busy?: boolean;
+    scopeOptions: ScopeOptions;
+    ageGroupOptions: { value: string; label: string }[];
     onCreate: (payload: Record<string, unknown>) => Promise<void>;
     onCancel: () => void;
 }) {
-    const [scopeType, setScopeType] = useState<string>("org");
-    const [scopeTargetId, setScopeTargetId] = useState("");
+    const [scope, setScope] = useState<ScopeSelection>(ORG_SCOPE_SELECTION);
     const [ageGroupKey, setAgeGroupKey] = useState("");
     const [planKey, setPlanKey] = useState("");
     const [label, setLabel] = useState("");
@@ -57,21 +60,13 @@ export default function CreateRatePlanForm({
     const [effectiveStart, setEffectiveStart] = useState("");
     const [formError, setFormError] = useState<string | null>(null);
 
-    const scopeTargetField = SCOPE_TARGET_FIELD[scopeType] ?? null;
-    const scopeOptions = useMemo(
-        () => CONFIG_RULE_SCOPE_TYPES.map((s) => ({ value: s, label: humanize(s) })),
-        [],
-    );
-
     async function submit() {
         if (!planKey.trim()) return setFormError("Plan key is required");
         if (!effectiveStart) return setFormError("Effective start date is required");
-        if (scopeTargetField && !scopeTargetId.trim()) {
-            return setFormError(`${humanize(scopeType)} scope requires a target ID`);
-        }
+        if (!isScopeSelectionComplete(scope)) return setFormError("Choose a scope target (location, program, or room)");
         setFormError(null);
         const payload: Record<string, unknown> = {
-            scope_type: scopeType,
+            ...scopeSelectionToPayload(scope),
             plan_key: planKey.trim(),
             label: label.trim() || null,
             currency_code: currency.trim() || DEFAULT_RATE_CURRENCY_CODE,
@@ -80,7 +75,6 @@ export default function CreateRatePlanForm({
             age_group_key: ageGroupKey.trim() || null,
             effective_start: effectiveStart,
         };
-        if (scopeTargetField) payload[scopeTargetField] = scopeTargetId.trim();
         try {
             await onCreate(payload);
         } catch (e) {
@@ -90,15 +84,8 @@ export default function CreateRatePlanForm({
 
     return (
         <ConfigurationDetailCard title="New rate plan" testId="financials-create-rate-plan">
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-                <ConfigFieldLabel label="Scope">
-                    <ConfigSelectInput value={scopeType} onChange={setScopeType} options={scopeOptions} disabled={busy} testId="create-plan-scope_type" />
-                </ConfigFieldLabel>
-                {scopeTargetField ? (
-                    <ConfigFieldLabel label={`${humanize(scopeType)} target ID`}>
-                        <ConfigTextInput value={scopeTargetId} onChange={setScopeTargetId} disabled={busy} placeholder="UUID" testId="create-plan-scope_target" />
-                    </ConfigFieldLabel>
-                ) : null}
+            <ScopePicker value={scope} onChange={setScope} options={scopeOptions} disabled={busy} testIdPrefix="create-plan-scope" />
+            <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3">
                 <ConfigFieldLabel label="Plan key">
                     <ConfigTextInput value={planKey} onChange={setPlanKey} disabled={busy} placeholder="standard_tuition" testId="create-plan-plan_key" />
                 </ConfigFieldLabel>
@@ -114,8 +101,8 @@ export default function CreateRatePlanForm({
                 <ConfigFieldLabel label="Calc strategy">
                     <ConfigSelectInput value={calcStrategy} onChange={setCalcStrategy} options={CALCULATION_STRATEGIES.map((c) => ({ value: c, label: humanize(c) }))} disabled={busy} testId="create-plan-calc_strategy" />
                 </ConfigFieldLabel>
-                <ConfigFieldLabel label="Age group (optional)">
-                    <ConfigTextInput value={ageGroupKey} onChange={setAgeGroupKey} disabled={busy} placeholder="All ages" testId="create-plan-age_group" />
+                <ConfigFieldLabel label="Age group">
+                    <ConfigSelectInput value={ageGroupKey} onChange={setAgeGroupKey} options={ageGroupOptions} disabled={busy} testId="create-plan-age_group" />
                 </ConfigFieldLabel>
                 <ConfigFieldLabel label="Effective start">
                     <ConfigDateInput value={effectiveStart} onChange={setEffectiveStart} disabled={busy} testId="create-plan-effective_start" />

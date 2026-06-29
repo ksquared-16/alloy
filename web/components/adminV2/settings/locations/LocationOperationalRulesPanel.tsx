@@ -7,18 +7,24 @@ import type {
     ChildcareRatioRuleTierRow,
     ChildcareScheduleRuleRow,
 } from "@/lib/childcareOperational/config/configRuleTypes";
-import { CAPACITY_KINDS, CONFIG_RULE_SCOPE_TYPES } from "@/lib/childcareOperational/config/configRuleTypes";
+import { CAPACITY_KINDS } from "@/lib/childcareOperational/config/configRuleTypes";
 import {
     ConfigurationDetailCard,
     ConfigurationEmptyState,
 } from "@/components/adminV2/settings/configurationRuntime/ConfigurationModeLayout";
-import { describeScope } from "@/lib/adminV2/operationalConfig/configReadPresentation";
+import { describeScopeWithLabel } from "@/lib/adminV2/operationalConfig/configReadPresentation";
 import { resolveConfigRule } from "@/lib/childcareOperational/config/resolveConfigRule";
 import type { EditorField } from "@/components/adminV2/settings/configurationRuntime/EffectiveDatedConfigurationEditor";
+import {
+    isScopeSelectionComplete,
+    scopeSelectionToPayload,
+} from "@/components/adminV2/settings/configurationRuntime/ScopePicker";
+import { useScopeOptions } from "@/components/adminV2/settings/configurationRuntime/useScopeOptions";
 import { useLocationOperationalRules } from "@/components/adminV2/settings/locations/useLocationOperationalRules";
 import { useLocationRuleAuthoring } from "@/components/adminV2/settings/locations/useLocationRuleAuthoring";
 import {
     ConfigRuleAuthoringGroup,
+    readScopeSelection,
     type CreateValues,
 } from "@/components/adminV2/settings/locations/ConfigRuleAuthoringGroup";
 import {
@@ -46,27 +52,11 @@ function scopeKey(r: {
     return [r.scope_type, r.site_location_id ?? "", r.program_category_id ?? "", r.room_location_id ?? ""].join("|");
 }
 
-const SCOPE_OPTIONS = CONFIG_RULE_SCOPE_TYPES.map((s) => ({ value: s, label: humanize(s) }));
-const SCOPE_TARGET_FIELD: Record<string, string | null> = {
-    org: null,
-    site: "site_location_id",
-    program: "program_category_id",
-    room: "room_location_id",
-};
-
-/** Common add-form scope fields (scope_type + a generic target ID for non-org). */
-const SCOPE_ADD_FIELDS: EditorField[] = [
-    { key: "scope_type", label: "Scope", type: "select", options: SCOPE_OPTIONS, defaultValue: "org" },
-    { key: "scope_target_id", label: "Scope target ID (site/program/room)", type: "text", placeholder: "UUID — leave blank for org" },
-];
-
-/** Map the add-form scope fields onto the scoped columns the API expects. */
-function mapScope(fields: Record<string, string>): Record<string, unknown> {
-    const scopeType = fields.scope_type || "org";
-    const out: Record<string, unknown> = { scope_type: scopeType };
-    const targetField = SCOPE_TARGET_FIELD[scopeType];
-    if (targetField && fields.scope_target_id?.trim()) out[targetField] = fields.scope_target_id.trim();
-    return out;
+/** Build the scope payload from an add form's picker selection, validating completeness. */
+function scopePayload(values: CreateValues): Record<string, unknown> {
+    const selection = readScopeSelection(values.extra);
+    if (!isScopeSelectionComplete(selection)) throw new Error("Choose a scope target (location, program, or room)");
+    return scopeSelectionToPayload(selection);
 }
 
 function commaToArray(value: string | undefined): string[] | null {
@@ -79,31 +69,62 @@ function ResolvedPreviewCard({
     sites,
     capacityRules,
     ratioRules,
+    ratioRuleTiers,
     today,
+    labelFor,
 }: {
     sites: { id: string; label: string }[];
     capacityRules: ChildcareCapacityRuleRow[];
     ratioRules: ChildcareRatioRuleRow[];
+    ratioRuleTiers: ChildcareRatioRuleTierRow[];
     today: string;
+    labelFor: (id: string) => string | undefined;
 }) {
     if (sites.length === 0) return null;
     return (
         <ConfigurationDetailCard testId="locations-operational-resolved" title="Resolved per location">
             <p className="config-typo-sublabel mb-2 text-alloy-forge/60">
-                Most-specific-wins: Room override → Program override → Location override → Org default.
+                What resolves today (most-specific-wins: Room → Program → Location → Org default). “Org default” means
+                inherited; a more specific label means overridden here.
             </p>
             <ul className="divide-y divide-alloy-stone/30">
                 {sites.map((site) => {
                     const ctx = { siteLocationId: site.id };
                     const capacity = resolveConfigRule(capacityRules, ctx, today);
                     const ratio = resolveConfigRule(ratioRules, ctx, today);
+                    const ratioTiers = ratio
+                        ? ratioRuleTiers
+                              .filter((t) => t.ratio_rule_id === ratio.id)
+                              .sort((a, b) => a.sort_order - b.sort_order)
+                        : [];
                     return (
                         <li key={site.id} className="py-2.5" data-testid={`locations-operational-resolved-${site.id}`}>
                             <p className="config-typo-field-value text-alloy-midnight">{site.label}</p>
                             <p className="config-typo-sublabel text-alloy-forge/70">
                                 Capacity:{" "}
-                                {capacity ? `${capacity.capacity} (${describeScope(capacity)})` : "no rule"} · Ratio:{" "}
-                                {ratio ? describeScope(ratio) : "no rule"}
+                                {capacity ? (
+                                    <>
+                                        <span className="text-alloy-midnight">{capacity.capacity}</span>{" "}
+                                        <span className="text-alloy-forge/55">({describeScopeWithLabel(capacity, labelFor)})</span>
+                                    </>
+                                ) : (
+                                    <span className="text-amber-700">no rule — fallback applies</span>
+                                )}
+                            </p>
+                            <p className="config-typo-sublabel text-alloy-forge/70">
+                                Ratio:{" "}
+                                {ratio ? (
+                                    <>
+                                        <span className="text-alloy-midnight">
+                                            {ratioTiers.length
+                                                ? ratioTiers.map((t) => `1:${t.required_staff}≤${t.max_children}`).join(", ")
+                                                : "no tiers"}
+                                        </span>{" "}
+                                        <span className="text-alloy-forge/55">({describeScopeWithLabel(ratio, labelFor)})</span>
+                                    </>
+                                ) : (
+                                    <span className="text-amber-700">no rule — fallback applies</span>
+                                )}
                             </p>
                         </li>
                     );
@@ -115,11 +136,12 @@ function ResolvedPreviewCard({
 
 /**
  * Operational configuration rules for the Locations workspace. Read display +
- * inline effective-dated authoring (Operational Configuration V1, Phase 3) for
- * Capacity, Ratio + Tiers, Operating Windows, and Schedule/Eligibility rules,
- * each as a version timeline (Current / Scheduled / Superseded / Retired) with
- * supersede / retire / void — no drawers, no in-place overwrite. Plus a
- * resolved-per-location inheritance preview.
+ * inline effective-dated authoring (Phase 3) with a labeled scope picker and
+ * label-aware scope/resolved displays (Phase 4) for Capacity, Ratio + Tiers,
+ * Operating Windows, and Schedule/Eligibility rules — each a version timeline
+ * (Current / Scheduled / Superseded / Retired) with supersede / retire / void.
+ * No drawers, no in-place overwrite, no raw IDs. Plus a resolved-per-location
+ * inheritance preview.
  */
 export default function LocationOperationalRulesPanel({
     siteLabelById,
@@ -139,6 +161,7 @@ export default function LocationOperationalRulesPanel({
         scheduleRules,
         refresh,
     } = useLocationOperationalRules();
+    const { options: scopeOptions, labelFor, ageGroupOptions } = useScopeOptions();
     const authoring = useLocationRuleAuthoring(refresh);
 
     const sites = Array.from(siteLabelById.entries())
@@ -166,6 +189,14 @@ export default function LocationOperationalRulesPanel({
     const tierDraftsFor = (rule: ChildcareRatioRuleRow): TierDraft[] =>
         tiersFor(rule.id).map((t) => ({ maxChildren: String(t.max_children), requiredStaff: String(t.required_staff) }));
 
+    const ageGroupField = (defaultValue = ""): EditorField => ({
+        key: "age_group_key",
+        label: "Age group",
+        type: "select",
+        options: ageGroupOptions,
+        defaultValue,
+    });
+
     return (
         <div className="space-y-4" data-testid="locations-operational-rules">
             <ConfigurationDetailCard testId="locations-operational-notice">
@@ -181,7 +212,14 @@ export default function LocationOperationalRulesPanel({
                 </p>
             ) : null}
 
-            <ResolvedPreviewCard sites={sites} capacityRules={capacityRules} ratioRules={ratioRules} today={today} />
+            <ResolvedPreviewCard
+                sites={sites}
+                capacityRules={capacityRules}
+                ratioRules={ratioRules}
+                ratioRuleTiers={ratioRuleTiers}
+                today={today}
+                labelFor={labelFor}
+            />
 
             {/* Capacity */}
             <ConfigRuleAuthoringGroup<ChildcareCapacityRuleRow>
@@ -191,16 +229,16 @@ export default function LocationOperationalRulesPanel({
                 todayYmd={today}
                 canMutate={canMutate}
                 busy={authoring.busy}
+                scopeOptions={scopeOptions}
                 lineageKey={(r) => `${scopeKey(r)}|${r.age_group_key ?? ""}|${r.capacity_kind}`}
-                lineageTitle={(w) => `Capacity · ${humanize(w.capacity_kind)}${w.age_group_key ? ` · Age ${w.age_group_key}` : ""} · ${describeScope(w)}`}
+                lineageTitle={(w) => `Capacity · ${humanize(w.capacity_kind)}${w.age_group_key ? ` · Age ${w.age_group_key}` : ""} · ${describeScopeWithLabel(w, labelFor)}`}
                 versionFields={(w) => [
                     { key: "capacity", label: "Capacity", type: "number", defaultValue: String(w.capacity), required: true },
                 ]}
                 addFields={[
-                    ...SCOPE_ADD_FIELDS,
                     { key: "capacity_kind", label: "Capacity kind", type: "select", options: CAPACITY_KINDS.map((k) => ({ value: k, label: humanize(k) })) },
                     { key: "capacity", label: "Capacity", type: "number", required: true },
-                    { key: "age_group_key", label: "Age group (optional)", type: "text", placeholder: "All ages" },
+                    ageGroupField(),
                 ]}
                 renderVersionSummary={(r) => (
                     <span>
@@ -214,7 +252,7 @@ export default function LocationOperationalRulesPanel({
                 onVoid={(id) => authoring.void("capacity", id)}
                 onCreate={(v: CreateValues) =>
                     authoring.create("capacity", {
-                        ...mapScope(v.fields),
+                        ...scopePayload(v),
                         capacity_kind: v.fields.capacity_kind,
                         capacity: Number(v.fields.capacity),
                         age_group_key: v.fields.age_group_key?.trim() || null,
@@ -231,14 +269,14 @@ export default function LocationOperationalRulesPanel({
                 todayYmd={today}
                 canMutate={canMutate}
                 busy={authoring.busy}
+                scopeOptions={scopeOptions}
                 lineageKey={(r) => `${scopeKey(r)}|${r.age_group_key ?? ""}|${r.jurisdiction_key ?? ""}`}
-                lineageTitle={(w) => `Ratio · Age ${w.age_group_key ?? "all"}${w.jurisdiction_key ? ` · ${w.jurisdiction_key}` : ""} · ${describeScope(w)}`}
+                lineageTitle={(w) => `Ratio · Age ${w.age_group_key ?? "all"}${w.jurisdiction_key ? ` · ${w.jurisdiction_key}` : ""} · ${describeScopeWithLabel(w, labelFor)}`}
                 versionFields={(w) => [
                     { key: "jurisdiction_key", label: "Jurisdiction (optional)", type: "text", defaultValue: w.jurisdiction_key ?? "" },
                 ]}
                 addFields={[
-                    ...SCOPE_ADD_FIELDS,
-                    { key: "age_group_key", label: "Age group (optional)", type: "text", placeholder: "All ages" },
+                    ageGroupField(),
                     { key: "jurisdiction_key", label: "Jurisdiction (optional)", type: "text" },
                 ]}
                 extraFormFor={(working) => buildRatioTierExtraForm(working ? tierDraftsFor(working) : [])}
@@ -257,7 +295,7 @@ export default function LocationOperationalRulesPanel({
                 onVoid={(id) => authoring.void("ratio", id)}
                 onCreate={(v: CreateValues) =>
                     authoring.create("ratio", {
-                        ...mapScope(v.fields),
+                        ...scopePayload(v),
                         age_group_key: v.fields.age_group_key?.trim() || null,
                         jurisdiction_key: v.fields.jurisdiction_key?.trim() || null,
                         tiers: tierDraftsToPayload(v.extra),
@@ -274,14 +312,14 @@ export default function LocationOperationalRulesPanel({
                 todayYmd={today}
                 canMutate={canMutate}
                 busy={authoring.busy}
+                scopeOptions={scopeOptions}
                 lineageKey={(r) => `${scopeKey(r)}|${r.weekday}`}
-                lineageTitle={(w) => `${WEEKDAYS[w.weekday] ?? `Day ${w.weekday}`} window · ${describeScope(w)}`}
+                lineageTitle={(w) => `${WEEKDAYS[w.weekday] ?? `Day ${w.weekday}`} window · ${describeScopeWithLabel(w, labelFor)}`}
                 versionFields={(w) => [
                     { key: "open_time", label: "Open (HH:MM)", type: "text", defaultValue: w.open_time.slice(0, 5), required: true },
                     { key: "close_time", label: "Close (HH:MM)", type: "text", defaultValue: w.close_time.slice(0, 5), required: true },
                 ]}
                 addFields={[
-                    ...SCOPE_ADD_FIELDS,
                     { key: "weekday", label: "Weekday", type: "select", options: WEEKDAYS.map((d, i) => ({ value: String(i), label: d })) },
                     { key: "open_time", label: "Open (HH:MM)", type: "text", placeholder: "08:00", required: true },
                     { key: "close_time", label: "Close (HH:MM)", type: "text", placeholder: "18:00", required: true },
@@ -303,7 +341,7 @@ export default function LocationOperationalRulesPanel({
                 onVoid={(id) => authoring.void("operating", id)}
                 onCreate={(v: CreateValues) =>
                     authoring.create("operating", {
-                        ...mapScope(v.fields),
+                        ...scopePayload(v),
                         weekday: Number(v.fields.weekday),
                         open_time: v.fields.open_time,
                         close_time: v.fields.close_time,
@@ -320,8 +358,9 @@ export default function LocationOperationalRulesPanel({
                 todayYmd={today}
                 canMutate={canMutate}
                 busy={authoring.busy}
+                scopeOptions={scopeOptions}
                 lineageKey={(r) => `${scopeKey(r)}|${r.age_group_key ?? ""}`}
-                lineageTitle={(w) => `Schedule eligibility · Age ${w.age_group_key ?? "all"} · ${describeScope(w)}`}
+                lineageTitle={(w) => `Schedule eligibility · Age ${w.age_group_key ?? "all"} · ${describeScopeWithLabel(w, labelFor)}`}
                 versionFields={(w) => [
                     { key: "eligible_schedule_type_keys", label: "Eligible schedule types (comma)", type: "text", defaultValue: (w.eligible_schedule_type_keys ?? []).join(", ") },
                     { key: "eligible_age_group_keys", label: "Eligible age groups (comma)", type: "text", defaultValue: (w.eligible_age_group_keys ?? []).join(", ") },
@@ -329,8 +368,7 @@ export default function LocationOperationalRulesPanel({
                     { key: "max_days_per_week", label: "Max days/wk", type: "number", defaultValue: w.max_days_per_week != null ? String(w.max_days_per_week) : "" },
                 ]}
                 addFields={[
-                    ...SCOPE_ADD_FIELDS,
-                    { key: "age_group_key", label: "Age group (optional)", type: "text", placeholder: "All ages" },
+                    ageGroupField(),
                     { key: "eligible_schedule_type_keys", label: "Eligible schedule types (comma)", type: "text", placeholder: "full_time, half_day" },
                     { key: "eligible_age_group_keys", label: "Eligible age groups (comma)", type: "text" },
                     { key: "min_days_per_week", label: "Min days/wk", type: "number" },
@@ -362,7 +400,7 @@ export default function LocationOperationalRulesPanel({
                 onVoid={(id) => authoring.void("schedule", id)}
                 onCreate={(v: CreateValues) =>
                     authoring.create("schedule", {
-                        ...mapScope(v.fields),
+                        ...scopePayload(v),
                         age_group_key: v.fields.age_group_key?.trim() || null,
                         eligible_schedule_type_keys: commaToArray(v.fields.eligible_schedule_type_keys),
                         eligible_age_group_keys: commaToArray(v.fields.eligible_age_group_keys),

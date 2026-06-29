@@ -31,7 +31,8 @@ import {
     classifyVersionStatus,
     currentVersionId,
 } from "@/lib/adminV2/operationalConfig/effectiveDatedVersioning";
-import { describeScope } from "@/lib/adminV2/operationalConfig/configReadPresentation";
+import { describeScopeWithLabel } from "@/lib/adminV2/operationalConfig/configReadPresentation";
+import { useScopeOptions } from "@/components/adminV2/settings/configurationRuntime/useScopeOptions";
 import type { ChildcareRatePlanRow } from "@/lib/financials/rates/rateTypes";
 
 const FINANCIALS_SUBTITLE =
@@ -56,6 +57,7 @@ export default function FinancialsConfigurationPage() {
     const { canMutate } = useAdminAuth();
     const { loading, error, ratePlans, rateRules, glAccounts, glAccountMappings, refresh } =
         useFinancialsConfigurationSettings();
+    const { options: scopeOptions, labelFor, ageGroupOptions } = useScopeOptions();
     const authoring = useRateAuthoring(refresh);
 
     const [section, setSection] = useState<FinancialsConfigSection>("overview");
@@ -133,7 +135,7 @@ export default function FinancialsConfigurationPage() {
                                 key={key}
                                 active={key === selectedLineageKey && !creatingPlan}
                                 title={(working.label ?? "").trim() || working.plan_key}
-                                subtitle={`${describeScope(working)} · ${working.currency_code} · ${rows.length} version${rows.length === 1 ? "" : "s"}`}
+                                subtitle={`${describeScopeWithLabel(working, labelFor)} · ${working.currency_code} · ${rows.length} version${rows.length === 1 ? "" : "s"}`}
                                 trailing={<ConfigVersionBadge status={status} />}
                                 onClick={() => {
                                     setSelectedLineageKey(key);
@@ -189,6 +191,8 @@ export default function FinancialsConfigurationPage() {
                 return (
                     <CreateRatePlanForm
                         busy={authoring.busy}
+                        scopeOptions={scopeOptions}
+                        ageGroupOptions={ageGroupOptions}
                         onCancel={() => setCreatingPlan(false)}
                         onCreate={async (payload) => {
                             await authoring.createPlan(payload);
@@ -206,6 +210,7 @@ export default function FinancialsConfigurationPage() {
                     todayYmd={today}
                     canMutate={canMutate}
                     authoring={authoring}
+                    labelFor={labelFor}
                 />
             );
         }

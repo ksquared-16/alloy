@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, type ReactNode } from "react";
+import { Fragment, useMemo, type ReactNode } from "react";
 import {
     currentVersionId,
     type EffectiveDatedVersionRow,
@@ -10,14 +10,20 @@ import {
     type EditorExtraForm,
     type EditorField,
 } from "@/components/adminV2/settings/configurationRuntime/EffectiveDatedConfigurationEditor";
+import {
+    ORG_SCOPE_SELECTION,
+    ScopePicker,
+    type ScopeOptions,
+    type ScopeSelection,
+} from "@/components/adminV2/settings/configurationRuntime/ScopePicker";
 
 /**
  * Generic authoring group for one operational-rule category (Operational
- * Configuration V1, Phase 3). Groups a category's rows into lineages and renders
- * the shared EffectiveDatedConfigurationEditor once per lineage (timeline +
- * supersede/retire/void) plus an inline "add" editor for a new lineage. The same
- * component drives capacity, ratio (with a tier sub-form), operating windows, and
- * schedule rules — one versioning UX, four domains. No drawers.
+ * Configuration V1, Phase 3; scope picker added Phase 4). Groups a category's
+ * rows into lineages and renders the shared EffectiveDatedConfigurationEditor
+ * once per lineage (timeline + supersede/retire/void) plus an inline "add" editor
+ * for a new lineage. The add form chooses scope via the labeled ScopePicker (no
+ * raw IDs). One versioning UX, four domains. No drawers.
  */
 
 export type CreateValues = {
@@ -25,6 +31,41 @@ export type CreateValues = {
     fields: Record<string, string>;
     extra: Record<string, unknown>;
 };
+
+/** Read the scope selection an add form captured via the ScopePicker extra slot. */
+export function readScopeSelection(extra: Record<string, unknown>): ScopeSelection {
+    const s = extra.scope;
+    return s && typeof s === "object" ? (s as ScopeSelection) : ORG_SCOPE_SELECTION;
+}
+
+/** Build the add-form scope sub-form (labeled picker), composed with any caller extra. */
+function buildScopeExtra(scopeOptions: ScopeOptions): EditorExtraForm {
+    return {
+        initial: () => ({ scope: ORG_SCOPE_SELECTION }),
+        render: (state, setState, busy) => (
+            <ScopePicker
+                value={readScopeSelection(state)}
+                onChange={(scope) => setState({ ...state, scope })}
+                options={scopeOptions}
+                disabled={busy}
+            />
+        ),
+    };
+}
+
+function composeExtra(a?: EditorExtraForm, b?: EditorExtraForm): EditorExtraForm | undefined {
+    if (!a) return b;
+    if (!b) return a;
+    return {
+        initial: () => ({ ...a.initial(), ...b.initial() }),
+        render: (state, setState, busy) => (
+            <Fragment>
+                {a.render(state, setState, busy)}
+                {b.render(state, setState, busy)}
+            </Fragment>
+        ),
+    };
+}
 
 function pickWorking<T extends EffectiveDatedVersionRow>(lineage: T[], todayYmd: string): T {
     const currentId = currentVersionId(lineage, todayYmd);
@@ -53,6 +94,8 @@ export type ConfigRuleAuthoringGroupProps<T extends EffectiveDatedVersionRow> = 
     renderVersionSummary: (row: T) => ReactNode;
     /** Optional structured sub-form (ratio tiers); `working` is null for add. */
     extraFormFor?: (working: T | null) => EditorExtraForm | undefined;
+    /** Labeled scope options for the add-form scope picker. */
+    scopeOptions: ScopeOptions;
     /** Add-form label + empty-state. */
     addLabel: string;
     emptyCopy: string;
@@ -79,6 +122,7 @@ export function ConfigRuleAuthoringGroup<T extends EffectiveDatedVersionRow>({
     addFields,
     renderVersionSummary,
     extraFormFor,
+    scopeOptions,
     addLabel,
     emptyCopy,
     onCreate,
@@ -87,6 +131,9 @@ export function ConfigRuleAuthoringGroup<T extends EffectiveDatedVersionRow>({
     onVoid,
     resolvedPreview,
 }: ConfigRuleAuthoringGroupProps<T>) {
+    // The add form chooses scope via the labeled picker, composed with any
+    // domain-specific extra (e.g. ratio tiers).
+    const addExtraForm = composeExtra(buildScopeExtra(scopeOptions), extraFormFor?.(null));
     const lineages = useMemo(() => {
         const groups = new Map<string, T[]>();
         for (const r of rows) {
@@ -140,7 +187,7 @@ export function ConfigRuleAuthoringGroup<T extends EffectiveDatedVersionRow>({
                     versions={[]}
                     todayYmd={todayYmd}
                     fields={addFields}
-                    extraForm={extraFormFor?.(null)}
+                    extraForm={addExtraForm}
                     canMutate={canMutate}
                     busy={busy}
                     emptyCreateLabel={addLabel}

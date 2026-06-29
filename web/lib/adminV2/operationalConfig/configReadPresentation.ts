@@ -51,6 +51,36 @@ export function describeScope(row: ConfigRuleScopeColumns): string {
     return SCOPE_LABEL[row.scope_type] ?? row.scope_type;
 }
 
+/** Resolve a scope-target id (site/program/room) to a human label, or undefined. */
+export type ScopeLabelLookup = (id: string) => string | undefined;
+
+/**
+ * Human, label-aware scope description (Operational Configuration V1, Phase 4):
+ * "Org default" / "Location: Austin Campus" / "Program: Toddler" / "Room: Toddler A".
+ * Falls back to the generic override label when a target label is unavailable, so
+ * a surface never has to show a raw UUID.
+ */
+export function describeScopeWithLabel(row: ConfigRuleScopeColumns, lookup: ScopeLabelLookup): string {
+    switch (row.scope_type) {
+        case "org":
+            return "Org default";
+        case "site": {
+            const label = row.site_location_id ? lookup(row.site_location_id) : undefined;
+            return label ? `Location: ${label}` : "Location override";
+        }
+        case "program": {
+            const label = row.program_category_id ? lookup(row.program_category_id) : undefined;
+            return label ? `Program: ${label}` : "Program override";
+        }
+        case "room": {
+            const label = row.room_location_id ? lookup(row.room_location_id) : undefined;
+            return label ? `Room: ${label}` : "Room override";
+        }
+        default:
+            return SCOPE_LABEL[row.scope_type] ?? row.scope_type;
+    }
+}
+
 /** True when this row overrides the org default (i.e. is more specific). */
 export function isScopeOverride(row: ConfigRuleScopeColumns): boolean {
     return row.scope_type !== "org";

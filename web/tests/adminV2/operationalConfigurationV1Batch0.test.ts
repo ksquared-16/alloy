@@ -209,6 +209,58 @@ describe("Phase 3 — Locations operational-rule write + versioning", () => {
     });
 });
 
+describe("Phase 4 — scope picker + labeled scope display", () => {
+    it("the scope picker emits scoped columns and is reused by both domains", () => {
+        const picker = read("components/adminV2/settings/configurationRuntime/ScopePicker.tsx");
+        expect(picker).toContain("scopeSelectionToPayload");
+        // emits the right scoped column per scope type
+        expect(picker).toContain("site_location_id");
+        expect(picker).toContain("program_category_id");
+        expect(picker).toContain("room_location_id");
+    });
+
+    it("the scope-options loader is read-only (GET only)", () => {
+        const hook = read("components/adminV2/settings/configurationRuntime/useScopeOptions.ts");
+        expect(hook).toContain("/api/admin/locations");
+        expect(hook).not.toMatch(/method:\s*["'](POST|PUT|PATCH|DELETE)["']/);
+    });
+
+    it("the rate plan create form uses the labeled ScopePicker, not raw ID entry", () => {
+        const form = read("components/adminV2/settings/financials/CreateRatePlanForm.tsx");
+        expect(form).toContain("ScopePicker");
+        expect(form).toContain("scopeSelectionToPayload");
+        // no raw scope-target text field remains
+        expect(form).not.toContain("scope_target_id");
+    });
+
+    it("the Locations authoring group composes the ScopePicker into the add form", () => {
+        const group = read("components/adminV2/settings/locations/ConfigRuleAuthoringGroup.tsx");
+        expect(group).toContain("ScopePicker");
+        expect(group).toContain("scopeOptions");
+    });
+
+    it("the Locations panel authors scope via the picker (no raw scope-target text field)", () => {
+        const panel = read("components/adminV2/settings/locations/LocationOperationalRulesPanel.tsx");
+        expect(panel).toContain("scopeSelectionToPayload");
+        expect(panel).toContain("describeScopeWithLabel");
+        expect(panel).not.toContain("scope_target_id");
+    });
+
+    it("scope is shown with human labels (describeScopeWithLabel), not the generic override label only", () => {
+        const finPage = read("components/adminV2/settings/financials/FinancialsConfigurationPage.tsx");
+        expect(finPage).toContain("describeScopeWithLabel");
+        const workspace = read("components/adminV2/settings/financials/RatePlanAuthoringWorkspace.tsx");
+        expect(workspace).toContain("describeScopeWithLabel");
+    });
+
+    it("still no drawers and no forbidden financial writes after the polish", () => {
+        const panel = read("components/adminV2/settings/locations/LocationOperationalRulesPanel.tsx");
+        expect(panel).not.toMatch(/openDrawer|useAdminDrawer/);
+        const svc = read("lib/childcareOperational/config/configRuleAuthoringService.ts");
+        expect(svc).not.toMatch(/from\(["'](charges|ledger_transactions|gl_journal_lines|gl_accounts|invoices|payments)["']\)/);
+    });
+});
+
 describe("Batch 0 — existing surfaces remain intact", () => {
     it("existing settings pages still resolve", () => {
         expect(() => read("app/adminV2/settings/locations/page.tsx")).not.toThrow();
