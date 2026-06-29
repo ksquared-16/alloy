@@ -7,8 +7,12 @@
  * persistence store are the only surface-specific I/O. No builder code lives here.
  */
 
-import { listOperationalCalculations } from "@/lib/analytics/calculations/registry";
+import {
+    listOperationalCalculations,
+    findOperationalCalculation,
+} from "@/lib/analytics/calculations/registry";
 import type { OperationalCalculation } from "@/lib/analytics/calculations/types";
+import { MetricCardShell, MetricCardValue } from "@/components/admin/metrics/MetricCardShell";
 import type {
     SurfaceDefinition,
     SurfacePersistenceAdapter,
@@ -116,14 +120,29 @@ export const OPERATIONAL_INTELLIGENCE_INSPECTOR: InspectorSchema = {
     ],
 };
 
+/**
+ * Renders the real Operational Intelligence card chrome (the runtime MetricCardShell)
+ * so the builder canvas shows actual cards, not rectangles. Values are dashes in the
+ * builder (no live resolution at author time); the live values render in the runtime.
+ */
 const runtimeRenderer: SurfaceRuntimeRenderer = {
-    renderCard: (instance, ctx) => (
-        <div className="rounded-xl border border-alloy-stone/15 bg-white p-3 shadow-[0_1px_2px_rgba(15,23,42,0.05)]">
-            <p className="text-[11px] font-semibold uppercase tracking-wide text-alloy-pine">{instance.cardTypeKey}</p>
-            <p className="mt-1 text-sm font-semibold text-alloy-midnight">{ctx.contentLabel || "Choose content"}</p>
-            <p className="mt-2 text-2xl font-semibold tabular-nums text-alloy-midnight/40">—</p>
-        </div>
-    ),
+    renderCard: (instance, ctx) => {
+        const calc = instance.contentId ? findOperationalCalculation(instance.contentId) : null;
+        return (
+            <MetricCardShell
+                label={ctx.contentLabel || "Choose content"}
+                visual="metric_scorecard"
+                question={calc?.questionAnswered ?? null}
+                status="unknown"
+                showHealthChip={false}
+            >
+                <MetricCardValue value="—" />
+                <p className="text-[10px] font-medium uppercase tracking-wide text-alloy-midnight/35">
+                    {instance.cardTypeKey} · preview
+                </p>
+            </MetricCardShell>
+        );
+    },
 };
 
 /**

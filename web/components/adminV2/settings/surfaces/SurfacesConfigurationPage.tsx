@@ -9,6 +9,7 @@ import {
     ConfigurationShell,
 } from "@/components/adminV2/settings/configurationRuntime/ConfigurationModeLayout";
 import FocusPanelSummarySurfaceEditor from "@/components/adminV2/settings/surfaces/FocusPanelSummarySurfaceEditor";
+import OperationalIntelligenceSurfaceBuilder from "@/components/adminV2/settings/surfaces/OperationalIntelligenceSurfaceBuilder";
 import {
     useSurfacesConfigurationSettings,
     type SurfaceConfigSectionKey,
@@ -77,7 +78,11 @@ export default function SurfacesConfigurationPage() {
                         </div>
 
                         <div className="min-h-0 flex-1">
-                            <FocusPanelSummarySurfaceEditor />
+                            {selectedObject.editor === "operational-intelligence" ? (
+                                <OperationalIntelligenceSurfaceBuilder />
+                            ) : (
+                                <FocusPanelSummarySurfaceEditor />
+                            )}
                         </div>
                     </div>
                 </ConfigurationShell>

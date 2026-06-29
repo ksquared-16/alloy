@@ -19,7 +19,7 @@ export type SurfaceConfigSection = {
 };
 
 /** Editor kinds the workspace knows how to render. */
-export type SurfaceEditorKind = "focus-panel-summary";
+export type SurfaceEditorKind = "focus-panel-summary" | "operational-intelligence";
 
 export type SurfaceConfigObject = {
     id: string;
@@ -72,14 +72,14 @@ export const SURFACE_OBJECTS: Record<SurfaceConfigSectionKey, SurfaceConfigObjec
             title: "Operational Intelligence",
             subtitle: "Today: pulse, attention, bottlenecks",
             previewHref: ANALYTICS_SURFACE_PREVIEW_HREF,
-            // Runtime lives in the Workspace → Operational Intelligence modal, not a
-            // standalone page. This deep-link lands on the canonical operator workspace
-            // (`/workspace` browser URL → AdminV2 tree) where TopNavBar reads the param
-            // and opens the modal. NB: `/adminV2` redirects to `/admin` and drops params.
+            // Runtime lives in the Workspace → Operational Intelligence modal. This
+            // deep-link lands on the canonical operator workspace (`/workspace`) where
+            // TopNavBar reads the param and opens the modal.
             liveHref: "/workspace?workspaceModal=analytics",
-            // Real configuration: the metric placement builder. Placements for
-            // surface=operational_intelligence drive the runtime modal's metric set.
-            configureHref: "/admin/settings/analytics?tab=placements",
+            // Configure opens the platform SurfaceBuilder inline (the one builder), not a
+            // standalone Analytics config page. Operational Intelligence is just a
+            // Surface Definition handed to SurfaceBuilder.
+            editor: "operational-intelligence",
         },
         {
             id: "enrollment-intelligence",
