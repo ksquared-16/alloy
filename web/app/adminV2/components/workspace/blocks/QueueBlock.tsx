@@ -39,6 +39,7 @@ import OpportunityQueueRowLayoutRuntimeShadowMount from "@/components/admin/work
 import { buildOpportunityQueueRowRecordFromPreview } from "@/lib/layout/runtime/buildOpportunityQueueRowRecordFromPreview";
 import { stageKeyFromQueueDrillWorkUnitKey } from "@/lib/layout/buildLayoutAssignmentContext";
 import { useOpportunityQueueLayoutRuntime } from "@/lib/layout/runtime/useOpportunityQueueLayoutRuntime";
+import { opportunityQueueLayoutRuntimeRowsPossible } from "@/lib/workspace/opportunityQueueLayoutRuntimeActivation";
 import { CRM_COMPACT_VALUE_DOT_SEP } from "@/lib/ui-v2/crmQueueRowPreviewPresentation";
 import {
   orderedQueueQuickActions,
@@ -1811,6 +1812,15 @@ function WorkUnitQueueLane({
     [queue.drillWorkUnitKey],
   );
 
+  // Only fetch the lane layout doc when a row could actually render through the
+  // legacy layout path (a row lacking `semanticCrmCompact`, or flag-off). With the
+  // canonical compressed rows owning every crm row, the doc is otherwise unused, so
+  // this skips a decoupled per-lane fetch waterfall on the work-unit page. Reveal
+  // gates and queue empty-state semantics are untouched.
+  const layoutRuntimeRowsPossible = useMemo(
+    () => opportunityQueueLayoutRuntimeRowsPossible(queue.items, ALLOY_OS_RUNTIME_ENABLED),
+    [queue.items],
+  );
   const queueLayoutRuntime = useOpportunityQueueLayoutRuntime(
     `${queue.id}:${queue.drillWorkUnitKey ?? "lane"}:${hasCandidatePlacementRows ? "waitlist" : "pipeline"}:${queueLaneStageKey ?? ""}`,
     {
@@ -1821,9 +1831,10 @@ function WorkUnitQueueLane({
       grain: hasCandidatePlacementRows ? "candidate" : "case",
     },
     queue.pinnedQueueLayoutId,
+    { active: layoutRuntimeRowsPossible },
   );
   const layoutQueueEnabled =
-    queue.queueEntityType === "opportunity" && queueLayoutRuntime.enabled;
+    queue.queueEntityType === "opportunity" && queueLayoutRuntime.enabled && layoutRuntimeRowsPossible;
   const useLayoutQueueRows = layoutQueueEnabled && queueLayoutRuntime.doc != null;
   const showLayoutQueueHold =
     layoutQueueEnabled && (queueLayoutRuntime.loading || queueLayoutRuntime.doc == null);
