@@ -2056,6 +2056,12 @@ export default function AdminV2WorkspaceDepartmentPage() {
                 workUnitId={primaryWorkUnit?.id ?? null}
                 surface="right_rail"
                 onClose={() => setCreateLeadOpen(false)}
+                onRefresh={() => {
+                    // Honor the success refresh contract: refresh this department's work-unit pill counts.
+                    // The command surface already dispatches the canonical opportunity-queue event for any
+                    // mounted work-unit view; router.refresh() catches this page's server-rendered counts.
+                    router.refresh();
+                }}
                 onOpenCreatedRecord={(opportunityId) => {
                     // Canonical: open the new lead in the Work Unit Focus Panel — not the legacy drawer.
                     router.push(

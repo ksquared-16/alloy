@@ -56,7 +56,16 @@ export async function executeCreateLeadAction(
     ctx: ExecuteAdminActionCtx,
     input: ExecuteCreateLeadInput
 ): Promise<
-    | { ok: true; opportunity_id: string; person_id: string; customer_id: string }
+    | {
+          ok: true;
+          opportunity_id: string;
+          person_id: string;
+          customer_id: string;
+          /** Work unit the lead was assigned to (lifecycle binding / context). Drives post-create queue/count refresh + focus-panel routing. */
+          work_unit_id: string | null;
+          /** Case status written to the opportunity (e.g. `new_inquiry`). Used to prove New Leads membership. */
+          status_key: string;
+      }
     | EntryLifecycleActionError
 > {
     const firstName = trim(input.merged.first_name);
@@ -267,7 +276,14 @@ export async function executeCreateLeadAction(
         console.error("[executeCreateLeadAction] emitStatusChangedEvent", e);
     }
 
-    return { ok: true, opportunity_id: opportunityId, person_id: personId, customer_id: customerId };
+    return {
+        ok: true,
+        opportunity_id: opportunityId,
+        person_id: personId,
+        customer_id: customerId,
+        work_unit_id: workUnitId,
+        status_key: statusKeyForLead,
+    };
 }
 
 export async function assertMoveToQualificationAllowed(

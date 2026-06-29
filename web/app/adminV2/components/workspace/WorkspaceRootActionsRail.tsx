@@ -138,6 +138,12 @@ export function WorkspaceRootActionsRail({ defaultDepartmentId = null }: Props) 
                     workUnitId={null}
                     surface="workspace"
                     onClose={() => setCreateLeadOpen(false)}
+                    onRefresh={() => {
+                        // Honor the success refresh contract from the global rail. The command surface
+                        // dispatches the canonical opportunity-queue event for any mounted work-unit view;
+                        // router.refresh() catches any server-rendered workspace counts here.
+                        router.refresh();
+                    }}
                     onOpenCreatedRecord={(opportunityId) => {
                         // Canonical: open the new lead in the operational workspace, not the legacy drawer.
                         // No current work unit on the root rail → safe fallback to the workspace home.

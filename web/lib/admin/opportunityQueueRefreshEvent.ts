@@ -18,6 +18,9 @@ export type OpportunityQueueUpdatedDetail = {
 
 /** Mutations that can change lane membership, sort order, or row labels/counts. */
 const QUEUE_MEMBERSHIP_ACTION_KEYS = new Set([
+    // Creating a lead adds a brand-new row to the New Leads lane — the work-unit listener must
+    // refetch rows + counts (the new opportunity is never already in the visible list).
+    "create_lead",
     "inline_save",
     "patch_opportunity_quote",
     "schedule_tour",

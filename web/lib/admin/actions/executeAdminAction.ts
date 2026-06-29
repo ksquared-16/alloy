@@ -336,6 +336,10 @@ export async function executeAdminAction(
                 opportunity_id: created.opportunity_id,
                 person_id: created.person_id,
                 customer_id: created.customer_id,
+                // Surface the lead's assigned work unit + written status so the client success contract
+                // can invalidate the right work-unit queue/counts and prove New Leads membership.
+                work_unit_id: created.work_unit_id,
+                status_key: created.status_key,
             }
         );
     }

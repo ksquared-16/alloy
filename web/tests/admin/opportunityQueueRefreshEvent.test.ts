@@ -27,6 +27,20 @@ describe("opportunityQueueRefreshEvent", () => {
         ).toBe(true);
     });
 
+    it("treats create_lead as a queue-membership mutation", () => {
+        // A new lead changes New Leads lane membership — listeners must refetch, not no-op.
+        expect(isQueueMembershipMutationActionKey("create_lead")).toBe(true);
+    });
+
+    it("refetches lane rows AND summaries for a newly created lead not yet in the visible list", () => {
+        const detail = { id: "opp-new", action_key: "create_lead" };
+        const visibleOpportunityIds = ["opp-1", "opp-2"]; // new lead is off-screen
+        // Row refetch is required so the new lead appears in the lane (not just the count).
+        expect(shouldRefetchWorkUnitQueueRowsForEvent({ detail, visibleOpportunityIds })).toBe(true);
+        // Counts/pills must refetch too.
+        expect(shouldRefreshQueueSummariesForEvent({ detail, visibleOpportunityIds })).toBe(true);
+    });
+
     it("refetches rows when updated id is visible and action is membership (inline_save)", () => {
         expect(
             shouldRefetchWorkUnitQueueRowsForEvent({

@@ -32,6 +32,8 @@ import {
     buildCreateLeadSuccess,
     type CreateLeadSuccess,
 } from "@/lib/platform/commands/createLead/createLeadSuccess";
+import { dispatchOpportunityQueueUpdated } from "@/lib/admin/opportunityQueueRefreshEvent";
+import { logCreateLeadSuccessDiagnostic } from "@/lib/platform/commands/createLead/createLeadSuccessDiagnostic";
 
 export type CreateLeadCommandSurfaceProps = {
     open: boolean;
@@ -91,6 +93,16 @@ export function CreateLeadCommandSurface(props: CreateLeadCommandSurfaceProps) {
                 if (!success.createdRecordId) {
                     throw new Error("Lead was created but no opportunity id was returned.");
                 }
+                // Canonical cross-surface queue/count refresh seam: every mounted work-unit listener
+                // refetches its lane rows + pill counts so the new lead appears in New Leads without a
+                // full reload. `create_lead` is registered as a queue-membership mutation so the row
+                // (not just the count) is pulled in. Works regardless of which surface initiated.
+                dispatchOpportunityQueueUpdated(success.createdRecordId, "create_lead");
+                logCreateLeadSuccessDiagnostic({
+                    createdRecordId: success.createdRecordId,
+                    statusKey: success.statusKey,
+                    workUnitId: success.workUnitId,
+                });
                 onRefresh?.(success);
                 return { opportunity_id: success.createdRecordId };
             }}

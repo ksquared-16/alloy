@@ -40,6 +40,17 @@ describe("Create Lead Command Surface wiring", () => {
         expect(src).toContain("CreateLeadModal");
     });
 
+    it("the host dispatches the canonical queue refresh on success (New Leads count/list catches up)", () => {
+        const src = read(WRAPPER);
+        expect(src).toContain("dispatchOpportunityQueueUpdated");
+        expect(src).toContain("create_lead");
+    });
+
+    it.each(ENTRY_POINTS)("entry point %s honors onRefresh (does not drop post-create refresh)", (relPath) => {
+        const src = read(relPath);
+        expect(src).toContain("onRefresh");
+    });
+
     it("the host has no forked mutation path (delegates execution, never fetches directly)", () => {
         const src = read(WRAPPER);
         expect(src).not.toMatch(/fetch\s*\(/);
