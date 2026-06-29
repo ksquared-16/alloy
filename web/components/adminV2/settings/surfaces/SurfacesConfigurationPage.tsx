@@ -9,6 +9,8 @@ import {
     ConfigurationShell,
 } from "@/components/adminV2/settings/configurationRuntime/ConfigurationModeLayout";
 import FocusPanelSummarySurfaceEditor from "@/components/adminV2/settings/surfaces/FocusPanelSummarySurfaceEditor";
+import OperationalIntelligenceSurfaceBuilder from "@/components/adminV2/settings/surfaces/OperationalIntelligenceSurfaceBuilder";
+import { SurfaceLibrary } from "@/components/platform/surfaceBuilder/SurfaceLibrary";
 import {
     useSurfacesConfigurationSettings,
     type SurfaceConfigSectionKey,
@@ -77,7 +79,11 @@ export default function SurfacesConfigurationPage() {
                         </div>
 
                         <div className="min-h-0 flex-1">
-                            <FocusPanelSummarySurfaceEditor />
+                            {selectedObject.editor === "operational-intelligence" ? (
+                                <OperationalIntelligenceSurfaceBuilder />
+                            ) : (
+                                <FocusPanelSummarySurfaceEditor />
+                            )}
                         </div>
                     </div>
                 </ConfigurationShell>
@@ -162,6 +168,10 @@ export default function SurfacesConfigurationPage() {
                                 </div>
                             </div>
                         </ConfigurationDetailCard>
+                    ) : !selectedObject ? (
+                        // Surface Library — the command center. Choosing a surface opens the
+                        // one platform SurfaceBuilder (a new surface type just appears here).
+                        <SurfaceLibrary onOpen={(id) => setSelectedId(id)} />
                     ) : (
                         <ConfigurationEmptyState
                             testId="surfaces-workspace-empty"

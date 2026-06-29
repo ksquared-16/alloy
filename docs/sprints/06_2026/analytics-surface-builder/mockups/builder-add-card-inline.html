@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Surface Builder — Add card (inline)</title>
+<link rel="stylesheet" href="../../analytics-operational-intelligence-platform/mockups/_shared.css" />
+<style>
+  .wrap { padding: 26px; background: var(--canvas); min-height: 760px; }
+  .hint { font-size: 12px; color: var(--forge-70); margin-bottom: 16px; }
+  .hint b { color: var(--midnight); }
+  .canvas-card { background: var(--white); border: 1px solid var(--line); border-radius: var(--r-lg); box-shadow: var(--shadow); overflow: hidden; max-width: 1120px; margin: 0 auto; }
+  .cc-bar { padding: 11px 18px; border-bottom: 1px solid var(--line-soft); font-size: 13px; font-weight: 650; display:flex; align-items:center; gap:10px; }
+  .cc-bar .z { font-size:11px;font-weight:600;color:var(--forge-70); }
+  .cc-body { padding: 18px 22px; }
+  .row-existing { display:grid; grid-template-columns:repeat(3,1fr); gap:14px; margin-bottom:6px; }
+  .ghost-card { border:1px solid var(--line-soft); border-radius:var(--r); padding:14px; opacity:.5; }
+  .ghost-card .gl { font-size:12px;font-weight:600;color:var(--forge-70);}
+  .ghost-card .gv { font-size:26px;font-weight:680;color:var(--midnight-46); margin-top:6px;}
+  /* the inline insertion popover */
+  .pop { border: 1px solid var(--pine-border); border-radius: var(--r-lg); background: var(--white); box-shadow: var(--shadow-lg); overflow: hidden; margin: 12px 0; }
+  .pop-h { padding: 11px 16px; background: var(--pine-soft); border-bottom: 1px solid var(--pine-border); display:flex; align-items:center; gap:9px; font-size:12.5px; font-weight:650; color:var(--pine-strong); }
+  .pop-h .x { margin-left:auto; color:var(--midnight-46); }
+  .pop-body { display:flex; }
+  .pop-left { flex:1; padding:14px 16px; border-right:1px solid var(--line); }
+  .pl-lbl { font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--forge-70); margin-bottom:8px; }
+  .types { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:16px; }
+  .ty { font-size:11.5px;font-weight:600;color:var(--midnight-70);border:1px solid var(--line);border-radius:var(--r-sm);padding:6px 10px; display:inline-flex; gap:5px; align-items:center;}
+  .ty.on { border-color:var(--pine);background:var(--pine-soft);color:var(--pine-strong); }
+  .csrch { width:100%;padding:8px 11px;border:1px solid var(--line);border-radius:var(--r-sm);font-size:12.5px;color:var(--midnight-46);background:var(--canvas);margin-bottom:10px;display:flex;gap:7px;align-items:center;}
+  .cg { font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--forge-70);margin:8px 2px 6px; }
+  .crow { display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:var(--r-sm);font-size:12.5px; }
+  .crow.on { background:var(--pine-soft); box-shadow:inset 0 0 0 1px var(--pine-border); }
+  .crow .cmi { width:24px;height:24px;border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:12px;flex-shrink:0; }
+  .crow .cmn { font-weight:650; }
+  .crow .cmq { font-size:10.5px;color:var(--forge-70); }
+  .crow .cmc { margin-left:auto;font-size:9px;font-weight:700;padding:2px 6px;border-radius:999px; }
+  .pop-right { width:280px; padding:14px 16px; background:var(--canvas); }
+  .pop-foot { padding:11px 16px; border-top:1px solid var(--line); display:flex; align-items:center; gap:9px; }
+</style>
+</head>
+<body>
+<div class="frame" style="min-height:800px">
+  <div class="label"><span class="dot"></span> Mockup · Add card — inline <span>— no wizard; choose a card + content right on the canvas</span></div>
+  <div class="wrap">
+    <div class="hint">Click <b>＋ Add card</b> on the canvas and an inline panel opens in place — pick a <b>card type</b> and its <b>content</b>, see it live, insert. Same “+ line” insertion as the Focus Panel builder.</div>
+
+    <div class="canvas-card">
+      <div class="cc-bar">Operational Pulse <span class="z">· inserting after “Lead demand”</span></div>
+      <div class="cc-body">
+        <div class="row-existing">
+          <div class="ghost-card"><div class="gl">Needs attention</div><div class="gv">14</div></div>
+          <div class="ghost-card"><div class="gl">Tour conversion</div><div class="gv">68%</div></div>
+          <div class="ghost-card"><div class="gl">Lead demand</div><div class="gv">42</div></div>
+        </div>
+
+        <div class="pop">
+          <div class="pop-h"><span>＋ Add a card to Operational Pulse</span><span class="x">✕</span></div>
+          <div class="pop-body">
+            <div class="pop-left">
+              <div class="pl-lbl">Card type</div>
+              <div class="types">
+                <span class="ty on">▦ KPI</span><span class="ty">📈 Trend</span><span class="ty">◔ Gauge</span><span class="ty">⇄ Comparison</span><span class="ty">▥ Breakdown</span><span class="ty">⊟ Chart</span><span class="ty">≣ Table</span><span class="ty">✓ Health</span><span class="ty">✦ Insight</span><span class="ty">⚑ Affected work</span>
+              </div>
+              <div class="pl-lbl">Content</div>
+              <div class="csrch">🔍 Search — “revenue”, “attendance”, “ratio”…</div>
+              <div class="cg">Operations</div>
+              <div class="crow on"><span class="cmi" style="background:var(--warn-bg);color:var(--warn)">!</span><span><span class="cmn">Needs attention</span><br><span class="cmq">Opportunities needing attention now</span></span><span class="cmc" style="background:var(--good-bg);color:var(--good)">Live</span></div>
+              <div class="crow"><span class="cmi" style="background:var(--crit-bg);color:var(--crit)">⏱</span><span><span class="cmn">Overdue work</span><br><span class="cmq">Open work past its due date</span></span><span class="cmc" style="background:var(--good-bg);color:var(--good)">Live</span></div>
+              <div class="cg">Financial · advanced</div>
+              <div class="crow" style="opacity:.7"><span class="cmi" style="background:var(--fin-bg);color:var(--fin)">$</span><span><span class="cmn">AR aging</span><br><span class="cmq">Needs a calculation — set up in Platform</span></span><span class="cmc" style="background:rgba(89,103,139,.12);color:var(--forge)">Set up</span></div>
+            </div>
+            <div class="pop-right">
+              <div class="pl-lbl">Live preview</div>
+              <div class="mcard t-warn" style="box-shadow:var(--shadow)">
+                <div class="mc-head"><span class="mc-label">Needs attention</span><span class="tone warn">Watch</span></div>
+                <div class="mc-value">14</div>
+                <div class="mc-meta">Live OIP · point-in-time</div>
+                <div class="mc-foot"><span class="drill"><span class="arr">↳</span> Attention queue</span></div>
+              </div>
+              <div class="note" style="margin-top:12px">Content maps to <b style="color:var(--midnight)">Operational Calculations</b> under the hood. You never see metric definitions.</div>
+            </div>
+          </div>
+          <div class="pop-foot"><span class="cmq" style="font-size:11.5px;color:var(--forge-70)">KPI · Needs attention</span><span style="margin-left:auto" class="btn btn-ghost btn-sm">Cancel</span><span class="btn btn-pine btn-sm">Insert card</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>
+</content>

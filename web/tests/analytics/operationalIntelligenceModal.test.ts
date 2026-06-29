@@ -90,8 +90,8 @@ describe("Surfaces runtime link opens the modal, not the dev mock", () => {
         expect(oi?.previewHref).toBe("/dev/analytics-surface-mocks");
     });
 
-    it("exposes a real Configure action pointing at the metric placement builder", () => {
-        expect(oi?.configureHref).toBe("/admin/settings/analytics?tab=placements");
-        expect(oi?.configureHref).not.toContain("/dev/");
+    it("Configure opens the platform SurfaceBuilder inline (not a standalone config page)", () => {
+        expect(oi?.editor).toBe("operational-intelligence");
+        expect(oi?.configureHref).toBeUndefined();
     });
 });

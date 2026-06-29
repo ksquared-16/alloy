@@ -1,0 +1,215 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Surface Builder — Operational Intelligence (canvas)</title>
+<link rel="stylesheet" href="../../analytics-operational-intelligence-platform/mockups/_shared.css" />
+<style>
+  /* One builder. Reuses the Focus Panel builder pattern: left tree + component library,
+     centered live canvas with inline insertion, right contextual Inspector. Same Alloy tokens. */
+  .wb { display: flex; flex: 1; min-height: 0; }
+  /* left: surface tree + component library */
+  .tree { width: 236px; background: var(--white); border-right: 1px solid var(--line); display: flex; flex-direction: column; flex-shrink: 0; }
+  .tree-h { padding: 12px 14px 8px; font-size: 10.5px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--forge-70); }
+  .tn { display: flex; align-items: center; gap: 8px; padding: 7px 14px; font-size: 12.5px; color: var(--midnight-70); font-weight: 550; }
+  .tn .tw { color: var(--forge-70); opacity: .5; font-size: 11px; }
+  .tn.sec { font-weight: 650; color: var(--midnight); }
+  .tn.sec.on { color: var(--pine-strong); }
+  .tn.card { padding-left: 30px; font-weight: 500; font-size: 12px; }
+  .tn.card.on { background: var(--pine-soft); color: var(--pine-strong); font-weight: 650; box-shadow: inset 2px 0 0 var(--pine); }
+  .tn .gr { margin-left: auto; color: var(--forge-70); opacity: .4; cursor: grab; }
+  .tn .add { margin-left: auto; color: var(--pine-strong); font-weight: 700; }
+  .lib { margin-top: auto; border-top: 1px solid var(--line); padding: 12px 12px 14px; }
+  .lib-h { font-size: 10.5px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--forge-70); margin-bottom: 9px; }
+  .lib-grid { display: flex; flex-wrap: wrap; gap: 6px; }
+  .comp { font-size: 11px; font-weight: 600; color: var(--midnight-70); border: 1px solid var(--line); border-radius: var(--r-sm); padding: 5px 9px; background: var(--white); display: inline-flex; align-items: center; gap: 5px; cursor: grab; }
+  .comp .ci { opacity: .6; }
+  .lib-note { font-size: 10.5px; color: var(--forge-70); margin-top: 9px; line-height: 1.4; }
+  /* center canvas */
+  .canvas-wrap { flex: 1; display: flex; flex-direction: column; min-width: 0; background: var(--canvas); }
+  .cbar { display: flex; align-items: center; gap: 10px; padding: 11px 18px; background: var(--white); border-bottom: 1px solid var(--line-soft); }
+  .cbar .ct { font-size: 14px; font-weight: 650; }
+  .cbar .cz { font-size: 11.5px; color: var(--forge-70); }
+  .canvas { flex: 1; overflow: auto; padding: 18px 22px; }
+  .ins-line { display: flex; align-items: center; justify-content: center; margin: 4px 0; }
+  .ins-line .pill { font-size: 11px; font-weight: 600; color: var(--pine-strong); border: 1px dashed var(--pine-border); background: var(--pine-soft); border-radius: 999px; padding: 3px 12px; display:inline-flex; gap:5px; align-items:center;}
+  .sec-band { display: flex; align-items: center; gap: 10px; margin: 6px 0 12px; }
+  .sec-band h3 { font-size: 15px; font-weight: 650; }
+  .sec-band .sb-tag { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .03em; color: var(--forge-70); background: rgba(89,103,139,.1); padding: 1px 8px; border-radius: 999px; }
+  .ecard { position: relative; }
+  .ecard.sel { outline: 2px solid var(--pine); outline-offset: 2px; }
+  .ecard .hb { position:absolute; top:7px; right:7px; display:flex; gap:4px; }
+  .ecard .hb .b { width:22px;height:22px;border-radius:6px;background:var(--white);border:1px solid var(--line);display:flex;align-items:center;justify-content:center;font-size:11px;color:var(--midnight-46);box-shadow:var(--shadow-sm);}
+  .tag-mini { font-size: 10px; font-weight: 700; color: var(--forge-70); background: rgba(89,103,139,0.10); padding: 1px 7px; border-radius: 999px; text-transform: uppercase; letter-spacing: 0.03em; }
+  /* right inspector */
+  .insp { width: 300px; background: var(--white); border-left: 1px solid var(--line); display: flex; flex-direction: column; flex-shrink: 0; }
+  .insp-h { padding: 13px 16px; border-bottom: 1px solid var(--line-soft); display: flex; align-items: center; gap: 9px; }
+  .insp-h .it { font-size: 13.5px; font-weight: 650; }
+  .insp-h .ix { margin-left: auto; color: var(--midnight-46); }
+  .itabs { display: flex; gap: 2px; padding: 8px 12px 0; border-bottom: 1px solid var(--line-soft); }
+  .itab { font-size: 12px; font-weight: 600; color: var(--midnight-46); padding: 7px 10px; border-bottom: 2px solid transparent; }
+  .itab.on { color: var(--pine-strong); border-bottom-color: var(--pine); }
+  .insp-body { flex: 1; overflow: auto; padding: 14px 16px; }
+  .ig { margin-bottom: 15px; }
+  .ig > label { display:block; font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--forge-70); margin-bottom: 6px; }
+  .ii { width: 100%; padding: 8px 11px; border: 1px solid var(--line); border-radius: var(--r-sm); font-size: 12.5px; background: var(--white); color: var(--midnight); }
+  .ii.row { display:flex; align-items:center; }
+  .ii.muted { color: var(--midnight-46); }
+  .content-pick { display:flex; align-items:center; gap:9px; border:1px solid var(--pine-border); background:var(--pine-soft); border-radius:var(--r-sm); padding:9px 11px; }
+  .content-pick .cm { width:26px;height:26px;border-radius:7px;background:var(--good-bg);color:var(--good);display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0;}
+  .content-pick .cn { font-size:12.5px; font-weight:650; }
+  .content-pick .cq { font-size:10.5px; color:var(--forge-70); }
+  .content-pick .chg { margin-left:auto; font-size:11px; font-weight:650; color:var(--pine-strong); }
+  .rsel { display:flex; flex-wrap:wrap; gap:6px; }
+  .rc { font-size:11.5px; font-weight:600; padding:6px 10px; border:1px solid var(--line); border-radius:var(--r-sm); color:var(--midnight-70); }
+  .rc.on { border-color:var(--pine); background:var(--pine-soft); color:var(--pine-strong); }
+  .thr2 { display:grid; grid-template-columns:1fr 1fr 1fr; gap:7px; }
+  .thr2 .t { border:1px solid var(--line); border-radius:var(--r-sm); padding:7px 8px; text-align:center; }
+  .thr2 .t .l { font-size:9.5px; font-weight:700; text-transform:uppercase; letter-spacing:.02em; }
+  .thr2 .t .v { font-size:13px; font-weight:680; margin-top:2px; }
+  .promo { display:flex; flex-direction:column; gap:6px; }
+  .pr { display:flex; align-items:center; gap:9px; padding:8px 10px; border:1px solid var(--line); border-radius:var(--r-sm); font-size:12px; font-weight:600; color:var(--midnight-70); }
+  .pr .ck { width:16px;height:16px;border-radius:4px;border:1.5px solid var(--line);display:flex;align-items:center;justify-content:center;font-size:10px;color:var(--forge-70);flex-shrink:0;}
+  .pr.on { border-color:var(--pine-border); background:var(--pine-soft); color:var(--pine-strong); }
+  .pr.on .ck { background:var(--pine); border-color:var(--pine); color:white; }
+  .insp-foot { padding:11px 16px; border-top:1px solid var(--line-soft); display:flex; gap:8px; }
+</style>
+</head>
+<body>
+<div class="frame">
+  <div class="label"><span class="dot"></span> Mockup · Surface Builder <span>— one builder for every Surface · Operational Intelligence</span></div>
+  <div class="body">
+    <div class="bos">
+      <div class="logo"></div>
+      <div class="bos-i">▦</div><div class="bos-i">◷</div><div class="bos-i">✦</div><div class="bos-i on">⚙</div>
+    </div>
+
+    <!-- Settings → Surfaces -->
+    <div class="nav" style="width:200px">
+      <div class="nav-head"><div class="eyebrow">Settings</div><h1>Surfaces</h1></div>
+      <div class="nav-list">
+        <div class="nav-group">Build a surface</div>
+        <div class="nav-item"><span class="ni">▭</span> Focus panels</div>
+        <div class="nav-item"><span class="ni">≣</span> Queue rows</div>
+        <div class="nav-item"><span class="ni">⎚</span> Workspace header</div>
+        <div class="nav-item"><span class="ni">◳</span> Work unit header</div>
+        <div class="nav-item on"><span class="ni">◉</span> Operational Intelligence</div>
+        <div class="nav-item"><span class="ni">▤</span> Executive Performance</div>
+        <div class="nav-item"><span class="ni">◑</span> Enrollment Intelligence</div>
+        <div class="nav-item"><span class="ni">$</span> Financial Performance</div>
+        <div class="nav-item"><span class="ni">⊞</span> Reports</div>
+        <div class="nav-group">Platform · advanced</div>
+        <div class="nav-item"><span class="ni">∑</span> Operational Calculations</div>
+      </div>
+      <div class="nav-foot"><span>⌁</span> One builder · every surface</div>
+    </div>
+
+    <div class="surface">
+      <div class="surface-head" style="padding-bottom:12px">
+        <div class="titles">
+          <div class="crumbs">Surfaces <span class="sep">›</span> <span class="here">Operational Intelligence</span></div>
+          <h2 style="font-size:22px">Operational Intelligence</h2>
+          <div class="sub">Build it like any surface — sections and cards. Opens in Workspace → Analytics.</div>
+        </div>
+        <div class="head-tools">
+          <div class="seg"><span class="on">Build</span><span>Preview</span></div>
+          <div class="btn btn-ghost">Preview in Workspace</div>
+          <div class="btn btn-pine">Publish</div>
+        </div>
+      </div>
+
+      <div class="wb">
+        <!-- LEFT: surface tree + component library -->
+        <div class="tree">
+          <div class="tree-h">Surface</div>
+          <div class="tn sec"><span class="tw">▾</span> Executive Summary</div>
+          <div class="tn sec on"><span class="tw">▾</span> Operational Pulse <span class="add">＋</span></div>
+          <div class="tn card"><span>▦</span> Needs attention</div>
+          <div class="tn card on"><span>📈</span> Tour conversion <span class="gr">⠿</span></div>
+          <div class="tn card"><span>▦</span> Overdue work</div>
+          <div class="tn card"><span>∿</span> Lead demand</div>
+          <div class="tn card"><span>▥</span> Demand breakdown</div>
+          <div class="tn card"><span>≣</span> Top affected queues</div>
+          <div class="tn sec"><span class="tw">▸</span> Enrollment</div>
+          <div class="tn sec"><span class="tw">▸</span> Financial</div>
+          <div class="tn sec"><span class="tw">▸</span> Forecasting</div>
+          <div class="tn sec"><span class="tw">▸</span> Needs Attention</div>
+
+          <div class="lib">
+            <div class="lib-h">Available components</div>
+            <div class="lib-grid">
+              <span class="comp"><span class="ci">▦</span>KPI</span>
+              <span class="comp"><span class="ci">📈</span>Trend</span>
+              <span class="comp"><span class="ci">◔</span>Gauge</span>
+              <span class="comp"><span class="ci">⇄</span>Comparison</span>
+              <span class="comp"><span class="ci">▥</span>Breakdown</span>
+              <span class="comp"><span class="ci">⊟</span>Chart</span>
+              <span class="comp"><span class="ci">≣</span>Table</span>
+              <span class="comp"><span class="ci">✓</span>Health</span>
+              <span class="comp"><span class="ci">“”</span>Narrative</span>
+              <span class="comp"><span class="ci">✦</span>Insight</span>
+              <span class="comp"><span class="ci">→</span>Recommendation</span>
+              <span class="comp"><span class="ci">⤢</span>Forecast</span>
+              <span class="comp"><span class="ci">⚑</span>Affected work</span>
+              <span class="comp"><span class="ci">▷</span>Action</span>
+            </div>
+            <div class="lib-note">Drag onto the canvas, or click ＋ on a section.</div>
+          </div>
+        </div>
+
+        <!-- CENTER: live canvas -->
+        <div class="canvas-wrap">
+          <div class="cbar"><span class="ct">Operational Pulse</span><span class="sb-tag tag-mini">Section · 6 cards</span><span class="cz" style="margin-left:auto">Live preview · rolling 30 days · All sites</span></div>
+          <div class="canvas">
+            <div class="sec-band"><h3>Operational Pulse</h3><span class="sb-tag">Today's operating signal</span></div>
+            <div class="grid">
+              <div class="mcard ecard t-warn s3"><div class="hb"><span class="b">⠿</span><span class="b">⋯</span></div><div class="mc-head"><span class="mc-label">Needs attention</span><span class="tone warn">Watch</span></div><div class="mc-value">14</div><div class="mc-foot"><span class="drill"><span class="arr">↳</span> Attention queue</span></div></div>
+
+              <div class="mcard ecard sel t-good s3"><div class="hb"><span class="b">⠿</span><span class="b">⋯</span></div><div class="mc-head"><span class="mc-label">Tour conversion</span><span class="tone good">On track</span></div><div class="mc-value">68<span class="unit">%</span></div><svg class="spark" viewBox="0 0 200 40" preserveAspectRatio="none"><polyline points="0,32 40,28 80,20 120,22 160,12 200,7" fill="none" stroke="var(--good)" stroke-width="2"/></svg><div class="mc-foot"><span class="drill"><span class="arr">↳</span> Tour queue</span><span class="tag-mini" style="margin-left:auto">Trend</span></div></div>
+
+              <div class="mcard ecard t-crit s3"><div class="hb"><span class="b">⠿</span><span class="b">⋯</span></div><div class="mc-head"><span class="mc-label">Overdue work</span><span class="tone crit">Critical</span></div><div class="mc-value">23</div><div class="mc-foot"><span class="drill"><span class="arr">↳</span> Overdue queue</span></div></div>
+
+              <div class="mcard ecard t-good s3"><div class="hb"><span class="b">⠿</span><span class="b">⋯</span></div><div class="mc-head"><span class="mc-label">Lead demand</span><span class="tone good">Healthy</span></div><div class="mc-value">42</div><svg class="spark" viewBox="0 0 200 40" preserveAspectRatio="none"><polyline points="0,30 40,26 80,22 120,16 160,11 200,6" fill="none" stroke="var(--good)" stroke-width="2"/></svg></div>
+
+              <div class="mcard ecard s6" style="gap:12px"><div class="hb"><span class="b">⠿</span><span class="b">⋯</span></div><div class="mc-head"><span class="mc-q">Where is demand sitting?</span><span class="tag-mini">Breakdown</span></div><div class="mc-label" style="font-size:14px">Open opportunities by stage</div><div class="bars"><div class="bar-row"><span class="bl">Touring</span><span class="bar-track"><span class="bar-fill" style="width:74%"></span></span><span class="bv link">31</span></div><div class="bar-row"><span class="bl">New inquiry</span><span class="bar-track"><span class="bar-fill" style="width:55%"></span></span><span class="bv link">24</span></div><div class="bar-row"><span class="bl">Waitlist</span><span class="bar-track"><span class="bar-fill warn" style="width:40%"></span></span><span class="bv link">17</span></div></div></div>
+
+              <div class="mcard ecard s3" style="padding:0;overflow:hidden"><div class="hb"><span class="b">⠿</span><span class="b">⋯</span></div><div class="panel-h"><span class="pt" style="font-size:13px">Top affected queues</span></div><div class="rowlist"><div class="rl"><span class="rl-chip" style="background:var(--crit-bg);color:var(--crit)">31</span><span class="rl-main"><span class="rl-t">Touring</span><span class="rl-s">stalled &gt; 5 days</span></span><span style="color:var(--midnight-46)">›</span></div><div class="rl"><span class="rl-chip" style="background:var(--warn-bg);color:var(--warn)">17</span><span class="rl-main"><span class="rl-t">Waitlist</span><span class="rl-s">needs follow-up</span></span><span style="color:var(--midnight-46)">›</span></div></div></div>
+            </div>
+            <div class="ins-line"><span class="pill">＋ Add card</span></div>
+          </div>
+        </div>
+
+        <!-- RIGHT: contextual inspector -->
+        <div class="insp">
+          <div class="insp-h"><span class="it">Tour conversion</span><span class="tag-mini">Card</span><span class="ix">✕</span></div>
+          <div class="itabs"><span class="itab on">Card</span><span class="itab">Content</span><span class="itab">Renderer</span><span class="itab">Promote</span></div>
+          <div class="insp-body">
+            <div class="ig"><label>Content</label>
+              <div class="content-pick"><span class="cm">↗</span><span><span class="cn">Tour conversion</span><br><span class="cq">Share of scheduled tours completed</span></span><span class="chg">Change</span></div>
+            </div>
+            <div class="ig"><label>Renderer</label><div class="rsel"><span class="rc">KPI</span><span class="rc on">Trend</span><span class="rc">Gauge</span><span class="rc">Comparison</span></div></div>
+            <div class="ig"><label>Title</label><div class="ii">Tour conversion</div></div>
+            <div class="ig"><label>Question</label><div class="ii muted">What share of scheduled tours completed?</div></div>
+            <div class="ig"><label>Tone thresholds</label><div class="thr2"><div class="t"><div class="l" style="color:var(--good)">Healthy ≥</div><div class="v">60%</div></div><div class="t"><div class="l" style="color:var(--warn)">Watch ≥</div><div class="v">45%</div></div><div class="t"><div class="l" style="color:var(--crit)">Crit &lt;</div><div class="v">45%</div></div></div></div>
+            <div class="ig"><label>Comparison</label><div class="ii row"><span>Prior period</span><span style="margin-left:auto;color:var(--midnight-46)">▾</span></div></div>
+            <div class="ig"><label>Drill to</label><div class="ii row"><span>Tour queue</span><span style="margin-left:auto;color:var(--midnight-46)">▾</span></div></div>
+            <div class="ig" style="margin-bottom:6px"><label>Promote to</label>
+              <div class="promo">
+                <div class="pr on"><span class="ck">✓</span> Operational Intelligence <span style="margin-left:auto;font-weight:500;color:var(--forge-70);font-size:10.5px">this surface</span></div>
+                <div class="pr on"><span class="ck">✓</span> Workspace header</div>
+                <div class="pr"><span class="ck"></span> Work unit header</div>
+                <div class="pr"><span class="ck"></span> Executive Performance</div>
+              </div>
+            </div>
+            <div class="note">No “placements”, no “display styles”. The platform writes them for you.</div>
+          </div>
+          <div class="insp-foot"><span class="btn btn-ghost btn-sm">Remove card</span><span class="btn btn-pine btn-sm" style="margin-left:auto">Done</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>
+</content>
