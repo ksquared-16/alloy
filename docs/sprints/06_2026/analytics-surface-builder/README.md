@@ -38,18 +38,40 @@ Net: **one** authoring place (Surfaces), **one** advanced place (Operational Cal
 
 ---
 
-## 3. Implementation slices — start now, ship aggressively
+## 3. One builder for every surface — generalize, never fork
 
-Reuse `FocusPanelSummarySurfaceEditor` + `FocusPanelCardInspector` (the canonical builder + Inspector), the Card Language / `MetricVisualRenderer`, the placements API (writes immediately, no draft/publish split), the Operational Calculations registry (Content picker), and the shipped runtime. Build nothing new.
+**Architectural rule:** there is exactly **one** `SurfaceBuilder` in Alloy. We do **not** create `AnalyticsSurfaceBuilder` (that forks the platform). We **extract** the canonical builder out of the Focus Panel implementation into a generic `SurfaceBuilder` and migrate Focus Panel to consume it. Operational Intelligence is then the **second consumer** — zero new builder code. The builder never knows what kind of surface it is building; it receives a `SurfaceDefinition`.
 
-1. **S1 · Operational Intelligence as a Surface Type.** Give the OI dashboards entry an `editor`; render an `AnalyticsSurfaceBuilder` shell cloned from `FocusPanelSummarySurfaceEditor` (toolbar + centered live canvas + contextual Inspector + inline insertion). Surfaces "Configure" opens the builder.
-2. **S2 · Canvas from runtime.** Render the canvas with the existing config-driven path (`metric_placements` → `MetricPlacementRenderer`, `surface=operational_intelligence`) that the runtime modal already uses. Sections = `placement_zone` (or a `surface_key` per section).
-3. **S3 · Left tree + component library.** Surface tree (sections → cards) + "Available components" = the card-type vocabulary. Drag/click inserts.
-4. **S4 · Add card (inline).** "+ Add card" → card type → Content (Operational Calculations registry, grouped by business process) → write `metric_visualization` (if new) + `metric_placement` via existing POST APIs. Mirror the FP "+ line" catalog.
-5. **S5 · Card Inspector.** Clone `FocusPanelCardInspector` tabs → Card · Content · Renderer · Promote: Title (viz label), Renderer (`visualization_type`), thresholds (`threshold_config`), drill (drill registry), **Promote to** = create/remove placements across surfaces, via existing PATCH APIs.
-6. **S6 · Reorder / resize.** Drag → `sort_order` PATCH; span cycle. Mirror `moveSummaryCardToIndex` / `cycleSummaryCardSpan`.
-7. **S7 · Replace `/settings/analytics`.** Rename route → **Operational Calculations** (Platform, advanced); move the four builder tabs + snapshots there; delete "Targets"/"Visibility". Surfaces nav: every Dashboards & Analytics surface carries the builder editor.
-8. **S8 · Publish + refresh.** "Published" confirmation; fire `ANALYTICS_V2_SNAPSHOTS_UPDATED` so the runtime modal reloads.
+### The contract — `SurfaceDefinition`
 
-Each slice independently replaces a piece of the current UI. After S1–S8 the answer to *"how do I add a metric to Operational Intelligence, the Workspace Header, or a Work Unit Header?"* is one workflow: **build the Surface** — in the one builder that powers them all.
+The only surface-specific inputs. Everything else (tree, canvas, inline insertion, drag/reorder, Inspector chrome, publish) is shared.
+
+```ts
+type SurfaceDefinition = {
+  surfaceType: string;                 // "focus_panel" | "operational_intelligence" | "executive_performance" | "workspace_header" | "work_unit_header" | "report"
+  title: string;
+  sections: "none" | "fixed" | "authorable";   // Focus Panel = none (single canvas); OI = authorable
+  availableCardTypes: CardTypeDef[];           // renderer-backed: KPI, Trend, Gauge, Comparison, Breakdown, Chart, Table, Health, Narrative, Insight, Recommendation, Forecast, Affected work, Action, Command
+  availableContentSources: ContentSourceProvider;  // lists pickable Content — OI = Operational Calculations registry; Focus Panel = entity fields/relations
+  inspectorSchema: InspectorSchema;            // which Inspector tabs/fields this surface's cards expose
+  persistence: SurfacePersistenceAdapter;      // load / insert / move / configure / publish — Focus Panel = entity_layouts; OI = metric_placements (the ONLY surface-specific I/O)
+  canvasRenderer: (state) => ReactNode;        // renders the live surface — Focus Panel renderer; OI = MetricPlacementRenderer
+};
+```
+
+`<SurfaceBuilder definition={focusPanelSurfaceDefinition} />` and `<SurfaceBuilder definition={operationalIntelligenceSurfaceDefinition} />` are the **same component**. Focus Panel and OI differ only in their definition.
+
+### Extraction sequence (start now)
+
+1. **R1 · Extract `SurfaceBuilder`.** Lift the chrome out of `FocusPanelSummarySurfaceEditor` / `FocusPanelCardInspector` into generic `SurfaceBuilder` + `SurfaceInspector`, parameterized by `SurfaceDefinition` + adapters. No behaviour change. Gated by the existing Focus Panel builder tests (`focusPanelSummarySurfaceEditor.test.tsx`, `focusPanelEditMode.test.tsx`, `focusPanelCanvasFinalization.test`).
+2. **R2 · Focus Panel becomes a consumer.** Define `focusPanelSurfaceDefinition` (entity-layout persistence adapter, entity-field content source, focus-panel card types/inspector) and render it through `SurfaceBuilder`. **Pixel + behaviour parity** — the Focus Panel test suite stays green. This proves the generalization before Analytics touches it.
+3. **R3 · Operational Intelligence becomes the second consumer.** Define `operationalIntelligenceSurfaceDefinition`: `sections: "authorable"`; card types = the metric renderers; content = the Operational Calculations registry; persistence adapter = `metric_placements` (existing POST/PATCH APIs, no draft/publish split); canvas = `MetricPlacementRenderer` (`surface=operational_intelligence`). The OI builder appears with **no new builder code** — just the definition. Surfaces "Configure" opens it.
+4. **R4 · Card Inspector contract.** OI's inspector schema → Card · Content · Renderer · Promote: Title (viz label), Renderer (`visualization_type`), thresholds (`threshold_config`), drill (drill registry), **Promote to** = create/remove placements across surfaces.
+5. **R5 · The rest are just definitions.** Executive Performance, Enrollment Intelligence, Financial Performance, Workspace Header, Work Unit Header, Reports = additional `SurfaceDefinition`s. No new builder.
+6. **R6 · Replace `/settings/analytics`.** Rename route → **Operational Calculations** (Platform, advanced); move the calculation/rollup/snapshot tabs there; delete "Targets"/"Visibility". Surfaces nav: every Dashboards & Analytics surface carries the builder editor.
+7. **R7 · Publish + refresh.** "Published" confirmation; fire `ANALYTICS_V2_SNAPSHOTS_UPDATED` so the runtime modal reloads.
+
+After R1–R7 there is **one builder, one interaction model, one platform**. The answer to *"how do I add a metric to Operational Intelligence, the Workspace Header, or a Work Unit Header?"* is the same as for Focus Panels: **build the Surface** — in the one `SurfaceBuilder` that powers them all.
+
+> **Risk gate:** R1–R2 touch the live Focus Panel builder. They ship only when the full Focus Panel builder test suite is green at parity. No Analytics work lands until Focus Panel runs on the extracted `SurfaceBuilder`.
 </content>
