@@ -21,8 +21,13 @@ export function useOpportunityQueueLayoutRuntime(
     laneKey: string,
     lane: OpportunityQueueLaneContextInput,
     pinnedEntityLayoutId?: string | null,
+    options?: { active?: boolean },
 ): OpportunityQueueLayoutRuntimeState {
     const enabled = isLayoutRuntimeOpportunityQueueBodyEnabledClient();
+    // `active === false` means no row on this lane could render through the layout
+    // path (every row is owned by the canonical compressed row), so the layout doc
+    // fetch would be unused — skip it. Defaults to active for back-compat.
+    const active = options?.active ?? true;
     const [loading, setLoading] = useState(false);
     const [doc, setDoc] = useState<LayoutDoc | null>(null);
     const [layoutSource, setLayoutSource] = useState<string | null>(null);
@@ -36,7 +41,7 @@ export function useOpportunityQueueLayoutRuntime(
     }, []);
 
     useEffect(() => {
-        if (!enabled) {
+        if (!enabled || !active) {
             setDoc(null);
             setLayoutSource(null);
             setLayoutKey(null);
@@ -74,6 +79,7 @@ export function useOpportunityQueueLayoutRuntime(
             .finally(() => setLoading(false));
     }, [
         enabled,
+        active,
         laneKey,
         refreshToken,
         lane.drillWorkUnitKey,
