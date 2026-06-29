@@ -153,6 +153,22 @@ export function isInternalDrillHref(href: string | null | undefined): boolean {
     return typeof href === "string" && href.startsWith("/");
 }
 
+/** Modal-local filter state for the Operational Intelligence runtime surface. */
+export type OperationalIntelligenceQuery = {
+    siteId?: string | null;
+    window?: MetricTimeWindowKey;
+    compare?: boolean;
+};
+
+/** Build the query string for the OI runtime data API (`/api/admin/intelligence/operational`). */
+export function buildOperationalIntelligenceQuery(query: OperationalIntelligenceQuery): string {
+    const params = new URLSearchParams();
+    if (query.siteId) params.set("site_id", query.siteId);
+    if (query.window) params.set("window", query.window);
+    if (query.compare) params.set("compare", "1");
+    return params.toString();
+}
+
 /** Accept a URL-supplied site id only when it is in the accessible option set (else null = All sites). */
 export function sanitizeSiteId(requestedSiteId: string | null | undefined, options: SiteOption[]): string | null {
     if (!requestedSiteId) return null;

@@ -6,8 +6,11 @@ import { useRouter } from "next/navigation";
 import { useWorkspaceSiteFilter } from "@/contexts/WorkspaceSiteFilterContext";
 import {
     isInternalDrillHref,
+    buildOperationalIntelligenceQuery,
     type OperationalSurfaceModel,
 } from "@/lib/analytics/runtime/operationalSurfaceModel";
+import { ANALYTICS_WINDOW_OPTIONS } from "@/lib/analytics/runtime/metricWindow";
+import type { MetricTimeWindowKey } from "@/lib/metrics/types";
 import { OperationalMetricCard } from "@/components/adminV2/intelligence/OperationalMetricCard";
 import { AnalyticsSection, DiagnosticPanel, AffectedWorkPanel } from "@/app/dev/analytics-surface-mocks/slice2/primitives";
 import { BarChart } from "@/app/dev/analytics-surface-mocks/slice2/charts";
@@ -26,10 +29,13 @@ import type { ChartBar, AffectedWorkItem } from "@/app/dev/analytics-surface-moc
 export function OperationalIntelligencePanel() {
     const router = useRouter();
     const siteFilter = useWorkspaceSiteFilter();
-    const selectedSiteId = siteFilter?.selectedSiteId ?? null;
 
+    // Modal-local filters. Site defaults from the workspace context but is overridable
+    // here without mutating the global workspace site filter.
+    const [windowKey, setWindowKey] = useState<MetricTimeWindowKey>("rolling_30d");
+    const [siteId, setSiteId] = useState<string | null>(siteFilter?.selectedSiteId ?? null);
     const [compareOn, setCompareOn] = useState(false);
-    const scopeKey = `${selectedSiteId ?? ""}|${compareOn ? "1" : "0"}`;
+    const scopeKey = `${siteId ?? ""}|${windowKey}|${compareOn ? "1" : "0"}`;
 
     // All state lands in async callbacks (no synchronous setState in the effect body);
     // `loading` is derived by comparing the loaded scope to the current scope.
@@ -49,10 +55,8 @@ export function OperationalIntelligencePanel() {
 
     useEffect(() => {
         let cancelled = false;
-        const qs = new URLSearchParams();
-        if (selectedSiteId) qs.set("site_id", selectedSiteId);
-        if (compareOn) qs.set("compare", "1");
-        fetch(`/api/admin/intelligence/operational?${qs.toString()}`, { credentials: "include" })
+        const qs = buildOperationalIntelligenceQuery({ siteId, window: windowKey, compare: compareOn });
+        fetch(`/api/admin/intelligence/operational?${qs}`, { credentials: "include" })
             .then((res) => {
                 if (!res.ok) throw new Error(`HTTP ${res.status}`);
                 return res.json() as Promise<OperationalSurfaceModel>;
@@ -67,7 +71,7 @@ export function OperationalIntelligencePanel() {
         return () => {
             cancelled = true;
         };
-    }, [scopeKey, selectedSiteId, compareOn]);
+    }, [scopeKey, siteId, windowKey, compareOn]);
 
     if (loading && !model) {
         return (
@@ -110,25 +114,63 @@ export function OperationalIntelligencePanel() {
 
     return (
         <div className="space-y-5" data-analytics-surface="operational_intelligence">
+            <div
+                className="flex flex-wrap items-center gap-2 rounded-xl border border-alloy-stone/15 bg-white p-2.5"
+                data-operational-filter-bar="true"
+                aria-busy={loading}
+            >
+                <span className="text-[10px] font-semibold uppercase tracking-wide text-alloy-pine">Filters</span>
+                <label className="inline-flex items-center gap-1 rounded-lg border border-alloy-stone/20 bg-alloy-stone/[0.04] px-2 py-1 text-xs" data-filter-dimension="date_range">
+                    <span className="text-alloy-midnight/45">Window:</span>
+                    <select
+                        value={windowKey}
+                        onChange={(e) => setWindowKey(e.target.value as MetricTimeWindowKey)}
+                        className="bg-transparent font-semibold text-alloy-midnight focus:outline-none"
+                        data-operational-window-filter="true"
+                    >
+                        {ANALYTICS_WINDOW_OPTIONS.map((o) => (
+                            <option key={o.windowKey} value={o.windowKey}>
+                                {o.label}
+                            </option>
+                        ))}
+                    </select>
+                </label>
+                <label className="inline-flex items-center gap-1 rounded-lg border border-alloy-stone/20 bg-alloy-stone/[0.04] px-2 py-1 text-xs" data-filter-dimension="location">
+                    <span className="text-alloy-midnight/45">Site:</span>
+                    <select
+                        value={siteId ?? ""}
+                        onChange={(e) => setSiteId(e.target.value || null)}
+                        className="bg-transparent font-semibold text-alloy-midnight focus:outline-none"
+                        data-operational-site-filter="true"
+                    >
+                        <option value="">All sites</option>
+                        {model.siteOptions.map((s) => (
+                            <option key={s.id} value={s.id}>
+                                {s.label}
+                            </option>
+                        ))}
+                    </select>
+                </label>
+                <label className="inline-flex items-center gap-1 rounded-lg border border-alloy-stone/20 bg-alloy-stone/[0.04] px-2 py-1 text-xs" data-filter-dimension="comparison">
+                    <span className="text-alloy-midnight/45">Compare:</span>
+                    <select
+                        value={compareOn ? "prior" : "off"}
+                        onChange={(e) => setCompareOn(e.target.value === "prior")}
+                        className="bg-transparent font-semibold text-alloy-midnight focus:outline-none"
+                        data-operational-compare-toggle="true"
+                    >
+                        <option value="off">Off</option>
+                        <option value="prior">Prior period</option>
+                    </select>
+                </label>
+                {loading ? <span className="ml-auto text-[11px] text-alloy-midnight/45">Updating…</span> : null}
+            </div>
+
             <AnalyticsSection
                 eyebrow="Measure"
                 title="Operational metrics"
                 description="Resolved live from Operational Calculations (OIP). Each card drills into real work."
             >
-                <div className="mb-3 flex items-center justify-end">
-                    <label className="inline-flex items-center gap-1 rounded-lg border border-alloy-stone/20 bg-alloy-stone/[0.04] px-2 py-1 text-xs">
-                        <span className="text-alloy-midnight/45">Compare:</span>
-                        <select
-                            value={compareOn ? "prior" : "off"}
-                            onChange={(e) => setCompareOn(e.target.value === "prior")}
-                            className="bg-transparent font-semibold text-alloy-midnight focus:outline-none"
-                            data-operational-compare-toggle="true"
-                        >
-                            <option value="off">Off</option>
-                            <option value="prior">Prior period</option>
-                        </select>
-                    </label>
-                </div>
                 <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-5" data-metric-grid="operational">
                     {model.metrics.map((card) => (
                         <OperationalMetricCard key={card.key} card={card} />
