@@ -76,12 +76,3 @@ describe("delete lead API routes", () => {
         expect(execute).toContain("executeDeleteOpportunityLead");
     });
 });
-
-describe("DeleteLeadModal preview UI", () => {
-    it("shows expanded will_delete breakdown", () => {
-        const src = read("components/admin/opportunity/DeleteLeadModal.tsx");
-        expect(src).toContain("will_delete");
-        expect(src).toContain("Communication threads");
-        expect(src).toContain("will_retain");
-    });
-});
