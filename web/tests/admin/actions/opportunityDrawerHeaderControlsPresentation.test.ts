@@ -72,11 +72,11 @@ describe("opportunity drawer header controls presentation", () => {
         expect(controls).not.toContain("OpportunityDrawerHeaderActionsPanel");
     });
 
-    it("registry action routing remains in VM runtime command rail", () => {
+    it("registry Manage actions stay in Focus Panel header, not workspace command rail", () => {
         const runtime = read("components/admin/vmDrawer/OpportunityDrawerVmRuntime.tsx");
         const legacy = read("components/admin/AdminEntityDrawerLegacy.tsx");
         expect(runtime).toContain("displayVm.actions.header_menu");
-        expect(runtime).toContain("DrawerCommandRailActionsRegistrar");
+        expect(runtime).not.toContain("DrawerCommandRailActionsRegistrar");
         expect(legacy).toContain("handleResolvedOpportunityHeaderAction");
         expect(legacy).toContain("flattenOpportunityRecordHeaderActionsForMenu");
     });

@@ -70,7 +70,6 @@ import { scheduleAdminV2BackgroundWork } from "@/lib/workspace/adminV2DeferBackg
 import { opportunityDisplayLocationLabel } from "@/lib/opportunities/resolveOpportunityDisplayLocation";
 import { drawerSubjectContextDiagnosticAttrs } from "@/lib/workUnits/buildDrawerSubjectContextFromQueueRowContext";
 import { useBosOpportunityDrawerContextSeed } from "@/lib/adminV2/bos/useBosDrawerOperationalContextSeed";
-import { DrawerCommandRailActionsRegistrar } from "@/app/adminV2/components/workspace/DrawerCommandRailActionsRegistrar";
 
 const OPPORTUNITY_TAB_LABELS: Partial<Record<DrawerTabKey, string>> = {
     overview: "Overview",
@@ -584,30 +583,6 @@ export default function OpportunityDrawerVmRuntime() {
         registryActionFeedback,
     ]);
 
-    const drawerCommandRailRegistration = useMemo(() => {
-        if (!committedVisible || !displayVm || !drawer.id || !record) return null;
-        const actions = displayVm.actions.header_menu;
-        return {
-            actions,
-            actionCount: actions.length,
-            canMutate: statusCanMutate,
-            actionLoadingKey,
-            onActionSelect,
-            disabledReason:
-                actionLoadingKey ? "An action is running — wait for it to finish."
-                : !statusCanMutate ? "You don't have permission to run actions on this record."
-                :   null,
-        };
-    }, [
-        actionLoadingKey,
-        committedVisible,
-        displayVm,
-        drawer.id,
-        onActionSelect,
-        record,
-        statusCanMutate,
-    ]);
-
     const tabs = useMemo((): DrawerTabKey[] => {
         const fromVm = displayVm?.layout.tabs;
         if (fromVm && fromVm.length > 0) return fromVm;
@@ -1005,7 +980,6 @@ export default function OpportunityDrawerVmRuntime() {
                     {registryModals}
                 </VmDrawerActionModalsPortal>
                 : null}
-            <DrawerCommandRailActionsRegistrar registration={drawerCommandRailRegistration} />
         </>
     );
 }

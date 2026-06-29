@@ -136,6 +136,24 @@ canonical set without breaking (`normalizeLifecyclePlacementId` /
 - Focus Panel (`record_header`/`primary`) → **Focus Panel Manage**
 - Work Unit Queue row (`queue_row`/`row_inline`) → **dropped** (no longer surfaced; renders safely)
 
+### Work Unit rail vs Focus Panel Manage (runtime)
+
+These are **separate placement surfaces** with separate resolution — they must never share the
+same action list in the operator UI:
+
+| Surface | Placement config | Command rail / menu | Subject context |
+|---|---|---|---|
+| **Work Unit right rail** | `work_unit` / `primary` | Persistent workspace command rail (`placementSurfaces: ["work_unit"]`) | **No inherited subject** — `create_lead` is always available when placed; record-required commands may receive the selected queue row as a **suggested** subject at execution time only |
+| **Focus Panel Manage** | `record_header` / `overflow` | Focus Panel header Manage menu (`header_menu`) | **Current record required** — resolved from `record_header` with `entityId` |
+
+The persistent command rail (`WorkspaceCommandRailShell`) **must not** replace page-registered
+Work Unit / Department / Workspace actions with drawer Focus Panel actions when a record is
+open. `shouldDrawerReplaceCommandRailActions` blocks that override; Focus Panel Manage stays
+in the drawer header (`OpportunityFocusPanelHeader` / `RecordDrawerManageMenu`).
+
+Suggested/selected queue row affects **execution context** (e.g. Schedule Tour default target),
+not **which actions appear** in the Work Unit rail.
+
 ## Placement behavior
 
 | Surface | Generic actions | Target-specific (e.g. make_primary_contact) |

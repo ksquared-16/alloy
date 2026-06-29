@@ -10,10 +10,20 @@ import {
     type ReactNode,
 } from "react";
 
+import type { PageCommandRailPlacementSurface } from "@/lib/workspace/workUnitRailActionResolution";
+
 export type WorkspaceCommandRailRegistration = {
     actions: ReactNode | null;
     telemetry: ReactNode | null;
+    /**
+     * Page-owned placement surface (work_unit / department / company). When set, the persistent
+     * command rail resolves from workspace placement only — drawer Focus Panel actions must not
+     * replace the registered rail body.
+     */
+    actionsPlacementSurface?: PageCommandRailPlacementSurface | null;
 };
+
+export type { PageCommandRailPlacementSurface };
 
 type WorkspaceCommandRailRegistryContextValue = {
     register: (next: WorkspaceCommandRailRegistration) => void;
@@ -25,6 +35,7 @@ type WorkspaceCommandRailRegistryContextValue = {
 const EMPTY_REGISTRATION: WorkspaceCommandRailRegistration = {
     actions: null,
     telemetry: null,
+    actionsPlacementSurface: null,
 };
 
 const WorkspaceCommandRailRegistryContext =
@@ -53,7 +64,8 @@ export function WorkspaceCommandRailRegistryProvider({ children }: { children: R
         (next: WorkspaceCommandRailRegistration) => {
             if (
                 registrationRef.current.actions === next.actions &&
-                registrationRef.current.telemetry === next.telemetry
+                registrationRef.current.telemetry === next.telemetry &&
+                registrationRef.current.actionsPlacementSurface === next.actionsPlacementSurface
             ) {
                 return;
             }

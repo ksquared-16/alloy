@@ -43,7 +43,6 @@ import { mergePersonLayoutRuntimeWidgetRecord } from "@/lib/layout/runtime/merge
 import { mergeChildLayoutRuntimeWidgetRecord } from "@/lib/layout/runtime/mergeChildLayoutRuntimeWidgetRecord";
 import { useDrawerLayoutRuntimeBody } from "@/lib/layout/runtime/useDrawerLayoutRuntimeBody";
 import { useBosPersonDrawerContextSeed } from "@/lib/adminV2/bos/useBosDrawerOperationalContextSeed";
-import { DrawerCommandRailActionsRegistrar } from "@/app/adminV2/components/workspace/DrawerCommandRailActionsRegistrar";
 
 const PERSON_TAB_LABELS: Partial<Record<DrawerTabKey, string>> = {
     overview: "Overview",
@@ -484,17 +483,6 @@ export default function PersonsDrawerVmRuntime() {
         childCompositionActive,
     ]);
 
-    const drawerCommandRailRegistration = useMemo(() => {
-        if (!drawerOpen || !committedVisible) return null;
-        return {
-            actions: [],
-            actionCount: 0,
-            canMutate: !!canMutate,
-            onActionSelect: () => undefined,
-            disabledReason: "Person drawer actions are not configured yet.",
-        };
-    }, [canMutate, committedVisible, drawerOpen]);
-
     return (
         <>
             {showRuntimeOpeningOverlay ?
@@ -560,7 +548,6 @@ export default function PersonsDrawerVmRuntime() {
                     :   null}
                 </div>
             </EntityDrawerOperatingShell>
-            <DrawerCommandRailActionsRegistrar registration={drawerCommandRailRegistration} />
         </>
     );
 }

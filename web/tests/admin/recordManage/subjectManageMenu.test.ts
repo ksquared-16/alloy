@@ -53,12 +53,12 @@ describe("opportunity Manage menu wiring", () => {
         expect(focusHeader).toContain("displayVm.actions.header_menu");
     });
 
-    it("uses registry actions for Manage and command rail from the same VM field", () => {
+    it("uses registry actions for Manage menu only — not the workspace command rail", () => {
         const runtime = read("components/admin/vmDrawer/OpportunityDrawerVmRuntime.tsx");
         expect(runtime).toContain("subjectManageActions");
         expect(runtime).toContain("displayVm?.actions.header_menu");
         expect(runtime).toContain("onSubjectManageActionSelect={onActionSelect}");
-        expect(runtime).toContain("DrawerCommandRailActionsRegistrar");
+        expect(runtime).not.toContain("DrawerCommandRailActionsRegistrar");
         expect(runtime).toContain("displayVm.actions.header_menu");
     });
 

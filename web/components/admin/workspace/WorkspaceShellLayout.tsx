@@ -60,7 +60,11 @@ export function WorkspaceShellLayout({
     >
       <div className="adminv2-ws-dept-v2-contain">
         {persistentCommandRail ?
-          <WorkspaceCommandRailRegistrar actions={railContent ?? null} telemetry={commandRailTelemetrySlot ?? null} />
+          <WorkspaceCommandRailRegistrar
+            actions={railContent ?? null}
+            telemetry={commandRailTelemetrySlot ?? null}
+            actionsPlacementSurface={surface}
+          />
         :   null}
         {containLead}
         <div
