@@ -8,6 +8,7 @@ import type { AdminViewerTimezoneValue } from "@/contexts/AdminViewerTimezoneCon
 import { loadAdminViewerTimezoneBootstrap } from "@/lib/admin/viewerTimezoneBootstrap";
 import { loadOperationalOrgTimezoneIana } from "@/lib/admin/loadOperationalOrgTimezoneServer";
 import { loadEntityLabelsMapForUser, type EntityLabelsBootstrapMap } from "@/lib/admin/entityLabelsServer";
+import { loadOperatorLifecycleLandingCardsServer } from "@/lib/admin/loadOperatorLifecycleLandingServer";
 
 export const dynamic = "force-dynamic";
 
@@ -70,13 +71,17 @@ export default async function AdminV2WorkspaceLayout({
         );
     }
 
-    const [orgName, viewerTimezone, operationalTimezoneIana, access, initialEntityLabels] = await Promise.all([
-        loadOrgDisplayName(orgId),
-        loadViewerTimezoneSafe(auth.user.id),
-        loadOperationalTimezoneSafe(orgId),
-        getAdminAccessContextCached(),
-        loadEntityLabelsMapForUser(auth.user.id).catch((): EntityLabelsBootstrapMap => ({})),
-    ]);
+    const [orgName, viewerTimezone, operationalTimezoneIana, access, initialEntityLabels, initialLifecycleCards] =
+        await Promise.all([
+            loadOrgDisplayName(orgId),
+            loadViewerTimezoneSafe(auth.user.id),
+            loadOperationalTimezoneSafe(orgId),
+            getAdminAccessContextCached(),
+            loadEntityLabelsMapForUser(auth.user.id).catch((): EntityLabelsBootstrapMap => ({})),
+            // First-paint seed for the /workspace landing (consumed only by the index page via
+            // WorkspaceFirstPaintSeedProvider). Runs in parallel with the existing bundle; graceful [].
+            loadOperatorLifecycleLandingCardsServer(),
+        ]);
 
     if (!access.ok) {
         redirect("/unauthorized");
@@ -106,6 +111,7 @@ export default async function AdminV2WorkspaceLayout({
             initialEntityLabels={initialEntityLabels}
             initialViewerTimezone={viewerTimezone}
             initialOperationalTimezoneIana={operationalTimezoneIana}
+            initialLifecycleCards={initialLifecycleCards}
         >
             {children}
         </AdminV2WorkspaceClientProviders>

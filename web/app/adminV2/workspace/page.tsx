@@ -86,6 +86,7 @@ import {
     writeWorkspaceLifecycleCardsCache,
 } from "@/lib/workspace/workspaceContinuityPrefetch";
 import { peekOperatorLifecycleLandingCards } from "@/lib/admin/loadOperatorLifecycleLandingClient";
+import { useWorkspaceFirstPaintLifecycleSeed } from "@/lib/adminV2/runtime/workspaceFirstPaintSeed";
 import { ResumeWhereYouLeftOffChip } from "@/components/admin/workspace/ResumeWhereYouLeftOffChip";
 import { useAlloyOsRuntimeMarkOnce } from "@/lib/perf/useAlloyOsRuntimeMark";
 
@@ -131,6 +132,10 @@ function buildWorkspaceQuickRollup(
  * Department fetches may still run for KPI background rollup; tiles are lifecycle catalog driven.
  */
 export default function AdminV2WorkspaceIndexPage() {
+    // Server-seeded first-paint cards (Operational Runtime Doctrine Laws 1/3/5): present → the
+    // surface reveals once with tiles already in place (no "Preparing…" gate, no grid skeleton);
+    // empty → identical to prior client-only behavior.
+    const initialLifecycleCards = useWorkspaceFirstPaintLifecycleSeed();
     const { orgName: orgNameFromContext, orgId, principalUserId, accessScopeFingerprint } = useWorkspaceOrg();
     const siteFilter = useWorkspaceSiteFilter();
     const selectedSiteId = siteFilter?.selectedSiteId ?? null;
@@ -156,12 +161,15 @@ export default function AdminV2WorkspaceIndexPage() {
     const [tilePipelineTrace, setTilePipelineTrace] = useState<WorkspaceTilePipelineTrace | null>(null);
     const [workspaceIdAudit, setWorkspaceIdAudit] = useState<LifecycleDepartmentIdAudit | null>(null);
     const [lifecycleCards, setLifecycleCards] = useState<OperatorLifecycleLandingCard[]>(() => {
-        if (typeof window === "undefined") return [];
-        return peekOperatorLifecycleLandingCards() ?? [];
+        const peeked = typeof window === "undefined" ? null : peekOperatorLifecycleLandingCards();
+        if (peeked?.length) return peeked;
+        // Server-seeded first paint (SSR + hydration): tiles present at reveal, no loading gate.
+        return initialLifecycleCards.length ? [...initialLifecycleCards] : [];
     });
     const [lifecycleCardsPending, setLifecycleCardsPending] = useState(() => {
-        if (typeof window === "undefined") return true;
-        return !peekOperatorLifecycleLandingCards()?.length;
+        const peeked = typeof window === "undefined" ? null : peekOperatorLifecycleLandingCards();
+        if (peeked?.length) return false;
+        return initialLifecycleCards.length === 0;
     });
     const lifecycleCacheHydratedRef = useRef(false);
 
