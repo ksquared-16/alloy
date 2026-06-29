@@ -35,7 +35,17 @@ import {
 } from "@/lib/admin/person/personDrawerHouseholdRoles";
 import { personDrawerHouseholdInitials } from "@/lib/admin/person/personDrawerHouseholdDisplay";
 import { resolveLeadDrawerHeaderContext } from "@/lib/layout/runtime/resolveLeadDrawerHeaderContext";
+import { formatPhoneUS } from "@/lib/adminFormatters";
 import type { OperationalContext } from "@/lib/adminV2/runtime/operationalContext/types";
+
+/** Display-format a phone for the card (e.g. "(541) 654-3217"); raw fallback if unparseable. */
+function formatPhoneForDisplay(raw: unknown): string | null {
+    if (raw == null) return null;
+    const text = String(raw).trim();
+    if (!text) return null;
+    const formatted = formatPhoneUS(text);
+    return formatted && formatted !== "—" ? formatted : text;
+}
 
 /** One contact row, normalized for card presentation (no person-level fetch). */
 export type HouseholdEvidenceContact = {
@@ -125,7 +135,7 @@ function toEvidenceContact(row: DrawerHouseholdContactRow): HouseholdEvidenceCon
         name: row.display_name,
         roleLabel: row.is_primary ? "Primary" : row.role_label,
         isPrimary: row.is_primary,
-        phone: row.phone,
+        phone: formatPhoneForDisplay(row.phone),
         email: row.email,
         initials: row.initials || initialsFor(row.display_name),
     };
@@ -191,10 +201,11 @@ function buildPrimaryContact(
         null;
     if (!name) return null;
 
-    const phone =
+    const phone = formatPhoneForDisplay(
         trimOrNull(record["person.primary_phone"]) ??
-        trimOrNull(familyPrimary?.phone) ??
-        trimOrNull(record["person.secondary_phone"]);
+            trimOrNull(familyPrimary?.phone) ??
+            trimOrNull(record["person.secondary_phone"]),
+    );
     const email =
         trimOrNull(record["person.primary_email"]) ??
         trimOrNull(familyPrimary?.email) ??
@@ -277,7 +288,7 @@ export function buildHouseholdCardEvidence(context: OperationalContext): Househo
         name: trimOrNull(row.display_name) ?? trimOrNull(row.first_name) ?? "Child",
     }));
 
-    const primaryPhone = primaryContact?.phone ?? trimOrNull(record["person.primary_phone"]);
+    const primaryPhone = primaryContact?.phone ?? formatPhoneForDisplay(record["person.primary_phone"]);
     const primaryEmail = primaryContact?.email ?? trimOrNull(record["person.primary_email"]);
 
     const preferredContactMethod =

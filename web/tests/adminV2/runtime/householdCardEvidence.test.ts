@@ -53,7 +53,7 @@ describe("buildHouseholdCardEvidence", () => {
 
         expect(ev.householdLabel).toBe("Johnson Household");
         expect(ev.primaryContact?.name).toBe("Sarah Johnson");
-        expect(ev.primaryPhone).toBe("555-123-4567");
+        expect(ev.primaryPhone).toBe("(555) 123-4567"); // display-formatted (QA #1)
         expect(ev.primaryEmail).toBe("sarah@example.com");
         expect(ev.childCount).toBe(2);
         expect(ev.answerLine).toContain("Sarah Johnson");

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import {
     householdContactDirty,
@@ -26,7 +26,13 @@ type Props = {
     initial: PersonContactValues;
     save: (personId: string, patch: PersonContactPatch) => Promise<FocusPanelSaveResult>;
     onClose: () => void;
+    /** Called after a confirmed save (brief "Saved" beat) so the card returns to the
+     *  focused view and flashes its own saved confirmation. Falls back to onClose. */
+    onSaved?: () => void;
 };
+
+/** How long the "Saved ✓" confirmation shows before returning to the card. */
+const SAVED_BEAT_MS = 900;
 
 const FIELD_ROWS: { key: keyof PersonContactValues; label: string; type: string }[] = [
     { key: "first_name", label: "First name", type: "text" },
@@ -35,18 +41,22 @@ const FIELD_ROWS: { key: keyof PersonContactValues; label: string; type: string 
     { key: "phone", label: "Phone", type: "tel" },
 ];
 
-export default function HouseholdContactEdit({ personId, initial, save, onClose }: Props) {
+export default function HouseholdContactEdit({ personId, initial, save, onClose, onSaved }: Props) {
     const [baseline, setBaseline] = useState<PersonContactValues>(initial);
     const [draft, setDraft] = useState<PersonContactValues>(initial);
-    const [saving, setSaving] = useState(false);
+    // idle → saving → saved (brief confirmation beat) → returns to the card view.
+    const [phase, setPhase] = useState<"idle" | "saving" | "saved">("idle");
     const [error, setError] = useState<string | null>(null);
-    const [saved, setSaved] = useState(false);
+    const savedTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+    useEffect(() => () => { if (savedTimer.current) clearTimeout(savedTimer.current); }, []);
 
     const dirty = householdContactDirty(draft, baseline);
+    const saving = phase === "saving";
 
     const setField = (key: keyof PersonContactValues, value: string) => {
         setDraft((prev) => ({ ...prev, [key]: value }));
-        setSaved(false);
+        setPhase("idle");
         setError(null);
     };
 
@@ -58,18 +68,20 @@ export default function HouseholdContactEdit({ personId, initial, save, onClose 
 
     const handleSave = async () => {
         if (!dirty || saving) return;
-        setSaving(true);
+        setPhase("saving");
         setError(null);
         const result = await save(personId, householdContactPatch(draft, baseline));
         if (result.ok) {
-            // Confirmed save: lock the new baseline so the form reads clean; the host
-            // re-merges truth and the card recomposes underneath.
+            // Confirmed save: lock the new baseline, show a brief "Saved ✓" beat, then
+            // hand back to the card (which recomposes from refreshed truth + flashes
+            // its own saved confirmation with the updated, formatted values).
             setBaseline(draft);
-            setSaved(true);
+            setPhase("saved");
+            savedTimer.current = setTimeout(() => (onSaved ?? onClose)(), SAVED_BEAT_MS);
         } else {
             setError(result.error || "Save failed");
+            setPhase("idle");
         }
-        setSaving(false);
     };
 
     return (
@@ -95,9 +107,9 @@ export default function HouseholdContactEdit({ personId, initial, save, onClose 
                 <p className="alloy-os-card-edit__error" data-household-edit-error="true" role="alert">
                     {error}
                 </p>
-            ) : saved && !dirty ? (
-                <p className="alloy-os-card-edit__saved" data-household-edit-saved="true">
-                    Saved
+            ) : phase === "saved" ? (
+                <p className="alloy-os-card-edit__saved" data-household-edit-saved="true" role="status">
+                    ✓ Saved
                 </p>
             ) : null}
 
@@ -115,10 +127,11 @@ export default function HouseholdContactEdit({ personId, initial, save, onClose 
                     type="button"
                     className="alloy-os-card-edit__btn alloy-os-card-edit__btn--primary"
                     data-testid="household-edit-save"
+                    data-save-phase={phase}
                     onClick={handleSave}
-                    disabled={!dirty || saving}
+                    disabled={!dirty || saving || phase === "saved"}
                 >
-                    {saving ? "Saving…" : "Save"}
+                    {phase === "saving" ? "Saving…" : phase === "saved" ? "✓ Saved" : "Save"}
                 </button>
             </div>
         </div>

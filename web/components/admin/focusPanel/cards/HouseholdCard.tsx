@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import clsx from "clsx";
 
 import UniversalCard from "@/components/admin/focusPanel/UniversalCard";
@@ -64,6 +64,16 @@ export default function HouseholdCard({ model, context, receded = false, coordin
     const [expanded, setExpanded] = useState(false);
     const [focusedGroup, setFocusedGroup] = useState<HouseholdEvidenceGroupKey | null>(null);
     const [editing, setEditing] = useState(false);
+    // Transient card-level confirmation after a successful contact save.
+    const [justSaved, setJustSaved] = useState(false);
+    const savedChipTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+    useEffect(() => () => { if (savedChipTimer.current) clearTimeout(savedChipTimer.current); }, []);
+    const handleContactSaved = () => {
+        setEditing(false);
+        setJustSaved(true);
+        if (savedChipTimer.current) clearTimeout(savedChipTimer.current);
+        savedChipTimer.current = setTimeout(() => setJustSaved(false), 2600);
+    };
 
     // Edit (a capability of Focus): seed the primary-contact draft from observed
     // truth. Editable only when the operator may mutate AND a primary person exists.
@@ -110,8 +120,9 @@ export default function HouseholdCard({ model, context, receded = false, coordin
 
     const density = !isEmpty && (expanded || focused) ? "expanded" : "compact";
     const hasWarning = Boolean(evidence.missingCriticalWarning);
-    const statusTone = hasWarning ? "at-risk" : "neutral";
-    const statusChip = hasWarning ? "Needs contact" : null;
+    // The transient saved chip takes precedence so the card visibly confirms the save.
+    const statusTone = justSaved ? "ready" : hasWarning ? "at-risk" : "neutral";
+    const statusChip = justSaved ? "✓ Saved" : hasWarning ? "Needs contact" : null;
 
     const footerAction =
         // Editing owns its own Cancel / Save controls — no card footer action.
@@ -174,6 +185,7 @@ export default function HouseholdCard({ model, context, receded = false, coordin
                 initial={contactSeed.values}
                 save={mutation!.savePersonContact}
                 onClose={() => setEditing(false)}
+                onSaved={handleContactSaved}
             />
         );
     } else if (focused) {

@@ -22,6 +22,11 @@ import {
     type FocusPanelDismissSignal,
     type FocusPanelFocusRequest,
 } from "@/lib/adminV2/runtime/focusPanel/focusPanelCoordinationModel";
+import {
+    mergePersonContactIntoFocusPanelTruth,
+    type FocusPanelMutation,
+} from "@/lib/adminV2/runtime/focusPanel/focusPanelMutation";
+import { seedHouseholdContactValues } from "@/lib/adminV2/runtime/focusPanel/household/householdContactEditState";
 import type { FocusPanelCardKey, FocusPanelCardModel } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardModel";
 import type {
     OperationalContext,
@@ -183,6 +188,35 @@ function OverviewComposition({ context }: { context: OperationalContext }) {
         dismissNonceRef.current += 1;
         setDismissed({ card, nonce: dismissNonceRef.current });
     }, []);
+
+    // Local (no-auth) save adapter: edits merge into the in-memory truth via the SAME
+    // production merge (`mergePersonContactIntoFocusPanelTruth`), so the card recomposes
+    // with the updated, formatted phone/email — demonstrating the live save loop.
+    const [liveTruth, setLiveTruth] = useState<Record<string, unknown>>(context.truth);
+    const liveContext = useMemo<OperationalContext>(
+        () => ({ ...context, truth: liveTruth, capabilities: { ...context.capabilities, canMutate: true } }),
+        [context, liveTruth],
+    );
+    const mutation = useMemo<FocusPanelMutation>(
+        () => ({
+            canEdit: true,
+            savePersonContact: async (_personId, patch) => {
+                setLiveTruth((prev) => {
+                    const cur = seedHouseholdContactValues(prev).values;
+                    const pick = (k: "first_name" | "last_name" | "email" | "phone") =>
+                        patch[k] !== undefined ? (patch[k] ?? "") : cur[k];
+                    return mergePersonContactIntoFocusPanelTruth(prev, {
+                        first_name: pick("first_name"),
+                        last_name: pick("last_name"),
+                        email: pick("email"),
+                        phone: pick("phone"),
+                    });
+                });
+                return { ok: true };
+            },
+        }),
+        [],
+    );
     const coordination = useMemo<FocusPanelCoordination>(
         () => ({ request, requestFocus, activeDepth, reportPerspective, dismissed, dismiss }),
         [request, requestFocus, activeDepth, reportPerspective, dismissed, dismiss],
@@ -207,13 +241,13 @@ function OverviewComposition({ context }: { context: OperationalContext }) {
             }}
             renderCell={(key) => {
                 if (key === "household")
-                    return <HouseholdCard model={compositionModel("household", "Household")} context={context} coordination={coordination} />;
+                    return <HouseholdCard model={compositionModel("household", "Household")} context={liveContext} coordination={coordination} mutation={mutation} />;
                 if (key === "children")
-                    return <ChildrenCard model={compositionModel("children", "Children")} context={context} coordination={coordination} />;
+                    return <ChildrenCard model={compositionModel("children", "Children")} context={liveContext} coordination={coordination} />;
                 if (key === "current_work")
-                    return <CurrentWorkCard model={compositionModel("current_work", "Current work")} context={context} coordination={coordination} />;
+                    return <CurrentWorkCard model={compositionModel("current_work", "Current work")} context={liveContext} coordination={coordination} />;
                 if (key === "readiness_kpi")
-                    return <ReadinessCard model={compositionModel("readiness_kpi", "Readiness")} context={context} coordination={coordination} />;
+                    return <ReadinessCard model={compositionModel("readiness_kpi", "Readiness")} context={liveContext} coordination={coordination} />;
                 return null;
             }}
         />
