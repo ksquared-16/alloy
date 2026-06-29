@@ -41,7 +41,7 @@ function SurfaceCard({ entry, onOpen }: { entry: SurfaceLibraryEntry; onOpen: (i
             </div>
 
             <div className="mt-3 flex items-center gap-2 border-t border-alloy-stone/10 pt-3">
-                <span className="text-[11px] text-alloy-midnight/40" title="Live timestamps arrive with the persistence adapter">
+                <span className="text-[11px] text-alloy-midnight/40" title="Per-surface timestamps aren't surfaced in the library yet">
                     Last updated · —
                 </span>
                 {openable ? (
