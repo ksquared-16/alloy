@@ -6,6 +6,13 @@
 **Code model (declarative):** `web/lib/adminV2/runtime/focusPanel/cardCompositionModel.ts`.
 **Engine (wired, V1):** `web/lib/adminV2/runtime/focusPanel/composition/composeFocusPanelSurface.ts` — see [`docs/sprints/06_2026/focus-panel-composition-engine-v1`](../../sprints/06_2026/focus-panel-composition-engine-v1/README.md).
 
+> **Composition V2 (June 2026) — published layout is the source of truth.** An
+> operator-authored **published layout** (rows → cells → fractional widths
+> `1/3·1/2·2/3·full` → stacked cards) now drives the runtime **exactly** (responsive
+> collapse only). The weight / preferred-partner / footprint model in this document is a
+> **recommendation default ONLY** — the smart starting point when no layout is published;
+> it never overrides one. Canonical state: [`focus-panel-composition-v2-and-editing.md`](./focus-panel-composition-v2-and-editing.md).
+
 > We have designed Operational Grammar, Card Language, Card Archetypes, Operational Context, Subject Change, and Perspective Change. The missing layer is **how cards compose into a Focus Panel**. This document defines that system. It introduces **no new interaction primitives and no new architecture** — it is the rulebook a future layout engine and the Experience Builder use to turn a set of cards into one operational experience.
 
 ---
