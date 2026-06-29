@@ -124,8 +124,9 @@ export default function SurfacesConfigurationPage() {
                                 <p className="config-typo-sublabel">
                                     {previewObject.subtitle ? `${previewObject.subtitle}. ` : ""}
                                     Analytics is a Dashboard Design Surface — composed from the Metric archetype and the
-                                    shared Renderer catalog. An in-place editor lands in a later slice; preview the
-                                    composition and visual language below.
+                                    shared Renderer catalog. Configuration lives here in Surfaces; the live runtime opens
+                                    in the Workspace → Operational Intelligence modal. An in-place editor lands in a later
+                                    slice; preview the composition and visual language below.
                                 </p>
                                 <a
                                     href={previewObject.previewHref}
@@ -143,7 +144,7 @@ export default function SurfacesConfigurationPage() {
                                         data-testid="surfaces-dashboard-live-link"
                                         className="ml-2 inline-flex items-center gap-1.5 rounded-lg border border-alloy-pine/30 px-3 py-1.5 text-xs font-semibold text-alloy-pine hover:bg-alloy-pine/[0.06]"
                                     >
-                                        Open live surface
+                                        Open in Workspace
                                         <span aria-hidden="true">→</span>
                                     </a>
                                 ) : null}

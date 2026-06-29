@@ -5,6 +5,11 @@
  * status breakdown (smallest-safe server resolver, reusing existing scope helpers),
  * and drill hrefs (via the Phase 1 DrillResolver). Produces a serializable model.
  *
+ * Product model: the RUNTIME surface is the Workspace → Operational Intelligence modal
+ * (rendered by OperationalIntelligencePanel, fed by /api/admin/intelligence/operational);
+ * CONFIGURATION lives in Surfaces. There is no standalone product page — routes are
+ * implementation details for data/modal state only.
+ *
  * No new metric engine, no OIP math duplication, no migrations.
  */
 

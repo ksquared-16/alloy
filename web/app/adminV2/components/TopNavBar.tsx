@@ -180,6 +180,21 @@ export default function TopNavBar() {
     };
   }, []);
 
+  // Deep-link bridge: `?workspaceModal=analytics` opens the Operational Intelligence
+  // modal (e.g. from Surfaces → "Open in Workspace"), then cleans the URL. The modal
+  // itself is client state — the param is an implementation detail, not a product URL.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    const requested = params.get("workspaceModal");
+    if (requested === "analytics") {
+      openWorkspaceModal("analytics");
+      params.delete("workspaceModal");
+      const qs = params.toString();
+      window.history.replaceState(null, "", `${window.location.pathname}${qs ? `?${qs}` : ""}`);
+    }
+  }, []);
+
   useEffect(() => {
     if (!isOperationalWorkV1Enabled()) return;
     const cancelDefer = runWhenAdminV2PrimarySurfaceReady(

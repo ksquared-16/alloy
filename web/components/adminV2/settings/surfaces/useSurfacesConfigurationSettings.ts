@@ -70,7 +70,10 @@ export const SURFACE_OBJECTS: Record<SurfaceConfigSectionKey, SurfaceConfigObjec
             title: "Operational Intelligence",
             subtitle: "Today: pulse, attention, bottlenecks",
             previewHref: ANALYTICS_SURFACE_PREVIEW_HREF,
-            liveHref: "/adminV2/intelligence/operational",
+            // Runtime lives in the Workspace → Operational Intelligence modal, not a
+            // standalone page. This deep-link opens that modal; the route param is an
+            // implementation detail for modal state (see TopNavBar).
+            liveHref: "/adminV2?workspaceModal=analytics",
         },
         {
             id: "enrollment-intelligence",
