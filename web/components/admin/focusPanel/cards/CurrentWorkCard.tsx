@@ -10,7 +10,7 @@ import {
     inferWorkItemOwner,
 } from "@/lib/adminV2/runtime/focusPanel/currentWork/buildCurrentWorkCardEvidence";
 import type { FocusPanelCardModel } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardModel";
-import type { FocusPanelCoordination } from "@/lib/adminV2/runtime/focusPanel/focusPanelCoordination";
+import type { FocusPanelCoordination } from "@/lib/adminV2/runtime/focusPanel/focusPanelCoordinationModel";
 import type {
     OperationalContext,
     OperationalWorkItem,

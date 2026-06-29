@@ -1,22 +1,19 @@
 /**
- * Focus Panel cross-card coordination.
+ * Focus Panel cross-card coordination — PURE MODEL (types, constants, helpers).
  *
- * NOT a new architecture or interaction primitive — this is orchestration of the
- * EXISTING local perspective state the Core Four already own. It lets a card that
- * only *references* a fact (e.g. Readiness "Program missing") hand off to the card
- * that *owns* that fact (Children → focused child), expressed as a Perspective
- * Change on the owner card. No fetch, no route, no Subject Change, no new context.
+ * No React. Safe to import from server / App Route code (validators, layout-doc
+ * model, entity-layout routes, Experience Builder model). The React hooks that
+ * orchestrate this state live in the client-only `useFocusPanelCoordination.ts`.
  *
- * Flow: a referencing card calls `requestFocus(ownerCard, focus)`. The Focus Panel
- * host records the request (with a monotonic nonce so repeats re-trigger), scrolls
- * the owner card into view, and the owner card observes the request and opens the
- * matching evidence/focused perspective.
+ * NOT a new architecture or interaction primitive — this is the shape of the
+ * EXISTING local perspective state the Core Four own. It lets a card that only
+ * *references* a fact (e.g. Readiness "Program missing") hand off to the card that
+ * *owns* that fact (Children → focused child), expressed as a Perspective Change on
+ * the owner card. No fetch, no route, no Subject Change, no new context.
  *
  * @see docs/platform/operator/card-language.md (Perspective Change)
- * @see docs/sprints/06_2026/core-four-product-review (Readiness pointer model)
+ * @see ./useFocusPanelCoordination.ts (client hooks)
  */
-
-import { useEffect, useRef } from "react";
 
 import type { FocusPanelCardKey } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardModel";
 
@@ -111,54 +108,4 @@ export function isFocusRequestFor(
     card: FocusPanelCardKey,
 ): boolean {
     return coordination?.request?.card === card;
-}
-
-/**
- * Report a card's current perspective depth to the host so it can apply the
- * in-panel depth layer (raise this card, recede the rest). Resets to `base` on
- * unmount. `reportPerspective` is captured via ref so the effect does not re-fire
- * when the coordination object identity changes (e.g. on every handoff request).
- */
-export function useReportPerspective(
-    coordination: FocusPanelCoordination | undefined,
-    card: FocusPanelCardKey,
-    level: FocusPanelPerspectiveLevel,
-): void {
-    const reportRef = useRef(coordination?.reportPerspective);
-    reportRef.current = coordination?.reportPerspective;
-
-    // Diagnostic cards never elevate: clamp so they only ever report base/evidence.
-    const effective = clampPerspectiveForCard(card, level);
-
-    useEffect(() => {
-        reportRef.current?.(card, effective);
-    }, [card, effective]);
-
-    useEffect(() => {
-        return () => {
-            reportRef.current?.(card, "base");
-        };
-    }, [card]);
-}
-
-/**
- * Run `reset` when the host dismisses this card's depth layer (backdrop click or
- * ESC). The card collapses back to its base Work surface. Keyed by card so only the
- * active focused/edit card responds. `reset` is captured via ref to keep the effect
- * gated solely on the dismissal nonce.
- */
-export function useDismissSignal(
-    coordination: FocusPanelCoordination | undefined,
-    card: FocusPanelCardKey,
-    reset: () => void,
-): void {
-    const resetRef = useRef(reset);
-    resetRef.current = reset;
-    const dismissed = coordination?.dismissed;
-    const nonce = dismissed?.card === card ? dismissed.nonce : null;
-
-    useEffect(() => {
-        if (nonce == null) return;
-        resetRef.current();
-    }, [nonce]);
 }

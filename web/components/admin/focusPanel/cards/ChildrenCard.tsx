@@ -9,12 +9,14 @@ import {
     type ChildrenEvidenceChild,
 } from "@/lib/adminV2/runtime/focusPanel/children/buildChildrenCardEvidence";
 import type { FocusPanelCardModel } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardModel";
+import type {
+    FocusPanelCoordination,
+    FocusPanelPerspectiveLevel,
+} from "@/lib/adminV2/runtime/focusPanel/focusPanelCoordinationModel";
 import {
-    useReportPerspective,
     useDismissSignal,
-    type FocusPanelCoordination,
-    type FocusPanelPerspectiveLevel,
-} from "@/lib/adminV2/runtime/focusPanel/focusPanelCoordination";
+    useReportPerspective,
+} from "@/lib/adminV2/runtime/focusPanel/useFocusPanelCoordination";
 import type { OperationalContext } from "@/lib/adminV2/runtime/operationalContext/types";
 import CardEditPlaceholder from "@/components/admin/focusPanel/cards/CardEditPlaceholder";
 

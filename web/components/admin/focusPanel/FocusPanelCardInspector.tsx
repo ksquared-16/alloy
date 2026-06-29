@@ -27,7 +27,7 @@ import {
     type CardPerspectiveExpansion,
     type CardPreferredRow,
 } from "@/lib/adminV2/runtime/focusPanel/cardCompositionModel";
-import { isOperationalTruthCard } from "@/lib/adminV2/runtime/focusPanel/focusPanelCoordination";
+import { isOperationalTruthCard } from "@/lib/adminV2/runtime/focusPanel/focusPanelCoordinationModel";
 import {
     conceptOptionsForCard,
     defaultCardExpansion,

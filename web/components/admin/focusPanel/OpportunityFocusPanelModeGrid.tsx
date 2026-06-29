@@ -25,7 +25,7 @@ import {
     type FocusPanelCoordination,
     type FocusPanelDismissSignal,
     type FocusPanelFocusRequest,
-} from "@/lib/adminV2/runtime/focusPanel/focusPanelCoordination";
+} from "@/lib/adminV2/runtime/focusPanel/focusPanelCoordinationModel";
 import { usePublishedFocusPanelSummaryDoc } from "@/lib/adminV2/runtime/focusPanel/usePublishedFocusPanelSummaryDoc";
 import { alloySectionDomAttrs } from "@/lib/perf/alloySectionMap";
 import type { FocusPanelMode } from "@/lib/adminV2/runtime/focusPanel/focusPanelMode";

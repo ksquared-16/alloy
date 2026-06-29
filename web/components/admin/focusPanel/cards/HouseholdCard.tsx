@@ -13,12 +13,14 @@ import {
 } from "@/lib/adminV2/runtime/focusPanel/household/buildHouseholdCardEvidence";
 import { seedHouseholdContactValues } from "@/lib/adminV2/runtime/focusPanel/household/householdContactEditState";
 import type { FocusPanelCardModel } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardModel";
+import type {
+    FocusPanelCoordination,
+    FocusPanelPerspectiveLevel,
+} from "@/lib/adminV2/runtime/focusPanel/focusPanelCoordinationModel";
 import {
-    useReportPerspective,
     useDismissSignal,
-    type FocusPanelCoordination,
-    type FocusPanelPerspectiveLevel,
-} from "@/lib/adminV2/runtime/focusPanel/focusPanelCoordination";
+    useReportPerspective,
+} from "@/lib/adminV2/runtime/focusPanel/useFocusPanelCoordination";
 import type { FocusPanelMutation } from "@/lib/adminV2/runtime/focusPanel/focusPanelMutation";
 import type { OperationalContext } from "@/lib/adminV2/runtime/operationalContext/types";
 

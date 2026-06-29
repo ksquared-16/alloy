@@ -33,7 +33,7 @@ import type {
     FocusPanelCardModel,
     FocusPanelProfileField,
 } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardModel";
-import { isOperationalTruthCard } from "@/lib/adminV2/runtime/focusPanel/focusPanelCoordination";
+import { isOperationalTruthCard } from "@/lib/adminV2/runtime/focusPanel/focusPanelCoordinationModel";
 import { resolveConceptValue } from "@/lib/adminV2/runtime/focusPanel/focusPanelConceptCatalog";
 
 /** Field renderers (presentation, not data). */

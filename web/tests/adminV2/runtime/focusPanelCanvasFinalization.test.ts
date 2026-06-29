@@ -3,7 +3,7 @@ import { describe, it, expect } from "vitest";
 import {
     clampPerspectiveForCard,
     isOperationalTruthCard,
-} from "@/lib/adminV2/runtime/focusPanel/focusPanelCoordination";
+} from "@/lib/adminV2/runtime/focusPanel/focusPanelCoordinationModel";
 import { inferWorkItemOwner } from "@/lib/adminV2/runtime/focusPanel/currentWork/buildCurrentWorkCardEvidence";
 import type { OperationalWorkItem } from "@/lib/adminV2/runtime/operationalContext/types";
 
