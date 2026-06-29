@@ -16,6 +16,7 @@ import {
 } from "@/lib/admin/operatorWorkUnitEntryWarm";
 import {
     peekWorkUnitSlugRouteCache,
+    putWorkUnitSlugRouteCache,
     type WorkUnitSlugRouteCacheEntry,
 } from "@/lib/admin/workUnitSlugRouteCache";
 import { tracePlatformDrawerVm } from "@/lib/perf/platformSurfacePerfTrace";
@@ -37,10 +38,20 @@ function readyStateFromCache(entry: WorkUnitSlugRouteCacheEntry): HostState {
     };
 }
 
-export default function WorkUnitSlugRouteHost({ workUnitSlug }: { workUnitSlug: string }) {
+export default function WorkUnitSlugRouteHost({
+    workUnitSlug,
+    initialRouteMeta = null,
+}: {
+    workUnitSlug: string;
+    /** Server-resolved route identity (Doctrine §1/5) — present → no cold shell; null → client resolves. */
+    initialRouteMeta?: WorkUnitSlugRouteCacheEntry | null;
+}) {
     const pathname = usePathname();
     const { openDrawer, drawer } = useAdminDrawer();
-    const initialCache = useMemo(() => peekWorkUnitSlugRouteCache(workUnitSlug), [workUnitSlug]);
+    const initialCache = useMemo(
+        () => peekWorkUnitSlugRouteCache(workUnitSlug) ?? initialRouteMeta,
+        [workUnitSlug, initialRouteMeta],
+    );
     const [state, setState] = useState<HostState>(() =>
         initialCache ? readyStateFromCache(initialCache) : { phase: "loading" },
     );
@@ -51,6 +62,13 @@ export default function WorkUnitSlugRouteHost({ workUnitSlug }: { workUnitSlug: 
         const canonical = normalizeOperatorPathname(pathname);
         return parseOperatorWorkUnitPath(canonical).recordId;
     }, [pathname]);
+
+    // Seed the module cache from the server-resolved identity BEFORE the fallback fetch effect
+    // runs (effects fire in declaration order), so the client never issues a by-slug fetch when
+    // the server already resolved the route — removing the cold-shell + slug-resolution waterfall.
+    useEffect(() => {
+        if (initialRouteMeta) putWorkUnitSlugRouteCache(workUnitSlug, initialRouteMeta);
+    }, [workUnitSlug, initialRouteMeta]);
 
     useEffect(() => {
         let cancelled = false;
