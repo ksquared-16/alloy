@@ -3136,6 +3136,26 @@ html[data-alloy-os-runtime-split="true"]
   width: 100%;
 }
 
+/* PUBLISHED layout (operator source of truth): explicit rows of width-proportional
+ * cells; cards stack vertically inside a cell. Honors the published widths exactly;
+ * collapses to one column (each row a single full-width cell) when too narrow. */
+.alloy-os-fp-canvas--published {
+  display: flex;
+  flex-direction: column;
+  gap: var(--alloy-os-fp-gap-y);
+}
+.alloy-os-fp-published-row {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--alloy-os-fp-gap-x);
+}
+.alloy-os-fp-published-cell {
+  display: flex;
+  flex-direction: column;
+  gap: var(--alloy-os-fp-gap-y);
+  min-width: 0;
+}
+
 /* ════════════════════════════════════════════════════════════════════════
  * Focus Panel Inline Overlay Finalization (June 2026)
  * Diagnostic / action cards (Readiness, Current Work) reveal deeper evidence as a

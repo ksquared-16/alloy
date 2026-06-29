@@ -19,6 +19,7 @@ import {
 import { FOCUS_PANEL_SUMMARY_DEFAULT_DOC } from "@/lib/adminV2/runtime/focusPanel/buildFocusPanelSummaryDefaultDoc";
 import { buildOpportunityFocusPanelMutation } from "@/lib/adminV2/runtime/focusPanel/focusPanelMutation";
 import type { CompositionCardInput } from "@/lib/adminV2/runtime/focusPanel/composition/composeFocusPanelSurface";
+import { readFocusPanelPublishedLayout } from "@/lib/adminV2/runtime/focusPanel/composition/focusPanelPublishedLayout";
 import {
     isElevatedLevel,
     type FocusPanelActiveDepth,
@@ -93,6 +94,12 @@ export default function OpportunityFocusPanelModeGrid({
         const derived = deriveFocusPanelGridFromLayoutDoc(activeDoc);
         return derived.rows.length > 0 ? derived : defaultGrid;
     }, [isSummary, activeDoc, defaultGrid]);
+    // Operator-published explicit layout (source of truth). When present the runtime
+    // renders these exact rows/widths; otherwise it falls back to auto-composition.
+    const publishedLayout = useMemo(
+        () => (isSummary ? readFocusPanelPublishedLayout(activeDoc) : null),
+        [isSummary, activeDoc],
+    );
 
     // Adapter seam: composed subject payload → Operational Context. Cards consume
     // this boundary, never the drawer VM directly. Built once; observed by cards.
@@ -282,6 +289,7 @@ export default function OpportunityFocusPanelModeGrid({
         >
             <FocusPanelCardGrid
                 rows={gridRows}
+                publishedLayout={publishedLayout}
                 composeCards={composeCards}
                 compositionOverrides={compositionOverrides}
                 className={mode === "work" ? "alloy-os-focus-panel-grid--work" : undefined}

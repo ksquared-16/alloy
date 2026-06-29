@@ -20,6 +20,10 @@ import {
     type CompositionCardInput,
     type ComposedCardPlacement,
 } from "@/lib/adminV2/runtime/focusPanel/composition/composeFocusPanelSurface";
+import {
+    planPublishedLayout,
+    type FocusPanelPublishedLayout,
+} from "@/lib/adminV2/runtime/focusPanel/composition/focusPanelPublishedLayout";
 import type { CardCompositionPreference } from "@/lib/adminV2/runtime/focusPanel/cardCompositionModel";
 import type { FocusPanelCardKey } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardModel";
 
@@ -29,9 +33,15 @@ type Props = {
     className?: string;
     dataFocusPanelSplitLayout?: string;
     /**
-     * Composition Engine input. When provided, the surface is COMPOSED from card
-     * semantics (interlocking lanes / composed stack) instead of the uniform grid.
-     * The legacy `rows` path is kept for Work + other modes.
+     * Operator-published explicit layout (Experience Builder). When present this is
+     * the SOURCE OF TRUTH: the runtime renders these exact rows/cells/widths and only
+     * collapses to one column when too narrow — it overrides auto-composition.
+     */
+    publishedLayout?: FocusPanelPublishedLayout | null;
+    /**
+     * Composition Engine input. When provided (and no `publishedLayout`), the surface
+     * is COMPOSED from card semantics (interlocking lanes / composed stack) — the
+     * smart DEFAULT. The legacy `rows` path is kept for Work + other modes.
      */
     composeCards?: CompositionCardInput[] | null;
     /**
@@ -60,6 +70,7 @@ export default function FocusPanelCardGrid({
     renderCell,
     className,
     dataFocusPanelSplitLayout,
+    publishedLayout,
     composeCards,
     compositionOverrides,
     elevatedCellKey,
@@ -137,14 +148,21 @@ export default function FocusPanelCardGrid({
         return () => ro.disconnect();
     }, []);
 
+    // Published layout is the source of truth (operator-authored). When present it
+    // wins over auto-composition; the engine only fills in the default.
+    const publishedPlan = useMemo(() => {
+        if (!publishedLayout || widthPx <= 0) return null;
+        return planPublishedLayout(publishedLayout, widthPx);
+    }, [publishedLayout, widthPx]);
+
     const composition = useMemo(() => {
-        if (!composed || widthPx <= 0) return null;
+        if (publishedLayout || !composed || widthPx <= 0) return null;
         return composeFocusPanelSurface({
             cards: composeCards!,
             availableWidthPx: widthPx,
             overrides: compositionOverrides,
         });
-    }, [composed, composeCards, widthPx, compositionOverrides]);
+    }, [publishedLayout, composed, composeCards, widthPx, compositionOverrides]);
 
     // Shared cell box — identical attributes in both paths so the depth/elevation CSS
     // (data-fp-elevated), refs, height reservation, and zoom origin all keep working.
@@ -182,6 +200,53 @@ export default function FocusPanelCardGrid({
             onClick={onBackdropClick}
         />
     ) : null;
+
+    // ── Published layout path (operator source of truth) ─────────────────────
+    if (publishedPlan) {
+        return (
+            <div
+                ref={containerRef}
+                className={[
+                    "alloy-os-focus-panel-grid",
+                    "alloy-os-focus-panel-grid--composed",
+                    "alloy-os-focus-panel-grid--published",
+                    className,
+                ]
+                    .filter(Boolean)
+                    .join(" ")}
+                data-focus-panel-card-grid="true"
+                data-fp-strategy={publishedPlan.collapsed ? "published-collapsed" : "published"}
+                data-focus-panel-split-layout={dataFocusPanelSplitLayout}
+                data-fp-depth={elevatedCellKey ? "active" : undefined}
+                data-fp-closing={closing ? "true" : undefined}
+                style={{ ["--alloy-os-fp-units" as string]: publishedPlan.columnBase }}
+            >
+                {scrim}
+                <div className="alloy-os-fp-canvas alloy-os-fp-canvas--published">
+                    {publishedPlan.rows.map((row, rowIndex) => (
+                        <div
+                            // eslint-disable-next-line react/no-array-index-key
+                            key={rowIndex}
+                            className="alloy-os-fp-published-row"
+                            data-fp-published-row={rowIndex}
+                        >
+                            {row.cells.map((cell, cellIndex) => (
+                                <div
+                                    // eslint-disable-next-line react/no-array-index-key
+                                    key={cellIndex}
+                                    className="alloy-os-fp-published-cell"
+                                    data-fp-cell-units={cell.widthUnits}
+                                    style={{ flexGrow: cell.widthUnits, flexShrink: 1, flexBasis: 0 }}
+                                >
+                                    {cell.cards.map((card) => renderCellBox(card, { dataWidthUnits: cell.widthUnits }))}
+                                </div>
+                            ))}
+                        </div>
+                    ))}
+                </div>
+            </div>
+        );
+    }
 
     // ── Composition path ─────────────────────────────────────────────────────
     if (composition) {
