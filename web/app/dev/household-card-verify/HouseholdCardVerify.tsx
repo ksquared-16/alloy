@@ -21,7 +21,7 @@ import {
     type FocusPanelCoordination,
     type FocusPanelDismissSignal,
     type FocusPanelFocusRequest,
-} from "@/lib/adminV2/runtime/focusPanel/focusPanelCoordination";
+} from "@/lib/adminV2/runtime/focusPanel/focusPanelCoordinationModel";
 import type { FocusPanelCardKey, FocusPanelCardModel } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardModel";
 import type {
     OperationalContext,

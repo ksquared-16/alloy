@@ -12,10 +12,12 @@ import {
     deriveFocusPanelInstanceMap,
 } from "@/lib/adminV2/runtime/focusPanel/deriveFocusPanelCardsFromLayoutDoc";
 import {
+    buildCompositionOverrides,
     composeEffectiveCardModel,
     type FocusPanelCardConfig,
 } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardConfigModel";
 import { FOCUS_PANEL_SUMMARY_DEFAULT_DOC } from "@/lib/adminV2/runtime/focusPanel/buildFocusPanelSummaryDefaultDoc";
+import { buildOpportunityFocusPanelMutation } from "@/lib/adminV2/runtime/focusPanel/focusPanelMutation";
 import type { CompositionCardInput } from "@/lib/adminV2/runtime/focusPanel/composition/composeFocusPanelSurface";
 import {
     isElevatedLevel,
@@ -23,7 +25,7 @@ import {
     type FocusPanelCoordination,
     type FocusPanelDismissSignal,
     type FocusPanelFocusRequest,
-} from "@/lib/adminV2/runtime/focusPanel/focusPanelCoordination";
+} from "@/lib/adminV2/runtime/focusPanel/focusPanelCoordinationModel";
 import { usePublishedFocusPanelSummaryDoc } from "@/lib/adminV2/runtime/focusPanel/usePublishedFocusPanelSummaryDoc";
 import { alloySectionDomAttrs } from "@/lib/perf/alloySectionMap";
 import type { FocusPanelMode } from "@/lib/adminV2/runtime/focusPanel/focusPanelMode";
@@ -32,6 +34,9 @@ import type { OpportunityDrawerViewModel } from "@/lib/adminV2/viewModel/drawer/
 import type { RuntimePerspective } from "@/lib/adminV2/runtime/perspective/deriveRuntimePerspective";
 import type { ResolvedActionForClient } from "@/lib/admin/actions/types";
 import type { DrawerTabKey } from "@/lib/entityPresentation";
+
+/** Reverse-zoom dismiss window — matches CSS `--alloy-os-fp-depth-ms` (240ms). */
+const FOCUS_PANEL_DEPTH_MS = 240;
 
 type Props = {
     mode: FocusPanelMode;
@@ -137,19 +142,43 @@ export default function OpportunityFocusPanelModeGrid({
         },
         [],
     );
-    // Return-to-base: backdrop click / ESC asks the active card to collapse. The card
-    // resets its local state → reports "base" → activeDepth clears → overlay dismisses.
+    // Return-to-base: backdrop click / ESC asks the active card to collapse. To play
+    // the reverse-zoom, we hold the card elevated for one depth duration (`closing`)
+    // BEFORE resetting it — so the focused card flies back to its cell instead of
+    // snapping. After the window the card resets → reports "base" → activeDepth clears.
     const [dismissed, setDismissed] = useState<FocusPanelDismissSignal | null>(null);
+    const [closing, setClosing] = useState(false);
     const dismissNonceRef = useRef(0);
+    const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const dismiss = useCallback<NonNullable<FocusPanelCoordination["dismiss"]>>((card) => {
-        dismissNonceRef.current += 1;
-        setDismissed({ card, nonce: dismissNonceRef.current });
+        if (closeTimerRef.current) return; // already closing — ignore repeat dismiss
+        setClosing(true);
+        closeTimerRef.current = setTimeout(() => {
+            closeTimerRef.current = null;
+            dismissNonceRef.current += 1;
+            setDismissed({ card, nonce: dismissNonceRef.current });
+            setClosing(false);
+        }, FOCUS_PANEL_DEPTH_MS);
     }, []);
+    useEffect(
+        () => () => {
+            if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
+        },
+        [],
+    );
     const coordination = useMemo<FocusPanelCoordination>(
         () => ({ request: focusRequest, requestFocus, activeDepth, reportPerspective, dismissed, dismiss }),
         [focusRequest, requestFocus, activeDepth, reportPerspective, dismissed, dismiss],
     );
     const elevatedCellKey = activeDepth?.card ?? null;
+
+    // Edit seam (Household V1): a separate injected save capability (NOT a write on
+    // the read-only Operational Context). Persists via the existing person PATCH path
+    // and broadcasts the existing record-patch events → VM merge → context recompose.
+    const mutation = useMemo(
+        () => buildOpportunityFocusPanelMutation({ canMutate, opportunityId: drawerId, truth: record }),
+        [canMutate, drawerId, record],
+    );
 
     // ESC returns the focused/edit card to its base Work surface. Captured before the
     // drawer's own ESC-to-close handler and stopped, so ESC dismisses the depth layer
@@ -217,6 +246,19 @@ export default function OpportunityFocusPanelModeGrid({
         );
     }, [isSummary, gridRows, cellResolution]);
 
+    // Composition overrides (Experience Builder): per-card weight / row / depth the
+    // published Surface Definition declared, fed to the engine so the operator surface
+    // composes per config. Keyed by card type; platform defaults fill the rest.
+    const compositionOverrides = useMemo(
+        () =>
+            isSummary
+                ? buildCompositionOverrides(
+                      Array.from(cellResolution.values()).map((r) => ({ typeKey: r.typeKey, config: r.config })),
+                  )
+                : undefined,
+        [isSummary, cellResolution],
+    );
+
     if (mode === "activity") {
         return (
             <OpportunityFocusPanelEmbeddedWorkspace
@@ -241,9 +283,11 @@ export default function OpportunityFocusPanelModeGrid({
             <FocusPanelCardGrid
                 rows={gridRows}
                 composeCards={composeCards}
+                compositionOverrides={compositionOverrides}
                 className={mode === "work" ? "alloy-os-focus-panel-grid--work" : undefined}
                 dataFocusPanelSplitLayout={mode === "work" ? "true" : undefined}
                 elevatedCellKey={elevatedCellKey}
+                closing={closing}
                 onBackdropClick={() => {
                     if (activeDepth) dismiss(activeDepth.card);
                 }}
@@ -266,6 +310,7 @@ export default function OpportunityFocusPanelModeGrid({
                             }}
                             receded={receded}
                             coordination={coordination}
+                            mutation={mutation}
                             compat={{ subjectVm: displayVm, onSelectTab }}
                         />
                     );

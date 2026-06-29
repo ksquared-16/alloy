@@ -20,6 +20,8 @@ import {
     type CompositionCardInput,
     type ComposedCardPlacement,
 } from "@/lib/adminV2/runtime/focusPanel/composition/composeFocusPanelSurface";
+import type { CardCompositionPreference } from "@/lib/adminV2/runtime/focusPanel/cardCompositionModel";
+import type { FocusPanelCardKey } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardModel";
 
 type Props = {
     rows: FocusPanelGridRow[];
@@ -32,8 +34,15 @@ type Props = {
      * The legacy `rows` path is kept for Work + other modes.
      */
     composeCards?: CompositionCardInput[] | null;
+    /**
+     * Surface / Business Process composition overrides (Experience Builder). Merged
+     * over platform-default card preferences by the engine. Keyed by card TYPE.
+     */
+    compositionOverrides?: Partial<Record<FocusPanelCardKey, Partial<CardCompositionPreference>>>;
     /** Cell raised in the in-panel depth layer; the rest recede. */
     elevatedCellKey?: string | null;
+    /** True during the reverse-zoom dismiss window (card still mounted + elevated). */
+    closing?: boolean;
     /** Clicking the depth backdrop returns to the base Work surface. */
     onBackdropClick?: () => void;
 };
@@ -52,7 +61,9 @@ export default function FocusPanelCardGrid({
     className,
     dataFocusPanelSplitLayout,
     composeCards,
+    compositionOverrides,
     elevatedCellKey,
+    closing,
     onBackdropClick,
 }: Props) {
     const containerRef = useRef<HTMLDivElement>(null);
@@ -128,8 +139,12 @@ export default function FocusPanelCardGrid({
 
     const composition = useMemo(() => {
         if (!composed || widthPx <= 0) return null;
-        return composeFocusPanelSurface({ cards: composeCards!, availableWidthPx: widthPx });
-    }, [composed, composeCards, widthPx]);
+        return composeFocusPanelSurface({
+            cards: composeCards!,
+            availableWidthPx: widthPx,
+            overrides: compositionOverrides,
+        });
+    }, [composed, composeCards, widthPx, compositionOverrides]);
 
     // Shared cell box — identical attributes in both paths so the depth/elevation CSS
     // (data-fp-elevated), refs, height reservation, and zoom origin all keep working.
@@ -184,6 +199,7 @@ export default function FocusPanelCardGrid({
                 data-fp-strategy={composition.strategy}
                 data-focus-panel-split-layout={dataFocusPanelSplitLayout}
                 data-fp-depth={elevatedCellKey ? "active" : undefined}
+                data-fp-closing={closing ? "true" : undefined}
                 style={{ ["--alloy-os-fp-units" as string]: composition.columnBase }}
             >
                 {scrim}

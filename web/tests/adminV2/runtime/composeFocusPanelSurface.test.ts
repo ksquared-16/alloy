@@ -43,6 +43,32 @@ describe("composition engine v1", () => {
         expect(support.widthUnits).toBeGreaterThanOrEqual(4);
     });
 
+    it("does not starve a multi-card support lane (anchor capped at 7/12 → support ≥ 5)", () => {
+        const c = composeFocusPanelSurface({ cards: CORE_FOUR, availableWidthPx: 760 });
+        const [primary, support] = c.lanes;
+        // Two support cards (Readiness + Current Work) → anchor yields to a readable
+        // support lane rather than the cramped 4/12.
+        expect(support.widthUnits).toBeGreaterThanOrEqual(5);
+        expect(primary.widthUnits).toBe(COMPOSITION_COLUMN_BASE - support.widthUnits);
+        expect(primary.widthUnits).toBeGreaterThan(support.widthUnits);
+    });
+
+    it("lets a single support card cede more width to the anchor (up to 8/12, not capped at 7)", () => {
+        // Two heavy anchors + one support card → ratio wants >8, single-support cap is 8.
+        const c = composeFocusPanelSurface({
+            cards: [
+                { key: "household", typeKey: "household" },
+                { key: "children", typeKey: "children" },
+                { key: "readiness_kpi", typeKey: "readiness_kpi" },
+            ],
+            availableWidthPx: 760,
+        });
+        const primary = c.lanes.find((l) => l.role === "primary");
+        const support = c.lanes.find((l) => l.role === "support");
+        expect(support?.cards).toHaveLength(1); // single support card
+        expect(primary?.widthUnits).toBe(8);
+    });
+
     it("each card in a lane spans the full lane width (lanes stack vertically)", () => {
         const c = composeFocusPanelSurface({ cards: CORE_FOUR, availableWidthPx: 760 });
         for (const lane of c.lanes) {

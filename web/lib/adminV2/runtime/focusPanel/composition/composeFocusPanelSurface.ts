@@ -122,8 +122,12 @@ function resolvePrimaryUnits(primary: Resolved[], support: Resolved[]): number {
     const total = primaryPoints + supportPoints;
     if (total <= 0) return Math.round(COMPOSITION_COLUMN_BASE / 2);
     const raw = Math.round((primaryPoints / total) * COMPOSITION_COLUMN_BASE);
-    // Dominant but never crowding: anchor 6–8 units, support gets the rest (4–6).
-    return Math.min(8, Math.max(6, raw));
+    // Dominant but never crowding. With a SINGLE support card the anchor may take up
+    // to 8/12; with a STACKED support lane (2+ cards) cap the anchor at 7/12 so the
+    // support lane reads at ≥5/12 (~310px at the live panel width) instead of a
+    // cramped 4/12 (~234px). (Enrollment Freeze composition refinement.)
+    const cap = support.length > 1 ? 7 : 8;
+    return Math.min(cap, Math.max(6, raw));
 }
 
 /**

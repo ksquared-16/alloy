@@ -13,7 +13,8 @@ import OpportunityDrawerVmTabPanes from "@/components/admin/vmDrawer/Opportunity
 import { buildOpportunityVmLifecycleRailModel } from "@/lib/adminV2/viewModel/drawer/vmRuntime/buildOpportunityVmLifecycleRailModel";
 import type { FocusPanelCardKey, FocusPanelCardModel } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardModel";
 import type { FocusPanelMode } from "@/lib/adminV2/runtime/focusPanel/focusPanelMode";
-import type { FocusPanelCoordination } from "@/lib/adminV2/runtime/focusPanel/focusPanelCoordination";
+import type { FocusPanelCoordination } from "@/lib/adminV2/runtime/focusPanel/focusPanelCoordinationModel";
+import type { FocusPanelMutation } from "@/lib/adminV2/runtime/focusPanel/focusPanelMutation";
 import type { OperationalContext } from "@/lib/adminV2/runtime/operationalContext/types";
 import { system5ArchetypeSuppressesFooterAction } from "@/lib/adminV2/runtime/focusPanel/system5CardArchetypes";
 import type { OperationalSubjectViewModel } from "@/lib/adminV2/viewModel/drawer/types";
@@ -49,6 +50,8 @@ type Props = {
     receded?: boolean;
     /** Cross-card handoff orchestration (Perspective Change on owner cards). */
     coordination?: FocusPanelCoordination;
+    /** Injected save seam for truth cards (Edit depth). Absent → cards stay read-only. */
+    mutation?: FocusPanelMutation;
     /** Internal compatibility wrapper — see {@link FocusPanelCardCompat}. Pure cards ignore it. */
     compat: FocusPanelCardCompat;
 };
@@ -84,6 +87,7 @@ export default function FocusPanelCardRenderer({
     onPrimaryAction,
     receded = false,
     coordination,
+    mutation,
     compat,
 }: Props) {
     if (!model.visible) return null;
@@ -94,7 +98,15 @@ export default function FocusPanelCardRenderer({
     // answer from `context.truth` — no fetch on expand. It therefore bypasses the
     // generic profile-payload body. NOTE: pure cards read only `model` + `context`.
     if (model.key === "household") {
-        return <HouseholdCard model={model} context={context} receded={receded} coordination={coordination} />;
+        return (
+            <HouseholdCard
+                model={model}
+                context={context}
+                receded={receded}
+                coordination={coordination}
+                mutation={mutation}
+            />
+        );
     }
 
     // Core Four operational cards — pure cards on the Operational Context boundary.

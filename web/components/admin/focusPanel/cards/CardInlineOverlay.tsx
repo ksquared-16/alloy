@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useRef, type ReactNode } from "react";
 
 type Props = {
     /** Whether the overlay is open. */
@@ -28,25 +28,26 @@ type Props = {
  * captured before the drawer's own close handler so the overlay collapses FIRST
  * and the record stays open.
  *
+ * Direction is INVARIANT: the overlay always expands DOWNWARD and never pushes the
+ * canvas or opens upward. When there isn't room below (e.g. the bottom card of a
+ * scrolled panel), we SCROLL the panel so the downward overlay becomes visible —
+ * we never reverse direction. (Enrollment Freeze rule.)
+ *
  * @see docs/sprints/06_2026/focus-panel-inline-overlay-finalization
  */
 export default function CardInlineOverlay({ open, onClose, title, children, footerRight, dataOverlay }: Props) {
     const overlayRef = useRef<HTMLDivElement>(null);
-    const [direction, setDirection] = useState<"down" | "up">("down");
 
-    // Anchor downward by default (covers the card below). For the bottom card of the
-    // panel a downward dropdown would fall off-screen, so flip upward when there isn't
-    // room below. Measured before paint to avoid a flash.
+    // Reposition (never reverse): if the downward overlay would fall below the
+    // viewport, scroll it into view through the nearest scrollable ancestor.
     useLayoutEffect(() => {
-        if (!open) {
-            setDirection("down");
-            return;
-        }
+        if (!open) return;
         const el = overlayRef.current;
-        if (!el || typeof window === "undefined") return;
+        if (!el || typeof el.scrollIntoView !== "function") return;
         const rect = el.getBoundingClientRect();
-        if (rect.bottom > window.innerHeight - 8 && rect.top > window.innerHeight / 2) {
-            setDirection("up");
+        const viewportBottom = typeof window === "undefined" ? 0 : window.innerHeight;
+        if (viewportBottom && rect.bottom > viewportBottom - 8) {
+            el.scrollIntoView({ block: "nearest", behavior: "smooth" });
         }
     }, [open]);
 
@@ -79,7 +80,7 @@ export default function CardInlineOverlay({ open, onClose, title, children, foot
                 className="alloy-os-card-overlay"
                 role="dialog"
                 data-card-overlay={dataOverlay ?? "true"}
-                data-overlay-direction={direction}
+                data-overlay-direction="down"
             >
                 <p className="alloy-os-card-overlay__title">{title}</p>
                 <div className="alloy-os-card-overlay__body">{children}</div>

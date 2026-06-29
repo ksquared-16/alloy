@@ -182,8 +182,20 @@ Card Preferences    ─┘            ▲
 > when narrow. The numbered algorithm below is the conceptual spec; V1 realizes
 > steps 1–8 via lane composition rather than row equalization (cards keep natural
 > heights so they interlock — §6 “row rhythm” relaxes to “lane interlock”). Depth
-> (Focus Cards) and inline overlays are unchanged. See the sprint README for
-> measured lane widths (operator panel 745px → primary 467 / support 234).
+> (Focus Cards) and inline overlays are unchanged.
+>
+> **Lane balance (Enrollment Freeze refinement).** A single support card may cede up
+> to 8/12 to the anchor; a **stacked support lane (2+ cards)** caps the anchor at
+> 7/12 so the support lane reads at ≥5/12 (~310px at the live 745px panel) instead of
+> a cramped 4/12 (~234px). The anchor stays clearly dominant either way.
+>
+> **Experience Builder overrides (now wired).** The engine's `overrides` param is
+> fed from per-card configuration: the Surfaces editor's Inspector → Composition tab
+> sets `weight` / `preferredRow` / depth (`perspectiveExpansion`), persisted on the
+> card's `LayoutSection` metadata and merged over platform defaults at compose time
+> (`buildCompositionOverrides` → `composeFocusPanelSurface`). So a published Surface
+> Definition composes per its configured weights — Enrollment is the first instance,
+> not a hardcode. Diagnostic cards are still clamped to Evidence depth by the runtime.
 
 The engine is **deterministic** and produces a composition the existing
 `FocusPanelCardGrid` can render. Algorithm:
@@ -220,6 +232,11 @@ The engine is **deterministic** and produces a composition the existing
 ---
 
 ## 7. Perspective expansion within composition
+
+> The three depths an operator descends through (Evidence / Focus / Workspace) are
+> defined in [`operational-depth-doctrine.md`](./operational-depth-doctrine.md). The
+> `perspectiveExpansion` values below are how composition realizes those depths:
+> `in_place` → Evidence, `takeover_row` → Focus, `takeover_surface` → Workspace.
 
 Perspective Change (local UI; no new context) interacts with composition via
 `perspectiveExpansion`:

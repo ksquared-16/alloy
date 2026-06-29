@@ -127,7 +127,7 @@ describe("Household reference card — product-quality Inspector", () => {
 
     it("renders product sections (no type/archetype/tier/instance jargon)", () => {
         expect(html).toContain('data-focus-panel-inspector-card="household"');
-        for (const tab of ["card", "fields", "related", "appearance", "conditions", "expansion", "actions", "ai"]) {
+        for (const tab of ["card", "fields", "related", "appearance", "composition", "conditions", "expansion", "actions", "ai"]) {
             expect(html).toContain(`data-focus-panel-inspector-tab="${tab}"`);
         }
         expect(html).not.toContain("Archetype");

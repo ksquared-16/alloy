@@ -10,7 +10,7 @@ import {
     type ReadinessFactor,
 } from "@/lib/adminV2/runtime/focusPanel/readiness/buildReadinessCardEvidence";
 import type { FocusPanelCardModel } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardModel";
-import type { FocusPanelCoordination } from "@/lib/adminV2/runtime/focusPanel/focusPanelCoordination";
+import type { FocusPanelCoordination } from "@/lib/adminV2/runtime/focusPanel/focusPanelCoordinationModel";
 import type { OperationalContext } from "@/lib/adminV2/runtime/operationalContext/types";
 
 type Props = {
