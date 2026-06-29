@@ -15,6 +15,7 @@ import { loadEnrollmentStageActionsForOrg } from "@/lib/lifecycle/loadEnrollment
 import {
     lifecycleActivationBaseActionByKey,
     lifecyclePlacementById,
+    normalizeLifecyclePlacementId,
     type LifecycleBaseActionKey,
 } from "@/lib/lifecycle/lifecycleStageBaseActions";
 import {
@@ -132,6 +133,8 @@ export async function POST(request: NextRequest) {
     const placements = activationOverflowOnly
         ? [{ id: "overflow", label: "Overflow Menu", surface: "record_header", slot: "overflow" }]
         : placementIds
+              .map((id) => normalizeLifecyclePlacementId(id))
+              .filter((id): id is string => Boolean(id))
               .map((id) => lifecyclePlacementById(id))
               .filter((p): p is NonNullable<typeof p> => !!p);
     if (!placements.length) {

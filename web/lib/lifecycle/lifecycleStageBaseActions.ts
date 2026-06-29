@@ -37,27 +37,81 @@ export type LifecycleActionPlacementOption = {
 };
 
 /**
- * Operator-facing placement labels for Lifecycle Builder.
- * Placement = where an action appears. Record-scoped surfaces present in the Focus Panel,
- * not a "drawer"; configuration places actions, it does not create executable behavior.
+ * Canonical operator-facing action placements (Command Surface).
+ *
+ * These are the ONLY placements offered in the process/lifecycle action editors:
+ *   - Focus Panel Manage  → `record_header` / `overflow`  (Focus Panel "Manage" menu)
+ *   - Work Unit right rail → `work_unit` / `primary`       (Work Unit Actions rail)
+ *   - Workspace           → `workspace` / `primary`        (Workspace root actions rail)
+ *
+ * Each `surface` here is the exact `action_placements.surface` consumed by the matching rail,
+ * so a saved placement resolves on the surface its label promises (e.g. "Work Unit right rail"
+ * → `work_unit`, which the Work Unit page requests via `placementSurfaces: ["work_unit"]`).
+ *
+ * Configuration places actions; it does not create executable behavior.
  */
 export const LIFECYCLE_ACTION_PLACEMENTS: readonly LifecycleActionPlacementOption[] = [
-    { id: "drawer", label: "Focus Panel", surface: "record_header", slot: "primary" },
-    { id: "queue_row", label: "Work Unit Queue Row", surface: "queue_row", slot: "row_inline" },
-    { id: "work_unit_rail", label: "Work Unit Right Rail", surface: "work_unit", slot: "primary" },
-    { id: "department_rail", label: "Department Right Rail", surface: "department", slot: "primary" },
-    { id: "workspace_root", label: "Workspace root", surface: "workspace", slot: "primary" },
     { id: "overflow", label: "Focus Panel Manage", surface: "record_header", slot: "overflow" },
+    { id: "work_unit_rail", label: "Work Unit right rail", surface: "work_unit", slot: "primary" },
+    { id: "workspace_root", label: "Workspace", surface: "workspace", slot: "primary" },
 ] as const;
 
-/** Activation wizard — user-facing placement labels. */
-export const LIFECYCLE_ACTIVATION_ACTION_PLACEMENTS: readonly LifecycleActionPlacementOption[] = [
-    { id: "overflow", label: "Focus Panel Manage", surface: "record_header", slot: "overflow" },
+/** Activation wizard uses the same canonical placement set as the process action editor. */
+export const LIFECYCLE_ACTIVATION_ACTION_PLACEMENTS: readonly LifecycleActionPlacementOption[] =
+    LIFECYCLE_ACTION_PLACEMENTS;
+
+/**
+ * Deprecated placements retained ONLY so previously-saved configs load/resolve without
+ * breaking. They are never offered in the editor. Legacy saved data is normalized onto the
+ * canonical set (see {@link normalizeLifecyclePlacementId} /
+ * {@link lifecycleActivationPlacementIdForSurfaceSlot}):
+ *   - Department right rail (`department`/`primary`) → Workspace
+ *   - Focus Panel          (`record_header`/`primary`) → Focus Panel Manage
+ *   - Work Unit Queue row  (`queue_row`/`row_inline`)  → dropped (no longer surfaced)
+ */
+export const LIFECYCLE_DEPRECATED_ACTION_PLACEMENTS: readonly LifecycleActionPlacementOption[] = [
+    { id: "drawer", label: "Focus Panel", surface: "record_header", slot: "primary" },
     { id: "queue_row", label: "Work Unit Queue row", surface: "queue_row", slot: "row_inline" },
-    { id: "work_unit_rail", label: "Work Unit right rail", surface: "work_unit", slot: "primary" },
     { id: "department_rail", label: "Department right rail", surface: "department", slot: "primary" },
-    { id: "workspace_root", label: "Workspace root", surface: "workspace", slot: "primary" },
 ] as const;
+
+/**
+ * Normalize a placement id (canonical or deprecated) onto the canonical set.
+ * Returns `null` for placements that are deprecated and no longer surfaced.
+ */
+export function normalizeLifecyclePlacementId(id: string): string | null {
+    switch ((id ?? "").trim()) {
+        case "department_rail":
+            return "workspace_root"; // Department right rail → Workspace
+        case "drawer":
+            return "overflow"; // Focus Panel → Focus Panel Manage
+        case "queue_row":
+            return null; // deprecated, no longer surfaced
+        default:
+            return (id ?? "").trim() || null;
+    }
+}
+
+/**
+ * Map a saved physical (`surface`, `slot`) back to a canonical editor placement id,
+ * normalizing deprecated surfaces. Returns `null` when the saved placement is deprecated and
+ * no longer surfaced (e.g. `queue_row`), so legacy data renders gracefully without breaking.
+ */
+export function lifecycleActivationPlacementIdForSurfaceSlot(
+    surface: string,
+    slot: string
+): string | null {
+    const s = (surface ?? "").trim();
+    const sl = (slot ?? "").trim();
+    for (const p of LIFECYCLE_ACTION_PLACEMENTS) {
+        if (p.surface === s && p.slot === sl) return p.id;
+    }
+    // Legacy normalization onto canonical placements.
+    if (s === "department" && sl === "primary") return "workspace_root"; // → Workspace
+    if (s === "record_header" && sl === "primary") return "overflow"; // Focus Panel → Focus Panel Manage
+    // queue_row / row_inline → deprecated, not surfaced.
+    return null;
+}
 
 /** Base actions for activation, including create-record with configured primary label. */
 export function lifecycleActivationBaseActions(primaryRecordLabel: string): readonly LifecycleBaseActionDefinition[] {
@@ -86,7 +140,7 @@ export function lifecycleActivationBaseActionByKey(
 export function lifecyclePlacementById(id: string): LifecycleActionPlacementOption | null {
     return (
         LIFECYCLE_ACTION_PLACEMENTS.find((p) => p.id === id) ??
-        LIFECYCLE_ACTIVATION_ACTION_PLACEMENTS.find((p) => p.id === id) ??
+        LIFECYCLE_DEPRECATED_ACTION_PLACEMENTS.find((p) => p.id === id) ??
         null
     );
 }

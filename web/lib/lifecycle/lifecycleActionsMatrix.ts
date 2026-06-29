@@ -22,8 +22,9 @@ import {
 import {
     lifecycleActivationBaseActionByKey,
     lifecycleActivationBaseActions,
+    lifecycleActivationPlacementIdForSurfaceSlot,
     lifecyclePlacementById,
-    LIFECYCLE_ACTIVATION_ACTION_PLACEMENTS,
+    normalizeLifecyclePlacementId,
     type LifecycleBaseActionDefinition,
     type LifecycleBaseActionKey,
 } from "@/lib/lifecycle/lifecycleStageBaseActions";
@@ -75,10 +76,7 @@ function baseActionKeyForDefinitionKey(
 }
 
 function activationPlacementIdForSurfaceSlot(surface: string, slot: string): string | null {
-    for (const p of LIFECYCLE_ACTIVATION_ACTION_PLACEMENTS) {
-        if (p.surface === surface && p.slot === slot) return p.id;
-    }
-    return null;
+    return lifecycleActivationPlacementIdForSurfaceSlot(surface, slot);
 }
 
 function normalizeStageRestrictions(raw: readonly string[] | undefined): LifecycleOperatorStage[] {
@@ -281,18 +279,28 @@ export async function saveLifecycleActionsMatrix(
         const label = typeof row.label === "string" ? row.label.trim() : "";
         if (!label) throw new Error(`Display label is required for ${base.label}`);
 
-        const placementIds = Array.isArray(row.placement_ids)
+        const rawPlacementIds = Array.isArray(row.placement_ids)
             ? row.placement_ids.map((p) => String(p ?? "").trim()).filter(Boolean)
             : [];
-        if (!placementIds.length) {
+        if (!rawPlacementIds.length) {
             throw new Error(`Select at least one placement for ${base.label}`);
         }
+
+        // Normalize legacy ids onto the canonical set (department_rail → Workspace,
+        // drawer → Focus Panel Manage) and drop deprecated ones (queue_row), de-duping.
+        const placementIds = [
+            ...new Set(
+                rawPlacementIds
+                    .map((id) => normalizeLifecyclePlacementId(id))
+                    .filter((id): id is string => Boolean(id))
+            ),
+        ];
 
         const placements = placementIds
             .map((id) => lifecyclePlacementById(id))
             .filter((p): p is NonNullable<typeof p> => !!p);
 
-        if (!placements.length) throw new Error(`Invalid placements for ${base.label}`);
+        if (!placements.length) throw new Error(`Select at least one placement for ${base.label}`);
 
         const { scope, operatorStages } = resolveScopeAndStages(row.stage_restrictions ?? [], allStageKeys);
         const displayOrder =

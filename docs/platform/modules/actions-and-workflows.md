@@ -114,6 +114,28 @@ Migrations (June 2026 workstream):
 
 ---
 
+## Action placements (operator editor)
+
+The Process Actions / Lifecycle Builder editor offers exactly **three** operator-facing
+placements (`LIFECYCLE_ACTION_PLACEMENTS` in `web/lib/lifecycle/lifecycleStageBaseActions.ts`).
+Each maps to the exact `action_placements.surface`/`slot` the matching rail consumes, so a
+checked placement resolves on the surface its label promises:
+
+| Placement (editor) | `surface` / `slot` | Consumed by |
+|---|---|---|
+| **Focus Panel Manage** | `record_header` / `overflow` | Focus Panel "Manage" menu |
+| **Work Unit right rail** | `work_unit` / `primary` | Work Unit Actions rail (`placementSurfaces: ["work_unit"]`) |
+| **Workspace** | `workspace` / `primary` | Workspace root actions rail |
+
+Deprecated placements (**Work Unit Queue row**, **Department right rail**, **Workspace root**,
+bare **Focus Panel**) are no longer offered. Previously-saved configs are normalized onto the
+canonical set without breaking (`normalizeLifecyclePlacementId` /
+`lifecycleActivationPlacementIdForSurfaceSlot`):
+
+- Department right rail (`department`/`primary`) → **Workspace**
+- Focus Panel (`record_header`/`primary`) → **Focus Panel Manage**
+- Work Unit Queue row (`queue_row`/`row_inline`) → **dropped** (no longer surfaced; renders safely)
+
 ## Placement behavior
 
 | Surface | Generic actions | Target-specific (e.g. make_primary_contact) |
