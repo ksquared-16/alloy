@@ -97,4 +97,14 @@ describe("financialConfigDemoDataset", () => {
     it("is deterministic for a given pivot year (idempotent shape)", () => {
         expect(buildFinancialConfigDemoDataset(2026)).toEqual(buildFinancialConfigDemoDataset(2026));
     });
+
+    it("includes demo charge templates with valid amount/offset shapes", () => {
+        const ds = buildFinancialConfigDemoDataset(2026);
+        expect(ds.chargeTemplates.length).toBeGreaterThanOrEqual(5);
+        const fieldTrip = ds.chargeTemplates.find((t) => t.templateKey === "field_trip")!;
+        expect(fieldTrip).toMatchObject({ billableOn: "offset_days", billableOffsetDays: 21, amountStrategy: "fixed" });
+        // usage-derived templates carry no fixed amount
+        const diapers = ds.chargeTemplates.find((t) => t.templateKey === "diapers")!;
+        expect(diapers.amountStrategy).toBe("usage_derived");
+    });
 });

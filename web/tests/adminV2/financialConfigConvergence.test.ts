@@ -79,6 +79,42 @@ describe("Commercial Model — Service is a first-class entity (Slice A)", () =>
     });
 });
 
+describe("Commercial Model — Charge Templates (Slice B)", () => {
+    it("the financial_charge_templates migration is effective-dated config (no posting/ledger)", () => {
+        const root2 = resolve(__dirname, "../../..");
+        const sql = readFileSync(resolve(root2, "supabase/migrations/20260703120000_financial_charge_templates.sql"), "utf8");
+        expect(sql).toContain("CREATE TABLE IF NOT EXISTS public.financial_charge_templates");
+        expect(sql).toContain("effective_start");
+        expect(sql).toContain("billable_on_strategy");
+        expect(sql).toContain("ENABLE ROW LEVEL SECURITY");
+        // configuration only — references no other money table
+        expect(sql).not.toMatch(/public\.(ledger_transactions|gl_journal_lines|invoices|payments|charges)/);
+    });
+
+    it("the charge-templates route is role-gated POST authoring (create|version|retire|void)", () => {
+        const r = read("app/api/admin/financial/charge-templates/route.ts");
+        expect(r).toMatch(/export async function POST/);
+        expect(r).toContain("requireAdminOrOps");
+        for (const a of ['"create"', '"version"', '"retire"', '"void"']) expect(r).toContain(a);
+    });
+
+    it("the authoring service supersedes (no in-place value overwrite) and writes only its table", () => {
+        const svc = read("lib/financials/chargeTemplates/chargeTemplateAuthoringService.ts");
+        expect(svc).toContain("planSupersede");
+        expect(svc).toContain("supersedes_id");
+        expect(svc).not.toMatch(/from\(["'](charges|ledger_transactions|gl_journal_lines|invoices|payments)["']\)/);
+    });
+
+    it("the panel authors inline via the shared editor, states it posts nothing, and shows labels not IDs", () => {
+        const panel = read("components/adminV2/settings/financials/ChargeTemplatesConfigurationPanel.tsx");
+        expect(panel).toContain("EffectiveDatedConfigurationEditor");
+        expect(panel).toContain("does not post money");
+        expect(panel).not.toMatch(/openDrawer|useAdminDrawer/);
+        const page = read("components/adminV2/settings/financials/FinancialsConfigurationPage.tsx");
+        expect(page).toContain("ChargeTemplatesConfigurationPanel");
+    });
+});
+
 describe("Convergence — Charge Preview uses operational selectors (no UUIDs)", () => {
     const inspector = read("components/adminV2/settings/financials/FinancialChargePreviewInspector.tsx");
 
@@ -109,7 +145,7 @@ describe("Convergence — designed areas are consistent + no forbidden runtime",
     it("designed areas use the shared DesignedConfigurationSurface", () => {
         const areas = read("components/adminV2/settings/financials/FinancialDesignedAreas.tsx");
         expect(areas).toContain("DesignedConfigurationSurface");
-        for (const fn of ["PostingConfigurationArea", "PaymentsConfigurationArea", "SubsidyConfigurationArea", "FinancialResponsibilityArea", "ChargeTemplatesArea", "FinancialPoliciesArea"]) {
+        for (const fn of ["PostingConfigurationArea", "PaymentsConfigurationArea", "SubsidyConfigurationArea", "FinancialResponsibilityArea", "FinancialPoliciesArea"]) {
             expect(areas).toContain(fn);
         }
     });

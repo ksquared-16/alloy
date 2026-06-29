@@ -38,11 +38,27 @@ export type DemoRatePlan = {
     versions: DemoRatePlanVersion[];
 };
 
+export type DemoChargeTemplate = {
+    templateKey: string;
+    label: string;
+    /** Service key to attach to (resolved to service_id at seed time); optional. */
+    serviceKey?: string;
+    chargeCategory: string;
+    triggerType: string;
+    amountStrategy: string;
+    amountCents?: number | null;
+    occursOn: string;
+    billableOn: string;
+    billableOffsetDays?: number | null;
+    reviewRequired?: boolean;
+};
+
 export type FinancialConfigDemoDataset = {
     services: FinancialServiceInput[];
     glAccounts: DemoGlAccount[];
     glMappings: DemoGlMapping[];
     ratePlans: DemoRatePlan[];
+    chargeTemplates: DemoChargeTemplate[];
 };
 
 /**
@@ -131,5 +147,13 @@ export function buildFinancialConfigDemoDataset(pivotYear: number): FinancialCon
         },
     ];
 
-    return { services, glAccounts, glMappings, ratePlans };
+    const chargeTemplates: DemoChargeTemplate[] = [
+        { templateKey: "registration_fee", label: "Registration Fee", serviceKey: "registration", chargeCategory: "fee", triggerType: "manual", amountStrategy: "fixed", amountCents: 15000, occursOn: "now", billableOn: "immediate", reviewRequired: false },
+        { templateKey: "field_trip", label: "Field Trip", serviceKey: "field_trips", chargeCategory: "one_time", triggerType: "event", amountStrategy: "fixed", amountCents: 4500, occursOn: "event_date", billableOn: "offset_days", billableOffsetDays: 21 },
+        { templateKey: "late_pickup", label: "Late Pickup", chargeCategory: "late_pickup", triggerType: "attendance", amountStrategy: "fixed", amountCents: 2500, occursOn: "event_date", billableOn: "immediate", reviewRequired: true },
+        { templateKey: "diapers", label: "Diapers / Consumables", serviceKey: "meals", chargeCategory: "consumable_fee", triggerType: "schedule", amountStrategy: "usage_derived", occursOn: "service_period_start", billableOn: "next_billing_cycle" },
+        { templateKey: "annual_supply_fee", label: "Annual Supply Fee", chargeCategory: "fee", triggerType: "manual", amountStrategy: "fixed", amountCents: 7500, occursOn: "now", billableOn: "immediate" },
+    ];
+
+    return { services, glAccounts, glMappings, ratePlans, chargeTemplates };
 }

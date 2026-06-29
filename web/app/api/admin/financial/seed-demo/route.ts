@@ -135,6 +135,47 @@ async function seedRatePlans(
     return { plans: planCount, rules: ruleCount };
 }
 
+async function seedChargeTemplates(
+    supabase: SupabaseClient,
+    orgId: string,
+    templates: ReturnType<typeof buildFinancialConfigDemoDataset>["chargeTemplates"],
+    today: string,
+): Promise<number> {
+    const { data: existing } = await supabase.from("financial_charge_templates").select("template_key").eq("org_id", orgId);
+    const existingKeys = new Set((existing ?? []).map((t) => (t as { template_key: string }).template_key));
+    const { data: svcRows } = await supabase.from("financial_services").select("id, service_key").eq("org_id", orgId);
+    const serviceIdByKey = new Map<string, string>(
+        ((svcRows ?? []) as { id: string; service_key: string }[]).map((s) => [s.service_key, s.id]),
+    );
+    const effectiveStart = `${today.slice(0, 4)}-01-01`;
+    let created = 0;
+    for (const t of templates) {
+        if (existingKeys.has(t.templateKey)) continue;
+        const { error } = await supabase.from("financial_charge_templates").insert({
+            org_id: orgId,
+            service_id: t.serviceKey ? serviceIdByKey.get(t.serviceKey) ?? null : null,
+            template_key: t.templateKey,
+            label: t.label,
+            charge_category: t.chargeCategory,
+            trigger_type: t.triggerType,
+            amount_strategy: t.amountStrategy,
+            amount_cents: t.amountStrategy === "fixed" ? t.amountCents ?? 0 : null,
+            currency_code: "USD",
+            occurs_on_strategy: t.occursOn,
+            billable_on_strategy: t.billableOn,
+            billable_offset_days: t.billableOn === "offset_days" ? t.billableOffsetDays ?? 0 : null,
+            review_required: t.reviewRequired === true,
+            is_active: true,
+            effective_start: effectiveStart,
+            effective_end: null,
+            source_key: "seed",
+            metadata: { seed: true },
+        });
+        if (!error) created += 1;
+    }
+    return created;
+}
+
 export async function POST() {
     const forbidden = await requireAdminOrOps();
     if (forbidden) return forbidden;
@@ -161,6 +202,7 @@ export async function POST() {
         const gl = await seedGlAccounts(supabase, ctx.orgId, dataset.glAccounts);
         const mappings = await seedGlMappings(supabase, ctx.orgId, dataset.glMappings, gl.byCode);
         const ratePlans = await seedRatePlans(supabase, ctx.orgId, dataset.ratePlans);
+        const chargeTemplates = await seedChargeTemplates(supabase, ctx.orgId, dataset.chargeTemplates, today);
 
         return NextResponse.json({
             seeded: {
@@ -169,6 +211,7 @@ export async function POST() {
                 glMappings: mappings,
                 ratePlans: ratePlans.plans,
                 rateRules: ratePlans.rules,
+                chargeTemplates,
             },
             idempotent: true,
         });

@@ -233,6 +233,8 @@ So "Field Trip scheduled today → charge created → billable in 3 weeks → in
 
 **Determination:** Charge Event is the **trigger fact** and largely already exists as `workflow_events` (converge, don't rebuild). The *scheduled future charge* is **not** a separate entity — it is the **Charge's genesis state**, so the Charge owns `occurs_on` / `billable_on`. Add a dedicated `charge_event` table **only** if one event must fan out to many charges (e.g., one field trip → 30 children) and a batch parent is needed.
 
+**As-built (Commercial Model Slice B, migration `20260703120000`):** the `financial_charge_templates` table is now the first-class, effective-dated config for this concept — `service_id`, `charge_category`, `trigger_type`/`trigger_key`, `amount_strategy`, `occurs_on_strategy`, `billable_on_strategy`/`billable_offset_days`, `default_gl_mapping_key`, `default_responsibility_key`, `review_required`. It is configuration only (posts nothing); Charge Events remain trigger facts and the Charge lifecycle/Posting are unchanged and still to come.
+
 ---
 
 ## 11. Financial periods — determination

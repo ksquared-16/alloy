@@ -497,3 +497,21 @@ Status: shipped. First vertical slice of the Commercial Model (per the frozen do
 
 ### Next slices (same vertical pattern)
 **Slice B — Charge Templates** (first-class, scoped, effective-dated config: Service, category, trigger, occurs-on / billable-on, default GL + responsibility). **Slice C — Financial Policies** (scoped Org→Location→Service→Rate Plan→Agreement, effective-dated). Both deferred to follow-on passes; Service had to land first.
+
+---
+
+## Commercial Model — Slice B: Charge Templates (IMPLEMENTED)
+
+Status: shipped. Charge Templates promoted from designed surface to **first-class, effective-dated configuration** — how an operational fact or event becomes a charge. Backend + UI + seed + tests + docs, together. **Configuration only: posts nothing, writes no ledger/GL/invoice/payment** (Posting remains the only authoritative money write).
+
+- **Migration `20260703120000_financial_charge_templates.sql`** — first-class table: org-scoped, optional `service_id` (FK `financial_services`), `template_key`, label/description, `charge_category` (CHECK mirrors code-owned vocab), `trigger_type` (manual/event/attendance/schedule) + `trigger_key`, `amount_strategy` (fixed/rate/usage/attendance/manual) + `amount_cents` (CHECK: required iff fixed), `occurs_on_strategy`, `billable_on_strategy` (immediate/offset_days/next_billing_cycle) + `billable_offset_days` (CHECK: required iff offset_days), `default_gl_mapping_key`, `default_responsibility_key`, `review_required`, effective dating + is_active, audit; RLS mirrors the rate-plan tables.
+- **Backend** — `chargeTemplateTypes.ts` (vocab + row), `chargeTemplateAuthoringService.ts` (read + **supersede** create/version/retire/void, `planSupersede`, no in-place value overwrite, void reopens predecessor), and a role-gated `/api/admin/financial/charge-templates` route (create | version | retire | void).
+- **Configuration UI** — `ChargeTemplatesConfigurationPanel` (replaces the designed area) authors inline via the shared `EffectiveDatedConfigurationEditor`: version timeline (Current/Scheduled/Superseded/Retired), create future version, retire, void scheduled; Service / category / responsibility chosen by **label** (no IDs); timing fields (occurs-on, billable-on, offset days). A persistent notice states **"This template configures future charges but does not post money."**
+- **Seed** — idempotent demo Charge Templates (Registration Fee, Field Trip → billable +21d, Late Pickup, Diapers/Consumables, Annual Supply Fee), attached to seeded Services where appropriate.
+- **Tests** — migration shape; create; supersede + no-overwrite + lineage; retire; void scheduled + reopen; category / amount-shape / offset-shape validation; service link; route gating + dispatch; demo dataset shape; UI posture (shared editor, posts-nothing notice, no drawers). 199 financials/config tests green.
+
+### Doctrine note
+Charge Templates are **configuration**; Charge Events are **trigger facts** (reuse `workflow_events`); **Charge** is the lifecycle spine; **Posting** stays separate and authoritative. Nothing in this slice generates or posts charges.
+
+### Next slice
+**Slice C — Financial Policies** (scoped Org→Location→Service→Rate Plan→Agreement, effective-dated) + Charge Categories review.

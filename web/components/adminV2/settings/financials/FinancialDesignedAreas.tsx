@@ -36,25 +36,6 @@ export function FinancialPoliciesArea({ children }: { children?: ReactNode }): R
     );
 }
 
-export function ChargeTemplatesArea(): ReactNode {
-    return (
-        <DesignedConfigurationSurface
-            testId="financials-charge-templates"
-            title="Charge Templates"
-            decision="What creates a charge, when it's created, and when it becomes billable?"
-            status="designed"
-            summary="Reusable definitions for non-tuition charges: registration, field trips, diapers, meals, transportation."
-            groups={[
-                { heading: "What & when", decisions: ["Trigger (one-time / recurring / per-usage / attendance-derived)", "Occurs-on vs. billable-on timing", "Schedule / cadence"] },
-                { heading: "Money", decisions: ["Service it bills", "Amount or rate source", "Charge category"] },
-                { heading: "Accounting & ownership", decisions: ["GL mapping", "Financial responsibility"] },
-            ]}
-            consumers={["Billing", "Scheduling", "Attendance", "Posting"]}
-            roadmap="Templates persist to org configuration in the same effective-dated language as Rate Plans. Examples: Registration (one-time, charged today, invoiced next month); Field Trip (one-time, occurs today → billable in 3 weeks); Meals (attendance-derived, monthly); Transportation (recurring, per schedule)."
-        />
-    );
-}
-
 export function FinancialResponsibilityArea(): ReactNode {
     return (
         <DesignedConfigurationSurface

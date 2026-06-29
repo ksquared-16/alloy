@@ -21,13 +21,13 @@ import FinancialChargePreviewInspector from "@/components/adminV2/settings/finan
 import AccountingConfigurationPanel from "@/components/adminV2/settings/financials/AccountingConfigurationPanel";
 import ServicesConfigurationPanel from "@/components/adminV2/settings/financials/ServicesConfigurationPanel";
 import {
-    ChargeTemplatesArea,
     FinancialPoliciesArea,
     FinancialResponsibilityArea,
     PaymentsConfigurationArea,
     PostingConfigurationArea,
     SubsidyConfigurationArea,
 } from "@/components/adminV2/settings/financials/FinancialDesignedAreas";
+import ChargeTemplatesConfigurationPanel from "@/components/adminV2/settings/financials/ChargeTemplatesConfigurationPanel";
 import RatePlanAuthoringWorkspace from "@/components/adminV2/settings/financials/RatePlanAuthoringWorkspace";
 import CreateRatePlanForm from "@/components/adminV2/settings/financials/CreateRatePlanForm";
 import {
@@ -254,7 +254,7 @@ export default function FinancialsConfigurationPage() {
             return <FinancialPoliciesArea />;
         }
         if (section === "charge_templates") {
-            return <ChargeTemplatesArea />;
+            return <ChargeTemplatesConfigurationPanel canMutate={canMutate} todayYmd={today} />;
         }
         if (section === "accounting") {
             return <AccountingConfigurationPanel glAccounts={glAccounts} glAccountMappings={glAccountMappings} />;
