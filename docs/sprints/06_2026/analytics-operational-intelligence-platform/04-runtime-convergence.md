@@ -508,12 +508,14 @@ Sequence for **maximum leverage, minimum risk**. Each step is independently ship
 
 **Goal:** One real Dashboard surface resolves real OIP data with drill to queue.
 
-1. **`AnalyticsContext` + URL sync** — shared type, provider, search param codec.
-2. **`DrillResolver`** — default mappings for existing OIP keys → queue hrefs (reuse `enrollmentDepartmentViewModel` patterns).
-3. **Production route:** `/adminV2/intelligence/operational` — renders `OiV2MetricOverview` + `MetricPlacementRenderer` with `surface=operational_intelligence`, context from URL.
-4. **Metric footer drill** — wire `MetricCardShell` footer to `DrillResolver` (UI-only, behind flag).
+> **Outcome note (shipped):** the runtime surface ships **inside the existing Workspace → Analytics ("Operational Intelligence") modal** — `OperationalIntelligencePanel` fed by `GET /api/admin/intelligence/operational`. The standalone `/adminV2/intelligence/operational` route and the URL-sync provider/codec below were prototyped then **removed**; routes/modal state are implementation details, configuration lives in Surfaces. See `docs/platform/core/operational-calculations.md` § Runtime.
 
-*Exit:* Operator opens Intelligence route, sees real snapshot metrics, clicks drill → lands in filtered queue.
+1. **`AnalyticsContext`** — shared scope type (`DrillResolver` consumes it).
+2. **`DrillResolver`** — default mappings for existing OIP keys → queue hrefs (reuse `enrollmentDepartmentViewModel` patterns).
+3. **Runtime surface:** the Workspace → Analytics modal renders real OIP metrics + breakdown + affected work with drill to queue.
+4. **Metric footer drill** — wire metric cards to `DrillResolver`.
+
+*Exit:* Operator opens the Analytics modal, sees real snapshot metrics, clicks drill → lands in filtered queue.
 
 ### Phase B — Breakdown (1–2 weeks)
 

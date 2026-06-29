@@ -10,7 +10,7 @@ import {
 import AlloyModeSwitch from "@/components/workspace/AlloyModeSwitch";
 import { Settings2 } from "lucide-react";
 import { OipOverviewStructure } from "@/components/admin/workspace/OipOverviewStructure";
-import { OiV2MetricOverview } from "@/components/admin/metrics/OiV2MetricOverview";
+import { OperationalIntelligencePanel } from "@/components/adminV2/intelligence/OperationalIntelligencePanel";
 import {
     OipKpiObjectCard,
     OipKpiObjectRow,
@@ -327,7 +327,7 @@ export default function AnalyticsWorkspacePanel({ onRequestClose }: AnalyticsWor
                         :   null}
                         <OipOverviewStructure health={health} resolved={resolved} loading={loading} />
                         <div className="mt-4 border-t border-alloy-stone/12 pt-4">
-                            <OiV2MetricOverview />
+                            <OperationalIntelligencePanel />
                         </div>
                     </div>
                 : studioView === "playbooks" ?

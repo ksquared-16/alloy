@@ -33,6 +33,10 @@ import {
     subscribeAdminV2WorkspaceModal,
     getAdminV2WorkspaceModalSnapshot,
 } from "@/lib/adminV2/workspaceModalCoordinator";
+import {
+    parseWorkspaceModalIntent,
+    WORKSPACE_MODAL_INTENT_PARAM,
+} from "@/lib/adminV2/workspaceModalIntent";
 
 function normalizeAdminPath(pathname: string): string {
   return normalizeToCanonicalAdminPath(pathname);
@@ -178,6 +182,21 @@ export default function TopNavBar() {
       window.removeEventListener("adminv2:open-inbox-modal", onOpenInbox);
       window.removeEventListener("adminv2:open-analytics-modal", onOpenAnalytics);
     };
+  }, []);
+
+  // Deep-link bridge: `?workspaceModal=analytics` opens the Operational Intelligence
+  // modal (e.g. from Surfaces → "Open in Workspace"), then cleans the URL. The modal
+  // itself is client state — the param is an implementation detail, not a product URL.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    const intent = parseWorkspaceModalIntent(params);
+    if (intent) {
+      openWorkspaceModal(intent);
+      params.delete(WORKSPACE_MODAL_INTENT_PARAM);
+      const qs = params.toString();
+      window.history.replaceState(null, "", `${window.location.pathname}${qs ? `?${qs}` : ""}`);
+    }
   }, []);
 
   useEffect(() => {
