@@ -241,6 +241,8 @@ So "Field Trip scheduled today → charge created → billable in 3 weeks → in
 
 **As-built (Operational Consumption Slice 1, migration `20260706120000`):** the *runtime contract* that interprets a trigger fact is now first-class — the **Consumption Event** (`consumption_events`), resolving to **Resolved Obligations** (`resolved_obligations`). The trigger fact still lives in `workflow_events`; "Charge Event" is retired only as a *runtime-contract name*, replaced by the Consumption Event, which carries the idempotent, recomputable interpretation and links (when drafted) to a `status='draft'` Charge. Consumption **consumes** the Slice D Charge Template resolver — it does not reimplement pricing — and posts nothing. See [`./operational-consumption-platform.md`](./operational-consumption-platform.md).
 
+**As-built (Operational Consumption Slice 2, migration `20260707120000`):** Consumption now understands **recurring** obligations from an agreement + schedule. A pure schedule-interpretation engine maps a schedule mutation to zero-or-more obligation directives (a recurring schedule → recurring tuition; a replacement → proration credit + replacement tuition; a holiday override / exception / no-op → **no obligation**), and the service consumes **Rate Resolution** + the Charge Template resolver + **Financial Policies** (proration, billing cadence, posting review) to price/date them. One Consumption Event may resolve to **many** Resolved Obligations (`resolved_obligations.obligation_kind` + `period_start`/`period_end`, additive). Still no Posting.
+
 ---
 
 ## 11. Financial periods — determination

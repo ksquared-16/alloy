@@ -52,6 +52,12 @@ export type SimulateArgs = {
     servicePeriodStart?: string | null;
     quantity?: number | null;
     unitAmountCents?: number | null;
+    /**
+     * Amount (cents) resolved by Rate Resolution for a `rate_derived` template.
+     * Supplied by Operational Consumption (recurring tuition / drop-in) so the
+     * existing resolver prices the charge — Consumption never reimplements pricing.
+     */
+    resolvedAmountCents?: number | null;
     today: string;
 };
 
@@ -117,6 +123,7 @@ export async function previewTemplateCharge(
         today: args.today,
         eventDate: args.eventDate,
         servicePeriodStart: args.servicePeriodStart,
+        resolvedAmountCents: args.resolvedAmountCents,
         quantity: args.quantity,
         unitAmountCents: args.unitAmountCents,
         reviewRequiredByPolicy: reviewByPolicy,

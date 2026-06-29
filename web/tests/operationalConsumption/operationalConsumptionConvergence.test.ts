@@ -99,3 +99,52 @@ describe("Operational Consumption — UI surface makes the boundary visible", ()
         expect(sim).toContain("enrollment.registration");
     });
 });
+
+describe("Operational Consumption Slice 2 — Agreement + Schedule consumption", () => {
+    const sql = readRepo("supabase/migrations/20260707120000_operational_consumption_schedule_slice2.sql");
+
+    it("the Slice 2 migration is additive (ALTER ADD COLUMN, seed event types) and writes no money table", () => {
+        expect(sql).toContain("ALTER TABLE public.resolved_obligations");
+        expect(sql).toContain("ADD COLUMN IF NOT EXISTS obligation_kind");
+        for (const k of ["schedule.recurring_tuition", "schedule.proration", "schedule.drop_in", "schedule.extra_day"]) {
+            expect(sql).toContain(k);
+        }
+        expect(sql).toContain("WHERE NOT EXISTS"); // idempotent seed
+        // additive only: no parallel money table, no posting
+        expect(sql).not.toMatch(/CREATE TABLE (IF NOT EXISTS )?public\.(charges|invoices|payments|ledger_transactions|gl_journal_lines|statements)\b/i);
+        expect(sql).not.toMatch(/status:\s*['"]posted['"]/);
+    });
+
+    it("the interpretation engine is pure and encodes 'not every mutation is commercial'", () => {
+        const eng = read("lib/operationalConsumption/scheduleInterpretation.ts");
+        expect(eng).toContain("interpretSchedule");
+        expect(eng).toContain("weekdaysToScheduleBasis");
+        // no IO in the pure engine
+        expect(eng).not.toMatch(/supabase|from\(["']/);
+        for (const kind of ["holiday_override", "exception", "no_op"]) expect(eng).toContain(kind);
+    });
+
+    it("the service consumes Rate Resolution + the Charge resolver (does not reimplement pricing) and never posts", () => {
+        const svc = read("lib/operationalConsumption/consumptionService.ts");
+        expect(svc).toContain("resolveRate");
+        expect(svc).toContain("resolveFinancialPolicy");
+        expect(svc).toContain("writeTemplateDraftCharge"); // existing lifecycle service
+        expect(svc).not.toMatch(/from\(["'](ledger_transactions|gl_journal_lines|invoices|payments|statements)["']\)/);
+        expect(svc).not.toMatch(/status:\s*["']posted["']/);
+    });
+
+    it("the demo dataset adds a rate-derived tuition template + drop-in rate rule", () => {
+        const demo = read("lib/financials/demo/financialConfigDemoDataset.ts");
+        expect(demo).toMatch(/templateKey:\s*"tuition"/);
+        expect(demo).toContain('amountStrategy: "rate_derived"');
+        expect(demo).toContain('scheduleBasis: "drop_in"');
+    });
+
+    it("the simulator exposes schedule scenarios + the explanation chain", () => {
+        const sim = read("components/adminV2/settings/financials/OperationalConsumptionSimulator.tsx");
+        expect(sim).toContain("schedule_change_kind");
+        expect(sim).toContain("Commercial objects used");
+        expect(sim).toContain("Policies applied");
+        expect(sim).toContain("Resolved obligations");
+    });
+});

@@ -20,6 +20,35 @@ export type ConsumptionEventStatus = (typeof CONSUMPTION_EVENT_STATUSES)[number]
 export const RESOLVED_OBLIGATION_STATUSES = ["previewed", "drafted", "no_charge", "superseded"] as const;
 export type ResolvedObligationStatus = (typeof RESOLVED_OBLIGATION_STATUSES)[number];
 
+/** What an obligation IS (drives explanation; pricing/timing still come from the Commercial Model). */
+export const OBLIGATION_KINDS = [
+    "registration",
+    "recurring_tuition",
+    "proration",
+    "proration_credit",
+    "drop_in",
+    "extra_day",
+] as const;
+export type ObligationKind = (typeof OBLIGATION_KINDS)[number];
+
+/**
+ * The financial interpretation of a schedule mutation. Operational Scheduling
+ * answers "where should the child be?"; this answers "what financially applies?".
+ * Not every mutation is commercial — holiday_override / exception / no_op carry
+ * no obligation by themselves.
+ */
+export const SCHEDULE_CHANGE_KINDS = [
+    "recurring",
+    "temporary",
+    "extra_day",
+    "drop_in",
+    "replacement",
+    "holiday_override",
+    "exception",
+    "no_op",
+] as const;
+export type ScheduleChangeKind = (typeof SCHEDULE_CHANGE_KINDS)[number];
+
 /** Registry row: which operational facts carry commercial meaning. */
 export type ConsumptionEventTypeRow = {
     id: string;
@@ -61,6 +90,26 @@ export type OperationalFactDto = {
     servicePeriodStart?: string | null;
     quantity?: number | null;
     unitAmountCents?: number | null;
+
+    // --- Schedule consumption (Slice 2) ---
+    /** How the schedule changed; decides the financial interpretation. Defaults to "recurring". */
+    scheduleChangeKind?: ScheduleChangeKind | null;
+    /** Rate Resolution schedule basis (e.g. three_day). Derived from weekdays/pattern when omitted. */
+    scheduleBasis?: string | null;
+    /** Weekday integers (0=Sun..6=Sat) when the basis must be derived from the pattern. */
+    weekdays?: number[] | null;
+    /** For a replacement: the prior schedule's basis (drives the proration credit). */
+    priorScheduleBasis?: string | null;
+    /** Age group for Rate Resolution. */
+    ageGroupKey?: string | null;
+    /** Optional rate plan disambiguator passed to Rate Resolution. */
+    ratePlanKey?: string | null;
+    /** Service period this consumption covers. */
+    periodStart?: string | null;
+    periodEnd?: string | null;
+    /** Proration inputs (consumed with the proration policy method). */
+    proratedDays?: number | null;
+    periodDays?: number | null;
 };
 
 /** The Consumption Event a fact resolves into (preview shape; persisted in draft mode). */
@@ -82,6 +131,7 @@ export type ConsumptionEventIntent = {
 
 /** A draft obligation the consumption event resolves to (preview shape). */
 export type ResolvedObligationIntent = {
+    obligationKind: ObligationKind;
     chargeTemplateId: string | null;
     serviceId: string | null;
     amountCents: number | null;
@@ -89,7 +139,11 @@ export type ResolvedObligationIntent = {
     responsibilityKey: string | null;
     occursOn: string | null;
     billableOn: string | null;
+    periodStart: string | null;
+    periodEnd: string | null;
     reviewRequired: boolean;
+    /** Whether this obligation should attempt a draft charge (a credit is preview-only). */
+    draftable: boolean;
     status: ResolvedObligationStatus;
     resolutionKey: string | null;
     explanation: Record<string, unknown>;
@@ -130,4 +184,7 @@ export type ResolvedObligationRow = {
     explanation: Record<string, unknown> | null;
     draft_charge_id: string | null;
     resolution_key: string | null;
+    obligation_kind: ObligationKind | null;
+    period_start: string | null;
+    period_end: string | null;
 };

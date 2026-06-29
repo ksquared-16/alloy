@@ -141,6 +141,79 @@ Code: `web/lib/operationalConsumption/` (`consumptionTypes.ts`, `resolveConsumpt
 
 ---
 
-## What this slice does NOT build
+# Slice 2 — Agreement + Schedule consumption (recurring obligations)
 
-Posting, Payments, Invoices, Statements, GL posting, Subsidy runtime, Claims, Settlement, Focus Panel, Attendance consumption, Schedule-tuition consumption, Vacation credits, Refunds, Withdrawal policies. Those are later slices. Slice 1 proves the platform boundary with one vertical.
+Slice 1 proved the boundary with a fixed fee. Slice 2 teaches Consumption to understand **recurring** commercial obligations from an agreement + schedule, still without Posting.
+
+> **The defining principle.** Operational Scheduling answers *"where should the child be?"*. Operational Consumption answers *"what financially applies because of that schedule?"*. **These are not the same question, and operational changes do not automatically imply commercial changes.** Consumption determines the meaning.
+
+## Agreement Consumption doctrine
+
+An agreement is the **scope + subject** of recurring consumption, not itself a charge. Agreement lifecycle facts are consumption *sources*:
+
+| Agreement fact | Consumption meaning |
+|---|---|
+| Agreement Activated | Eligibility opens: combined with a schedule, recurring tuition can be consumed for service periods. |
+| Agreement Updated | Re-evaluate; only a change to billable shape (service/rate scope) is commercial. |
+| Effective Date Changed | The service period window shifts; recurrence re-anchors. Recomputable — no duplicate obligations. |
+| Agreement Ended | Recurrence stops after the end; a partial final period may prorate (preview). |
+
+The agreement supplies the **Rate Resolution scope** (`site_location_id`, age group) and the **billable source** for any draft charge. Consumption reads it; it never mutates it.
+
+## Schedule Consumption doctrine
+
+A schedule fact is interpreted by the **schedule financial interpretation engine** (`web/lib/operationalConsumption/scheduleInterpretation.ts`, pure) into zero-or-more obligation *directives*. **Not every schedule mutation is commercial:**
+
+| Schedule fact | Financial interpretation | Obligation(s) |
+|---|---|---|
+| Recurring schedule (e.g. MWF) | Recurring tuition for the service period | 1 — `recurring_tuition` (draft charge) |
+| Temporary schedule | Tuition prorated across the partial period | 1 — `proration` (**preview only**; adjustment posts downstream) |
+| Extra day | Charged at the drop-in rate | 1 — `extra_day` (draft charge) |
+| Drop-in | Charged at the drop-in rate | 1 — `drop_in` (draft charge) |
+| Schedule replacement | Prior schedule ends mid-period **and** a new recurring tuition begins | 2 — `proration_credit` (preview) **+** `recurring_tuition` (draft charge) |
+| Holiday override | Changes attendance, not the recurring obligation | **0** — no financial impact |
+| Schedule exception | One-off; no obligation by itself | **0** — no financial impact |
+| No-op schedule edit | Billable shape unchanged | **0** — no financial impact |
+
+The engine maps a weekday set (or the pattern's `schedule_type_key`) to a Rate Resolution **schedule basis** (`weekdaysToScheduleBasis`): 3→`three_day`, 4→`four_day`, 5→`five_day`, 1→`drop_in`; an unsupported shape (e.g. a 2-day week) is **null → no obligation, explained**.
+
+## New Consumption Event catalog (Slice 2)
+
+Seeded globally (`20260707120000`), each mapping to the Commercial Model template it resolves:
+
+| Event key | Source family | Charge template (by key) | Amount source |
+|---|---|---|---|
+| `schedule.recurring_tuition` | schedule | `tuition` (rate_derived) | Rate Resolution |
+| `schedule.proration` | schedule | `tuition` (prorated) | Rate Resolution × proration policy |
+| `schedule.drop_in` | schedule | `drop_in` (rate_derived) | Rate Resolution (`drop_in` rule) |
+| `schedule.extra_day` | schedule | `drop_in` (rate_derived) | Rate Resolution (`drop_in` rule) |
+
+## Commercial Resolution — Consumption consumes, never duplicates
+
+For each directive the service:
+1. **Rate Resolution** — `resolveRate(plans, rules, { siteLocationId, ageGroupKey, scheduleBasis, planKey }, periodStart)` selects the Rate Plan + Rate Rule and yields the amount. *(consumed, not reimplemented)*
+2. **Charge Template resolution** — `resolveChargeFromTemplate` (Slice D) prices/dates/categorizes via the rate-resolved amount (`resolvedAmountCents` threaded through `chargeLifecycleService`). *(consumed, not bypassed)*
+3. **Financial Policy resolution** — `resolveFinancialPolicy` for `proration` (method), `billing_cadence`, `posting_review` (drives `review_required`), and `grace_period` (noted; consumed at Posting, not here). *(no new policy types — these already exist)*
+
+Consumption decides *"what should be commercially evaluated?"*; the Commercial Model decides *"what does the org charge?"*.
+
+## One Consumption Event → many Resolved Obligations
+
+`resolved_obligations` gains `obligation_kind` + `period_start`/`period_end` (additive). A single event may now fan out:
+
+```
+Schedule Replacement  →  Proration Credit (preview)  +  Replacement Recurring Tuition (draft charge)
+Recurring Schedule    →  Recurring Tuition (one draft charge per service period, idempotent by period)
+```
+
+Idempotency is per `(org_id, resolution_key)`: a draftable obligation reuses the Charge resolver's `tpl:<key>:<occurs_on>:<scope>` key (period-scoped, so re-running a schedule edit never duplicates and a new period yields a new obligation); preview-only obligations carry a synthesized `cons:<kind>:<period>:<agreement>` key.
+
+## Explanation is a core platform capability
+
+The preview returns, for every step, *why it happened*: the schedule `interpretation` (+ `noImpactReason`), `commercialObjectsUsed` (which Rate Plan / Rate Rule / Charge Template matched or didn't), `policiesApplied` (which policy, scope, and effect), and per-obligation `explanation` (the directive reason, amount strategy, and why a charge was or wasn't created). This is surfaced end-to-end in the Consumption simulator.
+
+---
+
+## What is still OUT of scope (after Slice 2)
+
+Posting, Payments, Invoices, Statements, GL posting, Subsidy runtime, Claims, Settlement, Focus Panel, **Attendance** consumption, late pickup, meals, hourly care, vacation credits, refunds, withdrawals. Slice 2 adds agreement + schedule recurring tuition (and drop-in / proration interpretation); everything else remains a later slice. Posting is never introduced here.

@@ -121,6 +121,7 @@ export function buildFinancialConfigDemoDataset(pivotYear: number): FinancialCon
                     rules: [
                         { scheduleBasis: "five_day", rateBasis: "monthly", amountCents: 110000 },
                         { scheduleBasis: "three_day", rateBasis: "monthly", amountCents: 75000 },
+                        { scheduleBasis: "drop_in", rateBasis: "daily", amountCents: 8000 },
                     ],
                 },
                 {
@@ -129,6 +130,7 @@ export function buildFinancialConfigDemoDataset(pivotYear: number): FinancialCon
                     rules: [
                         { scheduleBasis: "five_day", rateBasis: "monthly", amountCents: 120000 },
                         { scheduleBasis: "three_day", rateBasis: "monthly", amountCents: 82000 },
+                        { scheduleBasis: "drop_in", rateBasis: "daily", amountCents: 9000 },
                     ],
                 },
                 {
@@ -137,6 +139,7 @@ export function buildFinancialConfigDemoDataset(pivotYear: number): FinancialCon
                     rules: [
                         { scheduleBasis: "five_day", rateBasis: "monthly", amountCents: 130000 },
                         { scheduleBasis: "three_day", rateBasis: "monthly", amountCents: 89000 },
+                        { scheduleBasis: "drop_in", rateBasis: "daily", amountCents: 10000 },
                     ],
                 },
             ],
@@ -159,6 +162,11 @@ export function buildFinancialConfigDemoDataset(pivotYear: number): FinancialCon
 
     const chargeTemplates: DemoChargeTemplate[] = [
         { templateKey: "registration_fee", label: "Registration Fee", serviceKey: "registration", chargeCategory: "fee", triggerType: "manual", amountStrategy: "fixed", amountCents: 15000, occursOn: "now", billableOn: "immediate", reviewRequired: false },
+        // Recurring tuition: rate-derived (priced by Rate Resolution), service-period-anchored,
+        // billable next cycle — consumed by schedule.recurring_tuition (Operational Consumption Slice 2).
+        { templateKey: "tuition", label: "Recurring Tuition", serviceKey: "full_time_care", chargeCategory: "tuition", triggerType: "schedule", amountStrategy: "rate_derived", occursOn: "service_period_start", billableOn: "next_billing_cycle", reviewRequired: false },
+        // Drop-in / extra day: rate-derived at the drop_in rate rule, occurs on the day, billable immediately.
+        { templateKey: "drop_in", label: "Drop-In Day", serviceKey: "full_time_care", chargeCategory: "tuition", triggerType: "schedule", amountStrategy: "rate_derived", occursOn: "event_date", billableOn: "immediate", reviewRequired: false },
         { templateKey: "field_trip", label: "Field Trip", serviceKey: "field_trips", chargeCategory: "one_time", triggerType: "event", amountStrategy: "fixed", amountCents: 4500, occursOn: "event_date", billableOn: "offset_days", billableOffsetDays: 21 },
         { templateKey: "late_pickup", label: "Late Pickup", chargeCategory: "late_pickup", triggerType: "attendance", amountStrategy: "fixed", amountCents: 2500, occursOn: "event_date", billableOn: "immediate", reviewRequired: true },
         { templateKey: "diapers", label: "Diapers / Consumables", serviceKey: "meals", chargeCategory: "consumable_fee", triggerType: "schedule", amountStrategy: "usage_derived", occursOn: "service_period_start", billableOn: "next_billing_cycle" },

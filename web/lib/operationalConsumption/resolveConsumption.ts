@@ -44,7 +44,9 @@ function obligationFromChargeIntent(
     chargeIntent: ChargeIntent | null,
 ): ResolvedObligationIntent | null {
     if (!chargeIntent || !chargeIntent.eligible || !chargeIntent.wouldCreateDraft) return null;
+    const kind = (eventType.metadata as { obligation_kind?: string } | null)?.obligation_kind;
     return {
+        obligationKind: kind === "recurring_tuition" || kind === "drop_in" || kind === "extra_day" || kind === "proration" || kind === "proration_credit" ? kind : "registration",
         chargeTemplateId: chargeIntent.templateId,
         serviceId: chargeIntent.serviceId,
         amountCents: chargeIntent.amountCents,
@@ -52,7 +54,10 @@ function obligationFromChargeIntent(
         responsibilityKey: chargeIntent.responsibilityKey ?? eventType.default_responsibility_key ?? null,
         occursOn: chargeIntent.occursOn,
         billableOn: chargeIntent.billableOn,
+        periodStart: null,
+        periodEnd: null,
         reviewRequired: chargeIntent.reviewRequired,
+        draftable: true,
         status: "previewed",
         resolutionKey: chargeIntent.resolutionKey,
         explanation: {
