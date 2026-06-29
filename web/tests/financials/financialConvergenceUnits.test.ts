@@ -9,11 +9,8 @@ import {
     resolveGlAccountForMappingKey,
 } from "@/lib/financials/accounting/resolveGlMapping";
 import {
-    normalizeFinancialService,
-    parseFinancialServices,
     slugifyServiceKey,
-    upsertServiceInList,
-    type FinancialService,
+    validateServiceFields,
 } from "@/lib/financials/services/financialServicesStore";
 import { buildFinancialConfigDemoDataset } from "@/lib/financials/demo/financialConfigDemoDataset";
 import type { GlAccountMappingRow, GlAccountRow } from "@/lib/financials/gl/glConfigTypes";
@@ -65,34 +62,16 @@ describe("resolveGlMapping — Charge Category → GL Mapping → GL Account", (
 // Financial services store (pure helpers)
 // ---------------------------------------------------------------------------
 
-describe("financialServicesStore — pure helpers", () => {
-    it("slugifies keys and derives a key from the label", () => {
+describe("financialServicesStore — pure validation", () => {
+    it("slugifies keys and derives the key from the label", () => {
         expect(slugifyServiceKey("Full-Time Care")).toBe("full_time_care");
-        const svc = normalizeFinancialService({ label: "Before Care", serviceType: "recurring" }, "svc_1");
-        expect(svc).toMatchObject({ id: "svc_1", key: "before_care", serviceType: "recurring", isActive: true });
+        const fields = validateServiceFields({ label: "Before Care", serviceType: "recurring" });
+        expect(fields).toMatchObject({ service_key: "before_care", service_type: "recurring", label: "Before Care" });
     });
 
     it("rejects an invalid service type and a blank label", () => {
-        expect(() => normalizeFinancialService({ label: "X", serviceType: "nope" }, "id")).toThrow();
-        expect(() => normalizeFinancialService({ label: "  ", serviceType: "recurring" }, "id")).toThrow();
-    });
-
-    it("upsert rejects a duplicate key on another service", () => {
-        const a: FinancialService = { id: "1", key: "meals", label: "Meals", serviceType: "usage", unit: null, isActive: true, sortOrder: 0 };
-        const b: FinancialService = { id: "2", key: "meals", label: "Meals 2", serviceType: "usage", unit: null, isActive: true, sortOrder: 1 };
-        expect(() => upsertServiceInList([a], b)).toThrow();
-        // same id replaces in place
-        expect(upsertServiceInList([a], { ...a, label: "Meals X" })).toHaveLength(1);
-    });
-
-    it("parses stored services and drops malformed entries", () => {
-        const parsed = parseFinancialServices([
-            { id: "1", label: "A", serviceType: "recurring" },
-            { id: "2", label: "B" }, // missing type → dropped
-            "garbage",
-        ]);
-        expect(parsed).toHaveLength(1);
-        expect(parsed[0].key).toBe("a");
+        expect(() => validateServiceFields({ label: "X", serviceType: "nope" })).toThrow();
+        expect(() => validateServiceFields({ label: "  ", serviceType: "recurring" })).toThrow();
     });
 });
 

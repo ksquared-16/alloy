@@ -41,16 +41,20 @@ export default function CreateRatePlanForm({
     busy,
     scopeOptions,
     ageGroupOptions,
+    serviceOptions,
     onCreate,
     onCancel,
 }: {
     busy?: boolean;
     scopeOptions: ScopeOptions;
     ageGroupOptions: { value: string; label: string }[];
+    /** Services this plan can price (Commercial Model). First option is "—". */
+    serviceOptions: { value: string; label: string }[];
     onCreate: (payload: Record<string, unknown>) => Promise<void>;
     onCancel: () => void;
 }) {
     const [scope, setScope] = useState<ScopeSelection>(ORG_SCOPE_SELECTION);
+    const [serviceId, setServiceId] = useState("");
     const [ageGroupKey, setAgeGroupKey] = useState("");
     const [planKey, setPlanKey] = useState("");
     const [label, setLabel] = useState("");
@@ -68,6 +72,7 @@ export default function CreateRatePlanForm({
         const payload: Record<string, unknown> = {
             ...scopeSelectionToPayload(scope),
             plan_key: planKey.trim(),
+            service_id: serviceId || null,
             label: label.trim() || null,
             currency_code: currency.trim() || DEFAULT_RATE_CURRENCY_CODE,
             billing_basis: billingBasis,
@@ -86,6 +91,9 @@ export default function CreateRatePlanForm({
         <ConfigurationDetailCard title="New rate plan" testId="financials-create-rate-plan">
             <ScopePicker value={scope} onChange={setScope} options={scopeOptions} disabled={busy} testIdPrefix="create-plan-scope" />
             <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3">
+                <ConfigFieldLabel label="Service">
+                    <ConfigSelectInput value={serviceId} onChange={setServiceId} options={serviceOptions} disabled={busy} testId="create-plan-service" />
+                </ConfigFieldLabel>
                 <ConfigFieldLabel label="Plan key">
                     <ConfigTextInput value={planKey} onChange={setPlanKey} disabled={busy} placeholder="standard_tuition" testId="create-plan-plan_key" />
                 </ConfigFieldLabel>

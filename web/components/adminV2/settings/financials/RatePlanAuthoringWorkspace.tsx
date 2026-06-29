@@ -99,6 +99,7 @@ export default function RatePlanAuthoringWorkspace({
     canMutate,
     authoring,
     labelFor,
+    serviceLabelFor,
 }: {
     plan: ChildcareRatePlanRow | null;
     ratePlans: ChildcareRatePlanRow[];
@@ -108,6 +109,8 @@ export default function RatePlanAuthoringWorkspace({
     authoring: RateAuthoring;
     /** Resolve a scope-target id to a human label (Phase 4); identity if absent. */
     labelFor?: (id: string) => string | undefined;
+    /** Resolve a Service id to its label (Commercial Model). */
+    serviceLabelFor?: (id: string) => string | undefined;
 }) {
     const scopeLabel = (p: ChildcareRatePlanRow): string =>
         describeScopeWithLabel(p, labelFor ?? (() => undefined));
@@ -224,6 +227,7 @@ export default function RatePlanAuthoringWorkspace({
                     <ConfigScopeBadge label={scopeLabel(plan)} override={isScopeOverride(plan)} />
                 </div>
                 <ConfigFieldGrid>
+                    <ConfigField label="Service" value={plan.service_id ? serviceLabelFor?.(plan.service_id) ?? "—" : "—"} />
                     <ConfigField label="Plan key" value={plan.plan_key} />
                     <ConfigField label="Scope" value={scopeLabel(plan)} />
                     <ConfigField label="Currency" value={currency} />

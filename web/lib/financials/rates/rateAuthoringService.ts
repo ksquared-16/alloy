@@ -238,6 +238,7 @@ export type CreateRatePlanInput = {
     roomLocationId?: string | null;
     ageGroupKey?: string | null;
     planKey: string;
+    serviceId?: string | null;
     label?: string | null;
     currencyCode?: string | null;
     billingBasis: string;
@@ -268,6 +269,7 @@ export async function createRatePlan(
         ...scope,
         age_group_key: trimOrNull(input.ageGroupKey),
         plan_key: planKey,
+        service_id: trimOrNull(input.serviceId),
         label: trimOrNull(input.label),
         currency_code: (trimOrNull(input.currencyCode) ?? DEFAULT_RATE_CURRENCY_CODE).toUpperCase(),
         billing_basis: requireBillingBasis(input.billingBasis),
@@ -350,6 +352,7 @@ export async function createRatePlanVersion(
         room_location_id: prior.room_location_id,
         age_group_key: prior.age_group_key,
         plan_key: prior.plan_key,
+        service_id: prior.service_id,
         label: input.label !== undefined ? trimOrNull(input.label) : prior.label,
         currency_code:
             input.currencyCode != null

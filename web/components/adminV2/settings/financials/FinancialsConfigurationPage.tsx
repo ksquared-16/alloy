@@ -36,6 +36,7 @@ import {
     type FinancialsConfigSection,
 } from "@/components/adminV2/settings/financials/useFinancialsConfigurationSettings";
 import { useRateAuthoring } from "@/components/adminV2/settings/financials/useRateAuthoring";
+import { useFinancialServices } from "@/components/adminV2/settings/financials/useFinancialServices";
 import {
     classifyVersionStatus,
     currentVersionId,
@@ -66,7 +67,18 @@ export default function FinancialsConfigurationPage() {
     const { loading, error, ratePlans, rateRules, glAccounts, glAccountMappings, refresh } =
         useFinancialsConfigurationSettings();
     const { options: scopeOptions, labelFor, ageGroupOptions } = useScopeOptions();
+    const { services } = useFinancialServices();
     const authoring = useRateAuthoring(refresh);
+
+    const serviceLabelById = useMemo(() => {
+        const m = new Map<string, string>();
+        for (const s of services) m.set(s.id, s.label);
+        return m;
+    }, [services]);
+    const serviceOptions = useMemo(
+        () => [{ value: "", label: "— No service —" }, ...services.filter((s) => s.isActive).map((s) => ({ value: s.id, label: s.label }))],
+        [services],
+    );
 
     const [section, setSection] = useState<FinancialsConfigSection>("overview");
     const [selectedLineageKey, setSelectedLineageKey] = useState<string | null>(null);
@@ -170,7 +182,7 @@ export default function FinancialsConfigurationPage() {
                                 key={key}
                                 active={key === selectedLineageKey && !creatingPlan}
                                 title={(working.label ?? "").trim() || working.plan_key}
-                                subtitle={`${describeScopeWithLabel(working, labelFor)} · ${working.currency_code} · ${rows.length} version${rows.length === 1 ? "" : "s"}`}
+                                subtitle={`${working.service_id ? `${serviceLabelById.get(working.service_id) ?? "Service"} · ` : ""}${describeScopeWithLabel(working, labelFor)} · ${working.currency_code} · ${rows.length} version${rows.length === 1 ? "" : "s"}`}
                                 trailing={<ConfigVersionBadge status={status} />}
                                 onClick={() => {
                                     setSelectedLineageKey(key);
@@ -269,6 +281,7 @@ export default function FinancialsConfigurationPage() {
                         busy={authoring.busy}
                         scopeOptions={scopeOptions}
                         ageGroupOptions={ageGroupOptions}
+                        serviceOptions={serviceOptions}
                         onCancel={() => setCreatingPlan(false)}
                         onCreate={async (payload) => {
                             await authoring.createPlan(payload);
@@ -287,6 +300,7 @@ export default function FinancialsConfigurationPage() {
                     canMutate={canMutate}
                     authoring={authoring}
                     labelFor={labelFor}
+                    serviceLabelFor={(id) => serviceLabelById.get(id)}
                 />
             );
         }

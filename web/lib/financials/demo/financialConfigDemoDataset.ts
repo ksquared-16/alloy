@@ -29,6 +29,8 @@ export type DemoRatePlanVersion = {
 export type DemoRatePlan = {
     planKey: string;
     label: string;
+    /** Service key this plan prices (Commercial Model); resolved to service_id at seed time. */
+    serviceKey?: string;
     scopeType: "org" | "site" | "program" | "room";
     currencyCode: string;
     calculationStrategy: string;
@@ -82,6 +84,7 @@ export function buildFinancialConfigDemoDataset(pivotYear: number): FinancialCon
         {
             planKey: "standard_tuition",
             label: "Standard Tuition",
+            serviceKey: "full_time_care",
             scopeType: "org",
             currencyCode: "USD",
             calculationStrategy: "scheduled",

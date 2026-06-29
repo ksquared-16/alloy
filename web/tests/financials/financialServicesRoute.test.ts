@@ -62,7 +62,7 @@ describe("financial services route", () => {
         expect((await servicesRoute.POST(post({ action: "update", id: "svc_1", label: "Meals", service_type: "usage" }))).status).toBe(200);
         expect(svc.updateFinancialService).toHaveBeenCalled();
         expect((await servicesRoute.POST(post({ action: "set_active", id: "svc_1", is_active: false }))).status).toBe(200);
-        expect(svc.setFinancialServiceActive).toHaveBeenCalledWith(expect.anything(), orgId, "svc_1", false);
+        expect(svc.setFinancialServiceActive).toHaveBeenCalledWith(expect.anything(), orgId, "svc_1", false, userId);
     });
 
     it("rejects an unknown action", async () => {

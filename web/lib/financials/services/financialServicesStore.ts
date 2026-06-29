@@ -1,25 +1,25 @@
 /**
- * Financial Services catalog (Financial Configuration Convergence).
+ * Financial Services catalog (Commercial Model) — first-class entity.
  *
- * Services represent what the organization actually sells (Full-Time Care,
- * Before Care, Transportation, Meals, Registration, …) — the foundational
- * financial object that rates, charge templates, and posting will attach to.
+ * Service is what the organization sells (Full-Time Care, Before Care,
+ * Transportation, Meals, Registration, …). Promoted from the interim
+ * org_settings.metadata.financials.services blob to the first-class
+ * `financial_services` table (migration 20260702120000) per the frozen domain
+ * doctrine (docs/platform/modules/financial-platform-domain.md, determination #1).
  *
- * Persisted as structured JSON under `org_settings.metadata.financials.services`
- * — a generic per-org store that already exists with org-scoped RLS, so this
- * adds a real, authorable catalog with NO new table/migration/backend
- * architecture. Read-modify-write of the `financials` subtree keeps unrelated
- * org settings intact.
+ * A Service catalog is a list, not effective-dated truth — rate AMOUNTS remain
+ * the versioned objects (Rate Plans/Rules). Services carry is_active + audit.
  *
- * Doctrine note: a service catalog is a list, not effective-dated truth — rate
- * *amounts* remain the versioned, effective-dated objects (Rate Plans/Rules).
- * Wiring rates to attach to a service is a future backend pass (see docs).
- *
- * The list/validation helpers are pure (unit-tested); only load/save touch the DB.
+ * The exported API stays camelCase so existing route/panel/hook/seed callers are
+ * unchanged; only the persistence moved from JSON to a table. Pure validation
+ * helpers are unit-tested; only the DB functions touch the table. Server-only,
+ * role-gated at the route layer. No posting/charges/GL writes.
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { OperationalEnrollmentServiceError, trimOrNull } from "@/lib/childcareOperational/operationalEnrollmentErrors";
+
+const TABLE = "financial_services";
 
 export const FINANCIAL_SERVICE_TYPES = ["recurring", "one_time", "usage", "attendance_derived"] as const;
 export type FinancialServiceType = (typeof FINANCIAL_SERVICE_TYPES)[number];
@@ -31,18 +31,27 @@ export const FINANCIAL_SERVICE_TYPE_LABEL: Record<FinancialServiceType, string> 
     attendance_derived: "Attendance-derived",
 };
 
+/** camelCase API shape (decoupled from the snake_case table columns). */
 export type FinancialService = {
     id: string;
     key: string;
     label: string;
     serviceType: FinancialServiceType;
-    /** Optional unit for usage/recurring services (e.g. "day", "week", "trip", "meal"). */
     unit: string | null;
+    description: string | null;
     isActive: boolean;
     sortOrder: number;
 };
 
-const SERVICES_KEY = "services";
+export type FinancialServiceInput = {
+    id?: string | null;
+    key?: string | null;
+    label: string;
+    serviceType: string;
+    unit?: string | null;
+    description?: string | null;
+    sortOrder?: number | null;
+};
 
 function fail(code: OperationalEnrollmentServiceError["code"], message: string): never {
     throw new OperationalEnrollmentServiceError(code, message);
@@ -60,136 +69,123 @@ function isServiceType(value: unknown): value is FinancialServiceType {
     return typeof value === "string" && (FINANCIAL_SERVICE_TYPES as readonly string[]).includes(value);
 }
 
-export type FinancialServiceInput = {
-    id?: string | null;
-    key?: string | null;
+export type ValidatedServiceFields = {
+    service_key: string;
     label: string;
-    serviceType: string;
-    unit?: string | null;
-    isActive?: boolean;
-    sortOrder?: number | null;
+    service_type: FinancialServiceType;
+    unit: string | null;
+    description: string | null;
 };
 
-/** Validate + normalize a service input into a stored service (pure). */
-export function normalizeFinancialService(input: FinancialServiceInput, fallbackId: string): FinancialService {
+/** Validate + normalize an input into the columns to persist (pure). */
+export function validateServiceFields(input: FinancialServiceInput): ValidatedServiceFields {
     const label = trimOrNull(input.label);
     if (!label) fail("invalid_input", "Service label is required");
     if (!isServiceType(input.serviceType)) {
         fail("invalid_input", `serviceType must be one of ${FINANCIAL_SERVICE_TYPES.join(", ")}`);
     }
-    const key = slugifyServiceKey(trimOrNull(input.key) ?? label);
-    if (!key) fail("invalid_input", "Service key could not be derived from the label");
+    const service_key = slugifyServiceKey(trimOrNull(input.key) ?? label);
+    if (!service_key) fail("invalid_input", "Service key could not be derived from the label");
+    return { service_key, label, service_type: input.serviceType, unit: trimOrNull(input.unit), description: trimOrNull(input.description) };
+}
+
+type ServiceRow = {
+    id: string;
+    service_key: string;
+    label: string;
+    service_type: FinancialServiceType;
+    unit: string | null;
+    description: string | null;
+    is_active: boolean;
+    sort_order: number;
+};
+
+function rowToService(row: ServiceRow): FinancialService {
     return {
-        id: trimOrNull(input.id) ?? fallbackId,
-        key,
-        label,
-        serviceType: input.serviceType,
-        unit: trimOrNull(input.unit),
-        isActive: input.isActive ?? true,
-        sortOrder: typeof input.sortOrder === "number" ? input.sortOrder : 0,
+        id: row.id,
+        key: row.service_key,
+        label: row.label,
+        serviceType: row.service_type,
+        unit: row.unit ?? null,
+        description: row.description ?? null,
+        isActive: row.is_active !== false,
+        sortOrder: typeof row.sort_order === "number" ? row.sort_order : 0,
     };
 }
 
-/** Parse a raw services array from org_settings metadata into typed services (pure). */
-export function parseFinancialServices(raw: unknown): FinancialService[] {
-    if (!Array.isArray(raw)) return [];
-    const out: FinancialService[] = [];
-    for (const item of raw) {
-        if (!item || typeof item !== "object") continue;
-        const o = item as Record<string, unknown>;
-        if (typeof o.id !== "string" || typeof o.label !== "string" || !isServiceType(o.serviceType)) continue;
-        out.push({
-            id: o.id,
-            key: typeof o.key === "string" ? o.key : slugifyServiceKey(o.label),
-            label: o.label,
-            serviceType: o.serviceType,
-            unit: typeof o.unit === "string" ? o.unit : null,
-            isActive: o.isActive !== false,
-            sortOrder: typeof o.sortOrder === "number" ? o.sortOrder : 0,
-        });
-    }
-    return out.sort((a, b) => a.sortOrder - b.sortOrder || a.label.localeCompare(b.label));
-}
-
-/** Insert or replace a service by id (pure). Rejects a duplicate key on another service. */
-export function upsertServiceInList(list: readonly FinancialService[], service: FinancialService): FinancialService[] {
-    if (list.some((s) => s.id !== service.id && s.key === service.key)) {
-        fail("conflict", `A service with key "${service.key}" already exists`);
-    }
-    const exists = list.some((s) => s.id === service.id);
-    const next = exists ? list.map((s) => (s.id === service.id ? service : s)) : [...list, service];
-    return next.slice().sort((a, b) => a.sortOrder - b.sortOrder || a.label.localeCompare(b.label));
-}
-
 // ---------------------------------------------------------------------------
-// DB access (org_settings.metadata.financials.services)
+// DB access (financial_services table)
 // ---------------------------------------------------------------------------
-
-type FinancialsBlob = Record<string, unknown>;
-
-async function loadOrgMetadata(supabase: SupabaseClient, orgId: string): Promise<Record<string, unknown>> {
-    const { data, error } = await supabase.from("org_settings").select("metadata").eq("org_id", orgId).maybeSingle();
-    if (error) fail("db_error", error.message);
-    return ((data as { metadata?: Record<string, unknown> } | null)?.metadata ?? {}) as Record<string, unknown>;
-}
-
-function readFinancialsBlob(metadata: Record<string, unknown>): FinancialsBlob {
-    const fin = metadata.financials;
-    return fin && typeof fin === "object" && !Array.isArray(fin) ? (fin as FinancialsBlob) : {};
-}
 
 export async function listFinancialServices(supabase: SupabaseClient, orgId: string): Promise<FinancialService[]> {
-    const metadata = await loadOrgMetadata(supabase, orgId);
-    return parseFinancialServices(readFinancialsBlob(metadata)[SERVICES_KEY]);
-}
-
-/** Read-modify-write the financials.services subtree, preserving all other settings. */
-async function saveFinancialServices(
-    supabase: SupabaseClient,
-    orgId: string,
-    services: FinancialService[],
-): Promise<FinancialService[]> {
-    const metadata = await loadOrgMetadata(supabase, orgId);
-    const financials = readFinancialsBlob(metadata);
-    const nextMetadata = { ...metadata, financials: { ...financials, [SERVICES_KEY]: services } };
-    const { error } = await supabase
-        .from("org_settings")
-        .upsert({ org_id: orgId, metadata: nextMetadata }, { onConflict: "org_id" });
+    const { data, error } = await supabase
+        .from(TABLE)
+        .select("*")
+        .eq("org_id", orgId)
+        .order("sort_order", { ascending: true });
     if (error) fail("db_error", error.message);
-    return services;
+    return ((data ?? []) as ServiceRow[]).map(rowToService);
 }
 
-function newServiceId(): string {
-    // Server-only id generation (route layer). Pure helpers never call this.
-    return `svc_${globalThis.crypto.randomUUID()}`;
+async function findByKey(supabase: SupabaseClient, orgId: string, key: string): Promise<ServiceRow | null> {
+    const { data, error } = await supabase
+        .from(TABLE)
+        .select("*")
+        .eq("org_id", orgId)
+        .eq("service_key", key)
+        .maybeSingle();
+    if (error) fail("db_error", error.message);
+    return (data ?? null) as ServiceRow | null;
 }
 
 export async function createFinancialService(
     supabase: SupabaseClient,
     orgId: string,
     input: FinancialServiceInput,
+    actorUserId?: string | null,
 ): Promise<FinancialService> {
-    const existing = await listFinancialServices(supabase, orgId);
-    const service = normalizeFinancialService(
-        { ...input, sortOrder: input.sortOrder ?? existing.length * 10 },
-        newServiceId(),
-    );
-    const next = upsertServiceInList(existing, service);
-    await saveFinancialServices(supabase, orgId, next);
-    return service;
+    const fields = validateServiceFields(input);
+    const existing = await findByKey(supabase, orgId, fields.service_key);
+    if (existing) fail("conflict", `A service with key "${fields.service_key}" already exists`);
+    const actor = trimOrNull(actorUserId);
+    const { data, error } = await supabase
+        .from(TABLE)
+        .insert({
+            org_id: orgId,
+            ...fields,
+            is_active: true,
+            sort_order: typeof input.sortOrder === "number" ? input.sortOrder : 100,
+            source_key: "config",
+            metadata: {},
+            created_by: actor,
+            updated_by: actor,
+        })
+        .select("*")
+        .single();
+    if (error || !data) fail("db_error", error?.message ?? "service insert failed");
+    return rowToService(data as ServiceRow);
 }
 
 export async function updateFinancialService(
     supabase: SupabaseClient,
     orgId: string,
     input: FinancialServiceInput & { id: string },
+    actorUserId?: string | null,
 ): Promise<FinancialService> {
-    const existing = await listFinancialServices(supabase, orgId);
-    if (!existing.some((s) => s.id === input.id)) fail("not_found", "Service not found");
-    const service = normalizeFinancialService(input, input.id);
-    const next = upsertServiceInList(existing, service);
-    await saveFinancialServices(supabase, orgId, next);
-    return service;
+    const fields = validateServiceFields(input);
+    const dup = await findByKey(supabase, orgId, fields.service_key);
+    if (dup && dup.id !== input.id) fail("conflict", `A service with key "${fields.service_key}" already exists`);
+    const update: Record<string, unknown> = { ...fields, updated_by: trimOrNull(actorUserId) };
+    if (typeof input.sortOrder === "number") update.sort_order = input.sortOrder;
+    const { data, error } = await supabase
+        .from(TABLE)
+        .update(update)
+        .eq("org_id", orgId)
+        .eq("id", input.id)
+        .select("*")
+        .single();
+    if (error || !data) fail("db_error", error?.message ?? "service not found");
+    return rowToService(data as ServiceRow);
 }
 
 export async function setFinancialServiceActive(
@@ -197,9 +193,15 @@ export async function setFinancialServiceActive(
     orgId: string,
     id: string,
     isActive: boolean,
-): Promise<FinancialService[]> {
-    const existing = await listFinancialServices(supabase, orgId);
-    if (!existing.some((s) => s.id === id)) fail("not_found", "Service not found");
-    const next = existing.map((s) => (s.id === id ? { ...s, isActive } : s));
-    return saveFinancialServices(supabase, orgId, next);
+    actorUserId?: string | null,
+): Promise<FinancialService> {
+    const { data, error } = await supabase
+        .from(TABLE)
+        .update({ is_active: isActive, updated_by: trimOrNull(actorUserId) })
+        .eq("org_id", orgId)
+        .eq("id", id)
+        .select("*")
+        .single();
+    if (error || !data) fail("db_error", error?.message ?? "service not found");
+    return rowToService(data as ServiceRow);
 }

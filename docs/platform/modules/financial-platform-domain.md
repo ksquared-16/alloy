@@ -215,7 +215,7 @@ Charge Category ──> GL Mapping ──> GL Account ──> Accounting Period
 - **Rate Rules must key off Service**, not only `schedule_basis`. Pricing should answer "Full-Time Care," with schedule basis a *dimension of* a Service rate rather than its identity.
 - Future verticals make this non-optional: medical "procedure," HVAC "service line," restaurant "menu item," fitness "class/membership" are all **Service**.
 
-The `org_settings` services catalog shipped in the Financial Configuration Convergence is **interim only** — it proved the authoring UX with no migration. It is frozen at its current scope: **do not build additional financial configuration on top of it.**
+The `org_settings` services catalog shipped in the Financial Configuration Convergence was **interim only**. **As-built (Commercial Model Slice A, migration `20260702120000`):** Service is now the first-class `financial_services` table, and `childcare_rate_plans.service_id` wires the Rate Plan → Service relationship. The org_settings services path has been removed. Charge Templates and Financial Policies (the remaining promotions) follow as their own vertical slices.
 
 ---
 

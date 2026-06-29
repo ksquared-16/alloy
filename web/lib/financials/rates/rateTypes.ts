@@ -70,6 +70,8 @@ export type ChildcareRatePlanRow = ConfigRuleScopeColumns &
         org_id: string;
         age_group_key: string | null;
         plan_key: string;
+        /** Owning Service (Commercial Model). Nullable; resolution unaffected. */
+        service_id: string | null;
         label: string | null;
         currency_code: string;
         billing_basis: BillingBasis;

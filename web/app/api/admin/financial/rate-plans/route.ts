@@ -54,6 +54,7 @@ export async function POST(request: NextRequest) {
                 roomLocationId: body.room_location_id != null ? String(body.room_location_id) : null,
                 ageGroupKey: body.age_group_key != null ? String(body.age_group_key) : null,
                 planKey: String(body.plan_key ?? ""),
+                serviceId: body.service_id != null ? String(body.service_id) : null,
                 label: body.label != null ? String(body.label) : null,
                 currencyCode: body.currency_code != null ? String(body.currency_code) : null,
                 billingBasis: String(body.billing_basis ?? ""),

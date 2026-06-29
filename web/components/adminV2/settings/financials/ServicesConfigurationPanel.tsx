@@ -4,6 +4,7 @@ import { useState } from "react";
 import {
     FINANCIAL_SERVICE_TYPES,
     FINANCIAL_SERVICE_TYPE_LABEL,
+    type FinancialService,
 } from "@/lib/financials/services/financialServicesStore";
 import {
     ConfigurationContext,
@@ -21,32 +22,47 @@ import {
 import { useFinancialServices } from "@/components/adminV2/settings/financials/useFinancialServices";
 
 /**
- * Services configuration (Financial Configuration Convergence). The catalog of
- * what the organization sells — the foundational financial object that rates,
- * charge templates, and posting attach to. Real, authorable, persisted to org
- * configuration. Inline authoring, no drawers.
+ * Services configuration (Commercial Model). The catalog of what the organization
+ * sells — the first-class entity (table `financial_services`) that rates, charge
+ * templates, scheduling, attendance, billing, and posting attach to. Real,
+ * authorable (create / edit / activate). Inline authoring, no drawers, no IDs.
  */
 
 const TYPE_OPTIONS = FINANCIAL_SERVICE_TYPES.map((t) => ({ value: t, label: FINANCIAL_SERVICE_TYPE_LABEL[t] }));
 
+type Draft = { id: string | null; label: string; serviceType: string; unit: string; description: string };
+const EMPTY_DRAFT: Draft = { id: null, label: "", serviceType: FINANCIAL_SERVICE_TYPES[0], unit: "", description: "" };
+
 export default function ServicesConfigurationPanel({ canMutate }: { canMutate: boolean }) {
-    const { services, loading, error, busy, createService, setServiceActive } = useFinancialServices();
-    const [adding, setAdding] = useState(false);
-    const [label, setLabel] = useState("");
-    const [serviceType, setServiceType] = useState<string>(FINANCIAL_SERVICE_TYPES[0]);
-    const [unit, setUnit] = useState("");
+    const { services, loading, error, busy, createService, updateService, setServiceActive } = useFinancialServices();
+    const [draft, setDraft] = useState<Draft | null>(null);
     const [formError, setFormError] = useState<string | null>(null);
 
-    async function submit() {
-        if (!label.trim()) return setFormError("Service name is required");
+    function openCreate() {
+        setDraft({ ...EMPTY_DRAFT });
         setFormError(null);
+    }
+    function openEdit(s: FinancialService) {
+        setDraft({ id: s.id, label: s.label, serviceType: s.serviceType, unit: s.unit ?? "", description: s.description ?? "" });
+        setFormError(null);
+    }
+
+    async function submit() {
+        if (!draft) return;
+        if (!draft.label.trim()) return setFormError("Service name is required");
+        setFormError(null);
+        const body = {
+            label: draft.label.trim(),
+            service_type: draft.serviceType,
+            unit: draft.unit.trim() || null,
+            description: draft.description.trim() || null,
+        };
         try {
-            await createService({ label: label.trim(), service_type: serviceType, unit: unit.trim() || null });
-            setLabel("");
-            setUnit("");
-            setAdding(false);
+            if (draft.id) await updateService({ id: draft.id, ...body });
+            else await createService(body);
+            setDraft(null);
         } catch (e) {
-            setFormError(e instanceof Error ? e.message : "Failed to create service");
+            setFormError(e instanceof Error ? e.message : "Failed to save service");
         }
     }
 
@@ -57,8 +73,8 @@ export default function ServicesConfigurationPanel({ canMutate }: { canMutate: b
                 subtitle="What does the organization sell? Rates and charges attach to these services."
                 testId="financials-services-context"
                 actions={
-                    canMutate && !adding ? (
-                        <ConfigPrimaryButton onClick={() => setAdding(true)} testId="financials-services-add">
+                    canMutate && !draft ? (
+                        <ConfigPrimaryButton onClick={openCreate} testId="financials-services-add">
                             Add service
                         </ConfigPrimaryButton>
                     ) : undefined
@@ -71,17 +87,20 @@ export default function ServicesConfigurationPanel({ canMutate }: { canMutate: b
                 </p>
             ) : null}
 
-            {canMutate && adding ? (
-                <ConfigurationDetailCard title="New service" testId="financials-services-form">
+            {canMutate && draft ? (
+                <ConfigurationDetailCard title={draft.id ? "Edit service" : "New service"} testId="financials-services-form">
                     <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
                         <ConfigFieldLabel label="Name">
-                            <ConfigTextInput value={label} onChange={setLabel} disabled={busy} placeholder="Full-Time Care" testId="financials-services-label" />
+                            <ConfigTextInput value={draft.label} onChange={(v) => setDraft({ ...draft, label: v })} disabled={busy} placeholder="Full-Time Care" testId="financials-services-label" />
                         </ConfigFieldLabel>
                         <ConfigFieldLabel label="Type">
-                            <ConfigSelectInput value={serviceType} onChange={setServiceType} options={TYPE_OPTIONS} disabled={busy} testId="financials-services-type" />
+                            <ConfigSelectInput value={draft.serviceType} onChange={(v) => setDraft({ ...draft, serviceType: v })} options={TYPE_OPTIONS} disabled={busy} testId="financials-services-type" />
                         </ConfigFieldLabel>
                         <ConfigFieldLabel label="Unit (optional)">
-                            <ConfigTextInput value={unit} onChange={setUnit} disabled={busy} placeholder="month, week, trip…" testId="financials-services-unit" />
+                            <ConfigTextInput value={draft.unit} onChange={(v) => setDraft({ ...draft, unit: v })} disabled={busy} placeholder="month, week, trip…" testId="financials-services-unit" />
+                        </ConfigFieldLabel>
+                        <ConfigFieldLabel label="Description (optional)">
+                            <ConfigTextInput value={draft.description} onChange={(v) => setDraft({ ...draft, description: v })} disabled={busy} testId="financials-services-description" />
                         </ConfigFieldLabel>
                     </div>
                     {formError ? (
@@ -92,9 +111,9 @@ export default function ServicesConfigurationPanel({ canMutate }: { canMutate: b
                     <div className="mt-3">
                         <ConfigButtonRow>
                             <ConfigPrimaryButton onClick={() => void submit()} disabled={busy} testId="financials-services-save">
-                                Add service
+                                {draft.id ? "Save service" : "Add service"}
                             </ConfigPrimaryButton>
-                            <ConfigSecondaryButton onClick={() => setAdding(false)} disabled={busy}>
+                            <ConfigSecondaryButton onClick={() => setDraft(null)} disabled={busy}>
                                 Cancel
                             </ConfigSecondaryButton>
                         </ConfigButtonRow>
@@ -123,16 +142,22 @@ export default function ServicesConfigurationPanel({ canMutate }: { canMutate: b
                                     <p className="config-typo-sublabel text-alloy-forge/60">
                                         {FINANCIAL_SERVICE_TYPE_LABEL[s.serviceType]}
                                         {s.unit ? ` · per ${s.unit}` : ""} · {s.key}
+                                        {s.description ? ` · ${s.description}` : ""}
                                     </p>
                                 </div>
                                 {canMutate ? (
-                                    <ConfigSecondaryButton
-                                        onClick={() => void setServiceActive(s.id, !s.isActive)}
-                                        disabled={busy}
-                                        testId={`financials-service-toggle-${s.id}`}
-                                    >
-                                        {s.isActive ? "Deactivate" : "Reactivate"}
-                                    </ConfigSecondaryButton>
+                                    <ConfigButtonRow>
+                                        <ConfigSecondaryButton onClick={() => openEdit(s)} disabled={busy} testId={`financials-service-edit-${s.id}`}>
+                                            Edit
+                                        </ConfigSecondaryButton>
+                                        <ConfigSecondaryButton
+                                            onClick={() => void setServiceActive(s.id, !s.isActive)}
+                                            disabled={busy}
+                                            testId={`financials-service-toggle-${s.id}`}
+                                        >
+                                            {s.isActive ? "Deactivate" : "Reactivate"}
+                                        </ConfigSecondaryButton>
+                                    </ConfigButtonRow>
                                 ) : null}
                             </li>
                         ))}

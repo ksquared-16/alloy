@@ -43,20 +43,39 @@ describe("Convergence — decision-oriented IA", () => {
     });
 });
 
-describe("Convergence — Services is real (org_settings-backed)", () => {
-    it("the services route is role-gated and persists via the store", () => {
+describe("Commercial Model — Service is a first-class entity (Slice A)", () => {
+    it("the financial_services migration + Rate Plan→Service column exist", () => {
+        const root2 = resolve(__dirname, "../../..");
+        const sql = readFileSync(resolve(root2, "supabase/migrations/20260702120000_financial_services_commercial_model.sql"), "utf8");
+        expect(sql).toContain("CREATE TABLE IF NOT EXISTS public.financial_services");
+        expect(sql).toContain("ADD COLUMN IF NOT EXISTS service_id");
+        expect(sql).toContain("ENABLE ROW LEVEL SECURITY");
+    });
+
+    it("the services store reads/writes the financial_services table, not org_settings", () => {
+        const store = read("lib/financials/services/financialServicesStore.ts");
+        expect(store).toContain('"financial_services"');
+        // no longer queries the interim org_settings store
+        expect(store).not.toMatch(/from\(["']org_settings["']\)/);
+    });
+
+    it("the services route is role-gated", () => {
         const route = read("app/api/admin/financial/services/route.ts");
         expect(route).toMatch(/export async function POST/);
         expect(route).toContain("requireAdminOrOps");
-        const store = read("lib/financials/services/financialServicesStore.ts");
-        expect(store).toContain("org_settings");
-        expect(store).toContain("financials");
     });
 
-    it("the services panel authors inline (no drawers)", () => {
+    it("the services panel authors inline (create/edit/activate, no drawers)", () => {
         const panel = read("components/adminV2/settings/financials/ServicesConfigurationPanel.tsx");
         expect(panel).toContain("useFinancialServices");
+        expect(panel).toContain("updateService");
         expect(panel).not.toMatch(/openDrawer|useAdminDrawer/);
+    });
+
+    it("rate plan create form picks a Service (Commercial Model)", () => {
+        const form = read("components/adminV2/settings/financials/CreateRatePlanForm.tsx");
+        expect(form).toContain("serviceOptions");
+        expect(form).toContain("service_id");
     });
 });
 

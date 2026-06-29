@@ -481,3 +481,19 @@ Status: shipped. Financials is reorganized from a table browser into a decision-
 
 ### What remains intentionally unbuilt
 Wiring rates to attach to a Service (Services is a catalog today; rate rules still key off schedule basis — recommended next backend pass); org-level policy/charge-template authoring (designed; persists to org config next); Posting/Payments/Subsidy/Responsibility runtime; GL authoring. No Focus Panel, Attendance UI, or Settings IA reorg.
+
+---
+
+## Commercial Model — Slice A: Service first-class entity (IMPLEMENTED)
+
+Status: shipped. First vertical slice of the Commercial Model (per the frozen domain doctrine, [`../../platform/modules/financial-platform-domain.md`](../../platform/modules/financial-platform-domain.md), determination #1). Backend + configuration + seed + QA + docs, together.
+
+- **`financial_services` table** (migration `20260702120000_financial_services_commercial_model.sql`) — Service promoted from the interim `org_settings.metadata.financials.services` blob to a first-class, org-scoped entity (service_key unique per org, label, service_type, unit, description, is_active, sort_order, audit; RLS mirrors the rate-plan tables). A catalog (not effective-dated) per doctrine — rate *amounts* remain the versioned objects.
+- **Rate Plan → Service relationship** — `childcare_rate_plans` gains a nullable `service_id` (FK, `ON DELETE SET NULL`). Rate Resolution is unchanged (association/grouping dimension). A Service may have multiple plans (Standard / Corporate / Scholarship …).
+- **Service layer refactored** — `financialServicesStore.ts` now reads/writes the table (camelCase API unchanged, so route/panel/hook/seed callers are untouched); pure validation is unit-tested. The `org_settings` services path is removed.
+- **Config UI** — Services panel authors inline (create / edit / activate, with description); the rate-plan create form picks a Service; the plan queue + workspace show the Service label (no IDs).
+- **Seed** — the idempotent demo seed now seeds the `financial_services` table and links the Standard Tuition plan to Full-Time Care.
+- **Tests** — `financialServicesEntity.test.ts` (table CRUD + duplicate-key conflict + rate-plan `service_id` carry-through), updated convergence posture (migration present, store is table-backed, form picks Service), updated pure validation. 238 focused tests green.
+
+### Next slices (same vertical pattern)
+**Slice B — Charge Templates** (first-class, scoped, effective-dated config: Service, category, trigger, occurs-on / billable-on, default GL + responsibility). **Slice C — Financial Policies** (scoped Org→Location→Service→Rate Plan→Agreement, effective-dated). Both deferred to follow-on passes; Service had to land first.

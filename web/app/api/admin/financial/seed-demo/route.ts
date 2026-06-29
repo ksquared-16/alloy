@@ -70,11 +70,17 @@ async function seedRatePlans(
 ): Promise<{ plans: number; rules: number }> {
     const { data: existing } = await supabase.from("childcare_rate_plans").select("plan_key").eq("org_id", orgId);
     const existingKeys = new Set((existing ?? []).map((p) => (p as { plan_key: string }).plan_key));
+    // Resolve Service keys → ids so seeded plans attach to their Service (Commercial Model).
+    const { data: svcRows } = await supabase.from("financial_services").select("id, service_key").eq("org_id", orgId);
+    const serviceIdByKey = new Map<string, string>(
+        ((svcRows ?? []) as { id: string; service_key: string }[]).map((s) => [s.service_key, s.id]),
+    );
     let planCount = 0;
     let ruleCount = 0;
 
     for (const plan of plans) {
         if (existingKeys.has(plan.planKey)) continue;
+        const serviceId = plan.serviceKey ? serviceIdByKey.get(plan.serviceKey) ?? null : null;
         let priorId: string | null = null;
         const versions = [...plan.versions].sort((a, b) => (a.effectiveStart < b.effectiveStart ? -1 : 1));
         for (let i = 0; i < versions.length; i++) {
@@ -89,6 +95,7 @@ async function seedRatePlans(
                 room_location_id: null,
                 age_group_key: null,
                 plan_key: plan.planKey,
+                service_id: serviceId,
                 label: plan.label,
                 currency_code: plan.currencyCode,
                 billing_basis: v.billingBasis,

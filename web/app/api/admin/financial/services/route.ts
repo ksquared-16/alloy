@@ -47,35 +47,48 @@ export async function POST(request: NextRequest) {
 
     try {
         if (action === "create") {
-            const service = await createFinancialService(supabase, ctx.orgId, {
-                label: String(body.label ?? ""),
-                key: body.key != null ? String(body.key) : null,
-                serviceType: String(body.service_type ?? ""),
-                unit: body.unit != null ? String(body.unit) : null,
-            });
+            const service = await createFinancialService(
+                supabase,
+                ctx.orgId,
+                {
+                    label: String(body.label ?? ""),
+                    key: body.key != null ? String(body.key) : null,
+                    serviceType: String(body.service_type ?? ""),
+                    unit: body.unit != null ? String(body.unit) : null,
+                    description: body.description != null ? String(body.description) : null,
+                },
+                ctx.userId,
+            );
             return NextResponse.json({ service }, { status: 201 });
         }
 
         if (action === "update") {
-            const service = await updateFinancialService(supabase, ctx.orgId, {
-                id: String(body.id ?? ""),
-                label: String(body.label ?? ""),
-                key: body.key != null ? String(body.key) : null,
-                serviceType: String(body.service_type ?? ""),
-                unit: body.unit != null ? String(body.unit) : null,
-                sortOrder: body.sort_order != null ? Number(body.sort_order) : null,
-            });
+            const service = await updateFinancialService(
+                supabase,
+                ctx.orgId,
+                {
+                    id: String(body.id ?? ""),
+                    label: String(body.label ?? ""),
+                    key: body.key != null ? String(body.key) : null,
+                    serviceType: String(body.service_type ?? ""),
+                    unit: body.unit != null ? String(body.unit) : null,
+                    description: body.description != null ? String(body.description) : null,
+                    sortOrder: body.sort_order != null ? Number(body.sort_order) : null,
+                },
+                ctx.userId,
+            );
             return NextResponse.json({ service }, { status: 200 });
         }
 
         if (action === "set_active") {
-            const services = await setFinancialServiceActive(
+            const service = await setFinancialServiceActive(
                 supabase,
                 ctx.orgId,
                 String(body.id ?? ""),
                 body.is_active !== false,
+                ctx.userId,
             );
-            return NextResponse.json({ services }, { status: 200 });
+            return NextResponse.json({ service }, { status: 200 });
         }
 
         return NextResponse.json(
