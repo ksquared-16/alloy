@@ -89,4 +89,9 @@ describe("Surfaces runtime link opens the modal, not the dev mock", () => {
     it("preview link remains the clearly-separate dev/mock surface", () => {
         expect(oi?.previewHref).toBe("/dev/analytics-surface-mocks");
     });
+
+    it("exposes a real Configure action pointing at the metric placement builder", () => {
+        expect(oi?.configureHref).toBe("/admin/settings/analytics?tab=placements");
+        expect(oi?.configureHref).not.toContain("/dev/");
+    });
 });

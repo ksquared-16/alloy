@@ -31,6 +31,8 @@ export type SurfaceConfigObject = {
     previewHref?: string;
     /** When the surface has a live production route, link operators straight to it. */
     liveHref?: string;
+    /** Primary configuration target (the real metric/placement builder) when one exists. */
+    configureHref?: string;
 };
 
 /** Dev-only preview of the Analytics / Dashboard surface composition + Metric Card language. */
@@ -75,6 +77,9 @@ export const SURFACE_OBJECTS: Record<SurfaceConfigSectionKey, SurfaceConfigObjec
             // (`/workspace` browser URL → AdminV2 tree) where TopNavBar reads the param
             // and opens the modal. NB: `/adminV2` redirects to `/admin` and drops params.
             liveHref: "/workspace?workspaceModal=analytics",
+            // Real configuration: the metric placement builder. Placements for
+            // surface=operational_intelligence drive the runtime modal's metric set.
+            configureHref: "/admin/settings/analytics?tab=placements",
         },
         {
             id: "enrollment-intelligence",
