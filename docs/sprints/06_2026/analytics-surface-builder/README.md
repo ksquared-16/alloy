@@ -1,57 +1,55 @@
-# Analytics Surface Builder — replacement product
+# Analytics Surface Builder — one builder, every surface
 
-**Status:** Product correction (June 2026). The authoring model for Analytics is **replaced**, not improved.
+**Status:** Product correction (June 2026). The Analytics authoring model is **replaced**. Operational Intelligence becomes a **Surface Type** inside the existing Surface Builder — the same builder that powers Focus Panels, Queue Rows, Workspace Headers, and Work Unit Headers. We do not invent another builder; we extend the one we have.
 
-**The one workflow:** `Settings → Surfaces → Operational Intelligence → Section → Add Card → Card type → Metric → Renderer → Configure → Publish`. The operator never sees `metric_definitions`, `metric_visualizations`, `metric_placements`, "display styles", or "where it appears". Surfaces owns Analytics; the platform quietly manages calculations, renderers, placements, and runtime wiring — exactly like Focus Panels, Queue Rows, and Workspace.
+**The whole product:** `Settings → Surfaces → Operational Intelligence → (canvas) → Section → Card → Publish`. The operator never sees `metric_definitions`, `metric_visualizations`, `metric_placements`, "display styles", or "where it appears". Analytics is **content** inside a Surface; the platform writes the implementation underneath.
 
 ---
 
-## 1. High-fidelity mockups (open in a browser)
+## 1. The replacement builder (open in a browser)
 
-The actual UI, in the Alloy design system (`mockups/_shared.css`, Pine/Midnight). Not wireframes.
+Alloy design system (`mockups/_shared.css`). Production-quality HTML, not wireframes. Mirrors the Focus Panel builder: **left tree + component library · center live canvas · right contextual Inspector**, with inline "+ Add card" insertion (the same "+ line" pattern). No tabs, no wizard, no forms-first config.
 
 | File | Screen |
 |---|---|
-| `mockups/builder-01-operational-intelligence.html` | **Surface Builder canvas** — Settings → Surfaces → Operational Intelligence. Sections rail, live cards, drag, Add card, unpublished-changes bar, Publish. |
-| `mockups/builder-04-card-type-picker.html` | **Add Card · step 1** — card-type gallery (KPI, Trend, Gauge, Comparison, Chart, Breakdown, Table, Health, Narrative, Insight, Recommendation, Forecast, Affected work, Action panel, Command panel). |
-| `mockups/builder-02-add-card-metric-picker.html` | **Add Card · step 2** — Metric picker grouped by business process; question-led, "Live/Available/Set up" status; live preview. No implementation terms. |
-| `mockups/builder-03-configure-card-placement.html` | **Add Card · step 4** — Configure: renderer, label, question, tone thresholds, drill, and **"Appears on"** (placement belongs to the card, multi-surface). Live preview. |
+| `mockups/builder-canvas.html` | **The complete builder.** Left: Surface tree (Operational Intelligence → Sections → Cards) + Available components (KPI, Trend, Gauge, Comparison, Breakdown, Chart, Table, Health, Narrative, Insight, Recommendation, Forecast, Affected work, Action, Command). Center: live canvas of real runtime cards, selected card highlighted, inline "+ Add card". Right: contextual Inspector (Card · Content · Renderer · Promote) with Content picker, Renderer chips, Title, Question, Tone thresholds, Comparison, Drill, and **Promote to** (the surfaces this card appears on). |
+| `mockups/builder-add-card-inline.html` | **Add card, inline.** Click "+ Add card" → an in-place panel opens on the canvas: pick a card type, pick its Content (grouped, question-led, Live/Set-up status), live preview, Insert. No full-screen wizard. |
 
-**The test:** open `builder-01`. It should read as "yes, that is obviously how Analytics should be built" — a Surface composed of Sections and Cards, identical in spirit to the Focus Panel builder.
+**The test:** open `builder-canvas.html`. It should read like Figma/Webflow for surfaces — one canvas, one interaction model — and obviously the same builder as Focus Panels. If it reads as "a better Analytics Configuration page", it failed.
 
 ---
 
 ## 2. Convergence plan — every `/settings/analytics` screen
 
-`/settings/analytics` stops being the operator workflow. Verdicts:
+`/settings/analytics` stops being the Analytics product. It becomes **Platform → Operational Calculations** (admin-only). Verdicts:
 
 | Today (`/settings/analytics`) | Writes | Verdict | New home |
 |---|---|---|---|
-| **"Calculations"** tab (MetricBuilderPanel) | `metric_definitions` | **Move → Advanced** | Platform → Operational Calculations (define formula/source/grain). Pickable as a Metric in the builder. |
-| **"Display styles"** tab (VisualizationBuilderPanel) | `metric_visualizations` | **Merge + rename** | Becomes the **Renderer** step inside Add Card / card config. Standalone tab **deleted**. The word "visualization/display style" → **Renderer**. |
-| **"Where it appears"** tab (PlacementBuilderPanel) | `metric_placements` | **Delete (as a tab)** | Placement moves **into the card** ("Appears on"). `metric_placements` still written — invisibly, by the builder. The phrase "where it appears" **disappears**. |
-| **"Combined scores"** tab (RollupBuilderPanel) | `metric_rollups` | **Move → Advanced** | Platform → Operational Calculations (Rollups). The resulting rollup is pickable as a **Health** card metric. |
-| **"Targets"** (legacy KpiTargetsPanel) | KPI config | **Delete** | Folded into card **tone thresholds** (Configure step). |
-| **"Visibility"** (legacy OipVisibilityPanel) | pack visibility | **Delete** | Folded into card visibility + section management. |
-| **"+ New metric"** flow (MetricSetupFlow) | 3 tables | **Replace** | Add Card flow handles placement; defining a brand-new calculation routes to Platform → Operational Calculations → New calculation. |
+| **"Calculations"** tab (MetricBuilderPanel) | `metric_definitions` | **Move → Advanced** | Platform → Operational Calculations (formula, source, grain). Surfaces as **Content** in the picker. |
+| **"Display styles"** tab (VisualizationBuilderPanel) | `metric_visualizations` | **Merge** | Becomes the **Renderer** control in the card Inspector. Standalone tab **deleted**. |
+| **"Where it appears"** tab (PlacementBuilderPanel) | `metric_placements` | **Delete** | Replaced by **Promote to** in the card Inspector. `metric_placements` written invisibly. |
+| **"Combined scores"** (RollupBuilderPanel) | `metric_rollups` | **Move → Advanced** | Platform → Operational Calculations. The rollup is pickable as **Health** card content. |
+| **"Targets" / "Visibility"** (legacy) | KPI/pack config | **Delete** | Folded into card tone thresholds + visibility. |
+| **"+ New metric"** (MetricSetupFlow) | 3 tables | **Replace** | The builder's Add-card + Content flow; brand-new calculations route to Platform → Operational Calculations. |
 | **Metric snapshot button** | snapshots | **Move → Advanced** | Platform → Operational Calculations (Snapshots / Adapters). |
-| **`/settings/analytics` route** | — | **Reframe → Advanced** | Becomes **Platform → Operational Calculations** (admin-only: formula, source, threshold, target, rollup, snapshot, adapter, version). Not the normal path. |
+| **`/settings/analytics` route** | — | **Replace (rename)** | Becomes **Operational Calculations** (Platform). Not where operators build Operational Intelligence. |
 
-Result: **one** authoring place (Surfaces); **one** advanced place (Operational Calculations); zero implementation vocabulary in the operator path.
+Net: **one** authoring place (Surfaces), **one** advanced place (Operational Calculations). Zero implementation vocabulary in the operator path.
 
 ---
 
-## 3. Implementation slices (start after mockups are approved)
+## 3. Implementation slices — start now, ship aggressively
 
-Reuses the Focus Panel Surface Builder, the Card Language / Metric renderers, the placements API, and the runtime already shipped. No new builder, card language, placement system, dashboard architecture, runtime, or renderer system.
+Reuse `FocusPanelSummarySurfaceEditor` + `FocusPanelCardInspector` (the canonical builder + Inspector), the Card Language / `MetricVisualRenderer`, the placements API (writes immediately, no draft/publish split), the Operational Calculations registry (Content picker), and the shipped runtime. Build nothing new.
 
-1. **S1 · Surface editor kind.** Add `editor: "operational-intelligence"` to the OI dashboards entry in `useSurfacesConfigurationSettings.ts`; render an `AnalyticsSurfaceBuilder` shell that mirrors `FocusPanelSummarySurfaceEditor` (load → canvas → inspector → publish). Surfaces "Configure" opens the builder, not the placements tab.
-2. **S2 · Canvas from placements.** Sections map to `placement_zone` (overview/health/trends/comparisons) or a `surface_key` per section. Render cards with the existing `MetricPlacementRenderer` (`surface=operational_intelligence`) — the config→runtime path already merged into the modal reuses the same resolution.
-3. **S3 · Add Card flow.** Card type → Metric picker (from the Operational Calculations registry, grouped by business process) → Renderer (`MetricVisualizationType`) → Configure → write `metric_visualization` (if new) + `metric_placement` via the existing POST APIs. Immediate, no draft/publish split for placements.
-4. **S4 · Card Inspector.** Edit label (visualization label), renderer (visualization_type), thresholds (definition `threshold_config`), drill (drill registry), and **Appears on** (create/remove placements across surfaces) via existing PATCH APIs.
-5. **S5 · Reorder / resize.** Drag → `sort_order` PATCH; span cycle. Mirror `moveSummaryCardToIndex` / `cycleSummaryCardSpan`.
-6. **S6 · Reframe Platform.** Move the four builder tabs + snapshots behind **Platform → Operational Calculations (advanced)**; relabel; keep deep-links for admins. Update Surfaces nav so Dashboards & Analytics surfaces all carry the builder editor.
-7. **S7 · Publish + refresh.** Lightweight "Published" confirmation; fire `ANALYTICS_V2_SNAPSHOTS_UPDATED` so the runtime Analytics modal reloads.
+1. **S1 · Operational Intelligence as a Surface Type.** Give the OI dashboards entry an `editor`; render an `AnalyticsSurfaceBuilder` shell cloned from `FocusPanelSummarySurfaceEditor` (toolbar + centered live canvas + contextual Inspector + inline insertion). Surfaces "Configure" opens the builder.
+2. **S2 · Canvas from runtime.** Render the canvas with the existing config-driven path (`metric_placements` → `MetricPlacementRenderer`, `surface=operational_intelligence`) that the runtime modal already uses. Sections = `placement_zone` (or a `surface_key` per section).
+3. **S3 · Left tree + component library.** Surface tree (sections → cards) + "Available components" = the card-type vocabulary. Drag/click inserts.
+4. **S4 · Add card (inline).** "+ Add card" → card type → Content (Operational Calculations registry, grouped by business process) → write `metric_visualization` (if new) + `metric_placement` via existing POST APIs. Mirror the FP "+ line" catalog.
+5. **S5 · Card Inspector.** Clone `FocusPanelCardInspector` tabs → Card · Content · Renderer · Promote: Title (viz label), Renderer (`visualization_type`), thresholds (`threshold_config`), drill (drill registry), **Promote to** = create/remove placements across surfaces, via existing PATCH APIs.
+6. **S6 · Reorder / resize.** Drag → `sort_order` PATCH; span cycle. Mirror `moveSummaryCardToIndex` / `cycleSummaryCardSpan`.
+7. **S7 · Replace `/settings/analytics`.** Rename route → **Operational Calculations** (Platform, advanced); move the four builder tabs + snapshots there; delete "Targets"/"Visibility". Surfaces nav: every Dashboards & Analytics surface carries the builder editor.
+8. **S8 · Publish + refresh.** "Published" confirmation; fire `ANALYTICS_V2_SNAPSHOTS_UPDATED` so the runtime modal reloads.
 
-Each slice is independently shippable and replaces one piece of the current UI. After S1–S7, the answer to *"how do I add a metric to Operational Intelligence, the Workspace Header, or a Work Unit Header?"* is one workflow: **build the Surface.**
+Each slice independently replaces a piece of the current UI. After S1–S8 the answer to *"how do I add a metric to Operational Intelligence, the Workspace Header, or a Work Unit Header?"* is one workflow: **build the Surface** — in the one builder that powers them all.
 </content>
