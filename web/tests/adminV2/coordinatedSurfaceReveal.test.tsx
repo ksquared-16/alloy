@@ -4,10 +4,6 @@ import { createElement, type ReactNode } from "react";
 import { createRoot } from "react-dom/client";
 import { act } from "react";
 
-import {
-    computeWorkspaceRevealGate,
-    workspaceRevealKpiRegionReady,
-} from "@/lib/adminV2/workspaceRevealGate";
 import { workUnitPageContentReady } from "@/lib/adminV2/workUnitPageRevealPolicy";
 import { CORE_SURFACE_PRELOAD_REGISTRY } from "@/lib/adminV2/coreSurfacePreloadRegistry";
 import {
@@ -151,34 +147,6 @@ describe("Phase 2 — /workspace single coordinated reveal", () => {
         } catch {
             /* ignore */
         }
-    });
-
-    it("above-fold reveals only when every region is ready — one boundary (test #1)", () => {
-        const blocked = computeWorkspaceRevealGate({
-            shell_ready: true,
-            department_tiles_ready: true,
-            tile_counts_ready: false,
-            kpi_region_ready: true,
-            actions_ready: true,
-        });
-        expect(blocked.above_fold_ready).toBe(false);
-        expect(blocked.reason_if_blocked).toContain("tile_counts");
-
-        const ready = computeWorkspaceRevealGate({
-            shell_ready: true,
-            department_tiles_ready: true,
-            tile_counts_ready: true,
-            kpi_region_ready: true,
-            actions_ready: true,
-        });
-        expect(ready.above_fold_ready).toBe(true);
-        expect(ready.reason_if_blocked).toHaveLength(0);
-    });
-
-    it("KPI region never blocks reveal — it hydrates in its placement, not as a detached loader (test #3)", () => {
-        // Quiet-reserve contract: the gate treats the KPI region as ready so tiles never wait on
-        // (and never visually detach from) slow KPI metrics; values fill the reserved placement.
-        expect(workspaceRevealKpiRegionReady()).toBe(true);
     });
 
     it("warm cache stores tiles + KPIs as one surface and restores them together (test #2)", () => {

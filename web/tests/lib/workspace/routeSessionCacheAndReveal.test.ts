@@ -30,14 +30,6 @@ import {
     type CachedDeptAttentionBucket,
 } from "@/lib/workspace/adminV2WorkspaceSessionCache";
 
-import {
-    computeWorkspaceRevealGate,
-    workspaceRevealShellReady,
-    workspaceRevealDepartmentTilesReady,
-    workspaceRevealTileCountsReady,
-    workspaceRevealKpiRegionReady,
-    workspaceRevealActionsReady,
-} from "@/lib/adminV2/workspaceRevealGate";
 
 import {
     computeDeptRevealGate,
@@ -108,7 +100,7 @@ describe("workspace warm cache", () => {
         expect(hit).toBeNull();
     });
 
-    it("round-trips workspace root cache and satisfies reveal gate", () => {
+    it("round-trips workspace root cache (tiles + KPIs as one warm surface)", () => {
         const departments = [
             { id: "dept-a", name: "Enrollment", is_active: true, key: "enrollment", metadata: null },
         ];
@@ -128,33 +120,9 @@ describe("workspace warm cache", () => {
         const hit = readWorkspaceRootCache("org-1", "user-1", "fp-1");
         expect(hit).not.toBeNull();
         expect(hit!.departments).toHaveLength(1);
-
-        // Simulate what the workspace page does after a cache hit
-        const shell_ready = workspaceRevealShellReady({
-            bootstrap_loading: false,
-            departments_resolved: hit!.departments.length > 0,
-        });
-        const department_tiles_ready = workspaceRevealDepartmentTilesReady({
-            bootstrap_loading: false,
-            has_departments: hit!.departments.length > 0,
-            fetch_settled_empty: false,
-        });
-        const tile_counts_ready = workspaceRevealTileCountsReady({
-            has_departments: hit!.departments.length > 0,
-            quick_rollup_applied: hit!.metrics !== null,
-            fetch_settled_empty: false,
-        });
-
-        const gate = computeWorkspaceRevealGate({
-            shell_ready,
-            department_tiles_ready,
-            tile_counts_ready,
-            kpi_region_ready: workspaceRevealKpiRegionReady(),
-            actions_ready: workspaceRevealActionsReady(),
-        });
-
-        expect(gate.above_fold_ready).toBe(true);
-        expect(gate.reason_if_blocked).toHaveLength(0);
+        expect(hit!.deptTileStats).toEqual(deptTileStats);
+        expect(hit!.metrics).toEqual(metrics);
+        // The whole surface is one cached unit; the Route VM reveals it without a client gate.
     });
 
     it("cache key is scoped by org + user + fingerprint (cross-org isolation)", () => {
