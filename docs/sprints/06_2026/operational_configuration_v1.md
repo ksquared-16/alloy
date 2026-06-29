@@ -351,3 +351,43 @@ Write/versioning services + routes for P1 config rules and P3.2 rate plans/rules
 ### Recommended next batch
 
 **Batch 1 — Financials write + versioning:** supersede-based effective-dated write services + admin routes for Rate Plans and Rate Rules, behind the same read layouts (read-before-write). Then **Batch 2** for Locations operational-rule authoring (capacity/ratio/operating windows/schedule).
+
+---
+
+## Batch 1 — Financials Write + Versioning (IMPLEMENTED)
+
+Status: shipped. Versioned authoring for Rate Plans + Rate Rules inside the existing Financials configuration surface. **No schema change / no migration** — the P3.2 tables already carry `effective_start` / `effective_end` / `is_active` / `metadata` and the RLS already permits scoped insert/update/delete for admin/ops. No posting, payments, AR, subsidy, charge-resolution changes, or GL authoring.
+
+### Versioning model (effective-dated, never overwritten)
+
+- A **logical rate plan** is the set of `childcare_rate_plans` rows sharing `(plan_key, scope, age_group)`; each row is one **version** with its own effective window. A **rate-rule lineage** is the set of `childcare_rate_rules` rows sharing `(rate_plan_id, schedule_basis, age_group)`.
+- The rate tables have **no `status` / `supersedes_id` column** (unlike placements). Supersede is therefore expressed purely by **effective dating**: a new version row + the prior row's `effective_end` closed the day before (`computePriorRowCloseDate`). The prior-version link is preserved in `metadata.supersedes_id` / `metadata.lineage_origin_id` for auditability without a schema change.
+- **Status is derived, not stored:** `Current` (latest open row effective today), `Scheduled` (future start), `Superseded` (ended with a later version), `Retired` (ended/deactivated with no successor). Classification lives in the pure, domain-generic `effectiveDatedVersioning.ts` and agrees with the resolver's "latest effective_start" tie-break.
+
+### Operations (all server-side, role-gated admin/ops)
+
+| Operation | Plan | Rule | Semantics |
+|---|---|---|---|
+| create | ✓ | ✓ | genesis version |
+| future version / supersede | ✓ | ✓ | new row, close prior the day before; **plan supersede carries the prior version's currently-effective rules forward** so resolution never hits `no_rule` |
+| retire | ✓ | ✓ | close `effective_end` (date-based, non-destructive); a past/today date also `is_active=false` on plans |
+| void | ✓ | ✓ | hard-delete a **not-yet-started** version (rollback) and **reopen its predecessor**; refused once a version was ever effective |
+
+### Runtime components
+
+- **`lib/adminV2/operationalConfig/effectiveDatedVersioning.ts`** — pure, domain-generic version model (status classification, version timeline, `planSupersede`, `canVoidVersion`). The single reusable primitive intended to later power capacity / ratio / operating-window / schedule-rule authoring.
+- **`lib/financials/rates/rateAuthoringService.ts`** — supersede-based write service for plans + rules (mirrors `supersedeChildPlacement`). Reuses the shared `effectiveDating` helpers and `OperationalEnrollmentServiceError`.
+- **`app/api/admin/financial/rate-plans/route.ts`** + **`rate-rules/route.ts`** — `requireAdminOrOps`-gated POST routes dispatching `create | version | retire | void`.
+- **`components/adminV2/settings/configurationRuntime/EffectiveDatedConfigurationEditor.tsx`** + `ConfigEditorPrimitives.tsx` — **the one shared editor primitive** (version timeline + status badges + inline "create future version" + retire/void + resolved-preview slot), field-driven and domain-agnostic. This is the §9 "one effective-dated editor primitive" reuse decision, realized.
+- **`components/adminV2/settings/financials/RatePlanAuthoringWorkspace.tsx`**, `CreateRatePlanForm.tsx`, `useRateAuthoring.ts` — financials authoring host: plan version timeline, nested per-schedule-basis rule editors, add-rule, create-new-plan, and a **resolved-rate preview** using the authoritative `resolveRate`. `FinancialsConfigurationPage` now lists one entry per plan lineage and hosts authoring; the read-only `RatePlanDetailPanel` was folded into the workspace and removed.
+
+### Tests
+
+- `tests/adminV2/effectiveDatedVersioning.test.ts` — pure status/timeline/supersede/void model.
+- `tests/financials/rateAuthoringService.test.ts` — create/version (incl. rule carry-forward)/retire/void for plans + rules, validation + not-found paths, lineage metadata, predecessor reopen.
+- `tests/financials/rateAuthoringRoutes.test.ts` — auth gating, action dispatch, actor wiring, error→HTTP mapping, POST-only.
+- `tests/adminV2/operationalConfigurationV1Batch0.test.ts` — updated posture: GL + Locations remain read-only; Financials rate authoring routes export gated POST; versioning primitive is domain-generic. The shared mock (`mockOperationalEnrollmentSupabase.ts`) gained `.delete()` + bulk-insert-await support.
+
+### What remains intentionally unbuilt (Batch 1)
+
+Location/program **picker** for scoped plans (V1 takes scope-target IDs; org scope is the common case); Batch 2 Locations operational-rule authoring (capacity/ratio/operating windows/schedule) — already designed to reuse `EffectiveDatedConfigurationEditor` + `effectiveDatedVersioning`; posting, payments, financial responsibility, subsidy, and GL authoring (later phases).
