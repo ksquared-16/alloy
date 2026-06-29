@@ -9,6 +9,7 @@ import { loadAdminViewerTimezoneBootstrap } from "@/lib/admin/viewerTimezoneBoot
 import { loadOperationalOrgTimezoneIana } from "@/lib/admin/loadOperationalOrgTimezoneServer";
 import { loadEntityLabelsMapForUser, type EntityLabelsBootstrapMap } from "@/lib/admin/entityLabelsServer";
 import { loadOperatorLifecycleLandingCardsServer } from "@/lib/admin/loadOperatorLifecycleLandingServer";
+import { composeWorkspaceRouteVm } from "@/lib/adminV2/runtime/surface/workspaceRouteVm";
 
 export const dynamic = "force-dynamic";
 
@@ -71,15 +72,15 @@ export default async function AdminV2WorkspaceLayout({
         );
     }
 
-    const [orgName, viewerTimezone, operationalTimezoneIana, access, initialEntityLabels, initialLifecycleCards] =
+    const [orgName, viewerTimezone, operationalTimezoneIana, access, initialEntityLabels, lifecycleCards] =
         await Promise.all([
             loadOrgDisplayName(orgId),
             loadViewerTimezoneSafe(auth.user.id),
             loadOperationalTimezoneSafe(orgId),
             getAdminAccessContextCached(),
             loadEntityLabelsMapForUser(auth.user.id).catch((): EntityLabelsBootstrapMap => ({})),
-            // First-paint seed for the /workspace landing (consumed only by the index page via
-            // WorkspaceFirstPaintSeedProvider). Runs in parallel with the existing bundle; graceful [].
+            // First-paint lifecycle tiles for the workspace Route VM. Loads in parallel with the
+            // existing bundle; graceful [] on no-access/error keeps the client refinement path intact.
             loadOperatorLifecycleLandingCardsServer(),
         ]);
 
@@ -87,6 +88,13 @@ export default async function AdminV2WorkspaceLayout({
         redirect("/unauthorized");
     }
     const accessScopeFingerprint = buildAccessScopeCacheFingerprint(scopeDimensionsFromAccess(access));
+
+    // Canonical server-composed workspace Route VM (the single first-paint payload). Assembled from
+    // the parallel-loaded parts above; consumed by the index page via the Route VM context.
+    const workspaceRouteVm = composeWorkspaceRouteVm({
+        context: { orgId, orgName, accessScopeFingerprint },
+        lifecycleCards,
+    });
 
     if (process.env.NODE_ENV === "development") {
         const layoutMs =
@@ -111,7 +119,7 @@ export default async function AdminV2WorkspaceLayout({
             initialEntityLabels={initialEntityLabels}
             initialViewerTimezone={viewerTimezone}
             initialOperationalTimezoneIana={operationalTimezoneIana}
-            initialLifecycleCards={initialLifecycleCards}
+            workspaceRouteVm={workspaceRouteVm}
         >
             {children}
         </AdminV2WorkspaceClientProviders>

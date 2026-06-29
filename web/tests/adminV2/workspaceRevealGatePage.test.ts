@@ -10,12 +10,28 @@ function read(rel: string): string {
 }
 
 describe("workspace above-fold reveal gate (page)", () => {
-    it("page holds WorkspacePageLoadingGate until above_fold_ready", () => {
+    it("reveals from the Route VM — no loading gate, no client reveal-readiness layer", () => {
         const page = read("app/adminV2/workspace/page.tsx");
-        expect(page).toContain("workspaceRevealGate");
-        expect(page).toContain("workspaceAboveFoldPageReady");
-        expect(page).toContain("WorkspacePageLoadingGate");
-        expect(page).toMatch(/!workspaceAboveFoldPageReady[\s\S]*WorkspacePageLoadingGate/);
+        // The loading gate is deleted — the surface reveals its final structure from the Route VM +
+        // Operational Shell immediately; deferred values refine in reserved slots.
+        expect(page).not.toContain('import { WorkspacePageLoadingGate }');
+        expect(page).not.toMatch(/return <WorkspacePageLoadingGate/);
+        // The client reveal-readiness layer is removed: no reveal-gate computation, no Surface VM.
+        expect(page).not.toContain("computeWorkspaceRevealGate");
+        expect(page).not.toContain("composeWorkspaceSurfaceViewModel");
+        expect(page).not.toContain("workspaceSurfaceVm");
+        // The surface reveals from the canonical Route VM.
+        expect(page).toContain("useWorkspaceRouteVm");
+    });
+
+    it("the WorkspacePageLoadingGate component is deleted", () => {
+        let exists = true;
+        try {
+            read("app/adminV2/components/workspace/WorkspacePageLoadingGate.tsx");
+        } catch {
+            exists = false;
+        }
+        expect(exists).toBe(false);
     });
 
     it("idle prefetch caps visible departments", () => {
