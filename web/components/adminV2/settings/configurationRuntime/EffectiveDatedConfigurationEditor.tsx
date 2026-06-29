@@ -48,16 +48,39 @@ export type EditorField = {
     required?: boolean;
 };
 
+/**
+ * Optional structured sub-form for values that don't fit the flat field model
+ * (e.g. ratio rule tiers — a variable-length list versioned with its parent).
+ * The editor owns the extra state's lifecycle (reset on open) and hands it back
+ * via onCreateVersion's `extra`, so structured config versions the same way.
+ */
+export type EditorExtraForm = {
+    /** Initial structured state when the create form opens. */
+    initial: () => Record<string, unknown>;
+    /** Render the structured inputs bound to the editor-owned state. */
+    render: (
+        state: Record<string, unknown>,
+        setState: (next: Record<string, unknown>) => void,
+        busy: boolean,
+    ) => ReactNode;
+};
+
 export type EffectiveDatedEditorProps<T extends EffectiveDatedVersionRow> = {
     title: string;
     versions: readonly T[];
     todayYmd: string;
     /** Field schema for the create/new-version form (excludes effective_start). */
     fields: EditorField[];
+    /** Optional structured sub-form (e.g. ratio tiers) versioned with the row. */
+    extraForm?: EditorExtraForm;
     /** Render the domain-specific value summary for one version in the timeline. */
     renderVersionSummary: (row: T) => ReactNode;
     /** Perform the supersede/create. `values` keys match field keys + effectiveStart. */
-    onCreateVersion: (values: { effectiveStart: string; fields: Record<string, string> }) => Promise<void>;
+    onCreateVersion: (values: {
+        effectiveStart: string;
+        fields: Record<string, string>;
+        extra: Record<string, unknown>;
+    }) => Promise<void>;
     onRetire: (input: { effectiveEnd: string }) => Promise<void>;
     onVoid: (row: T) => Promise<void>;
     /** Resolved-value preview shown above the timeline (doctrine: preview everywhere). */
@@ -80,6 +103,7 @@ export function EffectiveDatedConfigurationEditor<T extends EffectiveDatedVersio
     versions,
     todayYmd,
     fields,
+    extraForm,
     renderVersionSummary,
     onCreateVersion,
     onRetire,
@@ -95,6 +119,7 @@ export function EffectiveDatedConfigurationEditor<T extends EffectiveDatedVersio
     const [mode, setMode] = useState<"idle" | "create" | "retire">("idle");
     const [effectiveStart, setEffectiveStart] = useState("");
     const [fieldValues, setFieldValues] = useState<Record<string, string>>(() => initialFieldValues(fields));
+    const [extraState, setExtraState] = useState<Record<string, unknown>>(() => extraForm?.initial() ?? {});
     const [retireEnd, setRetireEnd] = useState("");
     const [formError, setFormError] = useState<string | null>(null);
 
@@ -102,6 +127,7 @@ export function EffectiveDatedConfigurationEditor<T extends EffectiveDatedVersio
 
     function openCreate() {
         setFieldValues(initialFieldValues(fields));
+        setExtraState(extraForm?.initial() ?? {});
         setEffectiveStart("");
         setFormError(null);
         setMode("create");
@@ -120,7 +146,7 @@ export function EffectiveDatedConfigurationEditor<T extends EffectiveDatedVersio
         }
         setFormError(null);
         try {
-            await onCreateVersion({ effectiveStart, fields: fieldValues });
+            await onCreateVersion({ effectiveStart, fields: fieldValues, extra: extraState });
             setMode("idle");
         } catch (e) {
             setFormError(e instanceof Error ? e.message : "Failed to save version");
@@ -249,6 +275,9 @@ export function EffectiveDatedConfigurationEditor<T extends EffectiveDatedVersio
                             </ConfigFieldLabel>
                         ))}
                     </div>
+                    {extraForm ? (
+                        <div data-testid={`${testIdPrefix}-extra`}>{extraForm.render(extraState, setExtraState, !!busy)}</div>
+                    ) : null}
                     {formError ? (
                         <p className="text-xs text-red-700" role="alert" data-testid={`${testIdPrefix}-form-error`}>
                             {formError}

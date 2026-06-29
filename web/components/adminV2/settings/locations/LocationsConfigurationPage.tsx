@@ -146,7 +146,7 @@ export default function LocationsConfigurationPage() {
             );
         }
         if (section === "operational_rules") {
-            return <LocationOperationalRulesPanel siteLabelById={siteLabelById} />;
+            return <LocationOperationalRulesPanel siteLabelById={siteLabelById} canMutate={canMutate} />;
         }
         if (section === "rooms") {
             const parentSiteId = selectedRoom?.parent_location_id ?? "";
