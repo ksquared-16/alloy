@@ -22,6 +22,8 @@ vi.mock("@/contexts/AdminDrawerContext", () => ({
         drawer: { type: "opportunities", id: OPP_ID },
         stack: [{ type: "opportunities", id: OPP_ID }],
         openDrawer,
+        // Repaired net: the card now reads drawerLinkPending from the context.
+        drawerLinkPending: { isPending: () => false, errorForKey: () => null },
     }),
 }));
 
@@ -73,6 +75,7 @@ describe("EditablePersonContactCard live View Person path", () => {
             source: "opportunity_primary_contact",
             parent: { type: "opportunities", id: OPP_ID },
             personDrawerOpenSeed: null,
+            opportunityWorkspaceContext: null,
         });
     });
 

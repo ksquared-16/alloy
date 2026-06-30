@@ -149,7 +149,12 @@ describe("workspace warm cache", () => {
             shell_ready,
             department_tiles_ready,
             tile_counts_ready,
-            kpi_region_ready: workspaceRevealKpiRegionReady(),
+            kpi_region_ready: workspaceRevealKpiRegionReady({
+                quick_metrics_applied: hit!.metrics !== null,
+                fetch_settled_empty: false,
+                cache_primed: true,
+                errored: false,
+            }),
             actions_ready: workspaceRevealActionsReady(),
         });
 

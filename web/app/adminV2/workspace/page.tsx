@@ -520,10 +520,15 @@ export default function AdminV2WorkspaceIndexPage() {
             shell_ready,
             department_tiles_ready,
             tile_counts_ready,
-            kpi_region_ready: workspaceRevealKpiRegionReady(),
+            kpi_region_ready: workspaceRevealKpiRegionReady({
+                quick_metrics_applied: metrics !== null,
+                fetch_settled_empty: fetchSettledEmpty,
+                cache_primed: cachePrimed,
+                errored: error !== null,
+            }),
             actions_ready: workspaceRevealActionsReady(),
         });
-    }, [loading, departments.length, fetchSettledEmpty, metrics, workspaceCachePrimed]);
+    }, [loading, departments.length, fetchSettledEmpty, metrics, workspaceCachePrimed, error]);
 
     const workspaceAboveFoldPageReady = workspaceRevealGate.above_fold_ready;
 

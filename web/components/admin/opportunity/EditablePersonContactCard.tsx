@@ -3,6 +3,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { AdminDrawerEntityType } from "@/contexts/AdminDrawerContext";
 import { useAdminDrawer } from "@/contexts/AdminDrawerContext";
+import { useEditableCardRuntime } from "@/lib/experience/editing/useEditableCardRuntime";
+import {
+    editableCardIsSaving,
+    editableCardStatusLabel,
+} from "@/lib/experience/editing/editableCardRuntime";
 import { formatPhoneUS } from "@/lib/adminFormatters";
 import { normalizePhone } from "@/lib/contactNormalize";
 import {
@@ -64,6 +69,13 @@ export type EditablePersonContactCardProps = {
     phoneHref?: (raw: string) => string | null;
 };
 
+/**
+ * Edit lifecycle is owned by the canonical Editable Card Runtime (`useEditableCardRuntime`):
+ * Card Runtime owns the state machine; the ONE `drawerOperatingSaveCoordinator` owns Save-All +
+ * the dirty guard. No self-managed `saving`/`savedFlash`/`saveError`. Authoritative-confirmed save;
+ * on failure the operator's edit is retained (no silent loss). Doctrine:
+ * docs/platform/experience/editable-card-runtime.md.
+ */
 export default function EditablePersonContactCard({
     personId,
     opportunityId,
@@ -178,18 +190,10 @@ export default function EditablePersonContactCard({
 
     const [draft, setDraft] = useState<PersonContactCardValues>(initialValues);
     const baselineRef = useRef(initialValues);
+    const draftRef = useRef(draft);
+    draftRef.current = draft;
     const cardRef = useRef<HTMLDivElement>(null);
     const saveTimerRef = useRef<number | null>(null);
-    const [saving, setSaving] = useState(false);
-    const [savedFlash, setSavedFlash] = useState(false);
-    const [saveError, setSaveError] = useState<string | null>(null);
-
-    useEffect(() => {
-        baselineRef.current = initialValues;
-        setDraft(initialValues);
-        setSaveError(null);
-        setSavedFlash(false);
-    }, [initialValues, pid]);
 
     useEffect(() => {
         return () => {
@@ -201,6 +205,64 @@ export default function EditablePersonContactCard({
 
     const useExplicitSave = saveTrigger === "explicit" && variant === "summary";
 
+    // Card Runtime owns the edit lifecycle; the ONE save coordinator owns Save-All + the dirty
+    // guard (registered via sectionId). Authoritative-confirmed save (cross-entity linked person)
+    // — no optimistic pre-apply. On failure the operator's edit is RETAINED (runtime → dirty +
+    // error), never reverted: no silent data loss (Operational Experience Doctrine, Law 5).
+    const edit = useEditableCardRuntime({
+        dirty,
+        sectionId: pid ? `person_contact:${pid}` : undefined,
+        acknowledgeMs: 2000,
+        save: async () => {
+            const patch = buildPersonContactCardPatch(draftRef.current, baselineRef.current);
+            const gatedPatch: Record<string, unknown> = {};
+            for (const [key, value] of Object.entries(patch)) {
+                const gate = gates[key as PersonContactCardFieldKey];
+                if (gate?.editable) gatedPatch[key] = value;
+            }
+            if (!pid || Object.keys(gatedPatch).length === 0) return { ok: true };
+            try {
+                const result = await patchLinkedPersonFromOpportunityDrawer({ personId: pid, body: gatedPatch });
+                if (!result.ok) {
+                    return {
+                        ok: false,
+                        error:
+                            result.status === 403
+                                ? "You do not have permission to edit the linked person."
+                                : result.error,
+                    };
+                }
+                const nextValues: PersonContactCardValues = {
+                    first_name: trimStr(result.json.first_name),
+                    last_name: trimStr(result.json.last_name),
+                    email: trimStr(result.json.email),
+                    phone: trimStr(result.json.phone),
+                    display_name:
+                        trimStr(result.json.full_name) ||
+                        [result.json.first_name, result.json.last_name].filter(Boolean).join(" ").trim() ||
+                        baselineRef.current.display_name,
+                };
+                baselineRef.current = nextValues;
+                setDraft(nextValues);
+                onPersonUpdated?.(result.json);
+                return { ok: true };
+            } catch (e) {
+                return { ok: false, error: e instanceof Error ? e.message : "Save failed" };
+            }
+        },
+    });
+    const editRef = useRef(edit);
+    editRef.current = edit;
+
+    const saving = editableCardIsSaving(edit.state);
+    const statusLabel = editableCardStatusLabel(edit.state);
+
+    useEffect(() => {
+        baselineRef.current = initialValues;
+        setDraft(initialValues);
+        editRef.current.reset();
+    }, [initialValues, pid]);
+
     const cancelScheduledSave = useCallback(() => {
         if (saveTimerRef.current) {
             window.clearTimeout(saveTimerRef.current);
@@ -208,71 +270,26 @@ export default function EditablePersonContactCard({
         }
     }, []);
 
-    const persistCard = useCallback(async () => {
-        if (!pid || saving) return;
-        const patch = buildPersonContactCardPatch(draft, baselineRef.current);
-        if (Object.keys(patch).length === 0) return;
-
-        const gatedPatch: Record<string, unknown> = {};
-        for (const [key, value] of Object.entries(patch)) {
-            const gate = gates[key as PersonContactCardFieldKey];
-            if (gate?.editable) gatedPatch[key] = value;
-        }
-        if (Object.keys(gatedPatch).length === 0) return;
-
-        setSaving(true);
-        setSaveError(null);
-        setSavedFlash(false);
-        try {
-            const result = await patchLinkedPersonFromOpportunityDrawer({
-                personId: pid,
-                body: gatedPatch,
-            });
-            if (!result.ok) {
-                if (result.status === 403) {
-                    setSaveError("You do not have permission to edit the linked person.");
-                } else {
-                    setSaveError(result.error);
-                }
-                setDraft(baselineRef.current);
-                return;
-            }
-            const nextValues: PersonContactCardValues = {
-                first_name: trimStr(result.json.first_name),
-                last_name: trimStr(result.json.last_name),
-                email: trimStr(result.json.email),
-                phone: trimStr(result.json.phone),
-                display_name:
-                    trimStr(result.json.full_name) ||
-                    [result.json.first_name, result.json.last_name].filter(Boolean).join(" ").trim() ||
-                    baselineRef.current.display_name,
-            };
-            baselineRef.current = nextValues;
-            setDraft(nextValues);
-            setSavedFlash(true);
-            window.setTimeout(() => setSavedFlash(false), 2000);
-            onPersonUpdated?.(result.json);
-        } catch (e) {
-            setSaveError(e instanceof Error ? e.message : "Save failed");
-            setDraft(baselineRef.current);
-        } finally {
-            setSaving(false);
-        }
-    }, [draft, gates, onPersonUpdated, pid, saving]);
+    const handleFieldChange = useCallback((field: PersonContactCardFieldKey, value: string) => {
+        const next = { ...draftRef.current, [field]: value };
+        setDraft(next);
+        editRef.current.notifyChange(isPersonContactCardDirty(next, baselineRef.current));
+    }, []);
 
     const scheduleCardSave = useCallback(() => {
-        if (!dirty) return;
+        if (!isPersonContactCardDirty(draftRef.current, baselineRef.current)) return;
         cancelScheduledSave();
         saveTimerRef.current = window.setTimeout(() => {
             saveTimerRef.current = null;
-            void persistCard();
+            void editRef.current.commit();
         }, PERSON_CONTACT_CARD_SAVE_DELAY_MS);
-    }, [cancelScheduledSave, dirty, persistCard]);
+    }, [cancelScheduledSave]);
 
     const handleCardBlur = useCallback(
         (e: React.FocusEvent<HTMLDivElement>) => {
             const next = e.relatedTarget;
             if (next instanceof Node && cardRef.current?.contains(next)) return;
+            editRef.current.onBlur();
             scheduleCardSave();
         },
         [scheduleCardSave]
@@ -280,6 +297,7 @@ export default function EditablePersonContactCard({
 
     const handleFieldFocus = useCallback(() => {
         cancelScheduledSave();
+        editRef.current.onFocus();
     }, [cancelScheduledSave]);
 
     const displayName =
@@ -316,19 +334,19 @@ export default function EditablePersonContactCard({
             />
         ) : null;
 
-    const cardStatus = saveError ? (
+    const cardStatus = statusLabel === "error" ? (
         <span className="text-[11px] font-medium text-alloy-ember" role="alert">
-            {saveError}
+            {edit.state.error}
         </span>
-    ) : saving ? (
+    ) : statusLabel === "saving" ? (
         <span className="text-[11px] font-medium text-alloy-midnight/45" aria-live="polite">
             Saving…
         </span>
-    ) : savedFlash ? (
+    ) : statusLabel === "saved" ? (
         <span className="text-[11px] font-medium text-emerald-800/75" aria-live="polite">
             Saved
         </span>
-    ) : dirty ? (
+    ) : statusLabel === "unsaved" ? (
         <span className="text-[11px] text-alloy-midnight/40">Unsaved changes</span>
     ) : null;
 
@@ -387,7 +405,7 @@ export default function EditablePersonContactCard({
                                     type="text"
                                     value={draft.first_name}
                                     disabled={!canMutate || saving}
-                                    onChange={(e) => setDraft((d) => ({ ...d, first_name: e.target.value }))}
+                                    onChange={(e) => handleFieldChange("first_name", e.target.value)}
                                     onFocus={handleFieldFocus}
                                     className={INLINE_INPUT}
                                     aria-label={FIELD_LABEL.first_name}
@@ -406,7 +424,7 @@ export default function EditablePersonContactCard({
                                     type="text"
                                     value={draft.last_name}
                                     disabled={!canMutate || saving}
-                                    onChange={(e) => setDraft((d) => ({ ...d, last_name: e.target.value }))}
+                                    onChange={(e) => handleFieldChange("last_name", e.target.value)}
                                     onFocus={handleFieldFocus}
                                     className={INLINE_INPUT}
                                     aria-label={FIELD_LABEL.last_name}
@@ -450,7 +468,7 @@ export default function EditablePersonContactCard({
                                     type="tel"
                                     value={draft.phone}
                                     disabled={!canMutate || saving}
-                                    onChange={(e) => setDraft((d) => ({ ...d, phone: e.target.value }))}
+                                    onChange={(e) => handleFieldChange("phone", e.target.value)}
                                     onFocus={handleFieldFocus}
                                     className={variant === "summary" ? INLINE_INPUT : oppInqFieldInput}
                                     aria-label={FIELD_LABEL.phone}
@@ -471,7 +489,7 @@ export default function EditablePersonContactCard({
                                     type="email"
                                     value={draft.email}
                                     disabled={!canMutate || saving}
-                                    onChange={(e) => setDraft((d) => ({ ...d, email: e.target.value }))}
+                                    onChange={(e) => handleFieldChange("email", e.target.value)}
                                     onFocus={handleFieldFocus}
                                     className={variant === "summary" ? INLINE_INPUT : oppInqFieldInput}
                                     aria-label={FIELD_LABEL.email}
@@ -493,7 +511,7 @@ export default function EditablePersonContactCard({
                                 <button
                                     type="button"
                                     disabled={saving}
-                                    onClick={() => void persistCard()}
+                                    onClick={() => void editRef.current.commit()}
                                     className="rounded-md border border-alloy-blue/35 bg-alloy-blue/[0.08] px-2 py-0.5 text-[10px] font-semibold text-alloy-blue hover:bg-alloy-blue/10 disabled:opacity-60"
                                 >
                                     {saving ? "Saving…" : "Save"}

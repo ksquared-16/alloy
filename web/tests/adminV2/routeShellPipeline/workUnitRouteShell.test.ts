@@ -115,13 +115,15 @@ describe("work-unit route shell", () => {
         expect(recordPage).toMatch(/return null/);
     });
 
-    it("page has single WorkspaceChrome owner (no WorkUnitWorkspaceColdShell early return)", () => {
+    it("page has a single WorkspaceChrome owner; cold shell renders inside it, not as an early return", () => {
+        // Canonical: loading-and-reveal-contract.md §5 — the cold shell is page-owned, rendered inside
+        // the single WorkspaceChrome owner, gated by content readiness (not a pre-chrome early return).
         const page = read("app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page.tsx");
         expect(page).not.toMatch(/if \(workUnitPageBlockingLoad\)[\s\S]{0,120}WorkUnitWorkspaceColdShell/);
         expect(page).toContain("buildWorkUnitRouteShellPlaceholder");
         expect(page).toContain("workUnitRouteShellPlaceholder");
         expect(page).toContain("markRouteShellVisible");
-        expect(page).not.toContain("WorkUnitWorkspaceColdShell");
+        expect(page).toMatch(/WorkspaceChrome[\s\S]*!workUnitPageContentReady[\s\S]*WorkUnitWorkspaceColdShell/);
     });
 
     it("segment loading.tsx defers to page shell owner", () => {

@@ -125,9 +125,32 @@ export function workspaceRevealTileCountsReady(input: {
     return input.has_departments && input.quick_rollup_applied;
 }
 
-/** KPI may hydrate after reveal via quiet reserve — gate does not wait for placements. */
-export function workspaceRevealKpiRegionReady(): boolean {
-    return true;
+/**
+ * KPI region is ready to reveal once its first-paint STRUCTURE is present: quick rollup
+ * metrics applied, confirmed-empty org, primed cache, or a settled error. This routes
+ * real KPI readiness into the gate (Experience Doctrine Law 1 — no region reveals
+ * independently after the gate).
+ *
+ * It deliberately does NOT await the per-department growth rollup (2×N network in
+ * `loadWorkspaceGrowthRollup`). Those genuinely-slow values settle into already-reserved
+ * geometry after reveal (Operational Motion Doctrine — `settle`), never blocking the
+ * surface. Degraded/bounded semantics: empty, cached, and error all resolve to ready, so
+ * the region can never block reveal forever.
+ */
+export function workspaceRevealKpiRegionReady(input: {
+    /** Quick (synchronous, non-network) rollup metrics have been applied. */
+    quick_metrics_applied: boolean;
+    /** Department fetch settled with no departments — no KPI region to populate. */
+    fetch_settled_empty: boolean;
+    /** Session cache primed this surface — structure is already known. */
+    cache_primed: boolean;
+    /** A settled error is a terminal state — reveal the degraded surface, do not hang. */
+    errored: boolean;
+}): boolean {
+    if (input.errored) return true;
+    if (input.fetch_settled_empty) return true;
+    if (input.cache_primed) return true;
+    return input.quick_metrics_applied;
 }
 
 /** Orientation rail is static chrome — always ready. */

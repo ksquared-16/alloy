@@ -74,7 +74,6 @@ export default function PersonDrawerParentSummary({
                     onPersonUpdated?.(next);
                     setDraft(parentSummaryDraftFromRecord(next));
                 },
-                revertDraft: () => setDraft(parentSummaryDraftFromRecord(record)),
                 confirmSave: async (patch) => {
                     if (!personId || !canMutate) return;
                     await patchPersonDrawerFields(personId, patch);

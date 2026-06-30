@@ -22,11 +22,12 @@ Start here: **`platform/foundation/system-overview.md`**
 
 ### 1. Foundation
 
-1. `platform/foundation/system-overview.md`
-2. `platform/foundation/platform-capabilities.md`
-3. `platform/foundation/product-roadmap.md`
-4. `platform/foundation/architecture.md`
-5. `platform/governance/glossary.md`
+1. **`platform/foundation/runtime-architecture-map.md`** — **the canonical Alloy OS blueprint: what the operating system is, every runtime, the hierarchy, ownership, communication, lifecycle, failure, and migration. Start here for the whole-system picture.**
+2. `platform/foundation/system-overview.md`
+3. `platform/foundation/platform-capabilities.md`
+4. `platform/foundation/product-roadmap.md`
+5. `platform/foundation/architecture.md`
+6. `platform/governance/glossary.md`
 
 ### 2. Core platform
 
@@ -56,6 +57,9 @@ Start here: **`platform/foundation/system-overview.md`**
 | Topic | Doc |
 |-------|-----|
 | Design & operational doctrine | `platform/governance/design-and-operational-doctrine.md` |
+| **Operational Experience Doctrine** (platform HIG — Five Laws) | `platform/experience/operational-experience-doctrine.md` |
+| **Operational Motion Doctrine** (one motion language) | `platform/experience/operational-motion-doctrine.md` |
+| **Premium Interaction Principles** (field manual) | `platform/experience/premium-interaction-principles.md` |
 | Documentation rules | `platform/governance/documentation-governance.md` |
 | Agent repo boundaries | `governance/agent-repo-boundaries.md` |
 | API contracts | `platform/governance/api-contracts.md` |

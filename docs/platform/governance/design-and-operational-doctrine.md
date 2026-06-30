@@ -26,9 +26,20 @@ AdminV2 reveal gates, queue empty semantics, composed payload readiness — **pr
 
 ---
 
+## Experience doctrine (canonical)
+
+The platform Human Interface Guidelines. Every operator-facing feature conforms.
+
+- **Operational Experience Doctrine** (the Five Laws): `../experience/operational-experience-doctrine.md`
+- **Operational Motion Doctrine** (one motion language): `../experience/operational-motion-doctrine.md`
+- **Premium Interaction Principles** (field manual): `../experience/premium-interaction-principles.md`
+
+These **generalize** the locked performance doctrine below: the AdminV2 reveal gates are the Experience Doctrine's first implementation. Where the Experience Doctrine asks for more than the locked docs currently enforce (universal soft navigation, KPI in-gate, universal dirty-guard, cross-surface optimism, a motion language), those deltas are tracked in `../../sprints/06_2026/premium-operational-experience/sprint-roadmap.md` and must update the locked docs in the same change that implements them.
+
 ## Presentation doctrine
 
 - Typography: `../../system/typography-and-presentation-doctrine.md`
+- Motion (timing/easing/choreography): `../experience/operational-motion-doctrine.md`
 - BOS identity: `../../system/bos-identity-doctrine.md`
 - Queue record rows: `../../system/queue-record-doctrine.md`
 
