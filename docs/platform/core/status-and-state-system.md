@@ -1,6 +1,6 @@
 # Status and state system
 
-**Status:** Canonical (June 2026 freeze).
+**Status:** Canonical (June 2026 freeze). See also: [`operational-mutation-platform.md`](../modules/operational-mutation-platform.md) for mutation runtime doctrine.
 
 How status keys, state transitions, and lifecycle ownership work across grains.
 
@@ -33,10 +33,17 @@ Stages are **not** separate work units in enrollment — they are lanes inside `
 
 ## Transition paths
 
-1. **Admin actions** — `executeAdminAction` with guardrails
-2. **Workflow effects** — event-triggered automation
+All operator-facing status transitions must go through the **Mutation Runtime** (see `operational-mutation-platform.md`). The runtime handles structural validity, readiness gating, required information, and atomic commit + outbox event.
+
+**Operator-initiated (via Mutation Runtime):**
+1. **Registered commands** — `DecisionIntent → MutationRuntime → atomic commit + outbox`
+
+**System-initiated (via Mutation Runtime with `origin=automation`):**
+2. **Workflow effects** — event-triggered automatic transitions
 3. **Stage outcome rules** — metadata-driven routing after outcome picker
-4. **Direct PATCH** — field-policy bounded; not a substitute for lifecycle actions where catalog exists
+
+**Legacy (not for new commands):**
+4. **Direct PATCH** — field-policy bounded; do not use for lifecycle transitions where a registered command exists
 
 ---
 

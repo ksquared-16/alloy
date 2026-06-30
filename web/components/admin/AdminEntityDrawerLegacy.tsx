@@ -96,6 +96,8 @@ import {
     ADMINV2_OPEN_TOUR_SCHEDULE_MODAL,
 } from "@/lib/tours/actions/tourBookingActionClient";
 import { UpdateStatusAddNoteModal } from "@/components/admin/opportunity/actions/UpdateStatusAddNoteModal";
+import { UpdateLeadStatusPanel } from "@/components/mutations/UpdateLeadStatusPanel";
+import type { MutationResult } from "@/lib/mutations/types";
 import { AddPersonModal } from "@/components/admin/opportunity/actions/AddPersonModal";
 import { AddInquiryChildModal } from "@/components/admin/opportunity/actions/AddInquiryChildModal";
 import {
@@ -1954,6 +1956,9 @@ export function AdminEntityDrawerLegacy() {
         action: ResolvedActionForClient;
         /** Surfaces POST /api/admin/actions/execute audit context (registry placement). */
         executeContext?: { surface: string; section_key?: string | null };
+    } | null>(null);
+    const [mutationCommandState, setMutationCommandState] = useState<{
+        commandKey: string;
     } | null>(null);
     const [relatedPeopleRefreshKey, setRelatedPeopleRefreshKey] = useState(0);
     const [opportunityQueueDefinition, setOpportunityQueueDefinition] = useState<QueueDefinitionV1 | null>(null);
@@ -4471,6 +4476,10 @@ export function AdminEntityDrawerLegacy() {
                     return;
                 }
                 if (formKey) setActionFormState({ form_key: formKey, action: a, executeContext: { surface: "record_header" } });
+                return;
+            }
+            if (a.action_type === "mutation_command") {
+                setMutationCommandState({ commandKey: a.key });
                 return;
             }
             if (a.action_type === "navigate") {
@@ -19408,6 +19417,55 @@ export function AdminEntityDrawerLegacy() {
                         }
                     }}
                 />
+                {mutationCommandState?.commandKey === "update_lead_status" && drawer.id && drawer.id !== "new" && (
+                    <UpdateLeadStatusPanel
+                        opportunityId={drawer.id}
+                        currentStatusKey={
+                            data && typeof data === "object"
+                                ? String((data as { status_key?: unknown }).status_key ?? "")
+                                : null
+                        }
+                        currentStatusLabel={
+                            (statusDefsForDrawer ?? []).find(
+                                (s) =>
+                                    s.status_key ===
+                                    (data && typeof data === "object"
+                                        ? (data as { status_key?: unknown }).status_key
+                                        : null)
+                            )?.status_label ?? null
+                        }
+                        statusOptions={(statusDefsForDrawer ?? [])
+                            .filter((s) => s.is_active !== false)
+                            .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
+                            .map((s) => ({
+                                value: String(s.status_key ?? ""),
+                                label: String(s.status_label ?? s.status_key ?? ""),
+                            }))}
+                        workUnitId={
+                            data && typeof data === "object" &&
+                            (data as { work_unit_id?: unknown }).work_unit_id != null
+                                ? String((data as { work_unit_id?: unknown }).work_unit_id)
+                                : null
+                        }
+                        departmentId={opportunityWorkUnitDepartmentId}
+                        onClose={() => setMutationCommandState(null)}
+                        onSuccess={(result: Extract<MutationResult, { status: "committed" }>) => {
+                            setMutationCommandState(null);
+                            // Optimistic local update — reflect new status before projection refresh
+                            setData((prev) =>
+                                prev && typeof prev === "object"
+                                    ? { ...prev, status_key: result.newState }
+                                    : prev
+                            );
+                            refetch();
+                            window.dispatchEvent(
+                                new CustomEvent("adminv2:opportunity-updated", {
+                                    detail: { id: drawer.id, action_key: "update_lead_status" },
+                                })
+                            );
+                        }}
+                    />
+                )}
                 <UpdateStatusAddNoteModal
                     open={actionFormState?.form_key === "update_status_add_note"}
                     onClose={() => setActionFormState(null)}
