@@ -3544,3 +3544,58 @@ html[data-alloy-os-runtime-split="true"]
     animation: none;
   }
 }
+
+/* ── Live UI Polish: click acknowledgement ─────────────────────────────────────────
+ *
+ * Three surfaces need immediate press feedback so operators feel the click land before
+ * the navigation or panel transition completes:
+ *
+ *   1. Workspace process tile — <article data-ws-business-process-tile> wrapped in a
+ *      <Link> that receives data-adminv2-nav-pending="true" during the transition
+ *      (adminV2NavigationClickedItemProps). :active gives the instant press beat;
+ *      [data-adminv2-nav-pending] sustains the acknowledged state through nav.
+ *
+ *   2. Compressed queue row — .adminv2-os-crow is a <button>; :active is immediate.
+ *      The selected (Focus Panel open) state is driven by [data-queue-row-active="true"]
+ *      which uses a stronger background — do NOT override it here.
+ *
+ * Reduced-motion: collapse to opacity-only (no scale transform).
+ */
+
+/* 1. Workspace tile — press + nav-pending acknowledgement */
+[data-ws-business-process-tile="true"] {
+  transition:
+    opacity var(--motion-instant, 80ms) ease,
+    transform var(--motion-instant, 80ms) ease,
+    box-shadow 150ms cubic-bezier(0.4, 0, 0.2, 1),
+    border-color 150ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+[data-ws-business-process-tile="true"]:active {
+  opacity: 0.82;
+  transform: scale(0.988);
+}
+[data-adminv2-nav-pending="true"] [data-ws-business-process-tile="true"] {
+  opacity: 0.55;
+  transform: scale(0.988);
+}
+
+/* 2. Compressed queue row — press acknowledgement */
+.adminv2-os-crow {
+  transition: opacity var(--motion-instant, 80ms) ease;
+}
+.adminv2-os-crow:active {
+  opacity: 0.75;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-ws-business-process-tile="true"] {
+    transition: opacity var(--motion-instant, 80ms) ease;
+  }
+  [data-ws-business-process-tile="true"]:active,
+  [data-adminv2-nav-pending="true"] [data-ws-business-process-tile="true"] {
+    transform: none;
+  }
+  .adminv2-os-crow {
+    transition: none;
+  }
+}
