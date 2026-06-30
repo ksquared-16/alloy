@@ -1460,6 +1460,12 @@ html[data-alloy-os-runtime="on"]
   gap: 14px;
   padding: 14px;
   align-items: start;
+  /* The ResizeObserver measures THIS element. It must fill its container (not size to its
+   * content) so the measured width is the real surface width — otherwise a narrow/stacked
+   * render shrinks the box, which RO re-measures as narrow, locking in the stacked layout
+   * (the "flash correct → reflow to stack" feedback loop). */
+  width: 100%;
+  box-sizing: border-box;
 }
 
 /*

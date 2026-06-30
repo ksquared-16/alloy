@@ -22,6 +22,23 @@ import {
 
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
 
+/**
+ * Default ROW SPAN per card (in builder authoring tracks ≈ 76px each) so a newly placed
+ * or freshly-seeded tile opens tall enough to show its FULL summary card — not clipped to
+ * a single minimum-height row. Household/Children carry the most evidence (tallest);
+ * Readiness needs room for the full progress card; Current Work is shortest. The operator
+ * can still drag a tile shorter. Cards not listed get a sensible default.
+ */
+export const DEFAULT_CARD_ROW_SPAN: Partial<Record<FocusPanelCardKey, number>> = {
+    household: 3,
+    children: 4,
+    readiness_kpi: 3,
+    current_work: 2,
+};
+export function defaultRowSpanForCard(card: FocusPanelCardKey): number {
+    return DEFAULT_CARD_ROW_SPAN[card] ?? 2;
+}
+
 /** An empty grid on the given track count (default 12). */
 export function emptyGridLayout(columns: number = FOCUS_PANEL_GRID_COLUMNS): FocusPanelGridLayout {
     return { columns, areas: [] };
@@ -70,7 +87,8 @@ export function addCardToGrid(
         colStart: 1,
         colSpan: opts?.colSpan ?? grid.columns,
         rowStart: nextFreeRow(grid),
-        rowSpan: opts?.rowSpan ?? 1,
+        // Default to the card's natural summary height (full card), not a min-height row.
+        rowSpan: opts?.rowSpan ?? defaultRowSpanForCard(card),
     });
 }
 
@@ -140,16 +158,20 @@ export function gridFromPublishedLayout(
     for (const r of layout.rows) {
         const units = resolveRowUnits(r.cells);
         let col = 1;
-        let maxStack = 1;
+        let rowsUsed = 1;
         r.cells.forEach((cell, i) => {
             const colSpan = Math.max(1, Math.min(units[i] ?? 1, columns));
-            cell.cards.forEach((card, stackIndex) => {
-                areas.push({ card, colStart: Math.min(col, columns - colSpan + 1), colSpan, rowStart: row + stackIndex, rowSpan: 1, height: cell.height });
+            let stackRow = row;
+            cell.cards.forEach((card) => {
+                // Seed each card at its natural summary height so tiles open un-clipped.
+                const rowSpan = defaultRowSpanForCard(card);
+                areas.push({ card, colStart: Math.min(col, columns - colSpan + 1), colSpan, rowStart: stackRow, rowSpan, height: cell.height });
+                stackRow += rowSpan;
             });
-            maxStack = Math.max(maxStack, cell.cards.length);
+            rowsUsed = Math.max(rowsUsed, stackRow - row);
             col += colSpan;
         });
-        row += maxStack;
+        row += rowsUsed;
     }
     return { columns, areas };
 }

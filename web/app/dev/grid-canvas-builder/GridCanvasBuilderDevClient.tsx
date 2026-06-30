@@ -46,6 +46,17 @@ const LAYOUT_C: FocusPanelGridLayout = {
     ],
 };
 
+/** Builder seed — 2 lanes at each card's NATURAL summary height (default row spans). */
+const BUILDER_SEED: FocusPanelGridLayout = {
+    columns: 12,
+    areas: [
+        { card: "household", colStart: 1, colSpan: 6, rowStart: 1, rowSpan: 3 },
+        { card: "children", colStart: 1, colSpan: 6, rowStart: 4, rowSpan: 4 },
+        { card: "readiness_kpi", colStart: 7, colSpan: 6, rowStart: 1, rowSpan: 3 },
+        { card: "current_work", colStart: 7, colSpan: 6, rowStart: 4, rowSpan: 2 },
+    ],
+};
+
 const CATALOG: { key: FocusPanelCardKey; label: string }[] = [
     { key: "household", label: "Household" },
     { key: "children", label: "Children" },
@@ -110,7 +121,7 @@ export default function GridCanvasBuilderDevClient() {
 
             <div style={{ maxWidth: 1040 }} data-builder-region>
                 <FocusPanelGridCanvasBuilder
-                    initialGrid={LAYOUT_C}
+                    initialGrid={BUILDER_SEED}
                     catalog={CATALOG}
                     renderCard={renderCard}
                     onChange={setPublished}
@@ -120,6 +131,15 @@ export default function GridCanvasBuilderDevClient() {
                 <p style={{ fontSize: 12, color: "#2f6f4f", marginTop: 10 }} data-builder-areas={published.grid?.areas.length ?? 0}>
                     ✓ Authored grid → {published.grid?.areas.length ?? 0} regions · selected: {selected ?? "none"}
                 </p>
+            </div>
+
+            <h2 style={{ fontSize: 16, fontWeight: 700, margin: "34px 0 14px" }}>Stability test — strategy must not reflow at a stable width</h2>
+            <p style={{ fontSize: 12, color: "#475569", margin: "0 0 8px" }}>
+                Drive <code>#fp-resize-frame</code> width via the console; <code>window.__focusPanelGridDiag</code> shows the
+                live strategy. It must stay <code>published-grid</code> at wide widths and only collapse below ~560px.
+            </p>
+            <div id="fp-resize-frame" className="alloy-os-runtime" style={{ width: 1040, maxWidth: "100%", background: "#fff", border: "1px solid #e5e9ef", borderRadius: 12, boxSizing: "border-box", marginBottom: 26 }} data-resize-frame>
+                <FocusPanelCardGrid rows={[]} renderCell={(k) => renderCard(k as FocusPanelCardKey)} publishedLayout={buildPublishedLayoutFromGrid(LAYOUT_C)} />
             </div>
 
             <h2 style={{ fontSize: 16, fontWeight: 700, margin: "34px 0 14px" }}>Runtime renders the published grid (identical model)</h2>
