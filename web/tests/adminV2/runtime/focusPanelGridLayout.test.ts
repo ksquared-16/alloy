@@ -13,7 +13,9 @@ import {
     buildPublishedLayoutFromGrid,
     cardsInGrid,
     clampArea,
+    defaultRowSpanForCard,
     emptyGridLayout,
+    gridFromPublishedLayout,
     moveArea,
     removeArea,
     resizeArea,
@@ -130,6 +132,24 @@ describe("focusPanelGridLayoutOps", () => {
 
         g = removeArea(g, "household");
         expect(cardsInGrid(g)).toEqual(["readiness_kpi"]);
+    });
+
+    it("opens new/seeded cards at their NATURAL summary height — not a min row", () => {
+        // Per-card defaults: Household/Children tallest, Current Work shortest, > 1 row each.
+        expect(defaultRowSpanForCard("household")).toBeGreaterThanOrEqual(3);
+        expect(defaultRowSpanForCard("children")).toBeGreaterThan(defaultRowSpanForCard("current_work"));
+        expect(defaultRowSpanForCard("current_work")).toBeGreaterThan(1);
+
+        // addCardToGrid uses the natural default (not rowSpan 1).
+        const g = addCardToGrid(emptyGridLayout(12), "household");
+        expect(g.areas[0]!.rowSpan).toBe(defaultRowSpanForCard("household"));
+
+        // rows→grid seed gives each card its natural height (not a clipped single row).
+        const seeded = gridFromPublishedLayout({
+            rows: [{ cells: [{ width: "half", cards: ["household"] }, { width: "half", cards: ["readiness_kpi"] }] }],
+        });
+        expect(seeded.areas.find((a) => a.card === "household")!.rowSpan).toBe(defaultRowSpanForCard("household"));
+        expect(seeded.areas.find((a) => a.card === "readiness_kpi")!.rowSpan).toBe(defaultRowSpanForCard("readiness_kpi"));
     });
 
     it("clamps an out-of-bounds region back inside the grid", () => {

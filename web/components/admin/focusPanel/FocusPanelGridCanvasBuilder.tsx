@@ -13,6 +13,7 @@ import {
     buildPublishedLayoutFromGrid,
     cardsInGrid,
     clampArea,
+    defaultRowSpanForCard,
     moveArea,
     removeArea,
     resizeArea,
@@ -136,7 +137,8 @@ export default function FocusPanelGridCanvasBuilder({ initialGrid, catalog, rend
         const { col, row } = cellFromPointer(e.clientX, e.clientY);
         const span = Math.min(6, cols); // half-width default
         const colStart = Math.min(col, cols - span + 1);
-        const withCard = addCardToGrid(grid, card, { colSpan: span, rowSpan: 1 });
+        // Open at the card's natural summary height (not a single min-height row).
+        const withCard = addCardToGrid(grid, card, { colSpan: span, rowSpan: defaultRowSpanForCard(card) });
         apply(moveArea(withCard, card, colStart, row));
     };
 
