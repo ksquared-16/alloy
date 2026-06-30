@@ -137,3 +137,30 @@ describe("Card Definition V2 — evidence groups + ownership", () => {
         expect(normalized.evidenceGroups).toHaveLength(1);
     });
 });
+
+describe("evidence-group field ops used by the Inspector", () => {
+    it("updateFieldInGroups patches a field wherever it lives", async () => {
+        const { updateFieldInGroups } = await import("@/lib/adminV2/runtime/focusPanel/focusPanelEvidenceGroupOps");
+        const config = {
+            evidenceGroups: [
+                { id: "identity", label: "Identity", fields: [field("a", "Name")] },
+                { id: "contact", label: "Contact", fields: [field("b", "Email")] },
+            ],
+        };
+        const next = updateFieldInGroups(config, "b", { label: "Work Email", renderer: "text" });
+        expect(configFields(next).find((f) => f.id === "b")!.label).toBe("Work Email");
+    });
+
+    it("moveFieldWithinGroup reorders inside the group only", async () => {
+        const { moveFieldWithinGroup } = await import("@/lib/adminV2/runtime/focusPanel/focusPanelEvidenceGroupOps");
+        const config = {
+            evidenceGroups: [
+                { id: "identity", label: "Identity", fields: [field("a", "Name"), field("b", "DOB"), field("c", "Sex")] },
+            ],
+        };
+        const next = moveFieldWithinGroup(config, "c", -1);
+        expect(next.evidenceGroups![0]!.fields.map((f) => f.id)).toEqual(["a", "c", "b"]);
+        // clamped at the top
+        expect(moveFieldWithinGroup(next, "a", -1).evidenceGroups![0]!.fields.map((f) => f.id)).toEqual(["a", "c", "b"]);
+    });
+});

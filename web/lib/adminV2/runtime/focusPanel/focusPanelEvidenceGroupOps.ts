@@ -116,6 +116,40 @@ export function moveFieldToGroup(
     });
 }
 
+/** Patch any field's properties (label / concept / renderer / placement / collection). */
+export function updateFieldInGroups(
+    config: FocusPanelCardConfig | null | undefined,
+    fieldId: string,
+    patch: Partial<FocusPanelCardField>,
+): FocusPanelCardConfig {
+    return withGroups(config, (groups) =>
+        groups.map((g) => ({
+            ...g,
+            fields: g.fields.map((f) => (f.id === fieldId ? { ...f, ...patch } : f)),
+        })),
+    );
+}
+
+/** Reorder a field up (−1) / down (+1) WITHIN its own group. */
+export function moveFieldWithinGroup(
+    config: FocusPanelCardConfig | null | undefined,
+    fieldId: string,
+    direction: -1 | 1,
+): FocusPanelCardConfig {
+    return withGroups(config, (groups) =>
+        groups.map((g) => {
+            const index = g.fields.findIndex((f) => f.id === fieldId);
+            if (index < 0) return g;
+            const target = index + direction;
+            if (target < 0 || target >= g.fields.length) return g;
+            const fields = g.fields.slice();
+            const [moved] = fields.splice(index, 1);
+            fields.splice(target, 0, moved!);
+            return { ...g, fields };
+        }),
+    );
+}
+
 /** Per-field ownership + behavior the Inspector edits (Part 4). */
 export type FieldOwnershipPatch = {
     owner?: FocusPanelCardKey;
