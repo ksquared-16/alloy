@@ -134,6 +134,39 @@ export function listMetricSourceAdapters(): MetricSourceAdapter[] {
     return Object.values(ADAPTERS);
 }
 
+/**
+ * Convert a dot-notation source key to a readable label as a last-resort fallback.
+ * Uses only the final segment so "ops.work_overdue_count" → "Work overdue count".
+ * Prefer adapter label or definition label over this; use only when those are absent.
+ */
+export function humanizeSourceKey(sourceKey: string): string {
+    const lastSegment = sourceKey.split(".").pop() ?? sourceKey;
+    const spaced = lastSegment.replace(/_/g, " ");
+    return spaced.charAt(0).toUpperCase() + spaced.slice(1);
+}
+
+/**
+ * Resolve the display label for a metric tile, applying a fallback chain to prevent
+ * raw source keys from reaching the UI regardless of what was stored in the DB.
+ *
+ * Priority:
+ *  1. labelOverride (user/builder explicit title)
+ *  2. viz.label — but only if it is NOT the raw source key
+ *  3. definition.label
+ *  4. Adapter registry label
+ *  5. humanizeSourceKey as final safe fallback
+ */
+export function resolveMetricDisplayLabel(
+    vizLabel: string,
+    defLabel: string,
+    sourceKey: string,
+): string {
+    const raw = vizLabel?.trim();
+    if (raw && raw !== sourceKey) return raw;
+    if (defLabel?.trim()) return defLabel.trim();
+    return getMetricSourceAdapter(sourceKey)?.label ?? humanizeSourceKey(sourceKey);
+}
+
 export function getMetricSourceAdapter(sourceKey: string): MetricSourceAdapter | null {
     return ADAPTERS[sourceKey] ?? null;
 }

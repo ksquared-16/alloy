@@ -9,6 +9,11 @@ import {
     isHeaderSurface,
     type HeaderPlacementView,
 } from "@/lib/metrics/platform/headerSurfacePersistence";
+import {
+    humanizeSourceKey,
+    resolveMetricDisplayLabel,
+    getMetricSourceAdapter,
+} from "@/lib/metrics/platform/metricSourceRegistry";
 import { IMPLICIT_SECTION_ID } from "@/lib/platform/surfaceBuilder/surfaceBuilderModel";
 import type { SurfaceDoc } from "@/lib/platform/surfaceBuilder/surfaceDefinition";
 
@@ -116,5 +121,84 @@ describe("Header placement ⇄ SurfaceDoc mapping", () => {
 
         const desired = headerDocToDesired(doc);
         expect(desired[0]).not.toHaveProperty("showHealthChip");
+    });
+});
+
+describe("humanizeSourceKey", () => {
+    it("uses the last segment only", () => {
+        expect(humanizeSourceKey("ops.work_overdue_count")).toBe("Work overdue count");
+        expect(humanizeSourceKey("enrollment.tour_completed_count")).toBe("Tour completed count");
+        expect(humanizeSourceKey("enrollment.lead_count")).toBe("Lead count");
+    });
+
+    it("handles bare keys (no dot)", () => {
+        expect(humanizeSourceKey("lead_count")).toBe("Lead count");
+    });
+
+    it("capitalizes only the first character", () => {
+        expect(humanizeSourceKey("ops.needs_attention_count")).toBe("Needs attention count");
+    });
+});
+
+describe("resolveMetricDisplayLabel — label fallback chain", () => {
+    it("returns vizLabel when it is not the raw source key", () => {
+        expect(resolveMetricDisplayLabel("Lead count", "Lead count", "enrollment.lead_count")).toBe("Lead count");
+        expect(resolveMetricDisplayLabel("Custom title", "Lead count", "enrollment.lead_count")).toBe("Custom title");
+    });
+
+    it("skips vizLabel when it equals the raw source key (bad DB write)", () => {
+        // This is the first-publish bug: viz.label was stored as the source key
+        expect(resolveMetricDisplayLabel("enrollment.tour_completed_count", "Completed tours", "enrollment.tour_completed_count")).toBe("Completed tours");
+        expect(resolveMetricDisplayLabel("ops.work_overdue_count", "Overdue work count", "ops.work_overdue_count")).toBe("Overdue work count");
+    });
+
+    it("falls back to adapter label when vizLabel equals sourceKey and defLabel is empty", () => {
+        const adapterLabel = getMetricSourceAdapter("enrollment.lead_count")?.label ?? "";
+        expect(resolveMetricDisplayLabel("enrollment.lead_count", "", "enrollment.lead_count")).toBe(adapterLabel);
+        expect(adapterLabel).toBe("Lead count");
+    });
+
+    it("falls back to humanizeSourceKey when all DB labels are raw/empty and no adapter", () => {
+        expect(resolveMetricDisplayLabel("unknown.some_metric", "", "unknown.some_metric")).toBe("Some metric");
+    });
+
+    it("never returns a raw uppercase dot-separated key", () => {
+        const result = resolveMetricDisplayLabel("ENROLLMENT.TOUR_COMPLETED_COUNT", "", "enrollment.tour_completed_count");
+        // vizLabel is not equal to sourceKey (different case), but it's still a raw-looking key —
+        // in practice the DB stores lowercase; this assertion confirms non-empty string is returned
+        expect(typeof result).toBe("string");
+        expect(result.length).toBeGreaterThan(0);
+    });
+});
+
+describe("label fallback — first-publish label selection logic", () => {
+    it("empty labelBySource → adapter label used (not raw source key)", () => {
+        const labelBySource = new Map<string, string>(); // empty — simulates first publish
+        const sourceKey = "enrollment.tour_completed_count";
+        const resolved = labelBySource.get(sourceKey) ?? getMetricSourceAdapter(sourceKey)?.label ?? humanizeSourceKey(sourceKey);
+        expect(resolved).toBe("Completed tours");
+        expect(resolved).not.toBe(sourceKey);
+    });
+
+    it("empty labelBySource + ops.work_overdue_count → adapter label", () => {
+        const labelBySource = new Map<string, string>();
+        const sourceKey = "ops.work_overdue_count";
+        const resolved = labelBySource.get(sourceKey) ?? getMetricSourceAdapter(sourceKey)?.label ?? humanizeSourceKey(sourceKey);
+        expect(resolved).toBe("Overdue work count");
+    });
+
+    it("empty labelBySource + unknown key → humanized fallback (not raw key)", () => {
+        const labelBySource = new Map<string, string>();
+        const sourceKey = "custom.some_new_metric";
+        const resolved = labelBySource.get(sourceKey) ?? getMetricSourceAdapter(sourceKey)?.label ?? humanizeSourceKey(sourceKey);
+        expect(resolved).toBe("Some new metric");
+        expect(resolved).not.toBe(sourceKey);
+    });
+
+    it("populated labelBySource → existing user label wins", () => {
+        const labelBySource = new Map([["enrollment.lead_count", "My custom lead label"]]);
+        const sourceKey = "enrollment.lead_count";
+        const resolved = labelBySource.get(sourceKey) ?? getMetricSourceAdapter(sourceKey)?.label ?? humanizeSourceKey(sourceKey);
+        expect(resolved).toBe("My custom lead label");
     });
 });

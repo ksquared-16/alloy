@@ -68,6 +68,9 @@ export function MetricCardShell({
     const fillMode = normalizeMetricVisualFill(fill);
     const normalizedStatus = normalizeOipHealthStatus(status);
     const padding = density === "compact" ? "p-3" : "p-3.5";
+    // Compact tiles (header strips) share a uniform flex footprint so KPI and Trend cards
+    // sit at the same width in an inline/row flex container — trend sparklines can't blow out.
+    const sizeClass = density === "compact" ? "min-w-[120px] max-w-[180px] flex-1" : "min-w-0";
 
     const resolvedHeaderRight =
         headerRight ??
@@ -82,7 +85,7 @@ export function MetricCardShell({
 
     return (
         <div
-            className={`flex min-w-0 flex-col gap-2 rounded-xl border-l-[3px] ${visualAccent.rail} ${resolveMetricCardSurface(visualAccent, fillMode)} ${padding} shadow-[0_1px_2px_rgba(15,23,42,0.05)] ${className}`}
+            className={`flex flex-col gap-2 rounded-xl border-l-[3px] ${sizeClass} ${visualAccent.rail} ${resolveMetricCardSurface(visualAccent, fillMode)} ${padding} shadow-[0_1px_2px_rgba(15,23,42,0.05)] ${className}`}
             data-metric-visual={visual}
             data-metric-card-shell="true"
             data-metric-accent={visualAccent.key}
