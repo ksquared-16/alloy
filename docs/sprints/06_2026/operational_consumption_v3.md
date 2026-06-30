@@ -31,3 +31,11 @@ A **Consumption Candidate** is a normalized, non-persisted runtime interpretatio
 ## Downstream (not built)
 
 Posting, Invoicing, Payments, Statements, Subsidies, Claims, Settlement, General Ledger — downstream consumers of this runtime.
+
+## Merge & closeout
+
+Slices 1–3 shipped as one stacked branch (`claude/operational-consumption-v3`) merged via **PR #27** into `origin/staging`; the earlier stacked PRs **#23** (Slice 1) and **#24** (Slice 2) were closed as superseded. Before merge the branch was rebased onto the latest `origin/staging` (which had advanced with Alloy Services V1 + others); the only overlap — `financialConfigDemoDataset.ts` — auto-merged cleanly (consumption rate rules + charge templates coexist with the new service capabilities).
+
+Integration fix during closeout: staging independently introduced a migration at `20260706120000`, colliding with the Slice 1 foundation timestamp. Since Supabase keys migrations by version prefix (the repo holds 219 unique prefixes across 220 files — this was the sole duplicate), the foundation migration was renamed to **`20260706120050_operational_consumption_foundation.sql`** (after the lead-status migration, before the `…120100` seed) and all references updated. No schema change.
+
+Final validation: 87 Operational Consumption tests + 299 consumption/financial tests green against the rebased base; scoped typecheck + lint clean; migrations additive and uniquely ordered; idempotency and no-Posting verified; the runtime consumes the Commercial Model with no duplicated pricing logic.

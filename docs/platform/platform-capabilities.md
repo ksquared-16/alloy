@@ -155,6 +155,19 @@ the readiness gate and Definition of Done. Designing them API-first is the expec
 - **Notes:** ledger/financial truth is code-owned; route side effects through events/workflows, not
   ad hoc writes. Define idempotency and audit up front.
 
+### Operational Consumption
+
+- **Status:** **shipped** runtime (Slices 1–3) — the interpretation layer between Operational
+  Execution and Commercial/Financial Resolution. Turns an operational fact into a Consumption
+  Candidate → Consumption Event → Resolved Obligation → draft Charge, consuming the Commercial Model
+  (it reimplements no pricing). Domains: Agreement, Schedule, Attendance.
+- **API-first expectation:** **yes** — exposed today via `POST /api/admin/financial/consumption/simulate`
+  (`preview | draft`), which returns the full reasoning chain (candidate → event → commercial objects
+  → policies → obligations → draft charges).
+- **Notes:** **posts nothing** — Posting/Invoicing/Payments/GL are downstream consumers. Idempotent by
+  resolution key; duplicate facts never duplicate obligations. Doctrine:
+  [`./modules/operational-consumption-platform.md`](./modules/operational-consumption-platform.md).
+
 ### Processing
 
 - **Status:** upcoming operational capability.

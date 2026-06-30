@@ -21,7 +21,7 @@ function readRepo(rel: string): string {
 }
 
 describe("Operational Consumption — additive schema", () => {
-    const sql = readRepo("supabase/migrations/20260706120000_operational_consumption_foundation.sql");
+    const sql = readRepo("supabase/migrations/20260706120050_operational_consumption_foundation.sql");
 
     it("creates the three consumption tables with RLS + org isolation + updated_at triggers", () => {
         for (const t of ["consumption_event_types", "consumption_events", "resolved_obligations"]) {

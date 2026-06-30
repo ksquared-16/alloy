@@ -2,7 +2,7 @@
  * Operational Consumption — code-owned vocabularies + row/DTO shapes (Slice 1).
  *
  * Mirror of:
- *   supabase/migrations/20260706120000_operational_consumption_foundation.sql
+ *   supabase/migrations/20260706120050_operational_consumption_foundation.sql
  *
  * Operational Consumption is the RUNTIME layer between Operational Execution and
  * Commercial / Financial Resolution. It interprets an operational fact into a

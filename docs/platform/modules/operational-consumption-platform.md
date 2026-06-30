@@ -1,8 +1,10 @@
 # Operational Consumption platform
 
-**Status:** Canonical module doctrine (June 2026). Defines the **runtime layer** between Operational Execution and Commercial / Financial Resolution — the layer that interprets an operational fact into the commercial meaning it should carry.
+**Status:** Canonical module doctrine (June 2026). **Runtime COMPLETE — Slices 1–3 shipped** (registration · agreement + schedule recurring tuition · the Consumption Pipeline + attendance). Defines the **runtime layer** between Operational Execution and Commercial / Financial Resolution — the layer that interprets an operational fact into the commercial meaning it should carry. **Posting, Invoicing, Payments, Statements, Subsidies, Claims, Settlement, and the General Ledger are downstream consumers of this runtime and are not part of it.**
 
 > **Companion docs.** Truth-flow layering: [`../operational-truth-flow-doctrine.md`](../operational-truth-flow-doctrine.md). Financial domain (frozen): [`./financial-platform-domain.md`](./financial-platform-domain.md). Posting / draft Charge Resolution: [`./billing-financials-platform.md`](./billing-financials-platform.md).
+>
+> **The completed runtime (one canonical pipeline):** Operational Truth → Operational Execution → **Operational Consumption** (Operational Fact → Consumption Candidate → Consumption Event → Resolved Obligation) → Commercial Model → Financial Resolution → Draft Charges → **Posting** (downstream, authoritative). Three consumption domains flow through the same pipeline: **Agreement** (registration), **Schedule** (recurring tuition / proration / drop-in), and **Attendance** (late pickup / drop-in / hourly / vacation credit). See the Slice 1/2/3 sections below.
 
 ---
 
@@ -52,7 +54,7 @@ Operational Consumption **does NOT** (these are out of scope and belong to later
 
 A **Consumption Event** is a normalized operational fact, recorded as the **canonical runtime contract** for commercial interpretation. It is **not a charge.**
 
-Backing table: `consumption_events` (migration `20260706120000`). Key fields:
+Backing table: `consumption_events` (migration `20260706120050`). Key fields:
 
 | Field | Meaning |
 |---|---|
@@ -94,7 +96,7 @@ So "Charge Event" is retired as a *runtime contract name*: the trigger fact is `
 
 A **Resolved Obligation** is the commercial meaning a Consumption Event resolves to: a **draft obligation preview**, optionally linked to a **draft Charge**. It is never authoritative and always recomputable.
 
-Backing table: `resolved_obligations` (migration `20260706120000`). Key fields:
+Backing table: `resolved_obligations` (migration `20260706120050`). Key fields:
 
 | Field | Meaning |
 |---|---|
