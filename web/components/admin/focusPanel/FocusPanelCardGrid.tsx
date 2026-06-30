@@ -148,21 +148,29 @@ export default function FocusPanelCardGrid({
         return () => ro.disconnect();
     }, []);
 
+    // Before the ResizeObserver reports a width (SSR + first client paint), `widthPx`
+    // is 0. Treat that as "wide" so the composed/published LANES render immediately and
+    // the surface NEVER falls back to the legacy responsive grid (which tiles cards at
+    // content width and leaves dead whitespace). The observer corrects to the real width
+    // on mount; the only sanctioned narrow override (single-column collapse) still
+    // applies once a real sub-threshold width is known.
+    const measuredWidth = widthPx > 0 ? widthPx : 1024;
+
     // Published layout is the source of truth (operator-authored). When present it
     // wins over auto-composition; the engine only fills in the default.
     const publishedPlan = useMemo(() => {
-        if (!publishedLayout || widthPx <= 0) return null;
-        return planPublishedLayout(publishedLayout, widthPx);
-    }, [publishedLayout, widthPx]);
+        if (!publishedLayout) return null;
+        return planPublishedLayout(publishedLayout, measuredWidth);
+    }, [publishedLayout, measuredWidth]);
 
     const composition = useMemo(() => {
-        if (publishedLayout || !composed || widthPx <= 0) return null;
+        if (publishedLayout || !composed) return null;
         return composeFocusPanelSurface({
             cards: composeCards!,
-            availableWidthPx: widthPx,
+            availableWidthPx: measuredWidth,
             overrides: compositionOverrides,
         });
-    }, [publishedLayout, composed, composeCards, widthPx, compositionOverrides]);
+    }, [publishedLayout, composed, composeCards, measuredWidth, compositionOverrides]);
 
     // Shared cell box — identical attributes in both paths so the depth/elevation CSS
     // (data-fp-elevated), refs, height reservation, and zoom origin all keep working.
