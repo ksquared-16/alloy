@@ -242,15 +242,27 @@ describe("Targeted contact editing + depth history (QA)", () => {
     });
 });
 
-describe("Row builder mounted in the settings editor (Composition V2)", () => {
-    it("FocusPanelSummarySurfaceEditor mounts the row builder + persists via the existing flow", () => {
+describe("Canvas builder mounted in the settings editor (Experience Builder V4)", () => {
+    it("FocusPanelSummarySurfaceEditor mounts the canvas-first builder + persists via the existing flow", () => {
         const editor = readSrc("components/adminV2/settings/surfaces/FocusPanelSummarySurfaceEditor.tsx");
-        expect(editor).toContain("FocusPanelRowLayoutBuilder"); // mounted
+        expect(editor).toContain("FocusPanelCanvasBuilder"); // canvas IS the editor (replaces Compose Layout)
+        expect(editor).not.toContain("FocusPanelRowLayoutBuilder"); // the row-control panel is gone
+        expect(editor).toContain("onSelectCard"); // selecting a card on the canvas opens the Inspector
         expect(editor).toContain("readFocusPanelPublishedLayout"); // loads existing metadata
         expect(editor).toContain("withPublishedLayoutMetadata"); // injects on save/publish
         expect(editor).toContain("buildDocWithLayout"); // reused by save AND publish
         expect(editor).toContain("saveFocusPanelSummaryDraft"); // existing draft path
         expect(editor).toContain("publishFocusPanelSummary"); // existing publish path
+    });
+
+    it("Canvas owns composition (drag + direct resize); inspector owns behavior", () => {
+        const canvas = readSrc("components/admin/focusPanel/FocusPanelCanvasBuilder.tsx");
+        expect(canvas).toContain("data-canvas-resize-w"); // direct width resize handle
+        expect(canvas).toContain("data-canvas-resize-h"); // direct height resize handle
+        expect(canvas).toContain("snapWidthFromFraction"); // width snaps to a named token
+        expect(canvas).toContain("moveCardOntoCell"); // drag to stack
+        expect(canvas).toContain("moveCardToRowByCard"); // drag to move between rows
+        expect(canvas).toContain("onSelectCard"); // click selects → inspector
     });
 });
 

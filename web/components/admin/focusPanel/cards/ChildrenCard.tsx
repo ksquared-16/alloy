@@ -2,12 +2,26 @@
 
 import { useEffect, useMemo, useState } from "react";
 import clsx from "clsx";
+import {
+    BadgeCheck,
+    Cake,
+    CalendarClock,
+    CalendarDays,
+    Clock,
+    DoorOpen,
+    FileText,
+    GraduationCap,
+    User,
+    type LucideIcon,
+} from "lucide-react";
 
 import UniversalCard from "@/components/admin/focusPanel/UniversalCard";
+import CardAvatar from "@/components/admin/focusPanel/CardAvatar";
 import {
     buildChildrenCardEvidence,
     type ChildrenEvidenceChild,
 } from "@/lib/adminV2/runtime/focusPanel/children/buildChildrenCardEvidence";
+import { cardCapabilities, cardRelatedViews } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardLifecycle";
 import type { FocusPanelCardModel } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardModel";
 import {
     focusPanelCardBackLabel,
@@ -19,7 +33,6 @@ import {
     useReportPerspective,
 } from "@/lib/adminV2/runtime/focusPanel/useFocusPanelCoordination";
 import type { OperationalContext } from "@/lib/adminV2/runtime/operationalContext/types";
-import CardEditPlaceholder from "@/components/admin/focusPanel/cards/CardEditPlaceholder";
 
 type Props = {
     model: FocusPanelCardModel;
@@ -30,33 +43,42 @@ type Props = {
     coordination?: FocusPanelCoordination;
 };
 
+const CAPS = cardCapabilities("children");
+const RELATED_VIEWS = cardRelatedViews("children");
+
 /**
- * Children operational card (Collection archetype). Answers "What is true for each
- * child right now?" — program, room, schedule, enrollment status, desired start.
+ * Children operational card — reference implementation of the Universal Card Lifecycle
+ * (Universal Card Behavior V1). The Child card OWNS its operational truth as evidence
+ * groups: Identity · Placement (Program/Room/Schedule/Teacher/Desired Start) · Medical ·
+ * Documents · Readiness · Notes. Placement is an evidence group, NOT its own card.
  *
- * Perspectives are LOCAL UI state: collapsed (roster) → expanded (per-child
- * operational detail) → focused (single child). Focusing a child is the v1 local
- * depth swap; full Subject Change (panel recompose around the child) is the same
- * primitive wired at the runtime later. No perspective change performs a fetch.
+ *   - Summary   — roster: each child as a scannable mini-profile.
+ *   - Focus     — current truth (identity + placement) in a strong schedule structure.
+ *   - Edit      — that structure as a READ-ONLY PREVIEW (no save adapter → no fake save).
+ *   - Expanded  — the SAME question with ADDITIONAL configured evidence groups
+ *                 (placement / medical / documents / pickup / notes / readiness). Not history.
+ *   - Related Views — optional report drill-downs (Schedule History, Placement History).
  *
- * @see docs/platform/operator/card-archetypes.md (Collection)
+ * @see docs/platform/operator/universal-card-lifecycle.md
  */
 export default function ChildrenCard({ model, context, receded = false, coordination }: Props) {
     const evidence = useMemo(() => buildChildrenCardEvidence(context), [context]);
 
-    const [expanded, setExpanded] = useState(false);
+    const [rosterOpen, setRosterOpen] = useState(false);
     const [focusedId, setFocusedId] = useState<string | null>(null);
     const [editing, setEditing] = useState(false);
+    const [expandedOpen, setExpandedOpen] = useState(false);
+    const [relatedViewId, setRelatedViewId] = useState<string | null>(null);
 
-    // Cross-card handoff: when Readiness (or another card) points here, open the
-    // requested child as a Perspective Change (expand + focus). No fetch.
     const request = coordination?.request;
     const requestNonce = request?.card === "children" ? request.nonce : null;
     useEffect(() => {
         if (request?.card !== "children") return;
-        setExpanded(true);
+        setRosterOpen(true);
         setFocusedId(request.focus ?? null);
         setEditing(false);
+        setExpandedOpen(false);
+        setRelatedViewId(null);
         // eslint-disable-next-line react-hooks/exhaustive-deps -- nonce gates re-apply
     }, [requestNonce]);
 
@@ -67,26 +89,30 @@ export default function ChildrenCard({ model, context, receded = false, coordina
     const focusChild = (id: string) => {
         setFocusedId(id);
         setEditing(false);
+        setExpandedOpen(false);
+        setRelatedViewId(null);
+    };
+    const backToFocus = () => {
+        setEditing(false);
+        setExpandedOpen(false);
+        setRelatedViewId(null);
     };
 
-    // Report depth so the host raises this card above the surface. ANY open state
-    // (roster expand, a focused child, edit) elevates as a centered Focus Card — a
-    // truth card NEVER expands height inline (no row reflow).
     const level: FocusPanelPerspectiveLevel =
-        editing && focused ? "edit" : focused || expanded ? "focused" : "base";
+        editing && focused ? "edit" : focused || rosterOpen ? "focused" : "base";
     useReportPerspective(coordination, "children", level);
     useDismissSignal(coordination, "children", () => {
         setEditing(false);
+        setExpandedOpen(false);
+        setRelatedViewId(null);
         setFocusedId(null);
-        setExpanded(false);
+        setRosterOpen(false);
     });
 
-    const density = !isEmpty && (expanded || focused) ? "expanded" : "compact";
+    const density = !isEmpty && (rosterOpen || focused) ? "expanded" : "compact";
     const statusTone = evidence.hasAttention ? "at-risk" : "neutral";
     const statusChip = isEmpty ? null : evidence.hasAttention ? "Needs info" : `${evidence.count}`;
 
-    // Where a card-to-card handoff came FROM (e.g. Household). When set, Back returns
-    // to that prior card state instead of staying within Children / closing.
     const backOrigin = editing ? null : coordination?.previousFocus ?? null;
     const backToSourceButton = backOrigin ? (
         <button
@@ -99,93 +125,106 @@ export default function ChildrenCard({ model, context, receded = false, coordina
         </button>
     ) : null;
 
-    const footerAction = isEmpty ? null : editing && focused ? (
+    // Nav grammar: LEFT = back / out · RIGHT = the single deeper action (Edit). Expanded
+    // and Related Views are reached from quiet in-body links (see FocusedChild).
+    const firstName = focused?.name.split(" ")[0];
+    const backToFocusButton = (action: string) => (
         <button
             type="button"
             className="alloy-os-ucard__action alloy-os-ucard__action--system5"
-            onClick={() => setEditing(false)}
-            data-children-action="cancel-edit"
+            onClick={backToFocus}
+            data-children-action={action}
         >
-            ← Back to {focused.name.split(" ")[0]}
-        </button>
-    ) : focused ? (
-        <div className="alloy-os-card-nav">
-            {backToSourceButton ?? (
-                <button
-                    type="button"
-                    className="alloy-os-ucard__action alloy-os-ucard__action--system5"
-                    onClick={() => setFocusedId(null)}
-                    data-children-action="back"
-                >
-                    ← All children
-                </button>
-            )}
-            <button
-                type="button"
-                className="alloy-os-ucard__action alloy-os-ucard__action--system5"
-                onClick={() => setEditing(true)}
-                data-children-edit-trigger={focused.id}
-            >
-                {deeperEditLabel(focused)} →
-            </button>
-        </div>
-    ) : expanded ? (
-        backToSourceButton ?? (
-            <button
-                type="button"
-                className="alloy-os-ucard__action alloy-os-ucard__action--system5"
-                onClick={() => setExpanded(false)}
-                data-children-action="collapse"
-            >
-                ← Back to panel
-            </button>
-        )
-    ) : (
-        <button
-            type="button"
-            className="alloy-os-ucard__action alloy-os-ucard__action--system5"
-            onClick={() => setExpanded(true)}
-            data-children-action="expand"
-        >
-            View children →
+            ← Back to {firstName}
         </button>
     );
 
-    let body: React.ReactNode;
-    let perspective: "collapsed" | "expanded" | "focused" | "edit" | "empty";
+    let footerAction: React.ReactNode;
     if (isEmpty) {
-        perspective = "empty";
+        footerAction = null;
+    } else if (editing && focused) {
+        footerAction = backToFocusButton("cancel-edit");
+    } else if (relatedViewId && focused) {
+        footerAction = backToFocusButton("close-related");
+    } else if (expandedOpen && focused) {
+        footerAction = backToFocusButton("collapse-expanded");
+    } else if (focused) {
+        footerAction = (
+            <div className="alloy-os-card-nav">
+                {backToSourceButton ?? (
+                    <button
+                        type="button"
+                        className="alloy-os-ucard__action alloy-os-ucard__action--system5"
+                        onClick={() => setFocusedId(null)}
+                        data-children-action="back"
+                    >
+                        ← All children
+                    </button>
+                )}
+                {CAPS.supportsInlineEdit ? (
+                    <button
+                        type="button"
+                        className="alloy-os-ucard__action alloy-os-ucard__action--system5"
+                        onClick={() => setEditing(true)}
+                        data-children-edit-trigger={focused.id}
+                    >
+                        {deeperEditLabel(focused)} →
+                    </button>
+                ) : null}
+            </div>
+        );
+    } else if (rosterOpen) {
+        footerAction =
+            backToSourceButton ?? (
+                <button
+                    type="button"
+                    className="alloy-os-ucard__action alloy-os-ucard__action--system5"
+                    onClick={() => setRosterOpen(false)}
+                    data-children-action="collapse"
+                >
+                    ← Back to panel
+                </button>
+            );
+    } else {
+        footerAction = (
+            <button
+                type="button"
+                className="alloy-os-ucard__action alloy-os-ucard__action--system5"
+                onClick={() => setRosterOpen(true)}
+                data-children-action="expand"
+            >
+                View children →
+            </button>
+        );
+    }
+
+    let lifecycle: "empty" | "summary" | "focus" | "edit" | "expanded" | "related";
+    let body: React.ReactNode;
+    if (isEmpty) {
+        lifecycle = "empty";
         body = (
             <div className="alloy-os-household__summary" data-children-empty="true">
                 <p className="alloy-os-household__row-detail">No children linked to this record yet</p>
             </div>
         );
     } else if (focused) {
-        perspective = editing ? "edit" : "focused";
-        body = <FocusedChild child={focused} editing={editing} />;
-    } else if (expanded) {
-        perspective = "expanded";
+        lifecycle = editing ? "edit" : relatedViewId ? "related" : expandedOpen ? "expanded" : "focus";
         body = (
-            <div className="alloy-os-household__groups" data-children-evidence>
-                {evidence.children.map((child) => (
-                    <ChildEvidenceBlock
-                        key={child.id}
-                        child={child}
-                        onFocus={() => focusChild(child.id)}
-                    />
-                ))}
-            </div>
+            <FocusedChild
+                child={focused}
+                editing={editing}
+                expandedOpen={expandedOpen}
+                relatedViewId={relatedViewId}
+                onExpand={CAPS.supportsExpanded ? () => setExpandedOpen(true) : undefined}
+                onOpenRelated={(id) => setRelatedViewId(id)}
+            />
         );
     } else {
-        perspective = "collapsed";
+        lifecycle = "summary";
         body = (
-            <div className="alloy-os-household__rows" data-children-roster>
+            <div className="alloy-os-children__roster" data-children-roster>
                 {evidence.children.map((child) => (
-                    <ChildSummaryRow
-                        key={child.id}
-                        child={child}
-                        onFocus={() => focusChild(child.id)}
-                    />
+                    <ChildSummaryRow key={child.id} child={child} onFocus={() => focusChild(child.id)} />
                 ))}
             </div>
         );
@@ -195,12 +234,13 @@ export default function ChildrenCard({ model, context, receded = false, coordina
         <div
             className="alloy-os-household alloy-os-children"
             data-children-card="true"
-            data-children-card-perspective={perspective}
+            data-children-card-perspective={lifecycle === "summary" ? (rosterOpen ? "expanded" : "collapsed") : lifecycle}
+            data-children-lifecycle={lifecycle}
         >
             <UniversalCard
                 title={model.title}
                 insight={evidence.answerLine}
-                supportingInsight={perspective === "collapsed" ? evidence.supportingLine : null}
+                supportingInsight={lifecycle === "summary" && !rosterOpen ? evidence.supportingLine : null}
                 iconName={model.iconName}
                 tier={model.tier}
                 archetype="collection"
@@ -230,63 +270,49 @@ function StatusPill({ child }: { child: ChildrenEvidenceChild }) {
     );
 }
 
-function ChildSummaryRow({
-    child,
-    onFocus,
-}: {
-    child: ChildrenEvidenceChild;
-    onFocus: () => void;
-}) {
-    // Answer-first: the operational sentence (or what's missing), age as metadata.
-    const detail = child.detailLine ?? child.missingLine;
+function Ico({ icon: Icon }: { icon: LucideIcon }) {
     return (
-        <button
-            type="button"
-            className="alloy-os-household__row alloy-os-children__row"
-            onClick={onFocus}
-            data-children-child={child.id}
-        >
-            <span className="alloy-os-household__avatar" aria-hidden>
-                {child.initial}
-            </span>
-            <span className="alloy-os-household__row-main min-w-0">
-                <span className="alloy-os-household__row-name">{child.name}</span>
-                {detail ? (
-                    <span
-                        className={clsx(
-                            "alloy-os-household__row-detail",
-                            !child.detailLine && child.missingLine && "alloy-os-card-detail--risk",
-                        )}
-                    >
-                        {detail}
-                    </span>
-                ) : null}
-            </span>
-            <StatusPill child={child} />
-        </button>
+        <span className="alloy-os-child-truth__icon" aria-hidden>
+            <Icon size={15} strokeWidth={1.75} />
+        </span>
     );
 }
 
-/** Operational evidence as a sentence + quiet metadata — not a labeled field grid. */
-function ChildEvidenceSentence({ child }: { child: ChildrenEvidenceChild }) {
+/** Summary: a scannable per-child mini-profile — details stack under the name. */
+function ChildSummaryRow({ child, onFocus }: { child: ChildrenEvidenceChild; onFocus: () => void }) {
+    const meta: { icon: LucideIcon; value: string }[] = [];
+    if (child.dobAge) meta.push({ icon: Cake, value: child.dobAge });
+    if (child.program) meta.push({ icon: GraduationCap, value: child.program });
+    if (child.room) meta.push({ icon: DoorOpen, value: child.room });
+    if (child.schedule) meta.push({ icon: CalendarDays, value: child.schedule });
     return (
-        <div className="alloy-os-card-evidence" data-children-evidence-sentence={child.id}>
-            {child.detailLine ? (
-                <p className="alloy-os-card-evidence__line">{child.detailLine}</p>
-            ) : (
-                <p className="alloy-os-card-evidence__line alloy-os-card-evidence__line--muted">
-                    No program or schedule set yet
-                </p>
-            )}
-            {child.missingLine ? (
-                <p className="alloy-os-card-evidence__line alloy-os-card-detail--risk">
-                    {child.missingLine}
-                </p>
-            ) : null}
-            {child.dobAge ? (
-                <p className="alloy-os-card-evidence__meta">{child.dobAge}</p>
-            ) : null}
-        </div>
+        <button
+            type="button"
+            className="alloy-os-children__summary-row"
+            onClick={onFocus}
+            data-children-child={child.id}
+        >
+            <CardAvatar name={child.name} imageUrl={child.imageUrl} size={36} />
+            <span className="alloy-os-children__summary-main min-w-0">
+                <span className="alloy-os-children__summary-head">
+                    <span className="alloy-os-household__row-name">{child.name}</span>
+                    <StatusPill child={child} />
+                </span>
+                <span className="alloy-os-children__summary-meta">
+                    {meta.map((m, i) => (
+                        <span key={i} className="alloy-os-children__summary-line">
+                            <Ico icon={m.icon} />
+                            <span>{m.value}</span>
+                        </span>
+                    ))}
+                    {child.missingLine ? (
+                        <span className="alloy-os-children__summary-line alloy-os-card-detail--risk" data-children-missing={child.id}>
+                            {child.missingLine}
+                        </span>
+                    ) : null}
+                </span>
+            </span>
+        </button>
     );
 }
 
@@ -295,38 +321,11 @@ function ChildFlags({ child }: { child: ChildrenEvidenceChild }) {
     return (
         <div className="alloy-os-card-flags">
             {child.flags.map((flag) => (
-                <span
-                    key={flag.label}
-                    className={clsx("alloy-os-card-flag", `alloy-os-card-flag--${flag.tone}`)}
-                >
+                <span key={flag.label} className={clsx("alloy-os-card-flag", `alloy-os-card-flag--${flag.tone}`)}>
                     {flag.label}
                 </span>
             ))}
         </div>
-    );
-}
-
-function ChildEvidenceBlock({
-    child,
-    onFocus,
-}: {
-    child: ChildrenEvidenceChild;
-    onFocus: () => void;
-}) {
-    return (
-        <section className="alloy-os-child-block" data-children-evidence-child={child.id}>
-            <button
-                type="button"
-                className="alloy-os-household__group-header"
-                onClick={onFocus}
-                data-children-focus={child.id}
-            >
-                <span className="alloy-os-household__group-title">{child.name}</span>
-                <StatusPill child={child} />
-            </button>
-            <ChildEvidenceSentence child={child} />
-            <ChildFlags child={child} />
-        </section>
     );
 }
 
@@ -335,15 +334,194 @@ function deeperEditLabel(child: ChildrenEvidenceChild): string {
     if (!child.program) return "Set program";
     if (!child.schedule) return "Resolve schedule";
     if (!child.startDate) return "Set desired start";
-    return "Edit enrollment";
+    return "Edit schedule";
+}
+
+function TruthRow({ icon, label, value }: { icon: LucideIcon; label: string; value: string | null }) {
+    return (
+        <div className="alloy-os-child-truth__row" data-child-truth={label}>
+            <Ico icon={icon} />
+            <span className="alloy-os-child-truth__label">{label}</span>
+            <span className={clsx("alloy-os-child-truth__value", !value && "alloy-os-child-truth__value--empty")}>
+                {value ?? "Not set"}
+            </span>
+        </div>
+    );
+}
+
+const WEEKDAYS = ["M", "T", "W", "T", "F"] as const;
+
+function splitSchedule(schedule: string | null): { daysText: string | null; timesText: string | null } {
+    if (!schedule) return { daysText: null, timesText: null };
+    const parts = schedule.split("·").map((s) => s.trim()).filter(Boolean);
+    const timeIdx = parts.findIndex((p) => /\d/.test(p) && /[:apm]/i.test(p));
+    const timesText = timeIdx >= 0 ? parts[timeIdx]! : null;
+    const daysText = parts.filter((_, i) => i !== timeIdx).join(" · ") || schedule;
+    return { daysText, timesText };
+}
+
+function scheduleDaySelection(daysText: string | null): boolean[] {
+    if (!daysText) return [false, false, false, false, false];
+    const s = daysText.toLowerCase();
+    if (/(m\s*[–-]\s*f|mon\s*[–-]\s*fri|full|daily|every day|5 day)/.test(s)) {
+        return [true, true, true, true, true];
+    }
+    return ["mon", "tue", "wed", "thu", "fri"].map((n) => s.includes(n));
+}
+
+/** Schedule day chips + times — shared by Focus + Edit (same strong structure). */
+function ChildScheduleBlock({ child }: { child: ChildrenEvidenceChild }) {
+    const { daysText, timesText } = splitSchedule(child.schedule);
+    const days = scheduleDaySelection(daysText);
+    return (
+        <div className="alloy-os-child-edit__section" data-child-schedule>
+            <span className="alloy-os-child-edit__label">Schedule</span>
+            <div className="alloy-os-child-edit__chips" role="group" aria-label="Schedule days">
+                {WEEKDAYS.map((d, i) => (
+                    <span key={i} className={clsx("alloy-os-child-edit__chip", days[i] && "alloy-os-child-edit__chip--on")}>
+                        {d}
+                    </span>
+                ))}
+            </div>
+            {timesText ? (
+                <div className="alloy-os-child-truth__row alloy-os-child-edit__times" data-child-truth="Times">
+                    <Ico icon={Clock} />
+                    <span className="alloy-os-child-truth__label">Times</span>
+                    <span className="alloy-os-child-truth__value">{timesText}</span>
+                </div>
+            ) : null}
+        </div>
+    );
+}
+
+/** Placement truth — schedule block + program/room/teacher/start (Focus + Edit). */
+function ChildEnrollmentBody({ child }: { child: ChildrenEvidenceChild }) {
+    return (
+        <div className="alloy-os-child-edit" data-children-enrollment={child.id}>
+            <ChildScheduleBlock child={child} />
+            <TruthRow icon={GraduationCap} label="Program" value={child.program} />
+            <TruthRow icon={DoorOpen} label="Room" value={child.room} />
+            <TruthRow icon={User} label="Teacher" value={child.teacher} />
+            <TruthRow icon={CalendarClock} label="Start date" value={child.startDate} />
+        </div>
+    );
+}
+
+/** One evidence group in the Expanded overlay. */
+function EvidenceGroup({ title, children }: { title: string; children: React.ReactNode }) {
+    return (
+        <section className="alloy-os-child-egroup" data-children-egroup={title}>
+            <p className="alloy-os-child-egroup__title">{title}</p>
+            {children}
+        </section>
+    );
+}
+
+function EmptyEvidence({ text }: { text: string }) {
+    return <p className="alloy-os-child-egroup__empty">{text}</p>;
+}
+
+/** Expanded: the SAME question with ADDITIONAL configured evidence groups (not history). */
+function ChildExpandedEvidence({ child }: { child: ChildrenEvidenceChild }) {
+    const readiness = [
+        { label: "Program selected", ok: Boolean(child.program) },
+        { label: "Schedule set", ok: Boolean(child.schedule) },
+        { label: "Desired start set", ok: Boolean(child.startDate) },
+    ];
+    return (
+        <div className="alloy-os-child-expanded" data-children-expanded={child.id}>
+            <EvidenceGroup title="Placement">
+                <TruthRow icon={GraduationCap} label="Program" value={child.program} />
+                <TruthRow icon={DoorOpen} label="Room" value={child.room} />
+                <TruthRow icon={CalendarDays} label="Schedule" value={child.schedule} />
+                <TruthRow icon={User} label="Teacher" value={child.teacher} />
+                <TruthRow icon={CalendarClock} label="Desired start" value={child.startDate} />
+            </EvidenceGroup>
+            <EvidenceGroup title="Medical">
+                <EmptyEvidence text="No medical information on file" />
+            </EvidenceGroup>
+            <EvidenceGroup title="Documents">
+                <EmptyEvidence text="No documents on file" />
+            </EvidenceGroup>
+            <EvidenceGroup title="Pickup instructions">
+                <EmptyEvidence text="No pickup instructions on file" />
+            </EvidenceGroup>
+            <EvidenceGroup title="Notes">
+                <EmptyEvidence text="No notes" />
+            </EvidenceGroup>
+            <EvidenceGroup title="Readiness">
+                <div className="alloy-os-child-readiness">
+                    {readiness.map((r) => (
+                        <span key={r.label} className={clsx("alloy-os-child-readiness__row", r.ok && "alloy-os-child-readiness__row--ok")}>
+                            <BadgeCheck size={13} strokeWidth={1.75} /> {r.label}
+                            <span className="alloy-os-child-readiness__state">{r.ok ? "Ready" : "Needed"}</span>
+                        </span>
+                    ))}
+                </div>
+            </EvidenceGroup>
+        </div>
+    );
+}
+
+/** Related View: a related operational REPORT (history), distinct from Expanded. */
+function ChildRelatedReport({ child, viewId }: { child: ChildrenEvidenceChild; viewId: string }) {
+    const config =
+        viewId === "placement_history"
+            ? { title: "Placement History", columns: ["Effective", "Program · Room", "Status"] as [string, string, string], empty: "No placement changes recorded yet" }
+            : { title: "Schedule History", columns: ["Effective", "Schedule", "Status"] as [string, string, string], empty: "No schedule changes recorded yet" };
+    return (
+        <div className="alloy-os-child-report" data-children-related-report={viewId}>
+            <p className="alloy-os-child-report__title">{config.title}</p>
+            <div className="alloy-os-child-report__table">
+                <div className="alloy-os-child-report__row alloy-os-child-report__row--head">
+                    {config.columns.map((c) => (
+                        <span key={c}>{c}</span>
+                    ))}
+                </div>
+                <p className="alloy-os-child-report__empty">{config.empty}</p>
+            </div>
+            <p className="alloy-os-child-report__foot">A related operational report — {child.name.split(" ")[0]}’s {config.title.toLowerCase()}.</p>
+        </div>
+    );
+}
+
+/** Quiet row of related-report links (distinct from Expanded). */
+function RelatedViewsRow({ onOpen }: { onOpen: (id: string) => void }) {
+    if (RELATED_VIEWS.length === 0) return null;
+    return (
+        <div className="alloy-os-child-related" data-children-related-views="true">
+            <span className="alloy-os-child-related__label">Related views</span>
+            <span className="alloy-os-child-related__links">
+                {RELATED_VIEWS.map((v) => (
+                    <button
+                        key={v.id}
+                        type="button"
+                        className="alloy-os-child-related__link"
+                        data-related-view={v.id}
+                        onClick={() => onOpen(v.id)}
+                    >
+                        {v.label} →
+                    </button>
+                ))}
+            </span>
+        </div>
+    );
 }
 
 function FocusedChild({
     child,
     editing,
+    expandedOpen,
+    relatedViewId,
+    onExpand,
+    onOpenRelated,
 }: {
     child: ChildrenEvidenceChild;
     editing: boolean;
+    expandedOpen: boolean;
+    relatedViewId: string | null;
+    onExpand?: () => void;
+    onOpenRelated: (id: string) => void;
 }) {
     return (
         <div
@@ -351,24 +529,45 @@ function FocusedChild({
             data-children-focused-child={child.id}
             data-children-edit={editing ? "true" : undefined}
         >
-            <div className="alloy-os-household__focused-header">
-                <span className="alloy-os-household__group-title">{child.name}</span>
+            <div className="alloy-os-child-focus__header">
+                <CardAvatar name={child.name} imageUrl={child.imageUrl} size={40} />
+                <div className="alloy-os-child-focus__id min-w-0">
+                    <span className="alloy-os-household__group-title">{child.name}</span>
+                    {child.dobAge ? (
+                        <span className="alloy-os-child-focus__sub">
+                            <Cake size={13} strokeWidth={1.75} /> {child.dobAge}
+                        </span>
+                    ) : null}
+                </div>
                 <StatusPill child={child} />
             </div>
-            {editing ? (
-                <CardEditPlaceholder
-                    title={`Edit ${child.name.split(" ")[0]}'s enrollment`}
-                    fields={[
-                        { label: "Program", value: child.program },
-                        { label: "Room", value: child.room },
-                        { label: "Schedule", value: child.schedule },
-                        { label: "Desired start", value: child.startDate },
-                    ]}
-                />
+
+            {relatedViewId ? (
+                <ChildRelatedReport child={child} viewId={relatedViewId} />
+            ) : expandedOpen ? (
+                <ChildExpandedEvidence child={child} />
+            ) : editing ? (
+                <div data-children-edit-preview={child.id} data-children-edit-readonly="true">
+                    <ChildEnrollmentBody child={child} />
+                    <p className="alloy-os-card-edit__notice" data-card-edit-notice="true">
+                        Preview — schedule/program editing isn’t saveable yet
+                    </p>
+                </div>
             ) : (
                 <>
-                    <ChildEvidenceSentence child={child} />
+                    <ChildEnrollmentBody child={child} />
                     <ChildFlags child={child} />
+                    {onExpand ? (
+                        <button
+                            type="button"
+                            className="alloy-os-child-history-link"
+                            onClick={onExpand}
+                            data-children-action="expand-evidence"
+                        >
+                            <FileText size={13} strokeWidth={1.75} /> View all evidence →
+                        </button>
+                    ) : null}
+                    <RelatedViewsRow onOpen={onOpenRelated} />
                 </>
             )}
         </div>

@@ -11,6 +11,7 @@
 import type { FocusPanelCardKey } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardModel";
 import {
     FOCUS_PANEL_PUBLISHED_LAYOUT_META_KEY,
+    type FocusPanelCellHeight,
     type FocusPanelCellWidth,
     type FocusPanelLayoutCell,
     type FocusPanelPublishedLayout,
@@ -37,8 +38,8 @@ export function defaultRowLayoutFromCards(cards: FocusPanelCardKey[]): FocusPane
             cells:
                 pair.length === 2
                     ? [
-                          { width: "1/2", cards: [pair[0]!] },
-                          { width: "1/2", cards: [pair[1]!] },
+                          { width: "half", cards: [pair[0]!] },
+                          { width: "half", cards: [pair[1]!] },
                       ]
                     : [{ width: "full", cards: [pair[0]!] }],
         });
@@ -51,12 +52,89 @@ export function cardsInLayout(layout: FocusPanelPublishedLayout): FocusPanelCard
     return layout.rows.flatMap((r) => r.cells.flatMap((c) => c.cards));
 }
 
+/** Find a card's location by identity (index-safe for canvas drag operations). */
+export function locateCard(layout: FocusPanelPublishedLayout, card: FocusPanelCardKey): CardLocation | null {
+    for (let row = 0; row < layout.rows.length; row += 1) {
+        const cells = layout.rows[row]!.cells;
+        for (let cell = 0; cell < cells.length; cell += 1) {
+            if (cells[cell]!.cards.includes(card)) return { row, cell, card };
+        }
+    }
+    return null;
+}
+
+/** Move a card (by identity) to STACK under a target card's cell — canvas drop-on-card. */
+export function moveCardOntoCell(
+    layout: FocusPanelPublishedLayout,
+    card: FocusPanelCardKey,
+    targetCard: FocusPanelCardKey,
+): FocusPanelPublishedLayout {
+    if (card === targetCard) return layout;
+    const source = locateCard(layout, card);
+    if (!source) return layout;
+    const removed = removeCard(layout, source);
+    const target = locateCard(removed, targetCard); // re-locate after prune
+    if (!target) return layout;
+    return stackCardInCell(removed, target.row, target.cell, card);
+}
+
+/** Move a card (by identity) to the end of a row — canvas drop-on-row. */
+export function moveCardToRowByCard(
+    layout: FocusPanelPublishedLayout,
+    card: FocusPanelCardKey,
+    toRowIndex: number,
+): FocusPanelPublishedLayout {
+    const source = locateCard(layout, card);
+    if (!source) return layout;
+    return moveCardToRow(layout, source, toRowIndex);
+}
+
+/**
+ * Move a card (by identity) into a NEW row inserted at `atIndex` — canvas drop on a
+ * between-rows strip. Done atomically (remove → splice) so the new row survives the
+ * pruning that `moveCardToRow` would apply to an empty row.
+ */
+export function moveCardToNewRow(
+    layout: FocusPanelPublishedLayout,
+    card: FocusPanelCardKey,
+    atIndex: number,
+): FocusPanelPublishedLayout {
+    const source = locateCard(layout, card);
+    if (!source) return layout;
+    const width = layout.rows[source.row]?.cells[source.cell]?.width ?? "half";
+    const removed = removeCard(layout, source); // prunes emptied source cell/row
+    const rows = removed.rows.slice();
+    const at = Math.max(0, Math.min(atIndex, rows.length));
+    rows.splice(at, 0, { cells: [{ width, cards: [card] }] });
+    return { rows };
+}
+
 /** Append an empty row (with a single full-width cell awaiting a card), or insert at index. */
 export function addRow(layout: FocusPanelPublishedLayout, atIndex?: number): FocusPanelPublishedLayout {
     const rows = layout.rows.slice();
     const blank = { cells: [] as FocusPanelLayoutCell[] };
     const at = atIndex == null ? rows.length : Math.max(0, Math.min(atIndex, rows.length));
     rows.splice(at, 0, blank);
+    return { rows };
+}
+
+/** Remove an entire row (and the cards in it return to the catalog). */
+export function removeRow(layout: FocusPanelPublishedLayout, rowIndex: number): FocusPanelPublishedLayout {
+    if (!layout.rows[rowIndex]) return layout;
+    return { rows: layout.rows.filter((_, i) => i !== rowIndex) };
+}
+
+/** Reorder a row up (−1) or down (+1) — the builder's Reorder Rows affordance. */
+export function moveRow(
+    layout: FocusPanelPublishedLayout,
+    rowIndex: number,
+    direction: -1 | 1,
+): FocusPanelPublishedLayout {
+    const target = rowIndex + direction;
+    if (!layout.rows[rowIndex] || target < 0 || target >= layout.rows.length) return layout;
+    const rows = layout.rows.slice();
+    const [moved] = rows.splice(rowIndex, 1);
+    rows.splice(target, 0, moved!);
     return { rows };
 }
 
@@ -74,7 +152,7 @@ export function addCardToRow(
     layout: FocusPanelPublishedLayout,
     rowIndex: number,
     card: FocusPanelCardKey,
-    width: FocusPanelCellWidth = "1/2",
+    width: FocusPanelCellWidth = "half",
 ): FocusPanelPublishedLayout {
     if (cardsInLayout(layout).includes(card)) return layout; // a card appears once
     const rows = layout.rows.map((r, i) =>
@@ -114,6 +192,21 @@ export function setCellWidth(
     return { rows };
 }
 
+/** Set a cell's HEIGHT (room before expansion) — the canvas bottom-edge drag. */
+export function setCellHeight(
+    layout: FocusPanelPublishedLayout,
+    rowIndex: number,
+    cellIndex: number,
+    height: FocusPanelCellHeight,
+): FocusPanelPublishedLayout {
+    const rows = layout.rows.map((r, ri) =>
+        ri === rowIndex
+            ? { cells: r.cells.map((c, ci) => (ci === cellIndex ? { ...c, height } : c)) }
+            : r,
+    );
+    return { rows };
+}
+
 /** Remove a card; prunes the emptied cell / row. */
 export function removeCard(layout: FocusPanelPublishedLayout, loc: CardLocation): FocusPanelPublishedLayout {
     const rows = layout.rows.map((r, ri) =>
@@ -135,7 +228,7 @@ export function moveCardToRow(
 ): FocusPanelPublishedLayout {
     if (loc.row === toRowIndex) return layout;
     const sourceCell = layout.rows[loc.row]?.cells[loc.cell];
-    const width = sourceCell?.width ?? "1/2";
+    const width = sourceCell?.width ?? "half";
     const removed = removeCard(layout, loc);
     // toRowIndex refers to the ORIGINAL indexing; clamp into the pruned layout.
     const target = Math.max(0, Math.min(toRowIndex, removed.rows.length - 1));

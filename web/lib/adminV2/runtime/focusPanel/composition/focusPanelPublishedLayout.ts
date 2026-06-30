@@ -18,29 +18,123 @@
 
 import type { FocusPanelCardKey } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardModel";
 
-/** Operator-facing fractional cell widths (the builder's width buttons). */
-export type FocusPanelCellWidth = "1/3" | "1/2" | "2/3" | "full";
+/**
+ * Cell width = operator INTENT, not a grid token. The runtime computes exact
+ * spacing from intent (see `resolveRowUnits` / `planPublishedLayout`).
+ *
+ *   - Named sizes (`quarter`…`full`) declare a proportion of the row.
+ *   - `fill` is an intent — "take whatever space is left" — so a row never leaves
+ *     dead whitespace; the runtime divides the remainder among the fill cells.
+ *
+ * Legacy fraction values (`1/3`,`1/2`,`2/3`,`full`) remain valid (older published
+ * docs) and alias the named sizes.
+ */
+export type FocusPanelCellWidth =
+    | "quarter"
+    | "third"
+    | "half"
+    | "twoThirds"
+    | "full"
+    | "fill"
+    // legacy aliases (kept for already-published docs)
+    | "1/3"
+    | "1/2"
+    | "2/3";
 
-export const FOCUS_PANEL_CELL_WIDTHS: readonly FocusPanelCellWidth[] = ["1/3", "1/2", "2/3", "full"];
+/** The intent vocabulary the builder offers (in size order, `fill` last). */
+export const FOCUS_PANEL_CELL_WIDTHS: readonly FocusPanelCellWidth[] = [
+    "quarter",
+    "third",
+    "half",
+    "twoThirds",
+    "full",
+    "fill",
+];
 
-/** Width in 12-unit grid columns. */
+/** Operator-facing label for each width intent. */
+export const CELL_WIDTH_LABEL: Record<FocusPanelCellWidth, string> = {
+    quarter: "Quarter",
+    third: "Third",
+    half: "Half",
+    twoThirds: "Two Thirds",
+    full: "Full",
+    fill: "Fill",
+    "1/3": "Third",
+    "1/2": "Half",
+    "2/3": "Two Thirds",
+};
+
+/**
+ * Fixed width in 12-unit grid columns. `fill` resolves at plan time (remaining
+ * row space) and is represented here as `0` (a sentinel — never rendered directly;
+ * `resolveRowUnits` replaces it).
+ */
 export const CELL_WIDTH_UNITS: Record<FocusPanelCellWidth, number> = {
+    quarter: 3,
+    third: 4,
+    half: 6,
+    twoThirds: 8,
+    full: 12,
+    fill: 0,
     "1/3": 4,
     "1/2": 6,
     "2/3": 8,
-    full: 12,
 };
 
 export const PUBLISHED_LAYOUT_COLUMN_BASE = 12;
 
+/** The snap stops the canvas resize handle lands on (operator drags; runtime snaps). */
+const WIDTH_SNAP_STOPS: { width: FocusPanelCellWidth; fraction: number }[] = [
+    { width: "quarter", fraction: 3 / 12 },
+    { width: "third", fraction: 4 / 12 },
+    { width: "half", fraction: 6 / 12 },
+    { width: "twoThirds", fraction: 8 / 12 },
+    { width: "full", fraction: 12 / 12 },
+];
+
+/**
+ * Snap a 0–1 fraction of the row to the nearest named width — the operator drags a card
+ * "bigger / smaller" on the canvas; the runtime resolves it to a token. PURE.
+ */
+export function snapWidthFromFraction(fraction: number): FocusPanelCellWidth {
+    let best = WIDTH_SNAP_STOPS[0]!;
+    let bestDist = Infinity;
+    for (const stop of WIDTH_SNAP_STOPS) {
+        const dist = Math.abs(stop.fraction - fraction);
+        if (dist < bestDist) {
+            bestDist = dist;
+            best = stop;
+        }
+    }
+    return best.width;
+}
+
 /** Below this the published layout collapses to a single readable column. */
 export const PUBLISHED_LAYOUT_MIN_PX = 560;
+
+/**
+ * Cell HEIGHT = how much ROOM the card has before overlay/expanded behavior — the
+ * operator drags the bottom edge to give a card more or less room. It never changes the
+ * card's question, ownership, editability, or related views (same card, more room).
+ */
+export type FocusPanelCellHeight = "compact" | "standard" | "tall";
+
+export const FOCUS_PANEL_CELL_HEIGHTS: readonly FocusPanelCellHeight[] = ["compact", "standard", "tall"];
+
+/** Room before expansion, in px (min-height the runtime reserves for the cell). */
+export const CELL_HEIGHT_PX: Record<FocusPanelCellHeight, number> = {
+    compact: 132,
+    standard: 184,
+    tall: 268,
+};
 
 /** A cell = one column slot of a row, holding one or more vertically STACKED cards. */
 export type FocusPanelLayoutCell = {
     width: FocusPanelCellWidth;
     /** Cards stacked top-to-bottom inside this cell (≥1). */
     cards: FocusPanelCardKey[];
+    /** Room before expansion (optional; defaults to natural height when absent). */
+    height?: FocusPanelCellHeight;
 };
 
 /** A row = cells laid left→right, their widths summing toward full (12 units). */
@@ -50,7 +144,7 @@ export type FocusPanelLayoutRow = { cells: FocusPanelLayoutCell[] };
 export type FocusPanelPublishedLayout = { rows: FocusPanelLayoutRow[] };
 
 /** A planned cell the renderer paints (width resolved to grid units). */
-export type PublishedLayoutCellPlan = { widthUnits: number; cards: FocusPanelCardKey[] };
+export type PublishedLayoutCellPlan = { widthUnits: number; cards: FocusPanelCardKey[]; minHeightPx?: number };
 export type PublishedLayoutRowPlan = { cells: PublishedLayoutCellPlan[] };
 export type PublishedLayoutPlan = {
     columnBase: number;
@@ -59,7 +153,10 @@ export type PublishedLayoutPlan = {
     rows: PublishedLayoutRowPlan[];
 };
 
-const ALL_CARD_WIDTHS = new Set<string>(FOCUS_PANEL_CELL_WIDTHS);
+// Every accepted width value — the builder-offered intents PLUS legacy fraction
+// aliases — so already-published docs keep validating. (FOCUS_PANEL_CELL_WIDTHS is
+// only the subset the builder offers as buttons.)
+const ALL_CARD_WIDTHS = new Set<string>(Object.keys(CELL_WIDTH_UNITS));
 
 /** Validate a value is a well-formed published layout (defensive for stored docs). */
 export function isFocusPanelPublishedLayout(value: unknown): value is FocusPanelPublishedLayout {
@@ -99,6 +196,29 @@ export function publishedLayoutReadingOrder(layout: FocusPanelPublishedLayout): 
 }
 
 /**
+ * Resolve a row's cells to exact grid units — THE runtime's "compute spacing" step.
+ *
+ * Fixed cells take their named units. `fill` cells absorb the row's remaining units
+ * (12 − fixed), split as evenly as possible (the last fill cell takes any remainder),
+ * so the row always sums to the column base and never leaves dead whitespace. If the
+ * fixed cells already meet/exceed the base, each fill cell still gets a minimum of 1
+ * unit (it stays visible; flex-grow keeps the row proportional).
+ */
+export function resolveRowUnits(cells: FocusPanelLayoutCell[]): number[] {
+    const fixed = cells.map((c) => (c.width === "fill" ? null : CELL_WIDTH_UNITS[c.width]));
+    const fillIdx = fixed.flatMap((u, i) => (u == null ? [i] : []));
+    if (fillIdx.length === 0) return fixed.map((u) => u ?? 0);
+    const usedFixed = fixed.reduce<number>((sum, u) => sum + (u ?? 0), 0);
+    const remaining = Math.max(fillIdx.length, PUBLISHED_LAYOUT_COLUMN_BASE - usedFixed);
+    const per = Math.floor(remaining / fillIdx.length);
+    const units = fixed.map((u) => u ?? 0);
+    fillIdx.forEach((cellIndex, n) => {
+        units[cellIndex] = n === fillIdx.length - 1 ? remaining - per * (fillIdx.length - 1) : per;
+    });
+    return units;
+}
+
+/**
  * Resolve a published layout + available width into a render plan. PURE.
  *
  * At/above the min width the plan honors the published rows/cells/widths EXACTLY.
@@ -122,11 +242,15 @@ export function planPublishedLayout(
     return {
         columnBase: PUBLISHED_LAYOUT_COLUMN_BASE,
         collapsed: false,
-        rows: layout.rows.map((row) => ({
-            cells: row.cells.map((cell) => ({
-                widthUnits: CELL_WIDTH_UNITS[cell.width],
-                cards: cell.cards,
-            })),
-        })),
+        rows: layout.rows.map((row) => {
+            const units = resolveRowUnits(row.cells);
+            return {
+                cells: row.cells.map((cell, cellIndex) => ({
+                    widthUnits: units[cellIndex] ?? 0,
+                    cards: cell.cards,
+                    minHeightPx: cell.height ? CELL_HEIGHT_PX[cell.height] : undefined,
+                })),
+            };
+        }),
     };
 }

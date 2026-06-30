@@ -28,10 +28,14 @@ export type ChildrenEvidenceChild = {
     id: string;
     name: string;
     initial: string;
+    /** Identity profile image (evidence model); null → initials fallback. */
+    imageUrl: string | null;
     dobAge: string | null;
     program: string | null;
     room: string | null;
     schedule: string | null;
+    /** Placement evidence — assigned teacher (no source yet → null → "Not set"). */
+    teacher: string | null;
     startDate: string | null;
     status: string | null;
     statusTone: ChildStatusTone;
@@ -123,6 +127,7 @@ export function buildChildrenCardEvidence(context: OperationalContext): Children
         const program = trimOrNull(row.desired_program_label);
         const room = trimOrNull(row.program_room_cohort_label) ?? trimOrNull(row.location_label);
         const schedule = trimOrNull(row.desired_schedule_label);
+        const teacher = trimOrNull((row as { teacher_label?: unknown }).teacher_label);
         const startDate = trimOrNull(row.desired_start_date);
         const statusLabel = trimOrNull(row.outcome_status_label);
         const statusKey = trimOrNull(row.outcome_status_key);
@@ -158,10 +163,14 @@ export function buildChildrenCardEvidence(context: OperationalContext): Children
             id: trimOrNull(row.id) ?? trimOrNull(row.person_id) ?? `child-${index}`,
             name,
             initial: name.charAt(0).toUpperCase(),
+            // No child photo source today → null → CardAvatar renders the initials
+            // fallback. The seam is here for when child photos land (no fabricated image).
+            imageUrl: null,
             dobAge: dobAgeLine(row.dob, row.age),
             program,
             room,
             schedule,
+            teacher,
             startDate,
             // Prefer the projection's resolved label; else the canonical New Lead label (legacy
             // new_inquiry renders "New Lead", never "New Inquiry"); else humanize. A null key yields a

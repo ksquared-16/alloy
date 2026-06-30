@@ -11,7 +11,9 @@ import {
     cardsInLayout,
     emptyLayout,
     moveCardToRow,
+    moveRow,
     removeCard,
+    removeRow,
     setCellWidth,
     stackCardInCell,
     withPublishedLayoutMetadata,
@@ -137,5 +139,73 @@ describe("settings editor persist/load round-trip (metadata + fallback)", () => 
         // Editor with rowLayout=null persists the plain doc (no layout metadata).
         const doc = buildSummaryDocFromOrder(order);
         expect(readFocusPanelPublishedLayout(doc)).toBeNull();
+    });
+});
+
+describe("row operations (reorder + remove) — Composition V2", () => {
+    it("removes an entire row", () => {
+        let l = addCardToRow(addRow(emptyLayout()), 0, "household");
+        l = addCardToRow(addRow(l), 1, "children");
+        l = removeRow(l, 0);
+        expect(cardsInLayout(l)).toEqual(["children"]);
+        expect(l.rows).toHaveLength(1);
+    });
+
+    it("reorders a row up and down, clamping at the ends", () => {
+        let l = addCardToRow(addRow(emptyLayout()), 0, "household");
+        l = addCardToRow(addRow(l), 1, "children");
+        l = addCardToRow(addRow(l), 2, "readiness_kpi");
+        // move row 2 (readiness) up to index 1
+        l = moveRow(l, 2, -1);
+        expect(l.rows.map((r) => r.cells[0]!.cards[0])).toEqual(["household", "readiness_kpi", "children"]);
+        // moving the top row up is a no-op (clamped)
+        expect(moveRow(l, 0, -1)).toEqual(l);
+        // moving the bottom row down is a no-op (clamped)
+        expect(moveRow(l, 2, 1)).toEqual(l);
+    });
+
+    it("uses operator-friendly named widths by default (half), still placing each card once", () => {
+        const l = addCardToRow(addRow(emptyLayout()), 0, "household");
+        expect(l.rows[0]!.cells[0]!.width).toBe("half");
+    });
+})
+
+describe("Canvas Builder ops — direct manipulation (V4)", () => {
+    it("snaps a drag fraction to the nearest named width", async () => {
+        const { snapWidthFromFraction } = await import("@/lib/adminV2/runtime/focusPanel/composition/focusPanelPublishedLayout");
+        expect(snapWidthFromFraction(0.26)).toBe("quarter");
+        expect(snapWidthFromFraction(0.34)).toBe("third");
+        expect(snapWidthFromFraction(0.52)).toBe("half");
+        expect(snapWidthFromFraction(0.7)).toBe("twoThirds");
+        expect(snapWidthFromFraction(0.95)).toBe("full");
+    });
+
+    it("sets cell height (room before expansion) and the runtime reserves min-height", async () => {
+        const { setCellHeight } = await import("@/lib/adminV2/runtime/focusPanel/composition/focusPanelPublishedLayoutOps");
+        const { planPublishedLayout, CELL_HEIGHT_PX } = await import("@/lib/adminV2/runtime/focusPanel/composition/focusPanelPublishedLayout");
+        let l = addCardToRow(addRow(emptyLayout()), 0, "household", "half");
+        l = setCellHeight(l, 0, 0, "tall");
+        expect(l.rows[0]!.cells[0]!.height).toBe("tall");
+        const plan = planPublishedLayout(l, 900);
+        expect(plan.rows[0]!.cells[0]!.minHeightPx).toBe(CELL_HEIGHT_PX.tall);
+    });
+
+    it("locates + moves a card onto another card's cell (stack) by identity", async () => {
+        const { locateCard, moveCardOntoCell, moveCardToNewRow } = await import(
+            "@/lib/adminV2/runtime/focusPanel/composition/focusPanelPublishedLayoutOps"
+        );
+        let l = addCardToRow(addRow(emptyLayout()), 0, "household", "half");
+        l = addCardToRow(l, 0, "readiness_kpi", "half");
+        l = addCardToRow(addRow(l), 1, "current_work", "full");
+        expect(locateCard(l, "current_work")).toEqual({ row: 1, cell: 0, card: "current_work" });
+        // drag Current Work onto Readiness → stacks under it (row 1 pruned)
+        l = moveCardOntoCell(l, "current_work", "readiness_kpi");
+        const readinessCell = l.rows[0]!.cells.find((c) => c.cards.includes("readiness_kpi"))!;
+        expect(readinessCell.cards).toEqual(["readiness_kpi", "current_work"]);
+        expect(l.rows).toHaveLength(1);
+        // drag Household into a NEW row at the bottom (survives the move's prune)
+        l = moveCardToNewRow(l, "household", 1);
+        expect(l.rows).toHaveLength(2);
+        expect(l.rows[1]!.cells.flatMap((c) => c.cards)).toEqual(["household"]);
     });
 });

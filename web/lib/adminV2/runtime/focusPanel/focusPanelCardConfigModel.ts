@@ -90,6 +90,19 @@ export type FocusPanelCardField = {
     maxRows?: number;
     /** Collection-only: copy shown when the role has no linked records. */
     emptyText?: string;
+    // ── Ownership + behavior (Card Definition V2 — Part 4) ──
+    /**
+     * The single card that OWNS this business concept (Ownership doctrine: every
+     * concept has exactly one owning card). Defaults to the host card. A concept can
+     * be SHOWN read-only on other cards, but is only EDITABLE on its owner.
+     */
+    owner?: FocusPanelCardKey;
+    /** Operator may edit this value here (only valid on the owning card). */
+    editable?: boolean;
+    /** The value must be present (drives readiness / completion). */
+    required?: boolean;
+    /** Shown but never editable here (even on the owning card). */
+    readOnly?: boolean;
 };
 
 export const FOCUS_PANEL_CONDITION_KINDS = [
@@ -154,14 +167,126 @@ export type FocusPanelCardComposition = {
     perspectiveExpansion?: CardPerspectiveExpansion;
 };
 
+/**
+ * An Evidence Group (Card Definition V2 — Part 3): a named bundle of fields that
+ * answers part of the card's Question. Fields belong INSIDE a group — e.g. Children
+ * groups its evidence into Identity / Enrollment / Placement / Readiness / Medical /
+ * Documents. The runtime renders the flattened fields (reading order = groups in
+ * order, fields within), so grouping is an authoring + presentation concept, not a
+ * new runtime path.
+ */
+export type FocusPanelEvidenceGroup = {
+    id: string;
+    label: string;
+    fields: FocusPanelCardField[];
+    /** The group's operational question / purpose (Evidence Group Authoring, V4). */
+    purpose?: string;
+    /**
+     * The card that OWNS this evidence group (Experience Builder V3 — ownership lives at
+     * the evidence-group level). Defaults to the host card. The group's fields are
+     * editable only on the owning card.
+     */
+    owner?: FocusPanelCardKey;
+    /** Visible in the card's Summary (the 2–5s answer). */
+    showInSummary?: boolean;
+    /** Visible in Focus (the current operational truth). */
+    showInFocus?: boolean;
+    /**
+     * Whether this group is revealed when the card is Expanded (the SAME question with
+     * additional configured evidence — not history).
+     */
+    includeInExpanded?: boolean;
+};
+
+/** A configured Related View — a report drill-down distinct from Expanded. */
+export type FocusPanelConfiguredRelatedView = {
+    id: string;
+    label: string;
+};
+
+/** The group legacy flat `fields` migrate into when a card has no explicit groups. */
+export const DEFAULT_EVIDENCE_GROUP_ID = "details" as const;
+export const DEFAULT_EVIDENCE_GROUP_LABEL = "Details" as const;
+
 /** Complete per-card configuration persisted on the section metadata. */
 export type FocusPanelCardConfig = {
     appearance?: FocusPanelCardAppearance;
+    /**
+     * The card's operational QUESTION (Card Definition V2 — Part 2): the one thing it
+     * answers ("What is true about each child?"). Authoring leads with this.
+     */
+    question?: string;
+    /** Evidence groups own the fields (Part 3). Preferred over the flat `fields`. */
+    evidenceGroups?: FocusPanelEvidenceGroup[];
+    /** Configured Related Views — report drill-downs (Experience Builder V3). */
+    relatedViews?: FocusPanelConfiguredRelatedView[];
+    /** Legacy flat fields (pre-V2 docs). Read via `configFields`; kept for back-compat. */
     fields?: FocusPanelCardField[];
     expansion?: FocusPanelCardExpansion;
     conditions?: FocusPanelCardCondition[];
     composition?: FocusPanelCardComposition;
 };
+
+function evField(id: string, label: string, concept: string): FocusPanelCardField {
+    return { id, label, concept, renderer: "text", placement: "collapsed", kind: "field" };
+}
+
+/**
+ * The doctrine evidence groups a reference card seeds with (Evidence Group Authoring).
+ * Child OWNS Placement as an evidence group (Program/Room/Schedule/Teacher/Desired
+ * Start) — Placement is not a separate card. Other cards wrap their seed fields in one
+ * "Details" group.
+ */
+export function defaultEvidenceGroupsForCard(
+    key: FocusPanelCardKey,
+    seedFields: FocusPanelCardField[],
+): FocusPanelEvidenceGroup[] {
+    if (key === "children") {
+        return [
+            { id: "identity", label: "Identity", purpose: "Who is this child?", owner: "children", showInSummary: true, showInFocus: true, fields: [evField("child_name", "Name", "Enrollment → Children → Name"), evField("child_dob", "DOB / Age", "Enrollment → Children → DOB")] },
+            { id: "placement", label: "Placement", purpose: "Where is this child placed?", owner: "children", showInFocus: true, includeInExpanded: true, fields: [evField("program", "Program", "Enrollment → Children → Program"), evField("room", "Room", "Enrollment → Children → Room"), evField("schedule", "Schedule", "Enrollment → Children → Schedule"), evField("teacher", "Teacher", "Enrollment → Children → Teacher"), evField("desired_start", "Desired Start", "Enrollment → Children → Desired Start")] },
+            { id: "medical", label: "Medical", purpose: "What should we know medically?", owner: "children", includeInExpanded: true, fields: [] },
+            { id: "documents", label: "Documents", purpose: "What documents are required?", owner: "children", includeInExpanded: true, fields: [] },
+            { id: "readiness", label: "Readiness", purpose: "Is this child ready to enroll?", owner: "children", includeInExpanded: true, fields: [] },
+            { id: "notes", label: "Notes", purpose: "Anything else to record?", owner: "children", includeInExpanded: true, fields: [] },
+        ];
+    }
+    if (seedFields.length === 0) return [];
+    return [{ id: DEFAULT_EVIDENCE_GROUP_ID, label: DEFAULT_EVIDENCE_GROUP_LABEL, fields: seedFields }];
+}
+
+/**
+ * The card's evidence groups — explicit groups when present, else legacy flat
+ * `fields` wrapped in one default "Details" group. The single authoring view.
+ */
+export function evidenceGroupsFromConfig(
+    config: FocusPanelCardConfig | null | undefined,
+): FocusPanelEvidenceGroup[] {
+    if (config?.evidenceGroups && config.evidenceGroups.length > 0) return config.evidenceGroups;
+    const legacy = config?.fields ?? [];
+    if (legacy.length === 0) return [];
+    return [{ id: DEFAULT_EVIDENCE_GROUP_ID, label: DEFAULT_EVIDENCE_GROUP_LABEL, fields: legacy }];
+}
+
+/**
+ * The card's fields in reading order — flattened across evidence groups (V2) or the
+ * legacy flat list. THE single source the runtime + validation consume, so adding
+ * groups never forks the render path.
+ */
+export function configFields(config: FocusPanelCardConfig | null | undefined): FocusPanelCardField[] {
+    if (config?.evidenceGroups && config.evidenceGroups.length > 0) {
+        return config.evidenceGroups.flatMap((g) => g.fields);
+    }
+    return config?.fields ?? [];
+}
+
+/** The card that owns a field's concept (defaults to the host card). */
+export function effectiveFieldOwner(
+    field: FocusPanelCardField,
+    hostCard: FocusPanelCardKey,
+): FocusPanelCardKey {
+    return field.owner ?? hostCard;
+}
 
 /** True when a composition override carries no declared field. */
 function isCompositionEmpty(composition: FocusPanelCardComposition | null | undefined): boolean {
@@ -172,7 +297,7 @@ function isCompositionEmpty(composition: FocusPanelCardComposition | null | unde
 /** True when a config carries no meaningful content (avoid persisting empties). */
 export function isFocusPanelCardConfigEmpty(config: FocusPanelCardConfig | null | undefined): boolean {
     if (!config) return true;
-    const { appearance, fields, conditions, expansion, composition } = config;
+    const { appearance, conditions, expansion, composition, question } = config;
     const appearanceEmpty =
         !appearance ||
         ((!appearance.titleOverride || appearance.titleOverride.trim() === "") &&
@@ -180,7 +305,8 @@ export function isFocusPanelCardConfigEmpty(config: FocusPanelCardConfig | null 
             !appearance.density);
     return (
         appearanceEmpty &&
-        (fields?.length ?? 0) === 0 &&
+        (!question || question.trim() === "") &&
+        configFields(config).length === 0 &&
         (conditions?.length ?? 0) === 0 &&
         !expansion &&
         isCompositionEmpty(composition)
@@ -190,8 +316,8 @@ export function isFocusPanelCardConfigEmpty(config: FocusPanelCardConfig | null 
 /** One operator-facing problem with a card's evidence-group configuration. */
 export type FocusPanelConfigIssue = {
     /** Where the problem is, for the editor to anchor to. */
-    scope: "field" | "condition";
-    /** Field/condition identifier (field id, or condition index as string). */
+    scope: "field" | "condition" | "group" | "ownership";
+    /** Field/condition identifier (field id, condition index, or group id). */
     ref: string;
     message: string;
 };
@@ -207,11 +333,21 @@ export type FocusPanelConfigIssue = {
  */
 export function validateFocusPanelCardConfig(
     config: FocusPanelCardConfig | null | undefined,
+    hostCard?: FocusPanelCardKey,
 ): { ok: boolean; issues: FocusPanelConfigIssue[] } {
     const issues: FocusPanelConfigIssue[] = [];
     if (!config) return { ok: true, issues };
 
-    const fields = config.fields ?? [];
+    // Evidence groups need a label (V2). Validated whether explicit or legacy-wrapped.
+    if (config.evidenceGroups) {
+        for (const group of config.evidenceGroups) {
+            if (!group.label || group.label.trim() === "") {
+                issues.push({ scope: "group", ref: group.id, message: "An evidence group needs a name." });
+            }
+        }
+    }
+
+    const fields = configFields(config);
     const seen = new Set<string>();
     for (const field of fields) {
         if (seen.has(field.id)) {
@@ -226,6 +362,15 @@ export function validateFocusPanelCardConfig(
         }
         if (field.kind === "collection" && field.maxRows !== undefined && field.maxRows < 1) {
             issues.push({ scope: "field", ref: field.id, message: `"${field.label || field.id}" must show at least one row.` });
+        }
+        // Ownership doctrine: a concept is EDITABLE only on its owning card. If this
+        // host shows a concept owned elsewhere, it can't also be editable here.
+        if (field.editable && hostCard && effectiveFieldOwner(field, hostCard) !== hostCard) {
+            issues.push({
+                scope: "ownership",
+                ref: field.id,
+                message: `"${field.label || field.id}" is owned by another card — show it read-only here, edit it on its owner.`,
+            });
         }
     }
 
@@ -349,13 +494,16 @@ export function composeEffectiveCardModel(
     const description = appearance?.description?.trim();
     const density = appearance?.density ?? null;
 
-    const hasFieldConfig = baseModel.archetype === "profile" && (config.fields?.length ?? 0) > 0;
+    // Read fields through `configFields` so evidence groups (V2) and the legacy flat
+    // list render through the SAME path — grouping never forks the runtime.
+    const fields = configFields(config);
+    const hasFieldConfig = baseModel.archetype === "profile" && fields.length > 0;
     if (!title && !description && !density && !hasFieldConfig) return baseModel;
 
     let payload = baseModel.payload;
     if (hasFieldConfig) {
         const state = config.expansion?.default ?? "collapsed";
-        const profileFields: FocusPanelProfileField[] = visibleFieldsForState(config.fields!, state).map((field) => ({
+        const profileFields: FocusPanelProfileField[] = visibleFieldsForState(fields, state).map((field) => ({
             label: field.label,
             value: resolveFieldValue(field, record, state),
         }));

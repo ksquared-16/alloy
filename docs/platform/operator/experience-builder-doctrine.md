@@ -22,23 +22,76 @@ No new operator-facing product behavior should be added to **drawer overview**, 
 
 ---
 
-## Composition V2 — row-based Focus Panel authoring (June 2026)
+## Experience Builder V4 — Canvas Builder + Evidence Group Authoring (June 2026)
 
-The Focus Panel Surfaces editor composes the panel **visually with rows and columns**,
-not abstract tokens. Pipeline:
+The `/settings/surfaces` editor is **canvas-first**: the Focus Panel canvas **itself is the
+editor** (`FocusPanelCanvasBuilder`), not a control panel beside a preview. There is no
+"Compose Layout" panel.
+
+**Composition vs Behavior — a hard separation:**
+
+| The **CANVAS** owns composition | The **INSPECTOR** owns behavior |
+|---|---|
+| position · width · height · stacking · row placement | question · evidence groups · editing · expanded · related views · actions · conditions · AI · ownership |
+
+- **Direct manipulation:** click a card to select it (opens the Inspector), drag to
+  reorder / move between rows / stack, drag the **right edge** to make it wider/narrower,
+  drag the **bottom edge** to give it more/less **room**. The operator thinks "bigger /
+  smaller", not "layout token" — widths snap internally to Quarter / Third / Half / Two
+  Thirds / Full, the runtime computes exact spacing (+ Fill), so rows stay composed with
+  no dead whitespace.
+- **Width** changes composition; **height** (`cell.height` → compact / standard / tall)
+  changes how much room a card has before overlay/expanded behavior. Resizing **never**
+  changes a card's question, evidence ownership, editability, or related views — *same
+  card, same answer, different amount of room.*
+- The published layout drives the runtime exactly (`FocusPanelCardGrid` honors widths,
+  stacking, and reserved height). Composition is NOT configured in the Inspector.
+
+**Surface composition pipeline (authored on the canvas):**
 
 ```
-Surface → Rows → Cards → Evidence Groups → Perspectives → Conditions → Actions → Published Runtime
+Canvas → Rows → Columns → Cards (width · height · stacking) → Published Runtime
 ```
+
+**Card definition pipeline (per card — Evidence Group Authoring, V4):**
+
+```
+Card → Question → Evidence Groups → Evidence → Behavior → Related → Publish
+```
+
+**Evidence Groups are the heart of card configuration** — not "fields on a card". Each
+group exposes: name · operational question/purpose · owner card · evidence items
+(fields) · presentation · **Summary / Focus / Expanded visibility** · editing behavior ·
+required/read-only/hidden · related views · actions · conditions. Fields live **inside**
+Evidence Groups (`FocusPanelEvidenceGroup`); "Fields" is never the primary concept. A
+reference card seeds its doctrine groups via `defaultEvidenceGroupsForCard`.
+
+**Child owns Placement as an Evidence Group** (Program · Room · Schedule · Teacher ·
+Desired Start) — Placement is **not** a separate card. Child groups: Identity · Placement
+· Medical · Documents · Readiness · Notes. The operator manages the child without bouncing
+between cards.
+
+**Ownership lives at the Evidence Group level** (`group.owner`); a group's fields are
+editable only on the owning card. **Expanded** = the same question with additional
+configured evidence groups (`group.includeInExpanded`), *not* history. **Related Views**
+(`config.relatedViews`) are optional report drill-downs (Schedule History, Placement
+History, Billing History …) — distinct from Expanded. See
+[`universal-card-lifecycle.md`](./universal-card-lifecycle.md).
 
 - **Published layout is the source of truth.** The runtime renders the published rows/
-  widths exactly (responsive single-column collapse only). **Weight / partner / preferred
-  shape are recommendation defaults only** — the auto Composition Engine is the starting
-  point when nothing is published; it never overrides a published layout.
-- Width uses plain fractions (**Full / 1/2 / 1/3 / 2/3**); cards stack within a column;
-  the builder preview **is** the runtime grid. The layout persists on the Summary
-  `LayoutDoc` metadata (`focusPanelLayout`) via the existing draft/publish flow.
-- Full canonical state (incl. card editing + depth history + mutation model):
+  widths exactly (responsive single-column collapse only) and **never overrides an
+  intentional published layout**. **Weight / partner / preferred shape are recommendation
+  defaults only** — auto-composition exists only when nothing is published.
+- Cards are sized by **intent** (**Quarter / Third / Half / Two Thirds / Full / Fill**),
+  not grid fractions; the runtime computes exact spacing and **Fill** removes dead
+  whitespace. Rows add / remove / reorder; cards stack and drag between rows. The builder
+  preview **is** the runtime grid. Layout persists on the Summary `LayoutDoc` metadata
+  (`focusPanelLayout`) via the existing draft/publish flow.
+- **Fields live inside Evidence Groups**; **every concept has one owning card** (editable
+  only on its owner). The Inspector is organized by operational section (Question /
+  Evidence / Presentation / Behavior / Editing / Expansion / Conditions / Actions / AI).
+- Full canonical state (card definition, evidence groups, ownership, expansion +
+  workspace doctrine, mutation model, depth history):
   [`focus-panel-composition-v2-and-editing.md`](./focus-panel-composition-v2-and-editing.md).
 
 ---
