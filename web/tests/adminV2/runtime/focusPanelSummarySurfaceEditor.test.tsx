@@ -58,11 +58,12 @@ describe("FocusPanelSummarySurfaceEditor — canvas, structure, insertion", () =
 
     // The canvas + inspector are gated on the async layout load (`loaded`), so the static
     // SSR render shows "Loading…"; structure is asserted from source (canvas-first reality).
-    const canvasSrc = readSrc("components/admin/focusPanel/FocusPanelCanvasBuilder.tsx");
+    // EB V5: the canvas is the responsive GRID builder.
+    const canvasSrc = readSrc("components/admin/focusPanel/FocusPanelGridCanvasBuilder.tsx");
 
     it("is canvas-first: the Focus Panel canvas IS the editor (no separate lower preview)", () => {
         expect(editorSrc).toContain('data-surface-canvas-builder="true"');
-        expect(editorSrc).toContain("FocusPanelCanvasBuilder");
+        expect(editorSrc).toContain("FocusPanelGridCanvasBuilder");
         // The legacy lower "Focus Panel / Preview" structure editor is removed.
         expect(editorSrc).not.toContain('data-surface-editor-canvas="enrollment-focus-panel-summary"');
         expect(editorSrc).not.toContain("data-focus-panel-canvas-footprint");
@@ -75,9 +76,9 @@ describe("FocusPanelSummarySurfaceEditor — canvas, structure, insertion", () =
     });
 
     it("composition lives on the canvas (drag + direct resize); behavior in the adjacent inspector", () => {
-        // Direct-manipulation composition controls live on the canvas tiles.
-        expect(canvasSrc).toContain("data-canvas-resize-w");
-        expect(canvasSrc).toContain("data-canvas-resize-h");
+        // Direct-manipulation composition controls live on the canvas regions (grid resize).
+        expect(canvasSrc).toContain("data-grid-resize-w");
+        expect(canvasSrc).toContain("data-grid-resize-h");
         // The inspector sits adjacent to the canvas (behavior).
         expect(editorSrc).toContain('data-surface-inspector="true"');
         expect(editorSrc).toContain("FocusPanelCardInspector");
@@ -88,7 +89,7 @@ describe("FocusPanelSummarySurfaceEditor — canvas, structure, insertion", () =
 
     it("adds cards from the canvas card tray (not '+ line' insertion)", () => {
         // Unplaced cards live in the canvas tray; the legacy insert line is gone.
-        expect(canvasSrc).toContain('data-canvas-tray');
+        expect(canvasSrc).toContain('data-grid-tray');
         expect(editorSrc).not.toContain('data-testid="focus-panel-insert-line"');
         expect(editorSrc).not.toContain('data-testid="focus-panel-add-card-panel"');
         // Selecting a card on the canvas opens the inspector; sections track the canvas.
@@ -109,8 +110,8 @@ describe("Content Mode removed — contextual Inspector instead", () => {
         expect(editorSrc).not.toContain("focus-panel-content-inspector");
         expect(editorSrc).not.toContain("contentModeEnabled");
         expect(editorSrc).not.toContain("editSurface");
-        // Canvas-first: composition is authored on the canvas; the inspector owns behavior.
-        expect(editorSrc).toContain("FocusPanelCanvasBuilder");
+        // Canvas-first: composition is authored on the grid canvas; the inspector owns behavior.
+        expect(editorSrc).toContain("FocusPanelGridCanvasBuilder");
         expect(editorSrc).toContain("FocusPanelCardInspector");
     });
 

@@ -5,7 +5,8 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { ConfigurationPrimaryButton } from "@/components/adminV2/settings/configurationRuntime/ConfigurationModeLayout";
 import FocusPanelCardInspector from "@/components/admin/focusPanel/FocusPanelCardInspector";
 import FocusPanelCardRenderer from "@/components/admin/focusPanel/FocusPanelCardRenderer";
-import FocusPanelCanvasBuilder from "@/components/admin/focusPanel/FocusPanelCanvasBuilder";
+import FocusPanelGridCanvasBuilder from "@/components/admin/focusPanel/FocusPanelGridCanvasBuilder";
+import { gridFromPublishedLayout } from "@/lib/adminV2/runtime/focusPanel/composition/focusPanelGridLayoutOps";
 import {
     readFocusPanelPublishedLayout,
     type FocusPanelPublishedLayout,
@@ -252,6 +253,13 @@ export default function FocusPanelSummarySurfaceEditor() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
         [loaded],
     );
+    // EB V5: the canvas authors a responsive GRID. Seed it from the loaded layout's grid,
+    // or convert its rows → grid placement (so an existing row layout opens cleanly).
+    const builderInitialGrid = useMemo(
+        () => gridFromPublishedLayout(builderInitial),
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+        [loaded],
+    );
     const renderBuilderCard = useCallback(
         (key: FocusPanelCardKey) => {
             const model = cards.get(key);
@@ -323,8 +331,8 @@ export default function FocusPanelSummarySurfaceEditor() {
                 <div className="flex min-h-0 flex-1 gap-4">
                     {/* CANVAS owns composition: position · width · height · stacking · row. */}
                     <div className="process-config-setup-card min-w-0 flex-1 overflow-auto p-3" data-surface-canvas-builder="true">
-                        <FocusPanelCanvasBuilder
-                            initialLayout={builderInitial}
+                        <FocusPanelGridCanvasBuilder
+                            initialGrid={builderInitialGrid}
                             catalog={builderCatalog}
                             renderCard={renderBuilderCard}
                             selectedCard={selectedEntry?.key ?? null}
@@ -333,7 +341,7 @@ export default function FocusPanelSummarySurfaceEditor() {
                                 if (entry) setSelectedInstanceId(entry.instanceId);
                             }}
                             onChange={(l) => {
-                                setRowLayout(l);
+                                setRowLayout(l); // l carries grid (source of truth) + derived rows
                                 reconcileOrderToLayout(l); // keep sections (order) in sync — one source of truth
                                 setDirty(true);
                             }}
