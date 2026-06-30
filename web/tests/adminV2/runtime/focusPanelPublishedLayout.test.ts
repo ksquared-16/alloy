@@ -56,6 +56,27 @@ describe("focusPanelPublishedLayout", () => {
         plan.rows.forEach((r) => expect(r.cells.reduce((s, c) => s + c.widthUnits, 0)).toBe(12));
     });
 
+    it("fills the row in the authored proportion (flex-grow units) — 1:1, 2:1, 3:1, 2:1:1, 1:2:1", () => {
+        const lanes = (...widths: string[]): number[] => {
+            const layout: FocusPanelPublishedLayout = {
+                rows: [{ cells: widths.map((w) => ({ width: w as never, cards: ["household"] as never })) }],
+            };
+            const plan = planPublishedLayout(layout, 900);
+            expect(plan.strategy).toBe("lanes");
+            return plan.lanes.map((l) => l.widthUnits);
+        };
+        expect(lanes("half", "half")).toEqual([6, 6]); // 1:1
+        expect(lanes("twoThirds", "third")).toEqual([8, 4]); // 2:1
+        expect(lanes("threeQuarters", "quarter")).toEqual([9, 3]); // 3:1
+        expect(lanes("half", "quarter", "quarter")).toEqual([6, 3, 3]); // 2:1:1
+        expect(lanes("quarter", "half", "quarter")).toEqual([3, 6, 3]); // 1:2:1
+        expect(lanes("third", "third", "third")).toEqual([4, 4, 4]); // 1:1:1
+        // Every set sums to the column base → flex-grow fills the row with no remainder.
+        for (const set of [["half", "half"], ["threeQuarters", "quarter"], ["half", "quarter", "quarter"]]) {
+            expect(lanes(...set).reduce((s, u) => s + u, 0)).toBe(12);
+        }
+    });
+
     it("composes a column-regular grid into continuous LANES (no floating-island whitespace)", () => {
         // The canonical authored layout: Household/Children left (twoThirds), Readiness/
         // Current Work right (third) — same column widths down each row → column-regular.

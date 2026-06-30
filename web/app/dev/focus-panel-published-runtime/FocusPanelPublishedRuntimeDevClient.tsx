@@ -1,8 +1,10 @@
 "use client";
 
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 
 import "@/app/adminV2/components/alloyOsRuntime.css";
+
+import { focusPanelDomChain } from "@/lib/adminV2/runtime/focusPanel/debug/focusPanelDomChain";
 
 import FocusPanelCardGrid from "@/components/admin/focusPanel/FocusPanelCardGrid";
 import FocusPanelCardRenderer from "@/components/admin/focusPanel/FocusPanelCardRenderer";
@@ -26,6 +28,17 @@ const CANONICAL_LAYOUT: FocusPanelPublishedLayout = {
         { cells: [{ width: "twoThirds", cards: ["household"] }, { width: "third", cards: ["readiness_kpi"] }] },
         { cells: [{ width: "twoThirds", cards: ["children"] }, { width: "third", cards: ["current_work"] }] },
     ],
+};
+
+/** Proportion fixtures — runtime must fill the row in each ratio (flex-grow = units). */
+const RATIO_3_1: FocusPanelPublishedLayout = {
+    rows: [{ cells: [{ width: "threeQuarters", cards: ["household"] }, { width: "quarter", cards: ["readiness_kpi"] }] }],
+};
+const RATIO_2_1_1: FocusPanelPublishedLayout = {
+    rows: [{ cells: [{ width: "half", cards: ["household"] }, { width: "quarter", cards: ["children"] }, { width: "quarter", cards: ["readiness_kpi"] }] }],
+};
+const STACKED: FocusPanelPublishedLayout = {
+    rows: [{ cells: [{ width: "twoThirds", cards: ["household", "children"] }, { width: "third", cards: ["readiness_kpi", "current_work"] }] }],
 };
 
 export default function FocusPanelPublishedRuntimeDevClient() {
@@ -74,6 +87,11 @@ export default function FocusPanelPublishedRuntimeDevClient() {
         [],
     );
 
+    // Expose the DOM-chain diagnostic for the gated live route (paste-able snippet).
+    useEffect(() => {
+        (window as unknown as { __focusPanelDomChain?: typeof focusPanelDomChain }).__focusPanelDomChain = focusPanelDomChain;
+    }, []);
+
     const Frame = ({ label, width, children }: { label: string; width: number; children: React.ReactNode }) => (
         <div style={{ marginBottom: 28 }}>
             <p style={{ fontSize: 12, fontWeight: 700, color: "#475569", margin: "0 0 8px" }}>{label}</p>
@@ -98,6 +116,22 @@ export default function FocusPanelPublishedRuntimeDevClient() {
 
             <Frame label="B · Composition default path (no published layout) @ 1040px" width={1040}>
                 <FocusPanelCardGrid rows={[]} renderCell={renderCell} composeCards={composeCards} />
+            </Frame>
+
+            <Frame label="D · 3:1 proportion (threeQuarters : quarter) @ 1040px" width={1040}>
+                <FocusPanelCardGrid rows={[]} renderCell={renderCell} publishedLayout={RATIO_3_1} />
+            </Frame>
+
+            <Frame label="E · 2:1:1 proportion (half : quarter : quarter) @ 1040px" width={1040}>
+                <FocusPanelCardGrid rows={[]} renderCell={renderCell} publishedLayout={RATIO_2_1_1} />
+            </Frame>
+
+            <Frame label="F · Stacked cards inside lanes (Household+Children | Readiness+Current Work) @ 1040px" width={1040}>
+                <FocusPanelCardGrid rows={[]} renderCell={renderCell} publishedLayout={STACKED} />
+            </Frame>
+
+            <Frame label="G · Responsive collapse @ 460px (single column)" width={460}>
+                <FocusPanelCardGrid rows={[]} renderCell={renderCell} publishedLayout={CANONICAL_LAYOUT} />
             </Frame>
 
             <Frame label="C · Real OpportunityFocusPanelModeGrid (summary) @ 1040px" width={1040}>
