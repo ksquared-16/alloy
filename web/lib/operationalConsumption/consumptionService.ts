@@ -43,6 +43,7 @@ import {
     type ScheduleInterpretation,
 } from "@/lib/operationalConsumption/scheduleInterpretation";
 import { interpretAttendance, type AttendanceInterpretation } from "@/lib/operationalConsumption/attendanceInterpretation";
+import { buildFactSnapshot } from "@/lib/operationalConsumption/consumptionTypes";
 import type {
     ConsumptionCandidate,
     ConsumptionEventIntent,
@@ -441,7 +442,7 @@ async function previewScheduleConsumption(
         occursOn,
         effectiveOn: fact.effectiveOn ?? null,
         status: obligations.length > 0 ? "resolved" : "no_obligation",
-        context: { ...(fact.context ?? {}), source_family: "schedule", schedule_change_kind: interpretation.scheduleChangeKind, schedule_basis: derivedBasis ?? fact.scheduleBasis ?? null, weekdays: fact.weekdays ?? null, no_impact_reason: interpretation.noImpactReason },
+        context: { ...(fact.context ?? {}), source_family: "schedule", schedule_change_kind: interpretation.scheduleChangeKind, schedule_basis: derivedBasis ?? fact.scheduleBasis ?? null, weekdays: fact.weekdays ?? null, no_impact_reason: interpretation.noImpactReason, fact_snapshot: buildFactSnapshot(fact) },
         idempotencyKey: fact.idempotencyKey?.trim() || `cev:schedule:${interpretation.scheduleChangeKind}:${agreementId ?? fact.sourceEntityId}:${occursOn}`,
     };
 
@@ -559,7 +560,7 @@ async function previewAttendanceConsumption(
         occursOn: anchorDate,
         effectiveOn: fact.effectiveOn ?? null,
         status: obligations.length > 0 ? "resolved" : "no_obligation",
-        context: { ...(fact.context ?? {}), source_family: "attendance", attendance_fact_type: interpretation.attendanceFactType, discard_reason: interpretation.discardReason, check_out_time: fact.checkOutTime ?? null, late_threshold_time: fact.lateThresholdTime ?? null },
+        context: { ...(fact.context ?? {}), source_family: "attendance", attendance_fact_type: interpretation.attendanceFactType, discard_reason: interpretation.discardReason, check_out_time: fact.checkOutTime ?? null, late_threshold_time: fact.lateThresholdTime ?? null, fact_snapshot: buildFactSnapshot(fact) },
         idempotencyKey: fact.idempotencyKey?.trim() || `cev:attendance:${interpretation.attendanceFactType}:${agreementId ?? fact.sourceEntityId}:${anchorDate}`,
     };
 
@@ -856,9 +857,13 @@ async function upsertObligation(
         if (error || !data) fail("db_error", error?.message ?? "obligation update failed");
         return (data as { id: string }).id;
     }
+    // Seed the pre-posting review lifecycle (Slice 4) explicitly: a review-required
+    // obligation starts in review_required, otherwise pending. (The column default
+    // alone can't reflect review_required for new rows.) Operator review state is
+    // never reset on recalc — it is set on INSERT only.
     const { data, error } = await supabase
         .from(OBLIGATIONS_TABLE)
-        .insert({ ...row, created_by: actorUserId })
+        .insert({ ...row, review_status: obligation.reviewRequired ? "review_required" : "pending", created_by: actorUserId })
         .select("id")
         .single();
     if (error || !data) fail("db_error", error?.message ?? "obligation insert failed");

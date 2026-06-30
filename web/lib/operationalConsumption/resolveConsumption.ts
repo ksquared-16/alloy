@@ -14,11 +14,12 @@
 
 import { assertValidIsoDate } from "@/lib/childcareOperational/effectiveDating";
 import type { ChargeIntent } from "@/lib/financials/chargeLifecycle/resolveChargeFromTemplate";
-import type {
-    ConsumptionEventIntent,
-    ConsumptionEventTypeRow,
-    OperationalFactDto,
-    ResolvedObligationIntent,
+import {
+    buildFactSnapshot,
+    type ConsumptionEventIntent,
+    type ConsumptionEventTypeRow,
+    type OperationalFactDto,
+    type ResolvedObligationIntent,
 } from "@/lib/operationalConsumption/consumptionTypes";
 
 /** Stable idempotency key for a fact: cev:<event_key>:<entity_type>:<entity_id>:<occurs_on>. */
@@ -114,7 +115,7 @@ export function resolveConsumption(
         occursOn,
         effectiveOn: fact.effectiveOn ?? null,
         status,
-        context: { ...(fact.context ?? {}), source_family: fact.sourceFamily },
+        context: { ...(fact.context ?? {}), source_family: fact.sourceFamily, fact_snapshot: buildFactSnapshot(fact) },
         idempotencyKey,
     };
 

@@ -191,3 +191,43 @@ describe("Operational Consumption Slice 3 — Consumption Pipeline + Attendance"
         expect(sim).toContain("check_out");
     });
 });
+
+describe("Operational Consumption Slice 4 — Draft Obligation Review (pre-posting)", () => {
+    it("the Slice 4 migration is additive (review columns + CHECK) and writes no money table", () => {
+        const sql = readRepo("supabase/migrations/20260709120000_draft_obligation_review_slice4.sql");
+        expect(sql).toContain("ALTER TABLE public.resolved_obligations");
+        expect(sql).toContain("ADD COLUMN IF NOT EXISTS review_status");
+        expect(sql).toContain("resolved_obligations_review_status_check");
+        for (const s of ["pending", "review_required", "reviewed", "suppressed", "stale"]) expect(sql).toContain(s);
+        expect(sql).not.toMatch(/CREATE TABLE (IF NOT EXISTS )?public\.(charges|invoices|payments|ledger_transactions|gl_journal_lines|statements)\b/i);
+    });
+
+    it("the review service is review-only — no posting / invoice / payment / ledger writes", () => {
+        const svc = read("lib/operationalConsumption/obligationReviewService.ts");
+        // writes only resolved_obligations; recompute replays in PREVIEW (no charge writes)
+        expect(svc).toContain("previewConsumption"); // recompute consumes the existing pipeline (preview)
+        expect(svc).not.toMatch(/from\(["'](charges|ledger_transactions|gl_journal_lines|invoices|payments|statements)["']\)\s*\.\s*(insert|update|upsert)/);
+        expect(svc).not.toMatch(/status:\s*["']posted["']/);
+        expect(svc).not.toContain("writeTemplateDraftCharge"); // review never drafts/posts a charge
+    });
+
+    it("the route is role-gated and exposes list / detail / review actions", () => {
+        const r = read("app/api/admin/financial/consumption/obligations/route.ts");
+        expect(r).toContain("requireAdminOrOps");
+        expect(r).toMatch(/export async function GET/);
+        expect(r).toMatch(/export async function POST/);
+        expect(r).toContain("reviewObligation");
+        expect(r).toContain("recomputeObligation");
+    });
+
+    it("the workspace renders the queue, detail, explanation + timeline (pre-posting framing)", () => {
+        const ui = read("components/adminV2/settings/financials/DraftObligationReviewWorkspace.tsx");
+        expect(ui).toContain("/api/admin/financial/consumption/obligations");
+        expect(ui).toMatch(/pre-posting/i);
+        expect(ui).toContain("Timeline");
+        expect(ui).toContain("Why this exists");
+        const page = read("components/adminV2/settings/financials/FinancialsConfigurationPage.tsx");
+        expect(page).toContain('section === "obligations"');
+        expect(page).toContain("DraftObligationReviewWorkspace");
+    });
+});

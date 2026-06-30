@@ -1,10 +1,12 @@
 # Operational Consumption platform
 
-**Status:** Canonical module doctrine (June 2026). **Runtime COMPLETE — Slices 1–3 shipped** (registration · agreement + schedule recurring tuition · the Consumption Pipeline + attendance). Defines the **runtime layer** between Operational Execution and Commercial / Financial Resolution — the layer that interprets an operational fact into the commercial meaning it should carry. **Posting, Invoicing, Payments, Statements, Subsidies, Claims, Settlement, and the General Ledger are downstream consumers of this runtime and are not part of it.**
+**Status:** Canonical module doctrine (June 2026). **Operational Consumption V1 COMPLETE — Slices 1–4 shipped** (registration · agreement + schedule recurring tuition · the Consumption Pipeline + attendance · Draft Obligation Review). Defines the **runtime layer** between Operational Execution and Commercial / Financial Resolution — the layer that interprets an operational fact into the commercial meaning it should carry. **Posting is the first authoritative financial write; Posting, Payments, Statements, Subsidies, Claims, Settlement, and the General Ledger are downstream consumers of this runtime and are not part of it.**
 
 > **Companion docs.** Truth-flow layering: [`../operational-truth-flow-doctrine.md`](../operational-truth-flow-doctrine.md). Financial domain (frozen): [`./financial-platform-domain.md`](./financial-platform-domain.md). Posting / draft Charge Resolution: [`./billing-financials-platform.md`](./billing-financials-platform.md).
 >
-> **The completed runtime (one canonical pipeline):** Operational Truth → Operational Execution → **Operational Consumption** (Operational Fact → Consumption Candidate → Consumption Event → Resolved Obligation) → Commercial Model → Financial Resolution → Draft Charges → **Posting** (downstream, authoritative). Three consumption domains flow through the same pipeline: **Agreement** (registration), **Schedule** (recurring tuition / proration / drop-in), and **Attendance** (late pickup / drop-in / hourly / vacation credit). See the Slice 1/2/3 sections below.
+> **The full platform flow.** Operational Truth → Operational Execution → **Operational Consumption** (Operational Fact → Consumption Candidate → Consumption Event → Resolved Obligation) → Commercial Model → Financial Resolution → Resolved Obligations → **Draft Charge Review** (pre-posting; Slice 4) → **Posting** (the first authoritative financial write) → Payments → Settlement. Everything left of Posting is recomputable and non-authoritative; Posting and everything right of it are downstream and out of scope for this runtime.
+>
+> **The runtime is one canonical pipeline.** Three consumption domains flow through the same stages: **Agreement** (registration), **Schedule** (recurring tuition / proration / drop-in), and **Attendance** (late pickup / drop-in / hourly / vacation credit) — then the **Draft Obligation Review** surface lets operators inspect and triage Resolved Obligations before any Posting exists. See the Slice 1/2/3/4 sections below.
 
 ---
 
@@ -285,3 +287,53 @@ The preview explains every Candidate outcome: **why** it became a Consumption Ev
 ## What remains downstream (after Slice 3)
 
 The Operational Consumption Platform is complete as a runtime. **Posting, Invoicing, Payments, Statements, Subsidies, Claims, Settlement, and the General Ledger** remain downstream consumers of this runtime — none are introduced here. Meals and other attendance-derived verticals can now be added simply by registering an event type + interpreter directive; the pipeline already carries them.
+
+---
+
+# Slice 4 — Draft Obligation Review (pre-posting)
+
+The runtime produces Resolved Obligations (and draft Charges). Before Posting exists, operators need to **inspect and triage** them. Slice 4 adds the **Draft Obligation Review** workspace — the runtime counterpart to the configuration in `/settings/financials`.
+
+> **This is pre-posting review, NOT Posting.** Resolved Obligations are reviewed *before* they could ever become authoritative money. Nothing here posts, invoices, collects payment, creates statements, or writes the ledger — those remain downstream.
+
+## Resolved Obligations are the primary object
+
+The review experience centers on `resolved_obligations`. A draft Charge is a **downstream artifact** of an obligation, surfaced for context — never the primary object.
+
+## The review lifecycle (`review_status`)
+
+A new `review_status` column (migration `20260709120000`) carries the pre-posting lifecycle, **distinct from** `resolved_obligations.status` (resolution: previewed/drafted/no_charge/superseded) and `charges.status` (the charge lifecycle):
+
+```
+pending          — resolved, not yet reviewed
+review_required  — flagged (template/policy review, or operator-flagged)
+reviewed         — an operator signed off
+suppressed       — operator removed it from future Posting eligibility (reversible)
+stale            — recomputed and the amount/billable changed → needs re-review
+```
+
+A new review-required obligation starts in `review_required` (set on insert; the column default alone can't reflect it). **Eligibility for future Posting** = not `suppressed` and not `no_charge`.
+
+## Review-only actions
+
+`mark_reviewed`, `flag`, `suppress` (+reason), `restore`, `recompute`. **Not** allowed (and not present): post, invoice, collect/allocate payment, create statement, write ledger. `recompute` replays the **existing pipeline in PREVIEW mode** (no charge writes) from the event's stored `fact_snapshot`, reports drift, and — when applied — updates the obligation amount and marks it `stale`. Consumption is recomputable by design.
+
+## Explanation engine (reusable)
+
+`buildObligationExplanation` (in `obligationReviewService.ts`) assembles the normalized "why does this exist?" for an obligation, combining stored data with a fresh derivation: source operational fact, normalized candidate, consumption event, interpretation result, matched service / rate plan / rate rule / charge template, matched policies, amount calculation, suppression reason, and recompute (drift) status. It is intentionally structured for reuse by BOS later.
+
+## Timeline
+
+`buildObligationTimeline` renders the sequence so the drawer makes it understandable:
+
+```
+Operational Fact → Consumption Candidate → Consumption Event → Resolved Obligation → Draft Charge
+```
+
+## Surface
+
+API: `GET /api/admin/financial/consumption/obligations` (list with filters: status / review_status / review_required / source_family / event_key; detail via `?id=`) and `POST` (review actions; `recompute` with `persist=false` is a preview). Role-gated (admin/ops), org-isolated, RLS. UI: the **Draft Obligations** runtime section under `/settings/financials` — left queue, center detail + actions, right explanation + timeline.
+
+## Product goal (achieved)
+
+An operator opens a Draft Obligation and can answer **"Why does Alloy think this should be charged?"** — source fact → candidate → consumption event → matched commercial objects → applied policies → amount calculation → obligations created/suppressed — and mark reviewed / flag / suppress / restore / recompute, **without Posting, invoicing, collecting, or creating any authoritative financial record.**

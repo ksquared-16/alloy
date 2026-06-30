@@ -179,6 +179,18 @@ export type OperationalFactDto = {
     vacationEligible?: boolean | null;
 };
 
+/**
+ * A normalized snapshot of the operational fact, stored on the Consumption Event
+ * `context.fact_snapshot` so an obligation can be faithfully RECOMPUTED later
+ * (Slice 4 review) by replaying it through the same pipeline. Provenance only —
+ * never authoritative. Excludes the free-form `context` (avoids recursion).
+ */
+export function buildFactSnapshot(fact: OperationalFactDto): Record<string, unknown> {
+    const rest: Record<string, unknown> = { ...fact };
+    delete rest.context;
+    return rest;
+}
+
 /** The Consumption Event a fact resolves into (preview shape; persisted in draft mode). */
 export type ConsumptionEventIntent = {
     eventTypeId: string | null;

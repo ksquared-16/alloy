@@ -157,15 +157,19 @@ the readiness gate and Definition of Done. Designing them API-first is the expec
 
 ### Operational Consumption
 
-- **Status:** **shipped** runtime (Slices 1–3) — the interpretation layer between Operational
+- **Status:** **COMPLETE — V1 shipped (Slices 1–4)** — the interpretation layer between Operational
   Execution and Commercial/Financial Resolution. Turns an operational fact into a Consumption
   Candidate → Consumption Event → Resolved Obligation → draft Charge, consuming the Commercial Model
-  (it reimplements no pricing). Domains: Agreement, Schedule, Attendance.
+  (it reimplements no pricing). Domains: Agreement, Schedule, Attendance. Slice 4 adds the pre-posting
+  **Draft Obligation Review** surface. Posting is the first authoritative financial write (downstream).
 - **API-first expectation:** **yes** — exposed today via `POST /api/admin/financial/consumption/simulate`
   (`preview | draft`), which returns the full reasoning chain (candidate → event → commercial objects
-  → policies → obligations → draft charges).
+  → policies → obligations → draft charges); and the **Draft Obligation Review** surface
+  `GET/POST /api/admin/financial/consumption/obligations` (list/detail + review actions: mark reviewed,
+  flag, suppress, restore, recompute) — the pre-posting review of Resolved Obligations.
 - **Notes:** **posts nothing** — Posting/Invoicing/Payments/GL are downstream consumers. Idempotent by
-  resolution key; duplicate facts never duplicate obligations. Doctrine:
+  resolution key; duplicate facts never duplicate obligations. Review is pre-posting (suppression/recompute
+  write only review state; recompute replays in preview). Doctrine:
   [`./modules/operational-consumption-platform.md`](./modules/operational-consumption-platform.md).
 
 ### Processing
