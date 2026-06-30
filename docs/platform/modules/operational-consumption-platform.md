@@ -217,3 +217,69 @@ The preview returns, for every step, *why it happened*: the schedule `interpreta
 ## What is still OUT of scope (after Slice 2)
 
 Posting, Payments, Invoices, Statements, GL posting, Subsidy runtime, Claims, Settlement, Focus Panel, **Attendance** consumption, late pickup, meals, hourly care, vacation credits, refunds, withdrawals. Slice 2 adds agreement + schedule recurring tuition (and drop-in / proration interpretation); everything else remains a later slice. Posting is never introduced here.
+
+---
+
+# Slice 3 — the Consumption Pipeline + Attendance consumption
+
+Slices 1–2 each consumed a vertical directly (agreement → registration; schedule → tuition). Attendance would make a third. That does not scale, so Slice 3 introduces **one canonical runtime pipeline** that every operational domain enters identically — and makes Attendance its first consumer.
+
+## The Consumption Pipeline
+
+```
+Operational Fact
+  → Consumption Candidate      (normalized runtime interpretation — NOT persisted)
+  → Consumption Event(s)        (0..N — the canonical runtime contract)
+  → Commercial Resolution       (Service / Rate Plan / Rate Rule / Charge Template / Policies)
+  → Resolved Obligation         (draft preview)
+  → Draft Charge                (idempotent; never posted)
+```
+
+Every domain (agreement, schedule, attendance) now flows through the same stages. The shared core is `resolveDirective` (`consumptionService.ts`): given one obligation *directive* it consumes the existing Rate Resolution + Charge Template resolver + Financial Policies and produces a Resolved Obligation. It handles **rate-derived** amounts (with an optional unit multiplier, e.g. hours), **fixed-fee** templates (e.g. late pickup), and **preview-only** credits (e.g. vacation credit) uniformly. Pricing is never reimplemented; Posting is never introduced.
+
+## The Consumption Candidate model
+
+A **Consumption Candidate** represents an operational fact that *may* carry commercial significance. It is a normalized runtime interpretation — **not a persisted financial record** (no table; it lives only in the pipeline).
+
+```
+Agreement Activated  → Candidate → Registration Consumption Event
+Check-out 5:18 PM    → Candidate → Late-Pickup Consumption Event
+Schedule Changed     → Candidate → Proration Consumption Event
+Check-out 4:30 PM    → Candidate → (discarded — no commercial impact)
+```
+
+A Candidate resolves to **one event, many events, or none** (discarded with a reason). It carries `{ domain, factType, sourceEntity, subject, location, occursOn, agreementId, attributes }`. Provenance is recorded on the persisted Consumption Event (`source_family`, `event_key`, and `context` — including `attendance_fact_type` and any `discard_reason`).
+
+## Attendance Consumption doctrine
+
+Attendance is **interpreted, not redesigned**. Operational Truth owns the raw attendance facts; Consumption asks whether each carries commercial meaning. The pure engine `attendanceInterpretation.ts` decides — and **not every attendance fact becomes a Consumption Event:**
+
+| Attendance fact | Interpretation | Outcome |
+|---|---|---|
+| Check-out after the late threshold | Late-pickup fee (fixed template) | `attendance.late_pickup` → draft charge |
+| Check-out before the threshold | On-time | **discarded** (no event) |
+| Extra day / drop-in / unexpected attendance | Drop-in rate | `attendance.extra_day` / `drop_in` → draft charge |
+| Hourly care | Hourly rate × hours | `attendance.hourly_care` → draft charge |
+| Extended day | Drop-in rate | `attendance.extended_day` → draft charge |
+| Absence (vacation-eligible) | Vacation credit | `attendance.vacation_credit` → **preview-only** (credits post downstream) |
+| Absence (not eligible) / excused absence | — | **discarded** (no event) |
+| No-show | Fee **only if** configured | `attendance.no_show` → charge if a template exists, else **suppressed (no_charge)**, explained |
+| Room transfer / early pickup / check-in / duration / expected attendance | — | **discarded** (no commercial impact) |
+
+Late threshold + hours are supplied with the fact (operating-window config is a future input). Idempotency is per-day: a late-pickup obligation keys on `tpl:late_pickup:<event_date>:<agreement>`, so **duplicate attendance facts never create duplicate obligations**.
+
+## New attendance Consumption Event catalog (`20260708120000`)
+
+`attendance.late_pickup` (fixed), `attendance.drop_in` / `extra_day` / `extended_day` (drop-in rate), `attendance.hourly_care` (hourly rate × hours), `attendance.no_show` (fee only if configured), `attendance.vacation_credit` (preview-only).
+
+## Explanation is now first-class — for created AND suppressed obligations
+
+The preview explains every Candidate outcome: **why** it became a Consumption Event (or why it was discarded — `attendanceInterpretation.discardReason`), which Commercial objects matched (`commercialObjectsUsed`), which Policies applied (`policiesApplied`), which obligations were created, and which were **suppressed** (`status='no_charge'` with a `no_charge_reason`, counted in `suppressed_obligation_count`). The simulator renders this complete reasoning chain: Candidate → Consumption Event → Commercial objects → Policies → Resolved Obligations → Draft Charges.
+
+## Product goal (achieved)
+
+*"A child checked out at 5:18 PM"* → Candidate (attendance / check_out) → after the 17:00 threshold → `attendance.late_pickup` Consumption Event → matched the fixed Late-Pickup Charge Template → review-required policy applied → one Resolved Obligation → a **$25 draft charge** — posting nothing.
+
+## What remains downstream (after Slice 3)
+
+The Operational Consumption Platform is complete as a runtime. **Posting, Invoicing, Payments, Statements, Subsidies, Claims, Settlement, and the General Ledger** remain downstream consumers of this runtime — none are introduced here. Meals and other attendance-derived verticals can now be added simply by registering an event type + interpreter directive; the pipeline already carries them.

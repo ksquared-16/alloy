@@ -79,4 +79,15 @@ describe("operational consumption simulate route", () => {
             "2026-06-29",
         );
     });
+
+    it("accepts an attendance fact without an event_key (derives family from attendance fact type)", async () => {
+        const res = await route.POST(post({ action: "preview", attendance_fact_type: "check_out", check_out_time: "17:18", late_threshold_time: "17:00", source_entity_id: "att-1", agreement_id: "a1" }));
+        expect(res.status).toBe(200);
+        expect(svc.previewConsumption).toHaveBeenCalledWith(
+            expect.anything(),
+            orgId,
+            expect.objectContaining({ attendanceFactType: "check_out", checkOutTime: "17:18", sourceFamily: "attendance", agreementId: "a1" }),
+            "2026-06-29",
+        );
+    });
 });

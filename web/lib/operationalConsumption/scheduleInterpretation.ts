@@ -55,12 +55,14 @@ export type ConsumptionDirective = {
     obligationKind: ObligationKind;
     /** The Consumption Event Type key (registry) this directive records under. */
     eventKey: string;
-    /** Rate Resolution schedule basis for this directive (null => not rate-resolvable). */
+    /** Rate Resolution schedule basis for this directive (null => fixed template or not rate-resolvable). */
     scheduleBasis: ScheduleBasisValue | null;
     /** Whether this directive should attempt a draft charge (a credit is preview-only). */
     draftable: boolean;
     /** Why this directive exists (surfaced in the explanation). */
     reason: string;
+    /** Multiplier applied to a rate-derived amount (e.g. hours for hourly care). Defaults to 1. */
+    unitMultiplier?: number | null;
 };
 
 export type ScheduleInterpretation = {

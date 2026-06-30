@@ -38,13 +38,17 @@ function factFrom(body: Record<string, unknown>): OperationalFactDto {
         ? (body.context as Record<string, unknown>)
         : null;
     const scheduleChangeKind = str(body.schedule_change_kind);
-    // For schedule facts an event_key may be omitted (the change kind derives it); default
-    // the family to "schedule" when a schedule signal is present, else "agreement".
+    const attendanceFactType = str(body.attendance_fact_type);
+    // For schedule/attendance facts an event_key may be omitted (the kind derives it);
+    // default the family from whichever signal is present, else "agreement".
+    const isAttendance = attendanceFactType != null || str(body.source_family) === "attendance" || (str(body.event_key) ?? "").startsWith("attendance.");
     const isSchedule = scheduleChangeKind != null || str(body.source_family) === "schedule" || (str(body.event_key) ?? "").startsWith("schedule.");
+    const defaultFamily = isAttendance ? "attendance" : isSchedule ? "schedule" : "agreement";
+    const defaultEntityType = isAttendance ? "child_attendance_events" : "child_enrollment_agreements";
     return {
         eventKey: String(body.event_key ?? "").trim(),
-        sourceFamily: str(body.source_family) ?? (isSchedule ? "schedule" : "agreement"),
-        sourceEntityType: str(body.source_entity_type) ?? "child_enrollment_agreements",
+        sourceFamily: str(body.source_family) ?? defaultFamily,
+        sourceEntityType: str(body.source_entity_type) ?? defaultEntityType,
         sourceEntityId: String(body.source_entity_id ?? "").trim(),
         subjectType: str(body.subject_type),
         subjectId: str(body.subject_id),
@@ -68,6 +72,14 @@ function factFrom(body: Record<string, unknown>): OperationalFactDto {
         periodEnd: str(body.period_end),
         proratedDays: num(body.prorated_days),
         periodDays: num(body.period_days),
+        // --- attendance consumption (Slice 3) ---
+        attendanceFactType: attendanceFactType as OperationalFactDto["attendanceFactType"],
+        agreementId: str(body.agreement_id),
+        checkInTime: str(body.check_in_time),
+        checkOutTime: str(body.check_out_time),
+        lateThresholdTime: str(body.late_threshold_time),
+        hours: num(body.hours),
+        vacationEligible: body.vacation_eligible === true || body.vacation_eligible === "true",
     };
 }
 
@@ -90,8 +102,10 @@ export async function POST(request: NextRequest) {
     try {
         const today = await resolveOperationalEnrollmentTodayYmd(supabase, ctx.orgId);
         const fact = factFrom(body);
-        const isSchedule = fact.sourceFamily === "schedule" || fact.scheduleChangeKind != null || fact.eventKey.startsWith("schedule.");
-        if (!fact.eventKey && !isSchedule) {
+        const derivesEventKey =
+            fact.sourceFamily === "schedule" || fact.scheduleChangeKind != null || fact.eventKey.startsWith("schedule.") ||
+            fact.sourceFamily === "attendance" || fact.attendanceFactType != null || fact.eventKey.startsWith("attendance.");
+        if (!fact.eventKey && !derivesEventKey) {
             return NextResponse.json({ error: "event_key is required", code: "invalid_input" }, { status: 400 });
         }
         if (!fact.sourceEntityId) {

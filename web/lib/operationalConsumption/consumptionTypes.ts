@@ -28,8 +28,60 @@ export const OBLIGATION_KINDS = [
     "proration_credit",
     "drop_in",
     "extra_day",
+    // Slice 3 — attendance consumption
+    "late_pickup",
+    "hourly_care",
+    "extended_day",
+    "no_show",
+    "vacation_credit",
 ] as const;
 export type ObligationKind = (typeof OBLIGATION_KINDS)[number];
+
+/**
+ * Normalized attendance fact types (Slice 3). Operational Truth owns the raw
+ * attendance facts; Consumption interprets them. Not every type is commercial.
+ */
+export const ATTENDANCE_FACT_TYPES = [
+    "check_in",
+    "check_out",
+    "attendance_duration",
+    "late_pickup",
+    "early_pickup",
+    "absence",
+    "excused_absence",
+    "no_show",
+    "extra_day",
+    "drop_in",
+    "hourly_care",
+    "extended_day",
+    "room_transfer",
+    "unexpected_attendance",
+    "expected_attendance",
+] as const;
+export type AttendanceFactType = (typeof ATTENDANCE_FACT_TYPES)[number];
+
+/**
+ * A Consumption Candidate (Slice 3) — a normalized runtime interpretation of an
+ * operational fact that MAY carry commercial significance. It is NOT a persisted
+ * financial record. The pipeline turns one Candidate into zero-or-more Consumption
+ * Events (or discards it with a reason).
+ */
+export type ConsumptionCandidate = {
+    /** Operational domain: agreement | schedule | attendance. */
+    domain: string;
+    /** Domain-specific fact type (e.g. check_out, late_pickup, recurring). */
+    factType: string;
+    sourceEntityType: string;
+    sourceEntityId: string;
+    subjectType: string | null;
+    subjectId: string | null;
+    locationId: string | null;
+    occursOn: string;
+    /** The agreement that scopes/bills this candidate, when known. */
+    agreementId: string | null;
+    /** Normalized attributes carried from the fact (times, hours, flags). */
+    attributes: Record<string, unknown>;
+};
 
 /**
  * The financial interpretation of a schedule mutation. Operational Scheduling
@@ -110,6 +162,21 @@ export type OperationalFactDto = {
     /** Proration inputs (consumed with the proration policy method). */
     proratedDays?: number | null;
     periodDays?: number | null;
+
+    // --- Attendance consumption (Slice 3) ---
+    /** Normalized attendance fact type; routes the fact through the attendance interpreter. */
+    attendanceFactType?: AttendanceFactType | null;
+    /** Agreement that bills this fact (attendance facts reference an attendance event, not the agreement). */
+    agreementId?: string | null;
+    /** Check-in / check-out clock times (HH:MM, org-local) for duration + lateness. */
+    checkInTime?: string | null;
+    checkOutTime?: string | null;
+    /** Late-pickup threshold (HH:MM); the scheduled end of care. */
+    lateThresholdTime?: string | null;
+    /** Hours of care (for hourly/extended billing). */
+    hours?: number | null;
+    /** Whether the child is vacation-credit eligible (policy-supplied) — gates absence → vacation credit. */
+    vacationEligible?: boolean | null;
 };
 
 /** The Consumption Event a fact resolves into (preview shape; persisted in draft mode). */

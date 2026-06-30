@@ -148,3 +148,46 @@ describe("Operational Consumption Slice 2 — Agreement + Schedule consumption",
         expect(sim).toContain("Resolved obligations");
     });
 });
+
+describe("Operational Consumption Slice 3 — Consumption Pipeline + Attendance", () => {
+    it("the Slice 3 migration is additive and seeds the attendance.* event catalog", () => {
+        const sql = readRepo("supabase/migrations/20260708120000_operational_consumption_attendance_slice3.sql");
+        for (const k of ["attendance.late_pickup", "attendance.drop_in", "attendance.extra_day", "attendance.hourly_care", "attendance.no_show", "attendance.vacation_credit"]) {
+            expect(sql).toContain(k);
+        }
+        expect(sql).toContain("WHERE NOT EXISTS"); // idempotent seed
+        expect(sql).not.toMatch(/CREATE TABLE (IF NOT EXISTS )?public\.(charges|invoices|payments|ledger_transactions|gl_journal_lines|statements)\b/i);
+        expect(sql).not.toMatch(/status:\s*['"]posted['"]/);
+    });
+
+    it("the attendance interpretation engine is pure and encodes 'not every fact is commercial'", () => {
+        const eng = read("lib/operationalConsumption/attendanceInterpretation.ts");
+        expect(eng).toContain("interpretAttendance");
+        expect(eng).not.toMatch(/supabase|from\(["']/); // no IO
+        for (const f of ["room_transfer", "excused_absence", "vacation_credit", "late_pickup"]) expect(eng).toContain(f);
+    });
+
+    it("the pipeline shares ONE directive resolver across domains and consumes the existing resolvers", () => {
+        const svc = read("lib/operationalConsumption/consumptionService.ts");
+        expect(svc).toContain("buildCandidate"); // Consumption Candidate
+        expect(svc).toContain("resolveDirective"); // shared pipeline core
+        expect(svc).toContain("interpretAttendance");
+        expect(svc).toContain("previewAttendanceConsumption");
+        expect(svc).not.toMatch(/from\(["'](ledger_transactions|gl_journal_lines|invoices|payments|statements)["']\)/);
+        expect(svc).not.toMatch(/status:\s*["']posted["']/);
+    });
+
+    it("the demo dataset adds an hourly rate rule + hourly_care template", () => {
+        const demo = read("lib/financials/demo/financialConfigDemoDataset.ts");
+        expect(demo).toMatch(/templateKey:\s*"hourly_care"/);
+        expect(demo).toContain('scheduleBasis: "hourly"');
+    });
+
+    it("the simulator exposes attendance scenarios + the candidate/discard reasoning", () => {
+        const sim = read("components/adminV2/settings/financials/OperationalConsumptionSimulator.tsx");
+        expect(sim).toContain("attendance_fact_type");
+        expect(sim).toContain("Consumption candidate");
+        expect(sim).toContain("Candidate discarded");
+        expect(sim).toContain("check_out");
+    });
+});

@@ -42,7 +42,9 @@ import {
     type ConsumptionDirective,
     type ScheduleInterpretation,
 } from "@/lib/operationalConsumption/scheduleInterpretation";
+import { interpretAttendance, type AttendanceInterpretation } from "@/lib/operationalConsumption/attendanceInterpretation";
 import type {
+    ConsumptionCandidate,
     ConsumptionEventIntent,
     ConsumptionEventTypeRow,
     ObligationKind,
@@ -88,6 +90,11 @@ export type ConsumptionPreviewResult = {
     commercialObjectsUsed?: CommercialObjectRef[];
     /** Every Financial Policy applied (or considered) and its effect. */
     policiesApplied?: PolicyApplication[];
+    // --- Slice 3 (Consumption Pipeline) ---
+    /** The normalized Consumption Candidate this fact entered the pipeline as. */
+    candidate?: ConsumptionCandidate | null;
+    /** The attendance interpretation (null for non-attendance facts). */
+    attendanceInterpretation?: AttendanceInterpretation | null;
 };
 
 /** A Commercial Model object surfaced in the explanation (labels, not raw UUIDs). */
@@ -149,8 +156,9 @@ async function loadTemplateByKey(
     return templates.find((t) => t.template_key === templateKey && t.is_active !== false) ?? null;
 }
 
-/** Map a fact's billable source to the agreement id when the source family is `agreement`. */
+/** Map a fact to the agreement that scopes/bills it. Attendance facts carry an explicit agreementId. */
 function agreementIdFromFact(fact: OperationalFactDto): string | null {
+    if (fact.agreementId) return fact.agreementId;
     if (fact.sourceFamily === "agreement" || fact.sourceEntityType === ENROLLMENT_AGREEMENT_ENTITY_TYPE) {
         return fact.sourceEntityId || null;
     }
@@ -197,6 +205,45 @@ function isScheduleFact(fact: OperationalFactDto): boolean {
     );
 }
 
+/** An attendance fact (by family, attendance fact type, or event-key prefix). */
+function isAttendanceFact(fact: OperationalFactDto): boolean {
+    return (
+        fact.sourceFamily === "attendance" ||
+        fact.attendanceFactType != null ||
+        (typeof fact.eventKey === "string" && fact.eventKey.startsWith("attendance."))
+    );
+}
+
+/** Normalize a fact into a Consumption Candidate (the pipeline's entry shape). Pure. */
+function buildCandidate(fact: OperationalFactDto, today: string): ConsumptionCandidate {
+    const domain = isAttendanceFact(fact) ? "attendance" : isScheduleFact(fact) ? "schedule" : "agreement";
+    const factType =
+        domain === "attendance"
+            ? fact.attendanceFactType ?? "check_out"
+            : domain === "schedule"
+              ? fact.scheduleChangeKind ?? "recurring"
+              : fact.eventKey || "agreement";
+    return {
+        domain,
+        factType,
+        sourceEntityType: fact.sourceEntityType,
+        sourceEntityId: fact.sourceEntityId,
+        subjectType: fact.subjectType ?? null,
+        subjectId: fact.subjectId ?? null,
+        locationId: fact.locationId ?? null,
+        occursOn: fact.occursOn ?? fact.eventDate ?? today,
+        agreementId: agreementIdFromFact(fact),
+        attributes: {
+            check_in_time: fact.checkInTime ?? null,
+            check_out_time: fact.checkOutTime ?? null,
+            late_threshold_time: fact.lateThresholdTime ?? null,
+            hours: fact.hours ?? null,
+            vacation_eligible: fact.vacationEligible ?? null,
+            schedule_basis: fact.scheduleBasis ?? null,
+        },
+    };
+}
+
 export async function previewConsumption(
     supabase: SupabaseClient,
     orgId: string,
@@ -204,6 +251,7 @@ export async function previewConsumption(
     today: string,
 ): Promise<ConsumptionPreviewResult> {
     if (!fact.sourceEntityId?.trim()) fail("invalid_input", "source_entity_id is required");
+    if (isAttendanceFact(fact)) return previewAttendanceConsumption(supabase, orgId, fact, today);
     if (isScheduleFact(fact)) return previewScheduleConsumption(supabase, orgId, fact, today);
 
     if (!fact.eventKey?.trim()) fail("invalid_input", "event_key is required");
@@ -237,6 +285,8 @@ export async function previewConsumption(
             ? [{ kind: "charge_template", label: matchedCommercial.chargeTemplateLabel, detail: `key=${matchedCommercial.chargeTemplateKey}`, matched: true }]
             : [],
         policiesApplied: [],
+        candidate: buildCandidate(fact, today),
+        attendanceInterpretation: null,
     };
 }
 
@@ -341,74 +391,31 @@ async function previewScheduleConsumption(
         { policyType: "posting_review", scope: reviewPolicy.resolved ? reviewPolicy.sourceScope : null, value: reviewPolicy.resolved ? reviewPolicy.policy.value : null, applied: reviewByPolicy, effect: reviewByPolicy ? "obligations flagged review_required" : "no review required" },
     ];
 
+    const eventTypeCache = new Map<string, ConsumptionEventTypeRow | null>();
+    const ctx: DirectiveCtx = {
+        scope,
+        plans,
+        rules,
+        today,
+        periodStart,
+        anchorDate: periodStart,
+        agreementId,
+        reviewByPolicy,
+        prorationMethod: proration.resolved ? (proration.policy.value as { method?: string }).method ?? "none" : "none",
+        fact,
+        eventTypeCache,
+    };
     const obligations: ResolvedObligationIntent[] = [];
     const commercialObjectsUsed: CommercialObjectRef[] = [];
-    const eventTypeCache = new Map<string, ConsumptionEventTypeRow | null>();
     let primaryChargePreview: ChargePreviewResult | null = null;
     let primaryTemplate: ChargeTemplateRow | null = null;
-
     for (const directive of interpretation.directives) {
-        const rate: RateResolution | null = directive.scheduleBasis
-            ? resolveRate({ plans, rules, context: { siteLocationId: scope.siteLocationId, ageGroupKey: scope.ageGroupKey, scheduleBasis: directive.scheduleBasis as ScheduleBasis, planKey: fact.ratePlanKey }, dateYmd: periodStart })
-            : null;
-        if (rate?.resolved) {
-            commercialObjectsUsed.push({ kind: "rate_plan", label: rate.plan.label ?? rate.plan.plan_key, detail: `${rate.plan.scope_type} · ${rate.calculationStrategy}`, matched: true });
-            commercialObjectsUsed.push({ kind: "rate_rule", label: `${rate.scheduleBasis} @ ${rate.rateBasis}`, detail: `${rate.amountCents}¢ ${rate.currencyCode}`, matched: true });
-        } else if (directive.scheduleBasis) {
-            commercialObjectsUsed.push({ kind: "rate_rule", label: directive.scheduleBasis, detail: rate ? `unresolved: ${(rate as { reason: string }).reason}` : "no rate", matched: false });
-        }
-        const rateAmount = rate?.resolved ? rate.amountCents : null;
-        const currency = rate?.resolved ? rate.currencyCode : "USD";
-
-        if (directive.draftable) {
-            if (!eventTypeCache.has(directive.eventKey)) eventTypeCache.set(directive.eventKey, await loadEventType(supabase, orgId, directive.eventKey));
-            const dEventType = eventTypeCache.get(directive.eventKey) ?? null;
-            const template = await loadTemplateByKey(supabase, orgId, dEventType?.charge_template_key ?? null);
-            if (template && rateAmount != null) {
-                const cp = await previewTemplateCharge(supabase, orgId, scheduleSimulateArgs(fact, template, rateAmount, periodStart, today));
-                if (!primaryChargePreview) { primaryChargePreview = cp; primaryTemplate = template; }
-                commercialObjectsUsed.push({ kind: "charge_template", label: template.label, detail: `${template.template_key} · ${template.amount_strategy}`, matched: true });
-                obligations.push({
-                    obligationKind: directive.obligationKind,
-                    chargeTemplateId: cp.intent.templateId,
-                    serviceId: cp.intent.serviceId,
-                    amountCents: cp.intent.amountCents,
-                    currencyCode: cp.intent.currencyCode,
-                    responsibilityKey: cp.intent.responsibilityKey ?? dEventType?.default_responsibility_key ?? "household",
-                    occursOn: cp.intent.occursOn,
-                    billableOn: cp.intent.billableOn,
-                    periodStart: directive.obligationKind === "recurring_tuition" ? periodStart : null,
-                    periodEnd: fact.periodEnd ?? null,
-                    reviewRequired: cp.intent.reviewRequired,
-                    draftable: true,
-                    status: "previewed",
-                    resolutionKey: cp.intent.resolutionKey,
-                    explanation: { directive_reason: directive.reason, charge_template_key: cp.intent.templateKey, amount_strategy: cp.intent.amountStrategy, lifecycle_status: cp.intent.lifecycleStatus, rate_amount_cents: rateAmount },
-                });
-            } else {
-                obligations.push(noChargeObligation(directive, rateAmount == null ? "no rate rule matched the schedule basis" : "no charge template configured for this event", periodStart, fact, agreementId, currency));
-            }
-        } else {
-            // proration / proration_credit — preview-only obligation (credits post downstream).
-            const method = proration.resolved ? (proration.policy.value as { method?: string }).method ?? "none" : "none";
-            const amount = prorateAmountCents(rateAmount, fact.proratedDays, fact.periodDays);
-            obligations.push({
-                obligationKind: directive.obligationKind,
-                chargeTemplateId: null,
-                serviceId: null,
-                amountCents: amount,
-                currencyCode: currency,
-                responsibilityKey: "household",
-                occursOn: periodStart,
-                billableOn: periodStart,
-                periodStart,
-                periodEnd: fact.periodEnd ?? null,
-                reviewRequired: reviewByPolicy,
-                draftable: false,
-                status: amount != null ? "previewed" : "no_charge",
-                resolutionKey: `cons:${directive.obligationKind}:${periodStart}:${agreementId ?? fact.sourceEntityId}`,
-                explanation: { directive_reason: directive.reason, proration_method: method, prorated_days: fact.proratedDays ?? null, period_days: fact.periodDays ?? null, full_period_amount_cents: rateAmount, note: "preview only; the adjustment/credit posts downstream" },
-            });
+        const r = await resolveDirective(supabase, orgId, directive, ctx);
+        obligations.push(r.obligation);
+        commercialObjectsUsed.push(...r.commercialRefs);
+        if (!primaryChargePreview && r.chargePreview) {
+            primaryChargePreview = r.chargePreview;
+            primaryTemplate = r.template;
         }
     }
 
@@ -464,10 +471,158 @@ async function previewScheduleConsumption(
         interpretation,
         commercialObjectsUsed,
         policiesApplied,
+        candidate: buildCandidate(fact, today),
+        attendanceInterpretation: null,
     };
 }
 
-function noChargeObligation(directive: ConsumptionDirective, reason: string, periodStart: string, fact: OperationalFactDto, agreementId: string | null, currency: string): ResolvedObligationIntent {
+/**
+ * Attendance consumption (Slice 3). Attendance is the first consumer of the
+ * canonical pipeline: Operational Fact → Candidate → (interpret) → Consumption
+ * Event(s) → Commercial Resolution → Resolved Obligation → Draft Charge. Not every
+ * attendance fact becomes an event; discarded candidates explain why. No write.
+ */
+async function previewAttendanceConsumption(
+    supabase: SupabaseClient,
+    orgId: string,
+    fact: OperationalFactDto,
+    today: string,
+): Promise<ConsumptionPreviewResult> {
+    const candidate = buildCandidate(fact, today);
+    const agreementId = agreementIdFromFact(fact);
+    const scope = await resolveAgreementScope(supabase, orgId, fact, agreementId);
+    const interpretation = interpretAttendance(fact);
+
+    const plans = await listRows<ChildcareRatePlanRow>(supabase, RATE_PLANS_TABLE, orgId);
+    const rules = await listRows<ChildcareRateRuleRow>(supabase, RATE_RULES_TABLE, orgId);
+    const policies = await listFinancialPolicies(supabase, orgId);
+
+    const anchorDate = fact.occursOn ?? fact.eventDate ?? today;
+    const periodStart = fact.periodStart ?? firstOfMonth(anchorDate);
+    const policyCtx = { locationId: scope.siteLocationId ?? undefined, serviceId: undefined, ratePlanId: undefined };
+    const proration = resolveFinancialPolicy(policies, "proration", policyCtx, anchorDate);
+    const reviewPolicy = resolveFinancialPolicy(policies, "posting_review", policyCtx, anchorDate);
+    const reviewByPolicy = reviewPolicy.resolved ? reviewPolicy.policy.value.required === true : false;
+
+    const hasVacationCredit = interpretation.directives.some((d) => d.obligationKind === "vacation_credit");
+    const policiesApplied: PolicyApplication[] = [
+        { policyType: "posting_review", scope: reviewPolicy.resolved ? reviewPolicy.sourceScope : null, value: reviewPolicy.resolved ? reviewPolicy.policy.value : null, applied: reviewByPolicy, effect: reviewByPolicy ? "obligations flagged review_required" : "no review required" },
+        { policyType: "vacation_credit_eligibility", scope: null, value: { eligible: fact.vacationEligible === true }, applied: hasVacationCredit, effect: hasVacationCredit ? "absence → vacation credit (preview)" : "no vacation credit (not eligible / not an absence)" },
+        { policyType: "proration", scope: proration.resolved ? proration.sourceScope : null, value: proration.resolved ? proration.policy.value : null, applied: hasVacationCredit, effect: proration.resolved ? `method=${(proration.policy.value as { method?: string }).method ?? "?"}` : "no proration policy (default none)" },
+    ];
+
+    const eventTypeCache = new Map<string, ConsumptionEventTypeRow | null>();
+    const ctx: DirectiveCtx = {
+        scope,
+        plans,
+        rules,
+        today,
+        periodStart,
+        anchorDate,
+        agreementId,
+        reviewByPolicy,
+        prorationMethod: proration.resolved ? (proration.policy.value as { method?: string }).method ?? "none" : "none",
+        fact,
+        eventTypeCache,
+    };
+
+    const obligations: ResolvedObligationIntent[] = [];
+    const commercialObjectsUsed: CommercialObjectRef[] = [];
+    let primaryChargePreview: ChargePreviewResult | null = null;
+    let primaryTemplate: ChargeTemplateRow | null = null;
+    for (const directive of interpretation.directives) {
+        const r = await resolveDirective(supabase, orgId, directive, ctx);
+        obligations.push(r.obligation);
+        commercialObjectsUsed.push(...r.commercialRefs);
+        if (!primaryChargePreview && r.chargePreview) {
+            primaryChargePreview = r.chargePreview;
+            primaryTemplate = r.template;
+        }
+    }
+
+    const primaryDirective = interpretation.directives.find((d) => d.draftable) ?? interpretation.directives[0] ?? null;
+    const primaryEventKey = primaryDirective?.eventKey ?? `attendance.${interpretation.attendanceFactType}`;
+    if (primaryDirective && !eventTypeCache.has(primaryDirective.eventKey)) {
+        eventTypeCache.set(primaryDirective.eventKey, await loadEventType(supabase, orgId, primaryDirective.eventKey));
+    }
+    const primaryEventType = primaryDirective ? eventTypeCache.get(primaryDirective.eventKey) ?? null : null;
+
+    const event: ConsumptionEventIntent = {
+        eventTypeId: primaryEventType?.id ?? null,
+        sourceFamily: "attendance",
+        eventKey: primaryEventKey,
+        sourceEntityType: fact.sourceEntityType,
+        sourceEntityId: fact.sourceEntityId,
+        subjectType: fact.subjectType ?? null,
+        subjectId: fact.subjectId ?? null,
+        locationId: fact.locationId ?? scope.siteLocationId ?? null,
+        occursOn: anchorDate,
+        effectiveOn: fact.effectiveOn ?? null,
+        status: obligations.length > 0 ? "resolved" : "no_obligation",
+        context: { ...(fact.context ?? {}), source_family: "attendance", attendance_fact_type: interpretation.attendanceFactType, discard_reason: interpretation.discardReason, check_out_time: fact.checkOutTime ?? null, late_threshold_time: fact.lateThresholdTime ?? null },
+        idempotencyKey: fact.idempotencyKey?.trim() || `cev:attendance:${interpretation.attendanceFactType}:${agreementId ?? fact.sourceEntityId}:${anchorDate}`,
+    };
+
+    const resolution: ConsumptionResolution = {
+        event,
+        obligations,
+        explanation: {
+            attendance_fact_type: interpretation.attendanceFactType,
+            discard_reason: interpretation.discardReason,
+            candidate_discarded: interpretation.directives.length === 0,
+            directive_count: interpretation.directives.length,
+            obligation_count: obligations.length,
+            suppressed_obligation_count: obligations.filter((o) => o.status === "no_charge").length,
+            agreement_status: scope.agreementStatus,
+        },
+    };
+
+    const matchedCommercial: MatchedCommercial | null = primaryTemplate
+        ? { chargeTemplateId: primaryTemplate.id, chargeTemplateKey: primaryTemplate.template_key, chargeTemplateLabel: primaryTemplate.label, serviceId: primaryTemplate.service_id }
+        : null;
+
+    return {
+        fact,
+        eventType: primaryEventType ? eventTypeSummary(primaryEventType, orgId) : null,
+        matchedCommercial,
+        resolution,
+        chargePreview: primaryChargePreview,
+        interpretation: null,
+        commercialObjectsUsed,
+        policiesApplied,
+        candidate,
+        attendanceInterpretation: interpretation,
+    };
+}
+
+/** Obligation kinds that carry a service period (vs. an event-dated one-off). */
+const PERIOD_KINDS = new Set(["recurring_tuition", "proration", "proration_credit", "vacation_credit"]);
+
+type DirectiveCtx = {
+    scope: AgreementScope;
+    plans: ChildcareRatePlanRow[];
+    rules: ChildcareRateRuleRow[];
+    today: string;
+    /** Service-period anchor (schedule). */
+    periodStart: string;
+    /** Date this obligation anchors to when it is not a draftable charge (schedule: period; attendance: event date). */
+    anchorDate: string;
+    agreementId: string | null;
+    reviewByPolicy: boolean;
+    prorationMethod: string;
+    fact: OperationalFactDto;
+    eventTypeCache: Map<string, ConsumptionEventTypeRow | null>;
+};
+
+type DirectiveResolution = {
+    obligation: ResolvedObligationIntent;
+    chargePreview: ChargePreviewResult | null;
+    template: ChargeTemplateRow | null;
+    commercialRefs: CommercialObjectRef[];
+};
+
+function noChargeObligation(directive: ConsumptionDirective, reason: string, ctx: DirectiveCtx, currency: string): ResolvedObligationIntent {
+    const periodStart = PERIOD_KINDS.has(directive.obligationKind) ? ctx.periodStart : null;
     return {
         obligationKind: directive.obligationKind,
         chargeTemplateId: null,
@@ -475,15 +630,109 @@ function noChargeObligation(directive: ConsumptionDirective, reason: string, per
         amountCents: null,
         currencyCode: currency,
         responsibilityKey: "household",
-        occursOn: periodStart,
-        billableOn: periodStart,
-        periodStart: directive.obligationKind === "recurring_tuition" ? periodStart : null,
-        periodEnd: fact.periodEnd ?? null,
+        occursOn: ctx.anchorDate,
+        billableOn: ctx.anchorDate,
+        periodStart,
+        periodEnd: ctx.fact.periodEnd ?? null,
         reviewRequired: false,
         draftable: false,
         status: "no_charge",
-        resolutionKey: `cons:${directive.obligationKind}:${periodStart}:${agreementId ?? fact.sourceEntityId}`,
+        resolutionKey: `cons:${directive.obligationKind}:${ctx.anchorDate}:${ctx.agreementId ?? ctx.fact.sourceEntityId}`,
         explanation: { directive_reason: directive.reason, no_charge_reason: reason },
+    };
+}
+
+/**
+ * Resolve ONE directive into an obligation through the Commercial Model — the
+ * shared core of the Consumption Pipeline used by every domain (schedule,
+ * attendance, …). Handles rate-derived AND fixed-fee templates, an hourly
+ * unit multiplier, and preview-only (non-draftable) credits. Consumes the
+ * existing Rate Resolution + Charge Template resolver; never reimplements pricing.
+ */
+async function resolveDirective(
+    supabase: SupabaseClient,
+    orgId: string,
+    directive: ConsumptionDirective,
+    ctx: DirectiveCtx,
+): Promise<DirectiveResolution> {
+    const { fact } = ctx;
+    const commercialRefs: CommercialObjectRef[] = [];
+    const rate: RateResolution | null = directive.scheduleBasis
+        ? resolveRate({ plans: ctx.plans, rules: ctx.rules, context: { siteLocationId: ctx.scope.siteLocationId, ageGroupKey: ctx.scope.ageGroupKey, scheduleBasis: directive.scheduleBasis as ScheduleBasis, planKey: fact.ratePlanKey }, dateYmd: ctx.periodStart })
+        : null;
+    if (rate?.resolved) {
+        commercialRefs.push({ kind: "rate_plan", label: rate.plan.label ?? rate.plan.plan_key, detail: `${rate.plan.scope_type} · ${rate.calculationStrategy}`, matched: true });
+        commercialRefs.push({ kind: "rate_rule", label: `${rate.scheduleBasis} @ ${rate.rateBasis}`, detail: `${rate.amountCents}¢ ${rate.currencyCode}`, matched: true });
+    } else if (directive.scheduleBasis) {
+        commercialRefs.push({ kind: "rate_rule", label: directive.scheduleBasis, detail: rate ? `unresolved: ${(rate as { reason: string }).reason}` : "no rate", matched: false });
+    }
+    const rateAmount = rate?.resolved ? rate.amountCents : null;
+    const currency = rate?.resolved ? rate.currencyCode : "USD";
+    const periodStart = PERIOD_KINDS.has(directive.obligationKind) ? ctx.periodStart : null;
+
+    if (directive.draftable) {
+        if (!ctx.eventTypeCache.has(directive.eventKey)) ctx.eventTypeCache.set(directive.eventKey, await loadEventType(supabase, orgId, directive.eventKey));
+        const dEventType = ctx.eventTypeCache.get(directive.eventKey) ?? null;
+        const template = await loadTemplateByKey(supabase, orgId, dEventType?.charge_template_key ?? null);
+        if (!template) {
+            return { obligation: noChargeObligation(directive, `no charge template configured for ${directive.eventKey}`, ctx, currency), chargePreview: null, template: null, commercialRefs };
+        }
+        // rate-derived amount × unit multiplier (e.g. hours); null lets a FIXED template price itself.
+        const effectiveAmount = rateAmount != null ? Math.round(rateAmount * (directive.unitMultiplier ?? 1)) : null;
+        const cp = await previewTemplateCharge(supabase, orgId, scheduleSimulateArgs(fact, template, effectiveAmount, ctx.periodStart, ctx.today));
+        commercialRefs.push({ kind: "charge_template", label: template.label, detail: `${template.template_key} · ${template.amount_strategy}`, matched: true });
+        if (cp.intent.eligible && cp.intent.amountCents != null && cp.intent.amountCents > 0) {
+            return {
+                obligation: {
+                    obligationKind: directive.obligationKind,
+                    chargeTemplateId: cp.intent.templateId,
+                    serviceId: cp.intent.serviceId,
+                    amountCents: cp.intent.amountCents,
+                    currencyCode: cp.intent.currencyCode,
+                    responsibilityKey: cp.intent.responsibilityKey ?? dEventType?.default_responsibility_key ?? "household",
+                    occursOn: cp.intent.occursOn,
+                    billableOn: cp.intent.billableOn,
+                    periodStart,
+                    periodEnd: fact.periodEnd ?? null,
+                    reviewRequired: cp.intent.reviewRequired,
+                    draftable: true,
+                    status: "previewed",
+                    resolutionKey: cp.intent.resolutionKey,
+                    explanation: { directive_reason: directive.reason, charge_template_key: cp.intent.templateKey, amount_strategy: cp.intent.amountStrategy, lifecycle_status: cp.intent.lifecycleStatus, rate_amount_cents: rateAmount, unit_multiplier: directive.unitMultiplier ?? 1 },
+                },
+                chargePreview: cp,
+                template,
+                commercialRefs,
+            };
+        }
+        const reason = cp.intent.eligible ? "amount not resolvable (no rate / fixed amount)" : cp.intent.reason ?? "template ineligible";
+        return { obligation: noChargeObligation(directive, reason, ctx, currency), chargePreview: cp, template, commercialRefs };
+    }
+
+    // Non-draftable (proration / proration_credit / vacation_credit) — preview only.
+    const proratedDays = fact.proratedDays ?? (directive.obligationKind === "vacation_credit" ? 1 : null);
+    const amount = prorateAmountCents(rateAmount, proratedDays, fact.periodDays);
+    return {
+        obligation: {
+            obligationKind: directive.obligationKind,
+            chargeTemplateId: null,
+            serviceId: null,
+            amountCents: amount,
+            currencyCode: currency,
+            responsibilityKey: "household",
+            occursOn: ctx.anchorDate,
+            billableOn: ctx.anchorDate,
+            periodStart,
+            periodEnd: fact.periodEnd ?? null,
+            reviewRequired: ctx.reviewByPolicy,
+            draftable: false,
+            status: amount != null ? "previewed" : "no_charge",
+            resolutionKey: `cons:${directive.obligationKind}:${ctx.anchorDate}:${ctx.agreementId ?? fact.sourceEntityId}`,
+            explanation: { directive_reason: directive.reason, proration_method: ctx.prorationMethod, prorated_days: proratedDays, period_days: fact.periodDays ?? null, full_period_amount_cents: rateAmount, note: "preview only; the adjustment/credit posts downstream" },
+        },
+        chargePreview: null,
+        template: null,
+        commercialRefs,
     };
 }
 
