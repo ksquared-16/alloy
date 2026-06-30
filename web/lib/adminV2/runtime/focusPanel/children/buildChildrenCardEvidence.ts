@@ -27,6 +27,8 @@ export type ChildrenEvidenceChild = {
     id: string;
     name: string;
     initial: string;
+    /** Identity profile image (evidence model); null → initials fallback. */
+    imageUrl: string | null;
     dobAge: string | null;
     program: string | null;
     room: string | null;
@@ -157,6 +159,9 @@ export function buildChildrenCardEvidence(context: OperationalContext): Children
             id: trimOrNull(row.id) ?? trimOrNull(row.person_id) ?? `child-${index}`,
             name,
             initial: name.charAt(0).toUpperCase(),
+            // No child photo source today → null → CardAvatar renders the initials
+            // fallback. The seam is here for when child photos land (no fabricated image).
+            imageUrl: null,
             dobAge: dobAgeLine(row.dob, row.age),
             program,
             room,
