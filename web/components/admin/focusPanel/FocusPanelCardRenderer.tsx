@@ -131,10 +131,10 @@ export default function FocusPanelCardRenderer({
     // Context boundary. Each derives its answer from context.signals or context.truth.
     // No compat wrapper needed.
     if (model.key === "tour_summary") {
-        return <TourCard model={model} context={context} receded={receded} />;
+        return <TourCard model={model} context={context} receded={receded} mutation={mutation} />;
     }
     if (model.key === "communications") {
-        return <CommunicationsCard model={model} context={context} receded={receded} />;
+        return <CommunicationsCard model={model} context={context} receded={receded} mutation={mutation} />;
     }
     if (model.key === "billing_preview") {
         return <BillingPreviewCard model={model} context={context} receded={receded} />;

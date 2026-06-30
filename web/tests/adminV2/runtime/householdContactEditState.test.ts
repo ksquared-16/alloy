@@ -28,8 +28,8 @@ function contextFor(truth: Record<string, unknown>): OperationalContext {
         signals: {
             work: { primary: null, items: [], openCount: 0, overdueCount: 0, nextActionLabel: null },
             attention: { needsAttention: false, primaryReason: null, reasonCount: 0 },
-            tour: { scheduled: false, startAt: null, statusLabel: null },
-            communications: { scheduledSendCount: 0, nextFollowUpAt: null, hasOutreach: false },
+            tour: { scheduled: false, startAt: null, statusLabel: null, bookingId: null },
+            communications: { scheduledSendCount: 0, nextFollowUpAt: null, hasOutreach: false, nextScheduledSendId: null },
         },
         capabilities: { canMutate: true, maskedChannels: false },
         status: "ready",

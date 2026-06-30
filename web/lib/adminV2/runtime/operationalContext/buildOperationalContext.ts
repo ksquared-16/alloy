@@ -171,6 +171,7 @@ function buildOperationalContextSignals(
             scheduled: tourBookings.length > 0,
             startAt: trimOrNull(nextBooking?.start_at),
             statusLabel: trimOrNull(nextBooking?.status_key),
+            bookingId: trimOrNull(nextBooking?.id),
         },
         communications: buildCommunicationsSignal(subjectVm),
     };
@@ -182,10 +183,12 @@ function buildCommunicationsSignal(
     const reminders = subjectVm.summaries.reminders;
     const scheduledSendCount = reminders?.scheduled_send_count ?? 0;
     const nextFollowUpAt = reminders?.next_follow_up_iso ?? null;
+    const pendingSends = (reminders?.scheduled_sends ?? []).filter((s) => s.status === "pending");
     return {
         scheduledSendCount,
         nextFollowUpAt: trimOrNull(nextFollowUpAt),
         hasOutreach: scheduledSendCount > 0 || nextFollowUpAt != null,
+        nextScheduledSendId: trimOrNull(pendingSends[0]?.id),
     };
 }
 

@@ -26,6 +26,11 @@ import {
 import { dispatchOpportunityDrawerRecordPatch } from "@/lib/admin/opportunityDrawerTargetedRefresh";
 import { dispatchDrawerLayoutRuntimeBodyRecordPatch } from "@/lib/layout/runtime/drawerLayoutRuntimeBodyRecordPatch";
 import { resolveLeadSummaryPrimaryPersonId } from "@/lib/admin/drawer/opportunityFamilyContactsOrdering";
+import {
+    dispatchOpportunityTourUpdated,
+    ADMINV2_OPEN_TOUR_SCHEDULE_MODAL,
+    postTourBookingAction,
+} from "@/lib/tours/actions/tourBookingActionClient";
 
 /** Primary-contact/person fields editable on the Household card (V1). */
 export type PersonContactValues = {
@@ -42,12 +47,29 @@ export type FocusPanelSaveResult =
     | { ok: true }
     | { ok: false; status: number; error: string };
 
+/** Tour status actions (action-only card — no inline form). */
+export type FocusPanelTourMutation = {
+    cancelTour: (bookingId: string) => Promise<FocusPanelSaveResult>;
+    confirmTour: (bookingId: string) => Promise<FocusPanelSaveResult>;
+    openTourScheduleModal: (opts: { opportunityId: string; actionKey?: "schedule_tour" | "reschedule_tour" }) => void;
+    dispatchTourUpdated: (opportunityId: string, actionKey: string) => void;
+};
+
+/** Communications actions (action-only — no inline message composer). */
+export type FocusPanelCommunicationsMutation = {
+    cancelScheduledSend: (sendId: string) => Promise<FocusPanelSaveResult>;
+};
+
 /** The injected mutation capability a truth card uses to propose a change. */
 export type FocusPanelMutation = {
     /** Whether the operator may edit truth on this subject (mirrors `capabilities.canMutate`). */
     canEdit: boolean;
     /** Persist primary-contact field edits via the existing person PATCH route + refresh. */
     savePersonContact: (personId: string, patch: PersonContactPatch) => Promise<FocusPanelSaveResult>;
+    /** Tour status actions — present whenever a tour booking row exists and can be acted on. */
+    tour: FocusPanelTourMutation;
+    /** Communications actions — present for all opportunities. */
+    communications: FocusPanelCommunicationsMutation;
 };
 
 /** The subset of a persons PATCH response this seam reads back. */
@@ -137,12 +159,14 @@ export type BuildFocusPanelMutationInput = {
 };
 
 /**
- * Build the Household mutation adapter for an opportunity Focus Panel. Persists via
- * the existing person PATCH helper and, on success, dispatches the existing
- * record-patch events that drive VM merge + context recomposition.
+ * Build the opportunity Focus Panel mutation adapter. Wires:
+ *  - Household contact save (existing person PATCH path)
+ *  - Tour status actions (existing tour booking API)
+ *  - Communications scheduled-send cancel (existing scheduled-sends PATCH)
  */
 export function buildOpportunityFocusPanelMutation(input: BuildFocusPanelMutationInput): FocusPanelMutation {
     const { canMutate, opportunityId, truth, fetchFn } = input;
+    const f = fetchFn ?? fetch;
     return {
         canEdit: canMutate,
         savePersonContact: async (personId, patch) => {
@@ -160,6 +184,52 @@ export function buildOpportunityFocusPanelMutation(input: BuildFocusPanelMutatio
                 record: merged,
             });
             return { ok: true };
+        },
+        tour: {
+            cancelTour: async (bookingId) => {
+                try {
+                    await postTourBookingAction(bookingId, "/cancel");
+                    dispatchOpportunityTourUpdated(opportunityId, "cancel_tour");
+                    return { ok: true };
+                } catch (e) {
+                    return { ok: false, status: 500, error: e instanceof Error ? e.message : "Cancel failed" };
+                }
+            },
+            confirmTour: async (bookingId) => {
+                try {
+                    await postTourBookingAction(bookingId, "/confirm");
+                    dispatchOpportunityTourUpdated(opportunityId, "confirm_tour");
+                    return { ok: true };
+                } catch (e) {
+                    return { ok: false, status: 500, error: e instanceof Error ? e.message : "Confirm failed" };
+                }
+            },
+            openTourScheduleModal: ({ opportunityId: oppId, actionKey = "schedule_tour" }) => {
+                if (typeof window === "undefined") return;
+                window.dispatchEvent(
+                    new CustomEvent(ADMINV2_OPEN_TOUR_SCHEDULE_MODAL, {
+                        detail: { opportunity_id: oppId, action_key: actionKey },
+                    }),
+                );
+            },
+            dispatchTourUpdated: (oppId, actionKey) => dispatchOpportunityTourUpdated(oppId, actionKey),
+        },
+        communications: {
+            cancelScheduledSend: async (sendId) => {
+                try {
+                    const res = await f(`/api/admin/communication-scheduled-sends/${encodeURIComponent(sendId)}`, {
+                        method: "PATCH",
+                        credentials: "include",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ status: "canceled" }),
+                    });
+                    const json = (await res.json().catch(() => ({}))) as { error?: string };
+                    if (!res.ok) return { ok: false, status: res.status, error: json.error ?? "Cancel failed" };
+                    return { ok: true };
+                } catch (e) {
+                    return { ok: false, status: 500, error: e instanceof Error ? e.message : "Cancel failed" };
+                }
+            },
         },
     };
 }
