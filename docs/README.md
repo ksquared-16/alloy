@@ -42,6 +42,7 @@ Start here: **`platform/foundation/system-overview.md`**
 2. `platform/foundation/platform-capabilities.md`
 3. `platform/foundation/product-roadmap.md`
 4. `platform/foundation/architecture.md`
+4a. `platform/foundation/os-runtime-map.md` — **OS Runtime Map** (the nine runtime layers — Kernel · Intent · Navigation · Experience · Surface · Card · Record · Entity · Operational/BOS — the three flows, the **client/server seam**, the **Effects/Integration** service, and the Architecture Evolution & Known Gaps appendix)
 5. `platform/governance/glossary.md`
 
 ### 2. Core platform
