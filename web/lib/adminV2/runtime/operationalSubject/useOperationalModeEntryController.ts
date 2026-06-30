@@ -65,7 +65,12 @@ export function resolveOperationalModeEntrySnapshot(params: Params): Operational
         return { phase: "ready", message: "" };
     }
 
-    return { phase: "preparing", message };
+    // Rows are painted, the lane may paint, no deep-linked record is pending, and no drawer is open:
+    // the operational surface is READY. Browsing a loaded queue is the ready state — opening a Focus
+    // Panel subject is a separate user action, not surface "preparing". (Previously this returned
+    // "preparing", which made a fully-rendered queue show "Preparing operational surface…" until a
+    // subject opened — a partial-construction artifact the reveal doctrine forbids.)
+    return { phase: "ready", message: "" };
 }
 
 /** Gates Work Unit queue reveal until default operational subject is resolved. */
