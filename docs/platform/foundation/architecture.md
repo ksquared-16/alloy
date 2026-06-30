@@ -116,6 +116,7 @@ See `../governance/deployment-and-environments.md`.
 
 ## Related docs
 
+- `os-runtime-map.md` (**OS Runtime Map** — the nine runtime layers, the three flows, the client/server seam, the Effects/Integration service, and the Architecture Evolution & Known Gaps appendix)
 - `system-overview.md`
 - `../core/business-process-system.md`
 - `../../api/api-architecture.md` (API platform doctrine — the API layer is the platform boundary)
