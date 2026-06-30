@@ -40,7 +40,14 @@ describe("Universal Card Lifecycle + Capability Matrix", () => {
             supportsWorkspace: false,
             supportsProfileImage: true,
         });
-        expect(child.expansionEvidenceGroups).toContain("schedule_history");
+        // Placement is owned by Child (not its own card) — editable + in Expanded.
+        expect(child.editableEvidenceGroups).toContain("placement");
+        // Expanded = additional configured evidence (placement/medical/…), not history.
+        expect(child.expansionEvidenceGroups).toContain("placement");
+        expect(child.expansionEvidenceGroups).toContain("medical");
+        expect(child.expansionEvidenceGroups).not.toContain("schedule_history");
+        // History is a Related View, not Expanded.
+        expect(child.relatedViews.map((v) => v.id)).toEqual(["schedule_history", "placement_history"]);
 
         // Readiness: summary + expanded only, never focus/edit, no photo.
         expect(cardCapabilities("readiness_kpi")).toMatchObject({
@@ -88,6 +95,17 @@ describe("Universal Card Lifecycle + Capability Matrix", () => {
                 expect(caps.supportsFocus).toBe(true);
             }
         }
+    });
+
+    it("Related Views are report drill-downs distinct from Expanded", async () => {
+        const { cardRelatedViews } = await import("@/lib/adminV2/runtime/focusPanel/focusPanelCardLifecycle");
+        // Every card declares relatedViews (default empty).
+        for (const key of FOCUS_PANEL_CARD_KEYS) {
+            expect(Array.isArray(cardCapabilities(key).relatedViews)).toBe(true);
+        }
+        expect(cardRelatedViews("children").map((v) => v.label)).toEqual(["Schedule History", "Placement History"]);
+        expect(cardRelatedViews("timeline").map((v) => v.id)).toEqual(["full_timeline"]);
+        expect(cardRelatedViews("readiness_kpi")).toEqual([]);
     });
 
     it("flags an inconsistent profile (edit without focus)", () => {

@@ -36,6 +36,17 @@ export const FOCUS_PANEL_LIFECYCLE_LABELS: Record<FocusPanelCardLifecycleState, 
     workspace: "Workspace",
 };
 
+/**
+ * A Related View — an OPTIONAL drill-down to a report / historical context (Schedule
+ * History, Placement History, Billing History …). NOT the same as Expanded: Expanded
+ * answers the SAME operational question with more configured evidence, whereas a
+ * Related View is a separate related operational report.
+ */
+export type FocusPanelRelatedView = {
+    id: string;
+    label: string;
+};
+
 /** What a card declares it can do — read by runtime, canvas builder, and Inspector. */
 export type FocusPanelCardCapabilities = {
     /** The 2–5s answer on the Focus Panel surface. (Effectively always true.) */
@@ -54,8 +65,13 @@ export type FocusPanelCardCapabilities = {
     supportsProfileImage: boolean;
     /** Evidence-group ids editable inline (when owned + adapter + permission exist). */
     editableEvidenceGroups: readonly string[];
-    /** Evidence-group ids that add breadth / history when the card is expanded. */
+    /**
+     * Evidence-group ids revealed when the card is Expanded — the SAME operational
+     * question with ADDITIONAL configured evidence (not history). Overlays downward.
+     */
     expansionEvidenceGroups: readonly string[];
+    /** Optional related-report drill-downs (Schedule History, Placement History …). */
+    relatedViews: readonly FocusPanelRelatedView[];
 };
 
 /** Default capability profile: a card answers on the surface and nothing more. */
@@ -69,6 +85,7 @@ const DEFAULT_CAPABILITIES: FocusPanelCardCapabilities = {
     supportsProfileImage: false,
     editableEvidenceGroups: [],
     expansionEvidenceGroups: [],
+    relatedViews: [],
 };
 
 /**
@@ -84,7 +101,9 @@ const CAPABILITY_OVERRIDES: Partial<Record<FocusPanelCardKey, Partial<FocusPanel
         supportsSubjectChange: true,
         supportsProfileImage: true,
         editableEvidenceGroups: ["primary_contact", "other_parent", "emergency_contacts", "pickup", "billing", "members"],
-        expansionEvidenceGroups: ["addresses", "additional_contacts", "contact_history"],
+        // Expanded = additional configured evidence (not history).
+        expansionEvidenceGroups: ["addresses", "additional_contacts", "languages", "household_notes"],
+        relatedViews: [{ id: "contact_history", label: "Contact History" }],
     },
     children: {
         supportsFocus: true,
@@ -92,8 +111,15 @@ const CAPABILITY_OVERRIDES: Partial<Record<FocusPanelCardKey, Partial<FocusPanel
         supportsExpanded: true,
         supportsSubjectChange: true,
         supportsProfileImage: true,
-        editableEvidenceGroups: ["identity", "placement", "schedule", "status"],
-        expansionEvidenceGroups: ["schedule_history", "program_history", "status_history"],
+        // Child OWNS its operational truth; Placement is an evidence group on Child
+        // (not its own card): Program · Room · Schedule · Teacher · Desired Start.
+        editableEvidenceGroups: ["identity", "placement", "medical", "documents", "notes"],
+        // Expanded reveals the additional configured evidence groups for the child.
+        expansionEvidenceGroups: ["placement", "medical", "documents", "pickup", "notes", "readiness"],
+        relatedViews: [
+            { id: "schedule_history", label: "Schedule History" },
+            { id: "placement_history", label: "Placement History" },
+        ],
     },
     documents: {
         supportsFocus: true,
@@ -112,7 +138,7 @@ const CAPABILITY_OVERRIDES: Partial<Record<FocusPanelCardKey, Partial<FocusPanel
     readiness_kpi: { supportsExpanded: true, expansionEvidenceGroups: ["blockers"] },
     current_work: { supportsExpanded: true, expansionEvidenceGroups: ["work_items"] },
     tasks: { supportsExpanded: true, expansionEvidenceGroups: ["task_list"] },
-    timeline: { supportsExpanded: true, expansionEvidenceGroups: ["timeline_history"] },
+    timeline: { supportsExpanded: true, relatedViews: [{ id: "full_timeline", label: "Full Timeline" }] },
 };
 
 /** The frozen capability matrix — exhaustive across every card key. */
@@ -145,6 +171,11 @@ export function supportedLifecycleStates(key: FocusPanelCardKey): FocusPanelCard
 
 export function cardSupportsProfileImage(key: FocusPanelCardKey): boolean {
     return cardCapabilities(key).supportsProfileImage;
+}
+
+/** A card's optional related-report drill-downs (Schedule History, Full Timeline …). */
+export function cardRelatedViews(key: FocusPanelCardKey): readonly FocusPanelRelatedView[] {
+    return cardCapabilities(key).relatedViews;
 }
 
 /**

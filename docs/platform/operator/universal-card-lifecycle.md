@@ -24,8 +24,14 @@ every card declares which it supports.**
 | **Summary** | The 2–5 second operational answer on the Focus Panel surface. | — |
 | **Focus** | The current operational **truth** — everything needed to understand the current state. | a separate form |
 | **Edit** | Inline editing **inside** the focused card; rows transform into controls **in place**. | a separate form |
-| **Expanded** | The **same** answer with more **room** — breadth / history / additional context. Overlays downward, never reflows. | Focus · Edit · Workspace |
+| **Expanded** | The **same** operational question with **additional configured evidence** (more evidence groups). Overlays downward, never reflows. **Not history.** | Focus · Edit · Workspace · history |
 | **Workspace** | Doing **larger work** — bulk edits, document / financial review, mass scheduling, ledger review. | an expanded card |
+
+> **Related Views** (separate from the lifecycle) are optional drill-downs to a **report
+> / historical context** — Schedule History, Placement History, Billing History, Full
+> Timeline. A Related View is a *related operational report*, **not** Expanded: Expanded
+> answers the same question with more evidence; a Related View opens a different report.
+> Declared per card as `relatedViews` (see §2a).
 
 - **Summary** examples — Household: primary contact · children count · contact status.
   Child: name · age · program · room · schedule/status.
@@ -33,9 +39,10 @@ every card declares which it supports.**
   channel · language · can pick up · receives billing.
 - **Edit** stays visually connected to the row/evidence being edited (phone row → phone
   input; schedule days → selectable chips; times → editable values).
-- **Expanded** examples — Household: mailing/secondary/former address, additional
-  contacts, contact history. Child: schedule history, future schedules, program/status
-  history. Billing: weekly-charge history. Readiness: full blocker list.
+- **Expanded** examples (additional configured evidence — *not* history) — Household:
+  addresses, additional contacts, languages, household notes. Child: placement, medical,
+  documents, pickup instructions, notes, readiness. Billing: current billing
+  configuration, invoices, payment methods, balances.
 - **Workspace** is only when the operator is *doing work*, not reviewing.
 
 ---
@@ -67,6 +74,47 @@ The runtime, the canvas builder, and the Inspector read these — no per-card ha
 - Inline edit ⇒ the card is an **operational truth card** (it owns what it mutates).
 - Declaring `editableEvidenceGroups` ⇒ `supportsInlineEdit`; declaring
   `expansionEvidenceGroups` ⇒ `supportsExpanded`.
+
+---
+
+## 2a. Related Views (report drill-downs)
+
+A card declares optional **Related Views** — drill-downs to a report or historical
+context, distinct from Expanded:
+
+| Card | Related Views |
+|------|---------------|
+| **Child** | Schedule History · Placement History |
+| Household | Contact History |
+| Billing | Billing History · Payment History |
+| Attendance | Attendance History |
+| Timeline | Full Timeline |
+
+**Expanded vs Related View:** Expanded reveals more *evidence* for the **same question**
+(overlays downward). A Related View opens a *different operational report* (history /
+ledger / full list). Code: `relatedViews` on `FocusPanelCardCapabilities` /
+`cardRelatedViews(key)`.
+
+---
+
+## 2b. Child ownership (Placement is an evidence group, not a card)
+
+**Placement does NOT become its own card.** Placement is an **Evidence Group owned by the
+Child card**. The Child card owns its full operational truth as evidence groups:
+
+| Group | Fields |
+|-------|--------|
+| **Identity** | name · DOB / age · photo |
+| **Placement** | Program · Room · Schedule · Teacher · Desired Start |
+| **Medical** | allergies · conditions · medications |
+| **Documents** | required / received documents |
+| **Readiness** | enrollment-readiness factors |
+| **Notes** | child notes |
+
+Child edits these inline **only where a save adapter + permission + validation exist**;
+today child operational fields have **no save adapter**, so inline edit is a read-only
+**preview** (no fake save). Schedule/Placement *history* are **Related Views**, not
+Expanded.
 
 ---
 
