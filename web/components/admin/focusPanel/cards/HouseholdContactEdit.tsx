@@ -1,7 +1,10 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 
+import { EditableCardStatus } from "@/lib/experience/editing/EditableCardStatus";
+import { editableCardIsSaving } from "@/lib/experience/editing/editableCardRuntime";
+import { useEditableCardRuntime } from "@/lib/experience/editing/useEditableCardRuntime";
 import {
     householdContactDirty,
     householdContactPatch,
@@ -13,12 +16,15 @@ import type {
 } from "@/lib/adminV2/runtime/focusPanel/focusPanelMutation";
 
 /**
- * Household primary-contact edit surface — the live replacement for
- * `CardEditPlaceholder` on the Household card's Edit depth (Edit is a capability of
- * Focus; see operational-depth-doctrine.md). Confirmed save only (no optimistic):
- * local draft + dirty + cancel-reverts + loading + success + error. Persistence is
- * the injected `save` (existing person PATCH path); on success the host re-merges
- * the VM and the card recomposes from refreshed truth — this form does not refetch.
+ * Household primary-contact edit surface — live replacement for CardEditPlaceholder
+ * on the Household card's Edit depth (Edit is a capability of Focus;
+ * see operational-depth-doctrine.md).
+ *
+ * Edit lifecycle is owned by the canonical Editable Card Runtime
+ * (`useEditableCardRuntime`): Card Runtime owns the state machine; no second
+ * coordinator (Focus Panel editing is single-card, not Save-All). Authoritative
+ * confirmed save only (no optimistic): on failure the operator's draft is RETAINED
+ * (no silent loss). Doctrine: docs/platform/experience/editable-card-runtime.md.
  */
 
 type Props = {
@@ -33,7 +39,7 @@ type Props = {
     onSaved?: () => void;
 };
 
-/** How long the "Saved ✓" confirmation shows before returning to the card. */
+/** How long the "Saved" confirmation shows before returning to the card. */
 const SAVED_BEAT_MS = 900;
 
 const FIELD_ROWS: { key: keyof PersonContactValues; label: string; type: string }[] = [
@@ -44,46 +50,51 @@ const FIELD_ROWS: { key: keyof PersonContactValues; label: string; type: string 
 ];
 
 export default function HouseholdContactEdit({ personId, personName, initial, save, onClose, onSaved }: Props) {
-    const [baseline, setBaseline] = useState<PersonContactValues>(initial);
     const [draft, setDraft] = useState<PersonContactValues>(initial);
-    // idle → saving → saved (brief confirmation beat) → returns to the card view.
-    const [phase, setPhase] = useState<"idle" | "saving" | "saved">("idle");
-    const [error, setError] = useState<string | null>(null);
-    const savedTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const baselineRef = useRef<PersonContactValues>(initial);
+    const draftRef = useRef(draft);
+    draftRef.current = draft;
 
-    useEffect(() => () => { if (savedTimer.current) clearTimeout(savedTimer.current); }, []);
+    const dirty = householdContactDirty(draft, baselineRef.current);
 
-    const dirty = householdContactDirty(draft, baseline);
-    const saving = phase === "saving";
+    // Card Runtime owns the edit lifecycle. No sectionId — Focus Panel editing is
+    // single-card-isolated (no Save-All, no dirty guard across cards). Authoritative
+    // confirmed save: on failure the operator's draft is retained (never silently
+    // reverted). On success: lock the confirmed baseline, show the ack beat, then
+    // hand back to the card via onAcknowledge → (onSaved ?? onClose).
+    const edit = useEditableCardRuntime({
+        dirty,
+        acknowledgeMs: SAVED_BEAT_MS,
+        onAcknowledge: () => (onSaved ?? onClose)(),
+        save: async () => {
+            const patch = householdContactPatch(draftRef.current, baselineRef.current);
+            const result = await save(personId, patch);
+            if (result.ok) {
+                // Advance the baseline to the confirmed draft so re-entry (if any before
+                // the ack timer fires) sees no phantom dirty against the old values.
+                baselineRef.current = { ...draftRef.current };
+                return { ok: true };
+            }
+            return { ok: false, error: result.error || "Save failed" };
+        },
+    });
+
+    const saving = editableCardIsSaving(edit.state);
+    // Lock inputs during the save in-flight AND during the brief ack window — the
+    // operator shouldn't race an edit against the timer that closes the form.
+    const locked = saving || edit.state.phase === "saved";
 
     const setField = (key: keyof PersonContactValues, value: string) => {
-        setDraft((prev) => ({ ...prev, [key]: value }));
-        setPhase("idle");
-        setError(null);
+        const next = { ...draftRef.current, [key]: value };
+        setDraft(next);
+        edit.notifyChange(householdContactDirty(next, baselineRef.current));
     };
 
     const handleCancel = () => {
-        setDraft(baseline);
-        setError(null);
+        // Reset clears any in-flight ack timer before closing.
+        edit.reset();
+        setDraft(baselineRef.current);
         onClose();
-    };
-
-    const handleSave = async () => {
-        if (!dirty || saving) return;
-        setPhase("saving");
-        setError(null);
-        const result = await save(personId, householdContactPatch(draft, baseline));
-        if (result.ok) {
-            // Confirmed save: lock the new baseline, show a brief "Saved ✓" beat, then
-            // hand back to the card (which recomposes from refreshed truth + flashes
-            // its own saved confirmation with the updated, formatted values).
-            setBaseline(draft);
-            setPhase("saved");
-            savedTimer.current = setTimeout(() => (onSaved ?? onClose)(), SAVED_BEAT_MS);
-        } else {
-            setError(result.error || "Save failed");
-            setPhase("idle");
-        }
     };
 
     return (
@@ -100,22 +111,14 @@ export default function HouseholdContactEdit({ personId, personName, initial, sa
                             data-testid={`household-edit-${row.key}`}
                             type={row.type}
                             value={draft[row.key]}
-                            disabled={saving}
+                            disabled={locked}
                             onChange={(e) => setField(row.key, e.target.value)}
                         />
                     </label>
                 ))}
             </div>
 
-            {error ? (
-                <p className="alloy-os-card-edit__error" data-household-edit-error="true" role="alert">
-                    {error}
-                </p>
-            ) : phase === "saved" ? (
-                <p className="alloy-os-card-edit__saved" data-household-edit-saved="true" role="status">
-                    ✓ Saved
-                </p>
-            ) : null}
+            <EditableCardStatus state={edit.state} />
 
             <div className="alloy-os-card-edit__actions">
                 <button
@@ -131,11 +134,11 @@ export default function HouseholdContactEdit({ personId, personName, initial, sa
                     type="button"
                     className="alloy-os-card-edit__btn alloy-os-card-edit__btn--primary"
                     data-testid="household-edit-save"
-                    data-save-phase={phase}
-                    onClick={handleSave}
-                    disabled={!dirty || saving || phase === "saved"}
+                    data-save-phase={edit.state.phase}
+                    onClick={() => void edit.commit()}
+                    disabled={!dirty || locked}
                 >
-                    {phase === "saving" ? "Saving…" : phase === "saved" ? "✓ Saved" : "Save"}
+                    {saving ? "Saving…" : edit.state.phase === "saved" ? "✓ Saved" : "Save"}
                 </button>
             </div>
         </div>

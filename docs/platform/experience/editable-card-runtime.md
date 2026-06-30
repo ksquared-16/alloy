@@ -68,6 +68,20 @@ The competing pattern has been **converged** onto the canonical runtime:
 
 All new editable cards use `useEditableCardRuntime`.
 
+### HouseholdContactEdit (Focus Panel — Household edit depth)
+
+Previously used bespoke `phase` ("idle"/"saving"/"saved") + `savedTimer` + local `error` state. Now migrated onto the canonical runtime.
+
+Key differences vs. Opportunity Drawer pattern:
+- **No `sectionId`** — Focus Panel editing is card-isolated; no Save-All / dirty guard across cards. The coordinator is intentionally absent here.
+- **No `applyOptimistic` / `rollbackOptimistic`** — authoritative confirmed save only (same as before).
+- **`acknowledgeMs: 900`** — the 900 ms "Saved" beat is preserved as the timing constant.
+- **`onAcknowledge`** fires `(onSaved ?? onClose)()` — hands back to HouseholdCard which shows its own card-level chip.
+- Inputs **locked** during the ack window (phase === "saved") to prevent a race between the ack timer and an in-flight re-edit.
+- `CardEditPlaceholder` (the pre-implementation placeholder this replaced) deleted — no imports remaining.
+
+**Verified:** `tests/admin/focusPanel/householdContactEditRuntime.test.tsx` — 8 behavioral tests covering save success / failure / cancel / ack-beat / timer-clear-on-cancel.
+
 ---
 
 ## When this doc must be updated
