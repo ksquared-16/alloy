@@ -98,6 +98,99 @@ describe("buildEnrollmentOperationalSurfaceFields", () => {
         expect(fields?.todaysWork[0]?.href).toContain("work_view=");
     });
 
+    it("per-view counts come from the operational projection (base rows + predicates), NOT lane summaries", () => {
+        const baseRows = [
+            { id: "lyons", status_key: "new_inquiry" },
+            { id: "b", status_key: "waitlist" },
+            { id: "c", status_key: "enrolled" },
+        ];
+        const fields = buildEnrollmentOperationalSurfaceFields({
+            card: enrollmentCard(),
+            departmentMetadata: {
+                lifecycle_builder_v1: {
+                    version: 1,
+                    active_process_id: "proc-1",
+                    processes: [
+                        {
+                            id: "proc-1",
+                            key: "lead_management",
+                            name: "Enrollment",
+                            is_active: true,
+                            stages: [],
+                            work_views_v1: [
+                                // Predicate-only "All Leads" — no compat_queue_key; empty filter = include-all.
+                                { id: "all_leads", label: "All Leads", display_order: 1, filters_v1: [] },
+                                // Predicate view — no bound lane.
+                                {
+                                    id: "new_leads",
+                                    label: "New Leads",
+                                    display_order: 2,
+                                    filters_v1: [
+                                        { field_key: "opportunity_status", operator: "equals", value: "new_inquiry" },
+                                    ],
+                                },
+                            ],
+                        },
+                    ],
+                },
+            },
+            workUnits: [
+                {
+                    id: "wu-pipeline",
+                    department_id: "dept-1",
+                    key: "enrollment_pipeline",
+                    name: "Enrollment Pipeline",
+                    queue_definition: RAW_ENROLLMENT_PIPELINE_QUEUE_DEFINITION_V2,
+                },
+            ],
+            // Deliberately WRONG lane summaries — if these were used, All Leads would be 0 and New Leads 99.
+            queueSummaries: [
+                { id: "wu-pipeline", queues: [{ key: "new_leads", count: 99 }] },
+            ],
+            baseRows,
+        });
+
+        const byId = Object.fromEntries((fields?.todaysWork ?? []).map((w) => [w.id, w.count]));
+        // All Leads = all base rows (3) via empty-filter projection — NOT 0 from the absent lane summary.
+        expect(byId.all_leads).toBe(3);
+        // New Leads = predicate-filtered (1 new_inquiry) — NOT 99 from the lane summary.
+        expect(byId.new_leads).toBe(1);
+    });
+
+    it("falls back to lane summaries when base rows are not yet available", () => {
+        const fields = buildEnrollmentOperationalSurfaceFields({
+            card: enrollmentCard(),
+            departmentMetadata: {
+                lifecycle_builder_v1: {
+                    version: 1,
+                    active_process_id: "proc-1",
+                    processes: [
+                        {
+                            id: "proc-1",
+                            key: "lead_management",
+                            name: "Enrollment",
+                            is_active: true,
+                            stages: [],
+                            work_views_v1: enrollmentWorkViewsV1,
+                        },
+                    ],
+                },
+            },
+            workUnits: [
+                {
+                    id: "wu-pipeline",
+                    department_id: "dept-1",
+                    key: "enrollment_pipeline",
+                    name: "Enrollment Pipeline",
+                    queue_definition: RAW_ENROLLMENT_PIPELINE_QUEUE_DEFINITION_V2,
+                },
+            ],
+            queueSummaries: [{ id: "wu-pipeline", queues: [{ key: "tours", count: 2 }] }],
+            // no baseRows → lane-summary fallback (back-compat).
+        });
+        expect(fields?.todaysWork.find((w) => w.id === "tours")?.count).toBe(2);
+    });
+
     it("still builds surface when pipeline work unit is missing", () => {
         const fields = buildEnrollmentOperationalSurfaceFields({
             card: enrollmentCard(),

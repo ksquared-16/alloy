@@ -19,6 +19,7 @@ import { OipKpiIcon } from "@/components/admin/workspace/OipKpiIcon";
 import {
     formatTargetDisplayLabel,
     formatTargetFromKpi,
+    oipDisplayValueIsPresent,
     oipHealthPrimaryValue,
     oipKpiObjectStatusTextClass,
     oipKpiObjectValueClass,
@@ -109,7 +110,11 @@ export function OipKpiObjectCard({
     const displayValue =
         variant === "health" ? oipHealthPrimaryValue(status) : oipMetricDisplayValue(value);
     const showStatus = oipShouldShowStatusLine(status, variant);
-    const showNoDataHelper = variant === "health" && normalized === "unknown";
+    // Doctrine: never render a "No data" indicator beside a real value. Only show the No-data helper when
+    // there is genuinely no displayed value (e.g. analytics value present but health unknown → show the
+    // value, not "No data").
+    const showNoDataHelper =
+        variant === "health" && normalized === "unknown" && !oipDisplayValueIsPresent(displayValue);
     const interactive = Boolean(onClick);
     const preview = resolvedLayout === "preview";
     const isCommandLayout = resolvedLayout === "command";

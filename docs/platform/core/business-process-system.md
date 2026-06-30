@@ -135,6 +135,29 @@ opens its own work view, evaluates its own predicates, and shows its own count. 
   filters/relabels existing `queue_definition` lanes); converting it to render every configured Work View
   with its own predicate-derived count is the follow-up, tracked with the Stage roll-up modeling.
 
+### Operational Projection — one source of runtime truth
+
+Every operational surface must agree because they derive from **one projection**, not from independent
+queries. `computeOperationalProjection({ baseRows, workViews })`
+(`web/lib/lifecycle/operationalProjection.ts`) takes the work unit's **all-records base rows** (the
+`primary_total_queue`, e.g. `pipeline_total`) and each configured Work View's **V3 predicates**, and
+returns: `total` (process scope), per-view `count` (=== `rows.length`, via the **same**
+`filterQueueRowsByWorkViewFilters` evaluator as the rows), and single-record membership for the Focus
+Panel.
+
+- **One resolver for count and rows.** A Work View's count is the predicate-filtered count over the
+  all-records base — **never** a `queue_definition` lane-membership summary. So process card "records",
+  "All Leads", Work View counts, and queue rows agree (All Leads = total; each view's count = its rows).
+- **Analytics is not operational truth.** Window/aggregate metrics (e.g. "leads created in 30 days") are
+  analytics — they may differ in scope and must be labeled as such. A KPI tile **never** renders a value
+  beside a "No data" indicator (`oipDisplayValueIsPresent` guard).
+- **Focus Panel loads by id; membership is evaluated against the active view.** `resolveFocusPanelScope`
+  classifies a deep-linked record as in/out of the active Work View so the UI can offer "open in All
+  Leads" instead of silently showing a record the active queue counts as 0.
+- **Refresh recomputes the projection.** Membership-changing actions (Create Lead) dispatch the canonical
+  `dispatchOpportunityQueueUpdated` — re-running the projection updates card count, Work View counts, rows,
+  and Focus Panel scope from one event. See `docs/sprints/06_2026/operational_projection_convergence.md`.
+
 **Outcome picker:** My Tasks **Complete** flow resolves stage outcomes via `GET /api/admin/lifecycle-builder/stage-work-outcomes` — human confirms before side effects.
 
 **Actions on a stage** are configured invocations of *registered capabilities* (action

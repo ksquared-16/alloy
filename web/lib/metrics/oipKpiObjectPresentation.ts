@@ -52,6 +52,18 @@ export function oipMetricDisplayValue(value: string | null | undefined): string 
     return trimmed;
 }
 
+/**
+ * Whether a resolved display value is a real value (not the empty / em-dash / "no data" placeholder).
+ * Used to enforce the doctrine: a KPI tile must never render a value AND a "No data" indicator together.
+ */
+export function oipDisplayValueIsPresent(displayValue: string | null | undefined): boolean {
+    const trimmed = String(displayValue ?? "").trim();
+    if (!trimmed) return false;
+    if (trimmed === "—") return false;
+    if (trimmed.toLowerCase() === "no data") return false;
+    return true;
+}
+
 export function oipShouldShowStatusLine(
     status: OipHealthStatus | string | undefined | null,
     variant: "metric" | "health"

@@ -18,6 +18,10 @@ import {
 import type { LifecycleWorkUnitSummaryRow } from "@/lib/admin/resolveOperatorLifecycleLandingRollups";
 import type { WorkViewConfigV1Stored } from "@/lib/lifecycle/workViewsConfigV1";
 import { slugifyWorkViewId } from "@/lib/lifecycle/workViewsConfigV1";
+import {
+    computeOperationalProjection,
+    type OperationalProjectionRow,
+} from "@/lib/lifecycle/operationalProjection";
 import { resolveProcessWorkViews } from "@/lib/lifecycle/workViewsCompatibility";
 import { pickDeptPipelineWorkUnit } from "@/lib/workspace/pickDeptPipelineWorkUnit";
 import {
@@ -299,6 +303,9 @@ function buildWorkLinesFromConfiguredWorkViews(args: {
     departmentMetadata: unknown;
     workUnit: WorkUnitPick;
     queueSummaries?: readonly LifecycleWorkUnitSummaryRow[];
+    /** All-records base rows for the pipeline work unit — when present, per-view counts come from the
+     *  canonical operational projection (predicate-filtered), NOT lane summaries. */
+    baseRows?: ReadonlyArray<OperationalProjectionRow>;
 }): OperationalSurfaceWorkLineData[] {
     const operationalViews = args.workUnit.queueDefinition ?
         resolveOperationalViewsForWorkUnit({
@@ -313,6 +320,15 @@ function buildWorkLinesFromConfiguredWorkViews(args: {
         operationalViews,
         card: args.card,
     });
+
+    // Canonical operational projection — per-view counts from the all-records base rows + each view's
+    // predicates, via the SAME evaluator as the queue rows. Computed over the SAME `workViews` used for
+    // the work lines, so count keys align by id. Falls back to lane summaries only when base rows are
+    // unavailable (e.g. server first-paint before the client hydrates them).
+    const projection =
+        args.baseRows ?
+            computeOperationalProjection({ baseRows: args.baseRows, workViews, includeRows: false })
+        :   null;
 
     return workViews.map((view) => {
         const workViewId = view.id.trim();
@@ -331,10 +347,12 @@ function buildWorkLinesFromConfiguredWorkViews(args: {
             queueKey,
             entryHref: args.card.entryHref,
         });
+        const projectionCount = projection?.byViewId[workViewId]?.count;
         const count =
-            args.queueSummaries ?
+            projectionCount ??
+            (args.queueSummaries ?
                 queueCountFromSummaries(args.queueSummaries, args.workUnit.id, [queueKey])
-            :   null;
+            :   null);
 
         return {
             id: workViewId,
@@ -429,6 +447,7 @@ export function buildEnrollmentOperationalSurfaceFields(args: {
     departmentMetadata?: unknown;
     workUnits?: OperatorLifecycleWorkUnitRow[];
     queueSummaries?: readonly LifecycleWorkUnitSummaryRow[];
+    baseRows?: ReadonlyArray<OperationalProjectionRow>;
 }): EnrollmentOperationalSurfaceFields | null {
     if (!isEnrollmentLifecycleCard(args.card)) return null;
 
@@ -455,6 +474,7 @@ export function buildEnrollmentOperationalSurfaceFields(args: {
             departmentMetadata: args.departmentMetadata,
             workUnit,
             queueSummaries: args.queueSummaries,
+            baseRows: args.baseRows,
         }),
     };
 }
@@ -497,6 +517,8 @@ export function enrichEnrollmentOperationalSurfaceForDepartment(args: {
     departmentMetadata: unknown;
     workUnits: OperatorLifecycleWorkUnitRow[];
     queueSummaries?: readonly LifecycleWorkUnitSummaryRow[];
+    /** All-records base rows for the department's pipeline work unit (canonical projection source). */
+    baseRows?: ReadonlyArray<OperationalProjectionRow>;
 }): OperatorLifecycleLandingCard[] {
     return args.cards.map((card) => {
         if (card.departmentId !== args.departmentId) return card;
@@ -506,6 +528,7 @@ export function enrichEnrollmentOperationalSurfaceForDepartment(args: {
             departmentMetadata: args.departmentMetadata,
             workUnits: args.workUnits,
             queueSummaries: args.queueSummaries,
+            baseRows: args.baseRows,
         });
         return applyEnrollmentOperationalSurfaceFields(card, fields);
     });

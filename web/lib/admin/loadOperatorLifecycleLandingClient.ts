@@ -16,6 +16,45 @@ import {
 } from "@/lib/admin/enrollmentOperationalSurfaceLanding";
 import { workspaceDataFetchInit } from "@/lib/workspace/workspaceDataFetch";
 import { dedupeAdminFetchWithTtl, LIFECYCLE_SIBLING_FETCH_TTL_MS } from "@/lib/workspace/workspaceAdminFetchDedupe";
+import { pickDeptPipelineWorkUnit } from "@/lib/workspace/pickDeptPipelineWorkUnit";
+import { tryLoadWorkUnitQueueDefinitionBundle } from "@/lib/config/queueDefinitionV2Runtime";
+import { getQueueUiConfig } from "@/lib/ui-v2/queueUiConfig";
+import { findAllRecordsQueueKey } from "@/lib/workspace/workUnitQueueDerived";
+import type { OperationalProjectionRow } from "@/lib/lifecycle/operationalProjection";
+
+/** Cap on all-records base rows fetched for the operational projection (per department pipeline). */
+const PROJECTION_BASE_ROWS_LIMIT = 500;
+
+/**
+ * Fetch the all-records base rows (`pipeline_total`) for a department's enrollment pipeline work unit.
+ * These feed the canonical operational projection so per-Work-View counts are predicate-filtered (and
+ * agree with the queue rows), instead of lane-membership summaries that drop predicate-only views.
+ */
+async function fetchPipelineBaseRowsForDepartment(
+    departmentId: string,
+    workUnits: OperatorLifecycleWorkUnitRow[],
+    init: RequestInit,
+): Promise<OperationalProjectionRow[] | null> {
+    const forDept = workUnits.filter((w) => (w as { department_id?: string }).department_id === departmentId);
+    const pipelineWu = pickDeptPipelineWorkUnit(forDept, departmentId);
+    if (!pipelineWu) return null;
+    const bundle = tryLoadWorkUnitQueueDefinitionBundle(pipelineWu.queue_definition);
+    if (!bundle) return null;
+    const allRecordsKey = findAllRecordsQueueKey(bundle.def, getQueueUiConfig(bundle.def));
+    if (!allRecordsKey) return null;
+    try {
+        const res = await dedupeAdminFetchWithTtl(
+            `/api/admin/queues/${encodeURIComponent(pipelineWu.id)}/${encodeURIComponent(allRecordsKey)}?limit=${PROJECTION_BASE_ROWS_LIMIT}&offset=0&omit_total_count=true&count_mode=planned`,
+            init,
+            LIFECYCLE_SIBLING_FETCH_TTL_MS,
+        );
+        if (!res.ok) return null;
+        const json = (await res.json()) as { items?: OperationalProjectionRow[] };
+        return Array.isArray(json.items) ? json.items : null;
+    } catch {
+        return null;
+    }
+}
 
 type LifecycleCatalogResponse = { items?: LifecycleCatalogEntry[]; error?: string };
 type WorkUnitsResponse = { items?: OperatorLifecycleWorkUnitRow[]; error?: string };
@@ -48,13 +87,18 @@ async function fetchLifecycleRollupsForCards(
 
     const summariesByDept = await Promise.all(
         departmentIds.map(async (departmentId) => {
-            const res = await dedupeAdminFetchWithTtl(
-                `/api/admin/departments/${encodeURIComponent(departmentId)}/work-unit-queue-summaries?include_previews=false&count_mode=exact&summary_mode=priority&priority_budget=5`,
-                init,
-                LIFECYCLE_SIBLING_FETCH_TTL_MS,
-            );
+            // Summaries (lane rollups) and the all-records base rows (operational projection) in parallel —
+            // one extra base-rows fetch per department, not a duplicate of any existing fetch.
+            const [res, baseRows] = await Promise.all([
+                dedupeAdminFetchWithTtl(
+                    `/api/admin/departments/${encodeURIComponent(departmentId)}/work-unit-queue-summaries?include_previews=false&count_mode=exact&summary_mode=priority&priority_budget=5`,
+                    init,
+                    LIFECYCLE_SIBLING_FETCH_TTL_MS,
+                ),
+                fetchPipelineBaseRowsForDepartment(departmentId, workUnits, init),
+            ]);
             const json = (res.ok ? await res.json() : {}) as LifecycleDepartmentSummariesResponse;
-            return { departmentId, summaries: json.work_units ?? [] };
+            return { departmentId, summaries: json.work_units ?? [], baseRows };
         }),
     );
 
@@ -82,6 +126,8 @@ async function fetchLifecycleRollupsForCards(
             departmentMetadata: departmentsById.get(departmentId)?.metadata,
             workUnits,
             queueSummaries: deptSummaries?.summaries ?? [],
+            // Canonical projection source: per-view counts come from these base rows + view predicates.
+            baseRows: deptSummaries?.baseRows ?? undefined,
         });
     }
 
