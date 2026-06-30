@@ -79,8 +79,23 @@ describe("Children card — Universal Card Lifecycle wiring", () => {
         const src = readSrc("components/admin/focusPanel/cards/ChildrenCard.tsx");
         expect(src).toContain("cardCapabilities(\"children\")");
         expect(src).toContain("CAPS.supportsInlineEdit"); // edit trigger gated on capability
-        expect(src).toContain("CAPS.supportsExpanded"); // history/expand gated on capability
-        expect(src).toContain('data-children-action="expand-history"');
+        expect(src).toContain("CAPS.supportsExpanded"); // expand gated on capability
+        expect(src).toContain('data-children-action="expand-evidence"'); // Expanded = more evidence
+        expect(src).toContain("cardRelatedViews(\"children\")"); // Related Views drill-downs
+        expect(src).toContain("data-related-view"); // related-report links
+    });
+
+    it("Expanded shows additional evidence groups (not history); history is a Related View", () => {
+        const src = readSrc("components/admin/focusPanel/cards/ChildrenCard.tsx");
+        // Expanded renders configured evidence groups for the child.
+        expect(src).toContain("ChildExpandedEvidence");
+        expect(src).toContain('<EvidenceGroup title="Placement">');
+        expect(src).toContain('<EvidenceGroup title="Medical">');
+        expect(src).toContain('<EvidenceGroup title="Documents">');
+        // History lives in a Related View report, not in Expanded.
+        expect(src).toContain("ChildRelatedReport");
+        expect(src).toContain("data-children-related-report");
+        expect(src).toContain("placement_history");
     });
 
     it("Child inline edit is a READ-ONLY PREVIEW — never fakes persistence", () => {

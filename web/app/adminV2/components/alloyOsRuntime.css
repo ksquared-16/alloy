@@ -3289,6 +3289,25 @@ html[data-alloy-os-runtime-split="true"]
 .alloy-os-child-report__row:first-child { border-top: 0; }
 .alloy-os-child-report__row--head { background: color-mix(in srgb, var(--alloy-os-border, #e5e7eb) 28%, #fff); font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: var(--alloy-os-text-tertiary, #9ca3af); }
 .alloy-os-child-report__empty { padding: 12px 10px; font-size: 12px; color: var(--alloy-os-text-tertiary, #9ca3af); font-style: italic; }
+.alloy-os-child-report__foot { margin-top: 8px; font-size: 11px; color: var(--alloy-os-text-tertiary, #9ca3af); }
+
+/* ── Child Expanded: additional configured evidence groups ── */
+.alloy-os-child-expanded { display: flex; flex-direction: column; gap: 12px; }
+.alloy-os-child-egroup { display: flex; flex-direction: column; gap: 2px; }
+.alloy-os-child-egroup__title { font-size: 10.5px; font-weight: 700; color: var(--alloy-os-text-secondary, #4b5563); text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 3px; }
+.alloy-os-child-egroup__empty { font-size: 12px; color: var(--alloy-os-text-tertiary, #9ca3af); font-style: italic; padding: 2px 0; }
+.alloy-os-child-readiness { display: flex; flex-direction: column; gap: 3px; }
+.alloy-os-child-readiness__row { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--alloy-os-text-secondary, #4b5563); }
+.alloy-os-child-readiness__row svg { color: var(--alloy-os-text-tertiary, #9ca3af); }
+.alloy-os-child-readiness__row--ok svg { color: var(--alloy-os-accent, #2f6f4f); }
+.alloy-os-child-readiness__state { margin-left: auto; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; color: var(--alloy-os-text-tertiary, #9ca3af); }
+.alloy-os-child-readiness__row--ok .alloy-os-child-readiness__state { color: var(--alloy-os-accent, #2f6f4f); }
+
+/* ── Child Related Views (report drill-downs) ── */
+.alloy-os-child-related { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-top: 12px; padding-top: 10px; border-top: 1px solid color-mix(in srgb, var(--alloy-os-border, #e5e7eb) 60%, transparent); }
+.alloy-os-child-related__label { font-size: 10px; font-weight: 700; color: var(--alloy-os-text-tertiary, #9ca3af); text-transform: uppercase; letter-spacing: 0.04em; }
+.alloy-os-child-related__links { display: inline-flex; flex-wrap: wrap; gap: 10px; }
+.alloy-os-child-related__link { border: 0; background: transparent; cursor: pointer; padding: 0; font-size: 12px; font-weight: 600; color: var(--alloy-os-accent, #2f6f4f); }
 
 /* ── Household Summary: primary-contact row with badge ── */
 .alloy-os-household__primary-row { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }

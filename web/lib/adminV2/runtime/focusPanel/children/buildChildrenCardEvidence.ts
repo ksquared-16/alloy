@@ -33,6 +33,8 @@ export type ChildrenEvidenceChild = {
     program: string | null;
     room: string | null;
     schedule: string | null;
+    /** Placement evidence — assigned teacher (no source yet → null → "Not set"). */
+    teacher: string | null;
     startDate: string | null;
     status: string | null;
     statusTone: ChildStatusTone;
@@ -124,6 +126,7 @@ export function buildChildrenCardEvidence(context: OperationalContext): Children
         const program = trimOrNull(row.desired_program_label);
         const room = trimOrNull(row.program_room_cohort_label) ?? trimOrNull(row.location_label);
         const schedule = trimOrNull(row.desired_schedule_label);
+        const teacher = trimOrNull((row as { teacher_label?: unknown }).teacher_label);
         const startDate = trimOrNull(row.desired_start_date);
         const statusLabel = trimOrNull(row.outcome_status_label);
         const statusKey = trimOrNull(row.outcome_status_key);
@@ -166,6 +169,7 @@ export function buildChildrenCardEvidence(context: OperationalContext): Children
             program,
             room,
             schedule,
+            teacher,
             startDate,
             // Prefer the projection's resolved label; if absent, humanize the key rather than
             // showing a raw status key or UUID-like id as operator copy.
