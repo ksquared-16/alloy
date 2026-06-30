@@ -20,6 +20,7 @@ const SIGNALS: OperationalContextSignals = {
     work: { primary: null, items: [], openCount: 0, overdueCount: 0, nextActionLabel: null },
     attention: { needsAttention: false, primaryReason: null, reasonCount: 0 },
     tour: { scheduled: false, startAt: null, statusLabel: null },
+            communications: { scheduledSendCount: 0, nextFollowUpAt: null, hasOutreach: false },
 };
 
 const CONTEXT: OperationalContext = {
