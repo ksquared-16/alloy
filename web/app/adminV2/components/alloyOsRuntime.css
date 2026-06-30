@@ -3150,12 +3150,26 @@ html[data-alloy-os-runtime-split="true"]
   display: flex;
   align-items: flex-start;
   gap: var(--alloy-os-fp-gap-x);
+  width: 100%;
 }
 .alloy-os-fp-lane {
   display: flex;
   flex-direction: column;
   gap: var(--alloy-os-fp-gap-y);
   min-width: 0;
+}
+/* The composed/published canvas always fills its host box — even if a parent ever
+ * resolves to a CSS grid, span all tracks so the lanes get the full content width
+ * (never pinned to one 1fr track, which would strand the other half as dead space). */
+.alloy-os-fp-canvas {
+  width: 100%;
+  grid-column: 1 / -1;
+}
+/* Cards stretch to their lane width regardless of the outer grid/composed selector
+ * chain — a lane cell and its card always fill the lane (no shrink-to-content). */
+.alloy-os-fp-lane > .alloy-os-focus-panel-grid__cell,
+.alloy-os-fp-lane > .alloy-os-focus-panel-grid__cell > * {
+  width: 100%;
 }
 
 /* STACK: anchors take the full row; support cards pair beneath them at half
