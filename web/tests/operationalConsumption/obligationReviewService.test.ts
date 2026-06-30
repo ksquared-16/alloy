@@ -139,6 +139,21 @@ describe("obligation review — actions (review-only, no posting)", () => {
         expect(store.charges).toHaveLength(chargesBefore);
         expect(store.charges.every((c) => (c as { status: string }).status !== "posted")).toBe(true);
     });
+
+    it("records reviewer audit metadata (reviewed_by + reviewed_at) on mark_reviewed", async () => {
+        const { store, supabase } = setup();
+        await seedLatePickup(supabase);
+        const id = (store.resolved_obligations[0] as { id: string }).id;
+        const reviewed = await reviewObligation(supabase, ORG_ID, id, "mark_reviewed", TODAY, { actorUserId: "auditor-7" });
+        // returned detail carries the actor + timestamp …
+        expect(reviewed.reviewedBy).toBe("auditor-7");
+        expect(reviewed.reviewedAt).toBeTruthy();
+        // … and the audit metadata is actually persisted on the row.
+        const row = store.resolved_obligations[0] as { reviewed_by: string | null; reviewed_at: string | null; review_status: string };
+        expect(row.reviewed_by).toBe("auditor-7");
+        expect(row.reviewed_at).toBeTruthy();
+        expect(row.review_status).toBe("reviewed");
+    });
 });
 
 describe("obligation review — recompute (preview replays the pipeline, no charge writes)", () => {
