@@ -90,10 +90,10 @@ export const WORKSPACE_HEADER_TEMPLATE = headerDoc([
 ]);
 
 export const WORK_UNIT_HEADER_TEMPLATE = headerDoc([
-    { instanceId: "wu-queue", contentId: "ops.needs_attention_count" },
-    { instanceId: "wu-attn", contentId: "ops.readiness_gap_count" },
-    { instanceId: "wu-sla", contentId: "comms.reply_rate" },
+    { instanceId: "wu-attn", contentId: "ops.needs_attention_count" },
     { instanceId: "wu-overdue", contentId: "ops.work_overdue_count" },
+    { instanceId: "wu-tour", contentId: "enrollment.tour_conversion_rate" },
+    { instanceId: "wu-forms", contentId: "forms.completion_rate" },
 ]);
 
 function headerDefinition(opts: {

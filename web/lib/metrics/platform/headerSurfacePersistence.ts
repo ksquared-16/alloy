@@ -10,6 +10,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { resolvePlacementsForSurface } from "@/lib/metrics/platform/placementResolver";
 import { resolveDefinitionId, ensureVisualizationId } from "@/lib/metrics/platform/surfacePlacementHelpers";
+import { getMetricSourceAdapter } from "@/lib/metrics/platform/metricSourceRegistry";
 import { cardTypeToVizType, vizTypeToCardType } from "@/lib/metrics/platform/operationalIntelligenceSurfaceMapping";
 import type { MetricSurface, MetricVisualizationType } from "@/lib/metrics/platform/types";
 import type { SurfaceDoc } from "@/lib/platform/surfaceBuilder/surfaceDefinition";
@@ -141,6 +142,49 @@ export function headerContextConfig(d: { size?: string; accent?: string; showHea
 
 /* ---- server load/save ---- */
 
+/**
+ * Get the active oip_adapter definition for a source key, creating an org-scoped one on
+ * demand when no active global definition exists (e.g. ops.work_overdue_count before the
+ * 20260707 migration runs, or enrollment.lead_count which was draft in the original seeds).
+ * Only creates for source keys registered as "available" in the adapter registry.
+ */
+async function ensureDefinitionId(supabase: SupabaseClient, orgId: string, sourceKey: string): Promise<string | null> {
+    const existing = await resolveDefinitionId(supabase, orgId, sourceKey);
+    if (existing) return existing;
+
+    // Not in DB — only auto-create for source keys the adapter registry considers available.
+    const adapter = getMetricSourceAdapter(sourceKey);
+    if (!adapter || adapter.status !== "available") return null;
+
+    const { data, error } = await supabase
+        .from("metric_definitions")
+        .insert({
+            org_id: orgId,
+            key: sourceKey.replace(".", "_"),
+            label: adapter.label,
+            description: `${adapter.label} — auto-created for header surface`,
+            category: sourceKey.split(".")[0] ?? "ops",
+            entity_scope: "org",
+            source_type: "oip_adapter",
+            source_key: sourceKey,
+            aggregation: adapter.supportedAggregations[0] ?? "count",
+            filter_config: {},
+            dimension_config: {},
+            unit: "count",
+            precision: 0,
+            is_kpi: true,
+            status: "active",
+            version: 1,
+        })
+        .select("id")
+        .single();
+    if (error) {
+        console.warn(`[HeaderSurface] auto-create definition failed for ${sourceKey}:`, error.message);
+        return null;
+    }
+    return data?.id ?? null;
+}
+
 async function loadViews(supabase: SupabaseClient, orgId: string, surface: HeaderSurface): Promise<HeaderPlacementView[]> {
     const resolved = await resolvePlacementsForSurface({ supabase, orgId, surface: surface as MetricSurface });
     return resolved
@@ -172,8 +216,11 @@ export async function saveHeaderSurfaceDoc(supabase: SupabaseClient, orgId: stri
     const prefix = KEY_PREFIX[surface];
 
     for (const c of plan.creates) {
-        const definitionId = await resolveDefinitionId(supabase, orgId, c.sourceKey);
-        if (!definitionId) continue;
+        const definitionId = await ensureDefinitionId(supabase, orgId, c.sourceKey);
+        if (!definitionId) {
+            console.warn(`[HeaderSurface] skipping create for unknown source key: ${c.sourceKey}`);
+            continue;
+        }
         const vizId = await ensureVisualizationId(supabase, orgId, prefix, definitionId, c.sourceKey, c.vizType, labelBySource.get(c.sourceKey) ?? c.sourceKey);
         if (!vizId) continue;
         await supabase.from("metric_placements").insert({
@@ -191,8 +238,11 @@ export async function saveHeaderSurfaceDoc(supabase: SupabaseClient, orgId: stri
     }
 
     for (const u of plan.updates) {
-        const definitionId = await resolveDefinitionId(supabase, orgId, u.sourceKey);
-        if (!definitionId) continue;
+        const definitionId = await ensureDefinitionId(supabase, orgId, u.sourceKey);
+        if (!definitionId) {
+            console.warn(`[HeaderSurface] skipping update for unknown source key: ${u.sourceKey}`);
+            continue;
+        }
         const vizId = await ensureVisualizationId(supabase, orgId, prefix, definitionId, u.sourceKey, u.vizType, labelBySource.get(u.sourceKey) ?? u.sourceKey);
         if (!vizId) continue;
         await supabase
