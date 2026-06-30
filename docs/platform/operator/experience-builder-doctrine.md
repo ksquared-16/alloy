@@ -22,23 +22,37 @@ No new operator-facing product behavior should be added to **drawer overview**, 
 
 ---
 
-## Composition V2 — row-based Focus Panel authoring (June 2026)
+## Experience Builder V2 — visual composition + operational card definition (June 2026)
 
-The Focus Panel Surfaces editor composes the panel **visually with rows and columns**,
-not abstract tokens. Pipeline:
+The Focus Panel Surfaces editor composes the panel **visually with rows and columns**
+and authors each card as **operational meaning**, not abstract tokens or a field list.
+
+**Surface composition pipeline:**
 
 ```
-Surface → Rows → Cards → Evidence Groups → Perspectives → Conditions → Actions → Published Runtime
+Surface → Rows → Columns → Cards → Published Runtime
+```
+
+**Card definition pipeline (per card):**
+
+```
+Card → Question → Evidence Groups → Evidence → Presentation → Expansion → Actions → Conditions → AI → Ownership → Published Runtime
 ```
 
 - **Published layout is the source of truth.** The runtime renders the published rows/
-  widths exactly (responsive single-column collapse only). **Weight / partner / preferred
-  shape are recommendation defaults only** — the auto Composition Engine is the starting
-  point when nothing is published; it never overrides a published layout.
-- Width uses plain fractions (**Full / 1/2 / 1/3 / 2/3**); cards stack within a column;
-  the builder preview **is** the runtime grid. The layout persists on the Summary
-  `LayoutDoc` metadata (`focusPanelLayout`) via the existing draft/publish flow.
-- Full canonical state (incl. card editing + depth history + mutation model):
+  widths exactly (responsive single-column collapse only) and **never overrides an
+  intentional published layout**. **Weight / partner / preferred shape are recommendation
+  defaults only** — auto-composition exists only when nothing is published.
+- Cards are sized by **intent** (**Quarter / Third / Half / Two Thirds / Full / Fill**),
+  not grid fractions; the runtime computes exact spacing and **Fill** removes dead
+  whitespace. Rows add / remove / reorder; cards stack and drag between rows. The builder
+  preview **is** the runtime grid. Layout persists on the Summary `LayoutDoc` metadata
+  (`focusPanelLayout`) via the existing draft/publish flow.
+- **Fields live inside Evidence Groups**; **every concept has one owning card** (editable
+  only on its owner). The Inspector is organized by operational section (Question /
+  Evidence / Presentation / Behavior / Editing / Expansion / Conditions / Actions / AI).
+- Full canonical state (card definition, evidence groups, ownership, expansion +
+  workspace doctrine, mutation model, depth history):
   [`focus-panel-composition-v2-and-editing.md`](./focus-panel-composition-v2-and-editing.md).
 
 ---
