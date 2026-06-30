@@ -42,7 +42,7 @@ export function MetricTrendCard({
     status = "unknown",
     loading = false,
     sparklinePoints,
-    accent = "enrollment",
+    accent = "neutral",
     fill,
     direction,
     question,
@@ -55,7 +55,7 @@ export function MetricTrendCard({
         computedDirection === "up" ? "text-alloy-juniper"
         : computedDirection === "down" ? "text-alloy-ember"
         : "text-alloy-midnight/40";
-    const valueSize = density === "compact" ? "text-xl" : "text-2xl";
+    const valueSize = density === "compact" ? "text-[22px] leading-none tracking-tight" : "text-2xl";
 
     return (
         <MetricCardShell
@@ -70,7 +70,7 @@ export function MetricTrendCard({
             footer={footer}
         >
             <div className="flex items-baseline gap-1.5">
-                <p className={`truncate font-semibold tabular-nums text-alloy-midnight ${valueSize}`}>
+                <p className={`truncate tabular-nums text-alloy-midnight ${density === "compact" ? "font-bold" : "font-semibold"} ${valueSize}`}>
                     {loading ? "…" : value}
                 </p>
                 {!loading && sparklinePoints?.length ? (

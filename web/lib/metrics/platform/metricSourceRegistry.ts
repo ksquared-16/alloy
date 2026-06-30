@@ -156,6 +156,18 @@ export function humanizeSourceKey(sourceKey: string): string {
  *  4. Adapter registry label
  *  5. humanizeSourceKey as final safe fallback
  */
+/**
+ * Derive a safe accent key from a metric's health state when no explicit accent is configured.
+ * Maps health states to the closest semantic accent: healthy→green, warning→amber, critical→red.
+ * Falls back to "neutral" for unknown/no-data states so tiles don't appear falsely healthy.
+ */
+export function resolveAccentFromHealth(healthState: string | undefined): string {
+    if (healthState === "healthy") return "enrollment";
+    if (healthState === "warning") return "amber";
+    if (healthState === "critical") return "critical";
+    return "neutral";
+}
+
 export function resolveMetricDisplayLabel(
     vizLabel: string,
     defLabel: string,

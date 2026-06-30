@@ -5,7 +5,7 @@ import type {
     MetricVisualizationType,
     ResolvedMetricPlacement,
 } from "@/lib/metrics/platform/types";
-import { resolveMetricDisplayLabel } from "@/lib/metrics/platform/metricSourceRegistry";
+import { resolveAccentFromHealth, resolveMetricDisplayLabel } from "@/lib/metrics/platform/metricSourceRegistry";
 import { MetricComparisonCard } from "@/components/admin/metrics/MetricComparisonCard";
 import { MetricKpiCard } from "@/components/admin/metrics/MetricKpiCard";
 import { MetricTrendCard } from "@/components/admin/metrics/MetricTrendCard";
@@ -72,7 +72,10 @@ export function MetricVisualRenderer({
     // context_config carries surface-level overrides written by the header builder
     // (accent, showHealthChip). These take precedence over visualization-level style_config.
     const ctx = (placement.context_config ?? {}) as Record<string, unknown>;
-    const accent = (typeof ctx.accent === "string" ? ctx.accent : null) ?? (viz.style_config as { accent?: string }).accent;
+    // Accent priority: context_config.accent (builder-set) > style_config.accent (viz default) >
+    // health-state derivation (so unconfigured tiles reflect metric health, not false-green).
+    const rawAccent = (typeof ctx.accent === "string" ? ctx.accent : null) ?? (viz.style_config as { accent?: string }).accent ?? null;
+    const accent = rawAccent ?? resolveAccentFromHealth(evaluation?.healthState);
     const showHealthChip = typeof ctx.showHealthChip === "boolean" ? ctx.showHealthChip : undefined;
 
     switch (type) {

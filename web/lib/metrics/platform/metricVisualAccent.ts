@@ -47,8 +47,19 @@ export const METRIC_VISUAL_ACCENTS: MetricVisualAccent[] = [
 
 const NEUTRAL = METRIC_VISUAL_ACCENTS.find((a) => a.key === "neutral")!;
 
+// Maps builder accent option values to runtime MetricVisualAccentKey.
+// Builder writes: "juniper", "ember", "blue", "pine" — runtime METRIC_VISUAL_ACCENTS
+// uses semantic keys. This table bridges them so stored placements always resolve.
+const ACCENT_ALIAS: Partial<Record<string, MetricVisualAccentKey>> = {
+    juniper: "enrollment",
+    ember: "critical",
+    blue: "communications",
+    pine: "enrollment",
+    ops: "operational",
+};
+
 export function resolveMetricVisualAccent(accent: string | null | undefined): MetricVisualAccent {
-    const key = accent === "ops" ? "operational" : accent ?? "neutral";
+    const key = (ACCENT_ALIAS[accent ?? ""] ?? accent ?? "neutral") as MetricVisualAccentKey;
     return METRIC_VISUAL_ACCENTS.find((a) => a.key === key) ?? NEUTRAL;
 }
 

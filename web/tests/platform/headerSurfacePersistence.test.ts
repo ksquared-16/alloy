@@ -11,9 +11,11 @@ import {
 } from "@/lib/metrics/platform/headerSurfacePersistence";
 import {
     humanizeSourceKey,
+    resolveAccentFromHealth,
     resolveMetricDisplayLabel,
     getMetricSourceAdapter,
 } from "@/lib/metrics/platform/metricSourceRegistry";
+import { resolveMetricVisualAccent } from "@/lib/metrics/platform/metricVisualAccent";
 import { IMPLICIT_SECTION_ID } from "@/lib/platform/surfaceBuilder/surfaceBuilderModel";
 import type { SurfaceDoc } from "@/lib/platform/surfaceBuilder/surfaceDefinition";
 
@@ -168,6 +170,59 @@ describe("resolveMetricDisplayLabel — label fallback chain", () => {
         // in practice the DB stores lowercase; this assertion confirms non-empty string is returned
         expect(typeof result).toBe("string");
         expect(result.length).toBeGreaterThan(0);
+    });
+});
+
+describe("resolveAccentFromHealth", () => {
+    it("maps healthy → enrollment (green)", () => {
+        expect(resolveAccentFromHealth("healthy")).toBe("enrollment");
+    });
+
+    it("maps warning → amber", () => {
+        expect(resolveAccentFromHealth("warning")).toBe("amber");
+    });
+
+    it("maps critical → critical (red)", () => {
+        expect(resolveAccentFromHealth("critical")).toBe("critical");
+    });
+
+    it("maps unknown → neutral (no false-healthy green)", () => {
+        expect(resolveAccentFromHealth("unknown")).toBe("neutral");
+        expect(resolveAccentFromHealth(undefined)).toBe("neutral");
+    });
+});
+
+describe("resolveMetricVisualAccent — builder key aliases", () => {
+    it("resolves 'juniper' (builder green) to enrollment accent", () => {
+        const a = resolveMetricVisualAccent("juniper");
+        expect(a.key).toBe("enrollment");
+        expect(a.rail).toContain("alloy-juniper");
+    });
+
+    it("resolves 'ember' (builder red) to critical accent", () => {
+        const a = resolveMetricVisualAccent("ember");
+        expect(a.key).toBe("critical");
+        expect(a.rail).toContain("alloy-ember");
+    });
+
+    it("resolves 'blue' (builder blue) to communications accent", () => {
+        const a = resolveMetricVisualAccent("blue");
+        expect(a.key).toBe("communications");
+        expect(a.rail).toContain("alloy-blue");
+    });
+
+    it("resolves 'pine' to enrollment (closest green family)", () => {
+        expect(resolveMetricVisualAccent("pine").key).toBe("enrollment");
+    });
+
+    it("native keys still resolve directly", () => {
+        expect(resolveMetricVisualAccent("amber").key).toBe("amber");
+        expect(resolveMetricVisualAccent("neutral").key).toBe("neutral");
+        expect(resolveMetricVisualAccent("communications").key).toBe("communications");
+    });
+
+    it("unknown key falls back to neutral", () => {
+        expect(resolveMetricVisualAccent("nonexistent-key").key).toBe("neutral");
     });
 });
 
