@@ -8,13 +8,15 @@ const HUB_CARDS = [
         description:
             "Define what programs your centers offer — Infant, Toddler, Preschool, and more. Configure which programs are available at each location.",
         badge: "Organization & Location",
+        hint: "Set active programs and per-location availability.",
     },
     {
         href: "/admin/commercial/tuition",
         title: "Tuition",
         description:
-            "Set weekly and monthly tuition rates by program and schedule type. Configure org-wide defaults and override rates by location.",
+            "Set tuition rates by program and schedule type across all billing periods. Org defaults inherit to all sites — override per location as needed.",
         badge: "Tuition Grid",
+        hint: "Readiness score shown inside the grid.",
     },
 ] as const;
 
@@ -49,6 +51,7 @@ export default function CommercialHubShell() {
                         <p className="text-sm leading-relaxed text-alloy-midnight/60">
                             {card.description}
                         </p>
+                        <p className="text-xs text-alloy-midnight/40 italic">{card.hint}</p>
                         <div className="mt-auto flex items-center gap-1 text-xs font-medium text-alloy-pine/70 group-hover:text-alloy-pine">
                             Configure
                             <svg className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>

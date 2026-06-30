@@ -20,6 +20,7 @@ function mapRateRow(r: Record<string, unknown>): TuitionRateRow {
         rate_cents: Number(r.rate_cents ?? 0),
         billing_period: (r.billing_period as TuitionBillingPeriod) ?? "monthly",
         is_active: r.is_active !== false,
+        not_offered: r.not_offered === true,
         metadata:
             r.metadata != null && typeof r.metadata === "object" && !Array.isArray(r.metadata)
                 ? (r.metadata as Record<string, unknown>)
@@ -52,7 +53,7 @@ export async function GET(request: NextRequest) {
     let q = supabase
         .from("commercial_tuition_rates")
         .select(
-            "id, org_id, location_id, program_key, schedule_key, rate_cents, billing_period, is_active, metadata, created_at, updated_at"
+            "id, org_id, location_id, program_key, schedule_key, rate_cents, billing_period, is_active, not_offered, metadata, created_at, updated_at"
         )
         .eq("org_id", ctx.orgId)
         .order("program_key")
@@ -99,7 +100,8 @@ export async function POST(request: NextRequest) {
 
     const programKey = String(body.program_key ?? "").trim();
     const scheduleKey = String(body.schedule_key ?? "").trim();
-    const rateCents = body.rate_cents != null ? Number(body.rate_cents) : null;
+    const notOffered = body.not_offered === true;
+    const rateCents = notOffered ? 0 : (body.rate_cents != null ? Number(body.rate_cents) : null);
     const billingPeriod = String(body.billing_period ?? "monthly").trim() as TuitionBillingPeriod;
     const locationId = body.location_id != null ? String(body.location_id).trim() : null;
     const isActive = body.is_active !== false;
@@ -110,7 +112,7 @@ export async function POST(request: NextRequest) {
     if (!scheduleKey) {
         return NextResponse.json({ error: "schedule_key is required" }, { status: 400 });
     }
-    if (rateCents === null || !Number.isFinite(rateCents) || rateCents < 0) {
+    if (!notOffered && (rateCents === null || !Number.isFinite(rateCents) || rateCents < 0)) {
         return NextResponse.json({ error: "rate_cents must be a non-negative integer" }, { status: 400 });
     }
     if (!VALID_BILLING_PERIODS.has(billingPeriod)) {
@@ -155,7 +157,8 @@ export async function POST(request: NextRequest) {
         const res = await supabase
             .from("commercial_tuition_rates")
             .update({
-                rate_cents: Math.round(rateCents),
+                rate_cents: Math.round(rateCents ?? 0),
+                not_offered: notOffered,
                 is_active: isActive,
                 updated_at: new Date().toISOString(),
             })
@@ -175,7 +178,8 @@ export async function POST(request: NextRequest) {
                 location_id: locationId,
                 program_key: programKey,
                 schedule_key: scheduleKey,
-                rate_cents: Math.round(rateCents),
+                rate_cents: Math.round(rateCents ?? 0),
+                not_offered: notOffered,
                 billing_period: billingPeriod,
                 is_active: isActive,
                 updated_at: new Date().toISOString(),

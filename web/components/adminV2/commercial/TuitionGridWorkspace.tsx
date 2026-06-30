@@ -1,455 +1,686 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
-import Link from "next/link";
-import { SETTINGS_PAGE_SHELL_CLASS, SETTINGS_PAGE_INTRO_CLASS } from "@/lib/adminV2/settingsPageLayout";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { ConfigScopeSelector, type ScopedLocation } from "@/components/configRuntime/ConfigScopeSelector";
+import { ConfigReadinessCard } from "@/components/configRuntime/ConfigReadinessCard";
+import { OwnershipBadge } from "@/components/configRuntime/OwnershipBadge";
+import type { ConfigScope } from "@/lib/configRuntime/scope";
 import {
-    buildTuitionRateMap,
-    formatRateCents,
-    isLocationOverride,
-    parseDollarsToCents,
-    tuitionRateCellKey,
-    DEFAULT_BILLING_PERIOD,
     type TuitionRateRow,
     type TuitionBillingPeriod,
+    TUITION_BILLING_PERIODS,
+    DEFAULT_BILLING_PERIOD,
+    formatRateCents,
+    parseDollarsToCents,
+    tuitionRateCellKey,
+    buildTuitionRateMap,
+    buildLocationOnlyRateMap,
+    computeTuitionReadiness,
 } from "@/lib/commercial/tuitionRates";
-import type { LocationProgramCategoryRow } from "@/lib/locations/locationProgramCategories";
-import OwnershipBadge from "@/components/configRuntime/OwnershipBadge";
 
-type SiteRow = { id: string; label: string | null; location_type: string };
+// ─── Types ───────────────────────────────────────────────────────────────────
 
-type OptionValueRow = { value: string; label: string; sort_order: number };
+type ScheduleOption = { key: string; label: string };
+type ProgramOption = { key: string; label: string };
 
-/** Supported schedule types from childcare_schedule_type option set. */
-const FALLBACK_SCHEDULE_TYPES: OptionValueRow[] = [
-    { value: "full_time", label: "Full time", sort_order: 10 },
-    { value: "part_time", label: "Part time", sort_order: 20 },
-    { value: "drop_in", label: "Drop-in", sort_order: 30 },
-    { value: "before_school", label: "Before school", sort_order: 40 },
-    { value: "after_school", label: "After school", sort_order: 50 },
-];
+// ─── TuitionCell ─────────────────────────────────────────────────────────────
 
-type ScopeSelectorProps = {
-    sites: SiteRow[];
-    activeSiteId: string | null;
-    onSelect: (siteId: string | null) => void;
-};
-
-function ScopeSelector({ sites, activeSiteId, onSelect }: ScopeSelectorProps) {
-    return (
-        <div className="flex flex-wrap items-center gap-1.5">
-            <button
-                type="button"
-                onClick={() => onSelect(null)}
-                className={`rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors ${
-                    activeSiteId === null
-                        ? "border-alloy-midnight/20 bg-alloy-midnight/8 text-alloy-midnight"
-                        : "border-alloy-forge/12 bg-white text-alloy-midnight/55 hover:bg-alloy-stone/20"
-                }`}
-            >
-                Org default
-            </button>
-            {sites.map((site) => (
-                <button
-                    key={site.id}
-                    type="button"
-                    onClick={() => onSelect(site.id)}
-                    className={`rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors ${
-                        activeSiteId === site.id
-                            ? "border-alloy-pine/25 bg-alloy-pine/10 text-alloy-pine"
-                            : "border-alloy-forge/12 bg-white text-alloy-midnight/55 hover:bg-alloy-stone/20"
-                    }`}
-                >
-                    {(site.label ?? "Untitled site").trim() || "Untitled site"}
-                </button>
-            ))}
-        </div>
-    );
-}
-
-type TuitionCellProps = {
+type CellProps = {
+    programKey: string;
+    scheduleKey: string;
+    billingPeriod: TuitionBillingPeriod;
     rateRow: TuitionRateRow | undefined;
     orgDefaultRow: TuitionRateRow | undefined;
-    isLocationScope: boolean;
-    saving: boolean;
-    onSave: (rateCents: number) => Promise<void>;
-    onClear: () => Promise<void>;
+    locationId: string | null;
+    onSave: (
+        programKey: string,
+        scheduleKey: string,
+        payload: { rate_cents?: number; not_offered?: boolean },
+    ) => Promise<void>;
+    onClear: (rateId: string) => Promise<void>;
 };
 
-function TuitionCell({ rateRow, orgDefaultRow, isLocationScope, saving, onSave, onClear }: TuitionCellProps) {
+function TuitionCell({
+    programKey,
+    scheduleKey,
+    billingPeriod,
+    rateRow,
+    orgDefaultRow,
+    locationId,
+    onSave,
+    onClear,
+}: CellProps) {
     const [editing, setEditing] = useState(false);
     const [draft, setDraft] = useState("");
+    const [saving, setSaving] = useState(false);
+    const inputRef = useRef<HTMLInputElement>(null);
 
-    const isOverride = isLocationScope && rateRow != null && rateRow.location_id !== null;
-    const displayRow = rateRow ?? orgDefaultRow;
-    const displayCents = displayRow?.rate_cents;
+    const isLocationView = locationId !== null;
+    const isLocOverride = isLocationView && rateRow?.location_id === locationId;
+    const isInherited = isLocationView && rateRow?.location_id === null;
+    const isNotOffered = rateRow?.not_offered === true;
+    const displayRate = rateRow && !isNotOffered ? rateRow.rate_cents : null;
+    const inheritedRate = isInherited ? orgDefaultRow?.rate_cents : null;
 
-    const handleBlur = useCallback(async () => {
-        setEditing(false);
+    function startEdit() {
+        if (isNotOffered) return;
+        setDraft(displayRate != null ? String(displayRate / 100) : "");
+        setEditing(true);
+        setTimeout(() => inputRef.current?.select(), 0);
+    }
+
+    async function commitEdit() {
         const cents = parseDollarsToCents(draft);
-        if (cents === null) return;
-        if (cents === displayCents) return;
-        await onSave(cents);
-    }, [draft, displayCents, onSave]);
+        if (cents === null) { setEditing(false); return; }
+        setSaving(true);
+        await onSave(programKey, scheduleKey, { rate_cents: cents });
+        setSaving(false);
+        setEditing(false);
+    }
+
+    async function toggleNotOffered() {
+        setSaving(true);
+        await onSave(programKey, scheduleKey, { not_offered: !isNotOffered });
+        setSaving(false);
+    }
+
+    async function clearOverride() {
+        if (!rateRow?.id) return;
+        setSaving(true);
+        await onClear(rateRow.id);
+        setSaving(false);
+    }
 
     if (editing) {
         return (
-            <td className="border-b border-r border-alloy-forge/8 p-0 last:border-r-0">
+            <td className="px-3 py-1">
                 <input
-                    autoFocus
-                    type="text"
+                    ref={inputRef}
                     value={draft}
-                    disabled={saving}
                     onChange={(e) => setDraft(e.target.value)}
-                    onBlur={() => void handleBlur()}
+                    onBlur={commitEdit}
                     onKeyDown={(e) => {
-                        if (e.key === "Enter") e.currentTarget.blur();
-                        if (e.key === "Escape") {
-                            setEditing(false);
-                            setDraft("");
-                        }
+                        if (e.key === "Enter") void commitEdit();
+                        if (e.key === "Escape") setEditing(false);
                     }}
-                    className="w-full rounded-none border-0 bg-alloy-pine/5 px-3 py-2.5 text-right text-sm text-alloy-midnight outline-none ring-1 ring-inset ring-alloy-pine/40 focus:ring-alloy-pine/60"
+                    className="w-full border border-pine-400 rounded px-2 py-0.5 text-sm text-right focus:outline-none"
+                    placeholder="0.00"
+                    autoFocus
                 />
             </td>
         );
     }
 
     return (
-        <td className="group relative border-b border-r border-alloy-forge/8 last:border-r-0">
-            <button
-                type="button"
-                disabled={saving}
-                onClick={() => {
-                    setEditing(true);
-                    setDraft(
-                        displayCents != null
-                            ? (displayCents / 100).toFixed(0)
-                            : ""
-                    );
-                }}
-                className={`flex w-full items-center justify-end gap-1.5 px-3 py-2.5 text-right text-sm transition-colors hover:bg-alloy-pine/5 ${
-                    saving ? "opacity-50" : ""
-                } ${isOverride ? "font-medium text-alloy-pine" : "text-alloy-midnight/75"} ${
-                    !displayCents && !isOverride ? "text-alloy-midnight/25" : ""
-                }`}
-            >
-                {isOverride ? (
-                    <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-alloy-pine/60" title="Location override" />
-                ) : null}
-                {displayCents != null ? (
-                    formatRateCents(displayCents)
-                ) : (
-                    <span className="text-alloy-midnight/25">—</span>
-                )}
-            </button>
+        <td
+            className={[
+                "px-3 py-2 text-right text-sm group relative select-none",
+                isNotOffered ? "text-gray-300" : isInherited ? "text-gray-400 italic" : "text-gray-800",
+                saving ? "opacity-50" : "cursor-pointer hover:bg-gray-50",
+            ].join(" ")}
+            onClick={isNotOffered ? undefined : startEdit}
+            title={isInherited ? "Inherited from org default — click to override" : undefined}
+        >
+            {isNotOffered ? (
+                <span className="flex items-center justify-end gap-1">
+                    <span className="text-xs text-gray-300 line-through">N/A</span>
+                    <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); void toggleNotOffered(); }}
+                        className="text-gray-300 hover:text-gray-500 opacity-0 group-hover:opacity-100 transition-opacity text-xs"
+                        title="Mark as offered"
+                    >
+                        ↩
+                    </button>
+                </span>
+            ) : displayRate != null ? (
+                <span className="flex items-center justify-end gap-1">
+                    {isLocOverride && (
+                        <span className="w-1.5 h-1.5 rounded-full bg-pine-500 flex-shrink-0" />
+                    )}
+                    <span>{formatRateCents(displayRate)}</span>
+                    {isLocOverride && rateRow?.id && (
+                        <button
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); void clearOverride(); }}
+                            className="text-gray-300 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity ml-1 text-xs leading-none"
+                            title="Remove override — inherit org default"
+                        >
+                            ×
+                        </button>
+                    )}
+                </span>
+            ) : inheritedRate != null ? (
+                <span className="text-gray-300">{formatRateCents(inheritedRate)}</span>
+            ) : (
+                <span className="text-gray-200">—</span>
+            )}
 
-            {/* Clear override button — only shown for location overrides */}
-            {isOverride && (
+            {!isNotOffered && (
                 <button
                     type="button"
-                    disabled={saving}
-                    onClick={(e) => {
-                        e.stopPropagation();
-                        void onClear();
-                    }}
-                    title="Reset to org default"
-                    className="absolute right-1 top-1 hidden rounded p-0.5 text-alloy-midnight/30 hover:text-red-500 group-hover:block"
+                    onClick={(e) => { e.stopPropagation(); void toggleNotOffered(); }}
+                    className="absolute left-1 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity text-gray-300 hover:text-gray-500 text-xs"
+                    title="Mark as not offered"
                 >
-                    <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                    </svg>
+                    ⊘
                 </button>
             )}
         </td>
     );
 }
 
-export default function TuitionGridWorkspace() {
-    const [sites, setSites] = useState<SiteRow[]>([]);
-    const [programs, setPrograms] = useState<LocationProgramCategoryRow[]>([]);
-    const [scheduleTypes, setScheduleTypes] = useState<OptionValueRow[]>(FALLBACK_SCHEDULE_TYPES);
-    const [rates, setRates] = useState<TuitionRateRow[]>([]);
-    const [activeSiteId, setActiveSiteId] = useState<string | null>(null);
-    const [billingPeriod] = useState<TuitionBillingPeriod>(DEFAULT_BILLING_PERIOD);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState<string | null>(null);
-    const [savingCells, setSavingCells] = useState<Set<string>>(new Set());
+// ─── CompareCell ──────────────────────────────────────────────────────────────
 
-    // Unique programs across all sites (for grid rows) — deduplicated by key
-    const uniquePrograms = useMemo(() => {
-        const seen = new Map<string, LocationProgramCategoryRow>();
-        for (const p of programs) {
-            if (!seen.has(p.key) && p.is_active !== false) {
-                seen.set(p.key, p);
-            }
-        }
-        return Array.from(seen.values()).sort((a, b) => (a.sort_order ?? 100) - (b.sort_order ?? 100));
-    }, [programs]);
+type CompareCellProps = {
+    orgRow: TuitionRateRow | undefined;
+    locRow: TuitionRateRow | undefined;
+    locationLabel: string;
+};
 
-    useEffect(() => {
-        let cancelled = false;
-        (async () => {
-            setLoading(true);
-            try {
-                const [locRes, catRes, optRes, rateRes] = await Promise.all([
-                    fetch("/api/admin/locations", { credentials: "include" }),
-                    fetch("/api/admin/location-program-categories", { credentials: "include" }),
-                    fetch("/api/admin/option-sets/childcare_schedule_type", { credentials: "include" }),
-                    fetch("/api/admin/commercial/tuition-rates", { credentials: "include" }),
-                ]);
-                const locJson = (await locRes.json().catch(() => ({}))) as { locations?: SiteRow[] };
-                const catJson = (await catRes.json().catch(() => ({}))) as { categories?: LocationProgramCategoryRow[] };
-                const optJson = (await optRes.json().catch(() => ({}))) as { items?: OptionValueRow[] };
-                const rateJson = (await rateRes.json().catch(() => ({}))) as { rates?: TuitionRateRow[] };
+function CompareCell({ orgRow, locRow, locationLabel }: CompareCellProps) {
+    const orgVal = orgRow
+        ? orgRow.not_offered
+            ? "N/A"
+            : formatRateCents(orgRow.rate_cents)
+        : "—";
+    const locVal = locRow
+        ? locRow.not_offered
+            ? "N/A"
+            : formatRateCents(locRow.rate_cents)
+        : null;
 
-                if (!cancelled) {
-                    const siteList: SiteRow[] = (locJson.locations ?? []).filter(
-                        (l) => l.location_type === "site"
-                    );
-                    setSites(siteList);
-                    setPrograms(catJson.categories ?? []);
-                    if (optJson.items?.length) {
-                        setScheduleTypes(
-                            [...optJson.items].sort((a, b) => a.sort_order - b.sort_order)
-                        );
-                    }
-                    setRates(rateJson.rates ?? []);
-                }
-            } catch (e) {
-                if (!cancelled) setError((e as Error).message);
-            } finally {
-                if (!cancelled) setLoading(false);
-            }
-        })();
-        return () => { cancelled = true; };
-    }, []);
-
-    const rateMap = useMemo(
-        () => buildTuitionRateMap(rates, activeSiteId),
-        [rates, activeSiteId]
-    );
-
-    const orgDefaultMap = useMemo(
-        () => buildTuitionRateMap(rates, null),
-        [rates]
-    );
-
-    const handleSaveRate = useCallback(
-        async (programKey: string, scheduleKey: string, rateCents: number) => {
-            const cellKey = tuitionRateCellKey(programKey, scheduleKey, billingPeriod);
-            setSavingCells((s) => new Set(s).add(cellKey));
-            try {
-                const res = await fetch("/api/admin/commercial/tuition-rates", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    credentials: "include",
-                    body: JSON.stringify({
-                        program_key: programKey,
-                        schedule_key: scheduleKey,
-                        rate_cents: rateCents,
-                        billing_period: billingPeriod,
-                        location_id: activeSiteId,
-                    }),
-                });
-                const json = (await res.json().catch(() => ({}))) as {
-                    rate?: TuitionRateRow;
-                    error?: string;
-                };
-                if (!res.ok) throw new Error(json.error ?? `Failed (${res.status})`);
-                if (json.rate) {
-                    setRates((prev) => {
-                        const idx = prev.findIndex((r) => r.id === json.rate!.id);
-                        if (idx >= 0) {
-                            const next = [...prev];
-                            next[idx] = json.rate!;
-                            return next;
-                        }
-                        return [...prev, json.rate!];
-                    });
-                }
-            } catch (e) {
-                setError((e as Error).message);
-            } finally {
-                setSavingCells((s) => {
-                    const next = new Set(s);
-                    next.delete(cellKey);
-                    return next;
-                });
-            }
-        },
-        [activeSiteId, billingPeriod]
-    );
-
-    const handleClearOverride = useCallback(
-        async (programKey: string, scheduleKey: string) => {
-            const cellKey = tuitionRateCellKey(programKey, scheduleKey, billingPeriod);
-            const existing = rateMap.get(cellKey);
-            if (!existing || existing.location_id === null) return;
-
-            setSavingCells((s) => new Set(s).add(cellKey));
-            try {
-                const res = await fetch(`/api/admin/commercial/tuition-rates/${existing.id}`, {
-                    method: "DELETE",
-                    credentials: "include",
-                });
-                if (!res.ok) {
-                    const json = (await res.json().catch(() => ({}))) as { error?: string };
-                    throw new Error(json.error ?? "Delete failed");
-                }
-                setRates((prev) => prev.filter((r) => r.id !== existing.id));
-            } catch (e) {
-                setError((e as Error).message);
-            } finally {
-                setSavingCells((s) => {
-                    const next = new Set(s);
-                    next.delete(cellKey);
-                    return next;
-                });
-            }
-        },
-        [billingPeriod, rateMap]
-    );
-
-    const scopeIsLocation = activeSiteId !== null;
+    const isDifferent =
+        locRow != null &&
+        (locRow.not_offered !== (orgRow?.not_offered ?? false) ||
+            locRow.rate_cents !== (orgRow?.rate_cents ?? 0));
 
     return (
-        <div className={SETTINGS_PAGE_SHELL_CLASS}>
-            <header className="flex items-center gap-3">
-                <Link
-                    href="/admin/commercial"
-                    className="text-xs text-alloy-midnight/40 hover:text-alloy-midnight/70"
-                >
-                    Programs & Tuition
-                </Link>
-                <span className="text-alloy-midnight/25">/</span>
-                <h1 className="text-xl font-semibold tracking-tight text-alloy-midnight">Tuition</h1>
-            </header>
+        <td className="px-3 py-2 text-right text-sm">
+            <div className="flex flex-col items-end gap-0.5">
+                <span className={isDifferent ? "line-through text-gray-300 text-xs" : "text-gray-700"}>
+                    {orgVal}
+                </span>
+                {locRow && (
+                    <span className={isDifferent ? "text-pine-600 font-medium" : "text-gray-400 text-xs"}>
+                        {locVal ?? orgVal}
+                        {isDifferent && (
+                            <span className="ml-1 text-[10px] text-pine-400">({locationLabel})</span>
+                        )}
+                    </span>
+                )}
+            </div>
+        </td>
+    );
+}
 
-            <p className={SETTINGS_PAGE_INTRO_CLASS}>
-                Set tuition rates by program and schedule type. Org defaults apply to all locations
-                unless a location has its own override.{" "}
-                <span className="inline-flex items-center gap-1 text-alloy-pine/70">
-                    <span className="h-1.5 w-1.5 rounded-full bg-alloy-pine/60" />
-                    Green dot
-                </span>{" "}
-                indicates a location override.
-            </p>
+// ─── Fallback schedules ───────────────────────────────────────────────────────
 
-            {error ? (
-                <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-                    {error}{" "}
-                    <button onClick={() => setError(null)} className="ml-2 text-red-500 underline">
-                        Dismiss
+const FALLBACK_SCHEDULES: ScheduleOption[] = [
+    { key: "full_time", label: "Full Time" },
+    { key: "part_time", label: "Part Time" },
+    { key: "drop_in", label: "Drop-In" },
+    { key: "before_school", label: "Before School" },
+    { key: "after_school", label: "After School" },
+];
+
+// ─── Main workspace ───────────────────────────────────────────────────────────
+
+type WorkspaceMode = "edit" | "compare";
+
+export function TuitionGridWorkspace() {
+    const [orgId, setOrgId] = useState<string | null>(null);
+    const [locations, setLocations] = useState<ScopedLocation[]>([]);
+    const [scope, setScope] = useState<ConfigScope | null>(null);
+
+    const [programs, setPrograms] = useState<ProgramOption[]>([]);
+    const [schedules, setSchedules] = useState<ScheduleOption[]>(FALLBACK_SCHEDULES);
+
+    const [billingPeriod, setBillingPeriod] = useState<TuitionBillingPeriod>(DEFAULT_BILLING_PERIOD);
+    const [rates, setRates] = useState<TuitionRateRow[]>([]);
+    const [allRates, setAllRates] = useState<TuitionRateRow[]>([]);
+
+    const [mode, setMode] = useState<WorkspaceMode>("edit");
+    const [compareLocationId, setCompareLocationId] = useState<string | null>(null);
+
+    const [loading, setLoading] = useState(true);
+    const [saving, setSaving] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+    const [bulkCopying, setBulkCopying] = useState(false);
+
+    // ── Bootstrap ──────────────────────────────────────────────────────────────
+
+    useEffect(() => {
+        async function boot() {
+            setLoading(true);
+            try {
+                const [ctxRes, locRes, schedRes] = await Promise.all([
+                    fetch("/api/admin/context"),
+                    fetch("/api/admin/locations"),
+                    fetch("/api/admin/option-sets/childcare_schedule_type"),
+                ]);
+
+                const ctxJson = await ctxRes.json();
+                const oid: string = ctxJson.orgId ?? ctxJson.org_id ?? "";
+                setOrgId(oid);
+                setScope({ kind: "org", orgId: oid });
+
+                const locJson = await locRes.json();
+                const locs: ScopedLocation[] = (locJson.locations ?? []).map(
+                    (l: Record<string, unknown>) => ({
+                        id: String(l.id ?? ""),
+                        name: String(l.name ?? ""),
+                    }),
+                );
+                setLocations(locs);
+
+                if (schedRes.ok) {
+                    const schedJson = await schedRes.json();
+                    const items: ScheduleOption[] = (schedJson.items ?? []).map(
+                        (v: Record<string, unknown>) => ({
+                            key: String(v.value ?? v.key ?? ""),
+                            label: String(v.label ?? v.value ?? ""),
+                        }),
+                    );
+                    if (items.length > 0) setSchedules(items);
+                }
+            } catch (e) {
+                setError(String(e));
+            } finally {
+                setLoading(false);
+            }
+        }
+        void boot();
+    }, []);
+
+    // ── Programs ──────────────────────────────────────────────────────────────
+
+    useEffect(() => {
+        async function loadPrograms() {
+            try {
+                const res = await fetch("/api/admin/location-program-categories");
+                const json = await res.json();
+                const cats: ProgramOption[] = (json.categories ?? []).map(
+                    (c: Record<string, unknown>) => ({
+                        key: String(c.key ?? c.id ?? ""),
+                        label: String(c.label ?? c.name ?? ""),
+                    }),
+                );
+                setPrograms(cats);
+            } catch {
+                // silent — grid shows empty
+            }
+        }
+        void loadPrograms();
+    }, []);
+
+    // ── Rates ──────────────────────────────────────────────────────────────────
+
+    const loadRates = useCallback(async () => {
+        if (!scope) return;
+        setLoading(true);
+        try {
+            const locationId = scope.kind === "location" ? scope.locationId : null;
+            const params = new URLSearchParams({ billing_period: billingPeriod });
+            if (locationId) params.set("location_id", locationId);
+            const res = await fetch(`/api/admin/commercial/tuition-rates?${params}`);
+            const json = await res.json();
+            setRates(json.rates ?? []);
+
+            const allParams = new URLSearchParams();
+            if (locationId) allParams.set("location_id", locationId);
+            const allRes = await fetch(`/api/admin/commercial/tuition-rates?${allParams}`);
+            const allJson = await allRes.json();
+            setAllRates(allJson.rates ?? []);
+        } finally {
+            setLoading(false);
+        }
+    }, [scope, billingPeriod]);
+
+    useEffect(() => { void loadRates(); }, [loadRates]);
+
+    // ── Derived ────────────────────────────────────────────────────────────────
+
+    const locationId = scope?.kind === "location" ? scope.locationId : null;
+    const rateMap = buildTuitionRateMap(rates, locationId);
+    const orgOnlyMap = buildTuitionRateMap(rates, null);
+
+    const readiness = computeTuitionReadiness(
+        programs.map((p) => p.key),
+        schedules.map((s) => s.key),
+        billingPeriod,
+        allRates,
+    );
+
+    const scopeLabel =
+        scope?.kind === "org"
+            ? "Org Default"
+            : locations.find((l) => scope?.kind === "location" && l.id === scope.locationId)?.name ?? "Location";
+
+    // ── Save helpers ──────────────────────────────────────────────────────────
+
+    async function saveCell(
+        programKey: string,
+        scheduleKey: string,
+        payload: { rate_cents?: number; not_offered?: boolean },
+    ) {
+        setSaving(true);
+        try {
+            const body = {
+                program_key: programKey,
+                schedule_key: scheduleKey,
+                billing_period: billingPeriod,
+                location_id: locationId,
+                ...payload,
+            };
+            const res = await fetch("/api/admin/commercial/tuition-rates", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(body),
+            });
+            if (!res.ok) {
+                const j = await res.json();
+                setError((j as { error?: string }).error ?? "Save failed");
+            } else {
+                await loadRates();
+            }
+        } finally {
+            setSaving(false);
+        }
+    }
+
+    async function clearCell(rateId: string) {
+        setSaving(true);
+        try {
+            await fetch(`/api/admin/commercial/tuition-rates/${rateId}`, { method: "DELETE" });
+            await loadRates();
+        } finally {
+            setSaving(false);
+        }
+    }
+
+    // ── Bulk copy org → location ──────────────────────────────────────────────
+
+    async function bulkCopyOrgToLocation() {
+        if (!locationId) return;
+        setBulkCopying(true);
+        try {
+            const orgRates = allRates.filter((r) => r.location_id === null);
+            await Promise.all(
+                orgRates.map((r) =>
+                    fetch("/api/admin/commercial/tuition-rates", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                            program_key: r.program_key,
+                            schedule_key: r.schedule_key,
+                            billing_period: r.billing_period,
+                            location_id: locationId,
+                            rate_cents: r.rate_cents,
+                            not_offered: r.not_offered,
+                        }),
+                    }),
+                ),
+            );
+            await loadRates();
+        } finally {
+            setBulkCopying(false);
+        }
+    }
+
+    // ── Compare data ──────────────────────────────────────────────────────────
+
+    const compareLocMap = compareLocationId
+        ? buildLocationOnlyRateMap(allRates, compareLocationId)
+        : null;
+    const compareLocLabel =
+        locations.find((l) => l.id === compareLocationId)?.name ?? "Location";
+
+    // ─────────────────────────────────────────────────────────────────────────
+
+    if (!scope) {
+        return (
+            <div className="flex items-center justify-center h-64 text-gray-400 text-sm">
+                Loading…
+            </div>
+        );
+    }
+
+    return (
+        <div className="space-y-5">
+            {/* Header */}
+            <div className="flex items-start justify-between gap-4">
+                <div>
+                    <h1 className="text-xl font-semibold text-gray-900">Tuition Grid</h1>
+                    <p className="text-sm text-gray-500 mt-0.5">
+                        Program × schedule rates, by billing period. Org defaults inherit to all sites.
+                    </p>
+                </div>
+                <div className="flex rounded-md border border-gray-200 overflow-hidden text-sm flex-shrink-0">
+                    <button
+                        type="button"
+                        onClick={() => setMode("edit")}
+                        className={`px-4 py-1.5 ${mode === "edit" ? "bg-gray-900 text-white" : "bg-white text-gray-600 hover:bg-gray-50"}`}
+                    >
+                        Edit
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => setMode("compare")}
+                        className={`px-4 py-1.5 border-l border-gray-200 ${mode === "compare" ? "bg-gray-900 text-white" : "bg-white text-gray-600 hover:bg-gray-50"}`}
+                    >
+                        Compare Locations
                     </button>
                 </div>
-            ) : null}
+            </div>
 
-            {loading ? (
-                <p className="text-sm text-alloy-midnight/50">Loading tuition grid…</p>
-            ) : (
-                <div className="space-y-4">
-                    {/* Scope selector */}
-                    <div className="flex flex-wrap items-center justify-between gap-3">
-                        <ScopeSelector
-                            sites={sites}
-                            activeSiteId={activeSiteId}
-                            onSelect={setActiveSiteId}
-                        />
-                        <OwnershipBadge owner={scopeIsLocation ? "location" : "org"} />
+            {error && (
+                <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded px-3 py-2">
+                    {error}{" "}
+                    <button type="button" onClick={() => setError(null)} className="ml-2 underline">
+                        dismiss
+                    </button>
+                </div>
+            )}
+
+            {programs.length > 0 && (
+                <ConfigReadinessCard readiness={readiness} scopeLabel="Org Default" />
+            )}
+
+            {mode === "edit" && (
+                <>
+                    <ConfigScopeSelector
+                        scope={scope}
+                        locations={locations}
+                        onChange={setScope}
+                        loading={loading}
+                    />
+
+                    {/* Billing period tabs */}
+                    <div className="flex gap-0 border-b border-gray-200">
+                        {TUITION_BILLING_PERIODS.map((bp) => (
+                            <button
+                                key={bp.key}
+                                type="button"
+                                onClick={() => setBillingPeriod(bp.key)}
+                                className={[
+                                    "px-4 py-2 text-sm font-medium -mb-px border-b-2 transition-colors",
+                                    billingPeriod === bp.key
+                                        ? "border-pine-500 text-pine-700"
+                                        : "border-transparent text-gray-500 hover:text-gray-700",
+                                ].join(" ")}
+                            >
+                                {bp.label}
+                            </button>
+                        ))}
                     </div>
 
-                    {uniquePrograms.length === 0 ? (
-                        <div className="rounded-xl border border-dashed border-alloy-forge/20 bg-alloy-stone/10 px-5 py-8 text-center">
-                            <p className="text-sm text-alloy-midnight/50">
-                                No active programs found. Configure programs in{" "}
-                                <Link href="/admin/commercial/programs" className="text-alloy-pine underline">
-                                    Programs
-                                </Link>{" "}
-                                first.
-                            </p>
+                    {/* Bulk copy banner */}
+                    {locationId && (
+                        <div className="flex items-center justify-between bg-pine-50 border border-pine-200 rounded-lg px-4 py-2.5 text-sm">
+                            <span className="text-pine-700">
+                                Viewing <strong>{scopeLabel}</strong> — green dot = local override, italic = inherited.
+                            </span>
+                            <button
+                                type="button"
+                                onClick={() => void bulkCopyOrgToLocation()}
+                                disabled={bulkCopying || loading}
+                                className="ml-4 text-pine-700 font-medium underline hover:text-pine-900 disabled:opacity-50"
+                            >
+                                {bulkCopying ? "Copying…" : "Copy org defaults → this location"}
+                            </button>
+                        </div>
+                    )}
+
+                    {/* Grid */}
+                    <div className="overflow-x-auto rounded-lg border border-gray-200 bg-white">
+                        {programs.length === 0 ? (
+                            <div className="py-12 text-center text-sm text-gray-400">
+                                No programs configured.{" "}
+                                <a href="/admin/commercial/programs" className="text-pine-600 underline">
+                                    Set up programs first.
+                                </a>
+                            </div>
+                        ) : (
+                            <table className="w-full text-sm">
+                                <thead>
+                                    <tr className="border-b border-gray-100 bg-gray-50">
+                                        <th className="text-left px-4 py-2.5 font-medium text-gray-600 w-40">
+                                            Program
+                                        </th>
+                                        {schedules.map((s) => (
+                                            <th key={s.key} className="text-right px-3 py-2.5 font-medium text-gray-600 whitespace-nowrap">
+                                                {s.label}
+                                            </th>
+                                        ))}
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {programs.map((prog, pi) => (
+                                        <tr key={prog.key} className={pi % 2 === 0 ? "bg-white" : "bg-gray-50/40"}>
+                                            <td className="px-4 py-2 font-medium text-gray-700 whitespace-nowrap">
+                                                {prog.label}
+                                            </td>
+                                            {schedules.map((sched) => {
+                                                const cellKey = tuitionRateCellKey(prog.key, sched.key, billingPeriod);
+                                                return (
+                                                    <TuitionCell
+                                                        key={cellKey}
+                                                        programKey={prog.key}
+                                                        scheduleKey={sched.key}
+                                                        billingPeriod={billingPeriod}
+                                                        rateRow={rateMap.get(cellKey)}
+                                                        orgDefaultRow={orgOnlyMap.get(cellKey)}
+                                                        locationId={locationId}
+                                                        onSave={saveCell}
+                                                        onClear={clearCell}
+                                                    />
+                                                );
+                                            })}
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        )}
+                    </div>
+
+                    {/* Legend */}
+                    <div className="flex flex-wrap gap-5 text-xs text-gray-500 pt-1">
+                        {locationId && (
+                            <>
+                                <span className="flex items-center gap-1.5">
+                                    <span className="w-2 h-2 rounded-full bg-pine-500" />
+                                    Location override
+                                </span>
+                                <span className="italic">Italic = inherited from org</span>
+                            </>
+                        )}
+                        <span>
+                            <span className="text-gray-300 line-through">N/A</span> = not offered
+                        </span>
+                        <span className="text-gray-300">⊘ hover to mark not offered</span>
+                    </div>
+
+                    {locationId && (
+                        <div className="flex items-center gap-2">
+                            <span className="text-xs text-gray-500">Scope:</span>
+                            <OwnershipBadge owner="location" />
+                        </div>
+                    )}
+                </>
+            )}
+
+            {mode === "compare" && (
+                <div className="space-y-4">
+                    <div className="flex items-center gap-3 flex-wrap">
+                        <span className="text-sm text-gray-600">Compare org defaults vs:</span>
+                        <select
+                            value={compareLocationId ?? ""}
+                            onChange={(e) => setCompareLocationId(e.target.value || null)}
+                            className="border border-gray-200 rounded px-3 py-1.5 text-sm"
+                        >
+                            <option value="">— select a location —</option>
+                            {locations.map((l) => (
+                                <option key={l.id} value={l.id}>{l.name}</option>
+                            ))}
+                        </select>
+
+                        {/* Billing period also applies in compare */}
+                        <div className="flex gap-0 border border-gray-200 rounded overflow-hidden text-xs ml-auto">
+                            {TUITION_BILLING_PERIODS.map((bp) => (
+                                <button
+                                    key={bp.key}
+                                    type="button"
+                                    onClick={() => setBillingPeriod(bp.key)}
+                                    className={`px-3 py-1.5 ${billingPeriod === bp.key ? "bg-gray-800 text-white" : "bg-white text-gray-600 hover:bg-gray-50"}`}
+                                >
+                                    {bp.label}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+
+                    {compareLocationId && compareLocMap ? (
+                        <div className="overflow-x-auto rounded-lg border border-gray-200 bg-white">
+                            <table className="w-full text-sm">
+                                <thead>
+                                    <tr className="border-b border-gray-100 bg-gray-50">
+                                        <th className="text-left px-4 py-2.5 font-medium text-gray-600 w-40">
+                                            Program
+                                        </th>
+                                        {schedules.map((s) => (
+                                            <th key={s.key} className="text-right px-3 py-2.5 font-medium text-gray-600 whitespace-nowrap">
+                                                {s.label}
+                                            </th>
+                                        ))}
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {programs.map((prog, pi) => (
+                                        <tr key={prog.key} className={pi % 2 === 0 ? "bg-white" : "bg-gray-50/40"}>
+                                            <td className="px-4 py-2 font-medium text-gray-700 whitespace-nowrap">
+                                                {prog.label}
+                                            </td>
+                                            {schedules.map((sched) => {
+                                                const cellKey = tuitionRateCellKey(prog.key, sched.key, billingPeriod);
+                                                return (
+                                                    <CompareCell
+                                                        key={cellKey}
+                                                        orgRow={orgOnlyMap.get(cellKey)}
+                                                        locRow={compareLocMap.get(cellKey)}
+                                                        locationLabel={compareLocLabel}
+                                                    />
+                                                );
+                                            })}
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
                         </div>
                     ) : (
-                        <>
-                            {/* Tuition grid */}
-                            <div className="overflow-x-auto rounded-xl border border-alloy-forge/12 bg-white/90 shadow-sm">
-                                <table className="w-full border-collapse">
-                                    <thead>
-                                        <tr className="border-b border-alloy-forge/10 bg-alloy-stone/20">
-                                            <th className="px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-wide text-alloy-midnight/40">
-                                                Program
-                                            </th>
-                                            {scheduleTypes.map((st) => (
-                                                <th
-                                                    key={st.value}
-                                                    className="px-3 py-3 text-right text-[10px] font-semibold uppercase tracking-wide text-alloy-midnight/40"
-                                                >
-                                                    {st.label}
-                                                </th>
-                                            ))}
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {uniquePrograms.map((program) => (
-                                            <tr
-                                                key={program.key}
-                                                className="border-b border-alloy-forge/6 last:border-0 hover:bg-alloy-stone/10"
-                                            >
-                                                <td className="border-r border-alloy-forge/8 px-4 py-2.5">
-                                                    <span className="text-sm font-medium text-alloy-midnight">
-                                                        {program.label}
-                                                    </span>
-                                                </td>
-                                                {scheduleTypes.map((st) => {
-                                                    const cellKey = tuitionRateCellKey(
-                                                        program.key,
-                                                        st.value,
-                                                        billingPeriod
-                                                    );
-                                                    const rateRow = rateMap.get(cellKey);
-                                                    const orgRow = orgDefaultMap.get(cellKey);
-                                                    const saving = savingCells.has(cellKey);
-
-                                                    return (
-                                                        <TuitionCell
-                                                            key={st.value}
-                                                            rateRow={rateRow}
-                                                            orgDefaultRow={orgRow}
-                                                            isLocationScope={scopeIsLocation}
-                                                            saving={saving}
-                                                            onSave={(cents) =>
-                                                                handleSaveRate(
-                                                                    program.key,
-                                                                    st.value,
-                                                                    cents
-                                                                )
-                                                            }
-                                                            onClear={() =>
-                                                                handleClearOverride(program.key, st.value)
-                                                            }
-                                                        />
-                                                    );
-                                                })}
-                                            </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
-                            </div>
-
-                            <div className="flex flex-wrap items-center gap-4 text-xs text-alloy-midnight/45">
-                                <span>Click any cell to edit · Press Enter or click away to save</span>
-                                {scopeIsLocation ? (
-                                    <span className="flex items-center gap-1">
-                                        <span className="h-1.5 w-1.5 rounded-full bg-alloy-pine/60" />
-                                        Location override · Click × to reset to org default
-                                    </span>
-                                ) : (
-                                    <span>
-                                        Setting org defaults · Switch to a location to set overrides
-                                    </span>
-                                )}
-                            </div>
-                        </>
+                        <div className="text-sm text-gray-400 py-8 text-center">
+                            Select a location to compare against org defaults.
+                        </div>
                     )}
                 </div>
             )}

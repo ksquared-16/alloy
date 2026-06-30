@@ -13,6 +13,7 @@ function mapRateRow(r: Record<string, unknown>): TuitionRateRow {
         rate_cents: Number(r.rate_cents ?? 0),
         billing_period: (r.billing_period as TuitionBillingPeriod) ?? "monthly",
         is_active: r.is_active !== false,
+        not_offered: r.not_offered === true,
         metadata:
             r.metadata != null && typeof r.metadata === "object" && !Array.isArray(r.metadata)
                 ? (r.metadata as Record<string, unknown>)
@@ -22,7 +23,7 @@ function mapRateRow(r: Record<string, unknown>): TuitionRateRow {
     };
 }
 
-/** PATCH /api/admin/commercial/tuition-rates/[id] — update rate_cents or is_active. */
+/** PATCH /api/admin/commercial/tuition-rates/[id] — update rate_cents, is_active, or not_offered. */
 export async function PATCH(
     request: NextRequest,
     { params }: { params: Promise<{ id: string }> }
@@ -58,6 +59,10 @@ export async function PATCH(
         patch.is_active = body.is_active;
     }
 
+    if (typeof body.not_offered === "boolean") {
+        patch.not_offered = body.not_offered;
+    }
+
     if (Object.keys(patch).length <= 1) {
         return NextResponse.json({ error: "No fields to update" }, { status: 400 });
     }
@@ -69,7 +74,7 @@ export async function PATCH(
         .eq("id", id)
         .eq("org_id", ctx.orgId)
         .select(
-            "id, org_id, location_id, program_key, schedule_key, rate_cents, billing_period, is_active, metadata, created_at, updated_at"
+            "id, org_id, location_id, program_key, schedule_key, rate_cents, billing_period, is_active, not_offered, metadata, created_at, updated_at"
         )
         .maybeSingle();
 
