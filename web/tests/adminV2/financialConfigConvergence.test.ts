@@ -252,3 +252,51 @@ describe("Convergence — designed areas are consistent + no forbidden runtime",
         expect(seed).toContain("buildFinancialConfigDemoDataset");
     });
 });
+
+describe("Alloy Services V1 — switchboard + question-first authoring", () => {
+    it("the switchboard implements the six capabilities with consequence confirmations", () => {
+        const cap = read("lib/financials/services/serviceCapabilities.ts");
+        for (const c of ["creates_schedule", "tracks_attendance", "consumes_capacity", "supports_waitlist", "uses_rate_plans", "parent_portal_visible"]) {
+            expect(cap).toContain(c);
+        }
+        const board = read("components/adminV2/settings/financials/services/ServiceSwitchboard.tsx");
+        expect(board).toContain("HIGH_CONSEQUENCE_OFF");
+        expect(board).toMatch(/role="switch"/);
+    });
+
+    it("capabilities round-trip through the metadata jsonb (no migration; catalog stays a list)", () => {
+        const store = read("lib/financials/services/financialServicesStore.ts");
+        expect(store).toContain("buildMetadata");
+        expect(store).toContain("normalizeCapabilities");
+        expect(store).toContain("default_charge_category");
+        // additive — does not introduce effective dating on the service catalog
+        expect(store).not.toMatch(/effective_start|planSupersede/);
+    });
+
+    it("the panel is a mode-adaptive workspace (Operate / Author), not a Name/Type/Description form", () => {
+        const panel = read("components/adminV2/settings/financials/ServicesConfigurationPanel.tsx");
+        expect(panel).toContain("ServiceOperateView");
+        expect(panel).toContain("ServiceAuthorJourney");
+        expect(panel).toContain("switches on"); // operator language, not "type"
+    });
+
+    it("authoring is question-first, composing answers into a Service", () => {
+        const author = read("components/adminV2/settings/financials/services/ServiceAuthorJourney.tsx");
+        expect(author).toContain("How is it billed?");
+        expect(author).toContain("What does it switch on?");
+        expect(author).toContain("ServiceSwitchboard");
+    });
+
+    it("relationship cards are read-through with single authoring homes", () => {
+        const cards = read("components/adminV2/settings/financials/services/ServiceRelationshipCards.tsx");
+        expect(cards).toContain("Open in Rate Plans");
+        expect(cards).toContain("Open in Charges");
+        expect(cards).toMatch(/Accounting/);
+    });
+
+    it("validation speaks operational consequence", () => {
+        const v = read("lib/financials/services/serviceValidation.ts");
+        expect(v).toContain("would have no tuition");
+        expect(v).toMatch(/attention|advisory/);
+    });
+});

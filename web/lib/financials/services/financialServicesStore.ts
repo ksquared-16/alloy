@@ -18,6 +18,11 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { OperationalEnrollmentServiceError, trimOrNull } from "@/lib/childcareOperational/operationalEnrollmentErrors";
+import {
+    normalizeCapabilities,
+    SERVICE_CAPABILITIES,
+    type ServiceCapabilityMap,
+} from "@/lib/financials/services/serviceCapabilities";
 
 const TABLE = "financial_services";
 
@@ -41,6 +46,14 @@ export type FinancialService = {
     description: string | null;
     isActive: boolean;
     sortOrder: number;
+    /** Switchboard — what this offering switches on (from metadata; defaults by type). */
+    capabilities: ServiceCapabilityMap;
+    /** Default revenue category key (Accounting read-through); null = unmapped. */
+    defaultChargeCategory: string | null;
+    /** Associated program labels (relationship; stored in metadata until a program catalog link exists). */
+    programs: string[];
+    createdAt?: string | null;
+    updatedAt?: string | null;
 };
 
 export type FinancialServiceInput = {
@@ -51,6 +64,10 @@ export type FinancialServiceInput = {
     unit?: string | null;
     description?: string | null;
     sortOrder?: number | null;
+    /** Partial capability overrides; merged onto the type defaults. */
+    capabilities?: Partial<ServiceCapabilityMap> | null;
+    defaultChargeCategory?: string | null;
+    programs?: string[] | null;
 };
 
 function fail(code: OperationalEnrollmentServiceError["code"], message: string): never {
@@ -98,9 +115,19 @@ type ServiceRow = {
     description: string | null;
     is_active: boolean;
     sort_order: number;
+    metadata: Record<string, unknown> | null;
+    created_at?: string | null;
+    updated_at?: string | null;
 };
 
+function readPrograms(meta: Record<string, unknown> | null): string[] {
+    const raw = meta?.programs;
+    return Array.isArray(raw) ? raw.filter((x): x is string => typeof x === "string") : [];
+}
+
 function rowToService(row: ServiceRow): FinancialService {
+    const meta = row.metadata ?? {};
+    const cat = meta.default_charge_category;
     return {
         id: row.id,
         key: row.service_key,
@@ -110,7 +137,27 @@ function rowToService(row: ServiceRow): FinancialService {
         description: row.description ?? null,
         isActive: row.is_active !== false,
         sortOrder: typeof row.sort_order === "number" ? row.sort_order : 0,
+        capabilities: normalizeCapabilities(meta.capabilities, row.service_type),
+        defaultChargeCategory: typeof cat === "string" && cat.length > 0 ? cat : null,
+        programs: readPrograms(meta),
+        createdAt: row.created_at ?? null,
+        updatedAt: row.updated_at ?? null,
     };
+}
+
+/** Build the metadata jsonb to persist, merging capability overrides onto type defaults. */
+function buildMetadata(input: FinancialServiceInput, serviceType: FinancialServiceType, prior?: Record<string, unknown> | null): Record<string, unknown> {
+    const caps = normalizeCapabilities({ ...(prior?.capabilities as object | undefined), ...(input.capabilities ?? {}) }, serviceType);
+    const capObj: Record<string, boolean> = {};
+    for (const c of SERVICE_CAPABILITIES) capObj[c] = caps[c];
+    const meta: Record<string, unknown> = { ...(prior ?? {}), capabilities: capObj };
+    if (input.defaultChargeCategory !== undefined) {
+        meta.default_charge_category = trimOrNull(input.defaultChargeCategory);
+    }
+    if (input.programs !== undefined) {
+        meta.programs = (input.programs ?? []).map((p) => p.trim()).filter((p) => p.length > 0);
+    }
+    return meta;
 }
 
 // ---------------------------------------------------------------------------
@@ -156,7 +203,7 @@ export async function createFinancialService(
             is_active: true,
             sort_order: typeof input.sortOrder === "number" ? input.sortOrder : 100,
             source_key: "config",
-            metadata: {},
+            metadata: buildMetadata(input, fields.service_type),
             created_by: actor,
             updated_by: actor,
         })
@@ -175,7 +222,14 @@ export async function updateFinancialService(
     const fields = validateServiceFields(input);
     const dup = await findByKey(supabase, orgId, fields.service_key);
     if (dup && dup.id !== input.id) fail("conflict", `A service with key "${fields.service_key}" already exists`);
-    const update: Record<string, unknown> = { ...fields, updated_by: trimOrNull(actorUserId) };
+    // Load prior metadata so a partial edit (one capability, the category) merges, never clobbers.
+    const { data: priorRow } = await supabase.from(TABLE).select("metadata").eq("org_id", orgId).eq("id", input.id).maybeSingle();
+    const prior = (priorRow?.metadata ?? null) as Record<string, unknown> | null;
+    const update: Record<string, unknown> = {
+        ...fields,
+        metadata: buildMetadata(input, fields.service_type, prior),
+        updated_by: trimOrNull(actorUserId),
+    };
     if (typeof input.sortOrder === "number") update.sort_order = input.sortOrder;
     const { data, error } = await supabase
         .from(TABLE)

@@ -7,8 +7,28 @@ import {
     listFinancialServices,
     setFinancialServiceActive,
     updateFinancialService,
+    type FinancialServiceInput,
 } from "@/lib/financials/services/financialServicesStore";
+import { SERVICE_CAPABILITIES, type ServiceCapabilityMap } from "@/lib/financials/services/serviceCapabilities";
 import { operationalEnrollmentErrorResponse } from "@/lib/childcareOperational/operationalEnrollmentApi";
+
+/** Pull switchboard / revenue / program fields off the request body (operator-facing keys). */
+function metadataFromBody(body: Record<string, unknown>): Pick<FinancialServiceInput, "capabilities" | "defaultChargeCategory" | "programs"> {
+    const out: Pick<FinancialServiceInput, "capabilities" | "defaultChargeCategory" | "programs"> = {};
+    if (body.capabilities && typeof body.capabilities === "object") {
+        const src = body.capabilities as Record<string, unknown>;
+        const caps: Partial<ServiceCapabilityMap> = {};
+        for (const c of SERVICE_CAPABILITIES) if (typeof src[c] === "boolean") caps[c] = src[c] as boolean;
+        out.capabilities = caps;
+    }
+    if (body.default_charge_category !== undefined) {
+        out.defaultChargeCategory = body.default_charge_category != null ? String(body.default_charge_category) : null;
+    }
+    if (Array.isArray(body.programs)) {
+        out.programs = (body.programs as unknown[]).filter((x): x is string => typeof x === "string");
+    }
+    return out;
+}
 
 /**
  * Financial Services catalog (Financial Configuration Convergence). What the
@@ -56,6 +76,7 @@ export async function POST(request: NextRequest) {
                     serviceType: String(body.service_type ?? ""),
                     unit: body.unit != null ? String(body.unit) : null,
                     description: body.description != null ? String(body.description) : null,
+                    ...metadataFromBody(body),
                 },
                 ctx.userId,
             );
@@ -74,6 +95,7 @@ export async function POST(request: NextRequest) {
                     unit: body.unit != null ? String(body.unit) : null,
                     description: body.description != null ? String(body.description) : null,
                     sortOrder: body.sort_order != null ? Number(body.sort_order) : null,
+                    ...metadataFromBody(body),
                 },
                 ctx.userId,
             );

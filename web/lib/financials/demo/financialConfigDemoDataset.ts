@@ -81,15 +81,21 @@ export function buildFinancialConfigDemoDataset(pivotYear: number): FinancialCon
     const current = `${pivotYear}-01-01`;
     const future = `${pivotYear + 1}-01-01`;
 
+    // Capability postures by intent (the switchboard). Recurring care powers
+    // scheduling/attendance/capacity/waitlist/pricing/portal; one-time and usage
+    // offerings switch on far less. Default revenue homes + programs make the
+    // Operate canvas feel complete on a fresh seed.
+    const careCaps = { creates_schedule: true, tracks_attendance: true, consumes_capacity: true, supports_waitlist: true, uses_rate_plans: true, parent_portal_visible: true };
+    const programs = ["Toddler", "Preschool", "Pre-K"];
     const services: FinancialServiceInput[] = [
-        { label: "Full-Time Care", serviceType: "recurring", unit: "month", sortOrder: 10 },
-        { label: "Part-Time Care", serviceType: "recurring", unit: "month", sortOrder: 20 },
-        { label: "Before Care", serviceType: "recurring", unit: "week", sortOrder: 30 },
-        { label: "After Care", serviceType: "recurring", unit: "week", sortOrder: 40 },
-        { label: "Registration", serviceType: "one_time", unit: null, sortOrder: 50 },
-        { label: "Meals", serviceType: "attendance_derived", unit: "day", sortOrder: 60 },
-        { label: "Transportation", serviceType: "recurring", unit: "week", sortOrder: 70 },
-        { label: "Field Trips", serviceType: "one_time", unit: "trip", sortOrder: 80 },
+        { label: "Full-Time Care", serviceType: "recurring", unit: "week", sortOrder: 10, capabilities: careCaps, defaultChargeCategory: "tuition", programs },
+        { label: "Part-Time Care", serviceType: "recurring", unit: "week", sortOrder: 20, capabilities: careCaps, defaultChargeCategory: "tuition", programs },
+        { label: "Before Care", serviceType: "recurring", unit: "week", sortOrder: 30, capabilities: careCaps, defaultChargeCategory: "tuition", programs: ["Toddler", "Preschool"] },
+        { label: "After Care", serviceType: "recurring", unit: "week", sortOrder: 40, capabilities: careCaps, defaultChargeCategory: "tuition", programs: ["Toddler", "Preschool"] },
+        { label: "Registration", serviceType: "one_time", unit: null, sortOrder: 50, capabilities: { creates_schedule: false, tracks_attendance: false, consumes_capacity: false, supports_waitlist: false, uses_rate_plans: false, parent_portal_visible: true }, defaultChargeCategory: "fee", programs: [] },
+        { label: "Meals", serviceType: "attendance_derived", unit: "day", sortOrder: 60, capabilities: { creates_schedule: false, tracks_attendance: true, consumes_capacity: false, supports_waitlist: false, uses_rate_plans: false, parent_portal_visible: false }, defaultChargeCategory: "consumable_fee", programs: [] },
+        { label: "Transportation", serviceType: "recurring", unit: "week", sortOrder: 70, capabilities: { creates_schedule: false, tracks_attendance: false, consumes_capacity: false, supports_waitlist: false, uses_rate_plans: true, parent_portal_visible: true }, defaultChargeCategory: "fee", programs: [] },
+        { label: "Field Trips", serviceType: "one_time", unit: "trip", sortOrder: 80, capabilities: { creates_schedule: false, tracks_attendance: false, consumes_capacity: false, supports_waitlist: false, uses_rate_plans: false, parent_portal_visible: true }, defaultChargeCategory: "one_time", programs: [] },
     ];
 
     const glAccounts: DemoGlAccount[] = [

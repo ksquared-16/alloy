@@ -1,168 +1,201 @@
 "use client";
 
-import { useState } from "react";
-import {
-    FINANCIAL_SERVICE_TYPES,
-    FINANCIAL_SERVICE_TYPE_LABEL,
-    type FinancialService,
-} from "@/lib/financials/services/financialServicesStore";
+import { useMemo, useState } from "react";
 import {
     ConfigurationContext,
-    ConfigurationDetailCard,
     ConfigurationEmptyState,
+    ConfigurationPrimaryButton,
 } from "@/components/adminV2/settings/configurationRuntime/ConfigurationModeLayout";
-import {
-    ConfigButtonRow,
-    ConfigFieldLabel,
-    ConfigPrimaryButton,
-    ConfigSecondaryButton,
-    ConfigSelectInput,
-    ConfigTextInput,
-} from "@/components/adminV2/settings/configurationRuntime/ConfigEditorPrimitives";
+import { ConfigReadonlyNotice } from "@/components/adminV2/settings/configurationRuntime/ConfigReadonlyPrimitives";
+import { ConfigSecondaryButton } from "@/components/adminV2/settings/configurationRuntime/ConfigEditorPrimitives";
+import { formatCurrencyCents } from "@/lib/adminV2/operationalConfig/configReadPresentation";
 import { useFinancialServices } from "@/components/adminV2/settings/financials/useFinancialServices";
+import { useChargeTemplates } from "@/components/adminV2/settings/financials/useChargeTemplates";
+import { useFinancialsConfigurationSettings } from "@/components/adminV2/settings/financials/useFinancialsConfigurationSettings";
+import ServiceOperateView from "@/components/adminV2/settings/financials/services/ServiceOperateView";
+import ServiceAuthorJourney, { type ServiceDraftInput } from "@/components/adminV2/settings/financials/services/ServiceAuthorJourney";
+import type { FinancialService } from "@/lib/financials/services/financialServicesStore";
+import { rhythmOf, SERVICE_RHYTHM_LABEL, type ServiceCapability } from "@/lib/financials/services/serviceCapabilities";
+import { validateService } from "@/lib/financials/services/serviceValidation";
+import { CHARGE_CATEGORY_GL_MAPPING_KEY, chargeCategoryLabel, listChargeCategories } from "@/lib/financials/chargeCategories";
 
 /**
- * Services configuration (Commercial Model). The catalog of what the organization
- * sells — the first-class entity (table `financial_services`) that rates, charge
- * templates, scheduling, attendance, billing, and posting attach to. Real,
- * authorable (create / edit / activate). Inline authoring, no drawers, no IDs.
+ * Services configuration — Alloy Services V1 (mode-adaptive Service workspace).
+ * The frozen shell is constant; the Workspace takes one of three shapes:
+ *   • OPERATE (Summary/Activity) — the connected switchboard canvas (returning state)
+ *   • AUTHOR — question-first authoring (add / first-run)
+ *   • LIST — the offering set, the operate spine
+ * A Service is a switchboard, not a Name/Type/Description row. Configuration only —
+ * it does not post money.
  */
 
-const TYPE_OPTIONS = FINANCIAL_SERVICE_TYPES.map((t) => ({ value: t, label: FINANCIAL_SERVICE_TYPE_LABEL[t] }));
+const STARTER_SERVICES: ServiceDraftInput[] = [
+    { label: "Full-Time Care", description: "Full-day care, five days a week.", service_type: "recurring", unit: "week", capabilities: { creates_schedule: true, tracks_attendance: true, consumes_capacity: true, supports_waitlist: true, uses_rate_plans: true, parent_portal_visible: true }, programs: [] },
+    { label: "Before Care", description: "Morning care before the program day.", service_type: "recurring", unit: "week", capabilities: { creates_schedule: true, tracks_attendance: true, consumes_capacity: true, supports_waitlist: true, uses_rate_plans: true, parent_portal_visible: true }, programs: [] },
+    { label: "After Care", description: "Afternoon care after the program day.", service_type: "recurring", unit: "week", capabilities: { creates_schedule: true, tracks_attendance: true, consumes_capacity: true, supports_waitlist: true, uses_rate_plans: true, parent_portal_visible: true }, programs: [] },
+];
 
-type Draft = { id: string | null; label: string; serviceType: string; unit: string; description: string };
-const EMPTY_DRAFT: Draft = { id: null, label: "", serviceType: FINANCIAL_SERVICE_TYPES[0], unit: "", description: "" };
+type Mode = { kind: "list" } | { kind: "operate"; id: string } | { kind: "author" };
 
 export default function ServicesConfigurationPanel({ canMutate }: { canMutate: boolean }) {
     const { services, loading, error, busy, createService, updateService, setServiceActive } = useFinancialServices();
-    const [draft, setDraft] = useState<Draft | null>(null);
-    const [formError, setFormError] = useState<string | null>(null);
+    const { templates } = useChargeTemplates();
+    const { ratePlans, rateRules, glAccounts, glAccountMappings } = useFinancialsConfigurationSettings();
+    const [mode, setMode] = useState<Mode>({ kind: "list" });
 
-    function openCreate() {
-        setDraft({ ...EMPTY_DRAFT });
-        setFormError(null);
-    }
-    function openEdit(s: FinancialService) {
-        setDraft({ id: s.id, label: s.label, serviceType: s.serviceType, unit: s.unit ?? "", description: s.description ?? "" });
-        setFormError(null);
+    const categoryOptions = useMemo(() => listChargeCategories().map((c) => ({ value: c.key, label: c.label })), []);
+
+    // ---- relationship facts (read-through) ---------------------------------
+    function factsFor(service: FinancialService) {
+        const plans = ratePlans.filter((p) => p.service_id === service.id);
+        const planIds = new Set(plans.map((p) => p.id));
+        const planKeys = new Set(plans.map((p) => p.plan_key));
+        const amounts = rateRules.filter((r) => planIds.has(r.rate_plan_id)).map((r) => r.amount_cents).filter((n) => typeof n === "number");
+        let priceRange: string | null = null;
+        if (amounts.length > 0) {
+            const min = Math.min(...amounts);
+            const max = Math.max(...amounts);
+            const suffix = service.unit ? ` / ${service.unit}` : "";
+            priceRange = min === max ? `${formatCurrencyCents(min, "USD")}${suffix}` : `${formatCurrencyCents(min, "USD")}–${formatCurrencyCents(max, "USD")}${suffix}`;
+        }
+        const chargeCount = new Set(templates.filter((t) => t.service_id === service.id).map((t) => t.template_key)).size;
+        const categoryLabel = service.defaultChargeCategory ? chargeCategoryLabel(service.defaultChargeCategory) : null;
+        let revenueAccountLabel: string | null = null;
+        if (service.defaultChargeCategory) {
+            const mappingKey = CHARGE_CATEGORY_GL_MAPPING_KEY[service.defaultChargeCategory as keyof typeof CHARGE_CATEGORY_GL_MAPPING_KEY];
+            const mapping = mappingKey ? glAccountMappings.find((m) => m.key === mappingKey) : undefined;
+            const account = mapping ? glAccounts.find((a) => a.id === mapping.gl_account_id) : undefined;
+            if (account) revenueAccountLabel = `${account.code} ${account.name}`;
+        }
+        return { ratePlanCount: planKeys.size, priceRange, chargeCount, categoryLabel, revenueAccountLabel };
     }
 
-    async function submit() {
-        if (!draft) return;
-        if (!draft.label.trim()) return setFormError("Service name is required");
-        setFormError(null);
-        const body = {
-            label: draft.label.trim(),
-            service_type: draft.serviceType,
-            unit: draft.unit.trim() || null,
-            description: draft.description.trim() || null,
-        };
-        try {
-            if (draft.id) await updateService({ id: draft.id, ...body });
-            else await createService(body);
-            setDraft(null);
-        } catch (e) {
-            setFormError(e instanceof Error ? e.message : "Failed to save service");
+    function hasAttention(service: FinancialService): boolean {
+        const f = factsFor(service);
+        return validateService({
+            label: service.label,
+            serviceType: service.serviceType,
+            capabilities: service.capabilities,
+            hasRatePlan: f.ratePlanCount > 0,
+            hasRevenueHome: service.defaultChargeCategory != null,
+        }).some((x) => x.severity === "attention");
+    }
+
+    // ---- mutation handlers --------------------------------------------------
+    function toggleCapability(s: FinancialService, cap: ServiceCapability, value: boolean) {
+        void updateService({ id: s.id, label: s.label, service_type: s.serviceType, capabilities: { [cap]: value } });
+    }
+    function changeCategory(s: FinancialService, category: string) {
+        void updateService({ id: s.id, label: s.label, service_type: s.serviceType, default_charge_category: category || null });
+    }
+    function setPrograms(s: FinancialService, programs: string[]) {
+        void updateService({ id: s.id, label: s.label, service_type: s.serviceType, programs });
+    }
+    function saveIdentity(s: FinancialService, patch: { label: string; description: string | null; unit: string | null }) {
+        void updateService({ id: s.id, label: patch.label, service_type: s.serviceType, description: patch.description, unit: patch.unit });
+    }
+    async function seedStarters() {
+        for (const draft of STARTER_SERVICES) {
+            await createService({ ...draft });
         }
     }
 
+    const selected = mode.kind === "operate" ? services.find((s) => s.id === mode.id) ?? null : null;
+
+    // ---- render -------------------------------------------------------------
     return (
         <div className="space-y-3" data-testid="financials-services">
             <ConfigurationContext
                 title="Services"
-                subtitle="What does the organization sell? Rates and charges attach to these services."
-                testId="financials-services-context"
+                subtitle="What your organization offers — and what each switches on"
                 actions={
-                    canMutate && !draft ? (
-                        <ConfigPrimaryButton onClick={openCreate} testId="financials-services-add">
-                            Add service
-                        </ConfigPrimaryButton>
+                    canMutate && mode.kind === "list" && services.length > 0 ? (
+                        <ConfigurationPrimaryButton onClick={() => setMode({ kind: "author" })}>Add a service</ConfigurationPrimaryButton>
+                    ) : mode.kind !== "list" ? (
+                        <ConfigSecondaryButton onClick={() => setMode({ kind: "list" })}>← All services</ConfigSecondaryButton>
                     ) : undefined
                 }
             />
+            <ConfigReadonlyNotice testId="financials-services-notice">
+                This is configuration. It does not post money. A Service is what you offer and what it switches on —
+                scheduling, attendance, capacity, waitlist, pricing, and the parent portal.
+            </ConfigReadonlyNotice>
 
-            {error ? (
-                <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800" role="alert">
-                    {error}
-                </p>
-            ) : null}
-
-            {canMutate && draft ? (
-                <ConfigurationDetailCard title={draft.id ? "Edit service" : "New service"} testId="financials-services-form">
-                    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-                        <ConfigFieldLabel label="Name">
-                            <ConfigTextInput value={draft.label} onChange={(v) => setDraft({ ...draft, label: v })} disabled={busy} placeholder="Full-Time Care" testId="financials-services-label" />
-                        </ConfigFieldLabel>
-                        <ConfigFieldLabel label="Type">
-                            <ConfigSelectInput value={draft.serviceType} onChange={(v) => setDraft({ ...draft, serviceType: v })} options={TYPE_OPTIONS} disabled={busy} testId="financials-services-type" />
-                        </ConfigFieldLabel>
-                        <ConfigFieldLabel label="Unit (optional)">
-                            <ConfigTextInput value={draft.unit} onChange={(v) => setDraft({ ...draft, unit: v })} disabled={busy} placeholder="month, week, trip…" testId="financials-services-unit" />
-                        </ConfigFieldLabel>
-                        <ConfigFieldLabel label="Description (optional)">
-                            <ConfigTextInput value={draft.description} onChange={(v) => setDraft({ ...draft, description: v })} disabled={busy} testId="financials-services-description" />
-                        </ConfigFieldLabel>
-                    </div>
-                    {formError ? (
-                        <p className="mt-2 text-xs text-red-700" role="alert" data-testid="financials-services-error">
-                            {formError}
-                        </p>
-                    ) : null}
-                    <div className="mt-3">
-                        <ConfigButtonRow>
-                            <ConfigPrimaryButton onClick={() => void submit()} disabled={busy} testId="financials-services-save">
-                                {draft.id ? "Save service" : "Add service"}
-                            </ConfigPrimaryButton>
-                            <ConfigSecondaryButton onClick={() => setDraft(null)} disabled={busy}>
-                                Cancel
-                            </ConfigSecondaryButton>
-                        </ConfigButtonRow>
-                    </div>
-                </ConfigurationDetailCard>
-            ) : null}
+            {error ? <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800" role="alert">{error}</p> : null}
 
             {loading ? (
                 <ConfigurationEmptyState testId="financials-services-loading" title="Loading services" description="Fetching the service catalog." />
-            ) : services.length === 0 ? (
-                <ConfigurationEmptyState
-                    testId="financials-services-empty"
-                    title="No services yet"
-                    description="Add the services your organization sells — Full-Time Care, Before Care, Registration, Meals, Transportation…"
+            ) : mode.kind === "author" ? (
+                <ServiceAuthorJourney
+                    canMutate={canMutate}
+                    busy={busy}
+                    onCancel={() => setMode({ kind: "list" })}
+                    onCreate={(input) => {
+                        void createService({
+                            label: input.label,
+                            description: input.description,
+                            service_type: input.service_type,
+                            unit: input.unit,
+                            capabilities: input.capabilities,
+                            programs: input.programs,
+                        }).then(() => setMode({ kind: "list" }));
+                    }}
                 />
+            ) : selected ? (
+                <ServiceOperateView
+                    service={selected}
+                    canMutate={canMutate}
+                    busy={busy}
+                    {...factsFor(selected)}
+                    categoryOptions={categoryOptions}
+                    onToggleCapability={(cap, value) => toggleCapability(selected, cap, value)}
+                    onChangeCategory={(category) => changeCategory(selected, category)}
+                    onSetPrograms={(programs) => setPrograms(selected, programs)}
+                    onSaveIdentity={(patch) => saveIdentity(selected, patch)}
+                    onSetActive={(active) => void setServiceActive(selected.id, active)}
+                />
+            ) : services.length === 0 ? (
+                <div>
+                    <ConfigurationEmptyState
+                        testId="financials-services-empty"
+                        title="No services yet"
+                        description="Services are the things your organization offers — full-time care, before & after care, drop-in, meals, registration. Start with the one most families enroll in."
+                    />
+                    {canMutate ? (
+                        <div className="mt-3 flex flex-wrap items-center gap-2">
+                            <ConfigurationPrimaryButton onClick={() => setMode({ kind: "author" })}>Add your first service</ConfigurationPrimaryButton>
+                            <button type="button" className="config-secondary-btn" onClick={() => void seedStarters()} disabled={busy} data-testid="services-bos-seed">
+                                💡 Most childcare orgs start with Full-Time Care, Before Care, After Care — add these as drafts?
+                            </button>
+                        </div>
+                    ) : null}
+                </div>
             ) : (
-                <ConfigurationDetailCard title={`Service catalog (${services.length})`} testId="financials-services-list">
-                    <ul className="divide-y divide-alloy-stone/30">
-                        {services.map((s) => (
-                            <li key={s.id} className="flex flex-wrap items-center justify-between gap-2 py-2.5" data-testid={`financials-service-${s.id}`}>
-                                <div className="min-w-0">
-                                    <p className="config-typo-field-value text-alloy-midnight">
-                                        {s.label}
-                                        {!s.isActive ? <span className="text-alloy-forge/50"> · inactive</span> : null}
-                                    </p>
-                                    <p className="config-typo-sublabel text-alloy-forge/60">
-                                        {FINANCIAL_SERVICE_TYPE_LABEL[s.serviceType]}
-                                        {s.unit ? ` · per ${s.unit}` : ""} · {s.key}
-                                        {s.description ? ` · ${s.description}` : ""}
-                                    </p>
-                                </div>
-                                {canMutate ? (
-                                    <ConfigButtonRow>
-                                        <ConfigSecondaryButton onClick={() => openEdit(s)} disabled={busy} testId={`financials-service-edit-${s.id}`}>
-                                            Edit
-                                        </ConfigSecondaryButton>
-                                        <ConfigSecondaryButton
-                                            onClick={() => void setServiceActive(s.id, !s.isActive)}
-                                            disabled={busy}
-                                            testId={`financials-service-toggle-${s.id}`}
-                                        >
-                                            {s.isActive ? "Deactivate" : "Reactivate"}
-                                        </ConfigSecondaryButton>
-                                    </ConfigButtonRow>
-                                ) : null}
+                <ul className="space-y-1.5" data-testid="services-list">
+                    {services.map((s) => {
+                        const attention = hasAttention(s);
+                        const glyph = s.isActive && !attention ? "●" : "○";
+                        return (
+                            <li key={s.id}>
+                                <button
+                                    type="button"
+                                    onClick={() => setMode({ kind: "operate", id: s.id })}
+                                    data-testid={`service-row-${s.key}`}
+                                    className="flex w-full items-center gap-3 rounded-xl border border-alloy-stone bg-white px-4 py-3 text-left transition-colors hover:border-[#00a283]/40"
+                                >
+                                    <span className={attention ? "text-alloy-ember" : s.isActive ? "text-[#00a283]" : "text-alloy-forge/30"}>{glyph}</span>
+                                    <span className="min-w-0 flex-1">
+                                        <span className="config-typo-queue-item-title block truncate">{s.label}{s.isActive ? "" : " · retired"}</span>
+                                        {s.description ? <span className="config-typo-meta block truncate">{s.description}</span> : null}
+                                    </span>
+                                    <span className="shrink-0 rounded-full border border-alloy-stone px-2 py-0.5 config-typo-meta text-alloy-forge/70">
+                                        {SERVICE_RHYTHM_LABEL[rhythmOf(s.serviceType)]}
+                                    </span>
+                                </button>
                             </li>
-                        ))}
-                    </ul>
-                </ConfigurationDetailCard>
+                        );
+                    })}
+                </ul>
             )}
         </div>
     );
