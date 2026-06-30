@@ -346,19 +346,22 @@ function SurfaceCanvas({
         mode === "preview"
             ? { text: "Preview — exactly what operators will see", cls: "bg-alloy-blue/[0.06] text-alloy-blue border-alloy-blue/20" }
             : mode === "runtime"
-                ? { text: "Runtime — the published, live surface", cls: "bg-alloy-juniper/[0.07] text-alloy-juniper border-alloy-juniper/25" }
-                : { text: "Live preview — edits render here instantly", cls: "bg-alloy-pine/[0.06] text-alloy-pine border-alloy-pine/20" };
+                ? { text: "Runtime — published structure · open in Workspace for live values", cls: "bg-alloy-juniper/[0.07] text-alloy-juniper border-alloy-juniper/25" }
+                : { text: "Live preview — sample values; every edit renders here instantly", cls: "bg-alloy-pine/[0.06] text-alloy-pine border-alloy-pine/20" };
 
     return (
         <section className="relative flex min-w-0 flex-1 flex-col bg-alloy-stone/[0.04]" data-surface-canvas>
-            <div className={`flex items-center gap-2 border-b px-5 py-1.5 text-[11px] font-semibold ${banner.cls}`}>
+            <div className={`flex items-center gap-2 border-b px-6 py-2 text-[12px] font-semibold ${banner.cls}`}>
                 <span>●</span> {banner.text}
             </div>
-            <div className="min-h-0 flex-1 overflow-y-auto p-5">
+            <div className="min-h-0 flex-1 overflow-y-auto px-6 py-6">
                 {doc.sections.map((section) => (
-                    <div key={section.sectionId} className="mb-7">
+                    <div key={section.sectionId} className="mb-8">
                         {definition.sections !== "none" ? (
-                            <h3 className="mb-3 text-[13px] font-bold uppercase tracking-wide text-alloy-midnight/70">{section.title || "Section"}</h3>
+                            <div className="mb-3.5 flex items-baseline gap-2.5">
+                                <h3 className="text-[16px] font-bold tracking-tight text-alloy-midnight">{section.title || "Section"}</h3>
+                                <span className="rounded-full bg-alloy-stone/[0.10] px-2 py-0.5 text-[11px] font-semibold text-alloy-midnight/55">{section.cards.length} {section.cards.length === 1 ? "card" : "cards"}</span>
+                            </div>
                         ) : null}
 
                         {chrome && addCardFor === section.sectionId ? (
@@ -379,7 +382,7 @@ function SurfaceCanvas({
                                 onAdd={() => onOpenAddCard(section.sectionId)}
                             />
                         ) : (
-                            <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-4">
+                            <div className="grid auto-rows-fr grid-cols-2 gap-3.5 md:grid-cols-3 xl:grid-cols-4">
                                 {section.cards.map((card) => (
                                     <CanvasCard
                                         key={card.instanceId}
@@ -396,7 +399,7 @@ function SurfaceCanvas({
                                         type="button"
                                         onClick={() => onOpenAddCard(section.sectionId)}
                                         data-add-card={section.sectionId}
-                                        className="flex min-h-[128px] flex-col items-center justify-center gap-1 rounded-xl border border-dashed border-alloy-pine/30 bg-alloy-pine/[0.04] text-sm font-semibold text-alloy-pine hover:bg-alloy-pine/[0.07]"
+                                        className="flex min-h-[148px] flex-col items-center justify-center gap-1.5 rounded-xl border border-dashed border-alloy-pine/30 bg-alloy-pine/[0.04] text-sm font-semibold text-alloy-pine hover:bg-alloy-pine/[0.07]"
                                     >
                                         <span className="text-lg">＋</span> Add card
                                     </button>
@@ -439,9 +442,9 @@ function CanvasCard({
     const rendered = definition.runtimeRenderer.renderCard(card, {
         contentLabel: definition.contentSource.resolveLabel(card.contentId ?? ""),
     });
-    if (!chrome) return <div data-canvas-card={card.instanceId}>{rendered}</div>;
+    if (!chrome) return <div className="h-full" data-canvas-card={card.instanceId}>{rendered}</div>;
     return (
-        <div className="group relative" data-canvas-card={card.instanceId}>
+        <div className="group relative h-full" data-canvas-card={card.instanceId}>
             {selected ? (
                 <span className="absolute -top-2 left-2 z-10 rounded bg-alloy-pine px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-white">Selected</span>
             ) : null}
@@ -451,7 +454,7 @@ function CanvasCard({
             <button
                 type="button"
                 onClick={onSelect}
-                className={`block w-full rounded-xl text-left ${selected ? "outline outline-2 outline-alloy-pine" : "outline outline-2 outline-transparent hover:outline-alloy-pine/30"}`}
+                className={`block h-full w-full rounded-xl text-left ${selected ? "outline outline-2 outline-alloy-pine" : "outline outline-2 outline-transparent hover:outline-alloy-pine/30"}`}
             >
                 {rendered}
             </button>
