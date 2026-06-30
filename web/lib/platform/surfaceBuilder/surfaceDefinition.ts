@@ -119,6 +119,8 @@ export type InspectorSchema = { tabs: readonly InspectorTab[] };
 export type SurfaceRenderContext = {
     /** Resolved content label for the instance, for preview chrome. */
     contentLabel: string;
+    /** Compact surfaces (headers) render a denser card. */
+    density?: "compact" | "comfortable";
 };
 
 export type SurfaceRuntimeRenderer = {

@@ -315,6 +315,28 @@ const runtimeRenderer: SurfaceRuntimeRenderer = {
         const s = hasContent ? (SAMPLE[String(instance.contentId)] ?? FALLBACK_SAMPLE) : FALLBACK_SAMPLE;
         const tone = TONE[s.tone];
         const dimmed = cfg.visibility === "off";
+
+        // Compact (header) cards: a tight metric chip — a label + the headline number only.
+        if (ctx.density === "compact") {
+            return (
+                <div className={`relative h-full overflow-hidden rounded-lg border border-alloy-stone/15 bg-white px-2.5 py-2 shadow-[0_1px_2px_rgba(15,23,42,0.05)] ${dimmed ? "opacity-50" : ""}`} data-metric-visual={`metric_${renderer}`}>
+                    <span className={`absolute inset-y-0 left-0 w-[3px] ${tone.rail}`} aria-hidden="true" />
+                    <div className="flex items-center justify-between gap-1 pl-1.5">
+                        <p className="truncate text-[11px] font-semibold text-alloy-midnight">{title}</p>
+                        {hasContent ? <span className={`shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-semibold ${tone.chip}`}>{tone.label}</span> : null}
+                    </div>
+                    <div className="mt-0.5 flex items-baseline gap-1 pl-1.5">
+                        {hasContent ? (
+                            <>
+                                <span className="text-[20px] font-bold leading-none tracking-tight text-alloy-midnight">{s.value}</span>
+                                {s.unit ? <span className="text-[11px] font-semibold text-alloy-midnight/45">{s.unit}</span> : null}
+                            </>
+                        ) : <span className="text-[11px] font-medium text-alloy-midnight/35">Pick content →</span>}
+                    </div>
+                </div>
+            );
+        }
+
         return (
             <div className={`relative h-full overflow-hidden rounded-xl border border-alloy-stone/15 bg-white p-3.5 shadow-[0_1px_2px_rgba(15,23,42,0.05)] ${dimmed ? "opacity-50" : ""}`} data-metric-visual={`metric_${renderer}`}>
                 <span className={`absolute inset-y-0 left-0 w-[3px] ${tone.rail}`} aria-hidden="true" />

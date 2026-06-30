@@ -169,33 +169,33 @@ describe("Operational Intelligence panel V1 polish", () => {
 });
 
 describe("Analytics settings IA cleanup", () => {
-    it("settings page uses flat single-level tabs without nested builders", () => {
+    it("settings page uses the Operational Calculations list/detail layout", () => {
         const client = read("app/adminV2/settings/analytics/AnalyticsSettingsClient.tsx");
-        expect(client).toContain('"Calculations"');
-        expect(client).toContain('"Display styles"');
-        expect(client).toContain('"Where it appears"');
-        expect(client).toContain('"Combined scores"');
-        // No nested "Metric builders" wrapper tab and no redundant guidance callout.
-        expect(client).not.toContain('"Metric builders"');
+        expect(client).toContain('"Operational Calculations"');
+        expect(client).toContain("ConfigurationShell");
+        expect(client).toContain('label: "Calculations"');
+        expect(client).toContain('label: "Sources & targets"');
+        expect(client).toContain('label: "Snapshots"');
+        // No nested builder-tabs wrapper or redundant summary.
         expect(client).not.toContain("MetricPlatformBuilderTabs");
         expect(client).not.toContain("OipSettingsSummary");
     });
 
-    it("primary tabs exclude Targets and Experience placement (moved to legacy/advanced)", () => {
+    it("'Where it appears' and 'Combined scores' are not primary sections (moved to Advanced)", () => {
         const client = read("app/adminV2/settings/analytics/AnalyticsSettingsClient.tsx");
-        // The primary TABS array must not list legacy surfaces.
-        const tabsBlock = client.slice(client.indexOf("const TABS"), client.indexOf("const LEGACY_TABS"));
-        expect(tabsBlock).not.toContain('label: "Targets"');
-        expect(tabsBlock).not.toContain('label: "Experience placement"');
-        // Legacy surfaces still reachable behind the Advanced disclosure.
-        expect(client).toContain("data-analytics-legacy-advanced");
-        expect(client).toContain("Targets (legacy)");
-        expect(client).toContain("Experience placement (legacy V1)");
+        // The primary SECTIONS list must not surface placement or rollups.
+        const sectionsBlock = client.slice(client.indexOf("const SECTIONS"), client.indexOf("function sectionFromParam"));
+        expect(sectionsBlock).not.toContain("Where it appears");
+        expect(sectionsBlock).not.toContain("Combined scores");
+        // Still reachable inside the Advanced workspace.
+        expect(client).toContain("AdvancedWorkspace");
+        expect(client).toContain("Where it appears");
+        expect(client).toContain("Combined scores");
     });
 
-    it("uses one primary '+ New metric' CTA and only the empty-state '+ New calculation'", () => {
+    it("uses one primary '+ New calculation' CTA in the context bar", () => {
         const client = read("app/adminV2/settings/analytics/AnalyticsSettingsClient.tsx");
-        expect(client).toContain("+ New metric");
+        expect(client).toContain("+ New calculation");
         const panel = read("app/adminV2/settings/analytics/MetricBuilderPanel.tsx");
         // Exactly one create CTA remains in the panel — the empty-state action.
         const occurrences = panel.split("+ New calculation").length - 1;
@@ -203,12 +203,11 @@ describe("Analytics settings IA cleanup", () => {
         expect(panel).toContain("PlatformBuilderEmptyState");
     });
 
-    it("tab subtitles use the final copy", () => {
+    it("section subtitles use the final copy", () => {
         const client = read("app/adminV2/settings/analytics/AnalyticsSettingsClient.tsx");
-        expect(client).toContain("Define what is measured.");
-        expect(client).toContain("Choose how metrics appear.");
-        expect(client).toContain("Choose where metrics show up.");
-        expect(client).toContain("Combine metrics into one health score.");
+        expect(client).toContain("Define what is measured");
+        expect(client).toContain("Inputs and the goals they meet");
+        expect(client).toContain("Point-in-time captures");
     });
 
     it("display styles support a background fill treatment using accent opacity", () => {
@@ -263,10 +262,10 @@ describe("Analytics settings IA cleanup", () => {
 });
 
 describe("Analytics V2 guided setup flow", () => {
-    it("settings page exposes a primary '+ New metric' guided flow", () => {
+    it("settings page exposes a primary '+ New calculation' guided flow", () => {
         const client = read("app/adminV2/settings/analytics/AnalyticsSettingsClient.tsx");
         expect(client).toContain("MetricSetupFlow");
-        expect(client).toContain("+ New metric");
+        expect(client).toContain("+ New calculation");
     });
 
     it("guided flow walks calculation, display style, placement, review", () => {

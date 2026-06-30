@@ -15,6 +15,14 @@ import {
     operationalMetricRuntimeRenderer,
 } from "@/lib/platform/surfaceBuilder/definitions/operationalIntelligenceSurfaceDefinition";
 
+/**
+ * Header inspector — no "Placement" tab: a header surface IS the destination, so promoting
+ * the card elsewhere is meaningless. Visibility is already covered in the Card tab.
+ */
+const HEADER_INSPECTOR = {
+    tabs: OPERATIONAL_INTELLIGENCE_INSPECTOR.tabs.filter((t) => t.key !== "placement"),
+};
+
 const kpi = (instanceId: string, contentId: string) => ({ instanceId, cardTypeKey: "kpi", contentId, config: { rendererKey: "kpi_card", visibility: "on" } });
 
 function headerDoc(cards: { instanceId: string; contentId: string }[]): SurfaceDoc {
@@ -51,7 +59,7 @@ function headerDefinition(opts: {
         cardTypes: OPERATIONAL_INTELLIGENCE_CARD_TYPES,
         renderers: OPERATIONAL_INTELLIGENCE_RENDERERS,
         contentSource: operationalIntelligenceContentSource(),
-        inspectorSchema: OPERATIONAL_INTELLIGENCE_INSPECTOR,
+        inspectorSchema: HEADER_INSPECTOR,
         runtimeRenderer: operationalMetricRuntimeRenderer,
         persistence: opts.persistence,
         appearsIn: opts.appearsIn,

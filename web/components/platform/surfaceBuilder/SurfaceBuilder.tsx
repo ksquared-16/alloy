@@ -472,6 +472,7 @@ function CanvasCard({
 }): ReactElement {
     const rendered = definition.runtimeRenderer.renderCard(card, {
         contentLabel: definition.contentSource.resolveLabel(card.contentId ?? ""),
+        density: definition.density,
     });
     const size = (card.config as Record<string, unknown>)?.size;
     const sizeClass = size === "wide" ? "md:col-span-2" : size === "tall" ? "row-span-2" : "";

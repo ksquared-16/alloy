@@ -1,11 +1,15 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { useAdminAuth } from "@/contexts/AdminAuthContext";
-import SettingsEntityTabBar from "@/components/adminV2/settings/SettingsEntityTabBar";
-import SettingsPageHeader from "@/components/adminV2/settings/SettingsPageHeader";
-import { SETTINGS_PAGE_SHELL_CLASS } from "@/lib/adminV2/settingsPageLayout";
+import {
+    ConfigurationContext,
+    ConfigurationPrimaryButton,
+    ConfigurationQueue,
+    ConfigurationQueueItem,
+    ConfigurationShell,
+} from "@/components/adminV2/settings/configurationRuntime/ConfigurationModeLayout";
 import KpiTargetsPanel from "@/app/adminV2/settings/analytics/KpiTargetsPanel";
 import OipVisibilityPanel from "@/app/adminV2/settings/analytics/OipVisibilityPanel";
 import { OipSettingsProvider } from "@/app/adminV2/settings/analytics/OipSettingsContext";
@@ -15,103 +19,121 @@ import PlacementBuilderPanel from "@/app/adminV2/settings/analytics/PlacementBui
 import RollupBuilderPanel from "@/app/adminV2/settings/analytics/RollupBuilderPanel";
 import MetricSetupFlow from "@/app/adminV2/settings/analytics/MetricSetupFlow";
 import MetricSnapshotButton from "@/app/adminV2/settings/analytics/MetricSnapshotButton";
-import { PlatformBuilderButton } from "@/app/adminV2/settings/analytics/platformBuilderUi";
 
-type TabKey = "calculations" | "displays" | "placements" | "rollups" | "targets" | "visibility";
+/** Left-rail sections — the modern settings list/detail pattern (Processes / Fields / Statuses). */
+type SectionKey = "calculations" | "sources-targets" | "displays" | "snapshots" | "advanced";
+type AdvancedKey = "placements" | "rollups" | "visibility";
 
-const TABS: { key: TabKey; label: string; subtitle: string }[] = [
-    { key: "calculations", label: "Calculations", subtitle: "Define what is measured — the metrics operators place in Surfaces." },
-    { key: "displays", label: "Displays", subtitle: "How a metric renders by default." },
-    { key: "targets", label: "Sources & targets", subtitle: "Where values come from, and the goals they're judged against." },
+const SECTIONS: { key: SectionKey; label: string; sub: string }[] = [
+    { key: "calculations", label: "Calculations", sub: "Define what is measured" },
+    { key: "sources-targets", label: "Sources & targets", sub: "Inputs and the goals they meet" },
+    { key: "displays", label: "Displays", sub: "Default render style" },
+    { key: "snapshots", label: "Snapshots", sub: "Point-in-time captures" },
+    { key: "advanced", label: "Advanced", sub: "Platform internals" },
 ];
 
-/**
- * Advanced surfaces — out of the primary flow. "Where it appears" (placements) and
- * "Combined scores" (rollups) belong inside the Surface Builder / platform internals;
- * Targets/Visibility are legacy V1.
- */
-const LEGACY_TABS: TabKey[] = ["placements", "rollups", "visibility"];
-
-function tabFromParam(raw: string | null): TabKey {
+function sectionFromParam(raw: string | null): SectionKey {
     if (raw === "displays" || raw === "visualizations") return "displays";
-    if (raw === "placements") return "placements";
-    if (raw === "rollups") return "rollups";
-    if (raw === "targets") return "targets";
-    if (raw === "visibility") return "visibility";
-    if (raw === "calculations" || raw === "packs" || raw === "metrics" || raw === "builders") return "calculations";
+    if (raw === "targets") return "sources-targets";
+    if (raw === "snapshots") return "snapshots";
+    if (raw === "placements" || raw === "rollups" || raw === "visibility") return "advanced";
     return "calculations";
+}
+
+function SnapshotsWorkspace() {
+    return (
+        <div className="process-config-setup-card overflow-hidden p-5">
+            <p className="config-typo-workspace-title">Snapshots</p>
+            <p className="config-typo-sublabel mt-1 max-w-md">
+                Capture a point-in-time value for every active calculation. Snapshots back prior-period comparisons in the runtime.
+            </p>
+            <div className="mt-4">
+                <MetricSnapshotButton />
+            </div>
+        </div>
+    );
+}
+
+function AdvancedWorkspace({ tab, setTab, canEdit }: { tab: AdvancedKey; setTab: (t: AdvancedKey) => void; canEdit: boolean }) {
+    const items: { key: AdvancedKey; label: string; note: string }[] = [
+        { key: "placements", label: "Where it appears", note: "Placement lives in the Surface Builder now — this is the raw table." },
+        { key: "rollups", label: "Combined scores", note: "Roll several metrics into one health score." },
+        { key: "visibility", label: "Experience placement (legacy V1)", note: "Legacy visibility surface." },
+    ];
+    return (
+        <div className="space-y-3">
+            <p className="config-typo-sublabel">Platform internals — not the day-to-day flow. Placement and composition happen in Surfaces.</p>
+            <div className="flex flex-wrap gap-2">
+                {items.map((it) => (
+                    <button
+                        key={it.key}
+                        type="button"
+                        onClick={() => setTab(it.key)}
+                        className={`rounded-lg border px-2.5 py-1 text-xs font-medium ${tab === it.key ? "border-alloy-juniper/40 bg-alloy-juniper/10 text-alloy-juniper" : "border-alloy-stone/25 text-alloy-midnight/60"}`}
+                    >
+                        {it.label}
+                    </button>
+                ))}
+            </div>
+            <p className="config-typo-sublabel">{items.find((i) => i.key === tab)?.note}</p>
+            <div>
+                {tab === "placements" ? <PlacementBuilderPanel canEdit={canEdit} /> : tab === "rollups" ? <RollupBuilderPanel canEdit={canEdit} /> : <OipVisibilityPanel canEdit={canEdit} />}
+            </div>
+        </div>
+    );
 }
 
 function AnalyticsSettingsInner() {
     const searchParams = useSearchParams();
-    const [tab, setTab] = useState<TabKey>(() => tabFromParam(searchParams.get("tab")));
+    const { canMutate } = useAdminAuth();
+    const rawTab = searchParams.get("tab");
+    const [sectionKey, setSectionKey] = useState<SectionKey>(() => sectionFromParam(rawTab));
+    const [advancedTab, setAdvancedTab] = useState<AdvancedKey>(() =>
+        rawTab === "rollups" || rawTab === "visibility" ? rawTab : "placements",
+    );
     const [flowOpen, setFlowOpen] = useState(false);
     const [refreshKey, setRefreshKey] = useState(0);
-    const { canMutate } = useAdminAuth();
-
-    useEffect(() => {
-        setTab(tabFromParam(searchParams.get("tab")));
-    }, [searchParams]);
-
-    const isLegacy = LEGACY_TABS.includes(tab);
-    const activeSubtitle = TABS.find((t) => t.key === tab)?.subtitle;
 
     return (
-        <div className={SETTINGS_PAGE_SHELL_CLASS} data-adminv2-analytics-settings="true">
-            <SettingsPageHeader
+        <div className="process-config-page min-h-0 flex-1" data-adminv2-analytics-settings="true">
+            <ConfigurationContext
                 title="Operational Calculations"
-                subtitle="Define the measurements — Lead Count, Tour Conversion, Needs Attention, Revenue. This is where metrics are defined; you place and compose them into experiences in Surfaces, and they render in the runtime."
+                subtitle="Define the measurements — Lead Count, Tour Conversion, Needs Attention, Revenue. Compose them into cards in Surfaces; they render in the runtime."
+                actions={canMutate ? <ConfigurationPrimaryButton onClick={() => setFlowOpen(true)}>+ New calculation</ConfigurationPrimaryButton> : null}
             />
-
-            {canMutate ?
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                    <PlatformBuilderButton variant="primary" onClick={() => setFlowOpen(true)}>+ New metric</PlatformBuilderButton>
-                    <MetricSnapshotButton />
+            <ConfigurationShell
+                testId="operational-calculations-shell"
+                queueColumn={
+                    <ConfigurationQueue title="Operational Calculations" summary="Define · place in Surfaces · render in runtime">
+                        {SECTIONS.map((s) => (
+                            <ConfigurationQueueItem
+                                key={s.key}
+                                active={sectionKey === s.key}
+                                title={s.label}
+                                subtitle={s.sub}
+                                onClick={() => setSectionKey(s.key)}
+                                testId={`operational-calculations-section-${s.key}`}
+                            />
+                        ))}
+                    </ConfigurationQueue>
+                }
+            >
+                <div key={refreshKey}>
+                    {sectionKey === "calculations" ? (
+                        <MetricBuilderPanel canEdit={canMutate} />
+                    ) : sectionKey === "sources-targets" ? (
+                        <KpiTargetsPanel canEdit={canMutate} />
+                    ) : sectionKey === "displays" ? (
+                        <VisualizationBuilderPanel canEdit={canMutate} />
+                    ) : sectionKey === "snapshots" ? (
+                        <SnapshotsWorkspace />
+                    ) : (
+                        <AdvancedWorkspace tab={advancedTab} setTab={setAdvancedTab} canEdit={canMutate} />
+                    )}
                 </div>
-            :   null}
+            </ConfigurationShell>
 
-            <SettingsEntityTabBar tabs={TABS} activeKey={isLegacy ? "calculations" : tab} onSelect={setTab} aria-label="Analytics configuration sections" />
-            {activeSubtitle ? <p className="-mt-1 text-xs text-alloy-midnight/55">{activeSubtitle}</p> : null}
-
-            <div className="mt-4" key={refreshKey}>
-                {tab === "calculations" ?
-                    <MetricBuilderPanel canEdit={canMutate} />
-                : tab === "displays" ?
-                    <VisualizationBuilderPanel canEdit={canMutate} />
-                : tab === "placements" ?
-                    <PlacementBuilderPanel canEdit={canMutate} />
-                : tab === "rollups" ?
-                    <RollupBuilderPanel canEdit={canMutate} />
-                : tab === "targets" ?
-                    <KpiTargetsPanel canEdit={canMutate} />
-                :   <OipVisibilityPanel canEdit={canMutate} />}
-            </div>
-
-            <div className="mt-6 border-t border-alloy-stone/15 pt-3">
-                <details data-analytics-legacy-advanced="true">
-                    <summary className="cursor-pointer text-[11px] font-semibold uppercase tracking-wide text-alloy-midnight/45">
-                        Advanced · platform internals
-                    </summary>
-                    <p className="mt-1.5 text-[11px] text-alloy-midnight/45">Placement lives in the Surface Builder now — these are platform internals, not the day-to-day flow.</p>
-                    <div className="mt-2 flex flex-wrap gap-2">
-                        <button type="button" onClick={() => setTab("placements")} className={`rounded-lg border px-2.5 py-1 text-xs font-medium ${tab === "placements" ? "border-alloy-juniper/40 bg-alloy-juniper/10 text-alloy-juniper" : "border-alloy-stone/25 text-alloy-midnight/60"}`}>
-                            Where it appears (advanced)
-                        </button>
-                        <button type="button" onClick={() => setTab("rollups")} className={`rounded-lg border px-2.5 py-1 text-xs font-medium ${tab === "rollups" ? "border-alloy-juniper/40 bg-alloy-juniper/10 text-alloy-juniper" : "border-alloy-stone/25 text-alloy-midnight/60"}`}>
-                            Combined scores (advanced)
-                        </button>
-                        <button type="button" onClick={() => setTab("visibility")} className={`rounded-lg border px-2.5 py-1 text-xs font-medium ${tab === "visibility" ? "border-alloy-juniper/40 bg-alloy-juniper/10 text-alloy-juniper" : "border-alloy-stone/25 text-alloy-midnight/60"}`}>
-                            Experience placement (legacy V1)
-                        </button>
-                    </div>
-                </details>
-            </div>
-
-            <MetricSetupFlow
-                open={flowOpen}
-                onClose={() => setFlowOpen(false)}
-                onComplete={() => setRefreshKey((k) => k + 1)}
-            />
+            <MetricSetupFlow open={flowOpen} onClose={() => setFlowOpen(false)} onComplete={() => setRefreshKey((k) => k + 1)} />
         </div>
     );
 }
