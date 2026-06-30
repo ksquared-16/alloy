@@ -5,6 +5,7 @@ import type {
     MetricVisualizationType,
     ResolvedMetricPlacement,
 } from "@/lib/metrics/platform/types";
+import { resolveMetricDisplayLabel } from "@/lib/metrics/platform/metricSourceRegistry";
 import { MetricComparisonCard } from "@/components/admin/metrics/MetricComparisonCard";
 import { MetricKpiCard } from "@/components/admin/metrics/MetricKpiCard";
 import { MetricTrendCard } from "@/components/admin/metrics/MetricTrendCard";
@@ -57,7 +58,14 @@ export function MetricVisualRenderer({
     density = "standard",
 }: MetricVisualRendererProps) {
     const viz = placement.visualization;
-    const label = (viz.display_config as { labelOverride?: string }).labelOverride ?? viz.label;
+    const def = placement.definition;
+    // Resolve display label with fallback chain — prevents raw source keys from reaching the
+    // UI regardless of what was stored in metric_visualizations.label (e.g. first-publish bug).
+    const label = resolveMetricDisplayLabel(
+        (viz.display_config as { labelOverride?: string }).labelOverride ?? viz.label,
+        def.label,
+        def.source_key,
+    );
     const type = viz.visualization_type as MetricVisualizationType;
     const fill = (viz.style_config as { fill?: string }).fill;
 

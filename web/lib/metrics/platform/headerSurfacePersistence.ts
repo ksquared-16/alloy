@@ -10,7 +10,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { resolvePlacementsForSurface } from "@/lib/metrics/platform/placementResolver";
 import { resolveDefinitionId, ensureVisualizationId } from "@/lib/metrics/platform/surfacePlacementHelpers";
-import { getMetricSourceAdapter } from "@/lib/metrics/platform/metricSourceRegistry";
+import { getMetricSourceAdapter, humanizeSourceKey } from "@/lib/metrics/platform/metricSourceRegistry";
 import { cardTypeToVizType, vizTypeToCardType } from "@/lib/metrics/platform/operationalIntelligenceSurfaceMapping";
 import type { MetricSurface, MetricVisualizationType } from "@/lib/metrics/platform/types";
 import type { SurfaceDoc } from "@/lib/platform/surfaceBuilder/surfaceDefinition";
@@ -221,7 +221,8 @@ export async function saveHeaderSurfaceDoc(supabase: SupabaseClient, orgId: stri
             console.warn(`[HeaderSurface] skipping create for unknown source key: ${c.sourceKey}`);
             continue;
         }
-        const vizId = await ensureVisualizationId(supabase, orgId, prefix, definitionId, c.sourceKey, c.vizType, labelBySource.get(c.sourceKey) ?? c.sourceKey);
+        const createLabel = labelBySource.get(c.sourceKey) ?? getMetricSourceAdapter(c.sourceKey)?.label ?? humanizeSourceKey(c.sourceKey);
+        const vizId = await ensureVisualizationId(supabase, orgId, prefix, definitionId, c.sourceKey, c.vizType, createLabel);
         if (!vizId) continue;
         await supabase.from("metric_placements").insert({
             org_id: orgId,
@@ -243,7 +244,8 @@ export async function saveHeaderSurfaceDoc(supabase: SupabaseClient, orgId: stri
             console.warn(`[HeaderSurface] skipping update for unknown source key: ${u.sourceKey}`);
             continue;
         }
-        const vizId = await ensureVisualizationId(supabase, orgId, prefix, definitionId, u.sourceKey, u.vizType, labelBySource.get(u.sourceKey) ?? u.sourceKey);
+        const updateLabel = labelBySource.get(u.sourceKey) ?? getMetricSourceAdapter(u.sourceKey)?.label ?? humanizeSourceKey(u.sourceKey);
+        const vizId = await ensureVisualizationId(supabase, orgId, prefix, definitionId, u.sourceKey, u.vizType, updateLabel);
         if (!vizId) continue;
         await supabase
             .from("metric_placements")
