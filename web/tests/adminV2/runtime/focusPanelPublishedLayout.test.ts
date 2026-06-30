@@ -56,6 +56,55 @@ describe("focusPanelPublishedLayout", () => {
         plan.rows.forEach((r) => expect(r.cells.reduce((s, c) => s + c.widthUnits, 0)).toBe(12));
     });
 
+    it("composes a column-regular grid into continuous LANES (no floating-island whitespace)", () => {
+        // The canonical authored layout: Household/Children left (twoThirds), Readiness/
+        // Current Work right (third) — same column widths down each row → column-regular.
+        const grid: FocusPanelPublishedLayout = {
+            rows: [
+                { cells: [{ width: "twoThirds", cards: ["household"] }, { width: "third", cards: ["readiness_kpi"] }] },
+                { cells: [{ width: "twoThirds", cards: ["children"] }, { width: "third", cards: ["current_work"] }] },
+            ],
+        };
+        const plan = planPublishedLayout(grid, 900);
+        // Column-major: each column becomes one continuous lane that fills its width.
+        expect(plan.strategy).toBe("lanes");
+        expect(plan.lanes.map((l) => [l.widthUnits, l.cards.map((c) => c.key)])).toEqual([
+            [8, ["household", "children"]],
+            [4, ["readiness_kpi", "current_work"]],
+        ]);
+        // The literal row plan stays available (back-compat) but the renderer uses lanes.
+        expect(plan.rows).toHaveLength(2);
+    });
+
+    it("carries a cell's reserved room (height) onto the first card of its lane segment", () => {
+        const grid: FocusPanelPublishedLayout = {
+            rows: [
+                { cells: [{ width: "half", cards: ["household"], height: "tall" }, { width: "half", cards: ["readiness_kpi"] }] },
+                { cells: [{ width: "half", cards: ["children"] }, { width: "half", cards: ["current_work"] }] },
+            ],
+        };
+        const plan = planPublishedLayout(grid, 900);
+        expect(plan.strategy).toBe("lanes");
+        // household (tall) reserves 268px; children (no height) is natural.
+        expect(plan.lanes[0]!.cards).toEqual([
+            { key: "household", minHeightPx: 268 },
+            { key: "children", minHeightPx: undefined },
+        ]);
+    });
+
+    it("stays row-major for an IRREGULAR layout (banner row over a multi-column row)", () => {
+        const banner: FocusPanelPublishedLayout = {
+            rows: [
+                { cells: [{ width: "full", cards: ["household"] }] },
+                { cells: [{ width: "half", cards: ["children"] }, { width: "half", cards: ["readiness_kpi"] }] },
+            ],
+        };
+        const plan = planPublishedLayout(banner, 900);
+        expect(plan.strategy).toBe("rows");
+        expect(plan.lanes).toEqual([]);
+        expect(plan.rows).toHaveLength(2);
+    });
+
     it("honors the published rows/widths EXACTLY when wide", () => {
         const plan = planPublishedLayout(LAYOUT, 900);
         expect(plan.collapsed).toBe(false);

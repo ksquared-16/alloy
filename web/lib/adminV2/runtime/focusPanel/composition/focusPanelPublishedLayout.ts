@@ -146,10 +146,28 @@ export type FocusPanelPublishedLayout = { rows: FocusPanelLayoutRow[] };
 /** A planned cell the renderer paints (width resolved to grid units). */
 export type PublishedLayoutCellPlan = { widthUnits: number; cards: FocusPanelCardKey[]; minHeightPx?: number };
 export type PublishedLayoutRowPlan = { cells: PublishedLayoutCellPlan[] };
+/** One card placed in a lane, with the room (min-height) its authoring cell reserved. */
+export type PublishedLayoutLaneCard = { key: FocusPanelCardKey; minHeightPx?: number };
+/** A vertical LANE the renderer paints as one continuous column (column-major). */
+export type PublishedLayoutLanePlan = { widthUnits: number; cards: PublishedLayoutLaneCard[] };
 export type PublishedLayoutPlan = {
     columnBase: number;
     /** True → single column (surface too narrow); honors reading order. */
     collapsed: boolean;
+    /**
+     * How the renderer composes the surface:
+     *   - `"lanes"` — column-major continuous lanes that FILL the surface (no short cell
+     *     floating in a tall row, no dead whitespace). Used when the authored layout is
+     *     column-regular (the common case). The runtime owns visual fit; the published
+     *     widths/placement are preserved exactly.
+     *   - `"rows"` — literal row-major rendering. Used for the collapsed single column and
+     *     for irregular layouts (e.g. a full-width banner row over a multi-column row),
+     *     where lanes do not apply.
+     */
+    strategy: "lanes" | "rows";
+    /** Populated when `strategy === "lanes"` (else empty). */
+    lanes: PublishedLayoutLanePlan[];
+    /** The literal row plan — always populated (the row-major fallback + back-compat). */
     rows: PublishedLayoutRowPlan[];
 };
 
@@ -219,11 +237,52 @@ export function resolveRowUnits(cells: FocusPanelLayoutCell[]): number[] {
 }
 
 /**
+ * The authored layout is "column-regular" when every row shares the same column
+ * structure — the same number of cells, with the same widths, in the same order. This
+ * is the common case (a clean grid), and it is exactly the shape that composes into
+ * continuous vertical LANES: each column becomes one lane that fills its proportional
+ * width, so a short cell never floats in a tall row leaving dead space.
+ *
+ * Returns the shared column widths, or `null` when the layout is irregular (e.g. a
+ * full-width banner row over a multi-column row) and must stay row-major. PURE.
+ */
+export function publishedLayoutColumnWidths(
+    layout: FocusPanelPublishedLayout,
+): FocusPanelCellWidth[] | null {
+    const first = layout.rows[0]?.cells;
+    if (!first || first.length === 0) return null;
+    const widths = first.map((c) => c.width);
+    const regular = layout.rows.every(
+        (row) =>
+            row.cells.length === widths.length &&
+            row.cells.every((cell, i) => cell.width === widths[i]),
+    );
+    return regular ? widths : null;
+}
+
+/** The literal row plan (row-major) — widths resolved to grid units. PURE. */
+function planPublishedRows(layout: FocusPanelPublishedLayout): PublishedLayoutRowPlan[] {
+    return layout.rows.map((row) => {
+        const units = resolveRowUnits(row.cells);
+        return {
+            cells: row.cells.map((cell, cellIndex) => ({
+                widthUnits: units[cellIndex] ?? 0,
+                cards: cell.cards,
+                minHeightPx: cell.height ? CELL_HEIGHT_PX[cell.height] : undefined,
+            })),
+        };
+    });
+}
+
+/**
  * Resolve a published layout + available width into a render plan. PURE.
  *
- * At/above the min width the plan honors the published rows/cells/widths EXACTLY.
- * Below it (or unknown width 0 → treat as wide for SSR) it collapses to a single
- * column in reading order — the only sanctioned override of a published layout.
+ * At/above the min width the plan honors the published rows/cells/widths EXACTLY, and
+ * — when the layout is column-regular — composes them into continuous vertical lanes so
+ * the surface FILLS with no dead whitespace (the runtime owns visual fit; the published
+ * widths/placement are preserved). Below the min width (or unknown width 0 → treat as
+ * wide for SSR) it collapses to a single column in reading order — the only sanctioned
+ * override of a published layout.
  */
 export function planPublishedLayout(
     layout: FocusPanelPublishedLayout,
@@ -234,23 +293,33 @@ export function planPublishedLayout(
         return {
             columnBase: PUBLISHED_LAYOUT_COLUMN_BASE,
             collapsed: true,
+            strategy: "rows",
+            lanes: [],
             rows: publishedLayoutReadingOrder(layout).map((card) => ({
                 cells: [{ widthUnits: PUBLISHED_LAYOUT_COLUMN_BASE, cards: [card] }],
             })),
         };
     }
-    return {
-        columnBase: PUBLISHED_LAYOUT_COLUMN_BASE,
-        collapsed: false,
-        rows: layout.rows.map((row) => {
-            const units = resolveRowUnits(row.cells);
-            return {
-                cells: row.cells.map((cell, cellIndex) => ({
-                    widthUnits: units[cellIndex] ?? 0,
-                    cards: cell.cards,
-                    minHeightPx: cell.height ? CELL_HEIGHT_PX[cell.height] : undefined,
-                })),
-            };
-        }),
-    };
+
+    // The literal row plan is always available (back-compat + the row-major fallback).
+    const rows = planPublishedRows(layout);
+
+    // Column-major lanes when the grid is column-regular: transpose rows→lanes so each
+    // column flows as one continuous lane filling its proportional width. A cell's
+    // reserved room (height) lands on the first card of that cell's segment.
+    const columnWidths = publishedLayoutColumnWidths(layout);
+    if (columnWidths) {
+        const units = resolveRowUnits(layout.rows[0]!.cells);
+        const lanes: PublishedLayoutLanePlan[] = columnWidths.map((_, colIndex) => ({
+            widthUnits: units[colIndex] ?? 0,
+            cards: layout.rows.flatMap((row) => {
+                const cell = row.cells[colIndex]!;
+                const minHeightPx = cell.height ? CELL_HEIGHT_PX[cell.height] : undefined;
+                return cell.cards.map((key, i) => ({ key, minHeightPx: i === 0 ? minHeightPx : undefined }));
+            }),
+        }));
+        return { columnBase: PUBLISHED_LAYOUT_COLUMN_BASE, collapsed: false, strategy: "lanes", lanes, rows };
+    }
+
+    return { columnBase: PUBLISHED_LAYOUT_COLUMN_BASE, collapsed: false, strategy: "rows", lanes: [], rows };
 }
