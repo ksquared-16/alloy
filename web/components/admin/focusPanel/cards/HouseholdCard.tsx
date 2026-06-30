@@ -232,7 +232,7 @@ export default function HouseholdCard({ model, context, receded = false, coordin
         >
             <UniversalCard
                 title={model.title}
-                insight={evidence.answerLine}
+                insight={householdHeadline(evidence)}
                 supportingInsight={
                     perspective === "collapsed" ? evidence.lastUpdatedLabel : null
                 }
@@ -259,6 +259,22 @@ function EmptyBody() {
             <p className="alloy-os-household__row-detail">No household linked to this record yet</p>
         </div>
     );
+}
+
+/**
+ * Household-level headline that does NOT restate the child count (the chips carry it)
+ * nor the primary name (the primary-contact row carries it, with a Primary badge). Uses
+ * the family surname when a primary contact exists; falls back to the needs-attention
+ * answer otherwise. The full sentence still lives on `evidence.answerLine` for deeper
+ * states / other consumers.
+ */
+function householdHeadline(evidence: ReturnType<typeof buildHouseholdCardEvidence>): string {
+    const name = evidence.primaryContact?.name?.trim();
+    if (name) {
+        const surname = name.split(/\s+/).pop();
+        return surname ? `${surname} household` : "Household";
+    }
+    return evidence.answerLine;
 }
 
 function CollapsedBody({
@@ -310,15 +326,24 @@ function CollapsedBody({
     return (
         <div className="alloy-os-household__summary">
             {evidence.primaryContact ? (
-                <p
-                    className={clsx(
-                        "alloy-os-household__channel",
-                        !channel && "alloy-os-household__channel--missing",
-                    )}
-                    data-household-channel="true"
-                >
-                    {channel ?? "No contact channel on file"}
-                </p>
+                <div className="alloy-os-household__primary-row" data-household-primary-row="true">
+                    <CardAvatar name={evidence.primaryContact.name} imageUrl={evidence.primaryContact.imageUrl} size={30} />
+                    <div className="alloy-os-household__row-main min-w-0">
+                        <span className="alloy-os-household__row-name">
+                            {evidence.primaryContact.name}
+                            <span className="alloy-os-card-pill alloy-os-card-pill--positive alloy-os-household__primary-badge">Primary</span>
+                        </span>
+                        <span
+                            className={clsx(
+                                "alloy-os-household__row-detail",
+                                !channel && "alloy-os-household__channel--missing",
+                            )}
+                            data-household-channel="true"
+                        >
+                            {channel ?? "No contact channel on file"}
+                        </span>
+                    </div>
+                </div>
             ) : (
                 <p className="alloy-os-household__missing" data-household-missing="primary">
                     Primary contact needed
