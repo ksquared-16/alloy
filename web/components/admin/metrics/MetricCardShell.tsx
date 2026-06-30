@@ -72,7 +72,7 @@ export function MetricCardShell({
     const gapClass = density === "compact" ? "gap-1" : "gap-2";
     // Compact tiles (header strips) use a fixed width so every KPI and Trend card is the same
     // size regardless of label length — no tile grows because of a longer label or sparkline.
-    const sizeClass = density === "compact" ? "w-[160px] shrink-0" : "min-w-0";
+    const sizeClass = density === "compact" ? "w-[160px] min-h-[80px] shrink-0" : "min-w-0";
 
     const resolvedHeaderRight =
         headerRight ??
