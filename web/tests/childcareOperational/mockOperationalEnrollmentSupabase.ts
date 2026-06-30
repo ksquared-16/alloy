@@ -32,6 +32,9 @@ export type OperationalEnrollmentMockStore = {
     financial_services: Row[];
     financial_charge_templates: Row[];
     financial_policies: Row[];
+    consumption_event_types: Row[];
+    consumption_events: Row[];
+    resolved_obligations: Row[];
     locations: Row[];
     location_program_categories: Row[];
     customer_members: Row[];
@@ -60,6 +63,9 @@ export function createOperationalEnrollmentMockStore(
         financial_services: seed?.financial_services ?? [],
         financial_charge_templates: seed?.financial_charge_templates ?? [],
         financial_policies: seed?.financial_policies ?? [],
+        consumption_event_types: seed?.consumption_event_types ?? [],
+        consumption_events: seed?.consumption_events ?? [],
+        resolved_obligations: seed?.resolved_obligations ?? [],
         locations: seed?.locations ?? [],
         location_program_categories: seed?.location_program_categories ?? [],
         customer_members: seed?.customer_members ?? [],
