@@ -6,6 +6,7 @@ const PAGE = join(
     process.cwd(),
     "app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page.tsx"
 );
+const HOOK = join(process.cwd(), "lib/adminV2/runtime/queue/useWorkUnitQueueRuntime.ts");
 
 describe("workUnitQueuePillSwitchRegression", () => {
     it("page applies view-scoped cache on pill change and does not clear row buffer", () => {
@@ -34,7 +35,8 @@ describe("workUnitQueuePillSwitchRegression", () => {
     });
 
     it("fetch finally clears loading when no leases remain (anti-freeze)", () => {
-        const src = readFileSync(PAGE, "utf8");
+        // fetchQueueItems moved to the canonical useWorkUnitQueueRuntime hook.
+        const src = readFileSync(PAGE, "utf8") + readFileSync(HOOK, "utf8");
         expect(src).toContain("queueRowLeaseSigsRef.current.size === 0");
     });
 });

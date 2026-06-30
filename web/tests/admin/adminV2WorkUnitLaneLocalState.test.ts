@@ -8,6 +8,13 @@ const pagePath = join(
     "../../app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page.tsx"
 );
 const pageSource = readFileSync(pagePath, "utf8");
+// fetchQueueItems orchestration now lives in the canonical useWorkUnitQueueRuntime hook; queue-fetch
+// internal assertions read the page + hook together.
+const hookPath = join(
+    dirname(fileURLToPath(import.meta.url)),
+    "../../lib/adminV2/runtime/queue/useWorkUnitQueueRuntime.ts"
+);
+const queueRuntimeSource = pageSource + readFileSync(hookPath, "utf8");
 
 describe("work-unit lane local state (no URL churn)", () => {
     it("does not use useSearchParams; lane writes use shallow replaceState only", () => {
@@ -74,7 +81,7 @@ describe("work-unit queue stability (PERF-C-01 / C-02)", () => {
     });
 
     it("clears wrong-lane queue items when starting a foreground row fetch", () => {
-        expect(pageSource).toMatch(/pk != null && pk !== apiQueueKey\) return null/);
+        expect(queueRuntimeSource).toMatch(/pk != null && pk !== apiQueueKey\) return null/);
     });
 
     it("background-preloads visible queue pills including NA buckets after reveal", () => {
