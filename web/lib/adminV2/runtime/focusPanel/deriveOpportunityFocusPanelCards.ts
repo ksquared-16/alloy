@@ -732,6 +732,22 @@ function buildCardModels(input: {
         }),
     );
 
+    map.set(
+        "billing_preview",
+        card({
+            key: "billing_preview",
+            title: "Billing Preview",
+            insight: record["billing_configured"]
+                ? "Billing configured"
+                : trimOrNull(record["tuition_rate_label"]) ?? "Billing not configured",
+            tier: "context",
+            span: 1,
+            density: "compact",
+            statusChip: record["billing_configured"] ? "Configured" : null,
+            statusTone: record["billing_configured"] ? "ready" : "neutral",
+        }),
+    );
+
     return map;
 }
 
