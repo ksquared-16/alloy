@@ -222,29 +222,62 @@ export default function FocusPanelCardGrid({
                 style={{ ["--alloy-os-fp-units" as string]: publishedPlan.columnBase }}
             >
                 {scrim}
-                <div className="alloy-os-fp-canvas alloy-os-fp-canvas--published">
-                    {publishedPlan.rows.map((row, rowIndex) => (
-                        <div
-                            // eslint-disable-next-line react/no-array-index-key
-                            key={rowIndex}
-                            className="alloy-os-fp-published-row"
-                            data-fp-published-row={rowIndex}
-                        >
-                            {row.cells.map((cell, cellIndex) => (
-                                <div
-                                    // eslint-disable-next-line react/no-array-index-key
-                                    key={cellIndex}
-                                    className="alloy-os-fp-published-cell"
-                                    data-fp-cell-units={cell.widthUnits}
-                                    data-fp-cell-min-height={cell.minHeightPx ?? undefined}
-                                    style={{ flexGrow: cell.widthUnits, flexShrink: 1, flexBasis: 0, minHeight: cell.minHeightPx ? `${cell.minHeightPx}px` : undefined }}
-                                >
-                                    {cell.cards.map((card) => renderCellBox(card, { dataWidthUnits: cell.widthUnits }))}
-                                </div>
-                            ))}
-                        </div>
-                    ))}
-                </div>
+                {publishedPlan.strategy === "lanes" ? (
+                    // Column-major: each authored column flows as one continuous lane that
+                    // fills its proportional width — the surface composes with no dead space
+                    // (same lane mechanism as the auto-composition default).
+                    <div
+                        className="alloy-os-fp-canvas alloy-os-fp-canvas--lanes"
+                        data-fp-strategy="published-lanes"
+                    >
+                        {publishedPlan.lanes.map((lane, laneIndex) => (
+                            <div
+                                // eslint-disable-next-line react/no-array-index-key
+                                key={laneIndex}
+                                className="alloy-os-fp-lane alloy-os-fp-published-lane"
+                                data-fp-published-lane={laneIndex}
+                                data-fp-lane-units={lane.widthUnits}
+                                style={{
+                                    flexGrow: lane.widthUnits,
+                                    flexShrink: 1,
+                                    flexBasis: 0,
+                                    ["--alloy-os-fp-lane-units" as string]: lane.widthUnits,
+                                }}
+                            >
+                                {lane.cards.map((card) =>
+                                    renderCellBox(card.key, {
+                                        dataWidthUnits: lane.widthUnits,
+                                        style: card.minHeightPx ? { minHeight: `${card.minHeightPx}px` } : undefined,
+                                    }),
+                                )}
+                            </div>
+                        ))}
+                    </div>
+                ) : (
+                    <div className="alloy-os-fp-canvas alloy-os-fp-canvas--published">
+                        {publishedPlan.rows.map((row, rowIndex) => (
+                            <div
+                                // eslint-disable-next-line react/no-array-index-key
+                                key={rowIndex}
+                                className="alloy-os-fp-published-row"
+                                data-fp-published-row={rowIndex}
+                            >
+                                {row.cells.map((cell, cellIndex) => (
+                                    <div
+                                        // eslint-disable-next-line react/no-array-index-key
+                                        key={cellIndex}
+                                        className="alloy-os-fp-published-cell"
+                                        data-fp-cell-units={cell.widthUnits}
+                                        data-fp-cell-min-height={cell.minHeightPx ?? undefined}
+                                        style={{ flexGrow: cell.widthUnits, flexShrink: 1, flexBasis: 0, minHeight: cell.minHeightPx ? `${cell.minHeightPx}px` : undefined }}
+                                    >
+                                        {cell.cards.map((card) => renderCellBox(card, { dataWidthUnits: cell.widthUnits }))}
+                                    </div>
+                                ))}
+                            </div>
+                        ))}
+                    </div>
+                )}
             </div>
         );
     }
