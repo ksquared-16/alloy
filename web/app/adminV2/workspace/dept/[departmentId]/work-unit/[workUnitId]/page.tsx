@@ -2670,7 +2670,10 @@ export default function AdminV2OpportunityWorkUnitPage() {
             if (warmSwitch?.work_unit?.id === workUnitId) {
                 setWorkUnit(warmSwitch.work_unit as WorkUnitRow);
                 setDept(warmSwitch.department as DeptRow);
-                setQueueSummaries((warmSwitch.queue_summaries ?? []) as QueueSummary[]);
+                // Warm switch counts are stale (from a prior navigation's planned bootstrap).
+                // Mark deferred so pills show skeleton until fetchQueueSummaries refreshes them.
+                const rawWsQs = (warmSwitch.queue_summaries ?? []) as QueueSummary[];
+                setQueueSummaries(rawWsQs.map((q) => ({ ...q, counts_deferred: true as const })));
                 wuDeferredQueueKeysRef.current = warmSwitch.deferred_queue_keys ?? [];
                 workUnitDetailReadyRef.current = true;
                 bootstrapWuRef.current = warmSwitch.work_unit as WorkUnitRow;
@@ -3009,10 +3012,20 @@ export default function AdminV2OpportunityWorkUnitPage() {
                         workUnitDetailReadyRef.current = true;
                         bootstrapWuRef.current = wu;
 
-                        const qs = (b.queue?.summaries ?? []) as QueueSummary[];
-                        wuDeferredQueueKeysRef.current = Array.isArray(b.queue?.deferred_queue_keys)
-                            ? b.queue.deferred_queue_keys
+                        const rawQs = (b.queue?.summaries ?? []) as QueueSummary[];
+                        // Bootstrap uses planned (approximate) counts for priority queues — do not
+                        // display them. Mark ALL summaries as counts_deferred so pills show skeleton
+                        // until hydrateDeferredQueueSummaryCounts resolves exact counts for all keys.
+                        const qs = rawQs.map((q) => ({ ...q, counts_deferred: true as const }));
+                        const bootstrapDeferred = Array.isArray(b.queue?.deferred_queue_keys)
+                            ? (b.queue.deferred_queue_keys as string[])
                             : [];
+                        // Extend deferred key set to include priority queues so the exact-count
+                        // hydration step (hydrateDeferredQueueSummaryCounts) resolves all pills,
+                        // not just the originally-deferred non-priority ones.
+                        wuDeferredQueueKeysRef.current = Array.from(
+                            new Set([...bootstrapDeferred, ...rawQs.map((q) => q.key)])
+                        );
                         setQueueSummaries(qs);
                         setQueueSummariesError(null);
                         setQueueSummariesRoute(buildWorkUnitQueuesListRoute(workUnitId, selectedSiteId));
