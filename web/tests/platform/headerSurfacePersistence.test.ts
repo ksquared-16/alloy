@@ -149,7 +149,7 @@ describe("resolveMetricDisplayLabel — label fallback chain", () => {
     it("skips vizLabel when it equals the raw source key (bad DB write)", () => {
         // This is the first-publish bug: viz.label was stored as the source key
         expect(resolveMetricDisplayLabel("enrollment.tour_completed_count", "Completed tours", "enrollment.tour_completed_count")).toBe("Completed tours");
-        expect(resolveMetricDisplayLabel("ops.work_overdue_count", "Overdue work count", "ops.work_overdue_count")).toBe("Overdue work count");
+        expect(resolveMetricDisplayLabel("ops.work_overdue_count", "Overdue work", "ops.work_overdue_count")).toBe("Overdue work");
     });
 
     it("falls back to adapter label when vizLabel equals sourceKey and defLabel is empty", () => {
@@ -184,7 +184,7 @@ describe("label fallback — first-publish label selection logic", () => {
         const labelBySource = new Map<string, string>();
         const sourceKey = "ops.work_overdue_count";
         const resolved = labelBySource.get(sourceKey) ?? getMetricSourceAdapter(sourceKey)?.label ?? humanizeSourceKey(sourceKey);
-        expect(resolved).toBe("Overdue work count");
+        expect(resolved).toBe("Overdue work");
     });
 
     it("empty labelBySource + unknown key → humanized fallback (not raw key)", () => {
