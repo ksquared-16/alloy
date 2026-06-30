@@ -15,6 +15,7 @@ import {
     type PersonStatusProfileKey,
 } from "@/lib/admin/person/personStatusApplicability";
 import { OPPORTUNITY_CASE_STATUS_KEYS } from "@/lib/admin/statusReseed/statusMvpCatalog";
+import { parseProcessStageKeyFromStatusMetadata } from "@/lib/businessProcesses/processStageMetadata";
 
 function parsePersonStatusProfileParam(raw: string | null): PersonStatusProfileKey | null {
     const t = String(raw ?? "").trim().toLowerCase();
@@ -70,6 +71,13 @@ export async function GET(request: NextRequest) {
                 :   (r.status_label && String(r.status_label).trim()) || r.status_key,
             sort_order: r.sort_order ?? 0,
             lifecycle_stage: parseLifecycleStageFromMetadata(r.metadata),
+            // Configured process-stage bucket for this status (status_definitions.metadata.process_stage_key).
+            // The operational projection derives a record's Stage from its status via this — Stage Work View
+            // predicates (e.g. New Leads = stage "lead") evaluate correctly even though opportunities never
+            // store a stage column.
+            process_stage_key: parseProcessStageKeyFromStatusMetadata(
+                (r.metadata ?? null) as Record<string, unknown> | null,
+            ),
             metadata: r.metadata ?? null,
         }));
         return NextResponse.json({ options, status_profile: statusProfile });

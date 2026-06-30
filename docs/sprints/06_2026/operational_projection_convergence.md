@@ -128,17 +128,58 @@ event. No new event is required; the projection becomes the recomputed unit.
 
 ---
 
+## Stage is derived from status (New Leads vs Registration — data-proven)
+
+The Lyons Family lead showed under **Registration**, not **New Leads**. Inspecting the live record
+(org `93667019`):
+
+- `opportunities.status_key = new_inquiry`, **`lifecycle_stage_key = null`** (null on *every* opportunity
+  org-wide — opportunities never store a stage column).
+- New Leads filter = `opportunity_stage equals "lead"` (match=all). The evaluator resolves
+  `opportunity_stage` from `lifecycle_stage_key` → **null** → New Leads **false**.
+- Registration filter = `child_enrollment_status in […] OR needs_attention equals "true"` (match=**any**).
+  A brand-new uncontacted lead is needs-attention → that OR-branch → Registration **true**.
+
+**Root cause:** a record's **stage is a roll-up over its status** (`status_definitions.metadata.process_stage_key`,
+e.g. `new_inquiry → lead`), but the Stage predicate had no row value to evaluate because the stage was
+never materialized from the status.
+
+**Fix (correct layer = evaluator/projection input, not Create Lead or config):**
+`enrichRowsWithDerivedStage(rows, statusStageMap)` sets `lifecycle_stage_key` from
+`status_key → process_stage_key` when absent; `computeOperationalProjection` applies it before filtering.
+The status→stage map comes from `/api/admin/status-options` (now returns `process_stage_key`); the client
+landing loader fetches it once and threads it into the enrollment projection. New Leads now correctly
+counts the new lead. (Registration *also* matching via its `needs_attention` OR-branch is the saved
+config's intent — not changed, per "do not change Work View config".)
+
+**Diagnostic:** `diagnoseRecordWorkViewPlacement({ record, workViews, statusStageMap })` returns the
+record's status/derived-stage/work_unit + each Work View's pass/predicate — the dev/test tool used to
+prove the placement above.
+
+## KPI decision (Lead Count = 7)
+
+**Decision: the workspace KPI "Lead Count" is an ANALYTICS metric (opportunities created in a rolling
+30-day window), NOT the operational lead count, and must not be compared to operational projection
+counts.** The doctrine guard (`oipDisplayValueIsPresent`) ensures it never renders a value beside "No
+data". The cosmetic relabel ("Lead Count" → "Leads created in 30 days") is intentionally **not** done here
+("do not patch labels"); the operational New Leads / All Leads counts come from the projection, which is
+the operational source of truth.
+
 ## Remaining risks / work (bounded)
 
-1. **Base-rows count cap.** The client fetches up to `PROJECTION_BASE_ROWS_LIMIT` (500) all-records base
-   rows per department to compute per-view counts in-memory (consistent with the existing in-memory row
-   filter). A pipeline with >500 records would under-count; the scale-correct path is a server-side
-   per-view projection count (compute in the summaries endpoint where the queue is already loaded). The
-   one base-rows fetch runs in parallel with the existing summaries fetch (not a duplicate).
-2. **Above-fold header pills (per-view).** Header chips are lane-keyed and already agree with the
-   projection for lane-bound views; rendering predicate-only views as header pills is the Work View
-   header-pill materialization follow-up (a page restructure), out of scope here per the user.
+1. **Work Unit page header/pills are still lane-keyed.** The `/workspace/work-unit/...` above-fold chips
+   render from `queue_definition` lanes (`queuePillSections` in the page) — they agree with the projection
+   for lane-bound views but do not yet render one pill per configured Work View. Repointing them
+   (one pill per visible Work View, `?work_view=<id>` navigation, active from `loc.workViewId`, count from
+   the projection) is a hot-page restructure (~`page.tsx` 1037-1059 + the pill-click handler +
+   `WorkUnitAboveFoldHeaderChips`) — scoped as the next focused commit. The tile + sidebar already
+   materialize all six.
+2. **Queue-route rows need the same stage derivation.** The page's queue rows come from
+   `/api/admin/queues/[workUnitId]/[queueKey]` (server) filtered by the active view; for a Stage predicate
+   to match there, the route must apply the same `enrichRowsWithDerivedStage` server-side (it loads
+   `status_definitions` already). Same root fix, server seam.
 3. **Focus Panel scope banner.** `resolveFocusPanelScope` is ready + tested; rendering the out-of-scope
-   banner + "open in All Leads" action in `WorkUnitSlugRouteHost` is the UI step (out of scope, per the user).
-4. **Analytics KPI label.** Renaming "Lead Count" → "Leads created in 30 days" — metric-definition copy,
-   out of scope per the user.
+   banner + "open in All Leads" action in `WorkUnitSlugRouteHost` is the UI step.
+4. **Base-rows count cap.** The client fetches up to `PROJECTION_BASE_ROWS_LIMIT` (500) all-records base
+   rows per department for in-memory per-view counts (consistent with the existing in-memory row filter);
+   a pipeline >500 records would under-count — the scale-correct path is a server-side per-view count.

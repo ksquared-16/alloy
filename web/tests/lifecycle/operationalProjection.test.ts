@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
     computeOperationalProjection,
+    diagnoseRecordWorkViewPlacement,
+    enrichRowsWithDerivedStage,
     recordMatchesWorkView,
     resolveFocusPanelScope,
 } from "@/lib/lifecycle/operationalProjection";
@@ -93,6 +95,76 @@ describe("computeOperationalProjection — one source for counts and rows", () =
         const p = computeOperationalProjection({ baseRows: [{ id: "a" }], workViews: VIEWS });
         expect(p.byViewId.hidden!.visibleInRuntime).toBe(false);
         expect(p.byViewId.all_leads!.visibleInRuntime).toBe(true);
+    });
+});
+
+// Data-proven regression: the Lyons Family lead (status_key=new_inquiry, lifecycle_stage_key=null,
+// needs_attention) showed under Registration, not New Leads. Reproduced with the ACTUAL configured
+// Work Views (stage is derived from status; opportunities never store lifecycle_stage_key).
+describe("New Leads vs Registration placement (stage derived from status)", () => {
+    const ENROLLMENT_VIEWS: WorkViewConfigV1Stored[] = [
+        // New Leads — Stage predicate (process-stage bucket "lead").
+        {
+            id: "new_leads",
+            label: "New Leads",
+            display_order: 1,
+            match: "all",
+            filters_v1: [{ field_key: "opportunity_stage", operator: "equals", value: "lead" }],
+        },
+        // Registration — match=any incl. `needs_attention equals true` (catches an uncontacted new lead).
+        {
+            id: "registration",
+            label: "Registration",
+            display_order: 3,
+            match: "any",
+            filters_v1: [
+                { field_key: "child_enrollment_status", operator: "equals", value: "registration_pending" },
+                { field_key: "needs_attention", operator: "equals", value: "true" },
+            ],
+        },
+        { id: "all_leads", label: "All Leads", display_order: 6, match: "all", filters_v1: [] },
+    ];
+    // status_definitions: new_inquiry → stage "lead".
+    const STATUS_STAGE = { new_inquiry: "lead", tour_scheduled: "tour_scheduled" };
+    const lyons = { id: "lyons", status_key: "new_inquiry", lifecycle_stage_key: null, _needs_attention: true };
+
+    it("WITHOUT stage derivation: New Leads is false (null stage), Registration true (needs_attention)", () => {
+        expect(recordMatchesWorkView(lyons, ENROLLMENT_VIEWS[0])).toBe(false); // New Leads — stage null
+        expect(recordMatchesWorkView(lyons, ENROLLMENT_VIEWS[1])).toBe(true); // Registration — needs_attention OR
+    });
+
+    it("WITH stage derived from status: New Leads correctly includes the new lead", () => {
+        const [enriched] = enrichRowsWithDerivedStage([lyons], STATUS_STAGE);
+        expect(enriched.lifecycle_stage_key).toBe("lead");
+        expect(recordMatchesWorkView(enriched, ENROLLMENT_VIEWS[0])).toBe(true); // New Leads now matches
+    });
+
+    it("projection with statusStageMap: New Leads = 1, All Leads = 1 (counts agree)", () => {
+        const p = computeOperationalProjection({
+            baseRows: [lyons],
+            workViews: ENROLLMENT_VIEWS,
+            statusStageMap: STATUS_STAGE,
+        });
+        expect(p.total).toBe(1);
+        expect(p.byViewId.new_leads!.count).toBe(1);
+        expect(p.byViewId.new_leads!.rows).toHaveLength(1); // count === rows
+        expect(p.byViewId.all_leads!.count).toBe(1);
+        // Registration still also matches via needs_attention (config OR-branch) — that's the config's intent.
+        expect(p.byViewId.registration!.count).toBe(1);
+    });
+
+    it("diagnostic explains placement per Work View (record id, status, stage, pass/reason)", () => {
+        const diag = diagnoseRecordWorkViewPlacement({
+            record: lyons,
+            workViews: ENROLLMENT_VIEWS,
+            statusStageMap: STATUS_STAGE,
+        });
+        expect(diag.status_key).toBe("new_inquiry");
+        expect(diag.stage_key).toBe("lead"); // derived
+        const byId = Object.fromEntries(diag.views.map((v) => [v.id, v.pass]));
+        expect(byId.new_leads).toBe(true);
+        expect(byId.all_leads).toBe(true);
+        expect(byId.registration).toBe(true); // needs_attention
     });
 });
 

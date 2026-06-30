@@ -148,6 +148,12 @@ Panel.
 - **One resolver for count and rows.** A Work View's count is the predicate-filtered count over the
   all-records base — **never** a `queue_definition` lane-membership summary. So process card "records",
   "All Leads", Work View counts, and queue rows agree (All Leads = total; each view's count = its rows).
+- **Stage is a roll-up over status.** Opportunities do not store a stage column; a record's stage = the
+  stage its `status_key` belongs to (`status_definitions.metadata.process_stage_key`, e.g.
+  `new_inquiry → lead`). The projection derives `opportunity_stage` from the status
+  (`enrichRowsWithDerivedStage`) before evaluating, so Stage Work View predicates (New Leads = stage
+  "lead") match. Without this, a Stage predicate evaluates against a null stage and a new lead falls
+  through to whatever view's `needs_attention`/`any` branch catches it.
 - **Analytics is not operational truth.** Window/aggregate metrics (e.g. "leads created in 30 days") are
   analytics — they may differ in scope and must be labeled as such. A KPI tile **never** renders a value
   beside a "No data" indicator (`oipDisplayValueIsPresent` guard).

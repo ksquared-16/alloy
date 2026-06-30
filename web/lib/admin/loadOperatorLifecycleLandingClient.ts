@@ -20,7 +20,7 @@ import { pickDeptPipelineWorkUnit } from "@/lib/workspace/pickDeptPipelineWorkUn
 import { tryLoadWorkUnitQueueDefinitionBundle } from "@/lib/config/queueDefinitionV2Runtime";
 import { getQueueUiConfig } from "@/lib/ui-v2/queueUiConfig";
 import { findAllRecordsQueueKey } from "@/lib/workspace/workUnitQueueDerived";
-import type { OperationalProjectionRow } from "@/lib/lifecycle/operationalProjection";
+import type { OperationalProjectionRow, StatusStageMap } from "@/lib/lifecycle/operationalProjection";
 
 /** Cap on all-records base rows fetched for the operational projection (per department pipeline). */
 const PROJECTION_BASE_ROWS_LIMIT = 500;
@@ -76,6 +76,32 @@ export function invalidateOperatorLifecycleLandingCache(): void {
     cachedCards = null;
 }
 
+/**
+ * `status_key → process_stage_key` for opportunities — lets the operational projection derive a record's
+ * Stage from its status (opportunities store no stage), so Stage Work View predicates (e.g. New Leads =
+ * stage "lead") evaluate. Org-wide; fetched once per rollup pass.
+ */
+async function fetchOpportunityStatusStageMap(init: RequestInit): Promise<StatusStageMap | null> {
+    try {
+        const res = await dedupeAdminFetchWithTtl(
+            "/api/admin/status-options?entity_type=opportunities",
+            init,
+            LIFECYCLE_SIBLING_FETCH_TTL_MS,
+        );
+        if (!res.ok) return null;
+        const json = (await res.json()) as { options?: { value?: string; process_stage_key?: string | null }[] };
+        const map: StatusStageMap = {};
+        for (const o of json.options ?? []) {
+            const status = String(o.value ?? "").trim();
+            const stage = String(o.process_stage_key ?? "").trim();
+            if (status && stage) map[status] = stage;
+        }
+        return Object.keys(map).length ? map : null;
+    } catch {
+        return null;
+    }
+}
+
 async function fetchLifecycleRollupsForCards(
     cards: OperatorLifecycleLandingCard[],
     workUnits: OperatorLifecycleWorkUnitRow[],
@@ -84,6 +110,8 @@ async function fetchLifecycleRollupsForCards(
 ): Promise<OperatorLifecycleLandingCard[]> {
     const departmentIds = [...new Set(cards.map((c) => c.departmentId).filter(Boolean))];
     if (!departmentIds.length) return cards;
+
+    const statusStageMap = await fetchOpportunityStatusStageMap(init);
 
     const summariesByDept = await Promise.all(
         departmentIds.map(async (departmentId) => {
@@ -128,6 +156,8 @@ async function fetchLifecycleRollupsForCards(
             queueSummaries: deptSummaries?.summaries ?? [],
             // Canonical projection source: per-view counts come from these base rows + view predicates.
             baseRows: deptSummaries?.baseRows ?? undefined,
+            // Derive Stage from status so Stage predicates (e.g. New Leads = stage "lead") evaluate.
+            statusStageMap: statusStageMap ?? undefined,
         });
     }
 

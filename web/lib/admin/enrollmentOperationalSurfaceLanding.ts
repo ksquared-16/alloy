@@ -21,6 +21,7 @@ import { slugifyWorkViewId } from "@/lib/lifecycle/workViewsConfigV1";
 import {
     computeOperationalProjection,
     type OperationalProjectionRow,
+    type StatusStageMap,
 } from "@/lib/lifecycle/operationalProjection";
 import { resolveProcessWorkViews } from "@/lib/lifecycle/workViewsCompatibility";
 import { pickDeptPipelineWorkUnit } from "@/lib/workspace/pickDeptPipelineWorkUnit";
@@ -306,6 +307,8 @@ function buildWorkLinesFromConfiguredWorkViews(args: {
     /** All-records base rows for the pipeline work unit — when present, per-view counts come from the
      *  canonical operational projection (predicate-filtered), NOT lane summaries. */
     baseRows?: ReadonlyArray<OperationalProjectionRow>;
+    /** status_key → process stage key, so Stage predicates evaluate (opportunities store no stage). */
+    statusStageMap?: StatusStageMap | null;
 }): OperationalSurfaceWorkLineData[] {
     const operationalViews = args.workUnit.queueDefinition ?
         resolveOperationalViewsForWorkUnit({
@@ -327,7 +330,12 @@ function buildWorkLinesFromConfiguredWorkViews(args: {
     // unavailable (e.g. server first-paint before the client hydrates them).
     const projection =
         args.baseRows ?
-            computeOperationalProjection({ baseRows: args.baseRows, workViews, includeRows: false })
+            computeOperationalProjection({
+                baseRows: args.baseRows,
+                workViews,
+                includeRows: false,
+                statusStageMap: args.statusStageMap,
+            })
         :   null;
 
     return workViews.map((view) => {
@@ -448,6 +456,7 @@ export function buildEnrollmentOperationalSurfaceFields(args: {
     workUnits?: OperatorLifecycleWorkUnitRow[];
     queueSummaries?: readonly LifecycleWorkUnitSummaryRow[];
     baseRows?: ReadonlyArray<OperationalProjectionRow>;
+    statusStageMap?: StatusStageMap | null;
 }): EnrollmentOperationalSurfaceFields | null {
     if (!isEnrollmentLifecycleCard(args.card)) return null;
 
@@ -475,6 +484,7 @@ export function buildEnrollmentOperationalSurfaceFields(args: {
             workUnit,
             queueSummaries: args.queueSummaries,
             baseRows: args.baseRows,
+            statusStageMap: args.statusStageMap,
         }),
     };
 }
@@ -519,6 +529,7 @@ export function enrichEnrollmentOperationalSurfaceForDepartment(args: {
     queueSummaries?: readonly LifecycleWorkUnitSummaryRow[];
     /** All-records base rows for the department's pipeline work unit (canonical projection source). */
     baseRows?: ReadonlyArray<OperationalProjectionRow>;
+    statusStageMap?: StatusStageMap | null;
 }): OperatorLifecycleLandingCard[] {
     return args.cards.map((card) => {
         if (card.departmentId !== args.departmentId) return card;
@@ -529,6 +540,7 @@ export function enrichEnrollmentOperationalSurfaceForDepartment(args: {
             workUnits: args.workUnits,
             queueSummaries: args.queueSummaries,
             baseRows: args.baseRows,
+            statusStageMap: args.statusStageMap,
         });
         return applyEnrollmentOperationalSurfaceFields(card, fields);
     });

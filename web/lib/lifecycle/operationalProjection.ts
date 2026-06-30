@@ -19,9 +19,41 @@ import {
     evaluateWorkViewFiltersForRow,
     filterQueueRowsByWorkViewFilters,
 } from "@/lib/lifecycle/evaluateWorkViewFiltersV1";
-import { resolveWorkViewMatchV1, type WorkViewConfigV1Stored } from "@/lib/lifecycle/workViewsConfigV1";
+import {
+    resolveWorkViewMatchV1,
+    type WorkViewConfigV1Stored,
+    type WorkViewFilterMatchV1,
+} from "@/lib/lifecycle/workViewsConfigV1";
 
 export type OperationalProjectionRow = Record<string, unknown>;
+
+/** `status_key` → process stage key (from `status_definitions.metadata.process_stage_key`). */
+export type StatusStageMap = Record<string, string>;
+
+/**
+ * Materialize the process **stage** onto rows that carry only a **status**. Stage is a roll-up over
+ * statuses: a record's stage = the stage its `status_key` belongs to. Opportunities do not store
+ * `lifecycle_stage_key` (it is null in practice), so a Work View's Stage predicate (e.g. New Leads =
+ * `opportunity_stage equals "lead"`) cannot evaluate until the stage is derived from the status. This
+ * sets `lifecycle_stage_key` (the field the evaluator reads) from `statusStageMap[status_key]` when the
+ * row lacks one — leaving any explicit stage untouched.
+ */
+export function enrichRowsWithDerivedStage<T extends OperationalProjectionRow>(
+    rows: readonly T[],
+    statusStageMap: StatusStageMap | null | undefined,
+): T[] {
+    if (!statusStageMap) return [...rows];
+    return rows.map((row) => {
+        const existing =
+            typeof row.lifecycle_stage_key === "string" && row.lifecycle_stage_key.trim()
+                ? row.lifecycle_stage_key
+                : null;
+        if (existing) return row;
+        const status = typeof row.status_key === "string" ? row.status_key.trim() : "";
+        const stage = status ? statusStageMap[status] : undefined;
+        return stage ? ({ ...row, lifecycle_stage_key: stage } as T) : row;
+    });
+}
 
 export type OperationalProjectionView = {
     id: string;
@@ -51,8 +83,13 @@ export function computeOperationalProjection(params: {
     baseRows: ReadonlyArray<OperationalProjectionRow>;
     workViews: ReadonlyArray<WorkViewConfigV1Stored>;
     includeRows?: boolean;
+    /** Derive `opportunity_stage` from `status_key` so Stage predicates evaluate (see enrichRowsWithDerivedStage). */
+    statusStageMap?: StatusStageMap | null;
 }): OperationalProjection {
-    const baseRows = params.baseRows as OperationalProjectionRow[];
+    const baseRows = enrichRowsWithDerivedStage(
+        params.baseRows as OperationalProjectionRow[],
+        params.statusStageMap,
+    );
     const includeRows = params.includeRows !== false;
     const total = baseRows.length;
 
@@ -110,4 +147,50 @@ export function resolveFocusPanelScope(params: {
     if (!record) return { kind: "in_scope" }; // record not yet loaded — don't assert out-of-scope
     if (recordMatchesWorkView(record, activeView)) return { kind: "in_scope" };
     return { kind: "out_of_scope", activeViewId: activeView.id, activeViewLabel: activeView.label };
+}
+
+export type WorkViewPlacementResult = {
+    id: string;
+    label: string;
+    match: WorkViewFilterMatchV1;
+    pass: boolean;
+    filters: unknown;
+};
+
+export type RecordWorkViewPlacementDiagnostic = {
+    recordId: string;
+    status_key: string | null;
+    stage_key: string | null;
+    work_unit_id: string | null;
+    views: WorkViewPlacementResult[];
+};
+
+/**
+ * Diagnose why a record lands (or doesn't) in each Work View — evaluated with the SAME predicate
+ * evaluator as the counts/rows, after deriving the stage from status. Dev/test diagnostic to explain
+ * placement (e.g. why a New Lead shows under Registration, not New Leads).
+ */
+export function diagnoseRecordWorkViewPlacement(params: {
+    record: OperationalProjectionRow;
+    workViews: ReadonlyArray<WorkViewConfigV1Stored>;
+    statusStageMap?: StatusStageMap | null;
+}): RecordWorkViewPlacementDiagnostic {
+    const [record] = enrichRowsWithDerivedStage([params.record], params.statusStageMap);
+    const str = (k: string): string | null => {
+        const v = record?.[k];
+        return typeof v === "string" && v.trim() ? v.trim() : null;
+    };
+    return {
+        recordId: str("id") ?? "",
+        status_key: str("status_key"),
+        stage_key: str("lifecycle_stage_key"),
+        work_unit_id: str("work_unit_id"),
+        views: params.workViews.map((view) => ({
+            id: view.id,
+            label: view.label,
+            match: resolveWorkViewMatchV1(view.match),
+            pass: recordMatchesWorkView(record ?? params.record, view),
+            filters: view.filters_v1 ?? [],
+        })),
+    };
 }
