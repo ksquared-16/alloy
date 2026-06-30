@@ -76,7 +76,7 @@ A **stage** is where operators **work a cohort of records** with shared expected
 
 Stages render as **queue lanes** or **header pills** on the work-unit execution surface — not as separate navigation destinations.
 
-> **Operator navigation is the Work View, not the stage or the lane.** A **Work View** (`WorkViewConfigV1Stored`) is the operator's named lens over a process's work (filters, sort, queue/Focus-Panel layouts) and resolves onto queue lanes via `compat_queue_key`. Queue lanes are **execution/runtime**; stages are **lifecycle/governance**. Neither is the operator's primary navigation tier — Work Views are. See [`../operator/operational-workspace-shell.md` § Operational Work Doctrine](../operator/operational-workspace-shell.md#operational-work-doctrine--the-canonical-chain).
+> **Operator navigation is the Work View, not the stage or the lane.** A **Work View** (`WorkViewConfigV1Stored`) is the operator's named lens over a process's work (filters, sort, queue/Focus-Panel layouts). Every configured visible Work View **materializes** as its own navigation item (see *Work View runtime materialization* below) — a view may bind a queue lane via `compat_queue_key`, but a view without one still materializes and routes via `?work_view=<id>`. Queue lanes are **execution/runtime**; stages are **lifecycle/governance**. Neither is the operator's primary navigation tier — Work Views are. See [`../operator/operational-workspace-shell.md` § Operational Work Doctrine](../operator/operational-workspace-shell.md#operational-work-doctrine--the-canonical-chain).
 
 ### Work View conditions — operational predicate builder (V3)
 
@@ -109,6 +109,31 @@ type, **option source**, supported operators, and runtime resolver. See
   `status → opportunity_status`, `location → site` (plus `enrollment_status → child_enrollment_status`);
   views with no `match` evaluate as AND; an invalid `match` is never silently reinterpreted. The evaluator
   resolves canonical and legacy keys identically.
+
+### Work View runtime materialization
+
+**Process config can define many Work Views; the runtime must materialize each one.** A configured,
+visible Work View is its own operational lens — it appears in the left navigation under the process,
+opens its own work view, evaluates its own predicates, and shows its own count. The Work Unit page must
+**not** collapse to the first/default view.
+
+- **Nav is Work-View-driven, not lane-driven.** `buildOperatorLifecycleLanding` emits one nav item per
+  configured visible Work View (ordered by `display_order`, visibility respected). It no longer collapses
+  to the single view that happened to bind a queue lane — the prior bug, where views lacking a
+  `compat_queue_key` (or whose key didn't match a `queue_definition` lane) were silently dropped and the
+  rail fell back to the one default "New Leads" lane.
+- **Stable per-view route.** A view that binds a pipeline queue lane keeps its canonical lane-slug route
+  (`/workspace/work-unit/:laneSlug`). A view without a bound lane routes to the host work unit with
+  `?work_view=<id>` (a supported route param) — the runtime selects it (`resolveActiveWorkViewRuntimeContext`
+  resolves by id), evaluates its predicates, and counts its rows via the predicate-filtered queue route.
+  The legacy New Leads lane route remains the compatibility default.
+- **Focus Panel is unaffected.** `/workspace/work-unit/:slug/:recordId` opens the record by id regardless
+  of the active Work View (the query string is not part of the record-id path).
+- **Stage roll-up (next modeling cleanup, not solved here).** Stage should be treated as an operational
+  **bucket / roll-up over statuses and work**, and Work Views should consume stages as configured
+  process-stage buckets. The queue/header **pill row** on the Work Unit page is still queue-backed (it
+  filters/relabels existing `queue_definition` lanes); converting it to render every configured Work View
+  with its own predicate-derived count is the follow-up, tracked with the Stage roll-up modeling.
 
 **Outcome picker:** My Tasks **Complete** flow resolves stage outcomes via `GET /api/admin/lifecycle-builder/stage-work-outcomes` — human confirms before side effects.
 

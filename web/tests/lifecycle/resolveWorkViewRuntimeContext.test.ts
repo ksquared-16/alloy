@@ -118,3 +118,100 @@ describe("workViewRuntimeUrlParamsFromQueueKey", () => {
         });
     });
 });
+
+// Work View runtime materialization — each Work View (selected via ?work_view=<id>) must resolve and
+// evaluate ITS OWN predicates, even without a bound compat_queue_key, so counts differ per view.
+describe("per-Work-View predicate resolution + count (materialization)", () => {
+    const PREDICATE_VIEWS: WorkViewConfigV1Stored[] = [
+        {
+            id: "active_pipeline",
+            label: "Active Pipeline",
+            display_order: 1,
+            visible_in_runtime: true,
+            match: "any",
+            filters_v1: [
+                { field_key: "opportunity_status", operator: "equals", value: "tour_scheduled" },
+                { field_key: "opportunity_status", operator: "equals", value: "waitlist" },
+            ],
+        },
+        {
+            id: "waitlist",
+            label: "Waitlist",
+            display_order: 2,
+            visible_in_runtime: true,
+            filters_v1: [{ field_key: "opportunity_status", operator: "equals", value: "waitlist" }],
+        },
+    ];
+    const predicateDeptMetadata = {
+        lifecycle_builder_v1: {
+            version: 1,
+            active_process_id: "proc-1",
+            processes: [
+                {
+                    id: "proc-1",
+                    key: "enrollment",
+                    name: "Enrollment",
+                    is_active: true,
+                    stages: [],
+                    work_views_v1: PREDICATE_VIEWS,
+                },
+            ],
+        },
+    };
+
+    it("resolves each Work View by id → its own filters + match (no compat_queue_key needed)", () => {
+        const active = resolveActiveWorkViewRuntimeContext({
+            departmentMetadata: predicateDeptMetadata,
+            workViewId: "active_pipeline",
+        });
+        expect(active.workViewId).toBe("active_pipeline");
+        expect(active.match).toBe("any");
+        expect(active.filters).toHaveLength(2);
+
+        const waitlist = resolveActiveWorkViewRuntimeContext({
+            departmentMetadata: predicateDeptMetadata,
+            workViewId: "waitlist",
+        });
+        expect(waitlist.workViewId).toBe("waitlist");
+        expect(waitlist.match).toBe("all");
+        expect(waitlist.filters).toHaveLength(1);
+    });
+
+    it("counts differ when predicates differ — each view filters the same rows by its own predicate", async () => {
+        const { filterQueueRowsByWorkViewFilters } = await import(
+            "@/lib/lifecycle/evaluateWorkViewFiltersV1"
+        );
+        const rows = [
+            { id: "o1", status_key: "tour_scheduled" },
+            { id: "o2", status_key: "waitlist" },
+            { id: "o3", status_key: "waitlist" },
+            { id: "o4", status_key: "lost" },
+        ];
+        const active = resolveActiveWorkViewRuntimeContext({
+            departmentMetadata: predicateDeptMetadata,
+            workViewId: "active_pipeline",
+        });
+        const waitlist = resolveActiveWorkViewRuntimeContext({
+            departmentMetadata: predicateDeptMetadata,
+            workViewId: "waitlist",
+        });
+        // Active Pipeline (tour OR waitlist) → 3 rows; Waitlist → 2 rows. Counts differ.
+        expect(filterQueueRowsByWorkViewFilters(rows, active.filters, active.match)).toHaveLength(3);
+        expect(filterQueueRowsByWorkViewFilters(rows, waitlist.filters, waitlist.match)).toHaveLength(2);
+    });
+});
+
+describe("focus panel route is independent of the active Work View", () => {
+    it("parses the record id from /workspace/work-unit/:slug/:recordId even with ?work_view=", async () => {
+        const { parseOperatorWorkUnitPath } = await import("@/lib/admin/canonicalOperatorRoutes");
+        // Query string is not part of the pathname; record-id deep-link parsing is unaffected.
+        expect(parseOperatorWorkUnitPath("/workspace/work-unit/enrollment-pipeline/opp-123")).toEqual({
+            workUnitSlug: "enrollment-pipeline",
+            recordId: "opp-123",
+        });
+        expect(parseOperatorWorkUnitPath("/workspace/work-unit/enrollment-pipeline")).toEqual({
+            workUnitSlug: "enrollment-pipeline",
+            recordId: null,
+        });
+    });
+});

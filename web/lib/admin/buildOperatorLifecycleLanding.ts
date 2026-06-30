@@ -14,7 +14,8 @@ import {
     operatorWorkUnitKeyForPipelineQueueKey,
 } from "@/lib/lifecycle/enrollmentProcessStageQueueKeys";
 import { isLifecycleStageWorkUnitKey } from "@/lib/lifecycle/lifecycleStageWorkUnit";
-import { operatorWorkUnitHrefFromKey } from "@/lib/admin/canonicalOperatorRoutes";
+import { operatorWorkUnitHrefFromKey, operatorWorkViewHref } from "@/lib/admin/canonicalOperatorRoutes";
+import { savedWorkViewsFromDepartmentMetadata } from "@/lib/lifecycle/resolveWorkViewRuntimeContext";
 import {
     extractDrawerLifecycleExecutionLanes,
     extractPipelineExecutionLanes,
@@ -168,6 +169,43 @@ function workViewNavEntriesForDepartment(args: {
     const platformKey = (targetWu.key ?? "").trim();
     if (!platformKey) return [];
 
+    // Materialization (Work View runtime materialization): every configured, visible Work View becomes
+    // its own nav item — ordering + visibility come straight from the saved config. This no longer
+    // collapses to the one view that happened to bind a pipeline queue lane.
+    //   - A view that binds a pipeline queue lane (`compat_queue_key`) keeps its canonical lane-slug
+    //     route (`/workspace/work-unit/:laneSlug`) — preserves existing routing + the legacy default.
+    //   - A view without a bound lane routes to the host work unit with `?work_view=<id>`, so it still
+    //     materializes as its own operational view (the runtime selects it, evaluates its predicates,
+    //     and shows its own count) instead of being dropped.
+    const savedWorkViews = savedWorkViewsFromDepartmentMetadata(args.departmentMetadata).filter(
+        (view) => view.visible_in_runtime !== false,
+    );
+    if (savedWorkViews.length) {
+        return [...savedWorkViews]
+            .sort(
+                (a, b) =>
+                    (a.display_order ?? Number.MAX_SAFE_INTEGER) - (b.display_order ?? Number.MAX_SAFE_INTEGER)
+                    || a.label.localeCompare(b.label),
+            )
+            .map((view) => {
+                const compat = view.compat_queue_key?.trim();
+                if (compat) {
+                    const laneKey = operatorWorkUnitKeyForPipelineQueueKey(compat) ?? compat;
+                    return {
+                        label: view.label?.trim() || view.id,
+                        platformKey: laneKey,
+                        href: operatorWorkUnitHrefFromKey(laneKey),
+                    };
+                }
+                return {
+                    label: view.label?.trim() || view.id,
+                    platformKey: view.id,
+                    href: operatorWorkViewHref(platformKey, view.id),
+                };
+            });
+    }
+
+    // Legacy fallback — no configured Work Views: derive nav from queue lanes / stage perspectives.
     const fromConfig = resolveOperationalViewsForWorkUnit({
         departmentMetadata: args.departmentMetadata,
         workUnitMetadata: null,
@@ -187,8 +225,6 @@ function workViewNavEntriesForDepartment(args: {
         .map((row) => {
             // Phase 2 route canonicalization: each work-view lane resolves to its own operator
             // work-unit slug (`/workspace/work-unit/:slug`), matching the builder/pipeline nav path.
-            // The previous dept/uuid preview href routed through `/adminV2`→`/admin` and produced
-            // duplicate dept-route RSC loads per click (plus an unrouted `/workspace/dept/…` 404).
             const laneKey = operatorWorkUnitKeyForPipelineQueueKey(row.queue_key) ?? platformKey;
             return {
                 label: row.label?.trim() || row.queue_key,

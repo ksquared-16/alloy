@@ -151,6 +151,132 @@ describe("buildOperatorLifecycleLandingCards", () => {
         expect(cards[0]?.label).toBe("Lead Management");
     });
 
+    // Work View runtime materialization — configured Work Views (without bound queue lanes) must each
+    // become their own nav item routed via `?work_view=<id>`, not collapse to a single default lane.
+    function enrollmentCardWithWorkViews(
+        workViews: Array<Record<string, unknown>>,
+    ): ReturnType<typeof buildOperatorLifecycleLandingCards>[number] | undefined {
+        return buildOperatorLifecycleLandingCards({
+            catalogEntries: [visibleCatalogEntry({})],
+            departments: [
+                {
+                    id: "dept-1",
+                    metadata: {
+                        lifecycle_builder_v1: {
+                            version: 1,
+                            active_process_id: "proc-1",
+                            processes: [
+                                {
+                                    id: "proc-1",
+                                    key: "lead_management",
+                                    name: "Lead Management",
+                                    is_active: true,
+                                    stages: [],
+                                    work_views_v1: workViews,
+                                },
+                            ],
+                        },
+                    },
+                },
+            ],
+            workUnits: [
+                {
+                    id: "wu-pipeline",
+                    department_id: "dept-1",
+                    key: "enrollment_pipeline",
+                    name: "Enrollment Pipeline",
+                    queue_definition: RAW_ENROLLMENT_PIPELINE_QUEUE_DEFINITION_V2,
+                },
+            ],
+        })[0];
+    }
+
+    // Canonical configs use 1-based display_order (parseWorkViewRow clamps to >= 1).
+    const SIX_WORK_VIEWS = [
+        { id: "new_leads", label: "New Leads", display_order: 1 },
+        { id: "active_pipeline", label: "Active Pipeline", display_order: 2 },
+        { id: "registration", label: "Registration", display_order: 3 },
+        { id: "waitlist", label: "Waitlist", display_order: 4 },
+        { id: "tours", label: "Tours", display_order: 5 },
+        { id: "all_leads", label: "All Leads", display_order: 6 },
+    ];
+
+    it("materializes every configured Work View as its own nav item (6 → 6, not 6 → 1)", () => {
+        const card = enrollmentCardWithWorkViews(SIX_WORK_VIEWS);
+        expect(card?.workQueues.map((q) => q.label)).toEqual([
+            "New Leads",
+            "Active Pipeline",
+            "Registration",
+            "Waitlist",
+            "Tours",
+            "All Leads",
+        ]);
+    });
+
+    it("gives each Work View a stable per-view route (`?work_view=<id>`) on the host work unit", () => {
+        const card = enrollmentCardWithWorkViews(SIX_WORK_VIEWS);
+        expect(card?.workQueues.map((q) => q.href)).toEqual([
+            "/workspace/work-unit/enrollment-pipeline?work_view=new_leads",
+            "/workspace/work-unit/enrollment-pipeline?work_view=active_pipeline",
+            "/workspace/work-unit/enrollment-pipeline?work_view=registration",
+            "/workspace/work-unit/enrollment-pipeline?work_view=waitlist",
+            "/workspace/work-unit/enrollment-pipeline?work_view=tours",
+            "/workspace/work-unit/enrollment-pipeline?work_view=all_leads",
+        ]);
+        // Stable platformKey per view (drives active-state matching) + canonical operator route.
+        expect(card?.workQueues.map((q) => q.platformKey)).toEqual([
+            "new_leads",
+            "active_pipeline",
+            "registration",
+            "waitlist",
+            "tours",
+            "all_leads",
+        ]);
+        for (const q of card?.workQueues ?? []) {
+            expect(q.href.startsWith("/workspace/work-unit/")).toBe(true);
+            expect(q.href).not.toContain("/dept/");
+        }
+    });
+
+    it("excludes hidden/inactive Work Views; preserves configured order", () => {
+        const card = enrollmentCardWithWorkViews([
+            { id: "new_leads", label: "New Leads", display_order: 1 },
+            { id: "hidden_view", label: "Hidden", display_order: 2, visible_in_runtime: false },
+            { id: "tours", label: "Tours", display_order: 3 },
+        ]);
+        expect(card?.workQueues.map((q) => q.label)).toEqual(["New Leads", "Tours"]);
+    });
+
+    it("orders Work Views by display_order regardless of array order", () => {
+        const card = enrollmentCardWithWorkViews([
+            { id: "all_leads", label: "All Leads", display_order: 6 },
+            { id: "new_leads", label: "New Leads", display_order: 1 },
+            { id: "waitlist", label: "Waitlist", display_order: 4 },
+        ]);
+        expect(card?.workQueues.map((q) => q.label)).toEqual(["New Leads", "Waitlist", "All Leads"]);
+    });
+
+    it("mixes lane-bound and predicate-only Work Views — both materialize", () => {
+        const card = enrollmentCardWithWorkViews([
+            // Bound to a real pipeline lane → keeps canonical lane-slug route.
+            { id: "new_leads", label: "New Leads", compat_queue_key: "new_leads", display_order: 1 },
+            // No bound lane → materializes via ?work_view= instead of being dropped.
+            { id: "all_leads", label: "All Leads", display_order: 2 },
+        ]);
+        expect(card?.workQueues.map((q) => q.href)).toEqual([
+            "/workspace/work-unit/new-leads",
+            "/workspace/work-unit/enrollment-pipeline?work_view=all_leads",
+        ]);
+    });
+
+    it("legacy: no configured Work Views falls back to queue-lane nav (New Leads default)", () => {
+        const card = enrollmentCardWithWorkViews([]);
+        // Falls back to the pipeline queue lanes; New Leads remains the default entry.
+        expect((card?.workQueues.length ?? 0)).toBeGreaterThan(0);
+        expect(card?.workQueues.some((q) => q.label.toLowerCase().includes("new lead"))).toBe(true);
+        expect(card?.entryHref).toBe("/workspace/work-unit/new-leads");
+    });
+
     it("maps builder-owned lifecycle stage work units to pipeline queue slugs (not lifecycle_wu_lead)", () => {
         const cards = buildOperatorLifecycleLandingCards({
             catalogEntries: [visibleCatalogEntry({})],
