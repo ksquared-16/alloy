@@ -78,6 +78,16 @@ Stages render as **queue lanes** or **header pills** on the work-unit execution 
 
 > **Operator navigation is the Work View, not the stage or the lane.** A **Work View** (`WorkViewConfigV1Stored`) is the operator's named lens over a process's work (filters, sort, queue/Focus-Panel layouts) and resolves onto queue lanes via `compat_queue_key`. Queue lanes are **execution/runtime**; stages are **lifecycle/governance**. Neither is the operator's primary navigation tier — Work Views are. See [`../operator/operational-workspace-shell.md` § Operational Work Doctrine](../operator/operational-workspace-shell.md#operational-work-doctrine--the-canonical-chain).
 
+### Work View conditions — typed operational predicates (V2)
+
+A Work View's *"Show work when…"* conditions (`filters_v1`) are **typed operational predicates**, not generic database filters. The condition field list comes from a canonical registry (`web/lib/lifecycle/workViewConditionFieldRegistry.ts`) — every field declares its subject/entity, value type, **option source**, supported operators, and runtime resolver.
+
+- **Status always belongs to a subject.** There is no generic "Status" field. Use **Lead Status** (opportunity case statuses) or **Child Enrollment Status** (OCM/child dispositions) — each pulls from its own status-definition set, never a shared dropdown.
+- **Stages remain process configuration.** **Lead Stage** is a typed condition whose options are the process's **configured lifecycle stages** (not a status set). Stages are not deleted or demoted — Work Views simply reference them through a typed field.
+- **Fields are grouped by operational subject** — *Lead* (Lead Stage, Lead Status, Tour date), *Child* (Child Enrollment Status, Program), *Household* (Campus), *Operational* (Needs Attention, …).
+- **Operator labels vs canonical keys.** Operators see *Lead Stage / Lead Status / Campus*; the canonical stored/runtime keys remain `opportunity_stage` / `opportunity_status` / `site`.
+- **Generic `Stage` / `Status` condition fields are deprecated.** Legacy saved conditions normalize on load — `stage → opportunity_stage`, `status → opportunity_status`, `location → site` — and canonical keys persist on the next save. The runtime evaluator (`evaluateWorkViewFiltersV1.ts`) resolves both canonical and legacy keys identically.
+
 **Outcome picker:** My Tasks **Complete** flow resolves stage outcomes via `GET /api/admin/lifecycle-builder/stage-work-outcomes` — human confirms before side effects.
 
 **Actions on a stage** are configured invocations of *registered capabilities* (action

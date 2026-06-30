@@ -14,8 +14,9 @@ import {
 } from "@/lib/lifecycle/workViewsConfigV1";
 
 function filtersFromStageLabel(stageLabel: string): WorkViewFilterV1[] {
+    // Seed with the canonical typed key (legacy `stage` is normalized to this on load anyway).
     return [
-        { field_key: "stage", operator: "equals", value: stageLabel },
+        { field_key: "opportunity_stage", operator: "equals", value: stageLabel },
     ];
 }
 

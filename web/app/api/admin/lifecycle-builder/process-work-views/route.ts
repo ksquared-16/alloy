@@ -63,10 +63,17 @@ export async function GET(request: NextRequest) {
 
         const saved = process.work_views_v1 ?? null;
         const effective = resolveProcessWorkViews({ process, saved });
+        // Stage options for the typed "Opportunity Stage" condition field — the configured process
+        // lifecycle stages (the process spine), NOT a status set.
+        const stages = [...process.stages]
+            .filter((s) => s.is_active)
+            .sort((a, b) => a.sort_order - b.sort_order || a.label.localeCompare(b.label))
+            .map((s) => ({ value: s.key, label: s.label }));
         return NextResponse.json({
             work_views_v1: effective,
             saved_work_views_v1: saved,
             compatibility_seed: !saved?.length,
+            stages,
         });
     } catch (e) {
         return NextResponse.json({ error: e instanceof Error ? e.message : "Failed to load work views" }, { status: 500 });

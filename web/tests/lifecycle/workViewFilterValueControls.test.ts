@@ -17,6 +17,28 @@ describe("workViewFilterValueControls", () => {
 
     it("uses status select for status equals", () => {
         expect(resolveWorkViewFilterValueControlKind("status", "equals")).toBe("status_select");
+        expect(resolveWorkViewFilterValueControlKind("opportunity_status", "equals")).toBe("status_select");
+    });
+
+    it("uses a distinct stage select for opportunity_stage (not the status set)", () => {
+        expect(resolveWorkViewFilterValueControlKind("opportunity_stage", "equals")).toBe("stage_select");
+        // Stage and Status are different controls — the V1 bug shared one status_select.
+        expect(resolveWorkViewFilterValueControlKind("opportunity_stage", "equals")).not.toBe(
+            resolveWorkViewFilterValueControlKind("opportunity_status", "equals"),
+        );
+    });
+
+    it("uses program select for program equals", () => {
+        expect(resolveWorkViewFilterValueControlKind("program", "equals")).toBe("program_select");
+    });
+
+    it("clears stale value when switching between typed select fields", () => {
+        const row = patchWorkViewFilterRow(
+            { field_key: "opportunity_status", operator: "equals", value: "open" },
+            { field_key: "opportunity_stage" },
+        );
+        expect(row.field_key).toBe("opportunity_stage");
+        expect(row.value).toBe("");
     });
 
     it("uses location select with current site default", () => {

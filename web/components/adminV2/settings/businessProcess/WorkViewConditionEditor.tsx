@@ -3,13 +3,18 @@
 import { useCallback, useEffect, useState } from "react";
 import WorkViewConditionValueControl from "@/components/adminV2/settings/businessProcess/WorkViewConditionValueControl";
 import { ConfigRuntimeSectionHeader } from "@/components/adminV2/settings/configurationRuntime/ConfigurationRuntimePrimitives";
-import { WORK_VIEW_FILTER_FIELD_OPTIONS } from "@/lib/lifecycle/workViewsConfigV1";
+import { useWorkViewsConfiguration } from "@/components/adminV2/settings/businessProcess/WorkViewsConfigurationContext";
 import {
     createDefaultWorkViewFilterRow,
     operatorLabelsForField,
     patchWorkViewFilterRow,
     type WorkViewFilterOption,
 } from "@/lib/lifecycle/workViewFilterValueControls";
+import {
+    DEFAULT_WORK_VIEW_CONDITION_FIELD_KEY,
+    getWorkViewConditionField,
+    workViewConditionFieldGroups,
+} from "@/lib/lifecycle/workViewConditionFieldRegistry";
 import type { WorkViewFilterOperatorV1, WorkViewFilterV1 } from "@/lib/lifecycle/workViewsConfigV1";
 import { BUSINESS_PROCESS_WORK_VIEW_SHOW_WORK_WHEN } from "@/lib/lifecycle/businessProcessUiLabels";
 import { workspaceDataFetchInit } from "@/lib/workspace/workspaceDataFetch";
@@ -18,6 +23,11 @@ type StatusOptionsResponse = { options?: { value: string; label: string }[] };
 type LocationsResponse = {
     locations?: { id: string; label: string | null; name?: string | null }[];
 };
+type ProgramCategoriesResponse = {
+    categories?: { key: string; label: string | null }[];
+};
+
+const FIELD_GROUPS = workViewConditionFieldGroups();
 
 export default function WorkViewConditionEditor({
     filters,
@@ -26,29 +36,47 @@ export default function WorkViewConditionEditor({
     filters: WorkViewFilterV1[];
     onChange: (filters: WorkViewFilterV1[]) => void;
 }) {
-    const [statusOptions, setStatusOptions] = useState<WorkViewFilterOption[]>([]);
-    const [locationOptions, setLocationOptions] = useState<WorkViewFilterOption[]>([]);
+    const { stageOptions } = useWorkViewsConfiguration();
+    const [opportunityStatusOptions, setOpportunityStatusOptions] = useState<WorkViewFilterOption[]>([]);
+    const [childEnrollmentStatusOptions, setChildEnrollmentStatusOptions] = useState<WorkViewFilterOption[]>([]);
+    const [siteOptions, setSiteOptions] = useState<WorkViewFilterOption[]>([]);
+    const [programOptions, setProgramOptions] = useState<WorkViewFilterOption[]>([]);
 
     const loadOptions = useCallback(async () => {
         try {
-            const [statusRes, locRes] = await Promise.all([
+            const [oppRes, childRes, locRes, programRes] = await Promise.all([
                 fetch("/api/admin/status-options?entity_type=opportunities", workspaceDataFetchInit()),
+                fetch("/api/admin/status-options?entity_type=opportunity_customer_members", workspaceDataFetchInit()),
                 fetch("/api/admin/locations", workspaceDataFetchInit()),
+                fetch("/api/admin/location-program-categories", workspaceDataFetchInit()),
             ]);
-            const statusJson = (await statusRes.json()) as StatusOptionsResponse;
-            const locJson = (await locRes.json()) as LocationsResponse;
-            if (statusRes.ok) {
-                setStatusOptions(
-                    (statusJson.options ?? []).map((o) => ({ value: o.value, label: o.label })),
-                );
+            if (oppRes.ok) {
+                const json = (await oppRes.json()) as StatusOptionsResponse;
+                setOpportunityStatusOptions((json.options ?? []).map((o) => ({ value: o.value, label: o.label })));
+            }
+            if (childRes.ok) {
+                const json = (await childRes.json()) as StatusOptionsResponse;
+                setChildEnrollmentStatusOptions((json.options ?? []).map((o) => ({ value: o.value, label: o.label })));
             }
             if (locRes.ok) {
-                setLocationOptions(
-                    (locJson.locations ?? []).map((loc) => ({
+                const json = (await locRes.json()) as LocationsResponse;
+                setSiteOptions(
+                    (json.locations ?? []).map((loc) => ({
                         value: loc.id,
                         label: (loc.label ?? loc.name ?? loc.id).trim() || loc.id,
                     })),
                 );
+            }
+            if (programRes.ok) {
+                const json = (await programRes.json()) as ProgramCategoriesResponse;
+                // De-dupe program categories by key across locations for the (currently location-agnostic) picker.
+                const byKey = new Map<string, WorkViewFilterOption>();
+                for (const cat of json.categories ?? []) {
+                    const value = String(cat.key ?? "").trim();
+                    if (!value || byKey.has(value)) continue;
+                    byKey.set(value, { value, label: (cat.label ?? value).trim() || value });
+                }
+                setProgramOptions([...byKey.values()]);
             }
         } catch {
             /* keep empty — typed controls still render presets */
@@ -59,10 +87,31 @@ export default function WorkViewConditionEditor({
         void loadOptions();
     }, [loadOptions]);
 
+    /** Resolve the option list for a field from its typed option source. */
+    const optionsForField = useCallback(
+        (fieldKey: string): readonly WorkViewFilterOption[] => {
+            const source = getWorkViewConditionField(fieldKey)?.optionSource;
+            if (!source) return [];
+            switch (source.kind) {
+                case "process_stages":
+                    return stageOptions;
+                case "status_definitions":
+                    return source.entityType === "opportunity_customer_members" ?
+                            childEnrollmentStatusOptions
+                        :   opportunityStatusOptions;
+                case "locations":
+                    return siteOptions;
+                case "programs":
+                    return programOptions;
+                default:
+                    return [];
+            }
+        },
+        [childEnrollmentStatusOptions, opportunityStatusOptions, programOptions, siteOptions, stageOptions],
+    );
+
     const updateRow = (index: number, patch: Partial<WorkViewFilterV1>) => {
-        onChange(
-            filters.map((row, i) => (i === index ? patchWorkViewFilterRow(row, patch) : row)),
-        );
+        onChange(filters.map((row, i) => (i === index ? patchWorkViewFilterRow(row, patch) : row)));
     };
 
     const removeRow = (index: number) => {
@@ -70,7 +119,7 @@ export default function WorkViewConditionEditor({
     };
 
     const addRow = () => {
-        onChange([...filters, createDefaultWorkViewFilterRow("tour_date")]);
+        onChange([...filters, createDefaultWorkViewFilterRow(DEFAULT_WORK_VIEW_CONDITION_FIELD_KEY)]);
     };
 
     return (
@@ -86,15 +135,19 @@ export default function WorkViewConditionEditor({
                             data-testid={`work-view-condition-row-${index}`}
                         >
                             <select
-                                value={row.field_key}
+                                value={getWorkViewConditionField(row.field_key)?.key ?? row.field_key}
                                 onChange={(e) => updateRow(index, { field_key: e.target.value })}
                                 className="config-runtime-select"
                                 data-testid={`work-view-condition-field-${index}`}
                             >
-                                {WORK_VIEW_FILTER_FIELD_OPTIONS.map((opt) => (
-                                    <option key={opt.key} value={opt.key}>
-                                        {opt.label}
-                                    </option>
+                                {FIELD_GROUPS.map((group) => (
+                                    <optgroup key={group.key} label={group.label}>
+                                        {group.fields.map((def) => (
+                                            <option key={def.key} value={def.key}>
+                                                {def.label}
+                                            </option>
+                                        ))}
+                                    </optgroup>
                                 ))}
                             </select>
                             <select
@@ -115,8 +168,7 @@ export default function WorkViewConditionEditor({
                                 fieldKey={row.field_key}
                                 operator={row.operator}
                                 value={row.value}
-                                statusOptions={statusOptions}
-                                locationOptions={locationOptions}
+                                options={optionsForField(row.field_key)}
                                 onChange={(value) => updateRow(index, { value })}
                                 testId={`work-view-condition-value-${index}`}
                             />

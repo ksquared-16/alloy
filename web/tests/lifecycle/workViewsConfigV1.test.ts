@@ -9,7 +9,7 @@ import {
 import { resolveProcessWorkViews } from "@/lib/lifecycle/workViewsCompatibility";
 
 describe("work_views_v1 metadata", () => {
-    it("parses process-level work view rows", () => {
+    it("parses process-level work view rows and normalizes legacy condition keys", () => {
         const parsed = parseWorkViewsV1([
             {
                 id: "tours_today",
@@ -22,7 +22,22 @@ describe("work_views_v1 metadata", () => {
             },
         ]);
         expect(parsed?.[0]?.label).toBe("Tours today");
-        expect(parsed?.[0]?.filters_v1?.[0]?.field_key).toBe("status");
+        // Phase 5 — legacy generic `status` normalizes to canonical typed `opportunity_status` on load.
+        expect(parsed?.[0]?.filters_v1?.[0]?.field_key).toBe("opportunity_status");
+    });
+
+    it("normalizes legacy stage / location keys to canonical typed keys", () => {
+        const parsed = parseWorkViewsV1([
+            {
+                id: "legacy_view",
+                label: "Legacy view",
+                filters_v1: [
+                    { field_key: "stage", operator: "equals", value: "Lead" },
+                    { field_key: "location", operator: "equals", value: "site-1" },
+                ],
+            },
+        ]);
+        expect(parsed?.[0]?.filters_v1?.map((f) => f.field_key)).toEqual(["opportunity_stage", "site"]);
     });
 
     it("seeds from stage perspectives when process views absent", () => {

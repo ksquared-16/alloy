@@ -67,3 +67,81 @@ describe("evaluateWorkViewFiltersV1", () => {
         expect(result.notes[0]?.reason).toBe("unsupported_operator");
     });
 });
+
+describe("evaluateWorkViewFiltersV1 — typed V2 condition keys", () => {
+    it("opportunity_stage resolves the lifecycle stage key", () => {
+        const stageRow = { id: "o1", lifecycle_stage_key: "tour_scheduled", status_key: "open" };
+        expect(
+            evaluateWorkViewFiltersForRow(stageRow, [
+                { field_key: "opportunity_stage", operator: "equals", value: "tour_scheduled" },
+            ]).pass,
+        ).toBe(true);
+        // The V1 bug: "stage equals open" matched the status set. It must NOT match now.
+        expect(
+            evaluateWorkViewFiltersForRow(stageRow, [
+                { field_key: "opportunity_stage", operator: "equals", value: "open" },
+            ]).pass,
+        ).toBe(false);
+    });
+
+    it("opportunity_status resolves the opportunity status key", () => {
+        const r = { id: "o1", status_key: "open", lifecycle_stage_key: "tour_scheduled" };
+        expect(
+            evaluateWorkViewFiltersForRow(r, [
+                { field_key: "opportunity_status", operator: "equals", value: "open" },
+            ]).pass,
+        ).toBe(true);
+    });
+
+    it("child_enrollment_status resolves child/candidate disposition keys", () => {
+        const r = { id: "c1", candidate_status_key: "waitlisted" };
+        expect(
+            evaluateWorkViewFiltersForRow(r, [
+                { field_key: "child_enrollment_status", operator: "is_any_of", value: ["waitlisted", "enrolled"] },
+            ]).pass,
+        ).toBe(true);
+    });
+
+    it("site and program resolve enrichment/row facts", () => {
+        const r = { id: "o1", _location_label: "Main Campus", _requested_program: "Infants" };
+        expect(
+            evaluateWorkViewFiltersForRow(r, [
+                { field_key: "site", operator: "equals", value: "Main Campus" },
+            ]).pass,
+        ).toBe(true);
+        expect(
+            evaluateWorkViewFiltersForRow(r, [
+                { field_key: "program", operator: "equals", value: "Infants" },
+            ]).pass,
+        ).toBe(true);
+    });
+
+    it("needs_attention resolves the attention flag to a boolean", () => {
+        const attn = { id: "o1", _attention_reason: "Missing paperwork" };
+        const calm = { id: "o2" };
+        expect(
+            evaluateWorkViewFiltersForRow(attn, [
+                { field_key: "needs_attention", operator: "equals", value: "true" },
+            ]).pass,
+        ).toBe(true);
+        expect(
+            evaluateWorkViewFiltersForRow(calm, [
+                { field_key: "needs_attention", operator: "equals", value: "true" },
+            ]).pass,
+        ).toBe(false);
+    });
+
+    it("legacy stage/status keys evaluate identically to canonical typed keys", () => {
+        const r = { id: "o1", status_key: "open", lifecycle_stage_key: "tour_scheduled" };
+        const legacy = evaluateWorkViewFiltersForRow(r, [
+            { field_key: "stage", operator: "equals", value: "tour_scheduled" },
+        ]);
+        const typed = evaluateWorkViewFiltersForRow(r, [
+            { field_key: "opportunity_stage", operator: "equals", value: "tour_scheduled" },
+        ]);
+        expect(legacy.pass).toBe(true);
+        expect(typed.pass).toBe(true);
+        // The note's field_key is canonicalized even for the legacy input.
+        expect(legacy.notes[0]?.field_key).toBe("opportunity_stage");
+    });
+});

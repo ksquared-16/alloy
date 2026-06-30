@@ -22,10 +22,12 @@ import {
     enrichWorkViewsCompatQueueKeys,
     type WorkViewCompatQueueLane,
 } from "@/lib/lifecycle/workViewsRuntimeConvergence";
+import type { WorkViewFilterOption } from "@/lib/lifecycle/workViewFilterValueControls";
 
 type WorkViewsResponse = {
     work_views_v1?: WorkViewConfigV1Stored[];
     compatibility_seed?: boolean;
+    stages?: WorkViewFilterOption[];
     error?: string;
 };
 
@@ -35,6 +37,8 @@ type WorkViewsConfigurationContextValue = {
     selectedId: string | null;
     setSelectedId: (id: string) => void;
     layouts: EntityLayoutRecord[];
+    /** Typed "Opportunity Stage" options — the process's configured lifecycle stages. */
+    stageOptions: WorkViewFilterOption[];
     loading: boolean;
     saving: boolean;
     dirty: boolean;
@@ -66,6 +70,7 @@ export function WorkViewsConfigurationProvider({
     const [drafts, setDrafts] = useState<WorkViewConfigV1Stored[]>([]);
     const [selectedId, setSelectedId] = useState<string | null>(null);
     const [layouts, setLayouts] = useState<EntityLayoutRecord[]>([]);
+    const [stageOptions, setStageOptions] = useState<WorkViewFilterOption[]>([]);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -97,6 +102,7 @@ export function WorkViewsConfigurationProvider({
             setDrafts(effective);
             setSelectedId(effective[0]?.id ?? null);
             setCompatibilitySeed(Boolean(viewsJson.compatibility_seed));
+            setStageOptions(viewsJson.stages ?? []);
             setLayouts(layoutsJson.records ?? []);
         } catch (e) {
             setError(e instanceof Error ? e.message : "Failed to load work views");
@@ -170,6 +176,7 @@ export function WorkViewsConfigurationProvider({
             selectedId,
             setSelectedId,
             layouts,
+            stageOptions,
             loading,
             saving,
             dirty,
@@ -189,6 +196,7 @@ export function WorkViewsConfigurationProvider({
             drafts,
             error,
             layouts,
+            stageOptions,
             loading,
             save,
             savedFlash,

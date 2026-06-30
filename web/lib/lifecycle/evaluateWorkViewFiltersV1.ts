@@ -5,6 +5,10 @@
 
 import { buildQueueRowLayoutRuntimeEnrichment } from "@/lib/layout/runtime/queueRowLayoutRuntimeEnrichment";
 import type { WorkViewFilterOperatorV1, WorkViewFilterV1 } from "@/lib/lifecycle/workViewsConfigV1";
+import {
+    canonicalWorkViewConditionFieldKey,
+    WORK_VIEW_CONDITION_FIELD_DEFS,
+} from "@/lib/lifecycle/workViewConditionFieldRegistry";
 
 export type WorkViewFilterEvaluationNote = {
     field_key: string;
@@ -18,14 +22,10 @@ export type WorkViewFilterEvaluationResult = {
     notes: WorkViewFilterEvaluationNote[];
 };
 
-const SUPPORTED_FIELD_KEYS = new Set([
-    "status",
-    "stage",
-    "location",
-    "tour_date",
-    "updated_at",
-    "needs_follow_up",
-]);
+/** Canonical runtime keys the evaluator can apply (legacy keys canonicalize into these). */
+const SUPPORTED_FIELD_KEYS = new Set<string>(
+    WORK_VIEW_CONDITION_FIELD_DEFS.filter((def) => def.runtimeSupported).map((def) => def.runtimeField),
+);
 
 function norm(value: unknown): string {
     return String(value ?? "")
@@ -39,15 +39,35 @@ function readRowString(row: Record<string, unknown>, key: string): string | null
     return typeof v === "string" && v.trim() ? v.trim() : null;
 }
 
+/** Resolve a row value for a canonical runtime field key (legacy keys are canonicalized by callers). */
 function fieldValue(row: Record<string, unknown>, fieldKey: string): string | null {
     const enrichment = buildQueueRowLayoutRuntimeEnrichment(row);
     switch (fieldKey) {
-        case "status":
+        case "opportunity_status":
             return enrichment.statusKey ?? enrichment.statusDisplay ?? readRowString(row, "status_key");
-        case "stage":
+        case "opportunity_stage":
             return readRowString(row, "lifecycle_stage_key") ?? readRowString(row, "_lifecycle_stage_key");
-        case "location":
+        case "child_enrollment_status":
+            return (
+                readRowString(row, "child_enrollment_status_key") ??
+                readRowString(row, "candidate_status_key") ??
+                readRowString(row, "child_status_key") ??
+                readRowString(row, "ocm_status_key") ??
+                readRowString(row, "_child_status_key")
+            );
+        case "site":
             return enrichment.locationLabel ?? readRowString(row, "site_id") ?? readRowString(row, "location_id");
+        case "program":
+            return (
+                enrichment.programLabel ??
+                readRowString(row, "program") ??
+                readRowString(row, "_requested_program") ??
+                readRowString(row, "program_id")
+            );
+        case "needs_attention":
+            if (row._needs_attention === true || row.needs_attention === true) return "true";
+            if (enrichment.attentionReason) return "true";
+            return "false";
         case "tour_date": {
             const md = row.metadata;
             if (md && typeof md === "object" && !Array.isArray(md)) {
@@ -218,7 +238,9 @@ function evaluateOneFilter(
     row: Record<string, unknown>,
     filter: WorkViewFilterV1,
 ): WorkViewFilterEvaluationResult {
-    const fieldKey = filter.field_key.trim();
+    // Canonicalize legacy keys (`stage`/`status`/`location`) so runtime resolves them identically to
+    // the typed keys, even if a saved view has not yet been re-persisted with canonical keys.
+    const fieldKey = canonicalWorkViewConditionFieldKey(filter.field_key.trim());
     if (!SUPPORTED_FIELD_KEYS.has(fieldKey)) {
         return {
             pass: true,
@@ -243,7 +265,7 @@ function evaluateOneFilter(
         };
     }
 
-    if (fieldKey === "location" && filter.operator === "equals" && expectedParts.some((p) => norm(p) === "current_site")) {
+    if (fieldKey === "site" && filter.operator === "equals" && expectedParts.some((p) => norm(p) === "current_site")) {
         return {
             pass: true,
             notes: [{

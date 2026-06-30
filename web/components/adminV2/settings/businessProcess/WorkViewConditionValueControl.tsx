@@ -19,16 +19,15 @@ export default function WorkViewConditionValueControl({
     fieldKey,
     operator,
     value,
-    statusOptions,
-    locationOptions,
+    options,
     onChange,
     testId,
 }: {
     fieldKey: string;
     operator: WorkViewFilterOperatorV1;
     value: unknown;
-    statusOptions: readonly WorkViewFilterOption[];
-    locationOptions: readonly WorkViewFilterOption[];
+    /** Option list for the current field, resolved by the editor from the field's typed option source. */
+    options: readonly WorkViewFilterOption[];
     onChange: (value: unknown) => void;
     testId?: string;
 }) {
@@ -144,16 +143,20 @@ export default function WorkViewConditionValueControl({
         );
     }
 
-    if (kind === "status_select") {
+    if (kind === "status_select" || kind === "stage_select" || kind === "program_select") {
+        const placeholder =
+            kind === "stage_select" ? "Select stage…"
+            : kind === "program_select" ? "Select program…"
+            : "Select status…";
         return (
             <select
                 value={String(value ?? "")}
                 onChange={(e) => onChange(e.target.value)}
                 className="config-runtime-select"
-                data-testid={testId ?? "work-view-condition-value-status"}
+                data-testid={testId ?? `work-view-condition-value-${kind}`}
             >
-                <option value="">Select status…</option>
-                {statusOptions.map((opt) => (
+                <option value="">{placeholder}</option>
+                {options.map((opt) => (
                     <option key={opt.value} value={opt.value}>
                         {opt.label}
                     </option>
@@ -163,7 +166,7 @@ export default function WorkViewConditionValueControl({
     }
 
     if (kind === "location_select") {
-        const merged = mergeLocationFilterOptions(locationOptions);
+        const merged = mergeLocationFilterOptions(options);
         return (
             <select
                 value={String(value ?? "current_site")}

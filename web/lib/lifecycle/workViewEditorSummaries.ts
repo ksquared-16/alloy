@@ -2,14 +2,14 @@ import { BUSINESS_PROCESS_PRESENTATION_SURFACE_DEFAULT_LABEL } from "@/lib/lifec
 import { formatLayoutTitleWithVersion } from "@/lib/layout/layoutVersionNaming";
 import type { EntityLayoutRecord } from "@/lib/layout/layoutV2";
 import {
-    WORK_VIEW_FILTER_FIELD_OPTIONS,
     WORK_VIEW_FILTER_OPERATOR_OPTIONS,
     type WorkViewConfigV1Stored,
     type WorkViewFilterV1,
 } from "@/lib/lifecycle/workViewsConfigV1";
+import { getWorkViewConditionField } from "@/lib/lifecycle/workViewConditionFieldRegistry";
 
 function fieldLabel(fieldKey: string): string {
-    return WORK_VIEW_FILTER_FIELD_OPTIONS.find((f) => f.key === fieldKey)?.label ?? fieldKey;
+    return getWorkViewConditionField(fieldKey)?.label ?? fieldKey;
 }
 
 function operatorLabel(operator: string): string {

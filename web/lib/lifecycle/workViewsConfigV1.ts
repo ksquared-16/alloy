@@ -7,6 +7,11 @@
 
 import { randomUUID } from "crypto";
 
+import {
+    canonicalWorkViewConditionFieldKey,
+    WORK_VIEW_CONDITION_FIELD_DEFS,
+} from "@/lib/lifecycle/workViewConditionFieldRegistry";
+
 export const WORK_VIEWS_V1_METADATA_KEY = "work_views_v1" as const;
 
 export type WorkViewFilterOperatorV1 =
@@ -63,9 +68,12 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function parseFilter(raw: unknown): WorkViewFilterV1 | null {
     if (!isRecord(raw)) return null;
-    const field_key = typeof raw.field_key === "string" ? raw.field_key.trim() : "";
+    const rawFieldKey = typeof raw.field_key === "string" ? raw.field_key.trim() : "";
     const operator = typeof raw.operator === "string" ? raw.operator.trim() : "";
-    if (!field_key || !FILTER_OPERATORS.has(operator as WorkViewFilterOperatorV1)) return null;
+    if (!rawFieldKey || !FILTER_OPERATORS.has(operator as WorkViewFilterOperatorV1)) return null;
+    // Phase 5 — normalize legacy generic keys (`stage`/`status`/`location`) to canonical typed keys
+    // at load time, so canonical keys persist on the next save.
+    const field_key = canonicalWorkViewConditionFieldKey(rawFieldKey);
     return {
         field_key,
         operator: operator as WorkViewFilterOperatorV1,
@@ -165,15 +173,17 @@ export function slugifyWorkViewId(raw: string): string {
     return candidate;
 }
 
-/** Default filter field options for v1 business condition editor. */
-export const WORK_VIEW_FILTER_FIELD_OPTIONS = [
-    { key: "status", label: "Status" },
-    { key: "stage", label: "Stage" },
-    { key: "location", label: "Location" },
-    { key: "tour_date", label: "Tour date" },
-    { key: "updated_at", label: "Updated" },
-    { key: "needs_follow_up", label: "Needs follow-up" },
-] as const;
+/**
+ * Selectable condition field options for the Work View editor — derived from the typed condition
+ * registry. Generic `status` / `stage` are intentionally excluded (replaced by typed fields such as
+ * Opportunity Stage / Opportunity Status / Child Enrollment Status). See
+ * {@link WORK_VIEW_CONDITION_FIELD_DEFS} and {@link workViewConditionFieldGroups}.
+ */
+export const WORK_VIEW_FILTER_FIELD_OPTIONS: ReadonlyArray<{ key: string; label: string }> =
+    WORK_VIEW_CONDITION_FIELD_DEFS.filter((def) => def.runtimeSupported).map((def) => ({
+        key: def.key,
+        label: def.label,
+    }));
 
 export const WORK_VIEW_FILTER_OPERATOR_OPTIONS: ReadonlyArray<{ value: WorkViewFilterOperatorV1; label: string }> = [
     { value: "equals", label: "equals" },

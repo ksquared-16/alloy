@@ -5,14 +5,28 @@
  */
 
 import type { WorkViewFilterOperatorV1, WorkViewFilterV1 } from "@/lib/lifecycle/workViewsConfigV1";
+import {
+    getWorkViewConditionField,
+    type WorkViewConditionValueKind,
+} from "@/lib/lifecycle/workViewConditionFieldRegistry";
 
 export type WorkViewFilterValueControlKind =
     | "date_preset"
     | "status_select"
+    | "stage_select"
     | "location_select"
+    | "program_select"
     | "boolean"
     | "text"
     | "none";
+
+/** Select-style controls render an option dropdown sourced per-field by the editor. */
+export const WORK_VIEW_SELECT_CONTROL_KINDS: ReadonlySet<WorkViewFilterValueControlKind> = new Set([
+    "status_select",
+    "stage_select",
+    "location_select",
+    "program_select",
+]);
 
 export type WorkViewFilterOption = { value: string; label: string };
 
@@ -55,12 +69,16 @@ export const WORK_VIEW_LOCATION_STATIC_OPTIONS: readonly WorkViewFilterOption[] 
 
 const LEGACY_PRESETS = new Set(["today", "tomorrow", "this_week", "next_week", "next_7_days", "next_14_days"]);
 
-const DATE_FIELD_KEYS = new Set(["tour_date", "updated_at"]);
-const STATUS_FIELD_KEYS = new Set(["status", "stage"]);
-const LOCATION_FIELD_KEYS = new Set(["location"]);
-const BOOLEAN_FIELD_KEYS = new Set(["needs_follow_up"]);
-
 const VALUELESS_OPERATORS = new Set<WorkViewFilterOperatorV1>(["is_empty", "is_not_empty"]);
+
+/** Registry-backed value-kind for a (possibly legacy) field key; null for unknown keys. */
+function valueKindForField(fieldKey: string): WorkViewConditionValueKind | null {
+    return getWorkViewConditionField(fieldKey)?.valueKind ?? null;
+}
+
+function isDateField(fieldKey: string): boolean {
+    return valueKindForField(fieldKey) === "date_preset";
+}
 
 const RELATIVE_TOKEN_RE = /^(next|prev):(\d+):(days|weeks|months)$/;
 
@@ -104,12 +122,9 @@ export function isLegacyDatePreset(value: unknown): boolean {
 }
 
 export function operatorsForWorkViewFilterField(fieldKey: string): WorkViewFilterOperatorV1[] {
-    if (DATE_FIELD_KEYS.has(fieldKey)) {
-        return ["equals", "date_is", "is_empty", "is_not_empty"];
-    }
-    if (BOOLEAN_FIELD_KEYS.has(fieldKey)) {
-        return ["equals", "not_equals"];
-    }
+    const def = getWorkViewConditionField(fieldKey);
+    if (def) return [...def.operators];
+    // Unknown / legacy-unmapped key — generic select operators.
     return ["equals", "not_equals", "is_any_of", "is_empty", "is_not_empty"];
 }
 
@@ -131,11 +146,10 @@ export function resolveWorkViewFilterValueControlKind(
     operator: WorkViewFilterOperatorV1,
 ): WorkViewFilterValueControlKind {
     if (VALUELESS_OPERATORS.has(operator)) return "none";
-    if (DATE_FIELD_KEYS.has(fieldKey)) return "date_preset";
-    if (STATUS_FIELD_KEYS.has(fieldKey)) return "status_select";
-    if (LOCATION_FIELD_KEYS.has(fieldKey)) return "location_select";
-    if (BOOLEAN_FIELD_KEYS.has(fieldKey)) return "boolean";
-    return "text";
+    const valueKind = valueKindForField(fieldKey);
+    if (!valueKind || valueKind === "none") return "text";
+    // Registry value-kinds map 1:1 to control kinds (none handled above).
+    return valueKind;
 }
 
 export function defaultFilterValueForField(fieldKey: string, operator: WorkViewFilterOperatorV1): unknown {
@@ -149,6 +163,8 @@ export function defaultFilterValueForField(fieldKey: string, operator: WorkViewF
         case "location_select":
             return "current_site";
         case "status_select":
+        case "stage_select":
+        case "program_select":
             return "";
         default:
             return "";
@@ -189,7 +205,13 @@ export function patchWorkViewFilterRow(
     if (!allowedOps.includes(next.operator)) {
         next.operator = allowedOps[0] ?? "equals";
     }
-    next.value = coerceWorkViewFilterValue(fieldKey, next.operator, next.value);
+    // When the field changes (and the caller did not supply an explicit value), reset to the new
+    // field's typed default so stale option values from the previous field cannot leak through.
+    const fieldChanged = patch.field_key != null && patch.field_key.trim() !== row.field_key.trim();
+    next.value =
+        fieldChanged && patch.value === undefined ?
+            defaultFilterValueForField(fieldKey, next.operator)
+        :   coerceWorkViewFilterValue(fieldKey, next.operator, next.value);
     return next;
 }
 
@@ -236,6 +258,8 @@ export function formatWorkViewFilterValueLabel(
     options?: {
         statusOptions?: readonly WorkViewFilterOption[];
         locationOptions?: readonly WorkViewFilterOption[];
+        stageOptions?: readonly WorkViewFilterOption[];
+        programOptions?: readonly WorkViewFilterOption[];
     },
 ): string {
     if (VALUELESS_OPERATORS.has(operator)) return "";
@@ -264,6 +288,14 @@ export function formatWorkViewFilterValueLabel(
     }
     if (kind === "status_select") {
         const match = options?.statusOptions?.find((o) => o.value === str);
+        return match?.label ?? str;
+    }
+    if (kind === "stage_select") {
+        const match = options?.stageOptions?.find((o) => o.value === str);
+        return match?.label ?? str;
+    }
+    if (kind === "program_select") {
+        const match = options?.programOptions?.find((o) => o.value === str);
         return match?.label ?? str;
     }
     if (kind === "location_select") {
