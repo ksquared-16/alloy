@@ -33,11 +33,18 @@ and authors each card as **operational meaning**, not abstract tokens or a field
 Surface → Rows → Columns → Cards → Published Runtime
 ```
 
-**Card definition pipeline (per card):**
+**Card definition pipeline (per card — Experience Builder V3):**
 
 ```
-Card → Question → Evidence Groups → Evidence → Presentation → Expansion → Actions → Conditions → AI → Ownership → Published Runtime
+Composition → Cards → Evidence Groups → Presentation → Editing → Expanded → Related Views → Actions → Conditions → AI → Published Runtime
 ```
+
+**Ownership lives at the Evidence Group level** (`group.owner`); a group's fields are
+editable only on the owning card. **Expanded** = the same question with additional
+configured evidence groups (`group.includeInExpanded`), *not* history. **Related Views**
+(`config.relatedViews`) are optional report drill-downs (Schedule History, Placement
+History, Billing History …) — distinct from Expanded. See
+[`universal-card-lifecycle.md`](./universal-card-lifecycle.md).
 
 - **Published layout is the source of truth.** The runtime renders the published rows/
   widths exactly (responsive single-column collapse only) and **never overrides an
