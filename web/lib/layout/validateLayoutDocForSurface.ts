@@ -80,6 +80,22 @@ const ALLOWED_DOC_METADATA_KEYS = new Set([
     "action_placements",
 ]);
 
+/**
+ * The Enrollment Focus Panel Summary layout is persisted as an opportunities/drawer
+ * entity layout, but it is NOT a drawer surface: its sections are Focus Panel CARDS
+ * (household, readiness_kpi, …) and its doc metadata is Focus-Panel-specific
+ * (`focusPanelMode`, `layoutKey`, `focusPanelLayout`). The generic drawer validator
+ * does not know any of these, so without this exemption EVERY save/publish is rejected
+ * as "Invalid layout doc" and the operator-published canvas layout never persists — so
+ * the work-unit runtime falls back to the default and can't honor it. The Focus Panel
+ * Summary content is validated by Focus-Panel-specific code (the editor's
+ * validateFocusPanelCardConfig + isFocusPanelPublishedLayout at read time), not here.
+ */
+function isFocusPanelSummaryDoc(doc: LayoutDoc): boolean {
+    const metadata = doc.metadata;
+    return isObject(metadata) && metadata.focusPanelMode === "summary";
+}
+
 const ALLOWED_SECTION_METADATA_KEYS = new Set([
     "priority",
     "collapseWhenEmpty",
@@ -514,6 +530,13 @@ export function validateLayoutDocForSurface(
     const resolved = surfaceKey ?? resolveSurfaceLayoutKeyFromDoc(doc);
     if (!resolved) {
         return { ok: true, surfaceKey: null, errors: [] };
+    }
+
+    // The Focus Panel Summary layout is stored as an opportunities/drawer entity layout
+    // but is not a drawer surface — exempt it from the generic drawer validator (see
+    // isFocusPanelSummaryDoc) so its publish/save is not rejected as "Invalid layout doc".
+    if (isFocusPanelSummaryDoc(doc)) {
+        return { ok: true, surfaceKey: resolved, errors: [] };
     }
 
     const tenantFieldRefKeys = tenantFieldRefKeysForSurface(resolved, options?.tenantFieldDefinitions);

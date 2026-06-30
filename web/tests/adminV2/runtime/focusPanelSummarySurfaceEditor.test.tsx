@@ -56,12 +56,17 @@ describe("FocusPanelSummarySurfaceEditor — canvas, structure, insertion", () =
     const html = renderToStaticMarkup(<FocusPanelSummarySurfaceEditor />);
     const editorSrc = readSrc("components/adminV2/settings/surfaces/FocusPanelSummarySurfaceEditor.tsx");
 
-    it("caps the canvas to the real Focus Panel footprint (not a full-page grid)", () => {
-        expect(html).toContain('data-surface-editor-canvas="enrollment-focus-panel-summary"');
-        expect(html).toContain('data-focus-panel-canvas-footprint="focus-panel"');
-        expect(html).toContain("max-w-[720px]");
-        expect(html).toContain('data-focus-panel-mode="summary"');
-        expect(html).toContain('data-focus-panel-card-grid="true"');
+    // The canvas + inspector are gated on the async layout load (`loaded`), so the static
+    // SSR render shows "Loading…"; structure is asserted from source (canvas-first reality).
+    const canvasSrc = readSrc("components/admin/focusPanel/FocusPanelCanvasBuilder.tsx");
+
+    it("is canvas-first: the Focus Panel canvas IS the editor (no separate lower preview)", () => {
+        expect(editorSrc).toContain('data-surface-canvas-builder="true"');
+        expect(editorSrc).toContain("FocusPanelCanvasBuilder");
+        // The legacy lower "Focus Panel / Preview" structure editor is removed.
+        expect(editorSrc).not.toContain('data-surface-editor-canvas="enrollment-focus-panel-summary"');
+        expect(editorSrc).not.toContain("data-focus-panel-canvas-footprint");
+        expect(editorSrc).not.toContain("FocusPanelEditableCardFrame");
     });
 
     it("uses the Configuration header look (Enrollment Focus Panel, not legacy gray)", () => {
@@ -69,23 +74,26 @@ describe("FocusPanelSummarySurfaceEditor — canvas, structure, insertion", () =
         expect(html).not.toContain("Enrollment Focus Panel Summary");
     });
 
-    it("exposes drag, move, resize, duplicate, and remove controls", () => {
-        expect(html).toContain("data-focus-panel-card-drag-handle");
-        expect(html).toContain('draggable="true"');
-        expect(html).toContain("data-focus-panel-card-move-prev");
-        expect(html).toContain("data-focus-panel-card-move-next");
-        expect(html).toContain("data-focus-panel-card-span");
-        expect(html).toContain("data-focus-panel-card-duplicate");
-        expect(html).toContain("data-focus-panel-card-remove");
+    it("composition lives on the canvas (drag + direct resize); behavior in the adjacent inspector", () => {
+        // Direct-manipulation composition controls live on the canvas tiles.
+        expect(canvasSrc).toContain("data-canvas-resize-w");
+        expect(canvasSrc).toContain("data-canvas-resize-h");
+        // The inspector sits adjacent to the canvas (behavior).
+        expect(editorSrc).toContain('data-surface-inspector="true"');
+        expect(editorSrc).toContain("FocusPanelCardInspector");
+        // No legacy per-card structure frame / span controls in the editor.
+        expect(editorSrc).not.toContain("data-focus-panel-card-drag-handle");
+        expect(editorSrc).not.toContain("data-focus-panel-card-span");
     });
 
-    it("adds cards via '+ line between cards' (not a standing side panel)", () => {
-        expect(html).toContain('data-testid="focus-panel-insert-line"');
-        expect(html).toContain("data-focus-panel-insert-trigger");
-        // The catalog is an on-demand picker opened from a line (closed by default).
-        expect(html).not.toContain('data-testid="focus-panel-add-card-panel"');
-        expect(editorSrc).toContain('data-focus-panel-catalog-state={placed ? "placed" : available ? "addable" : "unavailable"}');
-        expect(editorSrc).toContain("insertSummaryCard");
+    it("adds cards from the canvas card tray (not '+ line' insertion)", () => {
+        // Unplaced cards live in the canvas tray; the legacy insert line is gone.
+        expect(canvasSrc).toContain('data-canvas-tray');
+        expect(editorSrc).not.toContain('data-testid="focus-panel-insert-line"');
+        expect(editorSrc).not.toContain('data-testid="focus-panel-add-card-panel"');
+        // Selecting a card on the canvas opens the inspector; sections track the canvas.
+        expect(editorSrc).toContain("onSelectCard");
+        expect(editorSrc).toContain("reconcileOrderToLayout");
     });
 
     it("keeps Undo + Reset working-copy controls", () => {
@@ -101,7 +109,9 @@ describe("Content Mode removed — contextual Inspector instead", () => {
         expect(editorSrc).not.toContain("focus-panel-content-inspector");
         expect(editorSrc).not.toContain("contentModeEnabled");
         expect(editorSrc).not.toContain("editSurface");
-        expect(editorSrc).toContain("composeEffectiveCardModel");
+        // Canvas-first: composition is authored on the canvas; the inspector owns behavior.
+        expect(editorSrc).toContain("FocusPanelCanvasBuilder");
+        expect(editorSrc).toContain("FocusPanelCardInspector");
     });
 
     it("wires the contextual Inspector to the selected card", () => {
