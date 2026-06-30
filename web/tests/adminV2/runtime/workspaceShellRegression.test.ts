@@ -13,7 +13,7 @@ describe("Alloy OS workspace shell regression guards", () => {
         const surface = readSrc("components/admin/workspace/layout/WorkUnitCommandSurface.tsx");
         expect(surface).toContain("ALLOY_OS_RUNTIME_ENABLED");
         expect(surface).toContain('className="adminv2-os-context"');
-        expect(surface).toContain("adminv2-os-context__kpi-strip");
+        expect(surface).toContain("adminv2-os-context__metric-tiles");
         expect(surface).toContain("adminv2-os-context__perspective-rail");
         expect(surface).toContain("data-alloy-os-work-unit-context");
     });

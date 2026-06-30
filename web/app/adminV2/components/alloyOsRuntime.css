@@ -154,7 +154,16 @@ html[data-alloy-os-runtime="on"]
   text-overflow: ellipsis;
 }
 
-/* Inline KPI strip — integrated chips, not floating tiles */
+/* Compact metric tile row — wrapping row of fixed-width KPI/Trend tiles (V2 header surface). */
+.adminv2-os-context__metric-tiles {
+  padding-block: 10px;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-height: 0;
+}
+
+/* Inline KPI strip — integrated chips, not floating tiles (V1 legacy, retained for CSS completeness) */
 .adminv2-os-context__kpi-strip {
   min-height: 34px;
   height: 34px;

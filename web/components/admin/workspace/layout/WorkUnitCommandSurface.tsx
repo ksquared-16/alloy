@@ -91,7 +91,7 @@ export function WorkUnitCommandSurface({
                 :   null}
                 {showKpiRow ?
                     <div
-                        className="adminv2-os-context__row adminv2-os-context__kpi-strip"
+                        className="adminv2-os-context__row adminv2-os-context__metric-tiles"
                         data-workspace-zone="kpi-tiles"
                         {...alloySectionDomAttrs("WU-02")}
                     >
@@ -102,10 +102,6 @@ export function WorkUnitCommandSurface({
                             contextType="work_unit"
                             contextId={workUnitId}
                             layout="row"
-                            className="adminv2-os-context__kpi-placement"
-                            // Runtime: platform placements are the sole visible KPI owner. OIP values
-                            // may feed data elsewhere but must not render a competing UI that platform
-                            // placements then replace with "—".
                             loadingReserve={<WorkspaceQuietKpiReserve id="wu-kpi-quiet-reserve" />}
                         />
                     </div>

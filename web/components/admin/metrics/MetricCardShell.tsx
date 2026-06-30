@@ -68,9 +68,9 @@ export function MetricCardShell({
     const fillMode = normalizeMetricVisualFill(fill);
     const normalizedStatus = normalizeOipHealthStatus(status);
     const padding = density === "compact" ? "p-3" : "p-3.5";
-    // Compact tiles (header strips) share a uniform flex footprint so KPI and Trend cards
-    // sit at the same width in an inline/row flex container — trend sparklines can't blow out.
-    const sizeClass = density === "compact" ? "min-w-[120px] max-w-[180px] flex-1" : "min-w-0";
+    // Compact tiles (header strips) use a fixed width so every KPI and Trend card is the same
+    // size regardless of label length — no tile grows because of a longer label or sparkline.
+    const sizeClass = density === "compact" ? "w-[160px] shrink-0" : "min-w-0";
 
     const resolvedHeaderRight =
         headerRight ??
@@ -100,7 +100,7 @@ export function MetricCardShell({
                         </p>
                     ) : null}
                     <p
-                        className={`truncate text-[11px] font-semibold uppercase tracking-wide ${visualAccent.text}`}
+                        className={`truncate text-[11px] font-semibold ${density !== "compact" ? "uppercase tracking-wide" : ""} ${visualAccent.text}`}
                         title={label}
                     >
                         {label}

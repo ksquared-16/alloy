@@ -31,7 +31,7 @@ export type MetricSourceAdapter = {
 const ADAPTERS: Record<string, MetricSourceAdapter> = {
     "enrollment.tour_conversion_rate": {
         key: "enrollment.tour_conversion_rate",
-        label: "Tour conversion rate",
+        label: "Tour conversion",
         status: "available",
         supportedAggregations: ["rate", "count"],
         supportedFilters: [
@@ -76,7 +76,7 @@ const ADAPTERS: Record<string, MetricSourceAdapter> = {
     },
     "ops.needs_attention_count": {
         key: "ops.needs_attention_count",
-        label: "Needs attention count",
+        label: "Needs attention",
         status: "available",
         supportedAggregations: ["count"],
         supportedFilters: [{ key: "work_unit_id", label: "Work unit", type: "uuid" }],
@@ -85,7 +85,7 @@ const ADAPTERS: Record<string, MetricSourceAdapter> = {
     },
     "ops.work_overdue_count": {
         key: "ops.work_overdue_count",
-        label: "Overdue work count",
+        label: "Overdue work",
         status: "available",
         supportedAggregations: ["count"],
         supportedFilters: [{ key: "work_unit_id", label: "Work unit", type: "uuid" }],
