@@ -72,17 +72,25 @@ describe("Runtime QA — workspace tile click is instant (commit-first) with hov
     });
 });
 
-// ── P5: lifecycle landing client dedups its admin fetches (no raw fetch duplication) ──
-describe("Runtime QA — lifecycle landing client dedups admin requests", () => {
-    const src = read("lib/admin/loadOperatorLifecycleLandingClient.ts");
-    it("uses dedupeAdminFetch for departments / work-units / catalog / queue-summaries", () => {
-        expect(src).toContain('import { dedupeAdminFetch } from "@/lib/workspace/workspaceAdminFetchDedupe"');
-        expect(src).toContain('dedupeAdminFetch("/api/admin/departments"');
-        expect(src).toContain('dedupeAdminFetch("/api/admin/work-units"');
-        expect(src).toContain('dedupeAdminFetch("/api/admin/lifecycle-catalog"');
-        expect(src).toContain("dedupeAdminFetch(\n");
+// ── P5: lifecycle landing client + work-unit sibling nav TTL-dedup their expensive admin fetches ──
+describe("Runtime QA — lifecycle/sibling fetches are TTL-deduped (collapse time-spread repeats)", () => {
+    const client = read("lib/admin/loadOperatorLifecycleLandingClient.ts");
+    const wu = read("app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page.tsx");
+
+    it("landing client uses dedupeAdminFetchWithTtl (not raw fetch) for departments/work-units/catalog/summaries", () => {
+        expect(client).toContain("dedupeAdminFetchWithTtl");
+        expect(client).toContain("LIFECYCLE_SIBLING_FETCH_TTL_MS");
+        expect(client).toContain('dedupeAdminFetchWithTtl("/api/admin/departments"');
+        expect(client).toContain('dedupeAdminFetchWithTtl("/api/admin/work-units"');
         // no remaining raw fetch( for these admin endpoints
-        expect(src).not.toMatch(/await fetch\(\s*\n?\s*`\/api\/admin\/departments\/\$\{/);
-        expect(src).not.toContain('fetch("/api/admin/departments"');
+        expect(client).not.toContain('fetch("/api/admin/departments"');
+        expect(client).not.toMatch(/await fetch\(\s*\n?\s*`\/api\/admin\/departments\/\$\{/);
+    });
+
+    it("work-unit page TTL-dedups the dept sibling list + queue-summaries (no per-navigation refetch)", () => {
+        // the repeated, expensive dept work-unit-queue-summaries + work-units?department_id calls now
+        // share a TTL cache across re-mounts.
+        expect(wu).toContain("dedupeAdminFetchWithTtl(summariesRoute, init ?? {}, LIFECYCLE_SIBLING_FETCH_TTL_MS)");
+        expect(wu).toMatch(/dedupeAdminFetchWithTtl\(\s*\n\s*`\/api\/admin\/work-units\?\$\{new URLSearchParams\(\{ department_id/);
     });
 });

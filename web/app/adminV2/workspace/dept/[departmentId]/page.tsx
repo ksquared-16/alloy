@@ -52,7 +52,7 @@ import { workspaceDataFetchInit } from "@/lib/workspace/workspaceDataFetch";
 import { ADMINV2_ABOVE_FOLD_CACHE_TTL_MS } from "@/lib/adminV2/adminV2AboveFoldCacheContracts";
 import { logPrefetchAdminV2 } from "@/lib/adminV2/adminV2PrefetchInstrumentation";
 import { prefetchVisibleWorkUnitBootstrapsFromDept } from "@/lib/adminV2/workUnitBootstrapPrefetchFromDept";
-import { dedupeAdminFetch, dedupeAdminFetchWithTtl, dedupeAdminFetchWithTtlMeta } from "@/lib/workspace/workspaceAdminFetchDedupe";
+import { dedupeAdminFetch, dedupeAdminFetchWithTtl, dedupeAdminFetchWithTtlMeta, LIFECYCLE_SIBLING_FETCH_TTL_MS } from "@/lib/workspace/workspaceAdminFetchDedupe";
 import { prefetchWorkUnitOperationalBootstrapFromDeptHref } from "@/lib/adminV2/workUnitBootstrapPrefetchFromDept";
 import {
     perfDeptLoad,
@@ -798,7 +798,9 @@ export default function AdminV2WorkspaceDepartmentPage() {
         async function refreshQueueSummaries(deptCommit: DeptRow | null, wuCommit: Array<{ id: string; name: string | null; key: string | null }>) {
             if (cancelled) return;
             try {
-                const sumRes = await dedupeAdminFetch(summariesRoute, init).catch(() => null as Response | null);
+                const sumRes = await dedupeAdminFetchWithTtl(summariesRoute, init, LIFECYCLE_SIBLING_FETCH_TTL_MS).catch(
+                    () => null as Response | null,
+                );
                 const j = (await (sumRes?.json().catch(() => ({})) ?? Promise.resolve({}))) as Parameters<
                     typeof applySummariesJson
                 >[1];

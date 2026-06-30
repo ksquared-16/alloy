@@ -8,6 +8,15 @@
  */
 const inflight = new Map<string, Promise<Response>>();
 
+/**
+ * TTL for the lifecycle sidebar landing + work-unit sibling-nav fetches (dept work-units, dept
+ * work-unit-queue-summaries, lifecycle-catalog). These are session-stable operational signals
+ * fetched on every workspace/work-unit mount; sharing them across re-navigations (and across the
+ * sidebar landing + the work-unit page, which use the same URLs) collapses the repeated expensive
+ * summary calls. Counts may be up to this window stale — acceptable for peripheral sibling signals.
+ */
+export const LIFECYCLE_SIBLING_FETCH_TTL_MS = 30_000;
+
 const WORKSPACE_DEPARTMENTS_URL = "/api/admin/departments";
 
 /** Bust coalesced / TTL cache for workspace department list after lifecycle create/repair/delete. */
