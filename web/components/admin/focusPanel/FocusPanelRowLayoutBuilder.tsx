@@ -5,8 +5,8 @@ import { useMemo, useState, type DragEvent, type ReactNode } from "react";
 import FocusPanelCardGrid from "@/components/admin/focusPanel/FocusPanelCardGrid";
 import type { FocusPanelCardKey } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardModel";
 import {
+    CELL_WIDTH_LABEL,
     FOCUS_PANEL_CELL_WIDTHS,
-    type FocusPanelCellWidth,
     type FocusPanelPublishedLayout,
 } from "@/lib/adminV2/runtime/focusPanel/composition/focusPanelPublishedLayout";
 import {
@@ -14,7 +14,9 @@ import {
     addRow,
     cardsInLayout,
     moveCardToRow,
+    moveRow,
     removeCard,
+    removeRow,
     setCellWidth,
     stackCardInCell,
     type CardLocation,
@@ -25,17 +27,12 @@ import {
  * columns, not abstract tokens. The operator adds rows, drops cards into them, and
  * sets each card's width with plain fractions (Full / 1/2 / 1/3 / 2/3). Stacking two
  * cards in one column makes the "Household left, Readiness + Current Work stacked
- * right" pattern. The preview is the REAL runtime grid fed the same published layout,
- * so what you see is what publishes. Internal weight/partner logic is only the
- * default fallback when nothing is published.
+ * right" pattern. The operator sizes each card by INTENT (Quarter / Third / Half /
+ * Two Thirds / Full / Fill) — the runtime computes exact spacing, and `Fill` absorbs
+ * the row's leftover space so nothing is pinned awkwardly. The preview is the REAL
+ * runtime grid fed the same published layout, so what you see is what publishes.
+ * Internal weight/partner logic is only the default fallback when nothing is published.
  */
-
-const WIDTH_LABEL: Record<FocusPanelCellWidth, string> = {
-    full: "Full",
-    "1/2": "1/2",
-    "1/3": "1/3",
-    "2/3": "2/3",
-};
 
 type Props = {
     initialLayout: FocusPanelPublishedLayout;
@@ -107,6 +104,37 @@ export default function FocusPanelRowLayoutBuilder({ initialLayout, catalog, ren
                     >
                         <div className="alloy-os-rlb__row-head">
                             <span className="alloy-os-rlb__row-label">Row {rowIndex + 1}</span>
+                            <div className="alloy-os-rlb__row-actions">
+                                <button
+                                    type="button"
+                                    className="alloy-os-rlb__row-btn"
+                                    data-builder-row-up={rowIndex}
+                                    aria-label={`Move row ${rowIndex + 1} up`}
+                                    disabled={rowIndex === 0}
+                                    onClick={() => apply(moveRow(layout, rowIndex, -1))}
+                                >
+                                    ↑
+                                </button>
+                                <button
+                                    type="button"
+                                    className="alloy-os-rlb__row-btn"
+                                    data-builder-row-down={rowIndex}
+                                    aria-label={`Move row ${rowIndex + 1} down`}
+                                    disabled={rowIndex === layout.rows.length - 1}
+                                    onClick={() => apply(moveRow(layout, rowIndex, 1))}
+                                >
+                                    ↓
+                                </button>
+                                <button
+                                    type="button"
+                                    className="alloy-os-rlb__row-btn alloy-os-rlb__row-btn--remove"
+                                    data-builder-remove-row={rowIndex}
+                                    aria-label={`Remove row ${rowIndex + 1}`}
+                                    onClick={() => apply(removeRow(layout, rowIndex))}
+                                >
+                                    Remove row
+                                </button>
+                            </div>
                         </div>
                         <div className="alloy-os-rlb__cells">
                             {row.cells.map((cell, cellIndex) =>
@@ -134,7 +162,7 @@ export default function FocusPanelRowLayoutBuilder({ initialLayout, catalog, ren
                                         </div>
                                         {/* Width controls only on the first card of a cell (the cell owns the width). */}
                                         {cardIndex === 0 ? (
-                                            <div className="alloy-os-rlb__widths" role="group" aria-label="Card width">
+                                            <div className="alloy-os-rlb__widths" role="group" aria-label="Card size">
                                                 {FOCUS_PANEL_CELL_WIDTHS.map((w) => (
                                                     <button
                                                         key={w}
@@ -142,12 +170,14 @@ export default function FocusPanelRowLayoutBuilder({ initialLayout, catalog, ren
                                                         className={[
                                                             "alloy-os-rlb__width",
                                                             cell.width === w ? "alloy-os-rlb__width--active" : "",
+                                                            w === "fill" ? "alloy-os-rlb__width--fill" : "",
                                                         ].join(" ")}
                                                         data-width-btn={w}
+                                                        title={w === "fill" ? "Fill the row's remaining space" : CELL_WIDTH_LABEL[w]}
                                                         aria-pressed={cell.width === w}
                                                         onClick={() => apply(setCellWidth(layout, rowIndex, cellIndex, w))}
                                                     >
-                                                        {WIDTH_LABEL[w]}
+                                                        {CELL_WIDTH_LABEL[w]}
                                                     </button>
                                                 ))}
                                             </div>

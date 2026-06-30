@@ -18,8 +18,42 @@ const LAYOUT: FocusPanelPublishedLayout = {
 };
 
 describe("focusPanelPublishedLayout", () => {
-    it("maps fractional widths to 12-unit columns", () => {
-        expect(CELL_WIDTH_UNITS).toEqual({ "1/3": 4, "1/2": 6, "2/3": 8, full: 12 });
+    it("maps operator size intents to 12-unit columns (legacy fractions still alias)", () => {
+        expect(CELL_WIDTH_UNITS).toMatchObject({
+            quarter: 3,
+            third: 4,
+            half: 6,
+            twoThirds: 8,
+            full: 12,
+            // legacy aliases — older published docs keep rendering
+            "1/3": 4,
+            "1/2": 6,
+            "2/3": 8,
+        });
+    });
+
+    it("named size intents render to the same units as the legacy fractions", () => {
+        const named: FocusPanelPublishedLayout = {
+            rows: [{ cells: [{ width: "twoThirds", cards: ["children"] }, { width: "third", cards: ["current_work"] }] }],
+        };
+        const plan = planPublishedLayout(named, 900);
+        expect(plan.rows[0]!.cells.map((c) => c.widthUnits)).toEqual([8, 4]);
+    });
+
+    it("Fill absorbs the row's remaining units (no dead whitespace)", () => {
+        const filled: FocusPanelPublishedLayout = {
+            rows: [
+                // Quarter (3) + Fill → fill takes the remaining 9.
+                { cells: [{ width: "quarter", cards: ["household"] }, { width: "fill", cards: ["children"] }] },
+                // Two fills split the full row evenly (6 / 6).
+                { cells: [{ width: "fill", cards: ["readiness_kpi"] }, { width: "fill", cards: ["current_work"] }] },
+            ],
+        };
+        const plan = planPublishedLayout(filled, 900);
+        expect(plan.rows[0]!.cells.map((c) => c.widthUnits)).toEqual([3, 9]);
+        expect(plan.rows[1]!.cells.map((c) => c.widthUnits)).toEqual([6, 6]);
+        // Each row sums to the column base — fits together, no leftover.
+        plan.rows.forEach((r) => expect(r.cells.reduce((s, c) => s + c.widthUnits, 0)).toBe(12));
     });
 
     it("honors the published rows/widths EXACTLY when wide", () => {

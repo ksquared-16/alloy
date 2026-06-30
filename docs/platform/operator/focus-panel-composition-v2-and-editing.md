@@ -41,9 +41,12 @@ V2 sprint. Supersedes the V1 "engine composes the surface" framing where they di
 > **Default composition = smart recommendation. Published composition = source of truth.**
 
 - A **published layout** (`FocusPanelPublishedLayout`) is operator-authored:
-  **rows → cells → fractional widths (`1/3 · 1/2 · 2/3 · full`) → vertically stacked cards.**
-  Stacking lets a column hold two cards (e.g. *Household left, Readiness + Current Work
-  stacked right*).
+  **rows → cells → sized by intent (`Quarter · Third · Half · Two Thirds · Full · Fill`)
+  → vertically stacked cards.** Sizes are operator intent, not grid tokens — the runtime
+  computes exact spacing, and **Fill** absorbs a row's leftover space so nothing is pinned
+  awkwardly and no dead whitespace remains. Stacking lets a column hold two cards (e.g.
+  *Household left, Readiness + Current Work stacked right*). Legacy fraction values stay
+  valid for already-published docs.
 - When a surface has a **published layout**, the runtime renders **exactly** those
   rows/widths. The only sanctioned override is **responsive collapse** to a single column
   on a too-narrow surface. No hidden auto-layout overrides a published layout.
@@ -73,8 +76,9 @@ Surface
               ↓ Published Runtime
 ```
 
-- Width is set with plain fractions (**Full / 1/2 / 1/3 / 2/3**); cards stack within a
-  column; cards drag between rows. The builder's **preview is the real runtime grid** fed
+- Cards are sized by **intent** (**Quarter / Third / Half / Two Thirds / Full / Fill**),
+  not grid fractions; rows can be added, removed, and reordered; cards stack within a
+  column and drag between rows. The builder's **preview is the real runtime grid** fed
   the same layout — preview equals runtime.
 - Mounted in the gated `/settings/surfaces` Focus Panel editor; **Save draft** and
   **Publish** persist the layout through the existing draft/publish flow

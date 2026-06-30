@@ -11,7 +11,9 @@ import {
     cardsInLayout,
     emptyLayout,
     moveCardToRow,
+    moveRow,
     removeCard,
+    removeRow,
     setCellWidth,
     stackCardInCell,
     withPublishedLayoutMetadata,
@@ -139,3 +141,31 @@ describe("settings editor persist/load round-trip (metadata + fallback)", () => 
         expect(readFocusPanelPublishedLayout(doc)).toBeNull();
     });
 });
+
+describe("row operations (reorder + remove) — Composition V2", () => {
+    it("removes an entire row", () => {
+        let l = addCardToRow(addRow(emptyLayout()), 0, "household");
+        l = addCardToRow(addRow(l), 1, "children");
+        l = removeRow(l, 0);
+        expect(cardsInLayout(l)).toEqual(["children"]);
+        expect(l.rows).toHaveLength(1);
+    });
+
+    it("reorders a row up and down, clamping at the ends", () => {
+        let l = addCardToRow(addRow(emptyLayout()), 0, "household");
+        l = addCardToRow(addRow(l), 1, "children");
+        l = addCardToRow(addRow(l), 2, "readiness_kpi");
+        // move row 2 (readiness) up to index 1
+        l = moveRow(l, 2, -1);
+        expect(l.rows.map((r) => r.cells[0]!.cards[0])).toEqual(["household", "readiness_kpi", "children"]);
+        // moving the top row up is a no-op (clamped)
+        expect(moveRow(l, 0, -1)).toEqual(l);
+        // moving the bottom row down is a no-op (clamped)
+        expect(moveRow(l, 2, 1)).toEqual(l);
+    });
+
+    it("uses operator-friendly named widths by default (half), still placing each card once", () => {
+        const l = addCardToRow(addRow(emptyLayout()), 0, "household");
+        expect(l.rows[0]!.cells[0]!.width).toBe("half");
+    });
+})

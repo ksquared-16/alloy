@@ -37,8 +37,8 @@ export function defaultRowLayoutFromCards(cards: FocusPanelCardKey[]): FocusPane
             cells:
                 pair.length === 2
                     ? [
-                          { width: "1/2", cards: [pair[0]!] },
-                          { width: "1/2", cards: [pair[1]!] },
+                          { width: "half", cards: [pair[0]!] },
+                          { width: "half", cards: [pair[1]!] },
                       ]
                     : [{ width: "full", cards: [pair[0]!] }],
         });
@@ -60,6 +60,26 @@ export function addRow(layout: FocusPanelPublishedLayout, atIndex?: number): Foc
     return { rows };
 }
 
+/** Remove an entire row (and the cards in it return to the catalog). */
+export function removeRow(layout: FocusPanelPublishedLayout, rowIndex: number): FocusPanelPublishedLayout {
+    if (!layout.rows[rowIndex]) return layout;
+    return { rows: layout.rows.filter((_, i) => i !== rowIndex) };
+}
+
+/** Reorder a row up (−1) or down (+1) — the builder's Reorder Rows affordance. */
+export function moveRow(
+    layout: FocusPanelPublishedLayout,
+    rowIndex: number,
+    direction: -1 | 1,
+): FocusPanelPublishedLayout {
+    const target = rowIndex + direction;
+    if (!layout.rows[rowIndex] || target < 0 || target >= layout.rows.length) return layout;
+    const rows = layout.rows.slice();
+    const [moved] = rows.splice(rowIndex, 1);
+    rows.splice(target, 0, moved!);
+    return { rows };
+}
+
 /** Drop rows left empty (no cells / no cards) so the layout stays clean. */
 function prune(layout: FocusPanelPublishedLayout): FocusPanelPublishedLayout {
     return {
@@ -74,7 +94,7 @@ export function addCardToRow(
     layout: FocusPanelPublishedLayout,
     rowIndex: number,
     card: FocusPanelCardKey,
-    width: FocusPanelCellWidth = "1/2",
+    width: FocusPanelCellWidth = "half",
 ): FocusPanelPublishedLayout {
     if (cardsInLayout(layout).includes(card)) return layout; // a card appears once
     const rows = layout.rows.map((r, i) =>
@@ -135,7 +155,7 @@ export function moveCardToRow(
 ): FocusPanelPublishedLayout {
     if (loc.row === toRowIndex) return layout;
     const sourceCell = layout.rows[loc.row]?.cells[loc.cell];
-    const width = sourceCell?.width ?? "1/2";
+    const width = sourceCell?.width ?? "half";
     const removed = removeCard(layout, loc);
     // toRowIndex refers to the ORIGINAL indexing; clamp into the pruned layout.
     const target = Math.max(0, Math.min(toRowIndex, removed.rows.length - 1));
