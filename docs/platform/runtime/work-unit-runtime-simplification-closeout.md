@@ -1,96 +1,100 @@
-# Work-Unit Runtime Simplification — Batch Close-out & Migration Status
+# Runtime Simplification Sprint — Closeout (Canonical)
 
-**Status:** IMPLEMENTED (landed to `staging`, June 2026). This batch is closed. The next step is UI verification against the integrated runtime, not further implementation.
+**Status: CLOSED — IMPLEMENTED, landed to `staging` (June 2026).** This is the single canonical record of the Runtime Simplification sprint: what landed, the runtime score, what remains, the lessons, and the runtime principles. The Runtime Architecture is now considered **stable** — treat the runtime as infrastructure, not an area requiring rediscovery. The next runtime sprint begins only when product experience identifies a concrete ownership domain that still needs simplification.
 
-This records the runtime ownership transferred out of the operator compat surfaces during the Runtime Simplification batch, the layers removed, the runtime score before/after, and what remains.
+Companion canonical docs (do not duplicate these — extend them):
+- [`operational-runtime-doctrine.md`](./operational-runtime-doctrine.md) — the 10 laws (governing constraints).
+- [`operational-runtime-topology.md`](./operational-runtime-topology.md) — how the runtime works today (descriptive map).
 
-Governing principle (unchanged): **remove runtime.** Every slice left the runtime objectively smaller — fewer owners, providers, gates, and compatibility paths — or moved ownership from the compat page to a canonical runtime module. Runtime flags are migration tools only (prove → merge → delete), never permanent product modes.
-
----
-
-## 1. Runtime ownership removed (domains transferred)
-
-Each domain moved from page-owned orchestration to a canonical owner:
-
-| Domain | From (compat page owned) | To (canonical owner) | PR |
-|---|---|---|---|
-| **Workspace reveal** | client reveal-readiness layer + loading gate | server-composed Workspace Route VM owns reveal | #13 |
-| **Workspace Route VM** | first-paint seed + Surface VM | `workspaceRouteVm` (server-composed) | #13 |
-| **Work-Unit sibling switching** | `handleQueueTabChange` in-page pill switch | canonical navigation (`resolveLifecycleSiblingNavHref` → slug route) | #17 |
-| **Work-Unit switching runtime** | `activeWorkUnitId` + optimistic setters + suppress/skip guards + history hack | route-owned identity (`workUnitId = routeWorkUnitId`); each work unit is its own route entry | #18 |
-| **Work-Unit context/banner** | local `routeWorkUnitDisplayName` derivation + session-cache warm-start | Work-Unit Route VM (`workUnitName` + new `departmentName`) | #19 |
-| **Work-Unit perspective** | `stageOperationalViews` memo + 2 publish effects | `useWorkUnitRuntimePerspective` (canonical hook) | #21 |
-| **Queue fetch orchestration** | 649-line `fetchQueueItems` + nested `runNetwork` | `useWorkUnitQueueRuntime` (canonical hook) | #25 |
-| **Queue runtime state** | `queueItems*` state + `queueItemsLastFetchSigRef`/`queueRowLeaseSigsRef`/`queueItemsRequestSeq` | `useWorkUnitQueueRuntime` owns + returns them | #28 |
+Governing principle (unchanged): **remove runtime.** Every batch left the runtime objectively smaller — fewer owners, providers, gates, compatibility paths — or moved ownership from the compat page to a canonical runtime module. Runtime flags are migration tools only (prove → merge → delete), never permanent product modes.
 
 ---
 
-## 2. Runtime layers / modules removed
+## 1. Architecture Status
 
-- **Loading gate:** `WorkspacePageLoadingGate` — deleted (#13).
-- **Reveal-readiness layer:** workspace reveal-gate computation + `workspaceRevealGate.ts` — deleted (#13).
-- **Surface VM:** `workspaceSurfaceViewModel.ts` + first-paint seed runtime — deleted (#13).
-- **Dead zero-importer components:** `OipOverviewPulseRow`, `OpportunityLifecyclePanel`, `ActionWorkspaceBosNeuralPulse`, `DeleteLeadModal` — deleted (#15).
-- **In-page switching runtime:** `activeWorkUnitId` state, `applyActiveLifecycleWorkUnitSelection`, the ~115-line in-page switch fallback, `replaceWorkUnitLocationHref` history hack — deleted (#18).
-- **Switch-only guard writes:** removed (the shared guard refs stay for bootstrap/lane logic) (#18).
-- **Context switch-artifact:** `routeWorkUnitDisplayName` state + session-cache warm-start effect — deleted (#19).
-- **Perspective ownership:** `stageOperationalViews` memo + both `setActiveRuntimePerspective` effects — moved out of page (#21).
+### ✓ Completed (landed to staging)
+| Domain | Canonical owner now | PRs |
+|---|---|---|
+| **Workspace Runtime** (reveal) | server Route VM owns reveal; loading gate / reveal-readiness layer / Surface VM deleted | #13, #15 |
+| **Workspace Route VM** | `workspaceRouteVm` (server-composed) | #13 |
+| **Work Unit Switching Runtime** | navigation to canonical slug routes; `activeWorkUnitId` + in-page switcher removed | #17, #18 |
+| **Work Unit Context Runtime** | Work-Unit Route VM (`workUnitName` + `departmentName`) | #19 |
+| **Work Unit Perspective Runtime** | `useWorkUnitRuntimePerspective` (canonical hook) | #21 |
+| **Queue Fetch Runtime** | `useWorkUnitQueueRuntime` (canonical hook) | #25 |
+| **Queue State Runtime** | `useWorkUnitQueueRuntime` owns queue-items state + dedup refs | #28 |
+| **Runtime Simplification** | compat page reduced from owner to consumer across all of the above | #13–#28 |
+| **Runtime QA fixes** | instant tile click (commitFirst); no "Preparing operational surface…" over a loaded queue; KPI header skeleton (no placeholder→value morph); TTL-dedup of repeated lifecycle/sibling/dept queue-summary fetches | #32 |
 
-No new runtime flags were introduced in this batch.
-
----
-
-## 3. Runtime score (before → after)
-
-| Metric | Before (batch start) | After | Notes |
-|---|---|---|---|
-| Workspace loading gate | 1 | **0** | deleted (#13) |
-| Workspace reveal-readiness layer | 1 | **0** | deleted (#13) |
-| Workspace Surface VM | 1 | **0** | deleted (#13) |
-| Work-Unit client-side switching runtime | present | **0** | navigation-only (#17/#18) |
-| Compat-page runtime ownership domains | 5 (switch, context, perspective, queue-fetch, queue-state) | **0 owned** | all delegated to canonical owners |
-| Compat-page `useState` | 60 | **54** | net of relocations to canonical hooks |
-| Compat-page `useRef` | 54 | **52** | |
-| Compat-page `useEffect` | 52 | **50** | |
-| Compat-page LOC | 7,786 | **6,962** | −824; queue/perspective/nav orchestration relocated to canonical modules |
-| Canonical runtime hooks/modules added | — | **3** | `useWorkUnitQueueRuntime`, `useWorkUnitRuntimePerspective`, `lifecycleSiblingNavTarget` |
-| New runtime flags | — | **0** | flags remain migration-only |
-| Queue runtime deps interface (page→hook) | n/a | 32 → **20** | after state migration (#28) |
-
-The headline is **ownership**, not raw LOC: the compat page no longer *owns* switching, context, perspective, or queue fetch/state — those live in canonical runtime modules with the page as a consumer. Workspace shed three real runtime layers (loading gate, reveal layer, Surface VM) outright.
+### ⟳ Still remaining (clearly scoped — future sprints)
+| Domain | What it is | Why it's deferred |
+|---|---|---|
+| **Queue summaries / bootstrap** | `queueSummaries` state + `fetchQueueSummaries` + the bootstrap lane-selection sequence (still compat-page-owned) | bootstrap-sequenced (lane selection reads summaries); needs careful staged extraction + runtime verification |
+| **Queue lane ownership** | `selectedQueueKey` / `attentionBucketKey` / record filters + lane URL sync | lane selection drives the page; moving it needs a queue-identity owner |
+| **Reveal coordination** | `workUnitRevealGate` + coordinated reveal orchestration | pure gate fns exist; the page still orchestrates; evidence-test guarded |
+| **KPI ownership** | KPI fetch + resolver composition (`workUnitKpiContext`, placement KPIs) | deliberately deferred for TTFB; QA gated the *reveal*, not the ownership — folding placements into the bootstrap/Route VM is the next step |
+| **Settings runtime** | the settings surface runtime | out of scope this sprint (separate surface) |
+| **Save coordinator** | already canonical (`useResumeSessionWriter` / `resumeSession`) | not page-owned; listed for completeness, no work pending |
 
 ---
 
-## 4. Code reduction
+## 2. Runtime Score (sprint start → close)
 
-- **Deleted:** `WorkspacePageLoadingGate.tsx`, `workspaceRevealGate.ts`, `workspaceSurfaceViewModel.ts`, `workspaceFirstPaintSeed.tsx`, 4 dead components (#13/#15), plus the in-page switch + context + perspective runtime blocks from the compat page.
-- **Added (canonical runtime):** `workspaceRouteVm.ts` (+context), `lifecycleSiblingNavTarget.ts`, `useWorkUnitRuntimePerspective.ts`, `useWorkUnitQueueRuntime.ts`, server loaders (`loadWorkUnitSlugRouteServer` extended with `departmentName`).
-- **Canonicalized:** work-unit route identity (server-resolved Route VM), sibling switching (navigation), context (Route VM), perspective (hook), queue fetch + state (hook).
-- **Moved:** the 649-line `fetchQueueItems` + queue-items state/dedup refs (page → `useWorkUnitQueueRuntime`).
+| Metric | Before | After |
+|---|---|---|
+| Workspace loading gate | 1 | **0** |
+| Workspace reveal-readiness layer | 1 | **0** |
+| Workspace Surface VM | 1 | **0** |
+| Work-unit client switching runtime | present | **0** (navigation-only) |
+| Compat-page *owned* runtime domains | 5 | **0** (all delegated) |
+| Compat-page LOC | 7,786 | ~6,962 |
+| Canonical runtime hooks added | — | 3 (`useWorkUnitQueueRuntime`, `useWorkUnitRuntimePerspective`, `lifecycleSiblingNavTarget`) |
+| New runtime flags | — | **0** (flags remain migration-only) |
+| Repeated dept `work-unit-queue-summaries` calls | 6+/dept/30s | **1/dept/30s window** (URL-keyed TTL dedup) |
 
----
-
-## 5. Remaining runtime domains (accurate status)
-
-Still compat-page-owned (NOT yet transferred):
-
-- **Queue summaries + bootstrap** — `queueSummaries` state, `fetchQueueSummaries`, bootstrap lane-selection sequencing. (Next candidate; bootstrap-sequenced, careful.)
-- **Queue lane state** — `selectedQueueKey`/`attentionBucketKey`/filters + URL sync (lane selection drives the page).
-- **KPI ownership** — KPI fetch + resolver composition (`workUnitKpiContext`, placement KPIs).
-- **Reveal coordination** — `workUnitRevealGate` + coordinated reveal orchestration (evidence-test guarded; the canonical gate functions exist, page still orchestrates).
-- **Settings runtime** — out of scope for this batch (separate surface).
-- **Save runtime** — already canonical (`useResumeSessionWriter` / `resumeSession`); not page-owned.
+The headline is **ownership**, not raw LOC: the compat page no longer *owns* switching, context, perspective, or queue fetch/state — those live in canonical runtime modules with the page as a consumer.
 
 ---
 
-## 6. Validation at close-out
+## 3. What We Learned
 
-- `typecheck:build` — **clean (0 errors)**.
-- Scoped runtime/work-unit/queue suites — pass except a known pre-existing baseline of source-evidence tests (asserting strings that drifted out of the page independently of this work; each verified pre-existing by restoring the page to HEAD and observing identical failures). No runtime regressions.
-- Each behavior-changing slice (#17, #18, #25, #28) was UI-verified before its merge, except #28 which is landed pending integrated UI verification per the close-out directive.
+Guidance for future runtime work:
+
+- **Ownership domains beat micro-slices.** Slicing by file/component produced relocation churn and "presentation traps" (moving code without reducing ownership). Slicing by *runtime ownership domain* (switching, context, perspective, queue fetch, queue state) gave each batch a clear before/after, a provable parity boundary, and a real reduction. Every domain answered: who owns this today, who should own it, can the old owner disappear?
+
+- **The Route VM became the canonical owner** because it is the one thing that survives the "React-disappearance test" — it is server-composed, frozen per route entry, and the single source of first-paint truth. Once switching became navigation, the per-entry Route VM was always correct, which unlocked moving context (and the rest) onto it without staleness.
+
+- **Runtime flags are temporary** by construction: prove the canonical path → merge → prove parity → delete the old path and the flag. A flag that becomes a permanent product mode is a second runtime to maintain. This sprint introduced **zero** new flags.
+
+- **Compatibility paths must be deleted, not left alive.** Dual ownership (a fallback + the canonical path) is the expensive failure mode — it doubles the surface and hides regressions. "Extract → prove identical → delete the old owner" is the loop; the deletion is the point.
+
+- **Runtime ownership is now explainable.** Each surface region maps to one owner (Route VM, a runtime hook, or the renderer). A new engineer can answer "where does this data come from and who owns it" without spelunking a 7,800-line component.
+
+- **Future runtime work should begin with ownership, not components.** Start from "which ownership domain is wrong," map current vs canonical owner, then move + delete. Do not start from "this component is big" — size is a symptom, ownership is the cause.
 
 ---
 
-## 7. Next step
+## 4. Runtime Principles (canonical)
 
-UI verification against the integrated `staging` runtime — then evaluate product experience before opening the next runtime batch (queue summaries / bootstrap, then KPI / reveal coordination).
+These are the standing rules for all future runtime work:
+
+1. **Runtime ownership over component ownership** — reason about who *owns* state/fetch/identity, not which file renders.
+2. **Route VM first** — first-paint truth is server-composed into the Route VM.
+3. **Runtime Services second** — cross-cutting behavior (fetch, save, perspective) lives in canonical runtime hooks/services, consumed by surfaces.
+4. **Surface Renderer third** — the page/component is a consumer that renders owned state; it does not own runtime.
+5. **Delete after parity** — extract, prove identical, then delete the old owner. No dual ownership.
+6. **Runtime gets smaller over time** — the score (owners, providers, gates, fetches, flags) trends down.
+7. **Every implementation batch removes runtime** — if a batch deletes nothing after parity, ask why.
+8. **Do not introduce duplicate runtime ownership** — one owner per domain; a fallback is a migration step, never an end state.
+
+---
+
+## 5. Next sprint sequence (recommended)
+
+Only when product experience flags a concrete need:
+1. **Queue summaries / bootstrap** → into `useWorkUnitQueueRuntime` (with runtime verification; bootstrap-sequenced).
+2. **Queue lane ownership** (selection/filters/URL sync) → a queue-identity owner.
+3. **KPI ownership** → fold placements into the bootstrap/Route VM (eliminates the residual snapshot refinement).
+4. **Reveal coordination** → page delegates the coordinated reveal to the canonical gate.
+5. **Settings runtime** → separate surface, its own ownership map.
+
+Until then: runtime changes should be **incremental, intentional, and ownership-driven** — not a rediscovery exercise.

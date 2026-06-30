@@ -1,5 +1,7 @@
 # Operational Runtime Doctrine
 
+> **Implemented — Runtime Simplification sprint CLOSED (June 2026).** These laws are now realized in code for `/workspace` and `/workspace/work-unit/*`: reveal owned by the server Route VM, switching as navigation, context/perspective/queue ownership in canonical runtime modules. The canonical sprint record (completed/remaining domains, runtime score, lessons, **runtime principles**) is [`work-unit-runtime-simplification-closeout.md`](./work-unit-runtime-simplification-closeout.md). Future runtime work is ownership-driven and incremental — treat the runtime as infrastructure, not an area to rediscover.
+
 **Status:** Canonical doctrine (Track 2, Phase 1 — June 2026). **Doctrine lock only; no runtime code changes in this phase.**
 **Scope:** Primary operational routes — `/workspace`, `/workspace/work-unit/:slug` (+ `:recordId`), and the navigations between them.
 **Companion evidence:** [`../../sprints/06_2026/operational-runtime-doctrine-phase-1.md`](../../sprints/06_2026/operational-runtime-doctrine-phase-1.md) (current-behavior map + first implementation plan).
