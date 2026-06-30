@@ -30,7 +30,18 @@ function InlinePulseMetric({
         >
             <span className="text-[11px] font-medium text-alloy-midnight/55">{label}</span>
             <span className="text-sm font-semibold tabular-nums leading-none text-alloy-midnight">
-                {loading ? "—" : value}
+                {loading ? (
+                    // Layout-reserving skeleton — never a placeholder value ("—") that morphs into the
+                    // real number. The KPI region reserves its placement and reveals the complete value
+                    // set atomically once placements + OIP resolve (no piecewise value morph).
+                    <span
+                        className="inline-block h-[0.7em] w-10 animate-pulse rounded bg-alloy-midnight/10 align-middle"
+                        data-workspace-pulse-skeleton="true"
+                        aria-hidden="true"
+                    />
+                ) : (
+                    value
+                )}
             </span>
         </div>
     );

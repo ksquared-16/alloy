@@ -15,6 +15,7 @@ import {
     enrollmentOperationalSurfaceNeedsHydration,
 } from "@/lib/admin/enrollmentOperationalSurfaceLanding";
 import { workspaceDataFetchInit } from "@/lib/workspace/workspaceDataFetch";
+import { dedupeAdminFetchWithTtl, LIFECYCLE_SIBLING_FETCH_TTL_MS } from "@/lib/workspace/workspaceAdminFetchDedupe";
 
 type LifecycleCatalogResponse = { items?: LifecycleCatalogEntry[]; error?: string };
 type WorkUnitsResponse = { items?: OperatorLifecycleWorkUnitRow[]; error?: string };
@@ -47,9 +48,10 @@ async function fetchLifecycleRollupsForCards(
 
     const summariesByDept = await Promise.all(
         departmentIds.map(async (departmentId) => {
-            const res = await fetch(
+            const res = await dedupeAdminFetchWithTtl(
                 `/api/admin/departments/${encodeURIComponent(departmentId)}/work-unit-queue-summaries?include_previews=false&count_mode=exact&summary_mode=priority&priority_budget=5`,
                 init,
+                LIFECYCLE_SIBLING_FETCH_TTL_MS,
             );
             const json = (res.ok ? await res.json() : {}) as LifecycleDepartmentSummariesResponse;
             return { departmentId, summaries: json.work_units ?? [] };
@@ -97,9 +99,9 @@ export async function loadOperatorLifecycleLandingCards(options?: {
     inflight = (async () => {
         const init = workspaceDataFetchInit() ?? { credentials: "include" as RequestCredentials };
         const [catalogRes, workUnitsRes, departmentsRes] = await Promise.all([
-            fetch("/api/admin/lifecycle-catalog", init),
-            fetch("/api/admin/work-units", init),
-            fetch("/api/admin/departments", init),
+            dedupeAdminFetchWithTtl("/api/admin/lifecycle-catalog", init, LIFECYCLE_SIBLING_FETCH_TTL_MS),
+            dedupeAdminFetchWithTtl("/api/admin/work-units", init, LIFECYCLE_SIBLING_FETCH_TTL_MS),
+            dedupeAdminFetchWithTtl("/api/admin/departments", init, LIFECYCLE_SIBLING_FETCH_TTL_MS),
         ]);
 
         const catalogJson = (catalogRes.ok ? await catalogRes.json() : {}) as LifecycleCatalogResponse;

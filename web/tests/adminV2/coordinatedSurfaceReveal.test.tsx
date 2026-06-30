@@ -247,7 +247,7 @@ describe("Phase 3 — Work Unit entry coordinated reveal", () => {
         expect(matched.phase).toBe("ready");
     });
 
-    it("rows present with no drawer open stays preparing (legacy expanded rows are not the ready state) (test #5/#10)", () => {
+    it("rows present with no drawer open is READY (a loaded queue is not 'preparing'; no surface-prep text)", () => {
         const noDrawer = snapshot({
             loading: false,
             mayPaint: true,
@@ -256,7 +256,22 @@ describe("Phase 3 — Work Unit entry coordinated reveal", () => {
             drawerType: null,
             drawerId: null,
         });
-        expect(noDrawer.phase).toBe("preparing");
+        // Browsing a fully-painted queue is the ready state — it must not show
+        // "Preparing operational surface…" while waiting for a Focus Panel subject.
+        expect(noDrawer.phase).toBe("ready");
+        expect(noDrawer.message).toBe("");
+    });
+
+    it("still 'preparing' only while genuinely loading or while a deep-linked drawer catches up", () => {
+        expect(
+            snapshot({ loading: true, mayPaint: false, rows: 0, routeRecordId: null, drawerType: null, drawerId: null })
+                .phase,
+        ).toBe("preparing");
+        // deep-link: URL targets a record but the drawer hasn't matched it yet → still preparing
+        expect(
+            snapshot({ loading: false, mayPaint: true, rows: 3, routeRecordId: "rec-9", drawerType: "opportunities", drawerId: "rec-1" })
+                .phase,
+        ).toBe("preparing");
     });
 });
 

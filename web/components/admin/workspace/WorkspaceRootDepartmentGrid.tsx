@@ -92,6 +92,10 @@ export function WorkspaceRootDepartmentGrid({
             href,
             clickedKey: workspaceDeptClickedKey(departmentId),
             variant: "department",
+            // Instant tile click: commit the route immediately and warm the dept bootstrap in the
+            // background (hover intent already prewarms it). The click no longer waits on the
+            // prefetch/timeout before navigating.
+            commitFirst: true,
             prepare: () =>
                 prefetchDeptAboveFoldBundle({
                     departmentId,

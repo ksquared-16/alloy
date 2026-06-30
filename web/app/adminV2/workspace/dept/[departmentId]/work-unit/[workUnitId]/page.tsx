@@ -345,7 +345,7 @@ import { tracePlatformPrefetch } from "@/lib/perf/platformSurfacePerfTrace";
 import { markDrawerRowClickStart } from "@/lib/perf/adminV2DrawerPerf";
 import { markWorkUnitNavigationStart } from "@/lib/perf/markWorkUnitNavigationStart";
 import { setAdminV2PrimarySurfacePending } from "@/lib/perf/adminV2PrimarySurfaceGate";
-import { dedupeAdminFetch, dedupeAdminFetchWithTtl } from "@/lib/workspace/workspaceAdminFetchDedupe";
+import { dedupeAdminFetch, dedupeAdminFetchWithTtl, LIFECYCLE_SIBLING_FETCH_TTL_MS } from "@/lib/workspace/workspaceAdminFetchDedupe";
 import { scheduleAdminV2BackgroundWork } from "@/lib/workspace/adminV2DeferBackgroundWork";
 import {
     allVisibleWorkUnitLanePrefetchTargets,
@@ -1195,9 +1195,12 @@ export default function AdminV2OpportunityWorkUnitPage() {
             department_id: departmentId,
             work_unit_id: workUnitId,
         });
-        void dedupeAdminFetch(
+        void dedupeAdminFetchWithTtl(
             `/api/admin/work-units?${new URLSearchParams({ department_id: departmentId }).toString()}`,
-            init ?? {}
+            init ?? {},
+            // TTL-share the dept sibling list across re-navigations + the sidebar lifecycle landing
+            // (same URL) so re-mounts within a session do not re-hit this endpoint.
+            LIFECYCLE_SIBLING_FETCH_TTL_MS,
         )
             .then(async (res) => {
                 if (!res.ok || cancelled) return;
@@ -1261,7 +1264,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
             view_scope_fingerprint: viewScopeFingerprint,
         });
 
-        void dedupeAdminFetch(summariesRoute, init ?? {})
+        void dedupeAdminFetchWithTtl(summariesRoute, init ?? {}, LIFECYCLE_SIBLING_FETCH_TTL_MS)
             .then(async (res) => {
                 if (cancelled) return;
                 if (!res.ok) {
