@@ -67,7 +67,9 @@ export function MetricCardShell({
     const visualAccent = resolveMetricVisualAccent(accent);
     const fillMode = normalizeMetricVisualFill(fill);
     const normalizedStatus = normalizeOipHealthStatus(status);
-    const padding = density === "compact" ? "p-3" : "p-3.5";
+    const padding = density === "compact" ? "px-3 py-2.5" : "p-3.5";
+    const radiusClass = density === "compact" ? "rounded-lg" : "rounded-xl";
+    const gapClass = density === "compact" ? "gap-1" : "gap-2";
     // Compact tiles (header strips) use a fixed width so every KPI and Trend card is the same
     // size regardless of label length — no tile grows because of a longer label or sparkline.
     const sizeClass = density === "compact" ? "w-[160px] shrink-0" : "min-w-0";
@@ -85,7 +87,7 @@ export function MetricCardShell({
 
     return (
         <div
-            className={`flex flex-col gap-2 rounded-xl border-l-[3px] ${sizeClass} ${visualAccent.rail} ${resolveMetricCardSurface(visualAccent, fillMode)} ${padding} shadow-[0_1px_2px_rgba(15,23,42,0.05)] ${className}`}
+            className={`flex flex-col ${gapClass} ${radiusClass} border-l-[3px] ${sizeClass} ${visualAccent.rail} ${resolveMetricCardSurface(visualAccent, fillMode)} ${padding} shadow-[0_1px_2px_rgba(15,23,42,0.05)] ${className}`}
             data-metric-visual={visual}
             data-metric-card-shell="true"
             data-metric-accent={visualAccent.key}
@@ -100,7 +102,8 @@ export function MetricCardShell({
                         </p>
                     ) : null}
                     <p
-                        className={`truncate text-[11px] font-semibold ${density !== "compact" ? "uppercase tracking-wide" : ""} ${visualAccent.text}`}
+                        className={`text-[11px] font-semibold ${density !== "compact" ? "truncate uppercase tracking-wide" : ""} ${visualAccent.text}`}
+                        style={density === "compact" ? { display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" } : undefined}
                         title={label}
                     >
                         {label}
@@ -119,7 +122,7 @@ export function MetricCardShell({
 }
 
 const VALUE_SIZE: Record<MetricCardDensity, string> = {
-    compact: "text-xl",
+    compact: "text-[22px] leading-none tracking-tight",
     standard: "text-2xl",
 };
 
@@ -136,7 +139,7 @@ export function MetricCardValue({
     className?: string;
 }) {
     return (
-        <p className={`truncate font-semibold tabular-nums text-alloy-midnight ${VALUE_SIZE[density]} ${className}`}>
+        <p className={`truncate tabular-nums text-alloy-midnight ${density === "compact" ? "font-bold" : "font-semibold"} ${VALUE_SIZE[density]} ${className}`}>
             {loading ? "…" : value}
         </p>
     );

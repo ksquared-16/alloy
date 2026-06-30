@@ -26,7 +26,7 @@ export function MetricKpiCard({
     value,
     status = "unknown",
     loading = false,
-    accent = "enrollment",
+    accent = "neutral",
     fill,
     question,
     density = "standard",
