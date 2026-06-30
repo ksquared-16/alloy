@@ -16,6 +16,7 @@ type Props = {
     /** Optional operational question eyebrow (Card Language). */
     question?: string | null;
     density?: MetricCardDensity;
+    showHealthChip?: boolean;
     /** Optional drill / context footer. */
     footer?: ReactNode;
 };
@@ -29,6 +30,7 @@ export function MetricKpiCard({
     fill,
     question,
     density = "standard",
+    showHealthChip,
     footer,
 }: Props) {
     return (
@@ -40,6 +42,7 @@ export function MetricKpiCard({
             accent={accent}
             fill={fill}
             density={density}
+            showHealthChip={showHealthChip}
             footer={footer}
         >
             <MetricCardValue value={value} loading={loading} density={density} />

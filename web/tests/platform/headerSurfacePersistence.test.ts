@@ -78,4 +78,43 @@ describe("Header placement ⇄ SurfaceDoc mapping", () => {
         expect(headerContextConfig({})).toEqual({ version: 1 });
         expect(headerContextConfig({ size: "compact", accent: "ember" })).toEqual({ version: 1, size: "compact", accent: "ember" });
     });
+
+    it("context_config carries showHealthChip when set", () => {
+        expect(headerContextConfig({ showHealthChip: false })).toEqual({ version: 1, showHealthChip: false });
+        expect(headerContextConfig({ showHealthChip: true })).toEqual({ version: 1, showHealthChip: true });
+        expect(headerContextConfig({ accent: "amber", showHealthChip: false })).toEqual({ version: 1, accent: "amber", showHealthChip: false });
+    });
+
+    it("showHealthChip round-trips through SurfaceDoc (view→doc→desired)", () => {
+        const withChip: HeaderPlacementView[] = [
+            { id: "x1", sourceKey: "enrollment.lead_count", vizType: "kpi_card", label: "Leads", sortOrder: 0, accent: "amber", showHealthChip: false },
+        ];
+        const doc = headerViewsToDoc(withChip);
+        expect(doc.sections[0].cards[0].config).toMatchObject({ showHealthChip: "off" });
+
+        const desired = headerDocToDesired(doc);
+        expect(desired[0]).toMatchObject({ sourceKey: "enrollment.lead_count", accent: "amber", showHealthChip: false });
+    });
+
+    it("showHealthChip: true round-trips as 'on' in doc config", () => {
+        const withChip: HeaderPlacementView[] = [
+            { id: "x2", sourceKey: "ops.work_overdue_count", vizType: "kpi_card", label: "Overdue", sortOrder: 0, showHealthChip: true },
+        ];
+        const doc = headerViewsToDoc(withChip);
+        expect(doc.sections[0].cards[0].config).toMatchObject({ showHealthChip: "on" });
+
+        const desired = headerDocToDesired(doc);
+        expect(desired[0]).toMatchObject({ showHealthChip: true });
+    });
+
+    it("showHealthChip absent in view → absent in doc config and desired", () => {
+        const noChip: HeaderPlacementView[] = [
+            { id: "x3", sourceKey: "enrollment.lead_count", vizType: "kpi_card", label: "Leads", sortOrder: 0 },
+        ];
+        const doc = headerViewsToDoc(noChip);
+        expect(doc.sections[0].cards[0].config).not.toHaveProperty("showHealthChip");
+
+        const desired = headerDocToDesired(doc);
+        expect(desired[0]).not.toHaveProperty("showHealthChip");
+    });
 });

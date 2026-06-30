@@ -43,6 +43,7 @@ export type HeaderPlacementView = {
     sortOrder: number;
     size?: string;
     accent?: string;
+    showHealthChip?: boolean;
 };
 
 export type DesiredHeaderPlacement = {
@@ -51,6 +52,7 @@ export type DesiredHeaderPlacement = {
     sortOrder: number;
     size?: string;
     accent?: string;
+    showHealthChip?: boolean;
 };
 
 /* ---- pure mapping (unit-testable) ---- */
@@ -68,6 +70,7 @@ export function headerViewsToDoc(views: readonly HeaderPlacementView[]): Surface
                 visibility: "on",
                 ...(v.size ? { size: v.size } : {}),
                 ...(v.accent ? { accent: v.accent } : {}),
+                ...(v.showHealthChip !== undefined ? { showHealthChip: v.showHealthChip ? "on" : "off" } : {}),
             } as Record<string, unknown>,
         }));
     return { sections: [{ sectionId: IMPLICIT_SECTION_ID, title: "", cards }] };
@@ -90,6 +93,7 @@ export function headerDocToDesired(doc: SurfaceDoc): DesiredHeaderPlacement[] {
                 sortOrder: out.length * 10,
                 ...(typeof cfg.size === "string" ? { size: cfg.size } : {}),
                 ...(typeof cfg.accent === "string" ? { accent: cfg.accent } : {}),
+                ...(cfg.showHealthChip === "on" ? { showHealthChip: true } : cfg.showHealthChip === "off" ? { showHealthChip: false } : {}),
             });
         });
     }
@@ -125,9 +129,14 @@ export function diffHeaderPlacements(current: readonly HeaderPlacementView[], de
     return { creates, updates, removes };
 }
 
-/** Build the placement context_config (carries size/accent for runtime + reload). */
-export function headerContextConfig(d: { size?: string; accent?: string }): Record<string, unknown> {
-    return { version: 1, ...(d.size ? { size: d.size } : {}), ...(d.accent ? { accent: d.accent } : {}) };
+/** Build the placement context_config (carries size/accent/showHealthChip for runtime + reload). */
+export function headerContextConfig(d: { size?: string; accent?: string; showHealthChip?: boolean }): Record<string, unknown> {
+    return {
+        version: 1,
+        ...(d.size ? { size: d.size } : {}),
+        ...(d.accent ? { accent: d.accent } : {}),
+        ...(d.showHealthChip !== undefined ? { showHealthChip: d.showHealthChip } : {}),
+    };
 }
 
 /* ---- server load/save ---- */
@@ -146,6 +155,7 @@ async function loadViews(supabase: SupabaseClient, orgId: string, surface: Heade
                 sortOrder: p.sort_order,
                 size: typeof ctx.size === "string" ? ctx.size : undefined,
                 accent: typeof ctx.accent === "string" ? ctx.accent : undefined,
+                showHealthChip: typeof ctx.showHealthChip === "boolean" ? ctx.showHealthChip : undefined,
             };
         });
 }

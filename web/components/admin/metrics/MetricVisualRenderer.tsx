@@ -59,8 +59,13 @@ export function MetricVisualRenderer({
     const viz = placement.visualization;
     const label = (viz.display_config as { labelOverride?: string }).labelOverride ?? viz.label;
     const type = viz.visualization_type as MetricVisualizationType;
-    const accent = (viz.style_config as { accent?: string }).accent;
     const fill = (viz.style_config as { fill?: string }).fill;
+
+    // context_config carries surface-level overrides written by the header builder
+    // (accent, showHealthChip). These take precedence over visualization-level style_config.
+    const ctx = (placement.context_config ?? {}) as Record<string, unknown>;
+    const accent = (typeof ctx.accent === "string" ? ctx.accent : null) ?? (viz.style_config as { accent?: string }).accent;
+    const showHealthChip = typeof ctx.showHealthChip === "boolean" ? ctx.showHealthChip : undefined;
 
     switch (type) {
         case "scorecard":
@@ -111,6 +116,7 @@ export function MetricVisualRenderer({
                     accent={accent}
                     fill={fill}
                     density={density}
+                    showHealthChip={showHealthChip}
                 />
             );
         case "trend_card":
@@ -125,6 +131,7 @@ export function MetricVisualRenderer({
                     fill={fill}
                     direction={trendComparison?.direction}
                     density={density}
+                    showHealthChip={showHealthChip}
                 />
             );
         case "chip":
@@ -167,6 +174,7 @@ export function MetricVisualRenderer({
                     accent={accent}
                     fill={fill}
                     density={density}
+                    showHealthChip={showHealthChip}
                 />
             );
     }
