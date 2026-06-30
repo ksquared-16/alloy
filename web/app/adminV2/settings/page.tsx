@@ -113,6 +113,15 @@ export default function AdminV2SettingsIndexPage() {
                         </SettingsLink>
                     </SettingsGroup>
 
+                    <SettingsGroup
+                        label="Commercial"
+                        description="Programs, tuition, and business rates."
+                    >
+                        <SettingsLink href="/admin/commercial" title="Programs & Tuition" mode="editable" emphasis>
+                            Programs offered at each location and the tuition rate grid.
+                        </SettingsLink>
+                    </SettingsGroup>
+
                     <SettingsGroup label="Workspace Experience" description="Metrics, forms, and operator-facing surfaces.">
                         <SettingsLink href="/admin/settings/kpis" title="Workspace metrics" mode="editable">
                             Dashboard KPI tiles.

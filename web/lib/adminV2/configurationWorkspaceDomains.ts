@@ -7,7 +7,8 @@ export type ConfigurationWorkspaceDomainId =
     | "organization"
     | "data_model"
     | "operations"
-    | "experience";
+    | "experience"
+    | "commercial";
 
 export type ConfigurationWorkspaceNavItem = {
     href: string;
@@ -185,6 +186,23 @@ export const CONFIGURATION_WORKSPACE_DOMAINS: readonly ConfigurationWorkspaceDom
                 label: "Configuration proposals",
                 description: "Review proposed layout changes.",
                 advanced: true,
+            },
+        ],
+    },
+    {
+        id: "commercial",
+        label: "Commercial",
+        description: "Programs, tuition, and business rates.",
+        items: [
+            {
+                href: "/admin/commercial/programs",
+                label: "Programs",
+                description: "Programs offered at each location.",
+            },
+            {
+                href: "/admin/commercial/tuition",
+                label: "Tuition",
+                description: "Rate grid by program and schedule type.",
             },
         ],
     },
