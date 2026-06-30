@@ -83,14 +83,58 @@ export const CELL_WIDTH_UNITS: Record<FocusPanelCellWidth, number> = {
 
 export const PUBLISHED_LAYOUT_COLUMN_BASE = 12;
 
+/** The snap stops the canvas resize handle lands on (operator drags; runtime snaps). */
+const WIDTH_SNAP_STOPS: { width: FocusPanelCellWidth; fraction: number }[] = [
+    { width: "quarter", fraction: 3 / 12 },
+    { width: "third", fraction: 4 / 12 },
+    { width: "half", fraction: 6 / 12 },
+    { width: "twoThirds", fraction: 8 / 12 },
+    { width: "full", fraction: 12 / 12 },
+];
+
+/**
+ * Snap a 0–1 fraction of the row to the nearest named width — the operator drags a card
+ * "bigger / smaller" on the canvas; the runtime resolves it to a token. PURE.
+ */
+export function snapWidthFromFraction(fraction: number): FocusPanelCellWidth {
+    let best = WIDTH_SNAP_STOPS[0]!;
+    let bestDist = Infinity;
+    for (const stop of WIDTH_SNAP_STOPS) {
+        const dist = Math.abs(stop.fraction - fraction);
+        if (dist < bestDist) {
+            bestDist = dist;
+            best = stop;
+        }
+    }
+    return best.width;
+}
+
 /** Below this the published layout collapses to a single readable column. */
 export const PUBLISHED_LAYOUT_MIN_PX = 560;
+
+/**
+ * Cell HEIGHT = how much ROOM the card has before overlay/expanded behavior — the
+ * operator drags the bottom edge to give a card more or less room. It never changes the
+ * card's question, ownership, editability, or related views (same card, more room).
+ */
+export type FocusPanelCellHeight = "compact" | "standard" | "tall";
+
+export const FOCUS_PANEL_CELL_HEIGHTS: readonly FocusPanelCellHeight[] = ["compact", "standard", "tall"];
+
+/** Room before expansion, in px (min-height the runtime reserves for the cell). */
+export const CELL_HEIGHT_PX: Record<FocusPanelCellHeight, number> = {
+    compact: 132,
+    standard: 184,
+    tall: 268,
+};
 
 /** A cell = one column slot of a row, holding one or more vertically STACKED cards. */
 export type FocusPanelLayoutCell = {
     width: FocusPanelCellWidth;
     /** Cards stacked top-to-bottom inside this cell (≥1). */
     cards: FocusPanelCardKey[];
+    /** Room before expansion (optional; defaults to natural height when absent). */
+    height?: FocusPanelCellHeight;
 };
 
 /** A row = cells laid left→right, their widths summing toward full (12 units). */
@@ -100,7 +144,7 @@ export type FocusPanelLayoutRow = { cells: FocusPanelLayoutCell[] };
 export type FocusPanelPublishedLayout = { rows: FocusPanelLayoutRow[] };
 
 /** A planned cell the renderer paints (width resolved to grid units). */
-export type PublishedLayoutCellPlan = { widthUnits: number; cards: FocusPanelCardKey[] };
+export type PublishedLayoutCellPlan = { widthUnits: number; cards: FocusPanelCardKey[]; minHeightPx?: number };
 export type PublishedLayoutRowPlan = { cells: PublishedLayoutCellPlan[] };
 export type PublishedLayoutPlan = {
     columnBase: number;
@@ -204,6 +248,7 @@ export function planPublishedLayout(
                 cells: row.cells.map((cell, cellIndex) => ({
                     widthUnits: units[cellIndex] ?? 0,
                     cards: cell.cards,
+                    minHeightPx: cell.height ? CELL_HEIGHT_PX[cell.height] : undefined,
                 })),
             };
         }),

@@ -6,7 +6,7 @@ import { ConfigurationPrimaryButton } from "@/components/adminV2/settings/config
 import FocusPanelCardGrid from "@/components/admin/focusPanel/FocusPanelCardGrid";
 import FocusPanelCardInspector from "@/components/admin/focusPanel/FocusPanelCardInspector";
 import FocusPanelCardRenderer from "@/components/admin/focusPanel/FocusPanelCardRenderer";
-import FocusPanelRowLayoutBuilder from "@/components/admin/focusPanel/FocusPanelRowLayoutBuilder";
+import FocusPanelCanvasBuilder from "@/components/admin/focusPanel/FocusPanelCanvasBuilder";
 import FocusPanelEditableCardFrame from "@/components/admin/focusPanel/FocusPanelEditableCardFrame";
 import {
     readFocusPanelPublishedLayout,
@@ -421,11 +421,18 @@ export default function FocusPanelSummarySurfaceEditor() {
                 catalog + per-card config below remain for which cards exist + their
                 content. Save draft / Publish (toolbar) persist this layout in metadata. */}
             {loaded ? (
-                <div className="process-config-setup-card overflow-hidden p-3" data-surface-row-builder="true">
-                    <FocusPanelRowLayoutBuilder
+                <div className="process-config-setup-card overflow-hidden p-3" data-surface-canvas-builder="true">
+                    <FocusPanelCanvasBuilder
                         initialLayout={builderInitial}
                         catalog={builderCatalog}
                         renderCard={renderBuilderCard}
+                        selectedCard={selectedEntry?.key ?? null}
+                        onSelectCard={(key) => {
+                            // Canvas owns composition; selecting a card opens the Inspector
+                            // (behavior) for that card's instance.
+                            const entry = order.find((o) => o.key === key);
+                            if (entry) setSelectedInstanceId(entry.instanceId);
+                        }}
                         onChange={(l) => {
                             setRowLayout(l);
                             setDirty(true);

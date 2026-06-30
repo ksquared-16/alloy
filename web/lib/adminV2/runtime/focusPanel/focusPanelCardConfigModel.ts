@@ -179,12 +179,18 @@ export type FocusPanelEvidenceGroup = {
     id: string;
     label: string;
     fields: FocusPanelCardField[];
+    /** The group's operational question / purpose (Evidence Group Authoring, V4). */
+    purpose?: string;
     /**
      * The card that OWNS this evidence group (Experience Builder V3 — ownership lives at
      * the evidence-group level). Defaults to the host card. The group's fields are
      * editable only on the owning card.
      */
     owner?: FocusPanelCardKey;
+    /** Visible in the card's Summary (the 2–5s answer). */
+    showInSummary?: boolean;
+    /** Visible in Focus (the current operational truth). */
+    showInFocus?: boolean;
     /**
      * Whether this group is revealed when the card is Expanded (the SAME question with
      * additional configured evidence — not history).
@@ -220,6 +226,34 @@ export type FocusPanelCardConfig = {
     conditions?: FocusPanelCardCondition[];
     composition?: FocusPanelCardComposition;
 };
+
+function evField(id: string, label: string, concept: string): FocusPanelCardField {
+    return { id, label, concept, renderer: "text", placement: "collapsed", kind: "field" };
+}
+
+/**
+ * The doctrine evidence groups a reference card seeds with (Evidence Group Authoring).
+ * Child OWNS Placement as an evidence group (Program/Room/Schedule/Teacher/Desired
+ * Start) — Placement is not a separate card. Other cards wrap their seed fields in one
+ * "Details" group.
+ */
+export function defaultEvidenceGroupsForCard(
+    key: FocusPanelCardKey,
+    seedFields: FocusPanelCardField[],
+): FocusPanelEvidenceGroup[] {
+    if (key === "children") {
+        return [
+            { id: "identity", label: "Identity", purpose: "Who is this child?", owner: "children", showInSummary: true, showInFocus: true, fields: [evField("child_name", "Name", "Enrollment → Children → Name"), evField("child_dob", "DOB / Age", "Enrollment → Children → DOB")] },
+            { id: "placement", label: "Placement", purpose: "Where is this child placed?", owner: "children", showInFocus: true, includeInExpanded: true, fields: [evField("program", "Program", "Enrollment → Children → Program"), evField("room", "Room", "Enrollment → Children → Room"), evField("schedule", "Schedule", "Enrollment → Children → Schedule"), evField("teacher", "Teacher", "Enrollment → Children → Teacher"), evField("desired_start", "Desired Start", "Enrollment → Children → Desired Start")] },
+            { id: "medical", label: "Medical", purpose: "What should we know medically?", owner: "children", includeInExpanded: true, fields: [] },
+            { id: "documents", label: "Documents", purpose: "What documents are required?", owner: "children", includeInExpanded: true, fields: [] },
+            { id: "readiness", label: "Readiness", purpose: "Is this child ready to enroll?", owner: "children", includeInExpanded: true, fields: [] },
+            { id: "notes", label: "Notes", purpose: "Anything else to record?", owner: "children", includeInExpanded: true, fields: [] },
+        ];
+    }
+    if (seedFields.length === 0) return [];
+    return [{ id: DEFAULT_EVIDENCE_GROUP_ID, label: DEFAULT_EVIDENCE_GROUP_LABEL, fields: seedFields }];
+}
 
 /**
  * The card's evidence groups — explicit groups when present, else legacy flat

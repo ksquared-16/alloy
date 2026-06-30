@@ -236,7 +236,8 @@ export default function FocusPanelCardGrid({
                                     key={cellIndex}
                                     className="alloy-os-fp-published-cell"
                                     data-fp-cell-units={cell.widthUnits}
-                                    style={{ flexGrow: cell.widthUnits, flexShrink: 1, flexBasis: 0 }}
+                                    data-fp-cell-min-height={cell.minHeightPx ?? undefined}
+                                    style={{ flexGrow: cell.widthUnits, flexShrink: 1, flexBasis: 0, minHeight: cell.minHeightPx ? `${cell.minHeightPx}px` : undefined }}
                                 >
                                     {cell.cards.map((card) => renderCellBox(card, { dataWidthUnits: cell.widthUnits }))}
                                 </div>

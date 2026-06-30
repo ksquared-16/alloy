@@ -169,3 +169,43 @@ describe("row operations (reorder + remove) — Composition V2", () => {
         expect(l.rows[0]!.cells[0]!.width).toBe("half");
     });
 })
+
+describe("Canvas Builder ops — direct manipulation (V4)", () => {
+    it("snaps a drag fraction to the nearest named width", async () => {
+        const { snapWidthFromFraction } = await import("@/lib/adminV2/runtime/focusPanel/composition/focusPanelPublishedLayout");
+        expect(snapWidthFromFraction(0.26)).toBe("quarter");
+        expect(snapWidthFromFraction(0.34)).toBe("third");
+        expect(snapWidthFromFraction(0.52)).toBe("half");
+        expect(snapWidthFromFraction(0.7)).toBe("twoThirds");
+        expect(snapWidthFromFraction(0.95)).toBe("full");
+    });
+
+    it("sets cell height (room before expansion) and the runtime reserves min-height", async () => {
+        const { setCellHeight } = await import("@/lib/adminV2/runtime/focusPanel/composition/focusPanelPublishedLayoutOps");
+        const { planPublishedLayout, CELL_HEIGHT_PX } = await import("@/lib/adminV2/runtime/focusPanel/composition/focusPanelPublishedLayout");
+        let l = addCardToRow(addRow(emptyLayout()), 0, "household", "half");
+        l = setCellHeight(l, 0, 0, "tall");
+        expect(l.rows[0]!.cells[0]!.height).toBe("tall");
+        const plan = planPublishedLayout(l, 900);
+        expect(plan.rows[0]!.cells[0]!.minHeightPx).toBe(CELL_HEIGHT_PX.tall);
+    });
+
+    it("locates + moves a card onto another card's cell (stack) by identity", async () => {
+        const { locateCard, moveCardOntoCell, moveCardToNewRow } = await import(
+            "@/lib/adminV2/runtime/focusPanel/composition/focusPanelPublishedLayoutOps"
+        );
+        let l = addCardToRow(addRow(emptyLayout()), 0, "household", "half");
+        l = addCardToRow(l, 0, "readiness_kpi", "half");
+        l = addCardToRow(addRow(l), 1, "current_work", "full");
+        expect(locateCard(l, "current_work")).toEqual({ row: 1, cell: 0, card: "current_work" });
+        // drag Current Work onto Readiness → stacks under it (row 1 pruned)
+        l = moveCardOntoCell(l, "current_work", "readiness_kpi");
+        const readinessCell = l.rows[0]!.cells.find((c) => c.cards.includes("readiness_kpi"))!;
+        expect(readinessCell.cards).toEqual(["readiness_kpi", "current_work"]);
+        expect(l.rows).toHaveLength(1);
+        // drag Household into a NEW row at the bottom (survives the move's prune)
+        l = moveCardToNewRow(l, "household", 1);
+        expect(l.rows).toHaveLength(2);
+        expect(l.rows[1]!.cells.flatMap((c) => c.cards)).toEqual(["household"]);
+    });
+});

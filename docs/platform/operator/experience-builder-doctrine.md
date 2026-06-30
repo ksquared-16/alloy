@@ -22,22 +22,54 @@ No new operator-facing product behavior should be added to **drawer overview**, 
 
 ---
 
-## Experience Builder V2 — visual composition + operational card definition (June 2026)
+## Experience Builder V4 — Canvas Builder + Evidence Group Authoring (June 2026)
 
-The Focus Panel Surfaces editor composes the panel **visually with rows and columns**
-and authors each card as **operational meaning**, not abstract tokens or a field list.
+The `/settings/surfaces` editor is **canvas-first**: the Focus Panel canvas **itself is the
+editor** (`FocusPanelCanvasBuilder`), not a control panel beside a preview. There is no
+"Compose Layout" panel.
 
-**Surface composition pipeline:**
+**Composition vs Behavior — a hard separation:**
+
+| The **CANVAS** owns composition | The **INSPECTOR** owns behavior |
+|---|---|
+| position · width · height · stacking · row placement | question · evidence groups · editing · expanded · related views · actions · conditions · AI · ownership |
+
+- **Direct manipulation:** click a card to select it (opens the Inspector), drag to
+  reorder / move between rows / stack, drag the **right edge** to make it wider/narrower,
+  drag the **bottom edge** to give it more/less **room**. The operator thinks "bigger /
+  smaller", not "layout token" — widths snap internally to Quarter / Third / Half / Two
+  Thirds / Full, the runtime computes exact spacing (+ Fill), so rows stay composed with
+  no dead whitespace.
+- **Width** changes composition; **height** (`cell.height` → compact / standard / tall)
+  changes how much room a card has before overlay/expanded behavior. Resizing **never**
+  changes a card's question, evidence ownership, editability, or related views — *same
+  card, same answer, different amount of room.*
+- The published layout drives the runtime exactly (`FocusPanelCardGrid` honors widths,
+  stacking, and reserved height). Composition is NOT configured in the Inspector.
+
+**Surface composition pipeline (authored on the canvas):**
 
 ```
-Surface → Rows → Columns → Cards → Published Runtime
+Canvas → Rows → Columns → Cards (width · height · stacking) → Published Runtime
 ```
 
-**Card definition pipeline (per card — Experience Builder V3):**
+**Card definition pipeline (per card — Evidence Group Authoring, V4):**
 
 ```
-Composition → Cards → Evidence Groups → Presentation → Editing → Expanded → Related Views → Actions → Conditions → AI → Published Runtime
+Card → Question → Evidence Groups → Evidence → Behavior → Related → Publish
 ```
+
+**Evidence Groups are the heart of card configuration** — not "fields on a card". Each
+group exposes: name · operational question/purpose · owner card · evidence items
+(fields) · presentation · **Summary / Focus / Expanded visibility** · editing behavior ·
+required/read-only/hidden · related views · actions · conditions. Fields live **inside**
+Evidence Groups (`FocusPanelEvidenceGroup`); "Fields" is never the primary concept. A
+reference card seeds its doctrine groups via `defaultEvidenceGroupsForCard`.
+
+**Child owns Placement as an Evidence Group** (Program · Room · Schedule · Teacher ·
+Desired Start) — Placement is **not** a separate card. Child groups: Identity · Placement
+· Medical · Documents · Readiness · Notes. The operator manages the child without bouncing
+between cards.
 
 **Ownership lives at the Evidence Group level** (`group.owner`); a group's fields are
 editable only on the owning card. **Expanded** = the same question with additional

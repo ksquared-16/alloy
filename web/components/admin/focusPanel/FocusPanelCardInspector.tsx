@@ -3,8 +3,6 @@
 import { useMemo, useState, type ReactNode } from "react";
 
 import {
-    DEFAULT_EVIDENCE_GROUP_ID,
-    DEFAULT_EVIDENCE_GROUP_LABEL,
     FOCUS_PANEL_COLLECTION_RENDERERS,
     FOCUS_PANEL_COLLECTION_RENDERER_LABELS,
     FOCUS_PANEL_CONDITION_KINDS,
@@ -14,6 +12,7 @@ import {
     FOCUS_PANEL_FIELD_RENDERERS,
     FOCUS_PANEL_FIELD_RENDERER_LABELS,
     configFields,
+    defaultEvidenceGroupsForCard,
     effectiveFieldOwner,
     evidenceGroupsFromConfig,
     validateFocusPanelCardConfig,
@@ -39,6 +38,8 @@ import {
     setFieldOwnership,
     setGroupInExpanded,
     setGroupOwner,
+    setGroupPurpose,
+    setGroupVisibility,
     updateFieldInGroups,
 } from "@/lib/adminV2/runtime/focusPanel/focusPanelEvidenceGroupOps";
 import { FOCUS_PANEL_CARD_CATALOG } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardCatalog";
@@ -176,10 +177,10 @@ export default function FocusPanelCardInspector({
     // has no fields yet, seed a default "Details" group from the reference so authoring
     // (and the first persisted edit) operate on real evidence, not an empty list.
     const editingConfig = useMemo<FocusPanelCardConfig>(() => {
-        if (configFields(config).length > 0) return config;
-        const seed = defaultCardFields(baseModel.key);
-        if (seed.length === 0) return config;
-        return { ...config, evidenceGroups: [{ id: DEFAULT_EVIDENCE_GROUP_ID, label: DEFAULT_EVIDENCE_GROUP_LABEL, fields: seed }] };
+        if ((config.evidenceGroups?.length ?? 0) > 0 || configFields(config).length > 0) return config;
+        const groups = defaultEvidenceGroupsForCard(baseModel.key, defaultCardFields(baseModel.key));
+        if (groups.length === 0) return config;
+        return { ...config, evidenceGroups: groups };
     }, [config, baseModel.key]);
 
     const groups = useMemo(() => evidenceGroupsFromConfig(editingConfig), [editingConfig]);
@@ -375,6 +376,14 @@ export default function FocusPanelCardInspector({
                                         </button>
                                     </div>
                                 </div>
+                                <input
+                                    aria-label={`${group.label} purpose`}
+                                    data-focus-panel-group-purpose={group.id}
+                                    className={`${FIELD} italic`}
+                                    placeholder="What operational question does this group answer?"
+                                    value={group.purpose ?? ""}
+                                    onChange={(e) => onChange(setGroupPurpose(editingConfig, group.id, e.target.value))}
+                                />
                                 <div className="flex flex-wrap items-center gap-2">
                                     <label className="config-typo-meta flex items-center gap-1">
                                         Owned by
@@ -390,15 +399,20 @@ export default function FocusPanelCardInspector({
                                             ))}
                                         </select>
                                     </label>
+                                </div>
+                                <div className="flex flex-wrap items-center gap-3" data-focus-panel-group-visibility={group.id}>
+                                    <span className="config-typo-meta font-semibold">Visible in:</span>
                                     <label className="config-typo-meta flex items-center gap-1">
-                                        <input
-                                            type="checkbox"
-                                            className="config-mode-control h-3.5 w-3.5 rounded border-alloy-stone/40"
-                                            data-focus-panel-group-expanded={group.id}
-                                            checked={Boolean(group.includeInExpanded)}
-                                            onChange={(e) => onChange(setGroupInExpanded(editingConfig, group.id, e.target.checked))}
-                                        />
-                                        Show in Expanded
+                                        <input type="checkbox" className="config-mode-control h-3.5 w-3.5 rounded border-alloy-stone/40" data-focus-panel-group-summary={group.id} checked={Boolean(group.showInSummary)} onChange={(e) => onChange(setGroupVisibility(editingConfig, group.id, { showInSummary: e.target.checked }))} />
+                                        Summary
+                                    </label>
+                                    <label className="config-typo-meta flex items-center gap-1">
+                                        <input type="checkbox" className="config-mode-control h-3.5 w-3.5 rounded border-alloy-stone/40" data-focus-panel-group-focus={group.id} checked={Boolean(group.showInFocus)} onChange={(e) => onChange(setGroupVisibility(editingConfig, group.id, { showInFocus: e.target.checked }))} />
+                                        Focus
+                                    </label>
+                                    <label className="config-typo-meta flex items-center gap-1">
+                                        <input type="checkbox" className="config-mode-control h-3.5 w-3.5 rounded border-alloy-stone/40" data-focus-panel-group-expanded={group.id} checked={Boolean(group.includeInExpanded)} onChange={(e) => onChange(setGroupInExpanded(editingConfig, group.id, e.target.checked))} />
+                                        Expanded
                                     </label>
                                 </div>
                                 {group.fields.length === 0 ? <Empty>No fields in this group.</Empty> : null}

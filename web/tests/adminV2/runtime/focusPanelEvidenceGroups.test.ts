@@ -192,3 +192,27 @@ describe("Experience Builder V3 — group ownership, Expanded, Related Views", (
         expect(config.relatedViews!.map((v) => v.label)).toEqual(["Placement History"]);
     });
 });
+
+describe("Experience Builder V4 — rich Evidence Group authoring", () => {
+    it("Child seeds the doctrine evidence groups, owning Placement (not a separate card)", async () => {
+        const { defaultEvidenceGroupsForCard } = await import("@/lib/adminV2/runtime/focusPanel/focusPanelCardConfigModel");
+        const groups = defaultEvidenceGroupsForCard("children", []);
+        expect(groups.map((g) => g.label)).toEqual(["Identity", "Placement", "Medical", "Documents", "Readiness", "Notes"]);
+        const placement = groups.find((g) => g.label === "Placement")!;
+        expect(placement.owner).toBe("children");
+        expect(placement.includeInExpanded).toBe(true);
+        expect(placement.fields.map((f) => f.label)).toEqual(["Program", "Room", "Schedule", "Teacher", "Desired Start"]);
+        expect(placement.purpose).toBeTruthy();
+    });
+
+    it("sets group purpose + Summary/Focus visibility", async () => {
+        const { setGroupPurpose, setGroupVisibility } = await import("@/lib/adminV2/runtime/focusPanel/focusPanelEvidenceGroupOps");
+        let config: FocusPanelCardConfig = { evidenceGroups: [{ id: "placement", label: "Placement", fields: [] }] };
+        config = setGroupPurpose(config, "placement", "Where is this child placed?");
+        config = setGroupVisibility(config, "placement", { showInFocus: true, showInSummary: false });
+        const g = config.evidenceGroups!.find((x) => x.id === "placement")!;
+        expect(g.purpose).toBe("Where is this child placed?");
+        expect(g.showInFocus).toBe(true);
+        expect(g.showInSummary).toBe(false);
+    });
+});

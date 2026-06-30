@@ -159,6 +159,24 @@ export function setGroupOwner(
     return withGroups(config, (groups) => groups.map((g) => (g.id === groupIdValue ? { ...g, owner } : g)));
 }
 
+/** Set a group's operational question / purpose (Evidence Group Authoring, V4). */
+export function setGroupPurpose(
+    config: FocusPanelCardConfig | null | undefined,
+    groupIdValue: string,
+    purpose: string,
+): FocusPanelCardConfig {
+    return withGroups(config, (groups) => groups.map((g) => (g.id === groupIdValue ? { ...g, purpose } : g)));
+}
+
+/** Set a group's Summary / Focus visibility. */
+export function setGroupVisibility(
+    config: FocusPanelCardConfig | null | undefined,
+    groupIdValue: string,
+    patch: { showInSummary?: boolean; showInFocus?: boolean },
+): FocusPanelCardConfig {
+    return withGroups(config, (groups) => groups.map((g) => (g.id === groupIdValue ? { ...g, ...patch } : g)));
+}
+
 /** Toggle whether a group is revealed when the card is Expanded. */
 export function setGroupInExpanded(
     config: FocusPanelCardConfig | null | undefined,

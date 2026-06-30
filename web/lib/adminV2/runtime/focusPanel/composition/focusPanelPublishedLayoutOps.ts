@@ -11,6 +11,7 @@
 import type { FocusPanelCardKey } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardModel";
 import {
     FOCUS_PANEL_PUBLISHED_LAYOUT_META_KEY,
+    type FocusPanelCellHeight,
     type FocusPanelCellWidth,
     type FocusPanelLayoutCell,
     type FocusPanelPublishedLayout,
@@ -49,6 +50,63 @@ export function defaultRowLayoutFromCards(cards: FocusPanelCardKey[]): FocusPane
 /** Every card placed in the layout (reading order), for the catalog "already placed" state. */
 export function cardsInLayout(layout: FocusPanelPublishedLayout): FocusPanelCardKey[] {
     return layout.rows.flatMap((r) => r.cells.flatMap((c) => c.cards));
+}
+
+/** Find a card's location by identity (index-safe for canvas drag operations). */
+export function locateCard(layout: FocusPanelPublishedLayout, card: FocusPanelCardKey): CardLocation | null {
+    for (let row = 0; row < layout.rows.length; row += 1) {
+        const cells = layout.rows[row]!.cells;
+        for (let cell = 0; cell < cells.length; cell += 1) {
+            if (cells[cell]!.cards.includes(card)) return { row, cell, card };
+        }
+    }
+    return null;
+}
+
+/** Move a card (by identity) to STACK under a target card's cell — canvas drop-on-card. */
+export function moveCardOntoCell(
+    layout: FocusPanelPublishedLayout,
+    card: FocusPanelCardKey,
+    targetCard: FocusPanelCardKey,
+): FocusPanelPublishedLayout {
+    if (card === targetCard) return layout;
+    const source = locateCard(layout, card);
+    if (!source) return layout;
+    const removed = removeCard(layout, source);
+    const target = locateCard(removed, targetCard); // re-locate after prune
+    if (!target) return layout;
+    return stackCardInCell(removed, target.row, target.cell, card);
+}
+
+/** Move a card (by identity) to the end of a row — canvas drop-on-row. */
+export function moveCardToRowByCard(
+    layout: FocusPanelPublishedLayout,
+    card: FocusPanelCardKey,
+    toRowIndex: number,
+): FocusPanelPublishedLayout {
+    const source = locateCard(layout, card);
+    if (!source) return layout;
+    return moveCardToRow(layout, source, toRowIndex);
+}
+
+/**
+ * Move a card (by identity) into a NEW row inserted at `atIndex` — canvas drop on a
+ * between-rows strip. Done atomically (remove → splice) so the new row survives the
+ * pruning that `moveCardToRow` would apply to an empty row.
+ */
+export function moveCardToNewRow(
+    layout: FocusPanelPublishedLayout,
+    card: FocusPanelCardKey,
+    atIndex: number,
+): FocusPanelPublishedLayout {
+    const source = locateCard(layout, card);
+    if (!source) return layout;
+    const width = layout.rows[source.row]?.cells[source.cell]?.width ?? "half";
+    const removed = removeCard(layout, source); // prunes emptied source cell/row
+    const rows = removed.rows.slice();
+    const at = Math.max(0, Math.min(atIndex, rows.length));
+    rows.splice(at, 0, { cells: [{ width, cards: [card] }] });
+    return { rows };
 }
 
 /** Append an empty row (with a single full-width cell awaiting a card), or insert at index. */
@@ -129,6 +187,21 @@ export function setCellWidth(
     const rows = layout.rows.map((r, ri) =>
         ri === rowIndex
             ? { cells: r.cells.map((c, ci) => (ci === cellIndex ? { ...c, width } : c)) }
+            : r,
+    );
+    return { rows };
+}
+
+/** Set a cell's HEIGHT (room before expansion) — the canvas bottom-edge drag. */
+export function setCellHeight(
+    layout: FocusPanelPublishedLayout,
+    rowIndex: number,
+    cellIndex: number,
+    height: FocusPanelCellHeight,
+): FocusPanelPublishedLayout {
+    const rows = layout.rows.map((r, ri) =>
+        ri === rowIndex
+            ? { cells: r.cells.map((c, ci) => (ci === cellIndex ? { ...c, height } : c)) }
             : r,
     );
     return { rows };

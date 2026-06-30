@@ -145,6 +145,20 @@ start → Placement/Child, pending the final ownership decision.)
 
 ---
 
+## 4a. Authoring (final state) — Canvas owns composition, Inspector owns behavior
+
+The card lifecycle is **authored**, not coded per-card:
+
+- **Composition** (where a card sits, how wide/tall, stacking, row) is authored **directly
+  on the canvas** (`FocusPanelCanvasBuilder`) — drag to move/stack, drag the edges to
+  resize. Width changes layout; **height** = room before overlay/expanded. Resizing never
+  changes a card's question, ownership, editability, or related views.
+- **Behavior** (question, Evidence Groups, editing, Expanded, Related Views, actions,
+  conditions, AI, ownership) is authored in the **Inspector**.
+- A new card declares its capabilities (`cardCapabilities`) and its Evidence Groups
+  (`defaultEvidenceGroupsForCard`), and inherits Summary/Focus/Edit/Expanded/Related-Views
+  for free. See [`experience-builder-doctrine.md`](./experience-builder-doctrine.md).
+
 ## 5. Why this matters
 
 Locking the lifecycle, capability matrix, evidence-group model, profile-image evidence,
