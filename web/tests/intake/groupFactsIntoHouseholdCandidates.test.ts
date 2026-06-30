@@ -40,6 +40,44 @@ describe("groupFactsIntoHouseholdCandidates — Ravi/Kai", () => {
     });
 });
 
+describe("groupFactsIntoHouseholdCandidates — two parents keep their own email", () => {
+    function parentByName(household: ReturnType<typeof groupFactsIntoHouseholdCandidates>, name: string) {
+        return household.parents.find((p) => p.first_name === name);
+    }
+
+    it("assigns each parent their own email when name+email share a line", () => {
+        const extraction = extractFactsFromText({
+            text: ["Jason Lyons jason@lyons.com", "Alex Lyons alex@lyons.com"].join("\n"),
+        });
+        const household = groupFactsIntoHouseholdCandidates(extraction.facts);
+        expect(household.parents).toHaveLength(2);
+        expect(parentByName(household, "Jason")?.emails).toEqual(["jason@lyons.com"]);
+        expect(parentByName(household, "Alex")?.emails).toEqual(["alex@lyons.com"]);
+        // Neither parent's email leaks onto the other.
+        expect(parentByName(household, "Jason")?.emails).not.toContain("alex@lyons.com");
+        expect(parentByName(household, "Alex")?.emails).not.toContain("jason@lyons.com");
+    });
+
+    it("preserves both emails from a comma-separated list (matched by name local-part)", () => {
+        const extraction = extractFactsFromText({
+            text: ["Jason Lyons and Alex Lyons", "jason@lyons.com, alex@lyons.com"].join("\n"),
+        });
+        const household = groupFactsIntoHouseholdCandidates(extraction.facts);
+        expect(parentByName(household, "Jason")?.emails).toContain("jason@lyons.com");
+        expect(parentByName(household, "Alex")?.emails).toContain("alex@lyons.com");
+    });
+
+    it("does not regress single-parent households (all contact info stays on the one parent)", () => {
+        const extraction = extractFactsFromText({
+            text: ["Ravi Almead", "ravi@almead.com", "9879879876"].join("\n"),
+        });
+        const household = groupFactsIntoHouseholdCandidates(extraction.facts);
+        expect(household.parents).toHaveLength(1);
+        expect(household.parents[0]?.emails).toEqual(["ravi@almead.com"]);
+        expect(household.parents[0]?.phones).toEqual(["9879879876"]);
+    });
+});
+
 describe("groupFactsIntoHouseholdCandidates — multiple children", () => {
     it("builds two child candidates", () => {
         const text = [

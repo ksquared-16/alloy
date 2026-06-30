@@ -183,6 +183,55 @@ function mergeLocationFacts(facts: IntakeFact[]): IntakeLocationCandidate | null
     };
 }
 
+function emailLocalPart(value: string): string {
+    const at = value.indexOf("@");
+    return (at > 0 ? value.slice(0, at) : value).trim().toLowerCase();
+}
+
+/** Email local-part references this parent's name (e.g. `jason@…` → Jason; `jlyons@…` → Lyons). */
+function parentMatchesEmailLocalPart(parent: IntakePersonCandidate, localPart: string): boolean {
+    if (!localPart) return false;
+    const norm = localPart.replace(/[._\-+0-9]/g, "");
+    const first = (parent.first_name ?? "").trim().toLowerCase();
+    const last = (parent.last_name ?? "").trim().toLowerCase();
+    if (first.length >= 3 && norm.includes(first)) return true;
+    if (last.length >= 3 && norm.includes(last)) return true;
+    return false;
+}
+
+/**
+ * Distribute extracted email/phone facts across the household's parents so each parent keeps their own
+ * contact info — never collapse everything onto the primary (which silently drops a second parent's
+ * email). Association precedence: same source line as the parent's name → email local-part matches the
+ * parent's name → primary parent (so nothing is lost). Single-parent households are unaffected.
+ */
+function distributeContactFactsToParents(
+    parents: IntakePersonCandidate[],
+    emailFacts: IntakeFact[],
+    phoneFacts: IntakeFact[],
+): void {
+    if (!parents.length) return;
+    const primary = parents[0]!;
+    const valueOf = (f: IntakeFact) => String(f.normalized_value ?? f.raw_value).trim();
+    const parentBySourceLine = (line: number | undefined): IntakePersonCandidate | null =>
+        typeof line === "number" ? (parents.find((p) => p.source_line === line) ?? null) : null;
+
+    for (const f of emailFacts) {
+        const value = valueOf(f);
+        if (!value) continue;
+        const byLine = parentBySourceLine(f.source_line);
+        const byName = byLine ?? parents.find((p) => parentMatchesEmailLocalPart(p, emailLocalPart(value)));
+        const parent = byLine ?? byName ?? primary;
+        if (!parent.emails.includes(value)) parent.emails.push(value);
+    }
+    for (const f of phoneFacts) {
+        const value = valueOf(f);
+        if (!value) continue;
+        const parent = parentBySourceLine(f.source_line) ?? primary;
+        if (!parent.phones.includes(value)) parent.phones.push(value);
+    }
+}
+
 function buildHouseholdContacts(facts: IntakeFact[]): IntakeHouseholdContact[] {
     const contacts: IntakeHouseholdContact[] = [];
     for (const fact of facts) {
@@ -248,9 +297,8 @@ export function groupFactsIntoHouseholdCandidates(facts: IntakeFact[]): IntakeHo
     const householdEmails = facts.filter((f) => f.fact_type === "email");
     const householdPhones = facts.filter((f) => f.fact_type === "phone");
     if (parents.length > 0) {
-        const primary = parents[0]!;
-        primary.emails = householdEmails.map((f) => String(f.normalized_value ?? f.raw_value).trim());
-        primary.phones = householdPhones.map((f) => String(f.normalized_value ?? f.raw_value).trim());
+        // Preserve each parent's own email/phone — do not collapse all contacts onto the primary.
+        distributeContactFactsToParents(parents, householdEmails, householdPhones);
         for (const f of [...householdEmails, ...householdPhones]) assignedFactIds.add(f.fact_id);
     }
 

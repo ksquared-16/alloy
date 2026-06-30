@@ -80,7 +80,10 @@ function orgFieldDefForKey(
 
 function placementSelectForInquiryChildField(fieldKey: string | null): ActionIntakePlacementSelect | null {
     if (fieldKey === "location_id") return "site";
-    if (fieldKey === "desired_program_type") return "site_program";
+    // The child:program_interest rule binds `desired_program_category_id` (canonical program field).
+    // Without this it falls through to a free-text input; map it to the location-aware program select
+    // so Program renders as a dropdown like Room (matching the platform gather field's intent).
+    if (fieldKey === "desired_program_category_id" || fieldKey === "desired_program_type") return "site_program";
     if (fieldKey === "program_room_cohort_key") return "site_room";
     return null;
 }

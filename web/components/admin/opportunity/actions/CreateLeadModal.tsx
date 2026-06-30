@@ -39,6 +39,7 @@ import {
 import { resolveCreateLeadProgressStep } from "@/lib/admin/actions/createLeadProgressStep";
 import { CreateLeadProgressRail } from "@/components/admin/actions/CreateLeadProgressRail";
 import { createLeadIntakePasteParser } from "@/lib/lifecycle/parseCreateLeadIntakeText";
+import { useInquiryChildPlacementCascade } from "@/lib/admin/hooks/useInquiryChildPlacementCascade";
 import { buildIntakeDebugTrace, logIntakeDebugTrace } from "@/lib/intake/debug/buildIntakeDebugTrace";
 import {
     buildCreateLeadCommitSelection,
@@ -98,6 +99,10 @@ export function CreateLeadModal(props: {
 }) {
     const { open, departmentId, title = CREATE_LEAD_WORKSPACE_TITLE, onClose, onSubmit, onCreated } = props;
     const siteFilter = useWorkspaceSiteFilter();
+    // Canonical site options for BOS location resolution — same source the Location dropdown uses,
+    // including the locations-hierarchy fallback when the workspace site bootstrap is empty. Without
+    // this, free-text like "South Campus" has no options to match against.
+    const placementSiteOptions = useInquiryChildPlacementCascade({ locationValue: "", programValue: "" }).siteOptions;
 
     const [step, setStep] = useState<ActionWorkspaceStep>("gather");
     const [gatherPhase, setGatherPhase] = useState<ActionWorkspaceGatherPhase>("paste");
@@ -321,10 +326,9 @@ export function CreateLeadModal(props: {
             setGatherPhase("paste");
             try {
                 const spec = intakeSpec ?? platformFallbackBundle(departmentId).spec;
-                const locationOptions = (siteFilter?.bootstrap?.sites ?? []).map((s) => ({
-                    value: s.id,
-                    label: s.label,
-                }));
+                // Canonical site options (workspace bootstrap → locations hierarchy fallback) so BOS
+                // free-text location like "South Campus" resolves the same as a dropdown selection.
+                const locationOptions = placementSiteOptions;
                 const extraction = createLeadIntakePasteParser.parse({
                     text,
                     spec,
@@ -403,7 +407,7 @@ export function CreateLeadModal(props: {
                 setAnalyzing(false);
             }
         },
-        [departmentId, gatherFields, intakeSpec, pasteText, siteFilter?.bootstrap?.sites],
+        [departmentId, gatherFields, intakeSpec, pasteText, placementSiteOptions],
     );
 
     const applySuggestions = useCallback(() => {

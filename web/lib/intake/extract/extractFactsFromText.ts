@@ -331,6 +331,27 @@ export function extractFactsFromText(input: {
         });
     }
 
+    // Capture EVERY email in the paste (comma-separated lists, or multiple parents on separate lines),
+    // each tagged with its source line. pushFact dedupes by value, so already-captured emails are not
+    // repeated. Required so a second parent's email is preserved (grouping distributes per parent).
+    const multiEmailScanRe = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi;
+    for (let li = 0; li < lines.length; li++) {
+        const lineMatches = lines[li]!.match(multiEmailScanRe);
+        if (!lineMatches) continue;
+        for (const match of lineMatches) {
+            const classified = classifyEmail(match);
+            pushFact(facts, seen, {
+                fact_type: "email",
+                raw_value: match,
+                normalized_value: classified.value,
+                confidence: classified.validation_state === "valid" ? "high" : "low",
+                validation_state: classified.validation_state,
+                source_line: li + 1,
+                evidence: "Email token detected in paste (multi-email scan)",
+            });
+        }
+    }
+
     const phoneRaw = findPhoneCandidate(raw_text);
     if (phoneRaw) {
         const classified = classifyPhone(phoneRaw);
