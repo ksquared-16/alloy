@@ -93,10 +93,15 @@ type, **option source**, supported operators, and runtime resolver. See
 - **Stage is process-stage membership.** The process-stage field is labeled **"Stage"** and its options
   are the process's **configured, active stages** (not a status set). Stages are never deleted or demoted
   — Work Views reference them through this one typed field.
-- **Status is subject/status-group specific.** No generic "Status". **Lead Status** = opportunity case
-  statuses; **Enrollment Status** = the **full** configured child/OCM enrollment set (`status_definitions`
-  for `opportunity_customer_members`). Each status field declares its entity via `optionSource`, so the
-  two never share a dropdown.
+- **Status is subject/status-group specific (Status Truth Doctrine).** There is **no generic "Status"** —
+  every status belongs to a subject/grain (see `status-and-state-system.md` § Status Truth Doctrine).
+  **Lead Status** = opportunity case statuses (`opportunities`); **Enrollment Status** = the full
+  configured child/OCM set (`opportunity_customer_members`). Each declares its entity via `optionSource`,
+  so the two never share a dropdown, and **a stage uses the status of its own grain** (Lead stages use
+  Lead Status; Waitlist uses Child Enrollment Status — never the family's lead status for a child waitlist).
+  **Person Status** (`persons`) and **Account Status** (`customers`) are **planned**, not yet exposed:
+  Account Status has no seeded `status_definitions`, and Person Status is not carried on opportunity/child
+  Work View rows — exposing either before it is backed would be a dead condition.
 - **Clean option sources.** **Campus** pulls only real campuses (`locations` where `location_type='site'`)
   — units/addresses/scaffolding excluded; **Room** pulls `location_type='unit'`.
 - **Multiple conditions combine with AND/OR.** A Work View carries `match: all | any` (`all` = AND,

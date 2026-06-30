@@ -128,6 +128,24 @@ event. No new event is required; the projection becomes the recomputed unit.
 
 ---
 
+## Status Truth Doctrine — every status has a subject/grain
+
+The projection evaluates **domain-typed** status conditions, never a generic "Status" (see
+`../../platform/core/status-and-state-system.md` § Status Truth Doctrine):
+
+- **Lead Status** (`opportunity_status` ← `opportunities.status_key`) drives family/lead stages; the
+  count grain is **families** (one opportunity = 1).
+- **Child Enrollment Status** (`child_enrollment_status` ← OCM `outcome_status_key`) drives child stages;
+  the count grain is **child rows** — one family with two waitlisted children counts as **2**, because the
+  base rows for a child-grain queue are member rows, not opportunities.
+- A family's Lead Status `waitlisted` does **not** match a `child_enrollment_status = waitlisted`
+  condition (different row field) — no cross-domain leakage.
+- **Person Status** (`persons.status_key`) and **Account Status** (`customers.status_key`) are **planned**,
+  not yet Work View conditions: Account has no seeded `status_definitions`; Person status is not carried on
+  opportunity/child Work View rows. They will be exposed once backed + evaluable.
+
+Codified in `web/tests/lifecycle/statusDomainTruth.test.ts`.
+
 ## Stage is derived from status (New Leads vs Registration — data-proven)
 
 The Lyons Family lead showed under **Registration**, not **New Leads**. Inspecting the live record

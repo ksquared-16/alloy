@@ -112,6 +112,22 @@ Migrations (June 2026 workstream):
 - `20260622210000_relationship_action_definitions.sql` — relationship action_definitions seeds
 - `20260622220000_update_enrollment_status_action.sql` — Change Enrollment Status
 
+### Update Status by domain (Status Truth Doctrine — next action sprint)
+
+Under the Status Truth Doctrine (`../core/status-and-state-system.md`), **"update status" is never
+generic** — every status belongs to a subject/domain, so the action must declare which it mutates.
+
+- **Today:** the registered `update_status` action is **hardcoded to Lead Status** —
+  `supportedEntityTypes: ["opportunity"]`, `assertAllowedStatusKey(…, "opportunities", …)` →
+  `updateOpportunityStatusWithEvent`. Child enrollment status already has its own action
+  (`update_enrollment_status`, OCM `outcome_status_key`).
+- **Next sprint (planned):** make the domain explicit across all subjects — `update_lead_status`
+  (`opportunities.status_key`), `update_child_enrollment_status` (OCM `outcome_status_key`, converging the
+  existing enrollment action), `update_person_status` (`persons.status_key`). Each resolves its subject
+  from the command's grain/context and mutates only that domain's field; none can silently change another
+  subject's status. The operator-facing intent ("Move Forward") still resolves to the correct domain
+  action via `operationalIntent.ts`.
+
 ---
 
 ## Action placements (operator editor)
