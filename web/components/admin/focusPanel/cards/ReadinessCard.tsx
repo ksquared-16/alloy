@@ -48,10 +48,11 @@ export default function ReadinessCard({ model, context, receded = false, coordin
         }
     };
 
+    // Alloy operational palette: blocked = red, ready = green, otherwise (almost) = amber.
     const gaugeTone =
         evidence.statusTone === "blocked" ? "risk"
         : evidence.statusTone === "ready" ? "positive"
-        : "metric";
+        : "warning";
 
     const hasFactors = !evidence.isEmpty && evidence.factors.length > 0;
 
@@ -130,7 +131,7 @@ export default function ReadinessCard({ model, context, receded = false, coordin
     );
 }
 
-function Gauge({ value, tone }: { value: number; tone: "risk" | "positive" | "metric" }) {
+function Gauge({ value, tone }: { value: number; tone: "risk" | "positive" | "warning" }) {
     return (
         <div className="alloy-os-gauge" data-tone={tone} data-readiness-score={value}>
             <div className="alloy-os-gauge__track">
