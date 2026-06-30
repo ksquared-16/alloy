@@ -34,6 +34,7 @@ export type FocusPanelCellWidth =
     | "third"
     | "half"
     | "twoThirds"
+    | "threeQuarters"
     | "full"
     | "fill"
     // legacy aliases (kept for already-published docs)
@@ -47,6 +48,7 @@ export const FOCUS_PANEL_CELL_WIDTHS: readonly FocusPanelCellWidth[] = [
     "third",
     "half",
     "twoThirds",
+    "threeQuarters",
     "full",
     "fill",
 ];
@@ -57,6 +59,7 @@ export const CELL_WIDTH_LABEL: Record<FocusPanelCellWidth, string> = {
     third: "Third",
     half: "Half",
     twoThirds: "Two Thirds",
+    threeQuarters: "Three Quarters",
     full: "Full",
     fill: "Fill",
     "1/3": "Third",
@@ -67,13 +70,15 @@ export const CELL_WIDTH_LABEL: Record<FocusPanelCellWidth, string> = {
 /**
  * Fixed width in 12-unit grid columns. `fill` resolves at plan time (remaining
  * row space) and is represented here as `0` (a sentinel — never rendered directly;
- * `resolveRowUnits` replaces it).
+ * `resolveRowUnits` replaces it). The runtime renders proportions via flex-grow on
+ * these units, so any pairing fills the row (e.g. threeQuarters + quarter = 9:3 = 3:1).
  */
 export const CELL_WIDTH_UNITS: Record<FocusPanelCellWidth, number> = {
     quarter: 3,
     third: 4,
     half: 6,
     twoThirds: 8,
+    threeQuarters: 9,
     full: 12,
     fill: 0,
     "1/3": 4,
@@ -89,6 +94,7 @@ const WIDTH_SNAP_STOPS: { width: FocusPanelCellWidth; fraction: number }[] = [
     { width: "third", fraction: 4 / 12 },
     { width: "half", fraction: 6 / 12 },
     { width: "twoThirds", fraction: 8 / 12 },
+    { width: "threeQuarters", fraction: 9 / 12 },
     { width: "full", fraction: 12 / 12 },
 ];
 

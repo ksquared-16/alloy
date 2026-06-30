@@ -3172,6 +3172,19 @@ html[data-alloy-os-runtime-split="true"]
   width: 100%;
 }
 
+/* ROOT-CAUSE FILL: several card wrappers (e.g. `.alloy-os-household`, which Household
+ * AND Children render) are `display: contents` — they generate NO box, so every
+ * `… > * { width: 100% }` rule lands on the boxless wrapper and is ignored, leaving the
+ * real card box (`.alloy-os-ucard`) as a content-width flex item in the flex-row cell
+ * (the narrow "island" symptom). Target the actual card box directly so it ALWAYS fills
+ * its cell/lane, through any `display: contents` wrapper, in every composed/published
+ * Focus Panel (work mode keeps its own rhythm). */
+.alloy-os-focus-panel-grid:not(.alloy-os-focus-panel-grid--work) .alloy-os-ucard {
+  width: 100%;
+  max-width: none;
+  min-width: 0;
+}
+
 /* STACK: anchors take the full row; support cards pair beneath them at half
  * width — a different rhythm than the heavy cards, so the column still reads as
  * a composition (not four identical stacked widgets). */
