@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import clsx from "clsx";
 
 import UniversalCard from "@/components/admin/focusPanel/UniversalCard";
+import CardAvatar from "@/components/admin/focusPanel/CardAvatar";
 import HouseholdContactEdit from "@/components/admin/focusPanel/cards/HouseholdContactEdit";
 import {
     buildHouseholdCardEvidence,
@@ -476,9 +477,7 @@ function GroupRows({
                             onClick={() => onOpenChild(child.id)}
                             data-household-child={child.id}
                         >
-                            <span className="alloy-os-household__avatar" aria-hidden>
-                                {child.name.charAt(0).toUpperCase()}
-                            </span>
+                            <CardAvatar name={child.name} imageUrl={child.imageUrl ?? null} size={26} />
                             <span className="alloy-os-household__row-main min-w-0">
                                 <span className="alloy-os-household__row-name">{child.name}</span>
                             </span>
@@ -488,9 +487,7 @@ function GroupRows({
                         </button>
                     ) : (
                         <div key={child.id} className="alloy-os-household__row">
-                            <span className="alloy-os-household__avatar" aria-hidden>
-                                {child.name.charAt(0).toUpperCase()}
-                            </span>
+                            <CardAvatar name={child.name} imageUrl={child.imageUrl ?? null} size={26} />
                             <span className="alloy-os-household__row-main min-w-0">
                                 <span className="alloy-os-household__row-name">{child.name}</span>
                             </span>
@@ -542,9 +539,7 @@ function ContactRow({
     const editable = isEditableContact(contact, masked, onEdit);
     return (
         <div className="alloy-os-household__row" data-household-contact={contact.personId || undefined}>
-            <span className="alloy-os-household__avatar" aria-hidden>
-                {contact.initials}
-            </span>
+            <CardAvatar name={contact.name} imageUrl={contact.imageUrl ?? null} size={26} />
             <span className="alloy-os-household__row-main min-w-0">
                 <span className="alloy-os-household__row-name">{contact.name}</span>
                 {masked ? (

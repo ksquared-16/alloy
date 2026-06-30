@@ -56,6 +56,8 @@ export type HouseholdEvidenceContact = {
     phone: string | null;
     email: string | null;
     initials: string;
+    /** Identity profile image (evidence model); null → initials fallback. */
+    imageUrl?: string | null;
 };
 
 /**
@@ -66,6 +68,8 @@ export type HouseholdEvidenceContact = {
 export type HouseholdEvidenceChild = {
     id: string;
     name: string;
+    /** Identity profile image (evidence model); null → initials fallback. */
+    imageUrl?: string | null;
 };
 
 /** Stable focusable evidence-group identifiers. */
