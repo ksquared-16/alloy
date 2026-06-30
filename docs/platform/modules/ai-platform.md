@@ -94,6 +94,26 @@ required inputs (incomplete parse) in operator language. BOS remains an entry po
 mutation path. See `docs/sprints/06_2026/command_surface_v3.md`,
 `command_surface_v2.md`, `command_surface_v1.md`.
 
+**BOS intake field parity (Create Lead reliability thread).** BOS intake is parse-and-fill over
+the **same** field model as manual Create Lead — the BOS path must never present a different
+source than the dropdown the operator would otherwise use:
+
+- **Field sources match the standard gather fields** (`createLeadPlatformGather.ts`). Location,
+  Program, Room are canonical `placement_select` dropdowns (`site`, `site_program`, `site_room`);
+  Schedule is the `childcare_schedule_type` option set; Desired Start is a date; Parents are
+  text/email/phone. Program previously fell back to free text because the `child:program_interest`
+  rule binds `desired_program_category_id` — `placementSelectForInquiryChildField` now maps that
+  key to `site_program`. A parity test (`createLeadBosFieldSourceParity.test.ts`) locks this so a
+  configured field never silently regresses to text.
+- **One canonical location source.** Free-text location ("South Campus") resolves through the
+  same `useInquiryChildPlacementCascade().siteOptions` the dropdown uses (with the locations-hierarchy
+  fallback), fed to `parseCreateLeadIntakeText` — not a second `siteFilter.bootstrap.sites`-only
+  source. Program filtering then follows the resolved location.
+- **Multiple parent emails preserved.** The extractor captures every email (multi-email scan), and
+  household grouping distributes emails to the matching parent (source line, then name local-part)
+  instead of collapsing them onto the primary — Jason→jason@…, Alex→alex@…, neither overwriting the
+  other.
+
 ---
 
 ## Capabilities registry

@@ -126,6 +126,47 @@ commands as `entityId = null`, or duplicating a capability per placement.
 
 ---
 
+## Post-mutation projection refresh (queue/Focus-Panel)
+
+A mutation that changes **queue membership** (e.g. `create_lead` adds a New Lead) must refresh
+the projection, not just the record — otherwise pill counts and lane rows go stale until reload.
+
+- **Dispatch the canonical queue event:** `dispatchOpportunityQueueUpdated(opportunityId, actionKey)`
+  (`web/lib/admin/opportunityQueueRefreshEvent.ts`). Every mounted Work Unit view listens and
+  refetches **rows + pill counts**. Membership-changing action keys must be registered in
+  `QUEUE_MEMBERSHIP_ACTION_KEYS` — otherwise an off-screen new record refetches counts only, never
+  the row.
+- **Carry projection refresh targets in the success contract** (`buildCreateLeadSuccess`): the
+  created record **and** its `work_unit_id`/`status_key`, so the right work-unit queue/counts
+  invalidate. Every entry point (Work Unit / department / workspace rail) must honor `onRefresh`.
+- **Compose the Focus Panel by record id, never by queue membership.** The opportunity drawer/Focus
+  Panel VM (`composeOpportunityDrawerViewModel`) loads by `org_id + id`, so a just-created record
+  opens even before the queue refresh lands. Routing uses the canonical
+  `operatorWorkUnitHrefFromKey` / `resolveCreatedLeadFocusPanelHref` — never the legacy adminV2 drawer.
+
+Avoid: refresh contracts that only invalidate the mutated entity; surfaces that drop `onRefresh`;
+gating record open on the row appearing in a (possibly stale) queue list.
+
+---
+
+## Status keys are internal; operators see labels
+
+Raw status keys (`new_inquiry`, `new_lead`) are runtime identifiers — operators must never see them
+or deprecated product language (e.g. "Inquiry").
+
+- **Resolve display labels through `status_definitions`** (org-scoped, `entity_type`-grained), then a
+  canonical transition label (`canonicalNewLeadStatusLabel` → "New Lead" for `new_inquiry`/`new_lead`),
+  then `humanizeStatusKey` as a last resort. Never render the raw key, and never humanize to stale copy.
+- **Suppress, don't invent.** If a subject has no meaningful status in its domain (a brand-new lead's
+  child has no enrollment disposition — the OCM status domain defines none for "lead"), write `null`
+  and suppress the badge. Do **not** fabricate a status the domain doesn't define.
+- **Defer global key renames; relabel + alias instead.** Keep the legacy key accepted by queue/lifecycle
+  config (alias expansion), relabel its `status_definitions` label, and migrate runtime rows with an
+  **org-scoped, dry-run-first** script (`EXECUTE=1` to apply) — don't blindly flip a shared opportunity
+  status key across queue/lifecycle config in one step.
+
+---
+
 ## Surface ViewModel (canonical reveal ownership)
 
 The **preferred / canonical** runtime pattern. Each route composes **one** above-fold Surface

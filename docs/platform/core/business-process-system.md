@@ -30,7 +30,7 @@ Organization
 | Operator label **Business Process** (not Lifecycle) in settings and workspace | **Shipped** — `businessProcessUiLabels.ts` |
 | Enrollment Process V1 — 13 stages (family + child journeys) | **Shipped** — default builder seed |
 | One execution work unit per enrollment department (`enrollment_pipeline`) | **Frozen** — stages are queues inside WU, not separate WUs |
-| Case vs child lifecycle grain | **Frozen** — `opportunities.status_key` (case) vs `opportunity_customer_members.outcome_status_key` (child) |
+| Case vs child lifecycle grain | **Frozen** — `opportunities.status_key` (case) vs `opportunity_customer_members.outcome_status_key` (child). Create Lead leaves child `outcome_status_key` **null** at intake (no enrollment disposition yet; badge suppressed) — see `../modules/actions-and-workflows.md` § Create Lead fresh-data contract |
 | Queue rows are preview-only | **Frozen** — see `queue-system.md` |
 | Builder API paths remain `lifecycle-*` internally | **Accepted** — rename deferred |
 

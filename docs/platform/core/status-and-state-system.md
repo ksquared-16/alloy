@@ -45,10 +45,11 @@ Stages are **not** separate work units in enrollment — they are lanes inside `
 
 | Topic | Behavior |
 |-------|----------|
-| **Create Lead binding** | Writes `opportunity.status_key` from BP lifecycle binding (e.g. `new_inquiry`) |
-| **OCM at intake** | `outcome_status_key = new_inquiry` when child captured |
-| **Legacy compatibility** | Existing `open` / `new` records appear in New Leads via alias expansion — no migration required |
-| **Queue filter path** | V2 execution prefers `filters_compat_v1`; aliases merged at runtime (`enrollmentLeadStageStatusAliases.ts`) |
+| **Create Lead binding** | Writes `opportunity.status_key` from BP lifecycle binding (legacy `new_inquiry` retained; **displays as "New Lead"** — product language is Lead, not Inquiry) |
+| **OCM at intake** | `outcome_status_key = null` — a brand-new lead has no enrollment disposition (the OCM domain defines none for "lead"); the child badge is **suppressed** until a real enrollment outcome. Never `new_inquiry`. |
+| **Status language** | No operator-facing "Inquiry". `new_inquiry` definitions relabeled to "New Lead"; `canonicalNewLeadStatusLabel` covers lingering keys; legacy child `new_inquiry` rows cleaned to `null` via `scripts/suppressLegacyChildNewInquiryStatus.ts` (org-scoped, dry-run first) |
+| **Legacy compatibility** | Existing `open` / `new` / `new_inquiry` records appear in New Leads via alias expansion — no per-org queue migration required |
+| **Queue filter path** | V2 execution prefers `filters_compat_v1`; aliases merged at runtime (`enrollmentLeadStageStatusAliases.ts`, accepts `new_lead` + legacy `new_inquiry`/`open`/`new`) |
 
 ---
 

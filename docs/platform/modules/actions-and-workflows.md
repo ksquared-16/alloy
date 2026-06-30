@@ -241,25 +241,39 @@ Modal host: work-unit rail + drawer via `openEnrollmentStatus` / `dispatchOpenEn
 
 ## Create Lead fresh-data contract
 
-Fresh **Create Lead** (June 2026) writes:
+Fresh **Create Lead** (June 2026, hardened in the Create Lead reliability thread) writes:
 
 | Artifact | Detail |
 |----------|--------|
-| `opportunity.status_key` | From lifecycle binding (e.g. `new_inquiry`) — not legacy `open` default |
-| OCM `outcome_status_key` | `new_inquiry` when child exists at intake |
-| Household | `customers`, `customer_persons`, `persons` |
+| `opportunity.status_key` | From lifecycle binding (legacy `new_inquiry` retained) — not legacy `open` default. The key stays `new_inquiry` for now (queue/lifecycle compatibility), but it **displays as "New Lead"** everywhere (see *Status language* below) |
+| OCM `outcome_status_key` | **`null` at intake** — a brand-new lead has no enrollment disposition, and the OCM status domain defines none for "lead". The child badge is **suppressed** until a real enrollment outcome (waitlisted/enrolling/…). Never `new_inquiry`. |
+| Household | `customers`, `customer_persons`, `persons` — household status writes `customers.status_key` (canonical), **never** the dropped `customers.status` column (PGRST204) |
 | Members | `customer_members`, `opportunity_customer_members` |
 | Child-scoped contacts | When role data supplied at intake |
 | Address | Parsed + persisted via create-lead address path |
 | Events | Workflow/activity audit |
-| Queue visibility | New Leads lane — includes legacy `open`/`new` aliases via `enrollmentLeadStageStatusAliases.ts` |
+| Queue visibility | New Leads lane — `enrollmentLeadStageStatusAliases.ts` accepts `new_lead`, legacy `new_inquiry`, and `open`/`new`; the org's stored lane filter is expanded at runtime so new + pre-migration rows coexist without a per-org queue migration |
+
+### Create Lead success / projection / refresh
+
+Operator behavior after a successful create (Create Lead reliability thread):
+
+- **No auto-open.** Success state stays in the modal. The Focus Panel opens **only** when the operator clicks **Open Lead**, which then closes the modal (`queueActionWorkspaceLeadHandoff` calls `closeWorkspace` before navigating).
+- **Canonical navigation, no legacy drawer.** Open Lead routes to the Work Unit Focus Panel via `resolveCreatedLeadFocusPanelHref` → `operatorWorkUnitHrefFromKey` (`/workspace/work-unit/:slug/:recordId`) — never the legacy adminV2 drawer.
+- **Focus Panel composes by record id.** `composeOpportunityDrawerViewModel` loads the record by `org_id + id` only — it is **not** gated on queue membership, so the just-created record opens even before the queue refresh lands.
+- **Projection refresh seam.** `CreateLeadCommandSurface` dispatches the canonical `dispatchOpportunityQueueUpdated(id, "create_lead")` on success, and `create_lead` is registered in `QUEUE_MEMBERSHIP_ACTION_KEYS`, so every mounted Work Unit view refetches **lane rows + pill counts** (the new lead appears in New Leads without a full reload). The success contract (`buildCreateLeadSuccess`) carries the created `work_unit_id`/`status_key` and a **work-unit refresh target** alongside the opportunity; all entry points (Work Unit / department / workspace rails) honor `onRefresh`.
+
+### Status language — no operator-facing "Inquiry"
+
+Product language is **Lead**, not **Inquiry**. The internal `new_inquiry` status key is retained for back-compat, but every operator-facing label resolves to **"New Lead"**: `new_inquiry` status-definition labels are relabeled to "New Lead" (migration `20260706120000_new_lead_status_label_canonicalization.sql`), the static status-label maps render "New Lead", and `canonicalNewLeadStatusLabel` covers any lingering `new_inquiry`/`new_lead` key in projections/cards. Legacy child OCM `new_inquiry` rows are cleaned to `null` (badge suppressed) by the org-scoped script `scripts/suppressLegacyChildNewInquiryStatus.ts` (dry-run by default, `EXECUTE=1` to apply; opportunity statuses untouched).
 
 **Caveats for validation:**
 
 - Child drawer needs child/OCM on record
 - Waitlist rows need waitlist transition (not create-lead alone)
 - Org role config must include relationship role keys
-- Legacy `open` records supported by alias filter — optional normalize to `new_inquiry` later
+- Legacy `open` records supported by alias filter — optional normalize later
+- Changing the **opportunity** case key from `new_inquiry` → `new_lead` is **deferred** (queue/lifecycle config validation first); only the child outcome status was changed
 
 ---
 
