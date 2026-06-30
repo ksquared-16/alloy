@@ -150,6 +150,46 @@ export function moveFieldWithinGroup(
     );
 }
 
+/** Set the owning card for an evidence group (Experience Builder V3 — group ownership). */
+export function setGroupOwner(
+    config: FocusPanelCardConfig | null | undefined,
+    groupIdValue: string,
+    owner: FocusPanelCardKey,
+): FocusPanelCardConfig {
+    return withGroups(config, (groups) => groups.map((g) => (g.id === groupIdValue ? { ...g, owner } : g)));
+}
+
+/** Toggle whether a group is revealed when the card is Expanded. */
+export function setGroupInExpanded(
+    config: FocusPanelCardConfig | null | undefined,
+    groupIdValue: string,
+    includeInExpanded: boolean,
+): FocusPanelCardConfig {
+    return withGroups(config, (groups) =>
+        groups.map((g) => (g.id === groupIdValue ? { ...g, includeInExpanded } : g)),
+    );
+}
+
+/** Add a Related View (report drill-down) to the card config. */
+export function addRelatedView(
+    config: FocusPanelCardConfig | null | undefined,
+    label: string,
+): FocusPanelCardConfig {
+    const base = config ?? {};
+    const existing = base.relatedViews ?? [];
+    const id = groupId(label, existing);
+    return { ...base, relatedViews: [...existing, { id, label }] };
+}
+
+/** Remove a Related View by id. */
+export function removeRelatedView(
+    config: FocusPanelCardConfig | null | undefined,
+    id: string,
+): FocusPanelCardConfig {
+    const base = config ?? {};
+    return { ...base, relatedViews: (base.relatedViews ?? []).filter((v) => v.id !== id) };
+}
+
 /** Per-field ownership + behavior the Inspector edits (Part 4). */
 export type FieldOwnershipPatch = {
     owner?: FocusPanelCardKey;

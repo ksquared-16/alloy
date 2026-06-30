@@ -179,6 +179,23 @@ export type FocusPanelEvidenceGroup = {
     id: string;
     label: string;
     fields: FocusPanelCardField[];
+    /**
+     * The card that OWNS this evidence group (Experience Builder V3 — ownership lives at
+     * the evidence-group level). Defaults to the host card. The group's fields are
+     * editable only on the owning card.
+     */
+    owner?: FocusPanelCardKey;
+    /**
+     * Whether this group is revealed when the card is Expanded (the SAME question with
+     * additional configured evidence — not history).
+     */
+    includeInExpanded?: boolean;
+};
+
+/** A configured Related View — a report drill-down distinct from Expanded. */
+export type FocusPanelConfiguredRelatedView = {
+    id: string;
+    label: string;
 };
 
 /** The group legacy flat `fields` migrate into when a card has no explicit groups. */
@@ -195,6 +212,8 @@ export type FocusPanelCardConfig = {
     question?: string;
     /** Evidence groups own the fields (Part 3). Preferred over the flat `fields`. */
     evidenceGroups?: FocusPanelEvidenceGroup[];
+    /** Configured Related Views — report drill-downs (Experience Builder V3). */
+    relatedViews?: FocusPanelConfiguredRelatedView[];
     /** Legacy flat fields (pre-V2 docs). Read via `configFields`; kept for back-compat. */
     fields?: FocusPanelCardField[];
     expansion?: FocusPanelCardExpansion;

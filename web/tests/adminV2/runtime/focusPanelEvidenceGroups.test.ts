@@ -164,3 +164,31 @@ describe("evidence-group field ops used by the Inspector", () => {
         expect(moveFieldWithinGroup(next, "a", -1).evidenceGroups![0]!.fields.map((f) => f.id)).toEqual(["a", "c", "b"]);
     });
 });
+
+describe("Experience Builder V3 — group ownership, Expanded, Related Views", () => {
+    it("sets group-level owner + Show-in-Expanded", async () => {
+        const { setGroupOwner, setGroupInExpanded } = await import(
+            "@/lib/adminV2/runtime/focusPanel/focusPanelEvidenceGroupOps"
+        );
+        let config: FocusPanelCardConfig = {
+            evidenceGroups: [{ id: "placement", label: "Placement", fields: [field("p", "Program")] }],
+        };
+        config = setGroupOwner(config, "placement", "children");
+        config = setGroupInExpanded(config, "placement", true);
+        const group = config.evidenceGroups!.find((g) => g.id === "placement")!;
+        expect(group.owner).toBe("children");
+        expect(group.includeInExpanded).toBe(true);
+    });
+
+    it("adds + removes Related Views (report drill-downs)", async () => {
+        const { addRelatedView, removeRelatedView } = await import(
+            "@/lib/adminV2/runtime/focusPanel/focusPanelEvidenceGroupOps"
+        );
+        let config = addRelatedView({}, "Schedule History");
+        config = addRelatedView(config, "Placement History");
+        expect(config.relatedViews!.map((v) => v.label)).toEqual(["Schedule History", "Placement History"]);
+        const id = config.relatedViews![0]!.id;
+        config = removeRelatedView(config, id);
+        expect(config.relatedViews!.map((v) => v.label)).toEqual(["Placement History"]);
+    });
+});

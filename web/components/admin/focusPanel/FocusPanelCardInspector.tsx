@@ -23,19 +23,22 @@ import {
     type FocusPanelCollectionRenderer,
     type FocusPanelConditionKind,
     type FocusPanelConditionOperator,
-    type FocusPanelFieldPlacement,
     type FocusPanelFieldRenderer,
 } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardConfigModel";
 import {
     addEvidenceGroup,
     addFieldToGroup,
+    addRelatedView,
     moveEvidenceGroup,
     moveFieldToGroup,
     moveFieldWithinGroup,
     removeEvidenceGroup,
     removeFieldFromGroup,
+    removeRelatedView,
     renameEvidenceGroup,
     setFieldOwnership,
+    setGroupInExpanded,
+    setGroupOwner,
     updateFieldInGroups,
 } from "@/lib/adminV2/runtime/focusPanel/focusPanelEvidenceGroupOps";
 import { FOCUS_PANEL_CARD_CATALOG } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardCatalog";
@@ -71,29 +74,34 @@ import type { FocusPanelCardKey, FocusPanelCardModel } from "@/lib/adminV2/runti
  * evidence groups flattened via `configFields`, so grouping never forks rendering.
  */
 
+// Experience Builder V3 authoring pipeline: Evidence Groups → Presentation → Editing →
+// Expanded → Related Views → Actions → Conditions → AI (ownership lives at the group
+// level). Behavior (composition) stays available until the canvas owns it.
 const INSPECTOR_TABS = [
     "question",
     "evidence",
     "presentation",
-    "behavior",
     "editing",
-    "expansion",
-    "conditions",
+    "expanded",
+    "related",
     "actions",
+    "conditions",
     "ai",
+    "behavior",
 ] as const;
 type InspectorTab = (typeof INSPECTOR_TABS)[number];
 
 const TAB_LABELS: Record<InspectorTab, string> = {
     question: "Question",
-    evidence: "Evidence",
+    evidence: "Evidence Groups",
     presentation: "Presentation",
-    behavior: "Behavior",
     editing: "Editing",
-    expansion: "Expansion",
-    conditions: "Conditions",
+    expanded: "Expanded",
+    related: "Related Views",
     actions: "Actions",
+    conditions: "Conditions",
     ai: "AI",
+    behavior: "Behavior",
 };
 
 const DENSITIES: readonly FocusPanelCardDensity[] = ["micro", "compact", "standard", "expanded"];
@@ -367,6 +375,32 @@ export default function FocusPanelCardInspector({
                                         </button>
                                     </div>
                                 </div>
+                                <div className="flex flex-wrap items-center gap-2">
+                                    <label className="config-typo-meta flex items-center gap-1">
+                                        Owned by
+                                        <select
+                                            aria-label={`${group.label} owner`}
+                                            data-focus-panel-group-owner={group.id}
+                                            className={FIELD}
+                                            value={group.owner ?? baseModel.key}
+                                            onChange={(e) => onChange(setGroupOwner(editingConfig, group.id, e.target.value as FocusPanelCardKey))}
+                                        >
+                                            {OWNER_OPTIONS.map((o) => (
+                                                <option key={o.key} value={o.key}>{o.label}{o.key === baseModel.key ? " (this card)" : ""}</option>
+                                            ))}
+                                        </select>
+                                    </label>
+                                    <label className="config-typo-meta flex items-center gap-1">
+                                        <input
+                                            type="checkbox"
+                                            className="config-mode-control h-3.5 w-3.5 rounded border-alloy-stone/40"
+                                            data-focus-panel-group-expanded={group.id}
+                                            checked={Boolean(group.includeInExpanded)}
+                                            onChange={(e) => onChange(setGroupInExpanded(editingConfig, group.id, e.target.checked))}
+                                        />
+                                        Show in Expanded
+                                    </label>
+                                </div>
                                 {group.fields.length === 0 ? <Empty>No fields in this group.</Empty> : null}
                                 {group.fields.map((field, index) => (
                                     <FieldRow
@@ -490,29 +524,45 @@ export default function FocusPanelCardInspector({
                             );
                         })}
                     </div>
-                ) : tab === "expansion" ? (
-                    <div className="space-y-3" data-focus-panel-inspector-expansion={expansion.default}>
-                        <Labeled label="Default state">
-                            <div className="flex gap-2">
-                                {(["collapsed", "expanded"] as FocusPanelFieldPlacement[]).map((state) => (
-                                    <button
-                                        key={state}
-                                        type="button"
-                                        data-focus-panel-expansion-default={state}
-                                        onClick={() => onChange({ ...editingConfig, expansion: { default: state } })}
-                                        className={[
-                                            "flex-1 rounded-lg border px-2.5 py-1.5 text-xs font-medium capitalize transition-colors",
-                                            expansion.default === state ? "border-alloy-pine bg-alloy-pine/10 text-alloy-pine" : "border-alloy-forge/20 text-alloy-midnight/60 hover:bg-alloy-stone/[0.06]",
-                                        ].join(" ")}
-                                    >
-                                        {state}
-                                    </button>
-                                ))}
+                ) : tab === "expanded" ? (
+                    <div className="space-y-3" data-focus-panel-inspector-expanded={String(groups.length)}>
+                        <p className="config-typo-sublabel">
+                            Expanded reveals the SAME question with additional configured evidence groups (not history — that is a Related View). Choose which groups appear when the card is expanded.
+                        </p>
+                        {groups.length === 0 ? <Empty>Add evidence groups first.</Empty> : null}
+                        {groups.map((group) => (
+                            <label key={group.id} data-focus-panel-expanded-group={group.id} className="flex items-center justify-between gap-2 rounded-lg border border-alloy-forge/14 px-3 py-2">
+                                <span className="config-typo-field-label">{group.label}</span>
+                                <span className="config-typo-meta flex items-center gap-1.5">
+                                    <input
+                                        type="checkbox"
+                                        className="config-mode-control h-3.5 w-3.5 rounded border-alloy-stone/40"
+                                        checked={Boolean(group.includeInExpanded)}
+                                        onChange={(e) => onChange(setGroupInExpanded(editingConfig, group.id, e.target.checked))}
+                                    />
+                                    Show in Expanded
+                                </span>
+                            </label>
+                        ))}
+                        <p className="config-typo-meta">Expanded overlays downward and never reflows surrounding cards.</p>
+                    </div>
+                ) : tab === "related" ? (
+                    <div className="space-y-2" data-focus-panel-inspector-related={String((config.relatedViews ?? []).length)}>
+                        <p className="config-typo-sublabel">
+                            Related Views are optional drill-downs to a related operational report (Schedule History, Placement History, Billing History …). They are NOT Expanded — a Related View opens a different report.
+                        </p>
+                        {(config.relatedViews ?? []).length === 0 ? <Empty>No related views.</Empty> : (config.relatedViews ?? []).map((view) => (
+                            <div key={view.id} data-focus-panel-related-view={view.id} className="flex items-center justify-between gap-2 rounded-lg border border-alloy-forge/14 px-3 py-2">
+                                <input
+                                    aria-label={`Related view ${view.label} name`}
+                                    className={`${FIELD} font-medium`}
+                                    value={view.label}
+                                    onChange={(e) => onChange({ ...editingConfig, relatedViews: (config.relatedViews ?? []).map((v) => (v.id === view.id ? { ...v, label: e.target.value } : v)) })}
+                                />
+                                <button type="button" aria-label={`Remove ${view.label}`} data-focus-panel-related-view-remove={view.id} onClick={() => onChange(removeRelatedView(editingConfig, view.id))} className="rounded-md border border-red-300 px-1.5 py-1 text-xs text-red-600 hover:bg-red-50">✕</button>
                             </div>
-                        </Labeled>
-                        <p className="config-typo-meta">Expansion = the same question with more room. It overlays downward and never reflows the surface.</p>
-                        <ExpansionList title="Always visible (collapsed)" fields={fields.filter((f) => f.placement === "collapsed")} onMove={(id) => updateField(id, { placement: "expanded" })} moveLabel="Move to expanded ↓" />
-                        <ExpansionList title="Shown when expanded" fields={fields.filter((f) => f.placement === "expanded")} onMove={(id) => updateField(id, { placement: "collapsed" })} moveLabel="Move to collapsed ↑" />
+                        ))}
+                        <button type="button" data-testid="inspector-add-related-view" onClick={() => onChange(addRelatedView(editingConfig, "New report"))} className="config-secondary-btn config-primary-btn--sm w-full">＋ Add related view</button>
                     </div>
                 ) : tab === "conditions" ? (
                     <div className="space-y-2">
@@ -694,30 +744,6 @@ function ConceptPicker({
                 ))}
             </select>
             {extraOptions && extraOptions.length > 0 ? <span className="sr-only">{extraOptions.join(", ")}</span> : null}
-        </div>
-    );
-}
-
-function ExpansionList({
-    title,
-    fields,
-    onMove,
-    moveLabel,
-}: {
-    title: string;
-    fields: FocusPanelCardField[];
-    onMove: (id: string) => void;
-    moveLabel: string;
-}) {
-    return (
-        <div className="space-y-1">
-            <p className={LABEL}>{title}</p>
-            {fields.length === 0 ? <Empty>None</Empty> : fields.map((field) => (
-                <div key={field.id} className="flex items-center justify-between rounded-lg border border-alloy-forge/14 px-3 py-1.5 text-xs text-alloy-midnight">
-                    <span className="truncate">{field.label}</span>
-                    <button type="button" onClick={() => onMove(field.id)} className="config-typo-meta shrink-0 rounded-md border border-alloy-forge/20 px-1.5 py-0.5 hover:bg-alloy-stone/10">{moveLabel}</button>
-                </div>
-            ))}
         </div>
     );
 }
