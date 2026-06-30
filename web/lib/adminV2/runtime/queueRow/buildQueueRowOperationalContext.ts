@@ -76,13 +76,14 @@ function buildAttentionSignal(record: Record<string, unknown>): OperationalAtten
 
 function buildTourSignal(record: Record<string, unknown>): OperationalTourSignal {
     const tourBooking = record["_active_tour_booking"] as
-        | { start_at?: string; status_key?: string }
+        | { id?: string; start_at?: string; status_key?: string }
         | null
         | undefined;
     return {
         scheduled: Boolean(tourBooking?.start_at),
         startAt: trimOrNull(tourBooking?.start_at),
         statusLabel: trimOrNull(tourBooking?.status_key),
+        bookingId: trimOrNull(tourBooking?.id),
     };
 }
 

@@ -55,8 +55,8 @@ function cardModel(key: FocusPanelCardModel["key"], title: string, iconName: str
 const EMPTY_SIGNALS: OperationalContextSignals = {
     work: { primary: null, items: [], openCount: 0, overdueCount: 0, nextActionLabel: null },
     attention: { needsAttention: false, primaryReason: null, reasonCount: 0 },
-    tour: { scheduled: false, startAt: null, statusLabel: null },
-            communications: { scheduledSendCount: 0, nextFollowUpAt: null, hasOutreach: false },
+    tour: { scheduled: false, startAt: null, statusLabel: null, bookingId: null },
+            communications: { scheduledSendCount: 0, nextFollowUpAt: null, hasOutreach: false, nextScheduledSendId: null },
 };
 
 function ctx(
@@ -134,8 +134,8 @@ const CORE_FOUR_SIGNALS: OperationalContextSignals = {
         nextActionLabel: "Advance to enrolled",
     },
     attention: { needsAttention: true, primaryReason: "Immunization record missing", reasonCount: 1 },
-    tour: { scheduled: true, startAt: "2026-06-27T10:00:00Z", statusLabel: "confirmed" },
-            communications: { scheduledSendCount: 0, nextFollowUpAt: null, hasOutreach: false },
+    tour: { scheduled: true, startAt: "2026-06-27T10:00:00Z", statusLabel: "confirmed", bookingId: null },
+            communications: { scheduledSendCount: 0, nextFollowUpAt: null, hasOutreach: false, nextScheduledSendId: null },
 };
 
 const CHILDREN_MODEL = cardModel("children", "Children", "users");
@@ -239,6 +239,15 @@ function OverviewComposition({ context }: { context: OperationalContext }) {
                     });
                 });
                 return { ok: true };
+            },
+            tour: {
+                cancelTour: async () => ({ ok: true }),
+                confirmTour: async () => ({ ok: true }),
+                openTourScheduleModal: () => {},
+                dispatchTourUpdated: () => {},
+            },
+            communications: {
+                cancelScheduledSend: async () => ({ ok: true }),
             },
         }),
         [],

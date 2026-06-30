@@ -95,6 +95,8 @@ export type OperationalTourSignal = {
     scheduled: boolean;
     startAt: string | null;
     statusLabel: string | null;
+    /** ID of the active tour_bookings row — present when scheduled=true, null otherwise. */
+    bookingId: string | null;
 };
 
 export type OperationalCommunicationsSignal = {
@@ -104,6 +106,8 @@ export type OperationalCommunicationsSignal = {
     nextFollowUpAt: string | null;
     /** True when there is any scheduled send or pending follow-up. */
     hasOutreach: boolean;
+    /** ID of the next pending scheduled send, null when none. Used for cancel action. */
+    nextScheduledSendId: string | null;
 };
 
 export type OperationalContextSignals = {
