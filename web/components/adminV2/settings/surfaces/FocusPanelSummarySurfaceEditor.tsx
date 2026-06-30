@@ -1,18 +1,17 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState, type DragEvent } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { ConfigurationPrimaryButton } from "@/components/adminV2/settings/configurationRuntime/ConfigurationModeLayout";
-import FocusPanelCardGrid from "@/components/admin/focusPanel/FocusPanelCardGrid";
 import FocusPanelCardInspector from "@/components/admin/focusPanel/FocusPanelCardInspector";
 import FocusPanelCardRenderer from "@/components/admin/focusPanel/FocusPanelCardRenderer";
 import FocusPanelCanvasBuilder from "@/components/admin/focusPanel/FocusPanelCanvasBuilder";
-import FocusPanelEditableCardFrame from "@/components/admin/focusPanel/FocusPanelEditableCardFrame";
 import {
     readFocusPanelPublishedLayout,
     type FocusPanelPublishedLayout,
 } from "@/lib/adminV2/runtime/focusPanel/composition/focusPanelPublishedLayout";
 import {
+    cardsInLayout,
     defaultRowLayoutFromCards,
     withPublishedLayoutMetadata,
 } from "@/lib/adminV2/runtime/focusPanel/composition/focusPanelPublishedLayoutOps";
@@ -23,21 +22,12 @@ import { deriveOpportunityFocusPanelPresentation } from "@/lib/adminV2/runtime/f
 import { FOCUS_PANEL_SUMMARY_DEFAULT_DOC } from "@/lib/adminV2/runtime/focusPanel/buildFocusPanelSummaryDefaultDoc";
 import {
     buildSummaryDocFromOrder,
-    cycleSummaryCardSpan,
-    duplicateSummaryCard,
     entryInstanceId,
-    insertSummaryCard,
-    moveSummaryCard,
-    moveSummaryCardToIndex,
     readSummaryCardOrder,
-    removeSummaryCard,
     updateSummaryCardConfig,
     type SummaryCardOrderEntry,
 } from "@/lib/adminV2/runtime/focusPanel/focusPanelSummaryDocOps";
-import {
-    composeEffectiveCardModel,
-    type FocusPanelCardConfig,
-} from "@/lib/adminV2/runtime/focusPanel/focusPanelCardConfigModel";
+import type { FocusPanelCardConfig } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardConfigModel";
 import { FOCUS_PANEL_CARD_CATALOG } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardCatalog";
 import {
     loadFocusPanelSummaryLayout,
@@ -93,10 +83,6 @@ export default function FocusPanelSummarySurfaceEditor() {
     const [selectedInstanceId, setSelectedInstanceId] = useState<string | null>(null);
     const [order, setOrder] = useState<SummaryCardOrderEntry[]>(defaultOrder);
     const [past, setPast] = useState<SummaryCardOrderEntry[][]>([]);
-    const [draggingId, setDraggingId] = useState<string | null>(null);
-    const [dropTargetId, setDropTargetId] = useState<string | null>(null);
-    // "+ line" insertion: the index the card catalog will insert at (null = closed).
-    const [insertIndex, setInsertIndex] = useState<number | null>(null);
 
     // Publish loop state (configure → publish → operate).
     const [layoutState, setLayoutState] = useState<FocusPanelSummaryLayoutState>({ draft: null, published: null });
@@ -149,6 +135,32 @@ export default function FocusPanelSummarySurfaceEditor() {
         const doc = buildSummaryDocFromOrder(order);
         return rowLayout ? { ...doc, metadata: withPublishedLayoutMetadata(doc.metadata, rowLayout) } : doc;
     }, [order, rowLayout]);
+
+    // The CANVAS is the single source of truth for which cards exist + their composition.
+    // Keep the doc SECTIONS (order) in sync with the cards placed on the canvas: a newly
+    // dropped card gets a default section (so its per-card config + the Inspector exist),
+    // and a card removed from the canvas drops its section. Existing config is preserved.
+    const reconcileOrderToLayout = useCallback(
+        (layout: FocusPanelPublishedLayout) => {
+            const keys = cardsInLayout(layout);
+            setOrder((prev) => {
+                const byKey = new Map(prev.map((e) => [e.key, e]));
+                const next = keys
+                    .map((key) => {
+                        const k = key as FocusPanelCardKey;
+                        const existing = byKey.get(k);
+                        if (existing) return existing;
+                        const model = cards.get(k);
+                        return model
+                            ? ({ key: k, span: model.span, density: model.density, tier: model.tier, gridRow: 0, instanceId: k } as SummaryCardOrderEntry)
+                            : null;
+                    })
+                    .filter((e): e is SummaryCardOrderEntry => e !== null);
+                return next;
+            });
+        },
+        [cards],
+    );
 
     const handleSaveDraft = useCallback(async () => {
         setSaving(true);
@@ -213,51 +225,6 @@ export default function FocusPanelSummarySurfaceEditor() {
         return map;
     }, [order]);
 
-    const presentTypeKeys = useMemo(() => new Set<string>(order.map((c) => c.key)), [order]);
-
-    const rows = useMemo(
-        () => [
-            {
-                cells: order
-                    .filter((entry) => cards.get(entry.key)?.visible !== false)
-                    .map((entry) => ({
-                        key: entryInstanceId(entry),
-                        span: entry.span,
-                        density: entry.density,
-                    })),
-            },
-        ],
-        [order, cards],
-    );
-
-    const insertCard = useCallback(
-        (key: FocusPanelCardKey, index: number) => {
-            const model = cards.get(key);
-            if (!model) return;
-            commit(
-                insertSummaryCard(
-                    order,
-                    { key: model.key, span: model.span, density: model.density, tier: model.tier, gridRow: 0 },
-                    index,
-                ),
-            );
-            setInsertIndex(null);
-        },
-        [cards, commit, order],
-    );
-
-    const handleDrop = useCallback(
-        (targetId: string) => {
-            if (draggingId && draggingId !== targetId) {
-                const targetIndex = order.findIndex((c) => entryInstanceId(c) === targetId);
-                if (targetIndex >= 0) commit(moveSummaryCardToIndex(order, draggingId, targetIndex));
-            }
-            setDraggingId(null);
-            setDropTargetId(null);
-        },
-        [commit, draggingId, order],
-    );
-
     const handleConfigChange = useCallback(
         (instanceId: string, config: FocusPanelCardConfig) => {
             commit(updateSummaryCardConfig(order, instanceId, config));
@@ -268,74 +235,6 @@ export default function FocusPanelSummarySurfaceEditor() {
     const selectedEntry = selectedInstanceId ? byInstance.get(selectedInstanceId) ?? null : null;
     const selectedBaseModel = selectedEntry ? cards.get(selectedEntry.key) ?? null : null;
 
-    const renderInsertLine = (index: number, label: string) => (
-        <div
-            data-testid="focus-panel-insert-line"
-            data-focus-panel-insert-index={index}
-            className="group relative my-1 flex items-center justify-center"
-        >
-            <span className="absolute inset-x-2 top-1/2 h-px -translate-y-1/2 bg-alloy-forge/15 transition-colors group-hover:bg-alloy-pine/40" />
-            <button
-                type="button"
-                data-focus-panel-insert-trigger={index}
-                aria-label="Add a card here"
-                onClick={() => setInsertIndex((cur) => (cur === index ? null : index))}
-                className={[
-                    "relative z-[1] inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-[11px] font-medium transition-colors",
-                    insertIndex === index
-                        ? "border-alloy-pine bg-alloy-pine text-white"
-                        : "border-alloy-forge/25 bg-white text-alloy-midnight/55 hover:border-alloy-pine/50 hover:text-alloy-pine",
-                ].join(" ")}
-            >
-                <span aria-hidden>＋</span> {label}
-            </button>
-        </div>
-    );
-
-    const cardCatalogPicker = insertIndex !== null ? (
-        <div
-            className="process-config-setup-card mx-1 mb-1 p-3"
-            data-testid="focus-panel-add-card-panel"
-            data-focus-panel-insert-at={insertIndex}
-        >
-            <div className="mb-2 flex items-center justify-between">
-                <p className="config-typo-field-label">Add a card</p>
-                <button
-                    type="button"
-                    aria-label="Close card picker"
-                    onClick={() => setInsertIndex(null)}
-                    className="config-typo-meta rounded-md px-1 py-0.5 text-alloy-forge/70 hover:text-alloy-midnight"
-                >
-                    ✕
-                </button>
-            </div>
-            <div className="flex flex-wrap gap-2">
-                {FOCUS_PANEL_CARD_CATALOG.map((entry) => {
-                    const model = entry.cardKey ? cards.get(entry.cardKey) : null;
-                    const placed = entry.cardKey ? presentTypeKeys.has(entry.cardKey) : false;
-                    const available = Boolean(entry.cardKey && model && model.visible !== false);
-                    const disabled = !available || placed;
-                    return (
-                        <button
-                            key={entry.label}
-                            type="button"
-                            data-focus-panel-catalog-entry={entry.label}
-                            data-focus-panel-catalog-state={placed ? "placed" : available ? "addable" : "unavailable"}
-                            disabled={disabled}
-                            title={entry.note ?? (placed ? "Already on the surface" : undefined)}
-                            onClick={() => {
-                                if (!available || placed || !entry.cardKey) return;
-                                insertCard(entry.cardKey, insertIndex);
-                            }}
-                            className="config-secondary-btn config-primary-btn--sm disabled:cursor-not-allowed disabled:opacity-50"
-                        >
-                            <span aria-hidden>{placed ? "✓" : "＋"}</span> {entry.label}
-                        </button>
-                    );
-                })}
-            </div>
-        </div>
-    ) : null;
 
     // Row-based composition builder (Composition V2): catalog from the catalog'd cards,
     // seeded from the loaded layout or a default arrangement of the present cards.
@@ -421,147 +320,52 @@ export default function FocusPanelSummarySurfaceEditor() {
                 catalog + per-card config below remain for which cards exist + their
                 content. Save draft / Publish (toolbar) persist this layout in metadata. */}
             {loaded ? (
-                <div className="process-config-setup-card overflow-hidden p-3" data-surface-canvas-builder="true">
-                    <FocusPanelCanvasBuilder
-                        initialLayout={builderInitial}
-                        catalog={builderCatalog}
-                        renderCard={renderBuilderCard}
-                        selectedCard={selectedEntry?.key ?? null}
-                        onSelectCard={(key) => {
-                            // Canvas owns composition; selecting a card opens the Inspector
-                            // (behavior) for that card's instance.
-                            const entry = order.find((o) => o.key === key);
-                            if (entry) setSelectedInstanceId(entry.instanceId);
-                        }}
-                        onChange={(l) => {
-                            setRowLayout(l);
-                            setDirty(true);
-                        }}
-                    />
-                </div>
-            ) : null}
-
-            {/* Card catalog + per-card config (which cards exist + their content). */}
-            <div className="flex min-h-0 flex-1 gap-4">
-                <div className="flex min-w-0 flex-1 justify-center overflow-y-auto">
-                    <div
-                        className="process-config-setup-card w-full max-w-[720px] overflow-hidden"
-                        data-surface-editor-canvas="enrollment-focus-panel-summary"
-                        data-focus-panel-canvas-footprint="focus-panel"
-                    >
-                        <div className="flex items-center justify-between border-b border-alloy-forge/10 px-4 py-2.5">
-                            <span className="config-typo-field-label">Focus Panel</span>
-                            <span className="config-typo-meta">Preview</span>
-                        </div>
-                        <div className="p-3" data-focus-panel-mode="summary" data-focus-panel-edit-mode="true">
-                            {renderInsertLine(0, "Add card")}
-                            <FocusPanelCardGrid
-                                rows={rows}
-                                renderCell={(instanceId) => {
-                                    const entry = byInstance.get(instanceId);
-                                    if (!entry) return null;
-                                    const baseModel = cards.get(entry.key);
-                                    if (!baseModel) return null;
-                                    const model = composeEffectiveCardModel(baseModel, entry.config, record);
-                                    const index = order.findIndex((c) => entryInstanceId(c) === instanceId);
-                                    const card = (
-                                        <FocusPanelCardRenderer
-                                            model={model}
-                                            context={previewContext}
-                                            focusPanelMode="summary"
-                                            compat={{ subjectVm: vm, onSelectTab: () => {} }}
-                                        />
-                                    );
-                                    return (
-                                        <FocusPanelEditableCardFrame
-                                            cardKey={instanceId}
-                                            selected={selectedInstanceId === instanceId}
-                                            onSelect={setSelectedInstanceId}
-                                            structureControls={{
-                                                span: entry.span,
-                                                canMovePrev: index > 0,
-                                                canMoveNext: index >= 0 && index < order.length - 1,
-                                                onMovePrev: () => commit(moveSummaryCard(order, instanceId, -1)),
-                                                onMoveNext: () => commit(moveSummaryCard(order, instanceId, 1)),
-                                                onCycleSpan: () => commit(cycleSummaryCardSpan(order, instanceId)),
-                                                onDuplicate: () => commit(duplicateSummaryCard(order, instanceId)),
-                                                onRemove: () => {
-                                                    commit(removeSummaryCard(order, instanceId));
-                                                    setSelectedInstanceId((sel) => (sel === instanceId ? null : sel));
-                                                },
-                                            }}
-                                            dragControls={{
-                                                dragging: draggingId === instanceId,
-                                                dropTarget: dropTargetId === instanceId && draggingId !== instanceId,
-                                                onDragStart: () => setDraggingId(instanceId),
-                                                onDragEnd: () => {
-                                                    setDraggingId(null);
-                                                    setDropTargetId(null);
-                                                },
-                                                onDragOver: (e: DragEvent<HTMLElement>) => {
-                                                    e.preventDefault();
-                                                    setDropTargetId(instanceId);
-                                                },
-                                                onDrop: (e: DragEvent<HTMLElement>) => {
-                                                    e.preventDefault();
-                                                    handleDrop(instanceId);
-                                                },
-                                            }}
-                                        >
-                                            {card}
-                                        </FocusPanelEditableCardFrame>
-                                    );
-                                }}
-                            />
-
-                            {/* Trailing "+ line" doubles as the drag drop-to-end target. */}
-                            <div
-                                data-testid="focus-panel-empty-slot"
-                                onDragOver={(e) => {
-                                    e.preventDefault();
-                                    setDropTargetId("__end__");
-                                }}
-                                onDrop={(e) => {
-                                    e.preventDefault();
-                                    if (draggingId) commit(moveSummaryCardToIndex(order, draggingId, order.length));
-                                    setDraggingId(null);
-                                    setDropTargetId(null);
-                                }}
-                                className={[
-                                    "rounded-xl transition-colors",
-                                    dropTargetId === "__end__" ? "bg-alloy-pine/5" : "",
-                                ].join(" ")}
-                            >
-                                {renderInsertLine(order.length, order.length === 0 ? "Add the first card" : "Add card")}
-                            </div>
-
-                            {cardCatalogPicker}
-                        </div>
-                    </div>
-                </div>
-
-                {selectedEntry && selectedBaseModel ? (
-                    <div className="w-[340px] shrink-0 overflow-y-auto">
-                        <FocusPanelCardInspector
-                            baseModel={selectedBaseModel}
-                            instanceId={selectedInstanceId!}
-                            config={selectedEntry.config ?? {}}
-                            onChange={(config) => handleConfigChange(selectedInstanceId!, config)}
-                            onClose={() => setSelectedInstanceId(null)}
-                            onDuplicate={() => commit(duplicateSummaryCard(order, selectedInstanceId!))}
-                            onRemove={() => {
-                                commit(removeSummaryCard(order, selectedInstanceId!));
-                                setSelectedInstanceId(null);
+                <div className="flex min-h-0 flex-1 gap-4">
+                    {/* CANVAS owns composition: position · width · height · stacking · row. */}
+                    <div className="process-config-setup-card min-w-0 flex-1 overflow-auto p-3" data-surface-canvas-builder="true">
+                        <FocusPanelCanvasBuilder
+                            initialLayout={builderInitial}
+                            catalog={builderCatalog}
+                            renderCard={renderBuilderCard}
+                            selectedCard={selectedEntry?.key ?? null}
+                            onSelectCard={(key) => {
+                                const entry = order.find((o) => o.key === key);
+                                if (entry) setSelectedInstanceId(entry.instanceId);
                             }}
-                            history={{
-                                publishedVersion: layoutState.published?.version ?? null,
-                                hasDraft: Boolean(layoutState.draft),
-                                dirty,
+                            onChange={(l) => {
+                                setRowLayout(l);
+                                reconcileOrderToLayout(l); // keep sections (order) in sync — one source of truth
+                                setDirty(true);
                             }}
                         />
                     </div>
-                ) : null}
-            </div>
+
+                    {/* INSPECTOR owns behavior — adjacent to the canvas, updates on select. */}
+                    <div className="w-[360px] shrink-0 overflow-y-auto" data-surface-inspector="true">
+                        {selectedEntry && selectedBaseModel ? (
+                            <FocusPanelCardInspector
+                                baseModel={selectedBaseModel}
+                                instanceId={selectedInstanceId!}
+                                config={selectedEntry.config ?? {}}
+                                onChange={(config) => handleConfigChange(selectedInstanceId!, config)}
+                                onClose={() => setSelectedInstanceId(null)}
+                                history={{
+                                    publishedVersion: layoutState.published?.version ?? null,
+                                    hasDraft: Boolean(layoutState.draft),
+                                    dirty,
+                                }}
+                            />
+                        ) : (
+                            <div className="process-config-setup-card flex h-full items-center justify-center p-6 text-center" data-surface-inspector-empty="true">
+                                <p className="config-typo-sublabel">
+                                    Select a card on the canvas to configure its behavior — question, evidence groups, editing, expanded, related views.
+                                </p>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            ) : null}
+
         </div>
     );
 }
