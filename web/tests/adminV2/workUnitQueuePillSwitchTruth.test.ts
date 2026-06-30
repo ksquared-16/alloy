@@ -12,6 +12,10 @@ const PAGE = join(
     process.cwd(),
     "app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page.tsx"
 );
+// fetchQueueItems orchestration now lives in the canonical useWorkUnitQueueRuntime hook; assertions
+// about its internals read the page + hook together.
+const HOOK = join(process.cwd(), "lib/adminV2/runtime/queue/useWorkUnitQueueRuntime.ts");
+const readQueueRuntimeSrc = () => readFileSync(PAGE, "utf8") + readFileSync(HOOK, "utf8");
 
 const FP = "scope:pill-truth";
 
@@ -30,7 +34,7 @@ describe("workUnitQueuePillSwitchTruth", () => {
     });
 
     it("cache-miss pill switch clears stale rows and marks pending before key change", () => {
-        const src = readFileSync(PAGE, "utf8");
+        const src = readQueueRuntimeSrc();
         expect(src).toContain("setQueuePillPendingKey(nextKey)");
         expect(src).toContain("setQueueItems(null)");
         expect(src).toContain("queuePayloadMatchesActiveLane");
@@ -43,13 +47,13 @@ describe("workUnitQueuePillSwitchTruth", () => {
     });
 
     it("user-initiated fetch does not block row apply on row-actions hydration", () => {
-        const src = readFileSync(PAGE, "utf8");
+        const src = readQueueRuntimeSrc();
         expect(src).toContain("!options?.userInitiated");
         expect(src).toMatch(/if \(options\?\.userInitiated\) \{\s*\n\s*void hydrateWorkUnitQueueRowActions\(\)/);
     });
 
     it("KPI prefetch uses reveal mode with slim row limit", () => {
-        const src = readFileSync(PAGE, "utf8");
+        const src = readQueueRuntimeSrc();
         expect(src).toContain("options?.prefetchOnly");
         expect(src).toContain("WORK_UNIT_QUEUE_REVEAL_FETCH_ROWS");
         expect(src).toMatch(

@@ -44,7 +44,11 @@ describe("work-unit above-fold reveal gate (page)", () => {
     });
 
     it("warm navigation retains lane authority and restores session lane rows", () => {
-        const page = read("app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page.tsx");
+        // The row-fetch (qs.set row_mode reveal) now lives in the canonical useWorkUnitQueueRuntime
+        // hook; the warm-lane bootstrap stays in the page.
+        const page =
+            read("app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page.tsx") +
+            read("lib/adminV2/runtime/queue/useWorkUnitQueueRuntime.ts");
         expect(page).toContain("restoreWarmWorkUnitLaneRows");
         expect(page).toMatch(/if \(warmLaneRetain\) \{[\s\S]*setWuQueueLaneAuthorityReady\(true\)/);
         expect(page).toMatch(/if \(!warmLaneRetain\) \{[\s\S]*clearWorkUnitBootstrapSessionForEntity/);

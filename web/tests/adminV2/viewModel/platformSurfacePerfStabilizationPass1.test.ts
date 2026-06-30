@@ -132,11 +132,14 @@ describe("platform surface perf stabilization pass 1", () => {
         expect(primaryLaneEffectDeps).toBeDefined();
         expect(primaryLaneEffectDeps).not.toMatch(/\bdrawer\b/);
 
-        const fetchQueueItemsDepsBlock = page.match(
+        // fetchQueueItems now lives in the canonical useWorkUnitQueueRuntime hook (the primary-lane
+        // effect that calls it stays in the page — asserted above).
+        const hook = read("lib/adminV2/runtime/queue/useWorkUnitQueueRuntime.ts");
+        const fetchQueueItemsDepsBlock = hook.match(
             /markFirstUsefulPaintOnce,\s*\n\s*laneUnmappedOnly,\s*\n\s*viewScopeFingerprint,\s*\n\s*selectedSiteId,\s*\n\s*\]/,
         );
         expect(fetchQueueItemsDepsBlock).not.toBeNull();
-        expect(page).not.toMatch(
+        expect(hook).not.toMatch(
             /const fetchQueueItems = useCallback[\s\S]*?\], \[([\s\S]*?\bdrawer\b[\s\S]*?)\]\s*\)/,
         );
     });

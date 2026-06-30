@@ -132,9 +132,10 @@ describe("Queue No-records display guard", () => {
      * NOT return early without fetching (the same-sig cache-miss path must fall through).
      */
     it("same-sig cache-miss falls through to network (recovers from error state)", () => {
-        const src = readSrc(
-            "app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page.tsx"
-        );
+        // fetchQueueItems moved to the canonical useWorkUnitQueueRuntime hook.
+        const src =
+            readSrc("app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page.tsx") +
+            readSrc("lib/adminV2/runtime/queue/useWorkUnitQueueRuntime.ts");
         // The cache-hit early return must only happen inside the `if (ent)` branch
         // and must NOT have an unconditional return after cache miss in the same-sig path.
         expect(src).toContain("// No cache entry (expired or evicted) even though sig matches");
@@ -222,9 +223,10 @@ describe("Queue determinism", () => {
      * the same-sig path has no cache entry, so errors allow recovery.
      */
     it("same-sig no-cache path falls through to network fetch (not silent no-op)", () => {
-        const src = readSrc(
-            "app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page.tsx"
-        );
+        // fetchQueueItems moved to the canonical useWorkUnitQueueRuntime hook.
+        const src =
+            readSrc("app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page.tsx") +
+            readSrc("lib/adminV2/runtime/queue/useWorkUnitQueueRuntime.ts");
         // The same-sig branch must NOT unconditionally setQueueItemsLoading(false) and return.
         // Verify the else-branch that used to silently return is gone.
         expect(src).not.toMatch(

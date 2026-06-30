@@ -36,7 +36,11 @@ describe("work unit queue row actions hydration", () => {
     });
 
     it("awaits row action hydration before first queue row paint", () => {
-        const page = read("app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page.tsx");
+        // fetchQueueItems (the !options?.prefetchOnly hydration gate) moved to the canonical
+        // useWorkUnitQueueRuntime hook; the bootstrap earlyActionsHydrationPRef path stays in the page.
+        const page =
+            read("app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page.tsx") +
+            read("lib/adminV2/runtime/queue/useWorkUnitQueueRuntime.ts");
         expect(page).toMatch(
             /!options\?\.prefetchOnly[\s\S]{0,200}await hydrateWorkUnitQueueRowActions/
         );
