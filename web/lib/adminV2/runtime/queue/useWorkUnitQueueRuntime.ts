@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useRef } from "react";
+import { useCallback, useRef, useState } from "react";
 
 import { findQueueSummaryForSelection } from "@/lib/adminV2/workUnitQueueSelection";
 import { resolveWorkUnitFetchQueueKeyFromPill } from "@/lib/adminV2/workUnitQueueSelection";
@@ -101,30 +101,8 @@ type QueueItemsResult = {
     placement_projection_diagnostics?: WorkUnitPlacementQueueDiagnostics;
 };
 
-export type WorkUnitQueueRuntimeDeps = {
-    activeLifecycleSelectionRef: React.MutableRefObject<ActiveLifecycleWorkUnitSelection>;
+export type WorkUnitQueueRuntimeLateDeps = {
     attentionBucketKeyRef: React.RefObject<string>;
-    deptRef: React.RefObject<DeptRow | null>;
-    initialLocationRef: React.RefObject<ReturnType<typeof readWorkUnitInitialLocationParams> | null>;
-    laneUnmappedOnlyRef: React.RefObject<boolean>;
-    lifecyclePillSwitchRetainRowsRef: React.MutableRefObject<boolean>;
-    pendingQueueTabPerfRef: React.MutableRefObject<boolean>;
-    primaryLaneRowsSettledOnceRef: React.MutableRefObject<boolean>;
-    queueItemsLastFetchSigRef: React.MutableRefObject<string | null>;
-    queueRowActionsHydratedRef: React.MutableRefObject<boolean>;
-    queueRowClientCacheRef: React.RefObject<Map<string, QueueRowClientCacheBucket<QueueItemsResult>>>;
-    queueRowLeaseSigsRef: React.MutableRefObject<Set<string>>;
-    queueSummariesRef: React.RefObject<QueueSummary[] | null>;
-    recordFiltersRef: React.RefObject<WorkUnitQueueRecordFilterState>;
-    selectedQueueKeyRef: React.RefObject<string | null>;
-    workUnitRef: React.RefObject<WorkUnitRow | null>;
-    queueItemsRequestSeq: React.MutableRefObject<number>;
-    setLifecyclePillRetainRows: React.Dispatch<React.SetStateAction<boolean>>;
-    setQueueItems: React.Dispatch<React.SetStateAction<QueueItemsResult | null>>;
-    setQueueItemsError: React.Dispatch<React.SetStateAction<string | null>>;
-    setQueueItemsLoading: React.Dispatch<React.SetStateAction<boolean>>;
-    setQueueItemsRoute: React.Dispatch<React.SetStateAction<string | null>>;
-    setQueuePillPendingKey: React.Dispatch<React.SetStateAction<string | null>>;
     commitQueueRowActionsWithLane: (detail: {
         work_unit_id: string;
         department_id: string;
@@ -134,6 +112,25 @@ export type WorkUnitQueueRuntimeDeps = {
     hydrateWorkUnitQueueRowActions: () => Promise<boolean>;
     requestWorkUnitDeferredSupplement: () => void;
     markFirstUsefulPaintOnce: () => void;
+};
+
+export type WorkUnitQueueRuntimeDeps = {
+    activeLifecycleSelectionRef: React.MutableRefObject<ActiveLifecycleWorkUnitSelection>;
+    deptRef: React.RefObject<DeptRow | null>;
+    initialLocationRef: React.RefObject<ReturnType<typeof readWorkUnitInitialLocationParams> | null>;
+    laneUnmappedOnlyRef: React.RefObject<boolean>;
+    lifecyclePillSwitchRetainRowsRef: React.MutableRefObject<boolean>;
+    pendingQueueTabPerfRef: React.MutableRefObject<boolean>;
+    primaryLaneRowsSettledOnceRef: React.MutableRefObject<boolean>;
+    queueRowActionsHydratedRef: React.MutableRefObject<boolean>;
+    queueRowClientCacheRef: React.RefObject<Map<string, QueueRowClientCacheBucket<QueueItemsResult>>>;
+    queueSummariesRef: React.RefObject<QueueSummary[] | null>;
+    recordFiltersRef: React.RefObject<WorkUnitQueueRecordFilterState>;
+    selectedQueueKeyRef: React.RefObject<string | null>;
+    workUnitRef: React.RefObject<WorkUnitRow | null>;
+    setLifecyclePillRetainRows: React.Dispatch<React.SetStateAction<boolean>>;
+    setQueuePillPendingKey: React.Dispatch<React.SetStateAction<string | null>>;
+    lateDepsRef: React.MutableRefObject<WorkUnitQueueRuntimeLateDeps | null>;
     viewScopeFingerprint: string;
     selectedSiteId: string | null;
     laneUnmappedOnly: boolean;
@@ -144,38 +141,35 @@ export type WorkUnitQueueRuntimeDeps = {
 export function useWorkUnitQueueRuntime(deps: WorkUnitQueueRuntimeDeps) {
     const {
         activeLifecycleSelectionRef,
-        attentionBucketKeyRef,
         deptRef,
         initialLocationRef,
         laneUnmappedOnlyRef,
         lifecyclePillSwitchRetainRowsRef,
         pendingQueueTabPerfRef,
         primaryLaneRowsSettledOnceRef,
-        queueItemsLastFetchSigRef,
         queueRowActionsHydratedRef,
         queueRowClientCacheRef,
-        queueRowLeaseSigsRef,
         queueSummariesRef,
         recordFiltersRef,
         selectedQueueKeyRef,
         workUnitRef,
-        queueItemsRequestSeq,
         setLifecyclePillRetainRows,
-        setQueueItems,
-        setQueueItemsError,
-        setQueueItemsLoading,
-        setQueueItemsRoute,
         setQueuePillPendingKey,
-        commitQueueRowActionsWithLane,
-        hydrateWorkUnitQueueRowActions,
-        requestWorkUnitDeferredSupplement,
-        markFirstUsefulPaintOnce,
+        lateDepsRef,
         viewScopeFingerprint,
         selectedSiteId,
         laneUnmappedOnly,
         departmentId,
         orgId,
     } = deps;
+
+    const [queueItems, setQueueItems] = useState<QueueItemsResult | null>(null);
+    const [queueItemsError, setQueueItemsError] = useState<string | null>(null);
+    const [queueItemsRoute, setQueueItemsRoute] = useState<string | null>(null);
+    const [queueItemsLoading, setQueueItemsLoading] = useState(false);
+    const queueItemsRequestSeq = useRef(0);
+    const queueItemsLastFetchSigRef = useRef<string | null>(null);
+    const queueRowLeaseSigsRef = useRef(new Set<string>());
 
     const fetchQueueItems = useCallback(
         async (
@@ -204,6 +198,13 @@ export function useWorkUnitQueueRuntime(deps: WorkUnitQueueRuntimeDeps) {
                 } | null;
             }
         ) => {
+            const {
+                attentionBucketKeyRef,
+                commitQueueRowActionsWithLane,
+                hydrateWorkUnitQueueRowActions,
+                requestWorkUnitDeferredSupplement,
+                markFirstUsefulPaintOnce,
+            } = lateDepsRef.current!;
             const workUnitRowForGuard =
                 options?.workUnitRowOverride ??
                 (workUnitRef.current ?
@@ -828,10 +829,6 @@ export function useWorkUnitQueueRuntime(deps: WorkUnitQueueRuntimeDeps) {
             }
         },
         [
-            commitQueueRowActionsWithLane,
-            hydrateWorkUnitQueueRowActions,
-            requestWorkUnitDeferredSupplement,
-            markFirstUsefulPaintOnce,
             laneUnmappedOnly,
             viewScopeFingerprint,
             selectedSiteId,
@@ -841,5 +838,18 @@ export function useWorkUnitQueueRuntime(deps: WorkUnitQueueRuntimeDeps) {
     const fetchQueueItemsRef = useRef(fetchQueueItems);
     fetchQueueItemsRef.current = fetchQueueItems;
 
-    return { fetchQueueItems };
+    return {
+        fetchQueueItems,
+        queueItems,
+        setQueueItems,
+        queueItemsError,
+        setQueueItemsError,
+        queueItemsLoading,
+        setQueueItemsLoading,
+        queueItemsRoute,
+        setQueueItemsRoute,
+        queueItemsLastFetchSigRef,
+        queueRowLeaseSigsRef,
+        queueItemsRequestSeq,
+    };
 }
