@@ -1,5 +1,7 @@
 # Operational Runtime Topology
 
+> **⚠️ Partially superseded (June 2026 — Work-Unit Runtime Simplification batch landed).** The work-unit and queue sections below describe the pre-simplification runtime. Implemented since: workspace reveal owned by the server Route VM (loading gate / reveal-readiness layer / Surface VM deleted); work-unit sibling switching is now **navigation, not in-page state** (`activeWorkUnitId` removed); work-unit context, perspective, and queue fetch + state are owned by canonical runtime modules (`useWorkUnitQueueRuntime`, `useWorkUnitRuntimePerspective`, Work-Unit Route VM). See [`work-unit-runtime-simplification-closeout.md`](./work-unit-runtime-simplification-closeout.md) for what moved, the runtime score, and remaining domains.
+
 **Status:** Canonical engineering blueprint (Track 2 — June 2026). **Descriptive, not prescriptive: this is how Alloy works *today*, literally.** No optimization, no targets — those live in the doctrine and the phase docs.
 **Companion analysis:** [`../../sprints/06_2026/runtime-topology-phase1.md`](../../sprints/06_2026/runtime-topology-phase1.md) (complexity scores, paint analysis, top-25 violations/simplifications, implementation order).
 **Governs against:** [`operational-runtime-doctrine.md`](./operational-runtime-doctrine.md) (the 10 laws). **Evidence base:** [`../../sprints/06_2026/operational-runtime-doctrine-phase-1.md`](../../sprints/06_2026/operational-runtime-doctrine-phase-1.md), Sprint 01/02 audits.
