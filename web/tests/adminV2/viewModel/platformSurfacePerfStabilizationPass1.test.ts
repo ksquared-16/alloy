@@ -135,8 +135,10 @@ describe("platform surface perf stabilization pass 1", () => {
         // fetchQueueItems now lives in the canonical useWorkUnitQueueRuntime hook (the primary-lane
         // effect that calls it stays in the page — asserted above).
         const hook = read("lib/adminV2/runtime/queue/useWorkUnitQueueRuntime.ts");
+        // Row-action callbacks are now accessed via lateDepsRef, so the fetchQueueItems dep array is
+        // just the scope/lane scalars — still no `drawer`.
         const fetchQueueItemsDepsBlock = hook.match(
-            /markFirstUsefulPaintOnce,\s*\n\s*laneUnmappedOnly,\s*\n\s*viewScopeFingerprint,\s*\n\s*selectedSiteId,\s*\n\s*\]/,
+            /\},\s*\n\s*\[\s*\n\s*laneUnmappedOnly,\s*\n\s*viewScopeFingerprint,\s*\n\s*selectedSiteId,\s*\n\s*\]/,
         );
         expect(fetchQueueItemsDepsBlock).not.toBeNull();
         expect(hook).not.toMatch(

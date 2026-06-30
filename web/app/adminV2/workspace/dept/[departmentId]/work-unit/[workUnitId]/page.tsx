@@ -474,6 +474,7 @@ import type { LocationProgramCategoryRow } from "@/lib/locations/locationProgram
 import { readOpportunityIdFromQueueRow } from "@/lib/orchestration/placement/placementWaitlistCandidateRowProjection";
 import { parseQueueRowGrainContext } from "@/lib/queues/queueRowGrainContext";
 import { useWorkUnitQueueRuntime } from "@/lib/adminV2/runtime/queue/useWorkUnitQueueRuntime";
+import type { WorkUnitQueueRuntimeLateDeps } from "@/lib/adminV2/runtime/queue/useWorkUnitQueueRuntime";
 
 const WORKSPACE_BASE = CANONICAL_ADMIN_WORKSPACE;
 
@@ -783,10 +784,6 @@ export default function AdminV2OpportunityWorkUnitPage() {
     const [queueSummariesRoute, setQueueSummariesRoute] = useState<string | null>(null);
     const [selectedQueueKey, setSelectedQueueKey] = useState<string | null>(null);
 
-    const [queueItems, setQueueItems] = useState<QueueItemsResult | null>(null);
-    const [queueItemsError, setQueueItemsError] = useState<string | null>(null);
-    const [queueItemsRoute, setQueueItemsRoute] = useState<string | null>(null);
-    const [queueItemsLoading, setQueueItemsLoading] = useState(false);
     const [wuPrimaryLaneTimedOut, setWuPrimaryLaneTimedOut] = useState(false);
     /** `undefined` = placement config not loaded → baseline strip; values are derived in `wuResolvedPlacementKpis`. */
     const [wuPlacementRows, setWuPlacementRows] = useState<WorkspaceKpiPlacementRow[] | undefined>(undefined);
@@ -796,15 +793,11 @@ export default function AdminV2OpportunityWorkUnitPage() {
     const oipBootstrapHydratedRef = useRef(false);
     const earlyActionsHydrationPRef = useRef<Promise<boolean> | null>(null);
     const [wuScopeHasPlacements, setWuScopeHasPlacements] = useState(false);
-    const queueItemsRequestSeq = useRef(0);
     const queueSummariesRequestSeq = useRef(0);
     /**
      * Skips redundant queue-item GETs when work unit + selected tab unchanged — same URL as last fetch.
      * Cleared on work-unit navigation; bypass with fetchQueueItems(..., { force: true }) for invalidation.
      */
-    const queueItemsLastFetchSigRef = useRef<string | null>(null);
-    /** Dedupes same-tab duplicate starts (effects + prefetch) until the in-flight GET settles. */
-    const queueRowLeaseSigsRef = useRef(new Set<string>());
     /** One-shot per work-unit navigation: workflow KPIs, row/right-rail actions after first row attempt settles. */
     const workUnitDeferredScheduledRef = useRef(false);
     /** Work-unit JSON validated in bootstrap; deferred supplement must wait (rows may finish first). */
@@ -902,6 +895,27 @@ export default function AdminV2OpportunityWorkUnitPage() {
     const wuDeferredSummaryHydrateDoneRef = useRef(false);
     /** True after first foreground (non-prefetch) rows attempt settles for selection — gates lane preview warm-up. */
     const primaryLaneRowsSettledOnceRef = useRef(false);
+
+    /** Filled in after the late deps (attentionBucketKeyRef + 4 callbacks) are declared below. */
+    const queueRuntimeLateDepsRef = useRef<WorkUnitQueueRuntimeLateDeps | null>(null);
+
+    const {
+        fetchQueueItems,
+        queueItems,
+        setQueueItems,
+        queueItemsError,
+        setQueueItemsError,
+        queueItemsLoading,
+        setQueueItemsLoading,
+        queueItemsRoute,
+        setQueueItemsRoute,
+        queueItemsLastFetchSigRef,
+        queueRowLeaseSigsRef,
+        queueItemsRequestSeq,
+    } = useWorkUnitQueueRuntime({ activeLifecycleSelectionRef, deptRef, initialLocationRef, laneUnmappedOnlyRef, lifecyclePillSwitchRetainRowsRef, pendingQueueTabPerfRef, primaryLaneRowsSettledOnceRef, queueRowActionsHydratedRef, queueRowClientCacheRef, queueSummariesRef, recordFiltersRef, selectedQueueKeyRef, workUnitRef, setLifecyclePillRetainRows, setQueuePillPendingKey, viewScopeFingerprint, selectedSiteId, laneUnmappedOnly, departmentId, orgId, lateDepsRef: queueRuntimeLateDepsRef });
+
+    const fetchQueueItemsRef = useRef(fetchQueueItems);
+    fetchQueueItemsRef.current = fetchQueueItems;
 
     const [workflowKpis, setWorkflowKpis] = useState<WorkflowKpis>(DEFAULT_WF_KPIS);
     const [workflowKpisLoading, setWorkflowKpisLoading] = useState(false);
@@ -2045,10 +2059,13 @@ export default function AdminV2OpportunityWorkUnitPage() {
         });
     }, []);
 
-    const { fetchQueueItems } = useWorkUnitQueueRuntime({ activeLifecycleSelectionRef, attentionBucketKeyRef, deptRef, initialLocationRef, laneUnmappedOnlyRef, lifecyclePillSwitchRetainRowsRef, pendingQueueTabPerfRef, primaryLaneRowsSettledOnceRef, queueItemsLastFetchSigRef, queueRowActionsHydratedRef, queueRowClientCacheRef, queueRowLeaseSigsRef, queueSummariesRef, recordFiltersRef, selectedQueueKeyRef, workUnitRef, queueItemsRequestSeq, setLifecyclePillRetainRows, setQueueItems, setQueueItemsError, setQueueItemsLoading, setQueueItemsRoute, setQueuePillPendingKey, commitQueueRowActionsWithLane, hydrateWorkUnitQueueRowActions, requestWorkUnitDeferredSupplement, markFirstUsefulPaintOnce, viewScopeFingerprint, selectedSiteId, laneUnmappedOnly, departmentId, orgId });
-
-    const fetchQueueItemsRef = useRef(fetchQueueItems);
-    fetchQueueItemsRef.current = fetchQueueItems;
+    queueRuntimeLateDepsRef.current = {
+        attentionBucketKeyRef,
+        commitQueueRowActionsWithLane,
+        hydrateWorkUnitQueueRowActions,
+        requestWorkUnitDeferredSupplement,
+        markFirstUsefulPaintOnce,
+    };
 
     useEffect(() => {
         const q = recordFilters.search.trim();
