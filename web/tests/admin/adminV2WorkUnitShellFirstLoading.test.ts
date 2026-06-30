@@ -17,15 +17,16 @@ describe("Work-unit shell-first loading (Card 3A)", () => {
         expect(loading).toMatch(/return null/);
     });
 
-    it("page owns single WorkspaceChrome shell; oper lane loads in-region via route pipeline", () => {
+    it("page owns the single WorkspaceChrome shell and renders the cold shell inside it (canonical)", () => {
+        // Canonical: loading-and-reveal-contract.md §5 — one WorkspaceChrome owner; the cold shell is
+        // rendered INSIDE it while content is not ready — never a pre-chrome early return.
         const page = read("app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page.tsx");
-        expect(page).not.toContain("WorkUnitWorkspaceColdShell");
         expect(page).not.toContain("workUnitPageBlockingLoad");
         expect(page).toContain("buildWorkUnitRouteShellPlaceholder");
-        expect(page).toContain("operLaneLoading={workUnitOperLaneLoading}");
         expect(page).toContain("workUnitRouteShellPlaceholder");
         expect(page).toContain("<WorkspaceChrome");
         expect(page).toContain("<WorkUnitWorkspace");
+        expect(page).toMatch(/WorkspaceChrome[\s\S]*!workUnitPageContentReady[\s\S]*WorkUnitWorkspaceColdShell/);
         expect(page).not.toMatch(/return \([\s\S]{0,200}WorkUnitWorkspaceColdShell/);
     });
 

@@ -55,12 +55,14 @@ describe("adminV2LoadingGeometry", () => {
 });
 
 describe("Work-unit loader alignment (PERF-A-03 / Card 3A shell-first)", () => {
-    it("route loading.tsx uses WorkUnitWorkspaceColdShell", () => {
+    it("route loading.tsx defers to the page shell owner (returns null; cold shell is page-owned)", () => {
+        // Canonical: loading-and-reveal-contract.md §5 — route segments do not own a cold shell;
+        // the page (single WorkspaceChrome owner) renders it. loading.tsx returns null and defers.
         const loading = read(
             "app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/loading.tsx"
         );
-        expect(loading).toContain("WorkUnitWorkspaceColdShell");
-        expect(loading).not.toContain("WorkUnitRouteSkeletonBody");
+        expect(loading).toMatch(/return null/);
+        expect(loading).not.toContain("WorkUnitWorkspaceColdShell");
         expect(loading).not.toContain("AdminV2RouteLoadingState");
     });
 
