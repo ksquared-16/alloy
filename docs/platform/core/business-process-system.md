@@ -78,15 +78,37 @@ Stages render as **queue lanes** or **header pills** on the work-unit execution 
 
 > **Operator navigation is the Work View, not the stage or the lane.** A **Work View** (`WorkViewConfigV1Stored`) is the operator's named lens over a process's work (filters, sort, queue/Focus-Panel layouts) and resolves onto queue lanes via `compat_queue_key`. Queue lanes are **execution/runtime**; stages are **lifecycle/governance**. Neither is the operator's primary navigation tier — Work Views are. See [`../operator/operational-workspace-shell.md` § Operational Work Doctrine](../operator/operational-workspace-shell.md#operational-work-doctrine--the-canonical-chain).
 
-### Work View conditions — typed operational predicates (V2)
+### Work View conditions — operational predicate builder (V3)
 
-A Work View's *"Show work when…"* conditions (`filters_v1`) are **typed operational predicates**, not generic database filters. The condition field list comes from a canonical registry (`web/lib/lifecycle/workViewConditionFieldRegistry.ts`) — every field declares its subject/entity, value type, **option source**, supported operators, and runtime resolver.
+A Work View's *"Show work when…"* conditions are a real **predicate builder**: `{ match, filters_v1[] }`
+evaluated against queue-row facts. The condition field list comes from a canonical registry
+(`web/lib/lifecycle/workViewConditionFieldRegistry.ts`) — every field declares its subject/entity, value
+type, **option source**, supported operators, and runtime resolver. See
+`docs/sprints/06_2026/work_view_conditions_v3.md`.
 
-- **Status always belongs to a subject.** There is no generic "Status" field. Use **Lead Status** (opportunity case statuses) or **Child Enrollment Status** (OCM/child dispositions) — each pulls from its own status-definition set, never a shared dropdown.
-- **Stages remain process configuration.** **Lead Stage** is a typed condition whose options are the process's **configured lifecycle stages** (not a status set). Stages are not deleted or demoted — Work Views simply reference them through a typed field.
-- **Fields are grouped by operational subject** — *Lead* (Lead Stage, Lead Status, Tour date), *Child* (Child Enrollment Status, Program), *Household* (Campus), *Operational* (Needs Attention, …).
-- **Operator labels vs canonical keys.** Operators see *Lead Stage / Lead Status / Campus*; the canonical stored/runtime keys remain `opportunity_stage` / `opportunity_status` / `site`.
-- **Generic `Stage` / `Status` condition fields are deprecated.** Legacy saved conditions normalize on load — `stage → opportunity_stage`, `status → opportunity_status`, `location → site` — and canonical keys persist on the next save. The runtime evaluator (`evaluateWorkViewFiltersV1.ts`) resolves both canonical and legacy keys identically.
+- **Fields come from config/canonical registries, never hardcoded subsets.** The Enrollment start set:
+  **Stage**, **Lead Status**, **Enrollment Status**, **Campus**, **Program**, **Room**, **Desired
+  Start**, **Needs Attention**, **Current Work** — grouped by subject (*Lead / Child / Household /
+  Operational*).
+- **Stage is process-stage membership.** The process-stage field is labeled **"Stage"** and its options
+  are the process's **configured, active stages** (not a status set). Stages are never deleted or demoted
+  — Work Views reference them through this one typed field.
+- **Status is subject/status-group specific.** No generic "Status". **Lead Status** = opportunity case
+  statuses; **Enrollment Status** = the **full** configured child/OCM enrollment set (`status_definitions`
+  for `opportunity_customer_members`). Each status field declares its entity via `optionSource`, so the
+  two never share a dropdown.
+- **Clean option sources.** **Campus** pulls only real campuses (`locations` where `location_type='site'`)
+  — units/addresses/scaffolding excluded; **Room** pulls `location_type='unit'`.
+- **Multiple conditions combine with AND/OR.** A Work View carries `match: all | any` (`all` = AND,
+  `any` = OR; default AND). *status is X **or** Y* and *school AND room* are both expressible. The runtime
+  evaluator (`evaluateWorkViewFiltersV1.ts`) honors the combinator.
+- **Operator labels vs canonical keys.** Operators see *Stage / Lead Status / Enrollment Status /
+  Campus*; canonical stored/runtime keys remain `opportunity_stage` / `opportunity_status` /
+  `child_enrollment_status` / `site`.
+- **Backward compatible.** Legacy generic conditions normalize on load — `stage → opportunity_stage`,
+  `status → opportunity_status`, `location → site` (plus `enrollment_status → child_enrollment_status`);
+  views with no `match` evaluate as AND; an invalid `match` is never silently reinterpreted. The evaluator
+  resolves canonical and legacy keys identically.
 
 **Outcome picker:** My Tasks **Complete** flow resolves stage outcomes via `GET /api/admin/lifecycle-builder/stage-work-outcomes` — human confirms before side effects.
 

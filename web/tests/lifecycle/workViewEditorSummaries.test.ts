@@ -7,17 +7,18 @@ import {
 } from "@/lib/lifecycle/workViewEditorSummaries";
 
 describe("workViewEditorSummaries", () => {
-    it("formats condition summary with typed field label (legacy stage resolves to Lead Stage)", () => {
+    it("formats condition summary with typed field label (legacy stage resolves to Stage)", () => {
+        // V3: the process-stage field is labeled "Stage" (legacy `stage` key still canonicalizes to it).
         expect(
             formatWorkViewConditionsSummary([
                 { field_key: "stage", operator: "equals", value: "lead" },
             ]),
-        ).toBe("Lead Stage equals Lead");
+        ).toBe("Stage equals Lead");
         expect(
             formatWorkViewConditionsSummary([
                 { field_key: "opportunity_stage", operator: "equals", value: "lead" },
             ]),
-        ).toBe("Lead Stage equals Lead");
+        ).toBe("Stage equals Lead");
     });
 
     it("formats presentation summary with surface defaults", () => {

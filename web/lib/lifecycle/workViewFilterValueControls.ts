@@ -16,6 +16,7 @@ export type WorkViewFilterValueControlKind =
     | "stage_select"
     | "location_select"
     | "program_select"
+    | "room_select"
     | "boolean"
     | "text"
     | "none";
@@ -26,6 +27,7 @@ export const WORK_VIEW_SELECT_CONTROL_KINDS: ReadonlySet<WorkViewFilterValueCont
     "stage_select",
     "location_select",
     "program_select",
+    "room_select",
 ]);
 
 export type WorkViewFilterOption = { value: string; label: string };
@@ -165,6 +167,7 @@ export function defaultFilterValueForField(fieldKey: string, operator: WorkViewF
         case "status_select":
         case "stage_select":
         case "program_select":
+        case "room_select":
             return "";
         default:
             return "";
@@ -260,6 +263,7 @@ export function formatWorkViewFilterValueLabel(
         locationOptions?: readonly WorkViewFilterOption[];
         stageOptions?: readonly WorkViewFilterOption[];
         programOptions?: readonly WorkViewFilterOption[];
+        roomOptions?: readonly WorkViewFilterOption[];
     },
 ): string {
     if (VALUELESS_OPERATORS.has(operator)) return "";
@@ -296,6 +300,10 @@ export function formatWorkViewFilterValueLabel(
     }
     if (kind === "program_select") {
         const match = options?.programOptions?.find((o) => o.value === str);
+        return match?.label ?? str;
+    }
+    if (kind === "room_select") {
+        const match = options?.roomOptions?.find((o) => o.value === str);
         return match?.label ?? str;
     }
     if (kind === "location_select") {

@@ -1,15 +1,22 @@
 /**
- * Work View Conditions V2 — canonical registry of typed operational condition fields.
+ * Work View Conditions V3 — canonical registry of typed operational condition fields.
  *
- * Single source of truth for the Work View "Show work when…" condition builder. Consumed by:
+ * Single source of truth for the Work View "Show work when…" predicate builder. Consumed by:
  *  - the editor field list + grouped dropdown (`WorkViewConditionEditor`)
  *  - the value-control resolver (`workViewFilterValueControls`)
  *  - the runtime evaluator (`evaluateWorkViewFiltersV1`)
  *  - the legacy normalizer (`workViewsConfigV1.parseWorkViewsV1`)
  *
- * Doctrine: Stages remain process configuration. Work View conditions expose typed predicates
- * ("Opportunity Stage", "Opportunity Status", "Child Enrollment Status", …) — never a generic
- * "Stage" / "Status" that shares one status set across unrelated subjects.
+ * Doctrine:
+ *  - **Stages remain process configuration.** The process-stage condition is a single typed field
+ *    ("Stage") whose options are the process's configured lifecycle stages — never a status set, and
+ *    never deleted/demoted.
+ *  - **Status is always subject-specific.** There is no generic "Status". "Lead Status" pulls the
+ *    opportunity case status set; "Enrollment Status" pulls the full configured child/OCM enrollment
+ *    set. Each field declares which status group/entity it uses via `optionSource`.
+ *  - **Option sources are canonical/configured, never hardcoded subsets.** Stages from process
+ *    config, statuses from `status_definitions`, campuses from real `location_type='site'` rows,
+ *    rooms from `location_type='unit'` rows, programs from configured program categories.
  */
 
 import type { WorkViewFilterOperatorV1 } from "@/lib/lifecycle/workViewsConfigV1";
@@ -23,6 +30,7 @@ export type WorkViewConditionValueKind =
     | "status_select"
     | "location_select"
     | "program_select"
+    | "room_select"
     | "boolean"
     | "date_preset"
     | "text"
@@ -33,6 +41,7 @@ export type WorkViewConditionOptionSource =
     | { kind: "process_stages" }
     | { kind: "status_definitions"; entityType: string; statusProfile?: "generic" | "child" }
     | { kind: "locations" }
+    | { kind: "rooms" }
     | { kind: "programs" }
     | { kind: "boolean" }
     | { kind: "date" }
@@ -65,11 +74,16 @@ const DATE_OPERATORS: readonly WorkViewFilterOperatorV1[] = ["equals", "date_is"
 /**
  * Selectable typed fields, in display order. Generic `status` / `stage` / `location` are intentionally
  * absent — they survive only as legacy aliases (see {@link LEGACY_FIELD_KEY_ALIASES}).
+ *
+ * Enrollment "Start with current Enrollment needs" set: Stage, Lead Status, Enrollment Status,
+ * Campus/School, Program, Room, Desired Start, Needs Attention, Current Work.
  */
 export const WORK_VIEW_CONDITION_FIELD_DEFS: readonly WorkViewConditionFieldDef[] = [
     {
+        // The process-stage field. Labeled simply "Stage" — for a given process its options are that
+        // process's configured stages (not an abstract cross-process "Lead Stage").
         key: "opportunity_stage",
-        label: "Lead Stage",
+        label: "Stage",
         group: "lead",
         subject: "opportunity",
         valueKind: "stage_select",
@@ -101,8 +115,11 @@ export const WORK_VIEW_CONDITION_FIELD_DEFS: readonly WorkViewConditionFieldDef[
         runtimeSupported: true,
     },
     {
+        // Child/OCM enrollment disposition. Options are the FULL configured enrollment status set
+        // (`status_definitions` for opportunity_customer_members, org defs unioned with industry
+        // defaults) — never a hardcoded subset.
         key: "child_enrollment_status",
-        label: "Child Enrollment Status",
+        label: "Enrollment Status",
         group: "child",
         subject: "child",
         valueKind: "status_select",
@@ -123,6 +140,30 @@ export const WORK_VIEW_CONDITION_FIELD_DEFS: readonly WorkViewConditionFieldDef[
         runtimeSupported: true,
     },
     {
+        // Classroom/room — `location_type='unit'` rows under a campus.
+        key: "room",
+        label: "Room",
+        group: "child",
+        subject: "child",
+        valueKind: "room_select",
+        optionSource: { kind: "rooms" },
+        operators: SELECT_OPERATORS,
+        runtimeField: "room",
+        runtimeSupported: true,
+    },
+    {
+        key: "desired_start_date",
+        label: "Desired Start",
+        group: "child",
+        subject: "child",
+        valueKind: "date_preset",
+        optionSource: { kind: "date" },
+        operators: DATE_OPERATORS,
+        runtimeField: "desired_start_date",
+        runtimeSupported: true,
+    },
+    {
+        // Campus/School — real `location_type='site'` rows only (no units/program/category scaffolding).
         key: "site",
         label: "Campus",
         group: "household",
@@ -142,6 +183,18 @@ export const WORK_VIEW_CONDITION_FIELD_DEFS: readonly WorkViewConditionFieldDef[
         optionSource: { kind: "boolean" },
         operators: BOOLEAN_OPERATORS,
         runtimeField: "needs_attention",
+        runtimeSupported: true,
+    },
+    {
+        // Whether the record currently has open operational work (work intents / tasks).
+        key: "current_work",
+        label: "Current Work",
+        group: "operational",
+        subject: "record",
+        valueKind: "boolean",
+        optionSource: { kind: "boolean" },
+        operators: BOOLEAN_OPERATORS,
+        runtimeField: "current_work",
         runtimeSupported: true,
     },
     {
@@ -172,11 +225,16 @@ export const WORK_VIEW_CONDITION_FIELD_DEFS: readonly WorkViewConditionFieldDef[
  * Legacy `field_key` → canonical key. Generic `stage`/`status`/`location` predate the typed registry.
  * Unambiguous in this codebase: `status` always meant the opportunity case status, `stage` the process
  * lifecycle stage, `location` the site. Used for both load-time normalization and runtime resolution.
+ *
+ * `child_status` / `enrollment_status` are accepted aliases for the renamed Enrollment Status field so
+ * that intermediate saves never silently reinterpret an ambiguous key.
  */
 export const LEGACY_FIELD_KEY_ALIASES: Readonly<Record<string, string>> = {
     stage: "opportunity_stage",
     status: "opportunity_status",
     location: "site",
+    enrollment_status: "child_enrollment_status",
+    child_status: "child_enrollment_status",
 };
 
 const FIELD_DEF_BY_KEY = new Map<string, WorkViewConditionFieldDef>(

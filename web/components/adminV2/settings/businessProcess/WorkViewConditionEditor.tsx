@@ -32,22 +32,31 @@ const FIELD_GROUPS = workViewConditionFieldGroups();
 export default function WorkViewConditionEditor({
     filters,
     onChange,
+    match = "all",
+    onMatchChange,
 }: {
     filters: WorkViewFilterV1[];
     onChange: (filters: WorkViewFilterV1[]) => void;
+    /** Condition combinator. `all` = AND, `any` = OR. */
+    match?: "all" | "any";
+    onMatchChange?: (match: "all" | "any") => void;
 }) {
     const { stageOptions } = useWorkViewsConfiguration();
     const [opportunityStatusOptions, setOpportunityStatusOptions] = useState<WorkViewFilterOption[]>([]);
     const [childEnrollmentStatusOptions, setChildEnrollmentStatusOptions] = useState<WorkViewFilterOption[]>([]);
     const [siteOptions, setSiteOptions] = useState<WorkViewFilterOption[]>([]);
+    const [roomOptions, setRoomOptions] = useState<WorkViewFilterOption[]>([]);
     const [programOptions, setProgramOptions] = useState<WorkViewFilterOption[]>([]);
 
     const loadOptions = useCallback(async () => {
         try {
-            const [oppRes, childRes, locRes, programRes] = await Promise.all([
+            const [oppRes, childRes, siteRes, roomRes, programRes] = await Promise.all([
                 fetch("/api/admin/status-options?entity_type=opportunities", workspaceDataFetchInit()),
                 fetch("/api/admin/status-options?entity_type=opportunity_customer_members", workspaceDataFetchInit()),
-                fetch("/api/admin/locations", workspaceDataFetchInit()),
+                // Campus options: real campuses only (`location_type=site`) — never units/scaffolding.
+                fetch("/api/admin/locations?location_type=site", workspaceDataFetchInit()),
+                // Room options: classrooms (`location_type=unit`).
+                fetch("/api/admin/locations?location_type=unit", workspaceDataFetchInit()),
                 fetch("/api/admin/location-program-categories", workspaceDataFetchInit()),
             ]);
             if (oppRes.ok) {
@@ -58,9 +67,18 @@ export default function WorkViewConditionEditor({
                 const json = (await childRes.json()) as StatusOptionsResponse;
                 setChildEnrollmentStatusOptions((json.options ?? []).map((o) => ({ value: o.value, label: o.label })));
             }
-            if (locRes.ok) {
-                const json = (await locRes.json()) as LocationsResponse;
+            if (siteRes.ok) {
+                const json = (await siteRes.json()) as LocationsResponse;
                 setSiteOptions(
+                    (json.locations ?? []).map((loc) => ({
+                        value: loc.id,
+                        label: (loc.label ?? loc.name ?? loc.id).trim() || loc.id,
+                    })),
+                );
+            }
+            if (roomRes.ok) {
+                const json = (await roomRes.json()) as LocationsResponse;
+                setRoomOptions(
                     (json.locations ?? []).map((loc) => ({
                         value: loc.id,
                         label: (loc.label ?? loc.name ?? loc.id).trim() || loc.id,
@@ -101,13 +119,15 @@ export default function WorkViewConditionEditor({
                         :   opportunityStatusOptions;
                 case "locations":
                     return siteOptions;
+                case "rooms":
+                    return roomOptions;
                 case "programs":
                     return programOptions;
                 default:
                     return [];
             }
         },
-        [childEnrollmentStatusOptions, opportunityStatusOptions, programOptions, siteOptions, stageOptions],
+        [childEnrollmentStatusOptions, opportunityStatusOptions, programOptions, roomOptions, siteOptions, stageOptions],
     );
 
     const updateRow = (index: number, patch: Partial<WorkViewFilterV1>) => {
@@ -124,7 +144,24 @@ export default function WorkViewConditionEditor({
 
     return (
         <div className="space-y-3" data-testid="work-view-condition-editor">
-            <ConfigRuntimeSectionHeader>{BUSINESS_PROCESS_WORK_VIEW_SHOW_WORK_WHEN}</ConfigRuntimeSectionHeader>
+            <div className="flex items-center justify-between gap-3">
+                <ConfigRuntimeSectionHeader>{BUSINESS_PROCESS_WORK_VIEW_SHOW_WORK_WHEN}</ConfigRuntimeSectionHeader>
+                {filters.length > 1 && onMatchChange ? (
+                    <label className="flex items-center gap-2 text-xs font-medium text-alloy-midnight/55">
+                        <span>Match</span>
+                        <select
+                            value={match}
+                            onChange={(e) => onMatchChange(e.target.value === "any" ? "any" : "all")}
+                            className="config-runtime-select"
+                            data-testid="work-view-condition-match"
+                            aria-label="Match all or any conditions"
+                        >
+                            <option value="all">all (AND)</option>
+                            <option value="any">any (OR)</option>
+                        </select>
+                    </label>
+                ) : null}
+            </div>
             <div className="space-y-2">
                 {filters.map((row, index) => {
                     const operators = operatorLabelsForField(row.field_key);

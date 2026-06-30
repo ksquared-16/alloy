@@ -145,3 +145,99 @@ describe("evaluateWorkViewFiltersV1 — typed V2 condition keys", () => {
         expect(legacy.notes[0]?.field_key).toBe("opportunity_stage");
     });
 });
+
+describe("evaluateWorkViewFiltersV1 — V3 predicate model (AND/OR + new fields)", () => {
+    const south = { id: "o1", status_key: "open", site_id: "South Campus", room_id: "Toddler 1" };
+
+    it("AND (match=all) requires every condition — default behavior", () => {
+        const filters: WorkViewFilterV1[] = [
+            { field_key: "site", operator: "equals", value: "South Campus" },
+            { field_key: "room", operator: "equals", value: "Toddler 1" },
+        ];
+        // Both match → pass (default match=all).
+        expect(evaluateWorkViewFiltersForRow(south, filters).pass).toBe(true);
+        expect(evaluateWorkViewFiltersForRow(south, filters, "all").pass).toBe(true);
+        // One fails → AND fails.
+        expect(
+            evaluateWorkViewFiltersForRow({ ...south, room_id: "Infant 2" }, filters, "all").pass,
+        ).toBe(false);
+    });
+
+    it("OR (match=any) passes when any condition matches — status is X OR status is Y", () => {
+        const filters: WorkViewFilterV1[] = [
+            { field_key: "opportunity_status", operator: "equals", value: "waitlist" },
+            { field_key: "opportunity_status", operator: "equals", value: "open" },
+        ];
+        // Second condition matches → OR passes.
+        expect(evaluateWorkViewFiltersForRow(south, filters, "any").pass).toBe(true);
+        // Neither matches → OR fails.
+        expect(
+            evaluateWorkViewFiltersForRow({ ...south, status_key: "lost" }, filters, "any").pass,
+        ).toBe(false);
+        // Same conditions under AND would fail (a status cannot equal both).
+        expect(evaluateWorkViewFiltersForRow(south, filters, "all").pass).toBe(false);
+    });
+
+    it("filterQueueRowsByWorkViewFilters threads the match combinator", () => {
+        const rows = [
+            { id: "a", status_key: "open" },
+            { id: "b", status_key: "waitlist" },
+            { id: "c", status_key: "lost" },
+        ];
+        const filters: WorkViewFilterV1[] = [
+            { field_key: "opportunity_status", operator: "equals", value: "open" },
+            { field_key: "opportunity_status", operator: "equals", value: "waitlist" },
+        ];
+        expect(filterQueueRowsByWorkViewFilters(rows, filters, "any").map((r) => r.id)).toEqual(["a", "b"]);
+        // AND yields nothing (no row is both open and waitlist).
+        expect(filterQueueRowsByWorkViewFilters(rows, filters, "all")).toHaveLength(0);
+    });
+
+    it("resolves the new room / desired_start_date / current_work fields", () => {
+        expect(
+            evaluateWorkViewFiltersForRow(south, [
+                { field_key: "room", operator: "equals", value: "Toddler 1" },
+            ]).pass,
+        ).toBe(true);
+
+        const startRow = { id: "o2", desired_start_date: "2026-09-01" };
+        expect(
+            evaluateWorkViewFiltersForRow(startRow, [
+                { field_key: "desired_start_date", operator: "date_is", value: "2026-09-01" },
+            ]).pass,
+        ).toBe(true);
+
+        const working = { id: "o3", has_open_work: true };
+        const idle = { id: "o4", open_work_count: 0 };
+        expect(
+            evaluateWorkViewFiltersForRow(working, [
+                { field_key: "current_work", operator: "equals", value: "true" },
+            ]).pass,
+        ).toBe(true);
+        expect(
+            evaluateWorkViewFiltersForRow(idle, [
+                { field_key: "current_work", operator: "equals", value: "true" },
+            ]).pass,
+        ).toBe(false);
+    });
+
+    it("applies mixed predicates under AND — school AND room", () => {
+        // "school is South Campus AND room is Toddler 1"
+        const filters: WorkViewFilterV1[] = [
+            { field_key: "site", operator: "equals", value: "South Campus" },
+            { field_key: "room", operator: "equals", value: "Toddler 1" },
+        ];
+        expect(evaluateWorkViewFiltersForRow(south, filters, "all").pass).toBe(true);
+        expect(
+            evaluateWorkViewFiltersForRow({ ...south, site_id: "North Campus" }, filters, "all").pass,
+        ).toBe(false);
+    });
+
+    it("OR fails open only when no condition is evaluable (all unsupported)", () => {
+        const filters: WorkViewFilterV1[] = [
+            { field_key: "assigned_staff", operator: "equals", value: "user-1" },
+        ];
+        // Unsupported-only → fail-safe pass (mirrors AND fail-open).
+        expect(evaluateWorkViewFiltersForRow(south, filters, "any").pass).toBe(true);
+    });
+});

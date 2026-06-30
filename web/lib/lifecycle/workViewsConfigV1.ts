@@ -34,10 +34,15 @@ export type WorkViewSortV1 = {
     direction: "asc" | "desc";
 };
 
+/** How a Work View's conditions combine. `all` = AND (every condition), `any` = OR (any condition). */
+export type WorkViewFilterMatchV1 = "all" | "any";
+
 export type WorkViewConfigV1Stored = {
     id: string;
     label: string;
     mission?: string;
+    /** Condition combinator. Absent = `all` (AND) — preserves pre-V3 behavior for saved views. */
+    match?: WorkViewFilterMatchV1;
     filters_v1?: WorkViewFilterV1[];
     sort_v1?: WorkViewSortV1;
     /** Optional multi-sort rules; first rule mirrors `sort_v1` for runtime. */
@@ -97,6 +102,10 @@ export function parseWorkViewRow(raw: unknown): WorkViewConfigV1Stored | null {
 
     const stored: WorkViewConfigV1Stored = { id, label };
     if (typeof raw.mission === "string" && raw.mission.trim()) stored.mission = raw.mission.trim();
+    // `match` combinator (V3). Only persist when explicitly `any`; absent/`all` keeps the default AND
+    // so legacy saved views are never silently reinterpreted.
+    if (raw.match === "any") stored.match = "any";
+    else if (raw.match === "all") stored.match = "all";
     if (Array.isArray(raw.filters_v1)) {
         const filters = raw.filters_v1.map(parseFilter).filter(Boolean) as WorkViewFilterV1[];
         if (filters.length) stored.filters_v1 = filters;
@@ -145,6 +154,11 @@ export function normalizeWorkViewsDisplayOrder(rows: readonly WorkViewConfigV1St
 
 export function workViewsV1Equal(a: readonly WorkViewConfigV1Stored[], b: readonly WorkViewConfigV1Stored[]): boolean {
     return JSON.stringify(normalizeWorkViewsDisplayOrder(a)) === JSON.stringify(normalizeWorkViewsDisplayOrder(b));
+}
+
+/** Resolve a view's condition combinator, defaulting to `all` (AND) when unset/invalid. */
+export function resolveWorkViewMatchV1(match: unknown): WorkViewFilterMatchV1 {
+    return match === "any" ? "any" : "all";
 }
 
 export function createEmptyWorkViewDraft(label = "New work view"): WorkViewConfigV1Stored {

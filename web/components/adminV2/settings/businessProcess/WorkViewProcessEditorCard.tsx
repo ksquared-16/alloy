@@ -208,6 +208,8 @@ export default function WorkViewProcessEditorCard({
                     <WorkViewConditionEditor
                         filters={view.filters_v1 ?? []}
                         onChange={(filters_v1) => onChange({ filters_v1 })}
+                        match={view.match ?? "all"}
+                        onMatchChange={(match) => onChange({ match })}
                     />
                 </WorkViewEditorSection>
 

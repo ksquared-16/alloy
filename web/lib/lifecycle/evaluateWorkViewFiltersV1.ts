@@ -64,6 +64,35 @@ function fieldValue(row: Record<string, unknown>, fieldKey: string): string | nu
                 readRowString(row, "_requested_program") ??
                 readRowString(row, "program_id")
             );
+        case "room":
+            return (
+                readRowString(row, "room_id") ??
+                readRowString(row, "room_key") ??
+                readRowString(row, "site_room") ??
+                readRowString(row, "room") ??
+                readRowString(row, "_room")
+            );
+        case "desired_start_date": {
+            const direct =
+                readRowString(row, "desired_start_date") ??
+                readRowString(row, "requested_start_date") ??
+                readRowString(row, "desired_start");
+            if (direct) return direct;
+            const md = row.metadata;
+            if (md && typeof md === "object" && !Array.isArray(md)) {
+                const v = (md as Record<string, unknown>).desired_start_date ?? (md as Record<string, unknown>).desired_start;
+                if (typeof v === "string" && v.trim()) return v.trim();
+            }
+            return null;
+        }
+        case "current_work": {
+            if (row._has_open_work === true || row.has_open_work === true) return "true";
+            const count =
+                (typeof row.open_work_count === "number" ? row.open_work_count : null) ??
+                (typeof row._open_work_count === "number" ? row._open_work_count : null);
+            if (typeof count === "number") return count > 0 ? "true" : "false";
+            return "false";
+        }
         case "needs_attention":
             if (row._needs_attention === true || row.needs_attention === true) return "true";
             if (enrichment.attentionReason) return "true";
@@ -129,7 +158,7 @@ function utcWeekRange(reference: Date, offsetWeeks: number): { start: Date; end:
     return { start, end };
 }
 
-const DATE_FIELD_KEYS = new Set(["tour_date", "updated_at"]);
+const DATE_FIELD_KEYS = new Set(["tour_date", "updated_at", "desired_start_date"]);
 
 function isDateFieldKey(fieldKey: string): boolean {
     return DATE_FIELD_KEYS.has(fieldKey);
@@ -323,13 +352,41 @@ function evaluateOneFilter(
     }
 }
 
-/** All filters must pass (AND). Empty filter list passes all rows. */
+/** How conditions combine: `all` = every condition (AND), `any` = at least one (OR). */
+export type WorkViewFilterMatch = "all" | "any";
+
+/**
+ * Evaluate a row against a Work View's conditions.
+ * - `match = "all"` (default): every condition must pass (AND). Short-circuits on the first failure.
+ * - `match = "any"`: at least one condition must pass (OR). Short-circuits on the first pass.
+ *
+ * Unsupported fields/operators are fail-safe: under AND they pass through (don't exclude the row);
+ * under OR they are skipped (a `supported:false` note never satisfies an OR on its own). Empty filter
+ * list passes all rows. Defaulting to AND preserves pre-V3 behavior for saved views with no `match`.
+ */
 export function evaluateWorkViewFiltersForRow(
     row: Record<string, unknown>,
     filters: readonly WorkViewFilterV1[] | null | undefined,
+    match: WorkViewFilterMatch = "all",
 ): WorkViewFilterEvaluationResult {
     if (!filters?.length) return { pass: true, notes: [] };
     const notes: WorkViewFilterEvaluationNote[] = [];
+
+    if (match === "any") {
+        let anySupported = false;
+        for (const filter of filters) {
+            const result = evaluateOneFilter(row, filter);
+            notes.push(...result.notes);
+            const supported = result.notes.every((n) => n.supported);
+            if (supported) {
+                anySupported = true;
+                if (result.pass) return { pass: true, notes };
+            }
+        }
+        // No supported condition matched. If nothing was evaluable, fail open (pass) like AND does.
+        return { pass: !anySupported, notes };
+    }
+
     for (const filter of filters) {
         const result = evaluateOneFilter(row, filter);
         notes.push(...result.notes);
@@ -341,7 +398,8 @@ export function evaluateWorkViewFiltersForRow(
 export function filterQueueRowsByWorkViewFilters<T extends Record<string, unknown>>(
     rows: readonly T[],
     filters: readonly WorkViewFilterV1[] | null | undefined,
+    match: WorkViewFilterMatch = "all",
 ): T[] {
     if (!filters?.length) return [...rows];
-    return rows.filter((row) => evaluateWorkViewFiltersForRow(row, filters).pass);
+    return rows.filter((row) => evaluateWorkViewFiltersForRow(row, filters, match).pass);
 }

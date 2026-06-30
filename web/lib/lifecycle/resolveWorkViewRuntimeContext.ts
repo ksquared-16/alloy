@@ -6,8 +6,8 @@ import {
     activeLifecycleProcess,
     lifecycleBuilderFromDepartmentMetadata,
 } from "@/lib/lifecycle/lifecycleBuilderConfig";
-import type { WorkViewConfigV1Stored } from "@/lib/lifecycle/workViewsConfigV1";
-import { normalizeWorkViewsDisplayOrder } from "@/lib/lifecycle/workViewsConfigV1";
+import type { WorkViewConfigV1Stored, WorkViewFilterMatchV1 } from "@/lib/lifecycle/workViewsConfigV1";
+import { normalizeWorkViewsDisplayOrder, resolveWorkViewMatchV1 } from "@/lib/lifecycle/workViewsConfigV1";
 
 export type WorkViewRuntimeContext = {
     workView: WorkViewConfigV1Stored | null;
@@ -16,6 +16,8 @@ export type WorkViewRuntimeContext = {
     queueLayoutId: string | null;
     focusPanelLayoutId: string | null;
     filters: WorkViewConfigV1Stored["filters_v1"];
+    /** Condition combinator (AND/OR). Always resolved — defaults to `all` when the view omits it. */
+    match: WorkViewFilterMatchV1;
     sort: WorkViewConfigV1Stored["sort_v1"];
 };
 
@@ -90,6 +92,7 @@ export function resolveActiveWorkViewRuntimeContext(params: {
         queueLayoutId: params.queueLayoutId?.trim() || null,
         focusPanelLayoutId: params.focusLayoutId?.trim() || null,
         filters: undefined,
+        match: "all",
         sort: undefined,
     };
 
@@ -113,6 +116,7 @@ export function resolveActiveWorkViewRuntimeContext(params: {
         queueLayoutId: params.queueLayoutId?.trim() || workView.queue_layout_id?.trim() || null,
         focusPanelLayoutId: params.focusLayoutId?.trim() || workView.focus_panel_layout_id?.trim() || null,
         filters: workView.filters_v1,
+        match: resolveWorkViewMatchV1(workView.match),
         sort: workView.sort_v1,
     };
 }

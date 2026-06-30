@@ -211,6 +211,7 @@ export async function GET(
                 const filtered = filterQueueRowsByWorkViewFilters(
                     result.items as Array<Record<string, unknown>>,
                     ctx.filters,
+                    ctx.match,
                 );
                 responseResult = {
                     ...result,

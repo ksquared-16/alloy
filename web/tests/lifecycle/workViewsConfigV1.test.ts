@@ -3,6 +3,7 @@ import {
     createEmptyWorkViewDraft,
     normalizeWorkViewsDisplayOrder,
     parseWorkViewsV1,
+    resolveWorkViewMatchV1,
     slugifyWorkViewId,
     workViewsV1Equal,
 } from "@/lib/lifecycle/workViewsConfigV1";
@@ -85,5 +86,24 @@ describe("work_views_v1 metadata", () => {
         const b = [createEmptyWorkViewDraft("Same")];
         a[0]!.id = b[0]!.id = "same";
         expect(workViewsV1Equal(a, b)).toBe(true);
+    });
+
+    it("V3 — parses match combinator, defaulting legacy/absent to AND", () => {
+        // Explicit `any` (OR) persists.
+        const orView = parseWorkViewsV1([
+            { id: "or_view", label: "Any", match: "any", filters_v1: [{ field_key: "opportunity_status", operator: "equals", value: "open" }] },
+        ]);
+        expect(orView?.[0]?.match).toBe("any");
+
+        // Legacy view with no `match` loads safely — undefined, resolving to AND.
+        const legacy = parseWorkViewsV1([
+            { id: "legacy", label: "Legacy", filters_v1: [{ field_key: "status", operator: "equals", value: "open" }] },
+        ]);
+        expect(legacy?.[0]?.match).toBeUndefined();
+        expect(resolveWorkViewMatchV1(legacy?.[0]?.match)).toBe("all");
+
+        // Garbage match value is not silently reinterpreted — falls back to AND.
+        expect(resolveWorkViewMatchV1("sometimes")).toBe("all");
+        expect(resolveWorkViewMatchV1("any")).toBe("any");
     });
 });

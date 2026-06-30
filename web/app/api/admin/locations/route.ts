@@ -20,6 +20,12 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const includeInactive = searchParams.get("include_inactive") === "true";
     const hierarchy = searchParams.get("hierarchy") === "1";
+    // Optional `location_type` filter (comma-separated). Lets dropdowns request only real campuses
+    // (`site`) or rooms (`unit`) instead of every location row (addresses/units/scaffolding).
+    const locationTypes = (searchParams.get("location_type") ?? "")
+        .split(",")
+        .map((t) => t.trim())
+        .filter(Boolean);
 
     const supabase = createAdminClient();
     // Select * so environments without optional columns (e.g. status_key) still return rows; map defensively below.
@@ -33,6 +39,12 @@ export async function GET(request: NextRequest) {
     // Treat NULL is_active as active (legacy rows); only exclude explicit false.
     if (!includeInactive) {
         q = q.or("is_active.is.null,is_active.eq.true");
+    }
+
+    if (locationTypes.length === 1) {
+        q = q.eq("location_type", locationTypes[0]);
+    } else if (locationTypes.length > 1) {
+        q = q.in("location_type", locationTypes);
     }
 
     const { data: rows, error } = await q;
