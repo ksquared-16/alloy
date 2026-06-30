@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ConfigScopeSelector, type ScopedLocation } from "@/components/configRuntime/ConfigScopeSelector";
 import { ConfigReadinessCard } from "@/components/configRuntime/ConfigReadinessCard";
-import { OwnershipBadge } from "@/components/configRuntime/OwnershipBadge";
+import OwnershipBadge from "@/components/configRuntime/OwnershipBadge";
 import type { ConfigScope } from "@/lib/configRuntime/scope";
 import {
     type TuitionRateRow,
