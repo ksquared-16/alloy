@@ -97,10 +97,20 @@ export type OperationalTourSignal = {
     statusLabel: string | null;
 };
 
+export type OperationalCommunicationsSignal = {
+    /** Number of outgoing messages scheduled for future delivery. */
+    scheduledSendCount: number;
+    /** ISO timestamp of the next configured follow-up, null when none. */
+    nextFollowUpAt: string | null;
+    /** True when there is any scheduled send or pending follow-up. */
+    hasOutreach: boolean;
+};
+
 export type OperationalContextSignals = {
     work: OperationalWorkSignal;
     attention: OperationalAttentionSignal;
     tour: OperationalTourSignal;
+    communications: OperationalCommunicationsSignal;
 };
 
 export type OperationalContext = {

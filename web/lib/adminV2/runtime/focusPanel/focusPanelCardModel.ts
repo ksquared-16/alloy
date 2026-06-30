@@ -91,6 +91,7 @@ export const FOCUS_PANEL_CARD_KEYS = [
     "automations",
     "primary_next_action",
     "timeline",
+    "billing_preview",
     "notes",
     "audit",
     "workflow_history",

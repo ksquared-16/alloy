@@ -16,6 +16,7 @@ const EMPTY_SIGNALS: OperationalContextSignals = {
     work: { primary: null, items: [], openCount: 0, overdueCount: 0, nextActionLabel: null },
     attention: { needsAttention: false, primaryReason: null, reasonCount: 0 },
     tour: { scheduled: false, startAt: null, statusLabel: null },
+            communications: { scheduledSendCount: 0, nextFollowUpAt: null, hasOutreach: false },
 };
 
 function ctx(truth: Record<string, unknown>): OperationalContext {

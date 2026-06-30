@@ -36,6 +36,7 @@ function ctx(work: Partial<OperationalContextSignals["work"]>): OperationalConte
         },
         attention: { needsAttention: false, primaryReason: null, reasonCount: 0 },
         tour: { scheduled: false, startAt: null, statusLabel: null },
+            communications: { scheduledSendCount: 0, nextFollowUpAt: null, hasOutreach: false },
     };
     return {
         subject: { type: "opportunity", id: "opp-1", label: "Johnson Household" },

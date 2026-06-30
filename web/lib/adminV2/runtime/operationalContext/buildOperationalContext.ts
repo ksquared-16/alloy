@@ -21,6 +21,7 @@ import type { OperationalSubjectViewModel } from "@/lib/adminV2/viewModel/drawer
 import type { StageWorkItemProjection } from "@/lib/lifecycle/stageWorkRuntimeTypes";
 import type { RuntimePerspective } from "@/lib/adminV2/runtime/perspective/deriveRuntimePerspective";
 import type {
+    OperationalCommunicationsSignal,
     OperationalContext,
     OperationalContextSignals,
     OperationalContextStatus,
@@ -171,6 +172,20 @@ function buildOperationalContextSignals(
             startAt: trimOrNull(nextBooking?.start_at),
             statusLabel: trimOrNull(nextBooking?.status_key),
         },
+        communications: buildCommunicationsSignal(subjectVm),
+    };
+}
+
+function buildCommunicationsSignal(
+    subjectVm: OperationalSubjectViewModel,
+): OperationalCommunicationsSignal {
+    const reminders = subjectVm.summaries.reminders;
+    const scheduledSendCount = reminders?.scheduled_send_count ?? 0;
+    const nextFollowUpAt = reminders?.next_follow_up_iso ?? null;
+    return {
+        scheduledSendCount,
+        nextFollowUpAt: trimOrNull(nextFollowUpAt),
+        hasOutreach: scheduledSendCount > 0 || nextFollowUpAt != null,
     };
 }
 

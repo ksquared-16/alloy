@@ -36,6 +36,7 @@ export const SYSTEM5_CARD_FOOTPRINT: Partial<Record<FocusPanelCardKey, FocusPane
     attention: "narrow",
     current_mission: "medium",
     health: "medium",
+    billing_preview: "medium",
 };
 
 export const SYSTEM5_DEFAULT_FOOTPRINT: FocusPanelCardFootprint = "medium";
@@ -81,6 +82,7 @@ export const SYSTEM5_CARD_ICON: Partial<Record<FocusPanelCardKey, string>> = {
     automations: "Zap",
     primary_next_action: "ArrowRight",
     timeline: "Clock",
+    billing_preview: "Receipt",
     notes: "StickyNote",
     audit: "ScrollText",
     workflow_history: "History",

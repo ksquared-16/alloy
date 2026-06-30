@@ -138,7 +138,8 @@ const CAPABILITY_OVERRIDES: Partial<Record<FocusPanelCardKey, Partial<FocusPanel
     readiness_kpi: { supportsExpanded: true, expansionEvidenceGroups: ["blockers"] },
     current_work: { supportsExpanded: true, expansionEvidenceGroups: ["work_items"] },
     tasks: { supportsExpanded: true, expansionEvidenceGroups: ["task_list"] },
-    timeline: { supportsExpanded: true, relatedViews: [{ id: "full_timeline", label: "Full Timeline" }] },
+    timeline: { supportsExpanded: true, expansionEvidenceGroups: ["event_list"], relatedViews: [{ id: "full_timeline", label: "Full Timeline" }] },
+    billing_preview: { supportsExpanded: true, expansionEvidenceGroups: ["billing_readiness"] },
 };
 
 /** The frozen capability matrix — exhaustive across every card key. */
