@@ -84,7 +84,7 @@ export async function POST(request: NextRequest) {
 
     if (result.status === "committed") {
         // Invalidate action resolution cache so queue rows reflect new status
-        revalidateTag(adminActionsOrgTag(ctx.orgId));
+        revalidateTag(adminActionsOrgTag(ctx.orgId), "max");
     }
 
     return NextResponse.json({ ok: result.status === "committed" || result.status === "previewed", result });
