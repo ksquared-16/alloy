@@ -13,6 +13,9 @@ import type { MutationDomain } from "@/lib/mutations/types";
 import { fetchEffectiveStatusDefinitions } from "@/lib/admin/statusDefinitionsResolve";
 import { emitStatusChangedEvent } from "@/lib/admin/emitStatusChangedEvent";
 
+/** Canonical command key for lead status mutations. Import this instead of using the string literal. */
+export const UPDATE_LEAD_STATUS_COMMAND_KEY = "update_lead_status";
+
 export const LEAD_STATUS_DOMAIN: MutationDomain = {
     key: "lead_status",
     label: "Lead Status",

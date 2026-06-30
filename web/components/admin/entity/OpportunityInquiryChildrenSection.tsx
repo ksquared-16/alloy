@@ -75,6 +75,25 @@ import type { StatusMenuItemVm } from "@/lib/adminV2/viewModel/drawer/types";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { ChildEnrollmentStatusPanel } from "@/components/mutations/ChildEnrollmentStatusPanel";
 import type { MutationResult } from "@/lib/mutations/types";
+import { getDomainHandlerForCommand } from "@/lib/mutations/domainRegistry";
+import { UPDATE_CHILD_ENROLLMENT_STATUS_COMMAND_KEY } from "@/lib/mutations/domains/enrollmentStatus";
+
+/**
+ * ROW-LEVEL MUTATION TRIGGER — temporary boundary note.
+ *
+ * The children section renders a per-OCM-row "Update status" mutation trigger.
+ * This bypasses the action placement system because that system is section-scoped
+ * (one fetch per section, entity_type: opportunity), not row-scoped.
+ *
+ * The trigger is gated on getDomainHandlerForCommand() so it disappears if the
+ * command is ever unregistered — it is not permanently hardcoded unconditionally.
+ *
+ * Future: introduce a per-row action resolution system for OCM-grain actions.
+ * When that exists, replace this trigger with a RowActionResolver component that
+ * fetches actions for entity_type: opportunity_customer_member, entity_id: ocm_id.
+ */
+const OCM_MUTATION_COMMAND_REGISTERED =
+    getDomainHandlerForCommand(UPDATE_CHILD_ENROLLMENT_STATUS_COMMAND_KEY) !== null;
 
 /** Literal Tailwind classes (must not be composed at runtime). DOB column compact; Desired Start wider. */
 const INQUIRY_CHILD_DESKTOP_GRID_7 =
@@ -1658,7 +1677,7 @@ export default function OpportunityInquiryChildrenSection({
                                             {rowStatus(r.id)}
                                         </div>
                                     ) : null}
-                                    {r.ocm_id ? (
+                                    {r.ocm_id && OCM_MUTATION_COMMAND_REGISTERED ? (
                                         <button
                                             type="button"
                                             className="mt-1 text-[9px] text-alloy-midnight/50 hover:text-alloy-midnight/80 underline underline-offset-2 transition-colors"
@@ -1709,7 +1728,7 @@ export default function OpportunityInquiryChildrenSection({
                             });
                             window.dispatchEvent(
                                 new CustomEvent("adminv2:opportunity-updated", {
-                                    detail: { id: opportunityId, action_key: "update_child_enrollment_status" },
+                                    detail: { id: opportunityId, action_key: UPDATE_CHILD_ENROLLMENT_STATUS_COMMAND_KEY },
                                 })
                             );
                         }}
