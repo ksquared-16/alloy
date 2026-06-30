@@ -61,10 +61,32 @@ export const ACTION_BUTTON_LIBRARY: ActionRegistryEntry[] = [
         defaultSlot: "row_inline",
     },
     {
-        key: "update_status_add_note",
-        label: "Change Enrollment Status",
+        key: "update_child_enrollment_status",
+        label: "Update Child Enrollment Status",
         category: "status_lifecycle",
         settingsConfigurable: true,
+        description:
+            "Change a child's enrollment status through the Mutation Runtime. Domain-specific: operates on the Child Enrollment grain (opportunity_customer_members.outcome_status_key) only.",
+        defaultSurface: "record_section",
+        defaultSlot: "primary",
+    },
+    {
+        key: "update_lead_status",
+        label: "Update Lead Status",
+        category: "status_lifecycle",
+        settingsConfigurable: true,
+        description:
+            "Change the lead status through the Mutation Runtime. Domain-specific: operates on Lead Status only.",
+        defaultSurface: "record_header",
+        defaultSlot: "primary",
+    },
+    {
+        // Legacy: remains for backward compat with existing action_placements.
+        // Do not create new placements pointing to this key.
+        key: "update_status_add_note",
+        label: "Change Enrollment Status (legacy key)",
+        category: "status_lifecycle",
+        settingsConfigurable: false,
         description:
             "Legacy placement key — routes to Change Enrollment Status (OCM-scoped). Prefer update_enrollment_status for new placements.",
         defaultSurface: "queue_row",

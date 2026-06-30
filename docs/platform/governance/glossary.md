@@ -4,6 +4,23 @@
 
 ---
 
+## Operational Mutation Platform
+
+| Term | Meaning |
+|------|---------|
+| **Operational Decision** | Atomic unit of operator work — always recorded. May or may not produce a mutation. |
+| **DecisionIntent** | Typed input to the Mutation Runtime — command, subject, domain, target state, context payload. |
+| **Mutation Runtime** | Shared four-phase execution engine (Resolve → Evaluate → Preview → Commit) for all operational mutations. |
+| **Mutation Result** | Synchronous output of the runtime — committed \| blocked \| previewed. Drives optimistic UI update. |
+| **Status Domain** | A typed namespace for status values + allowed transition graph. `lead_status`, `enrollment_status`, etc. There is no generic status. |
+| **Outbox** | Atomic write alongside state change; processed async to emit canonical mutation events. |
+| **Canonical Mutation Event** | The single event emitted per committed mutation. All projections subscribe to this. |
+| **Required Information** | Fields owned by a **transition** (not a command) that must be satisfied before commit. |
+| **Readiness** | Subject's operational fitness for a transition — evaluated pre-mutation as a gate and post-mutation to refresh Needs Attention. |
+| **Process Gate** | Cross-domain condition in business process config that blocks or warns on a transition. |
+
+---
+
 ## Platform terms
 
 | Term | Meaning |

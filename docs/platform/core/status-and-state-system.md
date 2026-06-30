@@ -1,6 +1,6 @@
 # Status and state system
 
-**Status:** Canonical (June 2026 freeze).
+**Status:** Canonical (June 2026 freeze). See also: [`operational-mutation-platform.md`](../modules/operational-mutation-platform.md) for mutation runtime doctrine.
 
 How status keys, state transitions, and lifecycle ownership work across grains.
 
@@ -75,17 +75,14 @@ Stages are **not** separate work units in enrollment — they are lanes inside `
 
 ## Transition paths
 
-1. **Change Enrollment Status** — `update_enrollment_status` — OCM-first modal; BP transition rules; preflight (replaces generic update status on enrollment surfaces)
-2. **Admin actions** — `executeAdminAction` with guardrails
-3. **Workflow effects** — event-triggered automation
-4. **Stage outcome rules** — metadata-driven routing after outcome picker
-5. **Direct PATCH** — field-policy bounded; not a substitute for lifecycle actions where catalog exists
+1. **Registered mutation commands** — `DecisionIntent → Execution Runtime → atomic commit + mutation_events outbox` (see [`business-process-execution-platform.md`](../modules/business-process-execution-platform.md))
+2. **Change Enrollment Status** — `update_enrollment_status` — OCM-first modal; BP transition rules; preflight
+3. **Admin actions** — `executeAdminAction` with guardrails
+4. **Workflow effects** — event-triggered automation (origin: `automation`)
+5. **Stage outcome rules** — metadata-driven routing after outcome picker
+6. **Direct PATCH** — field-policy bounded; not a substitute for registered commands where catalog exists
 
-> **Update Status must be domain-aware (next action sprint).** The current registered `update_status`
-> action is hardcoded to Lead Status (`opportunities.status_key`). Under the Status Truth Doctrine it must
-> split into explicit domain actions — `update_lead_status`, `update_child_enrollment_status`,
-> `update_person_status` (one capability per status domain) — so "update status" can never be ambiguous
-> about which subject it mutates. See `../modules/actions-and-workflows.md` § Update Status by domain.
+> **Domain-aware commands shipped (July 2026).** `update_lead_status` (Lead Status domain) and `update_child_enrollment_status` (Child Enrollment Status domain) are now registered in the Execution Runtime. Each operates on exactly one canonical field and never touches another domain's column. See `../modules/business-process-execution-platform.md` § Domain Registry.
 
 ---
 
