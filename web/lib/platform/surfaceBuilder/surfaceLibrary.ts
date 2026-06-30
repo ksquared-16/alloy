@@ -86,6 +86,7 @@ export const SURFACE_LIBRARY: readonly SurfaceLibraryEntry[] = [
         category: "Headers",
         status: "published",
         appearsIn: ["Workspace header"],
+        editor: "workspace-header",
     },
     {
         id: "work-unit-header",
@@ -94,6 +95,7 @@ export const SURFACE_LIBRARY: readonly SurfaceLibraryEntry[] = [
         category: "Headers",
         status: "published",
         appearsIn: ["Work unit header"],
+        editor: "work-unit-header",
     },
     {
         id: "reports",

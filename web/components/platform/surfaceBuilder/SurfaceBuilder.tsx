@@ -20,6 +20,7 @@ import type {
 import {
     emptyDoc,
     getCard,
+    countCards,
     surfaceBuilderReducer,
     type BuilderState,
     type CardPatch,
@@ -112,6 +113,11 @@ export function SurfaceBuilder({ definition }: { definition: SurfaceDefinition }
             .catch(() => setPublishState("error"));
     }, [definition, state.doc]);
 
+    const applyTemplate = useCallback(() => {
+        if (definition.template) dispatch({ type: "replaceDoc", doc: definition.template });
+    }, [definition]);
+    const startBlank = useCallback(() => dispatch({ type: "replaceDoc", doc: emptyDoc(definition.sections) }), [definition]);
+
     const selected = state.selectedInstanceId ? getCard(state.doc, state.selectedInstanceId) : null;
     const pill: "saving" | "error" | "draft" | "published" =
         publishState === "saving" ? "saving" : publishState === "error" ? "error" : state.dirty ? "draft" : "published";
@@ -127,6 +133,7 @@ export function SurfaceBuilder({ definition }: { definition: SurfaceDefinition }
                 pill={pill}
                 canPublish={state.dirty && publishState !== "saving"}
                 onPublish={publish}
+                onResetTemplate={definition.template && countCards(state.doc) > 0 ? applyTemplate : undefined}
             />
             <div className="flex min-h-0 flex-1">
                 {chrome ? (
@@ -159,6 +166,8 @@ export function SurfaceBuilder({ definition }: { definition: SurfaceDefinition }
                     onCancelAddCard={() => setAddCardFor(null)}
                     onConfirmAddCard={confirmAddCard}
                     onRemoveCard={(id) => dispatch({ type: "removeCard", instanceId: id })}
+                    onApplyTemplate={definition.template ? applyTemplate : undefined}
+                    onStartBlank={startBlank}
                     toast={toast}
                 />
 
@@ -184,6 +193,7 @@ function BuilderToolbar({
     pill,
     canPublish,
     onPublish,
+    onResetTemplate,
 }: {
     definition: SurfaceDefinition;
     mode: Mode;
@@ -191,6 +201,7 @@ function BuilderToolbar({
     pill: "saving" | "error" | "draft" | "published";
     canPublish: boolean;
     onPublish: () => void;
+    onResetTemplate?: () => void;
 }): ReactElement {
     const pillText = pill === "saving" ? "Saving…" : pill === "error" ? "Couldn't publish — retry" : pill === "draft" ? "Draft · unpublished changes" : "Published";
     const pillClass =
@@ -223,6 +234,9 @@ function BuilderToolbar({
                         </button>
                     ))}
                 </div>
+                {onResetTemplate ? (
+                    <button type="button" onClick={onResetTemplate} className="rounded-lg border border-alloy-stone/20 px-2.5 py-1.5 text-xs font-semibold text-alloy-midnight/60 hover:bg-alloy-stone/[0.06]">Reset to template</button>
+                ) : null}
                 <span className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${pillClass}`} data-publish-state={pill}>{pillText}</span>
                 {definition.runtimeHref ? (
                     <a href={definition.runtimeHref} className="rounded-lg border border-alloy-stone/20 px-3 py-1.5 text-xs font-semibold text-alloy-midnight/65 hover:bg-alloy-stone/[0.06]">Open runtime →</a>
@@ -327,6 +341,8 @@ function SurfaceCanvas({
     onCancelAddCard,
     onConfirmAddCard,
     onRemoveCard,
+    onApplyTemplate,
+    onStartBlank,
     toast,
 }: {
     definition: SurfaceDefinition;
@@ -340,8 +356,13 @@ function SurfaceCanvas({
     onCancelAddCard: () => void;
     onConfirmAddCard: (sectionId: string, result: AddCardResult) => void;
     onRemoveCard: (id: string) => void;
+    onApplyTemplate?: () => void;
+    onStartBlank?: () => void;
     toast: boolean;
 }): ReactElement {
+    const dense = definition.density === "compact";
+    const gridCols = dense ? "grid-cols-3 md:grid-cols-4 xl:grid-cols-6" : "grid-cols-2 md:grid-cols-3 xl:grid-cols-4";
+    const surfaceEmpty = chrome && countCards(doc) === 0;
     const banner =
         mode === "preview"
             ? { text: "Preview — exactly what operators will see", cls: "bg-alloy-blue/[0.06] text-alloy-blue border-alloy-blue/20" }
@@ -355,7 +376,17 @@ function SurfaceCanvas({
                 <span>●</span> {banner.text}
             </div>
             <div className="min-h-0 flex-1 overflow-y-auto px-6 py-6">
-                {doc.sections.map((section) => (
+                {surfaceEmpty && onApplyTemplate ? (
+                    <div className="mx-auto mt-6 max-w-md rounded-xl border border-dashed border-alloy-stone/25 bg-white p-7 text-center" data-surface-start>
+                        <p className="text-base font-bold text-alloy-midnight">Start your {definition.title}</p>
+                        <p className="mx-auto mt-1 max-w-sm text-xs text-alloy-midnight/55">Begin from the default template, or start blank and build your own. You can remove every card and compose the surface from scratch.</p>
+                        <div className="mt-4 flex justify-center gap-2">
+                            <button type="button" onClick={onApplyTemplate} className="rounded-lg bg-alloy-pine px-3.5 py-2 text-xs font-semibold text-white">Start from template</button>
+                            <button type="button" onClick={onStartBlank} className="rounded-lg border border-alloy-stone/20 px-3.5 py-2 text-xs font-semibold text-alloy-midnight/70">Start blank</button>
+                        </div>
+                    </div>
+                ) : null}
+                {surfaceEmpty && onApplyTemplate ? null : doc.sections.map((section) => (
                     <div key={section.sectionId} className="mb-8">
                         {definition.sections !== "none" ? (
                             <div className="mb-3.5 flex items-baseline gap-2.5">
@@ -382,7 +413,7 @@ function SurfaceCanvas({
                                 onAdd={() => onOpenAddCard(section.sectionId)}
                             />
                         ) : (
-                            <div className="grid auto-rows-fr grid-cols-2 gap-3.5 md:grid-cols-3 xl:grid-cols-4">
+                            <div className={`grid auto-rows-fr gap-3.5 ${gridCols}`}>
                                 {section.cards.map((card) => (
                                     <CanvasCard
                                         key={card.instanceId}
@@ -442,9 +473,11 @@ function CanvasCard({
     const rendered = definition.runtimeRenderer.renderCard(card, {
         contentLabel: definition.contentSource.resolveLabel(card.contentId ?? ""),
     });
-    if (!chrome) return <div className="h-full" data-canvas-card={card.instanceId}>{rendered}</div>;
+    const size = (card.config as Record<string, unknown>)?.size;
+    const sizeClass = size === "wide" ? "md:col-span-2" : size === "tall" ? "row-span-2" : "";
+    if (!chrome) return <div className={`h-full ${sizeClass}`} data-canvas-card={card.instanceId}>{rendered}</div>;
     return (
-        <div className="group relative h-full" data-canvas-card={card.instanceId}>
+        <div className={`group relative h-full ${sizeClass}`} data-canvas-card={card.instanceId}>
             {selected ? (
                 <span className="absolute -top-2 left-2 z-10 rounded bg-alloy-pine px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-white">Selected</span>
             ) : null}

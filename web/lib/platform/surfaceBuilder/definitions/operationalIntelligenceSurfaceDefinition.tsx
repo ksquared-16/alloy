@@ -21,6 +21,7 @@ import type {
     RendererDefinition,
     InspectorSchema,
     SurfaceRuntimeRenderer,
+    SurfaceDoc,
 } from "@/lib/platform/surfaceBuilder/surfaceDefinition";
 
 const BUSINESS_PROCESS_LABEL: Record<OperationalCalculation["businessProcess"], string> = {
@@ -49,14 +50,16 @@ export function operationalIntelligenceContentSource(): ContentSourceProvider {
 }
 
 export const OPERATIONAL_INTELLIGENCE_CARD_TYPES: readonly CardDefinition[] = [
-    { key: "kpi", label: "KPI", icon: "▦", rendererKey: "kpi_card", group: "Measure" },
-    { key: "trend", label: "Trend", icon: "📈", rendererKey: "trend_card", group: "Measure" },
-    { key: "gauge", label: "Gauge", icon: "◔", rendererKey: "gauge", group: "Measure" },
-    { key: "comparison", label: "Comparison", icon: "⇄", rendererKey: "comparison", group: "Measure" },
-    { key: "breakdown", label: "Breakdown", icon: "▥", rendererKey: "bar_chart", group: "Understand" },
-    { key: "table", label: "Table", icon: "≣", rendererKey: "table", group: "Understand" },
-    { key: "health", label: "Health", icon: "✓", rendererKey: "scorecard", group: "Understand" },
-    { key: "affected_work", label: "Affected work", icon: "⚑", rendererKey: "affected_work", group: "Operational" },
+    { key: "kpi", label: "Metric / KPI", icon: "▦", rendererKey: "kpi_card", group: "Measure", description: "A single number with tone" },
+    { key: "trend", label: "Trend", icon: "📈", rendererKey: "trend_card", group: "Measure", description: "Change over time" },
+    { key: "gauge", label: "Gauge", icon: "◑", rendererKey: "gauge", group: "Measure", description: "Progress toward a target" },
+    { key: "comparison", label: "Comparison", icon: "⇄", rendererKey: "comparison", group: "Measure", description: "This period vs prior" },
+    { key: "breakdown", label: "Breakdown", icon: "▥", rendererKey: "bar_chart", group: "Understand", description: "Split by segment" },
+    { key: "table", label: "Table", icon: "≣", rendererKey: "table", group: "Understand", description: "Rows of detail" },
+    { key: "health", label: "Health", icon: "✚", rendererKey: "scorecard", group: "Understand", description: "Composite status read" },
+    { key: "affected_work", label: "Affected work", icon: "❗", rendererKey: "affected_work", group: "Operational", description: "The records behind a number" },
+    { key: "recommendation", label: "Recommendation", icon: "✦", rendererKey: "recommendation", group: "Narrate", description: "Suggested action + impact" },
+    { key: "forecast", label: "Forecast", icon: "⤴", rendererKey: "forecast", group: "Narrate", description: "Current → projected" },
 ];
 
 export const OPERATIONAL_INTELLIGENCE_RENDERERS: readonly RendererDefinition[] = [
@@ -88,6 +91,17 @@ export const OPERATIONAL_INTELLIGENCE_INSPECTOR: InspectorSchema = {
             fields: [
                 { key: "title", label: "Title", kind: "text" },
                 { key: "description", label: "Description", kind: "textarea" },
+                {
+                    key: "size",
+                    label: "Size",
+                    kind: "select",
+                    options: [
+                        { value: "compact", label: "Compact" },
+                        { value: "standard", label: "Standard" },
+                        { value: "wide", label: "Wide" },
+                        { value: "tall", label: "Tall" },
+                    ],
+                },
                 { key: "visibility", label: "Visible on the surface", kind: "toggle" },
             ],
         },
@@ -147,6 +161,8 @@ const CARD_TYPE_DEFAULT_RENDERER: Record<string, string> = {
     table: "table",
     health: "scorecard",
     affected_work: "affected_work",
+    recommendation: "recommendation",
+    forecast: "forecast",
 };
 
 type SampleTone = "healthy" | "warning" | "critical" | "neutral";
@@ -262,6 +278,20 @@ function vividBody(renderer: string, s: Sample, stroke: string, showCompare: boo
                     ))}
                 </div>
             );
+        case "recommendation":
+            return (
+                <div className="space-y-1.5 pt-1">
+                    <p className="text-[12.5px] font-semibold leading-snug text-alloy-midnight">Follow up the 17 stalled tours today</p>
+                    <p className="text-[11px] font-medium" style={{ color: stroke }}>+6 conversions / month projected</p>
+                </div>
+            );
+        case "forecast":
+            return (
+                <div className="flex items-end gap-4 pt-1">
+                    <div><div className="text-[10px] font-semibold uppercase text-alloy-midnight/40">Now</div><ValueEl s={s} /></div>
+                    <div><div className="text-[10px] font-semibold uppercase text-alloy-midnight/40">Projected</div><div className="text-[22px] font-bold" style={{ color: stroke }}>{s.value}↑</div></div>
+                </div>
+            );
         default:
             return (
                 <div className="space-y-1"><ValueEl s={s} /><DeltaEl s={s} showCompare={showCompare} /></div>
@@ -305,10 +335,37 @@ const runtimeRenderer: SurfaceRuntimeRenderer = {
     },
 };
 
+/** Exposed so header surfaces reuse the exact same metric card renderer + content. */
+export { runtimeRenderer as operationalMetricRuntimeRenderer };
+
+const tplKpi = (instanceId: string, contentId: string) => ({ instanceId, cardTypeKey: "kpi", contentId, config: { rendererKey: "kpi_card", visibility: "on" } });
+
+/** Default starter dashboard — powers "Start from template" / "Reset to template". */
+export const OPERATIONAL_INTELLIGENCE_TEMPLATE: SurfaceDoc = {
+    sections: [
+        {
+            sectionId: "overview",
+            title: "Overview",
+            cards: [
+                tplKpi("tpl-lead", "enrollment.lead_count"),
+                { instanceId: "tpl-tour", cardTypeKey: "trend", contentId: "enrollment.tour_conversion_rate", config: { rendererKey: "trend_card", visibility: "on" } },
+                tplKpi("tpl-attn", "ops.needs_attention_count"),
+            ],
+        },
+        {
+            sectionId: "health",
+            title: "Health",
+            cards: [
+                tplKpi("tpl-overdue", "ops.work_overdue_count"),
+                { instanceId: "tpl-delivery", cardTypeKey: "gauge", contentId: "comms.delivery_rate", config: { rendererKey: "gauge", visibility: "on" } },
+            ],
+        },
+    ],
+};
+
 /**
  * Build the Operational Intelligence surface definition. The persistence adapter is
- * injected (the `metric_placements` adapter is wired in the next slice; use the in-memory
- * adapter for preview/tests).
+ * injected (the real `metric_placements` adapter in production; in-memory in tests).
  */
 export function operationalIntelligenceSurfaceDefinition(
     persistence: SurfacePersistenceAdapter,
@@ -326,5 +383,6 @@ export function operationalIntelligenceSurfaceDefinition(
         immediatePersist: true,
         appearsIn: "Workspace → Analytics modal",
         runtimeHref: "/workspace?workspaceModal=analytics",
+        template: OPERATIONAL_INTELLIGENCE_TEMPLATE,
     };
 }

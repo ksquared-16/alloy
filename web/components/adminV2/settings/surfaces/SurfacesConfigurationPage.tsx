@@ -10,6 +10,7 @@ import {
 } from "@/components/adminV2/settings/configurationRuntime/ConfigurationModeLayout";
 import FocusPanelSummarySurfaceEditor from "@/components/adminV2/settings/surfaces/FocusPanelSummarySurfaceEditor";
 import OperationalIntelligenceSurfaceBuilder from "@/components/adminV2/settings/surfaces/OperationalIntelligenceSurfaceBuilder";
+import { WorkspaceHeaderSurfaceBuilder, WorkUnitHeaderSurfaceBuilder } from "@/components/adminV2/settings/surfaces/HeaderSurfaceBuilders";
 import { SurfaceLibrary } from "@/components/platform/surfaceBuilder/SurfaceLibrary";
 import {
     useSurfacesConfigurationSettings,
@@ -27,7 +28,7 @@ function sectionEmptyListCopy(section: SurfaceConfigSectionKey): string {
 }
 
 export default function SurfacesConfigurationPage() {
-    const { section, setSection, selectedId, setSelectedId, sections, listItems, selectedObject } =
+    const { section, setSection, selectedId, setSelectedId, openSurface, sections, listItems, selectedObject } =
         useSurfacesConfigurationSettings();
 
     const editing = Boolean(selectedObject?.editor);
@@ -81,6 +82,10 @@ export default function SurfacesConfigurationPage() {
                         <div className="min-h-0 flex-1">
                             {selectedObject.editor === "operational-intelligence" ? (
                                 <OperationalIntelligenceSurfaceBuilder />
+                            ) : selectedObject.editor === "workspace-header" ? (
+                                <WorkspaceHeaderSurfaceBuilder />
+                            ) : selectedObject.editor === "work-unit-header" ? (
+                                <WorkUnitHeaderSurfaceBuilder />
                             ) : (
                                 <FocusPanelSummarySurfaceEditor />
                             )}
@@ -171,7 +176,7 @@ export default function SurfacesConfigurationPage() {
                     ) : !selectedObject ? (
                         // Surface Library — the command center. Choosing a surface opens the
                         // one platform SurfaceBuilder (a new surface type just appears here).
-                        <SurfaceLibrary onOpen={(id) => setSelectedId(id)} />
+                        <SurfaceLibrary onOpen={openSurface} />
                     ) : (
                         <ConfigurationEmptyState
                             testId="surfaces-workspace-empty"

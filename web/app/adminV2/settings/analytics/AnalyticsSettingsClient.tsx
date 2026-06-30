@@ -20,14 +20,17 @@ import { PlatformBuilderButton } from "@/app/adminV2/settings/analytics/platform
 type TabKey = "calculations" | "displays" | "placements" | "rollups" | "targets" | "visibility";
 
 const TABS: { key: TabKey; label: string; subtitle: string }[] = [
-    { key: "calculations", label: "Calculations", subtitle: "Define what is measured." },
-    { key: "displays", label: "Display styles", subtitle: "Choose how metrics appear." },
-    { key: "placements", label: "Where it appears", subtitle: "Choose where metrics show up." },
-    { key: "rollups", label: "Combined scores", subtitle: "Combine metrics into one health score." },
+    { key: "calculations", label: "Calculations", subtitle: "Define what is measured — the metrics operators place in Surfaces." },
+    { key: "displays", label: "Displays", subtitle: "How a metric renders by default." },
+    { key: "targets", label: "Sources & targets", subtitle: "Where values come from, and the goals they're judged against." },
 ];
 
-/** Legacy V1 surfaces — reachable via the Advanced link / ?tab=, not primary tabs. */
-const LEGACY_TABS: TabKey[] = ["targets", "visibility"];
+/**
+ * Advanced surfaces — out of the primary flow. "Where it appears" (placements) and
+ * "Combined scores" (rollups) belong inside the Surface Builder / platform internals;
+ * Targets/Visibility are legacy V1.
+ */
+const LEGACY_TABS: TabKey[] = ["placements", "rollups", "visibility"];
 
 function tabFromParam(raw: string | null): TabKey {
     if (raw === "displays" || raw === "visualizations") return "displays";
@@ -56,8 +59,8 @@ function AnalyticsSettingsInner() {
     return (
         <div className={SETTINGS_PAGE_SHELL_CLASS} data-adminv2-analytics-settings="true">
             <SettingsPageHeader
-                title="Analytics Configuration"
-                subtitle="Metric definitions, sources, targets, and display — the admin builder behind Analytics. The operator runtime is the Workspace → Operational Intelligence modal; dashboard composition lives in Surfaces."
+                title="Operational Calculations"
+                subtitle="Define the measurements — Lead Count, Tour Conversion, Needs Attention, Revenue. This is where metrics are defined; you place and compose them into experiences in Surfaces, and they render in the runtime."
             />
 
             {canMutate ?
@@ -87,11 +90,15 @@ function AnalyticsSettingsInner() {
             <div className="mt-6 border-t border-alloy-stone/15 pt-3">
                 <details data-analytics-legacy-advanced="true">
                     <summary className="cursor-pointer text-[11px] font-semibold uppercase tracking-wide text-alloy-midnight/45">
-                        Advanced · legacy V1 surfaces
+                        Advanced · platform internals
                     </summary>
+                    <p className="mt-1.5 text-[11px] text-alloy-midnight/45">Placement lives in the Surface Builder now — these are platform internals, not the day-to-day flow.</p>
                     <div className="mt-2 flex flex-wrap gap-2">
-                        <button type="button" onClick={() => setTab("targets")} className={`rounded-lg border px-2.5 py-1 text-xs font-medium ${tab === "targets" ? "border-alloy-juniper/40 bg-alloy-juniper/10 text-alloy-juniper" : "border-alloy-stone/25 text-alloy-midnight/60"}`}>
-                            Targets (legacy)
+                        <button type="button" onClick={() => setTab("placements")} className={`rounded-lg border px-2.5 py-1 text-xs font-medium ${tab === "placements" ? "border-alloy-juniper/40 bg-alloy-juniper/10 text-alloy-juniper" : "border-alloy-stone/25 text-alloy-midnight/60"}`}>
+                            Where it appears (advanced)
+                        </button>
+                        <button type="button" onClick={() => setTab("rollups")} className={`rounded-lg border px-2.5 py-1 text-xs font-medium ${tab === "rollups" ? "border-alloy-juniper/40 bg-alloy-juniper/10 text-alloy-juniper" : "border-alloy-stone/25 text-alloy-midnight/60"}`}>
+                            Combined scores (advanced)
                         </button>
                         <button type="button" onClick={() => setTab("visibility")} className={`rounded-lg border px-2.5 py-1 text-xs font-medium ${tab === "visibility" ? "border-alloy-juniper/40 bg-alloy-juniper/10 text-alloy-juniper" : "border-alloy-stone/25 text-alloy-midnight/60"}`}>
                             Experience placement (legacy V1)
