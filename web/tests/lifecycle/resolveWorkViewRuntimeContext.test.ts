@@ -4,9 +4,11 @@ import {
     findWorkViewById,
     firstVisibleWorkView,
     resolveActiveWorkViewRuntimeContext,
+    resolveWorkViewBaseQueueKey,
     workViewRuntimeUrlParamsFromQueueKey,
 } from "@/lib/lifecycle/resolveWorkViewRuntimeContext";
 import type { WorkViewConfigV1Stored } from "@/lib/lifecycle/workViewsConfigV1";
+import { RAW_ENROLLMENT_PIPELINE_QUEUE_DEFINITION_V2 } from "@/lib/config/enrollmentPipelineQueueDefinitionV2";
 
 const VIEWS: WorkViewConfigV1Stored[] = [
     {
@@ -198,6 +200,103 @@ describe("per-Work-View predicate resolution + count (materialization)", () => {
         // Active Pipeline (tour OR waitlist) → 3 rows; Waitlist → 2 rows. Counts differ.
         expect(filterQueueRowsByWorkViewFilters(rows, active.filters, active.match)).toHaveLength(3);
         expect(filterQueueRowsByWorkViewFilters(rows, waitlist.filters, waitlist.match)).toHaveLength(2);
+    });
+});
+
+// Count/membership consistency — a predicate-only Work View (no compat_queue_key) must resolve the work
+// unit's all-records base queue, not null (which made every such view fetch 0 rows / 0 count).
+describe("resolveWorkViewBaseQueueKey (all-records base for predicate-only views)", () => {
+    it("uses the bound lane when compat_queue_key is set", () => {
+        expect(
+            resolveWorkViewBaseQueueKey({ compat_queue_key: "new_leads" }, null, RAW_ENROLLMENT_PIPELINE_QUEUE_DEFINITION_V2),
+        ).toBe("new_leads");
+    });
+
+    it("uses an explicit URL queue when present and no compat", () => {
+        expect(
+            resolveWorkViewBaseQueueKey({ compat_queue_key: undefined }, "waitlist", RAW_ENROLLMENT_PIPELINE_QUEUE_DEFINITION_V2),
+        ).toBe("waitlist");
+    });
+
+    it("falls back to the all-records queue (pipeline_total) for a predicate-only view", () => {
+        expect(
+            resolveWorkViewBaseQueueKey({ compat_queue_key: undefined }, null, RAW_ENROLLMENT_PIPELINE_QUEUE_DEFINITION_V2),
+        ).toBe("pipeline_total");
+    });
+
+    it("returns null only when there is no lane and no queue definition", () => {
+        expect(resolveWorkViewBaseQueueKey({ compat_queue_key: undefined }, null, null)).toBeNull();
+    });
+});
+
+describe("resolveActiveWorkViewRuntimeContext resolves an all-records base for predicate-only views", () => {
+    const allLeadsMetadata = {
+        lifecycle_builder_v1: {
+            version: 1,
+            active_process_id: "proc-1",
+            processes: [
+                {
+                    id: "proc-1",
+                    key: "enrollment",
+                    name: "Enrollment",
+                    is_active: true,
+                    stages: [],
+                    work_views_v1: [
+                        // "All Leads" — predicate-only (no compat_queue_key), empty filters = include-all.
+                        { id: "all_leads", label: "All Leads", display_order: 1, visible_in_runtime: true },
+                    ],
+                },
+            ],
+        },
+    };
+
+    it("predicate-only `all_leads` resolves queueKey = pipeline_total (not null) when given the queue def", () => {
+        const ctx = resolveActiveWorkViewRuntimeContext({
+            departmentMetadata: allLeadsMetadata,
+            workViewId: "all_leads",
+            queueDefinition: RAW_ENROLLMENT_PIPELINE_QUEUE_DEFINITION_V2,
+        });
+        expect(ctx.workViewId).toBe("all_leads");
+        expect(ctx.queueKey).toBe("pipeline_total");
+        // Empty filters → include-all.
+        expect(ctx.filters ?? []).toHaveLength(0);
+    });
+
+    it("without the queue def, a predicate-only view still resolves null (back-compat — caller must pass it)", () => {
+        const ctx = resolveActiveWorkViewRuntimeContext({
+            departmentMetadata: allLeadsMetadata,
+            workViewId: "all_leads",
+        });
+        expect(ctx.queueKey).toBeNull();
+    });
+});
+
+// The count and the rows must come from the SAME predicate resolver over the SAME base rows.
+describe("Work View count and rows share one predicate resolver", () => {
+    it("one created lead appears in All Leads (empty filter = include-all); count equals rows", async () => {
+        const { filterQueueRowsByWorkViewFilters } = await import(
+            "@/lib/lifecycle/evaluateWorkViewFiltersV1"
+        );
+        // Base = all-records queue rows (e.g. pipeline_total) containing the one created lead.
+        const baseRows = [{ id: "lyons-family", status_key: "new_inquiry" }];
+
+        // All Leads — empty filters → include-all.
+        const allLeadsRows = filterQueueRowsByWorkViewFilters(baseRows, [], "all");
+        expect(allLeadsRows).toHaveLength(1);
+        expect(allLeadsRows.length).toBe(baseRows.length); // count == rows, same resolver
+
+        // New Leads — its own predicate over the SAME base; count == rows for that predicate.
+        const newLeadsFilters = [{ field_key: "opportunity_status", operator: "equals" as const, value: "new_inquiry" }];
+        const newLeadsRows = filterQueueRowsByWorkViewFilters(baseRows, newLeadsFilters, "all");
+        expect(newLeadsRows).toHaveLength(1);
+
+        // A non-matching predicate yields 0 — counts differ when predicates differ.
+        const enrolledRows = filterQueueRowsByWorkViewFilters(
+            baseRows,
+            [{ field_key: "opportunity_status", operator: "equals" as const, value: "enrolled" }],
+            "all",
+        );
+        expect(enrolledRows).toHaveLength(0);
     });
 });
 

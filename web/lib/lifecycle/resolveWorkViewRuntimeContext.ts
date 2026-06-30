@@ -8,6 +8,29 @@ import {
 } from "@/lib/lifecycle/lifecycleBuilderConfig";
 import type { WorkViewConfigV1Stored, WorkViewFilterMatchV1 } from "@/lib/lifecycle/workViewsConfigV1";
 import { normalizeWorkViewsDisplayOrder, resolveWorkViewMatchV1 } from "@/lib/lifecycle/workViewsConfigV1";
+import { tryLoadWorkUnitQueueDefinitionBundle } from "@/lib/config/queueDefinitionV2Runtime";
+import { getQueueUiConfig } from "@/lib/ui-v2/queueUiConfig";
+import { findAllRecordsQueueKey } from "@/lib/workspace/workUnitQueueDerived";
+
+/**
+ * Base queue key a Work View draws rows from: its bound lane (`compat_queue_key`), else an explicit URL
+ * `?queue=`, else the work unit's **all-records** queue (`primary_total_queue` / first lane without
+ * status filters). Predicate-only Work Views (no bound lane) must fall back to all-records so their
+ * predicates filter the full scope instead of resolving to no queue (which returned 0 rows/counts).
+ */
+export function resolveWorkViewBaseQueueKey(
+    workView: Pick<WorkViewConfigV1Stored, "compat_queue_key"> | null | undefined,
+    explicitQueueKey: string | null | undefined,
+    queueDefinition: unknown,
+): string | null {
+    const compat = workView?.compat_queue_key?.trim();
+    if (compat) return compat;
+    const explicit = explicitQueueKey?.trim();
+    if (explicit) return explicit;
+    const bundle = queueDefinition != null ? tryLoadWorkUnitQueueDefinitionBundle(queueDefinition) : null;
+    if (bundle) return findAllRecordsQueueKey(bundle.def, getQueueUiConfig(bundle.def));
+    return null;
+}
 
 export type WorkViewRuntimeContext = {
     workView: WorkViewConfigV1Stored | null;
@@ -83,6 +106,8 @@ export function resolveActiveWorkViewRuntimeContext(params: {
     queueKey?: string | null;
     queueLayoutId?: string | null;
     focusLayoutId?: string | null;
+    /** Host work unit's queue_definition — enables the all-records base-queue fallback. */
+    queueDefinition?: unknown;
 }): WorkViewRuntimeContext {
     const views = savedWorkViewsFromDepartmentMetadata(params.departmentMetadata);
     const empty: WorkViewRuntimeContext = {
@@ -104,10 +129,10 @@ export function resolveActiveWorkViewRuntimeContext(params: {
 
     if (!workView) return empty;
 
-    const queueKey =
-        workView.compat_queue_key?.trim()
-        || params.queueKey?.trim()
-        || null;
+    // Base queue: bound lane, else explicit URL queue, else the work unit's all-records queue. The
+    // all-records fallback is what makes a predicate-only view (e.g. "All Leads") resolve a real base to
+    // filter — previously it resolved to null and the runtime fetched no rows (count/rows = 0).
+    const queueKey = resolveWorkViewBaseQueueKey(workView, params.queueKey, params.queueDefinition);
 
     return {
         workView,

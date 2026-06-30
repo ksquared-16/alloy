@@ -18,6 +18,18 @@ describe("evaluateWorkViewFiltersV1", () => {
         expect(filterQueueRowsByWorkViewFilters([row], undefined)).toEqual([row]);
     });
 
+    it("empty filter Work View evaluates as include-all (All Leads semantics)", () => {
+        const rows = [
+            { id: "a", status_key: "new_inquiry" },
+            { id: "b", status_key: "waitlist" },
+            { id: "c", status_key: "enrolled" },
+        ];
+        // Empty filters — under both AND and OR — must include every base row, not exclude them.
+        expect(filterQueueRowsByWorkViewFilters(rows, [])).toHaveLength(3);
+        expect(filterQueueRowsByWorkViewFilters(rows, [], "all")).toHaveLength(3);
+        expect(filterQueueRowsByWorkViewFilters(rows, [], "any")).toHaveLength(3);
+    });
+
     it("filters by status equals", () => {
         const filters: WorkViewFilterV1[] = [
             { field_key: "status", operator: "equals", value: "new_inquiry" },

@@ -167,7 +167,10 @@ export function createEmptyWorkViewDraft(label = "New work view"): WorkViewConfi
         id: base,
         label,
         mission: "",
-        filters_v1: [{ field_key: "tour_date", operator: "equals", value: "today" }],
+        // No seeded condition — a new Work View is **include-all** by default (empty filters evaluate as
+        // include-all over the work unit's all-records base). The previous `tour_date = today` seed
+        // silently narrowed every new view (e.g. an "All Leads" view) to today's tours → 0 records.
+        filters_v1: [],
         sort_v1: { field_key: "updated_at", direction: "desc" },
         sorts_v1: [{ field_key: "updated_at", direction: "desc" }],
         visible_in_runtime: true,

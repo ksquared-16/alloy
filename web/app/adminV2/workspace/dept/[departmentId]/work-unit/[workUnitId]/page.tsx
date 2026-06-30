@@ -1578,12 +1578,16 @@ export default function AdminV2OpportunityWorkUnitPage() {
             queueKey: loc.queue,
             queueLayoutId: loc.queueLayoutId,
             focusLayoutId: loc.focusLayoutId,
+            // Pass the queue_definition so a predicate-only Work View (no compat_queue_key) resolves the
+            // work unit's all-records base queue instead of null — otherwise no lane is selected and the
+            // queue fetch bails (every such view showed 0 rows / 0 count).
+            queueDefinition: workUnit?.queue_definition,
         });
         if (!ctx.queueKey?.trim()) return;
         if (selectedQueueKeyRef.current?.trim()) return;
         setSelectedQueueKeyTraced("work_view_bootstrap", ctx.queueKey);
         routeQueueSelectionRef.current = workUnitQueueSelectionFromPillKey(workUnitId, ctx.queueKey);
-    }, [dept?.metadata, workUnitId, setSelectedQueueKeyTraced]);
+    }, [dept?.metadata, workUnitId, workUnit?.queue_definition, setSelectedQueueKeyTraced]);
 
     /**
      * Navigation reset + lane URL seed + optional shell cache (PERF-C-01).

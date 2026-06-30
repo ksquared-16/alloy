@@ -88,6 +88,12 @@ describe("work_views_v1 metadata", () => {
         expect(workViewsV1Equal(a, b)).toBe(true);
     });
 
+    it("a new Work View draft is include-all (empty filters) — no stray tour_date=today seed", () => {
+        const draft = createEmptyWorkViewDraft("All Leads");
+        // Previously seeded `tour_date = today`, which silently narrowed an "All Leads" view to 0 records.
+        expect(draft.filters_v1 ?? []).toHaveLength(0);
+    });
+
     it("V3 — parses match combinator, defaulting legacy/absent to AND", () => {
         // Explicit `any` (OR) persists.
         const orView = parseWorkViewsV1([
