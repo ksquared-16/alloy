@@ -4,7 +4,6 @@
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { NEW_LEAD_STATUS_KEY } from "@/lib/admin/actions/createLeadActionConstants";
 import { findOrCreateChildPersonInOrg } from "@/lib/admin/person/findOrCreateChildPersonInOrg";
 import { enrichOcmProgramCategoryFields } from "@/lib/locations/resolveOcmProgramCategoryFields";
 
@@ -106,7 +105,11 @@ export function buildCreateLeadOcmInsertRow(args: {
         org_id: orgId,
         opportunity_id: opportunityId,
         customer_member_id: customerMemberId,
-        outcome_status_key: NEW_LEAD_STATUS_KEY,
+        // No child enrollment disposition at lead creation: the OCM status domain only defines real
+        // enrollment outcomes (waitlisted/enrolling/enrolled/…), none of which a brand-new lead has.
+        // Leave outcome_status_key null so the child badge is suppressed until enrollment starts —
+        // do NOT write `new_inquiry` (which has no OCM definition and humanizes to "New Inquiry").
+        outcome_status_key: null,
         metadata: { source: "create_lead" },
         ...(ocm.location_id ? { location_id: ocm.location_id } : {}),
         ...(ocm.desired_program_type ? { desired_program_type: ocm.desired_program_type } : {}),

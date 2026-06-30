@@ -14,6 +14,7 @@
 
 import { mapRawInquiryChildrenToDrawerRows } from "@/lib/admin/drawer/inquiryChildrenDrawerRows";
 import { humanizeStatusKey } from "@/lib/admin/status/humanizeStatusKey";
+import { canonicalNewLeadStatusLabel } from "@/lib/lifecycle/enrollmentLeadStageStatusAliases";
 import type { OperationalContext } from "@/lib/adminV2/runtime/operationalContext/types";
 
 export type ChildStatusTone = "positive" | "work" | "risk" | "neutral";
@@ -162,9 +163,10 @@ export function buildChildrenCardEvidence(context: OperationalContext): Children
             room,
             schedule,
             startDate,
-            // Prefer the projection's resolved label; if absent, humanize the key rather than
-            // showing a raw status key or UUID-like id as operator copy.
-            status: statusLabel ?? humanizeStatusKey(statusKey),
+            // Prefer the projection's resolved label; else the canonical New Lead label (legacy
+            // new_inquiry renders "New Lead", never "New Inquiry"); else humanize. A null key yields a
+            // null status, so the badge is suppressed for brand-new leads (no enrollment outcome yet).
+            status: statusLabel ?? canonicalNewLeadStatusLabel(statusKey) ?? humanizeStatusKey(statusKey),
             statusTone: statusTone(statusKey),
             needsAttention,
             detailLine,

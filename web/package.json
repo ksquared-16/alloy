@@ -33,6 +33,7 @@
         "dev:seed:enrollment-demo-data": "tsx --tsconfig tsconfig.json scripts/seedEnrollmentPipelineDemoData.ts",
         "dev:seed:placement-priority-demo": "tsx --tsconfig tsconfig.json scripts/seedPlacementPriorityDemoPatch.ts",
         "dev:seed:waitlist-demo": "tsx --tsconfig tsconfig.json scripts/seedWaitlistDemo.ts",
+        "dev:suppress:child-new-inquiry": "tsx --tsconfig tsconfig.json scripts/suppressLegacyChildNewInquiryStatus.ts",
         "dev:clean:waitlist-demo": "tsx --tsconfig tsconfig.json scripts/cleanWaitlistDemo.ts",
         "dev:clean:legacy-waitlist-demo": "tsx --tsconfig tsconfig.json scripts/cleanLegacyWaitlistDemo.ts",
         "dev:backfill:placement-candidates": "tsx --tsconfig tsconfig.json scripts/backfillPlacementCandidatesV1.ts",

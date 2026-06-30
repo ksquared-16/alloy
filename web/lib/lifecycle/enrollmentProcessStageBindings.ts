@@ -14,7 +14,7 @@ export const ENROLLMENT_STAGE_STATUS_KEYS: Record<LifecycleOperatorStage, readon
 };
 
 const STATUS_DISPLAY: Record<string, string> = {
-    new_inquiry: "New Inquiry",
+    new_inquiry: "New Lead",
     open: "Open",
     new: "New",
     contact_attempted: "Contact Attempted",

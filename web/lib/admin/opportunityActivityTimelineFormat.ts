@@ -17,7 +17,8 @@ import { resolveCommunicationMessageEventTitle } from "@/lib/admin/activityMessa
 
 /** Status-key display labels used for enrollment / growth CRM (payload.summary, transitions). */
 export const OPPORTUNITY_ACTIVITY_STATUS_KEY_LABELS: Record<string, string> = {
-    new_inquiry: "New Inquiry",
+    // Product language is Lead, not Inquiry — the legacy `new_inquiry` key displays as "New Lead".
+    new_inquiry: "New Lead",
     contact_attempted: "Contact Attempted",
     tour_scheduled: "Tour Scheduled",
 };

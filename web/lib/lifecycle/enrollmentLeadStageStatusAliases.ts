@@ -33,6 +33,16 @@ export function expandEnrollmentNewLeadsQueueStatusKeys(statusKeys: readonly str
     return [...out];
 }
 
+/**
+ * Canonical operator label for the New Lead status. Covers the legacy `new_inquiry` key (and a
+ * future `new_lead` key) so any lingering New Lead status renders "New Lead" — never "New Inquiry".
+ * Returns null for any other key (caller falls back to the configured label / humanize / suppress).
+ */
+export function canonicalNewLeadStatusLabel(statusKey: string | null | undefined): string | null {
+    const k = normalizeStatusKey(statusKey ?? "");
+    return k === "new_inquiry" || k === "new_lead" ? "New Lead" : null;
+}
+
 export function isEnrollmentNewLeadsQueueKey(queueKey: string): boolean {
     const k = normalizeStatusKey(queueKey);
     if (!k) return false;

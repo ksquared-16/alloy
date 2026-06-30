@@ -17,7 +17,7 @@ export type LifecycleStageWorkspaceAppearance = {
 };
 
 const STATUS_LABELS: Record<string, string> = {
-    new_inquiry: "New Inquiry",
+    new_inquiry: "New Lead",
     open: "Open",
     new: "New",
     contact_attempted: "Contact Attempted",

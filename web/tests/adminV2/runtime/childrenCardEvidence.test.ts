@@ -109,16 +109,31 @@ describe("buildChildrenCardEvidence", () => {
     });
 
     it("humanizes an unlabeled status key instead of showing the raw key", () => {
-        // Org missing a status_definitions label for `new_inquiry` on opportunity_customer_members.
+        // Org missing a status_definitions label for this key on opportunity_customer_members.
         const evidence = buildChildrenCardEvidence(
             ctx({
                 id: "opp-1",
-                _inquiry_children: [{ id: "c1", display_name: "Ada Lovelace", outcome_status_key: "new_inquiry" }],
+                _inquiry_children: [{ id: "c1", display_name: "Ada Lovelace", outcome_status_key: "custom_hold" }],
             }),
         );
         const ada = evidence.children[0]!;
-        expect(ada.status).toBe("New Inquiry");
-        expect(ada.status).not.toBe("new_inquiry");
+        expect(ada.status).toBe("Custom Hold");
+        expect(ada.status).not.toBe("custom_hold");
+    });
+
+    it("suppresses the child status badge for a brand-new lead (no enrollment outcome)", () => {
+        const evidence = buildChildrenCardEvidence(
+            ctx({ id: "opp-1", _inquiry_children: [{ id: "c1", display_name: "Ada", outcome_status_key: null }] }),
+        );
+        expect(evidence.children[0]!.status).toBeNull();
+    });
+
+    it("renders a legacy new_inquiry child row as 'New Lead', never 'New Inquiry'", () => {
+        const evidence = buildChildrenCardEvidence(
+            ctx({ id: "opp-1", _inquiry_children: [{ id: "c1", display_name: "Ada", outcome_status_key: "new_inquiry" }] }),
+        );
+        expect(evidence.children[0]!.status).toBe("New Lead");
+        expect(evidence.children[0]!.status).not.toBe("New Inquiry");
     });
 
     it("prefers the configured label over the key when both are present", () => {
