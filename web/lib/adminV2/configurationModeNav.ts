@@ -17,7 +17,8 @@ export type ConfigurationModeNavIcon =
     | "security"
     | "locations"
     | "communications"
-    | "financials";
+    | "financials"
+    | "commercial";
 
 export type ConfigurationModeNavItem = {
     href: string;
@@ -101,6 +102,13 @@ export const CONFIGURATION_MODE_NAV_GROUPS: readonly ConfigurationModeNavGroup[]
     {
         label: "Business Operations",
         items: [
+            {
+                href: "/admin/commercial",
+                label: "Commercial",
+                description: "Programs offered, tuition rates, and per-location overrides.",
+                icon: "commercial",
+                testId: "config-mode-nav-commercial",
+            },
             {
                 href: settings("financials"),
                 label: "Financials",
