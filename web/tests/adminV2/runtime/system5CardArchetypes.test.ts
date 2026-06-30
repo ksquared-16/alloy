@@ -45,7 +45,7 @@ describe("System 5A Universal Card Archetypes", () => {
         expect(system5ArchetypeForCard("children")).toBe("collection");
         expect(system5ArchetypeForCard("work_launcher")).toBe("launcher");
         expect(system5ArchetypeForCard("timeline")).toBe("timeline");
-        expect(Object.keys(SYSTEM5_CARD_ARCHETYPE)).toHaveLength(20);
+        expect(Object.keys(SYSTEM5_CARD_ARCHETYPE)).toHaveLength(21); // billing_preview added
     });
 
     it("derives action archetype for Why Now with operational insight", () => {
