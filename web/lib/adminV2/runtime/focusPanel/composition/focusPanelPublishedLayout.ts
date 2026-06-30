@@ -146,8 +146,41 @@ export type FocusPanelLayoutCell = {
 /** A row = cells laid left→right, their widths summing toward full (12 units). */
 export type FocusPanelLayoutRow = { cells: FocusPanelLayoutCell[] };
 
-/** The published, operator-authored layout — the runtime source of truth. */
-export type FocusPanelPublishedLayout = { rows: FocusPanelLayoutRow[] };
+/** The grid track count the responsive grid canvas is authored on (12 = fine proportions). */
+export const FOCUS_PANEL_GRID_COLUMNS = 12;
+
+/**
+ * V5 responsive-grid placement. A card occupies a rectangular region of an N-column ×
+ * M-row grid — `colStart`/`rowStart` are 1-based, spans are ≥1. Unlike the row model,
+ * a region can span rows VERTICALLY (e.g. Readiness beside a stack of three cards) and
+ * regions are independent (no row ownership). This is the composition source of truth
+ * when present; the runtime renders it with CSS Grid.
+ */
+export type FocusPanelGridArea = {
+    card: FocusPanelCardKey;
+    colStart: number;
+    colSpan: number;
+    rowStart: number;
+    rowSpan: number;
+    /** Room before expansion (optional; min-height the runtime reserves for the region). */
+    height?: FocusPanelCellHeight;
+};
+
+export type FocusPanelGridLayout = {
+    /** Track count (e.g. 12). Areas place against `repeat(columns, 1fr)`. */
+    columns: number;
+    areas: FocusPanelGridArea[];
+};
+
+/**
+ * The published, operator-authored layout — the runtime source of truth.
+ *
+ * `rows` is the legacy/back-compat representation (and the reading-order fallback used
+ * for responsive collapse). `grid` (V5) is the richer responsive-grid placement; when
+ * present it WINS at runtime. Builders that author a grid also keep `rows` in reading
+ * order so older consumers (`deriveFocusPanelGridFromLayoutDoc`, reading order) still work.
+ */
+export type FocusPanelPublishedLayout = { rows: FocusPanelLayoutRow[]; grid?: FocusPanelGridLayout };
 
 /** A planned cell the renderer paints (width resolved to grid units). */
 export type PublishedLayoutCellPlan = { widthUnits: number; cards: FocusPanelCardKey[]; minHeightPx?: number };
@@ -156,21 +189,32 @@ export type PublishedLayoutRowPlan = { cells: PublishedLayoutCellPlan[] };
 export type PublishedLayoutLaneCard = { key: FocusPanelCardKey; minHeightPx?: number };
 /** A vertical LANE the renderer paints as one continuous column (column-major). */
 export type PublishedLayoutLanePlan = { widthUnits: number; cards: PublishedLayoutLaneCard[] };
+/** A planned grid region the renderer paints with CSS Grid placement (V5). */
+export type PublishedLayoutAreaPlan = {
+    card: FocusPanelCardKey;
+    colStart: number;
+    colSpan: number;
+    rowStart: number;
+    rowSpan: number;
+    minHeightPx?: number;
+};
 export type PublishedLayoutPlan = {
     columnBase: number;
     /** True → single column (surface too narrow); honors reading order. */
     collapsed: boolean;
     /**
      * How the renderer composes the surface:
-     *   - `"lanes"` — column-major continuous lanes that FILL the surface (no short cell
-     *     floating in a tall row, no dead whitespace). Used when the authored layout is
-     *     column-regular (the common case). The runtime owns visual fit; the published
-     *     widths/placement are preserved exactly.
-     *   - `"rows"` — literal row-major rendering. Used for the collapsed single column and
-     *     for irregular layouts (e.g. a full-width banner row over a multi-column row),
-     *     where lanes do not apply.
+     *   - `"grid"` — V5 responsive CSS-Grid placement (regions with vertical/horizontal
+     *     spans). Used when the layout carries a `grid`. The richest model.
+     *   - `"lanes"` — column-major continuous lanes that FILL the surface. Used when the
+     *     authored row layout is column-regular (the common case).
+     *   - `"rows"` — literal row-major rendering (collapsed single column, irregular rows).
      */
-    strategy: "lanes" | "rows";
+    strategy: "grid" | "lanes" | "rows";
+    /** Grid track count, populated when `strategy === "grid"`. */
+    gridColumns: number;
+    /** Populated when `strategy === "grid"` (else empty). */
+    areas: PublishedLayoutAreaPlan[];
     /** Populated when `strategy === "lanes"` (else empty). */
     lanes: PublishedLayoutLanePlan[];
     /** The literal row plan — always populated (the row-major fallback + back-compat). */
@@ -182,25 +226,54 @@ export type PublishedLayoutPlan = {
 // only the subset the builder offers as buttons.)
 const ALL_CARD_WIDTHS = new Set<string>(Object.keys(CELL_WIDTH_UNITS));
 
+/** Validate a value is a well-formed grid layout (defensive for stored docs). */
+export function isFocusPanelGridLayout(value: unknown): value is FocusPanelGridLayout {
+    if (!value || typeof value !== "object") return false;
+    const grid = value as FocusPanelGridLayout;
+    if (typeof grid.columns !== "number" || grid.columns < 1) return false;
+    if (!Array.isArray(grid.areas) || grid.areas.length === 0) return false;
+    return grid.areas.every(
+        (a) =>
+            a &&
+            typeof a.card === "string" &&
+            Number.isInteger(a.colStart) &&
+            a.colStart >= 1 &&
+            Number.isInteger(a.colSpan) &&
+            a.colSpan >= 1 &&
+            a.colStart + a.colSpan - 1 <= grid.columns &&
+            Number.isInteger(a.rowStart) &&
+            a.rowStart >= 1 &&
+            Number.isInteger(a.rowSpan) &&
+            a.rowSpan >= 1,
+    );
+}
+
 /** Validate a value is a well-formed published layout (defensive for stored docs). */
 export function isFocusPanelPublishedLayout(value: unknown): value is FocusPanelPublishedLayout {
     if (!value || typeof value !== "object") return false;
+    // A V5 grid is sufficient on its own; `rows` may be a thin reading-order fallback.
+    const grid = (value as FocusPanelPublishedLayout).grid;
+    if (grid !== undefined && !isFocusPanelGridLayout(grid)) return false;
     const rows = (value as FocusPanelPublishedLayout).rows;
-    if (!Array.isArray(rows) || rows.length === 0) return false;
-    return rows.every(
-        (row) =>
-            row &&
-            Array.isArray(row.cells) &&
-            row.cells.length > 0 &&
-            row.cells.every(
-                (cell) =>
-                    cell &&
-                    ALL_CARD_WIDTHS.has(cell.width) &&
-                    Array.isArray(cell.cards) &&
-                    cell.cards.length > 0 &&
-                    cell.cards.every((c) => typeof c === "string"),
-            ),
-    );
+    const rowsOk =
+        Array.isArray(rows) &&
+        rows.length > 0 &&
+        rows.every(
+            (row) =>
+                row &&
+                Array.isArray(row.cells) &&
+                row.cells.length > 0 &&
+                row.cells.every(
+                    (cell) =>
+                        cell &&
+                        ALL_CARD_WIDTHS.has(cell.width) &&
+                        Array.isArray(cell.cards) &&
+                        cell.cards.length > 0 &&
+                        cell.cards.every((c) => typeof c === "string"),
+                ),
+        );
+    // Valid when EITHER a grid is present (rows optional) OR the rows model is well-formed.
+    return isFocusPanelGridLayout(grid) || rowsOk;
 }
 
 /** LayoutDoc metadata key carrying the operator-published explicit layout. */
@@ -214,8 +287,17 @@ export function readFocusPanelPublishedLayout(
     return isFocusPanelPublishedLayout(raw) ? raw : null;
 }
 
-/** Reading order = rows top→bottom, cells left→right, stacked cards top→bottom. */
+/** Areas top→bottom, then left→right — the grid's natural reading order. */
+export function gridAreasInReadingOrder(grid: FocusPanelGridLayout): FocusPanelGridArea[] {
+    return [...grid.areas].sort((a, b) => a.rowStart - b.rowStart || a.colStart - b.colStart);
+}
+
+/**
+ * Reading order = grid areas top→bottom/left→right when a grid is present, else rows
+ * top→bottom, cells left→right, stacked cards top→bottom. Drives responsive collapse.
+ */
 export function publishedLayoutReadingOrder(layout: FocusPanelPublishedLayout): FocusPanelCardKey[] {
+    if (layout.grid) return gridAreasInReadingOrder(layout.grid).map((a) => a.card);
     return layout.rows.flatMap((row) => row.cells.flatMap((cell) => cell.cards));
 }
 
@@ -300,6 +382,8 @@ export function planPublishedLayout(
             columnBase: PUBLISHED_LAYOUT_COLUMN_BASE,
             collapsed: true,
             strategy: "rows",
+            gridColumns: PUBLISHED_LAYOUT_COLUMN_BASE,
+            areas: [],
             lanes: [],
             rows: publishedLayoutReadingOrder(layout).map((card) => ({
                 cells: [{ widthUnits: PUBLISHED_LAYOUT_COLUMN_BASE, cards: [card] }],
@@ -309,6 +393,28 @@ export function planPublishedLayout(
 
     // The literal row plan is always available (back-compat + the row-major fallback).
     const rows = planPublishedRows(layout);
+
+    // V5 responsive grid is the richest model (vertical/horizontal spans, independent
+    // regions). When present it wins — the runtime paints each area with CSS Grid.
+    if (layout.grid) {
+        const areas: PublishedLayoutAreaPlan[] = layout.grid.areas.map((a) => ({
+            card: a.card,
+            colStart: a.colStart,
+            colSpan: a.colSpan,
+            rowStart: a.rowStart,
+            rowSpan: a.rowSpan,
+            minHeightPx: a.height ? CELL_HEIGHT_PX[a.height] : undefined,
+        }));
+        return {
+            columnBase: PUBLISHED_LAYOUT_COLUMN_BASE,
+            collapsed: false,
+            strategy: "grid",
+            gridColumns: layout.grid.columns,
+            areas,
+            lanes: [],
+            rows,
+        };
+    }
 
     // Column-major lanes when the grid is column-regular: transpose rows→lanes so each
     // column flows as one continuous lane filling its proportional width. A cell's
@@ -324,8 +430,8 @@ export function planPublishedLayout(
                 return cell.cards.map((key, i) => ({ key, minHeightPx: i === 0 ? minHeightPx : undefined }));
             }),
         }));
-        return { columnBase: PUBLISHED_LAYOUT_COLUMN_BASE, collapsed: false, strategy: "lanes", lanes, rows };
+        return { columnBase: PUBLISHED_LAYOUT_COLUMN_BASE, collapsed: false, strategy: "lanes", gridColumns: PUBLISHED_LAYOUT_COLUMN_BASE, areas: [], lanes, rows };
     }
 
-    return { columnBase: PUBLISHED_LAYOUT_COLUMN_BASE, collapsed: false, strategy: "rows", lanes: [], rows };
+    return { columnBase: PUBLISHED_LAYOUT_COLUMN_BASE, collapsed: false, strategy: "rows", gridColumns: PUBLISHED_LAYOUT_COLUMN_BASE, areas: [], lanes: [], rows };
 }

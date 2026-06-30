@@ -230,7 +230,32 @@ export default function FocusPanelCardGrid({
                 style={{ ["--alloy-os-fp-units" as string]: publishedPlan.columnBase }}
             >
                 {scrim}
-                {publishedPlan.strategy === "lanes" ? (
+                {publishedPlan.strategy === "grid" ? (
+                    // V5 responsive CSS Grid: each region places at colStart/rowStart and
+                    // spans columns/rows (vertical + horizontal spans, independent regions).
+                    <div
+                        className="alloy-os-fp-canvas alloy-os-fp-canvas--grid"
+                        data-fp-strategy="published-grid"
+                        style={{ ["--fp-grid-cols" as string]: publishedPlan.gridColumns }}
+                    >
+                        {publishedPlan.areas.map((area) => (
+                            <div
+                                key={area.card}
+                                className="alloy-os-fp-grid-area"
+                                data-fp-grid-area={area.card}
+                                data-fp-grid-col={`${area.colStart}/${area.colSpan}`}
+                                data-fp-grid-row={`${area.rowStart}/${area.rowSpan}`}
+                                style={{
+                                    gridColumn: `${area.colStart} / span ${area.colSpan}`,
+                                    gridRow: `${area.rowStart} / span ${area.rowSpan}`,
+                                    minHeight: area.minHeightPx ? `${area.minHeightPx}px` : undefined,
+                                }}
+                            >
+                                {renderCellBox(area.card, { dataWidthUnits: area.colSpan })}
+                            </div>
+                        ))}
+                    </div>
+                ) : publishedPlan.strategy === "lanes" ? (
                     // Column-major: each authored column flows as one continuous lane that
                     // fills its proportional width — the surface composes with no dead space
                     // (same lane mechanism as the auto-composition default).
