@@ -23,7 +23,8 @@ export type SurfaceEditorKind =
     | "focus-panel-summary"
     | "operational-intelligence"
     | "workspace-header"
-    | "work-unit-header";
+    | "work-unit-header"
+    | "queue-row-builder";
 
 export type SurfaceConfigObject = {
     id: string;
@@ -59,7 +60,20 @@ export const SURFACE_OBJECTS: Record<SurfaceConfigSectionKey, SurfaceConfigObjec
             editor: "focus-panel-summary",
         },
     ],
-    "queue-rows": [],
+    "queue-rows": [
+        {
+            id: "pipeline-queue-row",
+            title: "Pipeline Queue Row",
+            subtitle: "Opportunity pipeline work-unit row",
+            editor: "queue-row-builder",
+        },
+        {
+            id: "waitlist-queue-row",
+            title: "Waitlist Queue Row",
+            subtitle: "Placement candidate waitlist row",
+            editor: "queue-row-builder",
+        },
+    ],
     workspaces: [],
     // Header surfaces — the metric strip atop the workspace and each work unit.
     // Same SurfaceBuilder, compact density. Preview persistence for now.
