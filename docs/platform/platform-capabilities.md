@@ -163,9 +163,12 @@ the readiness gate and Definition of Done. Designing them API-first is the expec
   (it reimplements no pricing). Domains: Agreement, Schedule, Attendance.
 - **API-first expectation:** **yes** — exposed today via `POST /api/admin/financial/consumption/simulate`
   (`preview | draft`), which returns the full reasoning chain (candidate → event → commercial objects
-  → policies → obligations → draft charges).
+  → policies → obligations → draft charges); and the **Draft Obligation Review** surface
+  `GET/POST /api/admin/financial/consumption/obligations` (list/detail + review actions: mark reviewed,
+  flag, suppress, restore, recompute) — the pre-posting review of Resolved Obligations.
 - **Notes:** **posts nothing** — Posting/Invoicing/Payments/GL are downstream consumers. Idempotent by
-  resolution key; duplicate facts never duplicate obligations. Doctrine:
+  resolution key; duplicate facts never duplicate obligations. Review is pre-posting (suppression/recompute
+  write only review state; recompute replays in preview). Doctrine:
   [`./modules/operational-consumption-platform.md`](./modules/operational-consumption-platform.md).
 
 ### Processing

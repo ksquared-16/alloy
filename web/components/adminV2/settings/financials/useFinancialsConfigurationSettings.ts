@@ -24,7 +24,8 @@ export type FinancialsConfigSection =
     | "financial_responsibility"
     | "subsidy"
     | "charge_preview"
-    | "consumption";
+    | "consumption"
+    | "obligations";
 
 export type FinancialsConfigSectionDef = { key: FinancialsConfigSection; label: string };
 export type FinancialsConfigGroup = { label: string; sections: FinancialsConfigSectionDef[] };
@@ -64,7 +65,14 @@ export const FINANCIALS_CONFIG_GROUPS: FinancialsConfigGroup[] = [
     { label: "Tools", sections: [{ key: "charge_preview", label: "Charge Preview" }] },
     // Runtime interpretation (NOT configuration): Operational Consumption turns an
     // operational fact into a Consumption Event -> Resolved Obligation -> draft Charge.
-    { label: "Runtime", sections: [{ key: "consumption", label: "Consumption" }] },
+    // "Obligations" is the pre-posting review queue over resolved_obligations.
+    {
+        label: "Runtime",
+        sections: [
+            { key: "consumption", label: "Consumption" },
+            { key: "obligations", label: "Draft Obligations" },
+        ],
+    },
 ];
 
 export const FINANCIALS_CONFIG_SECTIONS: FinancialsConfigSectionDef[] = FINANCIALS_CONFIG_GROUPS.flatMap(
