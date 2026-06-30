@@ -19,6 +19,7 @@ type Props = {
     direction?: MetricTrendDirection;
     question?: string | null;
     density?: MetricCardDensity;
+    showHealthChip?: boolean;
     footer?: ReactNode;
 };
 
@@ -46,6 +47,7 @@ export function MetricTrendCard({
     direction,
     question,
     density = "standard",
+    showHealthChip,
     footer,
 }: Props) {
     const computedDirection = direction ?? deriveTrendDirection(sparklinePoints);
@@ -64,6 +66,7 @@ export function MetricTrendCard({
             accent={accent}
             fill={fill}
             density={density}
+            showHealthChip={showHealthChip}
             footer={footer}
         >
             <div className="flex items-baseline gap-1.5">

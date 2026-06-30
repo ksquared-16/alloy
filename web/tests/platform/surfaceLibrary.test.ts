@@ -18,9 +18,14 @@ describe("Surface Library — the command center registry", () => {
         expect(oi?.category).toBe("Dashboards & analytics");
     });
 
-    it("authorable surfaces are exactly those with a builder editor (Focus Panel + Operational Intelligence)", () => {
+    it("authorable surfaces are exactly those with a builder editor (Focus Panel, OI, both headers)", () => {
         const editors = authorableSurfaces().map((s) => s.editor).sort();
-        expect(editors).toEqual(["focus-panel-summary", "operational-intelligence"]);
+        expect(editors).toEqual([
+            "focus-panel-summary",
+            "operational-intelligence",
+            "work-unit-header",
+            "workspace-header",
+        ]);
     });
 
     it("planned surfaces carry no editor (appear in the library, open later)", () => {

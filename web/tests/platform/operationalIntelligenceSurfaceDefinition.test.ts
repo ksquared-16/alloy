@@ -6,9 +6,38 @@ import {
     OPERATIONAL_INTELLIGENCE_CARD_TYPES,
     OPERATIONAL_INTELLIGENCE_INSPECTOR,
 } from "@/lib/platform/surfaceBuilder/definitions/operationalIntelligenceSurfaceDefinition";
+import { workspaceHeaderSurfaceDefinition } from "@/lib/platform/surfaceBuilder/definitions/headerSurfaceDefinitions";
 import { createMemoryPersistence } from "@/lib/platform/surfaceBuilder/memoryPersistence";
 import { emptyDoc } from "@/lib/platform/surfaceBuilder/surfaceBuilderModel";
 import { listOperationalCalculations } from "@/lib/analytics/calculations/registry";
+
+describe("Surface controls own display + header proportions", () => {
+    it("the OI inspector exposes an accent color control (Surfaces owns color)", () => {
+        const renderer = OPERATIONAL_INTELLIGENCE_INSPECTOR.tabs.find((t) => t.key === "renderer")!;
+        const accent = renderer.fields.find((f) => f.key === "accent");
+        expect(accent?.kind).toBe("select");
+        expect(accent?.options?.map((o) => o.value)).toEqual(
+            expect.arrayContaining(["auto", "juniper", "amber", "ember", "blue", "neutral"]),
+        );
+    });
+
+    it("header surfaces are compact KPI/Trend tiles — no Placement, no Size, with accent + health-chip controls", () => {
+        const def = workspaceHeaderSurfaceDefinition(createMemoryPersistence(emptyDoc("none")));
+        expect(def.sections).toBe("none");
+        expect(def.density).toBe("compact");
+        // Only real header renderers are offered (no Breakdown/Table/Gauge that don't fit a strip).
+        expect(def.cardTypes.map((c) => c.key)).toEqual(["kpi", "trend"]);
+        expect(def.renderers.map((r) => r.key)).toEqual(["kpi_card", "trend_card"]);
+        const tabKeys = def.inspectorSchema.tabs.map((t) => t.key);
+        expect(tabKeys).not.toContain("placement");
+        const cardFields = def.inspectorSchema.tabs.find((t) => t.key === "card")!.fields.map((f) => f.key);
+        expect(cardFields).not.toContain("size");
+        const displayFields = def.inspectorSchema.tabs.find((t) => t.key === "display")!.fields.map((f) => f.key);
+        expect(displayFields).toEqual(["rendererKey", "accent"]);
+        const behaviorFields = def.inspectorSchema.tabs.find((t) => t.key === "behavior")!.fields.map((f) => f.key);
+        expect(behaviorFields).toContain("showHealthChip");
+    });
+});
 
 describe("Operational Intelligence — a Surface Definition, not a builder", () => {
     it("content comes from the Operational Calculations registry (question-led, grouped, no impl terms)", () => {

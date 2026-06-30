@@ -60,6 +60,8 @@ export type CardDefinition = {
     rendererKey: string;
     /** Optional grouping for the component library ("Measure", "Understand", …). */
     group?: string;
+    /** One-line plain-language description shown in the Add Card picker. */
+    description?: string;
 };
 
 /** A renderer choice for a card (the runtime owns actual rendering; this is picker metadata). */
@@ -106,6 +108,8 @@ export type InspectorField = {
     kind: InspectorFieldKind;
     options?: readonly { value: string; label: string }[];
     help?: string;
+    /** Default state for a `toggle` field when the card has no explicit value. */
+    defaultOn?: boolean;
 };
 
 export type InspectorTab = { key: string; label: string; fields: readonly InspectorField[] };
@@ -117,6 +121,10 @@ export type InspectorSchema = { tabs: readonly InspectorTab[] };
 export type SurfaceRenderContext = {
     /** Resolved content label for the instance, for preview chrome. */
     contentLabel: string;
+    /** Compact surfaces (headers) render a denser card. */
+    density?: "compact" | "comfortable";
+    /** Card size (compact / standard / wide / tall) for size-aware rendering. */
+    size?: string;
 };
 
 export type SurfaceRuntimeRenderer = {
@@ -155,4 +163,8 @@ export type SurfaceDefinition = {
     appearsIn?: string;
     /** Link to the published live surface (the builder's "Open runtime"). */
     runtimeHref?: string;
+    /** Compact surfaces (headers) render a denser canvas preview. */
+    density?: "compact" | "comfortable";
+    /** Default starter content — powers "Start from template" / "Reset to template". */
+    template?: SurfaceDoc;
 };

@@ -99,7 +99,7 @@ export const CONFIGURATION_MODE_NAV_GROUPS: readonly ConfigurationModeNavGroup[]
         ],
     },
     {
-        label: "Financials",
+        label: "Business Operations",
         items: [
             {
                 href: settings("financials"),
@@ -108,14 +108,10 @@ export const CONFIGURATION_MODE_NAV_GROUPS: readonly ConfigurationModeNavGroup[]
                 icon: "financials",
                 testId: "config-mode-nav-financials",
             },
-        ],
-    },
-    {
-        items: [
             {
-                href: settings("analytics"),
-                label: "Operational Intelligence",
-                description: "Metrics, targets, and where indicators appear.",
+                href: settings("calculations"),
+                label: "Operational Calculations",
+                description: "Metrics, formulas, targets, and sources.",
                 icon: "analytics",
                 testId: "config-mode-nav-analytics",
             },

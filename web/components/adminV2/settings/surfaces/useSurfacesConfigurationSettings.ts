@@ -11,7 +11,7 @@ import { useCallback, useMemo, useState } from "react";
  * other categories are catalogued but not yet authorable.
  */
 
-export type SurfaceConfigSectionKey = "focus-panels" | "queue-rows" | "workspaces" | "dashboards";
+export type SurfaceConfigSectionKey = "focus-panels" | "queue-rows" | "workspaces" | "headers" | "dashboards";
 
 export type SurfaceConfigSection = {
     key: SurfaceConfigSectionKey;
@@ -19,7 +19,11 @@ export type SurfaceConfigSection = {
 };
 
 /** Editor kinds the workspace knows how to render. */
-export type SurfaceEditorKind = "focus-panel-summary" | "operational-intelligence";
+export type SurfaceEditorKind =
+    | "focus-panel-summary"
+    | "operational-intelligence"
+    | "workspace-header"
+    | "work-unit-header";
 
 export type SurfaceConfigObject = {
     id: string;
@@ -42,6 +46,7 @@ export const SURFACE_CONFIG_SECTIONS: readonly SurfaceConfigSection[] = [
     { key: "focus-panels", label: "Focus Panels" },
     { key: "queue-rows", label: "Queue Rows" },
     { key: "workspaces", label: "Workspaces" },
+    { key: "headers", label: "Headers" },
     { key: "dashboards", label: "Dashboards & Analytics" },
 ];
 
@@ -56,6 +61,24 @@ export const SURFACE_OBJECTS: Record<SurfaceConfigSectionKey, SurfaceConfigObjec
     ],
     "queue-rows": [],
     workspaces: [],
+    // Header surfaces — the metric strip atop the workspace and each work unit.
+    // Same SurfaceBuilder, compact density. Preview persistence for now.
+    headers: [
+        {
+            id: "workspace-header",
+            title: "Workspace Header",
+            subtitle: "Metrics atop /workspace",
+            editor: "workspace-header",
+            liveHref: "/workspace",
+        },
+        {
+            id: "work-unit-header",
+            title: "Work Unit Header",
+            subtitle: "Metrics atop a work unit",
+            editor: "work-unit-header",
+            liveHref: "/workspace",
+        },
+    ],
     // Dashboard / Analytics Design Surfaces. Catalogued from the Analytics OIP
     // surface inventory; composition is previewable (dev) ahead of an in-place
     // editor. Each reuses the Metric archetype + shared Renderer catalog — there
@@ -96,6 +119,13 @@ export const SURFACE_OBJECTS: Record<SurfaceConfigSectionKey, SurfaceConfigObjec
     ],
 };
 
+/** Section that owns a given surface id (for global resolution from the Surface Library). */
+const SECTION_BY_OBJECT_ID: Record<string, SurfaceConfigSectionKey> = Object.fromEntries(
+    (Object.entries(SURFACE_OBJECTS) as [SurfaceConfigSectionKey, SurfaceConfigObject[]][]).flatMap(([key, objs]) =>
+        objs.map((o) => [o.id, key] as const),
+    ),
+);
+
 export function useSurfacesConfigurationSettings() {
     const [section, setSectionState] = useState<SurfaceConfigSectionKey>("focus-panels");
     // Start unselected so the Configuration shell (Context → Section → Workspace)
@@ -110,16 +140,30 @@ export function useSurfacesConfigurationSettings() {
         setSelectedId(null);
     }, []);
 
-    const selectedObject = useMemo(
-        () => listItems.find((item) => item.id === selectedId) ?? null,
-        [listItems, selectedId],
-    );
+    /** Open a surface by id from anywhere (e.g. the Surface Library) — switches section too. */
+    const openSurface = useCallback((id: string) => {
+        const owner = SECTION_BY_OBJECT_ID[id];
+        if (owner) setSectionState(owner);
+        setSelectedId(id);
+    }, []);
+
+    // Resolve the selected object GLOBALLY (not just within the active section), so a
+    // surface opened from the Library always mounts its editor.
+    const selectedObject = useMemo(() => {
+        if (!selectedId) return null;
+        for (const objs of Object.values(SURFACE_OBJECTS)) {
+            const found = objs.find((item) => item.id === selectedId);
+            if (found) return found;
+        }
+        return null;
+    }, [selectedId]);
 
     return {
         section,
         setSection,
         selectedId,
         setSelectedId,
+        openSurface,
         sections: SURFACE_CONFIG_SECTIONS,
         listItems,
         selectedObject,

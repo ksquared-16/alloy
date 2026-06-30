@@ -6,7 +6,7 @@
  * the SurfaceDefinition (card types, content source, renderers, runtime preview).
  */
 
-import { useMemo, useState, type ReactElement } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactElement } from "react";
 
 import type { SurfaceDefinition } from "@/lib/platform/surfaceBuilder/surfaceDefinition";
 
@@ -32,6 +32,26 @@ export function AddCardPopover({
 
     const cardType = definition.cardTypes.find((c) => c.key === cardTypeKey) ?? null;
 
+    // Close on Escape or a click outside the popover.
+    const rootRef = useRef<HTMLDivElement>(null);
+    useEffect(() => {
+        const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onCancel(); };
+        const onDown = (e: MouseEvent) => { if (rootRef.current && !rootRef.current.contains(e.target as Node)) onCancel(); };
+        document.addEventListener("keydown", onKey);
+        document.addEventListener("mousedown", onDown);
+        return () => { document.removeEventListener("keydown", onKey); document.removeEventListener("mousedown", onDown); };
+    }, [onCancel]);
+
+    // Card types grouped for the picker ("Measure" / "Understand" / …).
+    const cardTypeGroups = useMemo(() => {
+        const groups = new Map<string, typeof definition.cardTypes>();
+        for (const ct of definition.cardTypes) {
+            const g = ct.group ?? "Cards";
+            groups.set(g, [...(groups.get(g) ?? []), ct]);
+        }
+        return [...groups.entries()];
+    }, [definition]);
+
     const groupedContent = useMemo(() => {
         const q = query.trim().toLowerCase();
         const items = definition.contentSource.list().filter((c) =>
@@ -45,35 +65,48 @@ export function AddCardPopover({
     const dot = (on: boolean) => `h-1.5 w-1.5 rounded-full ${on ? "bg-alloy-pine" : "bg-alloy-stone/30"}`;
 
     return (
-        <div className="overflow-hidden rounded-xl border border-alloy-stone/20 bg-white shadow-[0_12px_32px_rgba(15,23,42,0.12)]" data-add-card-popover>
+        <div ref={rootRef} className="overflow-hidden rounded-xl border border-alloy-stone/20 bg-white shadow-[0_12px_32px_rgba(15,23,42,0.12)]" data-add-card-popover>
             <div className="flex items-center gap-2 border-b border-alloy-stone/10 px-4 py-2.5">
                 <span className="text-[13px] font-semibold text-alloy-midnight">
                     {step === 1 ? `Add to ${sectionTitle}` : step === 2 ? `${cardType?.label ?? "Card"} · choose content` : `${definition.contentSource.resolveLabel(contentId) || "Card"} · configure`}
                 </span>
-                <div className="ml-auto flex items-center gap-1.5">
-                    <span className={dot(step === 1)} /><span className={dot(step === 2)} /><span className={dot(step === 3)} />
+                <div className="ml-auto flex items-center gap-2.5">
+                    <span className="flex items-center gap-1.5"><span className={dot(step === 1)} /><span className={dot(step === 2)} /><span className={dot(step === 3)} /></span>
+                    <button type="button" aria-label="Close" onClick={onCancel} className="text-[15px] leading-none text-alloy-midnight/40 hover:text-alloy-midnight">✕</button>
                 </div>
             </div>
 
             {step === 1 ? (
-                <div className="grid grid-cols-3 gap-2 p-4">
-                    {definition.cardTypes.map((ct) => (
-                        <button
-                            key={ct.key}
-                            type="button"
-                            data-add-card-type={ct.key}
-                            onClick={() => {
-                                setCardTypeKey(ct.key);
-                                setRendererKey(ct.rendererKey);
-                                setStep(2);
-                            }}
-                            className="flex flex-col gap-1 rounded-lg border border-alloy-stone/20 p-3 text-left hover:border-alloy-pine/40 hover:bg-alloy-pine/[0.04]"
-                        >
-                            <span className="text-lg leading-none">{ct.icon}</span>
-                            <span className="text-xs font-semibold text-alloy-midnight">{ct.label}</span>
-                            {ct.group ? <span className="text-[10px] text-alloy-midnight/45">{ct.group}</span> : null}
-                        </button>
-                    ))}
+                <div>
+                    <div className="max-h-80 overflow-y-auto p-3">
+                        {cardTypeGroups.map(([group, types]) => (
+                            <div key={group} className="mb-2">
+                                <div className="px-1 pb-1.5 pt-1 text-[10px] font-semibold uppercase tracking-wide text-alloy-midnight/45">{group}</div>
+                                <div className="grid grid-cols-3 gap-2">
+                                    {types.map((ct) => (
+                                        <button
+                                            key={ct.key}
+                                            type="button"
+                                            data-add-card-type={ct.key}
+                                            onClick={() => {
+                                                setCardTypeKey(ct.key);
+                                                setRendererKey(ct.rendererKey);
+                                                setStep(2);
+                                            }}
+                                            className="flex flex-col gap-1 rounded-lg border border-alloy-stone/20 p-2.5 text-left hover:border-alloy-pine/40 hover:bg-alloy-pine/[0.04]"
+                                        >
+                                            <span className="text-lg leading-none">{ct.icon}</span>
+                                            <span className="text-xs font-semibold text-alloy-midnight">{ct.label}</span>
+                                            {ct.description ? <span className="text-[10px] leading-tight text-alloy-midnight/50">{ct.description}</span> : null}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                    <div className="flex items-center justify-end border-t border-alloy-stone/10 px-4 py-2.5">
+                        <button type="button" onClick={onCancel} className="rounded-lg border border-alloy-stone/20 px-3 py-1.5 text-xs font-semibold text-alloy-midnight/65">Cancel</button>
+                    </div>
                 </div>
             ) : null}
 
@@ -119,6 +152,7 @@ export function AddCardPopover({
                     </div>
                     <div className="flex items-center border-t border-alloy-stone/10 px-4 py-2.5">
                         <button type="button" onClick={() => setStep(1)} className="text-xs font-semibold text-alloy-midnight/50">← Back</button>
+                        <button type="button" onClick={onCancel} className="ml-auto rounded-lg border border-alloy-stone/20 px-3 py-1.5 text-xs font-semibold text-alloy-midnight/65">Cancel</button>
                     </div>
                 </div>
             ) : null}

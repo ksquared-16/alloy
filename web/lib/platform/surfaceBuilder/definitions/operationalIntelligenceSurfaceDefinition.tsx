@@ -21,6 +21,7 @@ import type {
     RendererDefinition,
     InspectorSchema,
     SurfaceRuntimeRenderer,
+    SurfaceDoc,
 } from "@/lib/platform/surfaceBuilder/surfaceDefinition";
 
 const BUSINESS_PROCESS_LABEL: Record<OperationalCalculation["businessProcess"], string> = {
@@ -49,14 +50,16 @@ export function operationalIntelligenceContentSource(): ContentSourceProvider {
 }
 
 export const OPERATIONAL_INTELLIGENCE_CARD_TYPES: readonly CardDefinition[] = [
-    { key: "kpi", label: "KPI", icon: "▦", rendererKey: "kpi_card", group: "Measure" },
-    { key: "trend", label: "Trend", icon: "📈", rendererKey: "trend_card", group: "Measure" },
-    { key: "gauge", label: "Gauge", icon: "◔", rendererKey: "gauge", group: "Measure" },
-    { key: "comparison", label: "Comparison", icon: "⇄", rendererKey: "comparison", group: "Measure" },
-    { key: "breakdown", label: "Breakdown", icon: "▥", rendererKey: "bar_chart", group: "Understand" },
-    { key: "table", label: "Table", icon: "≣", rendererKey: "table", group: "Understand" },
-    { key: "health", label: "Health", icon: "✓", rendererKey: "scorecard", group: "Understand" },
-    { key: "affected_work", label: "Affected work", icon: "⚑", rendererKey: "affected_work", group: "Operational" },
+    { key: "kpi", label: "Metric / KPI", icon: "▦", rendererKey: "kpi_card", group: "Measure", description: "A single number with tone" },
+    { key: "trend", label: "Trend", icon: "📈", rendererKey: "trend_card", group: "Measure", description: "Change over time" },
+    { key: "gauge", label: "Gauge", icon: "◑", rendererKey: "gauge", group: "Measure", description: "Progress toward a target" },
+    { key: "comparison", label: "Comparison", icon: "⇄", rendererKey: "comparison", group: "Measure", description: "This period vs prior" },
+    { key: "breakdown", label: "Breakdown", icon: "▥", rendererKey: "bar_chart", group: "Understand", description: "Split by segment" },
+    { key: "table", label: "Table", icon: "≣", rendererKey: "table", group: "Understand", description: "Rows of detail" },
+    { key: "health", label: "Health", icon: "✚", rendererKey: "scorecard", group: "Understand", description: "Composite status read" },
+    { key: "affected_work", label: "Affected work", icon: "❗", rendererKey: "affected_work", group: "Operational", description: "The records behind a number" },
+    { key: "recommendation", label: "Recommendation", icon: "✦", rendererKey: "recommendation", group: "Narrate", description: "Suggested action + impact" },
+    { key: "forecast", label: "Forecast", icon: "⤴", rendererKey: "forecast", group: "Narrate", description: "Current → projected" },
 ];
 
 export const OPERATIONAL_INTELLIGENCE_RENDERERS: readonly RendererDefinition[] = [
@@ -88,6 +91,17 @@ export const OPERATIONAL_INTELLIGENCE_INSPECTOR: InspectorSchema = {
             fields: [
                 { key: "title", label: "Title", kind: "text" },
                 { key: "description", label: "Description", kind: "textarea" },
+                {
+                    key: "size",
+                    label: "Size",
+                    kind: "select",
+                    options: [
+                        { value: "compact", label: "Compact" },
+                        { value: "standard", label: "Standard" },
+                        { value: "wide", label: "Wide" },
+                        { value: "tall", label: "Tall" },
+                    ],
+                },
                 { key: "visibility", label: "Visible on the surface", kind: "toggle" },
             ],
         },
@@ -99,7 +113,27 @@ export const OPERATIONAL_INTELLIGENCE_INSPECTOR: InspectorSchema = {
                 { key: "question", label: "Question it answers", kind: "textarea" },
             ],
         },
-        { key: "renderer", label: "Renderer", fields: [{ key: "rendererKey", label: "Renderer", kind: "renderer" }] },
+        {
+            key: "renderer",
+            label: "Renderer",
+            fields: [
+                { key: "rendererKey", label: "Renderer", kind: "renderer" },
+                {
+                    key: "accent",
+                    label: "Accent color",
+                    kind: "select",
+                    options: [
+                        { value: "auto", label: "Auto (from status)" },
+                        { value: "juniper", label: "Green" },
+                        { value: "amber", label: "Amber" },
+                        { value: "ember", label: "Red" },
+                        { value: "blue", label: "Blue" },
+                        { value: "pine", label: "Pine" },
+                        { value: "neutral", label: "Neutral" },
+                    ],
+                },
+            ],
+        },
         {
             key: "behavior",
             label: "Behavior",
@@ -147,6 +181,8 @@ const CARD_TYPE_DEFAULT_RENDERER: Record<string, string> = {
     table: "table",
     health: "scorecard",
     affected_work: "affected_work",
+    recommendation: "recommendation",
+    forecast: "forecast",
 };
 
 type SampleTone = "healthy" | "warning" | "critical" | "neutral";
@@ -156,6 +192,16 @@ const TONE: Record<SampleTone, { rail: string; chip: string; label: string; stro
     warning: { rail: "bg-amber-500", chip: "bg-amber-500/10 text-amber-600", label: "Watch", stroke: "#d08700" },
     critical: { rail: "bg-alloy-ember", chip: "bg-alloy-ember/10 text-alloy-ember", label: "At risk", stroke: "#c2410c" },
     neutral: { rail: "bg-alloy-stone/40", chip: "bg-alloy-stone/15 text-alloy-midnight/55", label: "Live", stroke: "#94a3b8" },
+};
+
+/** Explicit accent override (Surfaces controls color, not Operational Calculations). */
+const ACCENT_COLOR: Record<string, { rail: string; chip: string; stroke: string }> = {
+    juniper: { rail: "bg-alloy-juniper", chip: "bg-alloy-juniper/10 text-alloy-juniper", stroke: "#1d7a5f" },
+    amber: { rail: "bg-amber-500", chip: "bg-amber-500/10 text-amber-600", stroke: "#d08700" },
+    ember: { rail: "bg-alloy-ember", chip: "bg-alloy-ember/10 text-alloy-ember", stroke: "#c2410c" },
+    blue: { rail: "bg-alloy-blue", chip: "bg-alloy-blue/10 text-alloy-blue", stroke: "#2563a8" },
+    pine: { rail: "bg-alloy-pine", chip: "bg-alloy-pine/10 text-alloy-pine", stroke: "#00a283" },
+    neutral: { rail: "bg-alloy-stone/40", chip: "bg-alloy-stone/15 text-alloy-midnight/55", stroke: "#94a3b8" },
 };
 
 type Sample = { value: string; unit?: string; tone: SampleTone; delta?: string; dir?: "up" | "down" };
@@ -262,6 +308,20 @@ function vividBody(renderer: string, s: Sample, stroke: string, showCompare: boo
                     ))}
                 </div>
             );
+        case "recommendation":
+            return (
+                <div className="space-y-1.5 pt-1">
+                    <p className="text-[12.5px] font-semibold leading-snug text-alloy-midnight">Follow up the 17 stalled tours today</p>
+                    <p className="text-[11px] font-medium" style={{ color: stroke }}>+6 conversions / month projected</p>
+                </div>
+            );
+        case "forecast":
+            return (
+                <div className="flex items-end gap-4 pt-1">
+                    <div><div className="text-[10px] font-semibold uppercase text-alloy-midnight/40">Now</div><ValueEl s={s} /></div>
+                    <div><div className="text-[10px] font-semibold uppercase text-alloy-midnight/40">Projected</div><div className="text-[22px] font-bold" style={{ color: stroke }}>{s.value}↑</div></div>
+                </div>
+            );
         default:
             return (
                 <div className="space-y-1"><ValueEl s={s} /><DeltaEl s={s} showCompare={showCompare} /></div>
@@ -283,8 +343,41 @@ const runtimeRenderer: SurfaceRuntimeRenderer = {
         const question = (typeof cfg.question === "string" && cfg.question) ? cfg.question : (calc?.questionAnswered ?? null);
         const hasContent = Boolean(instance.contentId);
         const s = hasContent ? (SAMPLE[String(instance.contentId)] ?? FALLBACK_SAMPLE) : FALLBACK_SAMPLE;
-        const tone = TONE[s.tone];
+        const baseTone = TONE[s.tone];
+        const acc = typeof cfg.accent === "string" && cfg.accent !== "auto" ? ACCENT_COLOR[cfg.accent] : null;
+        const tone = acc ? { ...baseTone, rail: acc.rail, chip: acc.chip, stroke: acc.stroke } : baseTone;
         const dimmed = cfg.visibility === "off";
+
+        // Compact (header) tiles: a uniform KPI/Trend tile. Renderer changes the body
+        // (Trend adds a sparkline); the health chip is off unless explicitly enabled; accent
+        // controls color. Headers are a single readable row, so there is no size variation.
+        if (ctx.density === "compact") {
+            const showChip = cfg.showHealthChip === "on";
+            const isTrend = renderer === "trend_card" || renderer === "sparkline" || renderer === "line_chart" || renderer === "area_chart";
+            return (
+                <div className={`relative overflow-hidden rounded-lg border border-alloy-stone/15 bg-white px-3 py-2.5 shadow-[0_1px_2px_rgba(15,23,42,0.05)] ${dimmed ? "opacity-50" : ""}`} data-metric-visual={`metric_${renderer}`}>
+                    <span className={`absolute inset-y-0 left-0 w-[3px] ${tone.rail}`} aria-hidden="true" />
+                    <div className="flex items-center justify-between gap-1.5 pl-1.5">
+                        <p className="min-w-0 flex-1 text-[11px] font-semibold text-alloy-midnight" style={{ display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{title}</p>
+                        {hasContent && showChip ? <span className={`shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-semibold ${tone.chip}`}>{tone.label}</span> : null}
+                    </div>
+                    <div className="mt-1 flex items-baseline gap-1 pl-1.5">
+                        {hasContent ? (
+                            <>
+                                <span className="text-[22px] font-bold leading-none tracking-tight text-alloy-midnight">{s.value}</span>
+                                {s.unit ? <span className="text-[11px] font-semibold text-alloy-midnight/45">{s.unit}</span> : null}
+                            </>
+                        ) : <span className="text-[11px] font-medium text-alloy-midnight/35">Pick content →</span>}
+                    </div>
+                    {hasContent && isTrend ? (
+                        <svg viewBox="0 0 120 20" preserveAspectRatio="none" className="mt-1 h-4 w-full pl-1.5">
+                            <polyline points="0,15 24,12 48,14 72,8 96,11 120,5" fill="none" stroke={tone.stroke} strokeWidth="2" />
+                        </svg>
+                    ) : null}
+                </div>
+            );
+        }
+
         return (
             <div className={`relative h-full overflow-hidden rounded-xl border border-alloy-stone/15 bg-white p-3.5 shadow-[0_1px_2px_rgba(15,23,42,0.05)] ${dimmed ? "opacity-50" : ""}`} data-metric-visual={`metric_${renderer}`}>
                 <span className={`absolute inset-y-0 left-0 w-[3px] ${tone.rail}`} aria-hidden="true" />
@@ -305,10 +398,37 @@ const runtimeRenderer: SurfaceRuntimeRenderer = {
     },
 };
 
+/** Exposed so header surfaces reuse the exact same metric card renderer + content. */
+export { runtimeRenderer as operationalMetricRuntimeRenderer };
+
+const tplKpi = (instanceId: string, contentId: string) => ({ instanceId, cardTypeKey: "kpi", contentId, config: { rendererKey: "kpi_card", visibility: "on" } });
+
+/** Default starter dashboard — powers "Start from template" / "Reset to template". */
+export const OPERATIONAL_INTELLIGENCE_TEMPLATE: SurfaceDoc = {
+    sections: [
+        {
+            sectionId: "overview",
+            title: "Overview",
+            cards: [
+                tplKpi("tpl-lead", "enrollment.lead_count"),
+                { instanceId: "tpl-tour", cardTypeKey: "trend", contentId: "enrollment.tour_conversion_rate", config: { rendererKey: "trend_card", visibility: "on" } },
+                tplKpi("tpl-attn", "ops.needs_attention_count"),
+            ],
+        },
+        {
+            sectionId: "health",
+            title: "Health",
+            cards: [
+                tplKpi("tpl-overdue", "ops.work_overdue_count"),
+                { instanceId: "tpl-delivery", cardTypeKey: "gauge", contentId: "comms.delivery_rate", config: { rendererKey: "gauge", visibility: "on" } },
+            ],
+        },
+    ],
+};
+
 /**
  * Build the Operational Intelligence surface definition. The persistence adapter is
- * injected (the `metric_placements` adapter is wired in the next slice; use the in-memory
- * adapter for preview/tests).
+ * injected (the real `metric_placements` adapter in production; in-memory in tests).
  */
 export function operationalIntelligenceSurfaceDefinition(
     persistence: SurfacePersistenceAdapter,
@@ -326,5 +446,6 @@ export function operationalIntelligenceSurfaceDefinition(
         immediatePersist: true,
         appearsIn: "Workspace → Analytics modal",
         runtimeHref: "/workspace?workspaceModal=analytics",
+        template: OPERATIONAL_INTELLIGENCE_TEMPLATE,
     };
 }

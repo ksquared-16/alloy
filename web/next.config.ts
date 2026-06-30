@@ -39,6 +39,13 @@ const nextConfig: NextConfig = {
        */
       { source: "/settings/layouts", destination: "/settings/surfaces", permanent: false },
       { source: "/settings/layouts/:path*", destination: "/settings/surfaces/:path*", permanent: false },
+      /**
+       * Operational Calculations rename — the canonical route is `/settings/calculations`.
+       * `/settings/analytics` aliases to it for compatibility. (`analytics` remains the
+       * storage/route folder; the visible product path is calculations.)
+       */
+      { source: "/settings/analytics", destination: "/settings/calculations", permanent: false },
+      { source: "/settings/analytics/:path*", destination: "/settings/calculations/:path*", permanent: false },
     ];
   },
   async rewrites() {

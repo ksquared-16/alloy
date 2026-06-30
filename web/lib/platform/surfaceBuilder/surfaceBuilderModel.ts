@@ -137,6 +137,7 @@ export type BuilderState = {
 
 export type BuilderAction =
     | { type: "load"; doc: SurfaceDoc }
+    | { type: "replaceDoc"; doc: SurfaceDoc }
     | { type: "select"; instanceId: string | null }
     | { type: "insertCard"; sectionId: string; index: number; instance: SurfaceCardInstance }
     | { type: "removeCard"; instanceId: string }
@@ -152,6 +153,9 @@ export function surfaceBuilderReducer(state: BuilderState, action: BuilderAction
     switch (action.type) {
         case "load":
             return { doc: action.doc, selectedInstanceId: null, dirty: false };
+        case "replaceDoc":
+            // Template / blank / reset — a deliberate edit, so the surface is dirty.
+            return { doc: action.doc, selectedInstanceId: null, dirty: true };
         case "select":
             return { ...state, selectedInstanceId: action.instanceId };
         case "markSaved":
