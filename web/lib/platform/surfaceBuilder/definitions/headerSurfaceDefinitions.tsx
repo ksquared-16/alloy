@@ -16,11 +16,22 @@ import {
 } from "@/lib/platform/surfaceBuilder/definitions/operationalIntelligenceSurfaceDefinition";
 
 /**
- * Header inspector — no "Placement" tab: a header surface IS the destination, so promoting
- * the card elsewhere is meaningless. Visibility is already covered in the Card tab.
+ * Header inspector — no "Placement" tab (a header surface IS the destination), and no
+ * "Tall" size (headers are a single readable row). Visibility stays in the Card tab.
  */
 const HEADER_INSPECTOR = {
-    tabs: OPERATIONAL_INTELLIGENCE_INSPECTOR.tabs.filter((t) => t.key !== "placement"),
+    tabs: OPERATIONAL_INTELLIGENCE_INSPECTOR.tabs
+        .filter((t) => t.key !== "placement")
+        .map((t) =>
+            t.key !== "card"
+                ? t
+                : {
+                      ...t,
+                      fields: t.fields.map((f) =>
+                          f.key !== "size" ? f : { ...f, options: (f.options ?? []).filter((o) => o.value !== "tall") },
+                      ),
+                  },
+        ),
 };
 
 const kpi = (instanceId: string, contentId: string) => ({ instanceId, cardTypeKey: "kpi", contentId, config: { rendererKey: "kpi_card", visibility: "on" } });

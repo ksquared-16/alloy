@@ -361,7 +361,10 @@ function SurfaceCanvas({
     toast: boolean;
 }): ReactElement {
     const dense = definition.density === "compact";
-    const gridCols = dense ? "grid-cols-3 md:grid-cols-4 xl:grid-cols-6" : "grid-cols-2 md:grid-cols-3 xl:grid-cols-4";
+    // Headers: wider, fewer columns so title/value/status stay readable; content-height
+    // rows (no auto-rows-fr) so compact tiles are short, not stretched-skinny.
+    const gridCols = dense ? "grid-cols-2 md:grid-cols-3 lg:grid-cols-4" : "grid-cols-2 md:grid-cols-3 xl:grid-cols-4";
+    const rowSizing = dense ? "" : "auto-rows-fr";
     const surfaceEmpty = chrome && countCards(doc) === 0;
     const banner =
         mode === "preview"
@@ -413,7 +416,7 @@ function SurfaceCanvas({
                                 onAdd={() => onOpenAddCard(section.sectionId)}
                             />
                         ) : (
-                            <div className={`grid auto-rows-fr gap-3.5 ${gridCols}`}>
+                            <div className={`grid gap-3.5 ${rowSizing} ${gridCols}`}>
                                 {section.cards.map((card) => (
                                     <CanvasCard
                                         key={card.instanceId}
@@ -470,12 +473,15 @@ function CanvasCard({
     onSelect: () => void;
     onRemove: () => void;
 }): ReactElement {
+    const size = (card.config as Record<string, unknown>)?.size;
     const rendered = definition.runtimeRenderer.renderCard(card, {
         contentLabel: definition.contentSource.resolveLabel(card.contentId ?? ""),
         density: definition.density,
+        size: typeof size === "string" ? size : undefined,
     });
-    const size = (card.config as Record<string, unknown>)?.size;
-    const sizeClass = size === "wide" ? "md:col-span-2" : size === "tall" ? "row-span-2" : "";
+    const compact = definition.density === "compact";
+    // Wide spans two columns. Tall only applies to comfortable surfaces (disabled for headers).
+    const sizeClass = size === "wide" ? "md:col-span-2" : size === "tall" && !compact ? "row-span-2" : "";
     if (!chrome) return <div className={`h-full ${sizeClass}`} data-canvas-card={card.instanceId}>{rendered}</div>;
     return (
         <div className={`group relative h-full ${sizeClass}`} data-canvas-card={card.instanceId}>

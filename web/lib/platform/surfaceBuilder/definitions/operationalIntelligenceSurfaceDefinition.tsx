@@ -113,7 +113,27 @@ export const OPERATIONAL_INTELLIGENCE_INSPECTOR: InspectorSchema = {
                 { key: "question", label: "Question it answers", kind: "textarea" },
             ],
         },
-        { key: "renderer", label: "Renderer", fields: [{ key: "rendererKey", label: "Renderer", kind: "renderer" }] },
+        {
+            key: "renderer",
+            label: "Renderer",
+            fields: [
+                { key: "rendererKey", label: "Renderer", kind: "renderer" },
+                {
+                    key: "accent",
+                    label: "Accent color",
+                    kind: "select",
+                    options: [
+                        { value: "auto", label: "Auto (from status)" },
+                        { value: "juniper", label: "Green" },
+                        { value: "amber", label: "Amber" },
+                        { value: "ember", label: "Red" },
+                        { value: "blue", label: "Blue" },
+                        { value: "pine", label: "Pine" },
+                        { value: "neutral", label: "Neutral" },
+                    ],
+                },
+            ],
+        },
         {
             key: "behavior",
             label: "Behavior",
@@ -172,6 +192,16 @@ const TONE: Record<SampleTone, { rail: string; chip: string; label: string; stro
     warning: { rail: "bg-amber-500", chip: "bg-amber-500/10 text-amber-600", label: "Watch", stroke: "#d08700" },
     critical: { rail: "bg-alloy-ember", chip: "bg-alloy-ember/10 text-alloy-ember", label: "At risk", stroke: "#c2410c" },
     neutral: { rail: "bg-alloy-stone/40", chip: "bg-alloy-stone/15 text-alloy-midnight/55", label: "Live", stroke: "#94a3b8" },
+};
+
+/** Explicit accent override (Surfaces controls color, not Operational Calculations). */
+const ACCENT_COLOR: Record<string, { rail: string; chip: string; stroke: string }> = {
+    juniper: { rail: "bg-alloy-juniper", chip: "bg-alloy-juniper/10 text-alloy-juniper", stroke: "#1d7a5f" },
+    amber: { rail: "bg-amber-500", chip: "bg-amber-500/10 text-amber-600", stroke: "#d08700" },
+    ember: { rail: "bg-alloy-ember", chip: "bg-alloy-ember/10 text-alloy-ember", stroke: "#c2410c" },
+    blue: { rail: "bg-alloy-blue", chip: "bg-alloy-blue/10 text-alloy-blue", stroke: "#2563a8" },
+    pine: { rail: "bg-alloy-pine", chip: "bg-alloy-pine/10 text-alloy-pine", stroke: "#00a283" },
+    neutral: { rail: "bg-alloy-stone/40", chip: "bg-alloy-stone/15 text-alloy-midnight/55", stroke: "#94a3b8" },
 };
 
 type Sample = { value: string; unit?: string; tone: SampleTone; delta?: string; dir?: "up" | "down" };
@@ -313,22 +343,26 @@ const runtimeRenderer: SurfaceRuntimeRenderer = {
         const question = (typeof cfg.question === "string" && cfg.question) ? cfg.question : (calc?.questionAnswered ?? null);
         const hasContent = Boolean(instance.contentId);
         const s = hasContent ? (SAMPLE[String(instance.contentId)] ?? FALLBACK_SAMPLE) : FALLBACK_SAMPLE;
-        const tone = TONE[s.tone];
+        const baseTone = TONE[s.tone];
+        const acc = typeof cfg.accent === "string" && cfg.accent !== "auto" ? ACCENT_COLOR[cfg.accent] : null;
+        const tone = acc ? { ...baseTone, rail: acc.rail, chip: acc.chip, stroke: acc.stroke } : baseTone;
         const dimmed = cfg.visibility === "off";
 
-        // Compact (header) cards: a tight metric chip — a label + the headline number only.
+        // Compact (header) cards: a tight metric tile. Size visibly changes the height/number:
+        // standard/wide are a step larger than compact; tall is disabled for headers.
         if (ctx.density === "compact") {
+            const big = ctx.size === "standard" || ctx.size === "wide";
             return (
-                <div className={`relative h-full overflow-hidden rounded-lg border border-alloy-stone/15 bg-white px-2.5 py-2 shadow-[0_1px_2px_rgba(15,23,42,0.05)] ${dimmed ? "opacity-50" : ""}`} data-metric-visual={`metric_${renderer}`}>
+                <div className={`relative overflow-hidden rounded-lg border border-alloy-stone/15 bg-white ${big ? "px-3 py-3" : "px-2.5 py-2"} shadow-[0_1px_2px_rgba(15,23,42,0.05)] ${dimmed ? "opacity-50" : ""}`} data-metric-visual={`metric_${renderer}`}>
                     <span className={`absolute inset-y-0 left-0 w-[3px] ${tone.rail}`} aria-hidden="true" />
-                    <div className="flex items-center justify-between gap-1 pl-1.5">
-                        <p className="truncate text-[11px] font-semibold text-alloy-midnight">{title}</p>
+                    <div className="flex items-center justify-between gap-1.5 pl-1.5">
+                        <p className={`min-w-0 flex-1 ${big ? "text-[12px]" : "text-[11px]"} font-semibold text-alloy-midnight`} style={{ display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{title}</p>
                         {hasContent ? <span className={`shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-semibold ${tone.chip}`}>{tone.label}</span> : null}
                     </div>
-                    <div className="mt-0.5 flex items-baseline gap-1 pl-1.5">
+                    <div className="mt-1 flex items-baseline gap-1 pl-1.5">
                         {hasContent ? (
                             <>
-                                <span className="text-[20px] font-bold leading-none tracking-tight text-alloy-midnight">{s.value}</span>
+                                <span className={`${big ? "text-[26px]" : "text-[19px]"} font-bold leading-none tracking-tight text-alloy-midnight`}>{s.value}</span>
                                 {s.unit ? <span className="text-[11px] font-semibold text-alloy-midnight/45">{s.unit}</span> : null}
                             </>
                         ) : <span className="text-[11px] font-medium text-alloy-midnight/35">Pick content →</span>}

@@ -6,9 +6,31 @@ import {
     OPERATIONAL_INTELLIGENCE_CARD_TYPES,
     OPERATIONAL_INTELLIGENCE_INSPECTOR,
 } from "@/lib/platform/surfaceBuilder/definitions/operationalIntelligenceSurfaceDefinition";
+import { workspaceHeaderSurfaceDefinition } from "@/lib/platform/surfaceBuilder/definitions/headerSurfaceDefinitions";
 import { createMemoryPersistence } from "@/lib/platform/surfaceBuilder/memoryPersistence";
 import { emptyDoc } from "@/lib/platform/surfaceBuilder/surfaceBuilderModel";
 import { listOperationalCalculations } from "@/lib/analytics/calculations/registry";
+
+describe("Surface controls own display + header proportions", () => {
+    it("the OI inspector exposes an accent color control (Surfaces owns color)", () => {
+        const renderer = OPERATIONAL_INTELLIGENCE_INSPECTOR.tabs.find((t) => t.key === "renderer")!;
+        const accent = renderer.fields.find((f) => f.key === "accent");
+        expect(accent?.kind).toBe("select");
+        expect(accent?.options?.map((o) => o.value)).toEqual(
+            expect.arrayContaining(["auto", "juniper", "amber", "ember", "blue", "neutral"]),
+        );
+    });
+
+    it("header surfaces are compact, single-canvas, with no Placement tab and no Tall size", () => {
+        const def = workspaceHeaderSurfaceDefinition(createMemoryPersistence(emptyDoc("none")));
+        expect(def.sections).toBe("none");
+        expect(def.density).toBe("compact");
+        const tabKeys = def.inspectorSchema.tabs.map((t) => t.key);
+        expect(tabKeys).not.toContain("placement");
+        const sizeField = def.inspectorSchema.tabs.find((t) => t.key === "card")!.fields.find((f) => f.key === "size")!;
+        expect(sizeField.options?.map((o) => o.value)).toEqual(["compact", "standard", "wide"]);
+    });
+});
 
 describe("Operational Intelligence — a Surface Definition, not a builder", () => {
     it("content comes from the Operational Calculations registry (question-led, grouped, no impl terms)", () => {

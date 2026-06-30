@@ -109,9 +109,9 @@ export const CONFIGURATION_MODE_NAV_GROUPS: readonly ConfigurationModeNavGroup[]
                 testId: "config-mode-nav-financials",
             },
             {
-                href: settings("analytics"),
+                href: settings("calculations"),
                 label: "Operational Calculations",
-                description: "Metrics, targets, sources, and snapshots.",
+                description: "Metrics, formulas, targets, and sources.",
                 icon: "analytics",
                 testId: "config-mode-nav-analytics",
             },

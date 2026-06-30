@@ -21,48 +21,45 @@ import MetricSetupFlow from "@/app/adminV2/settings/analytics/MetricSetupFlow";
 import MetricSnapshotButton from "@/app/adminV2/settings/analytics/MetricSnapshotButton";
 
 /** Left-rail sections — the modern settings list/detail pattern (Processes / Fields / Statuses). */
-type SectionKey = "calculations" | "sources-targets" | "displays" | "snapshots" | "advanced";
-type AdvancedKey = "placements" | "rollups" | "visibility";
+type SectionKey = "calculations" | "targets" | "sources" | "advanced";
+type AdvancedKey = "displays" | "placements" | "rollups" | "snapshots" | "visibility";
 
 const SECTIONS: { key: SectionKey; label: string; sub: string }[] = [
     { key: "calculations", label: "Calculations", sub: "Define what is measured" },
-    { key: "sources-targets", label: "Sources & targets", sub: "Inputs and the goals they meet" },
-    { key: "displays", label: "Displays", sub: "Default render style" },
-    { key: "snapshots", label: "Snapshots", sub: "Point-in-time captures" },
-    { key: "advanced", label: "Advanced", sub: "Platform internals" },
+    { key: "targets", label: "Targets", sub: "Goals a metric is judged against" },
+    { key: "sources", label: "Sources", sub: "Where values come from" },
+    { key: "advanced", label: "Advanced", sub: "Displays, snapshots, internals" },
 ];
 
 function sectionFromParam(raw: string | null): SectionKey {
-    if (raw === "displays" || raw === "visualizations") return "displays";
-    if (raw === "targets") return "sources-targets";
-    if (raw === "snapshots") return "snapshots";
-    if (raw === "placements" || raw === "rollups" || raw === "visibility") return "advanced";
+    if (raw === "targets") return "targets";
+    if (raw === "sources") return "sources";
+    if (raw === "displays" || raw === "visualizations" || raw === "snapshots" || raw === "placements" || raw === "rollups" || raw === "visibility") return "advanced";
     return "calculations";
 }
 
-function SnapshotsWorkspace() {
+function SourcesWorkspace() {
     return (
         <div className="process-config-setup-card overflow-hidden p-5">
-            <p className="config-typo-workspace-title">Snapshots</p>
+            <p className="config-typo-workspace-title">Sources</p>
             <p className="config-typo-sublabel mt-1 max-w-md">
-                Capture a point-in-time value for every active calculation. Snapshots back prior-period comparisons in the runtime.
+                Data sources are system-provided — each calculation reads from a governed source (OIP adapters, ledger, attendance). More sources are added as Alloy expands.
             </p>
-            <div className="mt-4">
-                <MetricSnapshotButton />
-            </div>
         </div>
     );
 }
 
 function AdvancedWorkspace({ tab, setTab, canEdit }: { tab: AdvancedKey; setTab: (t: AdvancedKey) => void; canEdit: boolean }) {
     const items: { key: AdvancedKey; label: string; note: string }[] = [
+        { key: "displays", label: "Displays", note: "A metric's default render style. How a card looks is chosen in Surfaces, per card." },
+        { key: "snapshots", label: "Snapshots", note: "Capture a point-in-time value for every active calculation — backs prior-period comparison." },
         { key: "placements", label: "Where it appears", note: "Placement lives in the Surface Builder now — this is the raw table." },
         { key: "rollups", label: "Combined scores", note: "Roll several metrics into one health score." },
         { key: "visibility", label: "Experience placement (legacy V1)", note: "Legacy visibility surface." },
     ];
     return (
-        <div className="space-y-3">
-            <p className="config-typo-sublabel">Platform internals — not the day-to-day flow. Placement and composition happen in Surfaces.</p>
+        <div className="space-y-3" data-analytics-legacy-advanced="true">
+            <p className="config-typo-sublabel">Platform internals — not the day-to-day flow. Display treatment and placement happen in Surfaces, per card.</p>
             <div className="flex flex-wrap gap-2">
                 {items.map((it) => (
                     <button
@@ -77,7 +74,11 @@ function AdvancedWorkspace({ tab, setTab, canEdit }: { tab: AdvancedKey; setTab:
             </div>
             <p className="config-typo-sublabel">{items.find((i) => i.key === tab)?.note}</p>
             <div>
-                {tab === "placements" ? <PlacementBuilderPanel canEdit={canEdit} /> : tab === "rollups" ? <RollupBuilderPanel canEdit={canEdit} /> : <OipVisibilityPanel canEdit={canEdit} />}
+                {tab === "displays" ? <VisualizationBuilderPanel canEdit={canEdit} /> :
+                 tab === "snapshots" ? <MetricSnapshotButton /> :
+                 tab === "placements" ? <PlacementBuilderPanel canEdit={canEdit} /> :
+                 tab === "rollups" ? <RollupBuilderPanel canEdit={canEdit} /> :
+                 <OipVisibilityPanel canEdit={canEdit} />}
             </div>
         </div>
     );
@@ -89,7 +90,7 @@ function AnalyticsSettingsInner() {
     const rawTab = searchParams.get("tab");
     const [sectionKey, setSectionKey] = useState<SectionKey>(() => sectionFromParam(rawTab));
     const [advancedTab, setAdvancedTab] = useState<AdvancedKey>(() =>
-        rawTab === "rollups" || rawTab === "visibility" ? rawTab : "placements",
+        rawTab === "snapshots" || rawTab === "placements" || rawTab === "rollups" || rawTab === "visibility" ? rawTab : "displays",
     );
     const [flowOpen, setFlowOpen] = useState(false);
     const [refreshKey, setRefreshKey] = useState(0);
@@ -121,12 +122,10 @@ function AnalyticsSettingsInner() {
                 <div key={refreshKey}>
                     {sectionKey === "calculations" ? (
                         <MetricBuilderPanel canEdit={canMutate} />
-                    ) : sectionKey === "sources-targets" ? (
+                    ) : sectionKey === "targets" ? (
                         <KpiTargetsPanel canEdit={canMutate} />
-                    ) : sectionKey === "displays" ? (
-                        <VisualizationBuilderPanel canEdit={canMutate} />
-                    ) : sectionKey === "snapshots" ? (
-                        <SnapshotsWorkspace />
+                    ) : sectionKey === "sources" ? (
+                        <SourcesWorkspace />
                     ) : (
                         <AdvancedWorkspace tab={advancedTab} setTab={setAdvancedTab} canEdit={canMutate} />
                     )}

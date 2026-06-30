@@ -121,6 +121,8 @@ export type SurfaceRenderContext = {
     contentLabel: string;
     /** Compact surfaces (headers) render a denser card. */
     density?: "compact" | "comfortable";
+    /** Card size (compact / standard / wide / tall) for size-aware rendering. */
+    size?: string;
 };
 
 export type SurfaceRuntimeRenderer = {

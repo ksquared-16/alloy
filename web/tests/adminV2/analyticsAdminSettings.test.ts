@@ -174,23 +174,34 @@ describe("Analytics settings IA cleanup", () => {
         expect(client).toContain('"Operational Calculations"');
         expect(client).toContain("ConfigurationShell");
         expect(client).toContain('label: "Calculations"');
-        expect(client).toContain('label: "Sources & targets"');
-        expect(client).toContain('label: "Snapshots"');
+        expect(client).toContain('label: "Targets"');
+        expect(client).toContain('label: "Sources"');
+        expect(client).toContain('label: "Advanced"');
         // No nested builder-tabs wrapper or redundant summary.
         expect(client).not.toContain("MetricPlatformBuilderTabs");
         expect(client).not.toContain("OipSettingsSummary");
     });
 
-    it("'Where it appears' and 'Combined scores' are not primary sections (moved to Advanced)", () => {
+    it("Displays, Where it appears, Combined scores, and Snapshots are not primary sections (Advanced)", () => {
         const client = read("app/adminV2/settings/analytics/AnalyticsSettingsClient.tsx");
-        // The primary SECTIONS list must not surface placement or rollups.
         const sectionsBlock = client.slice(client.indexOf("const SECTIONS"), client.indexOf("function sectionFromParam"));
+        expect(sectionsBlock).not.toContain('label: "Displays"');
+        expect(sectionsBlock).not.toContain('label: "Snapshots"');
         expect(sectionsBlock).not.toContain("Where it appears");
         expect(sectionsBlock).not.toContain("Combined scores");
         // Still reachable inside the Advanced workspace.
         expect(client).toContain("AdvancedWorkspace");
         expect(client).toContain("Where it appears");
         expect(client).toContain("Combined scores");
+        expect(client).toContain('label: "Displays"');
+        expect(client).toContain('label: "Snapshots"');
+    });
+
+    it("route is /settings/calculations and the nav card is renamed (no Operational Intelligence)", () => {
+        const nav = read("lib/adminV2/configurationModeNav.ts");
+        expect(nav).toContain('settings("calculations")');
+        expect(nav).toContain('label: "Operational Calculations"');
+        expect(nav).not.toContain('label: "Operational Intelligence"');
     });
 
     it("uses one primary '+ New calculation' CTA in the context bar", () => {
@@ -206,8 +217,8 @@ describe("Analytics settings IA cleanup", () => {
     it("section subtitles use the final copy", () => {
         const client = read("app/adminV2/settings/analytics/AnalyticsSettingsClient.tsx");
         expect(client).toContain("Define what is measured");
-        expect(client).toContain("Inputs and the goals they meet");
-        expect(client).toContain("Point-in-time captures");
+        expect(client).toContain("Goals a metric is judged against");
+        expect(client).toContain("Where values come from");
     });
 
     it("display styles support a background fill treatment using accent opacity", () => {
