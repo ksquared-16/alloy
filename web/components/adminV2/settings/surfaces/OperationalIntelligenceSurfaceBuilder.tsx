@@ -21,17 +21,10 @@ export default function OperationalIntelligenceSurfaceBuilder() {
         [],
     );
 
+    // The platform SurfaceBuilder owns its toolbar (title, modes, publish, Open runtime).
     return (
-        <div className="flex h-full min-h-0 flex-col gap-2" data-oi-surface-builder>
-            <div className="flex items-center gap-2 px-1 text-[11px] text-alloy-midnight/55">
-                <span>Editing the live Operational Intelligence surface. Publish writes to the runtime.</span>
-                <a href="/workspace?workspaceModal=analytics" className="ml-auto font-semibold text-alloy-pine hover:underline">
-                    Open in Workspace →
-                </a>
-            </div>
-            <div className="min-h-0 flex-1 overflow-hidden rounded-xl border border-alloy-stone/15 bg-white">
-                <SurfaceBuilder definition={definition} />
-            </div>
+        <div className="h-full min-h-0 overflow-hidden rounded-xl border border-alloy-stone/15 bg-white" data-oi-surface-builder>
+            <SurfaceBuilder definition={definition} />
         </div>
     );
 }

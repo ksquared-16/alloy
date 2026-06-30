@@ -24,19 +24,19 @@ describe("Operational Intelligence — a Surface Definition, not a builder", () 
         expect(source.resolveLabel("not.a.key")).toBe("not.a.key");
     });
 
-    it("offers metric card types and a Card/Content/Renderer/Configure/Promote inspector", () => {
+    it("offers metric card types and a Card/Content/Renderer/Behavior/Placement inspector", () => {
         expect(OPERATIONAL_INTELLIGENCE_CARD_TYPES.map((c) => c.key)).toContain("kpi");
         expect(OPERATIONAL_INTELLIGENCE_CARD_TYPES.map((c) => c.key)).toContain("breakdown");
         expect(OPERATIONAL_INTELLIGENCE_INSPECTOR.tabs.map((t) => t.key)).toEqual([
             "card",
             "content",
             "renderer",
-            "configure",
-            "promote",
+            "behavior",
+            "placement",
         ]);
-        const promote = OPERATIONAL_INTELLIGENCE_INSPECTOR.tabs.find((t) => t.key === "promote")!.fields[0];
-        expect(promote.kind).toBe("promote");
-        expect(promote.options?.map((o) => o.value)).toContain("workspace_header");
+        const placement = OPERATIONAL_INTELLIGENCE_INSPECTOR.tabs.find((t) => t.key === "placement")!.fields[0];
+        expect(placement.kind).toBe("promote");
+        expect(placement.options?.map((o) => o.value)).toContain("workspace_header");
     });
 
     it("builds a valid SurfaceDefinition with an injected persistence adapter", () => {

@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Surface Builder V2 — inspector & states</title>
+<link rel="stylesheet" href="../../analytics-operational-intelligence-platform/mockups/_shared.css" />
+<link rel="stylesheet" href="_builder.css" />
+<style>
+  .page { width: 1060px; margin: 24px auto; display: flex; gap: 22px; align-items: flex-start; }
+  .col-l { width: 344px; flex-shrink: 0; }
+  .col-r { flex: 1; }
+  .panel { background: var(--white); border: 1px solid var(--line); border-radius: 14px; box-shadow: var(--shadow); overflow: hidden; }
+  .col-l .insp { width: 100%; border-left: none; }
+  .cap2 { font-size: 11px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--forge-70); margin: 0 4px 8px; }
+  .cap2:not(:first-child) { margin-top: 22px; }
+  .statebox { background: var(--canvas); border: 1px solid var(--line); border-radius: 12px; padding: 18px; }
+  .scaption { font-size: 12px; color: var(--forge-70); margin-top: 10px; }
+  .scaption b { color: var(--midnight); }
+</style>
+</head>
+<body>
+<div class="page">
+  <!-- LEFT: full inspector, all five groups -->
+  <div class="col-l">
+    <div class="cap2">Inspector · five groups, plain-language</div>
+    <div class="panel">
+      <div class="insp" style="height:auto">
+        <div class="insp-head"><div class="pv">📈</div><div><div class="it">Tour conversion %</div><div class="is">Trend card · Overview</div></div></div>
+        <div class="insp-tabs"><span class="on">Card</span><span>Content</span><span>Renderer</span><span>Behavior</span><span>Placement</span></div>
+        <div class="insp-body">
+          <div class="fgroup">
+            <div class="gh">Card</div>
+            <div class="field"><label>Title</label><input class="inp" value="Tour conversion %" /></div>
+            <div class="field"><label>Description</label><textarea class="inp area">Share of scheduled tours that completed in the period.</textarea></div>
+            <div class="ptog on"><span class="pi">👁</span><span class="pl"><b>Visible</b><small>Shown on the live surface</small></span><span class="sw"></span></div>
+          </div>
+
+          <div class="fgroup">
+            <div class="gh">Content</div>
+            <div class="field"><label>Metric / calculation</label><input class="inp" value="Tour conversion %  ·  Enrollment" /></div>
+            <div class="field"><label>Question it answers</label><textarea class="inp area">What share of scheduled tours completed?</textarea></div>
+            <div class="hint">● Live · Operational Calculations — no “metric definition” to wrangle.</div>
+          </div>
+
+          <div class="fgroup">
+            <div class="gh">Renderer</div>
+            <div class="rchips">
+              <div class="rchip"><span class="ri">▦</span> KPI</div>
+              <div class="rchip on"><span class="ri">📈</span> Trend</div>
+              <div class="rchip"><span class="ri">◔</span> Gauge</div>
+              <div class="rchip"><span class="ri">▥</span> Chart</div>
+              <div class="rchip"><span class="ri">≣</span> Table</div>
+              <div class="rchip"><span class="ri">⇄</span> Comparison</div>
+              <div class="rchip"><span class="ri">✓</span> Health</div>
+            </div>
+          </div>
+
+          <div class="fgroup">
+            <div class="gh">Behavior</div>
+            <div class="field"><label>Tone thresholds</label>
+              <div class="tones"><span class="tband good">≥ 65</span><span class="tband warn">50–65</span><span class="tband crit">&lt; 50</span></div>
+            </div>
+            <div class="field"><label>Comparison</label><div class="segmini"><span>Off</span><span class="on">Prior period</span><span>Target</span></div></div>
+            <div class="field"><label>Drill to</label><input class="inp" value="View tours →" /></div>
+            <div class="field"><label>Refresh</label><div class="segmini"><span class="on">Live</span><span>Hourly</span><span>Daily</span></div></div>
+          </div>
+
+          <div class="fgroup" style="margin-bottom:4px">
+            <div class="gh">Placement · where this appears</div>
+            <div class="ptog on"><span class="pi">◵</span><span class="pl"><b>Operational Intelligence</b><small>Workspace → Analytics modal</small></span><span class="sw"></span></div>
+            <div class="ptog"><span class="pi">▤</span><span class="pl"><b>Workspace Header</b><small>Top of the workspace</small></span><span class="sw"></span></div>
+            <div class="ptog"><span class="pi">▤</span><span class="pl"><b>Work Unit Header</b><small>Top of a work unit</small></span><span class="sw"></span></div>
+            <div class="ptog"><span class="pi">★</span><span class="pl"><b>Executive Performance</b><small>Executive dashboard</small></span><span class="sw"></span></div>
+            <div class="ptog"><span class="pi">▢</span><span class="pl"><b>Reports</b><small>Period output</small></span><span class="sw"></span></div>
+            <div class="hint">You choose where it appears. Alloy handles the wiring underneath.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- RIGHT: states -->
+  <div class="col-r">
+    <div class="cap2">Empty section · teaches itself</div>
+    <div class="statebox">
+      <div class="empty">
+        <div class="et">Comparisons is empty</div>
+        <div class="ed">Show how this period stacks up. Pick a metric, chart, narrative read, recommendation, or an action panel — it renders live as soon as you add it.</div>
+        <div class="opts">
+          <div class="opt"><span class="oi">▦</span><span class="ol">Metric</span></div>
+          <div class="opt"><span class="oi">▥</span><span class="ol">Chart</span></div>
+          <div class="opt"><span class="oi">▢</span><span class="ol">Narrative</span></div>
+          <div class="opt"><span class="oi">✦</span><span class="ol">Recommend</span></div>
+          <div class="opt"><span class="oi">⚑</span><span class="ol">Action</span></div>
+        </div>
+        <span class="btn btn-pine">＋ Add card</span>
+      </div>
+    </div>
+
+    <div class="cap2">Hover · the card lifts and reveals its tools</div>
+    <div class="statebox" style="display:flex; gap:16px; align-items:flex-start">
+      <div class="mcard t-good float hov" style="width:240px">
+        <div class="mc-tools"><span title="Drag">⠿</span><span title="Duplicate">⎘</span><span title="Delete">🗑</span></div>
+        <div class="mc-head"><span class="mc-label">Lead count</span><span class="tone good">Healthy</span></div>
+        <div class="mc-value">142<span class="unit">leads</span></div>
+        <div class="mc-delta up">▲ 12%</div>
+      </div>
+      <div class="scaption"><b>Hover</b> shows a soft ring + the drag / duplicate / delete tools. You never wonder how to act on a card — the controls come to it.</div>
+    </div>
+
+    <div class="cap2">Selected · unmistakable, and the inspector binds to it</div>
+    <div class="statebox" style="display:flex; gap:16px; align-items:flex-start">
+      <div class="mcard t-warn float sel" style="width:240px; margin-top:10px">
+        <span class="sel-tag">Selected</span>
+        <div class="mc-tools"><span title="Drag">⠿</span><span title="Duplicate">⎘</span><span title="Delete">🗑</span></div>
+        <div class="mc-head"><span class="mc-label">Tour conversion %</span><span class="tone warn">Watch</span></div>
+        <div class="mc-value">58<span class="unit">%</span></div>
+        <svg class="spark" viewBox="0 0 220 40" preserveAspectRatio="none"><polyline points="0,14 40,11 80,17 120,13 160,22 200,28 220,30" fill="none" stroke="#b7791f" stroke-width="2.5"/></svg>
+      </div>
+      <div class="scaption"><b>Selected</b> gets a solid pine ring + a “Selected” tag, scrolls into view, and the inspector + left tree both highlight the same card. One source of focus.</div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

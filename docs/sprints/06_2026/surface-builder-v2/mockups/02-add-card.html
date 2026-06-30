@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Surface Builder V2 — add card</title>
+<link rel="stylesheet" href="../../analytics-operational-intelligence-platform/mockups/_shared.css" />
+<link rel="stylesheet" href="_builder.css" />
+<style>
+  .flow { width: 1000px; margin: 24px auto; }
+  .flow .intro { color: var(--midnight-70); font-size: 13px; margin: 0 6px 14px; }
+  .flow .intro b { color: var(--midnight); }
+  .step { background: var(--canvas); border-radius: 14px; box-shadow: var(--shadow); overflow: hidden; margin-bottom: 20px; }
+  .step > .cap { display: flex; align-items: center; gap: 8px; }
+  .step .stage { padding: 26px; display: flex; justify-content: center; background: linear-gradient(180deg,#eef0f3,#f5f6f8); }
+  .arrowdown { text-align: center; color: var(--forge-70); font-size: 18px; margin: -10px 0 8px; }
+  .mini-card { width: 220px; }
+</style>
+</head>
+<body>
+<div class="flow">
+  <p class="intro"><b>Add card</b> is one inline flow — choose type → choose content → configure → done. No wizard, no page change. It opens right under the section's “Add card”, like inserting a block in Notion.</p>
+
+  <!-- STEP 1 -->
+  <div class="step">
+    <div class="cap"><b>Step 1</b> · Choose a card type — anchored under <b>Overview › Add card</b></div>
+    <div class="stage">
+      <div class="pop">
+        <div class="pop-head"><span class="pt">Add to Overview</span><span class="pop-steps"><i class="on"></i><i></i><i></i></span></div>
+        <div class="pop-body">
+          <div class="ctgrid">
+            <div class="ctype on"><span class="ti">▦</span><span class="tl">KPI</span><span class="td">A single number</span></div>
+            <div class="ctype"><span class="ti">📈</span><span class="tl">Trend</span><span class="td">Change over time</span></div>
+            <div class="ctype"><span class="ti">◔</span><span class="tl">Gauge</span><span class="td">Progress to target</span></div>
+            <div class="ctype"><span class="ti">▥</span><span class="tl">Chart</span><span class="td">Breakdown by group</span></div>
+            <div class="ctype"><span class="ti">≣</span><span class="tl">Table</span><span class="td">Rows of detail</span></div>
+            <div class="ctype"><span class="ti">⇄</span><span class="tl">Comparison</span><span class="td">Period vs period</span></div>
+            <div class="ctype"><span class="ti">✓</span><span class="tl">Health</span><span class="td">Status scorecard</span></div>
+            <div class="ctype"><span class="ti">▢</span><span class="tl">Narrative</span><span class="td">Plain-language read</span></div>
+            <div class="ctype"><span class="ti">⚑</span><span class="tl">Action panel</span><span class="td">Affected work</span></div>
+          </div>
+        </div>
+        <div class="pop-foot"><span class="spacer"></span><span class="btn-pine btn-sm">Continue →</span></div>
+      </div>
+    </div>
+  </div>
+  <div class="arrowdown">↓</div>
+
+  <!-- STEP 2 -->
+  <div class="step">
+    <div class="cap"><b>Step 2</b> · Choose content — the operator picks a question, never a “metric definition”</div>
+    <div class="stage">
+      <div class="pop">
+        <div class="pop-head"><span class="pt">KPI · choose content</span><span class="pop-steps"><i></i><i class="on"></i><i></i></span></div>
+        <div class="pop-search"><span>🔍</span><input placeholder="Search metrics, calculations, questions…" value="tour" /></div>
+        <div class="pop-body">
+          <div class="cgroup">Enrollment</div>
+          <div class="crow on"><span class="cri">📈</span><span class="crt"><b>Tour conversion %</b><small>What share of scheduled tours completed?</small></span><span class="crs">Live</span></div>
+          <div class="crow"><span class="cri">▦</span><span class="crt"><b>Tours completed</b><small>How many tours completed this period?</small></span><span class="crs">Live</span></div>
+          <div class="crow"><span class="cri">▦</span><span class="crt"><b>Lead count</b><small>How many new leads arrived?</small></span><span class="crs">Live</span></div>
+          <div class="cgroup">Operations</div>
+          <div class="crow"><span class="cri">⚑</span><span class="crt"><b>Needs attention</b><small>How many items need an operator now?</small></span><span class="crs">Live</span></div>
+        </div>
+        <div class="pop-foot"><span class="back">← Back</span><span class="spacer"></span><span class="btn-pine btn-sm">Continue →</span></div>
+      </div>
+    </div>
+  </div>
+  <div class="arrowdown">↓</div>
+
+  <!-- STEP 3 -->
+  <div class="step">
+    <div class="cap"><b>Step 3</b> · Configure inline — a live mini-card previews every change, then drop it in</div>
+    <div class="stage">
+      <div class="pop">
+        <div class="pop-head"><span class="pt">Tour conversion % · configure</span><span class="pop-steps"><i></i><i></i><i class="on"></i></span></div>
+        <div class="pop-body" style="display:flex; gap:16px;">
+          <div class="mini-card">
+            <div class="mcard t-warn" style="box-shadow:none">
+              <div class="mc-head"><span class="mc-label">Tour conversion %</span><span class="tone warn">Watch</span></div>
+              <div class="mc-value">58<span class="unit">%</span></div>
+              <div class="mc-delta down">▼ 7 pts</div>
+              <svg class="spark" viewBox="0 0 220 40" preserveAspectRatio="none"><polyline points="0,14 40,11 80,17 120,13 160,22 200,28 220,30" fill="none" stroke="#b7791f" stroke-width="2.5"/></svg>
+            </div>
+            <div class="hint" style="text-align:center; margin-top:8px">Live preview</div>
+          </div>
+          <div style="flex:1">
+            <div class="field"><label>Title</label><input class="inp" value="Tour conversion %" /></div>
+            <div class="field"><label>Renderer</label>
+              <div class="segmini"><span>KPI</span><span class="on">Trend</span><span>Gauge</span></div>
+            </div>
+            <div class="field"><label>Tone thresholds</label>
+              <div class="tones"><span class="tband good">≥ 65</span><span class="tband warn">50–65</span><span class="tband crit">&lt; 50</span></div>
+            </div>
+          </div>
+        </div>
+        <div class="pop-foot"><span class="back">← Back</span><span class="spacer"></span><span class="btn-ghost btn-sm">Cancel</span><span class="btn-pine btn-sm">Add to Overview</span></div>
+      </div>
+    </div>
+  </div>
+
+  <p class="intro" style="margin-top:6px">Result · the card appears in <b>Overview</b> on the canvas, already selected, with the inspector open — ready to keep tuning or to publish.</p>
+</div>
+</body>
+</html>
