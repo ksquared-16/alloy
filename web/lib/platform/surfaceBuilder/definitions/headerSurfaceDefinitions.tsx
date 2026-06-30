@@ -6,32 +6,74 @@
  */
 
 import { IMPLICIT_SECTION_ID } from "@/lib/platform/surfaceBuilder/surfaceBuilderModel";
-import type { SurfaceDefinition, SurfacePersistenceAdapter, SurfaceDoc } from "@/lib/platform/surfaceBuilder/surfaceDefinition";
+import type { SurfaceDefinition, SurfacePersistenceAdapter, SurfaceDoc, InspectorSchema, CardDefinition, RendererDefinition } from "@/lib/platform/surfaceBuilder/surfaceDefinition";
 import {
     OPERATIONAL_INTELLIGENCE_CARD_TYPES,
     OPERATIONAL_INTELLIGENCE_RENDERERS,
-    OPERATIONAL_INTELLIGENCE_INSPECTOR,
     operationalIntelligenceContentSource,
     operationalMetricRuntimeRenderer,
 } from "@/lib/platform/surfaceBuilder/definitions/operationalIntelligenceSurfaceDefinition";
 
+const ACCENT_OPTIONS = [
+    { value: "auto", label: "Auto (from status)" },
+    { value: "juniper", label: "Green" },
+    { value: "amber", label: "Amber" },
+    { value: "ember", label: "Red" },
+    { value: "blue", label: "Blue" },
+    { value: "pine", label: "Pine" },
+    { value: "neutral", label: "Neutral" },
+];
+
+/** Headers are a compact metric strip — only KPI and Trend tiles fit and render in runtime. */
+const HEADER_CARD_TYPES: readonly CardDefinition[] = OPERATIONAL_INTELLIGENCE_CARD_TYPES.filter(
+    (c) => c.key === "kpi" || c.key === "trend",
+);
+const HEADER_RENDERERS: readonly RendererDefinition[] = OPERATIONAL_INTELLIGENCE_RENDERERS.filter(
+    (r) => r.key === "kpi_card" || r.key === "trend_card",
+);
+
 /**
- * Header inspector — no "Placement" tab (a header surface IS the destination), and no
- * "Tall" size (headers are a single readable row). Visibility stays in the Card tab.
+ * Header inspector — explicit, header-appropriate controls. No Placement (the surface IS
+ * the destination) and no Size (a header strip is a uniform row of tiles). Accent color
+ * and a health-chip toggle make display treatment explicit; health chips are OFF by
+ * default so headers never show unexplained status labels.
  */
-const HEADER_INSPECTOR = {
-    tabs: OPERATIONAL_INTELLIGENCE_INSPECTOR.tabs
-        .filter((t) => t.key !== "placement")
-        .map((t) =>
-            t.key !== "card"
-                ? t
-                : {
-                      ...t,
-                      fields: t.fields.map((f) =>
-                          f.key !== "size" ? f : { ...f, options: (f.options ?? []).filter((o) => o.value !== "tall") },
-                      ),
-                  },
-        ),
+const HEADER_INSPECTOR: InspectorSchema = {
+    tabs: [
+        {
+            key: "card",
+            label: "Card",
+            fields: [
+                { key: "title", label: "Title", kind: "text" },
+                { key: "visibility", label: "Visible on the surface", kind: "toggle", defaultOn: true },
+            ],
+        },
+        { key: "content", label: "Content", fields: [{ key: "contentId", label: "Metric", kind: "content" }] },
+        {
+            key: "display",
+            label: "Display",
+            fields: [
+                { key: "rendererKey", label: "Renderer (KPI or Trend)", kind: "renderer" },
+                { key: "accent", label: "Accent color", kind: "select", options: ACCENT_OPTIONS },
+            ],
+        },
+        {
+            key: "behavior",
+            label: "Behavior",
+            fields: [
+                { key: "showHealthChip", label: "Show health chip", kind: "toggle", defaultOn: false, help: "Health comes from the metric's thresholds; off by default for a clean header." },
+                {
+                    key: "comparison",
+                    label: "Comparison",
+                    kind: "select",
+                    options: [
+                        { value: "off", label: "Off" },
+                        { value: "prior", label: "Prior period" },
+                    ],
+                },
+            ],
+        },
+    ],
 };
 
 const kpi = (instanceId: string, contentId: string) => ({ instanceId, cardTypeKey: "kpi", contentId, config: { rendererKey: "kpi_card", visibility: "on" } });
@@ -67,8 +109,8 @@ function headerDefinition(opts: {
         title: opts.title,
         sections: "none",
         density: "compact",
-        cardTypes: OPERATIONAL_INTELLIGENCE_CARD_TYPES,
-        renderers: OPERATIONAL_INTELLIGENCE_RENDERERS,
+        cardTypes: HEADER_CARD_TYPES,
+        renderers: HEADER_RENDERERS,
         contentSource: operationalIntelligenceContentSource(),
         inspectorSchema: HEADER_INSPECTOR,
         runtimeRenderer: operationalMetricRuntimeRenderer,

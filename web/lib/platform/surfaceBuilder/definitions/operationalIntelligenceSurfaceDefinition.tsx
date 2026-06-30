@@ -348,25 +348,32 @@ const runtimeRenderer: SurfaceRuntimeRenderer = {
         const tone = acc ? { ...baseTone, rail: acc.rail, chip: acc.chip, stroke: acc.stroke } : baseTone;
         const dimmed = cfg.visibility === "off";
 
-        // Compact (header) cards: a tight metric tile. Size visibly changes the height/number:
-        // standard/wide are a step larger than compact; tall is disabled for headers.
+        // Compact (header) tiles: a uniform KPI/Trend tile. Renderer changes the body
+        // (Trend adds a sparkline); the health chip is off unless explicitly enabled; accent
+        // controls color. Headers are a single readable row, so there is no size variation.
         if (ctx.density === "compact") {
-            const big = ctx.size === "standard" || ctx.size === "wide";
+            const showChip = cfg.showHealthChip === "on";
+            const isTrend = renderer === "trend_card" || renderer === "sparkline" || renderer === "line_chart" || renderer === "area_chart";
             return (
-                <div className={`relative overflow-hidden rounded-lg border border-alloy-stone/15 bg-white ${big ? "px-3 py-3" : "px-2.5 py-2"} shadow-[0_1px_2px_rgba(15,23,42,0.05)] ${dimmed ? "opacity-50" : ""}`} data-metric-visual={`metric_${renderer}`}>
+                <div className={`relative overflow-hidden rounded-lg border border-alloy-stone/15 bg-white px-3 py-2.5 shadow-[0_1px_2px_rgba(15,23,42,0.05)] ${dimmed ? "opacity-50" : ""}`} data-metric-visual={`metric_${renderer}`}>
                     <span className={`absolute inset-y-0 left-0 w-[3px] ${tone.rail}`} aria-hidden="true" />
                     <div className="flex items-center justify-between gap-1.5 pl-1.5">
-                        <p className={`min-w-0 flex-1 ${big ? "text-[12px]" : "text-[11px]"} font-semibold text-alloy-midnight`} style={{ display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{title}</p>
-                        {hasContent ? <span className={`shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-semibold ${tone.chip}`}>{tone.label}</span> : null}
+                        <p className="min-w-0 flex-1 text-[11px] font-semibold text-alloy-midnight" style={{ display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{title}</p>
+                        {hasContent && showChip ? <span className={`shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-semibold ${tone.chip}`}>{tone.label}</span> : null}
                     </div>
                     <div className="mt-1 flex items-baseline gap-1 pl-1.5">
                         {hasContent ? (
                             <>
-                                <span className={`${big ? "text-[26px]" : "text-[19px]"} font-bold leading-none tracking-tight text-alloy-midnight`}>{s.value}</span>
+                                <span className="text-[22px] font-bold leading-none tracking-tight text-alloy-midnight">{s.value}</span>
                                 {s.unit ? <span className="text-[11px] font-semibold text-alloy-midnight/45">{s.unit}</span> : null}
                             </>
                         ) : <span className="text-[11px] font-medium text-alloy-midnight/35">Pick content →</span>}
                     </div>
+                    {hasContent && isTrend ? (
+                        <svg viewBox="0 0 120 20" preserveAspectRatio="none" className="mt-1 h-4 w-full pl-1.5">
+                            <polyline points="0,15 24,12 48,14 72,8 96,11 120,5" fill="none" stroke={tone.stroke} strokeWidth="2" />
+                        </svg>
+                    ) : null}
                 </div>
             );
         }

@@ -49,6 +49,9 @@ export function SurfaceBuilder({ definition }: { definition: SurfaceDefinition }
     const [addCardFor, setAddCardFor] = useState<string | null>(null);
     const [toast, setToast] = useState(false);
     const [runtimeDoc, setRuntimeDoc] = useState<SurfaceDoc | null>(null);
+    // Once the operator picks "Start blank", show the (empty) canvas + Add card instead of
+    // looping back to the template chooser.
+    const [startedBlank, setStartedBlank] = useState(false);
 
     // Load the working doc once (dispatch only in the async callback).
     useEffect(() => {
@@ -167,7 +170,8 @@ export function SurfaceBuilder({ definition }: { definition: SurfaceDefinition }
                     onConfirmAddCard={confirmAddCard}
                     onRemoveCard={(id) => dispatch({ type: "removeCard", instanceId: id })}
                     onApplyTemplate={definition.template ? applyTemplate : undefined}
-                    onStartBlank={startBlank}
+                    onStartBlank={() => { startBlank(); setStartedBlank(true); }}
+                    startedBlank={startedBlank}
                     toast={toast}
                 />
 
@@ -343,6 +347,7 @@ function SurfaceCanvas({
     onRemoveCard,
     onApplyTemplate,
     onStartBlank,
+    startedBlank,
     toast,
 }: {
     definition: SurfaceDefinition;
@@ -358,6 +363,7 @@ function SurfaceCanvas({
     onRemoveCard: (id: string) => void;
     onApplyTemplate?: () => void;
     onStartBlank?: () => void;
+    startedBlank?: boolean;
     toast: boolean;
 }): ReactElement {
     const dense = definition.density === "compact";
@@ -365,7 +371,9 @@ function SurfaceCanvas({
     // rows (no auto-rows-fr) so compact tiles are short, not stretched-skinny.
     const gridCols = dense ? "grid-cols-2 md:grid-cols-3 lg:grid-cols-4" : "grid-cols-2 md:grid-cols-3 xl:grid-cols-4";
     const rowSizing = dense ? "" : "auto-rows-fr";
-    const surfaceEmpty = chrome && countCards(doc) === 0;
+    // Show the template/blank chooser only on an untouched empty surface — once the operator
+    // starts blank, fall through to the canvas (with Add card) so they can build.
+    const showStartChooser = chrome && countCards(doc) === 0 && Boolean(onApplyTemplate) && !startedBlank;
     const banner =
         mode === "preview"
             ? { text: "Preview — exactly what operators will see", cls: "bg-alloy-blue/[0.06] text-alloy-blue border-alloy-blue/20" }
@@ -379,7 +387,7 @@ function SurfaceCanvas({
                 <span>●</span> {banner.text}
             </div>
             <div className="min-h-0 flex-1 overflow-y-auto px-6 py-6">
-                {surfaceEmpty && onApplyTemplate ? (
+                {showStartChooser ? (
                     <div className="mx-auto mt-6 max-w-md rounded-xl border border-dashed border-alloy-stone/25 bg-white p-7 text-center" data-surface-start>
                         <p className="text-base font-bold text-alloy-midnight">Start your {definition.title}</p>
                         <p className="mx-auto mt-1 max-w-sm text-xs text-alloy-midnight/55">Begin from the default template, or start blank and build your own. You can remove every card and compose the surface from scratch.</p>
@@ -389,7 +397,7 @@ function SurfaceCanvas({
                         </div>
                     </div>
                 ) : null}
-                {surfaceEmpty && onApplyTemplate ? null : doc.sections.map((section) => (
+                {showStartChooser ? null : doc.sections.map((section) => (
                     <div key={section.sectionId} className="mb-8">
                         {definition.sections !== "none" ? (
                             <div className="mb-3.5 flex items-baseline gap-2.5">
@@ -632,14 +640,15 @@ function InspectorFieldView({
                 </select>,
             );
         case "toggle": {
-            const on = cfg[field.key] !== "off";
+            const raw = cfg[field.key];
+            const on = raw === "on" ? true : raw === "off" ? false : (field.defaultOn ?? true);
             return wrap(
                 <button
                     type="button"
                     onClick={() => onUpdate({ config: { [field.key]: on ? "off" : "on" } })}
                     className={`flex w-full items-center justify-between rounded-lg border px-3 py-2 text-xs font-semibold ${on ? "border-alloy-pine/40 bg-alloy-pine/[0.06] text-alloy-pine" : "border-alloy-stone/20 text-alloy-midnight/60"}`}
                 >
-                    <span>{on ? "Visible" : "Hidden"}</span>
+                    <span>{on ? "On" : "Off"}</span>
                     <span className={`relative h-5 w-9 rounded-full ${on ? "bg-alloy-pine" : "bg-alloy-stone/30"}`}>
                         <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white transition-all ${on ? "left-[18px]" : "left-0.5"}`} />
                     </span>

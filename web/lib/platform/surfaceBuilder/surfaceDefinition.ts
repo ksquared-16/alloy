@@ -108,6 +108,8 @@ export type InspectorField = {
     kind: InspectorFieldKind;
     options?: readonly { value: string; label: string }[];
     help?: string;
+    /** Default state for a `toggle` field when the card has no explicit value. */
+    defaultOn?: boolean;
 };
 
 export type InspectorTab = { key: string; label: string; fields: readonly InspectorField[] };
