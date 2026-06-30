@@ -112,7 +112,9 @@ describe("Focus Panel Universal Card presentation", () => {
     it("summary communications card renderer stays context-only", () => {
         const renderer = readSrc("components/admin/focusPanel/FocusPanelCardRenderer.tsx");
         expect(renderer).not.toContain("CommunicationsDrawerSection");
-        expect(renderer).toContain('focusPanelMode !== "activity"');
+        // CommunicationsCard is a pure card — it bypasses compat entirely (stricter than the old activity gate).
+        expect(renderer).toContain("CommunicationsCard");
+        expect(renderer).not.toContain('case "communications"');
     });
 
     it("work idle checklist follows Why Now → step → blockers order", () => {
