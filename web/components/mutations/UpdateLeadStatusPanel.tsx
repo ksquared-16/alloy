@@ -23,6 +23,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { MutationResult, EvaluationWarning } from "@/lib/mutations/types";
+import { UPDATE_LEAD_STATUS_COMMAND_KEY } from "@/lib/mutations/domains/leadStatus";
 
 type StatusOption = {
     value: string;
@@ -85,7 +86,7 @@ export function UpdateLeadStatusPanel({
                     credentials: "include",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({
-                        command_key: "update_lead_status",
+                        command_key: UPDATE_LEAD_STATUS_COMMAND_KEY,
                         subject_id: opportunityId,
                         subject_type: "opportunity",
                         target_state: selectedKey,
@@ -134,7 +135,7 @@ export function UpdateLeadStatusPanel({
                 credentials: "include",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
-                    command_key: "update_lead_status",
+                    command_key: UPDATE_LEAD_STATUS_COMMAND_KEY,
                     subject_id: opportunityId,
                     subject_type: "opportunity",
                     target_state: selectedKey,

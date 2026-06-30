@@ -19,6 +19,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { MutationResult, EvaluationWarning } from "@/lib/mutations/types";
+import { UPDATE_CHILD_ENROLLMENT_STATUS_COMMAND_KEY } from "@/lib/mutations/domains/enrollmentStatus";
 
 type StatusOption = {
     value: string;
@@ -84,7 +85,7 @@ export function ChildEnrollmentStatusPanel({
                     credentials: "include",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({
-                        command_key: "update_child_enrollment_status",
+                        command_key: UPDATE_CHILD_ENROLLMENT_STATUS_COMMAND_KEY,
                         subject_id: ocmId,
                         subject_type: "opportunity_customer_member",
                         target_state: selectedKey,
@@ -137,7 +138,7 @@ export function ChildEnrollmentStatusPanel({
                 credentials: "include",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
-                    command_key: "update_child_enrollment_status",
+                    command_key: UPDATE_CHILD_ENROLLMENT_STATUS_COMMAND_KEY,
                     subject_id: ocmId,
                     subject_type: "opportunity_customer_member",
                     target_state: selectedKey,
