@@ -82,13 +82,65 @@ Location
 
 When room-based scheduling is built, the join will be `program_offerings ↔ rooms` (many-to-many), not `commercial_tuition_rates ↔ rooms`. Rates stay program/variant-scoped.
 
+## Fees, Add-ons & Deposits
+
+Three separate primitives — not subtypes of one another.
+
+### Fees (`commercial_fees`)
+
+Required or triggered charges beyond tuition. Examples: registration fee, application fee, materials fee, annual re-enrollment fee.
+
+- `fee_type` enum: `registration | application | materials | annual | other`
+- `cadence_key = null` → one-time. Non-null (e.g. `annual`) → recurring.
+- `is_required` distinguishes a mandatory charge from an optional one.
+- Commercial owns fee definitions and amounts. Billing owns when and whether to post the charge.
+
+### Add-ons (`commercial_addons`)
+
+Optional recurring or one-time commercial products families can elect. Examples: extended care, enrichment, lunch program, transportation.
+
+- `addon_type` enum: `extended_care | enrichment | lunch | transport | other`
+- `cadence_key` is required (e.g. `monthly`, `weekly`, `per_session`, `one_time`).
+- An add-on is a commercial product definition. Enrollment linkage (which families elected this add-on) is a separate domain not yet built.
+
+### Deposits (`commercial_deposits`)
+
+A deposit is a separate primitive — not a fee subtype — because it has a distinct refund lifecycle.
+
+- `is_refundable`: whether the deposit is returned on departure.
+- `apply_to_balance`: whether the deposit is credited toward the first tuition charge at billing time.
+- `due_timing` enum: `at_enrollment | at_acceptance | at_contract | other`
+- Refund processing is owned by Billing V2 (not yet built).
+
+### Scope model
+
+All three tables share the same scope pattern:
+
+| `location_id` | `program_key` | Scope |
+|---|---|---|
+| null | null | Org-wide default — applies to all programs at all locations |
+| non-null | null | Location-specific — applies to all programs at that location |
+| null | non-null | Program-specific — applies to that program at all locations |
+| non-null | non-null | Program + location — most specific |
+
+Scope resolution is currently UI-side only. There is no server-side inheritance or fallback — each record is independent. The `formatScope` helper in `lib/commercial/feesAddons.ts` formats scope for display.
+
+### What is deferred
+
+The following are **not** built in Commercial Experience 02 and must not be added until explicitly scoped:
+
+- Pass/package model (enrollment in a bundle of add-on sessions)
+- Automated fee triggers (posting a fee when a condition fires)
+- Family-level overrides (waiving or adjusting a fee for a specific family)
+- Add-on enrollment linkage (tracking which families have elected an add-on)
+- Refund lifecycle and deposit release (Billing V2 domain)
+
 ## Future commercial domains (not yet built)
 
 These domains are planned but not implemented. Do not build until explicitly scoped.
 
 | Domain | Covers | Relationship to current model |
 |---|---|---|
-| **Fees & Add-Ons** | Deposits, registration fees, supplies | Charged at enrollment or event, not recurring tuition; separate rate table |
 | **Add-On Programs** | Enrichment passes, extended care, after-school | Separate program_offerings in their own program category; billed independently |
 | **Funding Sources** | Subsidies, vouchers, scholarships | Applies against tuition rates at billing time; separate domain with payer splits |
 | **Billing Policies** | Sibling discounts, late fees, grace periods, proration rules | Policy engine applied at charge-generation time |
