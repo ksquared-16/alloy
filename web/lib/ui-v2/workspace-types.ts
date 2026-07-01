@@ -67,17 +67,19 @@ export type OperationalAnswer = {
  *  should resolve to OperationalAnswer directly; this is for existing call sites. */
 export function kpiVmToOperationalAnswer(k: KPIVm): OperationalAnswer {
   const isRisk = k.tone === "risk";
+  const answer = isRisk ? "Needs attention" : "On track";
   return {
     key: k.id,
     label: k.label,
     primaryValue: k.unit ? `${k.value} ${k.unit}` : k.value,
     state: isRisk ? "caution" : "healthy",
-    answer: isRisk ? "Needs attention" : "Healthy",
+    answer,
     evidence: k.aiSummary,
     trend: k.trend
       ? { direction: k.trend, magnitude: "", window: "", valence: "neutral" }
       : undefined,
     freshness: { isLive: false },
+    recommendedDrill: { label: `Open ${answer.toLowerCase()}`, surface: k.id },
     emptyState: { message: `No data for ${k.label}` },
     lane: k.lane === "ai" ? "ai" : "operational",
     sourceCalculationKey: k.id,

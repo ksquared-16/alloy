@@ -30,62 +30,50 @@ export default function OperationalAnswerStrip({
 }
 
 function CompactInstrument({ answer }: { answer: OperationalAnswer }) {
-  const stateClass = `alloy-ci--${answer.state}`;
-  const laneClass = answer.lane === "ai" ? "alloy-ci--ai" : "";
+  const hasDrill = Boolean(answer.recommendedDrill);
+  const drillLabel = answer.recommendedDrill?.label;
 
-  const trendIcon =
-    answer.trend?.direction === "up"
-      ? "↑"
-      : answer.trend?.direction === "down"
-        ? "↓"
-        : "—";
+  const classes = [
+    "alloy-ci",
+    `alloy-ci--${answer.state}`,
+    answer.lane === "ai" ? "alloy-ci--ai" : "",
+    hasDrill ? "alloy-ci--drillable" : "",
+  ].filter(Boolean).join(" ");
 
   return (
     <div
-      className={["alloy-ci", stateClass, laneClass].filter(Boolean).join(" ")}
-      role="listitem"
+      className={classes}
+      role={hasDrill ? "button" : "listitem"}
+      tabIndex={hasDrill ? 0 : undefined}
+      aria-label={
+        hasDrill
+          ? `${answer.label}: ${answer.answer}, ${answer.primaryValue}. ${drillLabel}`
+          : `${answer.label}: ${answer.answer}, ${answer.primaryValue}`
+      }
     >
-      <div className="alloy-ci__top">
-        <span className="alloy-ci__dot" aria-hidden="true" />
-        <span className="alloy-ci__label">{answer.label}</span>
-      </div>
+      {/* Category label — muted, structural */}
+      <span className="alloy-ci__label">{answer.label}</span>
 
-      <div className="alloy-ci__value" aria-label={`${answer.label}: ${answer.primaryValue}`}>
-        {answer.primaryValue}
-      </div>
-
-      <div className="alloy-ci__answer">{answer.answer}</div>
-
-      {answer.evidence && (
-        <div className="alloy-ci__evidence">{answer.evidence}</div>
-      )}
-
-      <div className="alloy-ci__foot">
-        {answer.trend && answer.trend.magnitude ? (
-          <span
-            className={`alloy-ci__trend alloy-ci__trend--${answer.trend.valence}`}
-            aria-label={`Trend: ${answer.trend.direction} ${answer.trend.magnitude} ${answer.trend.window}`}
-          >
-            {trendIcon} {answer.trend.magnitude}
-            {answer.trend.window ? ` ${answer.trend.window}` : ""}
-          </span>
-        ) : null}
-
-        {answer.freshness.isLive ? (
-          <span className="alloy-ci__fresh" aria-label="Live data">
-            <span className="alloy-ci__live-dot" aria-hidden="true" />
-            live
-          </span>
-        ) : answer.freshness.updatedAt ? (
-          <span className="alloy-ci__fresh">{answer.freshness.updatedAt}</span>
-        ) : null}
-      </div>
-
-      {answer.recommendedDrill && (
-        <span className="alloy-ci__drill" aria-label={`Open ${answer.recommendedDrill.label}`}>
-          {answer.recommendedDrill.label} ↗
+      {/* Answer slot — semantic text at rest, drill CTA on hover */}
+      <span className="alloy-ci__answer-wrap">
+        <span className="alloy-ci__answer">
+          <span className="alloy-ci__dot" aria-hidden="true" />
+          {answer.answer}
         </span>
-      )}
+        {hasDrill && (
+          <span className="alloy-ci__answer-drill" aria-hidden="true">
+            {drillLabel} →
+          </span>
+        )}
+      </span>
+
+      {/* Value — supporting the answer, always structural Forge */}
+      <span
+        className="alloy-ci__value"
+        aria-hidden="true"
+      >
+        {answer.primaryValue}
+      </span>
     </div>
   );
 }
