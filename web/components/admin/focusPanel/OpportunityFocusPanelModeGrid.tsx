@@ -19,7 +19,7 @@ import {
 import { FOCUS_PANEL_SUMMARY_DEFAULT_DOC } from "@/lib/adminV2/runtime/focusPanel/buildFocusPanelSummaryDefaultDoc";
 import { buildOpportunityFocusPanelMutation } from "@/lib/adminV2/runtime/focusPanel/focusPanelMutation";
 import type { CompositionCardInput } from "@/lib/adminV2/runtime/focusPanel/composition/composeFocusPanelSurface";
-import { readFocusPanelPublishedLayout } from "@/lib/adminV2/runtime/focusPanel/composition/focusPanelPublishedLayout";
+import { publishedLayoutReadingOrder, readFocusPanelPublishedLayout } from "@/lib/adminV2/runtime/focusPanel/composition/focusPanelPublishedLayout";
 import {
     isElevatedLevel,
     type FocusPanelActiveDepth,
@@ -101,6 +101,26 @@ export default function OpportunityFocusPanelModeGrid({
         () => (isSummary ? readFocusPanelPublishedLayout(activeDoc) : null),
         [isSummary, activeDoc],
     );
+
+    // ── Layout SOURCE tracer (the "correct → overwritten" diagnostic) ────────
+    // Records, whenever the resolved layout changes, WHERE the runtime layout came from
+    // (published doc vs code default), whether a published layout/grid is present, and the
+    // authored card order — so a reflow can be pinned to its source. Dev-only; exposed as
+    // `window.__focusPanelLayoutLog` (history) + `window.__focusPanelLayoutSource` (latest).
+    useEffect(() => {
+        if (!isSummary || typeof window === "undefined" || process.env.NODE_ENV === "production") return;
+        const entry = {
+            docSource: publishedDoc ? "published-doc" : "default-doc",
+            publishedLayout: publishedLayout ? "present" : "null",
+            grid: publishedLayout?.grid ? "present" : "absent",
+            gridAreas: publishedLayout?.grid?.areas.length ?? 0,
+            order: publishedLayout ? publishedLayoutReadingOrder(publishedLayout) : [],
+            sections: activeDoc?.sections?.length ?? 0,
+        };
+        const w = window as unknown as { __focusPanelLayoutSource?: unknown; __focusPanelLayoutLog?: unknown[] };
+        w.__focusPanelLayoutSource = entry;
+        (w.__focusPanelLayoutLog ||= []).push(entry);
+    }, [isSummary, publishedDoc, publishedLayout, activeDoc]);
 
     // Adapter seam: composed subject payload → Operational Context. Cards consume
     // this boundary, never the drawer VM directly. Built once; observed by cards.

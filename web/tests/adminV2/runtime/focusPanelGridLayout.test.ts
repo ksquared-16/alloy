@@ -5,9 +5,11 @@ import {
     isFocusPanelPublishedLayout,
     planPublishedLayout,
     publishedLayoutReadingOrder,
+    readFocusPanelPublishedLayout,
     PUBLISHED_LAYOUT_MIN_PX,
     type FocusPanelGridLayout,
 } from "@/lib/adminV2/runtime/focusPanel/composition/focusPanelPublishedLayout";
+import { withPublishedLayoutMetadata } from "@/lib/adminV2/runtime/focusPanel/composition/focusPanelPublishedLayoutOps";
 import {
     addCardToGrid,
     buildPublishedLayoutFromGrid,
@@ -84,6 +86,22 @@ describe("focusPanelGridLayout — V5 responsive grid", () => {
         expect(planPublishedLayout(buildPublishedLayoutFromGrid(A), 1040).areas.find((a) => a.card === "household")!.rowSpan).toBe(2);
         expect(planPublishedLayout(buildPublishedLayoutFromGrid(B), 1040).areas.find((a) => a.card === "children")!.rowSpan).toBe(2);
         expect(planPublishedLayout(buildPublishedLayoutFromGrid(C), 1040).areas.find((a) => a.card === "readiness_kpi")!.rowSpan).toBe(3);
+    });
+
+    it("PRESERVES the grid through the publish round-trip — never persists a rows-only stack", () => {
+        // The reported bug: the builder holds the grid correctly, but publishing pruned the
+        // `grid` away, persisting only the reading-order full-width `rows` fallback → the
+        // work-unit runtime rendered a single full-width STACK instead of the authored grid.
+        const layout = buildPublishedLayoutFromGrid(C); // { grid, rows: full-width stack }
+        const metadata = withPublishedLayoutMetadata(null, layout); // publish path (prunes)
+        const readBack = readFocusPanelPublishedLayout({ metadata });
+        expect(readBack).not.toBeNull();
+        expect(readBack!.grid).toBeDefined(); // the grid SURVIVES persistence (the fix)
+
+        const plan = planPublishedLayout(readBack!, 1040);
+        expect(plan.strategy).toBe("grid"); // renders the grid, NOT a rows stack
+        // Readiness still spans 3 rows at its authored coordinates — order is not flattened.
+        expect(plan.areas.find((a) => a.card === "readiness_kpi")!).toMatchObject({ colStart: 9, rowStart: 1, rowSpan: 3 });
     });
 
     it("collapses to a single column in reading order (top→bottom, left→right) when narrow", () => {
