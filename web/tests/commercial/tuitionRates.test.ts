@@ -26,6 +26,8 @@ function makeRow(overrides: Partial<TuitionRateRow> = {}): TuitionRateRow {
         rate_cents: 120000,
         is_active: true,
         not_offered: false,
+        effective_start: null,
+        effective_end: null,
         metadata: {},
         created_at: "2026-01-01T00:00:00Z",
         updated_at: null,

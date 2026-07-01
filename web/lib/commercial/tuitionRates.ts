@@ -21,6 +21,10 @@ export type TuitionRateRow = {
     is_active: boolean;
     /** Explicitly not offered at this scope/cadence — distinct from "no rate set". */
     not_offered: boolean;
+    /** Optional: date from which this rate is effective (ISO date string, YYYY-MM-DD). */
+    effective_start: string | null;
+    /** Optional: date after which this rate expires (ISO date string, YYYY-MM-DD). */
+    effective_end: string | null;
     metadata: Record<string, unknown>;
     created_at: string;
     updated_at: string | null;

@@ -4,7 +4,7 @@ import { getAdminContextCached } from "@/lib/admin/getAdminContext";
 import type { TuitionRateRow } from "@/lib/commercial/tuitionRates";
 
 const SELECT_COLS =
-    "id, org_id, location_id, variant_id, cadence_key, payer_type, rate_cents, is_active, not_offered, metadata, created_at, updated_at";
+    "id, org_id, location_id, variant_id, cadence_key, payer_type, rate_cents, is_active, not_offered, effective_start, effective_end, metadata, created_at, updated_at";
 
 function mapRateRow(r: Record<string, unknown>): TuitionRateRow {
     return {
@@ -17,6 +17,8 @@ function mapRateRow(r: Record<string, unknown>): TuitionRateRow {
         rate_cents: Number(r.rate_cents ?? 0),
         is_active: r.is_active !== false,
         not_offered: r.not_offered === true,
+        effective_start: (r.effective_start as string | null | undefined) ?? null,
+        effective_end: (r.effective_end as string | null | undefined) ?? null,
         metadata:
             r.metadata != null && typeof r.metadata === "object" && !Array.isArray(r.metadata)
                 ? (r.metadata as Record<string, unknown>)
@@ -110,6 +112,8 @@ export async function POST(request: NextRequest) {
     const location_id = body.location_id != null ? String(body.location_id).trim() : null;
     const payer_type = String(body.payer_type ?? "private_pay").trim();
     const is_active = body.is_active !== false;
+    const effective_start = body.effective_start != null ? String(body.effective_start).trim() || null : null;
+    const effective_end = body.effective_end != null ? String(body.effective_end).trim() || null : null;
 
     if (!variant_id) return NextResponse.json({ error: "variant_id is required" }, { status: 400 });
     if (!cadence_key) return NextResponse.json({ error: "cadence_key is required" }, { status: 400 });
@@ -158,6 +162,8 @@ export async function POST(request: NextRequest) {
         rate_cents: Math.round(rate_cents ?? 0),
         not_offered,
         is_active,
+        effective_start: effective_start ?? null,
+        effective_end: effective_end ?? null,
         updated_at: new Date().toISOString(),
     };
 

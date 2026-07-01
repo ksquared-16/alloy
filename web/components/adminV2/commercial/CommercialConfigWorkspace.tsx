@@ -49,7 +49,14 @@ type SiteLocation = { id: string; name: string };
 type ProgramEntry = { key: string; label: string; siteCount: number };
 type SecondaryTab = "programs" | "tuition";
 type PayerTab = "private" | "subsidy" | "corporate";
-type OnSave = (variantId: string, cadenceKey: string, payload: { rate_cents?: number; not_offered?: boolean }) => Promise<void>;
+
+type RatePayload = {
+    rate_cents?: number;
+    not_offered?: boolean;
+    effective_start?: string | null;
+    effective_end?: string | null;
+};
+type OnSave = (variantId: string, cadenceKey: string, payload: RatePayload) => Promise<void>;
 
 // ─── Constants ─────────────────────────────────────────────────────────────────
 
@@ -85,29 +92,37 @@ const BULK_PRESETS: Record<string, number[]> = {
 const inputCls =
     "rounded border border-alloy-forge/15 bg-white px-2 py-1 text-xs text-alloy-midnight focus:border-alloy-pine/40 focus:outline-none";
 
-// ─── CadenceRateRow ─────────────────────────────────────────────────────────────
+// ─── GridCell ──────────────────────────────────────────────────────────────────
+// Inline-editable cell in the offering×cadence rate table.
 
-function CadenceRateRow({ variant, cadence, rateRow, locationId, onSave, onClear }: {
+function GridCell({ variant, cadence, rateRow, orgDefaultRow, locationId, onSave, onClear }: {
     variant: ProgramOfferingVariant;
     cadence: BillingCadence;
-    rateRow: TuitionRateRow;
+    rateRow: TuitionRateRow | undefined;
+    orgDefaultRow: TuitionRateRow | undefined;
     locationId: string | null;
     onSave: OnSave;
     onClear: (id: string) => Promise<void>;
 }) {
     const [editing, setEditing] = useState(false);
     const [draft, setDraft] = useState("");
+    const [effectiveStart, setEffectiveStart] = useState("");
+    const [effectiveEnd, setEffectiveEnd] = useState("");
     const [saving, setSaving] = useState(false);
     const inputRef = useRef<HTMLInputElement>(null);
 
     const isLocationView = locationId !== null;
-    const isLocOverride = isLocationView && rateRow.location_id === locationId;
-    const isInherited = isLocationView && rateRow.location_id === null;
-    const isNotOffered = rateRow.not_offered === true;
+    const isLocOverride = isLocationView && rateRow?.location_id === locationId;
+    const isInherited = isLocationView && rateRow?.location_id === null;
+    const isNotOffered = rateRow?.not_offered === true;
+    const displayRate = rateRow && !isNotOffered ? rateRow.rate_cents : null;
+    const showOrgFallback = !rateRow && orgDefaultRow && !orgDefaultRow.not_offered;
 
     function startEdit() {
         if (isNotOffered) return;
-        setDraft(rateRow.rate_cents > 0 ? String(rateRow.rate_cents / 100) : "");
+        setDraft(displayRate != null ? String(displayRate / 100) : "");
+        setEffectiveStart(rateRow?.effective_start ?? "");
+        setEffectiveEnd(rateRow?.effective_end ?? "");
         setEditing(true);
         setTimeout(() => inputRef.current?.focus(), 0);
     }
@@ -116,7 +131,11 @@ function CadenceRateRow({ variant, cadence, rateRow, locationId, onSave, onClear
         const cents = parseDollarsToCents(draft);
         if (cents === null) { setEditing(false); return; }
         setSaving(true);
-        await onSave(variant.id, cadence.item_key, { rate_cents: cents });
+        await onSave(variant.id, cadence.item_key, {
+            rate_cents: cents,
+            effective_start: effectiveStart || null,
+            effective_end: effectiveEnd || null,
+        });
         setSaving(false);
         setEditing(false);
     }
@@ -127,164 +146,89 @@ function CadenceRateRow({ variant, cadence, rateRow, locationId, onSave, onClear
         setSaving(false);
     }
 
-    async function handleRemove() {
-        if (!rateRow.id || isInherited) return;
-        setSaving(true);
-        await onClear(rateRow.id);
-        setSaving(false);
-    }
-
-    return (
-        <div className={`flex items-center gap-3 px-4 py-2.5 group border-b border-alloy-stone/10 last:border-0 ${saving ? "opacity-50" : ""}`}>
-            <span className="text-sm text-alloy-midnight/50 w-24 shrink-0">{cadence.label}</span>
-            <div className="flex-1">
-                {editing ? (
+    if (editing) {
+        return (
+            <td className="px-2 py-1.5 align-top" style={{ minWidth: 130 }}>
+                <div className="space-y-1">
                     <input
                         ref={inputRef}
                         value={draft}
                         onChange={(e) => setDraft(e.target.value)}
-                        onBlur={() => void commitEdit()}
-                        onKeyDown={(e) => {
-                            if (e.key === "Enter") void commitEdit();
-                            if (e.key === "Escape") setEditing(false);
-                        }}
-                        className="w-28 rounded border border-alloy-pine/50 bg-white px-2 py-0.5 text-sm text-right focus:outline-none"
+                        onKeyDown={(e) => { if (e.key === "Enter") void commitEdit(); if (e.key === "Escape") setEditing(false); }}
+                        className="w-full rounded border border-alloy-pine/50 px-2 py-0.5 text-sm text-right focus:outline-none"
                         placeholder="0.00"
                     />
-                ) : isNotOffered ? (
-                    <span className="text-sm text-alloy-midnight/30 line-through">N/A</span>
-                ) : rateRow.rate_cents > 0 ? (
-                    <button
-                        type="button"
-                        onClick={startEdit}
-                        className={`text-sm font-medium hover:text-alloy-pine transition-colors flex items-center gap-1.5 ${isInherited ? "text-alloy-midnight/40 italic font-normal" : "text-alloy-midnight"}`}
-                    >
-                        {isLocOverride && <span className="w-1.5 h-1.5 rounded-full bg-alloy-pine/70 shrink-0" />}
-                        {formatRateCents(rateRow.rate_cents)}
-                        {isInherited && <span className="ml-1 text-xs text-alloy-midnight/30 font-normal not-italic">(org default)</span>}
-                    </button>
-                ) : (
-                    <button type="button" onClick={startEdit} className="text-sm text-alloy-midnight/25 hover:text-alloy-pine transition-colors">Set price…</button>
-                )}
-            </div>
-            <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
-                <button
-                    type="button"
-                    onClick={() => void toggleNotOffered()}
-                    className={`rounded px-1.5 py-0.5 text-xs transition-colors ${isNotOffered ? "bg-alloy-stone/25 text-alloy-midnight/50 hover:bg-alloy-stone/40" : "text-alloy-midnight/30 hover:text-alloy-midnight/60 hover:bg-alloy-stone/15"}`}
-                >
-                    {isNotOffered ? "↩ offered" : "N/A"}
-                </button>
-                {!isInherited && (
-                    <button type="button" onClick={() => void handleRemove()} className="text-alloy-midnight/20 hover:text-red-400 text-sm px-1 transition-colors" title={isLocOverride ? "Remove location override" : "Remove rate basis"}>×</button>
-                )}
-            </div>
-        </div>
-    );
-}
-
-// ─── AddCadenceRow ─────────────────────────────────────────────────────────────
-
-function AddCadenceRow({ variantId, availableCadences, onSave }: {
-    variantId: string;
-    availableCadences: BillingCadence[];
-    onSave: OnSave;
-}) {
-    const [expanded, setExpanded] = useState(false);
-    const [selectedKey, setSelectedKey] = useState(availableCadences[0]?.item_key ?? "");
-    const [draft, setDraft] = useState("");
-    const [notOffered, setNotOffered] = useState(false);
-    const [adding, setAdding] = useState(false);
-
-    async function handleAdd() {
-        if (!selectedKey) return;
-        setAdding(true);
-        if (notOffered) {
-            await onSave(variantId, selectedKey, { not_offered: true });
-        } else {
-            const cents = parseDollarsToCents(draft);
-            if (cents === null) { setAdding(false); return; }
-            await onSave(variantId, selectedKey, { rate_cents: cents });
-        }
-        setAdding(false);
-        setExpanded(false);
-        setDraft("");
-        setNotOffered(false);
-    }
-
-    if (!expanded) {
-        return (
-            <div className="px-4 py-2">
-                <button type="button" onClick={() => setExpanded(true)} className="text-xs text-alloy-pine/70 hover:text-alloy-pine transition-colors flex items-center gap-1">
-                    <span className="text-base leading-none">+</span> Add rate basis
-                </button>
-            </div>
+                    <div className="flex gap-1">
+                        <input
+                            type="date"
+                            value={effectiveStart}
+                            onChange={(e) => setEffectiveStart(e.target.value)}
+                            className="flex-1 rounded border border-alloy-stone/25 px-1 py-0.5 text-[10px] text-alloy-midnight/60 focus:outline-none"
+                            title="Effective start (optional)"
+                        />
+                        <input
+                            type="date"
+                            value={effectiveEnd}
+                            onChange={(e) => setEffectiveEnd(e.target.value)}
+                            className="flex-1 rounded border border-alloy-stone/25 px-1 py-0.5 text-[10px] text-alloy-midnight/60 focus:outline-none"
+                            title="Effective end (optional)"
+                        />
+                    </div>
+                    <div className="flex gap-2">
+                        <button type="button" onClick={() => void commitEdit()} disabled={saving} className="text-xs font-medium text-alloy-pine disabled:opacity-50">✓ Save</button>
+                        <button type="button" onClick={() => setEditing(false)} className="text-xs text-alloy-midnight/35 hover:text-alloy-midnight">Cancel</button>
+                    </div>
+                </div>
+            </td>
         );
     }
 
     return (
-        <div className="px-4 py-2.5 bg-alloy-stone/5 border-t border-alloy-stone/10">
-            <div className="flex items-center gap-2 flex-wrap">
-                <select value={selectedKey} onChange={(e) => setSelectedKey(e.target.value)} className={inputCls}>
-                    {availableCadences.map((c) => <option key={c.item_key} value={c.item_key}>{c.label}</option>)}
-                </select>
-                {!notOffered && (
-                    <input value={draft} onChange={(e) => setDraft(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") void handleAdd(); }} placeholder="$0.00" className={`${inputCls} w-24 text-right`} autoFocus />
-                )}
-                <label className="flex items-center gap-1 text-xs text-alloy-midnight/50 cursor-pointer">
-                    <input type="checkbox" checked={notOffered} onChange={(e) => setNotOffered(e.target.checked)} className="rounded" />
-                    Not offered
-                </label>
-                <button type="button" onClick={() => void handleAdd()} disabled={adding || (!notOffered && !draft.trim())} className="rounded border border-alloy-pine/30 bg-alloy-pine/8 px-2.5 py-1 text-xs font-medium text-alloy-pine hover:bg-alloy-pine/12 disabled:opacity-50 transition-colors">
-                    {adding ? "Adding…" : "Add"}
-                </button>
-                <button type="button" onClick={() => { setExpanded(false); setDraft(""); setNotOffered(false); }} className="text-xs text-alloy-midnight/40 hover:text-alloy-midnight">Cancel</button>
-            </div>
-        </div>
+        <td
+            className={[
+                "px-3 py-2.5 text-right text-sm group/cell select-none whitespace-nowrap",
+                saving ? "opacity-50" : "",
+                isNotOffered ? "text-alloy-midnight/25" : isInherited ? "italic text-alloy-midnight/40" : "text-alloy-midnight",
+                !isNotOffered ? "cursor-pointer hover:bg-alloy-stone/5" : "",
+            ].join(" ")}
+            onClick={isNotOffered ? undefined : startEdit}
+        >
+            {isNotOffered ? (
+                <span className="inline-flex items-center gap-1">
+                    <span className="line-through text-xs">N/A</span>
+                    <button type="button" onClick={(e) => { e.stopPropagation(); void toggleNotOffered(); }} className="opacity-0 group-hover/cell:opacity-100 text-[10px] text-alloy-midnight/30 hover:text-alloy-midnight/60" title="Mark as offered">↩</button>
+                </span>
+            ) : displayRate != null ? (
+                <span className="inline-flex items-center gap-1">
+                    {isLocOverride && <span className="w-1.5 h-1.5 rounded-full bg-alloy-pine/70 shrink-0" />}
+                    <span>{formatRateCents(displayRate)}</span>
+                    {rateRow?.effective_start && (
+                        <span className="opacity-0 group-hover/cell:opacity-100 text-[9px] text-alloy-midnight/30 font-normal not-italic" title={`Effective ${rateRow.effective_start}${rateRow.effective_end ? ` – ${rateRow.effective_end}` : ""}`}>📅</span>
+                    )}
+                    <span className="opacity-0 group-hover/cell:opacity-100 inline-flex gap-0.5">
+                        <button type="button" onClick={(e) => { e.stopPropagation(); void toggleNotOffered(); }} className="text-[10px] text-alloy-midnight/25 hover:text-alloy-midnight/55" title="Mark N/A">⊘</button>
+                        {!isInherited && rateRow?.id && (
+                            <button type="button" onClick={(e) => { e.stopPropagation(); void onClear(rateRow.id); }} className="text-[10px] text-alloy-midnight/20 hover:text-red-400" title="Clear rate">×</button>
+                        )}
+                    </span>
+                </span>
+            ) : showOrgFallback ? (
+                <span className="text-alloy-midnight/25 italic text-xs">{formatRateCents(orgDefaultRow!.rate_cents)}</span>
+            ) : (
+                <span className="text-alloy-midnight/18 group-hover/cell:text-alloy-pine/50 transition-colors">
+                    —
+                    <button type="button" onClick={(e) => { e.stopPropagation(); void toggleNotOffered(); }} className="opacity-0 group-hover/cell:opacity-100 ml-1 text-[10px] text-alloy-midnight/25 hover:text-alloy-midnight/55" title="Mark N/A">⊘</button>
+                </span>
+            )}
+        </td>
     );
 }
 
-// ─── VariantRateSection ─────────────────────────────────────────────────────────
+// ─── OfferingRateGrid ──────────────────────────────────────────────────────────
+// One table per offering: variants as rows, cadences as columns.
+// "Add rate basis" adds a cadence column to this offering.
 
-function VariantRateSection({ variant, cadences, rateMap, locationId, onSave, onClear, transparent }: {
-    variant: ProgramOfferingVariant;
-    cadences: BillingCadence[];
-    rateMap: Map<string, TuitionRateRow>;
-    locationId: string | null;
-    onSave: OnSave;
-    onClear: (id: string) => Promise<void>;
-    transparent: boolean;
-}) {
-    const configured = cadences
-        .map((c) => { const key = tuitionRateCellKey(variant.id, c.item_key); const r = rateMap.get(key); return r ? { cadence: c, rateRow: r } : null; })
-        .filter(Boolean) as { cadence: BillingCadence; rateRow: TuitionRateRow }[];
-    const configuredKeys = new Set(configured.map((x) => x.cadence.item_key));
-    const available = cadences.filter((c) => !configuredKeys.has(c.item_key));
-
-    const rows = (
-        <>
-            {configured.map(({ cadence, rateRow }) => (
-                <CadenceRateRow key={cadence.item_key} variant={variant} cadence={cadence} rateRow={rateRow} locationId={locationId} onSave={onSave} onClear={onClear} />
-            ))}
-            {available.length > 0 && <AddCadenceRow variantId={variant.id} availableCadences={available} onSave={onSave} />}
-        </>
-    );
-
-    if (transparent) return <>{rows}</>;
-
-    return (
-        <div className="border-t border-alloy-stone/10">
-            <div className="px-4 py-2 bg-alloy-stone/5">
-                <span className="text-xs font-medium text-alloy-midnight/60">{describeVariant(variant)}</span>
-            </div>
-            {rows}
-        </div>
-    );
-}
-
-// ─── OfferingRateSection ───────────────────────────────────────────────────────
-
-function OfferingRateSection({ offering, variants, cadences, rateMap, orgOnlyMap, locationId, onSave, onClear }: {
+function OfferingRateGrid({ offering, variants, cadences, rateMap, orgOnlyMap, locationId, onSave, onClear }: {
     offering: ProgramOffering;
     variants: ProgramOfferingVariant[];
     cadences: BillingCadence[];
@@ -295,18 +239,108 @@ function OfferingRateSection({ offering, variants, cadences, rateMap, orgOnlyMap
     onClear: (id: string) => Promise<void>;
 }) {
     const sorted = sortVariants(variants.filter((v) => v.is_active));
-    const hasAnyRates = sorted.some((v) => cadences.some((c) => rateMap.has(tuitionRateCellKey(v.id, c.item_key))));
+    const variantIdSet = new Set(sorted.map((v) => v.id));
+
+    // Cadences that have at least one persisted rate for this offering
+    const ratedCadenceKeys = new Set<string>();
+    for (const [key] of rateMap) {
+        const parts = key.split("::");
+        if (variantIdSet.has(parts[0]!)) ratedCadenceKeys.add(parts[1]!);
+    }
+    for (const [key] of orgOnlyMap) {
+        const parts = key.split("::");
+        if (variantIdSet.has(parts[0]!)) ratedCadenceKeys.add(parts[1]!);
+    }
+
+    // Cadences added this session (column appears before first save)
+    const [localKeys, setLocalKeys] = useState<string[]>([]);
+    const [addingCol, setAddingCol] = useState(false);
+    const [newKey, setNewKey] = useState("");
+
+    const activeCadenceKeys = new Set([...ratedCadenceKeys, ...localKeys]);
+    const activeCadences = cadences.filter((c) => activeCadenceKeys.has(c.item_key));
+    const availableCadences = cadences.filter((c) => !activeCadenceKeys.has(c.item_key));
+
+    function openAddCol() {
+        const first = availableCadences[0];
+        if (first) setNewKey(first.item_key);
+        setAddingCol(true);
+    }
+
+    function confirmAddCol() {
+        if (!newKey || activeCadenceKeys.has(newKey)) return;
+        setLocalKeys((prev) => [...prev, newKey]);
+        setAddingCol(false);
+    }
 
     return (
         <div className="border border-alloy-stone/20 rounded-lg overflow-hidden">
             <div className="flex items-center justify-between px-4 py-2.5 bg-alloy-stone/5 border-b border-alloy-stone/15">
                 <span className="text-sm font-medium text-alloy-midnight">{offering.label}</span>
-                {!hasAnyRates && <span className="text-xs text-alloy-midnight/30">No rates configured</span>}
+                {activeCadences.length === 0 && <span className="text-xs text-alloy-midnight/30">No rate bases — add one below</span>}
             </div>
-            {sorted.map((v) => (
-                <VariantRateSection key={v.id} variant={v} cadences={cadences} rateMap={rateMap} locationId={locationId} onSave={onSave} onClear={onClear} transparent={isDefaultVariant(v)} />
-            ))}
-            {sorted.length === 0 && <p className="px-4 py-3 text-xs text-alloy-midnight/35">No active variants.</p>}
+
+            {sorted.length === 0 ? (
+                <p className="px-4 py-3 text-xs text-alloy-midnight/35">No active variants.</p>
+            ) : activeCadences.length === 0 ? null : (
+                <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                        <thead>
+                            <tr className="border-b border-alloy-stone/10">
+                                <th className="text-left px-4 py-1.5 text-xs font-medium text-alloy-midnight/40 w-32" />
+                                {activeCadences.map((c) => (
+                                    <th key={c.item_key} className="text-right px-3 py-1.5 text-xs font-medium text-alloy-midnight/50 whitespace-nowrap">{c.label}</th>
+                                ))}
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {sorted.map((variant, vi) => (
+                                <tr key={variant.id} className={`border-b border-alloy-stone/8 last:border-0 ${vi % 2 === 1 ? "bg-alloy-stone/3" : ""}`}>
+                                    <td className="px-4 py-2 text-xs text-alloy-midnight/55 font-medium whitespace-nowrap">
+                                        {isDefaultVariant(variant)
+                                            ? <span className="italic text-alloy-midnight/30">Default</span>
+                                            : describeVariant(variant)}
+                                    </td>
+                                    {activeCadences.map((cadence) => {
+                                        const key = tuitionRateCellKey(variant.id, cadence.item_key);
+                                        return (
+                                            <GridCell
+                                                key={cadence.item_key}
+                                                variant={variant}
+                                                cadence={cadence}
+                                                rateRow={rateMap.get(key)}
+                                                orgDefaultRow={orgOnlyMap.get(key)}
+                                                locationId={locationId}
+                                                onSave={onSave}
+                                                onClear={onClear}
+                                            />
+                                        );
+                                    })}
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+            )}
+
+            {/* Add cadence column footer */}
+            {sorted.length > 0 && availableCadences.length > 0 && (
+                <div className="px-4 py-2 border-t border-alloy-stone/8">
+                    {addingCol ? (
+                        <div className="flex items-center gap-2 flex-wrap">
+                            <select value={newKey} onChange={(e) => setNewKey(e.target.value)} className={inputCls}>
+                                {availableCadences.map((c) => <option key={c.item_key} value={c.item_key}>{c.label}</option>)}
+                            </select>
+                            <button type="button" onClick={confirmAddCol} className="rounded border border-alloy-pine/30 bg-alloy-pine/8 px-2.5 py-1 text-xs font-medium text-alloy-pine hover:bg-alloy-pine/12">Add column</button>
+                            <button type="button" onClick={() => setAddingCol(false)} className="text-xs text-alloy-midnight/40 hover:text-alloy-midnight">Cancel</button>
+                        </div>
+                    ) : (
+                        <button type="button" onClick={openAddCol} className="text-xs text-alloy-pine/70 hover:text-alloy-pine flex items-center gap-1 transition-colors">
+                            <span className="text-base leading-none">+</span> Add rate basis
+                        </button>
+                    )}
+                </div>
+            )}
         </div>
     );
 }
@@ -452,6 +486,7 @@ function VariantBulkBuilder({ offering, variants, rates, onAddVariants, onUpdate
 }
 
 // ─── OfferingGroup ──────────────────────────────────────────────────────────────
+// Collapsed by default — expand to manage variants.
 
 function OfferingGroup({ offering, variants, rates, onAddVariants, onUpdateVariant, onDeleteVariant, onEdit, onDelete }: {
     offering: ProgramOffering;
@@ -463,7 +498,9 @@ function OfferingGroup({ offering, variants, rates, onAddVariants, onUpdateVaria
     onEdit: () => void;
     onDelete: () => void;
 }) {
-    const [expanded, setExpanded] = useState(true);
+    const [expanded, setExpanded] = useState(false);
+    const variantCount = variants.filter((v) => v.is_active).length;
+
     return (
         <div className="border border-alloy-stone/20 rounded-lg overflow-hidden">
             <div className="flex items-center gap-3 px-4 py-2.5 bg-alloy-stone/5 group">
@@ -471,6 +508,7 @@ function OfferingGroup({ offering, variants, rates, onAddVariants, onUpdateVaria
                     <span className={`text-alloy-midnight/30 text-xs transition-transform ${expanded ? "rotate-90" : ""}`}>▶</span>
                     <span className="text-sm font-medium text-alloy-midnight">{offering.label}</span>
                     <span className="text-xs text-alloy-midnight/35">{ATTENDANCE_TYPE_LABELS[offering.attendance_type]}</span>
+                    <span className="text-xs text-alloy-midnight/25">{variantCount} variant{variantCount !== 1 ? "s" : ""}</span>
                     {offering.status !== "active" && <span className="text-[10px] text-alloy-midnight/25 capitalize">{offering.status}</span>}
                 </button>
                 <div className="flex items-center gap-2 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -526,7 +564,6 @@ function ProgramsPanel({ program, locations, categories, offerings, variants, ra
     const existingTypes = new Set(offerings.map((o) => o.attendance_type));
 
     function siteActive(siteId: string) { return programCats.find((c) => c.location_id === siteId)?.is_active !== false; }
-
     async function handleToggle(siteId: string) { setTogglingId(siteId); await onToggleSite(siteId); setTogglingId(null); }
 
     async function handleAddOffering() {
@@ -614,39 +651,37 @@ function ProgramsPanel({ program, locations, categories, offerings, variants, ra
                     </div>
                 </ConfigurationDetailCard>
 
-                <ConfigurationDetailCard title="Location availability">
+                {/* Location availability — compact summary, expandable */}
+                <div className="flex items-center justify-between rounded-lg border border-alloy-stone/20 px-4 py-2.5">
                     {locations.length === 0 ? (
-                        <p className="text-sm text-alloy-midnight/40">No site locations configured. <Link href="/settings/locations" className="text-alloy-pine hover:underline">Add locations →</Link></p>
+                        <span className="text-xs text-alloy-midnight/40">No site locations. <Link href="/settings/locations" className="text-alloy-pine hover:underline">Add locations →</Link></span>
                     ) : (
                         <>
-                            <div className="flex items-center justify-between">
-                                <p className="text-sm text-alloy-midnight/55">Offered at <strong className="text-alloy-midnight">{offeredCount}</strong> of <strong className="text-alloy-midnight">{locations.length}</strong> site{locations.length !== 1 ? "s" : ""}</p>
-                                <button type="button" onClick={() => setLocExpanded((v) => !v)} className="text-xs text-alloy-pine hover:underline">{locExpanded ? "Collapse" : "Configure →"}</button>
-                            </div>
-                            {locExpanded && (
-                                <div className="-mx-4 mt-3 border-t border-alloy-stone/10">
-                                    {locations.map((site) => {
-                                        const active = siteActive(site.id);
-                                        const toggling = togglingId === site.id;
-                                        return (
-                                            <div key={site.id} className="flex items-center justify-between gap-3 border-b border-alloy-stone/10 last:border-0 px-4 py-2.5">
-                                                <span className="text-sm text-alloy-midnight">{site.name}</span>
-                                                <button type="button" disabled={toggling} onClick={() => void handleToggle(site.id)} className={`rounded-full px-2.5 py-0.5 text-xs font-medium transition-colors disabled:opacity-50 ${active ? "bg-green-100 text-green-700 hover:bg-green-200" : "bg-alloy-stone/20 text-alloy-midnight/40 hover:bg-alloy-stone/35"}`}>
-                                                    {toggling ? "…" : active ? "Offered" : "Not offered"}
-                                                </button>
-                                            </div>
-                                        );
-                                    })}
-                                </div>
-                            )}
+                            <span className="text-xs text-alloy-midnight/55">
+                                Offered at <strong className="text-alloy-midnight">{offeredCount}</strong> of <strong className="text-alloy-midnight">{locations.length}</strong> site{locations.length !== 1 ? "s" : ""}
+                            </span>
+                            <button type="button" onClick={() => setLocExpanded((v) => !v)} className="text-xs text-alloy-pine hover:underline shrink-0 ml-4">
+                                {locExpanded ? "Collapse" : "Configure →"}
+                            </button>
                         </>
                     )}
-                </ConfigurationDetailCard>
-
-                <ConfigurationDetailCard title="Rooms">
-                    <p className="text-sm text-alloy-midnight/55 leading-relaxed">Rooms are operational children of programs. Room assignment does not affect pricing — tuition is set at the variant level, not the room level.</p>
-                    <Link href="/settings/locations" className="mt-2 inline-block text-xs text-alloy-pine hover:underline">Manage rooms in Locations →</Link>
-                </ConfigurationDetailCard>
+                </div>
+                {locExpanded && locations.length > 0 && (
+                    <div className="rounded-lg border border-alloy-stone/20 overflow-hidden -mt-3">
+                        {locations.map((site) => {
+                            const active = siteActive(site.id);
+                            const toggling = togglingId === site.id;
+                            return (
+                                <div key={site.id} className="flex items-center justify-between gap-3 border-b border-alloy-stone/10 last:border-0 px-4 py-2.5">
+                                    <span className="text-sm text-alloy-midnight">{site.name}</span>
+                                    <button type="button" disabled={toggling} onClick={() => void handleToggle(site.id)} className={`rounded-full px-2.5 py-0.5 text-xs font-medium transition-colors disabled:opacity-50 ${active ? "bg-green-100 text-green-700 hover:bg-green-200" : "bg-alloy-stone/20 text-alloy-midnight/40 hover:bg-alloy-stone/35"}`}>
+                                        {toggling ? "…" : active ? "Offered" : "Not offered"}
+                                    </button>
+                                </div>
+                            );
+                        })}
+                    </div>
+                )}
             </div>
         </div>
     );
@@ -678,6 +713,7 @@ function TuitionPanel({ program, offerings, variantsByOffering, cadences, locati
             <div className="p-6 space-y-5">
                 <h2 className="config-typo-workspace-title text-xl">{program.label}</h2>
 
+                {/* Scope selector */}
                 <div className="flex items-center gap-2 flex-wrap">
                     <span className="text-xs font-medium text-alloy-midnight/45 shrink-0">Viewing:</span>
                     <button type="button" onClick={() => onScopeChange(null)} className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${selectedScopeId === null ? "bg-alloy-midnight text-white border-alloy-midnight" : "bg-white text-alloy-midnight/55 border-alloy-stone/30 hover:border-alloy-midnight/35"}`}>Org defaults</button>
@@ -689,7 +725,7 @@ function TuitionPanel({ program, offerings, variantsByOffering, cadences, locati
                 {selectedScopeId && (
                     <div className="flex items-center justify-between gap-3 rounded-lg border border-alloy-stone/25 bg-alloy-stone/8 px-4 py-2.5">
                         <p className="text-xs text-alloy-midnight/55">
-                            <strong className="font-medium text-alloy-midnight">{selectedLocName}</strong> — <span className="inline-flex items-center gap-1"><span className="inline-block w-1.5 h-1.5 rounded-full bg-alloy-pine/70" /> green dot = override.</span> Italic = inherited org default.
+                            <strong className="font-medium text-alloy-midnight">{selectedLocName}</strong> — <span className="inline-flex items-center gap-1"><span className="inline-block w-1.5 h-1.5 rounded-full bg-alloy-pine/70" /> green dot = override.</span> Italic = inherited.
                         </p>
                         <button type="button" disabled={bulkCopying} onClick={() => void onCopyOrgToLocation(selectedScopeId)} className="shrink-0 text-xs font-medium text-alloy-pine hover:underline disabled:opacity-50">
                             {bulkCopying ? "Copying…" : "Copy org rates →"}
@@ -697,6 +733,7 @@ function TuitionPanel({ program, offerings, variantsByOffering, cadences, locati
                     </div>
                 )}
 
+                {/* Payer tabs */}
                 <div className="flex border-b border-alloy-stone/20">
                     {PAYER_TABS.map((tab) => (
                         <button key={tab.key} type="button" disabled={!tab.available} onClick={() => { if (tab.available) onPayerTabChange(tab.key); }} className={`px-4 py-2 text-sm -mb-px border-b-2 transition-colors ${payerTab === tab.key ? "border-alloy-pine text-alloy-pine font-medium" : tab.available ? "border-transparent text-alloy-midnight/50 hover:text-alloy-midnight" : "border-transparent text-alloy-midnight/25 cursor-not-allowed"}`}>
@@ -705,21 +742,27 @@ function TuitionPanel({ program, offerings, variantsByOffering, cadences, locati
                     ))}
                 </div>
 
+                {/* One grid per offering */}
                 {offerings.length === 0 ? (
                     <p className="py-8 text-center text-sm text-alloy-midnight/40">No offerings configured. Add offerings in the Programs tab.</p>
                 ) : (
-                    <div className="space-y-3">
+                    <div className="space-y-4">
                         {offerings.map((o) => (
-                            <OfferingRateSection key={o.id} offering={o} variants={variantsByOffering.get(o.id) ?? []} cadences={cadences} rateMap={rateMap} orgOnlyMap={orgOnlyMap} locationId={locationId} onSave={onSave} onClear={onClear} />
+                            <OfferingRateGrid
+                                key={o.id}
+                                offering={o}
+                                variants={variantsByOffering.get(o.id) ?? []}
+                                cadences={cadences}
+                                rateMap={rateMap}
+                                orgOnlyMap={orgOnlyMap}
+                                locationId={locationId}
+                                onSave={onSave}
+                                onClear={onClear}
+                            />
                         ))}
-                        <p className="text-xs text-alloy-midnight/30 pt-1">Click any rate to edit inline. Use "+ Add rate basis" to configure billing cadences per variant.</p>
+                        <p className="text-xs text-alloy-midnight/30 pt-1">Click any cell to set a rate. Hover to mark N/A. Effective dates (optional) appear in the rate editor.</p>
                     </div>
                 )}
-
-                <ConfigurationDetailCard title={`Where does ${program.label} revenue land?`}>
-                    <p className="text-sm text-alloy-midnight/50 leading-relaxed">Revenue category mapping is set in Accounting configuration.</p>
-                    <Link href="/settings/financials" className="mt-2 inline-block text-xs text-alloy-pine hover:underline">Manage in Accounting →</Link>
-                </ConfigurationDetailCard>
             </div>
         </div>
     );
@@ -924,10 +967,14 @@ export function CommercialConfigWorkspace() {
         if (selectedProgramKey) await reloadOfferingsAndVariants(selectedProgramKey);
     }
 
-    async function saveCell(variantId: string, cadenceKey: string, payload: { rate_cents?: number; not_offered?: boolean }) {
+    async function saveCell(variantId: string, cadenceKey: string, payload: RatePayload) {
         setSaving(true);
         try {
-            const res = await fetch("/api/admin/commercial/tuition-rates", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ variant_id: variantId, cadence_key: cadenceKey, location_id: locationId, payer_type: "private_pay", ...payload }) });
+            const res = await fetch("/api/admin/commercial/tuition-rates", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ variant_id: variantId, cadence_key: cadenceKey, location_id: locationId, payer_type: "private_pay", ...payload }),
+            });
             if (!res.ok) { const j = (await res.json()) as { error?: string }; setError(j.error ?? "Save failed"); }
             else await reloadRates();
         } finally { setSaving(false); }
