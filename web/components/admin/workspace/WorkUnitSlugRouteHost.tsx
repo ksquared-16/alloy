@@ -10,6 +10,7 @@ import {
     parseOperatorWorkUnitPath,
 } from "@/lib/admin/canonicalOperatorRoutes";
 import { syncOperatorWorkUnitUrlInBrowser } from "@/lib/admin/operatorWorkUnitDrawerUrlSync";
+import { isLeavingWorkUnitSurface } from "@/lib/admin/workUnitOutboundHold";
 import {
     humanizeWorkUnitRouteSlug,
     warmWorkUnitSlugRoute,
@@ -122,6 +123,13 @@ export default function WorkUnitSlugRouteHost({
     }, [routeRecordIdFromPath, state]);
 
     if (state.phase === "loading") {
+        // Outbound transition: the URL has already left this work unit (back to Workspace,
+        // to a department, or to another work unit). Hold instead of flashing this work
+        // unit's cold shell at a foreign path — loading belongs to arrival, never departure
+        // (Operational Experience Doctrine, Law 2: Continuity).
+        if (isLeavingWorkUnitSurface(pathname, workUnitSlug)) {
+            return null;
+        }
         const cached = peekWorkUnitSlugRouteCache(workUnitSlug);
         return (
             <WorkUnitWorkspaceColdShell

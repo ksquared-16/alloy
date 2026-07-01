@@ -6,7 +6,6 @@ import { usePathname } from "next/navigation";
 import { useAdminDrawerOptional } from "@/contexts/AdminDrawerContext";
 import {
     ALLOY_OS_RUNTIME_ATTR,
-    ALLOY_OS_RUNTIME_ENABLED,
     ALLOY_OS_RUNTIME_PERSPECTIVE_ATTR,
     ALLOY_OS_RUNTIME_SPLIT_ATTR,
     alloyOsRuntimeSplitActive,
@@ -43,9 +42,8 @@ export default function AlloyOsRuntimeSplitController() {
     const onWorkUnitSurface = isWorkUnitQueueSurfacePath(pathname);
     const perspectiveAttr = runtimePerspectiveAttrValue(perspective);
 
-    // Token layer: opt the document in whenever the flag is enabled.
+    // Token layer: opt the document in to the runtime token layer.
     useEffect(() => {
-        if (!ALLOY_OS_RUNTIME_ENABLED) return;
         const root = document.documentElement;
         root.setAttribute(ALLOY_OS_RUNTIME_ATTR, "on");
         return () => {
@@ -55,7 +53,6 @@ export default function AlloyOsRuntimeSplitController() {
 
     // Active Perspective marker (diagnostic + scoping) — driven by runtime state, not URL.
     useEffect(() => {
-        if (!ALLOY_OS_RUNTIME_ENABLED) return;
         const root = document.documentElement;
         if (perspectiveAttr) {
             root.setAttribute(ALLOY_OS_RUNTIME_PERSPECTIVE_ATTR, perspectiveAttr);
@@ -79,7 +76,6 @@ export default function AlloyOsRuntimeSplitController() {
     // records keeps the same perspective key, so this never fires on record nav.
     const previousPerspectiveAttrRef = useRef<string | null>(perspectiveAttr);
     useEffect(() => {
-        if (!ALLOY_OS_RUNTIME_ENABLED) return;
         const previous = previousPerspectiveAttrRef.current;
         previousPerspectiveAttrRef.current = perspectiveAttr;
         const shouldClear = shouldClearFocusPanelOnPerspectiveChange({
@@ -101,7 +97,6 @@ export default function AlloyOsRuntimeSplitController() {
     // State 2: active Perspective + open Focus Panel on a work-unit surface.
     // useLayoutEffect so the attribute exists BEFORE drawer geometry measures (same frame).
     useLayoutEffect(() => {
-        if (!ALLOY_OS_RUNTIME_ENABLED) return;
         const root = document.documentElement;
         if (splitActive) {
             root.setAttribute(ALLOY_OS_RUNTIME_SPLIT_ATTR, "true");
@@ -117,7 +112,7 @@ export default function AlloyOsRuntimeSplitController() {
 
     // Re-measure on drawer open/close while split is already active (perspective unchanged).
     useLayoutEffect(() => {
-        if (!ALLOY_OS_RUNTIME_ENABLED || !splitActive) return;
+        if (!splitActive) return;
         measureAndApplyDrawerWorkspaceGeometry();
     }, [splitActive, drawerOpen]);
 
@@ -136,7 +131,7 @@ export default function AlloyOsRuntimeSplitController() {
     // Focus Panel now positions from `--alloy-os-op-surface-top` directly, so the inset override
     // is unnecessary and harmful in split.
     useEffect(() => {
-        if (!ALLOY_OS_RUNTIME_ENABLED || !splitActive) return;
+        if (!splitActive) return;
         const root = document.documentElement;
         const apply = () => {
             const deck = document.querySelector<HTMLElement>(ALLOY_OS_CONTROL_DECK_SELECTOR);

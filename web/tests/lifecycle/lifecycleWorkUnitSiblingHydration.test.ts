@@ -12,7 +12,10 @@ import {
     mergeLifecycleSiblingHydrationBlock,
     sortLifecycleSiblingWorkUnits,
 } from "@/lib/lifecycle/lifecycleWorkUnitSiblingHydration";
-import { buildLifecycleBuilderOwnedAboveFoldHeaderSections } from "@/lib/lifecycle/lifecycleWorkUnitShellPills";
+import {
+    buildLifecycleBuilderOwnedAboveFoldHeaderSections,
+    buildLifecycleSiblingPreliminaryHeaderSections,
+} from "@/lib/lifecycle/lifecycleWorkUnitShellPills";
 import { buildWorkUnitAboveFoldRenderModel } from "@/lib/adminV2/routeShellPipeline/adapters/workUnit/buildWorkUnitAboveFoldRenderModel";
 import { resolveDeptWorkUnitDisplayLabel } from "@/lib/workspace/workUnitShellDisplayTitle";
 
@@ -211,5 +214,149 @@ describe("work-unit page lifecycle hydration wiring", () => {
         expect(page).not.toContain(
             "lifecycleSiblingTotalsFromDeptSummaries(cache?.workUnitSummaries)"
         );
+    });
+
+    it("page seeds preliminary sibling rows from stable cache on non-preserved entry", () => {
+        const page = read("app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page.tsx");
+        // The preliminary state is wired
+        expect(page).toContain("lifecycleSiblingPreliminaryRows");
+        expect(page).toContain("setLifecycleSiblingPreliminaryRows");
+        // Preliminary is read from stable cache without consuming the preserve flag
+        expect(page).toContain("lifecycleHeaderPreliminarySections");
+        expect(page).toContain("buildLifecycleSiblingPreliminaryHeaderSections");
+        // Preliminary is passed to the above-fold model
+        expect(page).toContain("lifecycle_builder_owned_preliminary_siblings");
+    });
+});
+
+describe("lifecycle preliminary pill seeding", () => {
+    const siblings = [
+        { id: "wu-lead", name: "New Leads", key: "lifecycle_wu_lead", total: null },
+        { id: "wu-qual", name: "Qualification", key: "lifecycle_wu_qualification", total: null },
+        { id: "wu-tour", name: "Tours", key: "lifecycle_wu_tour", total: null },
+    ];
+
+    it("preliminary sections have real labels and skeleton counts", () => {
+        const sections = buildLifecycleSiblingPreliminaryHeaderSections({
+            siblings,
+            currentWorkUnitId: "wu-lead",
+        });
+        const wuSection = sections.find((s) => s.key === "lifecycle_work_units");
+        expect(wuSection?.chips.map((c) => c.label)).toEqual([
+            "New Leads",
+            "Qualification",
+            "Tours",
+        ]);
+        // All counts must be skeleton — never stale real numbers
+        expect(wuSection?.chips.every((c) => c.count === "skeleton")).toBe(true);
+        // Needs Attention row is reserved with skeleton count
+        const naSection = sections.find((s) => s.key === "needs_attention");
+        expect(naSection?.chips[0]?.count).toBe("skeleton");
+    });
+
+    it("preliminary sections mark the current work unit as selected", () => {
+        const sections = buildLifecycleSiblingPreliminaryHeaderSections({
+            siblings,
+            currentWorkUnitId: "wu-qual",
+        });
+        const wuSection = sections.find((s) => s.key === "lifecycle_work_units");
+        const selected = wuSection?.chips.filter((c) => c.selected).map((c) => c.label);
+        expect(selected).toEqual(["Qualification"]);
+    });
+
+    it("buildWorkUnitAboveFoldRenderModel uses preliminary sections when pending + preliminary available", () => {
+        const prelimSections = buildLifecycleSiblingPreliminaryHeaderSections({
+            siblings,
+            currentWorkUnitId: "wu-lead",
+        });
+        const model = buildWorkUnitAboveFoldRenderModel({
+            work_unit_shell_ready: true,
+            reserve_actions_rail: false,
+            queue_summaries: null,
+            queue_summaries_error: null,
+            queue_pill_sections: null,
+            queue_tab_placeholders: null,
+            selected_queue_key: null,
+            attention_bucket_key: "",
+            lane_unmapped_only: false,
+            all_records_queue_key: null,
+            other_pill_section_key: null,
+            unmapped_pill_count: null,
+            enrollment_right_rail_resolved: [],
+            queue_items_loading: false,
+            queue_lane_reveal_state: "ready_empty",
+            queue_items_error: null,
+            lifecycle_builder_owned_header_pending: true,
+            lifecycle_builder_owned_header_sections: null,
+            lifecycle_builder_owned_preliminary_siblings: prelimSections,
+        });
+        // Uses preliminary (named) sections, not generic "—" skeleton
+        const wuSection = model.header.sections.find((s) => s.key === "lifecycle_work_units");
+        expect(wuSection?.chips.map((c) => c.label)).toEqual(["New Leads", "Qualification", "Tours"]);
+        // Still skeleton state — counts not yet authoritative
+        expect(model.header.state).toBe("skeleton");
+        expect(wuSection?.chips.every((c) => c.count === "skeleton")).toBe(true);
+    });
+
+    it("buildWorkUnitAboveFoldRenderModel falls back to generic skeleton when no preliminary", () => {
+        const model = buildWorkUnitAboveFoldRenderModel({
+            work_unit_shell_ready: true,
+            reserve_actions_rail: false,
+            queue_summaries: null,
+            queue_summaries_error: null,
+            queue_pill_sections: null,
+            queue_tab_placeholders: null,
+            selected_queue_key: null,
+            attention_bucket_key: "",
+            lane_unmapped_only: false,
+            all_records_queue_key: null,
+            other_pill_section_key: null,
+            unmapped_pill_count: null,
+            enrollment_right_rail_resolved: [],
+            queue_items_loading: false,
+            queue_lane_reveal_state: "ready_empty",
+            queue_items_error: null,
+            lifecycle_builder_owned_header_pending: true,
+            lifecycle_builder_owned_header_sections: null,
+        });
+        // Falls back to generic "—" skeleton labels
+        const wuSection = model.header.sections[0];
+        expect(wuSection?.chips.every((c) => c.label === "—")).toBe(true);
+    });
+
+    it("preliminary sections do not bleed through once full hydration provides sections", () => {
+        const preliminary = buildLifecycleSiblingPreliminaryHeaderSections({
+            siblings,
+            currentWorkUnitId: "wu-lead",
+        });
+        const authoritative = buildLifecycleBuilderOwnedAboveFoldHeaderSections({
+            siblings: siblings.map((s) => ({ ...s, total: 5 })),
+            currentWorkUnitId: "wu-lead",
+            selectedQueueKey: null,
+        });
+        const model = buildWorkUnitAboveFoldRenderModel({
+            work_unit_shell_ready: true,
+            reserve_actions_rail: false,
+            queue_summaries: null,
+            queue_summaries_error: null,
+            queue_pill_sections: null,
+            queue_tab_placeholders: null,
+            selected_queue_key: null,
+            attention_bucket_key: "",
+            lane_unmapped_only: false,
+            all_records_queue_key: null,
+            other_pill_section_key: null,
+            unmapped_pill_count: null,
+            enrollment_right_rail_resolved: [],
+            queue_items_loading: false,
+            queue_lane_reveal_state: "ready_empty",
+            queue_items_error: null,
+            lifecycle_builder_owned_header_pending: false, // hydration complete
+            lifecycle_builder_owned_header_sections: authoritative,
+            lifecycle_builder_owned_preliminary_siblings: preliminary,
+        });
+        // Authoritative sections take priority — counts are real numbers, not skeleton
+        const wuSection = model.header.sections.find((s) => s.key === "lifecycle_work_units");
+        expect(wuSection?.chips.every((c) => c.count === 5)).toBe(true);
     });
 });

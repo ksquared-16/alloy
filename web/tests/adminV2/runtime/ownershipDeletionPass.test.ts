@@ -58,18 +58,22 @@ describe("Ownership deletion — work-unit cold shell", () => {
 });
 
 describe("Ownership deletion — KPI single renderer path", () => {
-    it("WU-02 runtime branch: platform placement only — no OIP emptyFallback owner", () => {
+    it("WU-02 runtime branch: platform placement only — no OIP emptyFallback owner, dead flag branches gone", () => {
         const src = readSrc("components/admin/workspace/layout/WorkUnitCommandSurface.tsx");
-        const runtimeBranch = src.slice(src.indexOf("if (ALLOY_OS_RUNTIME_ENABLED)"), src.indexOf("const v1Fallback"));
-        expect(runtimeBranch).toContain("loadingReserve={<WorkspaceQuietKpiReserve");
-        expect(runtimeBranch).not.toContain("emptyFallback");
-        expect(runtimeBranch).not.toContain("AlloyOsInlineKpiStrip");
+        // Both the runtime guard and the legacy v1Fallback must be absent
+        expect(src).not.toContain("ALLOY_OS_RUNTIME_ENABLED");
+        expect(src).not.toContain("v1Fallback");
+        expect(src).not.toContain("AlloyOsInlineKpiStrip");
+        // MetricPlacementRenderer for work_unit_header uses loadingReserve, never emptyFallback
+        const block = src.slice(src.indexOf('surface="work_unit_header"'));
+        expect(block).toContain("loadingReserve={<WorkspaceQuietKpiReserve");
+        expect(block).not.toContain("emptyFallback");
     });
 
-    it("WS-04 runtime: OIP pulse fallback quarantined behind !ALLOY_OS_RUNTIME_ENABLED", () => {
+    it("WS-04 OIP pulse fallback retired — PulseSlotReserve is the only loading path", () => {
         const src = readSrc("components/admin/workspace/layout/WorkspaceOperationalPulseStrip.tsx");
-        expect(src).toContain("!ALLOY_OS_RUNTIME_ENABLED && kpis.length");
-        expect(src).toContain("emptyFallback={legacyOipFallback}");
+        expect(src).not.toContain("ALLOY_OS_RUNTIME_ENABLED");
+        expect(src).not.toContain("legacyOipFallback");
         const secondary = src.slice(src.indexOf('placementZone="secondary_metrics"'));
         expect(secondary).toContain("loadingReserve={<PulseSlotReserve />}");
     });
@@ -78,5 +82,55 @@ describe("Ownership deletion — KPI single renderer path", () => {
         const src = readSrc("components/admin/metrics/MetricPlacementRenderer.tsx");
         expect(src).toContain("if (freshHasValues || !currentHasValues)");
         expect(src).toContain("metricRenderItemsHaveValues");
+    });
+});
+
+describe("Runtime flag retirement — production source", () => {
+    const sourceFiles = [
+        "lib/adminV2/runtime/alloyOsRuntimeFlag.ts",
+        "lib/adminV2/runtime/useAlloyOsRuntimeSplitActive.ts",
+        "lib/adminV2/runtime/configurationRuntimeConvergenceFlag.ts",
+        "lib/adminV2/runtime/operationalSubject/OperationalModeEntryContext.tsx",
+        "lib/adminV2/runtime/perspective/useWorkUnitRuntimePerspective.ts",
+        "lib/adminV2/runtime/preload/drawerVmPrewarmScheduler.ts",
+        "lib/admin/opportunityDrawerOpenCoordinator.ts",
+        "app/adminV2/components/AlloyOsRuntimeSplitController.tsx",
+        "app/adminV2/components/AlloyOsLayoutSurfaceDiagnostics.tsx",
+        "components/admin/vmDrawer/OpportunityDrawerVmRuntime.tsx",
+        "components/admin/workspace/layout/WorkspaceOperationalPulseStrip.tsx",
+        "app/adminV2/components/workspace/shells/WorkUnitWorkspace.tsx",
+        "components/admin/workspace/layout/WorkUnitCommandSurface.tsx",
+        "app/adminV2/components/workspace/blocks/QueueBlock.tsx",
+        "app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page.tsx",
+    ];
+    it.each(sourceFiles)("%s has no ALLOY_OS_RUNTIME_ENABLED references", (file) => {
+        expect(readSrc(file)).not.toContain("ALLOY_OS_RUNTIME_ENABLED");
+    });
+});
+
+describe("Outbound navigation — no cold shell regression", () => {
+    it("workUnitSurfaceEverCommitted is a one-way latch — never reset to false", () => {
+        const page = readSrc("app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page.tsx");
+        // The latch starts false and is only ever set to true
+        expect(page).toContain("useState(false)");
+        expect(page).toContain("setWorkUnitSurfaceEverCommitted(true)");
+        // Never set back to false
+        expect(page).not.toContain("setWorkUnitSurfaceEverCommitted(false)");
+    });
+
+    it("cold shell is gated on workUnitSurfaceEverCommitted — not shown after first reveal", () => {
+        const page = readSrc("app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page.tsx");
+        expect(page).toContain(
+            "const showWorkUnitColdShell =\n        !workUnitSurfaceReady && !workUnitPageSeededFromCache && !workUnitSurfaceEverCommitted;"
+        );
+        // The JSX cold shell branch uses showWorkUnitColdShell, not raw !workUnitSurfaceReady
+        expect(page).toContain(") : showWorkUnitColdShell ? (");
+    });
+
+    it("outbound navigation leaves page in ready state — no isLeavingWorkUnitSurface reset exists", () => {
+        const page = readSrc("app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page.tsx");
+        // No explicit freeze/shell-reset on navigation away (App Router keeps old page mounted)
+        expect(page).not.toContain("isLeavingWorkUnitSurface");
+        expect(page).not.toContain("setWorkUnitSurfaceReady(false)");
     });
 });

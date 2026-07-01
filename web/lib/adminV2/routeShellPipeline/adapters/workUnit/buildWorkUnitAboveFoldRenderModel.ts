@@ -78,6 +78,12 @@ export type BuildWorkUnitAboveFoldRenderModelInput = {
     lifecycle_builder_owned_header_sections?: WorkUnitAboveFoldChipSection[] | null;
     /** When true, render skeleton Work Units row until sibling hydration completes. */
     lifecycle_builder_owned_header_pending?: boolean;
+    /**
+     * Named sibling pills with skeleton counts — seeded from stable cache before full hydration.
+     * Shown in place of generic "—" skeleton chips when pending but sibling names are known.
+     * Replaced atomically by `lifecycle_builder_owned_header_sections` once hydration completes.
+     */
+    lifecycle_builder_owned_preliminary_siblings?: WorkUnitAboveFoldChipSection[] | null;
 };
 
 const EMPTY_ACTIONS: ActionsVm = {
@@ -184,6 +190,11 @@ function buildChipFromPlaceholder(q: WorkUnitChipPlaceholderQueue, input: BuildW
 
 function buildHeaderSections(input: BuildWorkUnitAboveFoldRenderModelInput): WorkUnitAboveFoldChipSection[] {
     if (input.lifecycle_builder_owned_header_pending) {
+        // Use cached sibling names with skeleton counts when available — avoids the generic
+        // "— — — —" skeleton and shows the real pill structure immediately.
+        if (input.lifecycle_builder_owned_preliminary_siblings?.length) {
+            return input.lifecycle_builder_owned_preliminary_siblings;
+        }
         return buildLifecycleSiblingHeaderSkeletonSections();
     }
     if (input.lifecycle_builder_owned_header_sections?.length) {

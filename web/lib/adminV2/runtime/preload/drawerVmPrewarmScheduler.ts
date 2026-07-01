@@ -24,7 +24,6 @@
  * cache key, request-ownership, or reveal gate. Dev/staging perf marks are gated to non-prod.
  */
 
-import { ALLOY_OS_RUNTIME_ENABLED } from "@/lib/adminV2/runtime/alloyOsRuntimeFlag";
 import { emitPerf, perfDevDetailEnabled, perfIntent } from "@/lib/perf/perfNamespaceLog";
 
 export const DRAWER_VM_PREWARM_CONCURRENCY_CAP = 1;
@@ -65,7 +64,7 @@ function log(phase: string, payload: Record<string, unknown> = {}): void {
 export function logDrawerVmPrewarmSchedulerBoot(): void {
     if (bootLogged) return;
     bootLogged = true;
-    log("scheduler_active", { runtime: ALLOY_OS_RUNTIME_ENABLED });
+    log("scheduler_active", { runtime: true });
 }
 
 /**
@@ -74,7 +73,6 @@ export function logDrawerVmPrewarmSchedulerBoot(): void {
  */
 export function beginWorkUnitPrimaryReveal(): void {
     logDrawerVmPrewarmSchedulerBoot();
-    if (!ALLOY_OS_RUNTIME_ENABLED) return;
     primaryRevealActive = true;
     // New Work Unit context — drop any stale backlog from a prior work unit so it cannot drain
     // against the new reveal. In-flight tasks already settle into their own deduped caches.
@@ -109,11 +107,6 @@ export function drawerVmPrewarmQueueDepth(): number {
  * otherwise drained one-at-a-time. Passthrough (immediate) when the runtime flag is OFF.
  */
 export function scheduleDrawerVmPrewarm(task: DrawerVmPrewarmTask): void {
-    // Flag OFF → legacy behavior: fire immediately, no gating, no cap.
-    if (!ALLOY_OS_RUNTIME_ENABLED) {
-        void runTask(task);
-        return;
-    }
     if (typeof window === "undefined") return;
     if (startedKeys.has(task.key) || queuedKeys.has(task.key)) return;
 

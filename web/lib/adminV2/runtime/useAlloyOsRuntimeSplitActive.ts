@@ -2,10 +2,7 @@
 
 import { useSyncExternalStore } from "react";
 
-import {
-    ALLOY_OS_RUNTIME_ENABLED,
-    ALLOY_OS_RUNTIME_SPLIT_ATTR,
-} from "@/lib/adminV2/runtime/alloyOsRuntimeFlag";
+import { ALLOY_OS_RUNTIME_SPLIT_ATTR } from "@/lib/adminV2/runtime/alloyOsRuntimeFlag";
 
 /**
  * Reactively reads the Alloy OS runtime split state from the document root.
@@ -33,5 +30,5 @@ function getSnapshot(): boolean {
 
 export function useAlloyOsRuntimeSplitActive(): boolean {
     const active = useSyncExternalStore(subscribe, getSnapshot, () => false);
-    return ALLOY_OS_RUNTIME_ENABLED && active;
+    return active;
 }

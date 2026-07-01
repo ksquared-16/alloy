@@ -461,6 +461,49 @@ export function buildLifecycleBuilderOwnedAboveFoldHeaderSections(params: {
     return sections;
 }
 
+/**
+ * Preliminary sibling sections — real work-unit names, skeleton counts.
+ * Used while the authoritative hydration is in-flight (bootstrap or client fetch).
+ * Never shows stale counts; exact hydration replaces this in-place once ready.
+ */
+export function buildLifecycleSiblingPreliminaryHeaderSections(params: {
+    siblings: LifecycleSiblingWorkUnitNavRow[];
+    currentWorkUnitId: string;
+    currentWorkUnitKey?: string | null;
+}): WorkUnitAboveFoldChipSection[] {
+    if (!params.siblings.length) return [];
+    const chips = params.siblings.map((wu) => {
+        const selected = lifecycleSiblingNavRowSelected(wu, params.currentWorkUnitId, params.currentWorkUnitKey);
+        const chipKey = wu.nav_platform_key
+            ? lifecyclePlatformNavChipKey(wu.nav_platform_key)
+            : lifecycleWorkUnitNavChipKey(wu.id);
+        return {
+            key: chipKey,
+            label: resolveLifecycleSiblingPillLabel({ name: wu.name, key: wu.key ?? null, metadata: wu.metadata }),
+            priority: "standard" as const,
+            selected,
+            count: "skeleton" as const,
+            lifecycle_work_unit_nav_id: wu.nav_platform_key ? undefined : wu.id,
+        };
+    });
+    return [
+        { key: "lifecycle_work_units", label: "Work Units", chips },
+        {
+            key: "needs_attention",
+            label: "Needs Attention",
+            chips: [
+                {
+                    key: "lifecycle_na_skeleton",
+                    label: "—",
+                    priority: "critical" as const,
+                    selected: false,
+                    count: "skeleton" as const,
+                },
+            ],
+        },
+    ];
+}
+
 /** Enrollment uses pipeline_with_attention KPI suppression when pills carry counts. */
 export function lifecycleBuilderOwnedUsesEnrollmentPillShell(
     departmentMetadata: unknown,

@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo } from "react";
 
-import { ALLOY_OS_RUNTIME_ENABLED } from "@/lib/adminV2/runtime/alloyOsRuntimeFlag";
 import { deriveRuntimePerspective } from "@/lib/adminV2/runtime/perspective/deriveRuntimePerspective";
 import {
     deriveOperationalViewsFromQueueDefinition,
@@ -63,7 +62,6 @@ export function useWorkUnitRuntimePerspective(
     }, [workViewPerspectivesEnabled, departmentMetadata, workUnit?.metadata, workUnit?.queue_definition]);
 
     useEffect(() => {
-        if (!ALLOY_OS_RUNTIME_ENABLED) return;
         const wuId = workUnitId?.trim();
         if (!wuId || !workUnit) {
             setActiveRuntimePerspective(null);
@@ -87,7 +85,6 @@ export function useWorkUnitRuntimePerspective(
     }, [workUnitId, workUnit, selectedQueueKey, attentionBucketKey, stageOperationalViews]);
 
     useEffect(() => {
-        if (!ALLOY_OS_RUNTIME_ENABLED) return;
         return () => setActiveRuntimePerspective(null);
     }, [workUnitId]);
 

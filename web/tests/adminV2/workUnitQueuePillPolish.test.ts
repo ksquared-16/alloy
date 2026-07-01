@@ -9,6 +9,32 @@ import {
     workUnitQueueSelectionFromLocation,
 } from "@/lib/adminV2/workUnitQueueSelection";
 
+/** Helper: minimal above-fold input for a single queue summary. */
+function singleQueueModel(
+    count: number,
+    counts_deferred: boolean,
+    selectedKey = "queue_a"
+) {
+    return buildWorkUnitAboveFoldRenderModel({
+        work_unit_shell_ready: true,
+        reserve_actions_rail: false,
+        queue_summaries: [{ key: "queue_a", label: "Queue A", priority: "standard", count, counts_deferred }],
+        queue_summaries_error: null,
+        queue_pill_sections: null,
+        queue_tab_placeholders: null,
+        selected_queue_key: selectedKey,
+        attention_bucket_key: "",
+        lane_unmapped_only: false,
+        all_records_queue_key: null,
+        other_pill_section_key: null,
+        unmapped_pill_count: null,
+        enrollment_right_rail_resolved: null,
+        queue_items_loading: false,
+        queue_lane_reveal_state: "ready_with_rows",
+        queue_items_error: null,
+    });
+}
+
 describe("workUnitQueuePillPolish", () => {
     it("needs-attention URL selection uses synthetic pill active key", () => {
         const selection = workUnitQueueSelectionFromLocation("wu-1", {
@@ -252,5 +278,75 @@ describe("workUnitQueuePillPolish", () => {
             queue_definition: wu,
         });
         expect(model.header.sections[0]?.chips[0]?.selected).toBe(true);
+    });
+});
+
+/**
+ * Pill count hydration / continuity (regression for 7 → 0 stale-hydration bug).
+ *
+ * Contract:
+ * 1. Bootstrap planned counts must never display — they are approximate and should be
+ *    treated as deferred (counts_deferred: true) until the exact-count hydration step resolves.
+ * 2. Warm-switch stale counts (from a prior navigation) must never display — mark deferred
+ *    and let fetchQueueSummaries or hydrateDeferredQueueSummaryCounts supply the exact value.
+ * 3. After mergeWorkUnitQueueSummaryCounts, the deferred flag clears and the exact count
+ *    is shown — no further oscillation.
+ * 4. A count of 0 returned by an exact fetch is valid and is shown; it does NOT suppress
+ *    a skeleton while a later resolution might arrive (the merge contract handles that).
+ */
+describe("pill count hydration / continuity", () => {
+    it("planned counts seed as deferred — pill shows skeleton not the approximate number", () => {
+        // Simulates bootstrap seeding: all summaries marked counts_deferred: true
+        const model = singleQueueModel(7, true);
+        expect(model.header.sections[0]?.chips[0]?.count).toBe("skeleton");
+    });
+
+    it("exact count 1 shows correctly after deferred merge", () => {
+        // Simulates hydrateDeferredQueueSummaryCounts result merged on top of skeleton seed
+        const seeded = [{ key: "queue_a", label: "Queue A", priority: "standard" as const, count: 7, counts_deferred: true }];
+        const exact = [{ key: "queue_a", label: "Queue A", priority: "standard" as const, count: 1, counts_deferred: false }];
+        const merged = mergeWorkUnitQueueSummaryCounts(seeded, exact);
+        expect(merged[0]?.count).toBe(1);
+        expect(merged[0]?.counts_deferred).toBe(false);
+        // Above-fold model reflects the resolved count
+        const model = singleQueueModel(1, false);
+        expect(model.header.sections[0]?.chips[0]?.count).toBe(1);
+    });
+
+    it("exact count 0 is a valid resolved state — not a skeleton", () => {
+        // Exact count 0 is different from a deferred count. It should display 0, not skeleton.
+        const model = singleQueueModel(0, false);
+        expect(model.header.sections[0]?.chips[0]?.count).toBe(0);
+    });
+
+    it("deferred merge preserves keys not in the incoming set — no data loss", () => {
+        const seeded = [
+            { key: "q1", label: "Q1", priority: "standard" as const, count: 7, counts_deferred: true },
+            { key: "q2", label: "Q2", priority: "standard" as const, count: 3, counts_deferred: true },
+        ];
+        const exact = [{ key: "q1", label: "Q1", priority: "standard" as const, count: 1, counts_deferred: false }];
+        const merged = mergeWorkUnitQueueSummaryCounts(seeded, exact);
+        expect(merged).toHaveLength(2);
+        // q1 resolved
+        expect(merged[0]?.count).toBe(1);
+        expect(merged[0]?.counts_deferred).toBe(false);
+        // q2 still skeleton (not in incoming — will be resolved in a subsequent merge)
+        expect(merged[1]?.count).toBe(3);
+        expect(merged[1]?.counts_deferred).toBe(true);
+    });
+
+    it("no count oscillation: planned seed → exact merge is a one-way transition", () => {
+        // Verify the state machine: skeleton seed → merge with exact → resolved, never back to stale
+        const initial = [{ key: "q1", label: "Q1", priority: "standard" as const, count: 7, counts_deferred: true }];
+        const exactResult = [{ key: "q1", label: "Q1", priority: "standard" as const, count: 1, counts_deferred: false }];
+
+        const afterMerge = mergeWorkUnitQueueSummaryCounts(initial, exactResult);
+        expect(afterMerge[0]?.count).toBe(1);
+        expect(afterMerge[0]?.counts_deferred).toBe(false);
+
+        // A second merge with the same exact result is idempotent — no regression to skeleton
+        const afterSecondMerge = mergeWorkUnitQueueSummaryCounts(afterMerge, exactResult);
+        expect(afterSecondMerge[0]?.count).toBe(1);
+        expect(afterSecondMerge[0]?.counts_deferred).toBe(false);
     });
 });

@@ -34,6 +34,78 @@
   --font-sans: var(--font-poppins), system-ui, sans-serif;
 }
 
+/* ============================================================================
+   Operational Motion System (Experience Layer — Capability 1)
+   Doctrine: docs/platform/experience/operational-motion-doctrine.md
+   TS mirror: web/lib/motion/motionTokens.ts
+   The single source of motion. Four durations, four easings, five choreographies.
+   No component invents a transition — apply a `.motion-*` class or import a token.
+   ============================================================================ */
+:root {
+  /* Durations — the only four interaction speeds */
+  --motion-instant: 80ms;
+  --motion-micro: 160ms;
+  --motion-standard: 240ms;
+  --motion-expressive: 360ms;
+  /* Easings — departures accelerate, arrivals decelerate, acknowledgement springs */
+  --motion-ease-exit: cubic-bezier(0.4, 0, 1, 1);
+  --motion-ease-enter: cubic-bezier(0, 0, 0.2, 1);
+  --motion-ease-move: cubic-bezier(0.4, 0, 0.2, 1);
+  --motion-ease-spring: cubic-bezier(0.34, 1.4, 0.64, 1);
+}
+
+@keyframes motion-reveal-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes motion-settle-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes motion-recede-out {
+  from { opacity: 1; transform: translateY(0) scale(1); }
+  to   { opacity: 0; transform: translateY(2px) scale(0.99); }
+}
+@keyframes motion-acknowledge-pulse {
+  0%   { transform: scale(1); }
+  40%  { transform: scale(1.015); }
+  100% { transform: scale(1); }
+}
+
+/* Choreography utilities — apply one; never a raw duration/easing. */
+.motion-reveal      { animation: motion-reveal-in var(--motion-standard) var(--motion-ease-enter) both; }
+.motion-settle      { animation: motion-settle-in var(--motion-micro) var(--motion-ease-enter) both; }
+.motion-recede      { animation: motion-recede-out var(--motion-standard) var(--motion-ease-exit) both; }
+.motion-acknowledge { animation: motion-acknowledge-pulse var(--motion-micro) var(--motion-ease-spring); }
+/* navigate + swap are crossfades the Continuity/Drawer systems orchestrate; expose the transition tokens */
+.motion-navigate    { transition: opacity var(--motion-standard) var(--motion-ease-move),
+                                   transform var(--motion-standard) var(--motion-ease-move); }
+.motion-swap        { transition: opacity var(--motion-micro) var(--motion-ease-move); }
+
+/* Interaction-feedback primitives (consumed by the Interaction System — Capability 4) */
+.motion-press        { transition: transform var(--motion-instant) var(--motion-ease-move); }
+.motion-press:active { transform: scale(0.98); }
+.motion-interactive  { transition: background-color var(--motion-instant) var(--motion-ease-move),
+                                   border-color var(--motion-instant) var(--motion-ease-move),
+                                   color var(--motion-instant) var(--motion-ease-move); }
+
+/* Accessibility: reduced motion collapses choreography to opacity-only,
+   preserving continuity (the crossfade) while removing translate/scale/spring. */
+@media (prefers-reduced-motion: reduce) {
+  .motion-reveal,
+  .motion-settle,
+  .motion-recede {
+    animation-name: motion-settle-in;
+    animation-duration: 1ms;
+  }
+  .motion-acknowledge { animation: none; }
+  .motion-navigate,
+  .motion-swap,
+  .motion-press,
+  .motion-interactive { transition-duration: 1ms; }
+  .motion-press:active { transform: none; }
+}
+
 body {
   background: var(--color-alloy-stone);
   color: var(--color-alloy-forge);

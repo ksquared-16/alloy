@@ -80,7 +80,6 @@ import {
     workUnitQueueLaneRevealSettled,
 } from "@/lib/workspace/workUnitQueueLaneRevealState";
 import { useAdminDrawer } from "@/contexts/AdminDrawerContext";
-import { ALLOY_OS_RUNTIME_ENABLED } from "@/lib/adminV2/runtime/alloyOsRuntimeFlag";
 import {
     DEFAULT_OPERATIONAL_SUBJECT_OPEN_SOURCE,
     markManualOperationalSubjectSelection,
@@ -229,6 +228,7 @@ import {
     attachSiblingWorkUnitTotals,
     buildLifecycleBuilderOwnedAboveFoldHeaderSections,
     buildLifecycleSiblingNavRowsFromDepartmentWorkUnits,
+    buildLifecycleSiblingPreliminaryHeaderSections,
     isLifecycleWorkUnitNavChipKey,
     lifecycleBuilderOwnedUsesEnrollmentPillShell,
     LIFECYCLE_NEEDS_ATTENTION_PLACEHOLDER_CHIP_KEY,
@@ -1148,6 +1148,11 @@ export default function AdminV2OpportunityWorkUnitPage() {
     const [lifecycleSiblingTotalsById, setLifecycleSiblingTotalsById] = useState<Record<string, number>>({});
     const lifecycleSiblingWorkUnitsRef = useRef<LifecycleSiblingWorkUnitNavRow[] | null>(null);
     lifecycleSiblingWorkUnitsRef.current = lifecycleSiblingWorkUnits;
+    // Preliminary sibling names from stable cache — shows real pill labels with skeleton counts
+    // before authoritative hydration completes. Never exposes stale counts (skeleton only).
+    const [lifecycleSiblingPreliminaryRows, setLifecycleSiblingPreliminaryRows] = useState<
+        LifecycleSiblingWorkUnitNavRow[] | null
+    >(null);
 
     useEffect(() => {
         if (!orgId) {
@@ -1174,9 +1179,21 @@ export default function AdminV2OpportunityWorkUnitPage() {
                 setLifecycleSiblingWorkUnits(stable.siblings);
                 setLifecycleSiblingTotalsById(stable.totalsByWorkUnitId);
                 setLifecycleSiblingsHydrationComplete(true);
+                setLifecycleSiblingPreliminaryRows(null); // already fully hydrated, no preliminary needed
                 return;
             }
         }
+        // Seed preliminary pill labels from the stable cache so the header shows named pills
+        // (with skeleton counts) immediately on non-preserved entry — avoids the generic "—" skeleton.
+        const preliminary =
+            orgId && departmentId
+                ? readLifecycleSiblingListStable({
+                      orgId,
+                      departmentId,
+                      accessScopeFingerprint: viewScopeFingerprint,
+                  })
+                : null;
+        setLifecycleSiblingPreliminaryRows(preliminary?.siblings ?? null);
         setLifecycleSiblingWorkUnits(null);
         setLifecycleSiblingsHydrationComplete(false);
         setLifecycleSiblingTotalsById({});
@@ -1514,6 +1531,28 @@ export default function AdminV2OpportunityWorkUnitPage() {
         selectedQueueKey,
         stageOperationalViews,
         workViewPerspectivesEnabled,
+    ]);
+
+    // Preliminary pill sections: named chips with skeleton counts, from stable sibling cache.
+    // Shown while `lifecycle_builder_owned_header_pending` is true so the header renders the
+    // real pill structure immediately instead of generic "—" skeletons.
+    const lifecycleHeaderPreliminarySections = useMemo(() => {
+        if (!builderOwnedLifecycleShell || !workUnitId || !lifecycleSiblingPreliminaryRows?.length) {
+            return null;
+        }
+        // Already fully hydrated — preliminary sections would be ignored, skip the work
+        if (lifecycleSiblingHeaderReady) return null;
+        return buildLifecycleSiblingPreliminaryHeaderSections({
+            siblings: lifecycleSiblingPreliminaryRows,
+            currentWorkUnitId: workUnitId,
+            currentWorkUnitKey: workUnit?.key ?? null,
+        });
+    }, [
+        builderOwnedLifecycleShell,
+        workUnitId,
+        workUnit?.key,
+        lifecycleSiblingPreliminaryRows,
+        lifecycleSiblingHeaderReady,
     ]);
 
     const showOipOnlyKpiStrip = builderOwnedLifecycleShell;
@@ -2673,7 +2712,10 @@ export default function AdminV2OpportunityWorkUnitPage() {
             if (warmSwitch?.work_unit?.id === workUnitId) {
                 setWorkUnit(warmSwitch.work_unit as WorkUnitRow);
                 setDept(warmSwitch.department as DeptRow);
-                setQueueSummaries((warmSwitch.queue_summaries ?? []) as QueueSummary[]);
+                // Warm switch counts are stale (from a prior navigation's planned bootstrap).
+                // Mark deferred so pills show skeleton until fetchQueueSummaries refreshes them.
+                const rawWsQs = (warmSwitch.queue_summaries ?? []) as QueueSummary[];
+                setQueueSummaries(rawWsQs.map((q) => ({ ...q, counts_deferred: true as const })));
                 wuDeferredQueueKeysRef.current = warmSwitch.deferred_queue_keys ?? [];
                 workUnitDetailReadyRef.current = true;
                 bootstrapWuRef.current = warmSwitch.work_unit as WorkUnitRow;
@@ -3012,10 +3054,20 @@ export default function AdminV2OpportunityWorkUnitPage() {
                         workUnitDetailReadyRef.current = true;
                         bootstrapWuRef.current = wu;
 
-                        const qs = (b.queue?.summaries ?? []) as QueueSummary[];
-                        wuDeferredQueueKeysRef.current = Array.isArray(b.queue?.deferred_queue_keys)
-                            ? b.queue.deferred_queue_keys
+                        const rawQs = (b.queue?.summaries ?? []) as QueueSummary[];
+                        // Bootstrap uses planned (approximate) counts for priority queues — do not
+                        // display them. Mark ALL summaries as counts_deferred so pills show skeleton
+                        // until hydrateDeferredQueueSummaryCounts resolves exact counts for all keys.
+                        const qs = rawQs.map((q) => ({ ...q, counts_deferred: true as const }));
+                        const bootstrapDeferred = Array.isArray(b.queue?.deferred_queue_keys)
+                            ? (b.queue.deferred_queue_keys as string[])
                             : [];
+                        // Extend deferred key set to include priority queues so the exact-count
+                        // hydration step (hydrateDeferredQueueSummaryCounts) resolves all pills,
+                        // not just the originally-deferred non-priority ones.
+                        wuDeferredQueueKeysRef.current = Array.from(
+                            new Set([...bootstrapDeferred, ...rawQs.map((q) => q.key)])
+                        );
                         setQueueSummaries(qs);
                         setQueueSummariesError(null);
                         setQueueSummariesRoute(buildWorkUnitQueuesListRoute(workUnitId, selectedSiteId));
@@ -3951,7 +4003,6 @@ export default function AdminV2OpportunityWorkUnitPage() {
 
     const [operationalSubjectQueueRevision, setOperationalSubjectQueueRevision] = useState(0);
     useEffect(() => {
-        if (!ALLOY_OS_RUNTIME_ENABLED) return;
         setOperationalSubjectQueueRevision((tick) => tick + 1);
     }, [
         workUnitLaneReveal.mayPaintRows,
@@ -5212,7 +5263,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
     );
 
     useWorkUnitDefaultOperationalSubjectAutoOpen({
-        enabled: ALLOY_OS_RUNTIME_ENABLED,
+        enabled: true,
         workUnitId: workUnit?.id ?? null,
         workUnitKey: workUnit?.key ?? null,
         activeQueueKey: workUnitLaneReveal.activeQueueKey || selectedQueueKey,
@@ -5233,7 +5284,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
     });
 
     useOperationalModeEntryController({
-        enabled: ALLOY_OS_RUNTIME_ENABLED,
+        enabled: true,
         workUnitId: workUnit?.id ?? null,
         activeQueueKey: workUnitLaneReveal.activeQueueKey || selectedQueueKey,
         laneMayPaint: workUnitLaneReveal.mayPaintRows,
@@ -5253,7 +5304,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
     const resumeSubjectId =
         resumeSubjectEntityType && drawer.id != null ? String(drawer.id).trim() || null : null;
     useResumeSessionWriter({
-        enabled: ALLOY_OS_RUNTIME_ENABLED,
+        enabled: true,
         scope: { orgId, principalUserId, accessScopeFingerprint },
         workUnitSlug: slugRoute?.routeSlug ?? null,
         workUnitName: slugRoute?.workUnitName ?? workUnit?.name ?? null,
@@ -5916,6 +5967,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
             lifecycle_builder_owned_header_sections: lifecycleHeaderSections,
             lifecycle_builder_owned_header_pending:
                 builderOwnedLifecycleShell && !lifecycleSiblingHeaderReady,
+            lifecycle_builder_owned_preliminary_siblings: lifecycleHeaderPreliminarySections,
             selected_queue_key: selectedQueueKey,
             attention_bucket_key: attentionBucketKey,
             lane_unmapped_only: laneUnmappedOnly,
@@ -5964,6 +6016,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
         builderOwnedLifecycleShell,
         lifecycleHeaderSections,
         lifecycleSiblingHeaderReady,
+        lifecycleHeaderPreliminarySections,
     ]);
 
     const workUnitRouteShellPlaceholder = useMemo(
@@ -6046,7 +6099,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
     const operationalEntryRevealSnapshot = useMemo(
         () =>
             resolveOperationalModeEntrySnapshot({
-                enabled: ALLOY_OS_RUNTIME_ENABLED,
+                enabled: true,
                 workUnitId: workUnit?.id ?? null,
                 activeQueueKey: workUnitLaneReveal.activeQueueKey || selectedQueueKey,
                 laneMayPaint: workUnitLaneReveal.mayPaintRows,
@@ -6070,7 +6123,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
         ],
     );
     const operationalRevealPhaseReady =
-        !ALLOY_OS_RUNTIME_ENABLED || operationalEntryRevealSnapshot.phase === "ready";
+        operationalEntryRevealSnapshot.phase === "ready";
 
     // Bounded fallback: a subject that never resolves (e.g. resolution returns nothing) must not
     // strand the cold shell. After a short coordination window we reveal anyway (today's behavior).
@@ -6081,7 +6134,6 @@ export default function AdminV2OpportunityWorkUnitPage() {
         setOperationalRevealFallbackElapsed(false);
     }, [operationalRevealResetKey]);
     useEffect(() => {
-        if (!ALLOY_OS_RUNTIME_ENABLED) return;
         if (wuCoordinatedRevealDone) return; // warm path already revealed
         if (!workUnitAboveFoldPageReady) return; // wait for the normal gate first
         if (operationalRevealPhaseReady) return; // subject already coherent
@@ -6154,7 +6206,6 @@ export default function AdminV2OpportunityWorkUnitPage() {
     // Resume continuity: when arriving via the Resume affordance, restore queue scroll once rows
     // are painted for the matching work unit + lane. URL still drives subject/lane selection.
     useEffect(() => {
-        if (!ALLOY_OS_RUNTIME_ENABLED) return;
         if (!workUnitQueueRevealReady) return;
         const intent = consumeResumeIntent();
         if (!intent) return;
@@ -6187,9 +6238,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
     const workUnitKpiHasSnapshotSurface =
         !suppressWorkUnitKpiStrip && !showOipOnlyKpiStrip && Boolean(workUnitKpiContext);
     const workUnitKpiStripPlaceholder =
-        ALLOY_OS_RUNTIME_ENABLED && workUnitKpiHasSnapshotSurface
-            ? false
-            : workUnitKpiStripPlaceholderRaw;
+        workUnitKpiHasSnapshotSurface ? false : workUnitKpiStripPlaceholderRaw;
 
     const workUnitRoutePipeline = useMemo(
         () =>
@@ -6800,7 +6849,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
                                 // refreshes on idle AFTER the coordinated reveal. Suppress its independent
                                 // "Checking…" transient so it never pops a loader in over a ready surface —
                                 // values hydrate quietly in place instead.
-                                kpisLoading={ALLOY_OS_RUNTIME_ENABLED ? false : workflowKpisLoading}
+                                kpisLoading={false}
                                 kpis={{
                                     runs_today: workflowKpis.runs_today,
                                     failed_last_7d: workflowKpis.failed_last_7d,

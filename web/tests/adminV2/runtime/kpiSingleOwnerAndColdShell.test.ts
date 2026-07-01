@@ -20,23 +20,28 @@ describe("KPI single-owner wiring", () => {
         expect(src).toContain("if (freshHasValues || !currentHasValues)");
     });
 
-    it("WU-02 KPI strip: platform placement is sole runtime owner — no OIP emptyFallback", () => {
+    it("WU-02 KPI strip: platform placement is sole owner — no OIP emptyFallback, no dead flag branch", () => {
         const src = readSrc("components/admin/workspace/layout/WorkUnitCommandSurface.tsx");
-        const block = src.slice(src.indexOf('surface="work_unit_header"'), src.indexOf("const v1Fallback"));
+        // Dead-branch guard and legacy fallback must be absent (runtime unconditionally on)
+        expect(src).not.toContain("ALLOY_OS_RUNTIME_ENABLED");
+        expect(src).not.toContain("v1Fallback");
+        expect(src).not.toContain("AlloyOsInlineKpiStrip");
+        // The MetricPlacementRenderer for WU-02 uses loadingReserve, never emptyFallback
+        const block = src.slice(src.indexOf('surface="work_unit_header"'));
         expect(block).toContain("loadingReserve={<WorkspaceQuietKpiReserve");
         expect(block).not.toContain("emptyFallback");
-        expect(block).not.toContain("AlloyOsInlineKpiStrip");
     });
 
-    it("WS-04 primary_metrics gets a stable reserve; secondary OIP fallback is legacy-only", () => {
+    it("WS-04 primary_metrics and secondary_metrics both use stable reserve — no legacy OIP fallback", () => {
         const src = readSrc("components/admin/workspace/layout/WorkspaceOperationalPulseStrip.tsx");
+        expect(src).not.toContain("ALLOY_OS_RUNTIME_ENABLED");
+        expect(src).not.toContain("legacyOipFallback");
         expect(src).toContain("function PulseSlotReserve()");
         const primary = src.slice(src.indexOf('placementZone="primary_metrics"'), src.indexOf('placementZone="secondary_metrics"'));
         expect(primary).toContain("loadingReserve={<PulseSlotReserve />}");
         expect(primary).not.toContain("emptyFallback");
         const secondary = src.slice(src.indexOf('placementZone="secondary_metrics"'));
-        expect(secondary).toContain("emptyFallback={legacyOipFallback}");
-        expect(src).toContain("!ALLOY_OS_RUNTIME_ENABLED && kpis.length");
+        expect(secondary).toContain("loadingReserve={<PulseSlotReserve />}");
     });
 });
 

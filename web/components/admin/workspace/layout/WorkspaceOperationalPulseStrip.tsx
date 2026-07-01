@@ -2,17 +2,7 @@
 
 import type { KPIVm } from "@/lib/ui-v2/workspace-types";
 import type { ResolvedMetricMap } from "@/lib/metrics/fetchResolvedMetrics";
-import { oipMetricKeyForStripKey } from "@/lib/kpi/oipBridge";
-import type { MetricKey } from "@/lib/kpi/types";
-import { filterOperationalPulseKpis } from "@/lib/kpi/workspaceKpiPresentation";
-import { oipSummaryLabel } from "@/lib/metrics/oipOperatorCopy";
 import { MetricPlacementRenderer } from "@/components/admin/metrics/MetricPlacementRenderer";
-import { ALLOY_OS_RUNTIME_ENABLED } from "@/lib/adminV2/runtime/alloyOsRuntimeFlag";
-
-function metricKeyFromKpiId(id: string): string | null {
-    if (!id.startsWith("oip.")) return null;
-    return oipMetricKeyForStripKey(id as MetricKey);
-}
 
 function InlinePulseMetric({
     label,
@@ -47,36 +37,6 @@ function InlinePulseMetric({
     );
 }
 
-function KpiPulseFallback({
-    kpis,
-    oipResolved: _oipResolved,
-    loading = false,
-}: {
-    kpis: KPIVm[];
-    oipResolved?: ResolvedMetricMap;
-    loading?: boolean;
-}) {
-    const pulseKpis = filterOperationalPulseKpis(kpis);
-    if (!pulseKpis.length) return null;
-
-    return (
-        <div className="flex flex-wrap items-baseline gap-x-6 gap-y-2">
-            {pulseKpis.map((kpi) => {
-                const metricKey = metricKeyFromKpiId(kpi.id);
-                const label = metricKey ? oipSummaryLabel(metricKey) : kpi.label;
-                return (
-                    <InlinePulseMetric
-                        key={kpi.id}
-                        label={label}
-                        value={kpi.value}
-                        loading={loading}
-                    />
-                );
-            })}
-        </div>
-    );
-}
-
 type Props = {
     kpis: KPIVm[];
     oipResolved?: ResolvedMetricMap;
@@ -99,13 +59,7 @@ function PulseSlotReserve() {
 }
 
 /** Compact horizontal operational pulse — attention signals, not dashboard tiles. */
-export function WorkspaceOperationalPulseStrip({ kpis, oipResolved, loading = false }: Props) {
-    // Legacy-only: OIP pulse fallback when platform resolves with no configured placements.
-    const legacyOipFallback =
-        !ALLOY_OS_RUNTIME_ENABLED && kpis.length ?
-            <KpiPulseFallback kpis={kpis} oipResolved={oipResolved} loading={loading} />
-        :   null;
-
+export function WorkspaceOperationalPulseStrip({ kpis: _kpis, oipResolved: _oipResolved, loading: _loading = false }: Props) {
     return (
         <div
             className="min-w-0 space-y-1.5"
@@ -126,7 +80,6 @@ export function WorkspaceOperationalPulseStrip({ kpis, oipResolved, loading = fa
                 layout="row"
                 className="gap-x-6 gap-y-2"
                 loadingReserve={<PulseSlotReserve />}
-                emptyFallback={legacyOipFallback}
             />
         </div>
     );
