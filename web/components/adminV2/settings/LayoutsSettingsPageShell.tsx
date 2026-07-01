@@ -51,7 +51,7 @@ function LayoutsSettingsPageShellInner({ initialEntityType }: Props) {
                 data-testid="layouts-hub-registry-trust-note"
             >
                 {LAYOUTS_HUB_REGISTRY_TRUST_NOTE}{" "}
-                <Link href="/admin/settings/fields" className="font-medium text-alloy-pine hover:underline">
+                <Link href="/settings/fields" className="font-medium text-alloy-pine hover:underline">
                     Open Fields
                 </Link>
                 .

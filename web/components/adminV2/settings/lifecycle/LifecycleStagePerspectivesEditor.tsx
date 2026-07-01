@@ -37,6 +37,7 @@ function workUnitPreviewHref(
     return buildOperationalViewPreviewRuntimeHref({
         departmentId,
         workUnitId,
+        workUnitKey: pipeline?.key ?? null,
         queueKey,
     });
 }

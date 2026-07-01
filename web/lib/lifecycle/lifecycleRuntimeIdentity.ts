@@ -114,5 +114,5 @@ export function syncCatalogToRuntimeIdentity(
 }
 
 export function workspaceDeptHref(runtimeDepartmentId: string): string {
-    return `/adminV2/workspace/dept/${encodeURIComponent(runtimeDepartmentId.trim())}`;
+    return "/workspace";
 }

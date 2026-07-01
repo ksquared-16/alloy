@@ -239,7 +239,7 @@ export default function LifecycleHubClient() {
                 id: "statuses",
                 title: "Statuses",
                 summary: statusCount ? `${statusCount} status${statusCount === 1 ? "" : "es"} assigned` : "None assigned",
-                manageHref: "/admin/settings/statuses?entity_type=opportunities",
+                manageHref: "/settings/statuses?entity_type=opportunities",
                 manageLabel: "All statuses",
                 content: departmentId ? (
                     <EnrollmentProcessStageStatusesCard
@@ -253,7 +253,7 @@ export default function LifecycleHubClient() {
                 id: "layouts",
                 title: "Layout assignments",
                 summary: "Queue and drawer layouts for this stage",
-                manageHref: "/admin/settings/layouts",
+                manageHref: "/settings/surfaces",
                 manageLabel: "Layout library",
                 content:
                     activeProcess && activeStageKey ? (
@@ -309,7 +309,7 @@ export default function LifecycleHubClient() {
                 id: "attention",
                 title: "Attention",
                 summary: "Follow-up and overdue signals",
-                manageHref: "/admin/settings/attention-sla-rules",
+                manageHref: "/settings/attention-sla-rules",
                 manageLabel: "Attention & SLA",
                 content: <LifecycleNeedsAttentionCard stageKey={activeStageKey} />,
             },

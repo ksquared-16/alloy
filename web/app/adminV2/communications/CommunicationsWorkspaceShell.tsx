@@ -101,7 +101,7 @@ export default function CommunicationsWorkspaceShell({
                     />
                     {mode === "studio" ? (
                         <a
-                            href="/adminV2/settings/communications"
+                            href="/settings/communications"
                             className={`${COMMS_SECONDARY_BTN_CLASS} mb-1.5 inline-flex items-center gap-1.5 !px-2.5 !py-1 text-[11px]`}
                             data-comms-studio-settings-link="true"
                         >

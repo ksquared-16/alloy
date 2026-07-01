@@ -17,7 +17,7 @@ type StatusOptionRow = {
 export default function LifecycleStatusesCard({
     payload,
     statusOptionRows,
-    statusesSettingsHref = "/admin/settings/statuses?entity_type=opportunities",
+    statusesSettingsHref = "/settings/statuses?entity_type=opportunities",
     loading,
     saving,
     saveState,

@@ -46,7 +46,7 @@ export const LOCATION_OWNERSHIP_MODEL = {
     programs: {
         operator_label: ENROLLMENT_PLACEMENT_OPERATOR_LABELS.program,
         storage_table: "location_program_categories",
-        settings_path: "/admin/settings/locations",
+        settings_path: "/settings/locations",
         scoped_by: "location_id",
     },
     rooms: {

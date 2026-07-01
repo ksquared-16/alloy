@@ -23,7 +23,7 @@ import type {
     NavigationIntent,
 } from "@/lib/analytics/runtime/types";
 
-const DEFAULT_WORKSPACE_BASE_PATH = "/adminV2/workspace";
+const DEFAULT_WORKSPACE_BASE_PATH = "/workspace";
 
 /** A queue drill — opens a filtered work unit queue. The only kind wired in Phase 1. */
 export type QueueDrillContract = {

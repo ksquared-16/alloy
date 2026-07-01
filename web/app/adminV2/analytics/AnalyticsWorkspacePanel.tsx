@@ -254,7 +254,7 @@ export default function AnalyticsWorkspacePanel({ onRequestClose }: AnalyticsWor
     const openConfiguration = () => {
         closeWorkspaceModal("analytics");
         onRequestClose?.();
-        router.push("/admin/settings/analytics");
+        router.push("/settings/calculations");
     };
 
     return (

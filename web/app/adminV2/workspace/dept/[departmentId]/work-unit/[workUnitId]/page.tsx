@@ -5811,7 +5811,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
                     return;
                 }
                 if (action.actionId === "wu_manage_work_units") {
-                    window.location.href = "/admin/settings/work-units";
+                    window.location.href = "/settings/work-units";
                     return;
                 }
                 if (action.actionId === "wu_workspace_root") {

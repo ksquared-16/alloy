@@ -274,7 +274,7 @@ export default function EnrollmentProcessActionsCard({
 
             <p className="text-[10px] text-alloy-midnight/45">
                 Advanced:{" "}
-                <Link href="/admin/settings/actions?entity_type=opportunity" className="text-alloy-pine hover:underline">
+                <Link href="/settings/actions?entity_type=opportunity" className="text-alloy-pine hover:underline">
                     Action Buttons
                 </Link>
             </p>

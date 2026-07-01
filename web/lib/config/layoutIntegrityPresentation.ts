@@ -110,8 +110,8 @@ export type LayoutIntegrityFixLink = { href: string; label: string };
 export function fixLinksForIssue(issue: LayoutIntegrityIssue): LayoutIntegrityFixLink[] {
     const entity = issue.entity_type ?? "opportunity";
     const links: LayoutIntegrityFixLink[] = [
-        { href: `/adminV2/settings/fields?entity=${encodeURIComponent(entity)}`, label: "Fields" },
-        { href: "/admin/settings/field-sections", label: "Field grouping" },
+        { href: `/settings/fields?entity=${encodeURIComponent(entity)}`, label: "Fields" },
+        { href: "/settings/field-sections", label: "Field grouping" },
     ];
     if (
         issue.code === "layout_ordering_conflict" ||
@@ -122,7 +122,7 @@ export function fixLinksForIssue(issue: LayoutIntegrityIssue): LayoutIntegrityFi
         links.push({ href: "/settings/surfaces", label: "Surfaces" });
     }
     if (issue.code === "option_field_no_active_options") {
-        links.push({ href: "/admin/settings/option-sets", label: "Option sets" });
+        links.push({ href: "/settings/option-sets", label: "Option sets" });
     }
     return links;
 }

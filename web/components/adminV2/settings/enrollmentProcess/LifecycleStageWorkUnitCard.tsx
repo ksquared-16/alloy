@@ -294,7 +294,7 @@ const LifecycleStageWorkUnitCard = forwardRef<
                 <p className="text-[10px] text-alloy-midnight/45">
                     Advanced:{" "}
                     <Link
-                        href={`/adminV2/settings/work-units?department_id=${encodeURIComponent(departmentId)}`}
+                        href={`/settings/work-units?department_id=${encodeURIComponent(departmentId)}`}
                         className="text-alloy-pine hover:underline"
                     >
                         Queue settings

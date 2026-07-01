@@ -24,7 +24,7 @@ export type LifecycleStageStatusRollupEditorHandle = {
 export default function LifecycleStageStatusRollupEditor({
     catalog,
     savedRollup,
-    statusesSettingsHref = "/admin/settings/statuses",
+    statusesSettingsHref = "/settings/statuses",
     onRollupChange,
     editorRef,
 }: {

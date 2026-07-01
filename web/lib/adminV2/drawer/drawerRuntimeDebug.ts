@@ -52,7 +52,7 @@ export function buildDrawerRuntimeProof(route: DrawerDebugRoute): DrawerRuntimeP
 export function drawerDebugSourceFromPathname(pathname: string | null | undefined): DrawerDebugSource {
     const p = String(pathname ?? "").trim();
     if (p.includes("/work-unit/")) return "work-unit";
-    if (p.startsWith("/adminV2/workspace")) return "workspace";
+    if (p.startsWith("/workspace") || p.startsWith("/adminV2/workspace")) return "workspace";
     return "other";
 }
 

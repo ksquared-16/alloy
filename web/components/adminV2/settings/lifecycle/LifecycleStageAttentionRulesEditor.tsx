@@ -206,7 +206,7 @@ export default function LifecycleStageAttentionRulesEditor({
     const footer = (
         <div className="text-[11px]">
             <AdminV2NavLink
-                href="/admin/settings/attention-sla-rules"
+                href="/settings/attention-sla-rules"
                 className="font-medium text-alloy-pine hover:underline"
             >
                 {BUSINESS_PROCESS_SECTION_ATTENTION_ORG_DEFAULTS_LINK}

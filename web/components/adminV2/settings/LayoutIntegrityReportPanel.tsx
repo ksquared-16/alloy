@@ -148,7 +148,7 @@ export default function LayoutIntegrityReportPanel() {
                         Surfaces
                     </Link>{" "}
                     (drawer composition) or{" "}
-                    <Link href="/admin/settings/fields" className="font-medium text-alloy-pine hover:underline">
+                    <Link href="/settings/fields" className="font-medium text-alloy-pine hover:underline">
                         Fields
                     </Link>
                     .

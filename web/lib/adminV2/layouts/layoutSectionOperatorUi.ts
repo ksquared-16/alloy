@@ -113,7 +113,7 @@ export function resolveLayoutSectionOperatorProfile(
             fixedFieldsNote: null,
             capabilitySummary: "Field behavior on this layout",
             actionsLinkLabel: "Header actions",
-            actionsLinkHref: "/admin/settings/actions?entity_type=opportunity&surface=record_header",
+            actionsLinkHref: "/settings/actions?entity_type=opportunity&surface=record_header",
         };
     }
 
@@ -132,7 +132,7 @@ export function resolveLayoutSectionOperatorProfile(
             fixedFieldsNote: null,
             capabilitySummary: "Rename · Show/hide · Reorder · Add/remove fields · Field behavior",
             actionsLinkLabel: "Section actions",
-            actionsLinkHref: `/adminV2/settings/actions?entity_type=opportunity&section_key=${encodeURIComponent(sectionKey)}`,
+            actionsLinkHref: `/settings/actions?entity_type=opportunity&section_key=${encodeURIComponent(sectionKey)}`,
         };
     }
 
@@ -155,7 +155,7 @@ export function resolveLayoutSectionOperatorProfile(
                 : "Show/hide · Reorder · Field behavior",
             actionsLinkLabel: hasPreviewFields ? "Section actions" : null,
             actionsLinkHref: hasPreviewFields
-                ? `/adminV2/settings/actions?entity_type=opportunity&section_key=${encodeURIComponent(sectionKey)}`
+                ? `/settings/actions?entity_type=opportunity&section_key=${encodeURIComponent(sectionKey)}`
                 : null,
         };
     }

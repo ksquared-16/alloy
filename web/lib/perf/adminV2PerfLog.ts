@@ -92,7 +92,7 @@ export function perfWorkspaceLoad(args: {
 }): void {
     emitAdminV2Perf("[perf.workspace.load]", {
         surface: "workspace_root",
-        route: "/adminV2/workspace",
+        route: "/workspace",
         phase: args.phase,
         total_ms: args.ms,
         source: args.source,
@@ -111,7 +111,7 @@ export function perfDeptLoad(args: {
 }): void {
     emitAdminV2Perf("[perf.dept.load]", {
         surface: "workspace_department",
-        route: args.department_id ? `/adminV2/workspace/dept/${args.department_id}` : "/adminV2/workspace/dept/[departmentId]",
+        route: args.department_id ? `/workspace/dept/${args.department_id}` : "/workspace/dept/[departmentId]",
         phase: args.phase,
         total_ms: args.ms,
         source: args.source,
@@ -135,8 +135,8 @@ export function perfWorkUnitLoad(args: {
     emitAdminV2Perf("[perf.work_unit.load]", {
         surface: "workspace_work_unit",
         route: args.work_unit_id
-            ? `/adminV2/workspace/dept/${args.department_id ?? "[departmentId]"}/work-unit/${args.work_unit_id}`
-            : "/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]",
+            ? `/workspace/work-unit/${args.work_unit_id}`
+            : "/workspace/work-unit/[workUnitSlug]",
         phase: args.phase,
         total_ms: args.ms,
         source: args.source,
