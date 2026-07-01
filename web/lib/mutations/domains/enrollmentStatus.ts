@@ -120,7 +120,7 @@ export const enrollmentStatusHandler: DomainHandler = {
 
         if (!row) return gaps;
 
-        const ocm = row as Record<string, unknown>;
+        const ocm = row as unknown as Record<string, unknown>;
         for (const requirement of matchingRule.requiredFields) {
             if (!ocm[requirement.field]) {
                 gaps.push({
