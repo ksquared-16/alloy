@@ -64,7 +64,6 @@ export async function resolveDeptPipelineExecSurface(params: {
             const bundle = tryLoadWorkUnitQueueDefinitionBundle(row.queue_definition);
             if (!bundle) return null;
             const def = bundle.def;
-            if (def.ui?.layout !== "pipeline_with_attention") return null;
             const lanes = extractPipelineExecutionLanes(def);
             if (!lanes.length) return null;
 

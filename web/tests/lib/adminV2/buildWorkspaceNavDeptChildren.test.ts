@@ -88,7 +88,7 @@ describe("buildWorkspaceNavDeptChildren", () => {
         expect(children[0]?.kind).toBe("work_unit");
     });
 
-    it("builds operator slug href from workUnitKey, not queueKey, for configured pipeline lanes", () => {
+    it("builds operator slug href from queueKey for configured pipeline lanes", () => {
         const child = {
             rowKey: "wu-pipe:new_inquiry",
             label: "New Inquiry",
@@ -97,13 +97,13 @@ describe("buildWorkspaceNavDeptChildren", () => {
             queueKey: "new_inquiry",
             kind: "configured_queue" as const,
         };
-        // All lanes in a process navigate to the same canonical WU URL — not to a queue-keyed route
+        // Lane row navigates to its own Work View slug — resolver maps it back to the parent WU
         expect(workspaceNavChildHref("/workspace", "dept-1", child)).toBe(
-            "/workspace/work-unit/enrollment-pipeline"
+            "/workspace/work-unit/new-inquiry"
         );
     });
 
-    it("marks configured queue child active when workUnitSlug matches the work unit key slug", () => {
+    it("marks configured queue child active when workUnitSlug matches the queue key slug", () => {
         const child = {
             rowKey: "wu-pipe:new_leads",
             label: "New Leads",
@@ -112,18 +112,16 @@ describe("buildWorkspaceNavDeptChildren", () => {
             queueKey: "new_leads",
             kind: "configured_queue" as const,
         };
-        // Active when the URL slug matches the work unit (not the queue key)
         expect(
             isWorkspaceNavChildActive({
                 departmentId: null,
                 workUnitId: null,
-                workUnitSlug: "enrollment-pipeline",
+                workUnitSlug: "new-leads",
                 activeQueueKey: null,
                 child,
                 deptId: "dept-enrollment",
             })
         ).toBe(true);
-        // Not active when on a different work unit's slug
         expect(
             isWorkspaceNavChildActive({
                 departmentId: null,
@@ -136,21 +134,20 @@ describe("buildWorkspaceNavDeptChildren", () => {
         ).toBe(false);
     });
 
-    it("workspaceDeptQueueNavHref with workUnitKey produces canonical /work-unit/[workUnitSlug] URL", () => {
+    it("workspaceDeptQueueNavHref with workUnitKey produces canonical /work-unit/[queueSlug] URL", () => {
         const href = workspaceDeptQueueNavHref("/workspace", "dept-1", "wu-pipe", "new_leads", "enrollment_pipeline");
-        // URL is the work unit slug, never the queue key slug
-        expect(href).toBe("/workspace/work-unit/enrollment-pipeline");
+        // URL uses the queue/work-view key slug — resolver maps it to the parent enrollment pipeline
+        expect(href).toBe("/workspace/work-unit/new-leads");
         expect(href).not.toContain("/dept/");
         expect(href).not.toContain("/adminV2/");
-        expect(href).not.toContain("new-leads");
     });
 
-    it("workspaceDeptQueueNavHref falls back to dept-scoped URL when workUnitKey is absent", () => {
-        // queueKey-only (no workUnitKey) → no operator href → dept-scoped fallback with ?queue=
+    it("workspaceDeptQueueNavHref without workUnitKey still produces canonical /work-unit/[queueSlug] URL", () => {
+        // queueKey alone is enough — operatorWorkUnitHrefFromKey uses it as slug
         const hrefWithQueueOnly = workspaceDeptQueueNavHref("/workspace", "dept-1", "wu-pipe", "new_leads");
-        expect(hrefWithQueueOnly).toContain("/dept/");
-        expect(hrefWithQueueOnly).toContain("queue=new_leads");
-        // ID-only (no key at all) → dept-scoped without queue param
+        expect(hrefWithQueueOnly).toBe("/workspace/work-unit/new-leads");
+        expect(hrefWithQueueOnly).not.toContain("/dept/");
+        // ID-only (no key at all) → last remaining legacy fallback
         const hrefIdOnly = workspaceDeptQueueNavHref("/workspace", "dept-1", "wu-pipe", null);
         expect(hrefIdOnly).toContain("/dept/");
         expect(hrefIdOnly).not.toContain("queue=");
@@ -189,6 +186,21 @@ describe("buildWorkspaceNavDeptChildren", () => {
         // And their hrefs use canonical /work-unit/[slug]
         expect(workspaceNavChildHref("/workspace", "dept-2", billingChild!)).toBe("/workspace/work-unit/billing");
         expect(workspaceNavChildHref("/workspace", "dept-2", hrChild!)).toBe("/workspace/work-unit/hr-onboarding");
+    });
+
+    it("Workspace Active Pipeline link uses /workspace/work-unit/active-pipeline", () => {
+        const child = {
+            rowKey: "wu-pipe:active_pipeline",
+            label: "Active Pipeline",
+            workUnitId: "wu-pipe",
+            workUnitKey: "enrollment_pipeline",
+            queueKey: "active_pipeline",
+            kind: "configured_queue" as const,
+        };
+        // Work View slug in URL — resolver maps active_pipeline → enrollment parent runtime
+        expect(workspaceNavChildHref("/workspace", "dept-1", child)).toBe(
+            "/workspace/work-unit/active-pipeline"
+        );
     });
 
     it("marks configured queue child active from legacy queue search param", () => {
