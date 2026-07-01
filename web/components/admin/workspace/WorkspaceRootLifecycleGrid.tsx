@@ -17,11 +17,6 @@ import type {
     OperatorLifecycleLandingCard,
     OperatorLifecycleWorkQueuePreview,
 } from "@/lib/admin/buildOperatorLifecycleLanding";
-import {
-    ensureEnrollmentOperationalSurfaceCard,
-    isEnrollmentLifecycleCard,
-} from "@/lib/admin/enrollmentOperationalSurfaceLanding";
-import { OperationalSurfaceCover } from "@/components/admin/workspace/OperationalSurfaceCover";
 import { OipKpiIcon } from "@/components/admin/workspace/OipKpiIcon";
 import { alloySectionDomAttrs } from "@/lib/perf/alloySectionMap";
 import { oipDomainVisualTokens, oipProcessAccentKey } from "@/lib/metrics/oipKpiCardVisualSystem";
@@ -82,7 +77,7 @@ function selectTilePreviewMetrics(
     return out.slice(0, 3);
 }
 
-function LegacyProcessNavTile({
+function ProcessNavTile({
     lifecycle,
     clickedKey,
     accent,
@@ -233,94 +228,6 @@ function LegacyProcessNavTile({
     );
 }
 
-function EnrollmentOperationalSurfaceTile({
-    lifecycle,
-    clickedKey,
-    accent,
-    domain,
-}: {
-    lifecycle: OperatorLifecycleLandingCard;
-    clickedKey: string;
-    accent: ReturnType<typeof oipProcessAccentKey>;
-    domain: ReturnType<typeof oipDomainVisualTokens>;
-}) {
-    const story = lifecycle.operationalStory;
-    const workLines = lifecycle.todaysWork ?? [];
-
-    return (
-        <article
-            className={`${WS_LAYOUT.processNavTile} ${domain.leftRail}`}
-            data-ws-business-process-tile="true"
-            data-operational-surface-tile="enrollment"
-        >
-            <div className="flex flex-1 flex-col px-4 pb-3 pt-3.5">
-                <div className="flex items-center gap-3">
-                    <OipKpiIcon
-                        iconKey={oipProcessIconKey(lifecycle.processKey)}
-                        accent={accent}
-                        withWell
-                        wellSize="md"
-                    />
-                    <h3
-                        className={`min-w-0 flex-1 text-base font-semibold leading-snug text-alloy-midnight ${domain.title}`}
-                    >
-                        {lifecycle.label}
-                    </h3>
-                    <span
-                        className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold tracking-wide ${
-                            story?.healthTone === "warning" ? "bg-alloy-ember/10 text-alloy-ember"
-                            : story?.healthTone === "critical" ? "bg-red-100 text-red-700"
-                            : "bg-alloy-juniper/10 text-alloy-juniper"
-                        }`}
-                        data-operational-surface-health="true"
-                    >
-                        {story?.healthLabel ?? "Healthy"}
-                    </span>
-                </div>
-
-                <OperationalSurfaceCover
-                    title={lifecycle.label}
-                    healthLabel={story?.healthLabel ?? "Healthy"}
-                    healthTone={story?.healthTone ?? "healthy"}
-                    storyHeadline={
-                        story?.headline ?? "Three families are waiting for the next step."
-                    }
-                    storyBody={
-                        story?.body
-                        ?? "Let's keep conversations moving and help families reach enrollment."
-                    }
-                    workLines={workLines.map((line) => ({
-                        ...line,
-                        clickedKey: `${clickedKey}:work:${line.id}`,
-                    }))}
-                    entryHref={lifecycle.entryHref}
-                    entryLabel="Enter Enrollment →"
-                    entryClickedKey={`${clickedKey}:entry`}
-                />
-
-                <div className="mt-auto flex items-end gap-4 border-t border-alloy-midnight/8 pt-2.5">
-                    <div>
-                        <div className="text-[8px] font-semibold uppercase tracking-wide text-alloy-midnight/40">
-                            Records
-                        </div>
-                        <div className="text-[11px] font-semibold tabular-nums text-alloy-midnight/70">
-                            {formatMetricValue(lifecycle.activeRecordCount)}
-                        </div>
-                    </div>
-                    <div>
-                        <div className="text-[8px] font-semibold uppercase tracking-wide text-alloy-midnight/40">
-                            Stages
-                        </div>
-                        <div className="text-[11px] font-semibold tabular-nums text-alloy-midnight/70">
-                            {formatStageCount(lifecycle.stageCount)}
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </article>
-    );
-}
-
 /** Work View entry links below a process tile — WS.PROCESS_TILE_WORK_VIEWS. */
 function WorkViewEntryList({
     workQueues,
@@ -404,13 +311,12 @@ export function WorkspaceRootLifecycleGrid({ lifecycles, pending = false }: Prop
         >
             {lifecycles.map((lifecycle) => {
                 const clickedKey = `lifecycle:${lifecycle.id}`;
-                const enrollmentCard = ensureEnrollmentOperationalSurfaceCard(lifecycle);
                 const hasAttention =
-                    enrollmentCard.needsAttentionCount != null && enrollmentCard.needsAttentionCount > 0;
-                const accent = oipProcessAccentKey(enrollmentCard.processKey, enrollmentCard.label);
+                    lifecycle.needsAttentionCount != null && lifecycle.needsAttentionCount > 0;
+                const accent = oipProcessAccentKey(lifecycle.processKey, lifecycle.label);
                 const domain = oipDomainVisualTokens(accent);
                 const previewMetrics =
-                    enrollmentCard.performanceMetrics?.map((m) => ({
+                    lifecycle.performanceMetrics?.map((m) => ({
                         label: performanceLabel(m.label),
                         value: m.value,
                     })) ?? [];
@@ -419,35 +325,14 @@ export function WorkspaceRootLifecycleGrid({ lifecycles, pending = false }: Prop
                     m.label.toLowerCase().includes("needs attention"),
                 );
 
-                if (isEnrollmentLifecycleCard(enrollmentCard)) {
-                    return (
-                        <div
-                            key={enrollmentCard.id}
-                            className="flex w-full min-w-[20rem] max-w-[25rem] flex-col"
-                            data-alloy-section="WS.PROCESS_TILE"
-                        >
-                            <EnrollmentOperationalSurfaceTile
-                                lifecycle={enrollmentCard}
-                                clickedKey={clickedKey}
-                                accent={accent}
-                                domain={domain}
-                            />
-                            <WorkViewEntryList
-                                workQueues={enrollmentCard.workQueues}
-                                clickedKey={clickedKey}
-                            />
-                        </div>
-                    );
-                }
-
                 return (
                     <div
-                        key={enrollmentCard.id}
+                        key={lifecycle.id}
                         className="flex w-full min-w-[20rem] max-w-[25rem] flex-col"
                         data-alloy-section="WS.PROCESS_TILE"
                     >
-                        <LegacyProcessNavTile
-                            lifecycle={enrollmentCard}
+                        <ProcessNavTile
+                            lifecycle={lifecycle}
                             clickedKey={clickedKey}
                             accent={accent}
                             domain={domain}
@@ -456,7 +341,7 @@ export function WorkspaceRootLifecycleGrid({ lifecycles, pending = false }: Prop
                             hasAttention={hasAttention}
                         />
                         <WorkViewEntryList
-                            workQueues={enrollmentCard.workQueues}
+                            workQueues={lifecycle.workQueues}
                             clickedKey={clickedKey}
                         />
                     </div>

@@ -81,13 +81,18 @@ export function WorkspaceRootShell({
   // the header popped in late — a phased reveal the snapshot law forbids.
 
   return (
+    <div data-alloy-section="WS.PAGE_SHELL">
     <WorkspaceShellLayout
       surface="company"
       rootClassName="adminv2-ws-company adminv2-ws-company-v2"
       style={companyRootStyle}
       workspaceRootShell
       railAriaLabel="Decisions and actions"
-      railContent={<WorkspaceRootActionsRail defaultDepartmentId={defaultDepartmentId} />}
+      railContent={
+        <div data-alloy-section="WS.RIGHT_RAIL">
+          <WorkspaceRootActionsRail defaultDepartmentId={defaultDepartmentId} />
+        </div>
+      }
       containLead={null}
       primaryColumn={
         <>
@@ -115,5 +120,6 @@ export function WorkspaceRootShell({
         </>
       }
     />
+    </div>
   );
 }

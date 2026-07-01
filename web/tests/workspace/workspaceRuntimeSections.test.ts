@@ -23,6 +23,21 @@ function countOccurrences(source: string, needle: string): number {
 }
 
 describe("WS.* section labels", () => {
+    it("WS.PAGE_SHELL appears exactly once — owned by WorkspaceRootShell outer wrapper", () => {
+        const src = readFile("components/admin/workspace/WorkspaceRootShell.tsx");
+        expect(countOccurrences(src, '"WS.PAGE_SHELL"')).toBe(1);
+    });
+
+    it("WS.HEADER appears exactly once — owned by WorkspaceRootShell command header div", () => {
+        const src = readFile("components/admin/workspace/WorkspaceRootShell.tsx");
+        expect(countOccurrences(src, '"WS.HEADER"')).toBe(1);
+    });
+
+    it("WS.RIGHT_RAIL appears exactly once — owned by WorkspaceRootShell rail wrapper", () => {
+        const src = readFile("components/admin/workspace/WorkspaceRootShell.tsx");
+        expect(countOccurrences(src, '"WS.RIGHT_RAIL"')).toBe(1);
+    });
+
     it("WS.PROCESS_GRID appears exactly once — owned by WorkspaceRootLifecycleGrid", () => {
         const src = readFile("components/admin/workspace/WorkspaceRootLifecycleGrid.tsx");
         expect(countOccurrences(src, '"WS.PROCESS_GRID"')).toBe(1);
@@ -38,14 +53,23 @@ describe("WS.* section labels", () => {
         expect(countOccurrences(src, '"WS.PROCESS_TILE_WORK_VIEWS"')).toBe(1);
     });
 
-    it("WS.HEADER appears exactly once — owned by WorkspaceRootShell command header div", () => {
-        const src = readFile("components/admin/workspace/WorkspaceRootShell.tsx");
-        expect(countOccurrences(src, '"WS.HEADER"')).toBe(1);
-    });
-
     it("WS.PROCESS_GRID is not present in WorkspaceRootShell (no duplicate ownership)", () => {
         const src = readFile("components/admin/workspace/WorkspaceRootShell.tsx");
         expect(countOccurrences(src, '"WS.PROCESS_GRID"')).toBe(0);
+    });
+
+    it("EnrollmentOperationalSurfaceTile is removed — no hardcoded enrollment tile in grid", () => {
+        const src = readFile("components/admin/workspace/WorkspaceRootLifecycleGrid.tsx");
+        expect(src).not.toContain("EnrollmentOperationalSurfaceTile");
+        expect(src).not.toContain("Enter Enrollment");
+        expect(src).not.toContain("isEnrollmentLifecycleCard");
+        expect(src).not.toContain("ensureEnrollmentOperationalSurfaceCard");
+    });
+
+    it("ProcessNavTile (not LegacyProcessNavTile) is the canonical tile renderer", () => {
+        const src = readFile("components/admin/workspace/WorkspaceRootLifecycleGrid.tsx");
+        expect(src).toContain("function ProcessNavTile(");
+        expect(src).not.toContain("LegacyProcessNavTile");
     });
 });
 
@@ -55,14 +79,24 @@ describe("WU.* section labels", () => {
         expect(countOccurrences(src, '"WU.PAGE_SHELL"')).toBe(1);
     });
 
-    it("WU.HEADER appears in WorkUnitCommandSurface (canonical header owner)", () => {
+    it("WU.HEADER appears in WorkUnitCommandSurface (canonical sole owner)", () => {
         const src = readFile("components/admin/workspace/layout/WorkUnitCommandSurface.tsx");
         expect(countOccurrences(src, '"WU.HEADER"')).toBeGreaterThanOrEqual(1);
     });
 
-    it("WU.HEADER_TITLE appears in WorkUnitCommandSurface", () => {
+    it("WU.HEADER is NOT in WorkUnitWorkspace (dual ownership removed)", () => {
+        const src = readFile("app/adminV2/components/workspace/shells/WorkUnitWorkspace.tsx");
+        expect(countOccurrences(src, '"WU.HEADER"')).toBe(0);
+    });
+
+    it("WU.HEADER_TITLE appears in WorkUnitCommandSurface (canonical sole owner)", () => {
         const src = readFile("components/admin/workspace/layout/WorkUnitCommandSurface.tsx");
         expect(countOccurrences(src, '"WU.HEADER_TITLE"')).toBe(1);
+    });
+
+    it("WU.HEADER_TITLE is NOT in WorkUnitWorkspace (dual ownership removed)", () => {
+        const src = readFile("app/adminV2/components/workspace/shells/WorkUnitWorkspace.tsx");
+        expect(countOccurrences(src, '"WU.HEADER_TITLE"')).toBe(0);
     });
 
     it("WU.HEADER_CALCULATIONS appears in WorkUnitCommandSurface", () => {
@@ -80,6 +114,16 @@ describe("WU.* section labels", () => {
         expect(countOccurrences(src, '"WU.QUEUE_REGION"')).toBe(1);
     });
 
+    it("WU.RIGHT_RAIL appears exactly once — owned by WorkUnitWorkspace rail wrapper", () => {
+        const src = readFile("app/adminV2/components/workspace/shells/WorkUnitWorkspace.tsx");
+        expect(countOccurrences(src, '"WU.RIGHT_RAIL"')).toBe(1);
+    });
+
+    it("WU.CONDENSED_QUEUE_ROW appears in QueueBlock queue card div", () => {
+        const src = readFile("app/adminV2/components/workspace/blocks/QueueBlock.tsx");
+        expect(countOccurrences(src, '"WU.CONDENSED_QUEUE_ROW"')).toBeGreaterThanOrEqual(1);
+    });
+
     it("WU.PAGE_SHELL is not present in WorkUnitCommandSurface (no duplicate ownership)", () => {
         const src = readFile("components/admin/workspace/layout/WorkUnitCommandSurface.tsx");
         expect(countOccurrences(src, '"WU.PAGE_SHELL"')).toBe(0);
@@ -89,7 +133,6 @@ describe("WU.* section labels", () => {
 describe("resolver bug guards", () => {
     it("resolveDeptPipelineExecSurface does not contain raw layout guard", () => {
         const src = readFile("lib/workspace/resolveDeptPipelineExecSurface.ts");
-        // Raw guard: `def.ui?.layout !== "pipeline_with_attention"` must not gate on this directly
         expect(src).not.toContain('def.ui?.layout !== "pipeline_with_attention"');
     });
 

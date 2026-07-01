@@ -111,7 +111,11 @@ export default function WorkUnitWorkspace({
   }, [primaryQueue]);
 
   const commandRailActions = useMemo(
-    () => <WorkUnitAboveFoldActionsRail slot={aboveFold.actions_rail} onAction={onAction} />,
+    () => (
+      <div data-alloy-section="WU.RIGHT_RAIL">
+        <WorkUnitAboveFoldActionsRail slot={aboveFold.actions_rail} onAction={onAction} />
+      </div>
+    ),
     [aboveFold.actions_rail, onAction],
   );
 
@@ -134,8 +138,8 @@ export default function WorkUnitWorkspace({
               {hasTopStack ?
                 <div className="adminv2-ws-dept-v2-top-stack mb-2">
                   {showBrief ?
-                    <div className="adminv2-ws-dept-v2-brief" data-alloy-section="WU.HEADER">
-                      <div className="adminv2-ws-dept-v2-brief-kicker" data-alloy-section="WU.HEADER_TITLE">{processName ?? "Work unit"}</div>
+                    <div className="adminv2-ws-dept-v2-brief">
+                      <div className="adminv2-ws-dept-v2-brief-kicker">{processName ?? "Work unit"}</div>
                       <div className="adminv2-ws-dept-v2-brief-head-row">
                         {model.aiSummary?.headline?.trim() ?
                             <h2 className="adminv2-ws-dept-v2-brief-headline">{model.aiSummary.headline.trim()}</h2>

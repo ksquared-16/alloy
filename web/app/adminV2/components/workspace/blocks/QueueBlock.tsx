@@ -2108,6 +2108,7 @@ function WorkUnitQueueLane({
                 className={`adminv2-ws-wu-queue-card adminv2-ws-wu-queue-card--compact adminv2-ws-wu-queue-card--operational adminv2-interactive-surface relative z-[1] pointer-events-auto adminv2-ws-wu-queue-card--tier-${tier}${
                   attentionAccent ? " adminv2-ws-wu-queue-card--attention-accent" : ""
                 } adminv2-ws-wu-queue-card--operational-row`}
+                data-alloy-section="WU.CONDENSED_QUEUE_ROW"
                 data-ws-wu-urgency={tier}
                 data-ws-needs-attention={attentionAccent ? "true" : undefined}
                 data-queue-row-active={
