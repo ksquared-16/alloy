@@ -14,7 +14,7 @@ import {
     operatorWorkUnitKeyForPipelineQueueKey,
 } from "@/lib/lifecycle/enrollmentProcessStageQueueKeys";
 import { isLifecycleStageWorkUnitKey } from "@/lib/lifecycle/lifecycleStageWorkUnit";
-import { operatorWorkUnitHrefFromKey, operatorWorkViewHref } from "@/lib/admin/canonicalOperatorRoutes";
+import { operatorWorkUnitHrefFromKey } from "@/lib/admin/canonicalOperatorRoutes";
 import { savedWorkViewsFromDepartmentMetadata } from "@/lib/lifecycle/resolveWorkViewRuntimeContext";
 import {
     extractDrawerLifecycleExecutionLanes,
@@ -169,40 +169,32 @@ function workViewNavEntriesForDepartment(args: {
     const platformKey = (targetWu.key ?? "").trim();
     if (!platformKey) return [];
 
-    // Materialization (Work View runtime materialization): every configured, visible Work View becomes
-    // its own nav item — ordering + visibility come straight from the saved config. This no longer
-    // collapses to the one view that happened to bind a pipeline queue lane.
-    //   - A view that binds a pipeline queue lane (`compat_queue_key`) keeps its canonical lane-slug
-    //     route (`/workspace/work-unit/:laneSlug`) — preserves existing routing + the legacy default.
-    //   - A view without a bound lane routes to the host work unit with `?work_view=<id>`, so it still
-    //     materializes as its own operational view (the runtime selects it, evaluates its predicates,
-    //     and shows its own count) instead of being dropped.
+    // Saved Work Views with a bound pipeline queue lane (`compat_queue_key`) become workspace tile
+    // nav items. Each routes to `/workspace/work-unit/:laneSlug` — a clean, param-free path.
+    // Work Views without a compat lane binding are excluded from the tile nav: they have no stable
+    // slug route and must not generate `?work_view=` or `?queue=` params.
+    // If no compat-bound views remain, return empty and let the caller fall through to pipeline lanes.
     const savedWorkViews = savedWorkViewsFromDepartmentMetadata(args.departmentMetadata).filter(
         (view) => view.visible_in_runtime !== false,
     );
     if (savedWorkViews.length) {
-        return [...savedWorkViews]
+        const compatBound = [...savedWorkViews]
             .sort(
                 (a, b) =>
                     (a.display_order ?? Number.MAX_SAFE_INTEGER) - (b.display_order ?? Number.MAX_SAFE_INTEGER)
                     || a.label.localeCompare(b.label),
             )
-            .map((view) => {
+            .flatMap((view) => {
                 const compat = view.compat_queue_key?.trim();
-                if (compat) {
-                    const laneKey = operatorWorkUnitKeyForPipelineQueueKey(compat) ?? compat;
-                    return {
-                        label: view.label?.trim() || view.id,
-                        platformKey: laneKey,
-                        href: operatorWorkUnitHrefFromKey(laneKey),
-                    };
-                }
-                return {
+                if (!compat) return [];
+                const laneKey = operatorWorkUnitKeyForPipelineQueueKey(compat) ?? compat;
+                return [{
                     label: view.label?.trim() || view.id,
-                    platformKey: view.id,
-                    href: operatorWorkViewHref(platformKey, view.id),
-                };
+                    platformKey: laneKey,
+                    href: operatorWorkUnitHrefFromKey(laneKey),
+                }];
             });
+        if (compatBound.length) return compatBound;
     }
 
     // Legacy fallback — no configured Work Views: derive nav from queue lanes / stage perspectives.

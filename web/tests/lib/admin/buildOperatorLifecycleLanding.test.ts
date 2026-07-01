@@ -201,72 +201,90 @@ describe("buildOperatorLifecycleLandingCards", () => {
         { id: "all_leads", label: "All Leads", display_order: 6 },
     ];
 
-    it("materializes every configured Work View as its own nav item (6 → 6, not 6 → 1)", () => {
+    it("Work Views without compat_queue_key are excluded; falls through to pipeline lane nav", () => {
+        // SIX_WORK_VIEWS — none have compat_queue_key → all excluded → falls back to pipeline lanes.
         const card = enrollmentCardWithWorkViews(SIX_WORK_VIEWS);
-        expect(card?.workQueues.map((q) => q.label)).toEqual([
-            "New Leads",
-            "Active Pipeline",
-            "Registration",
-            "Waitlist",
-            "Tours",
-            "All Leads",
-        ]);
+        expect((card?.workQueues.length ?? 0)).toBeGreaterThan(0);
+        for (const q of card?.workQueues ?? []) {
+            expect(q.href).not.toContain("work_view=");
+            expect(q.href).not.toContain("queue=");
+            expect(q.href.startsWith("/workspace/work-unit/")).toBe(true);
+        }
     });
 
-    it("gives each Work View a stable per-view route (`?work_view=<id>`) on the host work unit", () => {
-        const card = enrollmentCardWithWorkViews(SIX_WORK_VIEWS);
-        expect(card?.workQueues.map((q) => q.href)).toEqual([
-            "/workspace/work-unit/enrollment-pipeline?work_view=new_leads",
-            "/workspace/work-unit/enrollment-pipeline?work_view=active_pipeline",
-            "/workspace/work-unit/enrollment-pipeline?work_view=registration",
-            "/workspace/work-unit/enrollment-pipeline?work_view=waitlist",
-            "/workspace/work-unit/enrollment-pipeline?work_view=tours",
-            "/workspace/work-unit/enrollment-pipeline?work_view=all_leads",
+    it("Work Views with compat_queue_key produce clean lane-slug hrefs; those without are dropped", () => {
+        const card = enrollmentCardWithWorkViews([
+            { id: "nl", label: "New Leads", compat_queue_key: "new_leads", display_order: 1 },
+            { id: "tours_v", label: "Tours", compat_queue_key: "tours", display_order: 2 },
+            { id: "all_v", label: "All Leads", display_order: 3 },  // no compat → excluded
         ]);
-        // Stable platformKey per view (drives active-state matching) + canonical operator route.
-        expect(card?.workQueues.map((q) => q.platformKey)).toEqual([
-            "new_leads",
-            "active_pipeline",
-            "registration",
-            "waitlist",
-            "tours",
-            "all_leads",
+        expect(card?.workQueues.map((q) => q.label)).toEqual(["New Leads", "Tours"]);
+        expect(card?.workQueues.map((q) => q.href)).toEqual([
+            "/workspace/work-unit/new-leads",
+            "/workspace/work-unit/tours",
         ]);
         for (const q of card?.workQueues ?? []) {
+            expect(q.href).not.toContain("work_view=");
             expect(q.href.startsWith("/workspace/work-unit/")).toBe(true);
             expect(q.href).not.toContain("/dept/");
         }
     });
 
-    it("excludes hidden/inactive Work Views; preserves configured order", () => {
+    it("excludes hidden Work Views from compat-bound set; preserves configured order", () => {
         const card = enrollmentCardWithWorkViews([
-            { id: "new_leads", label: "New Leads", display_order: 1 },
-            { id: "hidden_view", label: "Hidden", display_order: 2, visible_in_runtime: false },
-            { id: "tours", label: "Tours", display_order: 3 },
+            { id: "nl", label: "New Leads", compat_queue_key: "new_leads", display_order: 1 },
+            { id: "hv", label: "Hidden", compat_queue_key: "waitlist", display_order: 2, visible_in_runtime: false },
+            { id: "tours_v", label: "Tours", compat_queue_key: "tours", display_order: 3 },
         ]);
         expect(card?.workQueues.map((q) => q.label)).toEqual(["New Leads", "Tours"]);
     });
 
-    it("orders Work Views by display_order regardless of array order", () => {
+    it("orders compat-bound Work Views by display_order regardless of array order", () => {
         const card = enrollmentCardWithWorkViews([
-            { id: "all_leads", label: "All Leads", display_order: 6 },
-            { id: "new_leads", label: "New Leads", display_order: 1 },
-            { id: "waitlist", label: "Waitlist", display_order: 4 },
+            { id: "all_v", label: "All Leads", compat_queue_key: "enrollment_completed", display_order: 6 },
+            { id: "nl", label: "New Leads", compat_queue_key: "new_leads", display_order: 1 },
+            { id: "wl", label: "Waitlist", compat_queue_key: "waitlist", display_order: 4 },
         ]);
         expect(card?.workQueues.map((q) => q.label)).toEqual(["New Leads", "Waitlist", "All Leads"]);
     });
 
-    it("mixes lane-bound and predicate-only Work Views — both materialize", () => {
+    it("mixes lane-bound and predicate-only Work Views — predicate-only is excluded from tile nav", () => {
         const card = enrollmentCardWithWorkViews([
-            // Bound to a real pipeline lane → keeps canonical lane-slug route.
+            // Bound to a real pipeline lane → clean slug.
             { id: "new_leads", label: "New Leads", compat_queue_key: "new_leads", display_order: 1 },
-            // No bound lane → materializes via ?work_view= instead of being dropped.
+            // No bound lane → excluded from tile nav (cannot produce a clean slug).
             { id: "all_leads", label: "All Leads", display_order: 2 },
         ]);
         expect(card?.workQueues.map((q) => q.href)).toEqual([
             "/workspace/work-unit/new-leads",
-            "/workspace/work-unit/enrollment-pipeline?work_view=all_leads",
         ]);
+        expect(card?.workQueues.map((q) => q.label)).toEqual(["New Leads"]);
+    });
+
+    // FAILING TEST — demonstrates the bug before fix.
+    // Workspace tile work view hrefs must be clean slugs only — no ?work_view= or ?queue= params.
+    // Before fix: SIX_WORK_VIEWS (all without compat_queue_key) produce ?work_view= URLs.
+    it("workspace tile hrefs must not contain work_view= or queue= params — clean slugs only", () => {
+        const card = enrollmentCardWithWorkViews(SIX_WORK_VIEWS);
+        for (const q of card?.workQueues ?? []) {
+            expect(q.href).not.toContain("work_view=");
+            expect(q.href).not.toContain("queue=");
+            expect(q.href).toMatch(/^\/workspace\/work-unit\/[a-z0-9-]+$/);
+        }
+    });
+
+    it("active-pipeline href = /workspace/work-unit/active-pipeline", () => {
+        const card = enrollmentCardWithWorkViews([
+            { id: "active_pipeline", label: "Active Pipeline", compat_queue_key: "active_pipeline", display_order: 1 },
+        ]);
+        expect(card?.workQueues[0]?.href).toBe("/workspace/work-unit/active-pipeline");
+    });
+
+    it("new-leads href = /workspace/work-unit/new-leads", () => {
+        const card = enrollmentCardWithWorkViews([
+            { id: "new_leads_view", label: "New Leads", compat_queue_key: "new_leads", display_order: 1 },
+        ]);
+        expect(card?.workQueues[0]?.href).toBe("/workspace/work-unit/new-leads");
     });
 
     it("legacy: no configured Work Views falls back to queue-lane nav (New Leads default)", () => {
