@@ -98,12 +98,13 @@ Gauge + verdict (Ready / Blocked / Partial) in 2 seconds. Deeper view (factor ch
 | **Archetype** | Summary |
 | **Tier** | Context |
 | **Operational question** | "Is a tour scheduled, and when?" |
-| **Lifecycle** | Summary only |
+| **Lifecycle** | Action-only (no inline edit; actions via `FocusPanelTourMutation`) |
 | **Evidence source** | `context.signals.tour` (via `buildTourCardEvidence`) |
-| **Capabilities** | Summary only |
+| **Capabilities** | Action-only |
+| **Actions** | Cancel tour · Confirm tour · Reschedule · Schedule (when no tour booked) |
 | **Footprint** | narrow (1 column) |
 
-Upcoming tour datetime + status chip, or "No tour scheduled" empty state. Tour booking truth lives in the scheduling side-panel. This card reports the operational signal — it does not book or cancel tours.
+Upcoming tour datetime + status chip, or "No tour scheduled" empty state. Action buttons (cancel/confirm/reschedule/schedule) call existing tour API routes via `mutation.tour`; no new persistence paths. Tour booking truth lives in the scheduling side-panel.
 
 ---
 
@@ -134,7 +135,7 @@ Scheduled send count or next follow-up date at a glance. Message thread history 
 | **Tier** | Context |
 | **Operational question** | "Is billing configured and ready for this enrollment?" |
 | **Lifecycle** | Summary + Expanded |
-| **Evidence source** | `context.truth` billing keys (via `buildBillingPreviewCardEvidence`) |
+| **Evidence source** | `context.signals.billing` (via `buildBillingPreviewCardEvidence` → `OperationalBillingSignal`) |
 | **Capabilities** | supportsExpanded |
 | **Expansion groups** | billing_readiness |
 | **Footprint** | medium (1 column) |
