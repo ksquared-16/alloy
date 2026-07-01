@@ -2,17 +2,17 @@
 
 @theme {
   /* Alloy Brand Colors — structural and semantic roles */
-  /* Alloy Blue: sidebar, primary actions, focus, info states */
+  /* Alloy Blue / Coastal Current: AI signals, informational, sidebar accent */
   --color-alloy-blue: #00458C;
-  /* Bend Pine: accent for active/success/emphasis/selected (not generic green) */
-  --color-alloy-pine: #273F52;
-  /* Ember: destructive, warning, archive, cancelled */
+  /* Bend Pine: healthy/live/active/success state — teal-green #00A283 */
+  --color-alloy-pine: #00A283;
+  /* Ember: caution, threshold approaching */
   --color-alloy-ember: #BC4300;
   /* Forge: primary/strong text */
   --color-alloy-forge: #18273A;
   /* River Stone: workspace background, neutral surfaces */
   --color-alloy-stone: #F4F6F9;
-  /* Juniper: success/active/completed (teal-green accent) */
+  /* Juniper: alias for Bend Pine — same teal-green */
   --color-alloy-juniper: #00A283;
   --color-alloy-midnight: #18273A;
   /* Admin / productized palette */
@@ -61,6 +61,33 @@ body {
 }
 
 /* ========== Public site: premium primitives (hero, modals, cards, buttons) ========== */
+
+/* ========== Alloy Visual Language — Canonical Runtime Tokens ========== */
+/* Source of truth: docs/platform/design/alloy-visual-language.md         */
+:root {
+  /* Brand */
+  --brand-primary:        #273F52;   /* Midnight Forge — chrome, headers, nav */
+  --brand-accent:         #00A283;   /* Bend Pine — positive, live, primary accent */
+  --brand-secondary:      #00458C;   /* Coastal Current — AI, informational */
+
+  /* Semantic state */
+  --state-positive:       #00A283;   /* Bend Pine */
+  --state-caution:        #BC4300;   /* Ember */
+  --state-critical:       #7C273A;   /* River Stone */
+  --state-intelligence:   #00458C;   /* Coastal Current */
+
+  /* Surface */
+  --surface-background:   #F4F6F9;   /* Alloy White */
+  --surface-panel:        #FFFFFF;
+  --surface-border:       rgba(39, 63, 82, 0.10);
+  --surface-border-strong: rgba(39, 63, 82, 0.18);
+
+  /* Text — Midnight Forge at varying opacities */
+  --text-primary:         #273F52;
+  --text-secondary:       rgba(39, 63, 82, 0.60);
+  --text-muted:           rgba(39, 63, 82, 0.40);
+  --text-disabled:        rgba(39, 63, 82, 0.25);
+}
 
 /* Teal accent for hover/focus/active (restrained) */
 :root {
@@ -584,7 +611,7 @@ body {
   --home-forge-soft: rgba(24, 39, 58, 0.06);
   --home-forge-edge: rgba(24, 39, 58, 0.08);
   --home-blue: #00458C;
-  --home-pine: #273F52;
+  --home-pine: #273F52;  /* Midnight Forge — structural heading dark; "pine" is a legacy name here */
   --home-stone: #F4F6F9;
   --home-stone-warm: #eef1f6;
   /* Atmospheric base — aligned to adminV2 workspace (riverStone #F6F8FC + neutral grays, not blue-gray ice) */
