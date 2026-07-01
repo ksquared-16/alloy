@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { getAdminContextCached } from "@/lib/admin/getAdminContext";
-import type { CommercialFee, FeeType } from "@/lib/commercial/feesAddons";
+import type { CommercialFee } from "@/lib/commercial/feesAddons";
 
 const SELECT_COLS =
-    "id, org_id, location_id, program_key, name, description, fee_type, amount_cents, is_required, cadence_key, is_active, metadata, created_at, updated_at";
+    "id, org_id, location_id, program_key, name, description, fee_type, amount_cents, is_required, cadence_key, effective_start, effective_end, revenue_category, is_active, metadata, created_at, updated_at";
 
 function mapRow(r: Record<string, unknown>): CommercialFee {
     return {
@@ -14,66 +14,45 @@ function mapRow(r: Record<string, unknown>): CommercialFee {
         program_key: (r.program_key as string | null | undefined) ?? null,
         name: String(r.name ?? ""),
         description: (r.description as string | null | undefined) ?? null,
-        fee_type: (r.fee_type as FeeType) ?? "other",
+        fee_type: String(r.fee_type ?? ""),
         amount_cents: Number(r.amount_cents ?? 0),
         is_required: r.is_required !== false,
         cadence_key: (r.cadence_key as string | null | undefined) ?? null,
+        effective_start: (r.effective_start as string | null | undefined) ?? null,
+        effective_end: (r.effective_end as string | null | undefined) ?? null,
+        revenue_category: (r.revenue_category as string | null | undefined) ?? null,
         is_active: r.is_active !== false,
-        metadata:
-            r.metadata != null && typeof r.metadata === "object" && !Array.isArray(r.metadata)
-                ? (r.metadata as Record<string, unknown>)
-                : {},
+        metadata: r.metadata != null && typeof r.metadata === "object" && !Array.isArray(r.metadata) ? (r.metadata as Record<string, unknown>) : {},
         created_at: String(r.created_at ?? ""),
         updated_at: (r.updated_at as string | null | undefined) ?? null,
     };
 }
 
-/** GET /api/admin/commercial/fees — returns all fees for the org. Optional ?location_id= ?program_key= */
 export async function GET(request: NextRequest) {
     const ctx = await getAdminContextCached();
-    if (!ctx.ok) {
-        return NextResponse.json(
-            { error: ctx.status === 401 ? "Unauthorized" : "Forbidden" },
-            { status: ctx.status },
-        );
-    }
+    if (!ctx.ok) return NextResponse.json({ error: ctx.status === 401 ? "Unauthorized" : "Forbidden" }, { status: ctx.status });
 
     const { searchParams } = new URL(request.url);
     const locationId = (searchParams.get("location_id") ?? "").trim() || null;
     const programKey = (searchParams.get("program_key") ?? "").trim() || null;
 
     const supabase = createAdminClient();
-    let q = supabase
-        .from("commercial_fees")
-        .select(SELECT_COLS)
-        .eq("org_id", ctx.orgId)
-        .order("created_at");
-
+    let q = supabase.from("commercial_fees").select(SELECT_COLS).eq("org_id", ctx.orgId).order("created_at");
     if (locationId) q = q.eq("location_id", locationId);
     if (programKey) q = q.eq("program_key", programKey);
 
     const { data, error } = await q;
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-
     return NextResponse.json({ fees: (data ?? []).map((r: Record<string, unknown>) => mapRow(r)) });
 }
 
-/** POST /api/admin/commercial/fees — create a fee. */
 export async function POST(request: NextRequest) {
     const ctx = await getAdminContextCached();
-    if (!ctx.ok) {
-        return NextResponse.json(
-            { error: ctx.status === 401 ? "Unauthorized" : "Forbidden" },
-            { status: ctx.status },
-        );
-    }
+    if (!ctx.ok) return NextResponse.json({ error: ctx.status === 401 ? "Unauthorized" : "Forbidden" }, { status: ctx.status });
 
     let body: Record<string, unknown> = {};
-    try {
-        body = (await request.json()) as Record<string, unknown>;
-    } catch {
-        return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
-    }
+    try { body = (await request.json()) as Record<string, unknown>; }
+    catch { return NextResponse.json({ error: "Invalid JSON" }, { status: 400 }); }
 
     const name = String(body.name ?? "").trim();
     const fee_type = String(body.fee_type ?? "").trim();
@@ -81,9 +60,8 @@ export async function POST(request: NextRequest) {
 
     if (!name) return NextResponse.json({ error: "name is required" }, { status: 400 });
     if (!fee_type) return NextResponse.json({ error: "fee_type is required" }, { status: 400 });
-    if (amount_cents === null || !Number.isFinite(amount_cents) || amount_cents < 0) {
+    if (amount_cents === null || !Number.isFinite(amount_cents) || amount_cents < 0)
         return NextResponse.json({ error: "amount_cents must be a non-negative integer" }, { status: 400 });
-    }
 
     const supabase = createAdminClient();
     const { data, error } = await supabase
@@ -98,6 +76,9 @@ export async function POST(request: NextRequest) {
             amount_cents: Math.round(amount_cents),
             is_required: body.is_required !== false,
             cadence_key: body.cadence_key != null ? String(body.cadence_key).trim() || null : null,
+            effective_start: body.effective_start != null ? String(body.effective_start).trim() || null : null,
+            effective_end: body.effective_end != null ? String(body.effective_end).trim() || null : null,
+            revenue_category: body.revenue_category != null ? String(body.revenue_category).trim() || null : null,
             is_active: body.is_active !== false,
             metadata: (body.metadata as Record<string, unknown>) ?? {},
         })
@@ -105,6 +86,5 @@ export async function POST(request: NextRequest) {
         .single();
 
     if (error) return NextResponse.json({ error: error.message }, { status: 400 });
-
     return NextResponse.json({ fee: mapRow(data as Record<string, unknown>) }, { status: 201 });
 }

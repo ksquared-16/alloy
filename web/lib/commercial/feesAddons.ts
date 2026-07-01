@@ -6,12 +6,14 @@
  *   commercial_addons   — optional recurring or one-time commercial products
  *   commercial_deposits — separate primitive with refund lifecycle fields
  *
- * Commercial owns definitions + prices. Policies/Billing/Accounting are separate domains.
+ * Types are free-text operator labels — no hardcoded enums. Seed suggestions
+ * are provided in FEE_TYPE_SUGGESTIONS etc. for the UI only.
+ *
+ * Commercial owns: definitions, prices, frequencies, effective dates, revenue_category.
+ * Policies own: waiver rules, auto-apply rules.
+ * Billing owns: charge generation, deposit lifecycle, pass usage.
+ * Accounting owns: GL mapping (revenue_category → GL code).
  */
-
-export type FeeType = 'registration' | 'application' | 'materials' | 'annual' | 'other';
-export type AddonType = 'extended_care' | 'enrichment' | 'lunch' | 'transport' | 'other';
-export type DepositTiming = 'at_enrollment' | 'at_acceptance' | 'at_contract' | 'other';
 
 export type CommercialFee = {
   id: string;
@@ -20,10 +22,13 @@ export type CommercialFee = {
   program_key: string | null;
   name: string;
   description: string | null;
-  fee_type: FeeType;
+  fee_type: string;           // free-text operator label
   amount_cents: number;
   is_required: boolean;
-  cadence_key: string | null;
+  cadence_key: string | null; // null = one-time
+  effective_start: string | null;
+  effective_end: string | null;
+  revenue_category: string | null;
   is_active: boolean;
   metadata: Record<string, unknown>;
   created_at: string;
@@ -37,9 +42,16 @@ export type CommercialAddon = {
   program_key: string | null;
   name: string;
   description: string | null;
-  addon_type: AddonType;
+  addon_type: string;         // free-text operator label
   amount_cents: number;
   cadence_key: string;
+  effective_start: string | null;
+  effective_end: string | null;
+  revenue_category: string | null;
+  // Package fields — null = not a package
+  package_unit_count: number | null;
+  package_unit_type: string | null;   // 'uses' | 'sessions' | 'days' | 'hours'
+  package_expires_days: number | null;
   is_active: boolean;
   metadata: Record<string, unknown>;
   created_at: string;
@@ -56,35 +68,46 @@ export type CommercialDeposit = {
   amount_cents: number;
   is_refundable: boolean;
   apply_to_balance: boolean;
-  due_timing: DepositTiming;
+  due_timing: string;         // free-text operator label
+  effective_start: string | null;
+  effective_end: string | null;
+  revenue_category: string | null;
   is_active: boolean;
   metadata: Record<string, unknown>;
   created_at: string;
   updated_at: string | null;
 };
 
-export const FEE_TYPE_LABELS: Record<FeeType, string> = {
-  registration: 'Registration fee',
-  application: 'Application fee',
-  materials: 'Materials fee',
-  annual: 'Annual fee',
-  other: 'Other',
-};
+/** UI-level frequency options — displayed as "Frequency", stored as cadence_key. */
+export type FrequencyOption = { key: string; label: string };
+export const FREQUENCY_OPTIONS: FrequencyOption[] = [
+  { key: "",            label: "One-time" },
+  { key: "weekly",      label: "Weekly" },
+  { key: "biweekly",    label: "Every 2 weeks" },
+  { key: "monthly",     label: "Monthly" },
+  { key: "annual",      label: "Annual" },
+  { key: "per_session", label: "Per session" },
+  { key: "per_use",     label: "Per use" },
+];
 
-export const ADDON_TYPE_LABELS: Record<AddonType, string> = {
-  extended_care: 'Extended care',
-  enrichment: 'Enrichment',
-  lunch: 'Lunch program',
-  transport: 'Transportation',
-  other: 'Other',
-};
+export function frequencyLabel(cadenceKey: string | null): string {
+  const opt = FREQUENCY_OPTIONS.find(o => o.key === (cadenceKey ?? ""));
+  return opt?.label ?? cadenceKey ?? "One-time";
+}
 
-export const DEPOSIT_TIMING_LABELS: Record<DepositTiming, string> = {
-  at_enrollment: 'At enrollment',
-  at_acceptance: 'At acceptance',
-  at_contract: 'At contract signing',
-  other: 'Other',
-};
+/** Seed suggestions for UI dropdowns — not enforced in DB. */
+export const FEE_TYPE_SUGGESTIONS = [
+  "Registration fee", "Application fee", "Materials fee",
+  "Annual supply fee", "Re-enrollment fee", "Other",
+];
+export const ADDON_TYPE_SUGGESTIONS = [
+  "Extended care", "Enrichment", "Lunch program",
+  "Transportation", "Field trips", "Other",
+];
+export const DEPOSIT_TIMING_SUGGESTIONS = [
+  "At enrollment", "At acceptance", "At contract signing", "Other",
+];
+export const PACKAGE_UNIT_TYPE_OPTIONS = ["uses", "sessions", "days", "hours"];
 
 export function formatScope(
   locationId: string | null,
@@ -97,5 +120,19 @@ export function formatScope(
     const loc = locations.find((l) => l.id === locationId);
     if (loc) parts.push(loc.name);
   }
-  return parts.length > 0 ? parts.join(' · ') : 'All programs';
+  return parts.length > 0 ? parts.join(" · ") : "All programs";
+}
+
+export function isPackageAddon(addon: CommercialAddon): boolean {
+  return addon.package_unit_count !== null && addon.package_unit_count > 0;
+}
+
+export function describePackage(addon: CommercialAddon): string {
+  if (!isPackageAddon(addon)) return "";
+  const count = addon.package_unit_count!;
+  const unit = addon.package_unit_type ?? "uses";
+  const expiry = addon.package_expires_days
+    ? ` · valid ${addon.package_expires_days} days`
+    : "";
+  return `${count} ${unit}${expiry}`;
 }
