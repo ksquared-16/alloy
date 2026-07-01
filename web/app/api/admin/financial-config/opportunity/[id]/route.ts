@@ -4,9 +4,7 @@ import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/
 import { formatRateCents } from "@/lib/commercial/tuitionRates";
 import type { TuitionBillingPeriod } from "@/lib/commercial/tuitionRates";
 import type { FinancialConfigApiResponse, FinancialConfigEnrollment } from "@/lib/adminV2/runtime/focusPanel/financialConfig/financialConfigTypes";
-
-/** Billing period preference order for rate resolution. */
-const BILLING_PERIOD_PREFERENCE: TuitionBillingPeriod[] = ["monthly", "weekly", "biweekly", "annual"];
+import { resolveEnrollmentTuitionRate } from "@/lib/adminV2/runtime/focusPanel/financialConfig/resolveEnrollmentTuitionRate";
 
 function formatRateLabel(rateCents: number, billingPeriod: TuitionBillingPeriod): string {
     const amount = formatRateCents(rateCents);
@@ -98,6 +96,7 @@ export async function GET(
         return NextResponse.json({ error: rateError.message }, { status: 500 });
     }
 
+    // Already filtered to active=true, not_offered=false in the query above.
     const rates = (rateRows ?? []) as Array<{
         id: string;
         program_key: string;
@@ -105,41 +104,7 @@ export async function GET(
         rate_cents: number;
         billing_period: TuitionBillingPeriod;
         location_id: string | null;
-        is_active: boolean;
-        not_offered: boolean;
     }>;
-
-    /** Find best-matching rate for a program+schedule, preferring location override then org default, monthly first. */
-    function resolveRate(
-        programKey: string,
-        scheduleKey: string,
-        locationId: string | null,
-    ) {
-        const candidates = rates.filter(
-            (r) => r.program_key === programKey && r.schedule_key === scheduleKey
-        );
-        if (candidates.length === 0) return null;
-
-        // Sort: location-specific > org default; then by period preference
-        const sorted = [...candidates].sort((a, b) => {
-            const aIsLoc = locationId && a.location_id === locationId ? 0 : 1;
-            const bIsLoc = locationId && b.location_id === locationId ? 0 : 1;
-            if (aIsLoc !== bIsLoc) return aIsLoc - bIsLoc;
-            const ai = BILLING_PERIOD_PREFERENCE.indexOf(a.billing_period);
-            const bi = BILLING_PERIOD_PREFERENCE.indexOf(b.billing_period);
-            return (ai === -1 ? 99 : ai) - (bi === -1 ? 99 : bi);
-        });
-
-        const best = sorted[0];
-        if (!best) return null;
-        return {
-            rateId: best.id,
-            rateCents: best.rate_cents,
-            billingPeriod: best.billing_period,
-            rateLabel: formatRateLabel(best.rate_cents, best.billing_period),
-            isLocationOverride: locationId !== null && best.location_id === locationId,
-        };
-    }
 
     const enrollments: FinancialConfigEnrollment[] = (ocmRows ?? []).map((row) => {
         const r = row as Record<string, unknown>;
@@ -153,10 +118,13 @@ export async function GET(
         const scheduleKey = typeof r.desired_schedule_type === "string" ? r.desired_schedule_type : null;
         const locationId = typeof r.location_id === "string" ? r.location_id : null;
 
-        const resolvedRate =
-            programKey && scheduleKey
-                ? resolveRate(programKey, scheduleKey, locationId)
-                : null;
+        const resolvedRate = resolveEnrollmentTuitionRate(
+            rates,
+            programKey,
+            scheduleKey,
+            locationId,
+            formatRateLabel,
+        );
 
         return {
             ocmId: String(r.id ?? ""),

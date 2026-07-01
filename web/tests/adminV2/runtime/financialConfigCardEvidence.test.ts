@@ -222,4 +222,82 @@ describe("hard invariants (no fabrication)", () => {
         expect(labels).toContain("Billing contact");
         expect(labels).toContain("Tuition rate");
     });
+
+    it("never produces payer rows or responsibility data in the evidence shape", () => {
+        // The evidence type does not include payer_rows, responsibility_type,
+        // payment_method, subsidy, or split_percent. These are deferred.
+        const ev = buildBillingPreviewCardEvidence(ctx({}));
+        expect("payer_rows" in ev).toBe(false);
+        expect("responsibility_type" in ev).toBe(false);
+        expect("payment_method" in ev).toBe(false);
+        expect("split_percent" in ev).toBe(false);
+    });
+
+    it("BillingPreviewCardEvidence has no mutation-related fields", () => {
+        // V1 is read-only: no onSave, onEdit, onAssign, or draft fields.
+        const ev = buildBillingPreviewCardEvidence(ctx({}));
+        expect("onSave" in ev).toBe(false);
+        expect("draftBillingContact" in ev).toBe(false);
+        expect("editMode" in ev).toBe(false);
+    });
+});
+
+// ── Hook lazy-fetch contract ──────────────────────────────────────────────────
+//
+// useFinancialConfig(opportunityId, open) — early-return guard:
+//   if (!open || !opportunityId) return;
+//
+// This ensures the API is never called on summary state (open=false).
+// The hook is a "use client" React hook; behavioral tests require renderHook
+// from @testing-library/react, which needs a browser-like environment.
+// The guard is documented and verified in BillingPreviewCard.tsx — the hook
+// is invoked as useFinancialConfig(opportunityId, overlayOpen), where
+// overlayOpen starts false and is only set true by user interaction.
+//
+// Structural verification: evidence.enrollments is null until the hook resolves,
+// which is covered by the "enrollments is null when not provided" test above.
+
+// ── Multiple children — end-to-end evidence shape ────────────────────────────
+
+describe("multiple children with mixed enrollment state", () => {
+    const twoChildrenTruth = {
+        _inquiry_children: [
+            {
+                display_name: "Emma Smith",
+                desired_program_label: "Preschool",
+                program_room_cohort_label: "Room A",
+                desired_schedule_label: "Full Time",
+            },
+            {
+                display_name: "Liam Smith",
+                // No placement set — desired_program_label absent
+                desired_program_label: null,
+                program_room_cohort_label: null,
+                desired_schedule_label: null,
+            },
+        ],
+    };
+
+    it("returns two placement facts for two children", () => {
+        const ev = buildBillingPreviewCardEvidence(ctx(twoChildrenTruth));
+        expect(ev.placementFacts).toHaveLength(2);
+    });
+
+    it("second child has null program/room/schedule labels", () => {
+        const ev = buildBillingPreviewCardEvidence(ctx(twoChildrenTruth));
+        expect(ev.placementFacts[1]?.programLabel).toBeNull();
+        expect(ev.placementFacts[1]?.roomLabel).toBeNull();
+        expect(ev.placementFacts[1]?.scheduleLabel).toBeNull();
+    });
+
+    it("enrollment array preserves both children with their OCM IDs", () => {
+        const enrollments: FinancialConfigEnrollment[] = [
+            { ...ENROLLMENT_WITH_RATE, childLabel: "Emma Smith" },
+            { ...ENROLLMENT_NO_RATE, childLabel: "Liam Smith" },
+        ];
+        const ev = buildBillingPreviewCardEvidence(ctx(twoChildrenTruth), enrollments);
+        expect(ev.enrollments).toHaveLength(2);
+        expect(ev.enrollments?.[0]?.resolvedRate).not.toBeNull();
+        expect(ev.enrollments?.[1]?.resolvedRate).toBeNull();
+    });
 });

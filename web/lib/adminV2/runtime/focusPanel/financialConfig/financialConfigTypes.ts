@@ -1,11 +1,15 @@
 /**
- * Financial Configuration card — shared types for API and card.
+ * Financial Configuration V1 — tuition resolution read model.
  *
- * Tuition rate resolutions come from the server (DB query in the API route).
- * They are not computable client-side from context.truth alone because
- * commercial_tuition_rates is a separate DB table.
+ * V1 scope: read-only. Resolves per-child tuition rates from
+ * commercial_tuition_rates via the API route. No payer data,
+ * no responsibility assignment, no invoices, no payment history.
+ *
+ * Deferred (no schema): payer responsibility, billing contact write,
+ * per-enrollment tuition assignment, invoice generation.
  *
  * @see web/app/api/admin/financial-config/opportunity/[id]/route.ts
+ * @see docs/platform/operator/operational-configuration-card-pattern.md
  */
 
 import type { TuitionBillingPeriod } from "@/lib/commercial/tuitionRates";
