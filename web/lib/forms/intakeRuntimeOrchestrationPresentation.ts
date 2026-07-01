@@ -25,6 +25,7 @@ import {
 } from "@/lib/forms/operationalIntentTemplates";
 import { inferIntakeTypeFromLink, INTAKE_TYPE_CATALOG, type IntakeTypeKey } from "@/lib/forms/inferIntakeType";
 import type { FormLifecycleRecordCreationGate } from "@/lib/forms/lifecycle/isFormLifecycleReadyForRecordCreation";
+import { operatorWorkUnitHrefFromKey } from "@/lib/admin/canonicalOperatorRoutes";
 
 export type { IntakeTypeKey } from "@/lib/forms/inferIntakeType";
 export { inferIntakeTypeFromLink } from "@/lib/forms/inferIntakeType";
@@ -104,12 +105,19 @@ function metaObject(raw: unknown): Record<string, unknown> {
 export function resolveWorkUnitWorkspaceHref(
     departmentId: string | null | undefined,
     workUnitId: string | null | undefined,
-    options?: { highlightQueueKey?: string | null }
+    options?: { highlightQueueKey?: string | null; workUnitKey?: string | null }
 ): string | null {
+    const wuKey = typeof options?.workUnitKey === "string" ? options.workUnitKey.trim() : "";
+    if (wuKey) {
+        const base = operatorWorkUnitHrefFromKey(wuKey);
+        const queueKey = typeof options?.highlightQueueKey === "string" ? options.highlightQueueKey.trim() : "";
+        if (!queueKey) return base;
+        return `${base}?primary_queue_key=${encodeURIComponent(queueKey)}`;
+    }
     const dept = typeof departmentId === "string" ? departmentId.trim() : "";
     const wu = typeof workUnitId === "string" ? workUnitId.trim() : "";
     if (!dept || !wu) return null;
-    const base = `/adminV2/workspace/dept/${encodeURIComponent(dept)}/work-unit/${encodeURIComponent(wu)}`;
+    const base = `/admin/workspace/dept/${encodeURIComponent(dept)}/work-unit/${encodeURIComponent(wu)}`;
     const queueKey = typeof options?.highlightQueueKey === "string" ? options.highlightQueueKey.trim() : "";
     if (!queueKey) return base;
     return `${base}?primary_queue_key=${encodeURIComponent(queueKey)}`;

@@ -46,6 +46,32 @@ const nextConfig: NextConfig = {
        */
       { source: "/settings/analytics", destination: "/settings/calculations", permanent: false },
       { source: "/settings/analytics/:path*", destination: "/settings/calculations/:path*", permanent: false },
+      /**
+       * Canonical Route Cleanup — dept-scoped Work Unit URLs are legacy and no longer a live
+       * surface. The canonical Work Unit renderer is `/work-unit/[slug]` only.
+       * Any direct visit to the dept-scoped URL redirects to the Workspace root so the operator
+       * can re-enter via the canonical path.
+       */
+      {
+        source: "/admin/workspace/dept/:deptId/work-unit/:wuId",
+        destination: "/workspace",
+        permanent: false,
+      },
+      {
+        source: "/admin/workspace/dept/:deptId/work-unit/:wuId/:recordId",
+        destination: "/workspace",
+        permanent: false,
+      },
+      {
+        source: "/adminV2/workspace/dept/:deptId/work-unit/:wuId",
+        destination: "/workspace",
+        permanent: false,
+      },
+      {
+        source: "/adminV2/workspace/dept/:deptId/work-unit/:wuId/:recordId",
+        destination: "/workspace",
+        permanent: false,
+      },
     ];
   },
   async rewrites() {
