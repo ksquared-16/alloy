@@ -99,4 +99,71 @@ describe("resolveWorkUnitByRouteSlug", () => {
             expect(result.match.initialQueueKey).toBeNull();
         }
     });
+
+    it("prefers enrollment_pipeline over lifecycle_wu_lead when both present for new-leads slug", () => {
+        // fetchWorkUnitsForSlugResolution strategy 2 now returns both; resolver must prefer pipeline.
+        const result = resolveWorkUnitByRouteSlug({
+            slug: "new-leads",
+            workUnits: [
+                {
+                    id: "wu-lead",
+                    department_id: "dept-enroll",
+                    key: "lifecycle_wu_lead",
+                    name: "New Leads Stage",
+                    queue_definition: {},
+                },
+                {
+                    id: "wu-pipeline",
+                    department_id: "dept-enroll",
+                    key: "enrollment_pipeline",
+                    name: "Enrollment Pipeline",
+                    queue_definition: RAW_ENROLLMENT_PIPELINE_QUEUE_DEFINITION_V2,
+                },
+            ],
+            departments: [{ id: "dept-enroll", key: "enrollment", name: "Enrollment" }],
+        });
+        expect(result.status).toBe("resolved");
+        if (result.status === "resolved") {
+            // findQueueLaneOwner finds new_leads in enrollment_pipeline first
+            expect(result.match.kind).toBe("queue_lane_key");
+            expect(result.match.workUnitKey).toBe("enrollment_pipeline");
+            expect(result.match.initialQueueKey).toBe("new_leads");
+        }
+    });
+
+    it("/workspace/work-unit/active-pipeline resolves to Enrollment parent runtime", () => {
+        const result = resolveWorkUnitByRouteSlug({
+            slug: "active-pipeline",
+            workUnits: [
+                {
+                    id: "wu-pipeline",
+                    department_id: "dept-enroll",
+                    key: "enrollment_pipeline",
+                    name: "Enrollment Pipeline",
+                    queue_definition: {
+                        version: 2,
+                        entity_type: "opportunity",
+                        ui: {
+                            layout: "domain_with_attention",
+                            sections: [
+                                { key: "active_pipeline", label: "Active Pipeline", queue_keys: ["active_pipeline"] },
+                                { key: "waitlist", label: "Waitlist", queue_keys: ["waitlist"] },
+                            ],
+                        },
+                        queues: [
+                            { key: "active_pipeline", label: "Active Pipeline", filters: [], sort: [] },
+                            { key: "waitlist", label: "Waitlist", filters: [], sort: [] },
+                        ],
+                    },
+                },
+            ],
+            departments: [{ id: "dept-enroll", key: "enrollment", name: "Enrollment" }],
+        });
+        expect(result.status).toBe("resolved");
+        if (result.status === "resolved") {
+            expect(result.match.workUnitKey).toBe("enrollment_pipeline");
+            expect(result.match.initialQueueKey).toBe("active_pipeline");
+            expect(result.match.routeSlug).toBe("active-pipeline");
+        }
+    });
 });

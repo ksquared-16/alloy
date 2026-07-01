@@ -36,10 +36,14 @@ export function WorkUnitCommandSurface({
         <div
             className="adminv2-os-context"
             data-alloy-os-work-unit-context="true"
+            data-alloy-section="WU.HEADER"
             {...alloySectionDomAttrs("WU-01")}
         >
             {processLine ?
-                <div className="adminv2-os-context__row adminv2-os-context__title-row">
+                <div
+                    className="adminv2-os-context__row adminv2-os-context__title-row"
+                    data-alloy-section="WU.HEADER_TITLE"
+                >
                     <h1 className="adminv2-os-context__title" data-work-unit-process-label="true">
                         {processLine}
                     </h1>
@@ -48,6 +52,7 @@ export function WorkUnitCommandSurface({
             <div
                 className="adminv2-os-context__row adminv2-os-context__metric-tiles"
                 data-workspace-zone="kpi-tiles"
+                data-alloy-section="WU.HEADER_CALCULATIONS"
                 {...alloySectionDomAttrs("WU-02")}
             >
                 <MetricPlacementRenderer
@@ -65,6 +70,7 @@ export function WorkUnitCommandSurface({
                     className="adminv2-os-context__row adminv2-os-context__perspective-rail"
                     data-alloy-os-context-perspective-rail="true"
                     data-ws-command-pills="true"
+                    data-alloy-section="WU.WORK_VIEW_PILLS"
                     {...alloySectionDomAttrs("WU-03")}
                 >
                     {stagePills}

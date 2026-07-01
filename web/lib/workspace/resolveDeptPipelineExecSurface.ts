@@ -8,6 +8,7 @@ import { mapWithConcurrency } from "@/lib/workspace/mapWithConcurrency";
 
 export type DeptPipelineExecSurface = {
     workUnitId: string;
+    workUnitKey: string | null;
     panelTitle: string;
     lanes: Array<{
         key: string;
@@ -63,7 +64,8 @@ export async function resolveDeptPipelineExecSurface(params: {
             const bundle = tryLoadWorkUnitQueueDefinitionBundle(row.queue_definition);
             if (!bundle) return null;
             const def = bundle.def;
-            if (def.ui?.layout !== "pipeline_with_attention") return null;
+            // extractPipelineExecutionLanes uses getQueueUiConfig which normalizes
+            // domain_with_attention → pipeline_with_attention, so check lanes not raw layout.
             const lanes = extractPipelineExecutionLanes(def);
             if (!lanes.length) return null;
 
@@ -93,6 +95,7 @@ export async function resolveDeptPipelineExecSurface(params: {
 
             return {
                 workUnitId: wu.id,
+                workUnitKey: wu.key ?? null,
                 panelTitle,
                 lanes: merged,
             } satisfies DeptPipelineExecSurface;

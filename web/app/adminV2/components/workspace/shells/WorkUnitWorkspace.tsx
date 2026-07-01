@@ -134,8 +134,8 @@ export default function WorkUnitWorkspace({
               {hasTopStack ?
                 <div className="adminv2-ws-dept-v2-top-stack mb-2">
                   {showBrief ?
-                    <div className="adminv2-ws-dept-v2-brief">
-                      <div className="adminv2-ws-dept-v2-brief-kicker">{processName ?? "Work unit"}</div>
+                    <div className="adminv2-ws-dept-v2-brief" data-alloy-section="WU.HEADER">
+                      <div className="adminv2-ws-dept-v2-brief-kicker" data-alloy-section="WU.HEADER_TITLE">{processName ?? "Work unit"}</div>
                       <div className="adminv2-ws-dept-v2-brief-head-row">
                         {model.aiSummary?.headline?.trim() ?
                             <h2 className="adminv2-ws-dept-v2-brief-headline">{model.aiSummary.headline.trim()}</h2>
@@ -199,6 +199,7 @@ export default function WorkUnitWorkspace({
                 className="adminv2-ws-dept-v2-lane adminv2-ws-dept-v2-lane--throughput"
                 data-ws-lane-kind="lane_queue"
                 data-ws-lane-drill-queue={model.primaryQueue.id}
+                data-alloy-section="WU.QUEUE_REGION"
               >
                 <div className="adminv2-ws-dept-v2-lane-chrome adminv2-ws-dept-v2-lane-chrome--throughput-deck">
                   {hasLaneStrip ? (

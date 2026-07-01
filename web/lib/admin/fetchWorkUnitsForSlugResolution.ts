@@ -1,6 +1,9 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { AdminAccessScopeDimensions } from "@/lib/admin/accessScope";
-import { operatorStageKeysForPipelineQueueKey } from "@/lib/lifecycle/enrollmentProcessStageQueueKeys";
+import {
+    ENROLLMENT_PIPELINE_WORK_UNIT_KEY,
+    operatorStageKeysForPipelineQueueKey,
+} from "@/lib/lifecycle/enrollmentProcessStageQueueKeys";
 import { lifecycleStageWorkUnitKey } from "@/lib/lifecycle/lifecycleStageWorkUnit";
 import type { WorkUnitRouteSlugRow } from "@/lib/admin/resolveWorkUnitByRouteSlug";
 
@@ -82,7 +85,12 @@ export async function fetchWorkUnitsForSlugResolution(params: {
 
     const stageKeys = operatorStageKeysForPipelineQueueKey(platformKey);
     const lifecycleWuKeys = [
-        ...new Set(stageKeys.map((stage) => lifecycleStageWorkUnitKey(stage).toLowerCase())),
+        ...new Set([
+            ...stageKeys.map((stage) => lifecycleStageWorkUnitKey(stage).toLowerCase()),
+            // Include the pipeline aggregate so findQueueLaneOwner can prefer it over
+            // per-stage lifecycle WUs when the queue key belongs to the enrollment pipeline.
+            ...(stageKeys.length > 0 ? [ENROLLMENT_PIPELINE_WORK_UNIT_KEY] : []),
+        ]),
     ];
     if (lifecycleWuKeys.length) {
         const { data: lifecycleData, error: lifecycleErr } = await base().in("key", lifecycleWuKeys);

@@ -94,6 +94,7 @@ export function WorkspaceRootShell({
             <div
               className="adminv2-ws-root-kpi-zone px-0 pb-1"
               data-workspace-zone="command-header"
+              data-alloy-section="WS.HEADER"
             >
               <WorkspaceCommandHeader
                 orgName={displayName}

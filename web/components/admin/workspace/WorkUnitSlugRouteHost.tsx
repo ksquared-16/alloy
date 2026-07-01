@@ -154,8 +154,10 @@ export default function WorkUnitSlugRouteHost({
     if (!providerValue) return null;
 
     return (
-        <WorkUnitSlugRouteProvider value={providerValue}>
-            <AdminV2OpportunityWorkUnitPage />
-        </WorkUnitSlugRouteProvider>
+        <div data-alloy-section="WU.PAGE_SHELL">
+            <WorkUnitSlugRouteProvider value={providerValue}>
+                <AdminV2OpportunityWorkUnitPage />
+            </WorkUnitSlugRouteProvider>
+        </div>
     );
 }

@@ -13,7 +13,10 @@ import {
     parseOperatorWorkUnitEntryHref,
     warmOperatorWorkUnitEntryFromHref,
 } from "@/lib/admin/operatorWorkUnitEntryWarm";
-import type { OperatorLifecycleLandingCard } from "@/lib/admin/buildOperatorLifecycleLanding";
+import type {
+    OperatorLifecycleLandingCard,
+    OperatorLifecycleWorkQueuePreview,
+} from "@/lib/admin/buildOperatorLifecycleLanding";
 import {
     ensureEnrollmentOperationalSurfaceCard,
     isEnrollmentLifecycleCard,
@@ -102,7 +105,7 @@ function LegacyProcessNavTile({
         <Link
             href={lifecycle.entryHref}
             prefetch={shouldDisableAdminV2LinkPrefetch(lifecycle.entryHref) ? false : undefined}
-            className="group block w-full min-w-[20rem] max-w-[25rem] no-underline text-inherit"
+            className="group block w-full no-underline text-inherit"
             {...adminV2NavigationClickedItemProps(clickedKey)}
             onMouseEnter={() =>
                 warmOperatorWorkUnitEntryFromHref(lifecycle.entryHref, null, "business_process_tile_hover")
@@ -318,6 +321,56 @@ function EnrollmentOperationalSurfaceTile({
     );
 }
 
+/** Work View entry links below a process tile — WS.PROCESS_TILE_WORK_VIEWS. */
+function WorkViewEntryList({
+    workQueues,
+    clickedKey,
+}: {
+    workQueues: readonly OperatorLifecycleWorkQueuePreview[];
+    clickedKey: string;
+}) {
+    const router = useRouter();
+    if (!workQueues.length) return null;
+    return (
+        <div
+            className="flex flex-wrap gap-x-1 gap-y-1 px-2 pt-1.5 pb-2"
+            data-alloy-section="WS.PROCESS_TILE_WORK_VIEWS"
+        >
+            {workQueues.map((wq) => (
+                <Link
+                    key={wq.platformKey}
+                    href={wq.href}
+                    prefetch={shouldDisableAdminV2LinkPrefetch(wq.href) ? false : undefined}
+                    className="rounded-md border border-alloy-midnight/12 bg-white px-2.5 py-1 text-[11px] font-medium text-alloy-midnight/70 no-underline transition-colors hover:border-alloy-juniper/40 hover:bg-alloy-juniper/5 hover:text-alloy-juniper"
+                    {...adminV2NavigationClickedItemProps(`${clickedKey}:wv:${wq.platformKey}`)}
+                    onMouseEnter={() =>
+                        warmOperatorWorkUnitEntryFromHref(wq.href, null, "work_view_pill_hover")
+                    }
+                    onClick={(e) => {
+                        if (isModifiedNavClick(e)) return;
+                        e.preventDefault();
+                        void runAdminV2NavigationTransition({
+                            href: wq.href,
+                            clickedKey: `${clickedKey}:wv:${wq.platformKey}`,
+                            variant: "work_unit",
+                            commitFirst: true,
+                            prepare: () =>
+                                warmOperatorWorkUnitEntryFromHref(
+                                    wq.href,
+                                    null,
+                                    "work_view_pill_click",
+                                ),
+                            commit: () => router.push(wq.href),
+                        });
+                    }}
+                >
+                    {wq.label}
+                </Link>
+            ))}
+        </div>
+    );
+}
+
 /** Process navigation tile — destination card, not a KPI dashboard. */
 export function WorkspaceRootLifecycleGrid({ lifecycles, pending = false }: Props) {
     useAdminV2NavigationTransition();
@@ -346,6 +399,7 @@ export function WorkspaceRootLifecycleGrid({ lifecycles, pending = false }: Prop
             className={WS_LAYOUT.processNavGrid}
             data-ws-layout={WS_LAYOUT_ATTR.processNavGrid}
             data-ws-business-process-grid
+            data-alloy-section="WS.PROCESS_GRID"
             {...alloySectionDomAttrs("WS-05")}
         >
             {lifecycles.map((lifecycle) => {
@@ -367,28 +421,45 @@ export function WorkspaceRootLifecycleGrid({ lifecycles, pending = false }: Prop
 
                 if (isEnrollmentLifecycleCard(enrollmentCard)) {
                     return (
-                        <div key={enrollmentCard.id} className="block w-full min-w-[20rem] max-w-[25rem]">
+                        <div
+                            key={enrollmentCard.id}
+                            className="flex w-full min-w-[20rem] max-w-[25rem] flex-col"
+                            data-alloy-section="WS.PROCESS_TILE"
+                        >
                             <EnrollmentOperationalSurfaceTile
                                 lifecycle={enrollmentCard}
                                 clickedKey={clickedKey}
                                 accent={accent}
                                 domain={domain}
                             />
+                            <WorkViewEntryList
+                                workQueues={enrollmentCard.workQueues}
+                                clickedKey={clickedKey}
+                            />
                         </div>
                     );
                 }
 
                 return (
-                    <LegacyProcessNavTile
+                    <div
                         key={enrollmentCard.id}
-                        lifecycle={enrollmentCard}
-                        clickedKey={clickedKey}
-                        accent={accent}
-                        domain={domain}
-                        inlineMetrics={inlineMetrics}
-                        previewShowsAttention={previewShowsAttention}
-                        hasAttention={hasAttention}
-                    />
+                        className="flex w-full min-w-[20rem] max-w-[25rem] flex-col"
+                        data-alloy-section="WS.PROCESS_TILE"
+                    >
+                        <LegacyProcessNavTile
+                            lifecycle={enrollmentCard}
+                            clickedKey={clickedKey}
+                            accent={accent}
+                            domain={domain}
+                            inlineMetrics={inlineMetrics}
+                            previewShowsAttention={previewShowsAttention}
+                            hasAttention={hasAttention}
+                        />
+                        <WorkViewEntryList
+                            workQueues={enrollmentCard.workQueues}
+                            clickedKey={clickedKey}
+                        />
+                    </div>
                 );
             })}
         </div>

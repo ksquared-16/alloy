@@ -42,4 +42,20 @@ describe("extractPipelineExecutionLanes", () => {
     it("resolvePipelineExecPanelTitle uses primary_total_label for v2 domain layout", () => {
         expect(resolvePipelineExecPanelTitle(ENROLLMENT_PIPELINE_QUEUE_DEFINITION_V2_BUNDLE.def)).toBe("Work Units");
     });
+
+    it("header includes all sibling work views — v2 domain sections become pill strip", () => {
+        const lanes = extractPipelineExecutionLanes(ENROLLMENT_PIPELINE_QUEUE_DEFINITION_V2_BUNDLE.def);
+        const keys = lanes.map((l) => l.key);
+        expect(keys).toContain("new_leads");
+        expect(keys).toContain("tours");
+        expect(keys).toContain("communications_followup");
+        expect(keys).toContain("waitlist");
+        expect(keys).toContain("enrollment_offers");
+        expect(keys).toContain("enrollment_completed");
+        expect(lanes.find((l) => l.key === "enrollment_offers")?.label).toBe("Enrolling");
+        expect(lanes.find((l) => l.key === "enrollment_completed")?.label).toBe("Enrolled");
+        const activeLane = lanes.find((l) => l.key === "new_leads");
+        expect(activeLane).toBeDefined();
+        expect(activeLane?.label).toBe("New Leads");
+    });
 });
