@@ -145,11 +145,11 @@ export function WorkUnitAboveFoldHeaderChips({
 
     const equalPillGrid = useMemo(() => computeEqualStagePillGrid(pillLabels), [pillLabels]);
 
-    const renderChipButton = (chip: WorkUnitAboveFoldChip) => {
+    const renderChipButton = (chip: WorkUnitAboveFoldChip, renderKey?: string) => {
         const pillPending = queuePillPendingKey != null && queuePillPendingKey === chip.key;
         return (
             <button
-                key={chip.key}
+                key={renderKey ?? chip.key}
                 type="button"
                 onMouseEnter={() => {
                     if (chip.attention_placeholder) return;
@@ -213,7 +213,7 @@ export function WorkUnitAboveFoldHeaderChips({
                     style={{ gridTemplateColumns: equalPillGrid.gridTemplateColumns }}
                     data-ws-stage-pill-count={equalPillGrid.pillCount}
                 >
-                    {slot.sections.flatMap((section) => section.chips.map((chip) => renderChipButton(chip)))}
+                    {slot.sections.flatMap((section, si) => section.chips.map((chip, ci) => renderChipButton(chip, `${si}:${section.key}:${ci}:${chip.key}`)))}
                     {showOtherPill && otherPill ?
                             <button
                                 type="button"

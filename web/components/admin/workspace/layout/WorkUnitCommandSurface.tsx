@@ -28,9 +28,6 @@ export function WorkUnitCommandSurface({
     surfaceKey = "default",
 }: Props) {
     const processLine = processName?.trim() ?? "";
-    const showProcessRow = Boolean(processLine || stagePills);
-
-    if (!showProcessRow) return null;
 
     return (
         <div
