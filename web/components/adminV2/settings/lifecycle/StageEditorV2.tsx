@@ -181,31 +181,47 @@ const GRAIN_ICONS: Record<StageGrain, ReactNode> = {
     work_item: <Package size={15} />,
 };
 
+// Grains that are fully wired vs. reserved for future configuration.
+const GRAIN_FUTURE: Partial<Record<StageGrain, true>> = {
+    person: true,
+    account: true,
+    work_item: true,
+};
+
 function GrainSelector({ value, onChange }: { value: StageGrain | undefined; onChange: (g: StageGrain) => void }) {
     const grains: StageGrain[] = ["family", "child", "person", "account", "work_item"];
     return (
         <div className="grid grid-cols-3 gap-2 sm:grid-cols-5">
             {grains.map((grain) => {
                 const active = value === grain;
+                const future = !!GRAIN_FUTURE[grain];
                 return (
                     <button
                         key={grain}
                         type="button"
                         onClick={() => onChange(grain)}
-                        className={`flex flex-col items-center gap-2 rounded-lg border px-2 py-3 text-center transition-all ${
+                        title={future ? "Coming soon — not yet fully supported" : undefined}
+                        className={`relative flex flex-col items-center gap-2 rounded-lg border px-2 py-3 text-center transition-all ${
                             active
                                 ? "border-alloy-juniper/40 bg-alloy-juniper/8 shadow-sm"
-                                : "border-alloy-forge/12 bg-white hover:border-alloy-juniper/30 hover:bg-alloy-stone/50"
+                                : future
+                                  ? "border-alloy-forge/8 bg-alloy-stone/30 opacity-50 cursor-not-allowed"
+                                  : "border-alloy-forge/12 bg-white hover:border-alloy-juniper/30 hover:bg-alloy-stone/50"
                         }`}
                         data-testid={`grain-option-${grain}`}
                     >
+                        {future && (
+                            <span className="absolute -top-1.5 left-1/2 -translate-x-1/2 rounded-full bg-alloy-midnight/20 px-1.5 py-px text-[8px] font-semibold uppercase tracking-wide text-alloy-midnight/50 whitespace-nowrap">
+                                Coming soon
+                            </span>
+                        )}
                         <span className={active ? "text-alloy-juniper" : "text-alloy-midnight/35"}>
                             {GRAIN_ICONS[grain]}
                         </span>
-                        <span className={`text-[11px] font-semibold leading-tight ${active ? "text-alloy-juniper" : "text-alloy-midnight/70"}`}>
+                        <span className={`text-[11px] font-semibold leading-tight ${active ? "text-alloy-juniper" : "text-alloy-midnight/60"}`}>
                             {GRAIN_LABELS[grain]}
                         </span>
-                        <span className="text-[10px] leading-tight text-alloy-midnight/40">
+                        <span className="text-[10px] leading-tight text-alloy-midnight/35">
                             {GRAIN_DESCRIPTIONS[grain]}
                         </span>
                     </button>
@@ -217,31 +233,26 @@ function GrainSelector({ value, onChange }: { value: StageGrain | undefined; onC
 
 // ─── Grain impact callout ────────────────────────────────────────────────────
 
-const GRAIN_IMPACT: Record<StageGrain, { count: string; focus: string; actions: string }> = {
+const GRAIN_IMPACT: Record<StageGrain, { count: string; focus: string }> = {
     family: {
-        count: "One queue row per family / opportunity",
-        focus: "Focus Panel shows the family case and contact record",
-        actions: "Family-grain actions: Update Lead Status, Close Lead, Schedule Tour",
+        count: "One row per lead / family",
+        focus: "Opens the full lead record with family, children, contacts, work, and activity.",
     },
     child: {
-        count: "One queue row per child enrollment track — a family with 2 children = 2 rows",
-        focus: "Focus Panel shows the child's enrollment context: placement, status, desired start",
-        actions: "Child-grain actions: Enroll Child, Waitlist Child, Update Enrollment Status",
+        count: "One row per child enrollment — a family with 2 children produces 2 rows",
+        focus: "Opens the lead record focused on the selected child.",
     },
     person: {
-        count: "One queue row per person record",
-        focus: "Focus Panel shows the person / contact record",
-        actions: "Person-grain actions available",
+        count: "One row per person record",
+        focus: "Opens the person record.",
     },
     account: {
-        count: "One queue row per customer account",
-        focus: "Focus Panel shows the account overview",
-        actions: "Account-grain actions available",
+        count: "One row per account",
+        focus: "Opens the account overview.",
     },
     work_item: {
-        count: "One queue row per task or obligation",
-        focus: "Focus Panel shows the work item detail",
-        actions: "Work item actions available",
+        count: "One row per task or obligation",
+        focus: "Opens the work item detail.",
     },
 };
 
@@ -250,16 +261,12 @@ function GrainImpactCallout({ grain }: { grain: StageGrain }) {
     return (
         <div className="mt-3 rounded-lg border border-alloy-blue/15 bg-alloy-blue/4 px-4 py-3 space-y-1.5 text-[11px]">
             <div className="flex gap-8">
-                <span className="w-20 shrink-0 font-medium text-alloy-blue/70">Queue count</span>
+                <span className="w-24 shrink-0 font-medium text-alloy-blue/70">Queue count</span>
                 <span className="text-alloy-midnight/65">{impact.count}</span>
             </div>
             <div className="flex gap-8">
-                <span className="w-20 shrink-0 font-medium text-alloy-blue/70">Focus Panel</span>
+                <span className="w-24 shrink-0 font-medium text-alloy-blue/70">Focus Panel</span>
                 <span className="text-alloy-midnight/65">{impact.focus}</span>
-            </div>
-            <div className="flex gap-8">
-                <span className="w-20 shrink-0 font-medium text-alloy-blue/70">Actions</span>
-                <span className="text-alloy-midnight/65">{impact.actions}</span>
             </div>
         </div>
     );
@@ -295,6 +302,30 @@ function Subsection({ label, description, children }: { label: string; descripti
     );
 }
 
+function CollapsibleSubsection({ label, description, children }: { label: string; description?: string; children: ReactNode }) {
+    const [open, setOpen] = useState(false);
+    return (
+        <div className="mt-5 border-t border-alloy-forge/8 pt-3">
+            <button
+                type="button"
+                onClick={() => setOpen((v) => !v)}
+                className="flex w-full items-center gap-2 text-left"
+            >
+                {open
+                    ? <ChevronDown size={11} className="shrink-0 text-alloy-midnight/35" />
+                    : <ChevronRight size={11} className="shrink-0 text-alloy-midnight/35" />}
+                <span className="text-[11px] font-semibold uppercase tracking-wider text-alloy-midnight/45">{label}</span>
+            </button>
+            {open && (
+                <div className="mt-3">
+                    {description ? <p className="mb-3 text-[11px] text-alloy-midnight/45">{description}</p> : null}
+                    {children}
+                </div>
+            )}
+        </div>
+    );
+}
+
 // ─── Action catalog panel ────────────────────────────────────────────────────
 
 const ACTION_CATEGORY_LABELS: Record<string, string> = {
@@ -317,7 +348,11 @@ function ActionCatalogPanel({
     onChange: (actions: StageCandidateAction[]) => void;
 }) {
     const grainFilter = grain === "child" ? "opportunity_customer_member" : "opportunity";
-    const catalogActions = listPlatformActions({ grain: grainFilter });
+    // Filter runtime-internal actions that should not be surfaced to operators.
+    const INTERNAL_ACTION_KEYS = new Set(["update_lead_status", "update_child_enrollment_status"]);
+    const catalogActions = listPlatformActions({ grain: grainFilter }).filter(
+        (a) => !INTERNAL_ACTION_KEYS.has(a.key),
+    );
 
     const toggleAction = useCallback(
         (key: string) => {
@@ -367,7 +402,7 @@ function ActionCatalogPanel({
     return (
         <div>
             <p className="mb-3 text-[11px] text-alloy-midnight/50">
-                Actions come from the <strong className="font-semibold text-alloy-midnight/70">Platform Action Catalog</strong> — a shared registry of operator-facing commands. Enabling an action here makes it available when operators are working records in this stage. Toggle status sets a stage-level priority: Recommended surfaces the action prominently; Available makes it accessible; Context-dependent shows it only when preconditions are met.
+                Choose the actions operators should see first in this stage. Actions come from the Platform Action Catalog; this stage only prioritizes and labels them. Click a badge to set priority: <span className="font-medium text-alloy-midnight/70">Recommended</span> shows it first; <span className="font-medium text-alloy-midnight/70">Available</span> makes it accessible; <span className="font-medium text-alloy-midnight/70">Context-dependent</span> shows it only when preconditions are met.
             </p>
             <div className="space-y-1.5">
                 {catalogActions.map((action) => {
@@ -722,8 +757,10 @@ export default function StageEditorV2({
         stageRecord?.action_catalog_v1?.candidate_actions ?? [],
     );
 
-    // ── Collapse state — experience/requirements/outcomes collapsed by default ──
+    // ── Collapse state — all sections collapsed by default ──
     const [collapsed, setCollapsed] = useState<Record<string, boolean>>({
+        identity: true,
+        representation: true,
         experience: true,
         requirements: true,
         outcomes: true,
@@ -917,7 +954,7 @@ export default function StageEditorV2({
                     {/* 2a — Grain */}
                     <Field
                         label="Stage grain"
-                        hint="Grain is what a single queue row represents. All surface counts, Focus Panel content, and available actions follow from this choice — set it before configuring anything else."
+                        hint="Grain is what a single queue row represents. Focus Panel content and available actions follow from this choice."
                     >
                         <GrainSelector value={grain} onChange={setGrain} />
                         {grain ? <GrainImpactCallout grain={grain} /> : null}
@@ -931,10 +968,10 @@ export default function StageEditorV2({
 
                     {stageKey.trim() ? (
                         <>
-                            {/* 2b — Inclusion filters */}
-                            <Subsection
-                                label="Inclusion filters — which records appear here"
-                                description="Records of the selected grain appear in this stage when they match queue membership criteria AND hold one of the included statuses. These filters describe inclusion — records that transition out of these statuses leave the queue automatically."
+                            {/* 2b — Inclusion criteria (advanced, collapsed) */}
+                            <CollapsibleSubsection
+                                label="Advanced inclusion criteria"
+                                description="Records of the selected grain appear in this stage when they match queue membership criteria and hold one of the included statuses. These criteria describe which records of that grain appear here — records that leave these statuses exit the queue automatically."
                             >
                                 <LifecycleStageQueueMembershipEditor
                                     ref={membershipRef}
@@ -948,8 +985,8 @@ export default function StageEditorV2({
                                     <p className="mb-1 text-[11px] font-semibold uppercase tracking-wider text-alloy-midnight/45">
                                         Included statuses
                                     </p>
-                                    <p className="mb-2 text-[11px] text-alloy-midnight/45">
-                                        A record appears in this stage&apos;s queue when its status matches one of these.
+                                    <p className="mb-2 text-[11px] text-alloy-midnight/40">
+                                        A record of this grain appears in this stage&apos;s queue when its status matches one of these.
                                     </p>
                                     <LifecycleStageStatusRollupEditor
                                         editorRef={rollupRef}
@@ -965,12 +1002,12 @@ export default function StageEditorV2({
                                         }}
                                     />
                                 </div>
-                            </Subsection>
+                            </CollapsibleSubsection>
 
                             {/* 2c — Surface assignments */}
                             <Subsection
                                 label="Surface assignments — how subjects are displayed"
-                                description="Assign published surfaces to the queue row and Focus Panel for this stage. A missing assignment inherits from the process default."
+                                description="Assign published surfaces to the queue row and Focus Panel for this stage. Missing assignments inherit from the process default."
                             >
                                 <div className="mb-3">
                                     <a

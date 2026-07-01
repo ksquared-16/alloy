@@ -870,6 +870,26 @@ export default function LifecycleActivationBoard({
             if (stageOperatingPlan) {
                 patchStageBootstrap({ stage_operating_plan: stageOperatingPlan });
             }
+            if (v2Draft) {
+                setBuilderStages((prev) =>
+                    prev.map((s) =>
+                        s.key !== sk
+                            ? s
+                            : {
+                                  ...s,
+                                  ...(v2Draft.grain !== undefined ? { grain: v2Draft.grain } : {}),
+                                  ...(v2Draft.purpose !== undefined ? { purpose: v2Draft.purpose } : { purpose: undefined }),
+                                  ...(v2Draft.description !== undefined ? { description: v2Draft.description } : { description: undefined }),
+                                  ...(v2Draft.allow_skipping !== undefined ? { allow_skipping: v2Draft.allow_skipping } : {}),
+                                  ...(v2Draft.operator_guidance !== undefined ? { operator_guidance: v2Draft.operator_guidance } : { operator_guidance: undefined }),
+                                  ...(v2Draft.subject_resolution_strategy !== undefined ? { subject_resolution_strategy: v2Draft.subject_resolution_strategy } : {}),
+                                  ...(v2Draft.candidate_actions !== undefined
+                                      ? { action_catalog_v1: { version: 1 as const, candidate_actions: v2Draft.candidate_actions } }
+                                      : {}),
+                              },
+                    ),
+                );
+            }
             setStatusKeys(keys);
             setStatusDisplayLabels(labels);
             await saveActivation({ status_keys: keys, status_labels: labels, completed_steps: 4 });
