@@ -81,6 +81,36 @@ export const ACTION_BUTTON_LIBRARY: ActionRegistryEntry[] = [
         defaultSlot: "primary",
     },
     {
+        key: "close_lead",
+        label: "Close Lead",
+        category: "status_lifecycle",
+        settingsConfigurable: true,
+        description:
+            "Mark this lead as closed or lost through the Mutation Runtime. Semantic alias for update_lead_status with closing intent.",
+        defaultSurface: "record_header",
+        defaultSlot: "secondary",
+    },
+    {
+        key: "waitlist_child",
+        label: "Waitlist Child",
+        category: "status_lifecycle",
+        settingsConfigurable: true,
+        description:
+            "Move a child to a waitlist status through the Mutation Runtime. Semantic alias for update_child_enrollment_status with waitlist intent.",
+        defaultSurface: "record_section",
+        defaultSlot: "primary",
+    },
+    {
+        key: "enroll_child",
+        label: "Enroll Child",
+        category: "status_lifecycle",
+        settingsConfigurable: true,
+        description:
+            "Confirm a child's enrollment through the Mutation Runtime. Semantic alias for update_child_enrollment_status with enrollment intent.",
+        defaultSurface: "record_section",
+        defaultSlot: "primary",
+    },
+    {
         // Legacy: remains for backward compat with existing action_placements.
         // Do not create new placements pointing to this key.
         key: "update_status_add_note",

@@ -15,6 +15,8 @@ import { emitStatusChangedEvent } from "@/lib/admin/emitStatusChangedEvent";
 
 /** Canonical command key for lead status mutations. Import this instead of using the string literal. */
 export const UPDATE_LEAD_STATUS_COMMAND_KEY = "update_lead_status";
+/** Semantic command key for closing/losing a lead. Routes to the same lead status domain. */
+export const CLOSE_LEAD_COMMAND_KEY = "close_lead";
 
 export const LEAD_STATUS_DOMAIN: MutationDomain = {
     key: "lead_status",

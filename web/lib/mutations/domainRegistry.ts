@@ -90,6 +90,13 @@ import { enrollmentStatusHandler } from "@/lib/mutations/domains/enrollmentStatu
 const COMMAND_DOMAIN_MAP: Record<string, DomainHandler> = {
     update_lead_status: leadStatusHandler,
     update_child_enrollment_status: enrollmentStatusHandler,
+    // Semantic aliases — same execution path, operator-facing label differs.
+    // close_lead routes to lead status domain (full status picker V1;
+    //   status-purpose filtering is a follow-up sprint).
+    // waitlist_child / enroll_child route to enrollment status domain.
+    close_lead: leadStatusHandler,
+    waitlist_child: enrollmentStatusHandler,
+    enroll_child: enrollmentStatusHandler,
 };
 
 // ─── Registry lookup ──────────────────────────────────────────────────────────

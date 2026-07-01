@@ -29,6 +29,12 @@ type StatusOption = {
 export type ChildEnrollmentStatusPanelProps = {
     ocmId: string;
     opportunityId: string;
+    /**
+     * Mutation command key. Defaults to update_child_enrollment_status for
+     * backward compat. Pass semantic keys (waitlist_child, enroll_child) when
+     * invoked from placement-driven action buttons.
+     */
+    commandKey?: string;
     childDisplayName?: string | null;
     currentStatusKey: string | null;
     currentStatusLabel?: string | null;
@@ -42,6 +48,7 @@ export type ChildEnrollmentStatusPanelProps = {
 export function ChildEnrollmentStatusPanel({
     ocmId,
     opportunityId,
+    commandKey = UPDATE_CHILD_ENROLLMENT_STATUS_COMMAND_KEY,
     childDisplayName,
     currentStatusKey,
     currentStatusLabel,
@@ -85,7 +92,7 @@ export function ChildEnrollmentStatusPanel({
                     credentials: "include",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({
-                        command_key: UPDATE_CHILD_ENROLLMENT_STATUS_COMMAND_KEY,
+                        command_key: commandKey,
                         subject_id: ocmId,
                         subject_type: "opportunity_customer_member",
                         target_state: selectedKey,
@@ -138,7 +145,7 @@ export function ChildEnrollmentStatusPanel({
                 credentials: "include",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
-                    command_key: UPDATE_CHILD_ENROLLMENT_STATUS_COMMAND_KEY,
+                    command_key: commandKey,
                     subject_id: ocmId,
                     subject_type: "opportunity_customer_member",
                     target_state: selectedKey,
