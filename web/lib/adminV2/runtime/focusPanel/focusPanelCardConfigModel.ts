@@ -241,6 +241,35 @@ export function defaultEvidenceGroupsForCard(
     key: FocusPanelCardKey,
     seedFields: FocusPanelCardField[],
 ): FocusPanelEvidenceGroup[] {
+    if (key === "household") {
+        return [
+            {
+                id: "primary_contact",
+                label: "Primary Contact",
+                purpose: "Who is the primary contact for this household?",
+                owner: "household",
+                showInSummary: true,
+                showInFocus: true,
+                fields: [
+                    evField("hh_name", "Name", "Enrollment → Primary Contact → Name"),
+                    evField("hh_phone", "Phone", "Enrollment → Primary Contact → Phone"),
+                    evField("hh_email", "Email", "Enrollment → Primary Contact → Email"),
+                ],
+            },
+            {
+                id: "additional_contacts",
+                label: "Additional Contacts",
+                purpose: "Who else is associated with this household?",
+                owner: "household",
+                showInFocus: true,
+                includeInExpanded: true,
+                fields: [
+                    evField("secondary_contact_name", "Secondary Contact", "Enrollment → Secondary Contact → Name"),
+                    evField("secondary_contact_phone", "Secondary Phone", "Enrollment → Secondary Contact → Phone"),
+                ],
+            },
+        ];
+    }
     if (key === "children") {
         return [
             { id: "identity", label: "Identity", purpose: "Who is this child?", owner: "children", showInSummary: true, showInFocus: true, fields: [evField("child_name", "Name", "Enrollment → Children → Name"), evField("child_dob", "DOB / Age", "Enrollment → Children → DOB")] },
