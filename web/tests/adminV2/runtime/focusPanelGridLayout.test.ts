@@ -172,7 +172,7 @@ describe("focusPanelGridLayoutOps", () => {
 
     it("clamps an out-of-bounds region back inside the grid", () => {
         const g = emptyGridLayout(12);
-        expect(clampArea(g, { card: "x", colStart: 11, colSpan: 6, rowStart: 0, rowSpan: 0 })).toMatchObject({
+        expect(clampArea(g, { card: "household", colStart: 11, colSpan: 6, rowStart: 0, rowSpan: 0 })).toMatchObject({
             colStart: 7, // 11 would overflow with span 6 → pulled back to 7 (7..12)
             colSpan: 6,
             rowStart: 1,

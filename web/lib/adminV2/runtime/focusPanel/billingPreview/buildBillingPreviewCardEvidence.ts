@@ -50,13 +50,11 @@ function formatBalanceLabel(cents: unknown): string | null {
 
 /** Build billing preview evidence from the Operational Context (pure derivation, no fetch). */
 export function buildBillingPreviewCardEvidence(context: OperationalContext): BillingPreviewCardEvidence {
-    const truth = context.truth;
+    const { billingConfigured, billingContactName, billingContactEmail, tuitionRateLabel, feeBalanceCents } =
+        context.signals.billing;
 
-    const billingContactName = trimOrNull(truth["billing_contact_name"]) ?? trimOrNull(truth["person.billing_contact_name"]);
-    const billingContactEmail = trimOrNull(truth["billing_contact_email"]);
-    const tuitionRateLabel = trimOrNull(truth["tuition_rate_label"]);
-    const feeBalanceCents = truth["fee_balance_cents"];
-    const billingConfigured = Boolean(truth["billing_configured"]);
+    const billingConfiguredFlag = billingConfigured;
+    void billingContactEmail; // available for readinessItems detail; kept for future use
 
     const balanceLabel = formatBalanceLabel(feeBalanceCents);
 
@@ -64,7 +62,7 @@ export function buildBillingPreviewCardEvidence(context: OperationalContext): Bi
         {
             label: "Billing contact",
             met: billingContactName != null,
-            detail: billingContactName ?? billingContactEmail,
+            detail: billingContactName,
         },
         {
             label: "Tuition rate",
@@ -73,7 +71,7 @@ export function buildBillingPreviewCardEvidence(context: OperationalContext): Bi
         },
     ];
 
-    const isConfigured = billingConfigured || (billingContactName != null && tuitionRateLabel != null);
+    const isConfigured = billingConfiguredFlag || (billingContactName != null && tuitionRateLabel != null);
     const unmetCount = readinessItems.filter((i) => !i.met).length;
 
     let answerLine: string;

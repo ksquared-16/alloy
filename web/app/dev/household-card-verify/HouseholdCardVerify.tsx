@@ -56,7 +56,8 @@ const EMPTY_SIGNALS: OperationalContextSignals = {
     work: { primary: null, items: [], openCount: 0, overdueCount: 0, nextActionLabel: null },
     attention: { needsAttention: false, primaryReason: null, reasonCount: 0 },
     tour: { scheduled: false, startAt: null, statusLabel: null, bookingId: null },
-            communications: { scheduledSendCount: 0, nextFollowUpAt: null, hasOutreach: false, nextScheduledSendId: null },
+    communications: { scheduledSendCount: 0, nextFollowUpAt: null, hasOutreach: false, nextScheduledSendId: null },
+    billing: { billingConfigured: false, billingContactName: null, billingContactEmail: null, tuitionRateLabel: null, feeBalanceCents: null },
 };
 
 function ctx(
@@ -64,6 +65,7 @@ function ctx(
     opts?: { masked?: boolean; label?: string; signals?: OperationalContextSignals },
 ): OperationalContext {
     return {
+        grain: "case",
         subject: { type: "opportunity", id: String(truth.id ?? "opp"), label: opts?.label ?? "Household" },
         businessProcess: { key: "enrollment", label: "Tour scheduled", stageKey: "tour" },
         perspective: { missionLabel: "Confirm enrollment readiness" },
@@ -135,7 +137,8 @@ const CORE_FOUR_SIGNALS: OperationalContextSignals = {
     },
     attention: { needsAttention: true, primaryReason: "Immunization record missing", reasonCount: 1 },
     tour: { scheduled: true, startAt: "2026-06-27T10:00:00Z", statusLabel: "confirmed", bookingId: null },
-            communications: { scheduledSendCount: 0, nextFollowUpAt: null, hasOutreach: false, nextScheduledSendId: null },
+    communications: { scheduledSendCount: 0, nextFollowUpAt: null, hasOutreach: false, nextScheduledSendId: null },
+    billing: { billingConfigured: false, billingContactName: null, billingContactEmail: null, tuitionRateLabel: null, feeBalanceCents: null },
 };
 
 const CHILDREN_MODEL = cardModel("children", "Children", "users");

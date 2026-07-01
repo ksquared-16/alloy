@@ -72,28 +72,57 @@ export type FocusPanelCardPayload = {
     launcherRows?: FocusPanelLauncherRow[];
 };
 
-/** Platform-owned card blueprint keys (not layout section keys). */
+/**
+ * Platform-owned card blueprint keys (not layout section keys).
+ *
+ * All keys in this registry are `@grain case` — the Focus Panel is always
+ * case-grain (subject is an Opportunity). Child-grain and candidate-grain cards
+ * are defined separately and never rendered in the case-grain Focus Panel.
+ *
+ * @see docs/platform/operator/operational-grain-doctrine.md §5
+ */
 export const FOCUS_PANEL_CARD_KEYS = [
+    /** @grain case — family attention flags */
     "attention",
+    /** @grain case — current lifecycle mission label */
     "current_mission",
+    /** @grain case — open work items for this family */
     "current_work",
+    /** @grain case — required information checklist */
     "required_information",
+    /** @grain case — enrollment readiness KPI */
     "readiness_kpi",
+    /** @grain case — case health signal */
     "health",
+    /** @grain case — tour booking status + actions */
     "tour_summary",
+    /** @grain case — household identity + contact fields (fully editable) */
     "household",
+    /** @grain case — children roster (read-only; child facts are case-grain display) */
     "children",
+    /** @grain case — outreach / scheduled sends status (action-only) */
     "communications",
+    /** @grain case — uploaded documents */
     "documents",
+    /** @grain case — available workflow actions launcher */
     "work_launcher",
+    /** @grain case — lifecycle workflow steps rail */
     "workflow_steps",
+    /** @grain case — open tasks */
     "tasks",
+    /** @grain case — configured automations */
     "automations",
+    /** @grain case — primary recommended next action */
     "primary_next_action",
+    /** @grain case — event timeline (read-only append-only) */
     "timeline",
+    /** @grain case — billing configuration preview (deferred; read-only until assignment route exists) */
     "billing_preview",
+    /** @grain case — notes */
     "notes",
+    /** @grain case — audit trail */
     "audit",
+    /** @grain case — workflow completion history */
     "workflow_history",
 ] as const;
 

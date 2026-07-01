@@ -36,9 +36,11 @@ function ctx(work: Partial<OperationalContextSignals["work"]>): OperationalConte
         },
         attention: { needsAttention: false, primaryReason: null, reasonCount: 0 },
         tour: { scheduled: false, startAt: null, statusLabel: null, bookingId: null },
-            communications: { scheduledSendCount: 0, nextFollowUpAt: null, hasOutreach: false, nextScheduledSendId: null },
+        communications: { scheduledSendCount: 0, nextFollowUpAt: null, hasOutreach: false, nextScheduledSendId: null },
+        billing: { billingConfigured: false, billingContactName: null, billingContactEmail: null, tuitionRateLabel: null, feeBalanceCents: null },
     };
     return {
+        grain: "case",
         subject: { type: "opportunity", id: "opp-1", label: "Johnson Household" },
         businessProcess: { key: null, label: null, stageKey: null },
         perspective: null,

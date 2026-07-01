@@ -22,6 +22,7 @@ import type {
 import type { PlacementPrioritySnapshot } from "@/lib/orchestration/placement/placementPriorityTypes";
 import type {
     OperationalAttentionSignal,
+    OperationalCommunicationsSignal,
     OperationalTourSignal,
 } from "@/lib/adminV2/runtime/operationalContext/types";
 import { NULL_PLACEMENT_SIGNAL } from "@/lib/adminV2/runtime/queueRow/queueRowOperationalContext";
@@ -88,6 +89,30 @@ function buildTourSignal(record: Record<string, unknown>): OperationalTourSignal
 }
 
 /**
+ * Project communications/scheduled-sends facts from the composed queue record.
+ * Reads from `_scheduled_sends_summary` (a composed sub-field on the queue record).
+ * Returns null when the field is absent — the communications signal is not yet
+ * universally composed on all queue row types.
+ */
+function buildCommunicationsSignal(record: Record<string, unknown>): OperationalCommunicationsSignal | null {
+    const summary = record["_scheduled_sends_summary"] as
+        | { scheduled_send_count?: number; next_follow_up_iso?: string | null; pending_sends?: { id?: string }[] }
+        | null
+        | undefined;
+    if (!summary) return null;
+
+    const scheduledSendCount = typeof summary.scheduled_send_count === "number" ? summary.scheduled_send_count : 0;
+    const nextFollowUpAt = trimOrNull(summary.next_follow_up_iso);
+    const pendingSends = summary.pending_sends ?? [];
+    return {
+        scheduledSendCount,
+        nextFollowUpAt,
+        hasOutreach: scheduledSendCount > 0 || nextFollowUpAt != null,
+        nextScheduledSendId: trimOrNull(pendingSends[0]?.id),
+    };
+}
+
+/**
  * Project a composed queue record into a `QueueRowOperationalContext`. Pure; safe in
  * `useMemo`. Performs no I/O — the record is already composed upstream.
  */
@@ -98,6 +123,7 @@ export function buildQueueRowOperationalContext(
 
     const subject: QueueRowSubjectRef = {
         type: input.entityType ?? "opportunity",
+        grain: "case",
         id: recordId,
         label: recordLabel,
     };
@@ -107,6 +133,9 @@ export function buildQueueRowOperationalContext(
         attention: buildAttentionSignal(record),
         tour: buildTourSignal(record),
         placement: buildPlacementSignal(record),
+        communications: buildCommunicationsSignal(record),
+        childStatus: null,
+        candidateStatus: null,
     };
 
     const capabilities: QueueRowCapabilities = {
