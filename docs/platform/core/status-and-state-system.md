@@ -1,8 +1,23 @@
 # Status and state system
 
-**Status:** Canonical (June 2026 freeze). See also: [`operational-mutation-platform.md`](../modules/operational-mutation-platform.md) for mutation runtime doctrine.
+**Status:** Canonical (July 2026). See [`business-process-execution-platform.md`](../modules/business-process-execution-platform.md) for execution runtime doctrine.
 
 How status keys, state transitions, and lifecycle ownership work across grains.
+
+---
+
+## What status is — and is not
+
+**Status is a durable state field on an entity row.** It is produced by the Execution Runtime after an operator performs an operational action. It is the result, not the driver.
+
+Status does **not** own:
+- Queue behavior (owned by stage entry conditions)
+- Actions (owned by business process + stage candidate actions)
+- Operational work (owned by stage operating plan)
+- Readiness definitions (owned by stage/action readiness config)
+- Dashboards (owned by surface configuration)
+
+Status **can** be referenced in stage entry/exit conditions, action visibility rules, and readiness expectations. In those contexts it is one input to evaluation — never the source of truth for what an operator should do next.
 
 ---
 

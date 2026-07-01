@@ -49,7 +49,9 @@ Legacy admin remains at `/legacy-admin` for unmigrated modules.
 
 | Topic | Doc |
 |-------|-----|
+| Business Process Execution Platform | `../modules/business-process-execution-platform.md` |
 | Business processes | `../core/business-process-system.md` |
+| Status and state | `../core/status-and-state-system.md` |
 | Navigation | `../core/navigation-and-workspace-doctrine.md` |
 | Records | `../core/record-system.md` |
 | Queues | `../operator/queue-system.md` |
