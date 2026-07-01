@@ -97,7 +97,6 @@ import {
 } from "@/lib/tours/actions/tourBookingActionClient";
 import { UpdateStatusAddNoteModal } from "@/components/admin/opportunity/actions/UpdateStatusAddNoteModal";
 import { getDrawerCommandPanelRenderer } from "@/lib/mutations/drawerCommandPanelRegistry";
->>>>>>> c83569d6e (refactor: remove avoidable hardcoding from mutation platform)
 import type { MutationResult } from "@/lib/mutations/types";
 import { AddPersonModal } from "@/components/admin/opportunity/actions/AddPersonModal";
 import { AddInquiryChildModal } from "@/components/admin/opportunity/actions/AddInquiryChildModal";
@@ -19547,7 +19546,6 @@ export function AdminEntityDrawerLegacy() {
                                 throw new Error(json.error ?? "Action failed");
                             }
                             const row = json.execution_result?.row;
->>>>>>> bf8207170 (feat: add operational mutation status commands)
                             if (row && typeof row === "object") {
                                 setData((prev) => (prev && typeof prev === "object" ? { ...prev, ...row } : prev));
                             }
