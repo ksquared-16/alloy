@@ -69,6 +69,27 @@ export async function PATCH(
                 : {};
     }
 
+    // Structural fields — allowed only when no rates reference this offering
+    const structuralFields = (["attendance_type", "quantity_type", "quantity_value"] as const).filter(
+        (f) => body[f] !== undefined,
+    );
+    if (structuralFields.length > 0) {
+        const supabase = createAdminClient();
+        const { count } = await supabase
+            .from("commercial_tuition_rates")
+            .select("id", { count: "exact", head: true })
+            .eq("offering_id", id);
+        if (count && count > 0) {
+            return NextResponse.json(
+                { error: "Cannot change attendance type or quantity — rates exist. Remove rates first." },
+                { status: 409 },
+            );
+        }
+        for (const f of structuralFields) {
+            patch[f] = body[f] ?? null;
+        }
+    }
+
     if (Object.keys(patch).length <= 1) {
         return NextResponse.json({ error: "No fields to update" }, { status: 400 });
     }
