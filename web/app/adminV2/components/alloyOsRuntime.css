@@ -1106,8 +1106,8 @@ html[data-alloy-os-runtime-split="true"] [data-alloy-os-focus-panel="true"] {
   display: flex;
   align-items: flex-start;
   gap: 8px;
-  min-height: 52px;
-  padding: 7px 12px 6px;
+  min-height: 44px;
+  padding: 5px 12px 4px;
   background: linear-gradient(
     180deg,
     color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 5%, #fff),
@@ -1129,11 +1129,11 @@ html[data-alloy-os-runtime-split="true"] [data-alloy-os-focus-panel="true"] {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 34px;
-  height: 34px;
+  width: 30px;
+  height: 30px;
   flex-shrink: 0;
   margin-top: 1px;
-  border-radius: 8px;
+  border-radius: 7px;
   border: 1px solid color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 24%, var(--alloy-os-border, #dde3eb));
   background: linear-gradient(
     145deg,
@@ -1402,7 +1402,7 @@ html[data-alloy-os-runtime-split="true"] [data-alloy-os-focus-panel="true"] {
 }
 
 .alloy-os-fp-header-compact__mode {
-  padding: 6px 12px 8px;
+  padding: 4px 12px 6px;
   background: var(--alloy-os-surface, #fff);
   border-top: 1px solid color-mix(in srgb, var(--alloy-os-border, #e5e9ef) 70%, transparent);
 }
@@ -2598,7 +2598,7 @@ html[data-alloy-os-runtime-split="true"]
 /* — Shell calmness: lighter header band + tighter mode switch — */
 .alloy-os-fp-header-compact__band {
   background: transparent;
-  min-height: 48px;
+  min-height: 44px;
 }
 .alloy-os-focus-panel-mode-switch__tab {
   padding: 3px 11px;
@@ -3679,4 +3679,185 @@ html[data-alloy-os-runtime-split="true"]
   .adminv2-os-crow {
     transition: none;
   }
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+ * Universal Card — checklist pattern (shared by Readiness, Financial Config)
+ * ════════════════════════════════════════════════════════════════════════ */
+
+.alloy-os-ucard__check-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.alloy-os-ucard__check-item {
+  display: grid;
+  grid-template-columns: 16px 1fr;
+  grid-template-rows: auto auto;
+  column-gap: 6px;
+  align-items: baseline;
+  padding: 5px 8px;
+  border-radius: 6px;
+  font-size: 12px;
+}
+
+.alloy-os-ucard__check-item--met {
+  background: color-mix(in srgb, var(--alloy-os-positive, #00a283) 5%, transparent);
+}
+
+.alloy-os-ucard__check-item--unmet {
+  background: color-mix(in srgb, var(--alloy-os-caution, #f59e0b) 8%, transparent);
+}
+
+.alloy-os-ucard__check-indicator {
+  grid-column: 1;
+  grid-row: 1;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.4;
+}
+
+.alloy-os-ucard__check-item--met .alloy-os-ucard__check-indicator {
+  color: var(--alloy-os-positive, #00a283);
+}
+
+.alloy-os-ucard__check-item--unmet .alloy-os-ucard__check-indicator {
+  color: color-mix(in srgb, var(--alloy-os-caution, #f59e0b) 80%, var(--alloy-os-midnight, #273f52));
+}
+
+.alloy-os-ucard__check-label {
+  grid-column: 2;
+  grid-row: 1;
+  font-weight: 500;
+  color: var(--alloy-os-text-primary, #111827);
+  line-height: 1.4;
+}
+
+.alloy-os-ucard__check-detail {
+  grid-column: 2;
+  grid-row: 2;
+  font-size: 10.5px;
+  color: var(--alloy-os-text-secondary, #6b7280);
+  line-height: 1.35;
+}
+
+.alloy-os-ucard__balance-line {
+  margin: 6px 0 0;
+  padding: 4px 8px;
+  font-size: 11px;
+  color: var(--alloy-os-text-secondary, #6b7280);
+  border-top: 1px solid color-mix(in srgb, var(--alloy-os-border, #e5e7eb) 60%, transparent);
+}
+
+.alloy-os-ucard__inline-error {
+  margin: 4px 0 0;
+  padding: 4px 8px;
+  font-size: 11px;
+  color: var(--alloy-os-risk, #dc2626);
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--alloy-os-risk, #dc2626) 6%, transparent);
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+ * Financial Configuration card — CardInlineOverlay sections
+ * ════════════════════════════════════════════════════════════════════════ */
+
+.alloy-os-financial-config__section {
+  padding: 10px 12px;
+  border-bottom: 1px solid color-mix(in srgb, var(--alloy-os-border, #e5e7eb) 60%, transparent);
+}
+
+.alloy-os-financial-config__section:last-child {
+  border-bottom: none;
+}
+
+.alloy-os-financial-config__section-heading {
+  margin: 0 0 7px;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--alloy-os-text-secondary, #6b7280);
+}
+
+.alloy-os-financial-config__placement-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.alloy-os-financial-config__placement-row {
+  display: grid;
+  grid-template-columns: 1fr 1.6fr auto;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 8px;
+  border-radius: 6px;
+  font-size: 11.5px;
+  border: 1px solid color-mix(in srgb, var(--alloy-os-border, #e5e7eb) 55%, transparent);
+  background: var(--alloy-os-surface, #fff);
+}
+
+.alloy-os-financial-config__child-label {
+  font-weight: 600;
+  color: var(--alloy-os-text-primary, #111827);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.alloy-os-financial-config__placement-detail {
+  color: var(--alloy-os-text-secondary, #6b7280);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.alloy-os-financial-config__tuition-rate {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--alloy-os-text-primary, #111827);
+  white-space: nowrap;
+  background: color-mix(in srgb, var(--alloy-os-positive, #00a283) 8%, transparent);
+  border-radius: 4px;
+  padding: 2px 6px;
+}
+
+.alloy-os-financial-config__tuition-rate--missing {
+  color: var(--alloy-os-text-secondary, #6b7280);
+  background: color-mix(in srgb, var(--alloy-os-border, #e5e7eb) 40%, transparent);
+}
+
+.alloy-os-financial-config__tuition-override {
+  font-weight: 400;
+  font-size: 10.5px;
+  color: var(--alloy-os-text-secondary, #6b7280);
+}
+
+.alloy-os-financial-config__missing-state {
+  margin: 0;
+  padding: 8px 10px;
+  font-size: 11.5px;
+  color: var(--alloy-os-text-secondary, #6b7280);
+  border-radius: 6px;
+  border: 1px dashed color-mix(in srgb, var(--alloy-os-border, #e5e7eb) 80%, transparent);
+  background: color-mix(in srgb, var(--alloy-os-border, #e5e7eb) 15%, transparent);
+  text-align: center;
+}
+
+.alloy-os-financial-config__loading {
+  margin: 0;
+  padding: 6px 8px;
+  font-size: 11.5px;
+  color: var(--alloy-os-text-secondary, #6b7280);
+  font-style: italic;
 }

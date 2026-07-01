@@ -210,14 +210,15 @@ function RowPreviewCanvas({
 }) {
     return (
         <div
-            className="w-full overflow-hidden rounded-xl border border-alloy-stone/14 bg-white"
+            className="w-full overflow-hidden rounded-xl border border-alloy-stone/14 bg-white shadow-sm"
             aria-label="Queue row preview"
             data-queue-row-preview-canvas
         >
-            <div className="border-b border-alloy-stone/10 px-4 py-2">
+            <div className="flex items-center justify-between border-b border-alloy-stone/10 px-4 py-2">
                 <p className="text-[10px] font-semibold uppercase tracking-wide text-alloy-midnight/40">
-                    Row preview
+                    Live row preview
                 </p>
+                <p className="text-[10px] text-alloy-midnight/30">Click a zone to inspect</p>
             </div>
             <div className="flex min-h-0 divide-x divide-alloy-stone/10">
                 {zones
@@ -545,8 +546,8 @@ function ZoneCard({
         <div
             className={`rounded-xl border transition-colors ${
                 isSelected
-                    ? "border-alloy-pine/30 bg-alloy-pine/[0.03]"
-                    : "border-alloy-stone/12 bg-white"
+                    ? "border-alloy-pine/40 bg-alloy-pine/[0.04] shadow-sm ring-1 ring-alloy-pine/20"
+                    : "border-alloy-stone/12 bg-white hover:border-alloy-stone/20"
             }`}
             onClick={onSelect}
             data-queue-row-zone={zone.zone}
@@ -556,7 +557,7 @@ function ZoneCard({
                 {/* Drag handle */}
                 <button
                     type="button"
-                    className="flex-shrink-0 cursor-grab touch-none text-alloy-midnight/25 hover:text-alloy-midnight/50 active:cursor-grabbing"
+                    className="group flex flex-shrink-0 cursor-grab touch-none items-center gap-1 text-alloy-midnight/25 hover:text-alloy-midnight/55 active:cursor-grabbing"
                     onPointerDown={onDragStart}
                     onPointerMove={onDragMove}
                     onPointerUp={onDragEnd}
@@ -565,7 +566,7 @@ function ZoneCard({
                     data-queue-row-drag-handle={zone.zone}
                     onClick={(e) => e.stopPropagation()}
                 >
-                    <svg className="h-4 w-4" viewBox="0 0 16 16" fill="currentColor">
+                    <svg className="h-4 w-4 flex-shrink-0" viewBox="0 0 16 16" fill="currentColor">
                         <rect x="3" y="4" width="10" height="1.5" rx="0.75" />
                         <rect x="3" y="7.25" width="10" height="1.5" rx="0.75" />
                         <rect x="3" y="10.5" width="10" height="1.5" rx="0.75" />
@@ -954,9 +955,12 @@ export default function QueueRowBuilderV1({ surfaceId = "pipeline-queue-row" }: 
 
             {/* Zone drag list */}
             <section data-queue-row-zones>
-                <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-alloy-midnight/50">
-                    Column zones
-                </h3>
+                <div className="mb-2 flex items-center justify-between">
+                    <h3 className="text-xs font-semibold uppercase tracking-wide text-alloy-midnight/50">
+                        Zones
+                    </h3>
+                    <p className="text-[10px] text-alloy-midnight/30">≡ Drag to reorder</p>
+                </div>
                 {loading ? (
                     <div className="space-y-2">
                         {QUEUE_RECORD_LAYOUT_ZONES.map((zone) => (
