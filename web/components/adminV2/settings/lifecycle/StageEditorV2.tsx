@@ -55,7 +55,6 @@ import {
     type StageSubjectResolutionStrategy,
 } from "@/lib/lifecycle/stageGrainV1";
 import type { LifecycleBuilderStageRecord } from "@/lib/lifecycle/lifecycleBuilderConfig";
-import { listPlatformActions } from "@/lib/platform/actions/platformActionCatalog";
 import type { StageCandidateAction } from "@/lib/lifecycle/stageActionCatalogV1";
 import type { StageOperatingPlanV1 } from "@/lib/lifecycle/stageOperatingPlanV1";
 import type { QueueMembershipV1 } from "@/lib/lifecycle/queueMembershipV1";
@@ -326,136 +325,6 @@ function CollapsibleSubsection({ label, description, children }: { label: string
     );
 }
 
-// ─── Action catalog panel ────────────────────────────────────────────────────
-
-const ACTION_CATEGORY_LABELS: Record<string, string> = {
-    status_lifecycle: "Status change",
-    workflow: "Workflow",
-    communication: "Communication",
-    record: "Record update",
-    enrollment: "Enrollment",
-    placement: "Placement",
-    scheduling: "Scheduling",
-};
-
-function ActionCatalogPanel({
-    candidateActions,
-    grain,
-    onChange,
-}: {
-    candidateActions: StageCandidateAction[];
-    grain: StageGrain | undefined;
-    onChange: (actions: StageCandidateAction[]) => void;
-}) {
-    const grainFilter = grain === "child" ? "opportunity_customer_member" : "opportunity";
-    // Filter runtime-internal actions that should not be surfaced to operators.
-    const INTERNAL_ACTION_KEYS = new Set(["update_lead_status", "update_child_enrollment_status"]);
-    const catalogActions = listPlatformActions({ grain: grainFilter }).filter(
-        (a) => !INTERNAL_ACTION_KEYS.has(a.key),
-    );
-
-    const toggleAction = useCallback(
-        (key: string) => {
-            const existing = candidateActions.find((a) => a.action_key === key);
-            if (existing) {
-                onChange(candidateActions.filter((a) => a.action_key !== key));
-            } else {
-                onChange([...candidateActions, { action_key: key, recommendation: "ready" }]);
-            }
-        },
-        [candidateActions, onChange],
-    );
-
-    const cycleRecommendation = useCallback(
-        (key: string) => {
-            const order: StageCandidateAction["recommendation"][] = ["recommended", "ready", "context_dependent"];
-            onChange(
-                candidateActions.map((a) => {
-                    if (a.action_key !== key) return a;
-                    const idx = order.indexOf(a.recommendation);
-                    return { ...a, recommendation: order[(idx + 1) % order.length]! };
-                }),
-            );
-        },
-        [candidateActions, onChange],
-    );
-
-    const REC_LABELS: Record<StageCandidateAction["recommendation"], string> = {
-        recommended: "Recommended",
-        ready: "Available",
-        context_dependent: "Context-dependent",
-    };
-    const REC_STYLES: Record<StageCandidateAction["recommendation"], string> = {
-        recommended: "bg-alloy-blue/10 text-alloy-blue border border-alloy-blue/15",
-        ready: "bg-alloy-forge/8 text-alloy-midnight/55 border border-alloy-forge/10",
-        context_dependent: "bg-alloy-midnight/6 text-alloy-midnight/45 border border-alloy-midnight/8",
-    };
-
-    if (!catalogActions.length) {
-        return (
-            <p className="text-[11px] text-alloy-midnight/40">
-                No actions found in the Platform Catalog for this grain. Configure grain above.
-            </p>
-        );
-    }
-
-    return (
-        <div>
-            <p className="mb-2 text-[11px] text-alloy-midnight/50">
-                Process actions define what operators can do. This stage only decides which actions are emphasized here.
-            </p>
-            <p className="mb-3 text-[11px] text-alloy-midnight/40">
-                Click a badge to set emphasis: <span className="font-medium text-alloy-midnight/60">Recommended</span> surfaces it first; <span className="font-medium text-alloy-midnight/60">Available</span> keeps it accessible; <span className="font-medium text-alloy-midnight/60">Context-dependent</span> shows it only when preconditions are met.
-            </p>
-            <div className="space-y-1.5">
-                {catalogActions.map((action) => {
-                    const candidate = candidateActions.find((a) => a.action_key === action.key);
-                    const enabled = !!candidate;
-                    return (
-                        <div
-                            key={action.key}
-                            className={`flex items-center gap-3 rounded-lg border px-3 py-2.5 transition-all ${
-                                enabled
-                                    ? "border-alloy-juniper/20 bg-white"
-                                    : "border-alloy-forge/8 bg-alloy-stone/40"
-                            }`}
-                        >
-                            <button
-                                type="button"
-                                onClick={() => toggleAction(action.key)}
-                                className={`relative h-4 w-7 shrink-0 rounded-full transition-colors ${enabled ? "bg-alloy-juniper" : "bg-alloy-forge/20"}`}
-                                aria-label={enabled ? `Disable ${action.defaultLabel}` : `Enable ${action.defaultLabel}`}
-                            >
-                                <span
-                                    className={`absolute top-0.5 h-3 w-3 rounded-full bg-white shadow-sm transition-all ${enabled ? "left-3.5" : "left-0.5"}`}
-                                />
-                            </button>
-                            <div className="flex-1 min-w-0">
-                                <p className={`text-[12px] font-semibold leading-snug ${enabled ? "text-alloy-midnight" : "text-alloy-midnight/40"}`}>
-                                    {action.defaultLabel}
-                                </p>
-                                <p className="text-[10px] text-alloy-midnight/40">
-                                    {ACTION_CATEGORY_LABELS[action.category] ?? action.category}
-                                    {action.confirmationPolicy === "destructive" ? " · requires confirmation" : ""}
-                                </p>
-                            </div>
-                            {enabled && candidate ? (
-                                <button
-                                    type="button"
-                                    onClick={() => cycleRecommendation(action.key)}
-                                    className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium transition-colors ${REC_STYLES[candidate.recommendation]}`}
-                                    title="Click to cycle: Recommended → Available → Context-dependent"
-                                >
-                                    {REC_LABELS[candidate.recommendation]}
-                                </button>
-                            ) : null}
-                        </div>
-                    );
-                })}
-            </div>
-        </div>
-    );
-}
 
 // ─── Subject resolution ───────────────────────────────────────────────────────
 
@@ -955,12 +824,12 @@ export default function StageEditorV2({
                     onToggle={() => toggleSection("representation")}
                 >
                     {/* 2a — Grain */}
-                    <Field
-                        label="Stage grain"
-                        hint="Grain determines queue rows — each row in this stage represents one unit of this grain. Focus Panel content and available actions follow."
-                    >
+                    <Field label="Stage grain">
                         <GrainSelector value={grain} onChange={setGrain} />
                         {grain ? <GrainImpactCallout grain={grain} /> : null}
+                        <p className="mt-3 text-[11px] text-alloy-midnight/50">
+                            Stage grain sets the default subject for this stage. Work Views use this grain to create queue rows — one row per {grain ? <span className="font-medium text-alloy-midnight/70">{GRAIN_LABELS[grain].toLowerCase()}</span> : "unit of the selected grain"}.
+                        </p>
                     </Field>
 
                     {grain === "child" ? (
@@ -971,10 +840,10 @@ export default function StageEditorV2({
 
                     {stageKey.trim() ? (
                         <>
-                            {/* 2b — Inclusion criteria (advanced, collapsed) */}
+                            {/* 2b — Work View membership criteria (advanced, collapsed) */}
                             <CollapsibleSubsection
-                                label="Advanced inclusion criteria"
-                                description="Records of the selected grain appear in this stage when they match queue membership criteria and hold one of the included statuses. These criteria describe which records of that grain appear here — records that leave these statuses exit the queue automatically."
+                                label="Work View membership criteria"
+                                description="Work Views for this stage show records that match these criteria. Records enter when their status is included; they exit automatically when it changes. Grain is inherited from stage grain above."
                             >
                                 <LifecycleStageQueueMembershipEditor
                                     ref={membershipRef}
@@ -989,7 +858,7 @@ export default function StageEditorV2({
                                         Included statuses
                                     </p>
                                     <p className="mb-2 text-[11px] text-alloy-midnight/40">
-                                        A record of this grain appears in this stage&apos;s queue when its status matches one of these.
+                                        A record appears in Work Views for this stage when its status matches one of these.
                                     </p>
                                     <LifecycleStageStatusRollupEditor
                                         editorRef={rollupRef}
@@ -1051,11 +920,12 @@ export default function StageEditorV2({
                             />
 
                             <Subsection label="Recommended actions">
-                                <ActionCatalogPanel
-                                    candidateActions={candidateActions}
-                                    grain={grain}
-                                    onChange={setCandidateActions}
-                                />
+                                <div className="rounded-lg border border-dashed border-alloy-forge/15 px-4 py-4">
+                                    <p className="text-[12px] font-medium text-alloy-midnight/55">Recommended actions come from Process Actions.</p>
+                                    <p className="mt-1 text-[11px] text-alloy-midnight/35">
+                                        Configure which actions are available to operators in Process → Actions. Stage-level prioritization will let you emphasize specific actions per stage — coming soon.
+                                    </p>
+                                </div>
                             </Subsection>
 
                             <Subsection label="Operator guidance">
