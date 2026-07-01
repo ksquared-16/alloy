@@ -40,6 +40,7 @@ import {
     invalidateAdminV2WorkspaceSessionCache,
     readWorkspaceRootCache,
     writeWorkspaceRootCache,
+    writeWorkUnitPageCache,
 } from "@/lib/workspace/adminV2WorkspaceSessionCache";
 import {
     traceWorkspaceRootDepartmentTiles,
@@ -357,6 +358,41 @@ export default function AdminV2WorkspaceIndexPage() {
 
                 setDepartments(active);
                 setFetchSettledEmpty(active.length === 0);
+
+                // Pre-seed WU page cache from workspace root bootstrap.
+                // Enables the WU page to skip its cold shell when navigating from the workspace
+                // root (e.g. "Enter Enrollment →"). Cache provides workUnit + dept immediately so
+                // workUnitShellReady=true from first render → header pills visible before bootstrap.
+                if (orgId && wuRes?.ok && Array.isArray(wuJson.items)) {
+                    const deptById = new Map(active.map((d) => [d.id, d] as const));
+                    const rawWus = wuJson.items as Array<{
+                        id?: unknown;
+                        name?: unknown;
+                        key?: unknown;
+                        department_id?: unknown;
+                        queue_definition?: unknown;
+                        metadata?: unknown;
+                    }>;
+                    for (const wu of rawWus) {
+                        const wuId = wu.id != null ? String(wu.id) : null;
+                        const deptId = wu.department_id != null ? String(wu.department_id) : null;
+                        if (!wuId || !deptId || !wu.queue_definition) continue;
+                        const dept = deptById.get(deptId);
+                        if (!dept) continue;
+                        writeWorkUnitPageCache(orgId, principalUserId, accessScopeFingerprint, {
+                            departmentId: deptId,
+                            dept: { id: dept.id, name: dept.name ?? null, key: dept.key ?? null },
+                            workUnit: {
+                                id: wuId,
+                                name: wu.name != null ? String(wu.name) : null,
+                                key: wu.key != null ? String(wu.key) : null,
+                                department_id: deptId,
+                                queue_definition: wu.queue_definition,
+                                metadata: wu.metadata,
+                            },
+                        });
+                    }
+                }
 
                 if (active.length) {
                     const quick = buildWorkspaceQuickRollup(active, wuRes, wuJson);

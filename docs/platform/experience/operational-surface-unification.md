@@ -105,24 +105,56 @@ for this sprint.
 
 ---
 
-## Skeleton chip gap: fix applied
+## Cold shell gap: fix applied (two seeding sites)
 
-On a cold first visit (no page cache), the Work Unit header had no skeleton chips during the brief
-bootstrap window. The root cause was that both `mapBootstrapWorkUnits()` and `mapDeptWorkUnitRows()`
-discarded `queue_definition` from the raw work unit rows, so `queueDef` was null until the WU
-bootstrap responded.
+### Root cause
 
-**Fix (Phase 3):** The workspace dept bootstrap pre-seeds `CachedWorkUnitPage` entries for each
-work unit with `queue_definition` before soft nav commits. On soft nav, `readWorkUnitPageCache()`
-hits immediately → `workUnit.queue_definition` is available from first render → `queueDef` →
-`queueUi` → `queueTabPlaceholders` → skeleton chips visible before bootstrap responds.
+When the Work Unit page mounts, it shows `WorkUnitWorkspaceColdShell` (a titled skeleton)
+until `workUnitSurfaceReady` commits, which requires:
+- `workUnitShellReady = Boolean(workUnit) && Boolean(dept) && !error` → needs WU bootstrap
+- `workUnitPageSeededFromCache = true` → bypasses cold shell entirely
 
-**File:** `web/app/adminV2/workspace/dept/[departmentId]/page.tsx` — pre-seeding block after
-`setDept(deptCommit)` in the dept bootstrap resolution handler.
+The page cache (`CachedWorkUnitPage`) stores `{ workUnit, dept }` including `queue_definition`.
+A cache hit sets `workUnit` and `dept` states immediately before the bootstrap responds, making
+`workUnitShellReady=true` from the first render → header queue pills appear without a cold shell.
 
-**Cold path for truly first-ever session visits** (no workspace bootstrap yet):
-skeleton chips appear once the WU bootstrap responds (≤200ms with pointer-down prewarm). This
-window is documented in the navigation contract and is the only acceptable skeleton window.
+### Why the cache was empty
+
+Two navigation paths existed, each with no pre-seeding:
+
+1. **Workspace root** (`/workspace`) → "Enter Enrollment →" → WU slug route: the workspace root
+   fetches `/api/admin/work-units` (with `queue_definition`) but never wrote to the WU page cache.
+
+2. **Dept workspace** (`/workspace/dept/[id]`) → tile click → WU slug route: the dept bootstrap
+   discards `queue_definition` when mapping rows to `DeptWorkUnitListRow[]`.
+
+### Fix
+
+**Site 1 (Phase 3 — PR #50):** Dept workspace page pre-seeds `CachedWorkUnitPage` entries after
+the dept bootstrap resolves. File: `web/app/adminV2/workspace/dept/[departmentId]/page.tsx`.
+
+**Site 2 (this sprint):** Workspace root page pre-seeds `CachedWorkUnitPage` entries after the
+global WU fetch resolves. File: `web/app/adminV2/workspace/page.tsx`.
+
+Both sites write: `writeWorkUnitPageCache(orgId, principalUserId, accessScopeFingerprint, { departmentId, dept, workUnit: { id, name, key, department_id, queue_definition, metadata } })`.
+
+### Queue pill rendering after cold shell dismissed
+
+Once the cache hits → `workUnitShellReady=true` → `workUnitAboveFold` is built from real data:
+- `queuePillSections` (from `queue_definition.ui.sections`) → all 6 queue pills
+- `computeEqualStagePillGrid` → equal-width horizontal pill grid
+
+The grid has `overflow-x: auto` so all 6 pills are accessible by scrolling. The active pill is
+highlighted via `chip.selected=true`.
+
+### What the "one pill" in the screenshots was
+
+The screenshots captured the cold shell / skeleton state. The "Waitlist" or "Tours Next 7 Days"
+visible in the screenshots is the **QUEUE SECTION LABEL** (the active queue tab below the header),
+not a header navigation pill. The header area was showing `WorkUnitWorkspaceColdShell` (titled
+skeleton with no operational pills), which appears as a large blank rectangle above the queue section.
+
+The pre-seeding fixes eliminate the cold shell for both navigation paths.
 
 ---
 

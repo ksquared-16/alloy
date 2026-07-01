@@ -235,3 +235,39 @@ describe("Skeleton chips: workspace bootstrap pre-seeds WU page cache", () => {
         expect(cacheLib).toContain("writeWorkUnitPageCache");
     });
 });
+
+// ---------------------------------------------------------------------------
+// Workspace root → Work Unit: cold shell avoided for root-page navigation
+// ---------------------------------------------------------------------------
+
+describe("Workspace root bootstrap pre-seeds WU page cache", () => {
+    it("writeWorkUnitPageCache is imported in workspace root page", () => {
+        const src = read("app/adminV2/workspace/page.tsx");
+        expect(src).toContain("writeWorkUnitPageCache");
+    });
+
+    it("workspace root pre-seeds cache after WU fetch resolves", () => {
+        const src = read("app/adminV2/workspace/page.tsx");
+        // Must call writeWorkUnitPageCache with orgId and queue_definition guard
+        expect(src).toContain("writeWorkUnitPageCache(orgId, principalUserId, accessScopeFingerprint");
+        // Must guard: skip WUs without queue_definition
+        const seedBlock = src.slice(
+            src.indexOf("writeWorkUnitPageCache(orgId, principalUserId, accessScopeFingerprint") - 400,
+            src.indexOf("writeWorkUnitPageCache(orgId, principalUserId, accessScopeFingerprint") + 400
+        );
+        expect(seedBlock).toContain("!wu.queue_definition");
+    });
+
+    it("workspace root passes dept identity to WU page cache", () => {
+        const src = read("app/adminV2/workspace/page.tsx");
+        const seedBlock = src.slice(
+            src.indexOf("writeWorkUnitPageCache(orgId, principalUserId, accessScopeFingerprint"),
+            src.indexOf("writeWorkUnitPageCache(orgId, principalUserId, accessScopeFingerprint") + 600
+        );
+        // dept shape: { id, name, key }
+        expect(seedBlock).toContain("dept.id");
+        expect(seedBlock).toContain("dept.name");
+        // queue_definition forwarded from WU row
+        expect(seedBlock).toContain("queue_definition: wu.queue_definition");
+    });
+});
