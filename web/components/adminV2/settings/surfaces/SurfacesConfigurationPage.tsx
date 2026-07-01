@@ -11,7 +11,7 @@ import {
 import FocusPanelSummarySurfaceEditor from "@/components/adminV2/settings/surfaces/FocusPanelSummarySurfaceEditor";
 import OperationalIntelligenceSurfaceBuilder from "@/components/adminV2/settings/surfaces/OperationalIntelligenceSurfaceBuilder";
 import { WorkspaceHeaderSurfaceBuilder, WorkUnitHeaderSurfaceBuilder } from "@/components/adminV2/settings/surfaces/HeaderSurfaceBuilders";
-import QueueRowBuilderV1 from "@/components/adminV2/settings/surfaces/QueueRowBuilderV1";
+import QueueRowBuilderV2 from "@/components/adminV2/settings/surfaces/QueueRowBuilderV2";
 import { SurfaceLibrary } from "@/components/platform/surfaceBuilder/SurfaceLibrary";
 import {
     useSurfacesConfigurationSettings,
@@ -88,7 +88,7 @@ export default function SurfacesConfigurationPage() {
                             ) : selectedObject.editor === "work-unit-header" ? (
                                 <WorkUnitHeaderSurfaceBuilder />
                             ) : selectedObject.editor === "queue-row-builder" ? (
-                                <QueueRowBuilderV1 surfaceId={selectedObject.id} />
+                                <QueueRowBuilderV2 surfaceId={selectedObject.id} />
                             ) : (
                                 <FocusPanelSummarySurfaceEditor />
                             )}
