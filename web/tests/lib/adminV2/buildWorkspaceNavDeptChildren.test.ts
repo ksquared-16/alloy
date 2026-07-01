@@ -88,7 +88,7 @@ describe("buildWorkspaceNavDeptChildren", () => {
         expect(children[0]?.kind).toBe("work_unit");
     });
 
-    it("builds operator slug href for configured pipeline lanes", () => {
+    it("builds operator slug href from workUnitKey, not queueKey, for configured pipeline lanes", () => {
         const child = {
             rowKey: "wu-pipe:new_inquiry",
             label: "New Inquiry",
@@ -97,12 +97,13 @@ describe("buildWorkspaceNavDeptChildren", () => {
             queueKey: "new_inquiry",
             kind: "configured_queue" as const,
         };
+        // All lanes in a process navigate to the same canonical WU URL — not to a queue-keyed route
         expect(workspaceNavChildHref("/workspace", "dept-1", child)).toBe(
-            "/workspace/work-unit/new-inquiry"
+            "/workspace/work-unit/enrollment-pipeline"
         );
     });
 
-    it("marks configured queue child active from slug route", () => {
+    it("marks configured queue child active when workUnitSlug matches the work unit key slug", () => {
         const child = {
             rowKey: "wu-pipe:new_leads",
             label: "New Leads",
@@ -111,33 +112,48 @@ describe("buildWorkspaceNavDeptChildren", () => {
             queueKey: "new_leads",
             kind: "configured_queue" as const,
         };
+        // Active when the URL slug matches the work unit (not the queue key)
         expect(
             isWorkspaceNavChildActive({
                 departmentId: null,
                 workUnitId: null,
-                workUnitSlug: "new-leads",
+                workUnitSlug: "enrollment-pipeline",
                 activeQueueKey: null,
                 child,
                 deptId: "dept-enrollment",
             })
         ).toBe(true);
+        // Not active when on a different work unit's slug
+        expect(
+            isWorkspaceNavChildActive({
+                departmentId: null,
+                workUnitId: null,
+                workUnitSlug: "billing",
+                activeQueueKey: null,
+                child,
+                deptId: "dept-enrollment",
+            })
+        ).toBe(false);
     });
 
-    it("workspaceDeptQueueNavHref with workUnitKey produces canonical /work-unit/[slug] URL", () => {
+    it("workspaceDeptQueueNavHref with workUnitKey produces canonical /work-unit/[workUnitSlug] URL", () => {
         const href = workspaceDeptQueueNavHref("/workspace", "dept-1", "wu-pipe", "new_leads", "enrollment_pipeline");
-        expect(href).toBe("/workspace/work-unit/new-leads");
+        // URL is the work unit slug, never the queue key slug
+        expect(href).toBe("/workspace/work-unit/enrollment-pipeline");
         expect(href).not.toContain("/dept/");
         expect(href).not.toContain("/adminV2/");
+        expect(href).not.toContain("new-leads");
     });
 
-    it("workspaceDeptQueueNavHref falls back to dept-scoped URL only when BOTH queueKey and workUnitKey are absent", () => {
-        // queueKey-only call still produces canonical URL (queueKey IS the slug)
-        const hrefWithQueue = workspaceDeptQueueNavHref("/workspace", "dept-1", "wu-pipe", "new_leads");
-        expect(hrefWithQueue).not.toContain("/dept/");
-        // ID-only (no key at all) → last remaining legacy fallback
+    it("workspaceDeptQueueNavHref falls back to dept-scoped URL when workUnitKey is absent", () => {
+        // queueKey-only (no workUnitKey) → no operator href → dept-scoped fallback with ?queue=
+        const hrefWithQueueOnly = workspaceDeptQueueNavHref("/workspace", "dept-1", "wu-pipe", "new_leads");
+        expect(hrefWithQueueOnly).toContain("/dept/");
+        expect(hrefWithQueueOnly).toContain("queue=new_leads");
+        // ID-only (no key at all) → dept-scoped without queue param
         const hrefIdOnly = workspaceDeptQueueNavHref("/workspace", "dept-1", "wu-pipe", null);
         expect(hrefIdOnly).toContain("/dept/");
-        expect(hrefIdOnly).not.toContain("/work-unit/new-leads");
+        expect(hrefIdOnly).not.toContain("queue=");
     });
 
     it("workspaceDeptQueueNavHref null queueKey with workUnitKey produces /work-unit/[slug] without queue param", () => {

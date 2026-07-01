@@ -82,13 +82,11 @@ export function buildWorkspaceNavDeptChildren(
 }
 
 function operatorNavSlugForChild(child: WorkspaceNavTreeChild): string | null {
-    if (child.queueKey) return workUnitKeyToRouteSlug(child.queueKey);
     if (child.workUnitKey) return workUnitKeyToRouteSlug(child.workUnitKey);
     return null;
 }
 
 export function workspaceNavChildOperatorHref(child: WorkspaceNavTreeChild): string | null {
-    if (child.queueKey) return operatorWorkUnitHrefFromKey(child.queueKey);
     if (child.workUnitKey) return operatorWorkUnitHrefFromKey(child.workUnitKey);
     return null;
 }
