@@ -229,7 +229,6 @@ const FALLBACK_SCHEDULES: ScheduleOption[] = [
 type WorkspaceMode = "edit" | "compare";
 
 export function TuitionGridWorkspace() {
-    const [orgId, setOrgId] = useState<string | null>(null);
     const [locations, setLocations] = useState<ScopedLocation[]>([]);
     const [scope, setScope] = useState<ConfigScope | null>(null);
 
@@ -254,24 +253,21 @@ export function TuitionGridWorkspace() {
         async function boot() {
             setLoading(true);
             try {
-                const [ctxRes, locRes, schedRes] = await Promise.all([
-                    fetch("/api/admin/context"),
+                const [locRes, schedRes] = await Promise.all([
                     fetch("/api/admin/locations"),
                     fetch("/api/admin/option-sets/childcare_schedule_type"),
                 ]);
 
-                const ctxJson = await ctxRes.json();
-                const oid: string = ctxJson.orgId ?? ctxJson.org_id ?? "";
-                setOrgId(oid);
+                const locJson = await locRes.json();
+                const rawLocs: Record<string, unknown>[] = locJson.locations ?? [];
+                // org_id is on every location row (select *); fall back to "org" sentinel
+                const oid: string = String(rawLocs[0]?.org_id ?? "org");
                 setScope({ kind: "org", orgId: oid });
 
-                const locJson = await locRes.json();
-                const locs: ScopedLocation[] = (locJson.locations ?? []).map(
-                    (l: Record<string, unknown>) => ({
-                        id: String(l.id ?? ""),
-                        name: String(l.name ?? ""),
-                    }),
-                );
+                const locs: ScopedLocation[] = rawLocs.map((l) => ({
+                    id: String(l.id ?? ""),
+                    name: String(l.name ?? ""),
+                }));
                 setLocations(locs);
 
                 if (schedRes.ok) {
