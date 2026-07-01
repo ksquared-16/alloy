@@ -37,7 +37,7 @@ export default function BusinessProcessWorkViewsSetupWorkspace({
     return (
         <div className="space-y-3" data-testid="business-process-work-views-workspace">
             <p className="px-1 text-[11px] text-alloy-midnight/45">
-                Work Views define how operators see and filter queue rows. Each view inherits its row grain from the stage — set grain in Stage → Operational Representation.
+                Work Views define the operational lens — which rows operators see, how they are filtered, sorted, and what surface they use. Row type (grain) is set per stage in Stage → Stage Context. Use separate Work Views for stages with different row types.
             </p>
             {error ?
                 <p className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800" role="alert">

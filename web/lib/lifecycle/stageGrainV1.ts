@@ -75,3 +75,25 @@ export function parseSubjectResolutionStrategy(raw: unknown): StageSubjectResolu
     if (typeof raw === "string" && (valid as string[]).includes(raw)) return raw as StageSubjectResolutionStrategy;
     return undefined;
 }
+
+// ── Work View grain consistency ───────────────────────────────────────────────
+
+/**
+ * Validates that all defined stage grains in a flat Work View are identical.
+ * A flat Work View cannot mix grains — each row type produces a different
+ * queue entry shape. Mixed-grain views should be split or use grouped lanes.
+ */
+export function validateWorkViewGrainConsistency(stageGrains: (StageGrain | undefined)[]): {
+    valid: boolean;
+    message?: string;
+} {
+    const defined = stageGrains.filter((g): g is StageGrain => g !== undefined);
+    if (defined.length <= 1) return { valid: true };
+    const unique = new Set(defined);
+    if (unique.size === 1) return { valid: true };
+    return {
+        valid: false,
+        message:
+            "This Work View includes stages with different row types. Create separate Work Views or use grouped lanes.",
+    };
+}

@@ -6,7 +6,6 @@ import StageEditorV2, {
 } from "@/components/adminV2/settings/lifecycle/StageEditorV2";
 import type { LifecycleStageSaveUiState } from "@/components/adminV2/settings/lifecycle/LifecycleStageWorkspace";
 import type { LifecycleStageBootstrapPayload } from "@/lib/lifecycle/lifecycleStageBootstrapTypes";
-import type { StatusRollupV1 } from "@/lib/lifecycle/statusRollupV1";
 import type { LifecycleRequirementEntityKey } from "@/lib/lifecycle/lifecycleFieldRequirementsCatalog";
 import type { LifecycleBuilderStageRecord } from "@/lib/lifecycle/lifecycleBuilderConfig";
 import type { ReactNode } from "react";
@@ -24,7 +23,6 @@ export default function LifecycleStageConfiguration({
     bootstrap,
     bootstrapLoading,
     statusesError,
-    onStatusRollupChange,
     validationSlot: _validationSlot,
     saveState,
     saveError,
@@ -43,7 +41,6 @@ export default function LifecycleStageConfiguration({
     bootstrap: LifecycleStageBootstrapPayload | null;
     bootstrapLoading: boolean;
     statusesError: string | null;
-    onStatusRollupChange: (rollup: StatusRollupV1, flatKeys: string[]) => void;
     validationSlot?: ReactNode;
     readyCheckRefreshKey?: string;
     saveState: LifecycleStageSaveUiState;
@@ -69,7 +66,6 @@ export default function LifecycleStageConfiguration({
                 bootstrap={bootstrap}
                 bootstrapLoading={bootstrapLoading}
                 statusesError={statusesError}
-                onStatusRollupChange={onStatusRollupChange}
                 saveState={saveState}
                 saveError={saveError}
                 onSaveStage={onSaveStage}

@@ -23,30 +23,17 @@ import {
     User,
     Building2,
     Package,
-    ExternalLink,
 } from "lucide-react";
-import LifecycleStageQueueMembershipEditor, {
-    type LifecycleStageQueueMembershipEditorHandle,
-} from "@/components/adminV2/settings/lifecycle/LifecycleStageQueueMembershipEditor";
-import LifecycleStageStatusRollupEditor, {
-    type LifecycleStageStatusRollupEditorHandle,
-} from "@/components/adminV2/settings/lifecycle/LifecycleStageStatusRollupEditor";
 import LifecycleStageFieldRequirementsEditor, {
     type LifecycleStageFieldRequirementsEditorHandle,
 } from "@/components/adminV2/settings/LifecycleStageFieldRequirementsEditor";
 import LifecycleStageOperatingPlanEditor, {
     type LifecycleStageOperatingPlanEditorHandle,
 } from "@/components/adminV2/settings/lifecycle/LifecycleStageOperatingPlanEditor";
-import LifecycleStageLayoutAssignmentsCard from "@/components/adminV2/settings/lifecycle/LifecycleStageLayoutAssignmentsCard";
 import type { LifecycleStageBootstrapPayload } from "@/lib/lifecycle/lifecycleStageBootstrapTypes";
 import type { StatusRollupV1 } from "@/lib/lifecycle/statusRollupV1";
 import type { LifecycleStageFieldRulesStored } from "@/lib/lifecycle/lifecycleStageRequirementLevels";
 import type { LifecycleRequirementEntityKey } from "@/lib/lifecycle/lifecycleFieldRequirementsCatalog";
-import {
-    queueMembershipSubjectForStatusOptions,
-    statusEntityTypeForSubject,
-    statusesSettingsHrefForEntity,
-} from "@/lib/lifecycle/stageStatusRollup";
 import {
     GRAIN_LABELS,
     GRAIN_DESCRIPTIONS,
@@ -547,7 +534,6 @@ export default function StageEditorV2({
     bootstrapLoading,
     entityDisplayLabels,
     statusesError,
-    onStatusRollupChange,
     saveState,
     saveError,
     onSaveStage,
@@ -565,7 +551,6 @@ export default function StageEditorV2({
     bootstrapLoading: boolean;
     entityDisplayLabels?: Partial<Record<LifecycleRequirementEntityKey, string>>;
     statusesError: string | null;
-    onStatusRollupChange: (rollup: StatusRollupV1, flatKeys: string[]) => void;
     saveState: LifecycleStageSaveUiState;
     saveError: string | null;
     onSaveStage: () => void | Promise<void>;
@@ -575,14 +560,10 @@ export default function StageEditorV2({
 }) {
     // ── Sub-editor refs ──
     const fieldReqRef = useRef<LifecycleStageFieldRequirementsEditorHandle | null>(null);
-    const membershipRef = useRef<LifecycleStageQueueMembershipEditorHandle | null>(null);
-    const rollupRef = useRef<LifecycleStageStatusRollupEditorHandle | null>(null);
     const operatingPlanRef = useRef<LifecycleStageOperatingPlanEditorHandle | null>(null);
 
     // ── Sub-editor dirty states ──
     const [fieldDirty, setFieldDirty] = useState(false);
-    const [membershipDirty, setMembershipDirty] = useState(false);
-    const [rollupDirty, setRollupDirty] = useState(false);
     const [operatingPlanDirty, setOperatingPlanDirty] = useState(false);
 
     // ── V2 field state ──
@@ -628,7 +609,7 @@ export default function StageEditorV2({
         operatorGuidance !== savedV2.operatorGuidance ||
         subjectResolution !== savedV2.subjectResolution;
 
-    const isDirty = fieldDirty || membershipDirty || rollupDirty || operatingPlanDirty || v2Dirty;
+    const isDirty = fieldDirty || operatingPlanDirty || v2Dirty;
 
     useEffect(() => {
         onDirtyChange?.(isDirty);
@@ -675,10 +656,11 @@ export default function StageEditorV2({
         getFieldDraftRules: () => fieldReqRef.current?.getDraftRules() ?? null,
         isFieldDirty: () => fieldReqRef.current?.isDirty() ?? false,
         getQueueDisplayName: () => null,
-        getQueueMembershipDraft: () => membershipRef.current?.getDraftMembership() ?? null,
-        isQueueMembershipDirty: () => membershipRef.current?.isDirty() ?? false,
-        getStatusRollupDraft: () => rollupRef.current?.getDraftRollup() ?? null,
-        isStatusRollupDirty: () => rollupRef.current?.isDirty() ?? false,
+        // Queue membership and status rollup are now configured via Work Views, not stage editor.
+        getQueueMembershipDraft: () => null,
+        isQueueMembershipDirty: () => false,
+        getStatusRollupDraft: () => null,
+        isStatusRollupDirty: () => false,
         getStageOperatingPlanDraft: () => operatingPlanRef.current?.getDraftPlan() ?? null,
         isStageOperatingPlanDirty: () => operatingPlanRef.current?.isDirty() ?? false,
         getV2Draft: () => ({
@@ -703,20 +685,13 @@ export default function StageEditorV2({
     const saveDisabled =
         !stageKey.trim() || effectiveSaveState === "saving" || (!isDirty && effectiveSaveState !== "error");
 
-    const statusSubjectType = queueMembershipSubjectForStatusOptions({
-        stageKey,
-        trackKey: bootstrap?.stage_track_key ?? null,
-        queueMembership: bootstrap?.queue_membership ?? null,
-    });
-    const statusesSettingsHref = statusesSettingsHrefForEntity(statusEntityTypeForSubject(statusSubjectType));
-
     const outcomeCount = bootstrap?.stage_operating_plan?.outcomes?.length ?? 0;
 
     // ── Section completion status ──
     const sectionStatus: Record<string, SectionStatus> = {
         identity: purpose.trim() || description.trim() ? "configured" : "optional",
-        representation: !grain ? "missing" : bootstrap?.queue_membership || bootstrap?.status_rollup_v1 ? "configured" : "incomplete",
-        experience: candidateActions.length > 0 || operatorGuidance.trim() || bootstrap?.stage_operating_plan?.outcomes?.length ? "configured" : "optional",
+        representation: grain ? "configured" : "missing",
+        experience: operatorGuidance.trim() || bootstrap?.stage_operating_plan?.outcomes?.length ? "configured" : "optional",
         requirements: bootstrap?.field_requirements ? "configured" : "optional",
         outcomes: outcomeCount > 0 ? "configured" : "optional",
     };
@@ -808,21 +783,22 @@ export default function StageEditorV2({
                     </Field>
                 </Section>
 
-                {/* ── Section 2: Operational Representation ── */}
+                {/* ── Section 2: Stage Context ── */}
                 <Section
                     id="representation"
                     icon={<Layers size={13} />}
-                    title="Operational Representation"
+                    title="Stage Context"
                     status={sectionStatus.representation}
                     collapsed={!!collapsed.representation}
                     onToggle={() => toggleSection("representation")}
                 >
-                    {/* 2a — Grain */}
-                    <Field label="Stage grain">
+                    {/* Grain — the single authoritative setting for what one unit of work represents */}
+                    <Field label="Row type (grain)">
                         <GrainSelector value={grain} onChange={setGrain} />
                         {grain ? <GrainImpactCallout grain={grain} /> : null}
                         <p className="mt-3 text-[11px] text-alloy-midnight/50">
-                            Stage grain sets the default subject for this stage. Work Views use this grain to create queue rows — one row per {grain ? <span className="font-medium text-alloy-midnight/70">{GRAIN_LABELS[grain].toLowerCase()}</span> : "unit of the selected grain"}.
+                            Stage grain is the authoritative row type for this stage. Work Views and surfaces use this grain — one queue row per <span className="font-medium text-alloy-midnight/70">{grain ? GRAIN_LABELS[grain].toLowerCase() : "unit of the selected type"}</span>.{" "}
+                            Surface layout and filters are configured in <span className="font-medium text-alloy-midnight/70">Work Views</span>.
                         </p>
                     </Field>
 
@@ -830,67 +806,6 @@ export default function StageEditorV2({
                         <Field label="When multiple children are eligible…">
                             <SubjectResolutionField value={subjectResolution} onChange={setSubjectResolution} />
                         </Field>
-                    ) : null}
-
-                    {stageKey.trim() ? (
-                        <>
-                            {/* 2b — Work View membership criteria (advanced, collapsed) */}
-                            <CollapsibleSubsection
-                                label="Work View membership criteria"
-                                description="Work Views for this stage show records that match these criteria. Records enter when their status is included; they exit automatically when it changes. Grain is inherited from stage grain above."
-                            >
-                                <LifecycleStageQueueMembershipEditor
-                                    ref={membershipRef}
-                                    departmentId={departmentId}
-                                    stageKey={stageKey}
-                                    savedMembership={bootstrap?.queue_membership ?? null}
-                                    onDirtyChange={setMembershipDirty}
-                                />
-
-                                <div className="mt-4 border-t border-alloy-forge/8 pt-4">
-                                    <p className="mb-1 text-[11px] font-semibold uppercase tracking-wider text-alloy-midnight/45">
-                                        Included statuses
-                                    </p>
-                                    <p className="mb-2 text-[11px] text-alloy-midnight/40">
-                                        A record appears in Work Views for this stage when its status matches one of these.
-                                    </p>
-                                    <LifecycleStageStatusRollupEditor
-                                        editorRef={rollupRef}
-                                        catalog={bootstrap?.status_category_catalog ?? []}
-                                        savedRollup={bootstrap?.status_rollup_v1 ?? null}
-                                        statusesSettingsHref={statusesSettingsHref}
-                                        onRollupChange={(rollup) => {
-                                            setRollupDirty(rollupRef.current?.isDirty() ?? true);
-                                            onStatusRollupChange(
-                                                rollup,
-                                                rollup.categories.flatMap((c) => c.selected_status_keys),
-                                            );
-                                        }}
-                                    />
-                                </div>
-                            </CollapsibleSubsection>
-
-                            {/* 2c — Surface assignments */}
-                            <Subsection
-                                label="Surface assignments — how subjects are displayed"
-                                description="Assign published surfaces to the queue row and Focus Panel for this stage. Missing assignments inherit from the process default."
-                            >
-                                <div className="mb-3">
-                                    <a
-                                        href="/settings/surfaces"
-                                        className="inline-flex items-center gap-1 text-[11px] font-medium text-alloy-pine hover:underline"
-                                    >
-                                        Design surfaces in Settings → Surfaces
-                                        <ExternalLink size={10} />
-                                    </a>
-                                </div>
-                                <LifecycleStageLayoutAssignmentsCard
-                                    businessProcessKey={businessProcessKey}
-                                    stageKey={stageKey}
-                                    stageLabel={stageLabel}
-                                />
-                            </Subsection>
-                        </>
                     ) : null}
                 </Section>
 

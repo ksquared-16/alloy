@@ -1768,7 +1768,6 @@ export default function LifecycleActivationBoard({
                                     bootstrap={stageBootstrap}
                                     bootstrapLoading={stageBootstrapLoading}
                                     statusesError={statusesError}
-                                    onStatusRollupChange={onStatusRollupChange}
                                     saveState={stageSaveState}
                                     saveError={stageSaveError}
                                     onSaveStage={saveStageUnified}

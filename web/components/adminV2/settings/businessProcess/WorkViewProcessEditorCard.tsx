@@ -237,9 +237,12 @@ export default function WorkViewProcessEditorCard({
                     onOpenChange={(isOpen) => setSectionOpen("presentation", isOpen)}
                     testId="work-view-section-presentation"
                 >
+                    <p className="mb-3 text-[11px] text-alloy-midnight/45">
+                        Choose surfaces for this Work View. Row type (grain) is inherited from the stage — use Work Views with matching grain for consistent queue rows.
+                    </p>
                     <div className="grid gap-2" data-testid={`process-work-view-presentation-${view.id}`}>
                         <LayoutAssignmentCard
-                            title="Queue layout"
+                            title="Queue row surface"
                             subtitle="Work list presentation for this view."
                             selectedId={view.queue_layout_id ?? ""}
                             assignedRecord={queueRecord}
