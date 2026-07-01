@@ -66,7 +66,7 @@ function partitionRecordSections(sections: RecordSectionVm[]) {
 }
 
 /**
- * Record — final drill level: shared workspace pattern (see docs/WORKSPACE_SYSTEM_V1.md).
+ * Record — final drill level: shared workspace pattern (see docs/implementation/WORKSPACE_SYSTEM_V1.md).
  * Left = understanding (body + entity/interaction context). Right = actions only (command rail).
  */
 export default function RecordWorkspace({ model, onAction }: Props) {

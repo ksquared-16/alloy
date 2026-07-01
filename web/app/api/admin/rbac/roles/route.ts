@@ -1,22 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
-import { getAdminContext } from "@/lib/admin/getAdminContext";
+import { requirePortalOrUsersRolesManageAuth, requireUsersRolesManageAuth } from "@/lib/admin/canManageUsersAndRoles";
+import { mergeRoleDefinitionsWithDefaults, type RoleDefinitionRow } from "@/lib/admin/defaultRoleDefinitions";
 
-/** GET: list roles for org. Admin + ops can read. */
+/** GET: list roles for org. Portal (admin/ops) or Users & Roles managers. */
 export async function GET() {
-    const ctx = await getAdminContext();
-    if (!ctx.ok) {
-        return NextResponse.json(
-            { error: ctx.status === 401 ? "Unauthorized" : "Forbidden" },
-            { status: ctx.status }
-        );
-    }
+    const auth = await requirePortalOrUsersRolesManageAuth();
+    if (!auth.ok) return auth.response;
+    const { orgId } = auth.access;
 
     const supabase = createAdminClient();
     const { data: rows, error } = await supabase
         .from("role_definitions")
         .select("role_key, role_label, is_system, is_active, created_at")
-        .eq("org_id", ctx.orgId)
+        .eq("org_id", orgId)
         .order("is_system", { ascending: false })
         .order("role_label", { ascending: true });
 
@@ -24,29 +21,23 @@ export async function GET() {
         return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
-    const roles = (rows ?? []).map((r) => ({
+    const rolesRaw: RoleDefinitionRow[] = (rows ?? []).map((r) => ({
         role_key: (r as { role_key: string }).role_key,
         role_label: (r as { role_label: string }).role_label,
         is_system: (r as { is_system: boolean }).is_system,
         is_active: (r as { is_active: boolean }).is_active,
         created_at: (r as { created_at?: string }).created_at ?? null,
     }));
+    const roles = mergeRoleDefinitionsWithDefaults(rolesRaw);
 
     return NextResponse.json({ roles });
 }
 
-/** POST: create role. Admin only. */
+/** POST: create role. Requires org admin or `settings.users_roles` permission. */
 export async function POST(request: NextRequest) {
-    const ctx = await getAdminContext();
-    if (!ctx.ok) {
-        return NextResponse.json(
-            { error: ctx.status === 401 ? "Unauthorized" : "Forbidden" },
-            { status: ctx.status }
-        );
-    }
-    if (ctx.role !== "admin") {
-        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
+    const auth = await requireUsersRolesManageAuth();
+    if (!auth.ok) return auth.response;
+    const { orgId } = auth.access;
 
     let body: { role_key?: string; role_label?: string } = {};
     try {
@@ -71,7 +62,7 @@ export async function POST(request: NextRequest) {
     const { data: existing } = await supabase
         .from("role_definitions")
         .select("role_key")
-        .eq("org_id", ctx.orgId)
+        .eq("org_id", orgId)
         .eq("role_key", role_key)
         .maybeSingle();
 
@@ -82,7 +73,7 @@ export async function POST(request: NextRequest) {
     const { data: created, error } = await supabase
         .from("role_definitions")
         .insert({
-            org_id: ctx.orgId,
+            org_id: orgId,
             role_key,
             role_label,
             is_system: false,

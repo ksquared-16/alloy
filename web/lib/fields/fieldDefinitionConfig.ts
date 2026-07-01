@@ -1,14 +1,32 @@
 /**
- * Validation for field_definitions.config (select / multiselect options and catalog refs).
+ * Validation for field_definitions.config (select / multiselect options, catalog refs, placement sources).
  */
+
+import { isSelectLikeFieldType } from "@/lib/admin/fieldDefinitionOptionSetConfig";
 
 export const ALLOWED_CATALOG_KEYS = ["home_types", "pricing_sqft_tiers"] as const;
 export type CatalogKey = (typeof ALLOWED_CATALOG_KEYS)[number];
+
+export const PLACEMENT_OPTION_SOURCES = [
+    "locations",
+    "programs_for_location",
+    "rooms_for_location_program",
+    "option_set",
+] as const;
+
+export type PlacementOptionSource = (typeof PLACEMENT_OPTION_SOURCES)[number];
+
+export const ENTITY_REFERENCE_STORAGE_CLASSES = ["native_column", "field_values", "computed"] as const;
+export type EntityReferenceStorageClass = (typeof ENTITY_REFERENCE_STORAGE_CLASSES)[number];
 
 export type FieldOption = { value: string; label: string };
 
 export function isCatalogKey(s: string): s is CatalogKey {
     return (ALLOWED_CATALOG_KEYS as readonly string[]).includes(s);
+}
+
+export function isPlacementOptionSource(s: string): s is PlacementOptionSource {
+    return (PLACEMENT_OPTION_SOURCES as readonly string[]).includes(s as PlacementOptionSource);
 }
 
 function isOptionRow(x: unknown): x is FieldOption {
@@ -17,7 +35,56 @@ function isOptionRow(x: unknown): x is FieldOption {
     return typeof o.value === "string" && o.value.trim() !== "" && typeof o.label === "string";
 }
 
-/** Validate config for select / multiselect: require options array or catalog_key. */
+function readConfigObject(config: unknown | null | undefined): Record<string, unknown> | null {
+    if (config == null) return {};
+    if (Array.isArray(config)) return null;
+    if (typeof config !== "object") return null;
+    return config as Record<string, unknown>;
+}
+
+/** Validate entity_reference metadata when config.field_kind = entity_reference. */
+export function validateEntityReferenceConfig(
+    config: unknown | null | undefined
+): { ok: true } | { ok: false; error: string } {
+    const obj = readConfigObject(config);
+    if (obj == null) {
+        return { ok: false, error: "entity_reference requires an object config" };
+    }
+
+    const fieldKind = typeof obj.field_kind === "string" ? obj.field_kind.trim() : "";
+    if (fieldKind !== "entity_reference") return { ok: true };
+
+    const targetEntityType = typeof obj.target_entity_type === "string" ? obj.target_entity_type.trim() : "";
+    if (!targetEntityType) {
+        return { ok: false, error: "entity_reference requires config.target_entity_type" };
+    }
+
+    const storageClass = typeof obj.storage_class === "string" ? obj.storage_class.trim() : "";
+    if (!storageClass) {
+        return { ok: false, error: "entity_reference requires config.storage_class" };
+    }
+    if (!(ENTITY_REFERENCE_STORAGE_CLASSES as readonly string[]).includes(storageClass)) {
+        return {
+            ok: false,
+            error: `entity_reference storage_class must be one of: ${ENTITY_REFERENCE_STORAGE_CLASSES.join(", ")}`,
+        };
+    }
+
+    if (storageClass === "native_column") {
+        const storageTable = typeof obj.storage_table === "string" ? obj.storage_table.trim() : "";
+        const storageColumn = typeof obj.storage_column === "string" ? obj.storage_column.trim() : "";
+        if (!storageTable || !storageColumn) {
+            return {
+                ok: false,
+                error: "native_column entity_reference requires config.storage_table and config.storage_column",
+            };
+        }
+    }
+
+    return { ok: true };
+}
+
+/** Validate config for select / multiselect: options, catalog_key, option_set_key, or placement option_source. */
 export function validateSelectLikeConfig(
     fieldType: string,
     config: unknown | null | undefined
@@ -32,7 +99,8 @@ export function validateSelectLikeConfig(
         if (c.length === 0) {
             return {
                 ok: false,
-                error: "select/multiselect requires a non-empty options array or config.catalog_key",
+                error:
+                    "select/multiselect requires a non-empty options array, config.option_set_key, config.catalog_key, or config.option_source",
             };
         }
         for (const row of c) {
@@ -43,11 +111,14 @@ export function validateSelectLikeConfig(
         return { ok: true };
     }
 
-    if (typeof c !== "object" || c === null) {
+    const obj = readConfigObject(c);
+    if (obj == null) {
         return { ok: false, error: "select/multiselect requires an object or array config" };
     }
 
-    const obj = c as Record<string, unknown>;
+    const entityRefCheck = validateEntityReferenceConfig(obj);
+    if (!entityRefCheck.ok) return entityRefCheck;
+
     const optionSetKey = typeof obj.option_set_key === "string" ? obj.option_set_key.trim() : "";
     if (optionSetKey) {
         return { ok: true };
@@ -64,11 +135,23 @@ export function validateSelectLikeConfig(
         return { ok: true };
     }
 
+    const optionSource = typeof obj.option_source === "string" ? obj.option_source.trim() : "";
+    if (optionSource) {
+        if (!isPlacementOptionSource(optionSource)) {
+            return {
+                ok: false,
+                error: `config.option_source must be one of: ${PLACEMENT_OPTION_SOURCES.join(", ")}`,
+            };
+        }
+        return { ok: true };
+    }
+
     const raw = obj.options;
     if (!Array.isArray(raw) || raw.length === 0) {
         return {
             ok: false,
-            error: "select/multiselect requires config.options, config.option_set_key, or config.catalog_key",
+            error:
+                "select/multiselect requires config.options, config.option_set_key, config.catalog_key, or config.option_source",
         };
     }
     for (const row of raw) {
@@ -77,6 +160,45 @@ export function validateSelectLikeConfig(
         }
     }
     return { ok: true };
+}
+
+function readConfigRecord(config: unknown | null | undefined): Record<string, unknown> {
+    if (config != null && typeof config === "object" && !Array.isArray(config)) {
+        return { ...(config as Record<string, unknown>) };
+    }
+    return {};
+}
+
+/** Merge stored field_definitions.config with a PATCH/create payload. */
+export function mergeFieldDefinitionConfigForWrite(
+    existing: unknown | null | undefined,
+    incoming: unknown | null | undefined,
+): Record<string, unknown> {
+    return {
+        ...readConfigRecord(existing),
+        ...readConfigRecord(incoming),
+    };
+}
+
+/** True when config uses placement option_source or native entity_reference metadata. */
+export function isConfigurableReferenceOrPlacementConfig(
+    config: unknown | null | undefined,
+): boolean {
+    const obj = readConfigRecord(config);
+    const optionSource = typeof obj.option_source === "string" ? obj.option_source.trim() : "";
+    if (optionSource) return true;
+    return obj.field_kind === "entity_reference";
+}
+
+/** Whether a select-like PATCH should include config (vs label-only omit). */
+export function shouldIncludeConfigOnFieldDefinitionPatch(args: {
+    fieldType: string;
+    existingConfig: unknown | null | undefined;
+    optionSetKey: string;
+}): boolean {
+    if (!isSelectLikeFieldType(args.fieldType)) return false;
+    if (args.optionSetKey.trim()) return true;
+    return !isConfigurableReferenceOrPlacementConfig(args.existingConfig);
 }
 
 /**

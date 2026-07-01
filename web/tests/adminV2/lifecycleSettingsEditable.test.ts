@@ -1,0 +1,54 @@
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
+import { describe, expect, it } from "vitest";
+
+const root = resolve(__dirname, "../..");
+
+function read(rel: string): string {
+    return readFileSync(resolve(root, rel), "utf8");
+}
+
+describe("editable lifecycle settings", () => {
+    it("settings index uses Business Processes title and editable mode", () => {
+        const page = read("app/adminV2/settings/page.tsx");
+        expect(page).toContain('title="Business Processes"');
+        expect(page).toMatch(/title="Business Processes"[\s\S]*mode="editable"/);
+        expect(page).not.toContain("Lifecycle stages & requirements");
+    });
+
+    it("settings index uses Title Case for key tiles", () => {
+        const page = read("app/adminV2/settings/page.tsx");
+        expect(page).toContain('title="Work Units & Queues"');
+        expect(page).toContain('title="Action Buttons"');
+        expect(page).toContain('title="Layouts"');
+        expect(page).toContain('title="Forms & Packets"');
+        expect(page).toContain('label="Operations"');
+    });
+
+    it("business-processes page title is Business Processes with compact shell", () => {
+        const page = read("app/adminV2/settings/business-processes/page.tsx");
+        expect(page).toContain("BUSINESS_PROCESS_SETTINGS_PAGE_TITLE");
+        expect(page).toContain("settings-business-processes-page");
+        expect(page).toContain("SETTINGS_PAGE_SHELL_COMPACT_CLASS");
+    });
+
+    it("hub renders field-level editor and save/reset", () => {
+        const hub = read("components/adminV2/settings/LifecycleStagesRequirementsHub.tsx");
+        const editor = read("components/adminV2/settings/LifecycleStageFieldRequirementsEditor.tsx");
+        expect(hub).toContain("LifecycleStageFieldRequirementsEditor");
+        expect(editor).toContain("lifecycle-settings-save");
+        expect(editor).toContain("lifecycle-settings-reset-stage");
+        expect(editor).toContain("lifecycle-field-level-");
+        expect(editor).toContain("field_rules");
+        expect(editor).toContain("/lifecycle-requirements");
+    });
+
+    it("lifecycle requirements API route supports field_rules GET and PATCH", () => {
+        const route = read("app/api/admin/departments/[departmentId]/lifecycle-requirements/route.ts");
+        expect(route).toContain("export async function GET");
+        expect(route).toContain("export async function PATCH");
+        expect(route).toContain("reset_stage");
+        expect(route).toContain("buildLifecycleFieldRulesOverridePatch");
+        expect(route).toContain("mergeLifecycleFieldPaletteForBuilderStage");
+    });
+});

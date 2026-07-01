@@ -59,7 +59,6 @@ export default function CompanyWorkspace({ model, onAction }: Props) {
   const hasTopStack = hasBrief || hasSignals || hasAwareness;
   const hasControlDeck = hasTopStack || hasKpis;
   const focusLabel = (model.focusLabel ?? "Company focus").trim();
-  const allDepartments = [...model.primaryDepartments, ...model.secondaryDepartments];
 
   return (
     <div
@@ -119,8 +118,11 @@ export default function CompanyWorkspace({ model, onAction }: Props) {
 
             <section className="adminv2-ws-company-v2-main" aria-label="Departments">
               <div className="adminv2-ws-company-v2-dept-grid">
-                {allDepartments.map((c) => (
-                  <CompanyDepartmentRollupCard key={c.id} card={c} onAction={onAction} />
+                {model.primaryDepartments.map((c) => (
+                  <CompanyDepartmentRollupCard key={c.id} card={c} tier="primary" onAction={onAction} />
+                ))}
+                {model.secondaryDepartments.map((c) => (
+                  <CompanyDepartmentRollupCard key={c.id} card={c} tier="secondary" onAction={onAction} />
                 ))}
               </div>
             </section>

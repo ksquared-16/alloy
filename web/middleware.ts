@@ -5,42 +5,52 @@ import {
     getSupabaseUrlForAuth,
     warnIfAuthSupabaseUrlMismatch,
 } from "@/lib/supabase/auth-env";
-
-// Allowed admin path prefixes (same as nav: dashboard, jobs, contacts, customers, vendors, etc.).
-// Unknown /admin paths redirect to dashboard instead of 404.
-const ADMIN_PATH_PREFIXES = [
-    "/admin",
-    /** Next-gen admin UI (App Router) — must be allowlisted or middleware redirects to /admin/dashboard */
-    "/adminV2",
-    "/adminv2",
-    "/admin/dashboard",
-    "/admin/opportunities",
-    "/admin/jobs",
-    "/admin/schedules",
-    "/admin/customers",
-    "/admin/contacts",
-    "/admin/vendors",
-    "/admin/contractors",
-    "/admin/discounts",
-    "/admin/discount-redemptions",
-    "/admin/subscriptions",
-    "/admin/verticals",
-    "/admin/workflows",
-    "/admin/messaging",
-    "/admin/settings",
-    "/admin/users",
-];
-
-function isAllowedAdminPath(pathname: string): boolean {
-    return ADMIN_PATH_PREFIXES.some(
-        (prefix) => pathname === prefix || pathname.startsWith(prefix + "/")
-    );
-}
+import {
+    isOperatorAdminPath,
+    legacyAdminRedirectTarget,
+    normalizeTransitionalAdminPath,
+} from "@/lib/admin/canonicalAdminRoutes";
+import {
+    isSettingsCompatibilityPath,
+    operatorLoginRedirectPath,
+    requiresOperatorSession,
+} from "@/lib/admin/operatorSessionGate";
 
 let didWarnAuthUrlMismatch = false;
 
 export async function middleware(request: NextRequest) {
     const pathname = request.nextUrl.pathname;
+
+    /**
+     * Provider delivery webhooks (Twilio SMS status callbacks, Resend lifecycle) are intentionally
+     * **public HTTPS endpoints**. They MUST NOT rely on Alloy admin/session auth at the edge.
+     */
+    if (
+        pathname === "/api/webhooks/twilio/sms-status" ||
+        pathname === "/api/webhooks/resend"
+    ) {
+        return NextResponse.next();
+    }
+
+    /** Phase H1: legacy `/admin/*` bookmarks → `/legacy-admin/*` before canonical rewrites. */
+    const legacyTarget = legacyAdminRedirectTarget(pathname);
+    if (legacyTarget) {
+        const url = request.nextUrl.clone();
+        url.pathname = legacyTarget;
+        const res = NextResponse.redirect(url);
+        res.headers.set("x-alloy-admin-mw", `legacy-redirect:${legacyTarget}`);
+        return res;
+    }
+
+    /** Phase H1: `/adminV2`, `/admin/v2` → canonical `/admin`. */
+    const transitionalTarget = normalizeTransitionalAdminPath(pathname);
+    if (transitionalTarget && transitionalTarget !== pathname) {
+        const url = request.nextUrl.clone();
+        url.pathname = transitionalTarget;
+        const res = NextResponse.redirect(url);
+        res.headers.set("x-alloy-admin-mw", `canonical-redirect:${transitionalTarget}`);
+        return res;
+    }
 
     let response = NextResponse.next({
         request: {
@@ -52,7 +62,7 @@ export async function middleware(request: NextRequest) {
     const supabaseAnonKey = getSupabaseAnonKeyForAuth();
 
     if (!supabaseUrl || !supabaseAnonKey) {
-        if (pathname.startsWith("/admin")) {
+        if (requiresOperatorSession(pathname) || isSettingsCompatibilityPath(pathname)) {
             console.error(
                 "[MIDDLEWARE] Missing Supabase environment variables. Set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY (or SUPABASE_URL / SUPABASE_ANON_KEY)."
             );
@@ -93,18 +103,12 @@ export async function middleware(request: NextRequest) {
         data: { user },
     } = await supabase.auth.getUser();
 
-    if (!pathname.startsWith("/admin")) {
+    if (!requiresOperatorSession(pathname)) {
         return response;
     }
 
-    if (!isAllowedAdminPath(pathname)) {
-        const res = NextResponse.redirect(new URL("/admin/dashboard", request.url));
-        res.headers.set("x-alloy-admin-mw", "blocked");
-        return res;
-    }
-
     if (!user) {
-        const res = NextResponse.redirect(new URL("/login", request.url));
+        const res = NextResponse.redirect(new URL(operatorLoginRedirectPath(), request.url));
         res.headers.set("x-alloy-admin-mw", "redirect:/login");
         return res;
     }
@@ -115,10 +119,6 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
     matcher: [
-        /*
-         * Run on all non-static routes so getUser() can refresh the session and
-         * write cookies — matches Supabase Next.js SSR guidance.
-         */
         "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
     ],
 };

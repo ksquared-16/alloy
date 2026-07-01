@@ -1,13 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { requireAdmin } from "@/lib/adminAuth";
-import { adminContextFailureResponse, getAdminContext } from "@/lib/admin/getAdminContext";
+import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
 
-const WORKFLOW_CREATE_KEYS = ["name", "description", "event_type", "entity_type", "enabled"] as const;
+const WORKFLOW_CREATE_KEYS = ["name", "description", "event_type", "entity_type", "enabled", "metadata"] as const;
 
 /** GET: list workflows for caller org (admin + ops). */
 export async function GET() {
-    const ctx = await getAdminContext();
+    const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);
     try {
         const supabase = createAdminClient();
@@ -27,7 +27,7 @@ export async function GET() {
 export async function POST(request: NextRequest) {
     const forbidden = await requireAdmin();
     if (forbidden) return forbidden;
-    const ctx = await getAdminContext();
+    const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);
     try {
         const supabase = createAdminClient();

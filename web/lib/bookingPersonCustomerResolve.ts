@@ -20,12 +20,15 @@ export async function ensureCustomerForPersonNative(
     supabase: SupabaseClient,
     personId: string,
     params: {
-        vertical_id: string;
+        /** Optional — customers.vertical_id is nullable; omit when org has no vertical configured. */
+        vertical_id?: string | null;
         org_id: string | null;
         first_name?: string | null;
         last_name?: string | null;
         email?: string | null;
         phone?: string | null;
+        /** Household-oriented customer name (e.g. `{LastName} Family`). */
+        household_name?: string | null;
     }
 ): Promise<{ customer_id: string }> {
     const trimmed = personId.trim();
@@ -62,15 +65,18 @@ export async function ensureCustomerForPersonNative(
     }
 
     const name =
-        [params.first_name ?? p.first_name, params.last_name ?? p.last_name].filter(Boolean).join(" ").trim()
+        (params.household_name ?? "").trim()
+        || [params.first_name ?? p.first_name, params.last_name ?? p.last_name].filter(Boolean).join(" ").trim()
         || (params.email ?? p.email)
         || (params.phone ?? p.phone)
         || "New Customer";
 
     const payload: Record<string, unknown> = {
         name,
-        status: "active",
-        vertical_id: params.vertical_id,
+        // Canonical household/account status lives on customers.status_key (statusCategoryRegistry
+        // authoritative col). The legacy customers.status column was dropped from the live schema —
+        // writing it triggers PGRST204. Do NOT reintroduce `status` here.
+        status_key: "active",
         metadata: {
             source: "book-v2-person-native",
             email: params.email ?? p.email ?? undefined,
@@ -78,6 +84,8 @@ export async function ensureCustomerForPersonNative(
         },
         org_id: orgId,
     };
+    const verticalId = params.vertical_id?.trim() || null;
+    if (verticalId) payload.vertical_id = verticalId;
 
     const { data: newCustomer, error: insErr } = await supabase.from("customers").insert(payload).select("id").single();
     if (insErr || !newCustomer) {

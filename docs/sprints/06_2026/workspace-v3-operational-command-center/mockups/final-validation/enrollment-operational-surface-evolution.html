@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=1440" />
+  <title>Enrollment Operational Surface — Final UX Validation</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, sans-serif;
+      background: #f4f6f8;
+      color: #1b1b27;
+      width: 1440px;
+      min-height: 960px;
+    }
+    .shell { display: grid; grid-template-columns: 56px 1fr 320px; min-height: 960px; }
+    .sidebar {
+      background: #1a2332;
+      display: flex; flex-direction: column; align-items: center;
+      padding: 12px 0; gap: 8px;
+    }
+    .sidebar-icon {
+      width: 36px; height: 36px; border-radius: 8px;
+      display: flex; align-items: center; justify-content: center;
+      color: #94a3b8; font-size: 14px;
+    }
+    .sidebar-icon.active { background: rgba(0,162,131,0.15); color: #00a283; box-shadow: inset 3px 0 0 #00a283; }
+    .badge { position: absolute; top: -2px; right: -2px; background: #f59e0b; color: #fff; font-size: 9px; font-weight: 700; border-radius: 999px; padding: 1px 4px; }
+    .header {
+      grid-column: 2 / 4;
+      background: #1a2332;
+      height: 48px;
+      display: flex; align-items: center; padding: 0 16px; gap: 12px;
+      color: #cbd5e1; font-size: 13px;
+    }
+    .header-search {
+      flex: 1; max-width: 480px; margin: 0 auto;
+      background: rgba(255,255,255,0.08); border-radius: 8px;
+      padding: 8px 12px; color: #64748b; font-size: 13px;
+    }
+    .main-wrap { display: contents; }
+    .primary {
+      padding: 20px 24px 24px;
+      background: #f4f6f8;
+    }
+    .rail {
+      background: #fff;
+      border-left: 1px solid #e5e9ef;
+      padding: 12px;
+      font-size: 12px;
+    }
+    .org-title { font-size: 18px; font-weight: 600; color: #1b1b27; margin-bottom: 12px; }
+    .health-row { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
+    .health-chip {
+      background: #fff; border: 1px solid #e5e9ef; border-radius: 8px;
+      padding: 8px 12px; font-size: 11px; font-weight: 600;
+      display: flex; align-items: center; gap: 8px;
+    }
+    .status { font-size: 9px; font-weight: 700; letter-spacing: 0.06em; padding: 2px 6px; border-radius: 4px; }
+    .status.critical { background: #fee2e2; color: #dc2626; }
+    .status.warning { background: #ffedd5; color: #ea580c; }
+    .status.none { background: #f1f5f9; color: #64748b; }
+    .pulse-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; max-width: 520px; margin-bottom: 20px; }
+    .pulse-card {
+      background: #fff; border: 1px solid #e5e9ef; border-radius: 10px;
+      padding: 12px 14px;
+    }
+    .pulse-label { font-size: 10px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: #7c3aed; margin-bottom: 4px; }
+    .pulse-label.blue { color: #2563eb; }
+    .pulse-value { font-size: 28px; font-weight: 700; line-height: 1; }
+    .pulse-tag { font-size: 9px; font-weight: 700; color: #dc2626; margin-top: 4px; }
+    .section-kicker {
+      font-size: 10px; font-weight: 600; letter-spacing: 0.12em;
+      text-transform: uppercase; color: rgba(27,27,39,0.45);
+      margin-bottom: 12px;
+    }
+    .tile-grid { display: grid; grid-template-columns: minmax(20rem, 25rem); gap: 16px; position: relative; }
+    .process-nav-tile {
+      display: flex; flex-direction: column; min-height: 10rem; max-width: 25rem;
+      border-radius: 12px; border: 1px solid rgba(0,162,131,0.2);
+      border-left: 4px solid #00a283; background: #fff;
+      box-shadow: 0 1px 4px rgba(15,23,42,0.05);
+    }
+    .tile-inner { padding: 14px 16px 12px; flex: 1; display: flex; flex-direction: column; }
+    .tile-header { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; }
+    .icon-well {
+      width: 36px; height: 36px; border-radius: 10px;
+      background: rgba(0,162,131,0.1); color: #00a283;
+      display: flex; align-items: center; justify-content: center; font-size: 16px;
+    }
+    .tile-title-row { flex: 1; display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+    .tile-title { font-size: 16px; font-weight: 600; color: #1b1b27; }
+    .health-pill {
+      font-size: 10px; font-weight: 700; letter-spacing: 0.04em;
+      padding: 3px 8px; border-radius: 999px;
+      background: rgba(0,162,131,0.12); color: #007a62;
+    }
+    /* Evolved operational surface interior */
+    .os-cover {
+      border: 1px solid #e5e9ef; border-radius: 8px;
+      background: linear-gradient(180deg, #fff 0%, rgba(0,162,131,0.02) 100%);
+      padding: 10px 12px; margin-bottom: 10px;
+    }
+    .os-title {
+      font-size: 11px; font-weight: 700; letter-spacing: 0.08em;
+      text-transform: uppercase; color: #00a283; margin-bottom: 6px;
+    }
+    .story {
+      font-size: 13px; line-height: 1.45; color: #1b1b27; margin-bottom: 4px;
+    }
+    .story-sub { font-size: 12px; line-height: 1.4; color: rgba(27,27,39,0.62); margin-bottom: 10px; }
+    .kpi-strip {
+      display: flex; border-top: 1px solid #e5e9ef; border-bottom: 1px solid #e5e9ef;
+      padding: 6px 0; margin-bottom: 10px; gap: 0;
+    }
+    .kpi {
+      flex: 1; padding: 0 10px; border-left: 1px solid #e5e9ef;
+      display: flex; flex-direction: column; gap: 1px;
+    }
+    .kpi:first-child { border-left: none; padding-left: 0; }
+    .kpi-val { font-size: 14px; font-weight: 700; }
+    .kpi-lbl { font-size: 9px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: #64748b; }
+    .todays-label {
+      font-size: 9px; font-weight: 700; letter-spacing: 0.08em;
+      text-transform: uppercase; color: rgba(27,27,39,0.45); margin-bottom: 6px;
+    }
+    .work-line {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 7px 10px; margin-bottom: 4px;
+      border-radius: 8px; border: 1px solid transparent;
+      background: rgba(0,162,131,0.04);
+      cursor: pointer; transition: all 0.15s;
+      font-size: 13px; font-weight: 600; color: #1b1b27;
+    }
+    .work-line:hover {
+      border-color: rgba(0,162,131,0.35);
+      background: rgba(0,162,131,0.08);
+      box-shadow: 0 1px 3px rgba(0,162,131,0.12);
+    }
+    .work-line .arrow { color: #00a283; font-weight: 700; margin-right: 6px; }
+    .work-line .count { font-size: 12px; font-weight: 700; color: #00a283; }
+    .tile-footer {
+      display: flex; align-items: end; justify-content: space-between;
+      border-top: 1px solid rgba(27,27,39,0.08); padding-top: 10px; margin-top: auto;
+    }
+    .footer-meta { display: flex; gap: 16px; }
+    .meta-block .lbl { font-size: 8px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: rgba(27,27,39,0.4); }
+    .meta-block .val { font-size: 11px; font-weight: 600; color: rgba(27,27,39,0.7); }
+    .open-btn {
+      font-size: 12px; font-weight: 700; letter-spacing: 0.02em;
+      padding: 6px 10px; border-radius: 6px;
+      border: 1px solid rgba(0,162,131,0.35);
+      background: rgba(0,162,131,0.1); color: #00a283;
+    }
+    /* Annotations */
+    .annotations {
+      position: absolute; left: calc(25rem + 32px); top: 0;
+      width: 380px; display: flex; flex-direction: column; gap: 10px;
+    }
+    .callout {
+      background: #fff; border: 1px solid #00a283; border-radius: 10px;
+      padding: 10px 12px; box-shadow: 0 4px 16px rgba(0,162,131,0.12);
+      position: relative;
+    }
+    .callout-num {
+      position: absolute; top: -8px; left: 10px;
+      background: #00a283; color: #fff; font-size: 10px; font-weight: 800;
+      width: 18px; height: 18px; border-radius: 999px;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .callout h4 { font-size: 11px; font-weight: 700; color: #00a283; margin-bottom: 4px; padding-top: 4px; }
+    .callout p { font-size: 11px; line-height: 1.4; color: #475569; }
+    .callout .maps { font-size: 10px; color: #64748b; margin-top: 4px; font-style: italic; }
+    .page-label {
+      position: fixed; top: 8px; left: 72px; z-index: 10;
+      background: #00a283; color: #fff; font-size: 10px; font-weight: 700;
+      letter-spacing: 0.06em; text-transform: uppercase;
+      padding: 4px 10px; border-radius: 6px;
+    }
+    .rail h3 { font-size: 11px; font-weight: 700; margin-bottom: 8px; color: #64748b; }
+    .rail-box { background: #f8fafc; border: 1px solid #e5e9ef; border-radius: 8px; padding: 10px; margin-bottom: 10px; }
+    .rail-item { padding: 8px; border-radius: 6px; margin-bottom: 4px; background: #fff; border: 1px solid #e5e9ef; font-size: 11px; }
+    .bos { color: #00a283; font-weight: 700; }
+  </style>
+</head>
+<body>
+  <div class="page-label">Final UX — Enrollment Operational Surface evolution</div>
+  <div class="header">
+    <div style="width:56px"></div>
+    <div class="header-search">Search records…</div>
+    <span>All locations ▾</span>
+    <span style="margin-left:auto">🔔</span>
+    <span style="width:28px;height:28px;border-radius:999px;background:#1b1b27;color:#fff;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700">N</span>
+  </div>
+  <div class="shell">
+    <nav class="sidebar">
+      <div class="sidebar-icon">⌕</div>
+      <div class="sidebar-icon active">⌂</div>
+      <div class="sidebar-icon" style="position:relative">☰<span class="badge">8</span></div>
+      <div class="sidebar-icon">✉</div>
+      <div class="sidebar-icon">▤</div>
+      <div class="sidebar-icon">▦</div>
+      <div style="flex:1"></div>
+      <div class="sidebar-icon">⚙</div>
+    </nav>
+    <main class="primary">
+      <h1 class="org-title">Firefly Early Learning</h1>
+      <div class="health-row">
+        <div class="health-chip">Business Health <span class="status critical">CRITICAL</span></div>
+        <div class="health-chip">Operational Health <span class="status warning">WARNING</span></div>
+        <div class="health-chip">Enrollment Health <span class="status none">NO DATA</span></div>
+      </div>
+      <div class="pulse-row">
+        <div class="pulse-card">
+          <div class="pulse-label">Forms Completion %</div>
+          <div class="pulse-value">43.8%</div>
+          <div class="pulse-tag">Critical</div>
+        </div>
+        <div class="pulse-card">
+          <div class="pulse-label blue">Lead Count</div>
+          <div class="pulse-value">7</div>
+        </div>
+      </div>
+      <div class="section-kicker">Business Processes</div>
+      <div class="tile-grid">
+        <article class="process-nav-tile">
+          <div class="tile-inner">
+            <div class="tile-header">
+              <div class="icon-well">👥</div>
+              <div class="tile-title-row">
+                <h3 class="tile-title">Enrollment</h3>
+                <span class="health-pill">Healthy</span>
+              </div>
+            </div>
+            <div class="os-cover">
+              <div class="os-title">Enrollment</div>
+              <p class="story"><strong>3 families</strong> are waiting for contact.</p>
+              <p class="story-sub">Let's keep conversations moving and help families reach enrollment.</p>
+              <div class="kpi-strip">
+                <div class="kpi"><span class="kpi-val">7</span><span class="kpi-lbl">Lead Count</span></div>
+                <div class="kpi"><span class="kpi-val">6</span><span class="kpi-lbl">Needs Attention</span></div>
+                <div class="kpi"><span class="kpi-val">—</span><span class="kpi-lbl">Tour Conv.</span></div>
+              </div>
+              <div class="todays-label">Today's Work</div>
+              <div class="work-line"><span><span class="arrow">→</span>2 Tours</span><span class="count">2</span></div>
+              <div class="work-line"><span><span class="arrow">→</span>1 Enrollment</span><span class="count">1</span></div>
+              <div class="work-line"><span><span class="arrow">→</span>3 Follow Ups</span><span class="count">3</span></div>
+            </div>
+            <div class="tile-footer">
+              <div class="footer-meta">
+                <div class="meta-block"><div class="lbl">Records</div><div class="val">1</div></div>
+                <div class="meta-block"><div class="lbl">Stages</div><div class="val">7</div></div>
+              </div>
+              <span class="open-btn">Open Enrollment →</span>
+            </div>
+          </div>
+        </article>
+        <div class="annotations">
+          <div class="callout"><span class="callout-num">1</span>
+            <h4>Operational story replaces metric list</h4>
+            <p>Human cohort language ("3 families waiting") replaces raw KPI rows as the primary scan.</p>
+            <p class="maps">Maps to queue header "Active lens · N families" on Work Unit entry.</p>
+          </div>
+          <div class="callout"><span class="callout-num">2</span>
+            <h4>Compressed context preview</h4>
+            <p>Inline KPI strip uses same <code>adminv2-os-kpi</code> grammar as Work Unit context bar.</p>
+            <p class="maps">Maps to <code>WorkUnitCommandSurface</code> row 2 — identical labels at entry.</p>
+          </div>
+          <div class="callout"><span class="callout-num">3</span>
+            <h4>Today's Work — enterable lines</h4>
+            <p>Hover affordance + arrow communicates clickability. Each line deep-links a Work View.</p>
+            <p class="maps">Maps to perspective pills (New Leads, Tours, Follow Ups) in WU header.</p>
+          </div>
+          <div class="callout"><span class="callout-num">4</span>
+            <h4>Cover page, not dashboard widget</h4>
+            <p>Tile shell unchanged — border, rail, dimensions, footer. Only interior becomes operational surface.</p>
+            <p class="maps">Opening expands this stack → full <code>adminv2-os-context</code> + queue below.</p>
+          </div>
+          <div class="callout"><span class="callout-num">5</span>
+            <h4>Everything else frozen</h4>
+            <p>Org pulse, Operational Pulse, sidebar, header, BOS rail — pixel-identical to baseline 01.</p>
+            <p class="maps">Continuity: same shell, deeper zoom — not a new application.</p>
+          </div>
+        </div>
+      </div>
+    </main>
+    <aside class="rail">
+      <h3>Actions (0)</h3>
+      <h3>Workflow Telemetry (0)</h3>
+      <div class="rail-box">
+        <div class="bos">● BOS</div>
+        <div style="font-size:10px;color:#64748b;margin:4px 0 8px">Operational Intelligence</div>
+        <div style="font-size:11px;background:#f1f5f9;padding:8px;border-radius:6px;margin-bottom:8px">No urgent issues detected.</div>
+        <div class="rail-item">Summarize this queue</div>
+        <div class="rail-item">Identify missing information</div>
+        <div class="rail-item">Draft follow-up</div>
+      </div>
+      <div style="margin-top:auto;padding-top:40px">
+        <div style="font-size:10px;color:#94a3b8;margin-bottom:6px">Ask BOS anything…</div>
+        <div style="height:36px;border:1px solid #e5e9ef;border-radius:8px;background:#fff"></div>
+      </div>
+    </aside>
+  </div>
+</body>
+</html>

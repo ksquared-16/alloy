@@ -10,6 +10,25 @@ export const BOOK_V2_ACCESS_METHOD_UI_TO_STABLE: Record<string, string> = {
     building: "front_desk",
 };
 
+/** option_set `access_method` item_key → book-v2 UI token (stable submit compatibility). */
+export const BOOK_V2_ACCESS_METHOD_STABLE_TO_UI: Record<string, string> = {
+    on_file: "home",
+    door_code: "code",
+    lockbox: "key",
+    front_desk: "building",
+};
+
+const STABLE_ACCESS_METHOD_KEYS = new Set(Object.keys(BOOK_V2_ACCESS_METHOD_STABLE_TO_UI));
+const BOOKING_ACCESS_UI_TOKENS = new Set(Object.keys(BOOK_V2_ACCESS_METHOD_UI_TO_STABLE));
+
+/** Normalize stored or API access value to the UI token used in book-v2 forms (`home` | `code` | …). */
+export function bookingAccessUiToken(raw: string | null | undefined): string {
+    const u = String(raw ?? "home").trim() || "home";
+    if (BOOKING_ACCESS_UI_TOKENS.has(u)) return u;
+    if (STABLE_ACCESS_METHOD_KEYS.has(u)) return BOOK_V2_ACCESS_METHOD_STABLE_TO_UI[u] ?? u;
+    return u;
+}
+
 /** @deprecated Use BOOK_V2_ACCESS_METHOD_UI_TO_STABLE + uiAccessMethodToStableKey */
 export const BOOK_V2_ACCESS_METHOD_TO_DB_KEY: Record<string, string> = {
     home: "on_file",
@@ -18,9 +37,45 @@ export const BOOK_V2_ACCESS_METHOD_TO_DB_KEY: Record<string, string> = {
     building: "front_desk",
 };
 
+/**
+ * Map book-v2 access payload to `locations.access_method_key` / option_set item_key.
+ * Accepts legacy UI tokens or stable keys already stored on the location.
+ */
 export function uiAccessMethodToStableKey(ui: string | null | undefined): string {
     const u = String(ui ?? "home").trim() || "home";
+    if (STABLE_ACCESS_METHOD_KEYS.has(u)) return u;
     return BOOK_V2_ACCESS_METHOD_UI_TO_STABLE[u] ?? "on_file";
+}
+
+export function accessMethodUsesDoorCodeField(method: string | null | undefined): boolean {
+    return bookingAccessUiToken(method) === "code";
+}
+
+export function accessMethodIsFrontDeskFlow(method: string | null | undefined): boolean {
+    return bookingAccessUiToken(method) === "building";
+}
+
+export function accessMethodIsHomeFlow(method: string | null | undefined): boolean {
+    return bookingAccessUiToken(method) === "home";
+}
+
+const DEFAULT_ACCESS_METHOD_BOOKING_LABELS: Record<string, string> = {
+    home: "I will be home",
+    code: "Door/Garage Code",
+    key: "Hidden Key",
+    building: "Building / Front Desk",
+};
+
+/** Summary / display: English labels for default UI tokens; title-case unknown keys. */
+export function accessMethodBookingDisplayLabel(method: string | null | undefined): string {
+    const token = bookingAccessUiToken(method);
+    const lab = DEFAULT_ACCESS_METHOD_BOOKING_LABELS[token];
+    if (lab) return lab;
+    return token
+        .split(/[_\s]+/)
+        .filter(Boolean)
+        .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+        .join(" ");
 }
 
 const ALLOWED_HOME_TYPE_KEYS = new Set(["house", "condo", "apartment", "townhome"]);
@@ -98,11 +153,11 @@ export function splitBookV2LocationAccess(params: {
     access_note?: string | null;
     additional_notes?: string | null;
 }): { access_code: string | null; access_notes: string | null } {
-    const method = String(params.access_method ?? "home").trim() || "home";
+    const methodRaw = String(params.access_method ?? "home").trim() || "home";
     const note = params.access_note != null ? String(params.access_note).trim() : "";
     const extra = params.additional_notes != null ? String(params.additional_notes).trim() : "";
 
-    if (method === "code") {
+    if (accessMethodUsesDoorCodeField(methodRaw)) {
         return {
             access_code: note || null,
             access_notes: extra || null,

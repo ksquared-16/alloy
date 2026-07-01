@@ -1,0 +1,24 @@
+# Catches TypeScript drift (e.g. route uses fields missing from enrich stub result) before merge.
+name: Web typecheck
+on:
+  pull_request:
+    paths:
+      - "web/**"
+      - ".github/workflows/web-typecheck.yml"
+
+defaults:
+  run:
+    working-directory: web
+
+jobs:
+  typecheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci
+      - run: npm run typecheck

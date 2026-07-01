@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><title>06 — Renderer Picker (contracts)</title><link rel="stylesheet" href="_shared.css"></head>
+<body>
+<div class="mockup-frame">
+  <div class="mockup-label">06 — Renderer Picker · Contracts <span class="sub">Filtered by the bound type · incompatible renderers greyed with reason</span></div>
+  <div class="stage">
+    <div class="split" style="grid-template-columns:1fr 1.2fr;">
+      <div class="panel">
+        <div class="panel-head"><div class="panel-title">Bound reference</div></div>
+        <div style="padding:16px;">
+          <div class="leaf-name">Balance</div>
+          <div class="leaf-path">Enrollment ▸ Billing ▸ Balance</div>
+          <div class="leaf-row" style="margin-top:12px;"><span class="k">Presentation type</span><span class="v"><span class="type-pill">Money</span></span></div>
+          <div class="leaf-row"><span class="k">Example</span><span class="v">$1,234.00</span></div>
+          <div style="margin-top:16px;font-size:12px;color:var(--midnight-46);line-height:1.6;">The picker only enables renderers whose contract <strong>accepts Money</strong> (or Metric→Money). Everything else is greyed with the reason — you can't build an invalid binding.</div>
+        </div>
+      </div>
+      <div class="panel">
+        <div class="panel-head"><div class="panel-title">Choose renderer</div><div class="panel-sub">contract-validated for · Money</div></div>
+        <div style="padding:16px;">
+          <div class="cat-group">Numbers &amp; money — compatible</div>
+          <div class="rgrid">
+            <div class="ropt selected"><span class="ri">$</span>Currency</div>
+            <div class="ropt"><span class="ri">#</span>Number</div>
+            <div class="ropt"><span class="ri">◔</span>Gauge</div>
+            <div class="ropt"><span class="ri">▦</span>Scorecard</div>
+          </div>
+          <div class="cat-group">Incompatible — needs a different type</div>
+          <div class="rgrid">
+            <div class="ropt disabled"><span class="ri">∿</span>Trend<span class="why">needs Metric + time</span></div>
+            <div class="ropt disabled"><span class="ri">☰</span>Table<span class="why">needs Collection</span></div>
+            <div class="ropt disabled"><span class="ri">📅</span>Date<span class="why">needs Date</span></div>
+            <div class="ropt disabled"><span class="ri">◉</span>Status Pill<span class="why">needs Status</span></div>
+            <div class="ropt disabled"><span class="ri">✨</span>AI Summary<span class="why">needs Narrative</span></div>
+            <div class="ropt disabled"><span class="ri">◉</span>Avatar<span class="why">needs Entity</span></div>
+          </div>
+          <div class="cat-group">Currency options (semantic)</div>
+          <div style="display:flex;gap:10px;font-size:12px;">
+            <span class="token">Show cents <span class="caret">●—</span></span>
+            <span class="token">Sign display <span class="caret">▾</span></span>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="center-note">Renderers validate by <strong>Presentation Type, not source kind</strong> — so the same picker works for a canonical field, a metric (Metric→Money), or a computed value. Options are <strong>semantic</strong> (show cents), never font/color.</div>
+  </div>
+</div>
+</body></html>

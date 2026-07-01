@@ -22,7 +22,7 @@ def _mask_sid(sid: str) -> str:
     return "****" + sid[-6:]
 
 
-def send_sms(to_number: str, body: str) -> Dict[str, Any]:
+def send_sms(to_number: str, body: str, *, status_callback: str = None) -> Dict[str, Any]:
     """
     Send an SMS via Twilio REST API using the configured Messaging Service.
 
@@ -52,12 +52,56 @@ def send_sms(to_number: str, body: str) -> Dict[str, Any]:
         raise RuntimeError("TWILIO_MESSAGING_SERVICE_SID must be set")
 
     client = Client(sid_val, token_val)
-    message = client.messages.create(
-        body=body.strip(),
-        messaging_service_sid=messaging_sid,
-        to=to_number.strip(),
-    )
+    create_kwargs = {
+        "body": body.strip(),
+        "messaging_service_sid": messaging_sid,
+        "to": to_number.strip(),
+    }
+    cb = (status_callback or "").strip()
+    if cb:
+        create_kwargs["status_callback"] = cb
+    message = client.messages.create(**create_kwargs)
     sid = message.sid or ""
     status = (message.status or "unknown").lower()
-    logger.info("Twilio send_sms: sid=%s status=%s", _mask_sid(sid), status)
+    logger.info("Twilio send_sms: sid=%s status=%s callback=%s", _mask_sid(sid), status, "y" if cb else "n")
+    return {"sid": sid, "status": status}
+
+
+def send_sms_with_credentials(
+    to_number: str,
+    body: str,
+    *,
+    account_sid: str,
+    auth_token: str,
+    messaging_service_sid: str,
+    status_callback: str = None,
+) -> Dict[str, Any]:
+    """
+    Send SMS using explicit Twilio credentials (tenant binding path).
+    """
+    if not to_number or not str(to_number).strip():
+        raise ValueError("to_number is required and cannot be empty")
+    if not body or not str(body).strip():
+        raise ValueError("body is required and cannot be empty")
+    sid_val = (account_sid or "").strip()
+    token_val = (auth_token or "").strip()
+    messaging_sid = (messaging_service_sid or "").strip()
+    if not sid_val or not token_val:
+        raise RuntimeError("account_sid and auth_token are required for binding send")
+    if not messaging_sid:
+        raise RuntimeError("messaging_service_sid is required for binding send")
+
+    client = Client(sid_val, token_val)
+    create_kwargs = {
+        "body": body.strip(),
+        "messaging_service_sid": messaging_sid,
+        "to": to_number.strip(),
+    }
+    cb = (status_callback or "").strip()
+    if cb:
+        create_kwargs["status_callback"] = cb
+    message = client.messages.create(**create_kwargs)
+    sid = message.sid or ""
+    status = (message.status or "unknown").lower()
+    logger.info("Twilio send_sms_with_credentials: sid=%s status=%s callback=%s", _mask_sid(sid), status, "y" if cb else "n")
     return {"sid": sid, "status": status}

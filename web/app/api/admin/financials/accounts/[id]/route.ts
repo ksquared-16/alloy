@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
-import { getAdminContext } from "@/lib/admin/getAdminContext";
+import { getAdminContextCached } from "@/lib/admin/getAdminContext";
+import { emitEvent } from "@/lib/emitEvent";
 
 export const dynamic = "force-dynamic";
 
@@ -8,7 +9,7 @@ export async function GET(
     _request: NextRequest,
     context: { params: Promise<{ id: string }> }
 ) {
-    const ctx = await getAdminContext();
+    const ctx = await getAdminContextCached();
     if (!ctx.ok) {
         return NextResponse.json(
             { error: ctx.status === 401 ? "Unauthorized" : "Forbidden" },
@@ -39,7 +40,7 @@ export async function PATCH(
     request: NextRequest,
     context: { params: Promise<{ id: string }> }
 ) {
-    const ctx = await getAdminContext();
+    const ctx = await getAdminContextCached();
     if (!ctx.ok) {
         return NextResponse.json(
             { error: ctx.status === 401 ? "Unauthorized" : "Forbidden" },
@@ -62,7 +63,7 @@ export async function PATCH(
     const supabase = createAdminClient();
     const { data: existing, error: fetchErr } = await supabase
         .from("gl_accounts")
-        .select("id")
+        .select("id, code, name, type, currency, is_active")
         .eq("id", id)
         .eq("org_id", ctx.orgId)
         .maybeSingle();
@@ -99,6 +100,22 @@ export async function PATCH(
 
     if (updateErr) {
         return NextResponse.json({ error: updateErr.message }, { status: 500 });
+    }
+    try {
+        await emitEvent({
+            org_id: ctx.orgId,
+            event_type: "gl_account_updated",
+            entity_type: "gl_accounts",
+            entity_id: id,
+            payload: {
+                before: existing as Record<string, unknown>,
+                after: updated as Record<string, unknown>,
+                changed_keys: Object.keys(updates),
+                actor_user_id: ctx.userId,
+            },
+        });
+    } catch (e) {
+        console.warn("[gl_accounts PATCH] emitEvent", e instanceof Error ? e.message : e);
     }
     return NextResponse.json(updated);
 }

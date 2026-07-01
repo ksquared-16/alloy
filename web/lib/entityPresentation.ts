@@ -81,8 +81,13 @@ export interface EntityDrawerSectionConfig {
   /** Default expanded state. */
   defaultExpanded?: boolean;
   collapsible?: boolean;
-  /** Grid columns for this section (1 or 2). */
-  gridCols?: 1 | 2;
+  /** Grid columns for this section (1, 2, or 3). */
+  gridCols?: 1 | 2 | 3;
+  /**
+   * `block` — section body is not wrapped in the default field grid (custom tables, inquiry children).
+   * `fields-grid` (default) — children laid out with `gridCols`.
+   */
+  contentLayout?: "fields-grid" | "block";
   /** Ordered list of field keys (or full field configs) to show in this section. */
   fields: EntityDrawerFieldConfig[];
   /**
@@ -188,7 +193,19 @@ export function getJobOverviewBillingSummarySection(): EntityDrawerSectionConfig
 }
 
 /** Tab/section key in drawer. Overview content can be section-driven or entity-specific. */
-export type DrawerTabKey = "overview" | "related" | "financials" | "automation" | "activity" | "payments" | "documents" | "ledger";
+export type DrawerTabKey =
+    | "overview"
+    | "rrs_overview"
+    | "related"
+    | "financials"
+    | "automation"
+    | "activity"
+    | "communications"
+    | "notes"
+    | "payments"
+    | "documents"
+    | "ledger"
+    | "lifecycle";
 
 /** Related record module: which related-entity tabs to show (e.g. jobs, schedules, contacts). */
 export interface RelatedModuleConfig {
@@ -370,6 +387,7 @@ const ENTITY_PRESENTATION_REGISTRY: Record<EntityPresentationType, EntityPresent
   },
   locations: {
     entityType: "locations",
+    /** Runtime drawer sections — target configured shape: `locationDrawerLayoutTarget.ts` */
     table: {
       columns: [
         { key: "_status_display", label: "Status", sortable: true, renderHint: "status", locked: true },
@@ -467,7 +485,7 @@ const ENTITY_PRESENTATION_REGISTRY: Record<EntityPresentationType, EntityPresent
         {
           key: "opportunity_details",
           title: "Opportunity Details",
-          defaultExpanded: true,
+          defaultExpanded: false,
           collapsible: true,
           gridCols: 2,
           fields: [
@@ -613,7 +631,7 @@ const ENTITY_PRESENTATION_REGISTRY: Record<EntityPresentationType, EntityPresent
       defaultSort: { key: "_updated", direction: "desc" },
     },
     drawer: {
-      tabs: ["overview", "related", "activity", "documents", "financials"],
+      tabs: ["overview", "rrs_overview", "related", "activity", "documents", "financials"],
       headerFields: [],
       layoutMode: 2,
       overviewSections: [
@@ -728,10 +746,10 @@ const ENTITY_PRESENTATION_REGISTRY: Record<EntityPresentationType, EntityPresent
         { key: "_status_display", label: "Status", sortable: true, renderHint: "status", locked: true },
         { key: "schedule_number", label: "Sched #", sortable: true, renderHint: "text", locked: true },
         { key: "start_at", label: "Date", sortable: true, renderHint: "datetime" },
-        { key: "_customer_name", label: "Customer", sortable: false, renderHint: "link" },
+        { key: "_customer_name", label: "Account", sortable: false, renderHint: "link" },
         { key: "_location_label", label: "Location", sortable: false, renderHint: "text" },
         { key: "_job_title", label: "Job", sortable: false, renderHint: "link" },
-        { key: "_assigned_vendor_name", label: "Vendor", sortable: false, renderHint: "text" },
+        { key: "_assigned_vendor_name", label: "Cleaner", sortable: false, renderHint: "text" },
         { key: "updated_at", label: "Updated", sortable: true, renderHint: "datetime" },
       ],
       defaultSort: { key: "start_at", direction: "desc" },
@@ -749,11 +767,24 @@ const ENTITY_PRESENTATION_REGISTRY: Record<EntityPresentationType, EntityPresent
           gridCols: 2,
           fields: [
             { key: "status_key", label: "Status", span: 1, renderHint: "status", editable: true },
-            { key: "start_at", label: "Start", span: 1, renderHint: "datetime", editable: true },
+            { key: "start_at", label: "Start time", span: 1, renderHint: "datetime", editable: true },
+            {
+              key: "assigned_vendor_id",
+              label: "Assigned cleaner",
+              span: 1,
+              renderHint: "link",
+              editable: false,
+              linkTarget: { idField: "assigned_vendor_id", entityType: "vendors" },
+            },
             { key: "end_at", label: "End", span: 1, renderHint: "datetime", editable: true },
             { key: "timezone", label: "Timezone", span: 1, renderHint: "text", editable: true },
             { key: "time_window", label: "Time window", span: 1, renderHint: "text" },
-            { key: "service_type", label: "Service type", span: 1, renderHint: "text" },
+            { key: "service_type", label: "Service", span: 1, renderHint: "text", editable: false },
+            { key: "price_cents", label: "Price", span: 1, renderHint: "money", editable: false },
+            { key: "_customer_name", label: "Account", span: 1, renderHint: "text" },
+            { key: "_contact_phone", label: "Phone", span: 1, renderHint: "phone" },
+            { key: "_contact_email", label: "Email", span: 1, renderHint: "text" },
+            { key: "_location_label", label: "Address", span: 2, renderHint: "text" },
             { key: "updated_at", label: "Updated", span: 1, renderHint: "datetime" },
           ],
           locked: true,
@@ -761,7 +792,7 @@ const ENTITY_PRESENTATION_REGISTRY: Record<EntityPresentationType, EntityPresent
         {
           key: "property_service",
           title: "Property / service details",
-          defaultExpanded: true,
+          defaultExpanded: false,
           collapsible: true,
           gridCols: 2,
           fields: [
@@ -1261,7 +1292,6 @@ const ENTITY_PRESENTATION_REGISTRY: Record<EntityPresentationType, EntityPresent
     entityType: "customer_members",
     table: {
       columns: [
-        { key: "_status_display", label: "Status", sortable: true, renderHint: "status", locked: true },
         { key: "display_name", label: "Name", sortable: true, renderHint: "text", locked: true },
         { key: "_relationship_label", label: "Relationship", sortable: false, renderHint: "text" },
         { key: "_customer_name", label: "Customer", sortable: false, renderHint: "text" },
@@ -1284,7 +1314,6 @@ const ENTITY_PRESENTATION_REGISTRY: Record<EntityPresentationType, EntityPresent
           collapsible: true,
           gridCols: 2,
           fields: [
-            { key: "status_key", label: "Status", span: 1, renderHint: "status", editable: true, locked: true },
             { key: "display_name", label: "Display name", span: 1, renderHint: "text", editable: true, locked: true },
             { key: "_relationship_label", label: "Relationship", span: 1, renderHint: "text", editable: false, locked: true },
             { key: "_customer_name", label: "Customer", span: 1, renderHint: "link", locked: true, linkTarget: { idField: "customer_id", entityType: "customers" } },
@@ -1356,19 +1385,46 @@ const ENTITY_PRESENTATION_REGISTRY: Record<EntityPresentationType, EntityPresent
       overviewSections: [
         {
           key: "basic_info",
-          title: "Basic Info",
+          title: "Profile",
           defaultExpanded: true,
           collapsible: true,
           gridCols: 2,
           fields: [
-            { key: "status_key", label: "Status", span: 1, renderHint: "status", editable: true, locked: true },
             { key: "first_name", label: "First name", span: 1, renderHint: "text", locked: true },
             { key: "last_name", label: "Last name", span: 1, renderHint: "text", locked: true },
-            { key: "email", label: "Email", span: 1, renderHint: "text", locked: true },
-            { key: "phone", label: "Phone", span: 1, renderHint: "phone", locked: true },
-            { key: "created_at", label: "Created", span: 1, renderHint: "datetime", locked: true },
-            { key: "updated_at", label: "Updated", span: 1, renderHint: "datetime", locked: true },
+            { key: "preferred_name", label: "Preferred name", span: 1, renderHint: "text", editable: true },
           ],
+          locked: true,
+        },
+        {
+          key: "contact_info",
+          title: "Contact",
+          defaultExpanded: true,
+          collapsible: true,
+          gridCols: 2,
+          fields: [
+            { key: "email", label: "Email", span: 1, renderHint: "text", locked: true },
+            { key: "phone", label: "Phone", span: 1, renderHint: "text", locked: true },
+          ],
+          locked: true,
+        },
+        {
+          key: "employee_placement",
+          title: "Employee status",
+          defaultExpanded: true,
+          collapsible: true,
+          gridCols: 1,
+          contentLayout: "block",
+          fields: [],
+          locked: true,
+        },
+        {
+          key: "relationships",
+          title: "Relationships",
+          defaultExpanded: true,
+          collapsible: true,
+          gridCols: 1,
+          fields: [],
           locked: true,
         },
         {
@@ -1380,16 +1436,9 @@ const ENTITY_PRESENTATION_REGISTRY: Record<EntityPresentationType, EntityPresent
           fields: [
             { key: "id", label: "ID", span: 1, renderHint: "text", locked: true },
             { key: "org_id", label: "Org ID", span: 1, renderHint: "text", locked: true },
+            { key: "created_at", label: "Created", span: 1, renderHint: "datetime", locked: true },
+            { key: "updated_at", label: "Updated", span: 1, renderHint: "datetime", locked: true },
           ],
-          locked: true,
-        },
-        {
-          key: "relationships",
-          title: "Relationships",
-          defaultExpanded: true,
-          collapsible: true,
-          gridCols: 1,
-          fields: [],
           locked: true,
         },
       ],

@@ -1,14 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
-import { getAdminContext } from "@/lib/admin/getAdminContext";
+import { getAdminContextCached } from "@/lib/admin/getAdminContext";
 import type { VendorPayoutPolicy } from "@/lib/admin/vendorPayoutPolicy";
+import { emitEvent } from "@/lib/emitEvent";
 
 /** PATCH: set or clear vendor.metadata.vendor_payout_policy. Admin only. */
 export async function PATCH(
     request: NextRequest,
     context: { params: Promise<{ id: string }> }
 ) {
-    const ctx = await getAdminContext();
+    const ctx = await getAdminContextCached();
     if (!ctx.ok) {
         return NextResponse.json(
             { error: ctx.status === 401 ? "Unauthorized" : "Forbidden" },
@@ -55,5 +56,21 @@ export async function PATCH(
 
     if (updateErr) return NextResponse.json({ error: updateErr.message }, { status: 500 });
 
-    return NextResponse.json({ ok: true, vendor_payout_policy: newMeta.vendor_payout_policy ?? null });
+    const policyOut = newMeta.vendor_payout_policy ?? null;
+    try {
+        await emitEvent({
+            org_id: ctx.orgId,
+            event_type: "vendor_payout_policy_updated",
+            entity_type: "vendors",
+            entity_id: vendorId,
+            payload: {
+                vendor_payout_policy: policyOut,
+                actor_user_id: ctx.userId,
+            },
+        });
+    } catch (e) {
+        console.warn("[vendor/payout-policy] emitEvent", e instanceof Error ? e.message : e);
+    }
+
+    return NextResponse.json({ ok: true, vendor_payout_policy: policyOut });
 }

@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>05 — Analytics Dashboard Editor</title>
+<link rel="stylesheet" href="_shared.css">
+</head>
+<body>
+<div class="mockup-frame">
+  <div class="mockup-label">05 — Analytics Dashboard Editor · Enrollment Dashboard</div>
+  <div class="app-shell">
+    <div class="app-rail"><div class="rail-icon">⌂</div><div class="rail-spacer"></div><div class="rail-icon active">⚙</div></div>
+    <div class="config-rail">
+      <div class="config-rail-title">Configuration</div>
+      <div class="config-nav-item active"><span class="icon">◫</span> Design Surfaces</div>
+      <div class="config-nav-item"><span class="icon">📊</span> Operational Intelligence</div>
+    </div>
+    <div class="main-area">
+      <div class="context-bar">
+        <div class="context-title">Design Surfaces</div>
+        <div class="context-chips"><span class="chip">Focus Panel</span><span class="chip active">Dashboard</span><span class="chip">Workspace</span></div>
+        <div class="context-actions"><button class="btn btn-primary">+ Create Dashboard</button></div>
+      </div>
+      <div class="workspace-grid">
+        <div class="config-queue">
+          <div class="queue-group-label">Published</div>
+          <div class="queue-item active">Enrollment Dashboard <span class="badge badge-published">v1</span></div>
+          <div class="queue-item">Operations Board <span class="badge badge-draft">draft</span></div>
+          <div class="queue-group-label">Platform Defaults</div>
+          <div class="queue-item">Executive Summary (default) <span class="badge badge-published">system</span></div>
+        </div>
+        <div class="workspace-center">
+          <div class="status-bar">
+            <span class="status-pill status-published">Published v1</span>
+            <span>Enrollment Dashboard · Dashboard · Org-scoped</span>
+          </div>
+          <div class="section-label">Dashboard Preview</div>
+          <div class="panel" style="margin-bottom:12px;">
+            <div class="panel-header"><span class="panel-title">Zone: hero · KPI strip</span></div>
+            <div class="dash-kpi-strip">
+              <div class="kpi-tile"><div class="kpi-value">87%</div><div class="kpi-label">Conversion Rate</div><div class="kpi-trend">↑ 3.2% vs last month</div></div>
+              <div class="kpi-tile"><div class="kpi-value">142</div><div class="kpi-label">Active Leads</div><div class="kpi-trend">↑ 12 this week</div></div>
+              <div class="kpi-tile"><div class="kpi-value">23</div><div class="kpi-label">Tours This Week</div><div class="kpi-trend">→ on target</div></div>
+              <div class="kpi-tile"><div class="kpi-value">4.2d</div><div class="kpi-label">Avg Response Time</div><div class="kpi-trend">↓ 0.8d improved</div></div>
+            </div>
+          </div>
+          <div class="workspace-split" style="display:flex;gap:12px;">
+            <div style="flex:2;">
+              <div class="panel">
+                <div class="panel-header"><span class="panel-title">Zone: detail_grid</span></div>
+                <div class="panel-body">
+                  <div class="card-preview" style="margin-bottom:8px;">
+                    <div class="card-preview-header"><div class="card-icon">📊</div><div class="card-preview-title">Enrollment Funnel</div><span class="arch-tag">Metric · Bar Chart</span></div>
+                    <div style="height:80px;background:var(--canvas);border-radius:6px;display:flex;align-items:flex-end;gap:4px;padding:8px;">
+                      <div style="flex:1;background:var(--pine);opacity:0.3;height:80%;border-radius:3px 3px 0 0;"></div>
+                      <div style="flex:1;background:var(--pine);opacity:0.5;height:60%;border-radius:3px 3px 0 0;"></div>
+                      <div style="flex:1;background:var(--pine);opacity:0.7;height:45%;border-radius:3px 3px 0 0;"></div>
+                      <div style="flex:1;background:var(--pine);height:30%;border-radius:3px 3px 0 0;"></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div style="flex:1;">
+              <div class="panel">
+                <div class="panel-header pine-accent"><span class="panel-title">Card: Conversion Rate</span></div>
+                <div class="panel-body" style="font-size:12px;">
+                  <div style="margin-bottom:8px;"><strong>Card Type</strong> · Metric<br><strong>Archetype</strong> · Metric</div>
+                  <div class="section-label">Slots</div>
+                  <div class="slot-row selected">
+                    <span class="slot-name">value</span><span class="slot-arrow">→</span>
+                    <span class="slot-renderer">KPI Card</span>
+                  </div>
+                  <div class="slot-row">
+                    <span class="slot-name">trend</span><span class="slot-arrow">→</span>
+                    <span class="slot-renderer">Sparkline</span>
+                  </div>
+                  <div class="section-label" style="margin-top:8px;">Data Source</div>
+                  <div style="padding:8px;background:var(--canvas);border-radius:6px;font-size:11px;">
+                    <strong>Metric ref:</strong> enrollment.conversion_rate<br>
+                    <span style="color:var(--midnight-46);">Defined in Operational Intelligence → not editable here</span>
+                  </div>
+                  <div class="bos-suggestion" style="margin-top:8px;font-size:11px;">Same Metric Card Type and KPI Card Renderer used in Workspace KPI strip and Work Unit header.</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="bos-rail" style="width:280px;">
+          <div class="bos-title">BOS Assist</div>
+          <div class="bos-suggestion">Analytics dashboards use the same Card Type (Metric) and Renderer catalog (KPI Card, Sparkline, Bar Chart) as operational surfaces. No separate analytics config model.</div>
+          <div class="bos-warning">Metric definitions are authored in Operational Intelligence. This editor only controls placement and visualization.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

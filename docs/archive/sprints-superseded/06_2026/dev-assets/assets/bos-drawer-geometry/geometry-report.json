@@ -1,0 +1,196 @@
+{
+  "capturedAt": "2026-06-10T17:14:36.611Z",
+  "viewport": {
+    "innerWidth": 1600,
+    "innerHeight": 1000,
+    "centerX": 800
+  },
+  "workspace": {
+    "mainContent": {
+      "left": 308,
+      "right": 1241,
+      "top": 153,
+      "bottom": 1059,
+      "width": 933,
+      "height": 906,
+      "centerX": 775,
+      "centerY": 606
+    },
+    "mainContentSelector": ".adminv2-ws-dept-v2-primary-column",
+    "commandRailColumn": {
+      "left": 1261,
+      "right": 1572,
+      "top": 153,
+      "bottom": 1059,
+      "width": 311,
+      "height": 906,
+      "centerX": 1417,
+      "centerY": 606
+    },
+    "commandRail": {
+      "left": 1261,
+      "right": 1572,
+      "top": 153,
+      "bottom": 1059,
+      "width": 311,
+      "height": 906,
+      "centerX": 1417,
+      "centerY": 606
+    },
+    "availableDrawerArea": {
+      "left": 296,
+      "right": 1257,
+      "top": 0,
+      "bottom": 1000,
+      "width": 961,
+      "height": 1000,
+      "centerX": 777,
+      "centerY": 500
+    }
+  },
+  "drawer": {
+    "open": true,
+    "presentation": "modal",
+    "backdrop": {
+      "left": 280,
+      "right": 1257,
+      "top": 0,
+      "bottom": 1000,
+      "width": 977,
+      "height": 1000,
+      "centerX": 769,
+      "centerY": 500
+    },
+    "panel": {
+      "left": 297,
+      "right": 1257,
+      "top": 60,
+      "bottom": 980,
+      "width": 960,
+      "height": 920,
+      "centerX": 777,
+      "centerY": 520
+    },
+    "contentVisibleArea": {
+      "left": 297,
+      "right": 1257,
+      "top": 60,
+      "bottom": 980,
+      "width": 960,
+      "height": 920,
+      "centerX": 777,
+      "centerY": 520
+    },
+    "computedRightPx": 344,
+    "computedLeftPx": 297,
+    "computedTransform": "none",
+    "computedMaxWidth": "960px",
+    "computedWidth": "960px",
+    "inlineWidth": "var(--adminv2-drawer-computed-width)",
+    "inlineMaxWidth": "var(--adminv2-drawer-computed-width)",
+    "inlineRight": "auto",
+    "cssVars": {
+      "bosOverlayWidth": "291px",
+      "bosOverlayGutter": "24px",
+      "workspaceCommandRailOffset": "343px",
+      "drawerInsetRight": null,
+      "drawerInsetTop": "3.75rem",
+      "drawerInsetBottom": "1rem"
+    }
+  },
+  "bos": {
+    "overlay": {
+      "left": 1281,
+      "right": 1572,
+      "top": 224,
+      "bottom": 968,
+      "width": 291,
+      "height": 744,
+      "centerX": 1427,
+      "centerY": 596
+    },
+    "overlayZIndex": "90",
+    "host": {
+      "left": 1281,
+      "right": 1572,
+      "top": 224,
+      "bottom": 1059,
+      "width": 291,
+      "height": 835,
+      "centerX": 1427,
+      "centerY": 641
+    },
+    "visiblePanel": {
+      "left": 1282,
+      "right": 1571,
+      "top": 225,
+      "bottom": 967,
+      "width": 289,
+      "height": 742,
+      "centerX": 1427,
+      "centerY": 596
+    },
+    "visiblePanelZIndex": "auto"
+  },
+  "geometry": {
+    "overlapPx": -24,
+    "requiredShiftPx": 0,
+    "currentRightOffsetPx": 343,
+    "proposedDrawerRightOffsetPx": 343,
+    "passesGutterRule": true,
+    "expectedMaxDrawerRight": 1257
+  },
+  "workspaceBounds": {
+    "sidebarRight": 280,
+    "bosOverlayLeft": 1281,
+    "availableLeft": 296,
+    "availableRight": 1257,
+    "availableWidth": 961,
+    "computedDrawerLeft": 296.5,
+    "computedDrawerRight": 1256.5,
+    "computedDrawerWidth": 960,
+    "actualDrawerLeft": 297,
+    "actualDrawerRight": 1257,
+    "actualDrawerWidth": 960,
+    "passesLeftRule": true,
+    "passesRightRule": true,
+    "cssVars": {
+      "availableLeft": "296px",
+      "availableRight": "1257px",
+      "availableWidth": "961px",
+      "computedLeft": "296.5px",
+      "computedWidth": "960px",
+      "computedRight": "1256.5px"
+    }
+  },
+  "loader": {
+    "found": true,
+    "selector": "[data-drawer-vm-runtime-cold-loading='true']",
+    "rect": {
+      "left": 318,
+      "right": 1221,
+      "top": 163,
+      "bottom": 443,
+      "width": 903,
+      "height": 280,
+      "centerX": 769,
+      "centerY": 303
+    },
+    "centerX": 769,
+    "viewportCenterX": 800,
+    "drawerPanelCenterX": 777,
+    "drawerWorkspaceCenterX": 777,
+    "alignment": "drawer-panel",
+    "deltaViewportPx": -31,
+    "deltaPanelPx": -8,
+    "deltaWorkspacePx": -8
+  },
+  "recommendations": {
+    "summary": "Gutter rule passes — no rail offset increase required.",
+    "cssVarUpdates": {
+      "--adminv2-workspace-command-rail-offset": "343px"
+    },
+    "measuredOverlayOffsetPx": 343,
+    "note": null
+  }
+}

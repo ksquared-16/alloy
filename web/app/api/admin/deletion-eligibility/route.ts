@@ -5,14 +5,14 @@
  * Used by admin drawer to show/hide delete and display reason when blocked.
  */
 import { NextRequest, NextResponse } from "next/server";
-import { getAdminContext } from "@/lib/admin/getAdminContext";
+import { getAdminContextCached } from "@/lib/admin/getAdminContext";
 import {
     evaluateDeletionEligibility,
     isDeletionEligibilityEntityType,
 } from "@/lib/admin/deletionEligibility";
 
 export async function GET(request: NextRequest) {
-    const ctx = await getAdminContext();
+    const ctx = await getAdminContextCached();
     if (!ctx.ok) {
         return NextResponse.json(
             { error: ctx.status === 401 ? "Unauthorized" : "Forbidden" },

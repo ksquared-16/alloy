@@ -4,14 +4,23 @@ import { ReactNode, useState } from "react";
 import type { EntityDrawerSectionConfig } from "@/lib/entityPresentation";
 
 const SECTION_HEADER_CLASS =
-  "rounded-t-md bg-alloy-stone/30 border-b border-admin-border px-3 py-2 mb-3 text-xs font-semibold uppercase tracking-wider text-alloy-forge";
+  "rounded-t-md bg-alloy-stone/30 border-b border-admin-border px-3 py-2 mb-3 text-xs font-semibold tracking-wider text-alloy-forge";
+
+/** Pine accent — aligned with inquiry workflow snapshot header cards. */
+const PREMIUM_SECTION =
+  "rounded-lg border border-alloy-stone/[0.1] border-l-[3px] border-l-[rgb(0,162,131)] bg-white/[0.97] shadow-sm ring-1 ring-alloy-stone/[0.06] overflow-hidden";
+const PREMIUM_HEADER_STATIC =
+  "border-b border-alloy-stone/10 bg-emerald-50/20 px-1.5 py-1 text-[8px] font-semibold tracking-[0.12em] text-alloy-midnight/45";
 
 interface EntityDrawerSectionProps {
   config: EntityDrawerSectionConfig;
   children: ReactNode;
+  headerRight?: ReactNode;
   /** Override default expanded state (e.g. from persisted layout). */
   defaultExpanded?: boolean;
   className?: string;
+  /** Card-style sections with left accent (workflow inquiry drawer). */
+  surface?: "default" | "premium";
 }
 
 /**
@@ -21,37 +30,89 @@ interface EntityDrawerSectionProps {
 export default function EntityDrawerSection({
   config,
   children,
+  headerRight,
   defaultExpanded,
   className = "",
+  surface = "default",
 }: EntityDrawerSectionProps) {
+  const isPremium = surface === "premium";
   const isCollapsible = config.collapsible ?? false;
   const [expanded, setExpanded] = useState(defaultExpanded ?? config.defaultExpanded ?? false);
   const showContent = !isCollapsible || expanded;
-  const gridCols = config.gridCols === 2 ? "grid-cols-1 md:grid-cols-2" : "grid-cols-1";
+  const gridCols =
+    config.gridCols === 3
+      ? "grid-cols-1 md:grid-cols-3"
+      : config.gridCols === 2
+        ? "grid-cols-1 md:grid-cols-2"
+        : "grid-cols-1";
+  const blockContent = config.contentLayout === "block";
 
   return (
     <section
-      className={`mb-6 ${className}`}
+      className={`${
+        isPremium
+          ? `mb-0 ${PREMIUM_SECTION} ${isCollapsible && !expanded ? "shadow-md shadow-alloy-stone/15" : ""}`
+          : "mb-6"
+      } ${className}`}
       data-entity-section
       data-section-key={config.key}
+      data-section-surface={surface}
     >
       {isCollapsible ? (
-        <button
-          type="button"
-          onClick={() => setExpanded((e) => !e)}
-          className={`flex w-full items-center justify-between gap-2 text-left ${SECTION_HEADER_CLASS}`}
-          aria-expanded={expanded}
+        <div
+          className={
+            isPremium
+              ? "flex w-full min-w-0 items-stretch border-b border-alloy-stone/15 bg-alloy-stone/[0.05]"
+              : `flex w-full min-w-0 items-stretch rounded-t-md bg-alloy-stone/30 border-b border-admin-border mb-3 text-xs font-semibold tracking-wider text-alloy-forge`
+          }
         >
-          <span>{config.title}</span>
-          <span className="text-alloy-muted" aria-hidden>
-            {expanded ? "−" : "+"}
-          </span>
-        </button>
+          <button
+            type="button"
+            onClick={() => setExpanded((e) => !e)}
+            className={`entity-drawer-section-toggle flex min-h-0 min-w-0 flex-1 items-center justify-between gap-2 text-left transition-colors duration-150 ${
+              isPremium
+                ? "border-0 bg-transparent px-2.5 py-1.5 text-[10px] font-semibold tracking-[0.1em] text-alloy-forge/80 hover:bg-alloy-stone/10"
+                : "border-0 bg-transparent px-3 py-2 hover:bg-alloy-stone/25"
+            }`}
+            aria-expanded={expanded}
+          >
+            <span className="min-w-0 truncate">{config.title}</span>
+            <span className="shrink-0 text-alloy-muted transition-opacity duration-150" aria-hidden>
+              {expanded ? "−" : "+"}
+            </span>
+          </button>
+          {headerRight ? (
+            <div
+              className={`flex shrink-0 items-center gap-2 self-center px-2.5 normal-case tracking-normal ${
+                isPremium ? "py-1.5" : "py-2"
+              }`}
+            >
+              {headerRight}
+            </div>
+          ) : null}
+        </div>
       ) : (
-        <h3 className={SECTION_HEADER_CLASS}>{config.title}</h3>
+        <div className={isPremium ? PREMIUM_HEADER_STATIC : SECTION_HEADER_CLASS}>
+          <div className="flex items-center gap-2">
+            <span className="truncate">{config.title}</span>
+            {headerRight ? <span className="shrink-0 normal-case tracking-normal">{headerRight}</span> : null}
+          </div>
+        </div>
       )}
       {showContent && (
-        <div className={`grid gap-x-6 gap-y-4 ${gridCols} ${isCollapsible ? "mt-2" : ""} mt-3`}>{children}</div>
+        <div
+          className={
+            blockContent
+              ? isPremium
+                  ? "min-w-0 w-full px-2.5 pb-2 pt-1.5"
+                  : `min-w-0 w-full ${isCollapsible ? "mt-2" : "mt-3"}`
+              : isPremium
+                ? `min-w-0 w-full px-2.5 pb-2 pt-1.5 grid gap-x-3 gap-y-1.5 ${gridCols} [&>*]:min-w-0`
+                : `grid gap-x-4 gap-y-2 ${gridCols} ${isCollapsible ? "mt-2" : "mt-3"}`
+          }
+        >
+          {children}
+        </div>
       )}
     </section>
   );

@@ -1,18 +1,20 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
-import { getAdminContext } from "@/lib/admin/getAdminContext";
+import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
+import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
+import { assertGlJournalEntryReadableInAdminScope, scopeDimensionsFromAccess } from "@/lib/admin/accessScope";
 
 export const dynamic = "force-dynamic";
 
 /**
  * GET /api/admin/financials/journal-entries/[id]
- * Returns entry + lines with account code/name. Auth: getAdminContext().
+ * Returns entry + lines with account code/name. Auth: getAdminContextCached().
  */
 export async function GET(
     _request: NextRequest,
     context: { params: Promise<{ id: string }> }
 ) {
-    const ctx = await getAdminContext();
+    const ctx = await getAdminContextCached();
     if (!ctx.ok) {
         return NextResponse.json(
             { error: ctx.status === 401 ? "Unauthorized" : "Forbidden" },
@@ -49,6 +51,16 @@ export async function GET(
     }
 
     const lineList = (lineRows ?? []) as { line_no: number; account_id: string; debit_cents: number; credit_cents: number; job_id: string | null; schedule_id: string | null; customer_id: string | null; vendor_id: string | null }[];
+
+    const access = await getAdminAccessContextCached();
+    if (!access.ok) return adminContextFailureResponse(access);
+    const dim = scopeDimensionsFromAccess(access);
+    if (
+        !(await assertGlJournalEntryReadableInAdminScope(supabase, orgId, dim, entryRow as { source_type?: string | null; source_id?: string | null }, lineList))
+    ) {
+        return NextResponse.json({ error: "Not found" }, { status: 404 });
+    }
+
     const accountIds = [...new Set(lineList.map((l) => l.account_id))];
     const { data: accounts } = accountIds.length
         ? await supabase.from("gl_accounts").select("id, code, name").in("id", accountIds)

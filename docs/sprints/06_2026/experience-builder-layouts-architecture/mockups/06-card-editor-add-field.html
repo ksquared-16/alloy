@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>06 — Card editor add field</title>
+  <link rel="stylesheet" href="_shared.css" />
+  <style>
+    .card.editing { outline: 2px solid var(--pine); outline-offset: 2px; }
+    .card-toolbar { position:absolute; top:-8px; right:8px; display:flex; gap:4px; }
+    .mini-btn { font-size:10px; font-weight:600; padding:4px 8px; border-radius:6px; background:var(--pine); color:white; border:none; }
+  </style>
+</head>
+<body>
+<div class="frame">
+  <div class="label">Card Editor <span>direct add field on card</span></div>
+  <div class="body">
+    <div class="bos"><div class="bos-i on">▦</div></div>
+    <div class="config-page">
+      <div class="shell">
+        <div class="workspace" style="flex:1">
+          <div class="ws-toolbar"><h2>Editing · Household card</h2><span class="pill pill-draft">Draft</span><button class="btn-pine">Publish</button></div>
+          <div class="ws-body">
+            <div class="card-grid">
+              <div class="card span-6 editing" style="position:relative">
+                <div class="card-toolbar"><button class="mini-btn">½</button><button class="mini-btn">⋮</button></div>
+                <div class="card-h"><div class="ico">⌁</div><div><div class="title">Household</div><div class="sub">Blueprint: household</div></div></div>
+                <div class="field-row"><span class="lbl">Primary</span><span class="val">Sarah Chen</span></div>
+                <div class="field-row"><span class="lbl">Phone</span><span class="val">(555) 012-3456</span></div>
+                <div class="add-slot" style="margin-top:10px">+ Add field</div>
+              </div>
+              <div class="card span-6"><div class="card-h"><div class="ico">👶</div><div class="title">Children</div></div></div>
+            </div>
+            <p class="hint">Primary editing is direct on the card. Inspector is for Advanced only.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

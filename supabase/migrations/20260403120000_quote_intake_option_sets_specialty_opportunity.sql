@@ -14,57 +14,69 @@
 -- ---------------------------------------------------------------------------
 -- 1) Bedrooms / bathrooms option sets (all orgs)
 -- ---------------------------------------------------------------------------
-INSERT INTO public.option_sets (org_id, set_key, label, sort_order)
-SELECT o.id, v.set_key, v.label, v.ord
-FROM public.orgs o
-CROSS JOIN (
-  VALUES
-    ('bedrooms_booking'::text, 'Bedrooms (booking)'::text, 40::int),
-    ('bathrooms_booking'::text, 'Bathrooms (booking)'::text, 50),
-    ('specialty_cleaning_type'::text, 'Specialty cleaning type'::text, 60)
-) AS v (set_key, label, ord)
-ON CONFLICT (org_id, set_key) DO NOTHING;
+-- Guard: public.option_sets / option_set_items are first created in the NEXT
+-- migration (20260404130000). On a fresh `supabase db reset` they do not yet
+-- exist here, so this block no-ops. Behavior is unchanged where the tables exist
+-- (these seeds source FROM public.orgs and are 0-row on a fresh DB regardless).
+DO $$
+BEGIN
+  IF to_regclass('public.option_sets') IS NULL OR to_regclass('public.option_set_items') IS NULL THEN
+    RAISE NOTICE 'option_sets/option_set_items absent; skipping booking option-set seed (created later in 20260404130000).';
+    RETURN;
+  END IF;
 
-INSERT INTO public.option_set_items (option_set_id, item_key, label, sort_order)
-SELECT os.id, v.item_key, v.label, v.ord
-FROM public.option_sets os
-CROSS JOIN (
-  VALUES
-    ('bedrooms_booking', 'studio', 'Studio', 10),
-    ('bedrooms_booking', '1', '1', 20),
-    ('bedrooms_booking', '2', '2', 30),
-    ('bedrooms_booking', '3', '3', 40),
-    ('bedrooms_booking', '4', '4', 50),
-    ('bedrooms_booking', '5_plus', '5+', 60)
-) AS v (set_key, item_key, label, ord)
-WHERE os.set_key = v.set_key
-ON CONFLICT (option_set_id, item_key) DO NOTHING;
+  INSERT INTO public.option_sets (org_id, set_key, label, sort_order)
+  SELECT o.id, v.set_key, v.label, v.ord
+  FROM public.orgs o
+  CROSS JOIN (
+    VALUES
+      ('bedrooms_booking'::text, 'Bedrooms (booking)'::text, 40::int),
+      ('bathrooms_booking'::text, 'Bathrooms (booking)'::text, 50),
+      ('specialty_cleaning_type'::text, 'Specialty cleaning type'::text, 60)
+  ) AS v (set_key, label, ord)
+  ON CONFLICT (org_id, set_key) DO NOTHING;
 
-INSERT INTO public.option_set_items (option_set_id, item_key, label, sort_order)
-SELECT os.id, v.item_key, v.label, v.ord
-FROM public.option_sets os
-CROSS JOIN (
-  VALUES
-    ('bathrooms_booking', '1', '1', 10),
-    ('bathrooms_booking', '1_5', '1.5', 20),
-    ('bathrooms_booking', '2', '2', 30),
-    ('bathrooms_booking', '2_5', '2.5', 40),
-    ('bathrooms_booking', '3', '3', 50),
-    ('bathrooms_booking', '4_plus', '4+', 60)
-) AS v (set_key, item_key, label, ord)
-WHERE os.set_key = v.set_key
-ON CONFLICT (option_set_id, item_key) DO NOTHING;
+  INSERT INTO public.option_set_items (option_set_id, item_key, label, sort_order)
+  SELECT os.id, v.item_key, v.label, v.ord
+  FROM public.option_sets os
+  CROSS JOIN (
+    VALUES
+      ('bedrooms_booking', 'studio', 'Studio', 10),
+      ('bedrooms_booking', '1', '1', 20),
+      ('bedrooms_booking', '2', '2', 30),
+      ('bedrooms_booking', '3', '3', 40),
+      ('bedrooms_booking', '4', '4', 50),
+      ('bedrooms_booking', '5_plus', '5+', 60)
+  ) AS v (set_key, item_key, label, ord)
+  WHERE os.set_key = v.set_key
+  ON CONFLICT (option_set_id, item_key) DO NOTHING;
 
-INSERT INTO public.option_set_items (option_set_id, item_key, label, sort_order)
-SELECT os.id, v.item_key, v.label, v.ord
-FROM public.option_sets os
-CROSS JOIN (
-  VALUES
-    ('specialty_cleaning_type', 'move_out', 'Move-out cleaning', 10),
-    ('specialty_cleaning_type', 'heavy_clean', 'Heavy / deep cleaning', 20)
-) AS v (set_key, item_key, label, ord)
-WHERE os.set_key = v.set_key
-ON CONFLICT (option_set_id, item_key) DO NOTHING;
+  INSERT INTO public.option_set_items (option_set_id, item_key, label, sort_order)
+  SELECT os.id, v.item_key, v.label, v.ord
+  FROM public.option_sets os
+  CROSS JOIN (
+    VALUES
+      ('bathrooms_booking', '1', '1', 10),
+      ('bathrooms_booking', '1_5', '1.5', 20),
+      ('bathrooms_booking', '2', '2', 30),
+      ('bathrooms_booking', '2_5', '2.5', 40),
+      ('bathrooms_booking', '3', '3', 50),
+      ('bathrooms_booking', '4_plus', '4+', 60)
+  ) AS v (set_key, item_key, label, ord)
+  WHERE os.set_key = v.set_key
+  ON CONFLICT (option_set_id, item_key) DO NOTHING;
+
+  INSERT INTO public.option_set_items (option_set_id, item_key, label, sort_order)
+  SELECT os.id, v.item_key, v.label, v.ord
+  FROM public.option_sets os
+  CROSS JOIN (
+    VALUES
+      ('specialty_cleaning_type', 'move_out', 'Move-out cleaning', 10),
+      ('specialty_cleaning_type', 'heavy_clean', 'Heavy / deep cleaning', 20)
+  ) AS v (set_key, item_key, label, ord)
+  WHERE os.set_key = v.set_key
+  ON CONFLICT (option_set_id, item_key) DO NOTHING;
+END $$;
 
 -- ---------------------------------------------------------------------------
 -- 2) Location: bedrooms / bathrooms use option sets; avoid duplicate public booking fields

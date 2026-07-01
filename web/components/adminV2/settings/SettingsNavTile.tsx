@@ -1,0 +1,79 @@
+"use client";
+
+import type { ReactNode } from "react";
+import SettingsIntentLink from "@/components/adminV2/settings/SettingsIntentLink";
+import { settingsSurfacePrefix, type SettingsSurfaceMode } from "@/lib/adminV2/settingsSurfaceModes";
+
+const TILE_MIN_H = "min-h-[4.75rem]";
+
+export function SettingsNavTile({
+    href,
+    title,
+    children,
+    emphasis = false,
+    mode,
+    variant = "tile",
+}: {
+    href: string;
+    title: string;
+    children: ReactNode;
+    emphasis?: boolean;
+    mode?: SettingsSurfaceMode;
+    variant?: "tile" | "diagnostic";
+}) {
+    const description = mode ? `${settingsSurfacePrefix(mode)}${children}` : children;
+
+    if (variant === "diagnostic") {
+        return (
+            <SettingsIntentLink
+                href={href}
+                className="block rounded-md border border-dashed border-alloy-forge/22 bg-white/40 px-3 py-2 text-sm transition-colors hover:border-alloy-forge/35 hover:bg-white/70"
+            >
+                <span className="font-medium text-alloy-midnight/85">{title}</span>
+                <span className="mt-0.5 block text-xs leading-snug text-alloy-midnight/50">{description}</span>
+            </SettingsIntentLink>
+        );
+    }
+
+    return (
+        <SettingsIntentLink
+            href={href}
+            className={[
+                "group flex h-full flex-col justify-center rounded-xl border px-4 py-3 shadow-sm transition-colors",
+                emphasis ? "min-h-[5.5rem]" : TILE_MIN_H,
+                emphasis
+                    ? "border-alloy-pine/30 bg-alloy-pine/[0.07] hover:border-alloy-pine/45 hover:bg-alloy-pine/[0.11]"
+                    : "border-alloy-forge/12 bg-white/80 hover:border-alloy-pine/20 hover:bg-white",
+            ].join(" ")}
+        >
+            <div className={`leading-tight text-alloy-midnight group-hover:text-alloy-pine ${emphasis ? "text-base font-semibold" : "text-sm font-semibold"}`}>
+                {title}
+            </div>
+            <div className={`mt-1 line-clamp-2 leading-snug text-alloy-midnight/55 ${emphasis ? "text-xs" : "text-xs"}`}>
+                {description}
+            </div>
+        </SettingsIntentLink>
+    );
+}
+
+export function SettingsNavGroup({
+    label,
+    description,
+    children,
+}: {
+    label: string;
+    description?: string;
+    children: ReactNode;
+}) {
+    return (
+        <section className="space-y-3 rounded-2xl border border-alloy-forge/10 bg-white/70 px-5 py-4">
+            <div>
+                <h2 className="text-xs font-semibold uppercase tracking-wide text-alloy-midnight/50">{label}</h2>
+                {description ? (
+                    <p className="mt-0.5 text-[11px] leading-snug text-alloy-midnight/45">{description}</p>
+                ) : null}
+            </div>
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">{children}</div>
+        </section>
+    );
+}

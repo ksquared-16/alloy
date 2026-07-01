@@ -1,0 +1,193 @@
+/**
+ * Card 9c — Deterministic Task Assist command intent (no LLM).
+ */
+
+import { extractCommandSurfaceSlots } from "@/lib/adminV2/aiCommandSurface/commandSurfaceSlotExtract";
+import { stripTaskAssistCommandPrefixes } from "@/lib/agent/taskAssist/taskAssistCommandBarResolution";
+
+export type TaskAssistCommandIntentType = "draft_message" | "schedule_message" | "create_reminder" | "unknown";
+
+export type TaskAssistCommandIntentConfidence = "high" | "medium" | "low";
+
+export type TaskAssistCommandIntent = {
+    intent_type: TaskAssistCommandIntentType;
+    channel_hint: "sms" | "email" | null;
+    timing_hint_text: string | null;
+    message_goal_text: string | null;
+    search_text_hint: string | null;
+    confidence: TaskAssistCommandIntentConfidence;
+    warnings: string[];
+    /** When true, caller must not proceed with Task Assist resolution. */
+    workflow_blocked: boolean;
+};
+
+const WORKFLOW_RE =
+    /\b(workflows?|automatically|every\s+time|when\s+.+\s+(?:happens|complete|completes|finish|finishes)|trigger(?:ed|s)?|rules?)\b/i;
+
+const REMINDER_RE =
+    /\b(remind(?:\s+me|\s+them|\s+us)?|reminder|follow[\s-]?up|create\s+(?:a\s+)?(?:reminder|task)|operational\s+task)\b/i;
+
+const MESSAGE_RE = /\b(text|sms|email|message|send|draft|notify)\b/i;
+
+const SMS_RE = /\b(text|sms)\b/i;
+const EMAIL_RE = /\bemail\b/i;
+
+const TIMING_RE =
+    /\b(tomorrow|next\s+week|later|tonight|this\s+evening|schedule(?:d)?|send\s+later|(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday|mon|tue|tues|wed|thu|thur|thurs|fri|sat|sun)(?:\s+at)?|at\s+\d{1,2}(?::\d{2})?\s*(?:a\.?m\.?|p\.?m\.?)?|\d{1,2}\s*(?:a\.?m\.?|p\.?m\.?))\b/i;
+
+/** Legacy fallback when slot extract yields no entity fragment. */
+const SEARCH_STOP =
+    /\b(about|regarding|that|missing|forms|tomorrow|next\s+week|later|tonight|at\s+\d{1,2}(?::\d{2})?\s*(?:am|pm)?|please|thanks)\b/gi;
+
+export {
+    formatResolvedTimingLabel,
+    timingHintHasExplicitClock,
+    timingHintIsDateGranularOnly,
+    timingHintToDatetimeLocal,
+} from "@/lib/agent/taskAssist/taskAssistTimingResolve";
+
+function extractTimingHint(raw: string): string | null {
+    const m = raw.match(TIMING_RE);
+    return m ? m[0].trim() : null;
+}
+
+function buildSearchTextHintFallback(raw: string, goal: string | null): string | null {
+    let s = stripTaskAssistCommandPrefixes(raw);
+    s = s.replace(TIMING_RE, " ").trim();
+    if (goal) {
+        s = s.replace(new RegExp(`\\b(?:about|regarding|re:|that)\\s+${goal.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`, "i"), " ");
+    }
+    s = s.replace(SEARCH_STOP, " ").replace(/\s+/g, " ").trim();
+    s = s.replace(/^(the|a|an)\s+/i, "").trim();
+    if (s.length < 2) return null;
+    return s.slice(0, 64);
+}
+
+/**
+ * Parse operator natural language into Task Assist intent + hints (deterministic).
+ */
+export function parseTaskAssistCommandIntent(input: string): TaskAssistCommandIntent {
+    const raw = input.trim().slice(0, 500);
+    const warnings: string[] = [];
+
+    if (!raw) {
+        return {
+            intent_type: "unknown",
+            channel_hint: null,
+            timing_hint_text: null,
+            message_goal_text: null,
+            search_text_hint: null,
+            confidence: "low",
+            warnings: ["Empty command."],
+            workflow_blocked: false,
+        };
+    }
+
+    if (WORKFLOW_RE.test(raw)) {
+        return {
+            intent_type: "unknown",
+            channel_hint: null,
+            timing_hint_text: null,
+            message_goal_text: null,
+            search_text_hint: null,
+            confidence: "high",
+            warnings: ["That sounds like Workflow Assist, not Task Assist."],
+            workflow_blocked: true,
+        };
+    }
+
+    const slots = extractCommandSurfaceSlots(raw);
+    const timing_hint_text = slots.timing_phrase ?? extractTimingHint(raw);
+    const message_goal_text = slots.message_goal_text;
+    const search_text_hint =
+        slots.entity_search_text?.trim() || buildSearchTextHintFallback(raw, message_goal_text);
+
+    let channel_hint: "sms" | "email" | null = null;
+    if (EMAIL_RE.test(raw)) channel_hint = "email";
+    else if (SMS_RE.test(raw)) channel_hint = "sms";
+
+    const hasReminder = REMINDER_RE.test(raw);
+    const hasMessage = MESSAGE_RE.test(raw) || Boolean(message_goal_text);
+    const hasTiming = Boolean(timing_hint_text);
+
+    let intent_type: TaskAssistCommandIntentType = "unknown";
+    let confidence: TaskAssistCommandIntentConfidence = "low";
+
+    if (hasReminder && !hasMessage) {
+        intent_type = "create_reminder";
+        confidence = "medium";
+    } else if (hasReminder && hasMessage) {
+        intent_type = "create_reminder";
+        confidence = "medium";
+        warnings.push("Command mentions both messaging and reminder — using reminder flow.");
+    } else if (hasMessage && hasTiming) {
+        intent_type = "schedule_message";
+        confidence = channel_hint ? "high" : "medium";
+    } else if (hasMessage) {
+        intent_type = "draft_message";
+        confidence = channel_hint ? "high" : "medium";
+    } else if (hasTiming) {
+        intent_type = "schedule_message";
+        confidence = "low";
+        warnings.push("Timing detected without a clear message action — confirm channel and body in the workspace.");
+    } else if (search_text_hint) {
+        intent_type = "unknown";
+        confidence = "low";
+        warnings.push("No clear Task Assist action — find a target first, then choose draft, schedule, or reminder.");
+    }
+
+    return {
+        intent_type,
+        channel_hint,
+        timing_hint_text,
+        message_goal_text,
+        search_text_hint,
+        confidence,
+        warnings,
+        workflow_blocked: false,
+    };
+}
+
+export type TaskAssistCommandBootstrap = {
+    intent_type: TaskAssistCommandIntentType;
+    channel_hint?: "sms" | "email" | null;
+    instruction?: string | null;
+    timing_hint_text?: string | null;
+    open_schedule?: boolean;
+    reminder_title?: string | null;
+    reminder_due_hint?: string | null;
+    /** BOS communication objective — internal routing, not customer copy. */
+    communication_objective?: string | null;
+    /** Internal operator guidance from recommendation — not customer-facing. */
+    operator_guidance?: string | null;
+    /** Pre-synthesized outbound draft from BOS communication layer. */
+    synthesized_draft?: {
+        subject: string | null;
+        body: string;
+        sms_body?: string | null;
+        mode?: "deterministic" | "ai_assisted";
+    } | null;
+};
+
+export function buildTaskAssistCommandBootstrap(intent: TaskAssistCommandIntent): TaskAssistCommandBootstrap {
+    const instruction =
+        intent.message_goal_text?.trim() ||
+        (intent.intent_type === "draft_message" || intent.intent_type === "schedule_message" ?
+            intent.search_text_hint
+        :   null);
+
+    const reminderTitle =
+        intent.intent_type === "create_reminder" ?
+            intent.message_goal_text?.trim() || "Follow up"
+        :   null;
+
+    return {
+        intent_type: intent.intent_type,
+        channel_hint: intent.channel_hint,
+        instruction: instruction?.trim() || null,
+        timing_hint_text: intent.timing_hint_text,
+        open_schedule: intent.intent_type === "schedule_message",
+        reminder_title: reminderTitle,
+        reminder_due_hint: intent.intent_type === "create_reminder" ? intent.timing_hint_text : null,
+    };
+}

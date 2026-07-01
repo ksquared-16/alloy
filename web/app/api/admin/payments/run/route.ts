@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { assertRowOrg } from "@/lib/admin/assertRowOrg";
-import { adminContextFailureResponse, getAdminContext } from "@/lib/admin/getAdminContext";
+import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { requireAdmin } from "@/lib/adminAuth";
+import { emitEvent } from "@/lib/emitEvent";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 
 export const dynamic = "force-dynamic";
@@ -19,7 +20,7 @@ const BACKEND_URL =
 export async function POST(request: NextRequest) {
   const forbidden = await requireAdmin();
   if (forbidden) return forbidden;
-  const ctx = await getAdminContext();
+  const ctx = await getAdminContextCached();
   if (!ctx.ok) return adminContextFailureResponse(ctx);
 
   let body: Record<string, unknown>;
@@ -86,5 +87,50 @@ export async function POST(request: NextRequest) {
     textTruncated: responseText.slice(0, 500),
   });
   const data = responseText ? (() => { try { return JSON.parse(responseText); } catch { return {}; } })() : {};
+  /**
+   * Durable payment rows are written in the Python backend; this proxy is the UI boundary
+   * that observes final succeeded/failed responses and mirrors them into workflow_events.
+   */
+  if (data && typeof data === "object" && !Array.isArray(data)) {
+    const d = data as Record<string, unknown>;
+    if (res.ok && d.ok === true && d.status === "succeeded" && typeof d.payment_id === "string") {
+      try {
+        await emitEvent({
+          org_id: ctx.orgId,
+          event_type: "payment_succeeded",
+          entity_type: "payments",
+          entity_id: d.payment_id,
+          payload: {
+            job_id: jobId,
+            amount_cents: d.amount_cents,
+            provider_payment_id: d.provider_payment_id,
+            actor_user_id: ctx.userId,
+            source: "admin_payments_run",
+          },
+        });
+      } catch (e) {
+        console.warn("[PAYMENTS_RUN] emitEvent payment_succeeded", e instanceof Error ? e.message : e);
+      }
+    }
+    if (res.status === 400 && d.ok === false && typeof d.payment_id === "string" && d.requires_action !== true) {
+      try {
+        await emitEvent({
+          org_id: ctx.orgId,
+          event_type: "payment_failed",
+          entity_type: "payments",
+          entity_id: d.payment_id,
+          payload: {
+            job_id: jobId,
+            error: d.error,
+            status: d.status,
+            actor_user_id: ctx.userId,
+            source: "admin_payments_run",
+          },
+        });
+      } catch (e) {
+        console.warn("[PAYMENTS_RUN] emitEvent payment_failed", e instanceof Error ? e.message : e);
+      }
+    }
+  }
   return NextResponse.json(data, { status: res.status });
 }

@@ -1,0 +1,263 @@
+/**
+ * Layout editor conditional visibility presets — maps to LayoutCondition (V1).
+ */
+
+import type { LayoutCollectionColumn, LayoutCondition, LayoutItem } from "@/lib/layout/layoutV2";
+import {
+    LAYOUT_CONTACT_BLOCK_VISIBILITY_PATHS,
+    type LayoutEditorContactRole,
+} from "@/lib/layout/layoutEditorContactRoles";
+
+export const LAYOUT_EDITOR_VISIBILITY_RULES = [
+    "always",
+    "hide_when_empty",
+    "show_when_field_exists",
+    "show_when_related_exists",
+    "conditional",
+    "show_when_count_gt_1",
+    "show_when_contact_record_exists",
+    "show_when_contact_count_gt_1",
+    "show_when_not_primary",
+] as const;
+export type LayoutEditorVisibilityRule = (typeof LAYOUT_EDITOR_VISIBILITY_RULES)[number];
+
+export const LAYOUT_EDITOR_CROSS_FIELD_VISIBILITY_OPERATORS = [
+    "filled",
+    "equals",
+    "not_equals",
+    "is_true",
+    "is_false",
+] as const;
+export type LayoutEditorCrossFieldVisibilityOperator =
+    (typeof LAYOUT_EDITOR_CROSS_FIELD_VISIBILITY_OPERATORS)[number];
+
+export type LayoutEditorCrossFieldVisibility = {
+    sourcePath: string;
+    operator: LayoutEditorCrossFieldVisibilityOperator;
+    value?: string;
+};
+
+/** Draft conditional visibility while the operator configures sourcePath (not yet in visibleWhen). */
+export const LAYOUT_EDITOR_CROSS_FIELD_VISIBILITY_METADATA_KEY = "layoutEditorCrossFieldVisibility" as const;
+
+type VisibilityMetadataCarrier = {
+    visibleWhen?: LayoutCondition;
+    metadata?: Record<string, unknown>;
+};
+
+function isCrossFieldVisibilityDraft(raw: unknown): raw is LayoutEditorCrossFieldVisibility {
+    if (!raw || typeof raw !== "object") return false;
+    const draft = raw as LayoutEditorCrossFieldVisibility;
+    return typeof draft.sourcePath === "string" && typeof draft.operator === "string";
+}
+
+/** Read in-progress or persisted cross-field visibility from item metadata or visibleWhen. */
+export function readLayoutEditorCrossFieldVisibilityDraft(
+    item: VisibilityMetadataCarrier,
+    boundPath: string,
+): LayoutEditorCrossFieldVisibility | null {
+    const fromCondition = parseCrossFieldVisibility(item.visibleWhen, boundPath);
+    if (fromCondition) return fromCondition;
+    const raw = item.metadata?.[LAYOUT_EDITOR_CROSS_FIELD_VISIBILITY_METADATA_KEY];
+    return isCrossFieldVisibilityDraft(raw) ? raw : null;
+}
+
+export function resolveLayoutEditorFieldVisibilityRule(
+    item: VisibilityMetadataCarrier,
+    boundPath: string,
+): LayoutEditorVisibilityRule {
+    if (readLayoutEditorCrossFieldVisibilityDraft(item, boundPath)) return "conditional";
+    return resolveVisibilityRuleKey(item.visibleWhen, boundPath);
+}
+
+export function writeLayoutEditorCrossFieldVisibilityMetadata(
+    metadata: Record<string, unknown> | undefined,
+    crossField: LayoutEditorCrossFieldVisibility | null | undefined,
+): Record<string, unknown> {
+    const next = { ...(metadata ?? {}) };
+    if (crossField) {
+        next[LAYOUT_EDITOR_CROSS_FIELD_VISIBILITY_METADATA_KEY] = crossField;
+    } else {
+        delete next[LAYOUT_EDITOR_CROSS_FIELD_VISIBILITY_METADATA_KEY];
+    }
+    return next;
+}
+
+export function readLayoutEditorCrossFieldVisibilityDraftFromItem(
+    item: Pick<LayoutItem, "visibleWhen" | "metadata" | "refKey">,
+): LayoutEditorCrossFieldVisibility | null {
+    const boundPath = item.refKey.startsWith("_") ? item.refKey : item.refKey;
+    return readLayoutEditorCrossFieldVisibilityDraft(item, boundPath);
+}
+
+export function readLayoutEditorCrossFieldVisibilityDraftFromColumn(
+    col: Pick<LayoutCollectionColumn, "visibleWhen" | "metadata" | "refKey">,
+): LayoutEditorCrossFieldVisibility | null {
+    return readLayoutEditorCrossFieldVisibilityDraft(col, col.refKey);
+}
+
+export type LayoutEditorVisibilityPreset = {
+    key: LayoutEditorVisibilityRule;
+    label: string;
+    description: string;
+};
+
+export const LAYOUT_EDITOR_VISIBILITY_PRESETS: LayoutEditorVisibilityPreset[] = [
+    { key: "always", label: "Always show", description: "Visible regardless of data." },
+    { key: "hide_when_empty", label: "Hide when empty", description: "Hide when the bound field has no value." },
+    { key: "show_when_field_exists", label: "Show when field exists", description: "Show only when the bound field has a value." },
+    {
+        key: "show_when_related_exists",
+        label: "Show when related record exists",
+        description: "Show when a related path resolves to a value.",
+    },
+    {
+        key: "conditional",
+        label: "Conditional (another field)",
+        description: "Show or hide based on another field on this record.",
+    },
+    { key: "show_when_count_gt_1", label: "Show when count > 1", description: "Show when a collection has more than one row." },
+    {
+        key: "show_when_contact_record_exists",
+        label: "Show when contact record exists",
+        description: "Show when the contact block resolved a person from household relationships.",
+    },
+    {
+        key: "show_when_contact_count_gt_1",
+        label: "Show when contact count > 1",
+        description: "Show when the contact block resolved more than one matching person.",
+    },
+    {
+        key: "show_when_not_primary",
+        label: "Show when not primary",
+        description: "Show when the resolved contact is not the primary household contact.",
+    },
+];
+
+const CONTACT_VISIBILITY_PATHS = new Set<string>(Object.values(LAYOUT_CONTACT_BLOCK_VISIBILITY_PATHS));
+
+export function isLayoutEditorContactVisibilityPath(path: string | undefined): boolean {
+    const key = path?.trim() ?? "";
+    return CONTACT_VISIBILITY_PATHS.has(key);
+}
+
+/** Presets available for fields inside a contact_block (relationship-aware). */
+export function layoutEditorContactFieldVisibilityPresets(
+    contactRole?: LayoutEditorContactRole,
+): LayoutEditorVisibilityPreset[] {
+    const base = LAYOUT_EDITOR_VISIBILITY_PRESETS.filter((preset) =>
+        ["always", "hide_when_empty", "show_when_field_exists", "show_when_contact_record_exists"].includes(preset.key),
+    );
+    const extras: LayoutEditorVisibilityPreset[] = [
+        LAYOUT_EDITOR_VISIBILITY_PRESETS.find((p) => p.key === "show_when_contact_count_gt_1")!,
+    ];
+    if (contactRole && contactRole !== "primary") {
+        extras.push(LAYOUT_EDITOR_VISIBILITY_PRESETS.find((p) => p.key === "show_when_not_primary")!);
+    }
+    return [...base, ...extras.filter(Boolean)];
+}
+
+export function parseCrossFieldVisibility(
+    condition: LayoutCondition | undefined,
+    boundPath: string,
+): LayoutEditorCrossFieldVisibility | null {
+    if (!condition?.path?.trim()) return null;
+    if (condition.path === boundPath) return null;
+    if (isLayoutEditorContactVisibilityPath(condition.path)) return null;
+    if (condition.type === "exists") {
+        return { sourcePath: condition.path, operator: "filled" };
+    }
+    if (condition.type === "equals") {
+        if (condition.value === "true") return { sourcePath: condition.path, operator: "is_true" };
+        if (condition.value === "false") return { sourcePath: condition.path, operator: "is_false" };
+        return { sourcePath: condition.path, operator: "equals", value: condition.value ?? "" };
+    }
+    if (condition.type === "not_equals") {
+        return { sourcePath: condition.path, operator: "not_equals", value: condition.value ?? "" };
+    }
+    return null;
+}
+
+export function buildCrossFieldVisibilityCondition(
+    crossField: LayoutEditorCrossFieldVisibility,
+): LayoutCondition | undefined {
+    const sourcePath = crossField.sourcePath.trim();
+    if (!sourcePath) return undefined;
+    switch (crossField.operator) {
+        case "filled":
+            return { type: "exists", path: sourcePath };
+        case "equals":
+            return { type: "equals", path: sourcePath, value: crossField.value ?? "" };
+        case "not_equals":
+            return { type: "not_equals", path: sourcePath, value: crossField.value ?? "" };
+        case "is_true":
+            return { type: "equals", path: sourcePath, value: "true" };
+        case "is_false":
+            return { type: "equals", path: sourcePath, value: "false" };
+        default:
+            return undefined;
+    }
+}
+
+export function resolveVisibilityRuleKey(
+    condition: LayoutCondition | undefined,
+    boundPath: string,
+): LayoutEditorVisibilityRule {
+    if (!condition) return "always";
+    const crossField = parseCrossFieldVisibility(condition, boundPath);
+    if (crossField) return "conditional";
+    if (condition.type === "count_gt") {
+        if (condition.path === LAYOUT_CONTACT_BLOCK_VISIBILITY_PATHS.resolvedCount) {
+            return "show_when_contact_count_gt_1";
+        }
+        return "show_when_count_gt_1";
+    }
+    if (condition.type === "exists") {
+        if (condition.path === LAYOUT_CONTACT_BLOCK_VISIBILITY_PATHS.resolved) {
+            return "show_when_contact_record_exists";
+        }
+        if (condition.path === LAYOUT_CONTACT_BLOCK_VISIBILITY_PATHS.isNotPrimary) {
+            return "show_when_not_primary";
+        }
+        if (condition.path === boundPath) return "hide_when_empty";
+        return "show_when_related_exists";
+    }
+    return "show_when_field_exists";
+}
+
+export function visibilityConditionForRule(
+    rule: LayoutEditorVisibilityRule,
+    boundPath: string,
+    relatedPath?: string,
+): LayoutCondition | undefined {
+    switch (rule) {
+        case "always":
+            return undefined;
+        case "hide_when_empty":
+            return { type: "exists", path: boundPath };
+        case "show_when_field_exists":
+            return { type: "exists", path: boundPath };
+        case "show_when_related_exists":
+            return { type: "exists", path: relatedPath?.trim() || boundPath };
+        case "show_when_count_gt_1":
+            return { type: "count_gt", path: relatedPath?.trim() || boundPath, value: "1" };
+        case "show_when_contact_record_exists":
+            return { type: "exists", path: LAYOUT_CONTACT_BLOCK_VISIBILITY_PATHS.resolved };
+        case "show_when_contact_count_gt_1":
+            return {
+                type: "count_gt",
+                path: LAYOUT_CONTACT_BLOCK_VISIBILITY_PATHS.resolvedCount,
+                value: "1",
+            };
+        case "show_when_not_primary":
+            return { type: "exists", path: LAYOUT_CONTACT_BLOCK_VISIBILITY_PATHS.isNotPrimary };
+        case "conditional":
+            return undefined;
+        default:
+            return undefined;
+    }
+}
+
+export function validateVisibilityRule(rule: string): rule is LayoutEditorVisibilityRule {
+    return (LAYOUT_EDITOR_VISIBILITY_RULES as readonly string[]).includes(rule);
+}

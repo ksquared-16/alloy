@@ -1,10 +1,13 @@
 "use client";
 
+import { useMemo } from "react";
 import type { CSSProperties } from "react";
-import { neutral, derived, brand } from "@/styles/tokens/colors";
 import type { DepartmentWorkspaceModel } from "@/lib/ui-v2/workspace-types";
+import { operationalWorkspaceShellStyle } from "@/lib/visualContext";
 import type { WorkspaceActionHandler } from "@/lib/ui-v2/workspace-actions";
-import { SignalBlock, KPIBlock, QueueBlock, WorkBlock, ActionsBlock } from "../blocks";
+import { SignalBlock, KPIBlock, QueueBlock, WorkBlock } from "../blocks";
+import { WorkspaceCommandRailActionsSection } from "@/app/adminV2/components/workspace/WorkspaceCommandRailActionsSection";
+import { countActionsVm } from "@/lib/bos/countActionsVm";
 import "../workspace.css";
 
 type Props = {
@@ -13,44 +16,21 @@ type Props = {
 };
 
 /**
- * Department workspace — scoped tokens for compression + ambient (AdminV2 river stone / KPI / field washes).
- * No dark chamber; panels use soft deck + rail washes from derived tokens.
- */
-const deptRootStyle: CSSProperties = {
-  backgroundColor: "transparent",
-  color: neutral.textPrimary,
-  ["--d-text-primary" as string]: neutral.textPrimary,
-  ["--d-page-bg" as string]: neutral.background,
-  ["--d-border" as string]: derived.border,
-  ["--d-muted" as string]: derived.textSecondary,
-  ["--d-surface" as string]: neutral.surface,
-  ["--d-brand" as string]: brand.primary,
-  ["--d-pine" as string]: brand.secondary,
-  ["--d-top-wash" as string]: derived.kpiRailWash,
-  ["--d-panel" as string]: derived.chromeDeckBg,
-  ["--d-panel-quiet" as string]: derived.inspectorCommandRailWash,
-  ["--d-rail" as string]: derived.inspectorCommandRail,
-  ["--d-field-veil" as string]: derived.canvasFieldWash,
-  ["--d-ambient-core" as string]: derived.ambientLifeBloomMid,
-  ["--d-kpi-tint" as string]: derived.kpiBandBusinessLight,
-  ["--d-kpi-ai-tint" as string]: derived.kpiBandAiLight,
-  ["--d-summary-wash" as string]: derived.maskOverlay,
-  ["--d-boundary-inset" as string]: derived.adminV2BoundaryAmberInset,
-  /** KPIBand / inspector grammar (main AdminV2 shell) */
-  ["--d-kpi-band-shadow" as string]: derived.kpiBandShadow,
-  ["--d-admin-amber" as string]: derived.adminV2BoundaryAmber,
-  ["--d-rail-hairline" as string]: derived.inspectorCommandHairline,
-  ["--d-rail-sep" as string]: derived.inspectorChamberSeparation,
-  ["--d-ambient-edge" as string]: derived.ambientLifeBloomEdge,
-  ["--d-field-depth" as string]: derived.canvasFieldDepth,
-  ["--d-card-shadow" as string]: derived.cardShadow,
-};
-
-/**
  * Page split: primary column (~75%) = control deck → operational + workflows;
  * command column (~25%) = full-height system rail aligned to top.
  */
 export default function DepartmentWorkspace({ model, onAction }: Props) {
+  const deptShellStyle: CSSProperties = useMemo(
+    () =>
+      operationalWorkspaceShellStyle({
+        layer: "department",
+        visualContextKey: model.visualContextKey,
+        departmentDefaultVisualContextKey: model.departmentDefaultVisualContextKey,
+        departmentKey: model.departmentKey,
+      }),
+    [model.departmentKey, model.departmentDefaultVisualContextKey, model.visualContextKey]
+  );
+
   const briefParagraphs =
     model.aiSummary?.bodyParagraphs?.filter((p) => p.trim()) ??
     (model.aiSummary?.body?.trim() ? [model.aiSummary.body.trim()] : []);
@@ -63,12 +43,13 @@ export default function DepartmentWorkspace({ model, onAction }: Props) {
   const hasKpis = model.kpis.length > 0;
   const hasTopStack = hasBrief || hasSignals || hasAwareness;
   const hasControlDeck = hasTopStack || hasKpis;
+  const departmentActionCount = countActionsVm(model.actionsRail, "department");
 
   return (
     <div
       data-ws-surface="department"
       className="adminv2-ws-root adminv2-ws-department adminv2-ws-dept-v2"
-      style={deptRootStyle}
+      style={deptShellStyle}
     >
       <div className="adminv2-ws-dept-v2-contain">
         <div className="adminv2-ws-dept-v2-page-split">
@@ -160,7 +141,13 @@ export default function DepartmentWorkspace({ model, onAction }: Props) {
               data-adminv2-workspace-command-rail
               aria-label="Decisions and actions"
             >
-              <ActionsBlock model={model.actionsRail} onAction={onAction} title="Actions" surface="department" />
+              <WorkspaceCommandRailActionsSection
+                model={model.actionsRail}
+                onAction={onAction}
+                surface="department"
+                actionCount={departmentActionCount}
+                title="Actions"
+              />
             </aside>
           </div>
         </div>

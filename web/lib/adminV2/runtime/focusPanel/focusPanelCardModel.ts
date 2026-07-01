@@ -1,0 +1,171 @@
+/**
+ * Universal Card presentation model — business question first, not layout sections.
+ * @see docs/platform/operator/operational-surface-design-system.md (System 5)
+ * @see docs/platform/operator/universal-card-archetypes.md (System 5A)
+ * @see docs/sprints/06_2026/alloy_os_system_4_universal_card_system.md
+ */
+
+import type { FocusPanelCardDensity, FocusPanelCardSpan } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardGrid";
+
+export const FOCUS_PANEL_CARD_TIERS = [
+    "attention",
+    "work",
+    "context",
+    "reference",
+    "historical",
+    "metric",
+] as const;
+
+export type FocusPanelCardTier = (typeof FOCUS_PANEL_CARD_TIERS)[number];
+
+/** System 5 card role — maps tier to presentation vocabulary. */
+export type FocusPanelCardRole =
+    | "critical"
+    | "active-work"
+    | "metric"
+    | "context"
+    | "history"
+    | "reference";
+
+/** System 5A card archetype — purpose-specific composition within shared design language. */
+export const FOCUS_PANEL_CARD_ARCHETYPES = [
+    "action",
+    "status",
+    "summary",
+    "profile",
+    "collection",
+    "metric",
+    "timeline",
+    "launcher",
+] as const;
+
+export type FocusPanelCardArchetype = (typeof FOCUS_PANEL_CARD_ARCHETYPES)[number];
+
+export type FocusPanelProfileField = {
+    label: string;
+    value: string | null;
+};
+
+export type FocusPanelCollectionItem = {
+    label: string;
+    status?: string | null;
+};
+
+export type FocusPanelTimelineEvent = {
+    when: string;
+    label: string;
+};
+
+export type FocusPanelLauncherRow = {
+    key: string;
+    label: string;
+    description: string;
+    actionLabel: string;
+};
+
+export type FocusPanelCardPayload = {
+    profileFields?: FocusPanelProfileField[];
+    collectionItems?: FocusPanelCollectionItem[];
+    overflowCount?: number;
+    statusIssues?: string[];
+    timelineEvents?: FocusPanelTimelineEvent[];
+    launcherRows?: FocusPanelLauncherRow[];
+};
+
+/**
+ * Platform-owned card blueprint keys (not layout section keys).
+ *
+ * All keys in this registry are `@grain case` — the Focus Panel is always
+ * case-grain (subject is an Opportunity). Child-grain and candidate-grain cards
+ * are defined separately and never rendered in the case-grain Focus Panel.
+ *
+ * @see docs/platform/operator/operational-grain-doctrine.md §5
+ */
+export const FOCUS_PANEL_CARD_KEYS = [
+    /** @grain case — family attention flags */
+    "attention",
+    /** @grain case — current lifecycle mission label */
+    "current_mission",
+    /** @grain case — open work items for this family */
+    "current_work",
+    /** @grain case — required information checklist */
+    "required_information",
+    /** @grain case — enrollment readiness KPI */
+    "readiness_kpi",
+    /** @grain case — case health signal */
+    "health",
+    /** @grain case — tour booking status + actions */
+    "tour_summary",
+    /** @grain case — household identity + contact fields (fully editable) */
+    "household",
+    /** @grain case — children roster (read-only; child facts are case-grain display) */
+    "children",
+    /** @grain case — outreach / scheduled sends status (action-only) */
+    "communications",
+    /** @grain case — uploaded documents */
+    "documents",
+    /** @grain case — available workflow actions launcher */
+    "work_launcher",
+    /** @grain case — lifecycle workflow steps rail */
+    "workflow_steps",
+    /** @grain case — open tasks */
+    "tasks",
+    /** @grain case — configured automations */
+    "automations",
+    /** @grain case — primary recommended next action */
+    "primary_next_action",
+    /** @grain case — event timeline (read-only append-only) */
+    "timeline",
+    /** @grain case — billing configuration preview (deferred; read-only until assignment route exists) */
+    "billing_preview",
+    /** @grain case — notes */
+    "notes",
+    /** @grain case — audit trail */
+    "audit",
+    /** @grain case — workflow completion history */
+    "workflow_history",
+] as const;
+
+export type FocusPanelCardKey = (typeof FOCUS_PANEL_CARD_KEYS)[number];
+
+export type FocusPanelCardAction = {
+    label: string;
+    onClick?: () => void;
+    href?: string;
+    variant?: "primary" | "secondary";
+};
+
+export type FocusPanelCardModel = {
+    key: FocusPanelCardKey;
+    /** System 5A archetype — platform-owned composition primitive. */
+    archetype: FocusPanelCardArchetype;
+    /** Operator-facing card title — the business question category (1–3 words). */
+    title: string;
+    /** Meaning-first answer line (required for scan). */
+    insight: string;
+    tier: FocusPanelCardTier;
+    span: FocusPanelCardSpan;
+    density: FocusPanelCardDensity;
+    statusChip?: string | null;
+    statusTone?: "ready" | "blocked" | "at-risk" | "due" | "done" | "neutral";
+    primaryAction?: FocusPanelCardAction | null;
+    secondaryInsight?: string | null;
+    iconName?: string | null;
+    /** Archetype-specific structured body (profile rows, collection items, etc.). */
+    payload?: FocusPanelCardPayload;
+    /** When false, card is omitted from the grid. */
+    visible: boolean;
+};
+
+/**
+ * One placed card in the grid. `key` is the platform-owned card TYPE (drives the
+ * model + renderer). `instanceKey` is the stable per-placement id (defaults to the
+ * type) so the same type can be duplicated without colliding React keys.
+ */
+export type FocusPanelCardGridCell = Pick<FocusPanelCardModel, "key" | "span" | "density" | "tier"> & {
+    instanceKey?: string;
+};
+
+export type FocusPanelCardGridSpec = {
+    rows: { cells: FocusPanelCardGridCell[] }[];
+};

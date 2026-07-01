@@ -1,46 +1,438 @@
 "use client";
 
-import Link from "next/link";
-import { neutral, brand } from "@/styles/tokens/colors";
-import { PanelLeftClose, PanelLeft } from "lucide-react";
+import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
+import { usePathname } from "next/navigation";
+import {
+    ChevronDown,
+    ChevronRight,
+    Home,
+    PanelLeftClose,
+    PanelLeft,
+    Settings,
+    Workflow,
+} from "lucide-react";
+import { neutral, palette, derived } from "@/styles/tokens/colors";
+import {
+    CANONICAL_ADMIN_BASE,
+    CANONICAL_OPERATOR_BASE,
+    CANONICAL_SETTINGS_BASE,
+    isCanonicalFormsPath,
+    normalizeToCanonicalAdminPath,
+} from "@/lib/admin/canonicalAdminRoutes";
+import { parseOperatorWorkUnitPath } from "@/lib/admin/canonicalOperatorRoutes";
+import type { OperatorLifecycleLandingCard } from "@/lib/admin/buildOperatorLifecycleLanding";
+import {
+    loadOperatorLifecycleLandingCards,
+    peekOperatorLifecycleLandingCards,
+} from "@/lib/admin/loadOperatorLifecycleLandingClient";
+import { warmOperatorWorkUnitEntryFromHref } from "@/lib/admin/operatorWorkUnitEntryWarm";
+import { workUnitRouteSlugsEquivalent } from "@/lib/admin/workUnitRouteSlug";
+import { AdminV2NavLink } from "@/app/adminV2/components/navigation/AdminV2NavLink";
+import {
+    SidebarAnalyticsNavItem,
+    SidebarInboxNavItem,
+    SidebarProcessingNavItem,
+    SidebarTasksNavItem,
+} from "@/app/adminV2/components/SidebarModalNavItems";
+import { appendWorkspaceSiteToPath, readStickyWorkspaceSiteIdForNavigation } from "@/lib/adminV2/workspaceSiteFilterClient";
+import { useActiveAdminV2WorkspaceModal } from "@/lib/adminV2/useActiveWorkspaceModal";
+import SidebarConfigurationModeNav from "@/app/adminV2/components/SidebarConfigurationModeNav";
+import { readInboxUnreadCountCache } from "@/lib/adminV2/inboxNavUnreadCache";
+import { readOperationalTasksNavCountsCache } from "@/lib/adminV2/operationalTasksNavCountsCache";
+import { composeShellNavigationSurfaceViewModel } from "@/lib/adminV2/runtime/surface/shellNavigationSurfaceViewModel";
 
-export default function Sidebar({
-  collapsed,
-  onToggle,
+const WORKSPACE = CANONICAL_OPERATOR_BASE;
+const SETTINGS_HREF = CANONICAL_ADMIN_BASE;
+
+const EXPANDED_PRIMARY_LINK = "adminv2-sidebar-primary-link block w-full rounded-md px-2 py-1.5 font-medium";
+const EXPANDED_QUEUE_LINK = "adminv2-sidebar-queue-link";
+
+function normalizeAdminPath(pathname: string): string {
+    return normalizeToCanonicalAdminPath(pathname);
+}
+
+function parseWorkUnitSlug(path: string): string | null {
+    return parseOperatorWorkUnitPath(normalizeToCanonicalAdminPath(path)).workUnitSlug;
+}
+
+function workspaceHref(path: string): string {
+    return appendWorkspaceSiteToPath(path, readStickyWorkspaceSiteIdForNavigation());
+}
+
+function isAdminConfigPath(path: string): boolean {
+    if (path === CANONICAL_OPERATOR_BASE || path.startsWith(`${CANONICAL_OPERATOR_BASE}/`)) {
+        return false;
+    }
+    if (path.startsWith("/admin/tasks") || path.startsWith("/admin/messages")) return false;
+    if (isCanonicalFormsPath(path)) return false;
+    if (path.startsWith(`${CANONICAL_ADMIN_BASE}/workspace`)) return false;
+    return (
+        path === CANONICAL_SETTINGS_BASE
+        || path.startsWith(`${CANONICAL_SETTINGS_BASE}/`)
+        || path === CANONICAL_ADMIN_BASE
+        || path.startsWith(`${CANONICAL_ADMIN_BASE}/`)
+    );
+}
+
+function SidebarNav({
+    collapsed,
+    onToggle,
 }: {
-  collapsed: boolean;
-  onToggle: () => void;
+    collapsed: boolean;
+    onToggle: () => void;
 }) {
-  return (
-    <aside
-      className="flex flex-col flex-shrink-0 border-r transition-[width] duration-200 overflow-hidden"
-      style={{
-        width: collapsed ? 48 : 220,
-        backgroundColor: neutral.surface,
-        borderColor: neutral.border,
-      }}
-    >
-      <button
-        type="button"
-        onClick={onToggle}
-        className="flex items-center justify-center h-12 w-full flex-shrink-0 hover:opacity-90"
-        style={{ color: brand.primary }}
-        aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-      >
-        {collapsed ? <PanelLeft size={20} /> : <PanelLeftClose size={20} />}
-      </button>
-      {!collapsed && (
-        <div className="px-3 py-2 text-sm flex flex-col gap-2" style={{ color: neutral.textSecondary }}>
-          <span>Sidebar</span>
-          <Link
-            href="/adminV2/workspace"
-            className="text-xs font-semibold hover:underline"
-            style={{ color: brand.primary }}
-          >
-            UI V2 workspace
-          </Link>
-        </div>
-      )}
-    </aside>
-  );
+    const pathname = usePathname();
+    const path = useMemo(() => normalizeAdminPath(pathname), [pathname]);
+    const workUnitSlug = parseWorkUnitSlug(path);
+    const onSettings = isAdminConfigPath(path);
+    // When an operational modal is open it is the active workspace; route-based highlights
+    // (Workspace / lifecycle) defer to it so the rail shows a single active anchor.
+    const activeModal = useActiveAdminV2WorkspaceModal();
+    const modalOpen = activeModal != null;
+
+    const [lifecycleCards, setLifecycleCards] = useState<OperatorLifecycleLandingCard[]>(
+        () => peekOperatorLifecycleLandingCards() ?? [],
+    );
+    const [lifecycleLoading, setLifecycleLoading] = useState(
+        () => peekOperatorLifecycleLandingCards() == null,
+    );
+    const [expandedLifecycleIds, setExpandedLifecycleIds] = useState<Set<string>>(() => new Set());
+
+    useEffect(() => {
+        let cancelled = false;
+        if (!peekOperatorLifecycleLandingCards()) {
+            setLifecycleLoading(true);
+        }
+        void loadOperatorLifecycleLandingCards()
+            .then((cards) => {
+                if (cancelled) return;
+                setLifecycleCards(cards);
+                if (cards.length === 1) {
+                    setExpandedLifecycleIds(new Set([cards[0]!.id]));
+                } else if (cards.length > 1) {
+                    setExpandedLifecycleIds(new Set(cards.map((c) => c.id)));
+                }
+            })
+            .finally(() => {
+                if (!cancelled) setLifecycleLoading(false);
+            });
+        return () => {
+            cancelled = true;
+        };
+    }, []);
+
+    const toggleLifecycleExpanded = useCallback((id: string) => {
+        setExpandedLifecycleIds((prev) => {
+            const next = new Set(prev);
+            if (next.has(id)) next.delete(id);
+            else next.add(id);
+            return next;
+        });
+    }, []);
+
+    // ShellNavigationSurfaceViewModel — the persistent left nav is mounted ABOVE the route (in
+    // AdminV2Shell) so it commits once and never remounts across workspace/work-unit navigation.
+    // This VM formalizes that ownership: items + active route + modal launchers compose one stable
+    // surface; count badges are descriptive snapshots read from the SAME warm caches the reactive
+    // badge hooks write (no duplicate fetch) and patch quietly in place. Diagnostics only — does not
+    // gate nav rendering.
+    const shellNavVm = useMemo(() => {
+        const tasks = readOperationalTasksNavCountsCache("open");
+        return composeShellNavigationSurfaceViewModel({
+            // Standing items: home + settings + 4 modal launchers + one entry per lifecycle process.
+            itemCount: 2 + 4 + lifecycleCards.length,
+            activeRouteKey:
+                activeModal != null
+                    ? `modal:${activeModal}`
+                    : workUnitSlug != null
+                      ? `work_unit:${workUnitSlug}`
+                      : path,
+            activeRouteResolvable: path.length > 0,
+            launcherKeys: ["inbox", "processing", "tasks", "analytics"],
+            inboxUnread: readInboxUnreadCountCache(),
+            workItems: tasks ? tasks.open + tasks.due_soon + tasks.overdue : null,
+            processing: null,
+            notifications: null,
+            collapsed,
+            warmFromSession: lifecycleCards.length > 0,
+        });
+    }, [path, workUnitSlug, activeModal, collapsed, lifecycleCards.length]);
+
+    const homeHref = workspaceHref(WORKSPACE);
+    const railWidth = collapsed ? 56 : 280;
+
+    const homeLink = (
+        <AdminV2NavLink
+            href={homeHref}
+            title="Workspace"
+            aria-label="Workspace"
+            active={!modalOpen && (path === WORKSPACE || path === `${WORKSPACE}/`)}
+            className={collapsed ? "adminv2-sidebar-rail-link" : EXPANDED_PRIMARY_LINK}
+        >
+            {collapsed ? (
+                <Home size={20} strokeWidth={1.75} />
+            ) : (
+                <span className="inline-flex items-center gap-2">
+                    <Home size={16} strokeWidth={1.75} />
+                    Workspace
+                </span>
+            )}
+        </AdminV2NavLink>
+    );
+
+    const processingLink = <SidebarProcessingNavItem collapsed={collapsed} />;
+
+    const tasksLink = <SidebarTasksNavItem collapsed={collapsed} />;
+
+    const inboxLink = <SidebarInboxNavItem collapsed={collapsed} />;
+
+    const analyticsLink = <SidebarAnalyticsNavItem collapsed={collapsed} />;
+
+    const settingsLink = (
+        <AdminV2NavLink
+            href={SETTINGS_HREF}
+            title="Admin"
+            aria-label="Admin"
+            active={onSettings}
+            className={collapsed ? "adminv2-sidebar-rail-link" : EXPANDED_PRIMARY_LINK}
+        >
+            {collapsed ? (
+                <Settings size={20} strokeWidth={1.75} />
+            ) : (
+                <span className="inline-flex items-center gap-2">
+                    <Settings size={16} strokeWidth={1.75} />
+                    Admin
+                </span>
+            )}
+        </AdminV2NavLink>
+    );
+
+    const lifecycleNavExpanded = (
+        <>
+            {lifecycleLoading ? (
+                <p className="adminv2-sidebar-muted px-2 py-2 text-xs" aria-busy="true">
+                    Loading processes…
+                </p>
+            ) : null}
+            {!lifecycleLoading && lifecycleCards.length === 0 ? (
+                <p className="adminv2-sidebar-muted px-2 py-2 text-xs">No processes configured.</p>
+            ) : null}
+            <div className="space-y-1">
+                {lifecycleCards.map((lifecycle) => {
+                    const isExpanded = expandedLifecycleIds.has(lifecycle.id);
+                    const lifecycleEntryActive =
+                        !modalOpen && path === lifecycle.entryHref && !workUnitSlug;
+                    return (
+                        <div key={lifecycle.id} className="space-y-0.5">
+                            <div className="flex items-stretch gap-0.5">
+                                <button
+                                    type="button"
+                                    className="adminv2-sidebar-expand-btn flex h-8 w-7 shrink-0 items-center justify-center rounded-md"
+                                    aria-expanded={isExpanded}
+                                    aria-label={
+                                        isExpanded
+                                            ? `Collapse ${lifecycle.label}`
+                                            : `Expand ${lifecycle.label}`
+                                    }
+                                    onClick={() => toggleLifecycleExpanded(lifecycle.id)}
+                                >
+                                    {isExpanded ? (
+                                        <ChevronDown size={16} strokeWidth={1.75} aria-hidden />
+                                    ) : (
+                                        <ChevronRight size={16} strokeWidth={1.75} aria-hidden />
+                                    )}
+                                </button>
+                                <AdminV2NavLink
+                                    href={workspaceHref(lifecycle.entryHref)}
+                                    active={lifecycleEntryActive}
+                                    className={`min-w-0 flex-1 ${EXPANDED_PRIMARY_LINK}`}
+                                    title={lifecycle.label}
+                                    onMouseEnter={() =>
+                                        warmOperatorWorkUnitEntryFromHref(
+                                            lifecycle.entryHref,
+                                            null,
+                                            "sidebar_lifecycle_hover",
+                                        )
+                                    }
+                                    onFocus={() =>
+                                        warmOperatorWorkUnitEntryFromHref(
+                                            lifecycle.entryHref,
+                                            null,
+                                            "sidebar_lifecycle_focus",
+                                        )
+                                    }
+                                >
+                                    <span className="inline-flex min-w-0 items-center gap-2">
+                                        <Workflow size={16} strokeWidth={1.75} className="shrink-0" />
+                                        <span className="truncate">{lifecycle.label}</span>
+                                    </span>
+                                </AdminV2NavLink>
+                            </div>
+                            {isExpanded && lifecycle.workQueues.length ? (
+                                <div className="ml-8 border-l border-white/10 pl-2.5">
+                                    <ul
+                                        className="adminv2-sidebar-queue-list list-none space-y-0.5 pt-0.5"
+                                        role="group"
+                                        aria-label={`${lifecycle.label} work views`}
+                                    >
+                                    {lifecycle.workQueues.map((entry) => {
+                                        const childHref = workspaceHref(entry.href);
+                                        const childActive =
+                                            !modalOpen &&
+                                            workUnitSlug != null &&
+                                            workUnitRouteSlugsEquivalent(workUnitSlug, entry.platformKey);
+                                        return (
+                                            <li key={entry.platformKey} role="none">
+                                                <AdminV2NavLink
+                                                    href={childHref}
+                                                    active={childActive}
+                                                    highlightFromActiveOnly
+                                                    className={EXPANDED_QUEUE_LINK}
+                                                    title={entry.label}
+                                                    onMouseEnter={() =>
+                                                        warmOperatorWorkUnitEntryFromHref(
+                                                            entry.href,
+                                                            null,
+                                                            "sidebar_queue_hover",
+                                                        )
+                                                    }
+                                                    onFocus={() =>
+                                                        warmOperatorWorkUnitEntryFromHref(
+                                                            entry.href,
+                                                            null,
+                                                            "sidebar_queue_focus",
+                                                        )
+                                                    }
+                                                >
+                                                    <span className="truncate">{entry.label}</span>
+                                                </AdminV2NavLink>
+                                            </li>
+                                        );
+                                    })}
+                                    </ul>
+                                </div>
+                            ) : null}
+                        </div>
+                    );
+                })}
+            </div>
+        </>
+    );
+
+    return (
+        <aside
+            data-adminv2-sidebar="true"
+            data-shell-nav-surface="true"
+            data-shell-nav-ready={shellNavVm.reveal.canCommit ? "true" : "false"}
+            data-shell-nav-source={shellNavVm.source}
+            data-shell-nav-version={String(shellNavVm.version)}
+            className="adminv2-sidebar-shell relative z-[100] flex flex-col flex-shrink-0 min-h-0 border-r transition-[width] duration-200 ease-out overflow-hidden"
+            style={{
+                width: railWidth,
+                backgroundColor: palette.midnightForge,
+                borderColor: derived.topBarDivider,
+                color: neutral.surface,
+            }}
+        >
+            {collapsed ? (
+                <>
+                    <div className="adminv2-sidebar-brand flex shrink-0 items-center px-2 pt-3 pb-1" aria-label="Alloy">
+                        <img
+                            src="/brand/alloy-brandmark-gradient.svg"
+                            alt=""
+                            width={28}
+                            height={28}
+                            className="h-7 w-7 shrink-0"
+                        />
+                    </div>
+                    <button
+                        type="button"
+                        onClick={onToggle}
+                        className="adminv2-sidebar-toggle flex h-10 w-full flex-shrink-0 items-center justify-center hover:opacity-90 active:scale-[0.98] transition-transform"
+                        aria-label="Expand sidebar"
+                    >
+                        <PanelLeft size={20} />
+                    </button>
+                </>
+            ) : (
+                <div className="adminv2-sidebar-brand-row flex h-14 w-full flex-shrink-0 items-center gap-2 px-2">
+                    <div className="adminv2-sidebar-brand flex min-w-0 flex-1 items-center" aria-label="Alloy">
+                        <img
+                            src="/brand/alloy-brandmark-gradient.svg"
+                            alt=""
+                            width={36}
+                            height={36}
+                            className="h-9 w-9 shrink-0"
+                        />
+                    </div>
+                    <button
+                        type="button"
+                        onClick={onToggle}
+                        className="adminv2-sidebar-toggle flex h-9 w-9 shrink-0 items-center justify-center rounded-md hover:opacity-90 active:scale-[0.98] transition-transform"
+                        aria-label="Collapse sidebar"
+                    >
+                        <PanelLeftClose size={20} />
+                    </button>
+                </div>
+            )}
+
+            {collapsed ? (
+                <nav className="flex min-h-0 flex-1 flex-col px-1.5 pb-2" aria-label="Workspace navigation">
+                    <div className="flex shrink-0 flex-col items-stretch gap-1">
+                        {!onSettings ? homeLink : null}
+                        {onSettings ? null : (
+                            <>
+                                {inboxLink}
+                                {processingLink}
+                                {tasksLink}
+                                {analyticsLink}
+                            </>
+                        )}
+                    </div>
+                    {onSettings ? <SidebarConfigurationModeNav collapsed /> : <div className="min-h-0 flex-1" aria-hidden />}
+                    <div className="adminv2-sidebar-footer flex shrink-0 flex-col items-stretch gap-1 border-t pt-1">
+                        {settingsLink}
+                    </div>
+                </nav>
+            ) : (
+                <div className="adminv2-sidebar-body flex min-h-0 flex-1 flex-col overflow-hidden px-2 pb-3 text-[13px]">
+                    <div className="min-h-0 flex-1 overflow-y-auto pt-1">
+                        <div className="space-y-1">
+                            {!onSettings ? homeLink : null}
+                            {!onSettings ?
+                                <>
+                                    {inboxLink}
+                                    {processingLink}
+                                    {tasksLink}
+                                    {analyticsLink}
+                                    {lifecycleNavExpanded}
+                                </>
+                            :   <SidebarConfigurationModeNav collapsed={false} />}
+                        </div>
+                    </div>
+                    <div className="adminv2-sidebar-footer shrink-0 border-t pt-2">
+                        {settingsLink}
+                    </div>
+                </div>
+            )}
+        </aside>
+    );
+}
+
+export default function Sidebar(props: { collapsed: boolean; onToggle: () => void }) {
+    const railWidth = props.collapsed ? 56 : 280;
+    return (
+        <Suspense
+            fallback={
+                <aside
+                    data-adminv2-sidebar="true"
+                    className="adminv2-sidebar-shell relative z-[100] flex flex-shrink-0 flex-col border-r"
+                    style={{ width: railWidth, backgroundColor: palette.midnightForge, borderColor: derived.topBarDivider }}
+                    aria-hidden
+                />
+            }
+        >
+            <SidebarNav {...props} />
+        </Suspense>
+    );
 }

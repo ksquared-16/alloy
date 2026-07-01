@@ -133,7 +133,7 @@ cd /Users/Kelly/Alloy/web && npm run build
 **Acceptance Criteria:**
 - ✅ Selecting any date shows all slots for that date
 - ✅ No "current time" truncation of the day's slots
-- ✅ Timezone handling remains consistent (America/Los_Angeles)
+- ✅ Timezone handling uses org operational TZ (public booking) / requested IANA, not a hardcoded zone
 - ✅ 48-hour minimum still enforced when booking (not when viewing)
 
 ---

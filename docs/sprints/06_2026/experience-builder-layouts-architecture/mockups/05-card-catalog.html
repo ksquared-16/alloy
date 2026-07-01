@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>05 — Card catalog</title>
+  <link rel="stylesheet" href="_shared.css" />
+  <style>
+    .overlay { position:absolute; inset:0; background:rgba(26,35,50,0.35); display:flex; align-items:center; justify-content:center; padding:24px; }
+    .panel { background:white; border-radius:16px; width:720px; max-height:90%; overflow:auto; padding:20px; box-shadow:0 16px 48px rgba(0,0,0,0.15); }
+  </style>
+</head>
+<body>
+<div class="frame" style="position:relative">
+  <div class="label">Add Card <span>blueprint catalog — platform archetypes</span></div>
+  <div class="body"><div class="bos"><div class="bos-i on">▦</div></div>
+    <div class="config-page"><div class="shell"><div class="workspace" style="opacity:0.4"><div class="ws-body"></div></div></div></div>
+  </div>
+  <div class="overlay">
+    <div class="panel">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+        <h2 style="font-size:19px;font-weight:600">Add card</h2>
+        <span style="color:var(--forge-70)">Summary mode · Lead</span>
+      </div>
+      <input placeholder="Search blueprints…" style="width:100%;padding:10px;border:1px solid rgba(89,103,139,0.18);border-radius:8px;margin-bottom:16px" />
+      <div class="queue-label">Attention & work</div>
+      <div class="catalog" style="margin-bottom:16px">
+        <div class="cat-item" style="border-color:var(--pine-border)"><div class="t">Attention</div><div class="d">Needs follow-up, overdue items</div></div>
+        <div class="cat-item"><div class="t">Current Work</div><div class="d">Active step or task</div></div>
+        <div class="cat-item"><div class="t">Readiness</div><div class="d">Completion / readiness KPI</div></div>
+      </div>
+      <div class="queue-label">Context</div>
+      <div class="catalog" style="margin-bottom:16px">
+        <div class="cat-item"><div class="t">Household</div><div class="d">Primary contact, family</div></div>
+        <div class="cat-item"><div class="t">Children</div><div class="d">Enrollment children list</div></div>
+        <div class="cat-item"><div class="t">Tour Summary</div><div class="d">Scheduled tour details</div></div>
+      </div>
+      <div class="queue-label">Reference</div>
+      <div class="catalog">
+        <div class="cat-item"><div class="t">Communications</div><div class="d">Recent messages</div></div>
+        <div class="cat-item"><div class="t">Documents</div><div class="d">Forms and files</div></div>
+        <div class="cat-item"><div class="t">Notes</div><div class="d">Staff notes</div></div>
+      </div>
+      <p class="hint">Users create instances from blueprints — not new blueprint types in v1.</p>
+    </div>
+  </div>
+</div>
+</body>
+</html>

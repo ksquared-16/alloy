@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
-import { getAdminContext } from "@/lib/admin/getAdminContext";
+import { getAdminContextCached } from "@/lib/admin/getAdminContext";
 
 export type ServiceOfferingListItem = {
     id: string;
@@ -18,7 +18,7 @@ export type ServiceOfferingListItem = {
 };
 
 export async function GET(request: NextRequest) {
-    const ctx = await getAdminContext();
+    const ctx = await getAdminContextCached();
     if (!ctx.ok) return NextResponse.json({ error: ctx.status === 401 ? "Unauthorized" : "Forbidden" }, { status: ctx.status });
 
     const { searchParams } = new URL(request.url);
@@ -71,7 +71,7 @@ export async function GET(request: NextRequest) {
 
 /** POST: create a service offering. Body: offering_name, offering_key, vertical_id, description?, is_active? */
 export async function POST(request: NextRequest) {
-    const ctx = await getAdminContext();
+    const ctx = await getAdminContextCached();
     if (!ctx.ok) return NextResponse.json({ error: ctx.status === 401 ? "Unauthorized" : "Forbidden" }, { status: ctx.status });
 
     let body: { offering_name?: string; offering_key?: string; vertical_id?: string | null; description?: string | null; is_active?: boolean };

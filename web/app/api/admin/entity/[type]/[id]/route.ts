@@ -1,18 +1,14 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
-import { adminContextFailureResponse, getAdminContext } from "@/lib/admin/getAdminContext";
+import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
+import { adminPerfEnabled, adminPerfNow, logAdminPerf } from "@/lib/admin/perfTrace";
 import { assertRowOrg } from "@/lib/admin/assertRowOrg";
 import { formatRecurrenceLabel } from "@/lib/adminFormatters";
 import { attachDirectFkRelationshipDisplays } from "@/lib/admin/relationshipDisplayAttach";
+import { computeScheduleHydratedDisplay } from "@/lib/admin/scheduleRecordSnapshot";
 import { attachFieldDefinitionsAndValues } from "@/lib/admin/entityFieldRegistryAttach";
-import { inferJobDiscountSelectionToken, buildJobDiscountDisplayLabel } from "@/lib/admin/jobDiscountSelection";
-import {
-    computeJobDisplayTotalCents,
-    computeJobGrossBasisCents,
-    normalizeJobDiscountAmountToCents,
-    type JobPriceInput,
-} from "@/lib/admin/jobDisplayPrice";
-import { vendorRowToDisplayStub, type VendorRowForLabel } from "@/lib/admin/vendorOptionLabel";
+import { attachPersonDrawerVisibility } from "@/lib/admin/person/attachPersonDrawerVisibility";
+import { computeJobDisplayTotalCents, type JobPriceInput } from "@/lib/admin/jobDisplayPrice";
 import {
     fetchEffectiveStatusDefinitions,
     inferDocumentStatusFromStored,
@@ -20,43 +16,51 @@ import {
 } from "@/lib/admin/statusDefinitionsResolve";
 import { normalizeDocumentRow } from "@/lib/admin/normalizeDocumentRow";
 import { formatFrequencyLabel } from "@/lib/adminFormatters";
-import { isUuidLike } from "@/lib/admin/overviewRelationshipLabels";
-import { attachJobWorkUnitDisplay } from "@/lib/admin/attachJobWorkUnitDisplay";
-import { fetchActiveJobLineItemsForAdmin } from "@/lib/admin/fetchActiveJobLineItems";
 import { getPaymentAllocationRollup } from "@/lib/admin/jobPaymentBalances";
-import { CANONICAL_SQFT_TIER_OPTIONS } from "@/lib/book-v2/loadCleaningPricingCatalog";
+import { optionItemLabelForOrg } from "@/lib/admin/optionItemLabelForOrg";
+import { hydrateVendorDisplayStub } from "@/lib/admin/hydrateVendorDisplayStub";
+import { resolveJobRecord } from "@/lib/rrs/entities/job";
+import { resolveRecordSurfaceParam } from "@/lib/rrs/surfaces";
+import { respondOpportunityEntityGet } from "@/lib/admin/opportunityEntityRecord";
+import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
+import { assertEntityDrawerRecordReadable, scopeDimensionsFromAccess } from "@/lib/admin/accessScope";
+import { apiError, apiOk } from "@/lib/api/apiResponse";
 
-type AdminSupabase = ReturnType<typeof createAdminClient>;
-
-function canonicalSqftTierLabel(tierKey: string | null | undefined): string | null {
-    const k = String(tierKey ?? "").trim();
-    if (!k) return null;
-    return CANONICAL_SQFT_TIER_OPTIONS.find((o) => o.value === k)?.label ?? k;
+/**
+ * Phase 2D contract (fully migrated): every response uses the standard envelope.
+ * - Success: `{ ok: true, data: { entity }, correlation_id }` — the entity payload
+ *   shape is preserved verbatim inside `data.entity` (including the `{ _create: true }`
+ *   new-record sentinel). Active consumers unwrap `json.data.entity`.
+ * - Failure: `{ ok: false, error: { code, message }, correlation_id }` — HTTP status
+ *   codes are preserved exactly.
+ * @see docs/api/api-response-contract.md
+ * @see docs/api/api-contract-migration-status.md
+ */
+function entityNotFound(message = "Not found") {
+    return apiError("NOT_FOUND", message, 404);
 }
-
-async function optionItemLabelForOrg(
-    supabase: AdminSupabase,
-    orgId: string,
-    setKey: string,
-    itemKey: string | null | undefined
-): Promise<string | null> {
-    const k = String(itemKey ?? "").trim();
-    if (!k) return null;
-    const { data: setRow } = await supabase.from("option_sets").select("id").eq("org_id", orgId).eq("set_key", setKey).maybeSingle();
-    const sid = (setRow as { id?: string } | null)?.id;
-    if (!sid) {
-        if (setKey === "square_footage_tier") return canonicalSqftTierLabel(k) ?? k;
-        return k;
-    }
-    const { data: it } = await supabase
-        .from("option_set_items")
-        .select("label")
-        .eq("option_set_id", sid)
-        .eq("item_key", k)
-        .maybeSingle();
-    const lab = (it as { label?: string } | null)?.label;
-    if (lab != null && String(lab).trim() !== "") return String(lab).trim();
-    return canonicalSqftTierLabel(k) ?? k;
+function entityBadRequest(message: string) {
+    return apiError("BAD_REQUEST", message, 400);
+}
+function entityServerError(message = "Failed to fetch entity") {
+    return apiError("INTERNAL", message, 500);
+}
+/** Standard success envelope for entity reads: `{ ok, data: { entity }, correlation_id }`. */
+function entityOk(entity: unknown, request: NextRequest) {
+    return apiOk({ entity }, { request });
+}
+/** Map a Supabase error to the prior status semantics (PGRST116 = no rows → 404, else 500). */
+function entitySupabaseError(
+    err: { code?: string | null; message?: string | null } | null | undefined,
+    fallback = "Not found"
+) {
+    const message = err?.message || fallback;
+    return err?.code === "PGRST116" ? entityNotFound(message) : entityServerError(message);
+}
+/** Preserve a precomputed status while emitting the standard failure envelope. */
+function entityStatusError(message: string, status: number) {
+    const code = status === 404 ? "NOT_FOUND" : status >= 500 ? "INTERNAL" : "BAD_REQUEST";
+    return apiError(code, message, status);
 }
 
 /**
@@ -90,426 +94,96 @@ async function assertDiscountRedemptionInOrg(
     return { ok: true, row: data as Record<string, unknown> };
 }
 
-async function hydrateVendorDisplayStub(
-    supabase: ReturnType<typeof createAdminClient>,
-    vendorId: string,
-    orgId: string
-): Promise<{ id: string; name: string } | null> {
-    const { data: row } = await supabase
-        .from("vendors")
-        .select("id, name, company_name, email, phone, primary_person_id")
-        .eq("id", vendorId)
-        .eq("org_id", orgId)
-        .maybeSingle();
-    if (!row) return null;
-    const r = row as VendorRowForLabel;
-    let person: { first_name?: string | null; last_name?: string | null } | null = null;
-    if (r.primary_person_id) {
-        const { data: p } = await supabase
-            .from("persons")
-            .select("first_name, last_name")
-            .eq("id", r.primary_person_id)
-            .eq("org_id", orgId)
-            .maybeSingle();
-        person = p;
-    }
-    return vendorRowToDisplayStub(r, person);
-}
-
 type ContactRow = { id: string; first_name?: string | null; last_name?: string | null; email?: string | null; phone?: string | null; person_id?: string | null };
 
-export async function GET(
+function trimOrNull(v: unknown): string | null {
+    if (v == null) return null;
+    const s = String(v).trim();
+    return s ? s : null;
+}
+
+// ---------------------------------------------------------------------------
+// Person payload build timing
+// ---------------------------------------------------------------------------
+const PERSON_PAYLOAD_TIMING_LOG =
+    process.env.NODE_ENV === "development" || process.env.PERSON_PAYLOAD_TIMING === "1";
+
+function logPersonPayloadBuildTiming(
+    personId: string,
+    timing: Map<string, number>,
+    totalMs: number
+): void {
+    if (!PERSON_PAYLOAD_TIMING_LOG) return;
+    const W = 16;
+    const pad = (s: string) => s + ".".repeat(Math.max(1, W - s.length));
+    const fmt = (v: number) => `${Math.round(v)}ms`;
+    const sum = (...keys: string[]) =>
+        keys.reduce((a, k) => a + (timing.get(k) ?? 0), 0);
+    const rows: Array<[string, string[]]> = [
+        ["summary",       ["summary"]],
+        ["household",     ["customer_persons", "household_links"]],
+        ["address",       ["household_address"]],
+        ["employee",      []],
+        ["medical",       []],
+        ["relationships", ["person_relationships", "contacts_members", "locations", "opportunities"]],
+        ["BOS",           ["enrollment_mirror", "enrollment_opportunities", "sibling_links"]],
+        ["permissions",   ["field_defs", "fk_displays"]],
+    ];
+    console.info(
+        `[person-payload] ${personId.slice(0, 8)}…\n` +
+        rows.map(([label, keys]) => `  ${pad(label)}${fmt(sum(...keys))}`).join("\n") +
+        `\n  ${pad("TOTAL")}${fmt(totalMs)}`
+    );
+}
+
+async function getEntityImpl(
     request: NextRequest,
     { params }: { params: Promise<{ type: string; id: string }> }
 ) {
     const { type, id } = await params;
     if (!id || !ENTITY_TYPES.includes(type as (typeof ENTITY_TYPES)[number])) {
-        return NextResponse.json({ error: "Invalid type or id" }, { status: 400 });
+        return entityBadRequest("Invalid type or id");
     }
 
     try {
-        const ctx = await getAdminContext();
+        const ctx = await getAdminContextCached();
         if (!ctx.ok) return adminContextFailureResponse(ctx);
         const orgId = ctx.orgId;
 
+        const access = await getAdminAccessContextCached();
+        if (!access.ok) return adminContextFailureResponse(access);
+        const scopeDim = scopeDimensionsFromAccess(access);
+
         const supabase = createAdminClient();
+
+        const skipDrawerScopeGate = id === "new" || type === "opportunities" || type === "addons";
+        if (!skipDrawerScopeGate) {
+            if (!(await assertEntityDrawerRecordReadable(supabase, orgId, scopeDim, type, id))) {
+                return entityNotFound();
+            }
+        }
 
         if (type === "jobs") {
             if (id === "new") {
-                return NextResponse.json({ _create: true });
+                return entityOk({ _create: true }, request);
             }
-            const { data, error } = await supabase.from("jobs").select("*").eq("id", id).eq("org_id", orgId).single();
-            if (error || !data) return NextResponse.json(error?.message || "Not found", { status: error?.code === "PGRST116" ? 404 : 500 });
-            const out: Record<string, unknown> = { ...data };
-            if ((data as { opportunity_id?: string }).opportunity_id) {
-                const opp = await supabase
-                    .from("opportunities")
-                    .select("name")
-                    .eq("id", (data as { opportunity_id: string }).opportunity_id)
-                    .eq("org_id", orgId)
-                    .single();
-                out._opportunity_name = opp.data?.name ?? null;
-            } else {
-                out._opportunity_name = null;
+            const surface = resolveRecordSurfaceParam(request.nextUrl.searchParams.get("surface"), "full");
+            const resolved = await resolveJobRecord(supabase, orgId, id, surface);
+            if (!resolved.ok) {
+                const status = resolved.notFound ? 404 : 500;
+                return entityStatusError(resolved.message || "Not found", status);
             }
-            const jobPrimaryPersonId = (data as { primary_person_id?: string | null }).primary_person_id;
-            const jobPrimaryContactId = (data as { primary_contact_id?: string }).primary_contact_id;
-            if (jobPrimaryPersonId) {
-                const { data: person } = await supabase
-                    .from("persons")
-                    .select("id, first_name, last_name")
-                    .eq("id", jobPrimaryPersonId)
-                    .eq("org_id", orgId)
-                    .maybeSingle();
-                const p = person as { id: string; first_name?: string | null; last_name?: string | null } | null;
-                out._primary_person_id = p?.id ?? null;
-                out._primary_person_name = p ? [p.first_name, p.last_name].filter(Boolean).join(" ").trim() || null : null;
-                out._contact_name = out._primary_person_name;
-            } else if (jobPrimaryContactId) {
-                const contact = await supabase
-                    .from("contacts")
-                    .select("first_name, last_name, person_id")
-                    .eq("id", jobPrimaryContactId)
-                    .eq("org_id", orgId)
-                    .single();
-                const c = contact.data as { first_name?: string | null; last_name?: string | null; person_id?: string | null } | null;
-                out._contact_name = c ? [c.first_name, c.last_name].filter(Boolean).join(" ") || null : null;
-                if (c?.person_id) {
-                    const { data: person } = await supabase
-                        .from("persons")
-                        .select("id, first_name, last_name")
-                        .eq("id", c.person_id)
-                        .eq("org_id", orgId)
-                        .maybeSingle();
-                    const p = person as { id: string; first_name?: string | null; last_name?: string | null } | null;
-                    out._primary_person_id = p?.id ?? null;
-                    out._primary_person_name = p ? [p.first_name, p.last_name].filter(Boolean).join(" ").trim() || null : null;
-                } else {
-                    out._primary_person_id = null;
-                    out._primary_person_name = null;
-                }
-            } else {
-                out._contact_name = null;
-                out._primary_person_id = null;
-                out._primary_person_name = null;
-            }
-            if (typeof out._primary_person_id === "string" && out._primary_person_id.trim()) {
-                out.primary_person_id = out._primary_person_id;
-            }
-            if ((data as { customer_id?: string }).customer_id) {
-                const customer = await supabase
-                    .from("customers")
-                    .select("name")
-                    .eq("id", (data as { customer_id: string }).customer_id)
-                    .eq("org_id", orgId)
-                    .single();
-                out._customer_name = customer.data?.name ?? null;
-            } else {
-                out._customer_name = null;
-            }
-            const assignedVendorId = (data as { assigned_vendor_id?: string | null }).assigned_vendor_id;
-            if (assignedVendorId) {
-                const stub = await hydrateVendorDisplayStub(supabase, assignedVendorId, orgId);
-                out._assigned_vendor = stub;
-                out._vendor_name = stub?.name ?? null;
-            } else {
-                out._assigned_vendor = null;
-                out._vendor_name = null;
-            }
-            const jobLocationId = (data as { location_id?: string | null }).location_id;
-            if (jobLocationId) {
-                const { data: loc } = await supabase
-                    .from("locations")
-                    .select("id, label, address1, city, state, postal_code")
-                    .eq("id", jobLocationId)
-                    .eq("org_id", orgId)
-                    .maybeSingle();
-                if (loc) {
-                    const l = loc as { label?: string | null; address1?: string | null; city?: string | null; postal_code?: string | null };
-                    const label = l.label ?? ([l.address1, l.city, l.postal_code].filter(Boolean).join(", ") || null);
-                    out._location_label = label;
-                    out._location_name = label;
-                    out._location = loc;
-                } else {
-                    out._location_label = null;
-                    out._location_name = null;
-                    out._location = null;
-                }
-            } else {
-                out._location_label = null;
-                out._location_name = null;
-                out._location = null;
-            }
-            const verticalId = (data as { vertical_id?: string | null }).vertical_id;
-            if (verticalId) {
-                const { data: vert } = await supabase.from("verticals").select("slug, name").eq("id", verticalId).maybeSingle();
-                const vr = vert as { slug?: string | null; name?: string | null } | null;
-                out._vertical_slug = vr?.slug ?? null;
-                out._vertical_name = vr?.name ?? null;
-            } else {
-                out._vertical_slug = null;
-                out._vertical_name = null;
-            }
-            const orgIdJob = (data as { org_id?: string }).org_id;
-            let statusKey = (data as { status_key?: string | null }).status_key;
-            const jobStatusFk = (data as { job_status_id?: string | null }).job_status_id;
-            if ((!statusKey || !String(statusKey).trim()) && jobStatusFk) {
-                const { data: jst } = await supabase.from("job_statuses").select("key").eq("id", jobStatusFk).maybeSingle();
-                const k = (jst as { key?: string | null } | null)?.key;
-                if (k && String(k).trim()) {
-                    statusKey = String(k).trim();
-                    out.status_key = statusKey;
-                }
-            }
-            out._status_display = orgIdJob ? await resolveStatusLabel(supabase, orgIdJob, "jobs", statusKey) : (typeof statusKey === "string" && statusKey.trim() ? statusKey.trim() : null);
-            const grossBasis = computeJobGrossBasisCents(data as JobPriceInput) ?? 0;
-            out._discount_amount_cents = normalizeJobDiscountAmountToCents(
-                (data as { discount_amount?: number | string | null }).discount_amount,
-                grossBasis
-            );
-            const display_total_cents = computeJobDisplayTotalCents(data as JobPriceInput);
-            out.display_total_cents = display_total_cents;
-            out._price_display = display_total_cents != null ? display_total_cents / 100 : null;
-            const codeStr = String((data as { discount_code?: string | null }).discount_code ?? "").trim();
-            out._discount_applied =
-                Number(out._discount_amount_cents ?? 0) > 0 ||
-                !!codeStr ||
-                !!(data as { discount_code_id?: string | null }).discount_code_id ||
-                !!(data as { discount_program_id?: string | null }).discount_program_id;
-            const { data: nextSched } = await supabase
-                .from("schedules")
-                .select("start_at")
-                .eq("job_id", id)
-                .eq("org_id", orgId)
-                .is("canceled_at", null)
-                .gte("start_at", new Date().toISOString())
-                .order("start_at", { ascending: true })
-                .limit(1)
-                .maybeSingle();
-            out._next_schedule = (nextSched as { start_at?: string } | null)?.start_at ?? null;
-            out._discount_selection = await inferJobDiscountSelectionToken(supabase, {
-                discount_program_id: (data as { discount_program_id?: string | null }).discount_program_id ?? null,
-                discount_code_id: (data as { discount_code_id?: string | null }).discount_code_id ?? null,
-            });
-            out._discount_label = await buildJobDiscountDisplayLabel(supabase, {
-                discount_program_id: (data as { discount_program_id?: string | null }).discount_program_id ?? null,
-                discount_code_id: (data as { discount_code_id?: string | null }).discount_code_id ?? null,
-                discount_code: (data as { discount_code?: string | null }).discount_code ?? null,
-            });
-            out._service_home_type_label = null;
-            out._service_sqft_band_label = null;
-            out._service_square_footage = null;
-            out._service_square_footage_display = null;
-            out._service_bedrooms = null;
-            out._service_bathrooms = null;
-            const { data: cjdJob } = await supabase.from("cleaning_job_details").select("*").eq("job_id", id).maybeSingle();
-            const jd = cjdJob as {
-                home_type_key?: string | null;
-                square_footage_tier_key?: string | null;
-                beds?: number | null;
-                baths?: number | null;
-            } | null;
-            if (jd) {
-                out._service_bedrooms = jd.beds ?? null;
-                out._service_bathrooms = jd.baths ?? null;
-                out._service_square_footage = null;
-                if (jd.home_type_key) {
-                    out._service_home_type_label = await optionItemLabelForOrg(supabase, orgId, "home_type", jd.home_type_key);
-                }
-                if (jd.square_footage_tier_key) {
-                    out._service_sqft_band_label = await optionItemLabelForOrg(
-                        supabase,
-                        orgId,
-                        "square_footage_tier",
-                        jd.square_footage_tier_key
-                    );
-                }
-                const bandLabel = out._service_sqft_band_label != null ? String(out._service_sqft_band_label).trim() : "";
-                out._service_square_footage_display = bandLabel || null;
-            }
-            const jobDprogId = (data as { discount_program_id?: string | null }).discount_program_id ?? null;
-            if (jobDprogId) {
-                const { data: dpr } = await supabase.from("discount_programs").select("name").eq("id", jobDprogId).maybeSingle();
-                out._discount_program_label = (dpr as { name?: string | null } | null)?.name ?? null;
-            } else {
-                out._discount_program_label = null;
-            }
-            const withWu = await attachJobWorkUnitDisplay(supabase, orgId, out);
-            out._work_unit_name = withWu._work_unit_name;
-            out._work_unit_department_name = withWu._work_unit_department_name;
-            out._work_unit_label = withWu._work_unit_label;
-            out._job_line_items = await fetchActiveJobLineItemsForAdmin(supabase, orgId, id);
-            await attachFieldDefinitionsAndValues(supabase, out, "jobs", id);
-            await attachDirectFkRelationshipDisplays(supabase, orgId, "jobs", out);
-            return NextResponse.json(out);
+            return entityOk({ ...resolved.flat, _rrs: resolved.rrs }, request);
         }
         if (type === "opportunities") {
-            const { data, error } = await supabase.from("opportunities").select("*").eq("id", id).eq("org_id", orgId).single();
-            if (error || !data) return NextResponse.json(error?.message || "Not found", { status: error?.code === "PGRST116" ? 404 : 500 });
-            const opp = data as Record<string, unknown> & { status_key?: string | null; status?: string | null; customer_id?: string | null; primary_contact_id?: string | null; primary_person_id?: string | null; location_id?: string | null; quote_total?: number | null; estimated_price_cents?: number | null; monetary_value_cents?: number | null };
-            const out: Record<string, unknown> = { ...data };
-            if (opp.customer_id) {
-                const customer = await supabase.from("customers").select("name").eq("id", opp.customer_id).eq("org_id", orgId).single();
-                out._customer_name = customer.data?.name ?? null;
-            } else {
-                out._customer_name = null;
-            }
-            // Prefer primary_person_id for display; fallback to contact
-            const personDisplayName = (p: { full_name?: string | null; first_name?: string | null; last_name?: string | null } | null) =>
-                p ? ((p.full_name && p.full_name.trim()) || [p.first_name, p.last_name].filter(Boolean).join(" ").trim() || null) : null;
-            if (opp.primary_person_id) {
-                const { data: person } = await supabase
-                    .from("persons")
-                    .select("id, first_name, last_name, full_name")
-                    .eq("id", opp.primary_person_id)
-                    .eq("org_id", orgId)
-                    .maybeSingle();
-                const p = person as { id: string; first_name?: string | null; last_name?: string | null; full_name?: string | null } | null;
-                out._primary_person_id = p?.id ?? null;
-                out._primary_person_name = personDisplayName(p);
-                out._contact_name = out._primary_person_name;
-                out._primary_contact_name = out._primary_person_name;
-            } else if (opp.primary_contact_id) {
-                const contact = await supabase
-                    .from("contacts")
-                    .select("first_name, last_name, person_id")
-                    .eq("id", opp.primary_contact_id)
-                    .eq("org_id", orgId)
-                    .single();
-                const c = contact.data;
-                const name = c ? [c.first_name, c.last_name].filter(Boolean).join(" ") || null : null;
-                out._contact_name = name;
-                out._primary_contact_name = name;
-                if (c && (c as { person_id?: string | null }).person_id) {
-                    const { data: person } = await supabase
-                        .from("persons")
-                        .select("id, first_name, last_name, full_name")
-                        .eq("id", (c as { person_id: string }).person_id)
-                        .eq("org_id", orgId)
-                        .maybeSingle();
-                    const p = person as { id: string; first_name?: string | null; last_name?: string | null; full_name?: string | null } | null;
-                    out._primary_person_id = p?.id ?? null;
-                    out._primary_person_name = personDisplayName(p);
-                } else {
-                    out._primary_person_id = null;
-                    out._primary_person_name = null;
-                }
-            } else {
-                out._contact_name = null;
-                out._primary_contact_name = null;
-                out._primary_person_id = null;
-                out._primary_person_name = null;
-            }
-            const oppPipelineStageId = (opp as { pipeline_stage_id?: string | null }).pipeline_stage_id ?? null;
-            if (oppPipelineStageId) {
-                const { data: stRow } = await supabase.from("pipeline_stages").select("name").eq("id", oppPipelineStageId).maybeSingle();
-                const stName = (stRow as { name?: string | null } | null)?.name ?? null;
-                out._pipeline_stage_name = stName;
-                out._stage_name = stName;
-            } else {
-                out._pipeline_stage_name = null;
-                out._stage_name = null;
-            }
-            const oppPipelineId = (opp as { pipeline_id?: string | null }).pipeline_id ?? null;
-            if (oppPipelineId) {
-                const { data: plRow } = await supabase.from("pipelines").select("name").eq("id", oppPipelineId).maybeSingle();
-                out._pipeline_name = (plRow as { name?: string | null } | null)?.name ?? null;
-            } else {
-                out._pipeline_name = null;
-            }
-            const oppDprogId = (opp as { discount_program_id?: string | null }).discount_program_id ?? null;
-            if (oppDprogId) {
-                const { data: dpr } = await supabase.from("discount_programs").select("name").eq("id", oppDprogId).maybeSingle();
-                out._discount_program_label = (dpr as { name?: string | null } | null)?.name ?? null;
-            } else {
-                out._discount_program_label = null;
-            }
-            if (opp.vertical_id) {
-                const { data: vert } = await supabase.from("verticals").select("name").eq("id", opp.vertical_id).maybeSingle();
-                out._vertical_name = (vert as { name?: string | null } | null)?.name ?? null;
-            } else {
-                out._vertical_name = null;
-            }
-            if (opp.location_id) {
-                const loc = await supabase
-                    .from("locations")
-                    .select("id, label, address1, city, state, postal_code")
-                    .eq("id", opp.location_id)
-                    .eq("org_id", orgId)
-                    .maybeSingle();
-                const l = loc.data as { label?: string | null; address1?: string | null; city?: string | null; state?: string | null; postal_code?: string | null } | null;
-                const locLabel = l ? l.label || [l.address1, l.city, l.state, l.postal_code].filter(Boolean).join(", ") || null : null;
-                out._location_name = locLabel;
-                out._location_label = locLabel;
-                out._location_id = opp.location_id;
-            } else {
-                out._location_name = null;
-                out._location_label = null;
-                out._location_id = null;
-            }
-            const oppOrgId = (opp as { org_id?: string }).org_id;
-            const oppLegacyStatus = (opp as { status?: string | null }).status;
-            const oppSkRaw =
-                opp.status_key != null && String(opp.status_key).trim() !== ""
-                    ? String(opp.status_key).trim()
-                    : oppLegacyStatus != null && String(oppLegacyStatus).trim() !== ""
-                      ? String(oppLegacyStatus).trim()
-                      : null;
-            const stageLabel =
-                out._pipeline_stage_name != null && String(out._pipeline_stage_name).trim() !== ""
-                    ? String(out._pipeline_stage_name).trim()
-                    : null;
-            let oppStatusDisplay: string | null = null;
-            if (oppOrgId && oppSkRaw) {
-                const defs = await fetchEffectiveStatusDefinitions(supabase, oppOrgId, "opportunities", { activeOnly: true });
-                const ci = defs.find((d) => d.status_key.toLowerCase() === oppSkRaw.toLowerCase());
-                if (ci?.status_label != null && String(ci.status_label).trim() !== "") {
-                    oppStatusDisplay = String(ci.status_label).trim();
-                } else {
-                    oppStatusDisplay = await resolveStatusLabel(supabase, oppOrgId, "opportunities", oppSkRaw);
-                }
-            } else {
-                oppStatusDisplay = oppSkRaw;
-            }
-            if (
-                oppPipelineStageId &&
-                oppSkRaw &&
-                String(oppSkRaw) === String(oppPipelineStageId) &&
-                stageLabel
-            ) {
-                oppStatusDisplay = stageLabel;
-            } else if (oppStatusDisplay != null && isUuidLike(String(oppStatusDisplay))) {
-                if (stageLabel) {
-                    oppStatusDisplay = stageLabel;
-                } else if (isUuidLike(oppSkRaw)) {
-                    const { data: stRow } = await supabase
-                        .from("pipeline_stages")
-                        .select("name")
-                        .eq("id", oppSkRaw)
-                        .maybeSingle();
-                    const nm = (stRow as { name?: string | null } | null)?.name;
-                    if (nm != null && String(nm).trim() !== "") oppStatusDisplay = String(nm).trim();
-                }
-            }
-            if ((oppStatusDisplay == null || String(oppStatusDisplay).trim() === "") && stageLabel) {
-                oppStatusDisplay = stageLabel;
-            }
-            out._status_display = oppStatusDisplay;
-            const qt = opp.quote_total != null && !Number.isNaN(Number(opp.quote_total)) ? Number(opp.quote_total)
-                : opp.estimated_price_cents != null && !Number.isNaN(Number(opp.estimated_price_cents)) ? Number(opp.estimated_price_cents) / 100
-                : opp.monetary_value_cents != null && !Number.isNaN(Number(opp.monetary_value_cents)) ? Number(opp.monetary_value_cents) / 100
-                : null;
-            out._quote_total_display = qt;
-            await attachFieldDefinitionsAndValues(supabase, out, "opportunities", id);
-            await attachDirectFkRelationshipDisplays(supabase, orgId, "opportunities", out);
-            return NextResponse.json(out);
+            return respondOpportunityEntityGet(supabase, orgId, id, request, scopeDim);
         }
         if (type === "contacts") {
             if (id === "new") {
-                return NextResponse.json({ _create: true });
+                return entityOk({ _create: true }, request);
             }
             const { data, error } = await supabase.from("contacts").select("*").eq("id", id).eq("org_id", orgId).single();
-            if (error || !data) return NextResponse.json(error?.message || "Not found", { status: error?.code === "PGRST116" ? 404 : 500 });
+            if (error || !data) return entitySupabaseError(error);
             const contact = data as { customer_id?: string | null; vendor_id?: string | null; person_id?: string | null };
             let _person: Record<string, unknown> | null = null;
             let _person_id: string | null = null;
@@ -517,7 +191,9 @@ export async function GET(
             if (contact.person_id) {
                 const { data: personRow } = await supabase
                     .from("persons")
-                    .select("id, first_name, last_name, full_name, email, phone, created_at, updated_at")
+                    .select(
+                        "id, first_name, last_name, full_name, email, phone, is_employee, employee_id, employee_source, created_at, updated_at"
+                    )
                     .eq("id", contact.person_id)
                     .eq("org_id", orgId)
                     .maybeSingle();
@@ -556,7 +232,7 @@ export async function GET(
                     .single();
                 if (vendor) _contact_vendor = { id: vendor.id, name: vendor.name ?? null, vendor_status_id: vendor.vendor_status_id ?? null, created_at: vendor.created_at };
             }
-            return NextResponse.json({
+            return entityOk({
                 ...data,
                 _contact_vendor,
                 _linked_customer_name,
@@ -565,11 +241,11 @@ export async function GET(
                 _person: _person ?? null,
                 _person_id,
                 _person_name,
-            });
+            }, request);
         }
         if (type === "customers") {
             const { data, error } = await supabase.from("customers").select("*").eq("id", id).eq("org_id", orgId).single();
-            if (error || !data) return NextResponse.json(error?.message || "Not found", { status: error?.code === "PGRST116" ? 404 : 500 });
+            if (error || !data) return entitySupabaseError(error);
             const out: Record<string, unknown> = { ...data };
             const primaryContactId = (data as { primary_contact_id?: string | null }).primary_contact_id;
             const verticalId = (data as { vertical_id?: string | null }).vertical_id;
@@ -667,21 +343,23 @@ export async function GET(
             }
             await attachFieldDefinitionsAndValues(supabase, out, "customers", id);
             await attachDirectFkRelationshipDisplays(supabase, orgId, "customers", out);
-            return NextResponse.json(out);
+            return entityOk(out, request);
         }
         if (type === "schedules") {
             if (id === "new") {
-                return NextResponse.json({ _create: true });
+                return entityOk({ _create: true }, request);
             }
             const { data: schedule, error } = await supabase.from("schedules").select("*").eq("id", id).eq("org_id", orgId).single();
-            if (error || !schedule) return NextResponse.json(error?.message || "Not found", { status: error?.code === "PGRST116" ? 404 : 500 });
+            if (error || !schedule) return entitySupabaseError(error);
             const out: Record<string, unknown> = { ...schedule };
             const scheduleLocationId = (schedule as { location_id?: string | null }).location_id;
             const jobId = (schedule as { job_id?: string }).job_id;
             if (jobId) {
                 const { data: job } = await supabase
                     .from("jobs")
-                    .select("id, title, customer_id, primary_contact_id, primary_person_id, opportunity_id, vertical_id, job_status_id, assigned_vendor_id, location_id")
+                    .select(
+                        "id, title, customer_id, primary_contact_id, primary_person_id, opportunity_id, vertical_id, job_status_id, assigned_vendor_id, location_id, service_key, job_type, gross_price_cents, estimated_total_cents"
+                    )
                     .eq("id", jobId)
                     .eq("org_id", orgId)
                     .single();
@@ -928,7 +606,8 @@ export async function GET(
 
             await attachFieldDefinitionsAndValues(supabase, out, "schedules", id);
             await attachDirectFkRelationshipDisplays(supabase, orgId, "schedules", out);
-            return NextResponse.json(out);
+            computeScheduleHydratedDisplay(out);
+            return entityOk(out, request);
         }
         if (type === "locations") {
             const { data: location, error } = await supabase
@@ -938,7 +617,7 @@ export async function GET(
                 .eq("org_id", orgId)
                 .single();
             if (error || !location) {
-                return NextResponse.json(error?.code === "PGRST116" ? "Not found" : error?.message ?? "Not found", { status: 404 });
+                return entityNotFound(error?.code === "PGRST116" ? "Not found" : error?.message ?? "Not found");
             }
             const out: Record<string, unknown> = { ...location };
             const locSk = (location as { status_key?: string | null }).status_key;
@@ -1055,11 +734,11 @@ export async function GET(
 
             await attachFieldDefinitionsAndValues(supabase, out, "locations", id);
             await attachDirectFkRelationshipDisplays(supabase, orgId, "locations", out);
-            return NextResponse.json(out);
+            return entityOk(out, request);
         }
         if (type === "discount_redemptions") {
             const dr = await assertDiscountRedemptionInOrg(supabase, id, orgId);
-            if (!dr.ok) return NextResponse.json("Not found", { status: 404 });
+            if (!dr.ok) return entityNotFound();
             const redemption = dr.row as Record<string, unknown> & {
                 discount_code_id: string;
                 customer_id?: string | null;
@@ -1132,25 +811,25 @@ export async function GET(
                 const j = job as { title?: string | null; service_key?: string | null; job_number_for_customer?: string | null } | null;
                 out._job_label = j ? ((j.title && String(j.title).trim()) || (j.service_key && String(j.service_key).trim()) || (j.job_number_for_customer && String(j.job_number_for_customer).trim()) || `Job #${(redemption.job_id as string).slice(-6)}`) : null;
             } else out._job_label = null;
-            return NextResponse.json(out);
+            return entityOk(out, request);
         }
         if (type === "workflows") {
             if (id === "new") {
-                return NextResponse.json({ _create: true });
+                return entityOk({ _create: true }, request);
             }
             const { data: wf, error: wErr } = await supabase.from("workflows").select("*").eq("id", id).eq("org_id", orgId).single();
-            if (wErr || !wf) return NextResponse.json(wErr?.message || "Not found", { status: wErr?.code === "PGRST116" ? 404 : 500 });
+            if (wErr || !wf) return entitySupabaseError(wErr);
             const { data: cond } = await supabase.from("workflow_conditions").select("*").eq("workflow_id", id);
             const { data: acts } = await supabase.from("workflow_actions").select("*").eq("workflow_id", id).order("action_order", { ascending: true });
-            return NextResponse.json({
+            return entityOk({
                 ...wf,
                 _conditions: cond ?? [],
                 _actions: acts ?? [],
-            });
+            }, request);
         }
         if (type === "vendors") {
             const { data: vendor, error: vErr } = await supabase.from("vendors").select("*").eq("id", id).eq("org_id", orgId).single();
-            if (vErr || !vendor) return NextResponse.json(vErr?.message || "Not found", { status: vErr?.code === "PGRST116" ? 404 : 500 });
+            if (vErr || !vendor) return entitySupabaseError(vErr);
             const v = vendor as Record<string, unknown> & {
                 status_key?: string | null;
                 status?: string | null;
@@ -1278,11 +957,11 @@ export async function GET(
 
             await attachFieldDefinitionsAndValues(supabase, out, "vendors", id);
             await attachDirectFkRelationshipDisplays(supabase, orgId, "vendors", out);
-            return NextResponse.json(out);
+            return entityOk(out, request);
         }
         if (type === "subscriptions") {
             const { data: sub, error: subErr } = await supabase.from("customer_subscriptions").select("*").eq("id", id).eq("org_id", orgId).single();
-            if (subErr || !sub) return NextResponse.json(subErr?.message || "Not found", { status: subErr?.code === "PGRST116" ? 404 : 500 });
+            if (subErr || !sub) return entitySupabaseError(subErr);
             const out: Record<string, unknown> = { ...sub };
             const cadence = (sub as { cadence?: string }).cadence ?? "month";
             const interval = Math.max(1, Number((sub as { interval?: number }).interval) || 1);
@@ -1329,7 +1008,7 @@ export async function GET(
             } else {
                 out._vertical_name = null;
             }
-            return NextResponse.json(out);
+            return entityOk(out, request);
         }
 
         if (type === "documents") {
@@ -1340,7 +1019,7 @@ export async function GET(
                 .eq("org_id", orgId)
                 .maybeSingle();
             if (docErr || !doc) {
-                return NextResponse.json(docErr?.message || "Not found", { status: docErr?.code === "PGRST116" ? 404 : 500 });
+                return entitySupabaseError(docErr);
             }
             const row = doc as Record<string, unknown>;
             const out: Record<string, unknown> = { ...row };
@@ -1420,12 +1099,12 @@ export async function GET(
             const exStatus = (row.extraction_status as string | null) ?? (row.ai_extraction_status as string | null) ?? null;
             out._ai_extraction_status = exStatus;
             out._uploaded_by = (row.uploaded_by as string | null) ?? null;
-            return NextResponse.json(out);
+            return entityOk(out, request);
         }
 
         if (type === "payments") {
             const { data, error } = await supabase.from("payments").select("*").eq("id", id).eq("org_id", orgId).single();
-            if (error || !data) return NextResponse.json(error?.message || "Not found", { status: error?.code === "PGRST116" ? 404 : 500 });
+            if (error || !data) return entitySupabaseError(error);
             const payment = data as Record<string, unknown> & {
                 customer_id?: string | null;
                 job_id?: string | null;
@@ -1506,11 +1185,11 @@ export async function GET(
             const paySk = payment.status_key ?? null;
             const legacyDisplay = await resolveStatusLabel(supabase, orgId, "payments", paySk);
             out._status_display = (canon && canonicalLabels[canon]) || legacyDisplay || canon || paySk || null;
-            return NextResponse.json(out);
+            return entityOk(out, request);
         }
         if (type === "customer_members") {
             if (id === "new") {
-                return NextResponse.json({ _create: true });
+                return entityOk({ _create: true }, request);
             }
             const { data: row, error: rowErr } = await supabase
                 .from("customer_members")
@@ -1519,7 +1198,7 @@ export async function GET(
                 .eq("org_id", orgId)
                 .maybeSingle();
             if (rowErr || !row) {
-                return NextResponse.json(rowErr?.code === "PGRST116" ? "Not found" : rowErr?.message ?? "Not found", { status: 404 });
+                return entityNotFound(rowErr?.code === "PGRST116" ? "Not found" : rowErr?.message ?? "Not found");
             }
             const out: Record<string, unknown> = { ...row };
             const personId = (row as { person_id?: string | null }).person_id ?? null;
@@ -1601,13 +1280,18 @@ export async function GET(
                     is_active: l.is_active ?? true,
                 };
             });
-            return NextResponse.json(out);
+            return entityOk(out, request);
         }
 
         if (type === "persons") {
             if (id === "new") {
-                return NextResponse.json({ _create: true });
+                return entityOk({ _create: true }, request);
             }
+            const _buildStart = Date.now();
+            const _pt = new Map<string, number>();
+
+            // ── summary: base row + status label ─────────────────────────────
+            let _ts = Date.now();
             const { data: personRow, error: personErr } = await supabase
                 .from("persons")
                 .select("*")
@@ -1615,7 +1299,7 @@ export async function GET(
                 .eq("org_id", orgId)
                 .maybeSingle();
             if (personErr || !personRow) {
-                return NextResponse.json(personErr?.code === "PGRST116" ? "Not found" : personErr?.message ?? "Not found", { status: 404 });
+                return entityNotFound(personErr?.code === "PGRST116" ? "Not found" : personErr?.message ?? "Not found");
             }
             const out: Record<string, unknown> = { ...personRow };
             const p = personRow as { full_name?: string | null; first_name?: string | null; last_name?: string | null };
@@ -1625,117 +1309,165 @@ export async function GET(
                 null;
             const psk = (personRow as { status_key?: string | null }).status_key ?? null;
             out._status_display = await resolveStatusLabel(supabase, orgId, "persons", psk);
-
-            const { data: cpRows } = await supabase
-                .from("customer_persons")
-                .select("id, customer_id, person_id, role, created_at")
-                .eq("person_id", id)
-                .eq("org_id", orgId);
-            const customerIds = [...new Set((cpRows ?? []).map((r: { customer_id: string }) => r.customer_id))];
-            const roleKeys = [...new Set((cpRows ?? []).map((r: { role?: string | null }) => r.role).filter(Boolean))] as string[];
-            const [customerRowsRes, roleTypesRes] = await Promise.all([
-                customerIds.length > 0
-                    ? supabase.from("customers").select("id, name").in("id", customerIds).eq("org_id", orgId)
-                    : { data: [] as { id: string; name: string | null }[] },
-                roleKeys.length > 0
-                    ? supabase.from("customer_person_role_types").select("key, label").eq("org_id", orgId).in("key", roleKeys)
-                    : { data: [] as { key: string; label: string | null }[] },
-            ]);
-            const customerMap = new Map((customerRowsRes.data ?? []).map((c) => [c.id, c.name ?? null]));
-            const roleLabelMap = new Map((roleTypesRes.data ?? []).map((r) => [r.key, r.label ?? r.key]));
-            out._customer_persons = (cpRows ?? []).map((r: { id: string; customer_id: string; person_id: string; role?: string | null; created_at?: string }) => ({
-                ...r,
-                _customer_name: customerMap.get(r.customer_id) ?? null,
-                _role_label: r.role ? (roleLabelMap.get(r.role) ?? r.role) : null,
-            }));
-
-            const { data: relRows } = await supabase
-                .from("person_relationships")
-                .select("id, from_person_id, to_person_id, relationship_type, created_at")
-                .eq("org_id", orgId)
-                .or(`from_person_id.eq.${id},to_person_id.eq.${id}`);
-            const relTypeKeys = [...new Set((relRows ?? []).map((r: { relationship_type?: string | null }) => r.relationship_type).filter(Boolean))] as string[];
-            const { data: relTypeRows } = relTypeKeys.length > 0
-                ? await supabase.from("person_relationship_type_settings").select("key, label").eq("org_id", orgId).in("key", relTypeKeys)
-                : { data: [] as { key: string; label: string | null }[] };
-            const relTypeLabelMap = new Map((relTypeRows ?? []).map((r) => [r.key, r.label ?? r.key]));
-            const otherPersonIds = [...new Set((relRows ?? []).flatMap((r: { from_person_id: string; to_person_id: string }) => (r.from_person_id === id ? [r.to_person_id] : [r.from_person_id])))];
-            const { data: otherPersons } = otherPersonIds.length > 0
-                ? await supabase.from("persons").select("id, first_name, last_name").in("id", otherPersonIds).eq("org_id", orgId)
-                : { data: [] as { id: string; first_name?: string | null; last_name?: string | null }[] };
-            const personNameMap = new Map((otherPersons ?? []).map((p: { id: string; first_name?: string | null; last_name?: string | null }) => [p.id, [p.first_name, p.last_name].filter(Boolean).join(" ").trim() || null]));
-            out._person_relationships = (relRows ?? []).map((r: { id: string; from_person_id: string; to_person_id: string; relationship_type?: string | null; created_at?: string }) => ({
-                ...r,
-                _other_person_id: r.from_person_id === id ? r.to_person_id : r.from_person_id,
-                _other_person_name: personNameMap.get(r.from_person_id === id ? r.to_person_id : r.from_person_id) ?? null,
-                _relationship_type_label: r.relationship_type ? (relTypeLabelMap.get(r.relationship_type) ?? r.relationship_type) : null,
-            }));
+            _pt.set("summary", Date.now() - _ts);
 
             const PERSON_LIMIT = 25;
-            const { data: contactRows } = await supabase
-                .from("contacts")
-                .select("id, first_name, last_name, email, phone, customer_id")
-                .eq("person_id", id)
-                .eq("org_id", orgId)
-                .limit(PERSON_LIMIT);
-            const { data: memberRows } = await supabase
-                .from("customer_members")
-                .select("id, display_name, relationship, customer_id")
-                .eq("person_id", id)
-                .eq("org_id", orgId)
-                .limit(PERSON_LIMIT);
-            out._compatibility_contacts = contactRows ?? [];
-            out._compatibility_members = memberRows ?? [];
 
-            const { data: plLocRows } = await supabase
-                .from("person_locations")
-                .select("location_id, is_primary, relationship_type")
-                .eq("person_id", id)
-                .eq("org_id", orgId)
-                .limit(PERSON_LIMIT);
-            const locLinkList = plLocRows ?? [];
-            const locIdsFromPl = [...new Set(locLinkList.map((r: { location_id: string }) => r.location_id))];
-            const { data: locRowsForPerson } =
-                locIdsFromPl.length > 0
-                    ? await supabase
-                          .from("locations")
-                          .select("id, label, postal_code, city, address1")
-                          .eq("org_id", orgId)
-                          .in("id", locIdsFromPl)
-                    : { data: [] as { id: string; label?: string | null; postal_code?: string | null; city?: string | null; address1?: string | null }[] };
-            const locLabelById = new Map(
-                (locRowsForPerson ?? []).map((l) => {
-                    const lbl =
-                        (l.label && String(l.label).trim()) ||
-                        [l.address1, l.city, l.postal_code].filter(Boolean).join(", ") ||
-                        null;
-                    return [l.id, lbl] as const;
-                })
-            );
-            out._linked_locations = locLinkList.map((row: { location_id: string; is_primary?: boolean | null; relationship_type?: string | null }) => ({
-                location_id: row.location_id,
-                _location_label: locLabelById.get(row.location_id) ?? null,
-                is_primary: !!row.is_primary,
-                relationship_type: row.relationship_type ?? null,
-            }));
+            // ── Phase 2: all person-level lookups in parallel ─────────────────
+            // customer_persons, relationships, contacts/members, locations, and opportunities
+            // are fully independent — run them concurrently to eliminate sequential round-trips.
+            const [cpResult, relResult, cmResult, locResult, oppResult] = await Promise.all([
+                // ── customer_persons ─────────────────────────────────────────
+                (async () => {
+                    const ts = Date.now();
+                    const { data: cpRows } = await supabase
+                        .from("customer_persons")
+                        .select("id, customer_id, person_id, role_type, is_primary, created_at")
+                        .eq("person_id", id)
+                        .eq("org_id", orgId);
+                    const customerIds = [...new Set((cpRows ?? []).map((r: { customer_id: string }) => r.customer_id))];
+                    const roleKeys = [...new Set((cpRows ?? []).map((r: { role_type?: string | null }) => r.role_type).filter(Boolean))] as string[];
+                    const [customerRowsRes, roleTypesRes] = await Promise.all([
+                        customerIds.length > 0
+                            ? supabase.from("customers").select("id, name").in("id", customerIds).eq("org_id", orgId)
+                            : { data: [] as { id: string; name: string | null }[] },
+                        roleKeys.length > 0
+                            ? supabase.from("customer_person_role_types").select("key, label").eq("org_id", orgId).in("key", roleKeys)
+                            : { data: [] as { key: string; label: string | null }[] },
+                    ]);
+                    const customerMap = new Map((customerRowsRes.data ?? []).map((c) => [c.id, c.name ?? null]));
+                    const roleLabelMap = new Map((roleTypesRes.data ?? []).map((r) => [r.key, r.label ?? r.key]));
+                    return {
+                        ms: Date.now() - ts,
+                        rows: (cpRows ?? []).map((r: { id: string; customer_id: string; person_id: string; role_type?: string | null; is_primary?: boolean | null; created_at?: string }) => ({
+                            ...r,
+                            is_primary: Boolean(r.is_primary),
+                            _customer_name: customerMap.get(r.customer_id) ?? null,
+                            _role_label: r.role_type ? (roleLabelMap.get(r.role_type) ?? r.role_type) : null,
+                        })),
+                    };
+                })(),
 
-            const { data: oppRows } = await supabase
-                .from("opportunities")
-                .select("id, name, status_key, job_date, quote_total, created_at")
-                .eq("primary_person_id", id)
-                .eq("org_id", orgId)
-                .order("created_at", { ascending: false })
-                .limit(PERSON_LIMIT);
-            out._linked_opportunities = oppRows ?? [];
+                // ── person_relationships ─────────────────────────────────────
+                (async () => {
+                    const ts = Date.now();
+                    const { data: relRows } = await supabase
+                        .from("person_relationships")
+                        .select("id, from_person_id, to_person_id, relationship_type, created_at")
+                        .eq("org_id", orgId)
+                        .or(`from_person_id.eq.${id},to_person_id.eq.${id}`);
+                    const relTypeKeys = [...new Set((relRows ?? []).map((r: { relationship_type?: string | null }) => r.relationship_type).filter(Boolean))] as string[];
+                    const otherPersonIds = [...new Set((relRows ?? []).flatMap((r: { from_person_id: string; to_person_id: string }) => (r.from_person_id === id ? [r.to_person_id] : [r.from_person_id])))];
+                    // rel-type labels and related person names are independent — fetch in parallel
+                    const [relTypeRes, otherPersonsRes] = await Promise.all([
+                        relTypeKeys.length > 0
+                            ? supabase.from("person_relationship_type_settings").select("key, label").eq("org_id", orgId).in("key", relTypeKeys)
+                            : { data: [] as { key: string; label: string | null }[] },
+                        otherPersonIds.length > 0
+                            ? supabase.from("persons").select("id, first_name, last_name").in("id", otherPersonIds).eq("org_id", orgId)
+                            : { data: [] as { id: string; first_name?: string | null; last_name?: string | null }[] },
+                    ]);
+                    const relTypeLabelMap = new Map((relTypeRes.data ?? []).map((r) => [r.key, r.label ?? r.key]));
+                    const personNameMap = new Map((otherPersonsRes.data ?? []).map((p: { id: string; first_name?: string | null; last_name?: string | null }) => [p.id, [p.first_name, p.last_name].filter(Boolean).join(" ").trim() || null]));
+                    return {
+                        ms: Date.now() - ts,
+                        rows: (relRows ?? []).map((r: { id: string; from_person_id: string; to_person_id: string; relationship_type?: string | null; created_at?: string }) => ({
+                            ...r,
+                            _other_person_id: r.from_person_id === id ? r.to_person_id : r.from_person_id,
+                            _other_person_name: personNameMap.get(r.from_person_id === id ? r.to_person_id : r.from_person_id) ?? null,
+                            _relationship_type_label: r.relationship_type ? (relTypeLabelMap.get(r.relationship_type) ?? r.relationship_type) : null,
+                        })),
+                    };
+                })(),
 
-            await attachFieldDefinitionsAndValues(supabase, out, "persons", id);
-            await attachDirectFkRelationshipDisplays(supabase, orgId, "persons", out);
-            return NextResponse.json(out);
+                // ── contacts + members (parallel within group) ───────────────
+                (async () => {
+                    const ts = Date.now();
+                    const [contactsRes, membersRes] = await Promise.all([
+                        supabase.from("contacts").select("id, first_name, last_name, email, phone, customer_id").eq("person_id", id).eq("org_id", orgId).limit(PERSON_LIMIT),
+                        supabase.from("customer_members").select("id, display_name, relationship, customer_id").eq("person_id", id).eq("org_id", orgId).limit(PERSON_LIMIT),
+                    ]);
+                    return { ms: Date.now() - ts, contacts: contactsRes.data ?? [], members: membersRes.data ?? [] };
+                })(),
+
+                // ── person locations (two sequential queries, second depends on first) ──
+                (async () => {
+                    const ts = Date.now();
+                    const { data: plLocRows } = await supabase
+                        .from("person_locations")
+                        .select("location_id, is_primary, relationship_type")
+                        .eq("person_id", id)
+                        .eq("org_id", orgId)
+                        .limit(PERSON_LIMIT);
+                    const locLinkList = plLocRows ?? [];
+                    const locIdsFromPl = [...new Set(locLinkList.map((r: { location_id: string }) => r.location_id))];
+                    const { data: locRowsForPerson } = locIdsFromPl.length > 0
+                        ? await supabase.from("locations").select("id, label, postal_code, city, address1").eq("org_id", orgId).in("id", locIdsFromPl)
+                        : { data: [] as { id: string; label?: string | null; postal_code?: string | null; city?: string | null; address1?: string | null }[] };
+                    const locLabelById = new Map(
+                        (locRowsForPerson ?? []).map((l) => {
+                            const lbl = (l.label && String(l.label).trim()) || [l.address1, l.city, l.postal_code].filter(Boolean).join(", ") || null;
+                            return [l.id, lbl] as const;
+                        })
+                    );
+                    return {
+                        ms: Date.now() - ts,
+                        rows: locLinkList.map((row: { location_id: string; is_primary?: boolean | null; relationship_type?: string | null }) => ({
+                            location_id: row.location_id,
+                            _location_label: locLabelById.get(row.location_id) ?? null,
+                            is_primary: !!row.is_primary,
+                            relationship_type: row.relationship_type ?? null,
+                        })),
+                    };
+                })(),
+
+                // ── linked opportunities ─────────────────────────────────────
+                (async () => {
+                    const ts = Date.now();
+                    const { data: oppRows } = await supabase
+                        .from("opportunities")
+                        .select("id, name, status_key, job_date, quote_total, created_at")
+                        .eq("primary_person_id", id)
+                        .eq("org_id", orgId)
+                        .order("created_at", { ascending: false })
+                        .limit(PERSON_LIMIT);
+                    return { ms: Date.now() - ts, rows: oppRows ?? [] };
+                })(),
+            ]);
+
+            // Apply phase-2 results to out
+            out._customer_persons = cpResult.rows;          _pt.set("customer_persons", cpResult.ms);
+            out._person_relationships = relResult.rows;     _pt.set("person_relationships", relResult.ms);
+            out._compatibility_contacts = cmResult.contacts; _pt.set("contacts_members", cmResult.ms);
+            out._compatibility_members = cmResult.members;
+            out._linked_locations = locResult.rows;          _pt.set("locations", locResult.ms);
+            out._linked_opportunities = oppResult.rows;      _pt.set("opportunities", oppResult.ms);
+
+            // ── Phase 3: visibility + field defs + FK displays in parallel ────
+            // attachPersonDrawerVisibility reads _customer_persons and _compatibility_members (set above).
+            // field_defs and fk_displays operate on base person columns from phase 1 and are
+            // independent of visibility data — safe to run concurrently.
+            await Promise.all([
+                attachPersonDrawerVisibility(supabase, orgId, id, out, { siteScope: scopeDim, payloadTiming: _pt }),
+                (async () => {
+                    const ts = Date.now();
+                    await attachFieldDefinitionsAndValues(supabase, out, "persons", id);
+                    _pt.set("field_defs", Date.now() - ts);
+                })(),
+                (async () => {
+                    const ts = Date.now();
+                    await attachDirectFkRelationshipDisplays(supabase, orgId, "persons", out);
+                    _pt.set("fk_displays", Date.now() - ts);
+                })(),
+            ]);
+
+            logPersonPayloadBuildTiming(id, _pt, Date.now() - _buildStart);
+            return entityOk(out, request);
         }
 
         if (type === "service_offerings") {
             const { data, error } = await supabase.from("service_offerings").select("*").eq("id", id).eq("org_id", orgId).single();
-            if (error || !data) return NextResponse.json(error?.message || "Not found", { status: error?.code === "PGRST116" ? 404 : 500 });
+            if (error || !data) return entitySupabaseError(error);
             const row = data as Record<string, unknown> & { vertical_id?: string | null };
             const out: Record<string, unknown> = { ...row };
             out._updated = (row.updated_at as string) ?? (row.created_at as string) ?? null;
@@ -1745,12 +1477,12 @@ export async function GET(
             } else {
                 out._vertical_name = null;
             }
-            return NextResponse.json(out);
+            return entityOk(out, request);
         }
 
         if (type === "service_plan_templates") {
             const { data, error } = await supabase.from("service_plan_templates").select("*").eq("id", id).eq("org_id", orgId).single();
-            if (error || !data) return NextResponse.json(error?.message || "Not found", { status: error?.code === "PGRST116" ? 404 : 500 });
+            if (error || !data) return entitySupabaseError(error);
             const row = data as Record<string, unknown> & { recurrence_unit?: string | null; recurrence_interval?: number | null };
             const out: Record<string, unknown> = { ...row };
             out._updated = (row.updated_at as string) ?? (row.created_at as string) ?? null;
@@ -1763,12 +1495,12 @@ export async function GET(
             out._status_display = tplOrgId
                 ? await resolveStatusLabel(supabase, tplOrgId, "service_plan_templates", tplSk)
                 : tplSk;
-            return NextResponse.json(out);
+            return entityOk(out, request);
         }
 
         if (type === "addons") {
             const { data, error } = await supabase.from("pricing_addons").select("*").eq("id", id).single();
-            if (error || !data) return NextResponse.json(error?.message || "Not found", { status: error?.code === "PGRST116" ? 404 : 500 });
+            if (error || !data) return entitySupabaseError(error);
             const row = data as Record<string, unknown> & { vertical_id?: string | null };
             const out: Record<string, unknown> = { ...row };
             out._updated = (row.updated_at as string) ?? (row.created_at as string) ?? null;
@@ -1778,12 +1510,25 @@ export async function GET(
             } else {
                 out._vertical_name = null;
             }
-            return NextResponse.json(out);
+            return entityOk(out, request);
         }
 
-        return NextResponse.json({ error: "Invalid type" }, { status: 400 });
+        return entityBadRequest("Invalid type");
     } catch (e: unknown) {
         console.error("[ADMIN_ENTITY]", e);
-        return NextResponse.json({ error: "Failed to fetch entity" }, { status: 500 });
+        return entityServerError();
     }
+}
+
+/** Phase 0 perf wrapper (Card 0.1): times the handler when ADMIN_PERF_TRACE=1; otherwise a passthrough. */
+export async function GET(
+    request: NextRequest,
+    context: { params: Promise<{ type: string; id: string }> }
+) {
+    if (!adminPerfEnabled()) return getEntityImpl(request, context);
+    const t0 = adminPerfNow();
+    const res = await getEntityImpl(request, context);
+    const { type, id } = await context.params;
+    logAdminPerf({ route: "entity", type, id, status: res.status, t0 });
+    return res;
 }

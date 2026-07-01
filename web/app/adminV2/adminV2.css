@@ -1,5 +1,1007 @@
 /* adminV2 — proof-pass ambient (obvious in screenshots; tone down later) */
 
+/* Entity drawer / record modal vertical band — below shell header, above BOS command surface */
+:root {
+  --adminv2-drawer-inset-top: 3.75rem;
+  --adminv2-drawer-inset-bottom: 8rem;
+  --adminv2-workspace-command-rail-offset: 0px;
+  --ws-shell-bottom-safe: 120px;
+}
+
+.adminv2-drawer-shell-inset {
+  top: var(--adminv2-drawer-inset-top);
+  bottom: var(--adminv2-drawer-inset-bottom);
+  height: auto;
+}
+
+/* AdminV2 workspace shell — BOS docked in workspace Actions column (canonical) */
+html[data-adminv2-workspace-shell="v2"] {
+  --adminv2-drawer-inset-bottom: 1rem;
+  --adminv2-drawer-outer-margin: 24px;
+  --ws-shell-bottom-safe: 16px;
+  --adminv2-workspace-scroll-pad-y: 24px;
+  --adminv2-bos-overlay-gutter: 16px;
+  --adminv2-bos-overlay-width: 0px;
+  /* Container hierarchy — border strength (Level 1 drawer > Level 2 rail > Level 3 widgets) */
+  --adminv2-container-border-drawer: rgba(39, 63, 82, 0.28);
+  --adminv2-container-border-rail: rgba(39, 63, 82, 0.2);
+  /*
+   * Workspace atmosphere (BOS mode) — locked premium pine gradient.
+   * ~80% Bend Pine / ~20% Midnight Forge on a pine-white base (self-contained, not transparent-over-page).
+   * Doctrine: docs/system/workspace-atmosphere-doctrine.md
+   */
+  --adminv2-drawer-shell-overlay-base: #f4fbf9;
+  --adminv2-drawer-shell-overlay-opacity: 0.7;
+  --adminv2-drawer-shell-overlay-background:
+    radial-gradient(
+      ellipse 78% 66% at 56% 42%,
+      rgba(0, 162, 131, 0.14) 0%,
+      rgba(0, 162, 131, 0.09) 38%,
+      rgba(0, 162, 131, 0.045) 64%,
+      rgba(0, 162, 131, 0.02) 100%
+    ),
+    radial-gradient(
+      ellipse 78% 66% at 56% 42%,
+      rgba(39, 63, 82, 0.032) 0%,
+      rgba(39, 63, 82, 0.02) 38%,
+      rgba(39, 63, 82, 0.01) 64%,
+      rgba(39, 63, 82, 0.006) 100%
+    ),
+    linear-gradient(
+      180deg,
+      rgba(0, 162, 131, 0.07) 0%,
+      rgba(0, 162, 131, 0.04) 100%
+    ),
+    linear-gradient(
+      180deg,
+      rgba(39, 63, 82, 0.014) 0%,
+      rgba(39, 63, 82, 0.008) 100%
+    ),
+    var(--adminv2-drawer-shell-overlay-base);
+  --adminv2-bos-rail-shell-wash:
+    linear-gradient(
+      180deg,
+      rgba(0, 162, 131, 0.1) 0%,
+      rgba(0, 162, 131, 0.045) 12%,
+      rgba(255, 255, 255, 1) 20%,
+      #ffffff 100%
+    );
+  --adminv2-workspace-rail-height: calc(
+    100vh - var(--adminv2-drawer-inset-top) - var(--ws-rail-sticky-top, 10px) -
+      var(--adminv2-workspace-scroll-pad-y, 24px)
+  );
+}
+
+/* Drawer inset applied inline in Drawer.tsx when flag is on — avoids Tailwind inset-0 / right-0 override */
+
+@media (min-width: 1001px) {
+  html[data-adminv2-workspace-shell="v2"] [data-adminv2-workspace-command-column] {
+    position: sticky;
+    top: var(--ws-rail-sticky-top, 10px);
+    z-index: 90;
+    align-self: start;
+    height: var(--adminv2-workspace-rail-height);
+    max-height: var(--adminv2-workspace-rail-height);
+    overflow: hidden;
+    pointer-events: auto;
+    isolation: isolate;
+  }
+
+  html[data-adminv2-workspace-shell="v2"] [data-ws-surface="department"].adminv2-ws-dept-v2 .adminv2-ws-shell-command-column[data-adminv2-workspace-command-column],
+  html[data-adminv2-workspace-shell="v2"] [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-shell-command-column[data-adminv2-workspace-command-column],
+  html[data-adminv2-workspace-shell="v2"] [data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-shell-command-column[data-adminv2-workspace-command-column],
+  html[data-adminv2-workspace-shell="v2"] [data-ws-surface="company"].adminv2-ws-company-v2 .adminv2-ws-shell-command-column[data-adminv2-workspace-command-column] {
+    overflow: hidden;
+    height: var(--adminv2-workspace-rail-height);
+    max-height: var(--adminv2-workspace-rail-height);
+    align-self: start;
+  }
+
+  html[data-adminv2-workspace-shell="v2"] [data-ws-surface="department"].adminv2-ws-dept-v2 .adminv2-ws-dept-v2-command-column .adminv2-ws-dept-v2-rail.adminv2-ws-command-rail-with-bos,
+  html[data-adminv2-workspace-shell="v2"] [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-dept-v2-command-column .adminv2-ws-dept-v2-rail.adminv2-ws-command-rail-with-bos,
+  html[data-adminv2-workspace-shell="v2"] [data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-dept-v2-command-column .adminv2-ws-dept-v2-rail.adminv2-ws-command-rail-with-bos,
+  html[data-adminv2-workspace-shell="v2"] [data-ws-surface="company"].adminv2-ws-company-v2 .adminv2-ws-dept-v2-command-column .adminv2-ws-dept-v2-rail.adminv2-ws-command-rail-with-bos {
+    flex: 1 1 auto;
+    height: 100%;
+    max-height: 100%;
+    min-height: 0;
+    overflow: hidden;
+    align-self: stretch;
+  }
+
+  html[data-adminv2-workspace-shell="v2"] [data-adminv2-persistent-command-rail="true"] {
+    width: var(--ws-rail, 345px);
+    max-width: min(var(--ws-rail, 345px), 28vw);
+    align-self: stretch;
+    height: 100%;
+    max-height: 100%;
+    min-height: 0;
+    overflow: hidden;
+    border-left: 1px solid rgba(39, 63, 82, 0.08);
+    background: rgba(255, 255, 255, 0.92);
+    padding-inline: 10px 12px;
+    padding-block: 10px 12px;
+    pointer-events: auto;
+    isolation: isolate;
+  }
+
+  html[data-adminv2-workspace-shell="v2"] [data-adminv2-persistent-command-rail="true"] .adminv2-persistent-command-rail {
+    flex: 1 1 auto;
+    height: 100%;
+    max-height: 100%;
+    min-height: 0;
+  }
+}
+
+@media (max-width: 1000px) {
+  html[data-adminv2-workspace-shell="v2"] [data-adminv2-persistent-command-rail="true"] {
+    width: 100%;
+    max-width: none;
+    border-left: none;
+    border-top: 1px solid rgba(39, 63, 82, 0.08);
+    max-height: min(42vh, 520px);
+  }
+}
+
+html[data-adminv2-workspace-shell="v2"] .adminv2-ws-command-rail-with-bos {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  height: 100%;
+  flex: 1;
+}
+
+html[data-adminv2-workspace-shell="v2"] .adminv2-ws-command-rail-actions {
+  flex: 0 0 auto;
+  max-height: min(38vh, 280px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+html[data-adminv2-workspace-shell="v2"] .adminv2-ws-command-rail-bos-host {
+  flex: 1 1 auto;
+  width: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.adminv2-ws-command-rail-bos-dock {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  min-height: 0;
+  flex: 1 1 auto;
+  height: 100%;
+}
+
+html[data-adminv2-workspace-shell="v2"] [data-adminv2-command-surface-layer="rail"] {
+  flex: 1 1 auto;
+  min-height: 0;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.adminv2-bos-rail-overlay {
+  isolation: isolate;
+  box-sizing: border-box;
+  background: var(--adminv2-bos-rail-shell-wash, #ffffff);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  opacity: 1;
+  border-radius: 12px;
+  border: 1px solid var(--adminv2-container-border-rail, rgba(39, 63, 82, 0.2));
+  overflow: hidden;
+  box-shadow:
+    0 8px 28px rgba(0, 162, 131, 0.08),
+    0 2px 6px rgba(0, 162, 131, 0.04),
+    inset 0 1px 0 rgba(255, 255, 255, 0.92);
+}
+
+.adminv2-bos-rail-overlay .adminv2-ws-command-rail-bos-dock {
+  flex: 1 1 auto;
+  min-height: 0;
+  background-color: #ffffff;
+}
+
+html[data-adminv2-workspace-shell="v2"] [data-adminv2-bos-rail-overlay="true"] [data-adminv2-command-surface-layer="rail"] {
+  background: #ffffff !important;
+  background-color: #ffffff !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  opacity: 1 !important;
+}
+
+html[data-adminv2-workspace-shell="v2"] [data-adminv2-bos-rail-overlay="true"] [data-recent-operational-activity-strip="true"] {
+  background-color: #ffffff !important;
+}
+
+html[data-adminv2-workspace-shell="v2"] [data-adminv2-bos-rail-overlay="true"] [data-command-surface-rail-starters="true"] .bos-rail-starter-card {
+  background-color: #ffffff !important;
+}
+
+html[data-adminv2-workspace-shell="v2"] .adminv2-ws-command-rail-with-bos {
+  gap: 10px;
+}
+
+html[data-adminv2-workspace-shell="v2"] .adminv2-ws-command-rail-actions-section {
+  margin-bottom: 0;
+  border: 1px solid var(--adminv2-container-border-rail, rgba(39, 63, 82, 0.2));
+  border-radius: 10px;
+  background: #ffffff;
+  box-shadow: 0 1px 2px rgba(39, 63, 82, 0.04);
+}
+
+html[data-adminv2-workspace-shell="v2"] .adminv2-ws-command-rail-actions-section--expanded {
+  border-color: var(--adminv2-container-border-rail, rgba(39, 63, 82, 0.2));
+  background: #ffffff;
+}
+
+html[data-adminv2-workspace-shell="v2"] .adminv2-ws-command-rail-actions-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 8px 12px;
+  border: none;
+  border-radius: 9px;
+  background: #ffffff;
+  font-size: 12px;
+  font-weight: 600;
+  color: #273f52;
+  cursor: pointer;
+  transition: background-color 120ms ease;
+}
+
+html[data-adminv2-workspace-shell="v2"] .adminv2-ws-command-rail-actions-section--expanded .adminv2-ws-command-rail-actions-trigger {
+  /* Body now floats in a portal, so the trigger keeps full radius even when expanded. */
+  border-radius: 9px;
+  border-bottom: none;
+  background: rgba(39, 63, 82, 0.04);
+}
+
+html[data-adminv2-workspace-shell="v2"] .adminv2-ws-command-rail-actions-trigger:hover {
+  background: rgba(39, 63, 82, 0.04);
+}
+
+html[data-adminv2-workspace-shell="v2"] .adminv2-ws-command-rail-actions-trigger-chevron {
+  font-size: 11px;
+  line-height: 1;
+  color: rgba(39, 63, 82, 0.45);
+}
+
+html[data-adminv2-workspace-shell="v2"] .adminv2-ws-command-rail-actions-body {
+  padding: 8px 8px 10px;
+  background: #ffffff;
+}
+
+/* Floating rail menu — detached panel portaled above the BOS command surface. */
+.adminv2-ws-command-rail-floating-menu {
+  border: 1px solid var(--adminv2-container-border-rail, rgba(39, 63, 82, 0.2));
+  border-radius: 10px;
+  background: #ffffff;
+  box-shadow:
+    0 12px 32px rgba(39, 63, 82, 0.16),
+    0 2px 6px rgba(39, 63, 82, 0.08);
+}
+
+.adminv2-ws-command-rail-actions-body--floating {
+  border-radius: 10px;
+}
+
+/* Persistent command rail — executable action rows (icon + label + chevron) */
+html[data-adminv2-workspace-shell="v2"] .adminv2-command-rail-executable-actions {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+html[data-adminv2-workspace-shell="v2"] .adminv2-command-rail-executable-action {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 10px;
+  box-sizing: border-box;
+  border: 1px solid rgba(39, 63, 82, 0.12);
+  border-radius: 10px;
+  background: #ffffff;
+  padding: 9px 10px;
+  text-align: left;
+  cursor: pointer;
+  font-family: inherit;
+  transition:
+    border-color 120ms ease,
+    background-color 120ms ease,
+    box-shadow 120ms ease;
+}
+
+html[data-adminv2-workspace-shell="v2"] .adminv2-command-rail-executable-action:hover:not(:disabled) {
+  border-color: rgba(0, 162, 131, 0.35);
+  background: rgba(0, 162, 131, 0.04);
+  box-shadow: 0 1px 3px rgba(39, 63, 82, 0.06);
+}
+
+html[data-adminv2-workspace-shell="v2"] .adminv2-command-rail-executable-action:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+html[data-adminv2-workspace-shell="v2"] .adminv2-command-rail-executable-action-label {
+  flex: 1;
+  min-width: 0;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.35;
+  color: #273f52;
+}
+
+html[data-adminv2-workspace-shell="v2"] .adminv2-command-rail-executable-action-icon {
+  display: flex;
+  shrink: 0;
+  align-items: center;
+  justify-content: center;
+}
+
+html[data-adminv2-workspace-shell="v2"] .adminv2-command-rail-executable-action-chevron {
+  opacity: 0.4;
+  transition: opacity 120ms ease;
+}
+
+html[data-adminv2-workspace-shell="v2"] .adminv2-command-rail-executable-action:hover:not(:disabled) .adminv2-command-rail-executable-action-chevron {
+  opacity: 0.7;
+}
+
+/* Create Lead action workspace — full-viewport atmospheric ownership */
+html[data-adminv2-workspace-shell="v2"] [data-action-workspace-viewport-scrim="true"] {
+  position: fixed;
+  inset: 0;
+}
+
+html[data-adminv2-workspace-shell="v2"] .action-workspace-band-backdrop.adminv2-drawer-workspace-backdrop-band {
+  top: 0;
+  bottom: 0;
+}
+
+html[data-adminv2-workspace-shell="v2"] .action-workspace-bos-drawer-panel {
+  isolation: isolate;
+}
+
+html[data-adminv2-workspace-shell="v2"] .action-workspace-bos-drawer-panel .action-workspace-bos-shell {
+  z-index: 1;
+}
+
+/* Workflow Telemetry — same rail shell as Actions; operator-focused expand body */
+html[data-adminv2-workspace-shell="v2"] .adminv2-ws-command-rail-telemetry-section {
+  margin-bottom: 0;
+}
+
+html[data-adminv2-workspace-shell="v2"] .adminv2-ws-command-rail-telemetry-attention-badge {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: #bc4300;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.9);
+  flex-shrink: 0;
+}
+
+html[data-adminv2-workspace-shell="v2"] .adminv2-ws-command-rail-telemetry-body {
+  max-height: min(28vh, 240px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+
+html[data-adminv2-workspace-shell="v2"] .adminv2-ws-command-rail-telemetry-panel + .adminv2-ws-command-rail-telemetry-panel {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(39, 63, 82, 0.08);
+}
+
+html[data-adminv2-workspace-shell="v2"] .adminv2-ws-command-rail-telemetry-panel-title {
+  margin: 0 0 6px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: rgba(39, 63, 82, 0.52);
+}
+
+html[data-adminv2-workspace-shell="v2"] .adminv2-ws-command-rail-telemetry-health {
+  margin: 0 0 4px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #273f52;
+}
+
+html[data-adminv2-workspace-shell="v2"] .adminv2-ws-command-rail-telemetry-health--attention {
+  color: #bc4300;
+}
+
+html[data-adminv2-workspace-shell="v2"] .adminv2-ws-command-rail-telemetry-health-lines {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 2px;
+  font-size: 11px;
+  color: rgba(39, 63, 82, 0.78);
+}
+
+html[data-adminv2-workspace-shell="v2"] .adminv2-ws-command-rail-telemetry-activity-list {
+  margin: 0;
+  padding: 0 0 0 14px;
+  font-size: 11px;
+  line-height: 1.45;
+  color: rgba(39, 63, 82, 0.82);
+}
+
+html[data-adminv2-workspace-shell="v2"] .adminv2-ws-command-rail-telemetry-empty {
+  margin: 0;
+  font-size: 11px;
+  color: rgba(39, 63, 82, 0.55);
+}
+
+html[data-adminv2-workspace-shell="v2"] .adminv2-ws-command-rail-telemetry-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+html[data-adminv2-workspace-shell="v2"] .adminv2-ws-command-rail-telemetry-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  padding: 7px 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(39, 63, 82, 0.16);
+  background: #ffffff;
+  font-size: 11px;
+  font-weight: 600;
+  color: #273f52;
+  text-decoration: none;
+  cursor: pointer;
+  transition: background-color 120ms ease;
+}
+
+html[data-adminv2-workspace-shell="v2"] .adminv2-ws-command-rail-telemetry-action:hover {
+  background: rgba(39, 63, 82, 0.04);
+}
+
+html[data-adminv2-workspace-shell="v2"] .adminv2-ws-command-rail-telemetry-action--secondary {
+  background: rgba(39, 63, 82, 0.03);
+}
+
+html[data-adminv2-workspace-shell="v2"] [data-adminv2-bos-rail-overlay="true"] [data-command-surface-thread-panel="true"] {
+  background-color: #ffffff !important;
+}
+
+html[data-adminv2-bos-rail-overlay-drawer="true"] [data-adminv2-bos-rail-overlay="true"] {
+  z-index: 90;
+}
+
+html[data-adminv2-bos-rail-overlay-drawer="true"] [data-adminv2-bos-rail-overlay="true"] {
+  width: var(--adminv2-bos-overlay-effective-width, var(--adminv2-bos-overlay-width)) !important;
+  max-width: var(--adminv2-bos-overlay-effective-width, var(--adminv2-bos-overlay-width)) !important;
+}
+
+/* BOS-rail drawer — modal framing (outer margin) + unified workspace edge toward BOS.
+ * Operational Workspaces are excluded — they use Operational Workspace Geometry (below). */
+html[data-adminv2-workspace-shell="v2"] .adminv2-drawer-modal-panel--bos-rail.adminv2-drawer-shell-inset:not([data-operational-workspace="true"]) {
+  top: calc(var(--adminv2-drawer-inset-top) + var(--adminv2-drawer-outer-margin, 24px));
+  bottom: calc(var(--adminv2-drawer-inset-bottom) + var(--adminv2-drawer-outer-margin, 24px));
+}
+
+/* BOS-rail drawer — full-bleed atmosphere band (sidebar → viewport right, below shell header) */
+html[data-adminv2-workspace-shell="v2"] .adminv2-drawer-workspace-backdrop-band {
+  top: var(--adminv2-drawer-inset-top);
+  bottom: 0;
+  right: 0 !important;
+  left: var(--adminv2-drawer-backdrop-left, 0);
+  background: var(--adminv2-drawer-shell-overlay-background);
+  opacity: var(--adminv2-drawer-shell-overlay-opacity);
+  z-index: 60;
+}
+
+/*
+ * Record drawer open — reinforce atmosphere on dim hit targets (same tokens as band default).
+ */
+html[data-adminv2-workspace-shell="v2"] .adminv2-drawer-workspace-backdrop-band.adminv2-drawer-modal-dim,
+html[data-adminv2-workspace-shell="v2"] .adminv2-drawer-workspace-backdrop-band.adminv2-drawer-sidebar-dim,
+html[data-adminv2-workspace-shell="v2"][data-adminv2-bos-rail-overlay-drawer="true"] .adminv2-drawer-modal-dim,
+html[data-adminv2-workspace-shell="v2"][data-adminv2-bos-rail-overlay-drawer="true"] .adminv2-drawer-sidebar-dim {
+  background: var(--adminv2-drawer-shell-overlay-background);
+  backdrop-filter: none;
+}
+
+html[data-adminv2-workspace-shell="v2"] .adminv2-drawer-workspace-loading-overlay {
+  background: var(--adminv2-drawer-shell-overlay-background);
+  opacity: var(--adminv2-drawer-shell-overlay-opacity);
+  top: var(--adminv2-drawer-inset-top);
+  bottom: 0;
+  right: 0 !important;
+}
+
+html[data-adminv2-workspace-shell="v2"][data-adminv2-bos-rail-overlay-drawer="true"] .adminv2-drawer-workspace-loading-overlay {
+  top: var(--adminv2-drawer-inset-top);
+  bottom: 0;
+}
+
+html[data-adminv2-workspace-shell="v2"][data-adminv2-bos-rail-overlay-drawer="true"] [data-adminv2-persistent-command-rail="true"] {
+  background: transparent;
+  border-left-color: rgba(0, 162, 131, 0.12);
+}
+
+/* Modal entity drawers — positioned via workspace-safe rectangle CSS vars (no viewport fallback).
+ * Operational Workspaces are excluded — they use Operational Workspace Geometry (below). */
+html[data-adminv2-workspace-shell="v2"] .adminv2-drawer-modal-panel--bos-rail:not([data-operational-workspace="true"]) {
+  left: var(--adminv2-drawer-computed-left) !important;
+  width: var(--adminv2-drawer-computed-width) !important;
+  max-width: var(--adminv2-drawer-computed-width) !important;
+  transform: none !important;
+  right: auto !important;
+  border: 1px solid var(--adminv2-container-border-drawer, rgba(39, 63, 82, 0.28)) !important;
+  box-shadow:
+    0 12px 40px rgba(39, 63, 82, 0.08),
+    0 2px 8px rgba(39, 63, 82, 0.04);
+}
+
+/* ── Operational Workspace Geometry (platform-level) ─────────────────────────────────
+ * Operational Workspaces (Communications, Processing, Work Items, Operational Intelligence,
+ * Create Lead, and any future operational surface) are PEERS of the sidebar / workspace
+ * context / BOS rail — not entity drawers, Focus Panels, or queue children. They own the
+ * full operational canvas and are never width-capped or horizontally centered.
+ *
+ *   left   = sidebar.right + clearance   (--operational-workspace-left, measured)
+ *   width  = band to BOS rail            (--operational-workspace-width, measured)
+ *   top    = below the application header (--adminv2-drawer-inset-top)
+ *   bottom = viewport bottom + workspace safe padding (--ws-shell-bottom-safe)
+ *
+ * Classification is by workspace type (the operational marker), never by feature name.
+ * Geometry vars are measured in `web/lib/bos/operationalWorkspaceGeometry.ts`.
+ *
+ * The panel occupies ~90% of the band (`--operational-workspace-fill`), inset evenly so a
+ * clickable backdrop margin remains on every side to dismiss the surface.
+ */
+html[data-adminv2-workspace-shell="v2"] .operational-workspace-surface[data-operational-workspace="true"],
+html[data-adminv2-workspace-shell="v2"][data-alloy-os-runtime-split="true"]
+  .operational-workspace-surface[data-operational-workspace="true"] {
+  --operational-workspace-fill: 0.9;
+  --operational-workspace-inset-x: calc(
+    var(--operational-workspace-width, 0px) * (1 - var(--operational-workspace-fill)) / 2
+  );
+  --operational-workspace-inset-y: 2.5vh;
+  left: calc(
+    var(--operational-workspace-left, var(--adminv2-drawer-computed-left)) +
+      var(--operational-workspace-inset-x)
+  ) !important;
+  width: calc(
+    var(--operational-workspace-width, var(--adminv2-drawer-computed-width)) *
+      var(--operational-workspace-fill)
+  ) !important;
+  max-width: calc(
+    var(--operational-workspace-width, 100%) * var(--operational-workspace-fill)
+  ) !important;
+  right: auto !important;
+  transform: none !important;
+  top: calc(var(--adminv2-drawer-inset-top) + var(--operational-workspace-inset-y)) !important;
+  bottom: calc(var(--ws-shell-bottom-safe, 16px) + var(--operational-workspace-inset-y)) !important;
+  height: auto !important;
+  max-height: none !important;
+  border: 1px solid var(--adminv2-container-border-drawer, rgba(39, 63, 82, 0.28)) !important;
+  box-shadow:
+    0 12px 40px rgba(39, 63, 82, 0.08),
+    0 2px 8px rgba(39, 63, 82, 0.04);
+}
+
+/* Drawer + BOS — drawer shell (L1) adjacent to BOS rail shell (L2) */
+html[data-adminv2-workspace-shell="v2"][data-adminv2-bos-rail-overlay-drawer="true"] .adminv2-drawer-modal-panel--bos-rail {
+  border: 1px solid var(--adminv2-container-border-drawer, rgba(39, 63, 82, 0.28)) !important;
+  box-shadow:
+    0 12px 40px rgba(39, 63, 82, 0.06),
+    0 2px 8px rgba(39, 63, 82, 0.03);
+}
+
+html[data-adminv2-workspace-shell="v2"][data-adminv2-bos-rail-overlay-drawer="true"] [data-adminv2-bos-rail-overlay="true"] {
+  border-left: 1px solid var(--adminv2-container-border-rail, rgba(39, 63, 82, 0.2)) !important;
+}
+
+html[data-adminv2-workspace-shell="v2"] .adminv2-drawer-modal-panel--bos-rail[data-adminv2-record-modal-tone="cleaning-v2"] {
+  max-width: var(--adminv2-drawer-computed-width) !important;
+}
+
+html[data-adminv2-workspace-shell="v2"] .adminv2-drawer-sidebar-panel.adminv2-drawer-shell-inset {
+  left: var(--adminv2-drawer-computed-left) !important;
+  width: var(--adminv2-drawer-computed-width) !important;
+  max-width: var(--adminv2-drawer-computed-width) !important;
+  right: auto !important;
+  transform: none !important;
+}
+
+/* Drawer overview — container-aware layout (drawer width, not viewport lg) */
+.adminv2-drawer-overview-canvas {
+  container-type: inline-size;
+  container-name: drawer-overview;
+  /* Never let overview content force the scroll body wider than the drawer. */
+  min-width: 0;
+  max-width: 100%;
+}
+
+.adminv2-drawer-overview-shell-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 1.25rem;
+  align-items: stretch;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.adminv2-drawer-overview-col-left,
+.adminv2-drawer-overview-col-main,
+.adminv2-drawer-overview-col-rail {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.adminv2-drawer-overview-col-rail {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.adminv2-drawer-overview-lead-source-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 1rem;
+}
+
+.adminv2-drawer-enrollment-field-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0.5rem;
+}
+
+@container drawer-overview (min-width: 1040px) {
+  .adminv2-drawer-overview-shell-grid {
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+    gap: 1.25rem;
+  }
+
+  .adminv2-drawer-overview-col-left {
+    grid-column: span 4;
+  }
+
+  .adminv2-drawer-overview-col-main {
+    grid-column: span 5;
+  }
+
+  .adminv2-drawer-overview-main-zone-flow {
+    grid-column: span 9;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+  }
+
+  /* No right-rail section configured → main zone owns the full width
+     (otherwise the empty 3-col rail clips the last ~1/4 on the right). */
+  .adminv2-drawer-overview-main-zone-flow:only-child {
+    grid-column: 1 / -1;
+  }
+
+  .adminv2-drawer-overview-col-rail {
+    grid-column: span 3;
+    min-width: 12rem;
+  }
+
+.adminv2-drawer-overview-lead-source-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1.25rem;
+  align-items: stretch;
+}
+
+.adminv2-drawer-overview-main-zone-flow {
+  gap: 1rem;
+}
+
+.adminv2-drawer-overview-main-zone-flow [data-layout-section-row-group] {
+  align-items: stretch;
+}
+
+  .adminv2-drawer-enrollment-field-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* BOS rail drawer — never rely on viewport lg for overview shell (safety net) */
+html[data-adminv2-workspace-shell="v2"] .adminv2-drawer-modal-panel--bos-rail .adminv2-drawer-overview-shell-grid {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0.75rem;
+}
+
+@container drawer-overview (min-width: 1040px) {
+  html[data-adminv2-workspace-shell="v2"] .adminv2-drawer-modal-panel--bos-rail .adminv2-drawer-overview-shell-grid {
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+    gap: 1rem;
+  }
+}
+
+/*
+ * BOS-rail drawer — internal density (outer panel geometry unchanged).
+ * Reclaims horizontal space by trimming nested padding/gutters while keeping ≥16px breathing room
+ * from the drawer panel edge to primary content.
+ */
+html[data-adminv2-workspace-shell="v2"] .adminv2-drawer-modal-panel--bos-rail {
+  /* Scroll body: default cleaning-v2 uses px-4/sm:px-5 — cap at 16px sides */
+  [data-adminv2-record-modal-scroll] {
+    padding-inline: 16px !important;
+    padding-top: 10px !important;
+  }
+
+  [data-entity-drawer-scroll-body="true"] {
+    gap: 0.375rem;
+  }
+
+  /* Header chrome — Proof shell + Lead command header */
+  [data-proof-layout-header-row="title-actions"] {
+    padding-inline: 16px !important;
+    gap: 0.75rem !important;
+    padding-top: 0.75rem !important;
+    padding-bottom: 0.5rem !important;
+  }
+
+  [data-proof-layout-header-row="tabs"],
+  [data-proof-layout-header-row="lifecycle"],
+  [data-proof-layout-header-row="attention"] {
+    padding-inline: 16px !important;
+  }
+
+  [data-proof-layout-header-row="tabs"] {
+    padding-bottom: 0.25rem !important;
+  }
+
+  [data-proof-layout-header-row="lifecycle"] {
+    padding-top: 0.5rem !important;
+    padding-bottom: 0.75rem !important;
+  }
+
+  /* Preserve command header card treatment — match person drawer density */
+  [data-lead-drawer-command-header="true"],
+  [data-person-drawer-command-header="true"] {
+    padding: 0.875rem 1rem !important;
+  }
+
+  [data-lead-drawer-command-avatar="true"],
+  [data-person-drawer-command-avatar="true"] {
+    width: 3rem !important;
+    height: 3rem !important;
+  }
+
+  [data-proof-layout-header-controls="true"] {
+    padding-top: 0 !important;
+  }
+
+  /* Overview canvas — drop duplicate horizontal inset (scroll body owns side breathing room) */
+  .adminv2-drawer-overview-canvas {
+    padding-inline: 0 !important;
+    padding-block: 0.5rem !important;
+    gap: 0.625rem;
+  }
+
+  .adminv2-drawer-overview-shell-grid {
+    gap: 0.5rem !important;
+  }
+
+  .adminv2-drawer-overview-col-rail {
+    gap: 0.5rem !important;
+  }
+
+  .adminv2-drawer-overview-lead-source-grid {
+    gap: 0.75rem !important;
+  }
+
+  /* Layout runtime section stack inside overview slots */
+  [data-lead-overview-composition] [data-layout-surface],
+  [data-person-overview-composition] [data-layout-surface],
+  [data-child-overview-composition] [data-layout-surface] {
+    gap: 0.75rem !important;
+  }
+
+  /* Section / card interiors */
+  [data-drawer-overview-panel="true"] header {
+    padding-inline: 0.625rem !important;
+    padding-block: 0.375rem !important;
+  }
+
+  [data-drawer-overview-panel="true"] > div:not(header) {
+    padding-inline: 0.625rem !important;
+  }
+
+  [data-drawer-overview-panel-section="children_enrollment"] > div:not(header),
+  [data-drawer-overview-panel-section="program_enrollment"] > div:not(header) {
+    padding-inline: 0 !important;
+  }
+
+  [data-drawer-household-profile-section="true"] {
+    padding: 0.5rem !important;
+  }
+
+  [data-lead-enrollment-card-list="true"] ul {
+    padding: 0.375rem !important;
+    gap: 0.375rem !important;
+  }
+
+  [data-lead-enrollment-card-row="true"] {
+    padding-inline: 0.625rem !important;
+    padding-block: 0.5rem !important;
+  }
+
+  [data-drawer-overview-empty-state="true"] {
+    padding-inline: 0.75rem !important;
+    padding-block: 0.75rem !important;
+  }
+}
+
+/* Drawer loading — center inside panel, not viewport */
+.adminv2-drawer-vm-cold-loading {
+  display: flex;
+  min-height: min(280px, 45vh);
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+
+/* Compact inline workspace breadcrumbs (bridge routes) */
+.adminv2-ws-inline-breadcrumb {
+  font-size: 11px;
+  line-height: 1.25;
+  gap: 2px;
+  padding: 0 2px;
+}
+
+.adminv2-ws-inline-breadcrumb a,
+.adminv2-ws-inline-breadcrumb span {
+  padding: 0 2px;
+}
+
+html[data-adminv2-workspace-shell="v2"] .adminv2-ws-inline-breadcrumb {
+  margin-bottom: 2px;
+}
+
+html[data-adminv2-workspace-shell="v2"] [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-dept-v2-control-deck .adminv2-ws-dept-v2-top-stack,
+html[data-adminv2-workspace-shell="v2"] [data-ws-surface="department"].adminv2-ws-dept-v2 .adminv2-ws-dept-v2-control-deck .adminv2-ws-dept-v2-top-stack,
+html[data-adminv2-workspace-shell="v2"] [data-ws-surface="company"].adminv2-ws-company-v2 .adminv2-ws-dept-v2-control-deck .adminv2-ws-dept-v2-top-stack {
+  gap: 3px;
+  padding: 6px 12px 4px;
+}
+
+/* V3 — white workspace canvas; cards keep borders */
+html[data-adminv2-workspace-shell="v2"] .adminv2-workspace-scroll-surface {
+  background-color: #ffffff;
+}
+
+/* Work unit — trim trailing scroll-surface padding so command rail sits closer to viewport edge */
+@media (min-width: 640px) {
+  html[data-adminv2-workspace-shell="v2"] .adminv2-workspace-scroll-surface:has([data-ws-surface="work_unit"].adminv2-ws-wu-v2) {
+    padding-right: 12px !important;
+  }
+}
+
+html[data-adminv2-workspace-shell="v2"] .adminv2-ws-root {
+  --ws-dept-surface-solid: #ffffff;
+  --ws-dept-surface-raised: #ffffff;
+}
+
+html[data-adminv2-workspace-shell="v2"] [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-dept-v2-control-deck,
+html[data-adminv2-workspace-shell="v2"] [data-ws-surface="department"].adminv2-ws-dept-v2 .adminv2-ws-dept-v2-control-deck,
+html[data-adminv2-workspace-shell="v2"] [data-ws-surface="company"].adminv2-ws-company-v2 .adminv2-ws-dept-v2-control-deck,
+html[data-adminv2-workspace-shell="v2"] [data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-dept-v2-control-deck {
+  background: #ffffff !important;
+}
+
+html[data-adminv2-workspace-shell="v2"] [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-dept-v2-control-deck .adminv2-ws-dept-v2-top-stack:not(:last-child),
+html[data-adminv2-workspace-shell="v2"] [data-ws-surface="department"].adminv2-ws-dept-v2 .adminv2-ws-dept-v2-control-deck .adminv2-ws-dept-v2-top-stack:not(:last-child) {
+  background: transparent !important;
+}
+
+html[data-adminv2-workspace-shell="v2"] [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-paired-oper-panel,
+html[data-adminv2-workspace-shell="v2"] [data-ws-surface="department"].adminv2-ws-dept-v2 .adminv2-ws-paired-oper-panel,
+html[data-adminv2-workspace-shell="v2"] [data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-paired-oper-panel,
+html[data-adminv2-workspace-shell="v2"] [data-ws-surface="company"].adminv2-ws-company-v2 .adminv2-ws-paired-oper-panel {
+  background: #ffffff;
+}
+
+html[data-adminv2-workspace-shell="v2"] [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-dept-qsec--summary,
+html[data-adminv2-workspace-shell="v2"] [data-ws-surface="department"].adminv2-ws-dept-v2 .adminv2-ws-dept-qsec--summary {
+  background: #ffffff;
+}
+
+/* BOS rail — tighter vertical rhythm; composer + preview stay visible */
+html[data-adminv2-workspace-shell="v2"] [data-command-surface-presentation="rail"] > div {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  flex: 1 1 auto;
+}
+
+html[data-adminv2-workspace-shell="v2"] .bos-rail-header {
+  padding: 6px 8px 6px;
+  flex-shrink: 0;
+}
+
+html[data-adminv2-workspace-shell="v2"] .bos-rail-header [data-command-surface-rail-context="true"] {
+  margin-top: 6px;
+}
+
+/* Upper assistant cards — bounded, never take over the rail. */
+html[data-adminv2-workspace-shell="v2"] .bos-rail-upper {
+  flex: 0 0 auto;
+  min-height: 0;
+  max-height: min(40vh, 320px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Conversation/thread region — flexes to fill all remaining height above the composer. */
+html[data-adminv2-workspace-shell="v2"] .bos-rail-conversation-region {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+html[data-adminv2-workspace-shell="v2"] [data-command-surface-rail-starters="true"] {
+  flex: 0 0 auto;
+  min-height: 0;
+}
+
+html[data-adminv2-workspace-shell="v2"] .bos-rail-attention {
+  margin-bottom: 6px;
+  padding: 8px 8px;
+}
+
+html[data-adminv2-workspace-shell="v2"] .bos-rail-attention--empty {
+  margin-bottom: 4px;
+  padding: 2px 8px;
+}
+
+html[data-adminv2-workspace-shell="v2"] .bos-rail-starters {
+  padding-bottom: 4px;
+}
+
+html[data-adminv2-workspace-shell="v2"] .bos-rail-starter-card {
+  padding: 7px 8px;
+}
+
+html[data-adminv2-workspace-shell="v2"] [data-command-surface-rail-starters="true"] .flex-col {
+  gap: 4px;
+}
+
+html[data-adminv2-workspace-shell="v2"] [data-command-surface-rail-conversation-header="true"] {
+  flex-shrink: 0;
+  padding-top: 2px;
+  padding-bottom: 2px;
+}
+
+html[data-adminv2-workspace-shell="v2"] [data-command-surface-rail-composer="true"] {
+  flex-shrink: 0;
+  padding-top: 2px;
+  padding-bottom: 6px;
+}
+
+/* Thread scroll — fills the conversation region; no fixed cap so it flexes with rail height. */
+html[data-adminv2-workspace-shell="v2"] [data-adminv2-bos-rail-overlay="true"] [data-command-surface-rail-conversation="true"] [data-command-surface-thread-panel="true"] {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
 @keyframes adminv2-ambient-orbit {
   from {
     transform: translate(-50%, -50%) rotate(0deg);
@@ -1541,4 +2543,284 @@
 .adminv2-workspace-ambient-field .adminv2-ambient-root-company-field {
   width: 100%;
   height: 100%;
+}
+
+/* Workspace-only: calmer field — static bloom, slate-forward specs, lighter rings */
+.adminv2-workspace-ambient-field .adminv2-workspace-ambient-bloom-dial {
+  opacity: 0.22 !important;
+  animation: none !important;
+}
+
+.adminv2-workspace-ambient-field .adminv2-company-field-drift {
+  animation: none !important;
+  opacity: 0.55 !important;
+  box-shadow:
+    0 0 0 0.5px rgba(39, 63, 82, 0.12),
+    0 0 3px rgba(39, 63, 82, 0.06) !important;
+}
+
+.adminv2-workspace-ambient-field .adminv2-ambient-ring[class*="company-field"] {
+  opacity: 0.2;
+  animation: none !important;
+}
+
+.adminv2-workspace-ambient-field .adminv2-ambient-spec-company-field-proof,
+.adminv2-workspace-ambient-field .adminv2-ambient-spec-company-field,
+.adminv2-workspace-ambient-field .adminv2-ambient-spec-company-field-soft,
+.adminv2-workspace-ambient-field .adminv2-ambient-spec-company-field-outer,
+.adminv2-workspace-ambient-field .adminv2-ambient-spec-company-field-dim {
+  background-color: rgba(39, 63, 82, 0.22) !important;
+  box-shadow: 0 0 0 0.5px rgba(39, 63, 82, 0.1) !important;
+}
+
+/* -------------------------------------------------------------------------- */
+/* AdminV2 navigation feedback (links, breadcrumbs, sidebar) */
+/* -------------------------------------------------------------------------- */
+.adminv2-nav-link {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  border-radius: 6px;
+  outline-offset: 2px;
+  transition:
+    color 120ms ease,
+    background-color 120ms ease,
+    opacity 120ms ease,
+    transform 80ms ease;
+}
+
+.adminv2-nav-link:active {
+  transform: scale(0.98);
+}
+
+.adminv2-nav-link--active .adminv2-nav-link__inner {
+  font-weight: 600;
+}
+
+.adminv2-nav-link__inner {
+  display: inline;
+}
+
+.adminv2-nav-link__inner--pending {
+  opacity: 0.55;
+}
+
+.adminv2-sidebar-shell {
+  color: #fff;
+}
+
+.adminv2-sidebar-brand-row {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.adminv2-sidebar-toggle,
+.adminv2-sidebar-expand-btn {
+  color: rgba(255, 255, 255, 0.82);
+}
+
+.adminv2-sidebar-toggle:hover,
+.adminv2-sidebar-expand-btn:hover {
+  background-color: rgba(255, 255, 255, 0.08);
+}
+
+.adminv2-sidebar-section-label {
+  color: rgba(255, 255, 255, 0.48);
+}
+
+.adminv2-sidebar-muted {
+  color: rgba(255, 255, 255, 0.45);
+}
+
+.adminv2-sidebar-body {
+  color: rgba(255, 255, 255, 0.72);
+}
+
+.adminv2-sidebar-footer {
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+.adminv2-sidebar-primary-link {
+  color: rgba(255, 255, 255, 0.86);
+  transition: background-color 120ms ease, color 120ms ease;
+}
+
+.adminv2-sidebar-primary-link:hover {
+  background-color: rgba(255, 255, 255, 0.08);
+  color: #fff;
+}
+
+.adminv2-sidebar-primary-link.adminv2-nav-link--active {
+  background-color: rgba(255, 255, 255, 0.1);
+  color: #fff;
+  box-shadow: inset 3px 0 0 #00a283;
+}
+
+.adminv2-sidebar-rail-link {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: 40px;
+  border-radius: 8px;
+  color: rgba(255, 255, 255, 0.82);
+  overflow: visible;
+  transition:
+    background-color 120ms ease,
+    color 120ms ease,
+    transform 80ms ease;
+}
+
+.adminv2-sidebar-rail-link:hover {
+  background-color: rgba(255, 255, 255, 0.08);
+  color: #fff;
+}
+
+.adminv2-sidebar-rail-link:active {
+  transform: scale(0.94);
+}
+
+.adminv2-sidebar-rail-link.adminv2-nav-link--active {
+  background-color: rgba(255, 255, 255, 0.1);
+  color: #fff;
+  box-shadow: inset 3px 0 0 #00a283;
+}
+
+.adminv2-sidebar-rail-link > .adminv2-sidebar-nav-badge-anchor {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* Collapsed rail: nudge icon away from the badge corner. */
+.adminv2-sidebar-rail-icon-with-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transform: translate(-5px, 4px);
+}
+
+.adminv2-sidebar-rail-link .adminv2-sidebar-nav-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1rem;
+  height: 1rem;
+  padding-inline: 0.22rem;
+  border-radius: 9999px;
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  box-shadow: 0 0 0 2px #273f52;
+}
+
+.adminv2-sidebar-rail-link .adminv2-sidebar-nav-badge--alert {
+  background-color: rgba(251, 191, 36, 0.96);
+  color: #273f52;
+}
+
+.adminv2-sidebar-rail-link .adminv2-sidebar-nav-badge--neutral {
+  background-color: rgba(255, 255, 255, 0.24);
+  color: #fff;
+}
+
+.adminv2-sidebar-rail-link .adminv2-sidebar-nav-badge--inbox {
+  background-color: rgba(0, 162, 131, 0.96);
+  color: #fff;
+}
+
+/* Expanded sidebar: badge sits after label, not over icon. */
+.adminv2-sidebar-primary-link .adminv2-sidebar-nav-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.1rem;
+  height: 1.1rem;
+  padding-inline: 0.3rem;
+  border-radius: 9999px;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.adminv2-sidebar-primary-link .adminv2-sidebar-nav-badge--alert {
+  background-color: rgba(251, 191, 36, 0.95);
+  color: #273f52;
+}
+
+.adminv2-sidebar-primary-link .adminv2-sidebar-nav-badge--neutral {
+  background-color: rgba(255, 255, 255, 0.2);
+  color: #fff;
+}
+
+.adminv2-sidebar-primary-link .adminv2-sidebar-nav-badge--inbox {
+  background-color: rgba(0, 162, 131, 0.95);
+  color: #fff;
+}
+
+.adminv2-sidebar-queue-list {
+  border-color: rgba(255, 255, 255, 0.14) !important;
+}
+
+.adminv2-sidebar-queue-link {
+  display: block;
+  width: 100%;
+  border-radius: 3px;
+  padding: 0.28rem 0.45rem;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.35;
+  color: rgba(255, 255, 255, 0.55);
+  background-color: transparent;
+  transition: background-color 120ms ease, color 120ms ease;
+}
+
+.adminv2-sidebar-queue-link:hover {
+  background-color: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.86);
+}
+
+.adminv2-sidebar-queue-link.adminv2-nav-link--active {
+  background-color: rgba(255, 255, 255, 0.08);
+  color: #fff;
+  font-weight: 600;
+  box-shadow: inset 2px 0 0 #00a283;
+}
+
+.adminv2-sidebar-queue-link .adminv2-nav-link__inner {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/*
+ * Dense admin cards (e.g. Settings index) — shared role sizes aligned with workspace record-card doctrine.
+ * See docs/architecture/workspace-work-unit-scope-doctrine.md § Cross-surface typography roles.
+ */
+:root {
+  --adminv2-settings-section-eyebrow-size: 10px;
+  --adminv2-settings-nav-card-title-size: 0.875rem;
+  --adminv2-settings-nav-card-desc-size: 11px;
+}
+
+.adminv2-sidebar-config-link--active {
+  box-shadow: inset 3px 0 0 #00a283;
+  background: rgba(0, 162, 131, 0.14) !important;
+  color: #ffffff !important;
+}
+
+.adminv2-sidebar-rail-link.adminv2-sidebar-config-link--active {
+  color: #ffffff !important;
+}
+
+.adminv2-sidebar-rail-link.adminv2-sidebar-config-link--active svg {
+  color: #00a283;
+}
+
+.adminv2-sidebar-config-list .adminv2-sidebar-config-link--active {
+  font-weight: 600;
 }

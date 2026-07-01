@@ -1,15 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
-import { getAdminContext } from "@/lib/admin/getAdminContext";
+import { getAdminContextCached } from "@/lib/admin/getAdminContext";
+import { emitEvent } from "@/lib/emitEvent";
 
 /** POST: set archived_at=null, archived_by=null. Scoped by org_id. */
 export async function POST(
     _request: NextRequest,
     context: { params: Promise<{ id: string }> }
 ) {
-    const ctx = await getAdminContext();
+    const ctx = await getAdminContextCached();
     if (!ctx.ok) return NextResponse.json({ error: ctx.status === 401 ? "Unauthorized" : "Forbidden" }, { status: ctx.status });
-    const { orgId } = ctx;
+    const { orgId, userId } = ctx;
 
     const { id } = await context.params;
     if (!id) return NextResponse.json({ error: "Missing id" }, { status: 400 });
@@ -25,5 +26,16 @@ export async function POST(
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
     if (!data) return NextResponse.json({ error: "Not found" }, { status: 404 });
+    try {
+        await emitEvent({
+            org_id: orgId,
+            event_type: "contact_unarchived",
+            entity_type: "contacts",
+            entity_id: id,
+            payload: { actor_user_id: userId },
+        });
+    } catch (e) {
+        console.warn("[contacts/unarchive] emitEvent", e instanceof Error ? e.message : e);
+    }
     return NextResponse.json(data);
 }

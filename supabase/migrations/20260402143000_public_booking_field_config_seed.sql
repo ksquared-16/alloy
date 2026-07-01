@@ -29,9 +29,9 @@
 DO $$
 BEGIN
   IF NOT EXISTS (SELECT 1 FROM public.orgs WHERE id = '7803388d-cdee-4afb-89cf-23a137f39423'::uuid) THEN
-    RAISE EXCEPTION 'Seed org 7803388d-cdee-4afb-89cf-23a137f39423 not found in public.orgs; skip or create org first';
+    RAISE NOTICE 'Seed org 7803388d-cdee-4afb-89cf-23a137f39423 absent; skipping public booking field config seed.';
+    RETURN;
   END IF;
-END $$;
 
 -- -----------------------------------------------------------------------------
 -- field_section_definitions (upsert by org + entity_type + section_key)
@@ -357,3 +357,5 @@ ON CONFLICT (org_id, entity_type, field_key) DO UPDATE SET
   config = EXCLUDED.config,
   label = EXCLUDED.label,
   updated_at = now();
+
+END $$;

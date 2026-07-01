@@ -3,7 +3,7 @@
 import type { ReactNode } from "react";
 
 const TERMS_ITEMS: ReactNode[] = [
-  "Offer valid for new residential customers in Bend, OR only. One per household/address. Cannot be combined with other offers or discounts.",
+  "Offer valid for new residential customers in Bend, OR only. One per address. Cannot be combined with other offers or discounts.",
   '"First Clean Free" applies only to a standard recurring maintenance clean (up to 3 hours total; kitchen, bathrooms, living areas, dusting, vacuuming/mopping, standard surface cleaning).',
   "Does not include deep cleans, move-in/move-out, or post-construction.",
   "Heavy pet hair/odor removal, oven/fridge interior, windows, laundry, organizing, or add-on services—these are available at regular rates.",
@@ -27,7 +27,7 @@ const TERMS_ITEMS: ReactNode[] = [
 export default function FirstFree4x120TermsPlaceholder() {
   return (
     <div className="rounded-lg border border-alloy-stone/30 bg-alloy-stone/5 p-4 md:p-6 text-sm text-alloy-midnight/90 max-h-[50vh] overflow-y-auto">
-      <h3 className="text-xs font-semibold uppercase tracking-wide text-alloy-juniper mb-3">Terms of service</h3>
+      <h3 className="text-xs font-semibold tracking-wide text-alloy-juniper mb-3">Terms of service</h3>
       <ul className="list-disc pl-4 sm:pl-5 space-y-2.5 text-alloy-midnight/90 leading-relaxed marker:text-alloy-juniper">
         {TERMS_ITEMS.map((text, idx) => (
           <li key={`terms-${idx}`}>{text}</li>

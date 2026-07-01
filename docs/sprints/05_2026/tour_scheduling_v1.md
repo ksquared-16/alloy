@@ -1,0 +1,407 @@
+# Tour Scheduling V1 — Enrollment CRM Completion
+
+## 1. Overview
+
+This sprint delivers **Tour Scheduling V1** as a first-class Alloy capability for enrollment CRM: admin-defined **availability rules**, **token-scoped public booking**, and **opportunity-attached tour appointments** with clear separation from queue previews and from the existing **`schedules`** (job-bound) model.
+
+**Sources of truth:** Step 0 audit (`docs/sprints/…` conversation / `docs/system/*`, `docs/execution/*`, repo inspection) and Step 1 design decisions. Implementation must stay aligned with **`docs/system/record-system.md`**, **`docs/system/workspace-system.md`**, **`docs/system/actions-and-workflows.md`**, **`docs/system/entity-model.md`**, **`docs/system/configuration-system.md`**, and **`docs/product/documents-and-forms.md`**.
+
+**Outcome:** Operators and families can book tours against real slots; **`tour_bookings`** holds scheduling truth; **opportunities** remain the CRM lifecycle anchor; **workflow_events** capture tour lifecycle; queues continue as **selection/preview only** with compatibility via metadata mirror for existing pipeline UX.
+
+---
+
+## 2. Doctrine / System Boundaries
+
+| Principle | Implication for this sprint |
+|-----------|------------------------------|
+| **Queues = selection/preview only** | Never persist booking decisions from queue row payloads; always **entity GET** (or dedicated booking read) before mutations; queue may show derived `tour_date` / time from resolver or mirrored metadata only. |
+| **Opportunity/person-first CRM** | Bookings reference **`opportunity_id`**; prefer **`primary_person_id`** when recording “who”; do not treat **`contacts`** as long-term identity for new paths (`entity-model.md`). |
+| **Lifecycle → `workflow_events`** | Tour transitions emit the **locked** tour event types; **`opportunity_status_changed`** fires **only** when `opportunities.status_key` actually changes (`emitStatusChangedEvent` / `updateOpportunityStatusWithEvent` patterns). |
+| **No `tour_scheduled` workflow event name** | Avoid collision with opportunity **status_key** `tour_scheduled`; use locked list in §3. |
+| **UI maps through record layout system** | Tour **gates** still use **`record_drawer_layouts` / `record_layouts`** (e.g. **`tour_scheduling`**). **Shipped V1 UX** concentrates scheduling in the inquiry **“Tour date”** row and the **Schedule tour / Reschedule tour** header action; the standalone **`tour_scheduling`** overview block is **suppressed** in the drawer to avoid duplicate surfaces (`AdminEntityDrawer` / record chrome). |
+| **Config/metadata where possible** | Availability rules and org policy knobs live in **DB + metadata**; avoid magic strings in React for keys already governed by status definitions or layouts. |
+| **Do not reuse `schedules` for tours** | **`schedules`** remains job-bound; tours use **`tour_bookings`** only. |
+
+---
+
+## 3. Locked V1 Decisions
+
+- **New tables:** `tour_availability_rules`, `tour_bookings`.
+- **Do not reuse** `public.schedules` for tour appointments.
+- **`tour_bookings`** is the **scheduling source of truth** (`start_at`, `end_at`, `timezone`, booking `status_key`, etc.).
+- **Opportunity** remains the **CRM lifecycle** source of truth (`status_key`, work unit, customer/person links).
+- **Metadata mirror:** On **confirmed** bookings only, mirror wall date/time to **`opportunities.metadata.tour_date`** and **`tour_time`** (and existing consumers such as queues, Needs Attention, CRM compact).
+- **Pending bookings block slots** (capacity / conflict rules treat pending like confirmed for blocking).
+- **At most one active non-terminal booking per opportunity** (enforce in service layer + DB constraint where expressible).
+- **Workflow event names (exact):** `tour_requested`, `tour_booking_pending`, `tour_confirmed`, `tour_rescheduled`, `tour_canceled`, `tour_no_show`, `tour_completed`.
+- **Do not** introduce a workflow event type named `tour_scheduled` (collides with opportunity status vocabulary).
+
+---
+
+## 4. Scope
+
+- Schema: **`tour_availability_rules`**, **`tour_bookings`** with org scoping, FKs, indexes, RLS, and constraints supporting locked rules.
+- **Availability engine:** slot generation from rules (day-of-week, wall times, timezone), buffers, blocking by pending + confirmed bookings, `max_bookings_per_slot`.
+- **Booking service:** create, confirm, reschedule, cancel, complete, no-show; single-flight active booking per opportunity.
+- **Opportunity integration:** status transitions via existing helpers where status changes; **metadata mirror** on confirm only.
+- **Events:** emit locked tour `event_type` values via **`emitEvent`**; **`opportunity_status_changed`** only when `status_key` changes.
+- **Admin UI:** layout-driven **Tour** section on opportunity drawer; **availability settings** CRUD.
+- **Public booking:** token-scoped flow reusing **public link / forms** patterns (`form_public_links`, resolve/submit, service role on server only).
+- **Tests:** service, events, mirror, queue compatibility assumptions, critical public/admin paths.
+- **Docs:** update matching topic files **in same PR** as behavior when required by `operating-doctrine.md`; regenerate **`docs/supabase/reference/*.csv`** after schema lands.
+
+---
+
+## 5. Explicit Non-Scope
+
+- External calendar sync (Outlook/Google).
+- SMS/email reminders (workflows may subscribe later; no comms build in this sprint).
+- AI scheduling or slot recommendations.
+- Deposits / payments for tour holds.
+- Staff roster optimization beyond optional `user_id` on rules.
+- Changing global meaning of **`schedules`** or creating job rows solely to host tours.
+- Retiring **`metadata.tour_*`** read paths in queues in V1 (mirror keeps compatibility).
+
+**Follow-on planning:** items above that move from “non-scope” to product are captured under **`docs/sprints/05_2026/later-phase/tour_scheduling_phase_2.md`** (not committed work until scheduled).
+
+## 6. Data Model Summary
+
+### `tour_availability_rules`
+
+- **Tenant:** `org_id` (required).
+- **Scope:** optional `location_id`, optional `user_id` (host); `day_of_week`, `start_time`, `end_time`, `timezone`.
+- **Slot policy:** `slot_duration_minutes`, `buffer_minutes`, `max_bookings_per_slot`, `approval_required`, `is_active`, `metadata` (jsonb).
+
+### `tour_bookings`
+
+- **Tenant + anchor:** `org_id`, `opportunity_id` (FK), `location_id`.
+- **People (nullable as applicable):** `primary_person_id`, `primary_contact_id` (legacy only if needed), `requested_by_user_id` (admin).
+- **Time:** `start_at`, `end_at`, `timezone` (timestamptz + IANA).
+- **Booking lifecycle `status_key`:** e.g. `requested`, `pending_approval`, `confirmed`, `rescheduled`, `canceled`, `completed`, `no_show` (finalize enum in migration with CHECK).
+- **Provenance:** `source` (`admin`, `public_link`, `form_submission`, `automation`), optional `form_submission_id`, `form_public_link_id`.
+- **Cancel audit:** `canceled_at`, `canceled_by`, `cancel_reason`; optional `rescheduled_from_booking_id`.
+- **metadata** jsonb for extensibility.
+
+### Constraints (conceptual)
+
+- **One active non-terminal booking per opportunity** (partial unique or enforced in transaction + CHECK/trigger — implementation choice on Card 1).
+- Valid window: `end_at > start_at`.
+
+---
+
+## 7. Event Strategy
+
+All tour events: **`emitEvent`** with **`entity_type` = `tour_bookings`**, **`entity_id` = booking id**, payload includes at minimum **`opportunity_id`**, **`org_id`**, booking time window, `status_key`, `source`, and actor/provenance fields as applicable. Then **`executeWorkflowRun`** fan-out as today for matching workflows.
+
+| `event_type` | When |
+|--------------|------|
+| `tour_requested` | Booking created in an initial requested state (e.g. before slot finalization if split; otherwise align with “create” — implementation may combine with next if redundant; **prefer single emission per user-visible request**). |
+| `tour_booking_pending` | Booking enters **pending approval** (slot held, blocks others per locked rules). |
+| `tour_confirmed` | Booking becomes **confirmed** (auto or after admin). |
+| `tour_rescheduled` | Successful reschedule (times and/or location changed per product rules). |
+| `tour_canceled` | Booking becomes **canceled**. |
+| `tour_no_show` | Admin marks **no_show**. |
+| `tour_completed` | Admin marks **completed**. |
+
+**`opportunity_status_changed`:** Call **`emitStatusChangedEvent`** / **`updateOpportunityStatusWithEvent`** only when **`opportunities.status_key`** changes (e.g. confirm → `tour_scheduled` per org policy). Never emit `tour_scheduled` as a **workflow `event_type`**.
+
+---
+
+## 8. Opportunity Integration
+
+- **Status:** Map booking lifecycle to opportunity **`status_key`** via **configurable defaults** (childcare enrollment: e.g. confirm → `tour_scheduled`, complete → `tour_completed`, no-show → `tour_no_show`) using **`validateStatusTransition`** + **`assertAllowedStatusKey`**.
+- **Metadata mirror:** When booking reaches **`confirmed`**, set **`metadata.tour_date`** / **`tour_time`** derived from booking instant + timezone; clear or update on cancel/reschedule per product rule (document: **on confirm write; on cancel clear mirror if no other confirmed** — Card 4 detail).
+- **Drawer / entity GET:** Hydrate active + recent **`tour_bookings`** for opportunity record payload (or dedicated include) so Tour section is authoritative for times; queue still non-authoritative.
+- **Needs Attention / queues:** Continue to use mirrored **`tour_date`** for existing **`tour_date_passed`** / sort paths in V1 without requiring queue SQL to join `tour_bookings` immediately.
+
+---
+
+## 9. UI Surfaces
+
+| Surface | Description |
+|---------|-------------|
+| **Opportunity drawer — primary tour UX** | **Scheduling and lifecycle actions** live in the **inquiry summary** on the existing **“Tour date”** row: readout is **booking-backed** when an active non-terminal **`tour_bookings`** row exists (site-local time from `start_at` + `tour_bookings.timezone`); otherwise metadata / legacy manual. **Reschedule, Cancel, Complete, No-show** (and **Confirm** when pending) sit in **`OpportunityTourBookingLifecycleBar`** under that field. Post-mutation flows **refetch entity GET**; do not trust queue payloads for mutations. |
+| **Header “Schedule tour” / “Reschedule tour”** | **`OpportunityTourScheduleActionModal`** is the operator entry point for slot pick / duplicate-guard / reschedule; calls admin **`tour_bookings`** APIs. Legacy manual date/time remains an escape hatch where needed but does not replace **`tour_bookings`**. |
+| **Layout key `tour_scheduling`** | Still recognized in **`record_drawer_layouts` / `record_layouts`** for backwards compatibility, but the **standalone overview section is suppressed** in the drawer (`tour_scheduling` filtered from overview order) so tours do not appear as a second silo — native inquiry fields carry the product. |
+| **Admin — availability settings** | CRUD **`tour_availability_rules`** (org/location-scoped, data-driven slot policy). |
+| **Public booking** | **V1-basic:** token-scoped **`tour_public_booking_links`** + public resolve/slots/book routes; secret link + server-side validation + **in-process** rate limits and bounded slot windows — not a full consumer marketing booking product (see Phase 2 doc). |
+| **Queues** | **Preview only:** sorting/filters may use **`metadata.tour_date`** / time; **`QueueService.enrichOpportunityRows`** may also load active **`tour_bookings`** to improve preview timing — still **not** authoritative for writes or workflow payloads. |
+
+---
+
+## 10. API Shape (high level)
+
+**Admin (authenticated, org-scoped)**
+
+- `GET` availability for org/location/user + date range → slot list (computed).
+- `POST` create booking (opportunity-scoped or nested under opportunity).
+- `POST` confirm / reschedule / cancel / complete / no-show on `tour_bookings/:id`.
+
+**Public (token-scoped)**
+
+- `GET` availability (limited params).
+- `POST` create booking (token binds org + opportunity or submission context per Card 7 design).
+
+Exact paths under `web/app/api/admin/...` and `web/app/api/public/...` to be chosen during implementation; must not expose service-role clients to the browser (`api-contracts.md`).
+
+---
+
+## 11. Shipped operator model and sources of truth (May 2026)
+
+Manual QA sign-off: **Tour Scheduling V1** is working as intended for the enrolled product slice.
+
+| Layer | Role |
+|-------|------|
+| **`tour_bookings`** | **Scheduling source of truth** — absolute `start_at` / `end_at`, IANA `timezone`, booking `status_key`, location, provenance. All slot validation and “what time is the tour?” authority for operators flows from here. |
+| **`opportunities`** | **CRM lifecycle source of truth** — `status_key`, work unit, identity links, pipeline metadata. Status moves (e.g. to **`tour_scheduled`**) go through **`validateStatusTransition`** + **`updateOpportunityStatusWithEvent`** when integration applies. |
+| **`opportunities.metadata.tour_date` / `tour_time`** | **Compatibility mirror only** — populated from the confirmed booking’s wall time so queues, Needs Attention, legacy CRM, and filters keep working without joining **`tour_bookings`** everywhere. Never treat mirror alone as scheduling authority when a booking row exists. |
+| **Queue rows** | **Selection / preview only** — may show tour labels from mirror and/or enriched booking read; mutations and “truth” always **entity GET** (see **`docs/system/record-system.md`**). |
+
+---
+
+## 12. Config vs hardcoding audit (V1)
+
+| Area | Configuration-driven (data / DB / layout) | Hardcoded in code (V1) | Phase 2 direction |
+|------|-------------------------------------------|-------------------------|-------------------|
+| **Availability** | **`tour_availability_rules`** per org/location (dow, wall times, timezone, slot duration, buffer, max per slot, `approval_required`, `is_active`, metadata). Engine reads rules + existing bookings from DB. | Blocking status lists (`pending_approval`, `confirmed`, `rescheduled` hold capacity) in **`web/lib/tours/constants.ts`**. Booking `status_key` enum enforced by DB CHECK + shared TS types. | Optional org policy for which booking states block capacity; holiday/blackout tables; recurring exceptions. |
+| **Record drawer layout** | Section order / keys from **`record_drawer_layouts`** / **`record_layouts`**; **`recordOpportunityDrawerLayoutIncludesSection`** used for gates. | **Suppressing** `tour_scheduling` from the overview list and **embedding** tour UX in inquiry summary is a deliberate **product** decision in **`AdminEntityDrawer`** / record chrome — not driven by a separate “tour_layout_mode” flag. | If some verticals want the old standalone Tour card back, expose a layout or org flag instead of branching in one mega-drawer. |
+| **Opportunity status mapping** | Transitions respect **`status_transition_rules`** and **`status_definitions`** (org DB). **`validateStatusTransition`** receives **`tour_date` / `tour_time`** on the payload for rules that require them. | Target keys **`tour_scheduled`**, **`tour_completed`**, **`tour_no_show`** are **constants** in **`web/lib/tours/opportunity/tourBookingOpportunityIntegration.ts`** (`TOUR_BOOKING_OPPORTUNITY_STATUS`). Cancel does **not** auto-revert opportunity status in V1. | Configurable map (booking event → opportunity status / optional no-op) per org or vertical; optional rewind on cancel. |
+| **Workflow `event_type` names** | Workflows subscribe by **`event_type`** + **`entity_type`** in DB (`workflows` table). | **Locked string union** **`TOUR_LIFECYCLE_EVENT_TYPES`** in **`web/lib/tours/constants.ts`** (`tour_requested`, `tour_booking_pending`, `tour_confirmed`, …). **No** workflow event named `tour_scheduled` (avoids collision with opportunity **`status_key`**). | Versioned event catalog doc UI; stricter governance in admin for workflow authors. |
+| **Timezone display** | Booking row carries **IANA** `timezone`. | Drawer **booking-backed** readout uses **`formatInTimeZone`** from booking instant + booking TZ only (no browser fallback for that path). Invalid IANA falls back to **`UTC_FALLBACK_IANA`** (`timezoneContract`). | Site-default TZ suggestions when creating rules; operator locale formatting prefs. |
+| **Queue preview** | Queue definitions, filters, status defs from org config. | **`QueueService`** allowlists and join logic (including optional **`tour_bookings`** enrichment for previews). Some filters still key off **`metadata->>tour_date`** for historical reasons. | More previews reading booking SoT with clear performance budget; deprecate mirror-only paths where safe. |
+| **Public booking** | **`tour_public_booking_links`** rows (token, org, opportunity, location, active flag). | Rate limit ceilings + window sizes (**`TOUR_PUBLIC_RATE_LIMIT`**, **`TOUR_PUBLIC_SLOTS_MAX_RANGE_MS`**), generic error text for bad tokens, in-process limiter (**not** distributed). | Redis/global limits, CAPTCHA, branded pages, expiring links — see Phase 2. |
+| **Opportunity update helper** | RLS/org patterns on **`opportunities`**. | **`updateOpportunityStatusWithEvent`** requires **`org_id`** on update and treats **0-row** update as failure (no spurious **`opportunity_status_changed`**). | Transactional “booking insert + opportunity patch” single unit of work if product demands it. |
+
+**Summary:** V1 is **intentionally opinionated** in code for event names, default opportunity status targets, blocking statuses, and public abuse guards — those are **acceptable product defaults**. Items marked for Phase 2 should move toward **org/vertical settings**, richer **admin config**, or **platform hardening** as described in **`docs/sprints/05_2026/later-phase/tour_scheduling_phase_2.md`**.
+
+---
+
+## 13. Card Breakdown
+
+### Card 0 — Audit validation
+
+**Objective:** Re-verify Step 0 findings against the repo **immediately before coding** (schema, opportunity PATCH/event paths, queue metadata usage, public forms routes, `record_drawer_layouts` resolution). Update sprint doc or linked audit notes only if drift is found.
+
+**Files likely touched:** `docs/sprints/05_2026/tour_scheduling_v1.md` (changelog note only); optionally `docs/execution/roadmap-and-gaps.md` if scope status changes; **no** `web/` or `supabase/` unless audit discovers a doc bug worth fixing in same PR as a one-line correction.
+
+**Acceptance criteria:**
+
+- [ ] Grep/read confirms: opportunities table has no native `tour_*` columns; existing `metadata.tour_date` / `tour_time` consumers (`QueueService`, attention resolver, drawer) documented with current paths.
+- [ ] `emitStatusChangedEvent` / `updateOpportunityStatusWithEvent` call sites for opportunities reviewed; no plan to emit `tour_scheduled` as workflow `event_type`.
+- [ ] `schedules` remains `job_id`-bound in schema reference after refresh (Card 1).
+- [ ] Public forms entrypoints (`/api/public/forms/[token]/...`) identified for Card 7 reuse.
+
+**Validation commands:** `rg "tour_date|tour_time|tour_booking"` in `web/`; `rg "emitStatusChangedEvent|updateOpportunityStatusWithEvent"` for opportunity flows; read `docs/supabase/reference/supabase_schema_columns.csv` for `schedules` / `opportunities` (current export; Card 1 re-runs `export:supabase-schema` after migrations).
+
+**Doctrine risks to avoid:** Treating this card as implementation; skipping re-check of queue-truth boundaries; assuming CSV reference is current without `export:supabase-schema` after migrations.
+
+#### Card 0 — Repo validation record (2026-05-11)
+
+- **Opportunity columns:** `docs/supabase/reference/supabase_schema_columns.csv` shows **no** native `tour_*` columns; tour display uses **`opportunities.metadata`** (`tour_date`, `tour_time`, `next_follow_up_at`, notes). **`appointment_id`** exists as **text** (not a typed FK to a tour row today).
+- **Forms engine tables:** `form_public_links` / `form_submissions` are **not** listed in the current exported `supabase_schema_columns.csv` (export likely predates or omits those tables in this snapshot). **Card 1** must run `npm run export:supabase-schema` after migrations so reference CSVs include new **`tour_*`** and any missing **`form_*`** rows per `operating-doctrine.md`.
+- **`schedules.job_id`:** CSV shows `job_id` as **NOT NULL** on `public.schedules` — aligns with sprint decision **not** to reuse `schedules` for tours.
+- **Opportunity status vs workflow `event_type`:** Enrollment seed workflow **`Enrollment: Schedule Tour Follow-up`** uses `workflows.event_type = **opportunity_schedule_tour_followup**`** (`supabase/migrations/20260430217000_enrollment_schedule_tour_workflow.sql`). **`tour_scheduled`** appears in repo as **`opportunities.status_key`** and labels, **not** as a workflow `event_type` in that migration. V1 locked tour events remain additive; avoid conflating with `opportunity_schedule_tour_followup`.
+- **Drawer / layout today:** Tour capture is **`schedule_tour`** + **`ScheduleTourActionFormModal`** + metadata-driven fields in **`AdminEntityDrawer.tsx`**; **`record_drawer_layouts`** / **`isOpportunityTourFollowUpSection`** provide real extension points. A **dedicated layout-keyed “Tour” booking section** (slot picker, `tour_bookings` summary) is the **Card 6** target — not fully present as a single composable today.
+- **Typecheck:** `cd web && npx tsc --noEmit` — **pass** (Card 0 run).
+
+#### Card 1 — Implementation record (2026-05-11)
+
+- **Migration:** `supabase/migrations/20260511143000_tour_scheduling_v1_foundation.sql` — tables, CHECKs, partial unique (one active non-terminal booking per opportunity), indexes, org-integrity triggers, RLS + grants (anon revoked), `set_updated_at` triggers.
+- **Local `supabase db reset --local`:** Failed early on unrelated migration `20260328120000_firstfree4x120_discount_program.sql` (`discount_programs` missing in clean reset order) — **not** attributed to tour SQL; apply tour migration in a healthy local/remote DB to verify end-to-end.
+- **`npm run export:supabase-schema`:** Not executed here — no `DATABASE_URL` / `SUPABASE_DB_URL` in this environment; **CSV reference files were not modified** (per doctrine: do not hand-edit; regenerate when DB is available).
+- **Doctrine doc:** `docs/system/entity-model.md` updated in same change set (tour entities + `schedules` boundary).
+
+---
+
+### Card 1 — Data model + RLS + docs reference refresh
+
+**Objective:** Add **`tour_availability_rules`** and **`tour_bookings`** migrations: PKs, FKs to `orgs`, `opportunities`, `locations`, optional `form_submissions` / `form_public_links`, CHECKs, partial unique for **one active non-terminal booking per opportunity**, indexes for availability queries and org scope. Enable RLS with policies consistent with other org-scoped tables (authenticated + service_role). Regenerate **`docs/supabase/reference/*.csv`**.
+
+**Files likely touched:** `supabase/migrations/*_tour_scheduling_v1*.sql`; `docs/supabase/reference/*.csv`; `docs/system/entity-model.md` or `api-contracts.md` if new families need a representative row (same PR per doctrine).
+
+**Acceptance criteria:**
+
+- [ ] Tables exist with locked V1 semantics; `schedules` untouched for tours.
+- [ ] RLS: no cross-org reads/writes; service role for server paths documented.
+- [ ] Constraint: at most one active non-terminal booking per `opportunity_id` (DB or documented DB+app double enforcement).
+- [ ] `npm run export:supabase-schema` (or project’s documented equivalent) run against DB with migration applied; CSVs committed.
+
+**Validation commands:** `npm run export:supabase-schema`; local Supabase `db reset` / migration apply per team standard; optional `psql` `\d+ tour_bookings`.
+
+**Doctrine risks to avoid:** Missing RLS; weak FK to wrong org; allowing multiple conflicting truths without constraint; hand-editing CSVs instead of regenerating.
+
+---
+
+### Card 2 — Availability engine
+
+**Objective:** Pure server module: given org, location, optional user, date range, and ruleset, return **candidate slots** excluding blocked windows; apply **buffer**, **slot_duration_minutes**, **max_bookings_per_slot**; **pending + confirmed** bookings block; timezone-safe conversion.
+
+**Files likely touched:** `web/lib/tours/*` (new); possibly `web/lib/admin/timezoneContract.ts` reuse; read-only access to `tour_availability_rules`, `tour_bookings`.
+
+**Acceptance criteria:**
+
+- [ ] Deterministic slot generation documented (in code comment or short module docstring): day-of-week, truncation, buffer semantics.
+- [ ] Blocking includes **pending_approval** and **confirmed** (and any other statuses classified as “holding slot” in shared constant).
+- [ ] Unit tests for edge cases: DST boundary (at least one fixture), empty rules, full day booked, max_bookings > 1.
+
+**Validation commands:** `pnpm test` / `npm test` scoped to new test files (e.g. `web/tests/tours/availability.engine.test.ts`).
+
+**Doctrine risks to avoid:** Using queue rows as input; caching slots in client as authority; ignoring org timezone policy.
+
+---
+
+### Card 3 — Booking service
+
+**Objective:** Core transactional **booking service**: create (requested / pending per `approval_required`), confirm, reschedule, cancel, complete, no-show; enforce **single active non-terminal** booking; integrate with availability engine for validation.
+
+**Files likely touched:** `web/lib/tours/bookingService.ts` (or similar); callers TBD for Cards 6–7; `web/lib/opportunityIdentity.ts` only if normalization needed for opportunity side-effects.
+
+**Acceptance criteria:**
+
+- [ ] All mutations run through one service layer with clear invariants (org match, opportunity exists, slot still free).
+- [ ] Reschedule validates new window same as create.
+- [ ] Cancel/complete/no-show are idempotent-safe or return clear errors on illegal transitions.
+
+**Validation commands:** `pnpm test` / `npm test` for `web/tests/tours/bookingService*.test.ts`.
+
+**Doctrine risks to avoid:** Splitting business rules across API routes without shared service; skipping org/opportunity scope checks.
+
+---
+
+### Card 4 — Opportunity integration
+
+**Objective:** On **confirm** (and relevant transitions), **mirror** `tour_date` / `tour_time` to **`opportunities.metadata`**; on cancel/reschedule-out, update mirror per locked policy; apply **`status_key`** changes through **`validateStatusTransition`**, **`normalizeOpportunityWritePayload`**, **`updateOpportunityStatusWithEvent`** or **`emitStatusChangedEvent`** after persist.
+
+**Files likely touched:** `web/lib/tours/opportunityTourMirror.ts` (new); `web/lib/opportunities/updateOpportunityStatusWithEvent.ts`; `web/lib/admin/emitStatusChangedEvent.ts` (callers only); possibly `web/lib/admin/opportunityEntityRecord.ts` for GET payload fields.
+
+**Acceptance criteria:**
+
+- [ ] Confirmed booking → metadata mirror matches booking wall date/time in chosen TZ policy.
+- [ ] Opportunity status updates never bypass transition validators.
+- [ ] Entity GET reflects booking summary for drawer consumers.
+
+**Validation commands:** Targeted tests under `web/tests/tours/` and/or `web/tests/opportunities/`; manual smoke: confirm booking → `GET /api/admin/entity/opportunities/:id` shows mirror + booking.
+
+**Doctrine risks to avoid:** Writing metadata without booking truth; updating `status_key` without `opportunity_status_changed` when key changes; person/contact writes violating `opportunityIdentity` rules.
+
+---
+
+### Card 5 — Event emission
+
+**Objective:** Emit **`tour_requested`**, **`tour_booking_pending`**, **`tour_confirmed`**, **`tour_rescheduled`**, **`tour_canceled`**, **`tour_no_show`**, **`tour_completed`** via **`emitEvent`** with `entity_type = tour_bookings`; run **`executeWorkflowRun`** with `event_id`; **never** register workflows on a `tour_scheduled` **event_type**. Preserve **`opportunity_status_changed`** only when opportunity status changes.
+
+**Files likely touched:** `web/lib/tours/tourEvents.ts` (new); `web/lib/emitEvent.ts` (reuse only); `web/lib/workflowRun.ts` (reuse only); booking service from Card 3; `docs/system/actions-and-workflows.md` when event catalog changes.
+
+**Acceptance criteria:**
+
+- [ ] Each booking transition emits the correct **single** event (no duplicate spam on retries).
+- [ ] Workflow runs receive `event_id` where applicable (match existing status-change pattern).
+- [ ] `opportunity_status_changed` emission unchanged in semantics when status updates accompany tour confirm.
+
+**Validation commands:** Tests with mocked `emitEvent` / workflow runner; grep ensures no `event_type.*tour_scheduled` string for workflow events.
+
+**Doctrine risks to avoid:** Skipping `emitEvent` for auditability; using `tour_scheduled` as workflow event name; emitting status changed without DB status update.
+
+---
+
+### Card 6 — Admin UI: drawer Tour section + availability settings
+
+**Objective:** **Layout-driven** Tour section for opportunity drawer (registry + `record_drawer_layouts` / template updates or seed migration for default section); admin CRUD UI for **`tour_availability_rules`**.
+
+**Files likely touched:** `web/components/admin/...` (Tour section); `web/lib/recordChrome/*`; `web/lib/admin/effectiveRecordDrawerLayout.ts` consumers; `web/app/adminV2/settings/...`; `web/app/api/admin/tour-availability-rules/**`; `supabase/migrations/*` for default layout rows if needed.
+
+**Acceptance criteria:**
+
+- [ ] Tour section visibility/order comes from effective drawer layout, not only hardcoded order.
+- [ ] Admin can create/edit/disable rules per org/location/user.
+- [ ] Drawer actions call admin APIs and refresh entity GET (no queue row mutation).
+
+**Validation commands:** Manual QA checklist; `pnpm lint` / `pnpm test` for touched components if tests exist.
+
+**Doctrine risks to avoid:** Hardcoding section only in `AdminEntityDrawer` without layout config; using queue data for slot picker; missing access scope (`getAdminAccessContextCached`) on new routes.
+
+---
+
+### Card 7 — Public booking surface
+
+**Objective:** Token-scoped public flow: list availability, create **requested** / **pending_approval** booking, optional auto-confirm when `approval_required=false`; integrate with **`form_public_links`** / **`form_submissions`** where practical for intake + proof.
+
+**Files likely touched:** `web/app/api/public/tour-booking/**` (or under `public/forms` extension); `web/lib/public/forms/*`; new thin `web/app/...` page or embed client; reuse `hashFormLinkToken` / org resolution patterns.
+
+**Acceptance criteria:**
+
+- [ ] No service key in browser; token validates server-side.
+- [ ] Creates booking tied to **one opportunity** per token contract; respects single active booking rule.
+- [ ] Emits `tour_requested` / `tour_booking_pending` / `tour_confirmed` per actual path.
+
+**Validation commands:** `pnpm test` for new public route tests; manual curl/fetch against dev server.
+
+**Doctrine risks to avoid:** Leaking `org_id` or PII in public responses; weak token entropy; booking without opportunity anchor.
+
+---
+
+### Card 8 — Testing + validation
+
+**Objective:** Consolidate automated coverage: schema constraints (where testable), availability engine, booking service transitions, event list + no `tour_scheduled` workflow event, metadata mirror, queue filter compatibility (metadata present after confirm), and critical admin/public API contracts.
+
+**Files likely touched:** `web/tests/tours/**`, `web/tests/api/**` as patterns dictate; CI config only if new suite path needed.
+
+**Acceptance criteria:**
+
+- [ ] CI-green test suite for new modules; regression tests for opportunity metadata consumers if touched.
+- [ ] Explicit test that **`tour_scheduled` is not used as `workflow_events.event_type`** for tour flow.
+- [ ] Smoke checklist documented in PR description for human QA.
+
+**Validation commands:** `pnpm test` (full or `web` workspace); `pnpm lint`.
+
+**Doctrine risks to avoid:** Tests that assert on queue row JSON as source of truth; skipping entity GET parity assertions.
+
+#### Card 8 — Completion record (2026-05-11)
+
+**Objective met:** Automated validation, targeted hardening of public tour-booking routes, admin-route doctrine notes, sprint documentation, and additional Vitest coverage for public windows, rate limits, inactive links, and resolve label safety.
+
+**Sources of truth (V1 recap):** **`tour_bookings`** rows are authoritative for scheduled times and booking lifecycle. **`opportunities.metadata.tour_date` / `tour_time`** are a **compatibility mirror** (written on confirm per Card 4 integration) for queues, Needs Attention, and legacy CRM displays — not a substitute for `tour_bookings` when editing or validating slots.
+
+**Layout config:** **`tour_scheduling`** remains a valid layout key for **`recordOpportunityDrawerLayoutIncludesSection`** and templates. In the **shipped** drawer, the **standalone `tour_scheduling` overview section is suppressed**; tour UX is consolidated into the inquiry **“Tour date”** row and the header schedule modal (**§9**).
+
+**Known V1 exclusions (unchanged):** External calendar sync; SMS/email reminders; AI scheduling; CAPTCHA and email confirmation on public booking (not implemented — public flow relies on secret link token + rate limits); multi-instance / distributed rate limiting (current guard is **in-memory, per server process**).
+
+**Migrations**
+
+- Present: `supabase/migrations/20260511143000_tour_scheduling_v1_foundation.sql`, `supabase/migrations/20260512140000_tour_public_booking_links.sql`.
+- **`supabase db reset --local`:** Still fails on **`20260328120000_firstfree4x120_discount_program.sql`** — `UPDATE public.discount_programs` where **`public.discount_programs` does not exist** in a clean reset order (unrelated to tour SQL). Apply tour migrations on a database that has already passed that migration, or fix the discount migration order separately.
+- **`npm run export:supabase-schema`:** Not run in Card 8 — **`DATABASE_URL` / `SUPABASE_DB_URL` unset** in this environment; CSV reference files were not modified (no hand-edited CSVs).
+
+**Security / scope hardening (Card 8)**
+
+- **Public:** Per-IP + hashed-token **in-process rate limits** on `resolve`, `slots`, and `book` (`web/lib/tours/public/tourPublicRateLimit.ts`); **`Retry-After`** on HTTP 429 via `tourPublicRateLimited`. **`assertTourPublicSlotsQueryWindow`** caps public slot query span (45 days). **`loadTourPublicResolveLabels`** loads opportunity/location labels only with **`.eq("org_id", link.org_id")`** on both queries. Resolve/slots/book return **generic** errors for bad/expired/inactive tokens; book failures map to a **generic client message** with server-side logging. **Rule** on book is constrained to **`link.org_id`** and **location** match.
+- **Admin:** `POST /api/admin/tours/bookings` documents that **queue row data is not trusted**; handlers continue to use **`getAdminContextCached`** org scope and **`fetchOpportunityForTourAdmin`** / **`assertBookingLocationMatchesOpportunity`** (existing pattern).
+
+**Validations run (Card 8)**
+
+- `cd web && npx tsc --noEmit` — **pass**
+- `npx vitest run tests/tours/` — **pass** (includes new `tourCard8.hardening.test.ts`)
+- `npx vitest run tests/queues/QueueService.test.ts tests/publicForms/publicFormsRoutes.test.ts tests/publicForms/publicFormLib.test.ts tests/opportunities/ tests/agent/recordOverviewLayoutRoutes.test.ts tests/forms/crmEntitySearchRoute.test.ts` — **pass** (queue Needs Attention `metadata->>tour_date` paths, public forms routes, opportunities, record overview layout, CRM entity search)
+
+**Tests added/updated**
+
+- `web/tests/tours/tourCard8.hardening.test.ts` — public slot window validation; **`takeTourPublicRateLimit`** over **`book`** ceiling; inactive public link; **`loadTourPublicResolveLabels`** empty-opportunity path; existing `tourBatchB` tests continue to cover expired link, admin location mismatch, **`tour_scheduling`** layout gate.
+
+**Files touched in Card 8 (implementation + tests + docs)**
+
+- `web/lib/tours/public/tourPublicHttp.ts` — `tourPublicRateLimited` helper
+- `web/lib/tours/public/tourPublicSlotsWindow.ts`, `tourPublicRateLimit.ts`, `loadTourPublicResolveLabels.ts` (as integrated)
+- `web/app/api/public/tour-booking/[token]/resolve/route.ts`, `slots/route.ts`, `book/route.ts` — rate limits, window guard, org-scoped labels, safer book path
+- `web/app/api/admin/tours/bookings/route.ts` — doctrine comment
+- `web/tests/tours/tourCard8.hardening.test.ts`
+- `docs/sprints/05_2026/tour_scheduling_v1.md` — this record + §9 drawer table clarification
+
+**Remaining gaps (product / infra, not blocking V1 code merge)**
+
+- Local **`db reset`** blocked until **`discount_programs`** migration order/content is repaired.
+- Schema reference CSVs still need **`export:supabase-schema`** when a DB URL is available.
+- Public abuse guard is **best-effort per instance** (not Redis/global).
+
+---
+
+Tour Scheduling V1 sprint **complete** (manual QA **May 2026**). **Phase 2 Band A complete** (comms/reminders, May 2026): [`completed/tour_scheduling_phase2_band_a_closeout.md`](./completed/tour_scheduling_phase2_band_a_closeout.md). **Band B+ roadmap:** [`../later-phase/tour_scheduling_phase_2.md`](../later-phase/tour_scheduling_phase_2.md).

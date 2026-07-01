@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
-import { getAdminContext } from "@/lib/admin/getAdminContext";
+import { getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { fetchJobDiscountOptionsForAdmin } from "@/lib/admin/jobDiscountSelection";
 
 /**
@@ -9,7 +9,7 @@ import { fetchJobDiscountOptionsForAdmin } from "@/lib/admin/jobDiscountSelectio
  * - discount_codes: deprecated shape for older clients (id = legacy code uuid only)
  */
 export async function GET(request: NextRequest) {
-    const ctx = await getAdminContext();
+    const ctx = await getAdminContextCached();
     if (!ctx.ok) {
         return NextResponse.json(
             { error: ctx.status === 401 ? "Unauthorized" : "Forbidden" },

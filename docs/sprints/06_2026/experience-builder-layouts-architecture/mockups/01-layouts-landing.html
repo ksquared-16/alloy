@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>01 — Layouts landing</title>
+  <link rel="stylesheet" href="_shared.css" />
+</head>
+<body>
+<div class="frame">
+  <div class="label">Experience Builder <span>/settings/layouts — landing</span></div>
+  <div class="body">
+    <div class="bos">
+      <div class="bos-i">⌂</div>
+      <div class="bos-i on">▦</div>
+      <div class="bos-i">⚙</div>
+    </div>
+    <div class="config-page">
+      <div class="ctx">
+        <div>
+          <h1>Experience Builder</h1>
+          <p>Configure what operators see in queues and Focus Panels. Assign layouts in Processes.</p>
+        </div>
+        <div class="ctx-actions">
+          <input type="search" placeholder="Search layouts…" style="padding:8px 12px;border:1px solid rgba(89,103,139,0.18);border-radius:8px;font-size:13px;width:200px" />
+          <button class="btn-pine">New Layout</button>
+        </div>
+      </div>
+      <div class="shell">
+        <aside class="queue-col narrow">
+          <div class="queue-label">Surface family</div>
+          <div class="q-item on"><div class="t">Focus Panel</div><div class="s">Summary · Work · Activity</div></div>
+          <div class="q-item"><div class="t">Queue Row</div><div class="s">Compressed · Comfortable · Expanded</div></div>
+          <div class="q-item" style="opacity:0.5"><div class="t">Dashboard</div><div class="s">Coming soon</div></div>
+        </aside>
+        <aside class="queue-col">
+          <div class="queue-label">Layouts · Lead · Focus Panel</div>
+          <div class="q-item on">
+            <div class="t">Enrollment · Lead · Summary</div>
+            <div class="s">Lead · Focus Panel Summary</div>
+            <div class="meta"><span class="pill pill-pub">Published</span><span class="pill pill-default">Default</span></div>
+          </div>
+          <div class="q-item">
+            <div class="t">Enrollment · Lead · Work</div>
+            <div class="s">Lead · Focus Panel Work</div>
+            <div class="meta"><span class="pill pill-draft">Draft</span></div>
+          </div>
+          <div class="q-item">
+            <div class="t">Enrollment · Tour · Summary</div>
+            <div class="s">Lead · Focus Panel Summary</div>
+            <div class="meta"><span class="pill pill-pub">Published</span></div>
+          </div>
+        </aside>
+        <div class="workspace">
+          <div class="ws-toolbar">
+            <h2>Enrollment · Lead · Summary</h2>
+            <span class="pill pill-pub">Published v3</span>
+            <button class="btn-ghost">Duplicate</button>
+            <button class="btn-pine">Edit layout</button>
+          </div>
+          <div class="ws-body">
+            <div class="fp-chrome">
+              <div style="font-weight:600;font-size:15px">Sarah Chen · New inquiry</div>
+              <div class="fp-modes"><span class="fp-mode on">Summary</span><span class="fp-mode">Work</span><span class="fp-mode">Activity</span></div>
+            </div>
+            <div class="card-grid" style="margin-top:12px">
+              <div class="card span-3"><div class="card-h"><div class="ico">!</div><div class="title">Attention</div></div><div class="field-row"><span class="lbl">Due</span><span class="val">Tour follow-up</span></div></div>
+              <div class="card span-3"><div class="card-h"><div class="ico">⌁</div><div class="title">Household</div></div><div class="field-row"><span class="lbl">Primary</span><span class="val">Sarah Chen</span></div></div>
+              <div class="card span-6"><div class="card-h"><div class="ico">👶</div><div class="title">Children</div></div><div class="field-row"><span class="lbl">Enrolled</span><span class="val">2 children</span></div></div>
+            </div>
+            <p class="hint">Runtime-faithful preview — same surface operators see in the work unit.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

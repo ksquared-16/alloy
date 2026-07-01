@@ -1,0 +1,197 @@
+"use client";
+
+import { useMemo } from "react";
+import { usePathname } from "next/navigation";
+import { AdminV2NavLink } from "@/app/adminV2/components/navigation/AdminV2NavLink";
+import { ChevronRight } from "lucide-react";
+import { derived, neutral } from "@/styles/tokens/colors";
+
+import {
+    ADMIN_SETTINGS_SUBPATH_PREFIX,
+    CANONICAL_ADMIN_CONFIG_LANDING,
+    normalizeToCanonicalAdminPath,
+} from "@/lib/admin/canonicalAdminRoutes";
+import { OPERATOR_WORKSPACE_HREF } from "@/lib/admin/canonicalOperatorRoutes";
+
+const SETTINGS_ROOT = ADMIN_SETTINGS_SUBPATH_PREFIX;
+
+/** Normalize rewrites so `/admin/v2/settings/...` and `/adminv2/...` match route logic. */
+function normalizedPathname(pathname: string): string {
+    return normalizeToCanonicalAdminPath(pathname);
+}
+
+type Crumb = { label: string; href: string | null };
+
+function crumbsForPath(path: string): Crumb[] {
+    const settingsPath =
+        path === CANONICAL_ADMIN_CONFIG_LANDING || path.startsWith(`${CANONICAL_ADMIN_CONFIG_LANDING}/`)
+            ? path.replace(CANONICAL_ADMIN_CONFIG_LANDING, SETTINGS_ROOT)
+            : path;
+    if (!settingsPath.startsWith(SETTINGS_ROOT)) {
+        return [{ label: "Settings", href: null }];
+    }
+
+    const tail = settingsPath.slice(SETTINGS_ROOT.length);
+    if (tail === "" || tail === "/") {
+        return [{ label: "Settings", href: null }];
+    }
+
+    const base: Crumb[] = [{ label: "Settings", href: CANONICAL_ADMIN_CONFIG_LANDING }];
+
+    if (tail.startsWith("/documents/document-fields")) {
+        base.push({ label: "Document field definitions", href: null });
+        return base;
+    }
+
+    if (tail.startsWith("/option-sets")) {
+        const detailMatch = /^\/option-sets\/([^/]+)\/?$/.exec(tail);
+        if (detailMatch) {
+            base.push({ label: "Option sets", href: `${SETTINGS_ROOT}/option-sets` });
+            const raw = detailMatch[1];
+            let key = raw;
+            try {
+                key = decodeURIComponent(raw);
+            } catch {
+                /* keep raw */
+            }
+            base.push({ label: key, href: null });
+        } else {
+            base.push({ label: "Option sets", href: null });
+        }
+        return base;
+    }
+
+    if (tail === "/statuses" || tail.startsWith("/statuses/")) {
+        base.push({ label: "Statuses", href: null });
+        return base;
+    }
+
+    if (tail === "/field-sections" || tail.startsWith("/field-sections/")) {
+        base.push({ label: "Field grouping catalog", href: null });
+        return base;
+    }
+
+    if (tail === "/departments" || tail.startsWith("/departments/")) {
+        base.push({ label: "Departments", href: null });
+        return base;
+    }
+
+    if (tail === "/kpis" || tail.startsWith("/kpis/")) {
+        base.push({ label: "Operational Intelligence", href: `${SETTINGS_ROOT}/analytics?tab=visibility` });
+        return base;
+    }
+
+    if (tail === "/analytics" || tail.startsWith("/analytics/")) {
+        base.push({ label: "Operational Intelligence", href: null });
+        return base;
+    }
+
+    if (tail === "/work-units" || tail.startsWith("/work-units/")) {
+        base.push({ label: "Work units", href: null });
+        return base;
+    }
+
+    if (tail === "/placement-priority" || tail.startsWith("/placement-priority")) {
+        base.push({ label: "Waitlist Ranking Policy", href: null });
+        return base;
+    }
+
+    if (tail === "/users-roles" || tail.startsWith("/users-roles/")) {
+        base.push({ label: "Access", href: null });
+        return base;
+    }
+
+    if (tail === "/user-access" || tail.startsWith("/user-access/")) {
+        base.push({ label: "User access scope", href: null });
+        return base;
+    }
+
+    if (tail === "/fields" || tail.startsWith("/fields")) {
+        base.push({ label: "Fields", href: null });
+        return base;
+    }
+
+    if (
+        tail === "/surfaces" ||
+        tail.startsWith("/surfaces/") ||
+        tail === "/layouts" ||
+        tail.startsWith("/layouts/")
+    ) {
+        base.push({ label: "Surfaces", href: null });
+        return base;
+    }
+
+    if (tail === "/entity-labels" || tail.startsWith("/entity-labels")) {
+        base.push({ label: "Entity labels", href: null });
+        return base;
+    }
+
+    if (tail === "/relationships" || tail.startsWith("/relationships/")) {
+        base.push({ label: "Relationships", href: null });
+        return base;
+    }
+
+    if (
+        tail === "/processes" ||
+        tail.startsWith("/processes/") ||
+        tail === "/business-processes" ||
+        tail.startsWith("/business-processes/") ||
+        tail === "/lifecycle" ||
+        tail.startsWith("/lifecycle/") ||
+        tail === "/enrollment-process" ||
+        tail.startsWith("/enrollment-process/")
+    ) {
+        base.push({ label: "Processes", href: null });
+        return base;
+    }
+
+    const remainder = tail.replace(/^\//, "").replace(/\/$/, "") || "Page";
+    return [{ label: "Settings", href: CANONICAL_ADMIN_CONFIG_LANDING }, { label: remainder, href: null }];
+}
+
+function crumbActive(href: string, path: string): boolean {
+    const h = href.replace(/\/$/, "");
+    const p = path.replace(/\/$/, "");
+    return p === h || p.startsWith(`${h}/`);
+}
+
+export default function SettingsHierarchyBreadcrumb() {
+    const pathname = usePathname();
+    const path = useMemo(() => normalizedPathname(pathname), [pathname]);
+    const crumbs = useMemo(() => crumbsForPath(path), [path]);
+
+    return (
+        <nav
+            aria-label="Settings hierarchy"
+            className="flex flex-wrap items-center gap-1 text-[13px] leading-snug"
+            style={{ color: derived.textSecondary }}
+        >
+            {crumbs.map((c, i) => {
+                const isLast = i === crumbs.length - 1;
+                return (
+                    <span key={`${c.label}-${i}`} className="flex items-center gap-1">
+                        {i > 0 && (
+                            <ChevronRight className="h-3.5 w-3.5 shrink-0 opacity-50" aria-hidden style={{ color: neutral.textPrimary }} />
+                        )}
+                        {c.href && !isLast ? (
+                            <AdminV2NavLink
+                                href={c.href}
+                                active={crumbActive(c.href, path)}
+                                className="font-medium text-alloy-pine hover:underline px-0.5 -mx-0.5 rounded"
+                            >
+                                {c.label}
+                            </AdminV2NavLink>
+                        ) : (
+                            <span
+                                className={isLast ? "font-semibold text-alloy-midnight" : "font-medium text-alloy-midnight/75"}
+                                aria-current={isLast ? "page" : undefined}
+                            >
+                                {c.label}
+                            </span>
+                        )}
+                    </span>
+                );
+            })}
+        </nav>
+    );
+}

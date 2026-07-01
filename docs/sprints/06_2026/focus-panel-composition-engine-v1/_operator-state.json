@@ -1,0 +1,17 @@
+{
+  "slug": "lifecycle-lead",
+  "url": "http://127.0.0.1:3000/workspace/work-unit/lifecycle-lead/24d6b7c8-09d4-4c6b-b1f4-3dd8da4e4abc",
+  "strategy": "lanes",
+  "gridWidth": 745,
+  "primaryLaneWidth": 467,
+  "supportLaneWidth": 234,
+  "primaryLaneCards": [
+    "household",
+    "children"
+  ],
+  "supportLaneCards": [
+    "readiness_kpi",
+    "current_work"
+  ],
+  "householdElevated": "household"
+}

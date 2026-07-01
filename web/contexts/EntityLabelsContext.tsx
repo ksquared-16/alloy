@@ -1,54 +1,19 @@
 "use client";
 
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
+import { runWhenAdminV2PrimarySurfaceReady } from "@/lib/workspace/adminV2DeferBackgroundWork";
+import { dedupeAdminFetchWithTtl } from "@/lib/workspace/workspaceAdminFetchDedupe";
+import { workspaceDataFetchInit } from "@/lib/workspace/workspaceDataFetch";
+import { isAdminV2PrimarySurfacePending } from "@/lib/perf/adminV2PrimarySurfaceGate";
 
 const CACHE_KEY = "entity_labels_cache";
 const CACHE_TTL_MS = 10 * 60 * 1000; // 10 minutes
 
-export type EntityLabelEntry = { singular: string | null; plural: string | null };
-export type EntityLabelsMap = Record<string, EntityLabelEntry>;
+import type { EntityLabelEntry, EntityLabelsMap } from "@/lib/admin/entityLabelDisplay";
+import { getEntityLabel } from "@/lib/admin/entityLabelDisplay";
 
-/** Default display labels when entity_labels has no override (DB entity type unchanged). */
-const DEFAULT_ENTITY_LABELS: Record<string, { singular: string; plural: string }> = {
-    vendors: { singular: "Vendor", plural: "Vendors" },
-    jobs: { singular: "Job", plural: "Jobs" },
-    schedules: { singular: "Schedule", plural: "Schedules" },
-    customers: { singular: "Customer", plural: "Customers" },
-    contacts: { singular: "Contact", plural: "Contacts" },
-    customer_members: { singular: "Member", plural: "Members" },
-    persons: { singular: "Person", plural: "People" },
-    opportunities: { singular: "Opportunity", plural: "Opportunities" },
-    workflows: { singular: "Workflow", plural: "Workflows" },
-    locations: { singular: "Location", plural: "Locations" },
-    documents: { singular: "Document", plural: "Documents" },
-    subscriptions: { singular: "Subscription", plural: "Subscriptions" },
-    payments: { singular: "Payment", plural: "Payments" },
-    messages: { singular: "Message", plural: "Messages" },
-    service_offerings: { singular: "Service Offering", plural: "Service Offerings" },
-    service_plan_templates: { singular: "Plan Template", plural: "Plan Templates" },
-    discount_redemptions: { singular: "Discount Redemption", plural: "Discount Redemptions" },
-    addons: { singular: "Add-on", plural: "Add-ons" },
-};
-
-/**
- * Get display label for an entity type. Use for UI only; DB entity types stay vendors/jobs/etc.
- * @param labels - from useEntityLabels().labels
- * @param entityType - e.g. "vendors", "jobs"
- * @param form - "singular" or "plural"
- */
-export function getEntityLabel(
-    labels: EntityLabelsMap,
-    entityType: string,
-    form: "singular" | "plural"
-): string {
-    const entry = labels[entityType];
-    const value = form === "singular" ? entry?.singular : entry?.plural;
-    if (value != null && value.trim() !== "") return value.trim();
-    const defaults = DEFAULT_ENTITY_LABELS[entityType];
-    if (defaults) return defaults[form];
-    const fallback = form === "singular" ? entityType.replace(/s$/, "") : entityType;
-    return fallback.charAt(0).toUpperCase() + fallback.slice(1);
-}
+export type { EntityLabelEntry, EntityLabelsMap };
+export { getEntityLabel };
 
 type EntityLabelsContextValue = {
     labels: EntityLabelsMap;
@@ -96,6 +61,60 @@ export function useEntityLabels(): EntityLabelsContextValue {
     return ctx;
 }
 
+async function fetchEntityLabelsMap(seeded: boolean): Promise<EntityLabelsMap> {
+    const fetchInit = workspaceDataFetchInit() ?? {};
+    const ttlMs = seeded ? 120_000 : 4500;
+    const res = await dedupeAdminFetchWithTtl("/api/admin/entity-labels", fetchInit, ttlMs);
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok) return {};
+    const effective =
+        (json as { effective?: { entity_type: string; singular: string | null; plural: string | null }[] })
+            .effective ?? [];
+    saveToCache(effective);
+    return buildMap(effective);
+}
+
+/** Shell-level surfaces (e.g. top-nav My Tasks modal) sit outside route-scoped EntityLabelsProvider. */
+function useEntityLabelsOutsideProvider(active: boolean): EntityLabelsContextValue {
+    const [labels, setLabels] = useState<EntityLabelsMap>(() => (active ? (loadFromCache() ?? {}) : {}));
+    const [loading, setLoading] = useState(() => active && Object.keys(loadFromCache() ?? {}).length === 0);
+
+    const refreshEntityLabels = useCallback(async () => {
+        if (!active) return;
+        try {
+            const map = await fetchEntityLabelsMap(false);
+            if (Object.keys(map).length > 0) setLabels(map);
+        } catch {
+            // keep previous labels on error
+        } finally {
+            setLoading(false);
+        }
+    }, [active]);
+
+    useEffect(() => {
+        if (!active) return;
+        const cached = loadFromCache();
+        if (Object.keys(cached ?? {}).length > 0) {
+            setLabels(cached!);
+            setLoading(false);
+            return runWhenAdminV2PrimarySurfaceReady(() => refreshEntityLabels(), "entity_labels_shell_cached");
+        }
+        if (isAdminV2PrimarySurfacePending()) {
+            return runWhenAdminV2PrimarySurfaceReady(() => refreshEntityLabels(), "entity_labels_shell_unseeded");
+        }
+        void refreshEntityLabels();
+    }, [active, refreshEntityLabels]);
+
+    return { labels, loading, refreshEntityLabels };
+}
+
+/** Same as {@link useEntityLabels} but safe outside EntityLabelsProvider (uses session cache + fetch). */
+export function useEntityLabelsOptional(): EntityLabelsContextValue {
+    const ctx = useContext(EntityLabelsContext);
+    const fallback = useEntityLabelsOutsideProvider(ctx == null);
+    return ctx ?? fallback;
+}
+
 export function EntityLabelsProvider({
     children,
     initialLabels,
@@ -110,31 +129,30 @@ export function EntityLabelsProvider({
 
     const refreshEntityLabels = useCallback(async () => {
         try {
-            const res = await fetch("/api/admin/entity-labels");
-            const json = await res.json().catch(() => ({}));
-            if (!res.ok) return;
-            const effective = (json as { effective?: { entity_type: string; singular: string | null; plural: string | null }[] }).effective ?? [];
-            const map = buildMap(effective);
-            setLabels(map);
-            saveToCache(effective);
+            const map = await fetchEntityLabelsMap(seeded);
+            if (Object.keys(map).length > 0) setLabels(map);
         } catch (_) {
             // keep previous labels on error
         } finally {
             setLoading(false);
         }
-    }, []);
+    }, [seeded]);
 
     useEffect(() => {
         if (seeded) {
-            void refreshEntityLabels();
-            return;
+            return runWhenAdminV2PrimarySurfaceReady(() => {
+                if (isAdminV2PrimarySurfacePending()) return;
+                void refreshEntityLabels();
+            }, "entity_labels_seeded");
         }
         const cached = loadFromCache();
         if (Object.keys(cached ?? {}).length > 0) {
             setLabels(cached!);
             setLoading(false);
-            void refreshEntityLabels();
-            return;
+            return runWhenAdminV2PrimarySurfaceReady(() => refreshEntityLabels(), "entity_labels_cached");
+        }
+        if (isAdminV2PrimarySurfacePending()) {
+            return runWhenAdminV2PrimarySurfaceReady(() => refreshEntityLabels(), "entity_labels_unseeded");
         }
         void refreshEntityLabels();
     }, [seeded, refreshEntityLabels]);

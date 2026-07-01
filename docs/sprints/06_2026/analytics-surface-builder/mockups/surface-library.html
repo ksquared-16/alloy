@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Surface Library — command center</title>
+<link rel="stylesheet" href="../../analytics-operational-intelligence-platform/mockups/_shared.css" />
+<style>
+  .lib-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-bottom: 22px; }
+  .lcard { background: var(--white); border: 1px solid var(--line); border-radius: var(--r); padding: 15px 15px 13px; box-shadow: var(--shadow-sm); display: flex; flex-direction: column; gap: 10px; }
+  .lc-top { display: flex; align-items: flex-start; gap: 8px; }
+  .lc-top .lt { font-size: 14px; font-weight: 650; color: var(--midnight); }
+  .lc-top .ls { font-size: 11.5px; color: var(--forge-70); margin-top: 2px; }
+  .st { font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 999px; flex-shrink: 0; }
+  .st.pub { background: var(--good-bg); color: var(--good); }
+  .st.draft { background: var(--warn-bg); color: var(--warn); }
+  .st.plan { background: rgba(89,103,139,0.12); color: var(--forge); }
+  .where { display: flex; flex-wrap: wrap; gap: 5px; }
+  .where span { font-size: 10px; font-weight: 600; color: var(--forge-70); background: rgba(89,103,139,0.08); padding: 2px 8px; border-radius: 999px; }
+  .lc-foot { display: flex; align-items: center; gap: 8px; border-top: 1px solid var(--line-soft); padding-top: 10px; margin-top: auto; }
+  .lc-foot .upd { font-size: 11px; color: var(--midnight-46); }
+  .open { margin-left: auto; }
+  .grp { font-size: 11px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--midnight-70); margin: 6px 2px 12px; }
+  .soon { margin-left: auto; font-size: 11px; font-weight: 600; color: var(--midnight-46); }
+</style>
+</head>
+<body>
+<div class="frame">
+  <div class="label"><span class="dot"></span> Mockup · Surface Library <span>— Settings › Surfaces · the command center for all surface authoring</span></div>
+  <div class="body">
+    <div class="bos"><div class="logo"></div><div class="bos-i">▦</div><div class="bos-i">◷</div><div class="bos-i">✦</div><div class="bos-i on">⚙</div></div>
+    <div class="nav" style="width:200px">
+      <div class="nav-head"><div class="eyebrow">Settings</div><h1>Surfaces</h1></div>
+      <div class="nav-list">
+        <div class="nav-item on"><span class="ni">▤</span> Surface Library</div>
+        <div class="nav-group">Platform · advanced</div>
+        <div class="nav-item"><span class="ni">∑</span> Operational Calculations</div>
+      </div>
+      <div class="nav-foot"><span>⌁</span> One builder · every surface</div>
+    </div>
+
+    <div class="surface">
+      <div class="surface-head">
+        <div class="titles">
+          <div class="crumbs">Settings <span class="sep">›</span> <span class="here">Surfaces</span></div>
+          <h2>Surface Library</h2>
+          <div class="sub">Every configurable surface in Alloy. Choose one to open the builder — the same builder powers them all.</div>
+        </div>
+        <div class="head-tools"><div class="btn btn-ghost">＋ New surface</div></div>
+      </div>
+
+      <div class="surface-body">
+        <div class="grp">Dashboards &amp; Analytics</div>
+        <div class="lib-grid">
+          <div class="lcard">
+            <div class="lc-top"><div style="flex:1"><div class="lt">Operational Intelligence</div><div class="ls">Today’s pulse, attention, bottlenecks</div></div><span class="st pub">Published</span></div>
+            <div class="where"><span>Workspace → Analytics modal</span></div>
+            <div class="lc-foot"><span class="upd">Updated · today</span><span class="btn btn-pine btn-sm open">Open builder →</span></div>
+          </div>
+          <div class="lcard">
+            <div class="lc-top"><div style="flex:1"><div class="lt">Executive Performance</div><div class="ls">Org health, growth, financial, forecast</div></div><span class="st plan">Planned</span></div>
+            <div class="where"><span>Executive dashboard</span></div>
+            <div class="lc-foot"><span class="upd">—</span><span class="soon">Coming soon</span></div>
+          </div>
+          <div class="lcard">
+            <div class="lc-top"><div style="flex:1"><div class="lt">Enrollment Intelligence</div><div class="ls">Funnel, conversion, capacity</div></div><span class="st plan">Planned</span></div>
+            <div class="where"><span>Enrollment workspace</span></div>
+            <div class="lc-foot"><span class="upd">—</span><span class="soon">Coming soon</span></div>
+          </div>
+          <div class="lcard">
+            <div class="lc-top"><div style="flex:1"><div class="lt">Financial Performance</div><div class="ls">Revenue, AR, margin</div></div><span class="st plan">Planned</span></div>
+            <div class="where"><span>Finance workspace</span></div>
+            <div class="lc-foot"><span class="upd">—</span><span class="soon">Coming soon</span></div>
+          </div>
+        </div>
+
+        <div class="grp">Operator surfaces</div>
+        <div class="lib-grid">
+          <div class="lcard">
+            <div class="lc-top"><div style="flex:1"><div class="lt">Focus Panel</div><div class="ls">The operator’s record focus panel</div></div><span class="st pub">Published</span></div>
+            <div class="where"><span>Record drawers</span><span>Focus Panel</span></div>
+            <div class="lc-foot"><span class="upd">Updated · 2 days ago</span><span class="btn btn-pine btn-sm open">Open builder →</span></div>
+          </div>
+        </div>
+
+        <div class="grp">Headers</div>
+        <div class="lib-grid">
+          <div class="lcard">
+            <div class="lc-top"><div style="flex:1"><div class="lt">Workspace Header</div><div class="ls">The metrics atop a workspace</div></div><span class="st pub">Published</span></div>
+            <div class="where"><span>Workspace header</span></div>
+            <div class="lc-foot"><span class="upd">—</span><span class="soon">Coming soon</span></div>
+          </div>
+          <div class="lcard">
+            <div class="lc-top"><div style="flex:1"><div class="lt">Work Unit Header</div><div class="ls">The metrics atop a work unit</div></div><span class="st pub">Published</span></div>
+            <div class="where"><span>Work unit header</span></div>
+            <div class="lc-foot"><span class="upd">—</span><span class="soon">Coming soon</span></div>
+          </div>
+        </div>
+
+        <div class="grp">Reports</div>
+        <div class="lib-grid">
+          <div class="lcard">
+            <div class="lc-top"><div style="flex:1"><div class="lt">Reports</div><div class="ls">Period output and board packets</div></div><span class="st plan">Planned</span></div>
+            <div class="where"><span>Reports</span></div>
+            <div class="lc-foot"><span class="upd">—</span><span class="soon">Coming soon</span></div>
+          </div>
+        </div>
+
+        <div class="note">Add a surface type → it appears here automatically (one registry entry). No new builder, no new landing. Choosing any “Open builder” enters the same SurfaceBuilder.</div>
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

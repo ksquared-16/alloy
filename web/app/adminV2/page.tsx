@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 
-/** Prefer `/admin/v2` (rewrites to workspace); keep direct `/adminV2` usable for bookmarks. */
+/** Prefer canonical `/admin` (settings landing); `/adminV2` redirects at the edge. */
 export default function AdminV2Page() {
-  redirect("/admin/v2/workspace");
+  redirect("/admin");
 }

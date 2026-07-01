@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>09 — Metric Card Gallery</title>
+<link rel="stylesheet" href="_shared.css" />
+</head>
+<body>
+<div class="frame">
+  <div class="label"><span class="dot"></span>Metric Card Language <span>One Metric archetype · all renderers &amp; compositions</span></div>
+  <div class="body">
+    <div class="surface">
+      <div class="surface-head">
+        <div class="titles">
+          <div class="crumbs"><span>Card Language</span><span class="sep">›</span><span class="here">Metric Card Gallery</span></div>
+          <h2>Metric Card Gallery</h2>
+          <div class="sub">Every metric card is the same archetype. KPI / Trend / Comparison / Forecast / Benchmark / Health / Breakdown are <b>renderers</b>; Insight / Recommendation are <b>compositions</b>.</div>
+        </div>
+      </div>
+      <div class="surface-body">
+
+        <div class="zone">
+          <div class="zone-head"><h3>Renderers</h3><span class="z-sub">Standard density</span></div>
+          <div class="grid">
+            <!-- KPI -->
+            <div class="mcard t-good s3">
+              <div class="mc-head"><span class="mc-q">How much demand?</span><span class="tone good">Strong</span></div>
+              <div class="mc-value">248</div><div class="mc-delta up">▲ 12%</div>
+              <div class="mc-foot"><span class="drill"><span class="arr">→</span> Leads</span></div>
+              <div class="note" style="margin-top:2px">KPI</div>
+            </div>
+            <!-- Trend -->
+            <div class="mcard t-good s3">
+              <div class="mc-head"><span class="mc-label">Revenue</span></div>
+              <div class="mc-value" style="font-size:26px">$418k</div>
+              <svg class="spark" viewBox="0 0 200 40" preserveAspectRatio="none"><polyline fill="none" stroke="#10805f" stroke-width="2.5" points="0,34 50,28 100,24 150,16 200,8"/><polyline fill="rgba(16,128,95,0.08)" stroke="none" points="0,34 50,28 100,24 150,16 200,8 200,40 0,40"/></svg>
+              <div class="note" style="margin-top:2px">Trend</div>
+            </div>
+            <!-- Comparison -->
+            <div class="mcard t-warn s3">
+              <div class="mc-head"><span class="mc-label">Conversion</span></div>
+              <div class="mc-value" style="font-size:26px">38%</div>
+              <div class="bar-track" style="margin-top:4px"><span class="bar-fill warn" style="width:84%"></span></div>
+              <div class="mc-meta">vs 45% target</div>
+              <div class="note" style="margin-top:2px">Comparison</div>
+            </div>
+            <!-- Forecast -->
+            <div class="mcard t-fin s3">
+              <div class="mc-head"><span class="mc-label">90-day revenue</span></div>
+              <div class="mc-value" style="font-size:26px">$1.31M</div>
+              <svg class="spark" viewBox="0 0 200 40" preserveAspectRatio="none"><polyline fill="none" stroke="#2563a8" stroke-width="2.5" points="0,30 70,24 120,20"/><polyline fill="none" stroke="#2563a8" stroke-width="2.5" stroke-dasharray="5 4" points="120,20 160,14 200,8"/></svg>
+              <div class="mc-meta">82% confidence</div>
+              <div class="note" style="margin-top:2px">Forecast</div>
+            </div>
+            <!-- Benchmark -->
+            <div class="mcard t-good s3">
+              <div class="mc-head"><span class="mc-label">Time in stage</span><span class="tone good">Top 20%</span></div>
+              <div class="mc-value" style="font-size:26px">2d</div>
+              <div class="mc-meta">vs 5d cohort median</div>
+              <div class="note" style="margin-top:2px">Benchmark</div>
+            </div>
+            <!-- Health -->
+            <div class="mcard t-good s3">
+              <div class="mc-head"><span class="mc-label">Org health</span></div>
+              <div class="gauge-wrap"><svg width="56" height="56" viewBox="0 0 96 96"><circle cx="48" cy="48" r="40" fill="none" stroke="rgba(89,103,139,0.14)" stroke-width="10"/><circle cx="48" cy="48" r="40" fill="none" stroke="#10805f" stroke-width="10" stroke-linecap="round" stroke-dasharray="251" stroke-dashoffset="40" transform="rotate(-90 48 48)"/></svg><div class="mc-value" style="font-size:24px">84</div></div>
+              <div class="note" style="margin-top:2px">Health (gauge)</div>
+            </div>
+            <!-- Breakdown -->
+            <div class="mcard t-warn s3">
+              <div class="mc-head"><span class="mc-label">Response by site</span></div>
+              <div class="bars">
+                <div class="bar-row"><span class="bl" style="width:60px">Maple</span><span class="bar-track"><span class="bar-fill" style="width:30%"></span></span></div>
+                <div class="bar-row"><span class="bl" style="width:60px">Down</span><span class="bar-track"><span class="bar-fill crit" style="width:88%"></span></span></div>
+                <div class="bar-row"><span class="bl" style="width:60px">River</span><span class="bar-track"><span class="bar-fill warn" style="width:64%"></span></span></div>
+              </div>
+              <div class="note" style="margin-top:2px">Breakdown</div>
+            </div>
+            <!-- Scorecard -->
+            <div class="mcard s3" style="--neutral:var(--forge)">
+              <div class="mc-head"><span class="mc-label">Enrollment scorecard</span></div>
+              <div class="mc-meta" style="display:flex;justify-content:space-between"><span>Conversion</span><b>38%</b></div>
+              <div class="mc-meta" style="display:flex;justify-content:space-between"><span>Velocity</span><b>2.1d</b></div>
+              <div class="mc-meta" style="display:flex;justify-content:space-between"><span>Fill</span><b>87%</b></div>
+              <div class="note" style="margin-top:2px">Scorecard</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="zone">
+          <div class="zone-head"><h3>Compositions</h3><span class="z-sub">Metric archetype + narrative / action</span></div>
+          <div class="grid">
+            <div class="mcard insight s6">
+              <div class="ins-head intel">◆ Insight</div>
+              <div class="ins-body">Tour conversion fell <b>5 pts</b>, driven almost entirely by <b>Downtown</b> where response time tripled after a coordinator change.</div>
+              <div class="mc-foot"><span class="drill"><span class="arr">→</span> Downtown queue</span></div>
+              <div class="note" style="margin-top:2px">Insight (the "Why")</div>
+            </div>
+            <div class="mcard recommend s6">
+              <div class="ins-head pine">✓ Recommendation</div>
+              <div class="ins-body">Reassign 1 coordinator to Downtown. Projected: response <b>6.1h → 2.3h</b>, conversion <b>+4 pts</b>.</div>
+              <div class="mc-foot" style="border:none;padding-top:4px"><div class="rec-actions"><button class="btn btn-pine btn-sm">Rebalance staff →</button><button class="btn btn-ghost btn-sm">Simulate</button></div><span class="impact" style="margin-left:auto"><b>+4 pts</b> proj.</span></div>
+              <div class="note" style="margin-top:2px">Recommendation (the "What now")</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="zone">
+          <div class="zone-head"><h3>Density ladder</h3><span class="z-sub">Same card · Surface Independence · only density changes</span></div>
+          <div style="display:flex; align-items:flex-end; gap:14px; flex-wrap:wrap">
+            <div class="kpi-mini t-warn" style="flex:0 0 150px"><div class="kl"><span class="tdot warn"></span>Conversion</div><div class="kv">38%</div><div class="kd down">▼5</div></div>
+            <div class="mcard t-warn" style="width:200px"><div class="mc-head"><span class="mc-label">Conversion</span></div><div class="mc-value" style="font-size:24px">38%</div><div class="mc-delta down">▼ 5 pts</div></div>
+            <div class="mcard t-warn" style="width:240px"><div class="mc-head"><span class="mc-q">Are tours converting?</span><span class="tone warn">Below</span></div><div class="mc-value" style="font-size:28px">38%</div><div class="mc-delta down">▼ 5 pts · target 45%</div><svg class="spark" viewBox="0 0 220 40" preserveAspectRatio="none"><polyline fill="none" stroke="#b7791f" stroke-width="2.5" points="0,12 110,20 220,30"/></svg></div>
+            <div class="mcard t-warn" style="width:280px"><div class="mc-head"><span class="mc-q">Are tours converting?</span><span class="tone warn">Below</span></div><div class="mc-value" style="font-size:30px">38%</div><div class="mc-delta down">▼ 5 pts · target 45%</div><div class="mc-why">Downtown &amp; Riverside drive the drop.</div><div class="mc-foot"><span class="drill"><span class="arr">→</span> Affected sites</span><span class="mc-act">Why?</span></div></div>
+          </div>
+          <div class="flow" style="margin-top:10px"><span class="step">Micro · header</span><span class="ar">·</span><span class="step">Compact · tile</span><span class="ar">·</span><span class="step">Standard · OI</span><span class="ar">·</span><span class="step on">Expanded · drill</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

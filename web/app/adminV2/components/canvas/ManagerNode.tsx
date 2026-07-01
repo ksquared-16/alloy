@@ -64,7 +64,7 @@ function ManagerNodeComponent({ data, selected }: NodeProps<ManagerNodeData>) {
             style={{
               fontSize: 10,
               color: derived.textSecondary,
-              textTransform: "uppercase",
+              textTransform: "none",
               letterSpacing: "0.06em",
               marginBottom: 4,
             }}
@@ -80,7 +80,7 @@ function ManagerNodeComponent({ data, selected }: NodeProps<ManagerNodeData>) {
             style={{
               fontSize: 10,
               color: derived.textSecondary,
-              textTransform: "uppercase",
+              textTransform: "none",
               letterSpacing: "0.06em",
               marginBottom: 4,
             }}

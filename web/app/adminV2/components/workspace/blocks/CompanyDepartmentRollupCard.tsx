@@ -6,6 +6,8 @@ import type { WorkspaceActionHandler } from "@/lib/ui-v2/workspace-actions";
 type Props = {
   card: CompanyDepartmentCardVm;
   onAction: WorkspaceActionHandler;
+  /** From model segmentation only — adjusts card chrome weight, not KPI config. */
+  tier?: "primary" | "secondary";
 };
 
 const MAX_SIGNALS = 3;
@@ -18,6 +20,7 @@ function deptToneForKey(departmentKey: string): DeptTone {
     operations: "pine",
     revenue: "amber",
     growth: "blue",
+    enrollment: "blue",
     team: "neutral",
     finance: "neutral",
     systems: "neutral",
@@ -27,8 +30,13 @@ function deptToneForKey(departmentKey: string): DeptTone {
 
 /**
  * Compact company-level department tile — summary density (not department rollup panels).
+ * `tier` distinguishes primary vs secondary departments from the model (visual weight only).
  */
-export default function CompanyDepartmentRollupCard({ card, onAction }: Props) {
+export default function CompanyDepartmentRollupCard({
+  card,
+  onAction,
+  tier = "secondary",
+}: Props) {
   const groups = (card.rollupGroups ?? []).slice(0, MAX_SIGNALS);
   const total = card.countBadge ?? groups.reduce((s, g) => s + g.count, 0);
   const desc = card.summaryLine?.trim();
@@ -40,6 +48,7 @@ export default function CompanyDepartmentRollupCard({ card, onAction }: Props) {
       className="adminv2-ws-company-dept-tile"
       data-ws-company-dept-key={card.departmentKey}
       data-ws-company-dept-tone={tone}
+      data-ws-company-dept-tier={tier}
       onClick={() => onAction({ type: "company.open_department", departmentKey: card.departmentKey })}
       aria-label={`Open ${card.label} department workspace`}
     >

@@ -1,15 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
-import { getAdminContext } from "@/lib/admin/getAdminContext";
+import { getAdminContextCached } from "@/lib/admin/getAdminContext";
+import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
+import { assertExistingJobMutableInAdminScope, scopeDimensionsFromAccess } from "@/lib/admin/accessScope";
 import type { OrgSettingsRow } from "@/lib/admin/vendorPayoutPolicy";
 import { vendorIsEligibleForAssignment } from "@/lib/admin/vendorAssignmentPolicy";
+import { emitEvent } from "@/lib/emitEvent";
 
 /** POST: reassign job vendor. Updates job.assigned_vendor_id and only future (non-completed) schedules. Admin only. */
 export async function POST(
     request: NextRequest,
     context: { params: Promise<{ id: string }> }
 ) {
-    const ctx = await getAdminContext();
+    const ctx = await getAdminContextCached();
     if (!ctx.ok) {
         return NextResponse.json(
             { error: ctx.status === 401 ? "Unauthorized" : "Forbidden" },
@@ -45,13 +48,22 @@ export async function POST(
 
     const { data: job, error: jobErr } = await supabase
         .from("jobs")
-        .select("id, org_id")
+        .select("id, org_id, assigned_vendor_id")
         .eq("id", jobId)
         .eq("org_id", ctx.orgId)
         .maybeSingle();
 
     if (jobErr) return NextResponse.json({ error: jobErr.message }, { status: 500 });
     if (!job) return NextResponse.json({ error: "Job not found" }, { status: 404 });
+
+    const access = await getAdminAccessContextCached();
+    if (!access.ok) {
+        return NextResponse.json({ error: access.status === 401 ? "Unauthorized" : "Forbidden" }, { status: access.status });
+    }
+    const dim = scopeDimensionsFromAccess(access);
+    if (!(await assertExistingJobMutableInAdminScope(supabase, ctx.orgId, dim, jobId))) {
+        return NextResponse.json({ error: "Job not found" }, { status: 404 });
+    }
 
     if (vendorId) {
         const { data: vendor, error: vErr } = await supabase
@@ -75,6 +87,7 @@ export async function POST(
 
     if (jobUpdateErr) return NextResponse.json({ error: jobUpdateErr.message }, { status: 500 });
 
+    const oldVendorId = (job as { assigned_vendor_id?: string | null }).assigned_vendor_id ?? null;
     let updatedSchedulesCount = 0;
     if (applyToFutureSchedules) {
         const { data: orgRow } = await supabase
@@ -95,6 +108,24 @@ export async function POST(
 
         if (schedErr) return NextResponse.json({ error: schedErr.message }, { status: 500 });
         updatedSchedulesCount = (updated ?? []).length;
+    }
+
+    try {
+        await emitEvent({
+            org_id: ctx.orgId,
+            event_type: "job_vendor_reassigned",
+            entity_type: "jobs",
+            entity_id: jobId,
+            payload: {
+                old_assigned_vendor_id: oldVendorId,
+                new_assigned_vendor_id: vendorId,
+                apply_to_future_schedules: applyToFutureSchedules,
+                updated_schedules_count: updatedSchedulesCount,
+                actor_user_id: ctx.userId,
+            },
+        });
+    } catch (e) {
+        console.warn("[assign-vendor] emitEvent", e instanceof Error ? e.message : e);
     }
 
     return NextResponse.json({

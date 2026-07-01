@@ -1,0 +1,20 @@
+{
+  "strategyWide": "lanes",
+  "primaryLaneExists": 1,
+  "supportLaneExists": 1,
+  "primaryLaneWidth": 609,
+  "supportLaneWidth": 305,
+  "lanesAsymmetric": true,
+  "primaryLaneCards": [
+    "household",
+    "children"
+  ],
+  "supportLaneCards": [
+    "readiness_kpi",
+    "current_work"
+  ],
+  "strategyNarrow": "stack",
+  "stackHouseholdWidth": 506,
+  "stackReadinessWidth": 247,
+  "supportPairedNarrowerThanAnchor": true
+}

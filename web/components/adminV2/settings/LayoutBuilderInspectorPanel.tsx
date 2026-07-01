@@ -1,0 +1,675 @@
+"use client";
+
+import { useMemo, useState } from "react";
+import OpportunityDrawerLayoutFieldSettingsModal from "@/components/adminV2/settings/OpportunityDrawerLayoutFieldSettingsModal";
+import OpportunityDrawerLayoutRelatedListSettings from "@/components/adminV2/settings/OpportunityDrawerLayoutRelatedListSettings";
+import OpportunityDrawerLayoutSectionRowEditor, {
+    LayoutBuilderItemInspector,
+} from "@/components/adminV2/settings/OpportunityDrawerLayoutSectionRowEditor";
+import type { LayoutCatalogGroup } from "@/lib/layout/fieldCatalog";
+import type { LayoutDoc } from "@/lib/layout/layoutV2";
+import {
+    canDeleteOpportunityDrawerSection,
+    deleteOpportunityDrawerSection,
+    isSectionEditorHidden,
+    renameSectionTitle,
+    setSectionEditorHidden,
+} from "@/lib/layout/opportunityDrawerLayoutEditorModel";
+import { reorderSectionInZone, resolveDrawerSectionZone } from "@/lib/layout/drawerLayoutEditorModel";
+import {
+    patchLayoutDocSectionCollapse,
+    readLayoutRuntimeSectionCollapseConfig,
+} from "@/lib/layout/runtime/layoutRuntimeSectionCollapse";
+import {
+    applySectionRowLayoutWithResult,
+    BUILDER_SECTION_ROW_LAYOUT_PRESET_KEYS,
+    LAYOUT_EDITOR_SECTION_TYPES,
+    readSectionRowLayoutPresetApplyState,
+    readSectionRowLayoutPresetKeyForDoc,
+    readSectionType,
+    SECTION_ROW_WIDTH_PRESETS,
+    setSectionType,
+    type LayoutEditorSectionType,
+    type SectionRowWidthPresetKey,
+} from "@/lib/layout/layoutEditorSectionLayout";
+import {
+    CARD_WIDTH_FRACTION_KEYS,
+    CARD_WIDTH_FRACTIONS,
+    readCardWidthFraction,
+    type CardWidthFractionKey,
+} from "@/lib/layout/layoutBuilderCardWidth";
+import { EXPERIENCE_BUILDER_PEER_BLOCK_LABELS } from "@/lib/layout/layoutBuilderCardAuthoring";
+import {
+    applyLayoutEditorFieldSettingsPatch,
+    resolveLayoutEditorFieldNodeFromSerializedPath,
+} from "@/lib/layout/layoutEditorCompositionModel";
+import { listSectionCompositionRows, removeSectionItem } from "@/lib/layout/layoutEditorSectionComposition";
+import { addSectionFieldItem, addSectionRow } from "@/lib/layout/layoutEditorSectionComposition";
+import OpportunityDrawerLayoutFieldPicker from "@/components/adminV2/settings/OpportunityDrawerLayoutFieldPicker";
+import { sectionZoneLabel } from "@/lib/layout/layoutBuilderStudioUx";
+import { layoutBuilderEditableInputProps } from "@/lib/layout/layoutBuilderEditableInput";
+import {
+    applyPeerCardWidth,
+    packPeerCardsInZone,
+    repackPeerCardsAfterZoneReorder,
+} from "@/lib/layout/layoutBuilderPeerCardRows";
+import { applyKpiTileWidth } from "@/lib/layout/layoutBuilderKpiTileRows";
+import { listSectionWidgetItems, sectionIsKpiTile, sectionIsWidgetStrip, WIDGET_STRIP_WIDTH_PRESETS } from "@/lib/layout/layoutBuilderWidgetStrip";
+import { setRowColumnCount } from "@/lib/layout/builderOps";
+import { opSectionSupport, opSectionTitle } from "@/lib/operational/ui/operationalVisualTokens";
+import type { DrawerLayoutEditorSurfaceKey } from "@/lib/layout/drawerLayoutEditorSurfaceConfig";
+
+type Props = {
+    doc: LayoutDoc;
+    selectedSectionId: string | null;
+    selectedFieldPath: string | null;
+    selectedBlockId: string | null;
+    fieldPickerGroups: LayoutCatalogGroup[];
+    validationOk: boolean;
+    applyDoc: (next: LayoutDoc) => void;
+    onFieldAddError: (message: string | null) => void;
+    onClearSelection: () => void;
+    onClearItemSelection: () => void;
+    onSelectItem: (itemId: string | null) => void;
+    layoutRecordId?: string | null;
+    layoutVersion?: number | null;
+    surfaceKey?: DrawerLayoutEditorSurfaceKey;
+};
+
+function resolveSelectedItemId(
+    selectedSectionId: string | null,
+    selectedFieldPath: string | null,
+    selectedBlockId: string | null,
+): string | null {
+    if (selectedBlockId) return selectedBlockId;
+    if (selectedSectionId && selectedFieldPath?.startsWith(`field:${selectedSectionId}:`)) {
+        return selectedFieldPath.slice(`field:${selectedSectionId}:`.length);
+    }
+    return null;
+}
+
+function collectSectionFieldRefKeys(
+    doc: LayoutDoc,
+    sectionKey: string,
+    surfaceKey: DrawerLayoutEditorSurfaceKey,
+): Set<string> {
+    const rows = listSectionCompositionRows(doc, sectionKey, surfaceKey);
+    const keys = new Set<string>();
+    for (const row of rows) {
+        for (const col of row.columns) {
+            for (const entry of col.items) {
+                if (entry.kind === "field" && entry.item.refKey) keys.add(entry.item.refKey);
+            }
+        }
+    }
+    return keys;
+}
+
+function InspectorField({
+    label,
+    helper,
+    children,
+}: {
+    label: string;
+    helper?: string;
+    children: React.ReactNode;
+}) {
+    return (
+        <label className="block text-xs text-alloy-midnight/70">
+            <span className="font-medium text-alloy-midnight/80">{label}</span>
+            {helper ?
+                <span className="mt-0.5 block text-[10px] font-normal leading-snug text-alloy-midnight/45">{helper}</span>
+            :   null}
+            <div className="mt-1.5">{children}</div>
+        </label>
+    );
+}
+
+export default function LayoutBuilderInspectorPanel({
+    doc,
+    selectedSectionId,
+    selectedFieldPath,
+    selectedBlockId,
+    fieldPickerGroups,
+    validationOk,
+    applyDoc,
+    onFieldAddError,
+    onClearSelection,
+    onClearItemSelection,
+    onSelectItem,
+    layoutRecordId,
+    layoutVersion,
+    surfaceKey = "opportunity_drawer",
+}: Props) {
+    const [showStructure, setShowStructure] = useState(false);
+    const [showAddField, setShowAddField] = useState(true);
+    const section = selectedSectionId ? doc.sections.find((s) => s.key === selectedSectionId) : null;
+    const selectedItemId = resolveSelectedItemId(selectedSectionId, selectedFieldPath, selectedBlockId);
+    const sectionType = section ? readSectionType(section) : null;
+    const kpiTile = section ? sectionIsKpiTile(section) : false;
+    const widgetStrip = section ? sectionIsWidgetStrip(section) : false;
+
+    const kpiWidgetItem = useMemo(() => {
+        if (!section || !kpiTile) return null;
+        return listSectionWidgetItems(doc, section.key)[0] ?? null;
+    }, [doc, section, kpiTile]);
+
+    const selectedItem = useMemo(() => {
+        if (!selectedSectionId || !selectedItemId) return null;
+        const rows = listSectionCompositionRows(doc, selectedSectionId, surfaceKey);
+        return rows.flatMap((r) => r.columns.flatMap((c) => c.items)).find((it) => it.itemId === selectedItemId) ?? null;
+    }, [doc, selectedSectionId, selectedItemId]);
+
+    const inspectorItem = selectedItem ?? kpiWidgetItem;
+
+    const canvasTraceFieldNode = useMemo(() => {
+        if (!selectedSectionId || !selectedFieldPath) return null;
+        if (selectedFieldPath.startsWith("field:")) return null;
+        if (selectedFieldPath.startsWith("column:") || selectedFieldPath.startsWith("group:")) {
+            return resolveLayoutEditorFieldNodeFromSerializedPath(doc, selectedFieldPath);
+        }
+        return null;
+    }, [doc, selectedFieldPath, selectedSectionId]);
+
+    const deleteGate = section ? canDeleteOpportunityDrawerSection(section) : { ok: false, reason: "" };
+
+    const usedFieldRefKeys = useMemo(
+        () => (section ? collectSectionFieldRefKeys(doc, section.key, surfaceKey) : new Set<string>()),
+        [doc, section, surfaceKey],
+    );
+
+    const rowLayoutPresetStates = useMemo(() => {
+        if (!section) return null;
+        return Object.fromEntries(
+            BUILDER_SECTION_ROW_LAYOUT_PRESET_KEYS.map((key) => [
+                key,
+                readSectionRowLayoutPresetApplyState(doc, section.key, key, surfaceKey),
+            ]),
+        ) as Record<
+            (typeof BUILDER_SECTION_ROW_LAYOUT_PRESET_KEYS)[number],
+            ReturnType<typeof readSectionRowLayoutPresetApplyState>
+        >;
+    }, [doc, section, surfaceKey]);
+
+    const stackedLayoutHint =
+        rowLayoutPresetStates?.half_stacked_right?.canApply === false ?
+            rowLayoutPresetStates.half_stacked_right.reason
+        :   null;
+
+    const selectionTitle =
+        inspectorItem ? inspectorItem.title
+        : section && !kpiTile ? section.title
+        : null;
+
+    const applyWidthChange = (widthKey: CardWidthFractionKey) => {
+        if (!section) return;
+        if (kpiTile) applyDoc(applyKpiTileWidth(doc, section.key, widthKey));
+        else applyDoc(applyPeerCardWidth(doc, section.key, widthKey));
+    };
+
+    const applyReorder = (direction: -1 | 1) => {
+        if (!section) return;
+        let next = reorderSectionInZone(doc, section.key, direction, surfaceKey);
+        next = repackPeerCardsAfterZoneReorder(next, section.key);
+        applyDoc(next);
+    };
+
+    const applyDeleteBlock = () => {
+        if (!section || !deleteGate.ok) return;
+        const zone = resolveDrawerSectionZone(section, surfaceKey);
+        let next = deleteOpportunityDrawerSection(doc, section.key);
+        next = packPeerCardsInZone(next, zone);
+        applyDoc(next);
+        onClearSelection();
+    };
+
+    return (
+        <aside
+            className="flex max-h-full min-w-0 flex-col overflow-hidden rounded-xl border border-alloy-forge/10 bg-white shadow-sm"
+            data-testid="layout-builder-inspector-panel"
+        >
+            <div className="sticky top-0 z-10 border-b border-alloy-forge/8 bg-white/95 px-4 py-3 backdrop-blur-sm">
+                <h3 className={opSectionTitle}>Properties</h3>
+                {selectionTitle ?
+                    <p className="mt-1 truncate text-sm font-semibold text-alloy-midnight" data-testid="layout-builder-inspector-selection-title">
+                        {selectionTitle}
+                    </p>
+                :   <p className={opSectionSupport}>Click a card, field, or tile on the canvas.</p>}
+            </div>
+
+            <div className="min-h-0 flex-1 space-y-4 overflow-x-hidden overflow-y-auto overscroll-contain px-4 py-3">
+                {!section ?
+                    <div
+                        className="rounded-xl border border-dashed border-alloy-forge/12 bg-alloy-stone/[0.02] px-4 py-8 text-center"
+                        data-testid="layout-builder-inspector-empty"
+                    >
+                        <p className="text-sm font-medium text-alloy-midnight/60">Nothing selected</p>
+                        <p className="mt-1 text-xs leading-relaxed text-alloy-midnight/45">
+                            Click any card on the canvas, or add a component from the palette.
+                        </p>
+                    </div>
+                : inspectorItem ?
+                    <div className="rounded-xl border border-alloy-forge/10 bg-alloy-stone/[0.02] p-3" data-testid="visual-editor-item-settings">
+                        <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-alloy-midnight/40">
+                            {inspectorItem.kind === "widget" ? "KPI tile"
+                            : inspectorItem.kind === "field" ? "Field"
+                            : "Item"}
+                        </p>
+                        <p className="mb-3 text-[10px] text-alloy-midnight/45">Changes preview instantly. Publish to update the live drawer.</p>
+
+                        {kpiTile ?
+                            <div className="mb-3">
+                                <InspectorField label="Width" helper="Tiles on the same row pack left-to-right when widths fit.">
+                                    <select
+                                        value={readCardWidthFraction(section)}
+                                        onChange={(e) => applyWidthChange(e.target.value as CardWidthFractionKey)}
+                                        className="w-full rounded-lg border border-alloy-forge/15 px-2.5 py-1.5 text-sm"
+                                        data-testid="visual-editor-kpi-tile-width"
+                                    >
+                                        {CARD_WIDTH_FRACTION_KEYS.map((key) => (
+                                            <option key={key} value={key}>
+                                                {CARD_WIDTH_FRACTIONS[key].label}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </InspectorField>
+                            </div>
+                        :   null}
+
+                        <LayoutBuilderItemInspector
+                            doc={doc}
+                            sectionKey={section.key}
+                            entry={inspectorItem}
+                            fieldPickerGroups={fieldPickerGroups}
+                            validationOk={validationOk}
+                            applyDoc={applyDoc}
+                            onFieldAddError={onFieldAddError}
+                            onClose={onClearItemSelection}
+                            surfaceKey={surfaceKey}
+                        />
+                        <button
+                            type="button"
+                            className="mt-3 w-full rounded-lg border border-red-200/80 bg-red-50/80 px-3 py-2 text-left text-[11px] font-semibold text-red-700 hover:bg-red-100/80"
+                            onClick={() => {
+                                if (kpiTile) {
+                                    applyDeleteBlock();
+                                    return;
+                                }
+                                applyDoc(removeSectionItem(doc, section.key, inspectorItem.itemId));
+                                onClearItemSelection();
+                            }}
+                            data-testid="layout-builder-inspector-delete-item"
+                        >
+                            {kpiTile ? "Delete tile" : "Delete"}
+                        </button>
+                    </div>
+                :   <div className="space-y-4" data-testid="visual-editor-section-settings-panel">
+                        <p className="text-[10px] text-alloy-midnight/45">
+                            In <strong>{sectionZoneLabel(doc, section.key)}</strong> · live after publish
+                        </p>
+
+                        <InspectorField label="Card title" helper="Shown at the top of this card in the drawer.">
+                            <input
+                                type="text"
+                                value={section.title}
+                                {...layoutBuilderEditableInputProps}
+                                onChange={(e) => applyDoc(renameSectionTitle(doc, section.key, e.target.value))}
+                                className="w-full rounded-lg border border-alloy-forge/15 px-2.5 py-1.5 text-sm"
+                                data-testid="visual-editor-section-title"
+                            />
+                        </InspectorField>
+
+                        {section ?
+                            <>
+                                <label className="flex items-start gap-2.5 rounded-lg border border-alloy-forge/10 bg-white px-3 py-2.5 text-xs text-alloy-midnight/70">
+                                    <input
+                                        type="checkbox"
+                                        checked={readLayoutRuntimeSectionCollapseConfig(section).collapsible}
+                                        onChange={(e) =>
+                                            applyDoc(
+                                                patchLayoutDocSectionCollapse(doc, section.key, {
+                                                    collapsible: e.target.checked,
+                                                }),
+                                            )
+                                        }
+                                        data-testid="visual-editor-section-collapsible"
+                                        className="mt-0.5"
+                                    />
+                                    <span>
+                                        <span className="font-medium text-alloy-midnight/80">Collapsible section</span>
+                                        <span className="mt-0.5 block text-[10px] text-alloy-midnight/45">
+                                            Operators can expand or collapse this card in the drawer.
+                                        </span>
+                                    </span>
+                                </label>
+
+                                {readLayoutRuntimeSectionCollapseConfig(section).collapsible ?
+                                    <>
+                                        <label className="flex items-start gap-2.5 rounded-lg border border-alloy-forge/10 bg-white px-3 py-2.5 text-xs text-alloy-midnight/70">
+                                            <input
+                                                type="checkbox"
+                                                checked={readLayoutRuntimeSectionCollapseConfig(section).defaultExpanded}
+                                                onChange={(e) =>
+                                                    applyDoc(
+                                                        patchLayoutDocSectionCollapse(doc, section.key, {
+                                                            defaultExpanded: e.target.checked,
+                                                        }),
+                                                    )
+                                                }
+                                                data-testid="visual-editor-section-default-expanded"
+                                                className="mt-0.5"
+                                            />
+                                            <span>
+                                                <span className="font-medium text-alloy-midnight/80">Expanded by default</span>
+                                            </span>
+                                        </label>
+
+                                        <label className="flex items-start gap-2.5 rounded-lg border border-alloy-forge/10 bg-white px-3 py-2.5 text-xs text-alloy-midnight/70">
+                                            <input
+                                                type="checkbox"
+                                                checked={readLayoutRuntimeSectionCollapseConfig(section).persistCollapseState}
+                                                onChange={(e) =>
+                                                    applyDoc(
+                                                        patchLayoutDocSectionCollapse(doc, section.key, {
+                                                            persistCollapseState: e.target.checked,
+                                                        }),
+                                                    )
+                                                }
+                                                data-testid="visual-editor-section-persist-collapse"
+                                                className="mt-0.5"
+                                            />
+                                            <span>
+                                                <span className="font-medium text-alloy-midnight/80">Remember collapse state</span>
+                                                <span className="mt-0.5 block text-[10px] text-alloy-midnight/45">
+                                                    Session-only; does not change the published layout.
+                                                </span>
+                                            </span>
+                                        </label>
+
+                                        <InspectorField label="Collapsed summary" helper="Optional hint shown when the section is collapsed.">
+                                            <input
+                                                type="text"
+                                                value={readLayoutRuntimeSectionCollapseConfig(section).collapsedSummary ?? ""}
+                                                onChange={(e) =>
+                                                    applyDoc(
+                                                        patchLayoutDocSectionCollapse(doc, section.key, {
+                                                            collapsedSummary: e.target.value,
+                                                        }),
+                                                    )
+                                                }
+                                                className="w-full rounded-lg border border-alloy-forge/15 px-2.5 py-1.5 text-sm"
+                                                data-testid="visual-editor-section-collapsed-summary"
+                                                placeholder="e.g. 3 documents attached"
+                                            />
+                                        </InspectorField>
+                                    </>
+                                :   null}
+                            </>
+                        :   null}
+
+                        {sectionType === "content" && !inspectorItem ?
+                            <div className="space-y-2" data-testid="layout-builder-inspector-add-field">
+                                <button
+                                    type="button"
+                                    className="flex w-full items-center justify-between rounded-lg border border-alloy-pine/25 bg-alloy-pine/[0.05] px-3 py-2 text-left text-xs font-semibold text-alloy-midnight hover:bg-alloy-pine/[0.08]"
+                                    onClick={() => setShowAddField((v) => !v)}
+                                >
+                                    + Add field
+                                    <span className="text-alloy-midnight/35">{showAddField ? "−" : "+"}</span>
+                                </button>
+                                {showAddField ?
+                                    <OpportunityDrawerLayoutFieldPicker
+                                        groups={fieldPickerGroups}
+                                        disabled={!validationOk}
+                                        variant="inspector"
+                                        stayOpen
+                                        usedRefKeys={usedFieldRefKeys}
+                                        onPickField={(field) => {
+                                            if (!section) return;
+                                            let next = doc;
+                                            if (section.rows.length === 0) {
+                                                next = addSectionRow(next, section.key, 1);
+                                            }
+                                            const result = addSectionFieldItem(next, section.key, 0, 0, field, { surfaceKey });
+                                            if (!result.ok) {
+                                                onFieldAddError(result.error);
+                                                return;
+                                            }
+                                            applyDoc(result.doc);
+                                            onSelectItem(result.itemId);
+                                            onFieldAddError(null);
+                                        }}
+                                    />
+                                :   null}
+                            </div>
+                        :   null}
+
+                        <InspectorField label="Width" helper="How wide this block appears on the canvas.">
+                            <select
+                                value={readCardWidthFraction(section)}
+                                onChange={(e) => applyWidthChange(e.target.value as CardWidthFractionKey)}
+                                className="w-full rounded-lg border border-alloy-forge/15 px-2.5 py-1.5 text-sm"
+                                data-testid="visual-editor-section-row-layout"
+                            >
+                                {CARD_WIDTH_FRACTION_KEYS.map((key) => (
+                                    <option key={key} value={key}>
+                                        {CARD_WIDTH_FRACTIONS[key].label}
+                                    </option>
+                                ))}
+                            </select>
+                        </InspectorField>
+
+                        <InspectorField label="Card type" helper="What this card is for.">
+                            <select
+                                value={sectionType ?? "content"}
+                                onChange={(e) =>
+                                    applyDoc(setSectionType(doc, section.key, e.target.value as LayoutEditorSectionType))
+                                }
+                                className="w-full rounded-lg border border-alloy-forge/15 px-2.5 py-1.5 text-sm"
+                                data-testid="visual-editor-section-type"
+                            >
+                                {LAYOUT_EDITOR_SECTION_TYPES.map((type) => (
+                                    <option key={type} value={type}>
+                                        {type === "content" ? EXPERIENCE_BUILDER_PEER_BLOCK_LABELS.fields
+                                        : type === "widget" ? EXPERIENCE_BUILDER_PEER_BLOCK_LABELS.widget
+                                        : EXPERIENCE_BUILDER_PEER_BLOCK_LABELS.related_list}
+                                    </option>
+                                ))}
+                            </select>
+                        </InspectorField>
+
+                        {widgetStrip ?
+                            <InspectorField label="Tile row layout" helper="When multiple KPI tiles share one card row.">
+                                <select
+                                    defaultValue={String(WIDGET_STRIP_WIDTH_PRESETS.find((p) => p.count === (section?.rows[0]?.columns.length ?? 4))?.count ?? 4)}
+                                    onChange={(e) => {
+                                        const count = Number(e.target.value);
+                                        if (!section) return;
+                                        const sIdx = doc.sections.findIndex((s) => s.key === section.key);
+                                        if (sIdx < 0) return;
+                                        applyDoc(setRowColumnCount(doc, sIdx, 0, count));
+                                    }}
+                                    className="w-full rounded-lg border border-alloy-forge/15 px-2.5 py-1.5 text-sm"
+                                    data-testid="visual-editor-widget-strip-width"
+                                >
+                                    {WIDGET_STRIP_WIDTH_PRESETS.map((preset) => (
+                                        <option key={preset.key} value={preset.count}>
+                                            {preset.label}
+                                        </option>
+                                    ))}
+                                </select>
+                            </InspectorField>
+                        :   null}
+
+                        {!kpiTile && !widgetStrip ?
+                            <InspectorField
+                                label="Row layout"
+                                helper="Groups this card with the next card(s) in the same zone. Pick the first card in the row — e.g. Contact Summary left, Address + Employment stacked right."
+                            >
+                                <select
+                                    value={readSectionRowLayoutPresetKeyForDoc(doc, section.key)}
+                                    onChange={(e) => {
+                                        const presetKey = e.target.value as SectionRowWidthPresetKey;
+                                        const result = applySectionRowLayoutWithResult(doc, section.key, presetKey, {
+                                            surfaceKey,
+                                        });
+                                        if (!result.ok) {
+                                            onFieldAddError(result.reason);
+                                            return;
+                                        }
+                                        applyDoc(result.doc);
+                                        onFieldAddError(null);
+                                    }}
+                                    className="w-full rounded-lg border border-alloy-forge/15 px-2.5 py-1.5 text-sm"
+                                    data-testid="visual-editor-section-row-group-layout"
+                                >
+                                    {BUILDER_SECTION_ROW_LAYOUT_PRESET_KEYS.map((key) => {
+                                        const state = rowLayoutPresetStates?.[key];
+                                        const needsMore =
+                                            state && !state.canApply && state.requiredSectionCount > 0 ?
+                                                ` — needs ${state.requiredSectionCount - state.followingSectionCount} more`
+                                            :   "";
+                                        return (
+                                            <option key={key} value={key} disabled={state?.canApply === false}>
+                                                {SECTION_ROW_WIDTH_PRESETS[key].label}
+                                                {needsMore}
+                                            </option>
+                                        );
+                                    })}
+                                </select>
+                                {stackedLayoutHint ?
+                                    <p
+                                        className="mt-1.5 text-[10px] leading-snug text-alloy-midnight/55"
+                                        data-testid="visual-editor-section-row-group-layout-feedback"
+                                    >
+                                        {stackedLayoutHint}
+                                    </p>
+                                :   null}
+                            </InspectorField>
+                        :   null}
+
+                        <label className="flex items-start gap-2.5 rounded-lg border border-alloy-forge/10 bg-white px-3 py-2.5 text-xs text-alloy-midnight/70">
+                            <input
+                                type="checkbox"
+                                checked={isSectionEditorHidden(section)}
+                                onChange={(e) => applyDoc(setSectionEditorHidden(doc, section.key, e.target.checked))}
+                                data-testid="visual-editor-section-hidden"
+                                className="mt-0.5"
+                            />
+                            <span>
+                                <span className="font-medium text-alloy-midnight/80">Hide after publish</span>
+                                <span className="mt-0.5 block text-[10px] text-alloy-midnight/45">
+                                    Removes this card from the live drawer without deleting your configuration.
+                                </span>
+                            </span>
+                        </label>
+
+                        {sectionType === "related_list" ?
+                            <div className="rounded-xl border border-alloy-pine/15 bg-alloy-pine/[0.03] p-3">
+                                <OpportunityDrawerLayoutRelatedListSettings
+                                    doc={doc}
+                                    sectionKey={section.key}
+                                    applyDoc={applyDoc}
+                                    surfaceKey={surfaceKey}
+                                />
+                            </div>
+                        :   null}
+
+                        <div className="flex flex-wrap gap-2">
+                            <button
+                                type="button"
+                                className="rounded-lg border border-alloy-forge/12 bg-white px-2.5 py-1 text-[11px] font-medium text-alloy-midnight/70 hover:border-alloy-pine/25"
+                                onClick={() => applyReorder(-1)}
+                                data-testid="visual-editor-section-move-up"
+                            >
+                                Move up
+                            </button>
+                            <button
+                                type="button"
+                                className="rounded-lg border border-alloy-forge/12 bg-white px-2.5 py-1 text-[11px] font-medium text-alloy-midnight/70 hover:border-alloy-pine/25"
+                                onClick={() => applyReorder(1)}
+                                data-testid="visual-editor-section-move-down"
+                            >
+                                Move down
+                            </button>
+                        </div>
+
+                        <div className="border-t border-alloy-forge/8 pt-3">
+                            <button
+                                type="button"
+                                className="w-full rounded-lg border border-red-200/80 bg-red-50/80 px-3 py-2 text-left text-[11px] font-semibold text-red-700 hover:bg-red-100/80 disabled:cursor-not-allowed disabled:opacity-40"
+                                disabled={!deleteGate.ok}
+                                title={deleteGate.ok ? undefined : deleteGate.reason}
+                                onClick={() => {
+                                    if (!deleteGate.ok) return;
+                                    applyDeleteBlock();
+                                }}
+                                data-testid="visual-editor-delete-section"
+                            >
+                                {kpiTile ? "Delete tile" : "Delete this card"}
+                            </button>
+                            {!deleteGate.ok ?
+                                <p className="mt-1.5 text-[10px] leading-relaxed text-alloy-midnight/45">{deleteGate.reason}</p>
+                            :   null}
+                        </div>
+
+                        <div className="border-t border-alloy-forge/8 pt-3">
+                            <button
+                                type="button"
+                                className="flex w-full items-center justify-between rounded-lg px-1 py-1 text-left text-xs font-medium text-alloy-midnight/65 hover:text-alloy-midnight"
+                                onClick={() => setShowStructure((v) => !v)}
+                                data-testid="layout-builder-inspector-structure-toggle"
+                            >
+                                Layout inside this card
+                                <span className="text-alloy-midnight/35">{showStructure ? "−" : "+"}</span>
+                            </button>
+                            <p className="mt-0.5 px-1 text-[10px] text-alloy-midnight/40">
+                                Add, reorder, or remove fields inside this card.
+                            </p>
+                            {showStructure ?
+                                <div className="mt-2 rounded-lg border border-alloy-forge/10 bg-white p-2" data-testid="visual-editor-composition-panel">
+                                    <OpportunityDrawerLayoutSectionRowEditor
+                                        doc={doc}
+                                        sectionKey={section.key}
+                                        fieldPickerGroups={fieldPickerGroups}
+                                        validationOk={validationOk}
+                                        selectedItemId={selectedItemId}
+                                        onSelectItemId={(itemId) => {
+                                            if (!selectedSectionId) return;
+                                            if (itemId) onSelectItem(itemId);
+                                            else onSelectItem(null);
+                                        }}
+                                        onFieldAddError={onFieldAddError}
+                                        applyDoc={applyDoc}
+                                        layoutRecordId={layoutRecordId}
+                                        layoutVersion={layoutVersion}
+                                        hideInlineItemSettings
+                                        hideDiagnostics
+                                        friendlyLabels
+                                        surfaceKey={surfaceKey}
+                                    />
+                                </div>
+                            :   null}
+                        </div>
+                    </div>
+                }
+            </div>
+            {canvasTraceFieldNode ?
+                <OpportunityDrawerLayoutFieldSettingsModal
+                    node={canvasTraceFieldNode}
+                    onClose={onClearItemSelection}
+                    onChange={(patch) => {
+                        applyDoc(
+                            applyLayoutEditorFieldSettingsPatch(
+                                doc,
+                                canvasTraceFieldNode.path,
+                                patch,
+                                canvasTraceFieldNode.refKey,
+                            ),
+                        );
+                    }}
+                />
+            :   null}
+        </aside>
+    );
+}

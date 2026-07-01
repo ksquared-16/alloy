@@ -6,16 +6,22 @@ import {
   updateContact,
   getVerticalIdBySlug,
   createOpportunity,
+  fetchContactIdentityById,
 } from "@/lib/supabase";
 import { emitEvent } from "@/lib/emitEvent";
 
 /**
  * POST /api/leads/gutters
- * 
- * Creates a gutter lead in Supabase:
- * 1. Upserts contact (match by email, fallback phone)
- * 2. Gets vertical_id from verticals table by slug="gutters"
- * 3. Creates opportunity with correct vertical_id and primary_contact_id
+ *
+ * LEGACY_COMPAT: inbound gutter leads still upsert `contacts` and set `primary_contact_id` on the
+ * opportunity for workflow/messaging compatibility. When `contacts.person_id` is populated,
+ * we also set `primary_person_id` (canonical). Do not introduce new contact-only CRM flows—prefer
+ * quote-start / person-first paths for new surfaces.
+ *
+ * Steps:
+ * 1. Upsert contact (match by email, fallback phone)
+ * 2. Resolve vertical_id for slug "gutters"
+ * 3. Create opportunity with vertical_id, primary_contact_id, and primary_person_id when available
  */
 export async function POST(request: NextRequest) {
   try {
@@ -140,9 +146,16 @@ export async function POST(request: NextRequest) {
       opportunityMetadata.utm = Object.fromEntries(utmParams.entries());
     }
 
+    const contactIdentity = await fetchContactIdentityById(contactId);
+    const primaryPersonId =
+      typeof contactIdentity?.person_id === "string" && contactIdentity.person_id.trim()
+        ? contactIdentity.person_id.trim()
+        : undefined;
+
     const opportunity = await createOpportunity({
       vertical_id: verticalId,
       primary_contact_id: contactId,
+      ...(primaryPersonId ? { primary_person_id: primaryPersonId } : {}),
       name: `${first_name} ${last_name} — Gutter Cleaning`,
       status: "open",
       source: "website",
@@ -164,7 +177,8 @@ export async function POST(request: NextRequest) {
           payload: {
             event_type: "gutter_lead_submitted",
             opportunity_id: opportunity.id,
-            contact_id: contactId,
+            primary_person_id: opportunity.primary_person_id,
+            fallback_contact_id: contactId,
             vertical_id: verticalId,
             source: "website",
           },

@@ -1,0 +1,395 @@
+"""
+Process queued outbound rows in communication_messages (SMS + email).
+Extends dispatcher alongside legacy public.messages (message_sender.py).
+"""
+
+from __future__ import annotations
+
+import logging
+from datetime import datetime, timezone
+from typing import Any, Dict, List, Optional
+
+import requests
+
+from ..integrations.resend_client import default_from_email, send_resend_email
+from ..integrations.twilio_client import send_sms, send_sms_with_credentials
+from ..supabase_client import _get_base_url, _get_headers
+from .communication_workflow_events import emit_for_communication_message
+from .communications.binding_resolver import find_binding_by_id, resolve_outbound_binding
+from .communications.status_callback import build_sms_status_callback_url
+from ..settings import PUBLIC_TWILIO_STATUS_CALLBACK_BASE
+from .communications.secret_ref import (
+    is_legacy_global_twilio_binding,
+    resolve_secret_plaintext,
+)
+
+logger = logging.getLogger("alloy-dispatcher")
+
+ERROR_TRUNCATE = 500
+
+
+def _tail_str(s: str, n: int = 8) -> str:
+    t = (s or "").strip()
+    if not t:
+        return "(empty)"
+    return t[-n:] if len(t) > n else t
+
+
+def _from_email_for_log(from_email: str) -> str:
+    """Log-friendly from: masked local + domain (not a secret; reduces shared-log PII)."""
+    s = (from_email or "").strip()
+    if not s:
+        return "(empty)"
+    if "@" not in s:
+        return s[:64]
+    local, _, domain = s.partition("@")
+    domain = domain.strip()
+    if not domain:
+        return s[:64]
+    if len(local) <= 2:
+        return f"...@{domain}"
+    return f"{local[0]}...{local[-1]}@{domain}"
+
+
+def _to_address_tail_for_log(to_email: str) -> str:
+    """Recipient: domain + last chars of local only."""
+    s = (to_email or "").strip()
+    if not s:
+        return "(empty)"
+    if "@" not in s:
+        return _tail_str(s, 12)
+    local, _, domain = s.partition("@")
+    domain = domain.strip()
+    if not domain:
+        return f"...{_tail_str(local, 4)}"
+    tail = local[-4:] if len(local) >= 4 else local
+    return f"...{tail}@{domain}"
+
+_JSON_HEADERS = {"Content-Type": "application/json", "Prefer": "return=representation"}
+
+
+def _patch_comm_message(base_url: str, headers: Dict[str, str], msg_id: str, patch: Dict[str, Any]) -> None:
+    h = dict(headers)
+    h.update(_JSON_HEADERS)
+    url = f"{base_url}/communication_messages"
+    params = {"id": f"eq.{msg_id}"}
+    resp = requests.patch(url, headers=h, params=params, json=patch, timeout=15)
+    if not resp.ok:
+        logger.error("COMM_MSG_PATCH_FAIL id=%s status=%s body=%s", msg_id, resp.status_code, resp.text[:200])
+
+
+def _get_thread(base_url: str, headers: Dict[str, str], thread_id: str) -> Optional[Dict[str, Any]]:
+    url = f"{base_url}/communication_threads"
+    params = {"id": f"eq.{thread_id}", "select": "*", "limit": "1"}
+    try:
+        r = requests.get(url, headers=headers, params=params, timeout=15)
+        if not r.ok:
+            return None
+        rows = r.json()
+        if isinstance(rows, list) and rows:
+            return rows[0]
+    except Exception:
+        return None
+    return None
+
+
+def _resolve_outbound_email_subject(row: Dict[str, Any], cfg: Dict[str, Any], entity_type_raw: Any) -> str:
+    """Prefer persisted message subject, then binding config default, then entity-based defaults."""
+    col = str(row.get("subject") or "").strip()
+    if col:
+        return col
+    bind_sub = str(cfg.get("subject") or "").strip()
+    if bind_sub:
+        return bind_sub
+    et = str(entity_type_raw or "").strip().lower()
+    if et == "opportunities":
+        return "Update regarding your inquiry"
+    if et == "jobs":
+        return "Update regarding your service"
+    return "Message from Alloy"
+
+
+def process_communication_messages(
+    limit: int = 25,
+    workflow_run_id: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Dequeue communication_messages outbound queued; SMS + email."""
+    base_url = _get_base_url()
+    headers = _get_headers()
+    params: Dict[str, str] = {
+        "direction": "eq.outbound",
+        "status": "eq.queued",
+        "order": "created_at.asc",
+        "limit": str(max(1, min(limit, 50))),
+        "select": "*",
+    }
+    wr = (workflow_run_id or "").strip()
+    if wr and len(wr) == 36:
+        params["workflow_run_id"] = f"eq.{wr}"
+
+    url = f"{base_url}/communication_messages"
+    try:
+        resp = requests.get(url, headers=headers, params=params, timeout=30)
+        resp.raise_for_status()
+        rows: List[Dict[str, Any]] = resp.json()
+    except Exception as e:
+        logger.exception("COMM_MSG_QUERY_FAIL %s", e)
+        return {"processed": 0, "sent": 0, "failed": 0, "message_ids": [], "errors": [str(e)[:ERROR_TRUNCATE]]}
+
+    if not rows:
+        return {"processed": 0, "sent": 0, "failed": 0, "message_ids": [], "errors": []}
+
+    sent = failed = 0
+    mids: List[str] = []
+    errors: List[str] = []
+    now_iso = datetime.now(timezone.utc).isoformat()
+
+    for row in rows:
+        msg_id = row.get("id")
+        org_id = str(row.get("org_id") or "")
+        thread_id = str(row.get("thread_id") or "")
+        channel = (row.get("channel") or "").strip().lower()
+        body = (row.get("body") or "").strip()
+        to_addr = (row.get("to_address") or "").strip()
+
+        md = row.get("metadata") if isinstance(row.get("metadata"), dict) else {}
+        location_id = md.get("context_location_id")
+        location_id_str = str(location_id).strip() if location_id else None
+
+        if not msg_id or not org_id or not thread_id:
+            logger.warning("COMM_MSG_SKIP bad row ids")
+            continue
+
+        thr = _get_thread(base_url, headers, thread_id)
+        entity_type = (thr or {}).get("primary_entity_type") or "communications_unknown"
+        entity_id = str((thr or {}).get("primary_entity_id") or "")
+        if not entity_id:
+            err = "thread missing entity_id"
+            _patch_comm_message(
+                base_url,
+                headers,
+                str(msg_id),
+                {"status": "failed", "error": err[:ERROR_TRUNCATE]},
+            )
+            failed += 1
+            mids.append(str(msg_id))
+            errors.append(err)
+            emit_for_communication_message(
+                org_id=org_id,
+                entity_type=str(entity_type),
+                entity_id=org_id,
+                event_type="message_failed",
+                message_id=str(msg_id),
+                thread_id=thread_id,
+                channel=channel,
+                direction="outbound",
+                body_text=body,
+                extra={"reason": err},
+            )
+            continue
+
+        binding: Optional[Dict[str, Any]] = None
+        bound_on_row = row.get("communication_provider_binding_id")
+        if bound_on_row and channel in ("sms", "email"):
+            cand = find_binding_by_id(base_url, headers, str(bound_on_row))
+            if cand and str(cand.get("org_id") or "") == org_id and (
+                str(cand.get("channel") or "").strip().lower() == channel
+            ):
+                binding = cand
+        if binding is None:
+            binding = resolve_outbound_binding(
+                base_url,
+                headers,
+                org_id=org_id,
+                channel=channel if channel in ("sms", "email") else "sms",
+                location_id=location_id_str,
+            )
+
+        bound_id = str(binding.get("id")) if isinstance(binding, dict) and binding.get("id") else None
+        cfg = binding.get("config") if isinstance(binding, dict) and isinstance(binding.get("config"), dict) else {}
+        sms_status_callback = build_sms_status_callback_url(PUBLIC_TWILIO_STATUS_CALLBACK_BASE, bound_id)
+
+        try:
+            if channel == "sms":
+                if not to_addr:
+                    raise ValueError("missing to_address for SMS")
+                sid_result: Dict[str, Any]
+                secret_ref = (binding.get("secret_ref") or "unconfigured") if binding else "unconfigured"
+                if binding and is_legacy_global_twilio_binding(secret_ref):
+                    sid_result = send_sms(to_addr, body, status_callback=sms_status_callback)
+                elif binding:
+                    sid_val = str(cfg.get("twilio_account_sid") or "").strip()
+                    svc_sid = str(cfg.get("messaging_service_sid") or "").strip()
+                    token_plain = resolve_secret_plaintext(secret_ref)
+                    if not sid_val or not svc_sid or not token_plain:
+                        raise RuntimeError(
+                            "SMS binding incompletely configured — need twilio_account_sid,"
+                            " messaging_service_sid in config + env:* secret_ref for auth_token"
+                        )
+                    sid_result = send_sms_with_credentials(
+                        to_addr,
+                        body,
+                        account_sid=sid_val,
+                        auth_token=token_plain,
+                        messaging_service_sid=svc_sid,
+                        status_callback=sms_status_callback,
+                    )
+                else:
+                    raise RuntimeError("no SMS provider binding")
+
+                sms_sid = sid_result.get("sid", "")
+                _patch_comm_message(
+                    base_url,
+                    headers,
+                    str(msg_id),
+                    {
+                        "status": "sent",
+                        "sent_at": now_iso,
+                        "provider": "twilio",
+                        "provider_message_id": sms_sid or None,
+                        "error": None,
+                        "communication_provider_binding_id": bound_id,
+                    },
+                )
+                sent += 1
+                mids.append(str(msg_id))
+                emit_for_communication_message(
+                    org_id=org_id,
+                    entity_type=str(entity_type),
+                    entity_id=entity_id,
+                    event_type="message_sent",
+                    message_id=str(msg_id),
+                    thread_id=thread_id,
+                    channel="sms",
+                    direction="outbound",
+                    body_text=body,
+                    extra={"provider_message_id": sms_sid or None},
+                )
+                emit_for_communication_message(
+                    org_id=org_id,
+                    entity_type=str(entity_type),
+                    entity_id=entity_id,
+                    event_type="message_delivered",
+                    message_id=str(msg_id),
+                    thread_id=thread_id,
+                    channel="sms",
+                    direction="outbound",
+                    body_text=body,
+                    extra={"note": "optimistic-after-send"},
+                )
+            elif channel == "email":
+                if not to_addr:
+                    raise ValueError("missing to_address for email")
+                if not binding or (binding.get("provider") or "").lower() != "resend":
+                    raise RuntimeError("email requires active resend binding")
+
+                api_key_ref = binding.get("secret_ref") or "env:RESEND_API_KEY"
+                api_key_plain = resolve_secret_plaintext(api_key_ref)
+                if not api_key_plain:
+                    api_key_plain = resolve_secret_plaintext("env:RESEND_API_KEY")
+                if not api_key_plain:
+                    raise RuntimeError("RESEND_API_KEY not configured")
+
+                subject = _resolve_outbound_email_subject(row, cfg, entity_type)
+                from_email_cfg = str(cfg.get("from_email") or "").strip()
+                from_email = from_email_cfg or default_from_email()
+                res = send_resend_email(
+                    to_email=to_addr,
+                    subject=subject,
+                    html_body=str(cfg.get("html")) if cfg.get("html") else None,
+                    text_body=body,
+                    from_email=from_email,
+                    api_key=api_key_plain,
+                )
+                rid = res.get("id", "")
+                _patch_comm_message(
+                    base_url,
+                    headers,
+                    str(msg_id),
+                    {
+                        "status": "sent",
+                        "sent_at": now_iso,
+                        "provider": "resend",
+                        "provider_message_id": rid or None,
+                        "error": None,
+                        "communication_provider_binding_id": bound_id,
+                        "from_address": from_email.strip() or None,
+                    },
+                )
+                logger.info(
+                    "COMM_MSG_EMAIL_RESEND_OK comm_msg_id=%s provider_id_tail=%s from=%s to_tail=%s",
+                    msg_id,
+                    _tail_str(str(rid or "")),
+                    _from_email_for_log(from_email),
+                    _to_address_tail_for_log(to_addr),
+                )
+                sent += 1
+                mids.append(str(msg_id))
+                emit_for_communication_message(
+                    org_id=org_id,
+                    entity_type=str(entity_type),
+                    entity_id=entity_id,
+                    event_type="message_sent",
+                    message_id=str(msg_id),
+                    thread_id=thread_id,
+                    channel="email",
+                    direction="outbound",
+                    body_text=body,
+                    extra={"provider_message_id": rid or None},
+                )
+            elif channel == "in_app":
+                _patch_comm_message(
+                    base_url,
+                    headers,
+                    str(msg_id),
+                    {"status": "sent", "sent_at": now_iso, "provider": None, "error": None},
+                )
+                sent += 1
+                mids.append(str(msg_id))
+                emit_for_communication_message(
+                    org_id=org_id,
+                    entity_type=str(entity_type),
+                    entity_id=entity_id,
+                    event_type="message_sent",
+                    message_id=str(msg_id),
+                    thread_id=thread_id,
+                    channel="in_app",
+                    direction="outbound",
+                    body_text=body,
+                    extra={"note": "in_app-internal"},
+                )
+            else:
+                raise ValueError(f"unsupported channel {channel}")
+
+        except Exception as e:
+            err_msg = str(e)[:ERROR_TRUNCATE]
+            logger.warning("COMM_MSG_SEND_FAIL id=%s err=%s", msg_id, err_msg)
+            _patch_comm_message(
+                base_url,
+                headers,
+                str(msg_id),
+                {"status": "failed", "error": err_msg, "communication_provider_binding_id": bound_id},
+            )
+            failed += 1
+            mids.append(str(msg_id))
+            errors.append(err_msg)
+            emit_for_communication_message(
+                org_id=org_id,
+                entity_type=str(entity_type),
+                entity_id=entity_id,
+                event_type="message_failed",
+                message_id=str(msg_id),
+                thread_id=thread_id,
+                channel=channel or "sms",
+                direction="outbound",
+                body_text=body,
+                extra={"error": err_msg},
+            )
+
+    return {
+        "processed": len(rows),
+        "sent": sent,
+        "failed": failed,
+        "message_ids": mids,
+        "errors": errors,
+    }

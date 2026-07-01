@@ -1,0 +1,82 @@
+"use client";
+
+import { useEffect, useRef, useState } from "react";
+import { useAdminDrawer } from "@/contexts/AdminDrawerContext";
+import OpportunityDrawerOpeningOverlay from "@/components/admin/OpportunityDrawerOpeningOverlay";
+import { OpportunityDrawerViewModelHardCutoverError } from "@/lib/adminV2/viewModel/drawer/opportunity/opportunityDrawerViewModelHardCutover";
+import { loadOpportunityDrawerComposedOpen } from "@/lib/admin/opportunityDrawerOpenCoordinator";
+import {
+    markDrawerOpenOverlayShown,
+    reportDrawerOpenCoordinatorCommit,
+} from "@/lib/perf/adminV2DrawerPerf";
+import { workspaceDataFetchInit } from "@/lib/workspace/workspaceDataFetch";
+
+/**
+ * Primary-gated composed open: bootstrap + drawer_primary + header actions before drawer mount.
+ * surface=full warms in background and never blocks overlay dismissal.
+ */
+export default function OpportunityDrawerOpenCoordinator() {
+    const { openingOpportunity, commitOpportunityDrawerOpen, cancelOpportunityDrawerOpen } = useAdminDrawer();
+    const [errorMessage, setErrorMessage] = useState<string | null>(null);
+    const runGenRef = useRef(0);
+
+    useEffect(() => {
+        if (!openingOpportunity) {
+            setErrorMessage(null);
+            return;
+        }
+
+        const gen = ++runGenRef.current;
+        const ac = new AbortController();
+        setErrorMessage(null);
+        markDrawerOpenOverlayShown();
+        const overlayShownAt = typeof performance !== "undefined" ? performance.now() : 0;
+
+        const run = async () => {
+            try {
+                const { preload, metrics } = await loadOpportunityDrawerComposedOpen(
+                    openingOpportunity.id,
+                    openingOpportunity.opportunityWorkspaceContext ?? null,
+                    { ...workspaceDataFetchInit(), signal: ac.signal },
+                    {
+                        overlayShownAt,
+                        queuePreviewSeed: openingOpportunity.opportunityQueuePreviewSeed ?? null,
+                    }
+                );
+                if (gen !== runGenRef.current) return;
+                reportDrawerOpenCoordinatorCommit(openingOpportunity.id, metrics);
+                commitOpportunityDrawerOpen(openingOpportunity, preload);
+            } catch (e) {
+                if (gen !== runGenRef.current) return;
+                if (e instanceof Error && e.name === "AbortError") return;
+                if (e instanceof OpportunityDrawerViewModelHardCutoverError) {
+                    setErrorMessage(e.message);
+                    return;
+                }
+                setErrorMessage(
+                    e instanceof Error && e.message === "Not found"
+                        ? "Record not found."
+                        : "Could not open record. Try again."
+                );
+            }
+        };
+
+        void run();
+
+        return () => {
+            ac.abort();
+        };
+    }, [openingOpportunity, commitOpportunityDrawerOpen]);
+
+    if (!openingOpportunity) return null;
+
+    return (
+        <OpportunityDrawerOpeningOverlay
+            errorMessage={errorMessage}
+            onCancel={() => {
+                cancelOpportunityDrawerOpen();
+                setErrorMessage(null);
+            }}
+        />
+    );
+}

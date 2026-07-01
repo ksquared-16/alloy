@@ -1,21 +1,62 @@
 "use client";
 
-import { useState, type CSSProperties } from "react";
-import { usePathname } from "next/navigation";
-import { neutral, derived } from "@/styles/tokens/colors";
+import { Suspense, useEffect, useState, useCallback, type CSSProperties } from "react";
+import {
+    readAdminV2SidebarCollapsed,
+    writeAdminV2SidebarCollapsed,
+} from "@/lib/adminV2/navigation/adminV2SidebarCollapsed";
+import { runCoreSurfacePreload } from "@/lib/adminV2/coreSurfacePreloadRegistry";
+import { scheduleAdminV2BackgroundWork } from "@/lib/workspace/adminV2DeferBackgroundWork";
+import { perfAlloyOsRuntimeMark } from "@/lib/perf/adminV2PerfLog";
+import { alloySectionDomAttrs } from "@/lib/perf/alloySectionMap";
+import { useIdleSessionLogout } from "@/lib/adminV2/runtime/useIdleSessionLogout";
+import { usePathname, useSearchParams } from "next/navigation";
+import { neutral, derived, palette } from "@/styles/tokens/colors";
 
 const CHAMBER_FRAME = `inset 0 0 0 1px ${derived.adminV2BoundaryAmberInset}`;
 import TopNavBar from "./TopNavBar";
+import { WorkspaceSiteFilterProvider } from "@/contexts/WorkspaceSiteFilterContext";
 import Sidebar from "./Sidebar";
 import InspectorPanel from "./InspectorPanel";
 import AICommandBar from "./AICommandBar";
+import AICommandSurfaceShell from "./aiCommandSurface/AICommandSurfaceShell";
+import RecentAiActionsStrip from "./aiActivity/RecentAiActionsStrip";
+import { GlobalAssistantProvider } from "@/contexts/GlobalAssistantContext";
+import AskBosHandoffListener from "@/components/adminV2/AskBosHandoffListener";
 import BreadcrumbBar from "./navigation/BreadcrumbBar";
 import KPIBand from "./dashboard/KPIBand";
 import SystemCanvas from "./canvas/SystemCanvas";
 import RecordsExpandable from "./records/RecordsExpandable";
 import { MOCK_DEPARTMENTS } from "./canvas/mockDepartments";
 import type { DepartmentKey } from "@/lib/departmentColors";
-import WorkspaceAmbientLayer from "./WorkspaceAmbientLayer";
+import { AdminV2NavigationTransitionRibbon } from "@/components/admin/workspace/AdminV2NavigationTransitionRibbon";
+import {
+    isCanonicalAiActivityPath,
+    isCanonicalFormsPath,
+    isCanonicalSettingsPath,
+    isCanonicalWorkflowsPath,
+    isCanonicalWorkspacePath,
+} from "@/lib/admin/canonicalAdminRoutes";
+import AdminV2PersistentCommandRail from "./AdminV2PersistentCommandRail";
+import { AdminV2ShellDrawerScope } from "./AdminV2ShellDrawerScope";
+import { CommandRailBosMount } from "./CommandRailBosMount";
+import { useAdminV2WorkspaceShellDocumentFlag } from "./useAdminV2WorkspaceShellDocumentFlag";
+import BosDrawerGeometryDiagnostics from "./BosDrawerGeometryDiagnostics";
+import { useWorkspaceCommandRailDrawerOffset } from "./useWorkspaceCommandRailDrawerOffset";
+import { DrawerCommandRailActionsProvider } from "@/contexts/DrawerCommandRailActionsContext";
+import { WorkspaceCommandRailRegistryProvider } from "@/contexts/WorkspaceCommandRailRegistryContext";
+import { isExperienceBuilderStudioActive } from "@/lib/layout/experienceBuilderStudioMode";
+
+/**
+ * AdminV2 AI command surface is internal/admin-only and should be interactive whenever visible.
+ * This avoids NEXT_PUBLIC env misconfiguration causing a non-interactive placeholder bar in production.
+ */
+function adminV2AiCommandSurfaceEnabled(): boolean {
+  return true;
+}
+
+/** Matches `AICommandSurfaceShell` inner max width so the activity strip aligns with the bar. */
+const COMMAND_SURFACE_MAX_W_PX = 840;
 
 function getDepartmentName(key: DepartmentKey): string {
   const dept = MOCK_DEPARTMENTS.find((d) => d.key === key);
@@ -29,16 +70,9 @@ function getDepartmentName(key: DepartmentKey): string {
  */
 const DEBUG_EXAGGERATE_WORKSPACE_AMBIENT = false;
 
-/** Production ambient (subtle) — re-enable when DEBUG_EXAGGERATE_WORKSPACE_AMBIENT is false */
+/** Production ambient — white workspace canvas (cards retain borders/hierarchy). */
 const workspaceContentAmbientStyleProduction: CSSProperties = {
-  backgroundColor: neutral.background,
-  /* Align with canvas field vocabulary; slightly stronger blooms so company-field specs read as one system */
-  backgroundImage: `
-    radial-gradient(ellipse 100% 64% at 50% -6%, ${derived.ambientLifeBloomCore} 0%, ${derived.ambientLifeBloomMid} 32%, transparent 54%),
-    radial-gradient(ellipse 72% 48% at 92% 16%, ${derived.ambientLifeBloomMid} 0%, ${derived.ambientLifeBloomEdge} 38%, transparent 48%),
-    linear-gradient(180deg, ${derived.canvasFieldWash} 0%, transparent 40%),
-    linear-gradient(180deg, transparent 52%, ${derived.canvasFieldDepth} 100%)
-  `,
+  backgroundColor: "#ffffff",
 };
 
 /** Debug ambient — larger blooms + stronger field wash/depth, same vocabulary hues, no layout change */
@@ -56,15 +90,40 @@ const workspaceContentAmbientStyle: CSSProperties = DEBUG_EXAGGERATE_WORKSPACE_A
   ? workspaceContentAmbientStyleDebug
   : workspaceContentAmbientStyleProduction;
 
-export default function AdminV2Shell({
+function AdminV2ShellInner({
   children,
 }: {
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
-  const isWorkspaceV2Route = pathname === "/adminV2/workspace" || pathname.startsWith("/adminV2/workspace/");
+  const searchParams = useSearchParams();
+  const experienceBuilderStudio = isExperienceBuilderStudioActive(pathname, searchParams);
+  const isWorkspaceV2Route = isCanonicalWorkspacePath(pathname);
+  const isAiActivityRoute = isCanonicalAiActivityPath(pathname);
+  const isSettingsRoute = isCanonicalSettingsPath(pathname);
+  const isWorkflowsRoute = isCanonicalWorkflowsPath(pathname);
+  const isFormsRoute = isCanonicalFormsPath(pathname);
 
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => readAdminV2SidebarCollapsed() ?? true);
+  const toggleSidebarCollapsed = useCallback(() => {
+    setSidebarCollapsed((c) => {
+      const next = !c;
+      writeAdminV2SidebarCollapsed(next);
+      return next;
+    });
+  }, []);
+
+  useEffect(() => {
+    perfAlloyOsRuntimeMark("os_shell_mounted");
+    return scheduleAdminV2BackgroundWork(() => runCoreSurfacePreload(), {
+      idleTimeoutMs: 4500,
+      fallbackMs: 2800,
+    });
+  }, []);
+
+  // Idle / inactivity logout (flag-gated). Uses the existing Supabase signOut path.
+  useIdleSessionLogout();
+
   const [zoomLevel, setZoomLevel] = useState<"company" | "department">("company");
   const [selectedDepartmentKey, setSelectedDepartmentKey] = useState<DepartmentKey | null>(null);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
@@ -86,47 +145,112 @@ export default function AdminV2Shell({
       : { level: "department" as const, key: selectedDepartmentKey };
 
   const showRecordsExpandable = zoomLevel === "department" && selectedDepartmentKey != null;
+  useAdminV2WorkspaceShellDocumentFlag();
+  useWorkspaceCommandRailDrawerOffset(pathname);
 
-  if (isWorkspaceV2Route) {
+  if (experienceBuilderStudio) {
     return (
-      <div
-        className="flex h-screen w-full overflow-hidden"
-        style={{ backgroundColor: neutral.background }}
-      >
-        <Sidebar
-          collapsed={sidebarCollapsed}
-          onToggle={() => setSidebarCollapsed((c) => !c)}
-        />
-        <div className="flex flex-1 flex-col min-w-0 min-h-0 overflow-hidden">
-          <TopNavBar />
+      <GlobalAssistantProvider>
+        <CommandRailBosMount>
+          <WorkspaceCommandRailRegistryProvider>
+            <DrawerCommandRailActionsProvider>
+              <BosDrawerGeometryDiagnostics />
+              <AskBosHandoffListener />
+              <AdminV2ShellDrawerScope>
+                <WorkspaceSiteFilterProvider>
+                  <div
+                    className="flex h-screen w-full min-h-0 min-w-0 flex-col overflow-hidden bg-[#EEF2F8]"
+                    data-adminv2-app-shell="experience-builder-studio"
+                    data-experience-builder-studio="true"
+                  >
+                    <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">{children}</main>
+                  </div>
+                </WorkspaceSiteFilterProvider>
+              </AdminV2ShellDrawerScope>
+            </DrawerCommandRailActionsProvider>
+          </WorkspaceCommandRailRegistryProvider>
+        </CommandRailBosMount>
+      </GlobalAssistantProvider>
+    );
+  }
+
+  if (isWorkspaceV2Route || isAiActivityRoute || isSettingsRoute || isWorkflowsRoute || isFormsRoute) {
+    return (
+      <GlobalAssistantProvider>
+        <CommandRailBosMount>
+        <WorkspaceCommandRailRegistryProvider>
+        <DrawerCommandRailActionsProvider>
+        <BosDrawerGeometryDiagnostics />
+        <AskBosHandoffListener />
+        <WorkspaceSiteFilterProvider>
           <div
-            data-adminv2-workspace-ambient-root
-            className="relative flex flex-1 min-h-0 min-w-0 flex-col overflow-hidden"
-            style={workspaceContentAmbientStyle}
+            className="flex h-screen w-full overflow-hidden"
+            style={{
+              backgroundColor: "#ffffff",
+            }}
+            data-adminv2-app-shell="workspace-v2"
+            data-adminv2-workspace-shell="v2"
+            data-adminv2-settings-mode={isSettingsRoute ? "true" : undefined}
+            data-adminv2-sidebar-collapsed={sidebarCollapsed ? "true" : "false"}
+            {...alloySectionDomAttrs("WU-00")}
           >
-            <WorkspaceAmbientLayer />
-            <div className="relative z-10 flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden isolate">
-              {children}
+            <Sidebar collapsed={sidebarCollapsed} onToggle={toggleSidebarCollapsed} />
+            <div className="flex flex-1 flex-col min-w-0 min-h-0 overflow-hidden">
+              <div className="relative z-[100] shrink-0" data-adminv2-shell-header-mount="persistent">
+                <TopNavBar />
+              </div>
+              <AdminV2ShellDrawerScope>
+                <div
+                  data-adminv2-workspace-ambient-root
+                  className="relative flex flex-1 min-h-0 min-w-0 flex-col overflow-hidden lg:flex-row"
+                  style={workspaceContentAmbientStyle}
+                >
+                  <div className="relative z-10 flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden isolate">
+                    <AdminV2NavigationTransitionRibbon />
+                    {isAiActivityRoute || isSettingsRoute || isWorkflowsRoute || isFormsRoute ?
+                      <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+                        {children}
+                      </main>
+                    : children}
+                  </div>
+                  <AdminV2PersistentCommandRail />
+                </div>
+              </AdminV2ShellDrawerScope>
             </div>
           </div>
-          {/* Same system grammar as main /adminV2: persistent bottom AI command surface */}
-          <AICommandBar />
-        </div>
-      </div>
+        </WorkspaceSiteFilterProvider>
+        </DrawerCommandRailActionsProvider>
+        </WorkspaceCommandRailRegistryProvider>
+        </CommandRailBosMount>
+      </GlobalAssistantProvider>
     );
   }
 
   return (
+    <GlobalAssistantProvider>
+    <AskBosHandoffListener />
     <div
       className="flex h-screen w-full overflow-hidden"
       style={{ backgroundColor: neutral.background }}
     >
       <Sidebar
         collapsed={sidebarCollapsed}
-        onToggle={() => setSidebarCollapsed((c) => !c)}
+        onToggle={toggleSidebarCollapsed}
       />
       <div className="flex flex-1 flex-col min-w-0">
-        <TopNavBar />
+        <Suspense
+          fallback={
+            <div
+              className="flex h-12 flex-shrink-0 items-center px-4 text-sm text-white/70"
+              style={{ backgroundColor: palette.midnightForge }}
+              aria-hidden
+            >
+              Loading…
+            </div>
+          }
+        >
+          <TopNavBar />
+        </Suspense>
         <BreadcrumbBar
           zoomLevel={zoomLevel}
           departmentName={selectedDepartmentKey ? getDepartmentName(selectedDepartmentKey) : null}
@@ -175,8 +299,24 @@ export default function AdminV2Shell({
             zoomLevel={zoomLevel}
           />
         </div>
-        <AICommandBar />
+        <div className="relative flex flex-col">
+          <div className="flex w-full justify-center px-4">
+            <div className="w-full" style={{ maxWidth: COMMAND_SURFACE_MAX_W_PX }}>
+              <RecentAiActionsStrip />
+            </div>
+          </div>
+          {adminV2AiCommandSurfaceEnabled() ? <AICommandSurfaceShell /> : <AICommandBar />}
+        </div>
       </div>
     </div>
+    </GlobalAssistantProvider>
+  );
+}
+
+export default function AdminV2Shell({ children }: { children: React.ReactNode }) {
+  return (
+    <Suspense fallback={<div className="flex h-screen items-center justify-center text-sm text-alloy-midnight/55">Loading…</div>}>
+      <AdminV2ShellInner>{children}</AdminV2ShellInner>
+    </Suspense>
   );
 }

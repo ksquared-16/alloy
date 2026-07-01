@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase/serverServiceClient";
+import { normalizeOpportunityWritePayload } from "@/lib/opportunityIdentity";
+import { emitEvent } from "@/lib/emitEvent";
 
 type DiscountBody = {
   opportunity_id: string;
@@ -47,7 +49,7 @@ export async function POST(request: NextRequest) {
     const supabase = createServiceRoleClient();
     const { data: existing, error: fetchErr } = await supabase
       .from("opportunities")
-      .select("id, quote_subtotal, estimated_price_cents, metadata")
+      .select("id, org_id, quote_subtotal, estimated_price_cents, metadata")
       .eq("id", opportunityId)
       .maybeSingle();
 
@@ -56,10 +58,12 @@ export async function POST(request: NextRequest) {
     }
 
     const row = existing as {
+      org_id?: string | null;
       quote_subtotal?: number | null;
       estimated_price_cents?: number | null;
       metadata?: Record<string, unknown> | null;
     };
+    const orgId = row.org_id != null && String(row.org_id).trim() ? String(row.org_id).trim() : null;
 
     if (body.clear === true) {
       const sub = inferredSubtotalFromRow(row);
@@ -76,10 +80,24 @@ export async function POST(request: NextRequest) {
         update.estimated_price_cents = cents;
         update.monetary_value_cents = cents;
       }
+      await normalizeOpportunityWritePayload(supabase, update, "book-v2/opportunity-discount:clear");
       const { error } = await supabase.from("opportunities").update(update).eq("id", opportunityId);
       if (error) {
         console.error("[BOOK_V2_OPP_DISCOUNT] clear failed", error.message);
         return NextResponse.json({ ok: false, message: "Failed to clear discount" }, { status: 500 });
+      }
+      if (orgId) {
+        try {
+          await emitEvent({
+            org_id: orgId,
+            event_type: "opportunity_discount_cleared",
+            entity_type: "opportunities",
+            entity_id: opportunityId,
+            payload: { source: "book-v2/opportunity-discount", quote_total_after: update.quote_total ?? null },
+          });
+        } catch (e) {
+          console.warn("[BOOK_V2_OPP_DISCOUNT] emit clear", e instanceof Error ? e.message : e);
+        }
       }
       return NextResponse.json({ ok: true, cleared: true });
     }
@@ -120,10 +138,32 @@ export async function POST(request: NextRequest) {
       updated_at: new Date().toISOString(),
     };
 
+    await normalizeOpportunityWritePayload(supabase, update, "book-v2/opportunity-discount:apply");
     const { error } = await supabase.from("opportunities").update(update).eq("id", opportunityId);
     if (error) {
       console.error("[BOOK_V2_OPP_DISCOUNT] update failed", error.message);
       return NextResponse.json({ ok: false, message: "Failed to save discount" }, { status: 500 });
+    }
+
+    if (orgId) {
+      try {
+        await emitEvent({
+          org_id: orgId,
+          event_type: "opportunity_discount_applied",
+          entity_type: "opportunities",
+          entity_id: opportunityId,
+          payload: {
+            source: "book-v2/opportunity-discount",
+            quote_subtotal,
+            quote_total,
+            discount_amount: discount_amount > 0 ? discount_amount : null,
+            discount_code_id,
+            discount_program_id,
+          },
+        });
+      } catch (e) {
+        console.warn("[BOOK_V2_OPP_DISCOUNT] emit apply", e instanceof Error ? e.message : e);
+      }
     }
 
     return NextResponse.json({ ok: true });

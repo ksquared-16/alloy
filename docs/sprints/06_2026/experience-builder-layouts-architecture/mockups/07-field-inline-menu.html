@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>07 — Field inline menu</title>
+  <link rel="stylesheet" href="_shared.css" />
+  <style>
+    .field-selected { background:var(--pine-soft); border-radius:6px; padding:4px 6px; margin:-4px -6px; outline:1px solid var(--pine-border); position:relative; }
+    .popover { position:absolute; top:100%; left:0; margin-top:4px; background:white; border:1px solid rgba(89,103,139,0.14); border-radius:10px; padding:8px 0; min-width:200px; box-shadow:0 8px 24px rgba(0,0,0,0.1); z-index:10; }
+    .pop-item { padding:8px 14px; font-size:12px; font-weight:500; }
+    .pop-item:hover { background:var(--pine-soft); }
+    .pop-sep { height:1px; background:rgba(89,103,139,0.12); margin:4px 0; }
+  </style>
+</head>
+<body>
+<div class="frame">
+  <div class="label">Field Inline Menu <span>label · format · visibility · swap · remove</span></div>
+  <div class="body">
+    <div class="bos"><div class="bos-i on">▦</div></div>
+    <div class="config-page">
+      <div class="shell"><div class="workspace">
+        <div class="ws-body">
+          <div class="card span-6" style="max-width:480px">
+            <div class="card-h"><div class="ico">⌁</div><div class="title">Household</div></div>
+            <div class="field-row field-selected">
+              <span class="lbl">Phone</span>
+              <span class="val">(555) 012-3456</span>
+              <div class="popover">
+                <div class="pop-item">Edit label</div>
+                <div class="pop-item">Display format</div>
+                <div class="pop-item">Visibility condition…</div>
+                <div class="pop-item">Editable when…</div>
+                <div class="pop-sep"></div>
+                <div class="pop-item">Swap field</div>
+                <div class="pop-item">Move up / down</div>
+                <div class="pop-item" style="color:#b7791f">Remove field</div>
+                <div class="pop-sep"></div>
+                <div class="pop-item" style="font-size:11px;color:var(--forge-70)">Advanced · field key</div>
+              </div>
+            </div>
+          </div>
+          <p class="hint">Field catalog only — system fields under Advanced filter.</p>
+        </div>
+      </div></div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

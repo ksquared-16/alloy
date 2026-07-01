@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 500" fill="none" aria-hidden="true">
+  <!-- TODO: Replace with final deck title artifact export -->
+  <rect width="800" height="500" fill="#F4F6F9"/>
+  <circle cx="400" cy="250" r="120" stroke="#18273A" stroke-width="2" opacity="0.15"/>
+  <circle cx="400" cy="250" r="80" stroke="#00A283" stroke-width="2" opacity="0.35"/>
+  <circle cx="400" cy="250" r="40" fill="#00458C" opacity="0.12"/>
+  <text x="400" y="420" text-anchor="middle" font-family="system-ui,sans-serif" font-size="14" fill="#18273A" opacity="0.35">Title Artifact Placeholder</text>
+</svg>

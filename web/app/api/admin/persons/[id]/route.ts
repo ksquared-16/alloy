@@ -1,10 +1,24 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
-import { getAdminContext } from "@/lib/admin/getAdminContext";
+import { getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { assertAllowedStatusKey } from "@/lib/admin/statusDefinitionsResolve";
 import { upsertFieldValuesFromBody } from "@/lib/admin/fieldValues";
+import { parsePersonEmployeePlacementPatchBody } from "@/lib/admin/personEmployeePlacementFields";
+import {
+    COMPLETION_REQUIREMENT_VALIDATION_ERROR,
+    enforcePersonCompletionOnPatch,
+} from "@/lib/completion/enforcePersonCompletionOnPatch";
 
-const PERSON_NATIVE_KEYS_IN_PATCH = ["first_name", "last_name", "email", "phone", "status_key"] as const;
+const PERSON_NATIVE_KEYS_IN_PATCH = [
+    "first_name",
+    "last_name",
+    "email",
+    "phone",
+    "status_key",
+    "is_employee",
+    "employee_id",
+    "employee_source",
+] as const;
 
 /** Keys never persisted via field_values (native columns, computed, or audit fields). */
 const PERSON_FIELD_VALUES_EXCLUDED_KEYS = [
@@ -29,7 +43,7 @@ export async function PATCH(
     request: NextRequest,
     context: { params: Promise<{ id: string }> }
 ) {
-    const ctx = await getAdminContext();
+    const ctx = await getAdminContextCached();
     if (!ctx.ok) {
         return NextResponse.json(
             { error: ctx.status === 401 ? "Unauthorized" : "Forbidden" },
@@ -53,7 +67,9 @@ export async function PATCH(
     const supabase = createAdminClient();
     const { data: existing, error: fetchErr } = await supabase
         .from("persons")
-        .select("id, org_id, first_name, last_name")
+        .select(
+            "id, org_id, first_name, last_name, email, phone, status_key, date_of_birth, is_employee, employee_id, employee_source"
+        )
         .eq("id", id)
         .eq("org_id", ctx.orgId)
         .maybeSingle();
@@ -74,12 +90,21 @@ export async function PATCH(
                   ? body.status_key.trim() || null
                   : null
             : undefined;
+    const date_of_birth =
+        body.date_of_birth !== undefined
+            ? body.date_of_birth === "" || body.date_of_birth == null
+                ? null
+                : typeof body.date_of_birth === "string"
+                  ? body.date_of_birth.trim().slice(0, 10) || null
+                  : null
+            : undefined;
 
     const personUpdates: Record<string, unknown> = {};
     if (first_name !== undefined) personUpdates.first_name = first_name;
     if (last_name !== undefined) personUpdates.last_name = last_name;
     if (email !== undefined) personUpdates.email = email;
     if (phone !== undefined) personUpdates.phone = phone;
+    if (date_of_birth !== undefined) personUpdates.date_of_birth = date_of_birth;
     if (status_key !== undefined) {
         const chk = await assertAllowedStatusKey(supabase, ctx.orgId, "persons", status_key);
         if (!chk.ok) {
@@ -87,13 +112,51 @@ export async function PATCH(
         }
         personUpdates.status_key = status_key;
     }
+
+    const employeePatch = parsePersonEmployeePlacementPatchBody(body);
+    if (!employeePatch.ok) {
+        return NextResponse.json({ error: employeePatch.error }, { status: 400 });
+    }
+    if (employeePatch.updates.is_employee !== undefined) {
+        personUpdates.is_employee = employeePatch.updates.is_employee;
+    }
+    if (employeePatch.updates.employee_id !== undefined) {
+        personUpdates.employee_id = employeePatch.updates.employee_id;
+    }
+    if (employeePatch.updates.employee_source !== undefined) {
+        personUpdates.employee_source = employeePatch.updates.employee_source;
+    }
+
+    const mergedForValidation: Record<string, unknown> = {
+        ...(existing as Record<string, unknown>),
+        ...body,
+        ...personUpdates,
+    };
+
+    const completionCheck = await enforcePersonCompletionOnPatch({
+        supabase,
+        orgId: ctx.orgId,
+        personId: id,
+        body,
+        existing: mergedForValidation,
+        phase: status_key !== undefined ? "status_change" : "save",
+        status_to: status_key,
+    });
+    if (!completionCheck.ok) {
+        return NextResponse.json(
+            {
+                error: completionCheck.message || COMPLETION_REQUIREMENT_VALIDATION_ERROR,
+                completion_requirements: completionCheck.validation,
+            },
+            { status: 400 }
+        );
+    }
+
     if (Object.keys(personUpdates).length > 0) {
         const fn = first_name !== undefined ? first_name : (existing as { first_name?: string | null }).first_name;
         const ln = last_name !== undefined ? last_name : (existing as { last_name?: string | null }).last_name;
         (personUpdates as Record<string, unknown>).full_name = [fn, ln].filter(Boolean).join(" ").trim() || null;
-    }
 
-    if (Object.keys(personUpdates).length > 0) {
         const { error: updateErr } = await supabase
             .from("persons")
             .update(personUpdates)
@@ -108,7 +171,9 @@ export async function PATCH(
 
     const { data: updated } = await supabase
         .from("persons")
-        .select("id, org_id, first_name, last_name, full_name, email, phone, status_key, created_at, updated_at")
+        .select(
+            "id, org_id, first_name, last_name, full_name, email, phone, status_key, date_of_birth, is_employee, employee_id, employee_source, created_at, updated_at"
+        )
         .eq("id", id)
         .eq("org_id", ctx.orgId)
         .single();

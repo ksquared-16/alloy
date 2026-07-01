@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
-import { getAdminContext } from "@/lib/admin/getAdminContext";
+import { getAdminContextCached } from "@/lib/admin/getAdminContext";
+import { emitEvent } from "@/lib/emitEvent";
+import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
+import { assertExistingJobMutableInAdminScope, scopeDimensionsFromAccess } from "@/lib/admin/accessScope";
 
 const ALLOWED_TYPES = new Set(["adjustment", "fee"]);
 
@@ -16,7 +19,7 @@ function normalizeDateOnly(v: unknown): string | null {
  * Posted immediately so balances and payment UX reflect it without a separate post step.
  */
 export async function POST(request: NextRequest, context: { params: Promise<{ id: string }> }) {
-    const ctx = await getAdminContext();
+    const ctx = await getAdminContextCached();
     if (!ctx.ok) {
         return NextResponse.json({ error: ctx.status === 401 ? "Unauthorized" : "Forbidden" }, { status: ctx.status });
     }
@@ -62,8 +65,21 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
     const dueDate = normalizeDateOnly(body.due_date) ?? serviceDate;
 
     const supabase = createAdminClient();
-    const { data: job, error: jobErr } = await supabase.from("jobs").select("id, org_id").eq("id", jobId).maybeSingle();
+    const { data: job, error: jobErr } = await supabase
+        .from("jobs")
+        .select("id, org_id, work_unit_id, location_id")
+        .eq("id", jobId)
+        .maybeSingle();
     if (jobErr || !job || (job as { org_id: string }).org_id !== ctx.orgId) {
+        return NextResponse.json({ error: "Job not found" }, { status: 404 });
+    }
+
+    const access = await getAdminAccessContextCached();
+    if (!access.ok) {
+        return NextResponse.json({ error: access.status === 401 ? "Unauthorized" : "Forbidden" }, { status: access.status });
+    }
+    const dim = scopeDimensionsFromAccess(access);
+    if (!(await assertExistingJobMutableInAdminScope(supabase, ctx.orgId, dim, jobId))) {
         return NextResponse.json({ error: "Job not found" }, { status: 404 });
     }
 
@@ -92,6 +108,40 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
 
     if (insErr) {
         return NextResponse.json({ error: insErr.message }, { status: 400 });
+    }
+
+    const row = inserted as {
+        id: string;
+        job_id: string;
+        charge_type: string;
+        amount_cents: number;
+        status: string;
+        description: string | null;
+        service_date: string | null;
+        due_date: string | null;
+        posted_at: string;
+    };
+    try {
+        await emitEvent({
+            org_id: ctx.orgId,
+            event_type: "charge_posted",
+            entity_type: "job",
+            entity_id: jobId,
+            occurred_at: now,
+            payload: {
+                charge_id: row.id,
+                charge_type: row.charge_type,
+                amount_cents: row.amount_cents,
+                status: row.status,
+                description: row.description,
+                service_date: row.service_date,
+                due_date: row.due_date,
+                posted_at: row.posted_at,
+                actor_user_id: ctx.userId ?? null,
+            },
+        });
+    } catch (e) {
+        console.warn("[jobs/charges] emitEvent charge_posted", e instanceof Error ? e.message : e);
     }
 
     return NextResponse.json(inserted);

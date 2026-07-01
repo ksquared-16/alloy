@@ -1,0 +1,15 @@
+{
+  "extends": "./tsconfig.json",
+  "exclude": [
+    "node_modules",
+    "tests",
+    "playwright",
+    "scripts",
+    "test-results",
+    "playwright-report",
+    "coverage",
+    "tmp",
+    "**/*.test.ts",
+    "**/*.test.tsx"
+  ]
+}

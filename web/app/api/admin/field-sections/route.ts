@@ -1,13 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
-import { getAdminContext } from "@/lib/admin/getAdminContext";
+import { getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { logAdminAudit } from "@/lib/adminAuth";
+import { parseFieldSectionConfig } from "@/lib/fields/sectionManagement";
+import { FIELD_DEFINITION_ENTITY_TYPES, isFieldDefinitionEntityType } from "@/lib/fields/inquiryChildFieldRegistry";
 
-const ALLOWED_ENTITY_TYPES = ["person", "customer", "job", "opportunity", "vendor", "schedule", "location"] as const;
+const ALLOWED_ENTITY_TYPES = FIELD_DEFINITION_ENTITY_TYPES;
 const SECTION_KEY_REGEX = /^[a-z0-9_]{2,64}$/;
 
 export async function GET(request: NextRequest) {
-    const ctx = await getAdminContext();
+    const ctx = await getAdminContextCached();
     if (!ctx.ok) {
         return NextResponse.json(
             { error: ctx.status === 401 ? "Unauthorized" : "Forbidden" },
@@ -17,7 +19,7 @@ export async function GET(request: NextRequest) {
 
     const { searchParams } = new URL(request.url);
     const entityType = searchParams.get("entity_type")?.trim() || null;
-    if (!entityType || !ALLOWED_ENTITY_TYPES.includes(entityType as (typeof ALLOWED_ENTITY_TYPES)[number])) {
+    if (!entityType || !isFieldDefinitionEntityType(entityType)) {
         return NextResponse.json(
             { error: `entity_type required; one of: ${ALLOWED_ENTITY_TYPES.join(", ")}` },
             { status: 400 }
@@ -40,7 +42,7 @@ export async function GET(request: NextRequest) {
 
 /** POST: create section metadata row (label for section_key). */
 export async function POST(request: NextRequest) {
-    const ctx = await getAdminContext();
+    const ctx = await getAdminContextCached();
     if (!ctx.ok) {
         return NextResponse.json(
             { error: ctx.status === 401 ? "Unauthorized" : "Forbidden" },
@@ -59,7 +61,7 @@ export async function POST(request: NextRequest) {
     }
 
     const entity_type = typeof body.entity_type === "string" ? body.entity_type.trim() : "";
-    if (!ALLOWED_ENTITY_TYPES.includes(entity_type as (typeof ALLOWED_ENTITY_TYPES)[number])) {
+    if (!isFieldDefinitionEntityType(entity_type)) {
         return NextResponse.json({ error: `entity_type invalid` }, { status: 400 });
     }
 
@@ -75,6 +77,16 @@ export async function POST(request: NextRequest) {
     const label = typeof body.label === "string" ? body.label.trim() || section_key : section_key;
     const description = typeof body.description === "string" ? body.description.trim() || null : null;
     const sort_order = typeof body.sort_order === "number" && !Number.isNaN(body.sort_order) ? body.sort_order : 100;
+    const is_archived = body.is_archived === true;
+
+    let section_config: Record<string, unknown> = {};
+    if (body.section_config !== undefined) {
+        const parsed = parseFieldSectionConfig(body.section_config);
+        if (!parsed.ok) {
+            return NextResponse.json({ error: parsed.error }, { status: 400 });
+        }
+        section_config = parsed.value;
+    }
 
     const supabase = createAdminClient();
     const { data: created, error } = await supabase
@@ -86,6 +98,8 @@ export async function POST(request: NextRequest) {
             label,
             description,
             sort_order,
+            is_archived,
+            section_config,
         })
         .select()
         .single();

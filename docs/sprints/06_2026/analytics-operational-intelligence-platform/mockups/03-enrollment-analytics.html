@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>03 — Enrollment Analytics</title>
+<link rel="stylesheet" href="_shared.css" />
+</head>
+<body>
+<div class="frame">
+  <div class="label"><span class="dot"></span>Alloy Intelligence <span>Enrollment Intelligence — business process scorecard</span></div>
+  <div class="body">
+    <div class="bos">
+      <div class="logo"></div>
+      <div class="bos-i">⌂</div><div class="bos-i">▦</div><div class="bos-i on">📈</div><div class="bos-i">✉</div>
+      <div class="bos-i" style="margin-top:auto">⚙</div>
+    </div>
+    <nav class="nav">
+      <div class="nav-head"><div class="eyebrow">Intelligence</div><h1>Bright Futures</h1></div>
+      <div class="nav-list">
+        <div class="nav-item"><span class="ni">★</span> Executive Performance</div>
+        <div class="nav-item"><span class="ni">◴</span> Operational Intelligence <span class="badge">7</span></div>
+        <div class="nav-group">Process Intelligence</div>
+        <div class="nav-item on"><span class="ni">◆</span> Enrollment</div>
+        <div class="nav-item"><span class="ni">$</span> Financial Performance</div>
+        <div class="nav-item"><span class="ni">◷</span> Attendance</div>
+        <div class="nav-item"><span class="ni">✉</span> Communications</div>
+        <div class="nav-item"><span class="ni">☺</span> Staff &amp; Labor</div>
+        <div class="nav-item"><span class="ni">✓</span> Compliance</div>
+        <div class="nav-group">Decide</div>
+        <div class="nav-item"><span class="ni">⤢</span> Forecasting</div>
+        <div class="nav-item"><span class="ni">⚙</span> Optimization Centers</div>
+        <div class="nav-item"><span class="ni">▤</span> Reporting</div>
+      </div>
+      <div class="nav-foot"><span class="tdot good"></span> All sites · 30 days</div>
+    </nav>
+
+    <div class="surface">
+      <div class="surface-head">
+        <div class="titles">
+          <div class="crumbs"><span>Organization</span><span class="sep">›</span><span>Business Process</span><span class="sep">›</span><span class="here">Enrollment</span></div>
+          <h2>Enrollment Intelligence</h2>
+          <div class="sub">Demand → conversion → capacity. Every stage drills to the families inside it.</div>
+        </div>
+        <div class="head-tools">
+          <div class="seg"><span>7d</span><span class="on">30d</span><span>Quarter</span></div>
+          <button class="btn btn-ghost">Compare to prior ▾</button>
+          <button class="btn btn-pine">→ Capacity Optimization</button>
+        </div>
+      </div>
+
+      <div class="surface-body">
+        <div class="grid">
+          <!-- Funnel breakdown -->
+          <div class="zone s7">
+            <div class="zone-head"><h3>Pipeline Funnel</h3><span class="z-sub">Stage volume &amp; conversion</span></div>
+            <div class="mcard">
+              <div class="mc-head"><span class="mc-label">Where are families in the process?</span><span class="tone warn">Tour→Enroll soft</span></div>
+              <div class="bars" style="margin-top:4px">
+                <div class="bar-row"><span class="bl">New inquiry</span><span class="bar-track"><span class="bar-fill" style="width:100%"></span></span><span class="bv link">248</span></div>
+                <div class="bar-row"><span class="bl">Contacted</span><span class="bar-track"><span class="bar-fill" style="width:79%"></span></span><span class="bv link">196</span></div>
+                <div class="bar-row"><span class="bl">Tour booked</span><span class="bar-track"><span class="bar-fill" style="width:54%"></span></span><span class="bv link">134</span></div>
+                <div class="bar-row"><span class="bl">Tour done</span><span class="bar-track"><span class="bar-fill" style="width:42%"></span></span><span class="bv link">104</span></div>
+                <div class="bar-row"><span class="bl">Enrolled</span><span class="bar-track"><span class="bar-fill" style="width:16%"></span></span><span class="bv link">40</span></div>
+              </div>
+              <div class="mc-why">Biggest leak: <b>Tour done → Enrolled (38%)</b>. Healthy top-of-funnel; conversion is the constraint.</div>
+              <div class="mc-foot"><span class="drill"><span class="arr">→</span> Open "Tour done" queue (104)</span><span class="mc-act">Segment by site ▾</span></div>
+            </div>
+          </div>
+
+          <!-- Conversion KPI + trend -->
+          <div class="zone s5">
+            <div class="zone-head"><h3>Conversion</h3></div>
+            <div class="grid" style="gap:14px">
+              <div class="mcard t-warn s12">
+                <div class="mc-head"><span class="mc-q">Are tours converting?</span><span class="tone warn">Below target</span></div>
+                <div class="mc-value">38<span class="unit">%</span></div>
+                <div class="mc-delta down">▼ 5 pts vs prior 30d · target 45%</div>
+                <svg class="spark" viewBox="0 0 240 40" preserveAspectRatio="none"><polyline fill="none" stroke="#b7791f" stroke-width="2.5" points="0,12 40,14 80,16 120,20 160,22 200,28 240,30"/></svg>
+                <div class="mc-foot"><span class="drill"><span class="arr">→</span> Affected sites</span><span class="mc-act">Why? ▾</span></div>
+              </div>
+              <div class="mcard t-good s6"><div class="mc-head"><span class="mc-label">Time to first tour</span></div><div class="mc-value">2.1<span class="unit">d</span></div><div class="mc-delta up">▲ faster</div></div>
+              <div class="mcard t-good s6"><div class="mc-head"><span class="mc-label">Lead count</span></div><div class="mc-value">248</div><div class="mc-delta up">▲ 12%</div></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Capacity + sources + drill -->
+        <div class="zone">
+          <div class="zone-head"><h3>Capacity &amp; Sources</h3><span class="z-link">→ Capacity Optimization Center</span></div>
+          <div class="grid">
+            <div class="mcard t-warn s4">
+              <div class="mc-head"><span class="mc-label">Capacity fill by program</span></div>
+              <div class="bars">
+                <div class="bar-row"><span class="bl">Infant</span><span class="bar-track"><span class="bar-fill crit" style="width:98%"></span></span><span class="bv">98%</span></div>
+                <div class="bar-row"><span class="bl">Toddler</span><span class="bar-track"><span class="bar-fill" style="width:84%"></span></span><span class="bv">84%</span></div>
+                <div class="bar-row"><span class="bl">Preschool</span><span class="bar-track"><span class="bar-fill warn" style="width:62%"></span></span><span class="bv link">62%</span></div>
+                <div class="bar-row"><span class="bl">Pre-K</span><span class="bar-track"><span class="bar-fill" style="width:91%"></span></span><span class="bv">91%</span></div>
+              </div>
+              <div class="mc-why">Preschool is the only open capacity — <b>34 seats</b>; demand is concentrated on Infant.</div>
+            </div>
+            <div class="mcard t-good s4">
+              <div class="mc-head"><span class="mc-label">Lead source mix</span></div>
+              <div class="bars">
+                <div class="bar-row"><span class="bl">Referral</span><span class="bar-track"><span class="bar-fill" style="width:46%"></span></span><span class="bv">46%</span></div>
+                <div class="bar-row"><span class="bl">Web search</span><span class="bar-track"><span class="bar-fill" style="width:28%"></span></span><span class="bv">28%</span></div>
+                <div class="bar-row"><span class="bl">Walk-in</span><span class="bar-track"><span class="bar-fill" style="width:16%"></span></span><span class="bv">16%</span></div>
+                <div class="bar-row"><span class="bl">Paid</span><span class="bar-track"><span class="bar-fill" style="width:10%"></span></span><span class="bv">10%</span></div>
+              </div>
+              <div class="mc-why">Referral converts at <b>2.3×</b> paid — highest-quality demand.</div>
+            </div>
+            <div class="panel s4">
+              <div class="panel-h"><span class="ins-head intel">◆ Drill · Tour done, not enrolled</span></div>
+              <div class="rowlist">
+                <div class="rl"><div class="av">SC</div><div class="rl-main"><div class="rl-t">Sarah Chen</div><div class="rl-s">Toured 6d ago · no follow-up</div></div><span class="drill"><span class="arr">→</span></span></div>
+                <div class="rl"><div class="av">MR</div><div class="rl-main"><div class="rl-t">Marcus Reed</div><div class="rl-s">Toured 4d ago · awaiting offer</div></div><span class="drill"><span class="arr">→</span></span></div>
+                <div class="rl"><div class="av">PA</div><div class="rl-main"><div class="rl-t">Priya Anand</div><div class="rl-s">Toured 8d ago · price concern</div></div><span class="drill"><span class="arr">→</span></span></div>
+                <div class="rl" style="justify-content:center"><span class="drill">View all 64 families →</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="note">Surface: <b>Enrollment Intelligence</b> · Category: Dashboard (Fully Configurable) · Process-bound · Renderers: Breakdown (funnel/capacity/sources), KPI, Trend · Drill path: metric → stage queue → family record → action.</div>
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
-import { getAdminContext } from "@/lib/admin/getAdminContext";
+import { getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { formatRecurrenceLabel } from "@/lib/adminFormatters";
 
 export type ServicePlanTemplateListItem = {
@@ -22,7 +22,7 @@ export type ServicePlanTemplateListItem = {
 };
 
 export async function GET(request: NextRequest) {
-    const ctx = await getAdminContext();
+    const ctx = await getAdminContextCached();
     if (!ctx.ok) return NextResponse.json({ error: ctx.status === 401 ? "Unauthorized" : "Forbidden" }, { status: ctx.status });
 
     const { searchParams } = new URL(request.url);
@@ -85,7 +85,7 @@ const RECURRENCE_UNITS = ["day", "week", "month", "quarter", "year"] as const;
 
 /** POST: create a plan template. Body: plan_name, plan_key, is_recurring?, recurrence_unit?, recurrence_interval?, is_active? */
 export async function POST(request: NextRequest) {
-    const ctx = await getAdminContext();
+    const ctx = await getAdminContextCached();
     if (!ctx.ok) return NextResponse.json({ error: ctx.status === 401 ? "Unauthorized" : "Forbidden" }, { status: ctx.status });
 
     let body: { plan_name?: string; plan_key?: string; is_recurring?: boolean; recurrence_unit?: string | null; recurrence_interval?: number | null; is_active?: boolean };

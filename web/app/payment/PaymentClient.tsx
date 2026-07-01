@@ -610,7 +610,7 @@ export default function PaymentClient() {
 
                                     {/* First Cleaning */}
                                     <div>
-                                        <p className="text-xs font-semibold text-alloy-midnight/60 uppercase tracking-wide mb-1">
+                                        <p className="text-xs font-semibold text-alloy-midnight/60 tracking-wide mb-1">
                                             First Cleaning
                                         </p>
                                         {(() => {
@@ -639,7 +639,7 @@ export default function PaymentClient() {
                                             quote.recurring_price > 0 &&
                                             quote.frequency_label ? (
                                             <>
-                                                <p className="text-xs font-semibold text-alloy-midnight/60 uppercase tracking-wide mb-1">
+                                                <p className="text-xs font-semibold text-alloy-midnight/60 tracking-wide mb-1">
                                                     {quote.frequency_label} Cleaning
                                                     {quote.discount_label && (
                                                         <span className="normal-case text-[11px] text-alloy-midnight/70 ml-1">
@@ -658,7 +658,7 @@ export default function PaymentClient() {
                                             </>
                                         ) : (
                                             <>
-                                                <p className="text-xs font-semibold text-alloy-midnight/60 uppercase tracking-wide mb-1">
+                                                <p className="text-xs font-semibold text-alloy-midnight/60 tracking-wide mb-1">
                                                     Recurring Cleaning
                                                 </p>
                                                 <p className="text-sm text-alloy-midnight/70">
@@ -671,7 +671,7 @@ export default function PaymentClient() {
                                     {/* Add-ons */}
                                     {quote.addons && quote.addons.length > 0 && (
                                         <div>
-                                            <p className="text-xs font-semibold text-alloy-midnight/60 uppercase tracking-wide mb-2">
+                                            <p className="text-xs font-semibold text-alloy-midnight/60 tracking-wide mb-2">
                                                 Add-ons
                                             </p>
                                             <div className="space-y-1.5">

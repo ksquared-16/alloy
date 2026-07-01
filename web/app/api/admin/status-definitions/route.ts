@@ -1,11 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
-import { getAdminContext } from "@/lib/admin/getAdminContext";
+import { getAdminContextCached } from "@/lib/admin/getAdminContext";
 import {
-    fetchEffectiveStatusDefinitions,
+    fetchEffectiveStatusDefinitionsDirect,
     fetchOrgStatusDefinitions,
 } from "@/lib/admin/statusDefinitionsResolve";
+import { ADMIN_STATUS_DEFINITIONS_ENTITY_TYPES } from "@/lib/admin/statusDefinitionsAdminEntityTypes";
 import { normalizeStatusDefinitionMetadata } from "@/lib/admin/normalizeStatusMetadata";
+import { revalidateEffectiveStatusDefinitionsCache } from "@/lib/admin/statusDefinitionsCache";
 
 const STATUS_KEY_REGEX = /^[a-z0-9_]{2,32}$/;
 
@@ -25,7 +27,7 @@ export type StatusDef = {
 
 /** GET: effective status_definitions for admin UI — org rows first, else industry defaults. */
 export async function GET(request: NextRequest) {
-    const ctx = await getAdminContext();
+    const ctx = await getAdminContextCached();
     if (!ctx.ok) {
         return NextResponse.json(
             { error: ctx.status === 401 ? "Unauthorized" : "Forbidden" },
@@ -35,14 +37,21 @@ export async function GET(request: NextRequest) {
 
     const { searchParams } = new URL(request.url);
     const entityType = searchParams.get("entity_type")?.trim() || null;
+    const includeInactive = searchParams.get("include_inactive") === "1";
 
     const supabase = createAdminClient();
+    const activeOnly = !includeInactive;
 
     try {
         if (entityType) {
-            const orgRows = await fetchOrgStatusDefinitions(supabase, ctx.orgId, entityType, { activeOnly: true });
+            const orgRows = await fetchOrgStatusDefinitions(supabase, ctx.orgId, entityType, { activeOnly });
             const source: "org" | "industry_defaults" = orgRows.length > 0 ? "org" : "industry_defaults";
-            const rows = orgRows.length > 0 ? orgRows : await fetchEffectiveStatusDefinitions(supabase, ctx.orgId, entityType, { activeOnly: true });
+            const rows =
+                orgRows.length > 0
+                    ? orgRows
+                    : await fetchEffectiveStatusDefinitionsDirect(supabase, ctx.orgId, entityType, {
+                          activeOnly: true,
+                      });
             const statuses: StatusDef[] = rows.map((r) => ({
                 id: r.id,
                 org_id: r.org_id,
@@ -66,35 +75,33 @@ export async function GET(request: NextRequest) {
             });
         }
 
-        const { data: allOrgRows, error } = await supabase
-            .from("status_definitions")
-            .select(
-                "id, org_id, industry_key, entity_type, status_key, status_label, sort_order, is_active, is_system, metadata, created_at, updated_at"
-            )
-            .eq("org_id", ctx.orgId)
-            .order("entity_type", { ascending: true })
-            .order("sort_order", { ascending: true })
-            .order("status_label", { ascending: true });
+        /**
+         * Aggregate effective definitions for each entity type (same merge rules as
+         * GET ?entity_type=…): org rows + industry defaults (`org_id` NULL) where applicable.
+         * The previous org-only query hid global defaults when the org had no rows yet.
+         */
+        const rowsNested = await Promise.all(
+            ADMIN_STATUS_DEFINITIONS_ENTITY_TYPES.map((entityType) =>
+                fetchEffectiveStatusDefinitionsDirect(supabase, ctx.orgId, entityType, { activeOnly }),
+            ),
+        );
+        const merged = rowsNested.flat();
 
-        if (error) {
-            return NextResponse.json({ error: error.message }, { status: 500 });
-        }
-
-        const statuses: StatusDef[] = (allOrgRows ?? []).map((r) => ({
-            id: (r as { id: string }).id,
-            org_id: (r as { org_id: string }).org_id,
-            entity_type: (r as { entity_type: string }).entity_type,
-            status_key: (r as { status_key: string }).status_key,
-            status_label: (r as { status_label: string | null }).status_label ?? null,
-            sort_order: Number((r as { sort_order: number }).sort_order) ?? 100,
-            is_active: Boolean((r as { is_active: boolean }).is_active),
-            is_system: Boolean((r as { is_system: boolean }).is_system),
-            metadata: (r as { metadata?: Record<string, unknown> | null }).metadata ?? null,
-            created_at: (r as { created_at: string }).created_at,
-            updated_at: (r as { updated_at: string }).updated_at,
+        const statuses: StatusDef[] = merged.map((r) => ({
+            id: r.id,
+            org_id: r.org_id,
+            entity_type: r.entity_type,
+            status_key: r.status_key,
+            status_label: r.status_label ?? null,
+            sort_order: Number(r.sort_order) ?? 100,
+            is_active: Boolean(r.is_active),
+            is_system: Boolean(r.is_system),
+            metadata: r.metadata ?? null,
+            created_at: "",
+            updated_at: "",
         }));
 
-        return NextResponse.json({ statuses, source: "org" as const });
+        return NextResponse.json({ statuses, source: "effective" as const });
     } catch (e) {
         return NextResponse.json({ error: (e as Error).message }, { status: 500 });
     }
@@ -102,7 +109,7 @@ export async function GET(request: NextRequest) {
 
 /** POST: create status_definition for current org. Admin only. */
 export async function POST(request: NextRequest) {
-    const ctx = await getAdminContext();
+    const ctx = await getAdminContextCached();
     if (!ctx.ok) {
         return NextResponse.json(
             { error: ctx.status === 401 ? "Unauthorized" : "Forbidden" },
@@ -176,6 +183,8 @@ export async function POST(request: NextRequest) {
         }
         return NextResponse.json({ error: error.message }, { status: 400 });
     }
+
+    revalidateEffectiveStatusDefinitionsCache(ctx.orgId);
 
     return NextResponse.json(created);
 }

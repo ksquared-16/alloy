@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><title>08 — Collection Renderer</title><link rel="stylesheet" href="_shared.css"></head>
+<body>
+<div class="mockup-frame">
+  <div class="mockup-label">08 — Collection Renderer <span class="sub">Children / Invoices as Collection&lt;T&gt; · per-item slot template = bindings one level down</span></div>
+  <div class="stage">
+    <div class="split" style="grid-template-columns:1.3fr 1fr;">
+      <div class="panel">
+        <div class="panel-head"><div class="panel-title">Children</div><div class="panel-sub">Collection&lt;Child&gt; · Table renderer</div></div>
+        <div style="padding:0 0 8px;">
+          <table class="coll-table">
+            <thead><tr>
+              <th>Name<span class="col-binding">Child → Name · Text</span></th>
+              <th>Current Room<span class="col-binding">Child → Current Room · Text</span></th>
+              <th>Status<span class="col-binding">Child → Enrollment Status · Status</span></th>
+            </tr></thead>
+            <tbody>
+              <tr><td>Ava Hayes</td><td>Sunflower</td><td><span class="status-pill">Enrolled</span></td></tr>
+              <tr><td>Liam Hayes</td><td>Tulip</td><td><span class="status-pill warn">Waitlisted</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <div class="panel">
+        <div class="panel-head"><div class="panel-title">Per-item slot template</div></div>
+        <div style="padding:16px;">
+          <p style="font-size:12px;color:var(--midnight-70);line-height:1.6;margin-bottom:12px;">A collection renderer accepts <strong>Collection&lt;Child&gt;</strong> and declares a <strong>per-item template</strong> — each column is itself a Binding over the <em>item's</em> references, validated by the same renderer contracts.</p>
+          <div class="section-label">Columns (each a binding)</div>
+          <div class="b-item selected"><span class="nm">Name</span><span class="tp">Text</span></div>
+          <div class="b-item"><span class="nm">Current Room</span><span class="tp">Text</span></div>
+          <div class="b-item"><span class="nm">Status</span><span class="tp">Status</span></div>
+          <div class="add-cond" style="padding:8px 10px;">＋ Add column</div>
+          <div class="bp-owned" style="margin-top:10px;">Other collection renderers accept the same shape: <b>List</b> (primary/secondary line), <b>Timeline</b> (items with a Date), <b>Relationship Card</b>.</div>
+        </div>
+      </div>
+    </div>
+    <div class="center-note">Collections reuse the <strong>same binding machinery</strong>, one level down — a collection is a surface-within-a-slot. Invoices, Tasks, Payments, Communications, Documents and Activities all bind the same way.</div>
+  </div>
+</div>
+</body></html>

@@ -1,0 +1,517 @@
+"use client";
+
+import { forwardRef, useEffect, useImperativeHandle, useMemo, useState } from "react";
+import {
+    BUSINESS_PROCESS_SECTION_ATTENTION,
+    BUSINESS_PROCESS_SECTION_PURPOSE,
+} from "@/lib/lifecycle/businessProcessUiLabels";
+import {
+    newOutcomeDraft,
+    newWorkTemplateDraft,
+    stageOperatingPlanDraftDirty,
+    stageOperatingPlanDraftFromSaved,
+    stageOperatingPlanDraftToPersisted,
+    type StageOperatingPlanEditorDraft,
+} from "@/lib/lifecycle/stageOperatingPlanEditorModel";
+import {
+    outcomesForWorkTemplate,
+    resolveEffectivePrimaryWorkTemplate,
+    setPrimaryWorkTemplate,
+    unattachedStageOutcomes,
+} from "@/lib/lifecycle/stageOperatingPlanConvergence";
+import type { StageOperatingPlanV1 } from "@/lib/lifecycle/stageOperatingPlanV1";
+import { STAGE_JOURNEY_SEGMENT_LABELS } from "@/lib/lifecycle/stageOperatingPlanUiLabels";
+import LifecycleStageAttentionRulesEditor from "@/components/adminV2/settings/lifecycle/LifecycleStageAttentionRulesEditor";
+import LifecycleStageWorkCompletionPolicyEditor from "@/components/adminV2/settings/lifecycle/LifecycleStageWorkCompletionPolicyEditor";
+import LifecycleStageOutcomeAutomationEditor from "@/components/adminV2/settings/lifecycle/LifecycleStageOutcomeAutomationEditor";
+
+export type LifecycleStageOperatingPlanEditorHandle = {
+    getDraftPlan: () => StageOperatingPlanV1 | null;
+    isDirty: () => boolean;
+};
+
+type Props = {
+    stageKey: string;
+    stageLabel?: string;
+    savedPlan: StageOperatingPlanV1 | null;
+    onDirtyChange?: (dirty: boolean) => void;
+};
+
+function dueDaysFromPolicy(work: StageOperatingPlanEditorDraft["work_templates"][number]): number {
+    return work.due_policy.kind === "same_day" ? 0 : work.due_policy.days ?? 1;
+}
+
+const LifecycleStageOperatingPlanEditor = forwardRef<
+    LifecycleStageOperatingPlanEditorHandle,
+    Props
+>(function LifecycleStageOperatingPlanEditor({ stageKey, stageLabel, savedPlan, onDirtyChange }, ref) {
+    const [draft, setDraft] = useState<StageOperatingPlanEditorDraft>(() =>
+        stageOperatingPlanDraftFromSaved(savedPlan, stageKey),
+    );
+    const [selectedWorkKey, setSelectedWorkKey] = useState<string | null>(null);
+
+    useEffect(() => {
+        setDraft(stageOperatingPlanDraftFromSaved(savedPlan, stageKey));
+    }, [savedPlan, stageKey]);
+
+    useEffect(() => {
+        if (!draft.work_templates.length) {
+            setSelectedWorkKey(null);
+            return;
+        }
+        if (selectedWorkKey && !draft.work_templates.some((work) => work.template_key === selectedWorkKey)) {
+            setSelectedWorkKey(null);
+        }
+    }, [draft.work_templates, selectedWorkKey]);
+
+    const dirty = useMemo(
+        () => stageOperatingPlanDraftDirty(savedPlan, draft, stageKey),
+        [savedPlan, draft, stageKey],
+    );
+
+    useEffect(() => {
+        onDirtyChange?.(dirty);
+    }, [dirty, onDirtyChange]);
+
+    useImperativeHandle(
+        ref,
+        () => ({
+            getDraftPlan: () => stageOperatingPlanDraftToPersisted(draft, stageKey),
+            isDirty: () => dirty,
+        }),
+        [draft, dirty, stageKey],
+    );
+
+    const primaryWork = resolveEffectivePrimaryWorkTemplate({ work_templates: draft.work_templates });
+    const legacyOutcomes = unattachedStageOutcomes(draft.outcomes);
+
+    return (
+        <div className="space-y-4" data-testid="lifecycle-stage-operating-plan-editor">
+            <p className="text-[11px] text-alloy-midnight/55">
+                Configure work items, outcomes, and attention for this stage. Primary work drives Work Intent
+                runtime when saved.
+            </p>
+
+            <label className="block space-y-1">
+                <span className="text-[11px] font-medium text-alloy-midnight/70">{BUSINESS_PROCESS_SECTION_PURPOSE}</span>
+                <textarea
+                    className="min-h-[52px] w-full rounded-md border border-alloy-forge/20 bg-white px-2 py-1.5 text-xs"
+                    value={draft.purpose}
+                    onChange={(e) => setDraft((prev) => ({ ...prev, purpose: e.target.value }))}
+                    data-testid="stage-operating-plan-purpose"
+                />
+            </label>
+
+            <label className="block space-y-1">
+                <span className="text-[11px] font-medium text-alloy-midnight/70">Journey</span>
+                <select
+                    className="w-full rounded-md border border-alloy-forge/20 bg-white px-2 py-1.5 text-xs"
+                    value={draft.journey_segment}
+                    onChange={(e) =>
+                        setDraft((prev) => ({
+                            ...prev,
+                            journey_segment: e.target.value as "family" | "child",
+                        }))
+                    }
+                    data-testid="stage-operating-plan-journey"
+                >
+                    <option value="family">{STAGE_JOURNEY_SEGMENT_LABELS.family}</option>
+                    <option value="child">{STAGE_JOURNEY_SEGMENT_LABELS.child}</option>
+                </select>
+            </label>
+
+            <div
+                className="rounded-lg border border-alloy-forge/10 bg-white"
+                data-testid="stage-operating-plan-work-section"
+            >
+                <details className="group" data-testid="stage-operating-plan-work-items-collapsible">
+                    <summary className="flex cursor-pointer list-none items-center justify-between gap-2 px-3 py-2 [&::-webkit-details-marker]:hidden">
+                        <span className="text-[11px] font-semibold text-alloy-midnight/75">
+                            Work items ({draft.work_templates.length})
+                        </span>
+                        <span className="text-[10px] text-alloy-midnight/40 group-open:rotate-90">›</span>
+                    </summary>
+                    <div className="border-t border-alloy-forge/8 px-3 pb-3 pt-2">
+            <div className="flex min-h-[14rem] flex-col gap-3 lg:flex-row" data-testid="stage-operating-plan-queue-workspace">
+                <aside className="w-full shrink-0 space-y-2 lg:w-44" data-testid="stage-operating-plan-work-queue">
+                    <div className="flex items-center justify-between gap-2">
+                        <span className="text-[11px] font-semibold text-alloy-midnight/75">Work items</span>
+                        <button
+                            type="button"
+                            className="text-[10px] font-medium text-alloy-pine"
+                            onClick={() =>
+                                setDraft((prev) => {
+                                    const next = newWorkTemplateDraft(prev.work_templates.length);
+                                    setSelectedWorkKey(next.template_key);
+                                    return {
+                                        ...prev,
+                                        work_templates: [...prev.work_templates, next],
+                                    };
+                                })
+                            }
+                            data-testid="stage-operating-plan-add-work"
+                        >
+                            + Add
+                        </button>
+                    </div>
+                    <div className="space-y-1.5">
+                        {draft.work_templates.map((work) => {
+                            const active = work.template_key === selectedWorkKey;
+                            return (
+                                <button
+                                    key={work.template_key}
+                                    type="button"
+                                    onClick={() => setSelectedWorkKey(work.template_key)}
+                                    className={`process-config-work-view-list-card !py-2 ${active ? "process-config-work-view-list-card--active" : ""}`}
+                                    data-testid={`stage-operating-plan-work-queue-${work.template_key}`}
+                                >
+                                    <p className="truncate text-left text-xs font-semibold text-alloy-midnight">
+                                        {work.label.trim() || "Untitled work item"}
+                                    </p>
+                                </button>
+                            );
+                        })}
+                        {!draft.work_templates.length ?
+                            <p className="text-xs text-alloy-midnight/50">No work items yet.</p>
+                        :   null}
+                    </div>
+                </aside>
+
+                <div className="min-w-0 flex-1 space-y-3" data-testid="stage-operating-plan-work-workspace">
+                {draft.work_templates.map((work, index) => {
+                        if (work.template_key !== selectedWorkKey) return null;
+                        const workOutcomes = outcomesForWorkTemplate(draft.outcomes, work.template_key);
+                        const isPrimary =
+                            work.primary === true ||
+                            (primaryWork?.template_key === work.template_key && !draft.work_templates.some((w) => w.primary));
+
+                        return (
+                            <div
+                                key={work.template_key}
+                                className="rounded-xl border border-alloy-forge/12 bg-white p-3"
+                                data-testid={`stage-operating-plan-work-${work.template_key}`}
+                            >
+                                <div className="mb-2 flex flex-wrap items-center gap-2">
+                                    <input
+                                        className="min-w-0 flex-1 rounded border border-alloy-forge/15 px-2 py-1 text-xs font-medium"
+                                        value={work.label}
+                                        placeholder="Work item name"
+                                        onChange={(e) =>
+                                            setDraft((prev) => {
+                                                const work_templates = [...prev.work_templates];
+                                                work_templates[index] = { ...work, label: e.target.value };
+                                                return { ...prev, work_templates };
+                                            })
+                                        }
+                                    />
+                                    <label className="flex items-center gap-1 rounded-full border border-alloy-forge/15 px-2 py-0.5 text-[10px]">
+                                        <input
+                                            type="radio"
+                                            name="primary-work-item"
+                                            checked={isPrimary}
+                                            onChange={() =>
+                                                setDraft((prev) => ({
+                                                    ...prev,
+                                                    work_templates: setPrimaryWorkTemplate(
+                                                        prev.work_templates,
+                                                        work.template_key,
+                                                    ),
+                                                }))
+                                            }
+                                            data-testid={`stage-operating-plan-primary-${work.template_key}`}
+                                        />
+                                        Primary
+                                    </label>
+                                    {isPrimary ?
+                                        <span className="rounded-full bg-alloy-pine/10 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-alloy-pine">
+                                            Work Intent driver
+                                        </span>
+                                    :   null}
+                                </div>
+
+                                <textarea
+                                    className="mb-2 min-h-[40px] w-full rounded border border-alloy-forge/15 px-2 py-1 text-xs"
+                                    value={work.description ?? ""}
+                                    placeholder="Description (what staff should accomplish)"
+                                    onChange={(e) =>
+                                        setDraft((prev) => {
+                                            const work_templates = [...prev.work_templates];
+                                            work_templates[index] = {
+                                                ...work,
+                                                description: e.target.value,
+                                            };
+                                            return { ...prev, work_templates };
+                                        })
+                                    }
+                                />
+
+                                <div className="flex flex-wrap items-center gap-3 text-[10px] text-alloy-midnight/65">
+                                    <label className="flex items-center gap-1">
+                                        <input
+                                            type="checkbox"
+                                            checked={work.required}
+                                            onChange={(e) =>
+                                                setDraft((prev) => {
+                                                    const work_templates = [...prev.work_templates];
+                                                    work_templates[index] = {
+                                                        ...work,
+                                                        required: e.target.checked,
+                                                    };
+                                                    return { ...prev, work_templates };
+                                                })
+                                            }
+                                        />
+                                        Required
+                                    </label>
+                                    <label className="flex items-center gap-1">
+                                        Due
+                                        <input
+                                            type="number"
+                                            min={0}
+                                            className="w-12 rounded border border-alloy-forge/15 px-1 py-0.5"
+                                            value={dueDaysFromPolicy(work)}
+                                            onChange={(e) => {
+                                                const days = Math.max(0, Number(e.target.value) || 0);
+                                                setDraft((prev) => {
+                                                    const work_templates = [...prev.work_templates];
+                                                    work_templates[index] = {
+                                                        ...work,
+                                                        due_policy:
+                                                            days === 0
+                                                                ? { kind: "same_day" }
+                                                                : { kind: "offset_days", days },
+                                                    };
+                                                    return { ...prev, work_templates };
+                                                });
+                                            }}
+                                        />
+                                        days
+                                    </label>
+                                    <button
+                                        type="button"
+                                        className="text-red-700/80"
+                                        onClick={() =>
+                                            setDraft((prev) => ({
+                                                ...prev,
+                                                work_templates: prev.work_templates.filter((_, i) => i !== index),
+                                                outcomes: prev.outcomes.filter(
+                                                    (o) => o.work_template_key !== work.template_key,
+                                                ),
+                                                outcome_rules: prev.outcome_rules.filter((r) => {
+                                                    const outcome = prev.outcomes.find(
+                                                        (o) => o.outcome_key === r.when_outcome_key,
+                                                    );
+                                                    return outcome?.work_template_key !== work.template_key;
+                                                }),
+                                            }))
+                                        }
+                                    >
+                                        Remove work item
+                                    </button>
+                                </div>
+
+                                <LifecycleStageWorkCompletionPolicyEditor
+                                    policy={work.completion_policy}
+                                    testIdPrefix={`stage-operating-plan-work-${work.template_key}`}
+                                    onChange={(completion_policy) =>
+                                        setDraft((prev) => {
+                                            const work_templates = [...prev.work_templates];
+                                            const next = { ...work, completion_policy };
+                                            if (!completion_policy) delete next.completion_policy;
+                                            work_templates[index] = next;
+                                            return { ...prev, work_templates };
+                                        })
+                                    }
+                                />
+
+                                <div className="mt-3 border-t border-alloy-forge/10 pt-2">
+                                    <details className="group" data-testid={`stage-operating-plan-outcomes-${work.template_key}`}>
+                                        <summary className="flex cursor-pointer list-none items-center justify-between gap-2 py-1 [&::-webkit-details-marker]:hidden">
+                                            <span className="text-[10px] font-semibold text-alloy-midnight/70">
+                                                Outcomes ({workOutcomes.length})
+                                            </span>
+                                            <span className="text-[10px] text-alloy-midnight/40 group-open:rotate-90">›</span>
+                                        </summary>
+                                        <div className="pt-2">
+                                    <div className="mb-1 flex items-center justify-end gap-2">
+                                        <button
+                                            type="button"
+                                            className="text-[10px] font-medium text-alloy-pine"
+                                            onClick={() =>
+                                                setDraft((prev) => ({
+                                                    ...prev,
+                                                    outcomes: [
+                                                        ...prev.outcomes,
+                                                        newOutcomeDraft(prev.outcomes.length, {
+                                                            work_template_key: work.template_key,
+                                                        }),
+                                                    ],
+                                                }))
+                                            }
+                                        >
+                                            + Add outcome
+                                        </button>
+                                    </div>
+                                    <ul className="space-y-1.5">
+                                        {workOutcomes.map((outcome) => {
+                                            const outcomeIndex = draft.outcomes.findIndex(
+                                                (o) => o.outcome_key === outcome.outcome_key,
+                                            );
+                                            return (
+                                                <li
+                                                    key={outcome.outcome_key}
+                                                    className="rounded border border-alloy-forge/10 bg-white/80 px-2 py-1.5"
+                                                    data-testid={`stage-operating-plan-outcome-${outcome.outcome_key}`}
+                                                >
+                                                    <div className="flex flex-wrap items-center gap-2">
+                                                        <input
+                                                            className="min-w-0 flex-1 rounded border border-alloy-forge/15 px-2 py-1 text-xs"
+                                                            value={outcome.label}
+                                                            onChange={(e) =>
+                                                                setDraft((prev) => {
+                                                                    const outcomes = [...prev.outcomes];
+                                                                    outcomes[outcomeIndex] = {
+                                                                        ...outcome,
+                                                                        label: e.target.value,
+                                                                    };
+                                                                    return { ...prev, outcomes };
+                                                                })
+                                                            }
+                                                        />
+                                                        <label className="flex items-center gap-1 text-[10px] text-alloy-midnight/65">
+                                                            <input
+                                                                type="checkbox"
+                                                                checked={Boolean(outcome.successful)}
+                                                                onChange={(e) =>
+                                                                    setDraft((prev) => {
+                                                                        const outcomes = [...prev.outcomes];
+                                                                        const next = { ...outcome };
+                                                                        if (e.target.checked) next.successful = true;
+                                                                        else delete next.successful;
+                                                                        outcomes[outcomeIndex] = next;
+                                                                        return { ...prev, outcomes };
+                                                                    })
+                                                                }
+                                                            />
+                                                            Success
+                                                        </label>
+                                                        <button
+                                                            type="button"
+                                                            className="text-[10px] text-red-700/80"
+                                                            onClick={() =>
+                                                                setDraft((prev) => ({
+                                                                    ...prev,
+                                                                    outcomes: prev.outcomes.filter(
+                                                                        (o) => o.outcome_key !== outcome.outcome_key,
+                                                                    ),
+                                                                    outcome_rules: prev.outcome_rules.filter(
+                                                                        (r) => r.when_outcome_key !== outcome.outcome_key,
+                                                                    ),
+                                                                }))
+                                                            }
+                                                        >
+                                                            Remove
+                                                        </button>
+                                                    </div>
+                                                    <LifecycleStageOutcomeAutomationEditor
+                                                        outcomeKey={outcome.outcome_key}
+                                                        outcomeLabel={outcome.label}
+                                                        rules={draft.outcome_rules}
+                                                        workTemplates={draft.work_templates}
+                                                        defaultRepeatTemplateKey={work.template_key}
+                                                        onRulesChange={(outcome_rules) =>
+                                                            setDraft((prev) => ({ ...prev, outcome_rules }))
+                                                        }
+                                                    />
+                                                </li>
+                                            );
+                                        })}
+                                        {!workOutcomes.length ?
+                                            <li className="text-[10px] text-alloy-midnight/45">No outcomes yet.</li>
+                                        :   null}
+                                    </ul>
+                                        </div>
+                                    </details>
+                                </div>
+                            </div>
+                        );
+                    })}
+                {!selectedWorkKey ?
+                    <p className="text-sm text-alloy-midnight/50">Select a work item to configure purpose, timing, and outcomes.</p>
+                :   null}
+                </div>
+                    </div>
+                    </div>
+                </details>
+            </div>
+
+            {legacyOutcomes.length ?
+                <div className="space-y-1.5 rounded-md border border-dashed border-alloy-forge/15 p-2">
+                    <span className="text-[11px] font-semibold text-alloy-midnight/75">
+                        Stage-level outcomes (legacy)
+                    </span>
+                    <p className="text-[10px] text-alloy-midnight/50">
+                        These outcomes are not attached to a work item. Runtime still reads them from the stage
+                        plan.
+                    </p>
+                    <ul className="space-y-1">
+                        {legacyOutcomes.map((outcome) => {
+                            const outcomeIndex = draft.outcomes.findIndex(
+                                (o) => o.outcome_key === outcome.outcome_key,
+                            );
+                            return (
+                                <li key={outcome.outcome_key} className="rounded border border-alloy-forge/10 px-2 py-1.5">
+                                    <input
+                                        className="mb-2 min-w-0 w-full rounded border border-alloy-forge/15 px-2 py-1 text-xs"
+                                        value={outcome.label}
+                                        onChange={(e) =>
+                                            setDraft((prev) => {
+                                                const outcomes = [...prev.outcomes];
+                                                outcomes[outcomeIndex] = { ...outcome, label: e.target.value };
+                                                return { ...prev, outcomes };
+                                            })
+                                        }
+                                    />
+                                    <LifecycleStageOutcomeAutomationEditor
+                                        outcomeKey={outcome.outcome_key}
+                                        outcomeLabel={outcome.label}
+                                        rules={draft.outcome_rules}
+                                        workTemplates={draft.work_templates}
+                                        onRulesChange={(outcome_rules) =>
+                                            setDraft((prev) => ({ ...prev, outcome_rules }))
+                                        }
+                                    />
+                                </li>
+                            );
+                        })}
+                    </ul>
+                </div>
+            :   null}
+
+            <div
+                className="rounded-lg border border-alloy-forge/10 bg-white"
+                data-testid="stage-operating-plan-attention-section"
+            >
+                <details className="group" data-testid="stage-operating-plan-attention-collapsible">
+                    <summary className="flex cursor-pointer list-none items-center justify-between gap-2 px-3 py-2 [&::-webkit-details-marker]:hidden">
+                        <span className="text-[11px] font-semibold text-alloy-midnight/75">
+                            {BUSINESS_PROCESS_SECTION_ATTENTION} ({draft.attention_rules.length})
+                        </span>
+                        <span className="text-[10px] text-alloy-midnight/40 group-open:rotate-90">›</span>
+                    </summary>
+                    <div className="border-t border-alloy-forge/8 px-3 pb-3 pt-2">
+                        <LifecycleStageAttentionRulesEditor
+                            rules={draft.attention_rules}
+                            workTemplates={draft.work_templates}
+                            onChange={(attention_rules) => setDraft((prev) => ({ ...prev, attention_rules }))}
+                            stageLabel={stageLabel?.trim() || stageKey}
+                            layout="queue_workspace"
+                        />
+                    </div>
+                </details>
+            </div>
+        </div>
+    );
+});
+
+export default LifecycleStageOperatingPlanEditor;

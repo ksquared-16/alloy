@@ -1,34 +1,46 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
-import { getAdminContext } from "@/lib/admin/getAdminContext";
+import { getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { logAdminAudit } from "@/lib/adminAuth";
+import { apiOk, apiError } from "@/lib/api/apiResponse";
 
 const ALLOWED_PATCH_KEYS = ["label", "description", "sort_order", "is_active"] as const;
+
+/**
+ * Update / delete a single person relationship type setting.
+ *
+ * Phase 2F contract (migrated): every response uses the standard envelope
+ * (`apiOk` / `apiError`); PATCH success is `{ ok, data: { item } }`. HTTP status
+ * codes are preserved (DELETE remains 405). @see docs/api/api-response-contract.md
+ */
 
 /** PATCH: update person_relationship_type_setting. Admin only. System types: key not editable. */
 export async function PATCH(
     request: NextRequest,
     context: { params: Promise<{ id: string }> }
 ) {
-    const ctx = await getAdminContext();
+    const ctx = await getAdminContextCached();
     if (!ctx.ok) {
-        return NextResponse.json(
-            { error: ctx.status === 401 ? "Unauthorized" : "Forbidden" },
-            { status: ctx.status }
+        return apiError(
+            ctx.status === 401 ? "UNAUTHORIZED" : "FORBIDDEN",
+            ctx.status === 401 ? "Unauthorized" : "Forbidden",
+            ctx.status,
+            undefined,
+            { request }
         );
     }
     if (ctx.role !== "admin") {
-        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+        return apiError("FORBIDDEN", "Forbidden", 403, undefined, { request });
     }
 
     const { id } = await context.params;
-    if (!id) return NextResponse.json({ error: "Missing id" }, { status: 400 });
+    if (!id) return apiError("BAD_REQUEST", "Missing id", 400, undefined, { request });
 
     let body: Record<string, unknown> = {};
     try {
         body = (await request.json()) as Record<string, unknown>;
     } catch {
-        return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
+        return apiError("BAD_REQUEST", "Invalid JSON", 400, undefined, { request });
     }
 
     const supabase = createAdminClient();
@@ -40,7 +52,7 @@ export async function PATCH(
         .maybeSingle();
 
     if (fetchErr || !existing) {
-        return NextResponse.json({ error: "Relationship type not found" }, { status: 404 });
+        return apiError("NOT_FOUND", "Relationship type not found", 404, undefined, { request });
     }
 
     const updates: Record<string, unknown> = {};
@@ -66,7 +78,7 @@ export async function PATCH(
     }
 
     if (Object.keys(updates).length === 0) {
-        return NextResponse.json({ error: "No allowed fields to update" }, { status: 400 });
+        return apiError("BAD_REQUEST", "No allowed fields to update", 400, undefined, { request });
     }
 
     const { data: updated, error: updateErr } = await supabase
@@ -78,10 +90,10 @@ export async function PATCH(
         .single();
 
     if (updateErr) {
-        return NextResponse.json({ error: updateErr.message }, { status: 400 });
+        return apiError("BAD_REQUEST", updateErr.message, 400, undefined, { request });
     }
     if (!updated) {
-        return NextResponse.json({ error: "Not found" }, { status: 404 });
+        return apiError("NOT_FOUND", "Not found", 404, undefined, { request });
     }
 
     logAdminAudit({
@@ -92,13 +104,14 @@ export async function PATCH(
         role: ctx.role,
     });
 
-    return NextResponse.json(updated);
+    return apiOk({ item: updated }, { request });
 }
 
 /** DELETE: not implemented. Use is_active=false to deactivate. Records may reference key in person_relationships.relationship_type. */
 export async function DELETE() {
-    return NextResponse.json(
-        { error: "Delete not supported. Set is_active to false to deactivate." },
-        { status: 405 }
+    return apiError(
+        "NOT_IMPLEMENTED",
+        "Delete not supported. Set is_active to false to deactivate.",
+        405
     );
 }

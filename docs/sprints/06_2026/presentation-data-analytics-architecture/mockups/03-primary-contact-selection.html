@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><title>03 — Selection Rule (to-many)</title><link rel="stylesheet" href="_shared.css"></head>
+<body>
+<div class="mockup-frame">
+  <div class="mockup-label">03 — To-many Selection Rule <span class="sub">Children → Current Room · a to-many → scalar reference needs a selection rule</span></div>
+  <div class="stage">
+    <div class="split">
+      <div class="panel">
+        <div class="panel-head"><div class="panel-title">Enrollment → Children → Current Room</div><div class="panel-sub">to-many → field · choose how to resolve</div></div>
+        <div style="padding:16px;">
+          <div class="hop-trail">
+            <span class="hop entity">▦ Enrollment</span><span class="hop-arrow">→</span>
+            <span class="hop entity">🧒 Children <span class="cardinality">∞</span></span><span class="hop-arrow">→</span>
+            <span class="hop leaf">Current Room</span>
+          </div>
+          <div class="section-label">Selection rule (required)</div>
+          <div class="rule-opt"><span class="rule-radio"></span><span><span class="rd">First / Primary</span></span><span class="rx">→ "Sunflower"</span></div>
+          <div class="rule-opt selected"><span class="rule-radio"></span><span><span class="rd">Each (list)</span></span><span class="rx">→ "Sunflower, Tulip"</span></div>
+          <div class="rule-opt"><span class="rule-radio"></span><span><span class="rd">Aggregate</span></span><span class="rx">→ count / any / all</span></div>
+          <div class="readback" style="margin-top:6px;">Resolves <b>one value per child</b> → renders as a small inline list.</div>
+        </div>
+      </div>
+      <div class="panel">
+        <div class="panel-head"><div class="panel-title">Why a rule is required</div></div>
+        <div style="padding:16px;font-size:13px;color:var(--midnight-70);line-height:1.6;">
+          <p style="margin-bottom:12px;">A <strong>to-many relationship</strong> (Children) traversed to a <strong>scalar field</strong> (Current Room) is ambiguous — which child's room?</p>
+          <div class="kv"><span class="k">Show the set instead?</span><span class="v">→ Collection renderer</span></div>
+          <div class="kv"><span class="k">First / Primary</span><span class="v">eldest child's room</span></div>
+          <div class="kv"><span class="k">Each (list)</span><span class="v">value per child</span></div>
+          <div class="kv"><span class="k">Aggregate</span><span class="v">count, any, all</span></div>
+          <p style="margin-top:14px;font-size:12px;color:var(--midnight-46);">Without a selection rule, the reference is <strong>invalid</strong>. The rule becomes part of the Data Reference — so the value is unambiguous everywhere it's used.</p>
+        </div>
+      </div>
+    </div>
+    <div class="center-note">When a to-many role resolves to a single value, Alloy forces an explicit choice. This prevents the silent "first row wins" ambiguity that plagues generic builders.</div>
+  </div>
+</div>
+</body></html>

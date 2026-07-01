@@ -1,0 +1,237 @@
+"use client";
+
+import type { DepartmentWorkspaceLayout, WorkspaceRuntimeData } from "@/lib/workspace/types";
+import { CANONICAL_OPERATOR_BASE } from "@/lib/admin/canonicalAdminRoutes";
+import { partitionDepartmentBlocks } from "@/lib/workspace/partitionBlocks";
+import { DepartmentWorkspaceBridgeShell } from "./DepartmentWorkspaceBridgeShell";
+import { ActionsBlock } from "./blocks/ActionsBlock";
+import { GrowthWorkspaceActions } from "./blocks/GrowthWorkspaceActions";
+import { AttentionBlock } from "./blocks/AttentionBlock";
+import { ContextBlock } from "./blocks/ContextBlock";
+import { ConfigSnapshotBlock } from "./blocks/ConfigSnapshotBlock";
+import { OpportunityAttentionLaneBlock } from "./blocks/OpportunityAttentionLaneBlock";
+import { KpiBlock } from "./blocks/KpiBlock";
+import { QueueBlock } from "./blocks/QueueBlock";
+import { SignalsBlock } from "./blocks/SignalsBlock";
+
+type Presentation = "flat" | "department_bridge";
+
+/**
+ * Renders a department workspace from `DepartmentWorkspaceLayout` + runtime data.
+ * `department_bridge` maps blocks into Admin V2 zones (control deck, throughput lane, rail).
+ */
+export function WorkspaceRenderer({
+    layout,
+    departmentId,
+    runtime,
+    presentation = "flat",
+    bridgeBriefTitle,
+    bridgeBriefSubtitle,
+    /** Base path for workspace routes (default: canonical `/workspace`). */
+    workspaceBasePath = CANONICAL_OPERATOR_BASE,
+}: {
+    layout: DepartmentWorkspaceLayout;
+    departmentId: string;
+    runtime: WorkspaceRuntimeData;
+    presentation?: Presentation;
+    /** Headline in the control deck top stack (e.g. department display name). */
+    bridgeBriefTitle?: string;
+    /** Subline under the briefing headline when `presentation="department_bridge"`. */
+    bridgeBriefSubtitle?: string;
+    workspaceBasePath?: string;
+}) {
+    if (presentation === "department_bridge") {
+        const parts = partitionDepartmentBlocks(layout.blocks);
+
+        const signalsSlot =
+            parts.signals.length > 0 ? (
+                <>
+                    {parts.signals.map((b) => (
+                        <SignalsBlock key={b.id} block={b} runtime={runtime} presentation="bridge" />
+                    ))}
+                </>
+            ) : null;
+
+        const kpiSlot =
+            parts.kpis.length > 0 ? (
+                <>
+                    {parts.kpis.map((b, i) => (
+                        <div key={b.id} style={i > 0 ? { marginTop: 8 } : undefined}>
+                            <KpiBlock block={b} runtime={runtime} presentation="bridge" />
+                        </div>
+                    ))}
+                </>
+            ) : null;
+
+        const throughputSlot =
+            parts.queues.length > 0 ? (
+                <>
+                    {parts.queues.map((b, i) => (
+                        <div key={b.id} style={i > 0 ? { marginTop: 16 } : undefined}>
+                            <QueueBlock
+                                block={b}
+                                departmentId={departmentId}
+                                runtime={runtime}
+                                presentation="bridge"
+                                workspaceBasePath={workspaceBasePath}
+                            />
+                        </div>
+                    ))}
+                </>
+            ) : (
+                <p className="text-sm px-1 py-3" style={{ color: "var(--d-muted)" }}>
+                    No queue blocks in this layout.
+                </p>
+            );
+
+        const attentionSlot =
+            parts.attentions.length > 0 || parts.opportunityAttentionLanes.length > 0 ? (
+                <>
+                    {parts.attentions.map((b) => (
+                        <AttentionBlock
+                            key={b.id}
+                            block={b}
+                            runtime={runtime}
+                            departmentId={departmentId}
+                            workspaceBasePath={workspaceBasePath}
+                            presentation="bridge"
+                        />
+                    ))}
+                    {parts.opportunityAttentionLanes.map((b) => (
+                        <OpportunityAttentionLaneBlock
+                            key={b.id}
+                            departmentId={departmentId}
+                            runtime={runtime}
+                            workspaceBasePath={workspaceBasePath}
+                            title={b.title}
+                            subtitle={b.subtitle}
+                        />
+                    ))}
+                </>
+            ) : null;
+
+        const contextSlot =
+            parts.contexts.length > 0 || parts.configSnapshots.length > 0 ? (
+                <>
+                    {parts.contexts.map((b) => (
+                        <ContextBlock key={b.id} block={b} presentation="bridge" />
+                    ))}
+                    {parts.configSnapshots.map((b) => (
+                        <div key={b.id} style={{ marginTop: 12 }}>
+                            <ConfigSnapshotBlock block={b} />
+                        </div>
+                    ))}
+                </>
+            ) : null;
+
+        const railSlot =
+            parts.actions.length > 0 || parts.growthWorkspaceActions.length > 0 ? (
+                <>
+                    {parts.actions.map((b) => (
+                        <ActionsBlock
+                            key={b.id}
+                            block={b}
+                            presentation="bridge"
+                            departmentId={departmentId}
+                            workspaceBasePath={workspaceBasePath}
+                        />
+                    ))}
+                    {parts.growthWorkspaceActions.map((b) => (
+                        <GrowthWorkspaceActions
+                            key={b.id}
+                            block={b}
+                            departmentId={departmentId}
+                            workspaceBasePath={workspaceBasePath}
+                            presentation="bridge"
+                        />
+                    ))}
+                </>
+            ) : null;
+
+        return (
+            <div data-workspace-renderer data-department-key={layout.department_key ?? "generic"} data-presentation="department_bridge">
+                <DepartmentWorkspaceBridgeShell
+                    departmentKey={layout.department_key}
+                    briefTitle={(bridgeBriefTitle ?? "Department workspace").trim() || "Department workspace"}
+                    briefSubtitle={bridgeBriefSubtitle}
+                    signalsSlot={signalsSlot}
+                    kpiSlot={kpiSlot}
+                    throughputSlot={throughputSlot}
+                    attentionSlot={attentionSlot}
+                    contextSlot={contextSlot}
+                    railSlot={railSlot}
+                />
+            </div>
+        );
+    }
+
+    return (
+        <div className="space-y-6" data-workspace-renderer data-department-key={layout.department_key ?? "generic"} data-presentation="flat">
+            {layout.blocks.map((block) => {
+                switch (block.type) {
+                    case "signals":
+                        return <SignalsBlock key={block.id} block={block} runtime={runtime} />;
+                    case "queue":
+                        return (
+                            <QueueBlock
+                                key={block.id}
+                                block={block}
+                                departmentId={departmentId}
+                                runtime={runtime}
+                                workspaceBasePath={workspaceBasePath}
+                            />
+                        );
+                    case "attention":
+                        return (
+                            <AttentionBlock
+                                key={block.id}
+                                block={block}
+                                runtime={runtime}
+                                departmentId={departmentId}
+                                workspaceBasePath={workspaceBasePath}
+                                presentation="flat"
+                            />
+                        );
+                    case "kpi":
+                        return <KpiBlock key={block.id} block={block} runtime={runtime} />;
+                    case "actions":
+                        return (
+                            <ActionsBlock
+                                key={block.id}
+                                block={block}
+                                departmentId={departmentId}
+                                workspaceBasePath={workspaceBasePath}
+                            />
+                        );
+                    case "growth_workspace_actions":
+                        return (
+                            <GrowthWorkspaceActions
+                                key={block.id}
+                                block={block}
+                                departmentId={departmentId}
+                                workspaceBasePath={workspaceBasePath}
+                                presentation="flat"
+                            />
+                        );
+                    case "context":
+                        return <ContextBlock key={block.id} block={block} />;
+                    case "config_snapshot":
+                        return <ConfigSnapshotBlock key={block.id} block={block} />;
+                    case "opportunity_attention_lane":
+                        return (
+                            <OpportunityAttentionLaneBlock
+                                key={block.id}
+                                departmentId={departmentId}
+                                runtime={runtime}
+                                workspaceBasePath={workspaceBasePath}
+                                title={block.title}
+                                subtitle={block.subtitle}
+                            />
+                        );
+                    default:
+                        return null;
+                }
+            })}
+        </div>
+    );
+}

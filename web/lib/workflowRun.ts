@@ -11,9 +11,17 @@ import {
     type VendorRow,
 } from "@/lib/admin/vendorPayoutPolicy";
 import { CANONICAL_SQFT_TIER_OPTIONS } from "@/lib/book-v2/loadCleaningPricingCatalog";
+import { attachCanonicalOpportunityIdentityToWorkflowPayload } from "@/lib/opportunityIdentity";
+import { OPPORTUNITY_CANONICAL_WORKFLOW_SELECT } from "@/lib/fields/canonicalEntitySelectColumns";
 import { getByPath, renderActionLinkMetadata, renderTemplate } from "@/lib/workflowTemplate";
 import { resolveJobStatusRowByOrgAndKey } from "@/lib/admin/jobEffectiveStatusKey";
 import { resolveScheduleStatusRowByKey } from "@/lib/admin/scheduleEffectiveStatusKey";
+import { isCommunicationCanonicalDualWriteEnabled } from "@/lib/communications/communicationsEnabled";
+import { enqueueCanonicalCommunicationMirror } from "@/lib/communications/mirrorQueuedMessage";
+import { logCommDualWrite, orgIdTail } from "@/lib/communications/mirrorObservation";
+import { assertWorkflowStatusMutationGrain } from "@/lib/admin/actions/resolveStatusMutationGrain";
+import { updateOpportunityCustomerMemberLifecycleStatus } from "@/lib/opportunities/updateOpportunityCustomerMemberLifecycleStatus";
+import { executeInstantiateWorkWorkflowAction } from "@/lib/admin/operationalWork/workflowInstantiateWork/executeInstantiateWorkWorkflowAction";
 
 /** Standard event payload shape; all entity keys optional. Do not crash if missing. */
 export type WorkflowEventPayload = {
@@ -22,6 +30,7 @@ export type WorkflowEventPayload = {
     org_id?: string | null;
     customer?: Record<string, unknown> | null;
     contact?: Record<string, unknown> | null;
+    person?: Record<string, unknown> | null;
     opportunity?: Record<string, unknown> | null;
     job?: Record<string, unknown> | null;
     schedule?: Record<string, unknown> | null;
@@ -192,6 +201,8 @@ const ENTITY_TABLES: Record<string, string> = {
     locations: "locations",
     assignment: "assignments",
     assignments: "assignments",
+    opportunity_customer_member: "opportunity_customer_members",
+    opportunity_customer_members: "opportunity_customer_members",
 };
 
 type ConditionRow = {
@@ -1273,10 +1284,18 @@ async function enrichWorkflowEventPayloadEntities(supabase: SupabaseClient, payl
     const oppIdFromPayload = existingOpp?.id != null ? String(existingOpp.id).trim() : "";
     const oppIdFromJob =
         jobForOpp?.opportunity_id != null ? String(jobForOpp.opportunity_id).trim() : "";
-    const oppId = oppIdFromPayload || oppIdFromJob;
+    let oppId = oppIdFromPayload || oppIdFromJob;
+
+    if (!oppId) {
+        const entityTypeRaw = p.entity_type != null ? String(p.entity_type).trim().toLowerCase() : "";
+        const entityIdRaw = p.entity_id != null ? String(p.entity_id).trim() : "";
+        if (entityIdRaw && (entityTypeRaw === "opportunities" || entityTypeRaw === "opportunity")) {
+            oppId = entityIdRaw;
+        }
+    }
 
     if (oppId) {
-        const { data: oFull } = await supabase.from("opportunities").select("*").eq("id", oppId).maybeSingle();
+        const { data: oFull } = await supabase.from("opportunities").select(OPPORTUNITY_CANONICAL_WORKFLOW_SELECT).eq("id", oppId).maybeSingle();
         if (oFull) {
             p.opportunity = { ...(existingOpp ?? {}), ...(oFull as Record<string, unknown>) };
         }
@@ -1443,7 +1462,10 @@ function validateWorkflowEventMatch(
                 return "event_type_mismatch";
             }
         }
-        if (payloadEventType === "entity_status_changed") {
+        if (
+            payloadEventType === "entity_status_changed" ||
+            payloadEventType === "opportunity_status_changed"
+        ) {
             const nested = payload.payload as Record<string, unknown> | null | undefined;
             const newStatusKey =
                 (payload.new_status_key != null ? String(payload.new_status_key) : null) ||
@@ -1462,7 +1484,7 @@ function validateWorkflowEventMatch(
 
 /**
  * Execute a workflow run: insert run row, evaluate conditions, execute actions.
- * Event payload should include event_type, occurred_at, org_id, and entity keys (customer, contact, job, schedule, opportunity, vendor) when available.
+ * Event payload should include event_type, occurred_at, org_id, and entity keys (customer, contact, job, schedule, opportunity, vendor, person) when available.
  * Optional options.event_id and options.org_id are set on the workflow_runs row when provided (e.g. from canonical event layer).
  */
 export async function executeWorkflowRun(
@@ -1477,6 +1499,7 @@ export async function executeWorkflowRun(
         org_id: (eventPayload.org_id as string) ?? null,
         customer: (eventPayload.customer as Record<string, unknown>) ?? null,
         contact: (eventPayload.contact as Record<string, unknown>) ?? null,
+        person: (eventPayload.person as Record<string, unknown>) ?? null,
         opportunity: (eventPayload.opportunity as Record<string, unknown>) ?? null,
         job: (eventPayload.job as Record<string, unknown>) ?? null,
         schedule: (eventPayload.schedule as Record<string, unknown>) ?? null,
@@ -1485,6 +1508,7 @@ export async function executeWorkflowRun(
     };
 
     await enrichWorkflowEventPayloadEntities(supabase, payload);
+    await attachCanonicalOpportunityIdentityToWorkflowPayload(supabase, payload as Record<string, unknown>);
     await enrichVendorPayload(supabase, payload);
 
     const { data: workflow, error: wErr } = await supabase
@@ -1733,6 +1757,65 @@ export async function executeWorkflowRun(
                         (payload as Record<string, unknown>)._last_workflow_message_id = newMsgId;
                         (payload as Record<string, unknown>)._last_workflow_message_channel = channel;
                     }
+                    if (isCommunicationCanonicalDualWriteEnabled()) {
+                        const orgForComm = String(
+                            (payload as Record<string, unknown>).org_id ?? options?.org_id ?? ""
+                        ).trim();
+                        const chanLower = channel.toLowerCase();
+                        if (!orgForComm) {
+                            logCommDualWrite({
+                                phase: "skip_create_message_mirror",
+                                reason: "no_org_id",
+                                workflow_run_id: runId,
+                                workflow_id: workflowId,
+                                channel,
+                                org_id_tail: null,
+                            });
+                        } else if (chanLower !== "sms" && chanLower !== "email") {
+                            logCommDualWrite({
+                                phase: "skip_create_message_mirror",
+                                reason: "channel_not_mirrored",
+                                workflow_run_id: runId,
+                                workflow_id: workflowId,
+                                channel,
+                                org_id_tail: orgIdTail(orgForComm),
+                            });
+                        } else {
+                            let mirrorPayload: Record<string, unknown> = payload as Record<string, unknown>;
+                            if (
+                                personIdForMeta &&
+                                (mirrorPayload.person == null ||
+                                    typeof mirrorPayload.person !== "object" ||
+                                    !String((mirrorPayload.person as Record<string, unknown>).id ?? "").trim())
+                            ) {
+                                mirrorPayload = {
+                                    ...mirrorPayload,
+                                    person: {
+                                        ...(typeof mirrorPayload.person === "object"
+                                            ? (mirrorPayload.person as Record<string, unknown>)
+                                            : {}),
+                                        id: personIdForMeta,
+                                    },
+                                };
+                            }
+                            void enqueueCanonicalCommunicationMirror({
+                                supabase,
+                                orgId: orgForComm,
+                                workflowRunId: runId,
+                                workflowId,
+                                channelRaw: channel,
+                                toRaw: toValue,
+                                bodyRaw: bodyText ?? "",
+                                payload: mirrorPayload,
+                                optionsOrgId: options?.org_id ?? null,
+                            }).catch((e) =>
+                                console.warn(
+                                    "[WORKFLOW_RUN] canonical communication mirror failed",
+                                    e instanceof Error ? e.message : e
+                                )
+                            );
+                        }
+                    }
                     console.log("[WORKFLOW_RUN] create_message_queued", {
                         workflow_id: workflowId,
                         workflow_run_id: runId,
@@ -1963,6 +2046,8 @@ export async function executeWorkflowRun(
                             });
                         }
                         const dedupeKey = `${workflowId}:${channel}:${recipient}:${templateKey}:${hashForRecipient}`;
+                        // LEGACY_COMPAT: messages_outbox.to_contact_id — required for compatibility with contact-keyed sends/dedupe.
+                        // Do not introduce new contact-only recipient models; prefer person-backed drawer recipients where implemented.
                         const row: Record<string, unknown> = {
                             org_id: orgId,
                             workflow_run_id: runId,
@@ -2073,6 +2158,54 @@ export async function executeWorkflowRun(
                     for (const k of Object.keys(patch)) {
                         const v = patch[k];
                         patchResolved[k] = typeof v === "string" ? renderTemplate(v, payload) : v;
+                    }
+
+                    const grainGuard = assertWorkflowStatusMutationGrain({
+                        entityType,
+                        patch: patchResolved,
+                        payload: payload && typeof payload === "object" ? (payload as Record<string, unknown>) : {},
+                    });
+                    if (!grainGuard.ok) {
+                        throw new Error(grainGuard.error);
+                    }
+
+                    if (
+                        table === "opportunity_customer_members" &&
+                        Object.prototype.hasOwnProperty.call(patchResolved, "outcome_status_key")
+                    ) {
+                        const { data: ocmRow, error: ocmLoadErr } = await supabase
+                            .from("opportunity_customer_members")
+                            .select("opportunity_id")
+                            .eq("id", entityId)
+                            .eq("org_id", orgIdResolved)
+                            .maybeSingle();
+                        if (ocmLoadErr) throw ocmLoadErr;
+                        if (!ocmRow) {
+                            throw new Error(
+                                `update_entity: opportunity_customer_members not found (id=${entityId}, org_id=${orgIdResolved})`
+                            );
+                        }
+                        const lifecycleResult = await updateOpportunityCustomerMemberLifecycleStatus({
+                            supabase,
+                            orgId: String(orgIdResolved),
+                            opportunityId: String((ocmRow as { opportunity_id: string }).opportunity_id),
+                            opportunityCustomerMemberId: entityId,
+                            nextStatusKey:
+                                patchResolved.outcome_status_key == null || patchResolved.outcome_status_key === ""
+                                    ? null
+                                    : String(patchResolved.outcome_status_key),
+                            source: "workflow:update_entity",
+                            metadata: {
+                                workflow_run_id: runId,
+                                row_grain: payload?.row_grain ?? null,
+                            },
+                        });
+                        if (lifecycleResult.error) {
+                            throw new Error(lifecycleResult.error.message);
+                        }
+                        actionOutputs = { updated: true, child_lifecycle: true };
+                        actionCompleted = true;
+                        break;
                     }
 
                     let patchToApply = patchResolved;
@@ -2334,6 +2467,32 @@ export async function executeWorkflowRun(
                     actionCompleted = true;
                     break;
                 }
+                case "instantiate_work": {
+                    const instantiateResult = await executeInstantiateWorkWorkflowAction({
+                        supabase,
+                        orgId: orgId ?? "",
+                        workflowId,
+                        workflowRunId: runId,
+                        eventId: options?.event_id ?? null,
+                        actionOrder: action.action_order ?? 0,
+                        workflowActionId: (action as { id?: string }).id ?? null,
+                        actionPayload: pl,
+                        workflowPayload: payload as Record<string, unknown>,
+                    });
+                    logs.push(instantiateResult.log);
+                    actionOutputs = instantiateResult.outputs;
+                    if (instantiateResult.status === "skipped") {
+                        actionSkipped = true;
+                        skipReason = instantiateResult.skipReason ?? "instantiate_work_skipped";
+                    } else {
+                        actionCompleted = true;
+                        const taskId = instantiateResult.outputs.task_id;
+                        if (taskId) {
+                            (payload as Record<string, unknown>)._last_instantiated_work_id = taskId;
+                        }
+                    }
+                    break;
+                }
                 default:
                     logs.push(`Unknown action_type: ${action.action_type}`);
                     actionSkipped = true;
@@ -2413,4 +2572,73 @@ export async function executeWorkflowRun(
             logs: logs.length > 0 ? logs : undefined,
         };
     }
+}
+
+/** Read-only condition row for Workflow Assist operational trace (mirrors `workflow_conditions`). */
+export type WorkflowConditionInspectRow = {
+    id?: string | null;
+    target_entity?: string | null;
+    field_path?: string | null;
+    field?: string | null;
+    operator?: string | null;
+    value?: unknown;
+    value_jsonb?: unknown;
+    enabled?: boolean | null;
+};
+
+export type WorkflowConditionInspectResult = {
+    condition_id: string;
+    target_entity: string | null;
+    field_path: string | null;
+    operator: string;
+    expected: unknown;
+    actual: unknown;
+    passed: boolean;
+    enabled: boolean;
+    eval_error: string | null;
+};
+
+/**
+ * Deterministic condition inspection using the same evaluation path as `executeWorkflowRun`.
+ * Read-only — does not mutate runs or workflows.
+ */
+export function inspectWorkflowConditions(
+    payload: Record<string, unknown>,
+    defaultEntityType: string | null,
+    conditions: WorkflowConditionInspectRow[]
+): WorkflowConditionInspectResult[] {
+    return conditions.map((c, index) => {
+        const enabled = c.enabled !== false;
+        const field_path = (c.field_path ?? c.field ?? "").trim() || null;
+        const operator = String(c.operator ?? "eq").trim().toLowerCase();
+        const condition_id = c.id != null && String(c.id).trim() ? String(c.id).trim() : `condition-${index}`;
+        try {
+            const actual = getConditionActual(payload, defaultEntityType, c);
+            const passed = evaluateCondition(payload, defaultEntityType, c);
+            const expected = c.value_jsonb !== undefined && c.value_jsonb !== null ? c.value_jsonb : c.value;
+            return {
+                condition_id,
+                target_entity: c.target_entity ?? defaultEntityType ?? null,
+                field_path,
+                operator,
+                expected,
+                actual,
+                passed,
+                enabled,
+                eval_error: null,
+            };
+        } catch (err) {
+            return {
+                condition_id,
+                target_entity: c.target_entity ?? defaultEntityType ?? null,
+                field_path,
+                operator,
+                expected: c.value_jsonb !== undefined && c.value_jsonb !== null ? c.value_jsonb : c.value,
+                actual: undefined,
+                passed: false,
+                enabled,
+                eval_error: err instanceof Error ? err.message : String(err),
+            };
+        }
+    });
 }

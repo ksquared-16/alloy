@@ -1,11 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
-import { getAdminContext } from "@/lib/admin/getAdminContext";
-import { displayLabelsFromDefinitions, fetchEffectiveStatusDefinitions } from "@/lib/admin/statusDefinitionsResolve";
+import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
+import { requireAdminOrOps } from "@/lib/adminAuth";
+import { emitEvent } from "@/lib/emitEvent";
+import { findOrCreateChildPersonInOrg } from "@/lib/admin/person/findOrCreateChildPersonInOrg";
 
 /** GET: list customer_members for org. Optional ?customer_id= filter. Admin + ops can read. */
 export async function GET(request: NextRequest) {
-    const ctx = await getAdminContext();
+    const ctx = await getAdminContextCached();
     if (!ctx.ok) {
         return NextResponse.json(
             { error: ctx.status === 401 ? "Unauthorized" : "Forbidden" },
@@ -14,20 +16,18 @@ export async function GET(request: NextRequest) {
     }
 
     const customerId = request.nextUrl.searchParams.get("customer_id")?.trim() || undefined;
-    const statusKey = request.nextUrl.searchParams.get("status_key")?.trim() || undefined;
     const supabase = createAdminClient();
 
     let query = supabase
         .from("customer_members")
-        .select("id, customer_id, display_name, relationship, first_name, last_name, dob, is_active, status_key, created_at, updated_at")
+        .select(
+            "id, customer_id, person_id, display_name, relationship, first_name, last_name, dob, is_active, created_at, updated_at"
+        )
         .eq("org_id", ctx.orgId)
         .order("created_at", { ascending: false });
 
     if (customerId) {
         query = query.eq("customer_id", customerId);
-    }
-    if (statusKey) {
-        query = query.eq("status_key", statusKey);
     }
 
     const { data: rows, error } = await query;
@@ -67,32 +67,23 @@ export async function GET(request: NextRequest) {
         return age >= 0 ? age : null;
     }
 
-    const memberDefs = await fetchEffectiveStatusDefinitions(supabase, ctx.orgId, "customer_members", { activeOnly: true });
-    const memberStatusLabels = displayLabelsFromDefinitions(memberDefs);
-
     const members = (rows ?? []).map((r) => {
         const id = (r as { id: string }).id;
         const relationshipKey = (r as { relationship: string | null }).relationship ?? null;
         const created_at = (r as { created_at: string }).created_at;
         const updated_at = (r as { updated_at?: string | null }).updated_at ?? null;
-        const sk = (r as { status_key?: string | null }).status_key ?? null;
-        const _status_display =
-            sk != null && String(sk).trim() !== ""
-                ? (memberStatusLabels.get(String(sk).trim()) ?? String(sk).trim())
-                : null;
         return {
             id,
             customer_id: (r as { customer_id: string }).customer_id,
+            person_id: (r as { person_id?: string | null }).person_id ?? null,
             display_name: (r as { display_name: string | null }).display_name ?? null,
             relationship: relationshipKey,
             first_name: (r as { first_name: string | null }).first_name ?? null,
             last_name: (r as { last_name: string | null }).last_name ?? null,
             dob: (r as { dob: string | null }).dob ?? null,
             is_active: (r as { is_active: boolean }).is_active ?? true,
-            status_key: sk,
             created_at,
             updated_at,
-            _status_display,
             _customer_name: customerMap.get((r as { customer_id: string }).customer_id) ?? null,
             _relationship_label: relationshipKey ? (relationshipMap.get(relationshipKey) ?? relationshipKey) : null,
             _age: ageFromDob((r as { dob: string | null }).dob),
@@ -104,17 +95,14 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ members });
 }
 
-/** POST: create customer_member. Admin only. */
+/** POST: create customer_member. Admin + ops can create (matches OCM link path). */
 export async function POST(request: NextRequest) {
-    const ctx = await getAdminContext();
+    const forbidden = await requireAdminOrOps();
+    if (forbidden) return forbidden;
+
+    const ctx = await getAdminContextCached();
     if (!ctx.ok) {
-        return NextResponse.json(
-            { error: ctx.status === 401 ? "Unauthorized" : "Forbidden" },
-            { status: ctx.status }
-        );
-    }
-    if (ctx.role !== "admin") {
-        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+        return adminContextFailureResponse(ctx);
     }
 
     let body: {
@@ -125,7 +113,6 @@ export async function POST(request: NextRequest) {
         last_name?: string;
         dob?: string | null;
         is_active?: boolean;
-        status_key?: string | null;
         metadata?: Record<string, unknown>;
     } = {};
     try {
@@ -157,26 +144,68 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: "Customer not found or not in your org" }, { status: 400 });
     }
 
-    const status_key = typeof body.status_key === "string" && body.status_key.trim() ? body.status_key.trim() : null;
+    const relationship =
+        typeof body.relationship === "string" ? body.relationship.trim().toLowerCase() || null : null;
+    const first_name = typeof body.first_name === "string" ? body.first_name.trim() || null : null;
+    const last_name = typeof body.last_name === "string" ? body.last_name.trim() || null : null;
+    const dob = typeof body.dob === "string" && body.dob.trim() ? body.dob.trim().slice(0, 10) : null;
+
+    let person_id: string | null = null;
+    if (relationship === "child" && first_name && last_name) {
+        const childPerson = await findOrCreateChildPersonInOrg(supabase, {
+            orgId: ctx.orgId,
+            customerId: customer_id,
+            firstName: first_name,
+            lastName: last_name,
+            dob,
+        });
+        person_id = childPerson?.person_id ?? null;
+        if (!person_id) {
+            return NextResponse.json(
+                { error: "Could not create or resolve child person identity." },
+                { status: 500 },
+            );
+        }
+    }
+
     const { data: inserted, error: insertErr } = await supabase
         .from("customer_members")
         .insert({
             org_id: ctx.orgId,
             customer_id,
             display_name,
-            relationship: typeof body.relationship === "string" ? body.relationship.trim() || null : null,
-            first_name: typeof body.first_name === "string" ? body.first_name.trim() || null : null,
-            last_name: typeof body.last_name === "string" ? body.last_name.trim() || null : null,
-            dob: typeof body.dob === "string" && body.dob.trim() ? body.dob.trim() : null,
+            relationship,
+            first_name,
+            last_name,
+            dob,
+            person_id,
             is_active: body.is_active !== false,
-            status_key,
             metadata: body.metadata && typeof body.metadata === "object" ? body.metadata : null,
         })
-        .select("id, customer_id, display_name, relationship, first_name, last_name, dob, is_active, status_key, created_at")
+        .select(
+            "id, customer_id, person_id, display_name, relationship, first_name, last_name, dob, is_active, created_at",
+        )
         .single();
 
     if (insertErr) {
         return NextResponse.json({ error: insertErr.message }, { status: 500 });
+    }
+
+    const ins = inserted as { id: string; customer_id: string; display_name?: string | null };
+    try {
+        await emitEvent({
+            org_id: ctx.orgId,
+            event_type: "customer_member_created",
+            entity_type: "customer_members",
+            entity_id: ins.id,
+            payload: {
+                customer_id: ins.customer_id,
+                display_name: ins.display_name ?? null,
+                actor_user_id: ctx.userId,
+            },
+        });
+    } catch (e) {
+        console.warn("[customer-members POST] emitEvent", e instanceof Error ? e.message : e);
     }
 
     return NextResponse.json(inserted);

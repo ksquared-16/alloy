@@ -1100,7 +1100,7 @@ export default function BookClient() {
 
                                         {/* First Cleaning - stacked vertically */}
                                         <div>
-                                            <p className="text-xs font-semibold text-alloy-midnight/60 uppercase tracking-wide mb-1">
+                                            <p className="text-xs font-semibold text-alloy-midnight/60 tracking-wide mb-1">
                                                 First Cleaning
                                             </p>
                                             {(() => {
@@ -1241,7 +1241,7 @@ export default function BookClient() {
                                                 </div>
                                             ) : (
                                                 <div className="space-y-2">
-                                                    <label className="text-xs font-semibold text-alloy-midnight/60 uppercase tracking-wide">
+                                                    <label className="text-xs font-semibold text-alloy-midnight/60 tracking-wide">
                                                         Discount Code
                                                     </label>
                                                     <div className="flex gap-2">
@@ -1295,7 +1295,7 @@ export default function BookClient() {
                                                 quote.frequency_label) {
                                                 return (
                                                     <div>
-                                                        <p className="text-xs font-semibold text-alloy-midnight/60 uppercase tracking-wide mb-1">
+                                                        <p className="text-xs font-semibold text-alloy-midnight/60 tracking-wide mb-1">
                                                             {quote.frequency_label.toUpperCase()} CLEANING
                                                             {quote.discount_label && (
                                                                 <span className="normal-case text-[11px] text-alloy-midnight/70 ml-1">
@@ -1320,7 +1320,7 @@ export default function BookClient() {
                                         {/* Add-ons - stacked vertically */}
                                         {quote.addons && quote.addons.length > 0 && (
                                             <div>
-                                                <p className="text-xs font-semibold text-alloy-midnight/60 uppercase tracking-wide mb-2">
+                                                <p className="text-xs font-semibold text-alloy-midnight/60 tracking-wide mb-2">
                                                     Add-ons
                                                 </p>
                                                 <div className="space-y-1.5">

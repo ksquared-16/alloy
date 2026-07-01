@@ -1,27 +1,58 @@
 # env files
 .env
+.env.*
+!.env.example
+!.env.local.example
 **/.env
+**/.env.*
+!**/.env.example
+!**/.env.local.example
 
-# python
+supabase/.temp/
+supabase/.branches/
+supabase/.temp/
+supabase/.branches/
+
+.venv/
+
+**/.venv/
+
+# Python
 __pycache__/
 *.pyc
+**/__pycache__/
+**/*.pyc
 
-# node
+# Node
 node_modules/
-.next/
-.vercel
-.env*.local
+**/node_modules/
 
-# local-only
-.env.local
+# Vercel
 .vercel/
+**/.vercel/
 
-__pycache__/
-*.pyc
-backend/.env
-web/.env.local
+web/.next/
 
-supabase/.temp/
-supabase/.branches/
-supabase/.temp/
-supabase/.branches/
+# Generated / cache
+*.tsbuildinfo
+.DS_Store
+web/test-results/
+
+# Local handoff artifacts
+*.bundle
+
+# Local SQL dumps / baselines at repo root only
+/*.sql
+
+# Communications WIP artifacts should live on comms/* branches, not staging
+/comunications_wip/
+/communications_wip/
+/UI*.md
+/THREAD_SEMANTICS.md
+/Messaging_*.md
+/SMS_*.md
+/comms-v2-*
+/communications-v2-*
+
+# Local scoped typecheck helper (not product code)
+web/tsconfig.poscheck.json

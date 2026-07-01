@@ -43,8 +43,8 @@ export function scheduleOverviewRelationshipReadLabel(
             if (!hasNonEmptyFk(record, "location_id") && !hasNonEmptyFk(record, "_location_id")) return undefined;
             return trimNonEmpty(record._location_label ?? record._location_name) ?? "";
         case "assigned_vendor_id":
-            if (!hasNonEmptyFk(record, "assigned_vendor_id")) return undefined;
-            return trimNonEmpty(record._assigned_vendor_name ?? record._vendor_name) ?? "";
+            if (!hasNonEmptyFk(record, "assigned_vendor_id")) return "Unassigned";
+            return trimNonEmpty(record._assigned_vendor_name ?? record._vendor_name) ?? "—";
         case "customer_subscription_id":
             if (!hasNonEmptyFk(record, "customer_subscription_id")) return undefined;
             return trimNonEmpty(record._customer_subscription_label) ?? "";

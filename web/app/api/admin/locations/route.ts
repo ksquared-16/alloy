@@ -1,11 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
-import { getAdminContext } from "@/lib/admin/getAdminContext";
+import { getAdminContextCached } from "@/lib/admin/getAdminContext";
+import {
+    enrichHierarchyUnitsWithProgramCategories,
+    UNIT_PROGRAM_CATEGORY_FIELD_KEYS,
+} from "@/lib/admin/location/enrichHierarchyUnitProgramCategories";
 import { assertAllowedStatusKey, displayLabelsFromDefinitions, fetchEffectiveStatusDefinitions } from "@/lib/admin/statusDefinitionsResolve";
 
 /** GET: list locations for current org (dropdowns). Admin + ops. is_active only by default. */
 export async function GET(request: NextRequest) {
-    const ctx = await getAdminContext();
+    const ctx = await getAdminContextCached();
     if (!ctx.ok) {
         return NextResponse.json(
             { error: ctx.status === 401 ? "Unauthorized" : "Forbidden" },
@@ -15,6 +19,13 @@ export async function GET(request: NextRequest) {
 
     const { searchParams } = new URL(request.url);
     const includeInactive = searchParams.get("include_inactive") === "true";
+    const hierarchy = searchParams.get("hierarchy") === "1";
+    // Optional `location_type` filter (comma-separated). Lets dropdowns request only real campuses
+    // (`site`) or rooms (`unit`) instead of every location row (addresses/units/scaffolding).
+    const locationTypes = (searchParams.get("location_type") ?? "")
+        .split(",")
+        .map((t) => t.trim())
+        .filter(Boolean);
 
     const supabase = createAdminClient();
     // Select * so environments without optional columns (e.g. status_key) still return rows; map defensively below.
@@ -28,6 +39,12 @@ export async function GET(request: NextRequest) {
     // Treat NULL is_active as active (legacy rows); only exclude explicit false.
     if (!includeInactive) {
         q = q.or("is_active.is.null,is_active.eq.true");
+    }
+
+    if (locationTypes.length === 1) {
+        q = q.eq("location_type", locationTypes[0]);
+    } else if (locationTypes.length > 1) {
+        q = q.in("location_type", locationTypes);
     }
 
     const { data: rows, error } = await q;
@@ -45,7 +62,7 @@ export async function GET(request: NextRequest) {
     const locDefs = await fetchEffectiveStatusDefinitions(supabase, ctx.orgId, "locations", { activeOnly: true });
     const locStatusLabels = displayLabelsFromDefinitions(locDefs);
 
-    const locations = list.map((r) => {
+    let locations = list.map((r) => {
         const id = String(r.id ?? "");
         const customer_id = (r.customer_id as string | null | undefined) ?? null;
         const skRaw = r.status_key;
@@ -66,6 +83,14 @@ export async function GET(request: NextRequest) {
             is_primary: !!(r.is_primary as boolean | undefined),
             is_active: r.is_active !== false,
             location_type: (r.location_type as string | null | undefined) ?? null,
+            parent_location_id: hierarchy
+                ? ((r.parent_location_id as string | null | undefined) ?? null)
+                : undefined,
+            metadata: hierarchy
+                ? (r.metadata != null && typeof r.metadata === "object" && !Array.isArray(r.metadata)
+                    ? r.metadata
+                    : {})
+                : undefined,
             updated_at: (r.updated_at as string | null | undefined) ?? null,
             status_key: sk,
             _customer_name: customer_id ? (customerMap.get(customer_id) ?? null) : null,
@@ -74,12 +99,43 @@ export async function GET(request: NextRequest) {
         };
     });
 
+    if (hierarchy) {
+        const unitIds = locations
+            .filter((row) => String(row.location_type ?? "").trim() === "unit")
+            .map((row) => String(row.id));
+        if (unitIds.length > 0) {
+            const { data: fieldDefs } = await supabase
+                .from("field_definitions")
+                .select("id")
+                .eq("org_id", ctx.orgId)
+                .eq("entity_type", "location")
+                .in("field_key", [...UNIT_PROGRAM_CATEGORY_FIELD_KEYS]);
+            const defIds = (fieldDefs ?? []).map((d) => String((d as { id: string }).id)).filter(Boolean);
+            if (defIds.length > 0) {
+                const { data: fieldValues } = await supabase
+                    .from("field_values")
+                    .select("entity_id, value_text")
+                    .eq("org_id", ctx.orgId)
+                    .eq("entity_type", "location")
+                    .in("entity_id", unitIds)
+                    .in("field_definition_id", defIds);
+                locations = enrichHierarchyUnitsWithProgramCategories(
+                    locations,
+                    (fieldValues ?? []).map((fv) => ({
+                        entity_id: String((fv as { entity_id: string }).entity_id),
+                        value_text: (fv as { value_text?: string | null }).value_text ?? null,
+                    }))
+                );
+            }
+        }
+    }
+
     return NextResponse.json({ locations });
 }
 
 /** POST: create location. Admin only. Org-scoped. customer_id optional (null = org-wide). */
 export async function POST(request: NextRequest) {
-    const ctx = await getAdminContext();
+    const ctx = await getAdminContextCached();
     if (!ctx.ok) {
         return NextResponse.json(
             { error: ctx.status === 401 ? "Unauthorized" : "Forbidden" },

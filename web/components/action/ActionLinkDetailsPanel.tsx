@@ -37,7 +37,7 @@ export default function ActionLinkDetailsPanel({ details, heading = "Booking det
     return (
         <div className={`rounded-lg border border-alloy-stone/20 bg-alloy-stone/[0.04] overflow-hidden ${className}`}>
             <div className="px-4 py-3 border-b border-alloy-stone/15 bg-white/60">
-                <h2 className="text-xs font-semibold uppercase tracking-wide text-alloy-midnight/55">{heading}</h2>
+                <h2 className="text-xs font-semibold tracking-wide text-alloy-midnight/55">{heading}</h2>
             </div>
             <div className="px-4 py-4 space-y-4 text-sm text-alloy-midnight/85">
                 {when && (

@@ -1,0 +1,147 @@
+# Forms Engine V1.1 — Usable Flow Sprint (May 2026)
+
+---
+
+## 1. Sprint objective
+
+Make **Forms Engine V1** **operationally usable** end-to-end:
+
+**Admin selects/sends a form → recipient completes it → submission persists → document can be generated/linked → workflow event is emitted → admin can review/act.**
+
+This sprint extends the **completed V1 foundation** with **minimal admin APIs, embed fixes, and thin admin UI** — **not** an architecture redesign.
+
+**Locked references:** `docs/sprints/05_2026/forms-engine-v1.txt` (V1 foundation, appendices, freeze rules).
+
+---
+
+## 2. Current status (post–Card 0 audit)
+
+| Area | State |
+|------|--------|
+| **Backend foundation** | **Exists** — DB model, RLS, migrations, versioned schemas, signatures, junctions, stub PDF boundary. |
+| **Admin APIs** | **Exists** — `/api/admin/forms/**` (definitions, versions, publish, submissions, submit, generate-document). |
+| **Public APIs** | **Exists** — `/api/public/forms/[token]/**` (resolve, submissions, patch, submit). |
+| **Public embed** | **Exists** — `/forms/embed/[token]` + `FormEmbedClient` + `FormEngineRenderer`. |
+| **Admin UI** | **MVP (Cards 3+4 + Card 7)** — **`/adminV2/forms`** hub (same clients as Cards 3–4): list forms, create public link (token once + copy), submissions list + detail, read-only answers, generate PDF stub, open linked documents in drawer. Legacy **`/admin/forms/**`** redirects to **`/adminV2/forms/**`**. |
+| **Public-link admin API** | **Implemented (Card 1)** — `GET/POST/PATCH` under `/api/admin/forms/[formId]/public-links` (+ `[linkId]`); plaintext token only on `POST` create. |
+| **Medication demo** | **Seed-complete (Card 2.5)** — demo org gets `med_demo_schedule` / `med_demo_route` option_sets via migration; embed works when migrations + Card 2 resolve hydration apply. |
+| **Submission review** | **UI (Cards 3–4)** — admin submissions list + detail; **`GET .../submissions/[id]`** omits **`org_id`** in JSON. |
+| **Workflow** | **Events emitted** (`form_submitted`, `form_signed`, `form_document_generated`) into **`workflow_events`**; operational surfacing (workflows consuming events, admin visibility) is **follow-up** unless scoped here. |
+
+---
+
+## 3. Sprint cards
+
+### Card 0 — Usability Audit
+
+- **Status:** **Complete**  
+- **Purpose:** Audit operational gaps and anti-drift risks (repo inspection; no architecture change).
+
+### Card 0.5 — Sprint Doc Creation
+
+- **Status:** **Complete**  
+- **Purpose:** Create this sprint tracker; align scope and acceptance criteria before implementation cards.
+
+### Card 1 — Public Link Admin API
+
+- **Status:** **Complete**  
+- **Purpose:** Minimal admin API for **`form_public_links`**:  
+  - **`GET`** / **`POST`** — **`/api/admin/forms/[formId]/public-links`**  
+  - **`PATCH`** — **`/api/admin/forms/[formId]/public-links/[linkId]`**  
+  - **POST** returns **plaintext token once** + **`embed_path`** + optional **`embed_url`** (from `Host` / `x-forwarded-*`); DB stores **hash only** via **`hashFormLinkToken`**.  
+  - **No UI** in this card.
+
+### Card 2 — Option Hydration + Embed Submit Fix
+
+- **Status:** **Complete**  
+- **Purpose:** Public **resolve** hydrates **`option_values_by_field_id`** / **`option_choices_by_field_id`**; embed submits them on PATCH/submit.
+
+### Card 2.5 — Demo medication option_sets seed
+
+- **Status:** **Complete**  
+- **Purpose:** Idempotent migration seeds **`med_demo_schedule`** and **`med_demo_route`** (`option_sets` + **`option_set_items`**) for the same demo org UUID as the medication form seed — no manual SQL for demo dropdowns.
+
+### Card 3 — Minimal Admin Forms Hub
+
+- **Status:** **Complete**  
+- **Purpose:** Forms hub in Operations (now **`/adminV2/forms`**; legacy **`/admin/forms`** redirects): list definitions (active + versions), **Create public link** (POST Card 1 API), **one-time token + embed URL** with copy; existing links table (prefix only); navigate to submissions.
+
+### Card 4 — Submission Review MVP
+
+- **Status:** **Complete (MVP)**  
+- **Purpose:** **`/adminV2/forms/[formId]/submissions`** and **`.../[submissionId]`** (legacy **`/admin/forms/...`** redirects): status, timestamps, FK ids with **drawer Open** for person/customer/customer_member/opportunity; **read-only `FormEngineRenderer`** + raw JSON; **`linked_documents`** from **`form_submission_documents`** + **Open** in documents drawer; **Generate document** → existing **`generate-document`** route (stub PDF).  
+  - **Follow-up:** dedicated **`form_submission_signatures`** surfacing in UI if needed beyond payload.
+
+### Card 5 — Embed Validation UX
+
+- **Status:** **Complete**  
+- **Purpose:** Embed lists **`validation_errors`** (path + message) from public PATCH/submit responses instead of only generic failure text.
+
+### Card 6 — Operational QA + smoke pass
+
+- **Status:** **Complete** (automated + code audit; browser smoke **not run** in CI)  
+- **Purpose:** Stabilize end-to-end Forms flow; fix small regressions only.  
+- **QA outcome (repo):**  
+  - Sidebar **Forms** (classic Operations nav) targets **`/adminV2/forms`**; nav active match includes **`/adminV2/forms/**`** (`pathnameMatchesNavHref`). Legacy **`/admin/forms/**`** still matches if hit before redirect.  
+  - Submission detail API strips **`org_id`** from JSON.  
+  - Public links list UI strips **`token_hash`** / **`plaintext_token`** defensively if ever present.  
+  - Copy affordance shows **manual-copy hint** when clipboard API fails.  
+  - Existing route tests + **`adminNavMatch`** unit tests pass.  
+- **Deferred / manual:** Full browser pass on staging (embed Origin allowlist, real Supabase). **`form_submission_signatures`** UI remains follow-up.
+
+### Card 7 — Move Forms operational UI into AdminV2 workspace
+
+- **Status:** **Complete**  
+- **Purpose:** Operators use **AdminV2**, not legacy **`/admin/forms`**, for review: canonical UI at **`/adminV2/forms`** (+ nested routes); **workspace** org root **Orientation** rail includes a **Forms** action; **`AdminV2Shell`** treats **`/adminV2/forms/**`** like settings/workflows (sidebar + main chrome). Reuses existing **`FormsHubClient`** / detail / submissions clients; links use shared **`ADMIN_FORMS_UI_BASE`**. Legacy **`/admin/forms/**`** → **`redirect`** to V2. No new APIs or duplicated CRM/documents/workflows logic.
+
+### Card 8 — Staging Forms demo seed alignment
+
+- **Status:** **Complete**  
+- **Purpose:** Medication demo SQL migrations seed **only** org **`7803388d-cdee-4afb-89cf-23a137f39423`** (Alloy Bend). Admin **`orgId`** is the user’s **resolved membership org** (often different on staging), so **`/adminV2/forms`** can be empty. **Fix:** idempotent script **`web/scripts/seedMedicationAuthorizationDemoForOrg.ts`** — org via **`DEMO_RESET_ORG_ID`**, **`FORMS_MED_DEMO_ORG_ID`**, or **`--org=<uuid>`**; optional **`FORMS_MED_DEMO_EMBED_ORIGINS`** for staging URLs. NPM: **`npm run demo:seed:medication-form`** from **`web/`**.
+
+### Card 9 — Admin Draft Submission PATCH *(optional)*
+
+- **Status:** Pending / only if ops confirms need  
+- **Purpose:** **`PATCH /api/admin/forms/submissions/[submissionId]`** for draft payloads under same validation rules as public PATCH — **skip if** staff never edit drafts without public token.
+
+---
+
+## 4. Anti-drift rules
+
+- **Forms do not own CRM identity.** Use **person-first helpers** (`applyFormLeadCaptureIntake`, booking-native person/customer flows); submissions store FKs only.  
+- **Forms do not own documents.** Generated/signature assets are **`documents`** rows + **`form_submission_documents`**; reuse Storage, RLS, and admin document patterns.  
+- **Forms do not own workflow execution.** Emit **`workflow_events`** via **`emitEvent`** only; no parallel bus; workflow **runs** remain the existing **`workflow_runs`** / editor model.  
+- **Submissions may reference** entities, documents, and events; they **must not replace** those systems.  
+- **Public links are access tokens**, not user accounts; hash-at-rest; plaintext shown only when issued (create/rotate).  
+- **Admin UI is thin operational UI** — not a drag/drop builder, not a second schema designer.
+
+**Explicit non-goals:** duplicate CRM or documents tables; DocuSign; full PDF engine rewrite; field_values auto-sync; generic form builder.
+
+---
+
+## 5. Definition of done (sprint)
+
+- [x] **Medication authorization demo** completable **end-to-end** via public embed when migrations + demo org apply (Cards 2 + 2.5).  
+- [x] Admin can **create/copy a public form link without SQL** (Card 1 API; **`/adminV2/forms/[formId]`**).  
+- [x] Admin can **view submissions without raw DB access** (submissions list + detail pages).  
+- [x] Admin can **generate or access** a document from a submission (**Generate document** + **Open** linked doc in drawer).  
+- [ ] **Workflow events** continue to emit through existing **`workflow_events`** (no regression) — **not re-validated in Card 6**; rely on unchanged emit paths.  
+- [x] **Existing tests pass** (`tsc`, targeted Vitest: admin forms + public + forms suites per Card 6).
+
+---
+
+## 6. Implementation notes (handoff)
+
+- **Card ordering:** 1 → 2 enables demo path; 3 → 4 delivers ops review; **7 = AdminV2 placement** for Forms; **8 = staging org alignment** for medication demo seed; 5 improves recipient UX; 2.5 seeds demo options; **6 = QA/smoke**; optional draft PATCH = **Card 9**.  
+- **Staging:** Apply/maintain V1 migrations + demo seed per environment policy (`forms-engine-v1.txt` validation notes).  
+- **Security:** Keep **`org_id`** off public JSON; admin submission **`GET`** detail response omits **`org_id`**; enforce **`allowed_embed_origins`**; rate limiting remains a **follow-up** unless pulled into this sprint explicitly.
+
+---
+
+## 7. V1.2 operator usability — manual QA (cross-sprint)
+
+Hub onboarding, preview, and submission outcome copy: see **`docs/sprints/05_2026/forms-engine-v1-2-operator-usability.md`** for Kelly’s step-by-step checklist, expected results, and known limitations.
+
+---
+
+*End of V1.1 Usable Flow sprint document.*

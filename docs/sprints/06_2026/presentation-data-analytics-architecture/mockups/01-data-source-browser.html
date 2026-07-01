@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><title>01 — Data Source Browser</title><link rel="stylesheet" href="_shared.css"></head>
+<body>
+<div class="mockup-frame">
+  <div class="mockup-label">01 — Data Source Browser <span class="sub">Navigate the business, not tables · Area → Path → Leaf · type + compatible renderers</span></div>
+  <div class="stage">
+    <div class="panel">
+      <div class="panel-head"><div class="panel-title">Choose information</div><div class="panel-sub">for slot · Billing card · Enrollment Summary</div><span class="spacer"></span><input class="search" style="width:240px;margin:0;" value="Search business concepts…" readonly></div>
+      <div class="browser">
+        <!-- AREAS -->
+        <div class="b-areas">
+          <div class="section-label" style="padding-left:8px;">Areas</div>
+          <div class="b-area active"><span class="ic">▦</span> This Record <span class="kindtag">CANONICAL</span></div>
+          <div class="b-area"><span class="ic">🔗</span> Related <span class="kindtag">RELATION</span></div>
+          <div class="b-area"><span class="ic">☰</span> Lists <span class="kindtag">COLLECTION</span></div>
+          <div class="b-area"><span class="ic">📊</span> Metrics <span class="kindtag">OI</span></div>
+          <div class="b-area"><span class="ic">◉</span> State <span class="kindtag">RUNTIME</span></div>
+          <div class="b-area"><span class="ic">✨</span> AI <span class="kindtag">AI</span></div>
+          <div class="b-area"><span class="ic">⚡</span> Actions <span class="kindtag">ACTION</span></div>
+          <div class="b-area"><span class="ic">∑</span> Computed <span class="kindtag">COMPUTED</span></div>
+          <div class="b-area"><span class="ic">⚙</span> System <span class="kindtag">SYSTEM</span></div>
+        </div>
+        <!-- PATH -->
+        <div class="b-path">
+          <div class="crumb">Enrollment ▸ <b>Billing</b></div>
+          <div class="b-group">Categories</div>
+          <div class="b-item"><span class="ic">👤</span><span class="nm">Contact</span><span class="chev">›</span></div>
+          <div class="b-item" style="background:var(--canvas);"><span class="ic">💰</span><span class="nm">Billing</span><span class="chev">▾</span></div>
+          <div style="padding-left:14px;">
+            <div class="b-item selected"><span class="nm">Balance</span><span class="tp">Money</span></div>
+            <div class="b-item"><span class="nm">Next Invoice</span><span class="tp">Date</span></div>
+            <div class="b-item"><span class="nm">Autopay</span><span class="tp">Status</span></div>
+            <div class="b-item"><span class="nm">Credits</span><span class="tp">Money</span></div>
+          </div>
+          <div class="b-item"><span class="ic">📅</span><span class="nm">Schedule</span><span class="chev">›</span></div>
+          <div class="b-item"><span class="ic">🎓</span><span class="nm">Program</span><span class="chev">›</span></div>
+        </div>
+        <!-- LEAF DETAIL -->
+        <div class="b-detail">
+          <div class="section-label">Leaf detail</div>
+          <div class="leaf-name">Balance</div>
+          <div class="leaf-path">Enrollment ▸ Billing ▸ Balance</div>
+          <div style="margin-top:14px;">
+            <div class="leaf-row"><span class="k">Presentation type</span><span class="v"><span class="type-pill">Money</span></span></div>
+            <div class="leaf-row"><span class="k">Example value</span><span class="v">$1,234.00</span></div>
+            <div class="leaf-row"><span class="k">Yields</span><span class="v">scalar</span></div>
+          </div>
+          <div class="section-label" style="margin-top:14px;">Compatible renderers</div>
+          <div class="rndr-chips">
+            <span class="rndr-chip best">Currency</span>
+            <span class="rndr-chip">Number</span>
+            <span class="rndr-chip">Gauge</span>
+            <span class="rndr-chip">Scorecard</span>
+          </div>
+          <div class="details-line">details · billing.balance · field_definitions</div>
+        </div>
+      </div>
+    </div>
+    <div class="center-note">The administrator browses <strong>business concepts</strong> (Enrollment ▸ Billing ▸ Balance), sees the <strong>Presentation Type</strong> and the <strong>renderers it's compatible with</strong> before binding. The technical resolution (<code>billing.balance</code>) is a faint secondary line — never the headline.</div>
+  </div>
+</div>
+</body></html>

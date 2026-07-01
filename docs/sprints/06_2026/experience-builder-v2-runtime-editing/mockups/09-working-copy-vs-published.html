@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><title>09 — Working Copy vs Published + History</title><link rel="stylesheet" href="_shared.css"></head>
+<body>
+<div class="mockup-frame">
+  <div class="mockup-label">09 — Working Copy vs Published <span class="sub">Preview is gone · runtime states · History + Restore · same renderer both sides</span></div>
+  <div class="app-shell">
+    <div class="app-rail"><div class="rail-icon">⌂</div><div class="rail-icon">☰</div><div class="rail-icon">💬</div><div class="rail-spacer"></div><div class="rail-icon active">✎</div></div>
+    <div class="main-area">
+      <div class="edit-bar">
+        <span class="eb-done">◀ Done</span>
+        <span class="eb-status"><span class="edit-dot"></span> Editing <span class="eb-sub">· Enrollment Summary</span></span>
+        <div class="mode-toggle"><span class="mt">Structure</span><span class="mt active">Content</span></div>
+        <div class="eb-icons"><span class="eb-icon">⤺</span><span class="eb-icon">⤻</span></div>
+        <span class="eb-state"><span class="state-pill state-working">Working Copy</span> · <span class="state-pill state-published">Published v3</span> History</span>
+        <span class="eb-spacer"></span>
+        <span class="scope-chip"><span class="dot"></span> Organization</span>
+        <span class="btn btn-primary">Publish</span>
+      </div>
+      <div class="runtime-region">
+        <div class="runtime-canvas">
+          <div class="compare">
+            <div class="compare-col">
+              <div class="compare-head" style="color:var(--amber);">● Working Copy <span style="font-weight:500;color:var(--midnight-46);text-transform:none;letter-spacing:0;">your edits, auto-saved</span></div>
+              <div class="fp" style="box-shadow:var(--shadow-sm);">
+                <div class="fp-header"><div class="fp-subject">Hayes Family</div></div>
+                <div class="fp-body" style="grid-template-columns:1fr;">
+                  <div class="card"><div class="card-head"><div class="card-icon">✓</div><div class="card-title">Readiness</div><div class="card-status">Ready</div></div></div>
+                  <div class="card" style="border-color:var(--pine-border);background:var(--pine-soft);"><div class="card-head"><div class="card-icon">💰</div><div class="card-title">Billing</div><span class="marker override" style="margin-left:auto;">＋ added</span></div><div class="card-insight">$1,234 · Past due</div></div>
+                  <div class="card"><div class="card-head"><div class="card-icon">👤</div><div class="card-title">Family</div></div></div>
+                </div>
+              </div>
+            </div>
+            <div class="compare-col">
+              <div class="compare-head" style="color:var(--pine);">● Published v3 <span style="font-weight:500;color:var(--midnight-46);text-transform:none;letter-spacing:0;">live · read-only reference</span></div>
+              <div class="fp" style="box-shadow:var(--shadow-sm);opacity:0.9;">
+                <div class="fp-header"><div class="fp-subject">Hayes Family</div></div>
+                <div class="fp-body" style="grid-template-columns:1fr;">
+                  <div class="card"><div class="card-head"><div class="card-icon">✓</div><div class="card-title">Readiness</div><div class="card-status">Ready</div></div></div>
+                  <div class="card"><div class="card-head"><div class="card-icon">👤</div><div class="card-title">Family</div></div></div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="center-note" style="margin-top:14px;">No "Preview" mode. You compare runtime <strong>states</strong> — both drawn by the same renderer. The diff (＋ added Billing) is shown <strong>on the surface</strong>, not in JSON.</div>
+
+          <div class="history" style="margin-top:18px;">
+            <div class="section-label">History · Enrollment Summary</div>
+            <div class="hrow current"><div class="hdot"></div><div><div class="hver">v3 · current published</div><div class="hmeta">Kelly · Jun 26 · "Added Billing to summary zone"</div></div></div>
+            <div class="hrow"><div class="hdot"></div><div><div class="hver">v2</div><div class="hmeta">Maria · Jun 24 · "Reordered Readiness to top"</div></div><span class="hrestore">Restore</span></div>
+            <div class="hrow"><div class="hdot"></div><div><div class="hver">v1</div><div class="hmeta">Kelly · Jun 12 · "Initial publish"</div></div><span class="hrestore">Restore</span></div>
+          </div>
+        </div>
+        <div class="bos-rail">
+          <div class="bos-title">Runtime states</div>
+          <div class="bos-note"><strong>Viewing</strong> · <strong>Working Copy</strong> · <strong>Published</strong> · <strong>History</strong> replace the old Preview/Publish pair.</div>
+          <div class="bos-suggestion">Publish promotes the Working Copy to a new immutable version. Restore creates a <em>new</em> version equal to an old one — history is never rewritten.</div>
+          <div class="bos-note">Both columns use the identical runtime — what you approve is exactly what ships.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</body></html>

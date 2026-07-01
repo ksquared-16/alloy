@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=1440" />
+  <title>Continuity Depth Flow</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+      background: #f8fafc; width: 1440px; height: 720px;
+      padding: 32px 40px;
+    }
+    h1 { font-size: 14px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: #64748b; margin-bottom: 24px; }
+    .flow { display: flex; align-items: stretch; gap: 0; height: 560px; }
+    .step {
+      flex: 1; display: flex; flex-direction: column;
+      border: 1px solid #e5e9ef; border-radius: 12px;
+      background: #fff; overflow: hidden; position: relative;
+    }
+    .step + .arrow-col { width: 48px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+    .arrow { font-size: 28px; color: #00a283; font-weight: 700; }
+    .step-label {
+      background: #1a2332; color: #fff; font-size: 10px; font-weight: 700;
+      letter-spacing: 0.08em; text-transform: uppercase; padding: 8px 12px;
+    }
+    .step-label.p1 { background: #00a283; }
+    .step-label.p2 { background: #007a62; }
+    .step-label.p3 { background: #005f4d; }
+    .step-label.p4 { background: #004539; }
+    .step-body { flex: 1; padding: 12px; font-size: 11px; color: #475569; display: flex; flex-direction: column; gap: 8px; }
+    .mini-shell { border: 1px solid #e5e9ef; border-radius: 8px; flex: 1; background: #f4f6f8; padding: 8px; display: flex; flex-direction: column; gap: 6px; }
+    .mini-bar { height: 8px; background: #1a2332; border-radius: 3px; }
+    .mini-org { height: 24px; background: #fff; border-radius: 4px; border: 1px solid #e5e9ef; }
+    .mini-pulse { height: 32px; background: #fff; border-radius: 4px; border: 1px solid #e5e9ef; }
+    .mini-tile { flex: 1; background: #fff; border-radius: 6px; border-left: 3px solid #00a283; border: 1px solid rgba(0,162,131,0.3); border-left-width: 3px; padding: 8px; }
+    .mini-tile .t { font-size: 9px; font-weight: 700; color: #00a283; text-transform: uppercase; }
+    .mini-tile .s { font-size: 10px; margin-top: 4px; color: #1b1b27; }
+    .mini-tile .w { font-size: 9px; margin-top: 6px; padding: 3px 6px; background: rgba(0,162,131,0.08); border-radius: 4px; color: #007a62; }
+    .mini-ctx { height: 48px; background: #fff; border-radius: 4px; border: 1px solid #e5e9ef; padding: 6px; }
+    .mini-ctx .t { font-size: 10px; font-weight: 700; color: #00a283; letter-spacing: 0.06em; }
+    .mini-ctx .k { display: flex; gap: 8px; margin-top: 4px; font-size: 8px; color: #64748b; }
+    .mini-queue { flex: 1; background: #fff; border-radius: 4px; border: 1px solid #e5e9ef; padding: 6px; }
+    .mini-row { height: 20px; background: #f8fafc; border-radius: 3px; margin-bottom: 4px; border: 1px solid #e5e9ef; }
+    .mini-row.active { border-color: #00a283; background: rgba(0,162,131,0.06); }
+    .mini-fp { flex: 1; background: #fff; border-radius: 4px; border: 1px solid #e5e9ef; padding: 6px; }
+    .mini-card { height: 28px; background: #f8fafc; border-radius: 3px; margin-bottom: 4px; border-left: 2px solid #00a283; padding-left: 6px; font-size: 8px; display: flex; align-items: center; }
+    .caption { font-size: 10px; line-height: 1.4; color: #64748b; margin-top: 8px; }
+    .depth { position: absolute; bottom: 8px; right: 10px; font-size: 9px; font-weight: 700; color: #00a283; opacity: 0.7; }
+  </style>
+</head>
+<body>
+  <h1>One operating environment — four depths of zoom</h1>
+  <div class="flow">
+    <div class="step">
+      <div class="step-label p1">Page 1 — Workspace cover</div>
+      <div class="step-body">
+        <div class="mini-shell">
+          <div class="mini-bar"></div>
+          <div class="mini-org"></div>
+          <div class="mini-pulse"></div>
+          <div class="mini-tile">
+            <div class="t">Enrollment</div>
+            <div class="s">3 families waiting for contact</div>
+            <div class="w">→ 2 Tours</div>
+            <div class="w">→ 3 Follow Ups</div>
+          </div>
+        </div>
+        <p class="caption">Operational Surface = compressed cover page. Same shell as today.</p>
+      </div>
+      <span class="depth">Click work line or Open →</span>
+    </div>
+    <div class="arrow-col"><span class="arrow">→</span></div>
+    <div class="step">
+      <div class="step-label p2">Page 2 — Work Unit context</div>
+      <div class="step-body">
+        <div class="mini-shell">
+          <div class="mini-bar"></div>
+          <div class="mini-ctx">
+            <div class="t">ENROLLMENT</div>
+            <div class="k"><span>Lead 7</span><span>Attention 6</span><span>New Leads pill</span></div>
+          </div>
+          <div class="mini-queue" style="opacity:0.4">
+            <div class="mini-row"></div><div class="mini-row"></div>
+          </div>
+        </div>
+        <p class="caption">Context bar expands from tile preview — same title, KPIs, perspective.</p>
+      </div>
+      <span class="depth">Not a new page</span>
+    </div>
+    <div class="arrow-col"><span class="arrow">→</span></div>
+    <div class="step">
+      <div class="step-label p3">Page 3 — Queue</div>
+      <div class="step-body">
+        <div class="mini-shell">
+          <div class="mini-bar"></div>
+          <div class="mini-ctx" style="height:36px"></div>
+          <div class="mini-queue">
+            <div style="font-size:9px;font-weight:700;margin-bottom:6px">Lead · Active lens · 7 families</div>
+            <div class="mini-row active"></div>
+            <div class="mini-row"></div>
+            <div class="mini-row"></div>
+          </div>
+        </div>
+        <p class="caption">Queue reveals below context bar bottom edge — frozen System 5 queue.</p>
+      </div>
+      <span class="depth">Select row</span>
+    </div>
+    <div class="arrow-col"><span class="arrow">→</span></div>
+    <div class="step">
+      <div class="step-label p4">Page 4 — Focus Panel</div>
+      <div class="step-body">
+        <div class="mini-shell" style="flex-direction:row;gap:6px">
+          <div class="mini-queue" style="flex:0.4">
+            <div class="mini-row active"></div>
+            <div class="mini-row"></div>
+          </div>
+          <div class="mini-fp" style="flex:0.6">
+            <div class="mini-card">WHY NOW</div>
+            <div class="mini-card">CURRENT MISSION</div>
+            <div class="mini-card">CURRENT WORK</div>
+          </div>
+        </div>
+        <p class="caption">Split State 2 — Universal Cards + BOS rail persist. Same environment.</p>
+      </div>
+      <span class="depth">Deeper context</span>
+    </div>
+  </div>
+</body>
+</html>

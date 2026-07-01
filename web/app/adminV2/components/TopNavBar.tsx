@@ -1,54 +1,246 @@
 "use client";
 
+import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
+import { prefetchWorkspaceOperationalTasks } from "@/lib/agent/taskAssist/operationalTasksWorkspaceCache";
+import { isOperationalWorkV1Enabled } from "@/lib/admin/operationalWork/operationalWorkV1UiGate";
+import { runWhenAdminV2PrimarySurfaceReady } from "@/lib/workspace/adminV2DeferBackgroundWork";
+import { usePathname } from "next/navigation";
+import {
+    ADMIN_FORMS_HREF,
+    isCanonicalFormsPath,
+    isCanonicalWorkspacePath,
+    normalizeToCanonicalAdminPath,
+} from "@/lib/admin/canonicalAdminRoutes";
 import { palette, neutral, derived } from "@/styles/tokens/colors";
+import { useWorkspaceSiteFilter } from "@/contexts/WorkspaceSiteFilterContext";
+import AdminV2ProfileMenu from "@/app/adminV2/components/AdminV2ProfileMenu";
+import TopNavNotificationsLink from "@/app/adminV2/components/TopNavNotificationsLink";
+import GlobalSearchBox from "@/app/adminV2/components/GlobalSearchBox";
+import MyTasksModal from "@/app/adminV2/components/MyTasksModal";
+import InboxModal from "@/app/adminV2/components/InboxModal";
+import AnalyticsModal from "@/app/adminV2/components/AnalyticsModal";
+import ProcessingModal from "@/app/adminV2/processing/ProcessingModal";
+import { warmCommunicationsWorkspaceModal } from "@/lib/communications/v2/communicationsWorkspaceWarmCache";
+import { isCommsV2FlagEnabled } from "@/lib/communications/v2/flags";
+import QuickMessageModal, { type QuickMessageModalSeed } from "@/app/adminV2/components/QuickMessageModal";
+import {
+    ADMINV2_OPEN_QUICK_MESSAGE_EVENT,
+    type QuickMessageLaunchSeed,
+} from "@/lib/adminV2/quickMessageLaunch";
+import {
+    closeWorkspaceModal,
+    openWorkspaceModal,
+    subscribeAdminV2WorkspaceModal,
+    getAdminV2WorkspaceModalSnapshot,
+} from "@/lib/adminV2/workspaceModalCoordinator";
+import {
+    parseWorkspaceModalIntent,
+    WORKSPACE_MODAL_INTENT_PARAM,
+} from "@/lib/adminV2/workspaceModalIntent";
+
+function normalizeAdminPath(pathname: string): string {
+  return normalizeToCanonicalAdminPath(pathname);
+}
+
+function isWorkspaceOperatorPath(normalizedPath: string): boolean {
+  return isCanonicalWorkspacePath(normalizedPath) || isCanonicalFormsPath(normalizedPath);
+}
+
+/** Fixed-width reserve so location chrome does not jump when bootstrap revalidates. */
+function WorkspaceSiteFilterLocationReserve() {
+  return (
+    <div
+      className="flex shrink-0 items-center min-w-[min(280px,34vw)] max-w-[min(280px,34vw)] h-[2.375rem]"
+      aria-hidden
+    >
+      <div className="h-[2.375rem] w-full rounded-md opacity-40" style={{ backgroundColor: derived.searchBgOnPrimary }} />
+    </div>
+  );
+}
+
+function useClientHydrated(): boolean {
+  return useSyncExternalStore(
+    () => () => {},
+    () => true,
+    () => false
+  );
+}
+
+function WorkspaceSiteFilterStrip({ normalizedPath }: { normalizedPath: string }) {
+  const hydrated = useClientHydrated();
+  const wf = useWorkspaceSiteFilter();
+  const showSiteFilter = isWorkspaceOperatorPath(normalizedPath);
+  if (!showSiteFilter) return null;
+
+  const bootstrap = wf?.displayBootstrap ?? wf?.bootstrap ?? null;
+  // Client-only bootstrap cache must not render select before hydration — SSR and first client paint match reserve.
+  if (!hydrated || !bootstrap || !wf) {
+    return <WorkspaceSiteFilterLocationReserve />;
+  }
+
+  const { selectedSiteId, setSelectedSiteId } = wf;
+
+  if (bootstrap.show_dropdown && bootstrap.sites.length > 1) {
+    return (
+      <div className="flex shrink-0 items-center gap-1.5 min-w-0 max-w-[min(280px,34vw)]">
+        <label htmlFor="adminv2-workspace-site-filter" className="sr-only">
+          Site filter
+        </label>
+        <select
+          id="adminv2-workspace-site-filter"
+          value={selectedSiteId ?? ""}
+          onChange={(e) => setSelectedSiteId(e.target.value === "" ? null : e.target.value)}
+          className="min-w-0 flex-1 truncate rounded-md border px-3 py-2 text-[15px] font-medium outline-none focus:ring-1 focus:ring-white/35"
+          style={{
+            backgroundColor: derived.searchBgOnPrimary,
+            borderColor: derived.topBarDivider,
+            color: neutral.surface,
+          }}
+          title="View filter — narrows workspace data to one campus within your allowed sites. Selection persists across workspace navigation."
+        >
+          <option value="">All locations</option>
+          {bootstrap.sites.map((s) => (
+            <option key={s.id} value={s.id}>
+              {s.label}
+            </option>
+          ))}
+        </select>
+      </div>
+    );
+  }
+
+  if (bootstrap.single_site_label) {
+    return (
+      <span
+        className="shrink-0 truncate max-w-[min(240px,32vw)] text-[15px] font-medium opacity-90"
+        title="Your access is scoped to this site."
+      >
+        {bootstrap.single_site_label}
+      </span>
+    );
+  }
+
+  return null;
+}
 
 export default function TopNavBar() {
+  const pathname = usePathname();
+  const [quickMessageSeed, setQuickMessageSeed] = useState<QuickMessageModalSeed | null>(null);
+  const activeWorkspaceModal = useSyncExternalStore(
+    subscribeAdminV2WorkspaceModal,
+    () => getAdminV2WorkspaceModalSnapshot().active,
+    () => null
+  );
+  const tasksModalOpen = activeWorkspaceModal === "tasks";
+  const inboxModalOpen = activeWorkspaceModal === "inbox";
+  const quickMessageOpen = activeWorkspaceModal === "quick_message";
+  const analyticsModalOpen = activeWorkspaceModal === "analytics";
+  const processingModalOpen = activeWorkspaceModal === "processing";
+
+  useEffect(() => {
+    const onLaunch = (ev: Event) => {
+      const detail = (ev as CustomEvent<QuickMessageLaunchSeed>).detail;
+      const personId = detail?.personId?.trim() || null;
+      const opportunityId = detail?.opportunityId?.trim() || null;
+      if (!personId && !opportunityId) return;
+      setQuickMessageSeed({
+        personId: personId ?? undefined,
+        opportunityId,
+        recordDisplayName: detail.recordDisplayName ?? detail.displayName ?? null,
+        displayName: detail.displayName,
+        email: detail.email,
+        phone: detail.phone,
+        recordScoped: detail.recordScoped ?? Boolean(opportunityId),
+        defaultChannel: detail.defaultChannel,
+      });
+      openWorkspaceModal("quick_message");
+    };
+    window.addEventListener(ADMINV2_OPEN_QUICK_MESSAGE_EVENT, onLaunch);
+    return () => window.removeEventListener(ADMINV2_OPEN_QUICK_MESSAGE_EVENT, onLaunch);
+  }, []);
+
+  useEffect(() => {
+    const onOpenTasks = () => {
+      if (!isOperationalWorkV1Enabled()) return;
+      prefetchWorkspaceOperationalTasks("open");
+      openWorkspaceModal("tasks");
+    };
+    const onOpenInbox = () => {
+      if (isCommsV2FlagEnabled("comms_v2_command_center")) {
+        void warmCommunicationsWorkspaceModal();
+      }
+      openWorkspaceModal("inbox");
+    };
+    const onOpenAnalytics = () => {
+      openWorkspaceModal("analytics");
+    };
+    window.addEventListener("adminv2:open-tasks-panel", onOpenTasks);
+    window.addEventListener("adminv2:open-inbox-modal", onOpenInbox);
+    window.addEventListener("adminv2:open-analytics-modal", onOpenAnalytics);
+    return () => {
+      window.removeEventListener("adminv2:open-tasks-panel", onOpenTasks);
+      window.removeEventListener("adminv2:open-inbox-modal", onOpenInbox);
+      window.removeEventListener("adminv2:open-analytics-modal", onOpenAnalytics);
+    };
+  }, []);
+
+  // Deep-link bridge: `?workspaceModal=analytics` opens the Operational Intelligence
+  // modal (e.g. from Surfaces → "Open in Workspace"), then cleans the URL. The modal
+  // itself is client state — the param is an implementation detail, not a product URL.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    const intent = parseWorkspaceModalIntent(params);
+    if (intent) {
+      openWorkspaceModal(intent);
+      params.delete(WORKSPACE_MODAL_INTENT_PARAM);
+      const qs = params.toString();
+      window.history.replaceState(null, "", `${window.location.pathname}${qs ? `?${qs}` : ""}`);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!isOperationalWorkV1Enabled()) return;
+    const cancelDefer = runWhenAdminV2PrimarySurfaceReady(
+      () => prefetchWorkspaceOperationalTasks("open"),
+      "operational_tasks_topnav_prefetch"
+    );
+    return cancelDefer;
+  }, []);
+
+  const normalizedPath = useMemo(() => normalizeAdminPath(pathname), [pathname]);
+
   return (
     <header
-      className="flex items-center h-12 flex-shrink-0 px-4 gap-4 border-b"
+      className="adminv2-shell-header flex h-[3.75rem] flex-shrink-0 items-center gap-3 border-b px-4"
       style={{
         backgroundColor: palette.midnightForge,
         borderColor: derived.topBarDivider,
         color: neutral.surface,
       }}
     >
-      <div className="flex items-center shrink-0" aria-label="Alloy">
-        <img
-          src="/brand/alloy-brandmark-gradient.svg"
-          alt=""
-          width={32}
-          height={32}
-          className="h-8 w-8 shrink-0"
-        />
+      <div className="flex min-w-0 flex-1 items-center gap-3">
+        <GlobalSearchBox />
       </div>
-      <div
-        className="flex-1 max-w-md rounded-md px-3 py-1.5 text-sm"
-        style={{
-          backgroundColor: derived.searchBgOnPrimary,
-          color: neutral.surface,
+
+      <div className="flex shrink-0 items-center gap-3">
+        <WorkspaceSiteFilterStrip normalizedPath={normalizedPath} />
+        <TopNavNotificationsLink />
+        <AdminV2ProfileMenu />
+      </div>
+
+      <QuickMessageModal
+        open={quickMessageOpen}
+        seed={quickMessageSeed}
+        onClose={() => {
+          closeWorkspaceModal("quick_message");
+          setQuickMessageSeed(null);
         }}
-      >
-        <span style={{ opacity: 0.92 }}>Search</span>
-      </div>
-      <nav className="flex items-center gap-1 shrink-0" aria-label="Perspective tabs">
-        <span
-          className="px-2 py-1 rounded text-xs font-medium"
-          style={{ backgroundColor: derived.tabActiveOnPrimary, color: neutral.surface }}
-        >
-          Overview
-        </span>
-        <span className="px-2 py-1 rounded text-xs font-medium" style={{ opacity: 0.88, color: neutral.surface }}>
-          AI Activity
-        </span>
-        <span className="px-2 py-1 rounded text-xs font-medium" style={{ opacity: 0.88, color: neutral.surface }}>
-          Queue
-        </span>
-      </nav>
-      <div
-        className="shrink-0 w-8 h-8 rounded-full border"
-        style={{ borderColor: derived.topBarDivider, backgroundColor: "rgba(255,255,255,0.08)" }}
-        aria-hidden
       />
+      <MyTasksModal open={tasksModalOpen} onClose={() => closeWorkspaceModal("tasks")} />
+      <InboxModal open={inboxModalOpen} onClose={() => closeWorkspaceModal("inbox")} />
+      <AnalyticsModal open={analyticsModalOpen} onClose={() => closeWorkspaceModal("analytics")} />
+      <ProcessingModal open={processingModalOpen} onClose={() => closeWorkspaceModal("processing")} />
     </header>
   );
 }

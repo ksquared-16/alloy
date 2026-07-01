@@ -468,6 +468,12 @@ async def submit_cleaning_lead(
                     "monetary_value_cents": int(calculated_estimated_price * 100) if calculated_estimated_price else None,
                     "metadata": opportunity_metadata,
                 }
+                # Person-first when the compatibility contact row already links to persons.person_id (canonical CRM reads).
+                supa_person_id = (
+                    supabase_contact.get("person_id") if isinstance(supabase_contact, dict) else None
+                )
+                if supa_person_id and str(supa_person_id).strip():
+                    opportunity_payload["primary_person_id"] = str(supa_person_id).strip()
                 
                 # Use idempotent find_or_create (checks mapping first, then recent window)
                 opp_result = find_or_create_opportunity(

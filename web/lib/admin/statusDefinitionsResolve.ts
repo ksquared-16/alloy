@@ -1,4 +1,103 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { unstable_cache } from "next/cache";
+import { createAdminClient } from "@/lib/supabaseAdmin";
+import { logDbTiming } from "@/lib/admin/dbQueryTiming";
+
+const STATUS_EFFECTIVE_CACHE = new Map<string, { at: number; rows: StatusDefinitionRow[]; ttlMs: number }>();
+/** Process + upstream data cache TTL; overlaps with Next `unstable_cache` revalidate below. */
+const STATUS_EFFECTIVE_TTL_MS = 90_000;
+const STATUS_EFFECTIVE_CACHE_ENABLED = process.env.NODE_ENV !== "test";
+
+const STATUS_EFFECTIVE_UNSTABLE_TAGS = ["status-definitions-effective"];
+
+export const STATUS_EFFECTIVE_UNSTABLE_CACHE_TAGS = STATUS_EFFECTIVE_UNSTABLE_TAGS;
+
+/** Clear in-process effective status cache entries for an org (all entity types / active flags). */
+export function invalidateProcessStatusDefinitionsCache(orgId: string): void {
+    const prefix = `${orgId.trim()}\u0001`;
+    for (const key of [...STATUS_EFFECTIVE_CACHE.keys()]) {
+        if (key.startsWith(prefix)) {
+            STATUS_EFFECTIVE_CACHE.delete(key);
+        }
+    }
+}
+
+/** Canonical branch names for caches + Postgres merge logic (singular/plural tolerated at call sites). */
+export function normalizeEffectiveStatusEntityType(entityType: string): string {
+    const t = String(entityType ?? "").trim().toLowerCase();
+    if (t === "opportunity" || t === "opportunities") return "opportunities";
+    if (t === "schedule" || t === "schedules") return "schedules";
+    if (t === "job" || t === "jobs") return "jobs";
+    if (t === "opportunity_customer_member" || t === "opportunity_customer_members") {
+        return "opportunity_customer_members";
+    }
+    if (t === "child" || t === "children") return "persons";
+    const raw = String(entityType ?? "").trim();
+    return raw || t;
+}
+
+function entityTypesForStatusQuery(normalizedEntity: string): string[] {
+    switch (normalizedEntity) {
+        case "opportunities":
+            return ["opportunities", "opportunity"];
+        case "schedules":
+            return ["schedules", "schedule"];
+        case "jobs":
+            return ["jobs", "job"];
+        default:
+            return [normalizedEntity];
+    }
+}
+
+function effectiveStatusDefsUnstableKeyParts(orgId: string, normalizedEntityType: string, activeOnly: boolean): string[] {
+    return ["admin-status-def-effective-v2", orgId, normalizedEntityType, activeOnly ? "1" : "0"];
+}
+
+type EffectiveStatusDefsPhaseTimings = {
+    overrides_ms?: number;
+    defaults_ms?: number;
+    merge_ms?: number;
+    uncached_ms?: number;
+};
+
+async function loadEffectiveStatusDefinitionsThroughNextCache(
+    orgId: string,
+    normalizedEntityType: string,
+    opts?: { activeOnly?: boolean; nextRevalidateSeconds?: number },
+    phasesOut?: EffectiveStatusDefsPhaseTimings | null
+): Promise<{ rows: StatusDefinitionRow[]; fetcherRan: boolean; nextCacheAttempted: boolean }> {
+    const activeOnly = opts?.activeOnly !== false;
+    const nextRev =
+        typeof opts?.nextRevalidateSeconds === "number" && opts.nextRevalidateSeconds >= 60
+            ? Math.floor(opts.nextRevalidateSeconds)
+            : 90;
+    const key = effectiveStatusDefsUnstableKeyParts(orgId, normalizedEntityType, activeOnly);
+    let fetcherRan = false;
+    const fetcher = async () => {
+        fetcherRan = true;
+        const client = createAdminClient();
+        return fetchEffectiveStatusDefinitionsUncached(client, orgId, normalizedEntityType, opts, phasesOut);
+    };
+    if (typeof unstable_cache === "function" && process.env.NODE_ENV !== "test") {
+        const rows = await unstable_cache(fetcher, key, {
+            revalidate: nextRev,
+            tags: [...STATUS_EFFECTIVE_UNSTABLE_TAGS, `status-def-org:${orgId}`],
+        })();
+        return { rows, fetcherRan, nextCacheAttempted: true };
+    }
+    const rows = await fetcher();
+    return { rows, fetcherRan, nextCacheAttempted: false };
+}
+
+function statusEffectiveCacheKey(orgId: string, normalizedEntityType: string, activeOnly: boolean): string {
+    return `${orgId}\u0001${normalizedEntityType}\u0001${activeOnly ? "1" : "0"}`;
+}
+
+export {
+    OPPORTUNITY_LIFECYCLE_STAGES,
+    parseLifecycleStageFromMetadata,
+    type OpportunityLifecycleStage,
+} from "@/lib/admin/statusDefinitionLifecycle";
 
 const STATUS_DEF_COLUMNS =
     "id, org_id, industry_key, entity_type, status_key, status_label, sort_order, is_active, is_system, metadata";
@@ -13,6 +112,7 @@ export type StatusDefinitionRow = {
     sort_order: number;
     is_active: boolean;
     is_system: boolean;
+    /** JSON; may include `lifecycle_stage` (canonical pipeline stage for this status_key). */
     metadata: Record<string, unknown> | null;
 };
 
@@ -33,19 +133,24 @@ export async function fetchOrgStatusDefinitions(
     entityType: string,
     opts?: { activeOnly?: boolean }
 ): Promise<StatusDefinitionRow[]> {
+    const t0 = Date.now();
+    const normalized = normalizeEffectiveStatusEntityType(entityType);
+    const entityTypes = entityTypesForStatusQuery(normalized);
     const activeOnly = opts?.activeOnly !== false;
     let q = supabase
         .from("status_definitions")
         .select(STATUS_DEF_COLUMNS)
         .eq("org_id", orgId)
-        .eq("entity_type", entityType);
+        .in("entity_type", entityTypes);
     if (activeOnly) q = q.eq("is_active", true);
     const { data, error } = await q.order("sort_order", { ascending: true }).order("status_label", { ascending: true });
     if (error) throw new Error(error.message);
-    return ((data ?? []) as StatusDefinitionRow[]).map((r) => ({
+    const rows = ((data ?? []) as StatusDefinitionRow[]).map((r) => ({
         ...r,
         metadata: (r.metadata as Record<string, unknown> | null) ?? null,
     }));
+    logDbTiming("status_definitions.org_select", Date.now() - t0, { orgId, entityType: normalized, activeOnly });
+    return rows;
 }
 
 /**
@@ -57,12 +162,15 @@ export async function fetchIndustryDefaultStatusDefinitions(
     orgIndustryKey: string | null,
     opts?: { activeOnly?: boolean }
 ): Promise<StatusDefinitionRow[]> {
+    const t0 = Date.now();
+    const normalized = normalizeEffectiveStatusEntityType(entityType);
+    const entityTypes = entityTypesForStatusQuery(normalized);
     const activeOnly = opts?.activeOnly !== false;
     let q = supabase
         .from("status_definitions")
         .select(STATUS_DEF_COLUMNS)
         .is("org_id", null)
-        .eq("entity_type", entityType);
+        .in("entity_type", entityTypes);
     if (activeOnly) q = q.eq("is_active", true);
     const { data, error } = await q;
     if (error) throw new Error(error.message);
@@ -77,33 +185,242 @@ export async function fetchIndustryDefaultStatusDefinitions(
     const byKey = new Map<string, StatusDefinitionRow>();
     for (const r of generic) byKey.set(r.status_key, r);
     for (const r of specific) byKey.set(r.status_key, r);
-    return sortDefs(Array.from(byKey.values()));
+    const out = sortDefs(Array.from(byKey.values()));
+    logDbTiming("status_definitions.industry_defaults_select", Date.now() - t0, {
+        entityType: normalized,
+        activeOnly,
+    });
+    return out;
 }
 
 /** Resolve org's industry to `industries.key` for matching `status_definitions.industry_key`. */
 export async function getOrgIndustryKey(supabase: SupabaseClient, orgId: string): Promise<string | null> {
+    const t0 = Date.now();
     const { data } = await supabase.from("orgs").select("industry_id").eq("id", orgId).maybeSingle();
     const industryId = (data as { industry_id?: string | null } | null)?.industry_id ?? null;
-    if (!industryId) return null;
+    if (!industryId) {
+        logDbTiming("orgs.industry_key_resolve", Date.now() - t0, { orgId, hit: false });
+        return null;
+    }
     const { data: ind } = await supabase.from("industries").select("key").eq("id", industryId).maybeSingle();
     const k = (ind as { key?: string | null } | null)?.key;
-    if (k == null || String(k).trim() === "") return null;
+    if (k == null || String(k).trim() === "") {
+        logDbTiming("orgs.industry_key_resolve", Date.now() - t0, { orgId, hit: false });
+        return null;
+    }
+    logDbTiming("orgs.industry_key_resolve", Date.now() - t0, { orgId, hit: true });
     return String(k).trim();
 }
 
 /**
  * Effective definitions for admin UI: org overrides first; if none, industry defaults (merged).
+ *
+ * **Schedules:** merge industry defaults with org rows by `status_key` (org wins). A lone org subset
+ * no longer hides keys like `canceled` that exist only on industry `status_definitions` rows.
  */
-export async function fetchEffectiveStatusDefinitions(
+async function fetchEffectiveStatusDefinitionsUncached(
+    supabase: SupabaseClient,
+    orgId: string,
+    normalizedEntityType: string,
+    opts?: { activeOnly?: boolean },
+    phasesOut?: EffectiveStatusDefsPhaseTimings | null
+): Promise<StatusDefinitionRow[]> {
+    const tUnc0 = Date.now();
+
+    // For schedules/opportunities we need *all* org overrides (including inactive) so an inactive org row can
+    // explicitly hide an industry default in the effective list.
+    const needsMergeDefaults = normalizedEntityType === "schedules" || normalizedEntityType === "opportunities";
+
+    // Schedules (and opportunities) must merge defaults with org rows so a partial org override
+    // does not hide industry defaults required by workflows/actions.
+    if (needsMergeDefaults) {
+        const tOv0 = Date.now();
+        const [orgRows, industryKey] = await Promise.all([
+            fetchOrgStatusDefinitions(supabase, orgId, normalizedEntityType, { activeOnly: false }),
+            getOrgIndustryKey(supabase, orgId),
+        ]);
+        logDbTiming("status_definitions.merge_parallel_boot", Date.now() - tOv0, {
+            orgId,
+            entityType: normalizedEntityType,
+        });
+        if (phasesOut) phasesOut.overrides_ms = Date.now() - tOv0;
+
+        const tDef0 = Date.now();
+        const defaultRows = await fetchIndustryDefaultStatusDefinitions(
+            supabase,
+            normalizedEntityType,
+            industryKey,
+            opts
+        );
+        if (phasesOut) phasesOut.defaults_ms = Date.now() - tDef0;
+
+        const tMerge0 = Date.now();
+        const activeOnly = opts?.activeOnly !== false;
+        const byKey = new Map<string, StatusDefinitionRow>();
+        for (const r of sortDefs(defaultRows)) {
+            if (activeOnly && !r.is_active) continue;
+            byKey.set(r.status_key, r);
+        }
+        for (const r of orgRows) {
+            if (activeOnly && !r.is_active) {
+                byKey.delete(r.status_key);
+            } else {
+                byKey.set(r.status_key, r);
+            }
+        }
+        const merged = sortDefs(Array.from(byKey.values()));
+        if (phasesOut) phasesOut.merge_ms = Date.now() - tMerge0;
+        if (phasesOut) phasesOut.uncached_ms = Date.now() - tUnc0;
+        return merged;
+    }
+
+    const orgRows = await fetchOrgStatusDefinitions(supabase, orgId, normalizedEntityType, opts);
+    if (orgRows.length > 0) {
+        if (phasesOut) phasesOut.uncached_ms = Date.now() - tUnc0;
+        return sortDefs(orgRows);
+    }
+    const industryKey = await getOrgIndustryKey(supabase, orgId);
+    const out = await fetchIndustryDefaultStatusDefinitions(supabase, normalizedEntityType, industryKey, opts);
+    if (phasesOut) phasesOut.uncached_ms = Date.now() - tUnc0;
+    return out;
+}
+
+/** Sub-timings from the uncached Postgres merge path (null phases when served from Next data cache without running fetcher). */
+export type StatusDefsResolveTelemetry = {
+    normalized_entity_type: string;
+    process_cache_hit: boolean;
+    next_cache_attempted: boolean;
+    /** True when Next `unstable_cache` returned a cached value without invoking the fetcher. */
+    next_cache_hit: boolean;
+    /** Wall time of uncached merge + queries when the fetcher ran; 0 on full cache hits. */
+    uncached_ms: number;
+    overrides_ms: number | null;
+    defaults_ms: number | null;
+    merge_ms: number | null;
+};
+
+export type EffectiveStatusDefinitionsPack = {
+    rows: StatusDefinitionRow[];
+    /**
+     * True when served from this Node process in-memory cache (sub-ms). `false` includes cold path,
+     * test mode, Next `unstable_cache` hits, or first population after TTL — see also `combinedCacheHit`.
+     */
+    processCacheHit: boolean;
+    /** True when either the process cache or Next `unstable_cache` avoided running the uncached merge this request. */
+    combinedCacheHit: boolean;
+    telemetry: StatusDefsResolveTelemetry;
+};
+
+function emptyStatusDefsTelemetry(normalized: string, processHit: boolean): StatusDefsResolveTelemetry {
+    return {
+        normalized_entity_type: normalized,
+        process_cache_hit: processHit,
+        next_cache_attempted: false,
+        next_cache_hit: false,
+        uncached_ms: 0,
+        overrides_ms: null,
+        defaults_ms: null,
+        merge_ms: null,
+    };
+}
+
+/**
+ * Effective merged definitions — same semantics as {@link fetchEffectiveStatusDefinitions}.
+ * Layers: short-TTL **process** map then Next **Data Cache** via `unstable_cache` (90s), then Postgres merge.
+ * Cache keys use {@link normalizeEffectiveStatusEntityType} so `opportunity` / `opportunities` share one entry.
+ */
+export type FetchEffectiveStatusDefinitionsTaggedOpts = {
+    activeOnly?: boolean;
+    /**
+     * In-process LRU TTL (ms). Larger values help warm staging/prod bursts where unrelated traffic
+     * evicts Lambda less often — effective defs still refresh via Postgres on expiry.
+     * Default {@link STATUS_EFFECTIVE_TTL_MS}.
+     */
+    processLruTtlMs?: number;
+    /** Next.js `unstable_cache` `revalidate` seconds for this entity (min 60). Default 90. */
+    nextRevalidateSeconds?: number;
+};
+
+export async function fetchEffectiveStatusDefinitionsTagged(
+    _supabase: SupabaseClient,
+    orgId: string,
+    entityType: string,
+    opts?: FetchEffectiveStatusDefinitionsTaggedOpts
+): Promise<EffectiveStatusDefinitionsPack> {
+    const normalized = normalizeEffectiveStatusEntityType(entityType);
+    const activeOnly = opts?.activeOnly !== false;
+    const processTtlMs = typeof opts?.processLruTtlMs === "number" && opts.processLruTtlMs >= 5000 ? opts.processLruTtlMs : STATUS_EFFECTIVE_TTL_MS;
+    if (STATUS_EFFECTIVE_CACHE_ENABLED) {
+        const ck = statusEffectiveCacheKey(orgId, normalized, activeOnly);
+        const ent = STATUS_EFFECTIVE_CACHE.get(ck);
+        const now = Date.now();
+        if (ent && now - ent.at < ent.ttlMs) {
+            return {
+                rows: ent.rows,
+                processCacheHit: true,
+                combinedCacheHit: true,
+                telemetry: emptyStatusDefsTelemetry(normalized, true),
+            };
+        }
+    }
+    const phases: EffectiveStatusDefsPhaseTimings = {};
+    const { rows, fetcherRan, nextCacheAttempted } = await loadEffectiveStatusDefinitionsThroughNextCache(
+        orgId,
+        normalized,
+        { activeOnly, nextRevalidateSeconds: opts?.nextRevalidateSeconds },
+        phases
+    );
+    const nextCacheHit = nextCacheAttempted && !fetcherRan;
+    if (STATUS_EFFECTIVE_CACHE_ENABLED) {
+        STATUS_EFFECTIVE_CACHE.set(statusEffectiveCacheKey(orgId, normalized, activeOnly), {
+            at: Date.now(),
+            rows,
+            ttlMs: processTtlMs,
+        });
+    }
+    const uncachedMs = typeof phases.uncached_ms === "number" ? phases.uncached_ms : 0;
+    return {
+        rows,
+        processCacheHit: false,
+        combinedCacheHit: nextCacheHit,
+        telemetry: {
+            normalized_entity_type: normalized,
+            process_cache_hit: false,
+            next_cache_attempted: nextCacheAttempted,
+            next_cache_hit: nextCacheHit,
+            uncached_ms: uncachedMs,
+            overrides_ms: typeof phases.overrides_ms === "number" ? phases.overrides_ms : null,
+            defaults_ms: typeof phases.defaults_ms === "number" ? phases.defaults_ms : null,
+            merge_ms: typeof phases.merge_ms === "number" ? phases.merge_ms : null,
+        },
+    };
+}
+
+/**
+ * Effective definitions without Next/process caches — for CLI inventory and other non-request contexts.
+ */
+export async function fetchEffectiveStatusDefinitionsDirect(
     supabase: SupabaseClient,
     orgId: string,
     entityType: string,
     opts?: { activeOnly?: boolean }
 ): Promise<StatusDefinitionRow[]> {
-    const orgRows = await fetchOrgStatusDefinitions(supabase, orgId, entityType, opts);
-    if (orgRows.length > 0) return sortDefs(orgRows);
-    const industryKey = await getOrgIndustryKey(supabase, orgId);
-    return fetchIndustryDefaultStatusDefinitions(supabase, entityType, industryKey, opts);
+    const normalized = normalizeEffectiveStatusEntityType(entityType);
+    return fetchEffectiveStatusDefinitionsUncached(supabase, orgId, normalized, opts);
+}
+
+/**
+ * Effective definitions for admin UI: org overrides first; if none, industry defaults (merged for schedules/opportunities).
+ * Short TTL in-process cache (org + entity + activeOnly); disabled in test to avoid cross-example staleness.
+ */
+export async function fetchEffectiveStatusDefinitions(
+    supabase: SupabaseClient,
+    orgId: string,
+    entityType: string,
+    opts?: FetchEffectiveStatusDefinitionsTaggedOpts
+): Promise<StatusDefinitionRow[]> {
+    const pack = await fetchEffectiveStatusDefinitionsTagged(supabase, orgId, entityType, opts);
+    return pack.rows;
 }
 
 /** Build a map from pre-fetched effective definitions (batch list enrichment). */

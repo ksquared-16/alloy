@@ -17,6 +17,8 @@ export async function findOrCreatePersonInOrgWithMeta(
     first_name: string | null;
     last_name: string | null;
     org_id: string | null;
+    /** When set, applied only on insert (enrollment intake default). */
+    default_status_key_on_create?: string | null;
   }
 ): Promise<FindOrCreatePersonInOrgResult | null> {
   const { email, phone, first_name, last_name, org_id } = params;
@@ -44,15 +46,21 @@ export async function findOrCreatePersonInOrgWithMeta(
 
   if (!org_id) return null;
 
-  const { data: created, error } = await supabase
-    .from("persons")
-    .insert({
+  const insertPayload: Record<string, unknown> = {
       org_id,
       first_name: first_name ?? null,
       last_name: last_name ?? null,
       email: emailNorm ?? null,
       phone: phoneNorm ?? null,
-    })
+  };
+  const statusKeyOnCreate = params.default_status_key_on_create?.trim();
+  if (statusKeyOnCreate) {
+      insertPayload.status_key = statusKeyOnCreate;
+  }
+
+  const { data: created, error } = await supabase
+    .from("persons")
+    .insert(insertPayload)
     .select("id")
     .single();
 

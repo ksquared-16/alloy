@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>10 — Responsive behavior</title>
+<link rel="stylesheet" href="_shared.css" />
+</head>
+<body>
+<div class="frame">
+  <div class="label"><span class="dot"></span>Responsive <span>One surface · three form factors · density adapts, identity does not</span></div>
+  <div class="body">
+    <div class="surface">
+      <div class="surface-head">
+        <div class="titles">
+          <div class="crumbs"><span>Operational Intelligence</span><span class="sep">›</span><span class="here">Responsive behavior</span></div>
+          <h2>Responsive behavior</h2>
+          <div class="sub">The same Operational Intelligence surface reflows from desktop → tablet → mobile. Zones stack, the grid collapses 12→6→1, and Metric cards drop to compact/micro density — never a different layout system.</div>
+        </div>
+      </div>
+      <div class="surface-body">
+        <div class="bp-wrap">
+          <!-- Desktop -->
+          <div class="device">
+            <div class="dcap">Desktop · 1440 · full composition</div>
+            <div class="dbody">
+              <div class="hstrip" style="margin-bottom:10px"><div class="hpill" style="padding:8px"><div class="hdot warn" style="width:24px;height:24px;font-size:11px">!</div><div><div class="ht" style="font-size:9px">Ops</div><div class="hv" style="font-size:12px">76</div></div></div><div class="hpill" style="padding:8px"><div class="hdot crit" style="width:24px;height:24px;font-size:11px">7</div><div><div class="ht" style="font-size:9px">Attention</div><div class="hv" style="font-size:12px">7</div></div></div><div class="hpill" style="padding:8px"><div class="hdot good" style="width:24px;height:24px;font-size:11px">✓</div><div><div class="ht" style="font-size:9px">Flow</div><div class="hv" style="font-size:12px">OK</div></div></div></div>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+                <div class="kpi-mini t-warn" style="min-width:0"><div class="kl">Response</div><div class="kv" style="font-size:18px">4.2h</div></div>
+                <div class="kpi-mini t-good" style="min-width:0"><div class="kl">Tours</div><div class="kv" style="font-size:18px">11</div></div>
+                <div class="kpi-mini t-good" style="min-width:0"><div class="kl">Forms</div><div class="kv" style="font-size:18px">82%</div></div>
+                <div class="kpi-mini t-crit" style="min-width:0"><div class="kl">Overdue</div><div class="kv" style="font-size:18px">14</div></div>
+              </div>
+              <div class="mcard t-warn" style="margin-top:8px;padding:10px"><div class="mc-head"><span class="mc-label" style="font-size:11px">Response by site</span></div><div class="bars"><div class="bar-row" style="font-size:10px"><span class="bl" style="width:50px">Maple</span><span class="bar-track"><span class="bar-fill" style="width:30%"></span></span></div><div class="bar-row" style="font-size:10px"><span class="bl" style="width:50px">Down</span><span class="bar-track"><span class="bar-fill crit" style="width:88%"></span></span></div></div></div>
+              <div class="note" style="margin-top:8px;font-size:10px">Pulse + Attention + Bottlenecks side by side · 12-col grid</div>
+            </div>
+          </div>
+
+          <!-- Tablet -->
+          <div class="device">
+            <div class="dcap">Tablet · 834 · 2-up</div>
+            <div class="dbody">
+              <div class="hstrip" style="margin-bottom:10px"><div class="hpill" style="padding:8px"><div class="hdot warn" style="width:24px;height:24px;font-size:11px">!</div><div><div class="ht" style="font-size:9px">Ops</div><div class="hv" style="font-size:12px">76</div></div></div><div class="hpill" style="padding:8px"><div class="hdot crit" style="width:24px;height:24px;font-size:11px">7</div><div><div class="ht" style="font-size:9px">Attention</div><div class="hv" style="font-size:12px">7</div></div></div></div>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+                <div class="kpi-mini t-warn" style="min-width:0"><div class="kl">Response</div><div class="kv" style="font-size:18px">4.2h</div></div>
+                <div class="kpi-mini t-crit" style="min-width:0"><div class="kl">Overdue</div><div class="kv" style="font-size:18px">14</div></div>
+              </div>
+              <div class="mcard t-crit" style="margin-top:8px;padding:10px"><div class="mc-head"><span class="mc-label" style="font-size:11px">Needs attention</span><span class="tone crit" style="font-size:9px">7</span></div><div class="mc-meta" style="font-size:10px">3 tours unconfirmed · 5 leads aging</div><div class="drill" style="font-size:10px"><span class="arr">→</span> Resolve</div></div>
+              <div class="note" style="margin-top:8px;font-size:10px">Zones stack · grid 12→6 · cards compact</div>
+            </div>
+          </div>
+
+          <!-- Mobile -->
+          <div class="device" style="border-radius:26px">
+            <div class="dcap">Mobile · Director Snapshot · 390</div>
+            <div class="dbody">
+              <div class="ws-sub" style="font-size:10px">Bright Futures · today</div>
+              <div class="hpill" style="padding:9px;margin:6px 0"><div class="hdot warn" style="width:28px;height:28px;font-size:12px">76</div><div><div class="ht" style="font-size:9px">Operational health</div><div class="hv" style="font-size:13px">Watch</div></div></div>
+              <div class="kpi-mini t-crit" style="margin-bottom:6px"><div class="kl">Needs attention</div><div class="kv" style="font-size:20px">7</div><div class="kd down">tap to resolve →</div></div>
+              <div class="kpi-mini t-warn" style="margin-bottom:6px"><div class="kl">Avg response</div><div class="kv" style="font-size:20px">4.2h</div></div>
+              <div class="kpi-mini t-good"><div class="kl">Tours today</div><div class="kv" style="font-size:20px">11</div></div>
+              <div class="note" style="margin-top:8px;font-size:10px">Single column · micro density · attention first · still drills to work</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="callout" style="margin-top:20px">Responsive is a <b>density &amp; reflow</b> behavior, not a separate build. The composition (Design Surface → Zone → Card) is constant; the grid collapses (12→6→1), cards step down the density ladder, and on mobile the surface re-prioritizes <b>Attention first</b> via Viewpoint (Director Snapshot). Drill targets are preserved on every form factor — Analytics never dead-ends, even on a phone.</div>
+        <div class="note">Mobile "Director Snapshot" and "Teacher" views are <b>Viewpoints</b> (audience axis), not separate surfaces — they override card visibility/order/density over one composition.</div>
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

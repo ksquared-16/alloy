@@ -1,0 +1,79 @@
+---
+description: Alloy implementation and verification guardrails
+alwaysApply: true
+---
+
+# Alloy Development Guardrails
+
+Follow existing patterns in `web/`, `supabase/migrations/`, and active docs before introducing new abstractions.
+
+## Operating Model
+
+Use audit -> design -> build for substantial work.
+
+- Read docs before coding.
+- Do not invent architecture.
+- Keep changes minimal, scoped, and reversible.
+- Prefer config-driven behavior where Alloy already has config surfaces.
+- Do not create parallel systems when existing modules exist.
+- Before changing code, summarize files inspected and likely blast radius.
+
+## Before Editing
+
+- Inspect `docs/README.md`, `docs/platform/governance/design-and-operational-doctrine.md`, and the relevant `docs/platform/**` topic file before implementation.
+- Search with `rg` for nearby patterns, route guards, tests, and migrations.
+- For admin/API work, identify the auth path: `getAdminContextCached`, `getAdminAccessContextCached`, `requireAdmin`, `requireAdminOrOps`, or a permission-specific guard.
+- For schema work, compare migrations with `docs/supabase/reference/*.csv`.
+- For behavior changes, update the matching **`docs/platform/**`** topic file (or `docs/governance/**` for agent/repo rules) in the same change.
+
+## Hard Rules
+
+- No direct Supabase service-role or privileged writes from client code.
+- No raw DB writes unless explicitly requested through migrations, scripts, or established server-side mutation paths.
+- Preserve RLS, org scoping, department scoping, and site scoping.
+- Queues are preview/selection only, not operational truth.
+- Record drawer/layout behavior must stay config-driven.
+- Workflows must use registered event keys and existing execution paths.
+- Do not bypass state machines, permissions, audit logs, or workflow events.
+- Do not mutate financial, compliance, ledger, or operational truth as "config."
+- AI/Codex may propose changes, but platform APIs and tests remain authoritative.
+
+## Implementation Preferences
+
+- Keep changes scoped to the feature area.
+- Prefer shared helpers already present in `web/lib/**`.
+- Avoid client-side direct DB access for privileged or AI-driven mutations.
+- Do not encode business-critical truth only in JSON config; code owns invariants.
+- Do not bypass existing workflow/action/event paths for meaningful side effects.
+
+## Verification
+
+Prefer focused checks first:
+
+- `cd web && npx tsc --noEmit` — **required before merge** on any `web/` TypeScript change (catches errors Vitest may miss).
+- `cd web && npm run verify:module-imports` — **required before staging deploy** when adding `@/lib/**` imports; catches new files not committed (Vercel `Module not found`).
+- `cd web && npm run lint`
+- `cd web && npm run test -- <relevant test path>` when changing covered behavior
+- Add or update tests when touching shared behavior, API contracts, migrations, workflow effects, permissions, forms, communications, or queues.
+
+Use full `cd web && npm run test` before larger merges when practical.
+
+### TypeScript: `import type` for props and interfaces
+
+When a symbol appears **only as a type** (component props, function parameters, return types), import it with **`import type`** from the defining module — do not rely on value imports from the same line unless the symbol is also used at runtime.
+
+**Failure mode (Vercel `next build` / `tsc`):** `Cannot find name 'SomeType'` when a type was used in `type Props = { … }` but only a runtime import exists (or the type import was dropped during a refactor).
+
+**Example (forms field authoring, May 2026):** `FormFieldAuthoringCard.tsx` referenced `SystemFieldRegistryEntry` in props after `import { linesToStaticOptions }` — fix: `import { linesToStaticOptions, type SystemFieldRegistryEntry } from "@/lib/forms/systemFieldRegistry"`.
+
+**Rule:** After splitting or editing imports, run `cd web && npx tsc --noEmit` before pushing.
+
+## Final Response Contract
+
+For implementation work, return:
+
+1. Files changed
+2. What changed
+3. Validation results
+4. Risks / follow-ups
+5. Suggested commit message

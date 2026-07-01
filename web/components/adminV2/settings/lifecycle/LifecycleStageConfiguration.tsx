@@ -1,0 +1,82 @@
+"use client";
+
+import { useRef } from "react";
+import StageEditorV2, {
+    type StageEditorV2Handle,
+} from "@/components/adminV2/settings/lifecycle/StageEditorV2";
+import type { LifecycleStageSaveUiState } from "@/components/adminV2/settings/lifecycle/LifecycleStageWorkspace";
+import type { LifecycleStageBootstrapPayload } from "@/lib/lifecycle/lifecycleStageBootstrapTypes";
+import type { StatusRollupV1 } from "@/lib/lifecycle/statusRollupV1";
+import type { LifecycleRequirementEntityKey } from "@/lib/lifecycle/lifecycleFieldRequirementsCatalog";
+import type { LifecycleBuilderStageRecord } from "@/lib/lifecycle/lifecycleBuilderConfig";
+import type { ReactNode } from "react";
+
+export type { StageEditorV2Handle as LifecycleStageConfigurationHandle };
+
+export default function LifecycleStageConfiguration({
+    departmentId,
+    businessProcessKey,
+    stageKey,
+    stageLabel,
+    lifecycleName: _lifecycleName,
+    stageRecord,
+    allStages,
+    bootstrap,
+    bootstrapLoading,
+    statusesError,
+    onStatusRollupChange,
+    validationSlot: _validationSlot,
+    saveState,
+    saveError,
+    onSaveStage,
+    onDirtyChange,
+    onDeleteStage,
+    workspaceHandleRef,
+}: {
+    departmentId: string;
+    businessProcessKey: string;
+    stageKey: string;
+    stageLabel: string;
+    lifecycleName: string;
+    stageRecord?: LifecycleBuilderStageRecord | null;
+    allStages?: LifecycleBuilderStageRecord[];
+    bootstrap: LifecycleStageBootstrapPayload | null;
+    bootstrapLoading: boolean;
+    statusesError: string | null;
+    onStatusRollupChange: (rollup: StatusRollupV1, flatKeys: string[]) => void;
+    validationSlot?: ReactNode;
+    readyCheckRefreshKey?: string;
+    saveState: LifecycleStageSaveUiState;
+    saveError: string | null;
+    onSaveStage: () => void | Promise<void>;
+    onDirtyChange?: (dirty: boolean) => void;
+    onDeleteStage?: () => void;
+    workspaceHandleRef?: React.RefObject<StageEditorV2Handle | null>;
+}) {
+    const localRef = useRef<StageEditorV2Handle | null>(null);
+    const ref = workspaceHandleRef ?? localRef;
+
+    return (
+        <div data-testid="lifecycle-stage-configuration" className="flex min-h-0 flex-1 flex-col overflow-y-auto">
+            <StageEditorV2
+                workspaceRef={ref}
+                departmentId={departmentId}
+                businessProcessKey={businessProcessKey}
+                stageKey={stageKey}
+                stageLabel={stageLabel}
+                stageRecord={stageRecord}
+                allStages={allStages}
+                bootstrap={bootstrap}
+                bootstrapLoading={bootstrapLoading}
+                statusesError={statusesError}
+                onStatusRollupChange={onStatusRollupChange}
+                saveState={saveState}
+                saveError={saveError}
+                onSaveStage={onSaveStage}
+                onDirtyChange={onDirtyChange}
+                onDeleteStage={onDeleteStage}
+                entityDisplayLabels={bootstrap?.entity_display_labels ?? undefined}
+            />
+        </div>
+    );
+}

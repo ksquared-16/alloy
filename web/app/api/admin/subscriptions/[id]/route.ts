@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
-import { requireAdminOrOps, logAdminAudit, getAdminAuth } from "@/lib/adminAuth";
-import { getAdminContext } from "@/lib/admin/getAdminContext";
+import { requireAdminOrOps, logAdminAudit, getAdminAuthCached } from "@/lib/adminAuth";
+import { getAdminContextCached } from "@/lib/admin/getAdminContext";
 import {
     assertAllowedStatusKey,
     displayLabelsFromDefinitions,
@@ -18,7 +18,7 @@ export async function PATCH(
     const forbidden = await requireAdminOrOps();
     if (forbidden) return forbidden;
 
-    const ctx = await getAdminContext();
+    const ctx = await getAdminContextCached();
     if (!ctx.ok) {
         return NextResponse.json({ error: ctx.status === 401 ? "Unauthorized" : "Forbidden" }, { status: ctx.status });
     }
@@ -61,7 +61,7 @@ export async function PATCH(
         return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
 
-    const auth = await getAdminAuth();
+    const auth = await getAdminAuthCached();
     if (!auth) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
     const newStatus =

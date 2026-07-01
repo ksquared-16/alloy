@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><title>07 — Analytics Placement</title><link rel="stylesheet" href="_shared.css"></head>
+<body>
+<div class="mockup-frame">
+  <div class="mockup-label">07 — Analytics Placement <span class="sub">Definition (OI) vs Presentation (EB) · place a metric · choose viz + band display</span></div>
+  <div class="stage">
+    <div class="split">
+      <div class="owner-card">
+        <div class="owner-head oi">◆ Metric Definition · Operational Intelligence <span class="lock" style="margin-left:auto;">governed</span></div>
+        <div class="owner-body">
+          <div class="leaf-name" style="font-size:14px;">Forecast Occupancy</div>
+          <div class="kv"><span class="k">Calculation</span><span class="v">enrolled ÷ capacity</span></div>
+          <div class="kv"><span class="k">Aggregation</span><span class="v">weighted avg</span></div>
+          <div class="kv"><span class="k">Periods</span><span class="v">week, month, term</span></div>
+          <div class="kv"><span class="k">Dimensions</span><span class="v">Location, Room</span></div>
+          <div class="kv"><span class="k">Comparisons</span><span class="v">prior period</span></div>
+          <div class="kv"><span class="k">Bands</span><span class="v">≤60 good · 60–85 watch · &gt;85 critical</span></div>
+          <div style="font-size:11px;color:var(--violet);margin-top:12px;">⟂ Math, bands, and governance never change based on where it's shown.</div>
+        </div>
+      </div>
+      <div class="owner-card">
+        <div class="owner-head eb">● Metric Presentation · Experience Builder</div>
+        <div class="owner-body">
+          <div class="kpi-tile" style="margin-bottom:12px;">
+            <div class="kpi-value">78%</div>
+            <div class="kpi-label">Forecast Occupancy · this term</div>
+            <div class="kpi-trend" style="color:var(--amber);">▲ 6 pts vs prior · watch</div>
+            <div class="band-bar"></div>
+          </div>
+          <div class="kv"><span class="k">Renderer</span><span class="v">KPI Card ▾</span></div>
+          <div class="kv"><span class="k">Period (from definition)</span><span class="v">This term ▾</span></div>
+          <div class="kv"><span class="k">Comparison display</span><span class="v">delta + label ▾</span></div>
+          <div class="kv"><span class="k">Show bands</span><span class="v">On · as color ▾</span></div>
+          <div class="kv"><span class="k">Placement</span><span class="v">KPI strip · span 1 ▾</span></div>
+          <div style="font-size:11px;color:var(--pine);margin-top:12px;">● Picks only from what the definition exposes; chooses the picture.</div>
+        </div>
+      </div>
+    </div>
+    <div class="center-note">A dashboard is just a Design Surface whose Card Type is <strong>Metric</strong>. Placing a metric = pick the metric (OI) → choose renderer, period, comparison display, band display, placement (EB). <strong>Bands come from the definition; whether/how to color them is presentation.</strong></div>
+  </div>
+</div>
+</body></html>

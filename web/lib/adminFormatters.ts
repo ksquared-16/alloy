@@ -1,3 +1,11 @@
+import { UTC_FALLBACK_IANA, isValidIanaTimeZone } from "@/lib/admin/timezoneContract";
+import {
+    formatDisplayDate,
+    formatDisplayDateTime,
+    formatQueueRecordDateDisplay as formatQueueRecordDateDisplayPresentation,
+    parsePresentationDateInput,
+} from "@/lib/presentation/presentationDateFormat";
+
 /**
  * Shared formatting helpers for admin portal.
  * Use these for consistent date and currency display in tables and drawers.
@@ -54,8 +62,86 @@ export function formatPayoutPercent(value: number | string | null | undefined | 
     return `${display}%`;
 }
 
-/** Display as MM/DD/YYYY. Uses UTC so server and client output match (avoids hydration #418). */
-export function formatDate(value: string | number | Date | null | undefined): string {
+/** MM-DD-YYYY in UTC — date-only queue/record preview (stable server–client). */
+export function formatDateUsShortHyphenUtc(value: string | number | Date | null | undefined): string {
+    if (value === null || value === undefined || value === "") return "—";
+    const d = typeof value === "object" && value instanceof Date ? value : new Date(value);
+    if (!Number.isNaN(d.getTime())) {
+        const mm = String(d.getUTCMonth() + 1).padStart(2, "0");
+        const dd = String(d.getUTCDate()).padStart(2, "0");
+        const yy = String(d.getUTCFullYear());
+        return `${mm}-${dd}-${yy}`;
+    }
+    const s = String(value).trim();
+    const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(s);
+    if (m) return `${m[2]}-${m[3]}-${m[1]}`;
+    return s;
+}
+
+/**
+ * MM-DD-YYYY + time in UTC (12-hour) — queue preview tour/datetime strings.
+ * No timezone conversion beyond interpreting the instant as UTC for display.
+ */
+export function formatDateTimeUsShortHyphenUtc(value: string | number | Date | null | undefined): string {
+    if (value === null || value === undefined || value === "") return "—";
+    const d = typeof value === "object" && value instanceof Date ? value : new Date(value);
+    if (Number.isNaN(d.getTime())) return "—";
+    const datePart = formatDateUsShortHyphenUtc(d);
+    const timePart = new Intl.DateTimeFormat("en-US", {
+        hour: "numeric",
+        minute: "2-digit",
+        hour12: true,
+        timeZone: "UTC",
+    }).format(d);
+    return `${datePart} ${timePart}`;
+}
+
+/**
+ * Normalize free-text queue preview lines: YYYY-MM-DD and MM/DD/YYYY tokens → MM-DD-YYYY.
+ */
+export function normalizePreviewLooseDateTokens(text: string): string {
+    let s = text;
+    s = s.replace(/\b(\d{1,2})\/(\d{1,2})\/(\d{4})\b/g, (_full, mo: string, day: string, yr: string) => {
+        return `${String(mo).padStart(2, "0")}-${String(day).padStart(2, "0")}-${yr}`;
+    });
+    s = s.replace(/\b(\d{4})-(\d{2})-(\d{2})\b/g, (_full, yr: string, mo: string, day: string) => `${mo}-${day}-${yr}`);
+    return s;
+}
+
+/**
+ * Normalize tour/timing preview values to MM-DD-YYYY (optional UTC time segment).
+ * Handles enrollment queue `Tour: MM/DD/YYYY …`, ISO date/datetime, and plain YYYY-MM-DD.
+ */
+export function formatQueuePreviewTourTimingUtc(value: string | null | undefined): string {
+    const t = (value ?? "").trim();
+    if (!t || t === "—" || t === "-") return "";
+    const slashFull = /^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:\s+(.*))?$/.exec(t);
+    if (slashFull) {
+        const mm = slashFull[1]!.padStart(2, "0");
+        const dd = slashFull[2]!.padStart(2, "0");
+        const yy = slashFull[3]!;
+        const datePart = `${mm}-${dd}-${yy}`;
+        const rest = slashFull[4]?.trim();
+        return rest ? `${datePart} ${rest}` : datePart;
+    }
+    if (/^\d{4}-\d{2}-\d{2}$/.test(t)) return formatDateUsShortHyphenUtc(t);
+    const ms = Date.parse(t);
+    if (Number.isFinite(ms)) {
+        const d = new Date(ms);
+        const hasExplicitTime =
+            /\d{1,2}:\d{2}/.test(t) ||
+            (/[Tt]/.test(t) &&
+                (d.getUTCHours() !== 0 ||
+                    d.getUTCMinutes() !== 0 ||
+                    d.getUTCSeconds() !== 0 ||
+                    d.getUTCMilliseconds() !== 0));
+        return hasExplicitTime ? formatDateTimeUsShortHyphenUtc(d) : formatDateUsShortHyphenUtc(d);
+    }
+    return normalizePreviewLooseDateTokens(t);
+}
+
+/** MM/DD/YYYY in UTC — audit trail parity / stable server–client comparison. */
+export function formatDateUtcAudit(value: string | number | Date | null | undefined): string {
     if (value === null || value === undefined) return "-";
     const d = typeof value === "object" ? value : new Date(value);
     if (Number.isNaN((d as Date).getTime())) return "-";
@@ -67,27 +153,8 @@ export function formatDate(value: string | number | Date | null | undefined): st
     }).format(d as Date);
 }
 
-/** Format subscription cadence + interval as label, e.g. "Every 1 week", "Every 2 weeks", "Every 3 months". */
-export function formatFrequencyLabel(cadence: string | null | undefined, interval: number | string | null | undefined): string {
-    const c = (cadence ?? "month").toLowerCase();
-    const n = Math.max(1, Number(interval) || 1);
-    if (c === "week") return n === 1 ? "Every 1 week" : `Every ${n} weeks`;
-    return n === 1 ? "Every 1 month" : `Every ${n} months`;
-}
-
-/** Format US phone for display: (541) 654-3217. Accepts E.164, digits-only, or already formatted. */
-export function formatPhoneUS(value: string | null | undefined): string {
-    if (value == null || value === "") return "—";
-    const digits = String(value).replace(/\D/g, "");
-    if (digits.length < 10) return String(value);
-    const area = digits.slice(-10, -7);
-    const mid = digits.slice(-7, -4);
-    const last = digits.slice(-4);
-    return `(${area}) ${mid}-${last}`;
-}
-
-/** Display as MM/DD/YYYY, h:mm A. Uses UTC so server and client output match (avoids hydration #418). */
-export function formatDateTime(value: string | number | Date | null | undefined): string {
+/** MM/DD/YYYY, h:mm A in UTC — audit trail parity / stable server–client comparison. */
+export function formatDateTimeUtcAudit(value: string | number | Date | null | undefined): string {
     if (value === null || value === undefined) return "-";
     const d = typeof value === "object" ? value : new Date(value);
     if (Number.isNaN((d as Date).getTime())) return "-";
@@ -100,6 +167,105 @@ export function formatDateTime(value: string | number | Date | null | undefined)
         hour12: true,
         timeZone: "UTC",
     }).format(d as Date);
+}
+
+/** @deprecated Prefer formatDateUtcAudit. */
+export function formatDate(value: string | number | Date | null | undefined): string {
+    return formatDateUtcAudit(value);
+}
+
+/** @deprecated Internal — prefer `parsePresentationDateInput` from `@/lib/presentation/presentationDateFormat`. */
+const parseQueueRecordDateInput = parsePresentationDateInput;
+
+/**
+ * Queue row date/event display — compact operator format (`Jan 15`, `Jun 22, 2026`).
+ * Doctrine: `docs/system/typography-and-presentation-doctrine.md`
+ */
+export function formatQueueRecordDateDisplay(value: string | number | Date | null | undefined): string {
+    if (value === null || value === undefined || value === "") return "";
+    const formatted = formatQueueRecordDateDisplayPresentation(value);
+    if (formatted) return formatted;
+    const tour = formatQueuePreviewTourTimingUtc(String(value).trim());
+    if (!tour) return String(value).trim();
+    const reparsed = formatQueueRecordDateDisplayPresentation(tour);
+    return reparsed || tour;
+}
+
+export { formatDisplayDate, formatDisplayDateTime };
+
+/** Format subscription cadence + interval as label, e.g. "Every 1 week", "Every 2 weeks", "Every 3 months". */
+export function formatFrequencyLabel(cadence: string | null | undefined, interval: number | string | null | undefined): string {
+    const c = (cadence ?? "month").toLowerCase();
+    const n = Math.max(1, Number(interval) || 1);
+    if (c === "week") return n === 1 ? "Every 1 week" : `Every ${n} weeks`;
+    return n === 1 ? "Every 1 month" : `Every ${n} months`;
+}
+
+/** Format US phone for display: (541) 654-3217. Uses last 10 digits when country code 1 is present. */
+export function formatPhoneUS(value: string | null | undefined): string {
+    if (value == null || value === "") return "—";
+    const digits = String(value).replace(/\D/g, "");
+    if (digits.length < 10) return String(value).trim() || "—";
+    const area = digits.slice(-10, -7);
+    const mid = digits.slice(-7, -4);
+    const last = digits.slice(-4);
+    return `(${area}) ${mid}-${last}`;
+}
+
+/** Format US phone for editable inputs; empty string when no value. */
+export function formatPhoneUSForEdit(value: string | null | undefined): string {
+    if (value == null || String(value).trim() === "") return "";
+    const formatted = formatPhoneUS(value);
+    return formatted === "—" ? String(value).trim() : formatted;
+}
+
+/** @deprecated Prefer formatDateTimeUtcAudit. */
+export function formatDateTime(value: string | number | Date | null | undefined): string {
+    return formatDateTimeUtcAudit(value);
+}
+
+function resolveDisplayTimeZone(iana: string): string {
+    const t = (iana ?? "").trim();
+    return t && isValidIanaTimeZone(t) ? t : UTC_FALLBACK_IANA;
+}
+
+/** User-facing date in resolved profile/org timezone — `Jan 13, 2024` display doctrine. */
+export function formatDateForUserDisplay(
+    value: string | number | Date | null | undefined,
+    timeZoneIana: string
+): string {
+    if (value === null || value === undefined) return "-";
+    const formatted = formatDisplayDate(value, { timeZone: resolveDisplayTimeZone(timeZoneIana) });
+    return formatted || "-";
+}
+
+/** User-facing datetime in resolved profile/org timezone — `Jan 13, 2024 · 2:30 PM`. */
+export function formatDateTimeForUserDisplay(
+    value: string | number | Date | null | undefined,
+    timeZoneIana: string
+): string {
+    if (value === null || value === undefined) return "-";
+    const formatted = formatDisplayDateTime(value, { timeZone: resolveDisplayTimeZone(timeZoneIana) });
+    return formatted || "-";
+}
+
+/**
+ * System-default timezone (often browser local on the client). Avoid for Timezone Contract v1;
+ * prefer formatDateTimeForUserDisplay with resolved profile/org IANA.
+ */
+export function formatDateTimeLocal(value: string | number | Date | null | undefined): string {
+    if (value === null || value === undefined) return "-";
+    const d = typeof value === "object" ? value : new Date(value);
+    if (Number.isNaN((d as Date).getTime())) return "-";
+    const s = new Intl.DateTimeFormat("en-US", {
+        month: "2-digit",
+        day: "2-digit",
+        year: "numeric",
+        hour: "numeric",
+        minute: "2-digit",
+        hour12: true,
+    }).format(d as Date);
+    return s.replace(",", "").replace(/\s+/g, " ").trim();
 }
 
 /** Recurrence unit values for dropdowns (stored lowercase). */

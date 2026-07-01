@@ -1,16 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
-import { getAdminContext } from "@/lib/admin/getAdminContext";
+import { requirePortalOrUsersRolesManageAuth, requireUsersRolesManageAuth } from "@/lib/admin/canManageUsersAndRoles";
 
-/** GET: list permission_keys granted for org + role_key. Admin + ops can read. */
+/** GET: list permission_keys granted for org + role_key. Portal (admin/ops) or Users & Roles managers. */
 export async function GET(request: NextRequest) {
-    const ctx = await getAdminContext();
-    if (!ctx.ok) {
-        return NextResponse.json(
-            { error: ctx.status === 401 ? "Unauthorized" : "Forbidden" },
-            { status: ctx.status }
-        );
-    }
+    const auth = await requirePortalOrUsersRolesManageAuth();
+    if (!auth.ok) return auth.response;
+    const { orgId } = auth.access;
 
     const { searchParams } = new URL(request.url);
     const role_key = searchParams.get("role_key")?.trim();
@@ -23,7 +19,7 @@ export async function GET(request: NextRequest) {
     const { data: rows, error } = await supabase
         .from("role_permission_grants")
         .select("permission_key")
-        .eq("org_id", ctx.orgId)
+        .eq("org_id", orgId)
         .eq("role_key", role_key)
         .eq("allowed", true);
 
@@ -36,18 +32,11 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ permission_keys });
 }
 
-/** PUT: replace all grants for org + role_key. Admin only. */
+/** PUT: replace all grants for org + role_key. Requires org admin or `settings.users_roles` permission. */
 export async function PUT(request: NextRequest) {
-    const ctx = await getAdminContext();
-    if (!ctx.ok) {
-        return NextResponse.json(
-            { error: ctx.status === 401 ? "Unauthorized" : "Forbidden" },
-            { status: ctx.status }
-        );
-    }
-    if (ctx.role !== "admin") {
-        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
+    const auth = await requireUsersRolesManageAuth();
+    if (!auth.ok) return auth.response;
+    const { orgId } = auth.access;
 
     const { searchParams } = new URL(request.url);
     const role_key = searchParams.get("role_key")?.trim();
@@ -81,7 +70,7 @@ export async function PUT(request: NextRequest) {
     const { error: deleteErr } = await supabase
         .from("role_permission_grants")
         .delete()
-        .eq("org_id", ctx.orgId)
+        .eq("org_id", orgId)
         .eq("role_key", role_key);
 
     if (deleteErr) {
@@ -90,7 +79,7 @@ export async function PUT(request: NextRequest) {
 
     if (permission_keys.length > 0) {
         const inserts = permission_keys.map((permission_key) => ({
-            org_id: ctx.orgId,
+            org_id: orgId,
             role_key,
             permission_key,
             allowed: true,

@@ -9,7 +9,9 @@ import {
     resolveSqftTierDisplayLabels,
 } from "@/lib/book-v2/loadCleaningPricingCatalog";
 import { filterExcludedCustomerAddonKeys } from "@/lib/book-v2/customerAddonPolicy";
-import { resolveOptionSetOptions } from "@/lib/fields/resolveOptionSetOptions";
+import { BOOK_V2_ACCESS_METHOD_STABLE_TO_UI } from "@/lib/book-v2/bookingCanonicalMaps";
+import { resolveOptionSetOptions, resolveOptionSetOptionsWithMetadata } from "@/lib/fields/resolveOptionSetOptions";
+import { fetchOperationalTimezoneForOrg, UTC_FALLBACK_IANA } from "@/lib/admin/timezoneContract";
 
 /**
  * GET /api/public/booking-config
@@ -22,18 +24,48 @@ export async function GET() {
         }
         const supabase = createServiceRoleClient();
         const orgId = process.env.ALLOY_PUBLIC_ORG_ID?.trim() || null;
+        let operational_timezone_iana = UTC_FALLBACK_IANA;
+        if (orgId) {
+            const { iana } = await fetchOperationalTimezoneForOrg(supabase, orgId);
+            operational_timezone_iana = iana;
+        }
         const verticalId = await resolveCleaningVerticalId(supabase, "cleaning");
         if (!verticalId) {
             return NextResponse.json({ ok: false, message: "Cleaning vertical not found" }, { status: 500 });
         }
 
-        const [tiersRaw, homeTypesFromSet, homeTypesLegacy, freqRows, addonBundle] = await Promise.all([
+        const [
+            tiersRaw,
+            homeTypesFromSet,
+            homeTypesLegacy,
+            freqRows,
+            addonBundle,
+            bedroomOptions,
+            bathroomOptions,
+            cleaningTypeOptions,
+            specialtyCleaningTypeOptions,
+            accessMethodStableOptions,
+        ] = await Promise.all([
             loadSqftTiersForVertical(supabase, verticalId),
             orgId ? resolveOptionSetOptions(supabase, orgId, "home_type") : Promise.resolve([]),
             loadActiveHomeTypes(supabase),
             loadPricingFrequenciesForVertical(supabase, verticalId),
             loadCleaningAddonsFromDb(supabase, verticalId),
+            orgId ? resolveOptionSetOptions(supabase, orgId, "bedrooms_booking") : Promise.resolve([]),
+            orgId ? resolveOptionSetOptions(supabase, orgId, "bathrooms_booking") : Promise.resolve([]),
+            orgId ? resolveOptionSetOptionsWithMetadata(supabase, orgId, "cleaning_type") : Promise.resolve([]),
+            orgId ? resolveOptionSetOptionsWithMetadata(supabase, orgId, "specialty_cleaning_type") : Promise.resolve([]),
+            orgId ? resolveOptionSetOptions(supabase, orgId, "access_method") : Promise.resolve([]),
         ]);
+
+        const access_method_booking_ui = accessMethodStableOptions.map((o) => {
+            const stable = String(o.value).trim();
+            const ui = BOOK_V2_ACCESS_METHOD_STABLE_TO_UI[stable] ?? stable;
+            return {
+                value: ui,
+                label: (o.label && String(o.label).trim()) || ui,
+            };
+        });
 
         const tierRows =
             tiersRaw.length > 0 ? await resolveSqftTierDisplayLabels(supabase, orgId, tiersRaw) : [];
@@ -75,8 +107,17 @@ export async function GET() {
         return NextResponse.json({
             ok: true,
             vertical_id: verticalId,
+            /** Org operational calendar timezone for slot selection (metadata.timezone → time_zone → UTC). */
+            operational_timezone_iana,
             square_footage_tiers,
             home_types,
+            bedroom_options: bedroomOptions,
+            bathroom_options: bathroomOptions,
+            /** Canonical: unified cleaning type options (standard + specialty), with metadata (e.g. is_specialty). */
+            cleaning_type_options: cleaningTypeOptions,
+            /** Deprecated legacy key (kept for older clients; will be removed after migration). */
+            specialty_cleaning_type_options: specialtyCleaningTypeOptions,
+            access_method_booking_ui,
             beds_input: { min: 0, max: 20, step: 1 },
             baths_input: { min: 0, max: 15, step: 0.5 },
             pricing_frequencies: freqRows,

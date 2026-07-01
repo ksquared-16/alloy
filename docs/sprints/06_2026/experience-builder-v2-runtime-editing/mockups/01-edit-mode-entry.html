@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><title>01 — Edit Mode Entry</title><link rel="stylesheet" href="_shared.css"></head>
+<body>
+<div class="mockup-frame">
+  <div class="mockup-label">01 — Edit Mode Entry <span class="sub">Viewing → Editing · the surface never moves; only the Edit Bar appears</span></div>
+  <div class="app-shell">
+    <div class="app-rail"><div class="rail-icon">⌂</div><div class="rail-icon">☰</div><div class="rail-icon">💬</div><div class="rail-spacer"></div><div class="rail-icon active">✎</div></div>
+    <div class="main-area">
+
+      <!-- VIEWING -->
+      <div style="padding:8px 16px;background:var(--white);border-bottom:1px solid var(--stone-15);display:flex;align-items:center;gap:12px;">
+        <span class="state-pill state-viewing">Viewing</span>
+        <span style="font-size:12px;color:var(--midnight-46);">Enrollment Summary · live runtime · what operators see</span>
+        <span style="margin-left:auto;"><span class="btn btn-secondary">✎ Edit this surface</span></span>
+      </div>
+      <div class="runtime-region">
+        <div class="runtime-canvas">
+          <div class="fp">
+            <div class="fp-header"><div class="fp-subject">Hayes Family · Enrollment</div><div class="fp-mission">Review lead — New Leads</div></div>
+            <div class="fp-modes"><div class="fp-mode active">Summary</div><div class="fp-mode">Work</div><div class="fp-mode">Activity</div></div>
+            <div class="fp-body">
+              <div class="card"><div class="card-head"><div class="card-icon">✓</div><div class="card-title">Readiness</div><div class="card-status">Ready</div></div><div class="card-insight">All required information collected.</div></div>
+              <div class="card"><div class="card-head"><div class="card-icon">👤</div><div class="card-title">Family</div></div><div class="card-insight">Chris &amp; Claire Hayes · 2 children</div></div>
+              <div class="card"><div class="card-head"><div class="card-icon">⚡</div><div class="card-title">Current Work</div></div><div class="card-insight">Schedule tour — due today</div></div>
+              <div class="card"><div class="card-head"><div class="card-icon">📋</div><div class="card-title">Enrollment</div></div><div class="card-insight">North Campus · Full-time · Aug 2026</div></div>
+            </div>
+          </div>
+          <div class="center-note">▲ The published surface. No editing chrome.</div>
+        </div>
+      </div>
+
+      <div style="height:14px;background:var(--canvas);border-top:1px dashed var(--stone);border-bottom:1px dashed var(--stone);display:flex;align-items:center;justify-content:center;font-size:10px;letter-spacing:0.1em;color:var(--midnight-30);text-transform:uppercase;">click Edit ↓</div>
+
+      <!-- EDITING -->
+      <div class="edit-bar">
+        <span class="eb-done">◀ Done</span>
+        <span class="eb-status"><span class="edit-dot"></span> Editing <span class="eb-sub">· Enrollment Summary</span></span>
+        <div class="mode-toggle"><span class="mt">Structure</span><span class="mt active">Content</span></div>
+        <div class="eb-icons"><span class="eb-icon">⤺</span><span class="eb-icon">⤻</span></div>
+        <span class="eb-state"><span class="state-pill state-working">Working Copy</span> History</span>
+        <span class="eb-spacer"></span>
+        <span class="scope-chip"><span class="dot"></span> Organization</span>
+        <span class="btn btn-primary">Publish</span>
+      </div>
+      <div class="runtime-region">
+        <div class="runtime-canvas">
+          <div class="fp">
+            <div class="fp-header"><div class="fp-subject">Hayes Family · Enrollment</div><div class="fp-mission">Review lead — New Leads</div></div>
+            <div class="fp-modes"><div class="fp-mode active">Summary</div><div class="fp-mode">Work</div><div class="fp-mode">Activity</div></div>
+            <div class="fp-body">
+              <div class="card editable hovered"><div class="edit-chip"><span class="chip-btn">✎ Edit card</span></div><div class="card-head"><div class="card-icon">✓</div><div class="card-title">Readiness</div><div class="card-status">Ready</div></div><div class="card-insight">All required information collected.</div></div>
+              <div class="card editable"><div class="card-head"><div class="card-icon">👤</div><div class="card-title">Family</div></div><div class="card-insight">Chris &amp; Claire Hayes · 2 children</div></div>
+              <div class="card editable"><div class="card-head"><div class="card-icon">⚡</div><div class="card-title">Current Work</div></div><div class="card-insight">Schedule tour — due today</div></div>
+              <div class="card editable"><div class="card-head"><div class="card-icon">📋</div><div class="card-title">Enrollment</div></div><div class="card-insight">North Campus · Full-time · Aug 2026</div></div>
+            </div>
+          </div>
+          <div class="center-note">▲ The <strong>identical</strong> surface — same cards, spacing, hierarchy. Only the Edit Bar + hover affordances are added.</div>
+        </div>
+        <div class="bos-rail">
+          <div class="bos-title">BOS Assist</div>
+          <div class="bos-suggestion">You're editing the <strong>real</strong> Enrollment Summary. What you see is what operators get — there is no separate preview.</div>
+          <div class="bos-note">Working Copy auto-saves. Nothing is live until you Publish.</div>
+          <div class="bos-note">Scope: Organization. Switch the Scope chip to edit a Location or Viewpoint override.</div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+</body></html>

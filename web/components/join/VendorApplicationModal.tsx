@@ -5,7 +5,7 @@ import { createPortal } from "react-dom";
 const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 /** Match Get a Quote (`CleaningQuickQuoteForm`) label + input tokens */
 const labelClass =
-  "block text-xs font-semibold text-alloy-midnight/80 uppercase tracking-wider mb-1.5";
+  "block text-xs font-semibold text-alloy-midnight/80 tracking-wider mb-1.5";
 const inputClass = "public-form-input";
 const ctaClass = "public-form-cta w-full disabled:opacity-50 disabled:cursor-not-allowed";
 

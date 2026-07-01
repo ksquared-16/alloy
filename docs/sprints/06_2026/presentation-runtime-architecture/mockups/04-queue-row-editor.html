@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>04 — Queue Row Editor</title>
+<link rel="stylesheet" href="_shared.css">
+</head>
+<body>
+<div class="mockup-frame">
+  <div class="mockup-label">04 — Queue Row Editor · Compact Enrollment</div>
+  <div class="app-shell">
+    <div class="app-rail"><div class="rail-icon">⌂</div><div class="rail-spacer"></div><div class="rail-icon active">⚙</div></div>
+    <div class="config-rail">
+      <div class="config-rail-title">Configuration</div>
+      <div class="config-nav-item active"><span class="icon">◫</span> Design Surfaces</div>
+    </div>
+    <div class="main-area">
+      <div class="context-bar">
+        <div class="context-title">Design Surfaces</div>
+        <div class="context-chips"><span class="chip active">Queue Row</span><span class="chip">Focus Panel</span><span class="chip">Dashboard</span></div>
+        <div class="context-actions"><button class="btn btn-primary">+ Create Queue Row</button></div>
+      </div>
+      <div class="workspace-grid">
+        <div class="config-queue">
+          <div class="queue-group-label">Published</div>
+          <div class="queue-item active">Compact Enrollment <span class="badge badge-published">v2</span></div>
+          <div class="queue-item">Expanded Enrollment <span class="badge badge-published">v1</span></div>
+          <div class="queue-item">Waitlist Row <span class="badge badge-published">v1</span></div>
+        </div>
+        <div class="workspace-center">
+          <div class="status-bar">
+            <span class="status-pill status-published">Published v2</span>
+            <span>Compact Enrollment · Queue Row · Opportunity · 52px</span>
+          </div>
+          <div class="section-label">Live Preview — 52px compressed row</div>
+          <div class="queue-row-preview" style="margin-bottom:16px;">
+            <div class="qr-zone" style="border-color:var(--pine);flex:2;">
+              <div class="qr-zone-label">header.primary</div>
+              <div class="qr-title">Hayes Family</div>
+              <div class="qr-meta">Chris Hayes · Primary contact</div>
+            </div>
+            <div class="qr-zone" style="flex:1;">
+              <div class="qr-zone-label">header.secondary</div>
+              <div class="qr-meta" style="font-weight:600;color:var(--midnight);">Tour Scheduled</div>
+            </div>
+            <div class="qr-zone" style="flex:1;">
+              <div class="qr-zone-label">context</div>
+              <div class="qr-meta">North Campus</div>
+            </div>
+            <div class="qr-zone" style="flex:1;">
+              <div class="qr-zone-label">body</div>
+              <div class="qr-meta">Created Mar 15 · Tour Jun 22</div>
+            </div>
+          </div>
+          <div class="workspace-split" style="display:flex;gap:12px;">
+            <div style="flex:1;">
+              <div class="panel">
+                <div class="panel-header pine-accent"><span class="panel-title">Zone: header.primary</span></div>
+                <div class="panel-body">
+                  <div class="slot-row selected">
+                    <span class="slot-name">title</span><span class="slot-arrow">→</span>
+                    <span class="slot-renderer">Text</span><span style="font-size:10px;color:var(--midnight-46);margin-left:8px;">emphasis: title</span>
+                  </div>
+                  <div class="slot-row">
+                    <span class="slot-name">primary_contact</span><span class="slot-arrow">→</span>
+                    <span class="slot-renderer">Relationship</span>
+                  </div>
+                </div>
+              </div>
+              <div class="panel">
+                <div class="panel-header"><span class="panel-title">Zone: body</span></div>
+                <div class="panel-body">
+                  <div class="slot-row">
+                    <span class="slot-name">created_date</span><span class="slot-arrow">→</span>
+                    <span class="slot-renderer">Date</span>
+                  </div>
+                  <div class="slot-row">
+                    <span class="slot-name">tour_date</span><span class="slot-arrow">→</span>
+                    <span class="slot-renderer">Date</span>
+                  </div>
+                  <div class="slot-row">
+                    <span class="slot-name">location</span><span class="slot-arrow">→</span>
+                    <span class="slot-renderer">Text</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div style="width:280px;">
+              <div class="panel">
+                <div class="panel-header pine-accent"><span class="panel-title">Slot: title</span></div>
+                <div class="panel-body" style="font-size:12px;">
+                  <div style="margin-bottom:8px;"><strong>Data Source</strong><br>opportunity.display_name</div>
+                  <div style="margin-bottom:8px;"><strong>Renderer</strong><br>Text (tier 1 — Record title)</div>
+                  <div style="margin-bottom:8px;"><strong>Behavior</strong><br>emphasis: title · read-only</div>
+                  <div class="section-label">Available Renderers</div>
+                  <div class="renderer-grid" style="grid-template-columns:repeat(3,1fr);">
+                    <div class="renderer-option selected"><span class="r-icon">Aa</span>Text</div>
+                    <div class="renderer-option"><span class="r-icon">🔗</span>Link</div>
+                    <div class="renderer-option"><span class="r-icon">👤</span>Avatar</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="bos-rail" style="width:280px;">
+          <div class="bos-title">BOS Assist</div>
+          <div class="bos-suggestion">Queue rows use the same Renderer catalog as Focus Panel cards. The Date renderer here is identical to the Date renderer in Billing cards.</div>
+          <div class="bos-warning">Queue rows are 52px compressed. Limit header.primary to 2 slots for scannability.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

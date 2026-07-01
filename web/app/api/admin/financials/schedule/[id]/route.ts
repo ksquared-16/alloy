@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
-import { getAdminContext } from "@/lib/admin/getAdminContext";
+import { getAdminContextCached } from "@/lib/admin/getAdminContext";
+import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
+import { assertScheduleInAccessScope, scopeDimensionsFromAccess } from "@/lib/admin/accessScope";
 import {
     resolveVendorPayoutPolicy,
     computePayoutPercent,
@@ -13,7 +15,16 @@ export const dynamic = "force-dynamic";
 const basisJob = "job_completed_occurrences";
 const basisVendorJob = "vendor_job_completed_occurrences";
 
-type ScheduleRow = { id: string; job_id: string | null; status_key: string | null; start_at: string | null; assigned_vendor_id: string | null; price_cents: number | null; created_at?: string | null };
+type ScheduleRow = {
+    id: string;
+    job_id: string | null;
+    location_id?: string | null;
+    status_key: string | null;
+    start_at: string | null;
+    assigned_vendor_id: string | null;
+    price_cents: number | null;
+    created_at?: string | null;
+};
 
 function computeOccurrenceNumber(
     orderedSchedules: ScheduleRow[],
@@ -38,7 +49,7 @@ export async function GET(
     _request: NextRequest,
     context: { params: Promise<{ id: string }> }
 ) {
-    const ctx = await getAdminContext();
+    const ctx = await getAdminContextCached();
     if (!ctx.ok) {
         return NextResponse.json({ error: ctx.status === 401 ? "Unauthorized" : "Forbidden" }, { status: ctx.status });
     }
@@ -51,13 +62,27 @@ export async function GET(
 
     const { data: schedule, error: sErr } = await supabase
         .from("schedules")
-        .select("id, job_id, status_key, start_at, assigned_vendor_id, price_cents, created_at")
+        .select("id, job_id, location_id, status_key, start_at, assigned_vendor_id, price_cents, created_at")
         .eq("id", scheduleId)
         .eq("org_id", orgId)
         .maybeSingle();
 
     if (sErr || !schedule) return NextResponse.json({ error: "Schedule not found" }, { status: 404 });
-    const s = schedule as ScheduleRow & { created_at?: string | null };
+    const s = schedule as ScheduleRow & { created_at?: string | null; location_id?: string | null };
+
+    const access = await getAdminAccessContextCached();
+    if (!access.ok) {
+        return NextResponse.json({ error: access.status === 401 ? "Unauthorized" : "Forbidden" }, { status: access.status });
+    }
+    const dim = scopeDimensionsFromAccess(access);
+    if (
+        !(await assertScheduleInAccessScope(supabase, orgId, dim, {
+            job_id: s.job_id ?? null,
+            location_id: s.location_id ?? null,
+        }))
+    ) {
+        return NextResponse.json({ error: "Schedule not found" }, { status: 404 });
+    }
 
     const jobId = s.job_id;
     if (!jobId) {

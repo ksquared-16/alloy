@@ -1,0 +1,76 @@
+Alloy sprint — Roles / permissions / department & site access (CRM)
+=====================================================================
+
+Phase 3 — Kanban cards (ordered)
+
+Card 1 — Schema migration [DONE]
+  - user_access_profiles, user_department_access, user_site_access
+  - Triggers, indexes, backfill user_access_profiles from distinct user_roles (user_id, org_id) → all/all
+  - Migration: supabase/migrations/20260504103000_user_access_scope_tables_v1.sql
+  - No app/runtime enforcement
+
+Card 2 — Access context helper [DONE]
+  - getAdminAccessContext (canonical)
+  - Converge getAdminContext, getAdminAuth, getAdminOrgIdForUser on same resolver
+  - Legacy admin/ops + missing profile → all/all default
+  - Tests; no route filtering / queues / actions yet
+
+Card 3 — Query scope utilities [DONE]
+  - Reusable dept/site predicates for SQL (`web/lib/admin/accessScope.ts`)
+  - Tests: `web/tests/admin/adminAccessScope.test.ts`
+
+Card 4 — Workspace & queues [DONE]
+  - Departments/work_units lists + single-row reads filtered by dept scope
+  - Opportunity queues / KPI / attention builders intersect org ∩ dept ∩ site via scope helpers
+
+Card 5 — Record fetch enforcement [DONE]
+  - Entity drawer route + dedicated jobs/schedules GET enforce scope (404 when out of scope)
+  - Opportunities drawer uses `assertOpportunityInAccessScope` inside `respondOpportunityEntityGet`
+
+Card 6 — Action enforcement [DONE]
+  - `executeAdminAction` + POST `/api/admin/actions/execute` pass `scopeDimensionsFromAccess` when restricted
+
+Card 6B — Mutation scope enforcement [DONE]
+  - PATCH jobs, job location, schedules, schedule location, schedule assignment, work-units (incl. POST create + DELETE), departments PATCH/DELETE
+  - Restricted callers get **404** for out-of-scope targets (same as read routes); org/admin role checks unchanged
+  - Tests: `web/tests/admin/adminMutationScope.test.ts`
+
+Card 6C — Remaining mutation coverage [DONE]
+  - PATCH `opportunities/[id]` + GET `opportunities/[id]/activity-signal` (404 out of scope)
+  - POST `schedules` (job + resolved location gated before insert; wrong-org job still 400)
+  - Job mutators: archive, unarchive, assign-vendor, apply-vendor-to-upcoming, charges
+  - Schedule mutators: cancel, reschedule, assign, post-completion, post-customer-payment, post-vendor-payout
+  - Helpers: `assertExistingJobMutableInAdminScope`, `assertExistingScheduleMutableInAdminScope`, `assertExistingOpportunityMutableInAdminScope` in `accessScope.ts`
+  - Extra bypass tests in `adminMutationScope.test.ts`
+
+Card 7 — Settings UI / API [DONE]
+  - `GET` / `PATCH /api/admin/users/[userId]/access-scope` (admin only)
+  - `PATCH` rejects **restricted** department or site scope with **empty** allow lists (safer than storing “restricted + zero rows” → silent deny-all)
+  - Validates department ids belong to org; site ids must be `locations.location_type = 'site'` (matches DB triggers; API validates before insert)
+  - UI: `/adminV2/settings/user-access` — role key via existing `PATCH .../role`, scope via new route; effective JSON preview
+  - `resolveAdminAccessDimensionsForOrgMember` — preview/resolution pinned to `(user_id, org_id)` for multi-org correctness
+
+Card 8 — Final audit and tests [DONE]
+  - Corporate / legacy all/all: resolver + `accessScopeRestrictsData` short-circuit covered in existing + new tests (`adminMutationScope`, `getAdminAccessContext`)
+  - Regional/director-style restricted dept list + unknown dept/site deny patterns: `adminAccessScope.test.ts`, `departmentIdAllowed`, mutation helpers
+  - Direct API bypass: tests assert corporate skips inner `assertJobInAccessScope` / `assertScheduleInAccessScope` queries; Card 6C covers opportunity helper fetch + deny when row missing
+  - Custom roles + legacy admin/ops: unchanged storage on `user_roles`; shell eligibility still driven by resolver `portalEligible`
+
+Card 9 — Docs finalization [DONE]
+  - Updated: `docs/system/configuration-system.md`, `workspace-system.md`, `api-contracts.md`, `docs/core/glossary.md`, `docs/execution/roadmap-and-gaps.md`
+  - Remaining gap (documented): not every admin **read** route is guaranteed scoped — grep when adding routes.
+
+Sprint status: **COMPLETE** for scoped CRM access + minimal settings + docs. Further work is incremental route coverage and any future RBAC/product rules — **no** generic RBAC engine in this sprint.
+
+Locks (Phase 2)
+  - Evolve user_roles only (no user_role_assignments)
+  - Sites = locations.location_type = 'site'
+  - Restricted users: unknown dept/site → deny; unresolved docs/payments → deny unless all/all scope
+  - Out-of-scope entity routes → 404
+  - Deploy safety: backfill all/all; runtime default missing profile to all/all for legacy transition
+
+Supabase CLI — migration 20260504103000 (user_access_scope_tables_v1)
+---------------------------------------------------------------------
+- `supabase migration list` (linked remote, 2026-05-04): **20260504103000** appears on **both** Local and Remote — user access scope tables are applied to the linked project in this environment.
+- If another environment shows Local-only, run `supabase db push` (or your deploy pipeline equivalent) before relying on `user_access_profiles` / allow-list tables there.
+- Local Docker-only drift: if `supabase migration up --local` errors about inserting migrations before the latest applied version, fix with `supabase migration repair`, `db reset`, or manual SQL only when you accept bookkeeping drift.

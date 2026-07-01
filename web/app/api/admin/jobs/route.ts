@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
-import { getAdminContext } from "@/lib/admin/getAdminContext";
+import { getAdminContextCached } from "@/lib/admin/getAdminContext";
+import { adminPerfEnabled, adminPerfNow, logAdminPerf } from "@/lib/admin/perfTrace";
 import { parseJobDiscountSelectionInput, resolveJobDiscountSelection } from "@/lib/admin/jobDiscountSelection";
 import { initializeJobPricing } from "@/lib/pricing/initializeJobPricing";
 import { computeJobDisplayTotalCents } from "@/lib/admin/jobDisplayPrice";
@@ -9,11 +10,21 @@ import { assertAllowedStatusKey, fetchEffectiveStatusDefinitions } from "@/lib/a
 import { fetchJobStatusKeyByFk, effectiveJobStatusKey, resolveJobStatusRowByOrgAndKey } from "@/lib/admin/jobEffectiveStatusKey";
 import { assertRowOrg } from "@/lib/admin/assertRowOrg";
 import { computeJobBalanceSnapshot } from "@/lib/admin/jobPaymentBalances";
-
+import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
+import {
+    accessScopeRestrictsData,
+    applyRecordScopeConstraintsToQuery,
+    resolveRecordScopeConstraints,
+    scopeDimensionsFromAccess,
+} from "@/lib/admin/accessScope";
 /** GET: list jobs for current org. Admin/ops. Exclude archived by default. */
-export async function GET(request: NextRequest) {
-  const ctx = await getAdminContext();
+async function getJobsImpl(request: NextRequest) {
+  const ctx = await getAdminContextCached();
   if (!ctx.ok) return NextResponse.json({ error: ctx.status === 401 ? "Unauthorized" : "Forbidden" }, { status: ctx.status });
+
+  const access = await getAdminAccessContextCached();
+  if (!access.ok) return NextResponse.json({ error: access.status === 401 ? "Unauthorized" : "Forbidden" }, { status: access.status });
+  const scopeDim = scopeDimensionsFromAccess(access);
 
   const { searchParams } = new URL(request.url);
   const search = (searchParams.get("search") ?? "").trim();
@@ -22,7 +33,10 @@ export async function GET(request: NextRequest) {
   const assignedVendorId = (searchParams.get("assigned_vendor_id") ?? "").trim();
   const workUnitIdParam = (searchParams.get("work_unit_id") ?? "").trim();
   const departmentIdParam = (searchParams.get("department_id") ?? "").trim();
+  /** Legacy: jobs with no work_unit_id (admin table filter). Prefer `assigned_vendor_unassigned` for Operations lane. */
   const unassignedWorkUnit = searchParams.get("unassigned_work_unit") === "true";
+  /** Operations “Unassigned Jobs” lane (cleaning): no vendor assigned yet. */
+  const assignedVendorUnassigned = searchParams.get("assigned_vendor_unassigned") === "true";
   const limit = Math.min(Number(searchParams.get("limit")) || 200, 200);
 
   const supabase = createAdminClient();
@@ -30,17 +44,51 @@ export async function GET(request: NextRequest) {
   /** When set, restrict jobs to these work_unit ids (department filter). */
   let departmentWorkUnitIds: string[] | null = null;
 
-  if (unassignedWorkUnit) {
+  if (assignedVendorUnassigned && unassignedWorkUnit) {
+    return NextResponse.json(
+      { error: "Use only one of assigned_vendor_unassigned or unassigned_work_unit" },
+      { status: 400 }
+    );
+  }
+  if (assignedVendorUnassigned && assignedVendorId) {
+    return NextResponse.json(
+      { error: "assigned_vendor_unassigned cannot be combined with assigned_vendor_id" },
+      { status: 400 }
+    );
+  }
+
+  if (assignedVendorUnassigned) {
+    // mutually exclusive with work_unit_id / department_id (enforced on client)
+  } else if (unassignedWorkUnit) {
     // mutually exclusive with work_unit_id / department_id (enforced on client)
   } else if (workUnitIdParam) {
     const wuOk = await assertRowOrg(supabase, "work_units", workUnitIdParam, ctx.orgId);
     if (!wuOk.ok) {
       return NextResponse.json({ error: "Work unit not found" }, { status: 404 });
     }
+    if (scopeDim.departmentScope === "restricted") {
+      const allowedDept = scopeDim.allowedDepartmentIds ?? [];
+      const { data: wuRow } = await supabase
+        .from("work_units")
+        .select("department_id")
+        .eq("id", workUnitIdParam)
+        .eq("org_id", ctx.orgId)
+        .maybeSingle();
+      const du = (wuRow as { department_id?: string } | null)?.department_id;
+      if (!du || !allowedDept.includes(du)) {
+        return NextResponse.json({ error: "Work unit not found" }, { status: 404 });
+      }
+    }
   } else if (departmentIdParam) {
     const depOk = await assertRowOrg(supabase, "departments", departmentIdParam, ctx.orgId);
     if (!depOk.ok) {
       return NextResponse.json({ error: "Department not found" }, { status: 404 });
+    }
+    if (scopeDim.departmentScope === "restricted") {
+      const allowedDept = scopeDim.allowedDepartmentIds ?? [];
+      if (!allowedDept.includes(departmentIdParam)) {
+        return NextResponse.json({ error: "Department not found" }, { status: 404 });
+      }
     }
     const { data: wuInDept, error: wuInDeptErr } = await supabase
       .from("work_units")
@@ -59,6 +107,9 @@ export async function GET(request: NextRequest) {
     }
     departmentWorkUnitIds = deptWuIds;
   }
+
+  let rows: Record<string, unknown>[] | null = null;
+  let count: number | null = null;
 
   let q = supabase
     .from("jobs")
@@ -79,12 +130,53 @@ export async function GET(request: NextRequest) {
   if (assignedVendorId) {
     q = q.eq("assigned_vendor_id", assignedVendorId);
   }
-  if (unassignedWorkUnit) {
+
+  let scopeConstraints: Awaited<ReturnType<typeof resolveRecordScopeConstraints>> | null = null;
+  let scopeWorkUnitInFilter: string[] | null = null;
+  if (accessScopeRestrictsData(scopeDim)) {
+    const c = await resolveRecordScopeConstraints(supabase, ctx.orgId, scopeDim);
+    if (c.impossible) {
+      return NextResponse.json({ jobs: [], total: 0 });
+    }
+    scopeConstraints = c;
+    if (c.workUnitIds?.length) {
+      const allowedWu = new Set(c.workUnitIds);
+      if (workUnitIdParam) {
+        if (!allowedWu.has(workUnitIdParam)) {
+          return NextResponse.json({ jobs: [], total: 0 });
+        }
+      } else if (departmentWorkUnitIds) {
+        departmentWorkUnitIds = departmentWorkUnitIds.filter((wid) => allowedWu.has(wid));
+        if (!departmentWorkUnitIds.length) {
+          return NextResponse.json({ jobs: [], total: 0 });
+        }
+      } else if (assignedVendorUnassigned || unassignedWorkUnit) {
+        return NextResponse.json({ jobs: [], total: 0 });
+      } else {
+        scopeWorkUnitInFilter = c.workUnitIds;
+      }
+    }
+  }
+
+  if (assignedVendorUnassigned) {
+    q = q.is("assigned_vendor_id", null);
+  } else if (unassignedWorkUnit) {
     q = q.is("work_unit_id", null);
   } else if (workUnitIdParam) {
     q = q.eq("work_unit_id", workUnitIdParam);
   } else if (departmentWorkUnitIds) {
     q = q.in("work_unit_id", departmentWorkUnitIds);
+  } else if (scopeWorkUnitInFilter?.length) {
+    q = q.in("work_unit_id", scopeWorkUnitInFilter);
+  }
+
+  if (scopeConstraints) {
+    const locOnly = {
+      impossible: false as const,
+      workUnitIds: null as string[] | null,
+      locationIds: scopeConstraints.locationIds,
+    };
+    q = applyRecordScopeConstraintsToQuery(q, locOnly);
   }
 
   if (search) {
@@ -93,8 +185,10 @@ export async function GET(request: NextRequest) {
     q = q.or(`title.ilike.${term},job_number_for_customer.ilike.${term}`);
   }
 
-  const { data: rows, error, count } = await q;
+  const { data: qrows, error, count: qcount } = await q;
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  rows = qrows ?? [];
+  count = qcount ?? rows.length;
 
   const jobs = rows ?? [];
   const jobIds = jobs.map((j) => (j as { id: string }).id);
@@ -129,7 +223,7 @@ export async function GET(request: NextRequest) {
           .is("canceled_at", null)
           .gte("start_at", new Date().toISOString())
           .order("start_at", { ascending: true })
-      : { data: [] },
+      : Promise.resolve({ data: [] as { job_id: string; start_at: string }[] }),
   ]);
 
   const customerMap = new Map((custRes.data ?? []).map((c) => [(c as { id: string }).id, (c as { name: string | null }).name ?? null]));
@@ -242,7 +336,9 @@ export async function GET(request: NextRequest) {
   const balanceSnaps =
     result.length > 0
       ? await Promise.all(
-          result.map((row) => computeJobBalanceSnapshot(supabase, ctx.orgId, (row as { id: string }).id))
+          result.map((row) =>
+            computeJobBalanceSnapshot(supabase, ctx.orgId, (row as unknown as { id: string }).id)
+          )
         )
       : [];
   const withReceivables = result.map((row, i) => {
@@ -257,9 +353,23 @@ export async function GET(request: NextRequest) {
   return NextResponse.json({ jobs: withReceivables, total: count ?? withReceivables.length });
 }
 
-/** POST: create job. Admin only. customer_id and status_key (must exist in status_definitions for jobs) required. */
+/** Phase 0 perf wrapper (Card 0.1): times the handler when ADMIN_PERF_TRACE=1; otherwise a passthrough. */
+export async function GET(request: NextRequest) {
+  if (!adminPerfEnabled()) return getJobsImpl(request);
+  const t0 = adminPerfNow();
+  const res = await getJobsImpl(request);
+  logAdminPerf({ route: "jobs", status: res.status, t0 });
+  return res;
+}
+
+/**
+ * POST: create job. Admin only. customer_id and status_key (must exist in status_definitions for jobs) required.
+ *
+ * LEGACY_COMPAT: Jobs still accept `primary_contact_id` for messaging/history compatibility. When omitted,
+ * resolve `primary_person_id` from that contact (`contacts.person_id`) when possible—do not treat contact as canonical identity for new CRM features.
+ */
 export async function POST(request: NextRequest) {
-  const ctx = await getAdminContext();
+  const ctx = await getAdminContextCached();
   if (!ctx.ok) return NextResponse.json({ error: ctx.status === 401 ? "Unauthorized" : "Forbidden" }, { status: ctx.status });
   if (ctx.role !== "admin") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
@@ -277,6 +387,8 @@ export async function POST(request: NextRequest) {
   const service_frequency_key = typeof body.service_frequency_key === "string" ? body.service_frequency_key.trim() || null : null;
   const gross_price_cents = typeof body.gross_price_cents === "number" && Number.isFinite(body.gross_price_cents) ? Math.round(body.gross_price_cents) : null;
   const primary_contact_id = typeof body.primary_contact_id === "string" && body.primary_contact_id.trim() ? body.primary_contact_id.trim() : null;
+  let primary_person_id =
+    typeof body.primary_person_id === "string" && body.primary_person_id.trim() ? body.primary_person_id.trim() : null;
   const discount_selection_raw =
     typeof body.discount_code_id === "string" && body.discount_code_id.trim() ? body.discount_code_id.trim() : null;
 
@@ -321,9 +433,18 @@ export async function POST(request: NextRequest) {
   }
 
   if (primary_contact_id) {
-    const { data: contact } = await supabase.from("contacts").select("id, customer_id, org_id").eq("id", primary_contact_id).maybeSingle();
+    const { data: contact } = await supabase
+      .from("contacts")
+      .select("id, customer_id, org_id, person_id")
+      .eq("id", primary_contact_id)
+      .maybeSingle();
     if (!contact || (contact as { org_id?: string }).org_id !== ctx.orgId || (contact as { customer_id?: string }).customer_id !== customer_id) {
       return NextResponse.json({ error: "Primary contact not found or does not belong to this customer" }, { status: 400 });
+    }
+    // Person-first when contact is linked; avoid new jobs that are contact-only when the contact already has a canonical person.
+    if (!primary_person_id) {
+      const pid = (contact as { person_id?: string | null }).person_id;
+      if (typeof pid === "string" && pid.trim()) primary_person_id = pid.trim();
     }
   }
 
@@ -369,6 +490,7 @@ export async function POST(request: NextRequest) {
     service_frequency_key: service_frequency_key ?? null,
     gross_price_cents: gross_price_cents ?? null,
     primary_contact_id: primary_contact_id ?? null,
+    primary_person_id: primary_person_id ?? null,
     title: typeof body.title === "string" ? body.title.trim() || null : null,
     description: typeof body.description === "string" ? body.description.trim() || null : null,
     assigned_vendor_id: typeof body.assigned_vendor_id === "string" && body.assigned_vendor_id.trim() ? body.assigned_vendor_id.trim() : null,

@@ -1,6 +1,6 @@
 /**
  * Configurable person model settings: customer person roles and person relationship types.
- * Use these APIs for dropdowns in forms; store the key in customer_persons.role or
+ * Use these APIs for dropdowns in forms; store the key in customer_persons.role_type or
  * person_relationships.relationship_type. Current text values remain compatible.
  *
  * Industry is the PRIMARY driver for default options (orgs.industry_id).

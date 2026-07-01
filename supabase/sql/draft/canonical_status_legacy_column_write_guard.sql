@@ -1,0 +1,5 @@
+-- APPLIED: supabase/migrations/20260625140000_canonical_legacy_status_write_guards.sql
+-- APPLIED: supabase/migrations/20260625140100_canonical_drop_legacy_status_columns.sql
+--
+-- Phase 6 moved guards and column drops into versioned migrations.
+-- This draft file is retained for reference only.
