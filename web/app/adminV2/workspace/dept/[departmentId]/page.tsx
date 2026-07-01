@@ -22,7 +22,11 @@ import {
     appendWorkspaceSiteToUrl,
     workspaceViewCacheFingerprint,
 } from "@/lib/adminV2/workspaceSiteFilterClient";
-import { adminV2CommitNavigation } from "@/lib/adminV2/shellNavigation";
+import {
+    adminV2BeforeRouteNavigation,
+    adminV2CommitNavigation,
+    adminV2PrepareNavHref,
+} from "@/lib/adminV2/shellNavigation";
 import { logAdminV2NavDebug } from "@/lib/debug/adminV2NavDebug";
 import {
     WorkspacePairedOperPanel,
@@ -141,8 +145,10 @@ import { resolveDeptPipelineExecSurface } from "@/lib/workspace/resolveDeptPipel
 import { WorkspaceOperIcon } from "@/components/admin/workspace/WorkspaceOperIcon";
 import { compareNeedsAttentionBuckets } from "@/lib/opportunities/needsAttentionBuckets";
 import {
+    clearDeptOperNavClickAck,
     deptOperNavClickAckProps,
     deptOperNavClickedKey,
+    isDeptOperNavClickPending,
     markDeptOperNavClickAck,
     parseWorkUnitNavFromDeptOperHref,
     workspaceDeptQueueNavHref,
@@ -258,10 +264,17 @@ function DeptOperConsoleQueueRow(props: {
         attentionBucketKey,
     } = props;
     const adminDrawer = useAdminDrawerOptional();
+    const router = useRouter();
     const selectedSiteId = useWorkspaceSiteFilter()?.selectedSiteId ?? null;
     useSyncExternalStore(subscribeDeptOperNavClickAck, getDeptOperNavClickAckSnapshot, () => null);
     const clickedKey = deptOperNavClickedKey(href);
     const ackProps = deptOperNavClickAckProps(clickedKey);
+    // Clear press-ack state when this tile unmounts (e.g. after soft nav away from workspace).
+    useEffect(() => {
+        return () => {
+            if (isDeptOperNavClickPending(clickedKey)) clearDeptOperNavClickAck();
+        };
+    }, [clickedKey]);
     const tier =
         variant === "attention"
             ? "adminv2-ws-wu-queue-card--tier-warning adminv2-ws-dept-attention-bucket-tile"
@@ -282,13 +295,16 @@ function DeptOperConsoleQueueRow(props: {
             />
         );
 
-    const commitHardNav = () => {
+    const commitSoftNav = () => {
+        const prepared = adminV2PrepareNavHref(href, { workspaceSiteId: selectedSiteId });
+        if (!prepared) return; // same URL — already here
         logAdminV2NavDebug({
             event: "deptQueueCardClick",
-            clickedHref: href,
-            routerAction: "location.assign",
+            clickedHref: prepared,
+            routerAction: "router.push",
         });
-        adminV2CommitNavigation(href, { closeDrawer: adminDrawer?.closeDrawer });
+        adminV2BeforeRouteNavigation({ closeDrawer: adminDrawer?.closeDrawer });
+        router.push(prepared);
     };
 
     return (
@@ -303,7 +319,7 @@ function DeptOperConsoleQueueRow(props: {
                 e.preventDefault();
                 warmWorkUnitBootstrapFromDeptOperHref(href, departmentId, selectedSiteId);
                 markDeptOperNavClickAck(clickedKey);
-                commitHardNav();
+                commitSoftNav();
             }}
             className={`adminv2-ws-wu-queue-card adminv2-ws-wu-queue-card--compact adminv2-ws-dept-oper-queue-link adminv2-interactive-surface relative z-[1] cursor-pointer pointer-events-auto ${tier} no-underline text-inherit`}
             data-ws-wu-urgency={urgency}

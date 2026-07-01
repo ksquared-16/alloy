@@ -89,14 +89,17 @@ export type AdminV2CommitNavigationOpts = {
 };
 
 /**
- * Guaranteed navigation — full document load. Use when App Router soft navigations
- * are cancelled by in-flight RSC work (Vercel logs show `---` on GET).
+ * Resolve the final href for a navigation, applying the sticky workspace site filter.
+ * Returns `null` when the prepared href is the same as the current URL (no-op navigation).
+ * Use this when the caller controls how navigation is committed (e.g. router.push for soft nav).
  */
-export function adminV2CommitNavigation(href: string, opts?: AdminV2CommitNavigationOpts): void {
-    if (typeof window === "undefined") return;
+export function adminV2PrepareNavHref(
+    href: string,
+    opts?: Pick<AdminV2CommitNavigationOpts, "workspaceSiteId">
+): string | null {
+    if (typeof window === "undefined") return null;
     const target = href.trim();
-    if (!target) return;
-    adminV2BeforeRouteNavigation(opts);
+    if (!target) return null;
     let next = target.startsWith("http")
         ? target
         : target.startsWith("/")
@@ -115,9 +118,21 @@ export function adminV2CommitNavigation(href: string, opts?: AdminV2CommitNaviga
     }
 
     const current = `${window.location.pathname}${window.location.search}`;
-    if (!target.startsWith("http") && current === next.split("#")[0]) {
+    if (!target.startsWith("http") && current === next.split("#")[0]) return null;
+    return next;
+}
+
+/**
+ * Guaranteed navigation — full document load. Use when App Router soft navigations
+ * are cancelled by in-flight RSC work (Vercel logs show `---` on GET).
+ */
+export function adminV2CommitNavigation(href: string, opts?: AdminV2CommitNavigationOpts): void {
+    if (typeof window === "undefined") return;
+    const next = adminV2PrepareNavHref(href, opts);
+    if (!next) {
         clearDeptOperNavClickAck();
         return;
     }
+    adminV2BeforeRouteNavigation(opts);
     window.location.assign(next);
 }
