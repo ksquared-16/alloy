@@ -18,18 +18,19 @@ export default function LifecycleStageConfiguration({
     businessProcessKey,
     stageKey,
     stageLabel,
-    lifecycleName,
+    lifecycleName: _lifecycleName,
     stageRecord,
     allStages,
     bootstrap,
     bootstrapLoading,
     statusesError,
     onStatusRollupChange,
-    validationSlot,
+    validationSlot: _validationSlot,
     saveState,
     saveError,
     onSaveStage,
     onDirtyChange,
+    onDeleteStage,
     workspaceHandleRef,
 }: {
     departmentId: string;
@@ -49,6 +50,7 @@ export default function LifecycleStageConfiguration({
     saveError: string | null;
     onSaveStage: () => void | Promise<void>;
     onDirtyChange?: (dirty: boolean) => void;
+    onDeleteStage?: () => void;
     workspaceHandleRef?: React.RefObject<StageEditorV2Handle | null>;
 }) {
     const localRef = useRef<StageEditorV2Handle | null>(null);
@@ -72,6 +74,7 @@ export default function LifecycleStageConfiguration({
                 saveError={saveError}
                 onSaveStage={onSaveStage}
                 onDirtyChange={onDirtyChange}
+                onDeleteStage={onDeleteStage}
                 entityDisplayLabels={bootstrap?.entity_display_labels ?? undefined}
             />
         </div>

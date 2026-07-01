@@ -401,8 +401,11 @@ function ActionCatalogPanel({
 
     return (
         <div>
-            <p className="mb-3 text-[11px] text-alloy-midnight/50">
-                Choose the actions operators should see first in this stage. Actions come from the Platform Action Catalog; this stage only prioritizes and labels them. Click a badge to set priority: <span className="font-medium text-alloy-midnight/70">Recommended</span> shows it first; <span className="font-medium text-alloy-midnight/70">Available</span> makes it accessible; <span className="font-medium text-alloy-midnight/70">Context-dependent</span> shows it only when preconditions are met.
+            <p className="mb-2 text-[11px] text-alloy-midnight/50">
+                Process actions define what operators can do. This stage only decides which actions are emphasized here.
+            </p>
+            <p className="mb-3 text-[11px] text-alloy-midnight/40">
+                Click a badge to set emphasis: <span className="font-medium text-alloy-midnight/60">Recommended</span> surfaces it first; <span className="font-medium text-alloy-midnight/60">Available</span> keeps it accessible; <span className="font-medium text-alloy-midnight/60">Context-dependent</span> shows it only when preconditions are met.
             </p>
             <div className="space-y-1.5">
                 {catalogActions.map((action) => {
@@ -609,29 +612,23 @@ function PossibleOutcomesSection({
 // ─── Save topbar ──────────────────────────────────────────────────────────────
 
 function StickyTopbar({
-    stageLabel,
-    stageKey,
     saveState,
     saveError,
     saveDisabled,
     isDirty,
     onSave,
+    onDelete,
 }: {
-    stageLabel: string;
-    stageKey: string;
     saveState: LifecycleStageSaveUiState;
     saveError: string | null;
     saveDisabled: boolean;
     isDirty: boolean;
     onSave: () => void | Promise<void>;
+    onDelete?: () => void;
 }) {
     return (
         <div className="sticky top-0 z-20 flex items-center justify-between gap-3 border-b border-alloy-forge/10 bg-white/96 px-5 py-3 backdrop-blur-sm">
-            <div className="min-w-0">
-                <p className="truncate text-[13px] font-semibold text-alloy-midnight">{stageLabel || stageKey}</p>
-                <p className="font-mono text-[10px] text-alloy-midnight/35">{stageKey}</p>
-            </div>
-            <div className="flex shrink-0 items-center gap-3">
+            <div className="flex items-center gap-2">
                 {isDirty && saveState !== "saving" ? (
                     <span className="text-[10px] font-medium text-alloy-ember" data-testid="stage-editor-v2-unsaved">
                         Unsaved changes
@@ -643,10 +640,22 @@ function StickyTopbar({
                     </span>
                 ) : null}
                 {saveState === "error" && saveError ? (
-                    <span className="flex items-center gap-1 max-w-[12rem] text-right text-[10px] text-alloy-ember" role="alert">
+                    <span className="flex items-center gap-1 max-w-[12rem] text-[10px] text-alloy-ember" role="alert">
                         <AlertCircle size={11} />
                         {saveError}
                     </span>
+                ) : null}
+            </div>
+            <div className="flex shrink-0 items-center gap-2">
+                {onDelete ? (
+                    <button
+                        type="button"
+                        onClick={onDelete}
+                        className="text-[11px] font-medium text-alloy-midnight/40 hover:text-alloy-ember transition-colors"
+                        data-testid="lifecycle-activation-delete-stage"
+                    >
+                        Delete stage
+                    </button>
                 ) : null}
                 <button
                     type="button"
@@ -659,39 +668,6 @@ function StickyTopbar({
                 </button>
             </div>
         </div>
-    );
-}
-
-// ─── Section anchor nav ───────────────────────────────────────────────────────
-
-const SECTIONS = [
-    { id: "identity", label: "Identity" },
-    { id: "representation", label: "Representation" },
-    { id: "experience", label: "Experience" },
-    { id: "requirements", label: "Requirements" },
-    { id: "outcomes", label: "Outcomes" },
-] as const;
-
-function SectionAnchorNav({ activeSection }: { activeSection: string }) {
-    return (
-        <nav
-            aria-label="Stage sections"
-            className="sticky top-[52px] z-10 flex gap-1 overflow-x-auto border-b border-alloy-forge/8 bg-alloy-stone/60 px-5 py-2 backdrop-blur-sm scrollbar-hide"
-        >
-            {SECTIONS.map((s) => (
-                <a
-                    key={s.id}
-                    href={`#stage-section-${s.id}`}
-                    className={`shrink-0 rounded-md px-2.5 py-1 text-[11px] font-medium transition-colors ${
-                        activeSection === s.id
-                            ? "bg-white text-alloy-juniper shadow-sm"
-                            : "text-alloy-midnight/50 hover:bg-white/60 hover:text-alloy-midnight"
-                    }`}
-                >
-                    {s.label}
-                </a>
-            ))}
-        </nav>
     );
 }
 
@@ -713,6 +689,7 @@ export default function StageEditorV2({
     saveError,
     onSaveStage,
     onDirtyChange,
+    onDeleteStage,
     workspaceRef,
 }: {
     departmentId: string;
@@ -730,6 +707,7 @@ export default function StageEditorV2({
     saveError: string | null;
     onSaveStage: () => void | Promise<void>;
     onDirtyChange?: (dirty: boolean) => void;
+    onDeleteStage?: () => void;
     workspaceRef?: React.RefObject<StageEditorV2Handle | null>;
 }) {
     // ── Sub-editor refs ──
@@ -769,21 +747,23 @@ export default function StageEditorV2({
         setCollapsed((prev) => ({ ...prev, [id]: !prev[id] }));
     }, []);
 
-    // ── V2 dirty tracking ──
-    const savedGrain = stageRecord?.grain;
-    const savedPurpose = stageRecord?.purpose ?? "";
-    const savedDescription = stageRecord?.description ?? "";
-    const savedAllowSkipping = stageRecord?.allow_skipping ?? false;
-    const savedGuidance = stageRecord?.operator_guidance ?? "";
-    const savedResolution = stageRecord?.subject_resolution_strategy ?? "ask_operator";
+    // ── V2 dirty tracking — committed baseline updated on stage switch or successful save ──
+    const [savedV2, setSavedV2] = useState(() => ({
+        grain: stageRecord?.grain,
+        purpose: stageRecord?.purpose ?? "",
+        description: stageRecord?.description ?? "",
+        allowSkipping: stageRecord?.allow_skipping ?? false,
+        operatorGuidance: stageRecord?.operator_guidance ?? "",
+        subjectResolution: (stageRecord?.subject_resolution_strategy ?? "ask_operator") as StageSubjectResolutionStrategy,
+    }));
 
     const v2Dirty =
-        grain !== savedGrain ||
-        purpose !== savedPurpose ||
-        description !== savedDescription ||
-        allowSkipping !== savedAllowSkipping ||
-        operatorGuidance !== savedGuidance ||
-        subjectResolution !== savedResolution;
+        grain !== savedV2.grain ||
+        purpose !== savedV2.purpose ||
+        description !== savedV2.description ||
+        allowSkipping !== savedV2.allowSkipping ||
+        operatorGuidance !== savedV2.operatorGuidance ||
+        subjectResolution !== savedV2.subjectResolution;
 
     const isDirty = fieldDirty || membershipDirty || rollupDirty || operatingPlanDirty || v2Dirty;
 
@@ -793,14 +773,40 @@ export default function StageEditorV2({
 
     // Reset local state when the active stage changes
     useEffect(() => {
-        setGrain(stageRecord?.grain);
-        setPurpose(stageRecord?.purpose ?? "");
-        setDescription(stageRecord?.description ?? "");
-        setAllowSkipping(stageRecord?.allow_skipping ?? false);
-        setOperatorGuidance(stageRecord?.operator_guidance ?? "");
-        setSubjectResolution(stageRecord?.subject_resolution_strategy ?? "ask_operator");
+        const next = {
+            grain: stageRecord?.grain,
+            purpose: stageRecord?.purpose ?? "",
+            description: stageRecord?.description ?? "",
+            allowSkipping: stageRecord?.allow_skipping ?? false,
+            operatorGuidance: stageRecord?.operator_guidance ?? "",
+            subjectResolution: (stageRecord?.subject_resolution_strategy ?? "ask_operator") as StageSubjectResolutionStrategy,
+        };
+        setGrain(next.grain);
+        setPurpose(next.purpose);
+        setDescription(next.description);
+        setAllowSkipping(next.allowSkipping);
+        setOperatorGuidance(next.operatorGuidance);
+        setSubjectResolution(next.subjectResolution);
         setCandidateActions(stageRecord?.action_catalog_v1?.candidate_actions ?? []);
+        setSavedV2(next);
     }, [stageKey, stageRecord]);
+
+    // Commit current field values as the new baseline when save transitions saving → saved.
+    // This clears dirty state immediately without waiting for stageRecord to propagate.
+    const prevSaveStateRef = useRef<LifecycleStageSaveUiState>("idle");
+    useEffect(() => {
+        if (prevSaveStateRef.current === "saving" && saveState === "saved") {
+            setSavedV2({
+                grain,
+                purpose,
+                description,
+                allowSkipping,
+                operatorGuidance,
+                subjectResolution: subjectResolution ?? "ask_operator",
+            });
+        }
+        prevSaveStateRef.current = saveState;
+    }, [saveState, grain, purpose, description, allowSkipping, operatorGuidance, subjectResolution]);
 
     useImperativeHandle(workspaceRef, () => ({
         getFieldDraftRules: () => fieldReqRef.current?.getDraftRules() ?? null,
@@ -865,16 +871,13 @@ export default function StageEditorV2({
     return (
         <div className="stage-editor-v2 relative flex flex-col" data-testid="stage-editor-v2">
             <StickyTopbar
-                stageLabel={stageLabel}
-                stageKey={stageKey}
                 saveState={effectiveSaveState}
                 saveError={saveError}
                 saveDisabled={saveDisabled}
                 isDirty={isDirty}
                 onSave={onSaveStage}
+                onDelete={onDeleteStage}
             />
-
-            <SectionAnchorNav activeSection="identity" />
 
             {statusesError ? (
                 <p className="mx-5 mt-2 flex items-center gap-1.5 text-xs text-alloy-ember" role="alert">
@@ -954,7 +957,7 @@ export default function StageEditorV2({
                     {/* 2a — Grain */}
                     <Field
                         label="Stage grain"
-                        hint="Grain is what a single queue row represents. Focus Panel content and available actions follow from this choice."
+                        hint="Grain determines queue rows — each row in this stage represents one unit of this grain. Focus Panel content and available actions follow."
                     >
                         <GrainSelector value={grain} onChange={setGrain} />
                         {grain ? <GrainImpactCallout grain={grain} /> : null}

@@ -1757,42 +1757,29 @@ export default function LifecycleActivationBoard({
                                 </div>
                             :   null}
                             {stageKey ?
-                                <>
-                                    <div className="flex justify-end">
-                                        {activationOwned ?
-                                            <button
-                                                type="button"
-                                                className="text-[10px] font-medium text-red-800 hover:underline"
-                                                onClick={() => setDeleteStageOpen(true)}
-                                                data-testid="lifecycle-activation-delete-stage"
-                                            >
-                                                Delete this stage
-                                            </button>
-                                        :   null}
-                                    </div>
-                                    <LifecycleStageConfiguration
-                                        departmentId={runtimeDepartmentId}
-                                        businessProcessKey={builderProcess?.key ?? "enrollment"}
-                                        stageKey={stageKey}
-                                        stageLabel={stageLabel}
-                                        lifecycleName={lifecycleName}
-                                        stageRecord={builderStages.find((s) => s.key === stageKey) ?? null}
-                                        allStages={builderStages}
-                                        bootstrap={stageBootstrap}
-                                        bootstrapLoading={stageBootstrapLoading}
-                                        statusesError={statusesError}
-                                        onStatusRollupChange={onStatusRollupChange}
-                                        saveState={stageSaveState}
-                                        saveError={stageSaveError}
-                                        onSaveStage={saveStageUnified}
-                                        onDirtyChange={(dirty) => {
-                                            stageDirtyRef.current = dirty;
-                                        }}
-                                        workspaceHandleRef={workspaceHandleRef}
-                                        validationSlot={null}
-                                        readyCheckRefreshKey={`${runtimeDepartmentId}:${readyCheckRevision}`}
-                                    />
-                                </>
+                                <LifecycleStageConfiguration
+                                    departmentId={runtimeDepartmentId}
+                                    businessProcessKey={builderProcess?.key ?? "enrollment"}
+                                    stageKey={stageKey}
+                                    stageLabel={stageLabel}
+                                    lifecycleName={lifecycleName}
+                                    stageRecord={builderStages.find((s) => s.key === stageKey) ?? null}
+                                    allStages={builderStages}
+                                    bootstrap={stageBootstrap}
+                                    bootstrapLoading={stageBootstrapLoading}
+                                    statusesError={statusesError}
+                                    onStatusRollupChange={onStatusRollupChange}
+                                    saveState={stageSaveState}
+                                    saveError={stageSaveError}
+                                    onSaveStage={saveStageUnified}
+                                    onDirtyChange={(dirty) => {
+                                        stageDirtyRef.current = dirty;
+                                    }}
+                                    onDeleteStage={activationOwned ? () => setDeleteStageOpen(true) : undefined}
+                                    workspaceHandleRef={workspaceHandleRef}
+                                    validationSlot={null}
+                                    readyCheckRefreshKey={`${runtimeDepartmentId}:${readyCheckRevision}`}
+                                />
                             :   null}
                         </>
                     :   null}
