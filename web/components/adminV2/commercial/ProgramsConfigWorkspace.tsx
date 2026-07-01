@@ -146,7 +146,7 @@ export default function ProgramsConfigWorkspace() {
         <div className={SETTINGS_PAGE_SHELL_CLASS}>
             <header className="flex items-center gap-3">
                 <Link
-                    href="/admin/commercial"
+                    href="/settings/commercial"
                     className="text-xs text-alloy-midnight/40 hover:text-alloy-midnight/70"
                 >
                     Programs & Tuition
@@ -400,7 +400,7 @@ export default function ProgramsConfigWorkspace() {
                                     Programs are configured per location. To set tuition rates for these
                                     programs, go to{" "}
                                     <Link
-                                        href="/admin/commercial/tuition"
+                                        href="/settings/commercial/tuition"
                                         className="text-alloy-pine underline"
                                     >
                                         Tuition

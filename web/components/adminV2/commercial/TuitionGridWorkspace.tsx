@@ -537,7 +537,7 @@ export function TuitionGridWorkspace() {
                         {programs.length === 0 ? (
                             <div className="py-12 text-center text-sm text-gray-400">
                                 No programs configured.{" "}
-                                <a href="/admin/commercial/programs" className="text-pine-600 underline">
+                                <a href="/settings/commercial/programs" className="text-pine-600 underline">
                                     Set up programs first.
                                 </a>
                             </div>

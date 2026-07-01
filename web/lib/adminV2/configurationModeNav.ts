@@ -103,7 +103,7 @@ export const CONFIGURATION_MODE_NAV_GROUPS: readonly ConfigurationModeNavGroup[]
         label: "Business Operations",
         items: [
             {
-                href: "/admin/commercial",
+                href: settings("commercial"),
                 label: "Commercial",
                 description: "Programs offered, tuition rates, and per-location overrides.",
                 icon: "commercial",
