@@ -10,20 +10,24 @@ import {
     computeTuitionReadiness,
     diffRateMaps,
     type TuitionRateRow,
-    type TuitionBillingPeriod,
 } from "@/lib/commercial/tuitionRates";
+
+const VARIANT_A = "00000000-0000-0000-0000-000000000001";
+const VARIANT_B = "00000000-0000-0000-0000-000000000002";
 
 function makeRow(overrides: Partial<TuitionRateRow> = {}): TuitionRateRow {
     return {
         id: "r1",
         org_id: "org1",
         location_id: null,
-        program_key: "infant",
-        schedule_key: "full_time",
+        variant_id: VARIANT_A,
+        cadence_key: "monthly",
+        payer_type: "private_pay",
         rate_cents: 120000,
-        billing_period: "monthly" as TuitionBillingPeriod,
         is_active: true,
         not_offered: false,
+        effective_start: null,
+        effective_end: null,
         metadata: {},
         created_at: "2026-01-01T00:00:00Z",
         updated_at: null,
@@ -52,8 +56,18 @@ describe("parseDollarsToCents", () => {
 });
 
 describe("tuitionRateCellKey", () => {
-    it("produces a stable compound key", () => {
-        expect(tuitionRateCellKey("infant", "full_time", "monthly")).toBe("infant::full_time::monthly");
+    it("produces a stable compound key from variant_id and cadence_key", () => {
+        expect(tuitionRateCellKey(VARIANT_A, "monthly")).toBe(`${VARIANT_A}::monthly`);
+    });
+    it("different variant_ids produce different keys", () => {
+        expect(tuitionRateCellKey(VARIANT_A, "monthly")).not.toBe(
+            tuitionRateCellKey(VARIANT_B, "monthly"),
+        );
+    });
+    it("different cadence_keys produce different keys", () => {
+        expect(tuitionRateCellKey(VARIANT_A, "monthly")).not.toBe(
+            tuitionRateCellKey(VARIANT_A, "weekly"),
+        );
     });
 });
 
@@ -64,21 +78,27 @@ describe("buildTuitionRateMap", () => {
 
     it("org scope: only returns org rows", () => {
         const map = buildTuitionRateMap(rates, null);
-        const key = tuitionRateCellKey("infant", "full_time", "monthly");
+        const key = tuitionRateCellKey(VARIANT_A, "monthly");
         expect(map.get(key)?.id).toBe("org-r");
     });
 
     it("location scope: location override wins", () => {
         const map = buildTuitionRateMap(rates, "loc1");
-        const key = tuitionRateCellKey("infant", "full_time", "monthly");
+        const key = tuitionRateCellKey(VARIANT_A, "monthly");
         expect(map.get(key)?.id).toBe("loc-r");
     });
 
-    it("location scope with no override: returns org row", () => {
-        const orgOnly = [orgRow];
-        const map = buildTuitionRateMap(orgOnly, "loc1");
-        const key = tuitionRateCellKey("infant", "full_time", "monthly");
+    it("location scope with no override: falls back to org row", () => {
+        const map = buildTuitionRateMap([orgRow], "loc1");
+        const key = tuitionRateCellKey(VARIANT_A, "monthly");
         expect(map.get(key)?.id).toBe("org-r");
+    });
+
+    it("handles multiple variants", () => {
+        const rowB = makeRow({ id: "org-r-b", variant_id: VARIANT_B, cadence_key: "weekly" });
+        const map = buildTuitionRateMap([orgRow, rowB], null);
+        expect(map.get(tuitionRateCellKey(VARIANT_A, "monthly"))?.id).toBe("org-r");
+        expect(map.get(tuitionRateCellKey(VARIANT_B, "weekly"))?.id).toBe("org-r-b");
     });
 });
 
@@ -87,7 +107,7 @@ describe("buildLocationOnlyRateMap", () => {
         const orgRow = makeRow({ id: "org-r", location_id: null });
         const locRow = makeRow({ id: "loc-r", location_id: "loc1" });
         const map = buildLocationOnlyRateMap([orgRow, locRow], "loc1");
-        const key = tuitionRateCellKey("infant", "full_time", "monthly");
+        const key = tuitionRateCellKey(VARIANT_A, "monthly");
         expect(map.get(key)?.id).toBe("loc-r");
         expect(map.size).toBe(1);
     });
@@ -95,16 +115,13 @@ describe("buildLocationOnlyRateMap", () => {
 
 describe("isLocationOverride", () => {
     it("true when row belongs to the location", () => {
-        const r = makeRow({ location_id: "loc1" });
-        expect(isLocationOverride(r, "loc1")).toBe(true);
+        expect(isLocationOverride(makeRow({ location_id: "loc1" }), "loc1")).toBe(true);
     });
     it("false when row is org default", () => {
-        const r = makeRow({ location_id: null });
-        expect(isLocationOverride(r, "loc1")).toBe(false);
+        expect(isLocationOverride(makeRow({ location_id: null }), "loc1")).toBe(false);
     });
     it("false in org scope", () => {
-        const r = makeRow({ location_id: "loc1" });
-        expect(isLocationOverride(r, null)).toBe(false);
+        expect(isLocationOverride(makeRow({ location_id: "loc1" }), null)).toBe(false);
     });
 });
 
@@ -115,8 +132,7 @@ describe("resolveCellState", () => {
 
     it("returns not_offered state", () => {
         const r = makeRow({ not_offered: true, location_id: null });
-        const state = resolveCellState(r, r, null);
-        expect(state.kind).toBe("not_offered");
+        expect(resolveCellState(r, r, null).kind).toBe("not_offered");
     });
 
     it("inherited row from org at location scope", () => {
@@ -144,21 +160,20 @@ describe("resolveCellState", () => {
 
 describe("computeTuitionReadiness", () => {
     it("returns 0% when no rates", () => {
-        const r = computeTuitionReadiness(["infant"], ["full_time"], "monthly", []);
+        const r = computeTuitionReadiness([VARIANT_A], ["monthly"], []);
         expect(r.percentComplete).toBe(0);
         expect(r.missing).toBe(1);
     });
 
     it("counts configured vs not_offered vs missing", () => {
         const rates: TuitionRateRow[] = [
-            makeRow({ program_key: "infant", schedule_key: "full_time", rate_cents: 100000 }),
-            makeRow({ program_key: "infant", schedule_key: "part_time", not_offered: true }),
-            // toddler / full_time missing
+            makeRow({ variant_id: VARIANT_A, cadence_key: "monthly", rate_cents: 100000 }),
+            makeRow({ variant_id: VARIANT_A, cadence_key: "weekly", not_offered: true }),
+            // VARIANT_B / monthly missing
         ];
         const r = computeTuitionReadiness(
-            ["infant", "toddler"],
-            ["full_time", "part_time"],
-            "monthly",
+            [VARIANT_A, VARIANT_B],
+            ["monthly", "weekly"],
             rates,
         );
         expect(r.configured).toBe(1);
@@ -170,16 +185,16 @@ describe("computeTuitionReadiness", () => {
 
     it("100% when all configured or not_offered", () => {
         const rates: TuitionRateRow[] = [
-            makeRow({ program_key: "infant", schedule_key: "full_time", rate_cents: 100000 }),
-            makeRow({ program_key: "infant", schedule_key: "part_time", not_offered: true }),
+            makeRow({ variant_id: VARIANT_A, cadence_key: "monthly", rate_cents: 100000 }),
+            makeRow({ variant_id: VARIANT_A, cadence_key: "weekly", not_offered: true }),
         ];
-        const r = computeTuitionReadiness(["infant"], ["full_time", "part_time"], "monthly", rates);
+        const r = computeTuitionReadiness([VARIANT_A], ["monthly", "weekly"], rates);
         expect(r.percentComplete).toBe(100);
     });
 });
 
 describe("diffRateMaps", () => {
-    const key = tuitionRateCellKey("infant", "full_time", "monthly");
+    const key = tuitionRateCellKey(VARIANT_A, "monthly");
 
     it("returns unset when neither map has the key", () => {
         expect(diffRateMaps(new Map(), new Map(), key).kind).toBe("unset");
@@ -202,8 +217,7 @@ describe("diffRateMaps", () => {
         const locRow = makeRow({ location_id: "loc1", rate_cents: 90000 });
         const orgMap = new Map([[key, orgRow]]);
         const locMap = new Map([[key, locRow]]);
-        const diff = diffRateMaps(orgMap, locMap, key);
-        expect(diff.kind).toBe("location_override");
+        expect(diffRateMaps(orgMap, locMap, key).kind).toBe("location_override");
     });
 
     it("not_offered_override when not_offered differs", () => {

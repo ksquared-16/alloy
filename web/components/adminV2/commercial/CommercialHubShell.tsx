@@ -3,7 +3,7 @@ import { SETTINGS_PAGE_SHELL_CLASS, SETTINGS_PAGE_INTRO_CLASS } from "@/lib/admi
 
 const HUB_CARDS = [
     {
-        href: "/admin/commercial/programs",
+        href: "/settings/commercial/programs",
         title: "Programs",
         description:
             "Define what programs your centers offer — Infant, Toddler, Preschool, and more. Configure which programs are available at each location.",
@@ -11,7 +11,7 @@ const HUB_CARDS = [
         hint: "Set active programs and per-location availability.",
     },
     {
-        href: "/admin/commercial/tuition",
+        href: "/settings/commercial/tuition",
         title: "Tuition",
         description:
             "Set tuition rates by program and schedule type across all billing periods. Org defaults inherit to all sites — override per location as needed.",

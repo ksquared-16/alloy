@@ -146,7 +146,7 @@ export default function ProgramsConfigWorkspace() {
         <div className={SETTINGS_PAGE_SHELL_CLASS}>
             <header className="flex items-center gap-3">
                 <Link
-                    href="/admin/commercial"
+                    href="/settings/commercial"
                     className="text-xs text-alloy-midnight/40 hover:text-alloy-midnight/70"
                 >
                     Programs & Tuition
@@ -220,7 +220,8 @@ export default function ProgramsConfigWorkspace() {
                     {/* Programs canvas */}
                     {activeSiteId ? (
                         <div className="space-y-4">
-                            <div className="flex items-center justify-between">
+                            {/* Section header */}
+                            <div className="flex items-center justify-between gap-3">
                                 <div>
                                     <h2 className="text-base font-semibold text-alloy-midnight">
                                         {(
@@ -238,14 +239,68 @@ export default function ProgramsConfigWorkspace() {
                                 <OwnershipBadge owner="location" />
                             </div>
 
+                            {/* Add program — above the list */}
+                            <div className="overflow-hidden rounded-xl border border-alloy-forge/12 bg-white/90 shadow-sm">
+                                <div className="border-b border-alloy-forge/10 bg-alloy-stone/20 px-4 py-2.5">
+                                    <p className="text-[10px] font-semibold uppercase tracking-wide text-alloy-midnight/40">
+                                        Add program
+                                    </p>
+                                </div>
+                                <div className="flex flex-wrap items-end gap-2 px-4 py-3">
+                                    <label className="flex min-w-[140px] flex-1 flex-col gap-0.5">
+                                        <span className="text-[10px] text-alloy-midnight/50">Name</span>
+                                        <input
+                                            type="text"
+                                            value={addDraft.label}
+                                            disabled={creating}
+                                            placeholder="e.g. Summer Camp"
+                                            className={inputClass}
+                                            onChange={(e) =>
+                                                setAddDraft((d) => ({ ...d, label: e.target.value }))
+                                            }
+                                            onKeyDown={(e) => {
+                                                if (e.key === "Enter") void createCategory();
+                                            }}
+                                        />
+                                    </label>
+                                    <label className="flex min-w-[120px] flex-col gap-0.5">
+                                        <span className="text-[10px] text-alloy-midnight/50">
+                                            Key <span className="text-alloy-midnight/30">(optional)</span>
+                                        </span>
+                                        <input
+                                            type="text"
+                                            value={addDraft.key}
+                                            disabled={creating}
+                                            placeholder="summer_camp"
+                                            className={`${inputClass} font-mono text-[11px]`}
+                                            onChange={(e) =>
+                                                setAddDraft((d) => ({ ...d, key: e.target.value }))
+                                            }
+                                        />
+                                    </label>
+                                    <button
+                                        type="button"
+                                        disabled={creating || !addDraft.label.trim()}
+                                        onClick={() => void createCategory()}
+                                        className="rounded-lg border border-alloy-pine/30 bg-alloy-pine/10 px-3 py-1.5 text-xs font-semibold text-alloy-pine hover:bg-alloy-pine/15 disabled:opacity-50"
+                                    >
+                                        {creating ? "Adding…" : "Add program"}
+                                    </button>
+                                </div>
+                                <p className="border-t border-alloy-forge/6 px-4 py-2 text-[10px] text-alloy-midnight/35">
+                                    Keys are stable identifiers used in enrollment data and the tuition grid.
+                                    Auto-generated from name if left blank.
+                                </p>
+                            </div>
+
+                            {/* Programs list */}
                             {siteCategories.length === 0 ? (
                                 <div className="rounded-xl border border-dashed border-alloy-forge/20 bg-alloy-stone/10 px-5 py-8 text-center">
                                     <p className="text-sm text-alloy-midnight/50">
-                                        No programs configured for this location yet.
+                                        No programs yet — add one above.
                                     </p>
                                     <p className="mt-1 text-xs text-alloy-midnight/35">
-                                        Add programs below — they appear in enrollment intake, rooms, and
-                                        the tuition grid.
+                                        Programs appear in enrollment intake, rooms, and the tuition grid.
                                     </p>
                                 </div>
                             ) : (
@@ -272,9 +327,7 @@ export default function ProgramsConfigWorkspace() {
                                                 <tr
                                                     key={cat.id}
                                                     className={`border-b border-alloy-forge/6 last:border-0 ${
-                                                        cat.is_active === false
-                                                            ? "opacity-50"
-                                                            : ""
+                                                        cat.is_active === false ? "opacity-50" : ""
                                                     }`}
                                                 >
                                                     <td className="px-4 py-2">
@@ -308,9 +361,7 @@ export default function ProgramsConfigWorkspace() {
                                                                     next === (cat.sort_order ?? 100)
                                                                 )
                                                                     return;
-                                                                void patchCategory(cat.id, {
-                                                                    sort_order: next,
-                                                                });
+                                                                void patchCategory(cat.id, { sort_order: next });
                                                             }}
                                                         />
                                                     </td>
@@ -329,9 +380,7 @@ export default function ProgramsConfigWorkspace() {
                                                                     : "bg-alloy-stone/30 text-alloy-midnight/40 hover:bg-alloy-stone/50"
                                                             }`}
                                                         >
-                                                            {cat.is_active !== false
-                                                                ? "Active"
-                                                                : "Inactive"}
+                                                            {cat.is_active !== false ? "Active" : "Inactive"}
                                                         </button>
                                                     </td>
                                                 </tr>
@@ -341,68 +390,10 @@ export default function ProgramsConfigWorkspace() {
                                 </div>
                             )}
 
-                            {/* Add program */}
-                            <div className="rounded-xl border border-dashed border-alloy-forge/15 bg-alloy-stone/10 p-4">
-                                <p className="mb-3 text-[10px] font-semibold uppercase tracking-wide text-alloy-midnight/40">
-                                    Add program
-                                </p>
-                                <div className="flex flex-wrap items-end gap-2">
-                                    <label className="flex min-w-[140px] flex-1 flex-col gap-0.5">
-                                        <span className="text-[10px] text-alloy-midnight/50">
-                                            Display name
-                                        </span>
-                                        <input
-                                            type="text"
-                                            value={addDraft.label}
-                                            disabled={creating}
-                                            placeholder="e.g. Summer Camp"
-                                            className={inputClass}
-                                            onChange={(e) =>
-                                                setAddDraft((d) => ({ ...d, label: e.target.value }))
-                                            }
-                                            onKeyDown={(e) => {
-                                                if (e.key === "Enter") void createCategory();
-                                            }}
-                                        />
-                                    </label>
-                                    <label className="flex min-w-[120px] flex-col gap-0.5">
-                                        <span className="text-[10px] text-alloy-midnight/50">
-                                            Key (optional)
-                                        </span>
-                                        <input
-                                            type="text"
-                                            value={addDraft.key}
-                                            disabled={creating}
-                                            placeholder="summer_camp"
-                                            className={`${inputClass} font-mono text-[11px]`}
-                                            onChange={(e) =>
-                                                setAddDraft((d) => ({ ...d, key: e.target.value }))
-                                            }
-                                        />
-                                    </label>
-                                    <button
-                                        type="button"
-                                        disabled={creating || !addDraft.label.trim()}
-                                        onClick={() => void createCategory()}
-                                        className="rounded-lg border border-alloy-pine/30 bg-alloy-pine/10 px-3 py-1.5 text-xs font-semibold text-alloy-pine hover:bg-alloy-pine/15 disabled:opacity-50"
-                                    >
-                                        {creating ? "Adding…" : "Add program"}
-                                    </button>
-                                </div>
-                                <p className="mt-2 text-[10px] text-alloy-midnight/40">
-                                    Keys are stable identifiers used in enrollment data and the tuition
-                                    grid. Auto-generated from the display name if left blank.
-                                </p>
-                            </div>
-
                             <div className="rounded-lg border border-alloy-forge/8 bg-alloy-stone/10 px-4 py-3">
                                 <p className="text-xs text-alloy-midnight/50">
-                                    Programs are configured per location. To set tuition rates for these
-                                    programs, go to{" "}
-                                    <Link
-                                        href="/admin/commercial/tuition"
-                                        className="text-alloy-pine underline"
-                                    >
+                                    Programs are configured per location. To set tuition rates, go to{" "}
+                                    <Link href="/settings/commercial/tuition" className="text-alloy-pine underline">
                                         Tuition
                                     </Link>
                                     .

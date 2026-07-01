@@ -1,37 +1,36 @@
 /**
- * Commercial Configuration — Tuition rates.
+ * Commercial Configuration — Tuition Rates V3.
  *
- * Rate grid: program × schedule → rate, per org or per site.
- * Org default (location_id = null) is inherited by all sites
- * unless a site-level override exists.
+ * Rate model: program_offering_variant × billing_cadence → rate, per org or per site.
+ * Org default (location_id = null) is inherited by all sites unless a
+ * site-level override exists.
+ *
+ * V3 model: variant_id (FK to program_offering_variants) replaces offering_id.
+ * Rates always attach to variants — never directly to offerings or programs.
+ * Commercial owns rates. Programs owns offerings and variants.
  */
+
+export type TuitionBillingPeriod = "monthly" | "weekly" | "biweekly" | "annual";
 
 export type TuitionRateRow = {
     id: string;
     org_id: string;
     location_id: string | null;
-    program_key: string;
-    schedule_key: string;
+    variant_id: string;
+    cadence_key: string;
+    payer_type: string;
     rate_cents: number;
-    billing_period: TuitionBillingPeriod;
     is_active: boolean;
-    /** Explicitly not offered — distinct from "no rate set yet". */
+    /** Explicitly not offered at this scope/cadence — distinct from "no rate set". */
     not_offered: boolean;
+    /** Optional: date from which this rate is effective (ISO date string, YYYY-MM-DD). */
+    effective_start: string | null;
+    /** Optional: date after which this rate expires (ISO date string, YYYY-MM-DD). */
+    effective_end: string | null;
     metadata: Record<string, unknown>;
     created_at: string;
     updated_at: string | null;
 };
-
-export type TuitionBillingPeriod = "weekly" | "biweekly" | "monthly" | "annual";
-
-export const TUITION_BILLING_PERIODS: { key: TuitionBillingPeriod; label: string }[] = [
-    { key: "weekly", label: "Weekly" },
-    { key: "biweekly", label: "Bi-weekly" },
-    { key: "monthly", label: "Monthly" },
-    { key: "annual", label: "Annual" },
-];
-
-export const DEFAULT_BILLING_PERIOD: TuitionBillingPeriod = "monthly";
 
 /** Format cents as a dollar string. */
 export function formatRateCents(cents: number): string {
@@ -53,13 +52,9 @@ export function parseDollarsToCents(raw: string): number | null {
     return Math.round(val * 100);
 }
 
-/** Build a cell key for indexing the rate grid. */
-export function tuitionRateCellKey(
-    programKey: string,
-    scheduleKey: string,
-    billingPeriod: TuitionBillingPeriod,
-): string {
-    return `${programKey}::${scheduleKey}::${billingPeriod}`;
+/** Build a cell key for indexing the rate grid. V3: variant × cadence. */
+export function tuitionRateCellKey(variantId: string, cadenceKey: string): string {
+    return `${variantId}::${cadenceKey}`;
 }
 
 /**
@@ -74,14 +69,14 @@ export function buildTuitionRateMap(
 
     for (const r of rates) {
         if (r.location_id === null) {
-            map.set(tuitionRateCellKey(r.program_key, r.schedule_key, r.billing_period), r);
+            map.set(tuitionRateCellKey(r.variant_id, r.cadence_key), r);
         }
     }
 
     if (locationId) {
         for (const r of rates) {
             if (r.location_id === locationId) {
-                map.set(tuitionRateCellKey(r.program_key, r.schedule_key, r.billing_period), r);
+                map.set(tuitionRateCellKey(r.variant_id, r.cadence_key), r);
             }
         }
     }
@@ -97,7 +92,7 @@ export function buildLocationOnlyRateMap(
     const map = new Map<string, TuitionRateRow>();
     for (const r of rates) {
         if (r.location_id === locationId) {
-            map.set(tuitionRateCellKey(r.program_key, r.schedule_key, r.billing_period), r);
+            map.set(tuitionRateCellKey(r.variant_id, r.cadence_key), r);
         }
     }
     return map;
@@ -119,7 +114,7 @@ export function resolveCellState(
     orgDefaultRow: TuitionRateRow | undefined,
     locationId: string | null,
 ): TuitionCellState {
-    const effective = rateRow; // already resolved with inheritance from buildTuitionRateMap
+    const effective = rateRow;
     if (!effective) return { kind: "unset" };
 
     const isOrgRow = effective.location_id === null;
@@ -138,7 +133,7 @@ export function resolveCellState(
     };
 }
 
-/** Readiness: how many cells in the grid have rates set at the org level. */
+/** Readiness: how many variant×cadence cells have rates set at the org level. */
 export type TuitionReadiness = {
     total: number;
     configured: number;
@@ -148,19 +143,18 @@ export type TuitionReadiness = {
 };
 
 export function computeTuitionReadiness(
-    programKeys: string[],
-    scheduleKeys: string[],
-    billingPeriod: TuitionBillingPeriod,
+    variantIds: string[],
+    cadenceKeys: string[],
     rates: TuitionRateRow[],
 ): TuitionReadiness {
     const orgMap = buildTuitionRateMap(rates, null);
-    const total = programKeys.length * scheduleKeys.length;
+    const total = variantIds.length * cadenceKeys.length;
     let configured = 0;
     let notOffered = 0;
 
-    for (const pk of programKeys) {
-        for (const sk of scheduleKeys) {
-            const row = orgMap.get(tuitionRateCellKey(pk, sk, billingPeriod));
+    for (const vid of variantIds) {
+        for (const ck of cadenceKeys) {
+            const row = orgMap.get(tuitionRateCellKey(vid, ck));
             if (!row) continue;
             if (row.not_offered) notOffered++;
             else configured++;
