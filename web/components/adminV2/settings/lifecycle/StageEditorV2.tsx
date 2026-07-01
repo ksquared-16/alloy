@@ -46,6 +46,7 @@ import type { LifecycleBuilderStageRecord } from "@/lib/lifecycle/lifecycleBuild
 import { listPlatformActions } from "@/lib/platform/actions/platformActionCatalog";
 import type { StageCandidateAction } from "@/lib/lifecycle/stageActionCatalogV1";
 import type { LifecycleStageSaveUiState } from "@/components/adminV2/settings/lifecycle/LifecycleStageWorkspace";
+import LifecycleStageLayoutAssignmentsCard from "@/components/adminV2/settings/lifecycle/LifecycleStageLayoutAssignmentsCard";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -410,6 +411,7 @@ function PossibleOutcomesSection({
     operatingPlan: import("@/lib/lifecycle/stageOperatingPlanV1").StageOperatingPlanV1 | null | undefined;
 }) {
     const outcomes = operatingPlan?.outcomes ?? [];
+    const outcomeRules = operatingPlan?.outcome_rules ?? [];
     if (!outcomes.length) {
         return (
             <div className="rounded-lg border border-dashed border-alloy-forge/20 px-4 py-6 text-center">
@@ -424,32 +426,33 @@ function PossibleOutcomesSection({
     }
     return (
         <div className="space-y-2">
-            {outcomes.map((outcome) => (
-                <div
-                    key={outcome.outcome_key}
-                    className="flex items-start gap-3 rounded-lg border border-alloy-forge/12 bg-white px-3 py-3"
-                >
+            {outcomes.map((outcome) => {
+                const rule = outcomeRules.find((r) => r.when_outcome_key === outcome.outcome_key) ?? null;
+                return (
                     <div
-                        className={`mt-0.5 h-2 w-2 shrink-0 rounded-full ${outcome.successful ? "bg-alloy-juniper" : "bg-alloy-midnight/30"}`}
-                    />
-                    <div className="flex-1 min-w-0">
-                        <p className="text-[12px] font-semibold text-alloy-midnight">{outcome.label}</p>
-                        {outcome.rules?.[0] ? (
-                            <p className="text-[11px] text-alloy-midnight/50 mt-0.5">
-                                → {outcome.rules[0].targets?.[0]?.kind?.replace(/_/g, " ") ?? "produces side effect"}
-                                {outcome.rules[0].targets?.[0]?.status_key
-                                    ? `: ${outcome.rules[0].targets[0].status_key}`
-                                    : ""}
-                            </p>
+                        key={outcome.outcome_key}
+                        className="flex items-start gap-3 rounded-lg border border-alloy-forge/12 bg-white px-3 py-3"
+                    >
+                        <div
+                            className={`mt-0.5 h-2 w-2 shrink-0 rounded-full ${outcome.successful ? "bg-alloy-juniper" : "bg-alloy-midnight/30"}`}
+                        />
+                        <div className="flex-1 min-w-0">
+                            <p className="text-[12px] font-semibold text-alloy-midnight">{outcome.label}</p>
+                            {rule?.targets[0] ? (
+                                <p className="text-[11px] text-alloy-midnight/50 mt-0.5">
+                                    → {rule.targets[0].kind.replace(/_/g, " ")}
+                                    {rule.targets[0].status_key ? `: ${rule.targets[0].status_key}` : ""}
+                                </p>
+                            ) : null}
+                        </div>
+                        {outcome.successful ? (
+                            <span className="shrink-0 rounded-full bg-alloy-juniper/10 px-2 py-0.5 text-[10px] font-semibold text-alloy-juniper">
+                                Success
+                            </span>
                         ) : null}
                     </div>
-                    {outcome.successful ? (
-                        <span className="shrink-0 rounded-full bg-alloy-juniper/10 px-2 py-0.5 text-[10px] font-semibold text-alloy-juniper">
-                            Success
-                        </span>
-                    ) : null}
-                </div>
-            ))}
+                );
+            })}
         </div>
     );
 }
@@ -876,6 +879,7 @@ export default function StageEditorV2({
                     ) : null}
 
                     {stageKey.trim() ? (
+                        <>
                         <div className="mt-4 border-t border-alloy-forge/8 pt-4">
                             <p className="mb-3 text-[11px] font-semibold text-alloy-midnight/60 uppercase tracking-wide">
                                 Queue membership
@@ -909,6 +913,20 @@ export default function StageEditorV2({
                                 />
                             </div>
                         </div>
+                        <div className="mt-4 border-t border-alloy-forge/8 pt-4">
+                            <p className="mb-1 text-[11px] font-semibold text-alloy-midnight/60 uppercase tracking-wide">
+                                Surface assignments
+                            </p>
+                            <p className="mb-3 text-[11px] text-alloy-midnight/45">
+                                Assign published layouts to the queue row and Focus Panel for this stage. Missing assignments inherit from the process default.
+                            </p>
+                            <LifecycleStageLayoutAssignmentsCard
+                                businessProcessKey={businessProcessKey}
+                                stageKey={stageKey}
+                                stageLabel={stageLabel}
+                            />
+                        </div>
+                        </>
                     ) : null}
                 </Section>
 
