@@ -227,6 +227,7 @@ import {
     attachSiblingWorkUnitTotals,
     buildLifecycleBuilderOwnedAboveFoldHeaderSections,
     buildLifecycleSiblingNavRowsFromDepartmentWorkUnits,
+    buildLifecycleSiblingPreliminaryHeaderSections,
     isLifecycleWorkUnitNavChipKey,
     lifecycleBuilderOwnedUsesEnrollmentPillShell,
     LIFECYCLE_NEEDS_ATTENTION_PLACEHOLDER_CHIP_KEY,
@@ -1144,6 +1145,11 @@ export default function AdminV2OpportunityWorkUnitPage() {
     const [lifecycleSiblingTotalsById, setLifecycleSiblingTotalsById] = useState<Record<string, number>>({});
     const lifecycleSiblingWorkUnitsRef = useRef<LifecycleSiblingWorkUnitNavRow[] | null>(null);
     lifecycleSiblingWorkUnitsRef.current = lifecycleSiblingWorkUnits;
+    // Preliminary sibling names from stable cache — shows real pill labels with skeleton counts
+    // before authoritative hydration completes. Never exposes stale counts (skeleton only).
+    const [lifecycleSiblingPreliminaryRows, setLifecycleSiblingPreliminaryRows] = useState<
+        LifecycleSiblingWorkUnitNavRow[] | null
+    >(null);
 
     useEffect(() => {
         if (!orgId) {
@@ -1170,9 +1176,21 @@ export default function AdminV2OpportunityWorkUnitPage() {
                 setLifecycleSiblingWorkUnits(stable.siblings);
                 setLifecycleSiblingTotalsById(stable.totalsByWorkUnitId);
                 setLifecycleSiblingsHydrationComplete(true);
+                setLifecycleSiblingPreliminaryRows(null); // already fully hydrated, no preliminary needed
                 return;
             }
         }
+        // Seed preliminary pill labels from the stable cache so the header shows named pills
+        // (with skeleton counts) immediately on non-preserved entry — avoids the generic "—" skeleton.
+        const preliminary =
+            orgId && departmentId
+                ? readLifecycleSiblingListStable({
+                      orgId,
+                      departmentId,
+                      accessScopeFingerprint: viewScopeFingerprint,
+                  })
+                : null;
+        setLifecycleSiblingPreliminaryRows(preliminary?.siblings ?? null);
         setLifecycleSiblingWorkUnits(null);
         setLifecycleSiblingsHydrationComplete(false);
         setLifecycleSiblingTotalsById({});
@@ -1510,6 +1528,28 @@ export default function AdminV2OpportunityWorkUnitPage() {
         selectedQueueKey,
         stageOperationalViews,
         workViewPerspectivesEnabled,
+    ]);
+
+    // Preliminary pill sections: named chips with skeleton counts, from stable sibling cache.
+    // Shown while `lifecycle_builder_owned_header_pending` is true so the header renders the
+    // real pill structure immediately instead of generic "—" skeletons.
+    const lifecycleHeaderPreliminarySections = useMemo(() => {
+        if (!builderOwnedLifecycleShell || !workUnitId || !lifecycleSiblingPreliminaryRows?.length) {
+            return null;
+        }
+        // Already fully hydrated — preliminary sections would be ignored, skip the work
+        if (lifecycleSiblingHeaderReady) return null;
+        return buildLifecycleSiblingPreliminaryHeaderSections({
+            siblings: lifecycleSiblingPreliminaryRows,
+            currentWorkUnitId: workUnitId,
+            currentWorkUnitKey: workUnit?.key ?? null,
+        });
+    }, [
+        builderOwnedLifecycleShell,
+        workUnitId,
+        workUnit?.key,
+        lifecycleSiblingPreliminaryRows,
+        lifecycleSiblingHeaderReady,
     ]);
 
     const showOipOnlyKpiStrip = builderOwnedLifecycleShell;
@@ -5924,6 +5964,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
             lifecycle_builder_owned_header_sections: lifecycleHeaderSections,
             lifecycle_builder_owned_header_pending:
                 builderOwnedLifecycleShell && !lifecycleSiblingHeaderReady,
+            lifecycle_builder_owned_preliminary_siblings: lifecycleHeaderPreliminarySections,
             selected_queue_key: selectedQueueKey,
             attention_bucket_key: attentionBucketKey,
             lane_unmapped_only: laneUnmappedOnly,
@@ -5972,6 +6013,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
         builderOwnedLifecycleShell,
         lifecycleHeaderSections,
         lifecycleSiblingHeaderReady,
+        lifecycleHeaderPreliminarySections,
     ]);
 
     const workUnitRouteShellPlaceholder = useMemo(

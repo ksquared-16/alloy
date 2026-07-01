@@ -84,3 +84,53 @@ describe("Ownership deletion — KPI single renderer path", () => {
         expect(src).toContain("metricRenderItemsHaveValues");
     });
 });
+
+describe("Runtime flag retirement — production source", () => {
+    const sourceFiles = [
+        "lib/adminV2/runtime/alloyOsRuntimeFlag.ts",
+        "lib/adminV2/runtime/useAlloyOsRuntimeSplitActive.ts",
+        "lib/adminV2/runtime/configurationRuntimeConvergenceFlag.ts",
+        "lib/adminV2/runtime/operationalSubject/OperationalModeEntryContext.tsx",
+        "lib/adminV2/runtime/perspective/useWorkUnitRuntimePerspective.ts",
+        "lib/adminV2/runtime/preload/drawerVmPrewarmScheduler.ts",
+        "lib/admin/opportunityDrawerOpenCoordinator.ts",
+        "app/adminV2/components/AlloyOsRuntimeSplitController.tsx",
+        "app/adminV2/components/AlloyOsLayoutSurfaceDiagnostics.tsx",
+        "components/admin/vmDrawer/OpportunityDrawerVmRuntime.tsx",
+        "components/admin/workspace/layout/WorkspaceOperationalPulseStrip.tsx",
+        "app/adminV2/components/workspace/shells/WorkUnitWorkspace.tsx",
+        "components/admin/workspace/layout/WorkUnitCommandSurface.tsx",
+        "app/adminV2/components/workspace/blocks/QueueBlock.tsx",
+        "app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page.tsx",
+    ];
+    it.each(sourceFiles)("%s has no ALLOY_OS_RUNTIME_ENABLED references", (file) => {
+        expect(readSrc(file)).not.toContain("ALLOY_OS_RUNTIME_ENABLED");
+    });
+});
+
+describe("Outbound navigation — no cold shell regression", () => {
+    it("workUnitSurfaceEverCommitted is a one-way latch — never reset to false", () => {
+        const page = readSrc("app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page.tsx");
+        // The latch starts false and is only ever set to true
+        expect(page).toContain("useState(false)");
+        expect(page).toContain("setWorkUnitSurfaceEverCommitted(true)");
+        // Never set back to false
+        expect(page).not.toContain("setWorkUnitSurfaceEverCommitted(false)");
+    });
+
+    it("cold shell is gated on workUnitSurfaceEverCommitted — not shown after first reveal", () => {
+        const page = readSrc("app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page.tsx");
+        expect(page).toContain(
+            "const showWorkUnitColdShell =\n        !workUnitSurfaceReady && !workUnitPageSeededFromCache && !workUnitSurfaceEverCommitted;"
+        );
+        // The JSX cold shell branch uses showWorkUnitColdShell, not raw !workUnitSurfaceReady
+        expect(page).toContain(") : showWorkUnitColdShell ? (");
+    });
+
+    it("outbound navigation leaves page in ready state — no isLeavingWorkUnitSurface reset exists", () => {
+        const page = readSrc("app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page.tsx");
+        // No explicit freeze/shell-reset on navigation away (App Router keeps old page mounted)
+        expect(page).not.toContain("isLeavingWorkUnitSurface");
+        expect(page).not.toContain("setWorkUnitSurfaceReady(false)");
+    });
+});
