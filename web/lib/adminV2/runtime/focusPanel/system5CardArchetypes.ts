@@ -27,6 +27,7 @@ export const SYSTEM5_CARD_ARCHETYPE: Record<FocusPanelCardKey, FocusPanelCardArc
     tasks: "collection",
     work_launcher: "launcher",
     timeline: "timeline",
+    billing_preview: "status",
 };
 
 export function system5ArchetypeForCard(key: FocusPanelCardKey): FocusPanelCardArchetype {

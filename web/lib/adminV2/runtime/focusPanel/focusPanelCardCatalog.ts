@@ -30,6 +30,6 @@ export const FOCUS_PANEL_CARD_CATALOG: readonly FocusPanelCardCatalogEntry[] = [
     { label: "Communications", cardKey: "communications" },
     { label: "Documents", cardKey: "documents" },
     { label: "Tasks", cardKey: "tasks" },
-    { label: "Billing", cardKey: null, note: "No runtime card on this surface yet" },
+    { label: "Billing Preview", cardKey: "billing_preview" },
     { label: "KPI / Metric", cardKey: null, note: "Bind an Operational Intelligence metric — next phase" },
 ];

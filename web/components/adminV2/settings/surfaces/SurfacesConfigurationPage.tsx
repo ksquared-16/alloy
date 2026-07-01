@@ -11,6 +11,7 @@ import {
 import FocusPanelSummarySurfaceEditor from "@/components/adminV2/settings/surfaces/FocusPanelSummarySurfaceEditor";
 import OperationalIntelligenceSurfaceBuilder from "@/components/adminV2/settings/surfaces/OperationalIntelligenceSurfaceBuilder";
 import { WorkspaceHeaderSurfaceBuilder, WorkUnitHeaderSurfaceBuilder } from "@/components/adminV2/settings/surfaces/HeaderSurfaceBuilders";
+import QueueRowBuilderV1 from "@/components/adminV2/settings/surfaces/QueueRowBuilderV1";
 import { SurfaceLibrary } from "@/components/platform/surfaceBuilder/SurfaceLibrary";
 import {
     useSurfacesConfigurationSettings,
@@ -21,7 +22,7 @@ const SURFACES_SUBTITLE =
     "Where operators see actions — Design Surfaces for queue rows, the Focus Panel, and cards.";
 
 function sectionEmptyListCopy(section: SurfaceConfigSectionKey): string {
-    if (section === "queue-rows") return "Queue row surfaces aren’t authorable here yet.";
+    if (section === "queue-rows") return "No queue row surfaces found.";
     if (section === "workspaces") return "Workspace surfaces aren’t authorable here yet.";
     if (section === "dashboards") return "Dashboard & analytics surfaces aren’t authorable here yet.";
     return "No Focus Panel surfaces yet.";
@@ -86,6 +87,8 @@ export default function SurfacesConfigurationPage() {
                                 <WorkspaceHeaderSurfaceBuilder />
                             ) : selectedObject.editor === "work-unit-header" ? (
                                 <WorkUnitHeaderSurfaceBuilder />
+                            ) : selectedObject.editor === "queue-row-builder" ? (
+                                <QueueRowBuilderV1 surfaceId={selectedObject.id} />
                             ) : (
                                 <FocusPanelSummarySurfaceEditor />
                             )}
