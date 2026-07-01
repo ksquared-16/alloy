@@ -123,6 +123,58 @@ describe("buildWorkspaceNavDeptChildren", () => {
         ).toBe(true);
     });
 
+    it("workspaceDeptQueueNavHref with workUnitKey produces canonical /work-unit/[slug] URL", () => {
+        const href = workspaceDeptQueueNavHref("/workspace", "dept-1", "wu-pipe", "new_leads", "enrollment_pipeline");
+        expect(href).toBe("/workspace/work-unit/new-leads");
+        expect(href).not.toContain("/dept/");
+        expect(href).not.toContain("/adminV2/");
+    });
+
+    it("workspaceDeptQueueNavHref falls back to dept-scoped URL only when BOTH queueKey and workUnitKey are absent", () => {
+        // queueKey-only call still produces canonical URL (queueKey IS the slug)
+        const hrefWithQueue = workspaceDeptQueueNavHref("/workspace", "dept-1", "wu-pipe", "new_leads");
+        expect(hrefWithQueue).not.toContain("/dept/");
+        // ID-only (no key at all) → last remaining legacy fallback
+        const hrefIdOnly = workspaceDeptQueueNavHref("/workspace", "dept-1", "wu-pipe", null);
+        expect(hrefIdOnly).toContain("/dept/");
+        expect(hrefIdOnly).not.toContain("/work-unit/new-leads");
+    });
+
+    it("workspaceDeptQueueNavHref null queueKey with workUnitKey produces /work-unit/[slug] without queue param", () => {
+        const href = workspaceDeptQueueNavHref("/workspace", "dept-1", "wu-pipe", null, "billing");
+        expect(href).toBe("/workspace/work-unit/billing");
+        expect(href).not.toContain("/dept/");
+    });
+
+    it("buildWorkspaceNavDeptChildren pipeline lanes carry workUnitKey from the pipeline work unit", () => {
+        const wus: WorkspaceNavTreeWu[] = [
+            {
+                id: "wu-pipe",
+                department_id: "dept-1",
+                key: "enrollment_pipeline",
+                name: "Enrollment Pipeline",
+                queue_definition: ENROLLMENT_PIPELINE_QD,
+            },
+        ];
+        const children = buildWorkspaceNavDeptChildren("dept-1", wus);
+        expect(children.every((c) => c.workUnitKey === "enrollment_pipeline")).toBe(true);
+    });
+
+    it("buildWorkspaceNavDeptChildren non-pipeline WU rows carry their own key", () => {
+        const wus: WorkspaceNavTreeWu[] = [
+            { id: "wu-billing", department_id: "dept-2", key: "billing", name: "Billing" },
+            { id: "wu-hr", department_id: "dept-2", key: "hr_onboarding", name: "HR" },
+        ];
+        const children = buildWorkspaceNavDeptChildren("dept-2", wus);
+        const billingChild = children.find((c) => c.workUnitId === "wu-billing");
+        const hrChild = children.find((c) => c.workUnitId === "wu-hr");
+        expect(billingChild?.workUnitKey).toBe("billing");
+        expect(hrChild?.workUnitKey).toBe("hr_onboarding");
+        // And their hrefs use canonical /work-unit/[slug]
+        expect(workspaceNavChildHref("/workspace", "dept-2", billingChild!)).toBe("/workspace/work-unit/billing");
+        expect(workspaceNavChildHref("/workspace", "dept-2", hrChild!)).toBe("/workspace/work-unit/hr-onboarding");
+    });
+
     it("marks configured queue child active from legacy queue search param", () => {
         const child = {
             rowKey: "wu-pipe:new_inquiry",

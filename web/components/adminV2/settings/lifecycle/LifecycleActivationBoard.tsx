@@ -1781,6 +1781,7 @@ export default function LifecycleActivationBoard({
                         <BusinessProcessWorkViewsSetupWorkspace
                             departmentId={runtimeDepartmentId}
                             workUnitId={workUnitId}
+                            workUnitKey={pipeline?.key ?? null}
                             queueLanes={workViewQueueLanes}
                         />
                     :   null}

@@ -11,5 +11,8 @@
     "tmp",
     "**/*.test.ts",
     "**/*.test.tsx"
-  ]
+  ],
+  "compilerOptions": {
+    "jsx": "preserve"
+  }
 }

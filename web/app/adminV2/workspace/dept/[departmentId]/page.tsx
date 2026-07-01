@@ -216,6 +216,7 @@ type DeptAttentionBucket = {
 
 type DeptPipelineExecSurface = {
     workUnitId: string;
+    workUnitKey: string | null;
     panelTitle: string;
     lanes: Array<{
         key: string;
@@ -1554,7 +1555,7 @@ export default function AdminV2WorkspaceDepartmentPage() {
             () => {
                 const hrefs = deptThroughputWuRows.slice(0, 3).map((wu) =>
                     appendWorkspaceSiteToPath(
-                        workspaceDeptQueueNavHref(WORKSPACE_BASE, departmentId, wu.id, null),
+                        workspaceDeptQueueNavHref(WORKSPACE_BASE, departmentId, wu.id, null, wu.key ?? null),
                         selectedSiteId
                     )
                 );
@@ -1797,7 +1798,8 @@ export default function AdminV2WorkspaceDepartmentPage() {
                                         WORKSPACE_BASE,
                                         departmentId,
                                         deptPipelineExecSurface!.workUnitId,
-                                        lane.key
+                                        lane.key,
+                                        deptPipelineExecSurface!.workUnitKey
                                     ),
                                     selectedSiteId
                                 );
@@ -1823,7 +1825,7 @@ export default function AdminV2WorkspaceDepartmentPage() {
                                 const s = deptWorkUnitSummaries[wu.id];
                                 const total = s ? s.total : null;
                                 const href = appendWorkspaceSiteToPath(
-                                    workspaceDeptQueueNavHref(WORKSPACE_BASE, departmentId, wu.id, null),
+                                    workspaceDeptQueueNavHref(WORKSPACE_BASE, departmentId, wu.id, null, wu.key ?? null),
                                     selectedSiteId
                                 );
                                 return (

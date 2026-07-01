@@ -27,6 +27,7 @@ export type WorkUnitQueueSelectionSource =
 /** Canonical work-unit queue filter — route-owned when source is dept_* or encoded in URL. */
 export type WorkUnitQueueSelection = {
     workUnitId: string;
+    workUnitKey?: string | null;
     queueKey: string;
     source: WorkUnitQueueSelectionSource;
     /** Process Work View id from `?work_view=` — resolved to compat queue at fetch time. */
@@ -172,7 +173,8 @@ export function buildWorkUnitQueueSelectionHref(
         basePath,
         departmentId,
         selection.workUnitId,
-        selection.queueKey
+        selection.queueKey,
+        selection.workUnitKey
     );
     const bucket = selection.attentionBucketKey?.trim();
     const status = selection.statusKey?.trim();

@@ -10,11 +10,13 @@ export default function BusinessProcessWorkViewsWorkspace({
     departmentId,
     processId,
     workUnitId,
+    workUnitKey,
     queueLanes = [],
 }: {
     departmentId: string;
     processId: string;
     workUnitId: string | null;
+    workUnitKey?: string | null;
     queueLanes?: WorkViewCompatQueueLane[];
 }) {
     return (
@@ -32,6 +34,7 @@ export default function BusinessProcessWorkViewsWorkspace({
                     <BusinessProcessWorkViewsSetupWorkspace
                         departmentId={departmentId}
                         workUnitId={workUnitId}
+                        workUnitKey={workUnitKey}
                         queueLanes={queueLanes}
                     />
                 </div>

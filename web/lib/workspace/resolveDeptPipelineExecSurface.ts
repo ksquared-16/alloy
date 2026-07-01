@@ -8,6 +8,7 @@ import { mapWithConcurrency } from "@/lib/workspace/mapWithConcurrency";
 
 export type DeptPipelineExecSurface = {
     workUnitId: string;
+    workUnitKey: string | null;
     panelTitle: string;
     lanes: Array<{
         key: string;
@@ -93,6 +94,7 @@ export async function resolveDeptPipelineExecSurface(params: {
 
             return {
                 workUnitId: wu.id,
+                workUnitKey: wu.key ?? null,
                 panelTitle,
                 lanes: merged,
             } satisfies DeptPipelineExecSurface;
