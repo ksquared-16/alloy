@@ -66,7 +66,7 @@ export default function CurrentWorkCard({ model, context, receded = false, coord
             data-work-action="view"
             aria-expanded={overlayOpen}
         >
-            View →
+            View work items →
         </button>
     ) : null;
 

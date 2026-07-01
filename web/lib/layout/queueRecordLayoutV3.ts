@@ -97,6 +97,12 @@ export type QueueRecordColumnConfig = {
     width: QueueRecordColumnWidth;
     scope: QueueRecordScope;
     blocks: QueueRecordBlockConfig[];
+    /**
+     * Optional zone-level visibility condition. When set, the entire column is hidden
+     * when the condition fails. V1: stored by the Queue Row Builder, evaluated by the
+     * queue row runtime renderer (deferred — runtime evaluation wired in V2).
+     */
+    visibleWhen?: LayoutCondition;
 };
 
 import type { QueueRecordFixedControls } from "@/lib/layout/queueRecordLayoutConfig";
