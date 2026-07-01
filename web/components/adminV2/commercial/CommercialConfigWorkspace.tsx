@@ -17,6 +17,18 @@ import {
     buildTuitionRateMap,
 } from "@/lib/commercial/tuitionRates";
 import {
+    type CommercialFee,
+    type CommercialAddon,
+    type CommercialDeposit,
+    type FeeType,
+    type AddonType,
+    type DepositTiming,
+    FEE_TYPE_LABELS,
+    ADDON_TYPE_LABELS,
+    DEPOSIT_TIMING_LABELS,
+    formatScope,
+} from "@/lib/commercial/feesAddons";
+import {
     type ProgramOffering,
     type AttendanceType,
     type OfferingStatus,
@@ -49,6 +61,7 @@ type SiteLocation = { id: string; name: string };
 type ProgramEntry = { key: string; label: string; siteCount: number };
 type SecondaryTab = "programs" | "tuition";
 type PayerTab = "private" | "subsidy" | "corporate";
+type SectionTab = "programs_tuition" | "fees";
 
 type RatePayload = {
     rate_cents?: number;
@@ -61,13 +74,13 @@ type OnSave = (variantId: string, cadenceKey: string, payload: RatePayload) => P
 // ─── Constants ─────────────────────────────────────────────────────────────────
 
 const SECTION_TABS = [
-    { key: "programs_tuition", label: "Programs & tuition", available: true },
-    { key: "funding", label: "Funding", available: false },
-    { key: "fees", label: "Fees & add-ons", available: false },
-    { key: "policies", label: "Policies", available: false },
-    { key: "accounting", label: "Accounting", available: false },
-    { key: "simulator", label: "Simulator", available: false },
-] as const;
+    { key: "programs_tuition" as const, label: "Programs & tuition", available: true },
+    { key: "funding" as const, label: "Funding", available: false },
+    { key: "fees" as const, label: "Fees & add-ons", available: true },
+    { key: "policies" as const, label: "Policies", available: false },
+    { key: "accounting" as const, label: "Accounting", available: false },
+    { key: "simulator" as const, label: "Simulator", available: false },
+];
 
 const PAYER_TABS: { key: PayerTab; label: string; available: boolean }[] = [
     { key: "private", label: "Private pay", available: true },
@@ -826,6 +839,634 @@ function AddProgramForm({ onAdd }: { onAdd: (label: string, key: string) => Prom
     );
 }
 
+// ─── FeesAddonsPanel ───────────────────────────────────────────────────────────
+
+function FeesAddonsPanel({
+    fees,
+    addons,
+    deposits,
+    locations,
+    programs,
+    loading,
+    onFeeCreated,
+    onFeeUpdated,
+    onFeeDeleted,
+    onAddonCreated,
+    onAddonUpdated,
+    onAddonDeleted,
+    onDepositCreated,
+    onDepositUpdated,
+    onDepositDeleted,
+}: {
+    fees: CommercialFee[];
+    addons: CommercialAddon[];
+    deposits: CommercialDeposit[];
+    locations: SiteLocation[];
+    programs: ProgramEntry[];
+    loading: boolean;
+    onFeeCreated: (fee: CommercialFee) => void;
+    onFeeUpdated: (fee: CommercialFee) => void;
+    onFeeDeleted: (id: string) => void;
+    onAddonCreated: (addon: CommercialAddon) => void;
+    onAddonUpdated: (addon: CommercialAddon) => void;
+    onAddonDeleted: (id: string) => void;
+    onDepositCreated: (deposit: CommercialDeposit) => void;
+    onDepositUpdated: (deposit: CommercialDeposit) => void;
+    onDepositDeleted: (id: string) => void;
+}) {
+    // ── Fee form state ──
+    const [addingFee, setAddingFee] = useState(false);
+    const [feeName, setFeeName] = useState("");
+    const [feeType, setFeeType] = useState<FeeType>("registration");
+    const [feeAmount, setFeeAmount] = useState("");
+    const [feeRequired, setFeeRequired] = useState(true);
+    const [feeCadence, setFeeCadence] = useState("");
+    const [feeLocationId, setFeeLocationId] = useState("");
+    const [feeProgramKey, setFeeProgramKey] = useState("");
+    const [savingFee, setSavingFee] = useState(false);
+    const [editingFeeId, setEditingFeeId] = useState<string | null>(null);
+
+    // ── Addon form state ──
+    const [addingAddon, setAddingAddon] = useState(false);
+    const [addonName, setAddonName] = useState("");
+    const [addonType, setAddonType] = useState<AddonType>("extended_care");
+    const [addonAmount, setAddonAmount] = useState("");
+    const [addonCadence, setAddonCadence] = useState("monthly");
+    const [addonLocationId, setAddonLocationId] = useState("");
+    const [addonProgramKey, setAddonProgramKey] = useState("");
+    const [savingAddon, setSavingAddon] = useState(false);
+    const [editingAddonId, setEditingAddonId] = useState<string | null>(null);
+
+    // ── Deposit form state ──
+    const [addingDeposit, setAddingDeposit] = useState(false);
+    const [depositName, setDepositName] = useState("");
+    const [depositAmount, setDepositAmount] = useState("");
+    const [depositRefundable, setDepositRefundable] = useState(true);
+    const [depositApplyToBalance, setDepositApplyToBalance] = useState(false);
+    const [depositTiming, setDepositTiming] = useState<DepositTiming>("at_enrollment");
+    const [depositLocationId, setDepositLocationId] = useState("");
+    const [depositProgramKey, setDepositProgramKey] = useState("");
+    const [savingDeposit, setSavingDeposit] = useState(false);
+    const [editingDepositId, setEditingDepositId] = useState<string | null>(null);
+
+    // ── Edit buffers (reuse fee/addon/deposit form state for inline edit) ──
+    function startEditFee(fee: CommercialFee) {
+        setEditingFeeId(fee.id);
+        setFeeName(fee.name);
+        setFeeType(fee.fee_type);
+        setFeeAmount(String(fee.amount_cents / 100));
+        setFeeRequired(fee.is_required);
+        setFeeCadence(fee.cadence_key ?? "");
+        setFeeLocationId(fee.location_id ?? "");
+        setFeeProgramKey(fee.program_key ?? "");
+    }
+
+    function startEditAddon(addon: CommercialAddon) {
+        setEditingAddonId(addon.id);
+        setAddonName(addon.name);
+        setAddonType(addon.addon_type);
+        setAddonAmount(String(addon.amount_cents / 100));
+        setAddonCadence(addon.cadence_key);
+        setAddonLocationId(addon.location_id ?? "");
+        setAddonProgramKey(addon.program_key ?? "");
+    }
+
+    function startEditDeposit(deposit: CommercialDeposit) {
+        setEditingDepositId(deposit.id);
+        setDepositName(deposit.name);
+        setDepositAmount(String(deposit.amount_cents / 100));
+        setDepositRefundable(deposit.is_refundable);
+        setDepositApplyToBalance(deposit.apply_to_balance);
+        setDepositTiming(deposit.due_timing);
+        setDepositLocationId(deposit.location_id ?? "");
+        setDepositProgramKey(deposit.program_key ?? "");
+    }
+
+    // ── Fee handlers ──
+    async function handleCreateFee() {
+        const cents = Math.round(parseFloat(feeAmount) * 100);
+        if (!feeName.trim() || !Number.isFinite(cents) || cents < 0) return;
+        setSavingFee(true);
+        try {
+            const res = await fetch("/api/admin/commercial/fees", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    name: feeName.trim(),
+                    fee_type: feeType,
+                    amount_cents: cents,
+                    is_required: feeRequired,
+                    cadence_key: feeCadence.trim() || null,
+                    location_id: feeLocationId || null,
+                    program_key: feeProgramKey.trim() || null,
+                }),
+            });
+            const j = (await res.json()) as { fee?: CommercialFee };
+            if (j.fee) { onFeeCreated(j.fee); setAddingFee(false); setFeeName(""); setFeeAmount(""); }
+        } finally { setSavingFee(false); }
+    }
+
+    async function handleUpdateFee(id: string) {
+        const cents = Math.round(parseFloat(feeAmount) * 100);
+        if (!feeName.trim() || !Number.isFinite(cents) || cents < 0) return;
+        setSavingFee(true);
+        try {
+            const res = await fetch(`/api/admin/commercial/fees/${id}`, {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    name: feeName.trim(),
+                    fee_type: feeType,
+                    amount_cents: cents,
+                    is_required: feeRequired,
+                    cadence_key: feeCadence.trim() || null,
+                    location_id: feeLocationId || null,
+                    program_key: feeProgramKey.trim() || null,
+                }),
+            });
+            const j = (await res.json()) as { fee?: CommercialFee };
+            if (j.fee) { onFeeUpdated(j.fee); setEditingFeeId(null); }
+        } finally { setSavingFee(false); }
+    }
+
+    async function handleDeleteFee(id: string) {
+        if (!window.confirm("Delete this fee?")) return;
+        await fetch(`/api/admin/commercial/fees/${id}`, { method: "DELETE" });
+        onFeeDeleted(id);
+    }
+
+    // ── Addon handlers ──
+    async function handleCreateAddon() {
+        const cents = Math.round(parseFloat(addonAmount) * 100);
+        if (!addonName.trim() || !addonCadence.trim() || !Number.isFinite(cents) || cents < 0) return;
+        setSavingAddon(true);
+        try {
+            const res = await fetch("/api/admin/commercial/addons", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    name: addonName.trim(),
+                    addon_type: addonType,
+                    amount_cents: cents,
+                    cadence_key: addonCadence.trim(),
+                    location_id: addonLocationId || null,
+                    program_key: addonProgramKey.trim() || null,
+                }),
+            });
+            const j = (await res.json()) as { addon?: CommercialAddon };
+            if (j.addon) { onAddonCreated(j.addon); setAddingAddon(false); setAddonName(""); setAddonAmount(""); }
+        } finally { setSavingAddon(false); }
+    }
+
+    async function handleUpdateAddon(id: string) {
+        const cents = Math.round(parseFloat(addonAmount) * 100);
+        if (!addonName.trim() || !addonCadence.trim() || !Number.isFinite(cents) || cents < 0) return;
+        setSavingAddon(true);
+        try {
+            const res = await fetch(`/api/admin/commercial/addons/${id}`, {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    name: addonName.trim(),
+                    addon_type: addonType,
+                    amount_cents: cents,
+                    cadence_key: addonCadence.trim(),
+                    location_id: addonLocationId || null,
+                    program_key: addonProgramKey.trim() || null,
+                }),
+            });
+            const j = (await res.json()) as { addon?: CommercialAddon };
+            if (j.addon) { onAddonUpdated(j.addon); setEditingAddonId(null); }
+        } finally { setSavingAddon(false); }
+    }
+
+    async function handleDeleteAddon(id: string) {
+        if (!window.confirm("Delete this add-on?")) return;
+        await fetch(`/api/admin/commercial/addons/${id}`, { method: "DELETE" });
+        onAddonDeleted(id);
+    }
+
+    // ── Deposit handlers ──
+    async function handleCreateDeposit() {
+        const cents = Math.round(parseFloat(depositAmount) * 100);
+        if (!depositName.trim() || !Number.isFinite(cents) || cents < 0) return;
+        setSavingDeposit(true);
+        try {
+            const res = await fetch("/api/admin/commercial/deposits", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    name: depositName.trim(),
+                    amount_cents: cents,
+                    is_refundable: depositRefundable,
+                    apply_to_balance: depositApplyToBalance,
+                    due_timing: depositTiming,
+                    location_id: depositLocationId || null,
+                    program_key: depositProgramKey.trim() || null,
+                }),
+            });
+            const j = (await res.json()) as { deposit?: CommercialDeposit };
+            if (j.deposit) { onDepositCreated(j.deposit); setAddingDeposit(false); setDepositName(""); setDepositAmount(""); }
+        } finally { setSavingDeposit(false); }
+    }
+
+    async function handleUpdateDeposit(id: string) {
+        const cents = Math.round(parseFloat(depositAmount) * 100);
+        if (!depositName.trim() || !Number.isFinite(cents) || cents < 0) return;
+        setSavingDeposit(true);
+        try {
+            const res = await fetch(`/api/admin/commercial/deposits/${id}`, {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    name: depositName.trim(),
+                    amount_cents: cents,
+                    is_refundable: depositRefundable,
+                    apply_to_balance: depositApplyToBalance,
+                    due_timing: depositTiming,
+                    location_id: depositLocationId || null,
+                    program_key: depositProgramKey.trim() || null,
+                }),
+            });
+            const j = (await res.json()) as { deposit?: CommercialDeposit };
+            if (j.deposit) { onDepositUpdated(j.deposit); setEditingDepositId(null); }
+        } finally { setSavingDeposit(false); }
+    }
+
+    async function handleDeleteDeposit(id: string) {
+        if (!window.confirm("Delete this deposit?")) return;
+        await fetch(`/api/admin/commercial/deposits/${id}`, { method: "DELETE" });
+        onDepositDeleted(id);
+    }
+
+    // ── Shared scope inputs ──
+    function ScopeInputs({ locationId, setLocationId, programKey, setProgramKey }: {
+        locationId: string;
+        setLocationId: (v: string) => void;
+        programKey: string;
+        setProgramKey: (v: string) => void;
+    }) {
+        return (
+            <div className="flex flex-wrap gap-2">
+                <label className="flex flex-col gap-0.5">
+                    <span className="text-[10px] text-alloy-midnight/45">Location (optional)</span>
+                    <select value={locationId} onChange={(e) => setLocationId(e.target.value)} className={inputCls}>
+                        <option value="">All locations</option>
+                        {locations.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
+                    </select>
+                </label>
+                <label className="flex flex-col gap-0.5">
+                    <span className="text-[10px] text-alloy-midnight/45">Program (optional)</span>
+                    {programs.length > 0 ? (
+                        <select value={programKey} onChange={(e) => setProgramKey(e.target.value)} className={inputCls}>
+                            <option value="">All programs</option>
+                            {programs.map((p) => <option key={p.key} value={p.key}>{p.label}</option>)}
+                        </select>
+                    ) : (
+                        <input type="text" value={programKey} onChange={(e) => setProgramKey(e.target.value)} placeholder="program_key" className={`${inputCls} w-32`} />
+                    )}
+                </label>
+            </div>
+        );
+    }
+
+    if (loading) {
+        return <div className="flex items-center justify-center h-64"><p className="text-sm text-alloy-midnight/40">Loading…</p></div>;
+    }
+
+    return (
+        <div className="flex flex-col min-h-0 overflow-y-auto">
+            <div className="p-6 space-y-8 max-w-3xl">
+
+                {/* ── Fees section ── */}
+                <div>
+                    <div className="flex items-center justify-between mb-3">
+                        <h3 className="text-sm font-semibold text-alloy-midnight">Fees</h3>
+                        {!addingFee && (
+                            <button type="button" onClick={() => setAddingFee(true)} className="text-xs text-alloy-pine/70 hover:text-alloy-pine flex items-center gap-0.5">
+                                <span className="text-sm leading-none">+</span> Add fee
+                            </button>
+                        )}
+                    </div>
+
+                    {addingFee && (
+                        <div className="mb-3 border border-alloy-pine/25 rounded-lg px-4 py-3 bg-alloy-pine/5 space-y-2.5">
+                            <p className="text-[10px] font-semibold uppercase tracking-wide text-alloy-midnight/40">New fee</p>
+                            <div className="flex flex-wrap gap-2 items-end">
+                                <label className="flex flex-col gap-0.5 flex-1 min-w-[140px]">
+                                    <span className="text-[10px] text-alloy-midnight/45">Name</span>
+                                    <input type="text" value={feeName} onChange={(e) => setFeeName(e.target.value)} placeholder="e.g. Registration fee" className={inputCls} autoFocus />
+                                </label>
+                                <label className="flex flex-col gap-0.5">
+                                    <span className="text-[10px] text-alloy-midnight/45">Type</span>
+                                    <select value={feeType} onChange={(e) => setFeeType(e.target.value as FeeType)} className={inputCls}>
+                                        {(Object.keys(FEE_TYPE_LABELS) as FeeType[]).map((k) => <option key={k} value={k}>{FEE_TYPE_LABELS[k]}</option>)}
+                                    </select>
+                                </label>
+                                <label className="flex flex-col gap-0.5">
+                                    <span className="text-[10px] text-alloy-midnight/45">Amount ($)</span>
+                                    <input type="number" min="0" step="0.01" value={feeAmount} onChange={(e) => setFeeAmount(e.target.value)} placeholder="0.00" className={`${inputCls} w-24`} />
+                                </label>
+                                <label className="flex flex-col gap-0.5">
+                                    <span className="text-[10px] text-alloy-midnight/45">Cadence</span>
+                                    <input type="text" value={feeCadence} onChange={(e) => setFeeCadence(e.target.value)} placeholder="blank = one-time" className={`${inputCls} w-28`} />
+                                </label>
+                                <label className="flex items-center gap-1.5 self-end pb-1">
+                                    <input type="checkbox" checked={feeRequired} onChange={(e) => setFeeRequired(e.target.checked)} />
+                                    <span className="text-xs text-alloy-midnight/55">Required</span>
+                                </label>
+                            </div>
+                            <ScopeInputs locationId={feeLocationId} setLocationId={setFeeLocationId} programKey={feeProgramKey} setProgramKey={setFeeProgramKey} />
+                            <div className="flex items-center gap-2 pt-1">
+                                <button type="button" disabled={savingFee || !feeName.trim()} onClick={() => void handleCreateFee()} className="rounded border border-alloy-pine/30 bg-alloy-pine/8 px-3 py-1 text-xs font-medium text-alloy-pine hover:bg-alloy-pine/12 disabled:opacity-50">
+                                    {savingFee ? "Saving…" : "Add fee"}
+                                </button>
+                                <button type="button" onClick={() => setAddingFee(false)} className="text-xs text-alloy-midnight/40 hover:text-alloy-midnight">Cancel</button>
+                            </div>
+                        </div>
+                    )}
+
+                    <div className="space-y-1.5">
+                        {fees.length === 0 && !addingFee && (
+                            <p className="text-xs text-alloy-midnight/35 py-2">No fees configured.</p>
+                        )}
+                        {fees.map((fee) => (
+                            editingFeeId === fee.id ? (
+                                <div key={fee.id} className="border border-alloy-pine/25 rounded-lg px-4 py-3 bg-alloy-pine/5 space-y-2.5">
+                                    <div className="flex flex-wrap gap-2 items-end">
+                                        <label className="flex flex-col gap-0.5 flex-1 min-w-[140px]">
+                                            <span className="text-[10px] text-alloy-midnight/45">Name</span>
+                                            <input type="text" value={feeName} onChange={(e) => setFeeName(e.target.value)} className={inputCls} autoFocus />
+                                        </label>
+                                        <label className="flex flex-col gap-0.5">
+                                            <span className="text-[10px] text-alloy-midnight/45">Type</span>
+                                            <select value={feeType} onChange={(e) => setFeeType(e.target.value as FeeType)} className={inputCls}>
+                                                {(Object.keys(FEE_TYPE_LABELS) as FeeType[]).map((k) => <option key={k} value={k}>{FEE_TYPE_LABELS[k]}</option>)}
+                                            </select>
+                                        </label>
+                                        <label className="flex flex-col gap-0.5">
+                                            <span className="text-[10px] text-alloy-midnight/45">Amount ($)</span>
+                                            <input type="number" min="0" step="0.01" value={feeAmount} onChange={(e) => setFeeAmount(e.target.value)} className={`${inputCls} w-24`} />
+                                        </label>
+                                        <label className="flex flex-col gap-0.5">
+                                            <span className="text-[10px] text-alloy-midnight/45">Cadence</span>
+                                            <input type="text" value={feeCadence} onChange={(e) => setFeeCadence(e.target.value)} placeholder="blank = one-time" className={`${inputCls} w-28`} />
+                                        </label>
+                                        <label className="flex items-center gap-1.5 self-end pb-1">
+                                            <input type="checkbox" checked={feeRequired} onChange={(e) => setFeeRequired(e.target.checked)} />
+                                            <span className="text-xs text-alloy-midnight/55">Required</span>
+                                        </label>
+                                    </div>
+                                    <ScopeInputs locationId={feeLocationId} setLocationId={setFeeLocationId} programKey={feeProgramKey} setProgramKey={setFeeProgramKey} />
+                                    <div className="flex items-center gap-2 pt-1">
+                                        <button type="button" disabled={savingFee} onClick={() => void handleUpdateFee(fee.id)} className="rounded border border-alloy-pine/30 bg-alloy-pine/8 px-3 py-1 text-xs font-medium text-alloy-pine hover:bg-alloy-pine/12 disabled:opacity-50">
+                                            {savingFee ? "Saving…" : "Save"}
+                                        </button>
+                                        <button type="button" onClick={() => setEditingFeeId(null)} className="text-xs text-alloy-midnight/40 hover:text-alloy-midnight">Cancel</button>
+                                    </div>
+                                </div>
+                            ) : (
+                                <div key={fee.id} className="flex items-center gap-3 border border-alloy-stone/20 rounded-lg px-3 py-2.5 group hover:border-alloy-stone/35 transition-colors">
+                                    <div className="flex-1 min-w-0">
+                                        <div className="flex items-center gap-2 flex-wrap">
+                                            <span className="text-sm font-medium text-alloy-midnight">{fee.name}</span>
+                                            <span className="rounded-full bg-alloy-stone/15 px-2 py-0.5 text-[10px] text-alloy-midnight/55">{FEE_TYPE_LABELS[fee.fee_type]}</span>
+                                            {fee.is_required && <span className="rounded-full bg-blue-50 border border-blue-200 px-2 py-0.5 text-[10px] text-blue-600">Required</span>}
+                                        </div>
+                                        <div className="flex items-center gap-3 mt-0.5">
+                                            <span className="text-xs font-semibold text-alloy-midnight">{formatRateCents(fee.amount_cents)}</span>
+                                            <span className="text-xs text-alloy-midnight/40">{fee.cadence_key ? fee.cadence_key : "One-time"}</span>
+                                            <span className="text-xs text-alloy-midnight/30">{formatScope(fee.location_id, fee.program_key, locations)}</span>
+                                        </div>
+                                    </div>
+                                    <div className="flex items-center gap-2 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                                        <button type="button" onClick={() => startEditFee(fee)} className="text-xs text-alloy-midnight/35 hover:text-alloy-pine px-1">Edit</button>
+                                        <button type="button" onClick={() => void handleDeleteFee(fee.id)} className="text-alloy-midnight/20 hover:text-red-400 text-xs px-1">×</button>
+                                    </div>
+                                </div>
+                            )
+                        ))}
+                    </div>
+                </div>
+
+                {/* ── Add-ons section ── */}
+                <div>
+                    <div className="flex items-center justify-between mb-3">
+                        <h3 className="text-sm font-semibold text-alloy-midnight">Add-ons</h3>
+                        {!addingAddon && (
+                            <button type="button" onClick={() => setAddingAddon(true)} className="text-xs text-alloy-pine/70 hover:text-alloy-pine flex items-center gap-0.5">
+                                <span className="text-sm leading-none">+</span> Add add-on
+                            </button>
+                        )}
+                    </div>
+
+                    {addingAddon && (
+                        <div className="mb-3 border border-alloy-pine/25 rounded-lg px-4 py-3 bg-alloy-pine/5 space-y-2.5">
+                            <p className="text-[10px] font-semibold uppercase tracking-wide text-alloy-midnight/40">New add-on</p>
+                            <div className="flex flex-wrap gap-2 items-end">
+                                <label className="flex flex-col gap-0.5 flex-1 min-w-[140px]">
+                                    <span className="text-[10px] text-alloy-midnight/45">Name</span>
+                                    <input type="text" value={addonName} onChange={(e) => setAddonName(e.target.value)} placeholder="e.g. Extended care" className={inputCls} autoFocus />
+                                </label>
+                                <label className="flex flex-col gap-0.5">
+                                    <span className="text-[10px] text-alloy-midnight/45">Type</span>
+                                    <select value={addonType} onChange={(e) => setAddonType(e.target.value as AddonType)} className={inputCls}>
+                                        {(Object.keys(ADDON_TYPE_LABELS) as AddonType[]).map((k) => <option key={k} value={k}>{ADDON_TYPE_LABELS[k]}</option>)}
+                                    </select>
+                                </label>
+                                <label className="flex flex-col gap-0.5">
+                                    <span className="text-[10px] text-alloy-midnight/45">Amount ($)</span>
+                                    <input type="number" min="0" step="0.01" value={addonAmount} onChange={(e) => setAddonAmount(e.target.value)} placeholder="0.00" className={`${inputCls} w-24`} />
+                                </label>
+                                <label className="flex flex-col gap-0.5">
+                                    <span className="text-[10px] text-alloy-midnight/45">Cadence</span>
+                                    <input type="text" value={addonCadence} onChange={(e) => setAddonCadence(e.target.value)} placeholder="monthly" className={`${inputCls} w-28`} />
+                                </label>
+                            </div>
+                            <ScopeInputs locationId={addonLocationId} setLocationId={setAddonLocationId} programKey={addonProgramKey} setProgramKey={setAddonProgramKey} />
+                            <div className="flex items-center gap-2 pt-1">
+                                <button type="button" disabled={savingAddon || !addonName.trim() || !addonCadence.trim()} onClick={() => void handleCreateAddon()} className="rounded border border-alloy-pine/30 bg-alloy-pine/8 px-3 py-1 text-xs font-medium text-alloy-pine hover:bg-alloy-pine/12 disabled:opacity-50">
+                                    {savingAddon ? "Saving…" : "Add add-on"}
+                                </button>
+                                <button type="button" onClick={() => setAddingAddon(false)} className="text-xs text-alloy-midnight/40 hover:text-alloy-midnight">Cancel</button>
+                            </div>
+                        </div>
+                    )}
+
+                    <div className="space-y-1.5">
+                        {addons.length === 0 && !addingAddon && (
+                            <p className="text-xs text-alloy-midnight/35 py-2">No add-ons configured.</p>
+                        )}
+                        {addons.map((addon) => (
+                            editingAddonId === addon.id ? (
+                                <div key={addon.id} className="border border-alloy-pine/25 rounded-lg px-4 py-3 bg-alloy-pine/5 space-y-2.5">
+                                    <div className="flex flex-wrap gap-2 items-end">
+                                        <label className="flex flex-col gap-0.5 flex-1 min-w-[140px]">
+                                            <span className="text-[10px] text-alloy-midnight/45">Name</span>
+                                            <input type="text" value={addonName} onChange={(e) => setAddonName(e.target.value)} className={inputCls} autoFocus />
+                                        </label>
+                                        <label className="flex flex-col gap-0.5">
+                                            <span className="text-[10px] text-alloy-midnight/45">Type</span>
+                                            <select value={addonType} onChange={(e) => setAddonType(e.target.value as AddonType)} className={inputCls}>
+                                                {(Object.keys(ADDON_TYPE_LABELS) as AddonType[]).map((k) => <option key={k} value={k}>{ADDON_TYPE_LABELS[k]}</option>)}
+                                            </select>
+                                        </label>
+                                        <label className="flex flex-col gap-0.5">
+                                            <span className="text-[10px] text-alloy-midnight/45">Amount ($)</span>
+                                            <input type="number" min="0" step="0.01" value={addonAmount} onChange={(e) => setAddonAmount(e.target.value)} className={`${inputCls} w-24`} />
+                                        </label>
+                                        <label className="flex flex-col gap-0.5">
+                                            <span className="text-[10px] text-alloy-midnight/45">Cadence</span>
+                                            <input type="text" value={addonCadence} onChange={(e) => setAddonCadence(e.target.value)} className={`${inputCls} w-28`} />
+                                        </label>
+                                    </div>
+                                    <ScopeInputs locationId={addonLocationId} setLocationId={setAddonLocationId} programKey={addonProgramKey} setProgramKey={setAddonProgramKey} />
+                                    <div className="flex items-center gap-2 pt-1">
+                                        <button type="button" disabled={savingAddon} onClick={() => void handleUpdateAddon(addon.id)} className="rounded border border-alloy-pine/30 bg-alloy-pine/8 px-3 py-1 text-xs font-medium text-alloy-pine hover:bg-alloy-pine/12 disabled:opacity-50">
+                                            {savingAddon ? "Saving…" : "Save"}
+                                        </button>
+                                        <button type="button" onClick={() => setEditingAddonId(null)} className="text-xs text-alloy-midnight/40 hover:text-alloy-midnight">Cancel</button>
+                                    </div>
+                                </div>
+                            ) : (
+                                <div key={addon.id} className="flex items-center gap-3 border border-alloy-stone/20 rounded-lg px-3 py-2.5 group hover:border-alloy-stone/35 transition-colors">
+                                    <div className="flex-1 min-w-0">
+                                        <div className="flex items-center gap-2 flex-wrap">
+                                            <span className="text-sm font-medium text-alloy-midnight">{addon.name}</span>
+                                            <span className="rounded-full bg-alloy-stone/15 px-2 py-0.5 text-[10px] text-alloy-midnight/55">{ADDON_TYPE_LABELS[addon.addon_type]}</span>
+                                        </div>
+                                        <div className="flex items-center gap-3 mt-0.5">
+                                            <span className="text-xs font-semibold text-alloy-midnight">{formatRateCents(addon.amount_cents)}</span>
+                                            <span className="text-xs text-alloy-midnight/40">{addon.cadence_key}</span>
+                                            <span className="text-xs text-alloy-midnight/30">{formatScope(addon.location_id, addon.program_key, locations)}</span>
+                                        </div>
+                                    </div>
+                                    <div className="flex items-center gap-2 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                                        <button type="button" onClick={() => startEditAddon(addon)} className="text-xs text-alloy-midnight/35 hover:text-alloy-pine px-1">Edit</button>
+                                        <button type="button" onClick={() => void handleDeleteAddon(addon.id)} className="text-alloy-midnight/20 hover:text-red-400 text-xs px-1">×</button>
+                                    </div>
+                                </div>
+                            )
+                        ))}
+                    </div>
+                </div>
+
+                {/* ── Deposits section ── */}
+                <div>
+                    <div className="flex items-center justify-between mb-3">
+                        <h3 className="text-sm font-semibold text-alloy-midnight">Deposits</h3>
+                        {!addingDeposit && (
+                            <button type="button" onClick={() => setAddingDeposit(true)} className="text-xs text-alloy-pine/70 hover:text-alloy-pine flex items-center gap-0.5">
+                                <span className="text-sm leading-none">+</span> Add deposit
+                            </button>
+                        )}
+                    </div>
+
+                    {addingDeposit && (
+                        <div className="mb-3 border border-alloy-pine/25 rounded-lg px-4 py-3 bg-alloy-pine/5 space-y-2.5">
+                            <p className="text-[10px] font-semibold uppercase tracking-wide text-alloy-midnight/40">New deposit</p>
+                            <div className="flex flex-wrap gap-2 items-end">
+                                <label className="flex flex-col gap-0.5 flex-1 min-w-[140px]">
+                                    <span className="text-[10px] text-alloy-midnight/45">Name</span>
+                                    <input type="text" value={depositName} onChange={(e) => setDepositName(e.target.value)} placeholder="e.g. Security deposit" className={inputCls} autoFocus />
+                                </label>
+                                <label className="flex flex-col gap-0.5">
+                                    <span className="text-[10px] text-alloy-midnight/45">Amount ($)</span>
+                                    <input type="number" min="0" step="0.01" value={depositAmount} onChange={(e) => setDepositAmount(e.target.value)} placeholder="0.00" className={`${inputCls} w-24`} />
+                                </label>
+                                <label className="flex flex-col gap-0.5">
+                                    <span className="text-[10px] text-alloy-midnight/45">Due timing</span>
+                                    <select value={depositTiming} onChange={(e) => setDepositTiming(e.target.value as DepositTiming)} className={inputCls}>
+                                        {(Object.keys(DEPOSIT_TIMING_LABELS) as DepositTiming[]).map((k) => <option key={k} value={k}>{DEPOSIT_TIMING_LABELS[k]}</option>)}
+                                    </select>
+                                </label>
+                                <label className="flex items-center gap-1.5 self-end pb-1">
+                                    <input type="checkbox" checked={depositRefundable} onChange={(e) => setDepositRefundable(e.target.checked)} />
+                                    <span className="text-xs text-alloy-midnight/55">Refundable</span>
+                                </label>
+                                <label className="flex items-center gap-1.5 self-end pb-1">
+                                    <input type="checkbox" checked={depositApplyToBalance} onChange={(e) => setDepositApplyToBalance(e.target.checked)} />
+                                    <span className="text-xs text-alloy-midnight/55">Apply to balance</span>
+                                </label>
+                            </div>
+                            <ScopeInputs locationId={depositLocationId} setLocationId={setDepositLocationId} programKey={depositProgramKey} setProgramKey={setDepositProgramKey} />
+                            <div className="flex items-center gap-2 pt-1">
+                                <button type="button" disabled={savingDeposit || !depositName.trim()} onClick={() => void handleCreateDeposit()} className="rounded border border-alloy-pine/30 bg-alloy-pine/8 px-3 py-1 text-xs font-medium text-alloy-pine hover:bg-alloy-pine/12 disabled:opacity-50">
+                                    {savingDeposit ? "Saving…" : "Add deposit"}
+                                </button>
+                                <button type="button" onClick={() => setAddingDeposit(false)} className="text-xs text-alloy-midnight/40 hover:text-alloy-midnight">Cancel</button>
+                            </div>
+                        </div>
+                    )}
+
+                    <div className="space-y-1.5">
+                        {deposits.length === 0 && !addingDeposit && (
+                            <p className="text-xs text-alloy-midnight/35 py-2">No deposits configured.</p>
+                        )}
+                        {deposits.map((deposit) => (
+                            editingDepositId === deposit.id ? (
+                                <div key={deposit.id} className="border border-alloy-pine/25 rounded-lg px-4 py-3 bg-alloy-pine/5 space-y-2.5">
+                                    <div className="flex flex-wrap gap-2 items-end">
+                                        <label className="flex flex-col gap-0.5 flex-1 min-w-[140px]">
+                                            <span className="text-[10px] text-alloy-midnight/45">Name</span>
+                                            <input type="text" value={depositName} onChange={(e) => setDepositName(e.target.value)} className={inputCls} autoFocus />
+                                        </label>
+                                        <label className="flex flex-col gap-0.5">
+                                            <span className="text-[10px] text-alloy-midnight/45">Amount ($)</span>
+                                            <input type="number" min="0" step="0.01" value={depositAmount} onChange={(e) => setDepositAmount(e.target.value)} className={`${inputCls} w-24`} />
+                                        </label>
+                                        <label className="flex flex-col gap-0.5">
+                                            <span className="text-[10px] text-alloy-midnight/45">Due timing</span>
+                                            <select value={depositTiming} onChange={(e) => setDepositTiming(e.target.value as DepositTiming)} className={inputCls}>
+                                                {(Object.keys(DEPOSIT_TIMING_LABELS) as DepositTiming[]).map((k) => <option key={k} value={k}>{DEPOSIT_TIMING_LABELS[k]}</option>)}
+                                            </select>
+                                        </label>
+                                        <label className="flex items-center gap-1.5 self-end pb-1">
+                                            <input type="checkbox" checked={depositRefundable} onChange={(e) => setDepositRefundable(e.target.checked)} />
+                                            <span className="text-xs text-alloy-midnight/55">Refundable</span>
+                                        </label>
+                                        <label className="flex items-center gap-1.5 self-end pb-1">
+                                            <input type="checkbox" checked={depositApplyToBalance} onChange={(e) => setDepositApplyToBalance(e.target.checked)} />
+                                            <span className="text-xs text-alloy-midnight/55">Apply to balance</span>
+                                        </label>
+                                    </div>
+                                    <ScopeInputs locationId={depositLocationId} setLocationId={setDepositLocationId} programKey={depositProgramKey} setProgramKey={setDepositProgramKey} />
+                                    <div className="flex items-center gap-2 pt-1">
+                                        <button type="button" disabled={savingDeposit} onClick={() => void handleUpdateDeposit(deposit.id)} className="rounded border border-alloy-pine/30 bg-alloy-pine/8 px-3 py-1 text-xs font-medium text-alloy-pine hover:bg-alloy-pine/12 disabled:opacity-50">
+                                            {savingDeposit ? "Saving…" : "Save"}
+                                        </button>
+                                        <button type="button" onClick={() => setEditingDepositId(null)} className="text-xs text-alloy-midnight/40 hover:text-alloy-midnight">Cancel</button>
+                                    </div>
+                                </div>
+                            ) : (
+                                <div key={deposit.id} className="flex items-center gap-3 border border-alloy-stone/20 rounded-lg px-3 py-2.5 group hover:border-alloy-stone/35 transition-colors">
+                                    <div className="flex-1 min-w-0">
+                                        <div className="flex items-center gap-2 flex-wrap">
+                                            <span className="text-sm font-medium text-alloy-midnight">{deposit.name}</span>
+                                            {deposit.is_refundable && <span className="rounded-full bg-green-50 border border-green-200 px-2 py-0.5 text-[10px] text-green-600">Refundable</span>}
+                                            {deposit.apply_to_balance && <span className="rounded-full bg-alloy-stone/15 px-2 py-0.5 text-[10px] text-alloy-midnight/55">Applied to balance</span>}
+                                        </div>
+                                        <div className="flex items-center gap-3 mt-0.5">
+                                            <span className="text-xs font-semibold text-alloy-midnight">{formatRateCents(deposit.amount_cents)}</span>
+                                            <span className="text-xs text-alloy-midnight/40">{DEPOSIT_TIMING_LABELS[deposit.due_timing]}</span>
+                                            <span className="text-xs text-alloy-midnight/30">{formatScope(deposit.location_id, deposit.program_key, locations)}</span>
+                                        </div>
+                                    </div>
+                                    <div className="flex items-center gap-2 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                                        <button type="button" onClick={() => startEditDeposit(deposit)} className="text-xs text-alloy-midnight/35 hover:text-alloy-pine px-1">Edit</button>
+                                        <button type="button" onClick={() => void handleDeleteDeposit(deposit.id)} className="text-alloy-midnight/20 hover:text-red-400 text-xs px-1">×</button>
+                                    </div>
+                                </div>
+                            )
+                        ))}
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    );
+}
+
 // ─── CommercialConfigWorkspace ─────────────────────────────────────────────────
 
 export function CommercialConfigWorkspace() {
@@ -841,10 +1482,18 @@ export function CommercialConfigWorkspace() {
     const [cadences, setCadences] = useState<BillingCadence[]>([]);
     const [rates, setRates] = useState<TuitionRateRow[]>([]);
 
+    const [activeSection, setActiveSection] = useState<SectionTab>("programs_tuition");
     const [secondaryTab, setSecondaryTab] = useState<SecondaryTab>("programs");
     const [selectedProgramKey, setSelectedProgramKey] = useState<string | null>(null);
     const [selectedScopeId, setSelectedScopeId] = useState<string | null>(null);
     const [payerTab, setPayerTab] = useState<PayerTab>("private");
+
+    // Fees & add-ons state (lazy-loaded when fees tab is first activated)
+    const [fees, setFees] = useState<CommercialFee[]>([]);
+    const [addons, setAddons] = useState<CommercialAddon[]>([]);
+    const [deposits, setDeposits] = useState<CommercialDeposit[]>([]);
+    const [feesLoading, setFeesLoading] = useState(false);
+    const feesLoadedRef = useRef(false);
 
     const reloadRates = useCallback(async () => {
         try {
@@ -860,6 +1509,26 @@ export function CommercialConfigWorkspace() {
             const json = (await res.json()) as { categories?: LocationProgramCategoryRow[] };
             setCategories(json.categories ?? []);
         } catch { /* silent */ }
+    }, []);
+
+    const loadFeesData = useCallback(async () => {
+        if (feesLoadedRef.current) return;
+        setFeesLoading(true);
+        try {
+            const [feesRes, addonsRes, depositsRes] = await Promise.all([
+                fetch("/api/admin/commercial/fees"),
+                fetch("/api/admin/commercial/addons"),
+                fetch("/api/admin/commercial/deposits"),
+            ]);
+            const feesJson = (await feesRes.json()) as { fees?: CommercialFee[] };
+            const addonsJson = (await addonsRes.json()) as { addons?: CommercialAddon[] };
+            const depositsJson = (await depositsRes.json()) as { deposits?: CommercialDeposit[] };
+            setFees(feesJson.fees ?? []);
+            setAddons(addonsJson.addons ?? []);
+            setDeposits(depositsJson.deposits ?? []);
+            feesLoadedRef.current = true;
+        } catch { /* retain */ }
+        finally { setFeesLoading(false); }
     }, []);
 
     const reloadOfferingsAndVariants = useCallback(async (programKey: string) => {
@@ -914,6 +1583,10 @@ export function CommercialConfigWorkspace() {
     useEffect(() => {
         if (selectedProgramKey) void reloadOfferingsAndVariants(selectedProgramKey);
     }, [selectedProgramKey, reloadOfferingsAndVariants]);
+
+    useEffect(() => {
+        if (activeSection === "fees") void loadFeesData();
+    }, [activeSection, loadFeesData]);
 
     // ── Derived ────────────────────────────────────────────────────────────────
 
@@ -1040,7 +1713,13 @@ export function CommercialConfigWorkspace() {
         <div className="config-runtime-shell flex flex-col min-h-0 flex-1">
             <div className="flex items-end border-b border-alloy-stone/20 bg-white px-6 flex-shrink-0">
                 {SECTION_TABS.map((tab) => (
-                    <button key={tab.key} type="button" disabled={!tab.available} className={`px-4 py-3 text-sm -mb-px border-b-2 transition-colors whitespace-nowrap ${tab.key === "programs_tuition" ? "border-alloy-pine text-alloy-pine font-medium" : "border-transparent text-alloy-midnight/28 cursor-not-allowed"}`}>
+                    <button
+                        key={tab.key}
+                        type="button"
+                        disabled={!tab.available}
+                        onClick={() => { if (tab.available && (tab.key === "programs_tuition" || tab.key === "fees")) setActiveSection(tab.key); }}
+                        className={`px-4 py-3 text-sm -mb-px border-b-2 transition-colors whitespace-nowrap ${activeSection === tab.key ? "border-alloy-pine text-alloy-pine font-medium" : tab.available ? "border-transparent text-alloy-midnight/50 hover:text-alloy-midnight" : "border-transparent text-alloy-midnight/28 cursor-not-allowed"}`}
+                    >
                         {tab.label}
                     </button>
                 ))}
@@ -1053,57 +1732,77 @@ export function CommercialConfigWorkspace() {
                 </div>
             )}
 
-            <ConfigurationShell queueColumn={programQueueColumn}>
-                {selectedProgram ? (
-                    <div className="flex flex-col min-h-0 flex-1">
-                        <div className="flex border-b border-alloy-stone/15 px-6 bg-white flex-shrink-0">
-                            {(["programs", "tuition"] as const).map((tab) => (
-                                <button key={tab} type="button" onClick={() => setSecondaryTab(tab)} className={`px-3 py-2.5 text-sm capitalize -mb-px border-b-2 transition-colors ${secondaryTab === tab ? "border-alloy-midnight text-alloy-midnight font-medium" : "border-transparent text-alloy-midnight/45 hover:text-alloy-midnight"}`}>
-                                    {tab}
-                                </button>
-                            ))}
+            {activeSection === "fees" ? (
+                <FeesAddonsPanel
+                    fees={fees}
+                    addons={addons}
+                    deposits={deposits}
+                    locations={locations}
+                    programs={programs}
+                    loading={feesLoading}
+                    onFeeCreated={(fee) => setFees((prev) => [...prev, fee])}
+                    onFeeUpdated={(fee) => setFees((prev) => prev.map((f) => f.id === fee.id ? fee : f))}
+                    onFeeDeleted={(id) => setFees((prev) => prev.filter((f) => f.id !== id))}
+                    onAddonCreated={(addon) => setAddons((prev) => [...prev, addon])}
+                    onAddonUpdated={(addon) => setAddons((prev) => prev.map((a) => a.id === addon.id ? addon : a))}
+                    onAddonDeleted={(id) => setAddons((prev) => prev.filter((a) => a.id !== id))}
+                    onDepositCreated={(deposit) => setDeposits((prev) => [...prev, deposit])}
+                    onDepositUpdated={(deposit) => setDeposits((prev) => prev.map((d) => d.id === deposit.id ? deposit : d))}
+                    onDepositDeleted={(id) => setDeposits((prev) => prev.filter((d) => d.id !== id))}
+                />
+            ) : (
+                <ConfigurationShell queueColumn={programQueueColumn}>
+                    {selectedProgram ? (
+                        <div className="flex flex-col min-h-0 flex-1">
+                            <div className="flex border-b border-alloy-stone/15 px-6 bg-white flex-shrink-0">
+                                {(["programs", "tuition"] as const).map((tab) => (
+                                    <button key={tab} type="button" onClick={() => setSecondaryTab(tab)} className={`px-3 py-2.5 text-sm capitalize -mb-px border-b-2 transition-colors ${secondaryTab === tab ? "border-alloy-midnight text-alloy-midnight font-medium" : "border-transparent text-alloy-midnight/45 hover:text-alloy-midnight"}`}>
+                                        {tab}
+                                    </button>
+                                ))}
+                            </div>
+                            {secondaryTab === "programs" ? (
+                                <ProgramsPanel
+                                    program={selectedProgram}
+                                    locations={locations}
+                                    categories={categories}
+                                    offerings={offerings}
+                                    variants={variants}
+                                    rates={rates}
+                                    onToggleSite={toggleSiteForProgram}
+                                    onAddOffering={addOffering}
+                                    onUpdateOffering={updateOffering}
+                                    onDeleteOffering={deleteOffering}
+                                    onAddVariants={addVariants}
+                                    onUpdateVariant={updateVariant}
+                                    onDeleteVariant={deleteVariant}
+                                />
+                            ) : (
+                                <TuitionPanel
+                                    program={selectedProgram}
+                                    offerings={offerings}
+                                    variantsByOffering={variantsByOffering}
+                                    cadences={cadences}
+                                    locations={locations}
+                                    selectedScopeId={selectedScopeId}
+                                    onScopeChange={setSelectedScopeId}
+                                    payerTab={payerTab}
+                                    onPayerTabChange={setPayerTab}
+                                    rateMap={rateMap}
+                                    orgOnlyMap={orgOnlyMap}
+                                    locationId={locationId}
+                                    onSave={saveCell}
+                                    onClear={clearCell}
+                                    onCopyOrgToLocation={bulkCopyOrgToLocation}
+                                    bulkCopying={bulkCopying}
+                                />
+                            )}
                         </div>
-                        {secondaryTab === "programs" ? (
-                            <ProgramsPanel
-                                program={selectedProgram}
-                                locations={locations}
-                                categories={categories}
-                                offerings={offerings}
-                                variants={variants}
-                                rates={rates}
-                                onToggleSite={toggleSiteForProgram}
-                                onAddOffering={addOffering}
-                                onUpdateOffering={updateOffering}
-                                onDeleteOffering={deleteOffering}
-                                onAddVariants={addVariants}
-                                onUpdateVariant={updateVariant}
-                                onDeleteVariant={deleteVariant}
-                            />
-                        ) : (
-                            <TuitionPanel
-                                program={selectedProgram}
-                                offerings={offerings}
-                                variantsByOffering={variantsByOffering}
-                                cadences={cadences}
-                                locations={locations}
-                                selectedScopeId={selectedScopeId}
-                                onScopeChange={setSelectedScopeId}
-                                payerTab={payerTab}
-                                onPayerTabChange={setPayerTab}
-                                rateMap={rateMap}
-                                orgOnlyMap={orgOnlyMap}
-                                locationId={locationId}
-                                onSave={saveCell}
-                                onClear={clearCell}
-                                onCopyOrgToLocation={bulkCopyOrgToLocation}
-                                bulkCopying={bulkCopying}
-                            />
-                        )}
-                    </div>
-                ) : (
-                    <ConfigurationEmptyState title="Select a program" description="Choose a program from the left to configure it, or add a new one." />
-                )}
-            </ConfigurationShell>
+                    ) : (
+                        <ConfigurationEmptyState title="Select a program" description="Choose a program from the left to configure it, or add a new one." />
+                    )}
+                </ConfigurationShell>
+            )}
 
             {saving && <div className="fixed bottom-4 right-4 z-50 rounded-lg bg-alloy-midnight px-3 py-2 text-xs text-white shadow-lg">Saving…</div>}
         </div>
