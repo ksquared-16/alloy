@@ -124,6 +124,7 @@ payer data.
 
 **Focus / Expanded (opened on demand)**:
 - Billing readiness checklist (billing contact ✓/○, tuition rate ✓/○)
+- Per-child placement + resolved tuition rate (lazy-fetched from `commercial_tuition_rates` via `/api/admin/financial-config/opportunity/[id]`)
 - Payer / responsibility sections — only when real payer records exist
 - Missing responsibility state — when no payer records exist
 - Future: activity/history area (last payment, next charge) — only when real charge records exist
@@ -133,13 +134,35 @@ payer data.
 - Balance shown only when `fee_balance_cents > 0` and is a real persisted value.
 - Responsibility section shown only when real payer records are projected into truth.
 
+### V1 scope — Tuition Resolution Read Model
+
+Financial Configuration V1 is a **read-only model**. It resolves and displays
+tuition rates from `commercial_tuition_rates`, billing contact from the layout
+runtime signal, and placement facts from `_inquiry_children`. No mutations.
+
+| What V1 does | What is deferred |
+|---|---|
+| Resolves per-child tuition rate (program × schedule → `commercial_tuition_rates`) | Billing responsibility assignment (no schema yet) |
+| Shows billing contact from `context.signals.billing` | Payer editing / split configuration |
+| Readiness checklist (contact ✓/○, tuition rate ✓/○) | Invoice generation / charge scheduling |
+| Per-child placement facts (program · room · schedule) | Payment history / balance reconciliation |
+| Missing-state when any item absent | Subsidy / funding source tracking |
+
+The editable Financial Configuration experience will follow when:
+1. A payer responsibility schema is added (who pays, what %, what method).
+2. Tuition assignment can be stored per-enrollment (not just as an org rate grid).
+
+Until then, the card is read-only and all deferred sections show missing-state.
+
 ### Lifecycle
 
 ```
 billing_preview key
-  Summary    — status chip + tuition rate + billing contact or missing state
-  Expanded   — readiness checklist + payer sections (real or missing-state)
-  [deferred] — activity/history tab when charge/payment records are available
+  Summary    — status chip + tuition rate (from signal) + billing contact or missing state
+  Expanded   — readiness checklist + per-child tuition resolution (lazy API fetch)
+               + billing responsibility missing-state
+  [deferred] — edit mode: billing contact assignment, payer responsibility config
+  [deferred] — activity/history tab: charge/payment records
 ```
 
 Read-only until a billing assignment write path is built
@@ -218,10 +241,12 @@ When building a new domain card, verify:
 
 The Financial Configuration card is the reference implementation for this pattern.
 Its current state (`billing_preview` key, `BillingPreviewCard` component,
-`buildBillingPreviewCardEvidence`) demonstrates:
+`buildBillingPreviewCardEvidence`, `useFinancialConfig`, API route) demonstrates:
 
 - **Summary** with status chip + supporting line ✅
 - **Expanded** readiness checklist driven by real signal fields ✅
+- **Per-child tuition rate resolution** via `GET /api/admin/financial-config/opportunity/[id]` ✅
+- **Lazy fetch** — tuition rates only fetched when expanded overlay opens ✅
 - **Missing-state** handling when billing is not configured ✅
 - **Balance line** only when `fee_balance_cents > 0` ✅
 - **Zero fabrication** of financial values ✅

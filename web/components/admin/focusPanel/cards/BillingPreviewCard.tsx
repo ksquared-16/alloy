@@ -8,6 +8,8 @@ import {
     buildBillingPreviewCardEvidence,
     type BillingPlacementFact,
 } from "@/lib/adminV2/runtime/focusPanel/billingPreview/buildBillingPreviewCardEvidence";
+import { useFinancialConfig } from "@/lib/adminV2/runtime/focusPanel/financialConfig/useFinancialConfig";
+import type { FinancialConfigEnrollment } from "@/lib/adminV2/runtime/focusPanel/financialConfig/financialConfigTypes";
 import type { FocusPanelCardModel } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardModel";
 import type { OperationalContext } from "@/lib/adminV2/runtime/operationalContext/types";
 
@@ -25,16 +27,24 @@ type Props = {
  *   Placement facts → Configuration → Readiness → Activity/History
  *
  * Summary: configured/not-configured chip + tuition rate + billing contact.
- * Expanded: billing configuration section + placement facts (shared with Children card)
- *           + missing-state responsibility section (until write path exists).
+ * Expanded: billing readiness checklist + per-child tuition rate resolution
+ *           (lazy-fetched from financial-config API) + missing-state responsibility section.
  *
  * Read-only — no mutation prop. Pure over context.signals.billing + context.truth.
+ * Tuition rate resolution requires a server query (commercial_tuition_rates table).
  *
  * @see docs/platform/operator/operational-configuration-card-pattern.md
  */
 export default function BillingPreviewCard({ model, context, receded = false }: Props) {
-    const evidence = useMemo(() => buildBillingPreviewCardEvidence(context), [context]);
     const [overlayOpen, setOverlayOpen] = useState(false);
+
+    const opportunityId = context.subject.type === "opportunity" ? context.subject.id : null;
+    const { data: financialConfig, loading: configLoading } = useFinancialConfig(opportunityId, overlayOpen);
+
+    const evidence = useMemo(
+        () => buildBillingPreviewCardEvidence(context, financialConfig?.enrollments ?? null),
+        [context, financialConfig],
+    );
 
     const hasChecklist = evidence.readinessItems.length > 0;
 
@@ -100,18 +110,30 @@ export default function BillingPreviewCard({ model, context, receded = false }: 
                     )}
                 </section>
 
-                {/* Placement facts — same source as Children card, read independently */}
+                {/* Placement & tuition section — placement from truth, rates from API */}
                 {evidence.placementFacts.length > 0 && (
                     <section className="alloy-os-financial-config__section">
-                        <h4 className="alloy-os-financial-config__section-heading">Placement &amp; schedule</h4>
-                        <ul className="alloy-os-financial-config__placement-list">
-                            {evidence.placementFacts.map((fact) => (
-                                <li key={fact.childLabel} className="alloy-os-financial-config__placement-row">
-                                    <span className="alloy-os-financial-config__child-label">{fact.childLabel}</span>
-                                    <PlacementDetail fact={fact} />
-                                </li>
-                            ))}
-                        </ul>
+                        <h4 className="alloy-os-financial-config__section-heading">Placement &amp; tuition</h4>
+                        {configLoading ? (
+                            <p className="alloy-os-financial-config__loading">Loading rates…</p>
+                        ) : (
+                            <ul className="alloy-os-financial-config__placement-list">
+                                {evidence.placementFacts.map((fact, i) => {
+                                    const enrollment = findEnrollmentForFact(
+                                        fact,
+                                        evidence.enrollments,
+                                        i,
+                                    );
+                                    return (
+                                        <li key={fact.childLabel + i} className="alloy-os-financial-config__placement-row">
+                                            <span className="alloy-os-financial-config__child-label">{fact.childLabel}</span>
+                                            <PlacementDetail fact={fact} />
+                                            <TuitionRateDetail enrollment={enrollment} hasApiData={evidence.enrollments !== null} />
+                                        </li>
+                                    );
+                                })}
+                            </ul>
+                        )}
                     </section>
                 )}
 
@@ -129,12 +151,59 @@ export default function BillingPreviewCard({ model, context, receded = false }: 
     );
 }
 
+/**
+ * Match a placement fact to an enrollment by child label.
+ * Falls back to index when multiple children share a label (rare).
+ */
+function findEnrollmentForFact(
+    fact: BillingPlacementFact,
+    enrollments: FinancialConfigEnrollment[] | null,
+    index: number,
+): FinancialConfigEnrollment | null {
+    if (!enrollments) return null;
+    const byLabel = enrollments.filter((e) => e.childLabel === fact.childLabel);
+    if (byLabel.length === 1) return byLabel[0] ?? null;
+    return enrollments[index] ?? null;
+}
+
 function PlacementDetail({ fact }: { fact: BillingPlacementFact }) {
     const parts = [fact.programLabel, fact.roomLabel, fact.scheduleLabel].filter(Boolean);
     if (parts.length === 0) return <span className="alloy-os-financial-config__placement-detail">—</span>;
     return (
         <span className="alloy-os-financial-config__placement-detail">
             {parts.join(" · ")}
+        </span>
+    );
+}
+
+function TuitionRateDetail({
+    enrollment,
+    hasApiData,
+}: {
+    enrollment: FinancialConfigEnrollment | null;
+    hasApiData: boolean;
+}) {
+    if (!hasApiData) return null;
+    if (!enrollment) {
+        return (
+            <span className="alloy-os-financial-config__tuition-rate alloy-os-financial-config__tuition-rate--missing">
+                No match
+            </span>
+        );
+    }
+    if (!enrollment.resolvedRate) {
+        return (
+            <span className="alloy-os-financial-config__tuition-rate alloy-os-financial-config__tuition-rate--missing">
+                Rate not configured
+            </span>
+        );
+    }
+    return (
+        <span className="alloy-os-financial-config__tuition-rate">
+            {enrollment.resolvedRate.rateLabel}
+            {enrollment.resolvedRate.isLocationOverride && (
+                <span className="alloy-os-financial-config__tuition-override"> (site rate)</span>
+            )}
         </span>
     );
 }
