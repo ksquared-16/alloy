@@ -28,10 +28,8 @@ import { parseStatusRollupV1, type StatusRollupV1 } from "@/lib/lifecycle/status
 import { parseStageActionCatalogV1, type StageActionCatalogV1 } from "@/lib/lifecycle/stageActionCatalogV1";
 import {
     parseStageGrain,
-    parseStagePurpose,
     parseSubjectResolutionStrategy,
     type StageGrain,
-    type StagePurpose,
     type StageSubjectResolutionStrategy,
 } from "@/lib/lifecycle/stageGrainV1";
 
@@ -59,8 +57,8 @@ export type LifecycleBuilderStageRecord = {
     action_catalog_v1?: StageActionCatalogV1;
     /** V2 Builder — grain determines the queue row subject entity. */
     grain?: StageGrain;
-    /** V2 Builder — semantic stage purpose category. */
-    purpose?: StagePurpose;
+    /** V2 Builder — freeform operator-authored stage purpose. */
+    purpose?: string;
     /** V2 Builder — stable key of this stage's parent (for sub-stages). */
     parent_stage_key?: string;
     /** V2 Builder — whether operators can skip this stage. */
@@ -175,7 +173,7 @@ export function parseLifecycleBuilderV1(raw: unknown): LifecycleBuilderV1 | null
                 ...(perspectives ? { perspectives_v1: perspectives } : {}),
                 ...(actionCatalog ? { action_catalog_v1: actionCatalog } : {}),
                 ...(parseStageGrain(sr.grain) ? { grain: parseStageGrain(sr.grain) } : {}),
-                ...(parseStagePurpose(sr.purpose) ? { purpose: parseStagePurpose(sr.purpose) } : {}),
+                ...(typeof sr.purpose === "string" && sr.purpose.trim() ? { purpose: sr.purpose.trim() } : {}),
                 ...(typeof sr.parent_stage_key === "string" && sr.parent_stage_key ? { parent_stage_key: sr.parent_stage_key } : {}),
                 ...(typeof sr.allow_skipping === "boolean" ? { allow_skipping: sr.allow_skipping } : {}),
                 ...(typeof sr.operator_guidance === "string" && sr.operator_guidance ? { operator_guidance: sr.operator_guidance } : {}),

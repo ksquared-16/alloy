@@ -9,17 +9,16 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { LIFECYCLE_BUILDER_METADATA_KEY } from "@/lib/lifecycle/lifecycleBuilderConfig";
 import {
     parseStageGrain,
-    parseStagePurpose,
     parseSubjectResolutionStrategy,
     type StageGrain,
-    type StagePurpose,
     type StageSubjectResolutionStrategy,
 } from "@/lib/lifecycle/stageGrainV1";
 import type { StageCandidateAction } from "@/lib/lifecycle/stageActionCatalogV1";
 
 export type StageV2DraftInput = {
     grain?: StageGrain;
-    purpose?: StagePurpose;
+    /** Freeform operator-authored purpose description. */
+    purpose?: string;
     description?: string;
     parent_stage_key?: string;
     allow_skipping?: boolean;
@@ -75,8 +74,7 @@ export function parseStageV2DraftInput(raw: unknown): StageV2DraftInput | null {
     const result: StageV2DraftInput = {};
     const grain = parseStageGrain(raw.grain);
     if (grain) result.grain = grain;
-    const purpose = parseStagePurpose(raw.purpose);
-    if (purpose) result.purpose = purpose;
+    if (typeof raw.purpose === "string" && raw.purpose.trim()) result.purpose = raw.purpose.trim();
     if (typeof raw.description === "string") result.description = raw.description;
     if (typeof raw.parent_stage_key === "string") result.parent_stage_key = raw.parent_stage_key;
     if (typeof raw.allow_skipping === "boolean") result.allow_skipping = raw.allow_skipping;
