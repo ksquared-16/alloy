@@ -1,6 +1,6 @@
 # Status and state system
 
-**Status:** Canonical (June 2026 freeze). See also: [`operational-mutation-platform.md`](../modules/operational-mutation-platform.md) for mutation runtime doctrine.
+**Status:** Canonical (July 2026). See [`business-process-execution-platform.md`](../modules/business-process-execution-platform.md) for execution runtime doctrine.
 
 How status keys, state transitions, and lifecycle ownership work across grains.
 
@@ -27,6 +27,7 @@ meaningful with its domain. Four domains:
   → count people.
 - **`status_definitions.entity_type` discriminates the domain** (`opportunities` / `opportunity_customer_members`
   / `persons` / `customers`). The evaluator resolves each domain from its own row field — never a shared set.
+- **Status is produced by the Execution Runtime — it is not the driver.** Status does not own queue behavior, actions, work, readiness, or dashboards. Those come from configured processes. See `../modules/business-process-execution-platform.md` § Status.
 
 > **Person / Account Status are not yet Work View conditions** — see *Work View conditions* below. Account
 > Status has no seeded `status_definitions`; Person Status is not carried on opportunity/child Work View
