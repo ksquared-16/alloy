@@ -575,6 +575,71 @@ describe("field-level toggle — per-field enabled state", () => {
     });
 });
 
+// ── V1 scope verification ─────────────────────────────────────────────────────
+
+describe("V1 scope — built config is QueueRecordLayoutConfigV3, publish path is real", () => {
+    it("buildConfigFromState returns a valid QueueRecordLayoutConfigV3 shape", () => {
+        const config = defaultLeadQueueLayoutV3();
+        const catalog = buildCatalog(false);
+        const zones = stateFromConfig(config, catalog);
+        const rebuilt = buildConfigFromState(config, zones, catalog);
+
+        // Must satisfy the QueueRecordLayoutConfigV3 contract used by the runtime
+        expect(rebuilt.variant).toBe("operational-row");
+        expect(rebuilt.version).toBe(3);
+        expect(Array.isArray(rebuilt.columns)).toBe(true);
+        expect(typeof rebuilt.fixedControls).toBe("object");
+        expect(typeof rebuilt.fixedControls.actionsMenu).toBe("boolean");
+        for (const col of rebuilt.columns) {
+            expect(typeof col.width).toBe("string");
+            expect(Array.isArray(col.blocks)).toBe(true);
+        }
+    });
+
+    it("field-level changes are contained in blocks[].fields[] — no side-channel", () => {
+        // The only surface the builder mutates is blocks[].fields[].
+        // Verify that toggling a field does not change column widths, block ids,
+        // or fixedControls — only the fields array inside the affected block.
+        const config = defaultLeadQueueLayoutV3();
+        const catalog = buildCatalog(false);
+        const zones = stateFromConfig(config, catalog);
+
+        const householdIdx = zones.findIndex((z) => z.key === "household");
+        const household = zones[householdIdx]!;
+        const firstGroup = household.evidenceGroups.find((g) => g.enabled && g.fields.length >= 2);
+        if (!firstGroup) return;
+        const fieldToDisable = firstGroup.fields[1]!.fieldKey;
+
+        const updatedZones = zones.map((z, i) =>
+            i !== householdIdx ? z : {
+                ...z,
+                evidenceGroups: z.evidenceGroups.map((g) =>
+                    g.blockId !== firstGroup.blockId ? g : {
+                        ...g,
+                        fields: g.fields.map((f) =>
+                            f.fieldKey !== fieldToDisable ? f : { ...f, enabled: false },
+                        ),
+                    },
+                ),
+            },
+        );
+
+        const baseline = buildConfigFromState(config, zones, catalog);
+        const modified = buildConfigFromState(config, updatedZones, catalog);
+
+        // Column widths unchanged
+        expect(modified.columns.map((c) => c.width)).toEqual(baseline.columns.map((c) => c.width));
+        // fixedControls unchanged
+        expect(modified.fixedControls).toEqual(baseline.fixedControls);
+        // Block IDs for identity column unchanged
+        const baseIdentity = baseline.columns.find((c) => c.width === "identity");
+        const modIdentity = modified.columns.find((c) => c.width === "identity");
+        if (baseIdentity && modIdentity) {
+            expect(modIdentity.blocks.map((b) => b.id)).toEqual(baseIdentity.blocks.map((b) => b.id));
+        }
+    });
+});
+
 // ── Runtime parity proof (Part 7) ────────────────────────────────────────────
 
 describe("runtime parity — field toggle → config → not rendered", () => {

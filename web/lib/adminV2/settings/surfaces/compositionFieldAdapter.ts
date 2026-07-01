@@ -1,18 +1,36 @@
 /**
- * Universal Composition Model — Field Availability Adapter.
+ * Universal Composition Model — Field Availability Adapter (V1).
  *
  * Answers the builder question: "What fields are available for this evidence group?"
  *
- * The adapter bridges two field systems:
- *   1. Queue Row refKey system (e.g. "person.phone", "child.name") — sourced from
- *      `defaultLeadQueueLayoutV3()` and the childcare field catalog.
- *   2. Focus Panel concept path system (e.g. "Enrollment → Primary Contact → Phone")
- *      — sourced from `CONCEPT_TREE` in `focusPanelConceptCatalog.ts`.
+ * ## V1 scope — static composition fields only
  *
- * Both are rooted on the same business entities. The adapter normalizes the
- * registry's `defaultFieldKeys` and adds display labels from the catalog.
+ * This adapter reads ONLY the static `QUEUE_FIELD_CATALOG` defined in this file.
+ * It does NOT read the real tenant field catalog (`tenantLayoutFieldPickerCatalog`,
+ * `LayoutCatalogField`, `childcareLayoutFieldCatalog`) and does NOT surface
+ * operator-created custom fields.
+ *
+ * The fields available here are a curated subset of the platform's built-in
+ * queue row fields — the same fields that appear in the default lead/waitlist
+ * queue layout configs. They are called "composition fields", not "all created
+ * fields", to be precise about V1 scope.
+ *
+ * ## Deferred — V2: Dynamic custom field catalog integration
+ *
+ * The platform goal is: operator creates a field → it appears in compatible
+ * builders automatically. That path requires:
+ *   1. `tenantLayoutFieldPickerCatalog.buildTenantLayoutCatalogFields()` merged
+ *      into this adapter at query time (already exists, not wired here).
+ *   2. Entity-namespace compatibility check between the custom field's
+ *      `entity_type` and the evidence group's namespace.
+ *   3. The queue row validator allow-list auto-extended for tenant refKeys.
+ *
+ * Until V2, operators who create custom fields must contact platform support
+ * to have refKeys added to the allow-list. The builder shows only the
+ * platform-defined composition fields below.
  *
  * @see compositionEvidenceGroupRegistry.ts (canonical group → field key maps)
+ * @see web/lib/layout/tenantLayoutFieldPickerCatalog.ts (V2 integration point)
  * @see docs/platform/operator/experience-builder-universal-composition-model.md
  */
 
@@ -60,15 +78,17 @@ export type NamedEvidenceGroup = {
     availableFields: AvailableField[];
 };
 
-// ── Static field catalog ───────────────────────────────────────────────────────
+// ── Static composition field catalog (V1) ─────────────────────────────────────
 
 /**
- * Canonical field definitions for the queue row field system (refKey namespace).
- * These correspond to the fields that appear in `defaultLeadQueueLayoutV3()` and
- * are handled by `OperationalQueueRecordRow`.
+ * Platform-defined composition fields for the queue row refKey namespace.
+ * These are the fields that `OperationalQueueRecordRow` knows how to render
+ * (backed by `QueueRecordScopedColumn` which iterates `config.columns[].blocks[].fields[]`).
  *
- * New fields added to the queue layout config should also appear here so the
- * builder can label them correctly.
+ * This is NOT the full tenant field catalog. Operator-created custom fields
+ * are NOT included here — see the V2 deferral note in the file header.
+ *
+ * `isSystemField: true` for all entries here — they are platform-defined.
  */
 const QUEUE_FIELD_CATALOG: Record<string, { label: string; namespace: AvailableFieldEntityNamespace; hint?: AvailableFieldDisplayHint }> = {
     // customer
@@ -103,8 +123,12 @@ const QUEUE_FIELD_CATALOG: Record<string, { label: string; namespace: AvailableF
 
 /**
  * Resolve a queue field key to an `AvailableField`.
- * Falls back to a synthesized definition when not in the static catalog —
- * this handles tenant custom fields that use the same refKey format.
+ *
+ * Keys in `QUEUE_FIELD_CATALOG` → fully resolved with label + hint.
+ * Unknown keys → synthesized label from the refKey shape; `isSystemField: false`
+ * marks these as unrecognized (they should not appear in the V1 builder UI,
+ * but the synthesizer prevents hard failures if stale config references an
+ * old or renamed key).
  */
 function resolveQueueField(key: string): AvailableField {
     const entry = QUEUE_FIELD_CATALOG[key];
@@ -117,7 +141,7 @@ function resolveQueueField(key: string): AvailableField {
             isSystemField: true,
         };
     }
-    // Synthesize from the refKey: "entity.field_name" → "Field Name"
+    // Synthesize — label from refKey shape; isSystemField=false = not in catalog
     const dotIndex = key.indexOf(".");
     const rawLabel = dotIndex >= 0 ? key.slice(dotIndex + 1) : key;
     const label = rawLabel.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
@@ -129,9 +153,10 @@ function resolveQueueField(key: string): AvailableField {
 // ── Public API ────────────────────────────────────────────────────────────────
 
 /**
- * Return all available fields for a queue zone evidence group, by group key.
- * Includes the group's `defaultFieldKeys` plus any tenant-catalog fields for
- * the same entity namespace (future — currently returns defaults only).
+ * Return the available composition fields for a specific evidence group within a zone.
+ *
+ * V1: returns the group's platform-defined `defaultFieldKeys` only.
+ * Does NOT include operator-created custom fields (deferred to V2 — see file header).
  */
 export function availableFieldsForGroup(
     zone: string,
@@ -145,8 +170,8 @@ export function availableFieldsForGroup(
 }
 
 /**
- * Return all available fields for a queue zone — flat, across all groups.
- * Used by bulk pickers when the group structure is not needed.
+ * Return all available composition fields for a zone — flat, across all groups.
+ * V1: platform-defined fields only. Does not include operator-created custom fields.
  */
 export function availableFieldsForZone(zone: string, isWaitlist = false): AvailableField[] {
     const groups = evidenceGroupsForZone(zone, isWaitlist);
@@ -164,9 +189,11 @@ export function availableFieldsForZone(zone: string, isWaitlist = false): Availa
 }
 
 /**
- * Return named evidence groups with their available fields for a queue zone.
- * This is the primary adapter function — used by the builder inspector to render
- * the "Evidence Groups" section with per-field toggles.
+ * Return named evidence groups with their available composition fields for a zone.
+ * Primary adapter function — used by the builder inspector to render named group
+ * sections with per-field toggles.
+ *
+ * V1: fields are platform-defined composition fields only. Custom fields deferred.
  */
 export function namedEvidenceGroupsForZone(
     zone: string,

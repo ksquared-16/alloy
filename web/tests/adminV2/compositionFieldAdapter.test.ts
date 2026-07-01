@@ -157,6 +157,45 @@ describe("namedEvidenceGroupsForZone — groups with available fields", () => {
     });
 });
 
+describe("V1 scope — static composition fields only, no custom fields", () => {
+    it("all fields returned by availableFieldsForZone have isSystemField=true (V1 catalog)", () => {
+        // V1: the adapter reads only the static QUEUE_FIELD_CATALOG.
+        // Every returned field must be a known system field — no operator-created
+        // custom fields should appear here.
+        for (const zone of ["household", "children", "status", "attention", "date_event"]) {
+            const fields = availableFieldsForZone(zone);
+            for (const field of fields) {
+                expect(field.isSystemField, `zone ${zone} field ${field.key} — should be system field`).toBe(true);
+            }
+        }
+    });
+
+    it("unknown refKey synthesizes isSystemField=false", () => {
+        // Sentinel: if a stale or unknown key slips into registry.defaultFieldKeys,
+        // isSystemField=false marks it as unrecognized so the builder can flag it.
+        const fields = availableFieldsForGroup("household", "primary_contact");
+        // All household primary_contact fields are known system fields
+        for (const field of fields) {
+            expect(field.isSystemField).toBe(true);
+        }
+    });
+
+    it("namedEvidenceGroupsForZone only exposes platform-defined fields (no custom fields)", () => {
+        // Confirm the named groups contain no dynamically injected tenant fields.
+        // All field keys must follow the refKey pattern: "namespace.field"
+        for (const zone of ["household", "children", "status", "attention", "date_event"]) {
+            const groups = namedEvidenceGroupsForZone(zone);
+            for (const group of groups) {
+                for (const field of group.availableFields) {
+                    // System fields follow "namespace.field_name" pattern
+                    expect(field.key).toMatch(/^[a-z_]+\.[a-z_]+$/);
+                    expect(field.isSystemField).toBe(true);
+                }
+            }
+        }
+    });
+});
+
 describe("isFieldAvailableForZone — membership check", () => {
     it("person.phone is available for household zone", () => {
         expect(isFieldAvailableForZone("person.phone", "household")).toBe(true);

@@ -9,6 +9,8 @@
 
 A field created in the field catalog becomes available anywhere appropriate — on a card, in a queue row, in a header tile — without engineering changes. Operators compose; engineers do not hard-code.
 
+**V1 implementation status:** The hierarchy and named evidence group model described here are implemented. The dynamic custom-field catalog integration (operator creates a field → appears in builders automatically) is **deferred to Experience Builder V2**. See [What is deferred](#deferred--experience-builder-v2) below.
+
 This document is the canonical definition of the composition hierarchy all surfaces share.
 
 ---
@@ -126,15 +128,17 @@ Not all Composition Item types are valid on all surfaces:
 | Calculation | ✓ | ✓ | ✓ |
 | AI Summary | ✓ (future) | — | — |
 
-### Field catalog → builder availability
+### Field catalog → builder availability (V1 scope)
 
-When an operator creates a field in the field catalog (Settings → Fields), it appears in builders automatically IF:
+In V1, the builder inspector shows **platform-defined composition fields only** — the curated set in `compositionFieldAdapter.ts::QUEUE_FIELD_CATALOG`. These are the fields the queue row runtime already renders.
 
-1. The field's `entity_type` matches the Evidence Group's entity namespace.
-2. The field's `is_active` is true and `is_visible_in_drawer` is not false.
-3. The surface's allow-list (`PIPELINE_QUEUE_RECORD_FIELD_REFS`, `PERSON_DRAWER_FIELD_REFS`, etc.) includes or can include the generated refKey.
+Operator-created custom fields from Settings → Fields are **not yet available in the builder** (deferred to V2 — see the Deferred section below). The rules that will govern V2 availability:
 
-**Implementation note**: The Queue Row validator allow-list (`queueRecordValidatorAllowList.ts`) must be extended to auto-include tenant field definitions that pass entity-type compatibility. Until that path is built, tenant fields appear in the catalog query but are marked "requires configuration" if not yet in the allow-list.
+1. The field's `entity_type` must match the Evidence Group's entity namespace.
+2. The field's `is_active` must be true and `is_visible_in_drawer` not false.
+3. The surface's validator allow-list must include the generated refKey.
+
+Until V2, do not describe the builder as "shows all created fields" — it shows composition fields only.
 
 ---
 
@@ -334,6 +338,47 @@ The Focus Panel Inspector persists card config to `LayoutSection.metadata`. The 
 **Deferred**: Making card evidence assemblies config-driven requires a `CardFieldsConfig` intermediate type and refactoring each card's evidence builder. This is deferred to Experience Builder V3.
 
 **Reference path today**: The profile/appearance/question/condition parts of the card config ARE live. The field list within evidence groups seeds default values but does not yet drive which fields the runtime extracts from the record.
+
+---
+
+---
+
+## What is implemented in V1
+
+| Capability | Status |
+|-----------|--------|
+| Composition hierarchy (Surface → Canvas → Component → Evidence Group → Composition Item → Conditions → Actions) | ✅ Doctrine + registry implemented |
+| Named evidence group registry (`compositionEvidenceGroupRegistry.ts`) | ✅ All queue zones + Focus Panel cards |
+| Composition field adapter (`compositionFieldAdapter.ts`) | ✅ Platform-defined fields only |
+| Queue Row Builder V2 — named group inspector with per-field toggles | ✅ Live |
+| Queue Row publish → LayoutDoc → runtime render path | ✅ Fully wired |
+| Household Focus Panel named groups (Primary Contact, Additional Contacts) | ✅ Seeded in `defaultEvidenceGroupsForCard` |
+| Focus Panel card evidence assemblies config-driven | ❌ Hardcoded — deferred to V3 |
+| Dynamic custom field catalog integration | ❌ Deferred to V2 (see below) |
+
+### What "composition fields" means in V1
+
+The builder inspector shows **composition fields** — the platform-defined set of fields that `OperationalQueueRecordRow` already knows how to render. These are sourced from `QUEUE_FIELD_CATALOG` in `compositionFieldAdapter.ts`, a curated subset of the built-in queue layout default fields.
+
+**Composition fields ≠ all created fields.** Operator-created custom fields from the field catalog are NOT shown in the V1 builder. The inspector label "Fields" refers to composition fields only.
+
+---
+
+## Deferred — Experience Builder V2
+
+**Goal:** operator creates a field in Settings → Fields → it appears in compatible builders automatically.
+
+**What needs to be built:**
+
+1. **Adapter integration** — `compositionFieldAdapter.ts` must call `tenantLayoutFieldPickerCatalog.buildTenantLayoutCatalogFields(defs, surface)` and merge tenant fields into the available set, filtered by entity-namespace compatibility.
+
+2. **Entity-namespace check** — the custom field's `entity_type` (from `TenantFieldDefinitionRow`) must match the evidence group's namespace (`opportunity`, `child`, `person`, etc.) before the field is offered.
+
+3. **Validator allow-list extension** — the queue row validator allow-list (`queueRecordValidatorAllowList.ts`) must be extended to auto-include tenant field refKeys that pass entity-type compatibility. Until then, custom fields pass through the catalog query but cannot be published.
+
+4. **Focus Panel evidence assembly** — `buildHouseholdCardEvidence`, `buildChildrenCardEvidence`, etc. must be refactored to read from `config.evidenceGroups[].fields[]` rather than fixed field paths. Requires a `CardFieldsConfig` intermediate type.
+
+Until V2 ships, operators who create custom fields that need to appear in builders should request refKey allow-list additions via platform support.
 
 ---
 

@@ -162,6 +162,34 @@ describe("FOCUS_PANEL_CARD_EVIDENCE_GROUPS — named card groups", () => {
     });
 });
 
+describe("named groups are user-facing business names (not abstract)", () => {
+    const ABSTRACT_PATTERN = /^(Evidence Group|Group|Block|Section|Group \d|Zone \d)\s*\d*$/i;
+
+    it("no queue zone group label is abstract", () => {
+        for (const zone of ["household", "children", "status", "attention", "date_event"]) {
+            const groups = evidenceGroupsForZone(zone);
+            for (const group of groups) {
+                expect(group.label, `zone ${zone} group ${group.key}`).not.toMatch(ABSTRACT_PATTERN);
+            }
+        }
+    });
+
+    it("no Focus Panel card group label is abstract", () => {
+        for (const [card, groups] of Object.entries(FOCUS_PANEL_CARD_EVIDENCE_GROUPS)) {
+            for (const group of groups ?? []) {
+                expect(group.label, `card ${card} group ${group.key}`).not.toMatch(ABSTRACT_PATTERN);
+            }
+        }
+    });
+
+    it("waitlist overridden groups also have non-abstract labels", () => {
+        const childrenWL = evidenceGroupsForZone("children", true);
+        for (const group of childrenWL) {
+            expect(group.label).not.toMatch(ABSTRACT_PATTERN);
+        }
+    });
+});
+
 describe("labelForFocusPanelGroup — named label resolution", () => {
     it("returns canonical label for known card + group", () => {
         expect(labelForFocusPanelGroup("household", "primary_contact")).toBe("Primary Contact");
