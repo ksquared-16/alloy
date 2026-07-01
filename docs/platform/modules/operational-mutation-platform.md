@@ -1,6 +1,10 @@
 # Operational Mutation Platform
 
-**Status:** Canonical doctrine — Operational Mutation Platform V1 (June 2026).
+**Status:** Superseded — see [`business-process-execution-platform.md`](business-process-execution-platform.md) (canonical doctrine, July 2026).
+
+This file is retained for historical reference. The Execution Runtime mechanics below remain accurate. The framing has been elevated: mutations are the engine underneath the Business Process Execution Platform, not the product name.
+
+---
 
 Every mutation an operator can perform in Alloy executes through this platform. Status changes, scheduling, enrollment, billing, documents, and communications share one runtime, one event shape, and one projection contract.
 
