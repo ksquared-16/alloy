@@ -6,6 +6,7 @@ import UniversalCard from "@/components/admin/focusPanel/UniversalCard";
 import CardInlineOverlay from "@/components/admin/focusPanel/cards/CardInlineOverlay";
 import {
     buildBillingPreviewCardEvidence,
+    type BillingPlacementFact,
 } from "@/lib/adminV2/runtime/focusPanel/billingPreview/buildBillingPreviewCardEvidence";
 import type { FocusPanelCardModel } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardModel";
 import type { OperationalContext } from "@/lib/adminV2/runtime/operationalContext/types";
@@ -17,15 +18,19 @@ type Props = {
 };
 
 /**
- * Billing Preview card (Status archetype). Answers "Is billing configured
- * and ready for this enrollment?".
+ * Financial Configuration card (Status archetype).
+ * Answers "Is billing configured and ready for this enrollment?"
  *
- * Summary: shows configured/not-configured status chip + tuition rate label.
- * Expanded: inline overlay lists the billing readiness checklist (billing
- * contact, tuition rate). Read-only — billing truth is owned by the billing
- * configuration workspace, not this card. Pure over `context.truth`.
+ * Follows the Operational Configuration Card Pattern:
+ *   Placement facts → Configuration → Readiness → Activity/History
  *
- * @see docs/platform/operator/universal-card-archetypes.md (Status)
+ * Summary: configured/not-configured chip + tuition rate + billing contact.
+ * Expanded: billing configuration section + placement facts (shared with Children card)
+ *           + missing-state responsibility section (until write path exists).
+ *
+ * Read-only — no mutation prop. Pure over context.signals.billing + context.truth.
+ *
+ * @see docs/platform/operator/operational-configuration-card-pattern.md
  */
 export default function BillingPreviewCard({ model, context, receded = false }: Props) {
     const evidence = useMemo(() => buildBillingPreviewCardEvidence(context), [context]);
@@ -40,12 +45,16 @@ export default function BillingPreviewCard({ model, context, receded = false }: 
             onClick={() => setOverlayOpen((v) => !v)}
             aria-expanded={overlayOpen}
         >
-            {overlayOpen ? "Hide checklist" : "View checklist →"}
+            {overlayOpen ? "Hide details" : "View configuration →"}
         </button>
     ) : null;
 
     return (
-        <div className="alloy-os-billing-preview" data-billing-card="true" data-fp-overlay-open={overlayOpen ? "true" : undefined}>
+        <div
+            className="alloy-os-billing-preview"
+            data-billing-card="true"
+            data-fp-overlay-open={overlayOpen ? "true" : undefined}
+        >
             <UniversalCard
                 title={model.title}
                 insight={evidence.answerLine}
@@ -64,29 +73,68 @@ export default function BillingPreviewCard({ model, context, receded = false }: 
             <CardInlineOverlay
                 open={overlayOpen && hasChecklist}
                 onClose={() => setOverlayOpen(false)}
-                title="Billing readiness"
+                title="Financial Configuration"
                 dataOverlay="billing-readiness"
             >
-                <ul className="alloy-os-ucard__check-list">
-                    {evidence.readinessItems.map((item) => (
-                        <li
-                            key={item.label}
-                            className={`alloy-os-ucard__check-item alloy-os-ucard__check-item--${item.met ? "met" : "unmet"}`}
-                        >
-                            <span className="alloy-os-ucard__check-indicator">
-                                {item.met ? "✓" : "○"}
-                            </span>
-                            <span className="alloy-os-ucard__check-label">{item.label}</span>
-                            {item.detail && (
-                                <span className="alloy-os-ucard__check-detail">{item.detail}</span>
-                            )}
-                        </li>
-                    ))}
-                </ul>
-                {evidence.balanceLabel && (
-                    <p className="alloy-os-ucard__balance-line">{evidence.balanceLabel}</p>
+                {/* Billing configuration section */}
+                <section className="alloy-os-financial-config__section">
+                    <h4 className="alloy-os-financial-config__section-heading">Billing configuration</h4>
+                    <ul className="alloy-os-ucard__check-list">
+                        {evidence.readinessItems.map((item) => (
+                            <li
+                                key={item.label}
+                                className={`alloy-os-ucard__check-item alloy-os-ucard__check-item--${item.met ? "met" : "unmet"}`}
+                            >
+                                <span className="alloy-os-ucard__check-indicator">
+                                    {item.met ? "✓" : "○"}
+                                </span>
+                                <span className="alloy-os-ucard__check-label">{item.label}</span>
+                                {item.detail && (
+                                    <span className="alloy-os-ucard__check-detail">{item.detail}</span>
+                                )}
+                            </li>
+                        ))}
+                    </ul>
+                    {evidence.balanceLabel && (
+                        <p className="alloy-os-ucard__balance-line">{evidence.balanceLabel}</p>
+                    )}
+                </section>
+
+                {/* Placement facts — same source as Children card, read independently */}
+                {evidence.placementFacts.length > 0 && (
+                    <section className="alloy-os-financial-config__section">
+                        <h4 className="alloy-os-financial-config__section-heading">Placement &amp; schedule</h4>
+                        <ul className="alloy-os-financial-config__placement-list">
+                            {evidence.placementFacts.map((fact) => (
+                                <li key={fact.childLabel} className="alloy-os-financial-config__placement-row">
+                                    <span className="alloy-os-financial-config__child-label">{fact.childLabel}</span>
+                                    <PlacementDetail fact={fact} />
+                                </li>
+                            ))}
+                        </ul>
+                    </section>
                 )}
+
+                {/* Billing responsibility — missing-state until write path is built */}
+                <section className="alloy-os-financial-config__section">
+                    <h4 className="alloy-os-financial-config__section-heading">Billing responsibility</h4>
+                    {evidence.responsibilityConfigured ? null : (
+                        <p className="alloy-os-financial-config__missing-state">
+                            Billing responsibility not configured.
+                        </p>
+                    )}
+                </section>
             </CardInlineOverlay>
         </div>
+    );
+}
+
+function PlacementDetail({ fact }: { fact: BillingPlacementFact }) {
+    const parts = [fact.programLabel, fact.roomLabel, fact.scheduleLabel].filter(Boolean);
+    if (parts.length === 0) return <span className="alloy-os-financial-config__placement-detail">—</span>;
+    return (
+        <span className="alloy-os-financial-config__placement-detail">
+            {parts.join(" · ")}
+        </span>
     );
 }

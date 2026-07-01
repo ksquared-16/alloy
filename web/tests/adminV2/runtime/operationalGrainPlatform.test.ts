@@ -269,6 +269,76 @@ describe("Doctrine §8.4 — billing signal evidence builder", () => {
         expect(src).toContain("export const NULL_BILLING_SIGNAL");
         expect(src).toContain("billing: OperationalBillingSignal");
     });
+
+    // Financial Configuration Card Pattern — placement facts + responsibility state
+    it("placementFacts is empty when no _inquiry_children in truth", () => {
+        const ctx = caseCtx({});
+        const evidence = buildBillingPreviewCardEvidence(ctx);
+        expect(evidence.placementFacts).toEqual([]);
+    });
+
+    it("placementFacts projects program/room/schedule from _inquiry_children (same source as Children card)", () => {
+        const ctx = caseCtx({
+            _inquiry_children: [
+                {
+                    display_name: "Emma Johnson",
+                    desired_program_label: "Preschool",
+                    program_room_cohort_label: "Butterflies Room",
+                    desired_schedule_label: "M–F · 8:30a – 2:30p",
+                },
+                {
+                    display_name: "Liam Johnson",
+                    desired_program_label: null,
+                    program_room_cohort_label: null,
+                    desired_schedule_label: null,
+                },
+            ],
+        });
+        const evidence = buildBillingPreviewCardEvidence(ctx);
+        expect(evidence.placementFacts).toHaveLength(2);
+        expect(evidence.placementFacts[0]).toMatchObject({
+            childLabel: "Emma Johnson",
+            programLabel: "Preschool",
+            roomLabel: "Butterflies Room",
+            scheduleLabel: "M–F · 8:30a – 2:30p",
+        });
+        expect(evidence.placementFacts[1]).toMatchObject({
+            childLabel: "Liam Johnson",
+            programLabel: null,
+            roomLabel: null,
+            scheduleLabel: null,
+        });
+    });
+
+    it("responsibilityConfigured is false when billing_responsibility_configured not in truth", () => {
+        const ctx = caseCtx({});
+        const evidence = buildBillingPreviewCardEvidence(ctx);
+        expect(evidence.responsibilityConfigured).toBe(false);
+    });
+
+    it("responsibilityConfigured is true when billing_responsibility_configured set in truth", () => {
+        const ctx = caseCtx({ billing_responsibility_configured: true });
+        const evidence = buildBillingPreviewCardEvidence(ctx);
+        expect(evidence.responsibilityConfigured).toBe(true);
+    });
+
+    it("billingContactEmail is surfaced in evidence (available for readiness detail)", () => {
+        const ctx: OperationalContext = {
+            ...caseCtx(),
+            signals: {
+                ...emptySignals(),
+                billing: {
+                    billingConfigured: false,
+                    billingContactName: null,
+                    billingContactEmail: "billing@example.com",
+                    tuitionRateLabel: null,
+                    feeBalanceCents: null,
+                },
+            },
+        };
+        const evidence = buildBillingPreviewCardEvidence(ctx);
+        expect(evidence.billingContactEmail).toBe("billing@example.com");
+    });
 });
 
 // ─── §8.5 — FocusPanelCardKey grain annotations ──────────────────────────────
