@@ -94,6 +94,7 @@ const inputCls =
 
 // ─── GridCell ──────────────────────────────────────────────────────────────────
 // Inline-editable cell in the offering×cadence rate table.
+// Edit mode: compact price input first, effective dates collapsed behind a toggle.
 
 function GridCell({ variant, cadence, rateRow, orgDefaultRow, locationId, onSave, onClear }: {
     variant: ProgramOfferingVariant;
@@ -106,6 +107,7 @@ function GridCell({ variant, cadence, rateRow, orgDefaultRow, locationId, onSave
 }) {
     const [editing, setEditing] = useState(false);
     const [draft, setDraft] = useState("");
+    const [showDates, setShowDates] = useState(false);
     const [effectiveStart, setEffectiveStart] = useState("");
     const [effectiveEnd, setEffectiveEnd] = useState("");
     const [saving, setSaving] = useState(false);
@@ -117,12 +119,14 @@ function GridCell({ variant, cadence, rateRow, orgDefaultRow, locationId, onSave
     const isNotOffered = rateRow?.not_offered === true;
     const displayRate = rateRow && !isNotOffered ? rateRow.rate_cents : null;
     const showOrgFallback = !rateRow && orgDefaultRow && !orgDefaultRow.not_offered;
+    const hasDates = !!(rateRow?.effective_start || rateRow?.effective_end);
 
     function startEdit() {
         if (isNotOffered) return;
         setDraft(displayRate != null ? String(displayRate / 100) : "");
         setEffectiveStart(rateRow?.effective_start ?? "");
         setEffectiveEnd(rateRow?.effective_end ?? "");
+        setShowDates(hasDates); // auto-expand if dates already set
         setEditing(true);
         setTimeout(() => inputRef.current?.focus(), 0);
     }
@@ -148,36 +152,55 @@ function GridCell({ variant, cadence, rateRow, orgDefaultRow, locationId, onSave
 
     if (editing) {
         return (
-            <td className="px-2 py-1.5 align-top" style={{ minWidth: 130 }}>
-                <div className="space-y-1">
-                    <input
-                        ref={inputRef}
-                        value={draft}
-                        onChange={(e) => setDraft(e.target.value)}
-                        onKeyDown={(e) => { if (e.key === "Enter") void commitEdit(); if (e.key === "Escape") setEditing(false); }}
-                        className="w-full rounded border border-alloy-pine/50 px-2 py-0.5 text-sm text-right focus:outline-none"
-                        placeholder="0.00"
-                    />
-                    <div className="flex gap-1">
+            <td className="px-2 py-2 align-top" style={{ minWidth: 148 }}>
+                <div className="space-y-1.5">
+                    {/* Price row — compact, feels like a spreadsheet cell */}
+                    <div className="flex items-center gap-1">
+                        <span className="text-xs text-alloy-midnight/35 select-none">$</span>
                         <input
-                            type="date"
-                            value={effectiveStart}
-                            onChange={(e) => setEffectiveStart(e.target.value)}
-                            className="flex-1 rounded border border-alloy-stone/25 px-1 py-0.5 text-[10px] text-alloy-midnight/60 focus:outline-none"
-                            title="Effective start (optional)"
+                            ref={inputRef}
+                            value={draft}
+                            onChange={(e) => setDraft(e.target.value)}
+                            onKeyDown={(e) => { if (e.key === "Enter") void commitEdit(); if (e.key === "Escape") { setEditing(false); setShowDates(false); } }}
+                            className="w-20 rounded border border-alloy-pine/45 px-1.5 py-0.5 text-sm text-right focus:outline-none focus:border-alloy-pine"
+                            placeholder="0.00"
                         />
-                        <input
-                            type="date"
-                            value={effectiveEnd}
-                            onChange={(e) => setEffectiveEnd(e.target.value)}
-                            className="flex-1 rounded border border-alloy-stone/25 px-1 py-0.5 text-[10px] text-alloy-midnight/60 focus:outline-none"
-                            title="Effective end (optional)"
-                        />
+                        <button type="button" onClick={() => void commitEdit()} disabled={saving} className="text-xs font-semibold text-alloy-pine hover:text-alloy-pine/70 disabled:opacity-40 px-0.5">✓</button>
+                        <button type="button" onClick={() => { setEditing(false); setShowDates(false); }} className="text-[11px] text-alloy-midnight/30 hover:text-alloy-midnight/60 px-0.5">✕</button>
                     </div>
-                    <div className="flex gap-2">
-                        <button type="button" onClick={() => void commitEdit()} disabled={saving} className="text-xs font-medium text-alloy-pine disabled:opacity-50">✓ Save</button>
-                        <button type="button" onClick={() => setEditing(false)} className="text-xs text-alloy-midnight/35 hover:text-alloy-midnight">Cancel</button>
-                    </div>
+
+                    {/* Effective dates — collapsed by default, revealed by toggle */}
+                    {!showDates ? (
+                        <button
+                            type="button"
+                            onClick={() => setShowDates(true)}
+                            className="text-[10px] text-alloy-midnight/30 hover:text-alloy-midnight/55 transition-colors"
+                        >
+                            + Effective dates
+                        </button>
+                    ) : (
+                        <div className="space-y-1 pt-0.5 border-t border-alloy-stone/15">
+                            <p className="text-[9px] text-alloy-midnight/35 leading-relaxed">Leave blank if rate applies now with no end date.</p>
+                            <label className="block">
+                                <span className="text-[9px] font-medium text-alloy-midnight/45 uppercase tracking-wide">Effective from</span>
+                                <input
+                                    type="date"
+                                    value={effectiveStart}
+                                    onChange={(e) => setEffectiveStart(e.target.value)}
+                                    className="mt-0.5 w-full rounded border border-alloy-stone/25 px-1 py-0.5 text-[11px] text-alloy-midnight/70 focus:outline-none"
+                                />
+                            </label>
+                            <label className="block">
+                                <span className="text-[9px] font-medium text-alloy-midnight/45 uppercase tracking-wide">Ends on <span className="font-normal normal-case">(optional)</span></span>
+                                <input
+                                    type="date"
+                                    value={effectiveEnd}
+                                    onChange={(e) => setEffectiveEnd(e.target.value)}
+                                    className="mt-0.5 w-full rounded border border-alloy-stone/25 px-1 py-0.5 text-[11px] text-alloy-midnight/70 focus:outline-none"
+                                />
+                            </label>
+                        </div>
+                    )}
                 </div>
             </td>
         );
@@ -275,14 +298,36 @@ function OfferingRateGrid({ offering, variants, cadences, rateMap, orgOnlyMap, l
 
     return (
         <div className="border border-alloy-stone/20 rounded-lg overflow-hidden">
-            <div className="flex items-center justify-between px-4 py-2.5 bg-alloy-stone/5 border-b border-alloy-stone/15">
+            {/* Header: offering name + "Add rate basis" on the right */}
+            <div className="flex items-center justify-between gap-3 px-4 py-2.5 bg-alloy-stone/5 border-b border-alloy-stone/15">
                 <span className="text-sm font-medium text-alloy-midnight">{offering.label}</span>
-                {activeCadences.length === 0 && <span className="text-xs text-alloy-midnight/30">No rate bases — add one below</span>}
+                <div className="shrink-0">
+                    {sorted.length > 0 && availableCadences.length > 0 && (
+                        addingCol ? (
+                            <div className="flex items-center gap-1.5">
+                                <select value={newKey} onChange={(e) => setNewKey(e.target.value)} className={inputCls}>
+                                    {availableCadences.map((c) => <option key={c.item_key} value={c.item_key}>{c.label}</option>)}
+                                </select>
+                                <button type="button" onClick={confirmAddCol} className="rounded border border-alloy-pine/30 bg-alloy-pine/8 px-2 py-0.5 text-xs font-medium text-alloy-pine hover:bg-alloy-pine/12">Add</button>
+                                <button type="button" onClick={() => setAddingCol(false)} className="text-xs text-alloy-midnight/35 hover:text-alloy-midnight">✕</button>
+                            </div>
+                        ) : (
+                            <button type="button" onClick={openAddCol} className="text-xs text-alloy-pine/70 hover:text-alloy-pine transition-colors flex items-center gap-0.5">
+                                <span className="text-sm leading-none">+</span> Add rate basis
+                            </button>
+                        )
+                    )}
+                    {activeCadences.length === 0 && availableCadences.length === 0 && (
+                        <span className="text-xs text-alloy-midnight/25">All cadences added</span>
+                    )}
+                </div>
             </div>
 
             {sorted.length === 0 ? (
                 <p className="px-4 py-3 text-xs text-alloy-midnight/35">No active variants.</p>
-            ) : activeCadences.length === 0 ? null : (
+            ) : activeCadences.length === 0 ? (
+                <p className="px-4 py-3 text-xs text-alloy-midnight/35">No rate bases yet — use "+ Add rate basis" above to start.</p>
+            ) : (
                 <div className="overflow-x-auto">
                     <table className="w-full text-sm">
                         <thead>
@@ -320,25 +365,6 @@ function OfferingRateGrid({ offering, variants, cadences, rateMap, orgOnlyMap, l
                             ))}
                         </tbody>
                     </table>
-                </div>
-            )}
-
-            {/* Add cadence column footer */}
-            {sorted.length > 0 && availableCadences.length > 0 && (
-                <div className="px-4 py-2 border-t border-alloy-stone/8">
-                    {addingCol ? (
-                        <div className="flex items-center gap-2 flex-wrap">
-                            <select value={newKey} onChange={(e) => setNewKey(e.target.value)} className={inputCls}>
-                                {availableCadences.map((c) => <option key={c.item_key} value={c.item_key}>{c.label}</option>)}
-                            </select>
-                            <button type="button" onClick={confirmAddCol} className="rounded border border-alloy-pine/30 bg-alloy-pine/8 px-2.5 py-1 text-xs font-medium text-alloy-pine hover:bg-alloy-pine/12">Add column</button>
-                            <button type="button" onClick={() => setAddingCol(false)} className="text-xs text-alloy-midnight/40 hover:text-alloy-midnight">Cancel</button>
-                        </div>
-                    ) : (
-                        <button type="button" onClick={openAddCol} className="text-xs text-alloy-pine/70 hover:text-alloy-pine flex items-center gap-1 transition-colors">
-                            <span className="text-base leading-none">+</span> Add rate basis
-                        </button>
-                    )}
                 </div>
             )}
         </div>
