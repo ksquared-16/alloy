@@ -32,6 +32,7 @@ import {
     useQueueRowLayoutConfig,
     useQueueRowPublish,
 } from "@/lib/adminV2/settings/surfaces/useQueueRowBuilder";
+import { namedEvidenceGroupsForZone } from "@/lib/adminV2/settings/surfaces/compositionFieldAdapter";
 
 // ── Zone key ─────────────────────────────────────────────────────────────────
 
@@ -90,11 +91,21 @@ const WIDTH_LABELS: Partial<Record<QueueRecordColumnWidth, string>> = {
 
 // ── State types ───────────────────────────────────────────────────────────────
 
+/** Per-field enable toggle within an evidence group. */
+type FieldToggleState = {
+    fieldKey: string;
+    label: string;
+    enabled: boolean;
+};
+
 type EvidenceGroupState = {
     blockId: string;
+    /** Named label from registry (e.g. "Primary Contact") — never abstract. */
     label: string;
     description: string;
     enabled: boolean;
+    /** Per-field toggles inside this evidence group. */
+    fields: FieldToggleState[];
 };
 
 type RowZoneState = {
@@ -151,6 +162,7 @@ function buildCatalog(isWaitlist: boolean): Map<ZoneKey, QueueRecordColumnConfig
 function stateFromConfig(
     config: QueueRecordLayoutConfigV3,
     catalog: Map<ZoneKey, QueueRecordColumnConfig>,
+    isWaitlist = false,
 ): RowZoneState[] {
     const colByWidth = new Map(config.columns.map((c) => [c.width, c]));
 
@@ -175,12 +187,42 @@ function stateFromConfig(
             ? config.fixedControls.actionsMenu
             : Boolean(col);
 
-        const blocks = (col?.blocks ?? catalogCol?.blocks ?? []).map((b, i) => ({
-            blockId: b.id,
-            label: blockLabel(b, i),
-            description: blockDescription(b),
-            enabled: Boolean(col),
-        }));
+        // Named evidence groups from the registry — drives labeled inspector sections
+        const registryGroups = namedEvidenceGroupsForZone(key, isWaitlist);
+
+        const blocks = (col?.blocks ?? catalogCol?.blocks ?? []).map((b, i) => {
+            // Map this block to a registry group (by index order)
+            const registryGroup = registryGroups[i];
+            const activeFieldKeys = new Set(
+                b.type === "field_group" || b.type === "repeated_record_block"
+                    ? b.fields.map((f) => f.fieldKey)
+                    : [],
+            );
+
+            // Seed field toggles: registry default fields as the available set
+            // Fields currently in the config are enabled; registry fields not yet added are disabled
+            const availableFieldKeys = registryGroup?.availableFields.map((f) => f.key) ?? [];
+            const enabledFieldKeys = availableFieldKeys.length > 0
+                ? availableFieldKeys
+                : [...activeFieldKeys];
+
+            const fieldToggles: FieldToggleState[] = enabledFieldKeys.map((fieldKey) => {
+                const registryField = registryGroup?.availableFields.find((f) => f.key === fieldKey);
+                return {
+                    fieldKey,
+                    label: registryField?.label ?? fieldKey.replace(/[._]/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()),
+                    enabled: activeFieldKeys.has(fieldKey),
+                };
+            });
+
+            return {
+                blockId: b.id,
+                label: registryGroup?.label ?? blockLabel(b, i),
+                description: registryGroup?.purpose ?? blockDescription(b),
+                enabled: Boolean(col),
+                fields: fieldToggles,
+            };
+        });
 
         return {
             key,
@@ -206,7 +248,22 @@ function buildConfigFromState(
             if (!catalogCol) return [];
 
             const enabledIds = new Set(z.evidenceGroups.filter((g) => g.enabled).map((g) => g.blockId));
-            const filteredBlocks = catalogCol.blocks.filter((b) => enabledIds.has(b.id));
+            const groupStateById = new Map(z.evidenceGroups.map((g) => [g.blockId, g]));
+            const filteredBlocks = catalogCol.blocks
+                .filter((b) => enabledIds.has(b.id))
+                .map((b) => {
+                    // Apply field-level toggles for field_group and repeated_record_block types
+                    if (b.type !== "field_group" && b.type !== "repeated_record_block") return b;
+                    const groupState = groupStateById.get(b.id);
+                    if (!groupState || groupState.fields.length === 0) return b;
+                    const enabledKeys = new Set(
+                        groupState.fields.filter((f) => f.enabled).map((f) => f.fieldKey),
+                    );
+                    const filteredFields = b.fields.filter((f) => enabledKeys.has(f.fieldKey));
+                    // Safety floor: always keep at least 1 field per block
+                    const finalFields = filteredFields.length > 0 ? filteredFields : b.fields.slice(0, 1);
+                    return { ...b, fields: finalFields };
+                });
             const blocks = filteredBlocks.length > 0 ? filteredBlocks : catalogCol.blocks.slice(0, 1);
 
             const col: QueueRecordColumnConfig = { ...catalogCol, width: z.width, blocks };
@@ -479,6 +536,7 @@ function BlockInspector({
     onClose,
     onSetWidth,
     onToggleGroup,
+    onToggleField,
     onSetCondition,
     onClearCondition,
     onTogglePlacementOverride,
@@ -489,6 +547,7 @@ function BlockInspector({
     onClose: () => void;
     onSetWidth: (w: QueueRecordColumnWidth) => void;
     onToggleGroup: (blockId: string) => void;
+    onToggleField: (blockId: string, fieldKey: string) => void;
     onSetCondition: (c: LayoutCondition) => void;
     onClearCondition: () => void;
     onTogglePlacementOverride: () => void;
@@ -549,44 +608,78 @@ function BlockInspector({
                     </div>
                 )}
 
-                {/* Evidence groups */}
+                {/* Evidence groups — named sections with per-field toggles */}
                 {!isActions && zone.evidenceGroups.length > 0 && (
                     <div>
                         <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-alloy-midnight/35">
                             Evidence groups
                         </p>
-                        <div className="space-y-1">
+                        <div className="space-y-2">
                             {zone.evidenceGroups.map((group) => (
                                 <div
                                     key={group.blockId}
-                                    className="flex items-center gap-2.5 rounded-lg bg-alloy-stone/4 px-2.5 py-1.5"
+                                    className="overflow-hidden rounded-lg border border-alloy-stone/12 bg-alloy-stone/3"
                                     data-inspector-group={group.blockId}
                                 >
-                                    <button
-                                        type="button"
-                                        role="switch"
-                                        aria-checked={group.enabled}
-                                        onClick={() => onToggleGroup(group.blockId)}
-                                        className={`relative h-3.5 w-6 flex-shrink-0 rounded-full transition-colors ${
-                                            group.enabled ? "bg-alloy-pine" : "bg-alloy-stone/30"
-                                        }`}
-                                        data-inspector-group-toggle={group.blockId}
-                                    >
-                                        <span
-                                            className={`absolute top-0.5 h-2.5 w-2.5 rounded-full bg-white shadow-sm transition-transform ${
-                                                group.enabled ? "translate-x-2.5" : "translate-x-0.5"
+                                    {/* Group header row */}
+                                    <div className="flex items-center gap-2.5 px-2.5 py-1.5">
+                                        <button
+                                            type="button"
+                                            role="switch"
+                                            aria-checked={group.enabled}
+                                            onClick={() => onToggleGroup(group.blockId)}
+                                            className={`relative h-3.5 w-6 flex-shrink-0 rounded-full transition-colors ${
+                                                group.enabled ? "bg-alloy-pine" : "bg-alloy-stone/30"
                                             }`}
-                                        />
-                                    </button>
-                                    <div className="min-w-0 flex-1">
-                                        <p className="truncate text-[11px] font-medium text-alloy-midnight">{group.label}</p>
-                                        {group.description && (
-                                            <p className="truncate text-[10px] text-alloy-midnight/40">{group.description}</p>
-                                        )}
+                                            data-inspector-group-toggle={group.blockId}
+                                        >
+                                            <span
+                                                className={`absolute top-0.5 h-2.5 w-2.5 rounded-full bg-white shadow-sm transition-transform ${
+                                                    group.enabled ? "translate-x-2.5" : "translate-x-0.5"
+                                                }`}
+                                            />
+                                        </button>
+                                        <div className="min-w-0 flex-1">
+                                            <p className="truncate text-[11px] font-semibold text-alloy-midnight">{group.label}</p>
+                                            {group.description && !group.enabled && (
+                                                <p className="truncate text-[10px] text-alloy-midnight/40">{group.description}</p>
+                                            )}
+                                        </div>
+                                        <span className={`text-[10px] font-medium ${group.enabled ? "text-alloy-juniper" : "text-alloy-midnight/30"}`}>
+                                            {group.enabled ? "On" : "Off"}
+                                        </span>
                                     </div>
-                                    <span className={`text-[10px] font-medium ${group.enabled ? "text-alloy-juniper" : "text-alloy-midnight/30"}`}>
-                                        {group.enabled ? "On" : "Off"}
-                                    </span>
+
+                                    {/* Per-field toggles — only visible when group is enabled */}
+                                    {group.enabled && group.fields.length > 0 && (
+                                        <div className="divide-y divide-alloy-stone/8 border-t border-alloy-stone/10 bg-white">
+                                            {group.fields.map((field) => (
+                                                <div
+                                                    key={field.fieldKey}
+                                                    className="flex items-center gap-2 px-3 py-1.5"
+                                                    data-inspector-field={field.fieldKey}
+                                                >
+                                                    <input
+                                                        type="checkbox"
+                                                        id={`field-${group.blockId}-${field.fieldKey}`}
+                                                        checked={field.enabled}
+                                                        onChange={() => onToggleField(group.blockId, field.fieldKey)}
+                                                        className="h-3 w-3 rounded border-alloy-stone/30 text-alloy-pine focus:ring-alloy-pine/30"
+                                                        data-inspector-field-toggle={field.fieldKey}
+                                                    />
+                                                    <label
+                                                        htmlFor={`field-${group.blockId}-${field.fieldKey}`}
+                                                        className="flex-1 cursor-pointer truncate text-[11px] text-alloy-midnight/75"
+                                                    >
+                                                        {field.label}
+                                                    </label>
+                                                    <span className="text-[9px] font-mono text-alloy-midnight/25">
+                                                        {field.fieldKey.split(".")[1] ?? field.fieldKey}
+                                                    </span>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
                                 </div>
                             ))}
                         </div>
@@ -716,7 +809,7 @@ export default function QueueRowBuilderV2({ surfaceId = "pipeline-queue-row" }: 
     const defaultConfig = isWaitlist ? defaultWaitlistQueueLayoutV3() : defaultLeadQueueLayoutV3();
 
     const [zones, setZones] = useState<RowZoneState[]>(() =>
-        stateFromConfig(defaultConfig, catalog.current),
+        stateFromConfig(defaultConfig, catalog.current, isWaitlist),
     );
     const [placementOverrideEnabled, setPlacementOverrideEnabled] = useState(false);
     const [dirty, setDirty] = useState(false);
@@ -730,7 +823,7 @@ export default function QueueRowBuilderV2({ surfaceId = "pipeline-queue-row" }: 
     // Init from server data
     useEffect(() => {
         if (!serverData) return;
-        setZones(stateFromConfig(serverData.config, catalog.current));
+        setZones(stateFromConfig(serverData.config, catalog.current, isWaitlist));
         setPlacementOverrideEnabled(serverData.placementOverrideEnabled);
         setDirty(false);
     }, [serverData]);
@@ -821,6 +914,24 @@ export default function QueueRowBuilderV2({ surfaceId = "pipeline-queue-row" }: 
         );
     }, []);
 
+    const toggleField = useCallback((key: ZoneKey, blockId: string, fieldKey: string) => {
+        mark((prev) =>
+            prev.map((z) =>
+                z.key !== key ? z : {
+                    ...z,
+                    evidenceGroups: z.evidenceGroups.map((g) =>
+                        g.blockId !== blockId ? g : {
+                            ...g,
+                            fields: g.fields.map((f) =>
+                                f.fieldKey !== fieldKey ? f : { ...f, enabled: !f.enabled },
+                            ),
+                        },
+                    ),
+                },
+            ),
+        );
+    }, []);
+
     const setCondition = useCallback((key: ZoneKey, condition: LayoutCondition) => {
         mark((prev) => prev.map((z) => (z.key === key ? { ...z, visibleWhen: condition } : z)));
     }, []);
@@ -903,6 +1014,7 @@ export default function QueueRowBuilderV2({ surfaceId = "pipeline-queue-row" }: 
                             onClose={() => setSelectedKey(null)}
                             onSetWidth={(w) => setWidth(selectedZone.key, w)}
                             onToggleGroup={(blockId) => toggleGroup(selectedZone.key, blockId)}
+                            onToggleField={(blockId, fieldKey) => toggleField(selectedZone.key, blockId, fieldKey)}
                             onSetCondition={(c) => setCondition(selectedZone.key, c)}
                             onClearCondition={() => clearCondition(selectedZone.key)}
                             onTogglePlacementOverride={togglePlacementOverride}
