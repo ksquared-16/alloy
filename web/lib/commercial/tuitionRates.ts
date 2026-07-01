@@ -10,6 +10,8 @@
  * Commercial owns rates. Programs owns offerings and variants.
  */
 
+export type TuitionBillingPeriod = "monthly" | "weekly" | "biweekly" | "annual";
+
 export type TuitionRateRow = {
     id: string;
     org_id: string;
