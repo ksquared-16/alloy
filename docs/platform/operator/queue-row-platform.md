@@ -1,6 +1,6 @@
 # Queue Row Platform
 
-> **Status**: V1 — Foundation complete. Builder wired. Placement signal projected. Grain model applied (Sprint 4).
+> **Status**: V1 — Builder persistence wired. Zone toggle + evidence group toggle → publish → runtime reads config. Placement signal projected. Grain model applied. Surface Library grain labels added.
 
 The Queue Row Platform mirrors the Focus Panel architecture for operational queue surfaces.
 The same doctrines apply: queue row widgets observe a `QueueRowOperationalContext` boundary;
@@ -163,12 +163,47 @@ Input: `{ candidateId, opportunityId, customerMemberId, candidateLabel, record, 
 Operators configure queue row surfaces at `/settings/surfaces → Queue Rows`.
 
 The builder exposes:
-- **Column zones**: household, children, status, attention, date/event, actions
+- **Column zones**: household, children, status, attention, date/event, actions — each independently on/off
+- **Evidence groups** (within each enabled zone): the blocks that compose the column — field groups,
+  repeating record blocks, widgets. Each block is individually toggleable. If all blocks in a zone are
+  disabled, one block is kept as a safety floor so the column always renders something.
 - **Placement override affordance** (waitlist rows only): toggles an inline override
   control on each row; operators with placement write permission set a manual tier
 
-Builder is wired to the existing `QueueRecordLayoutConfigV3` schema. Persistence to
-the LayoutDoc is Phase D2.
+### Persistence
+
+Builder persistence is wired as of V1 hardening:
+
+```
+Operator toggles zones → clicks Publish
+  → POST /api/admin/queue-row-layout/[surfaceId]
+      body: { config: QueueRecordLayoutConfigV3, placementOverrideEnabled? }
+      → creates draft LayoutDoc with metadata.queue_record_layout = config
+      → immediately publishes draft (atomic, no separate publish step)
+      → returns published EntityLayoutRecord
+
+Runtime (LayoutRuntimeQueueRowView):
+  resolveQueueRecordLayoutConfig(doc)
+    → reads doc.metadata.queue_record_layout
+    → falls back to defaultLeadQueueLayoutV3() / defaultWaitlistQueueLayoutV3()
+```
+
+**Zone → column width mapping** (how zone toggles control column visibility):
+
+| Zone | Column width | Effect when disabled |
+|---|---|---|
+| `household` | `identity` | Removes primary contact / household name column |
+| `children` | `children` | Removes children / candidate list column |
+| `status` | `status_band` | Removes lifecycle status chip column |
+| `attention` | `next_step` | Removes attention signal + next-step column |
+| `date_event` | `date_event` | Removes scheduled date column |
+| `actions` | — | Sets `fixedControls.actionsMenu = false` |
+
+**Placement override** (waitlist only): stored in `doc.metadata.queue_context.placement_override_enabled`.
+Not in `fixedControls` — no schema change to `QueueRecordFixedControls` required.
+
+**Feature flag**: `POST` requires `isLayoutV2ConfigEnabledServer()`. `GET` falls back to
+built-in defaults when flag is off.
 
 ---
 
@@ -176,17 +211,22 @@ the LayoutDoc is Phase D2.
 
 Both queue row surfaces appear in the Surface Library with `status: "published"`:
 
-| Surface | ID | Grain | Editor |
-|---|---|---|---|
-| Pipeline Queue Row | `pipeline-queue-row` | `"case"` | `queue-row-builder` |
-| Waitlist Queue Row | `waitlist-queue-row` | `"candidate"` | `queue-row-builder` |
+| Surface | ID | Grain | Entity type | Editor |
+|---|---|---|---|---|
+| Pipeline Queue Row | `pipeline-queue-row` | `"case"` | `opportunities` | `queue-row-builder` |
+| Waitlist Queue Row | `waitlist-queue-row` | `"candidate"` | `placement_candidate` | `queue-row-builder` |
 
 ---
 
-## Phase D2 Roadmap
+## V1 Scope
 
-- Wire builder save to LayoutDoc persistence (same path as Focus Panel Summary editor)
-- Evidence builders per zone (household widget, children widget, status widget)
-- `QueueRowWidget` components consuming `QueueRowOperationalContext`
-- Placement override write path (connects to existing `applyPlacementCandidateOverrides`)
-- Enrollment Offers queue row (child-grain, uses `buildChildGrainQueueRowOperationalContext`)
+| Done | Deferred |
+|---|---|
+| Zone visibility toggle (enable/disable columns) | Per-zone field picker (add/remove fields within a column) |
+| Evidence group toggles (block-level visibility within zones) | Zone reordering (drag or up/down) |
+| Placement override affordance toggle (waitlist) | Advanced block configuration (widgets, inline display) |
+| Publish to `entity_layouts` (create + publish draft) | Enrollment Offers queue row (child-grain) |
+| Runtime reads published config | Placement override write path to `applyPlacementCandidateOverrides` |
+| `GET` loads current published config on open | |
+| Fallback to built-in defaults when no published layout exists | |
+| Surface Library grain + entity type labels | |

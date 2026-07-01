@@ -38,6 +38,10 @@ export type SurfaceConfigObject = {
     liveHref?: string;
     /** Primary configuration target (the real metric/placement builder) when one exists. */
     configureHref?: string;
+    /** Operational grain — displayed as a label on queue row items in the Surface Library. */
+    grain?: "case" | "child" | "candidate";
+    /** Entity type stored in entity_layouts — displayed alongside grain for queue rows. */
+    entityType?: string;
 };
 
 /** Dev-only preview of the Analytics / Dashboard surface composition + Metric Card language. */
@@ -66,12 +70,16 @@ export const SURFACE_OBJECTS: Record<SurfaceConfigSectionKey, SurfaceConfigObjec
             title: "Pipeline Queue Row",
             subtitle: "Opportunity pipeline work-unit row",
             editor: "queue-row-builder",
+            grain: "case",
+            entityType: "opportunities",
         },
         {
             id: "waitlist-queue-row",
             title: "Waitlist Queue Row",
             subtitle: "Placement candidate waitlist row",
             editor: "queue-row-builder",
+            grain: "candidate",
+            entityType: "placement_candidate",
         },
     ],
     workspaces: [],
