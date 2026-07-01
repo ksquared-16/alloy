@@ -161,6 +161,7 @@ html[data-alloy-os-runtime="on"]
   flex-wrap: wrap;
   gap: 8px;
   min-height: 0;
+  background: var(--alloy-os-canvas, #f6f8fc);
 }
 
 /* Inline KPI strip — integrated chips, not floating tiles (V1 legacy, retained for CSS completeness) */
