@@ -152,62 +152,63 @@ function GridCell({ variant, cadence, rateRow, orgDefaultRow, locationId, onSave
 
     if (editing) {
         return (
-            <td className="px-2 py-2 align-top" style={{ minWidth: 148 }}>
-                <div className="space-y-1.5">
-                    {/* Price row — compact, feels like a spreadsheet cell */}
-                    <div className="flex items-center gap-1">
-                        <span className="text-xs text-alloy-midnight/35 select-none">$</span>
-                        <input
-                            ref={inputRef}
-                            value={draft}
-                            onChange={(e) => setDraft(e.target.value)}
-                            onKeyDown={(e) => { if (e.key === "Enter") void commitEdit(); if (e.key === "Escape") { setEditing(false); setShowDates(false); } }}
-                            className="w-20 rounded border border-alloy-pine/45 px-1.5 py-0.5 text-sm text-right focus:outline-none focus:border-alloy-pine"
-                            placeholder="0.00"
-                        />
-                        <button type="button" onClick={() => void commitEdit()} disabled={saving} className="text-xs font-semibold text-alloy-pine hover:text-alloy-pine/70 disabled:opacity-40 px-0.5">✓</button>
-                        <button type="button" onClick={() => { setEditing(false); setShowDates(false); }} className="text-[11px] text-alloy-midnight/30 hover:text-alloy-midnight/60 px-0.5">✕</button>
-                    </div>
-
-                    {/* Effective dates — collapsed by default, revealed by toggle */}
-                    {!showDates ? (
-                        <button
-                            type="button"
-                            onClick={() => setShowDates(true)}
-                            className="text-[10px] text-alloy-midnight/30 hover:text-alloy-midnight/55 transition-colors"
-                        >
-                            + Effective dates
-                        </button>
-                    ) : (
-                        <div className="space-y-1 pt-0.5 border-t border-alloy-stone/15">
-                            <p className="text-[9px] text-alloy-midnight/35 leading-relaxed">Leave blank if rate applies now with no end date.</p>
-                            <label className="block">
-                                <span className="text-[9px] font-medium text-alloy-midnight/45 uppercase tracking-wide">Effective from</span>
-                                <input
-                                    type="date"
-                                    value={effectiveStart}
-                                    onChange={(e) => setEffectiveStart(e.target.value)}
-                                    className="mt-0.5 w-full rounded border border-alloy-stone/25 px-1 py-0.5 text-[11px] text-alloy-midnight/70 focus:outline-none"
-                                />
-                            </label>
-                            <label className="block">
-                                <span className="text-[9px] font-medium text-alloy-midnight/45 uppercase tracking-wide">Ends on <span className="font-normal normal-case">(optional)</span></span>
-                                <input
-                                    type="date"
-                                    value={effectiveEnd}
-                                    onChange={(e) => setEffectiveEnd(e.target.value)}
-                                    className="mt-0.5 w-full rounded border border-alloy-stone/25 px-1 py-0.5 text-[11px] text-alloy-midnight/70 focus:outline-none"
-                                />
-                            </label>
-                        </div>
-                    )}
+            // Identical padding/sizing to read mode — grid stays locked
+            <td className="px-3 py-2.5 text-right text-sm relative whitespace-nowrap" style={{ minWidth: 120 }}>
+                {/* Price row — right-aligned to match read mode */}
+                <div className="flex items-center justify-end gap-1">
+                    <span className="text-xs text-alloy-midnight/35 select-none">$</span>
+                    <input
+                        ref={inputRef}
+                        value={draft}
+                        onChange={(e) => setDraft(e.target.value)}
+                        onKeyDown={(e) => { if (e.key === "Enter") void commitEdit(); if (e.key === "Escape") { setEditing(false); setShowDates(false); } }}
+                        className="w-16 rounded border border-alloy-pine/45 px-1 py-0 text-sm text-right leading-5 focus:outline-none focus:border-alloy-pine bg-white"
+                        placeholder="0.00"
+                    />
+                    <button type="button" onClick={() => void commitEdit()} disabled={saving} className="text-xs font-semibold text-alloy-pine hover:text-alloy-pine/70 disabled:opacity-40 leading-none">✓</button>
+                    <button type="button" onClick={() => { setEditing(false); setShowDates(false); }} className="text-[11px] text-alloy-midnight/30 hover:text-alloy-midnight/60 leading-none">✕</button>
                 </div>
+
+                {/* Effective dates — absolutely positioned below cell, never affects row height */}
+                {!showDates ? (
+                    <button
+                        type="button"
+                        onClick={() => setShowDates(true)}
+                        className="absolute right-3 top-full mt-0.5 text-[10px] text-alloy-midnight/30 hover:text-alloy-midnight/55 transition-colors z-10 whitespace-nowrap"
+                    >
+                        + dates
+                    </button>
+                ) : (
+                    <div className="absolute right-0 top-full mt-0.5 z-20 w-48 rounded border border-alloy-stone/20 bg-white shadow-sm p-2 space-y-1.5 text-left">
+                        <p className="text-[9px] text-alloy-midnight/35">Leave blank if rate applies now.</p>
+                        <label className="block">
+                            <span className="text-[9px] font-medium text-alloy-midnight/45 uppercase tracking-wide">Effective from</span>
+                            <input
+                                type="date"
+                                value={effectiveStart}
+                                onChange={(e) => setEffectiveStart(e.target.value)}
+                                className="mt-0.5 w-full rounded border border-alloy-stone/25 px-1 py-0.5 text-[11px] text-alloy-midnight/70 focus:outline-none"
+                            />
+                        </label>
+                        <label className="block">
+                            <span className="text-[9px] font-medium text-alloy-midnight/45 uppercase tracking-wide">Ends on <span className="font-normal normal-case">(optional)</span></span>
+                            <input
+                                type="date"
+                                value={effectiveEnd}
+                                onChange={(e) => setEffectiveEnd(e.target.value)}
+                                className="mt-0.5 w-full rounded border border-alloy-stone/25 px-1 py-0.5 text-[11px] text-alloy-midnight/70 focus:outline-none"
+                            />
+                        </label>
+                        <button type="button" onClick={() => setShowDates(false)} className="text-[9px] text-alloy-midnight/30 hover:text-alloy-midnight/55">✕ close</button>
+                    </div>
+                )}
             </td>
         );
     }
 
     return (
         <td
+            style={{ minWidth: 120 }}
             className={[
                 "px-3 py-2.5 text-right text-sm group/cell select-none whitespace-nowrap",
                 saving ? "opacity-50" : "",
@@ -297,9 +298,9 @@ function OfferingRateGrid({ offering, variants, cadences, rateMap, orgOnlyMap, l
     }
 
     return (
-        <div className="border border-alloy-stone/20 rounded-lg overflow-hidden">
+        <div className="border border-alloy-stone/20 rounded-lg overflow-visible">
             {/* Header: offering name + "Add rate basis" on the right */}
-            <div className="flex items-center justify-between gap-3 px-4 py-2.5 bg-alloy-stone/5 border-b border-alloy-stone/15">
+            <div className="flex items-center justify-between gap-3 px-4 py-2.5 bg-alloy-stone/5 border-b border-alloy-stone/15 rounded-t-lg">
                 <span className="text-sm font-medium text-alloy-midnight">{offering.label}</span>
                 <div className="shrink-0">
                     {sorted.length > 0 && availableCadences.length > 0 && (
@@ -328,7 +329,7 @@ function OfferingRateGrid({ offering, variants, cadences, rateMap, orgOnlyMap, l
             ) : activeCadences.length === 0 ? (
                 <p className="px-4 py-3 text-xs text-alloy-midnight/35">No rate bases yet — use "+ Add rate basis" above to start.</p>
             ) : (
-                <div className="overflow-x-auto">
+                <div className="overflow-x-auto overflow-y-visible">
                     <table className="w-full text-sm">
                         <thead>
                             <tr className="border-b border-alloy-stone/10">
