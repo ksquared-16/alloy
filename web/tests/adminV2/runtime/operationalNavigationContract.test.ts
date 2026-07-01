@@ -194,3 +194,44 @@ describe("Reduced-motion: opacity crossfade only, no per-component override", ()
         expect(css).toContain("prefers-reduced-motion");
     });
 });
+
+// ---------------------------------------------------------------------------
+// Skeleton chip pre-seeding — WU page cache written from workspace bootstrap
+// ---------------------------------------------------------------------------
+
+describe("Skeleton chips: workspace bootstrap pre-seeds WU page cache", () => {
+    it("writeWorkUnitPageCache is imported and called in the dept bootstrap resolution path", () => {
+        const src = read("app/adminV2/workspace/dept/[departmentId]/page.tsx");
+        // Must import writeWorkUnitPageCache from the session cache module
+        expect(src).toContain("writeWorkUnitPageCache");
+        // Must call it inside the dept bootstrap resolution block
+        expect(src).toContain("writeWorkUnitPageCache(orgId, principalUserId, accessScopeFingerprint");
+    });
+
+    it("pre-seeding passes queue_definition from raw bootstrap work units", () => {
+        const src = read("app/adminV2/workspace/dept/[departmentId]/page.tsx");
+        // queue_definition must be forwarded to the cache entry
+        const seedBlock = src.slice(
+            src.indexOf("writeWorkUnitPageCache(orgId"),
+            src.indexOf("writeWorkUnitPageCache(orgId") + 600
+        );
+        expect(seedBlock).toContain("queue_definition: wu.queue_definition");
+    });
+
+    it("pre-seeding skips work units with no queue_definition — no empty cache writes", () => {
+        const src = read("app/adminV2/workspace/dept/[departmentId]/page.tsx");
+        // Must guard: skip if queue_definition is absent
+        const seedBlock = src.slice(
+            src.indexOf("writeWorkUnitPageCache(orgId") - 300,
+            src.indexOf("writeWorkUnitPageCache(orgId") + 200
+        );
+        expect(seedBlock).toContain("!wu.queue_definition");
+    });
+
+    it("CachedWorkUnitPage type accepts queue_definition — cache shape is compatible", () => {
+        const cacheLib = read("lib/workspace/adminV2WorkspaceSessionCache.ts");
+        // The CachedWorkUnitPage workUnit shape must include queue_definition
+        expect(cacheLib).toContain("queue_definition");
+        expect(cacheLib).toContain("writeWorkUnitPageCache");
+    });
+});

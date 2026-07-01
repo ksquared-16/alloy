@@ -61,6 +61,7 @@ import {
     perfDeptLoad,
     readDepartmentPageCache,
     writeDepartmentPageCache,
+    writeWorkUnitPageCache,
 } from "@/lib/workspace/adminV2WorkspaceSessionCache";
 import { AutomationWorkflowsBlock } from "@/app/adminV2/components/workspace/blocks/AutomationWorkflowsBlock";
 import {
@@ -1027,6 +1028,35 @@ export default function AdminV2WorkspaceDepartmentPage() {
                         if (deptCommit) {
                             setDept(deptCommit);
                             setDeptError(null);
+                            // Pre-seed WU page cache so skeleton chips appear from first render on soft nav.
+                            // The WU page reads this cache on mount before its own bootstrap resolves,
+                            // providing queueDef → queueUi → skeleton queue chips immediately.
+                            if (orgId) {
+                                const rawWus = (b.work_units ?? []) as Array<{
+                                    id?: unknown;
+                                    name?: unknown;
+                                    key?: unknown;
+                                    department_id?: unknown;
+                                    queue_definition?: unknown;
+                                    metadata?: unknown;
+                                }>;
+                                for (const wu of rawWus) {
+                                    const wuId = wu.id != null ? String(wu.id) : null;
+                                    if (!wuId || !wu.queue_definition) continue;
+                                    writeWorkUnitPageCache(orgId, principalUserId, accessScopeFingerprint, {
+                                        departmentId,
+                                        dept: deptCommit,
+                                        workUnit: {
+                                            id: wuId,
+                                            name: wu.name != null ? String(wu.name) : null,
+                                            key: wu.key != null ? String(wu.key) : null,
+                                            department_id: String(wu.department_id ?? departmentId),
+                                            queue_definition: wu.queue_definition,
+                                            metadata: wu.metadata,
+                                        },
+                                    });
+                                }
+                            }
                         } else {
                             setDept(null);
                             setDeptError("Department not found");
