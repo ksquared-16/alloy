@@ -7,9 +7,6 @@ import OwnershipBadge from "@/components/configRuntime/OwnershipBadge";
 import type { ConfigScope } from "@/lib/configRuntime/scope";
 import {
     type TuitionRateRow,
-    type TuitionBillingPeriod,
-    TUITION_BILLING_PERIODS,
-    DEFAULT_BILLING_PERIOD,
     formatRateCents,
     parseDollarsToCents,
     tuitionRateCellKey,
@@ -17,33 +14,28 @@ import {
     buildLocationOnlyRateMap,
     computeTuitionReadiness,
 } from "@/lib/commercial/tuitionRates";
-
-// ─── Types ───────────────────────────────────────────────────────────────────
-
-type ScheduleOption = { key: string; label: string };
-type ProgramOption = { key: string; label: string };
+import type { BillingCadence } from "@/lib/commercial/billingCadences";
+import type { ProgramOffering } from "@/lib/programs/programOfferings";
 
 // ─── TuitionCell ─────────────────────────────────────────────────────────────
 
 type CellProps = {
-    programKey: string;
-    scheduleKey: string;
-    billingPeriod: TuitionBillingPeriod;
+    offeringId: string;
+    cadenceKey: string;
     rateRow: TuitionRateRow | undefined;
     orgDefaultRow: TuitionRateRow | undefined;
     locationId: string | null;
     onSave: (
-        programKey: string,
-        scheduleKey: string,
+        offeringId: string,
+        cadenceKey: string,
         payload: { rate_cents?: number; not_offered?: boolean },
     ) => Promise<void>;
     onClear: (rateId: string) => Promise<void>;
 };
 
 function TuitionCell({
-    programKey,
-    scheduleKey,
-    billingPeriod,
+    offeringId,
+    cadenceKey,
     rateRow,
     orgDefaultRow,
     locationId,
@@ -73,14 +65,14 @@ function TuitionCell({
         const cents = parseDollarsToCents(draft);
         if (cents === null) { setEditing(false); return; }
         setSaving(true);
-        await onSave(programKey, scheduleKey, { rate_cents: cents });
+        await onSave(offeringId, cadenceKey, { rate_cents: cents });
         setSaving(false);
         setEditing(false);
     }
 
     async function toggleNotOffered() {
         setSaving(true);
-        await onSave(programKey, scheduleKey, { not_offered: !isNotOffered });
+        await onSave(offeringId, cadenceKey, { not_offered: !isNotOffered });
         setSaving(false);
     }
 
@@ -214,16 +206,6 @@ function CompareCell({ orgRow, locRow, locationLabel }: CompareCellProps) {
     );
 }
 
-// ─── Fallback schedules ───────────────────────────────────────────────────────
-
-const FALLBACK_SCHEDULES: ScheduleOption[] = [
-    { key: "full_time", label: "Full Time" },
-    { key: "part_time", label: "Part Time" },
-    { key: "drop_in", label: "Drop-In" },
-    { key: "before_school", label: "Before School" },
-    { key: "after_school", label: "After School" },
-];
-
 // ─── Main workspace ───────────────────────────────────────────────────────────
 
 type WorkspaceMode = "edit" | "compare";
@@ -232,10 +214,9 @@ export function TuitionGridWorkspace() {
     const [locations, setLocations] = useState<ScopedLocation[]>([]);
     const [scope, setScope] = useState<ConfigScope | null>(null);
 
-    const [programs, setPrograms] = useState<ProgramOption[]>([]);
-    const [schedules, setSchedules] = useState<ScheduleOption[]>(FALLBACK_SCHEDULES);
+    const [offerings, setOfferings] = useState<ProgramOffering[]>([]);
+    const [cadences, setCadences] = useState<BillingCadence[]>([]);
 
-    const [billingPeriod, setBillingPeriod] = useState<TuitionBillingPeriod>(DEFAULT_BILLING_PERIOD);
     const [rates, setRates] = useState<TuitionRateRow[]>([]);
     const [allRates, setAllRates] = useState<TuitionRateRow[]>([]);
 
@@ -253,14 +234,14 @@ export function TuitionGridWorkspace() {
         async function boot() {
             setLoading(true);
             try {
-                const [locRes, schedRes] = await Promise.all([
+                const [locRes, offeringRes, cadenceRes] = await Promise.all([
                     fetch("/api/admin/locations"),
-                    fetch("/api/admin/option-sets/childcare_schedule_type"),
+                    fetch("/api/admin/programs/offerings?active_only=true"),
+                    fetch("/api/admin/commercial/billing-cadences"),
                 ]);
 
                 const locJson = await locRes.json();
                 const rawLocs: Record<string, unknown>[] = locJson.locations ?? [];
-                // org_id is on every location row (select *); fall back to "org" sentinel
                 const oid: string = String(rawLocs[0]?.org_id ?? "org");
                 setScope({ kind: "org", orgId: oid });
 
@@ -270,15 +251,14 @@ export function TuitionGridWorkspace() {
                 }));
                 setLocations(locs);
 
-                if (schedRes.ok) {
-                    const schedJson = await schedRes.json();
-                    const items: ScheduleOption[] = (schedJson.items ?? []).map(
-                        (v: Record<string, unknown>) => ({
-                            key: String(v.value ?? v.key ?? ""),
-                            label: String(v.label ?? v.value ?? ""),
-                        }),
-                    );
-                    if (items.length > 0) setSchedules(items);
+                if (offeringRes.ok) {
+                    const j = await offeringRes.json();
+                    setOfferings(j.offerings ?? []);
+                }
+
+                if (cadenceRes.ok) {
+                    const j = await cadenceRes.json();
+                    setCadences(j.cadences ?? []);
                 }
             } catch (e) {
                 setError(String(e));
@@ -289,27 +269,6 @@ export function TuitionGridWorkspace() {
         void boot();
     }, []);
 
-    // ── Programs ──────────────────────────────────────────────────────────────
-
-    useEffect(() => {
-        async function loadPrograms() {
-            try {
-                const res = await fetch("/api/admin/location-program-categories");
-                const json = await res.json();
-                const cats: ProgramOption[] = (json.categories ?? []).map(
-                    (c: Record<string, unknown>) => ({
-                        key: String(c.key ?? c.id ?? ""),
-                        label: String(c.label ?? c.name ?? ""),
-                    }),
-                );
-                setPrograms(cats);
-            } catch {
-                // silent — grid shows empty
-            }
-        }
-        void loadPrograms();
-    }, []);
-
     // ── Rates ──────────────────────────────────────────────────────────────────
 
     const loadRates = useCallback(async () => {
@@ -317,21 +276,19 @@ export function TuitionGridWorkspace() {
         setLoading(true);
         try {
             const locationId = scope.kind === "location" ? scope.locationId : null;
-            const params = new URLSearchParams({ billing_period: billingPeriod });
+            const params = new URLSearchParams();
             if (locationId) params.set("location_id", locationId);
             const res = await fetch(`/api/admin/commercial/tuition-rates?${params}`);
             const json = await res.json();
             setRates(json.rates ?? []);
 
-            const allParams = new URLSearchParams();
-            if (locationId) allParams.set("location_id", locationId);
-            const allRes = await fetch(`/api/admin/commercial/tuition-rates?${allParams}`);
+            const allRes = await fetch(`/api/admin/commercial/tuition-rates`);
             const allJson = await allRes.json();
             setAllRates(allJson.rates ?? []);
         } finally {
             setLoading(false);
         }
-    }, [scope, billingPeriod]);
+    }, [scope]);
 
     useEffect(() => { void loadRates(); }, [loadRates]);
 
@@ -342,9 +299,8 @@ export function TuitionGridWorkspace() {
     const orgOnlyMap = buildTuitionRateMap(rates, null);
 
     const readiness = computeTuitionReadiness(
-        programs.map((p) => p.key),
-        schedules.map((s) => s.key),
-        billingPeriod,
+        offerings.map((o) => o.id),
+        cadences.map((c) => c.item_key),
         allRates,
     );
 
@@ -356,16 +312,16 @@ export function TuitionGridWorkspace() {
     // ── Save helpers ──────────────────────────────────────────────────────────
 
     async function saveCell(
-        programKey: string,
-        scheduleKey: string,
+        offeringId: string,
+        cadenceKey: string,
         payload: { rate_cents?: number; not_offered?: boolean },
     ) {
         setSaving(true);
         try {
             const body = {
-                program_key: programKey,
-                schedule_key: scheduleKey,
-                billing_period: billingPeriod,
+                offering_id: offeringId,
+                cadence_key: cadenceKey,
+                payer_type: "private_pay",
                 location_id: locationId,
                 ...payload,
             };
@@ -408,9 +364,9 @@ export function TuitionGridWorkspace() {
                         method: "POST",
                         headers: { "Content-Type": "application/json" },
                         body: JSON.stringify({
-                            program_key: r.program_key,
-                            schedule_key: r.schedule_key,
-                            billing_period: r.billing_period,
+                            offering_id: r.offering_id,
+                            cadence_key: r.cadence_key,
+                            payer_type: r.payer_type,
                             location_id: locationId,
                             rate_cents: r.rate_cents,
                             not_offered: r.not_offered,
@@ -449,7 +405,7 @@ export function TuitionGridWorkspace() {
                 <div>
                     <h1 className="text-xl font-semibold text-gray-900">Tuition Grid</h1>
                     <p className="text-sm text-gray-500 mt-0.5">
-                        Program × schedule rates, by billing period. Org defaults inherit to all sites.
+                        Offering × billing cadence rates. Org defaults inherit to all sites.
                     </p>
                 </div>
                 <div className="flex rounded-md border border-gray-200 overflow-hidden text-sm flex-shrink-0">
@@ -479,7 +435,7 @@ export function TuitionGridWorkspace() {
                 </div>
             )}
 
-            {programs.length > 0 && (
+            {offerings.length > 0 && (
                 <ConfigReadinessCard readiness={readiness} scopeLabel="Org Default" />
             )}
 
@@ -491,25 +447,6 @@ export function TuitionGridWorkspace() {
                         onChange={setScope}
                         loading={loading}
                     />
-
-                    {/* Billing period tabs */}
-                    <div className="flex gap-0 border-b border-gray-200">
-                        {TUITION_BILLING_PERIODS.map((bp) => (
-                            <button
-                                key={bp.key}
-                                type="button"
-                                onClick={() => setBillingPeriod(bp.key)}
-                                className={[
-                                    "px-4 py-2 text-sm font-medium -mb-px border-b-2 transition-colors",
-                                    billingPeriod === bp.key
-                                        ? "border-pine-500 text-pine-700"
-                                        : "border-transparent text-gray-500 hover:text-gray-700",
-                                ].join(" ")}
-                            >
-                                {bp.label}
-                            </button>
-                        ))}
-                    </div>
 
                     {/* Bulk copy banner */}
                     {locationId && (
@@ -530,41 +467,40 @@ export function TuitionGridWorkspace() {
 
                     {/* Grid */}
                     <div className="overflow-x-auto rounded-lg border border-gray-200 bg-white">
-                        {programs.length === 0 ? (
+                        {offerings.length === 0 ? (
                             <div className="py-12 text-center text-sm text-gray-400">
-                                No programs configured.{" "}
-                                <a href="/settings/commercial/programs" className="text-pine-600 underline">
-                                    Set up programs first.
+                                No offerings configured.{" "}
+                                <a href="/settings/commercial" className="text-pine-600 underline">
+                                    Set up offerings first.
                                 </a>
                             </div>
                         ) : (
                             <table className="w-full text-sm">
                                 <thead>
                                     <tr className="border-b border-gray-100 bg-gray-50">
-                                        <th className="text-left px-4 py-2.5 font-medium text-gray-600 w-40">
-                                            Program
+                                        <th className="text-left px-4 py-2.5 font-medium text-gray-600 w-48">
+                                            Offering
                                         </th>
-                                        {schedules.map((s) => (
-                                            <th key={s.key} className="text-right px-3 py-2.5 font-medium text-gray-600 whitespace-nowrap">
-                                                {s.label}
+                                        {cadences.map((c) => (
+                                            <th key={c.item_key} className="text-right px-3 py-2.5 font-medium text-gray-600 whitespace-nowrap">
+                                                {c.label}
                                             </th>
                                         ))}
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {programs.map((prog, pi) => (
-                                        <tr key={prog.key} className={pi % 2 === 0 ? "bg-white" : "bg-gray-50/40"}>
+                                    {offerings.map((offering, oi) => (
+                                        <tr key={offering.id} className={oi % 2 === 0 ? "bg-white" : "bg-gray-50/40"}>
                                             <td className="px-4 py-2 font-medium text-gray-700 whitespace-nowrap">
-                                                {prog.label}
+                                                {offering.label}
                                             </td>
-                                            {schedules.map((sched) => {
-                                                const cellKey = tuitionRateCellKey(prog.key, sched.key, billingPeriod);
+                                            {cadences.map((cadence) => {
+                                                const cellKey = tuitionRateCellKey(offering.id, cadence.item_key);
                                                 return (
                                                     <TuitionCell
                                                         key={cellKey}
-                                                        programKey={prog.key}
-                                                        scheduleKey={sched.key}
-                                                        billingPeriod={billingPeriod}
+                                                        offeringId={offering.id}
+                                                        cadenceKey={cadence.item_key}
                                                         rateRow={rateMap.get(cellKey)}
                                                         orgDefaultRow={orgOnlyMap.get(cellKey)}
                                                         locationId={locationId}
@@ -621,19 +557,6 @@ export function TuitionGridWorkspace() {
                             ))}
                         </select>
 
-                        {/* Billing period also applies in compare */}
-                        <div className="flex gap-0 border border-gray-200 rounded overflow-hidden text-xs ml-auto">
-                            {TUITION_BILLING_PERIODS.map((bp) => (
-                                <button
-                                    key={bp.key}
-                                    type="button"
-                                    onClick={() => setBillingPeriod(bp.key)}
-                                    className={`px-3 py-1.5 ${billingPeriod === bp.key ? "bg-gray-800 text-white" : "bg-white text-gray-600 hover:bg-gray-50"}`}
-                                >
-                                    {bp.label}
-                                </button>
-                            ))}
-                        </div>
                     </div>
 
                     {compareLocationId && compareLocMap ? (
@@ -641,24 +564,24 @@ export function TuitionGridWorkspace() {
                             <table className="w-full text-sm">
                                 <thead>
                                     <tr className="border-b border-gray-100 bg-gray-50">
-                                        <th className="text-left px-4 py-2.5 font-medium text-gray-600 w-40">
-                                            Program
+                                        <th className="text-left px-4 py-2.5 font-medium text-gray-600 w-48">
+                                            Offering
                                         </th>
-                                        {schedules.map((s) => (
-                                            <th key={s.key} className="text-right px-3 py-2.5 font-medium text-gray-600 whitespace-nowrap">
-                                                {s.label}
+                                        {cadences.map((c) => (
+                                            <th key={c.item_key} className="text-right px-3 py-2.5 font-medium text-gray-600 whitespace-nowrap">
+                                                {c.label}
                                             </th>
                                         ))}
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {programs.map((prog, pi) => (
-                                        <tr key={prog.key} className={pi % 2 === 0 ? "bg-white" : "bg-gray-50/40"}>
+                                    {offerings.map((offering, oi) => (
+                                        <tr key={offering.id} className={oi % 2 === 0 ? "bg-white" : "bg-gray-50/40"}>
                                             <td className="px-4 py-2 font-medium text-gray-700 whitespace-nowrap">
-                                                {prog.label}
+                                                {offering.label}
                                             </td>
-                                            {schedules.map((sched) => {
-                                                const cellKey = tuitionRateCellKey(prog.key, sched.key, billingPeriod);
+                                            {cadences.map((cadence) => {
+                                                const cellKey = tuitionRateCellKey(offering.id, cadence.item_key);
                                                 return (
                                                     <CompareCell
                                                         key={cellKey}
