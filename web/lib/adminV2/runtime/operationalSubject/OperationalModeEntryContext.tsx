@@ -9,7 +9,6 @@ import {
     type ReactNode,
 } from "react";
 
-import { ALLOY_OS_RUNTIME_ENABLED } from "@/lib/adminV2/runtime/alloyOsRuntimeFlag";
 import {
     OPERATIONAL_MODE_ENTRY_MESSAGES,
     type OperationalModeEntryPhase,
@@ -31,7 +30,7 @@ const OperationalModeEntryContext = createContext<OperationalModeEntryContextVal
 
 export function OperationalModeEntryProvider({ children }: { children: ReactNode }) {
     const [state, setState] = useState<OperationalModeEntryState>(() => ({
-        phase: ALLOY_OS_RUNTIME_ENABLED ? "preparing" : "ready",
+        phase: "preparing",
         message: OPERATIONAL_MODE_ENTRY_MESSAGES.preparingSurface,
     }));
 

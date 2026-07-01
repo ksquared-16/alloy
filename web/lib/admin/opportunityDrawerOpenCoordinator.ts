@@ -42,10 +42,7 @@ import {
 } from "@/lib/adminV2/viewModel/drawer/shadow/logDrawerViewModelCutover";
 import type { OpportunityDrawerViewModel } from "@/lib/adminV2/viewModel/drawer/types";
 import { isCanonicalDrawerHostPath } from "@/lib/admin/canonicalAdminRoutes";
-import {
-    ALLOY_OS_RUNTIME_ENABLED,
-    isWorkUnitQueueSurfacePath,
-} from "@/lib/adminV2/runtime/alloyOsRuntimeFlag";
+import { isWorkUnitQueueSurfacePath } from "@/lib/adminV2/runtime/alloyOsRuntimeFlag";
 
 /** Max overlay floor when cold — avoids sub-frame flash; skipped when intent prefetch is warm. */
 export const OPPORTUNITY_DRAWER_OPEN_ANTI_FLICKER_MS = 200;
@@ -106,9 +103,8 @@ export function shouldDeferOpportunityDrawerOpen(
     const id = entityId.trim();
     if (!id || id === "new") return false;
     const p = pathname ?? "";
-    // Alloy OS operational mode: mount the Focus Panel shell immediately on work-unit surfaces.
-    // Payload warms in-place inside the panel — never block on the legacy centered opening overlay.
-    if (ALLOY_OS_RUNTIME_ENABLED && isWorkUnitQueueSurfacePath(p)) return false;
+    // Work-unit surfaces always mount the Focus Panel shell immediately (no centered opening overlay).
+    if (isWorkUnitQueueSurfacePath(p)) return false;
     return isCanonicalDrawerHostPath(p);
 }
 

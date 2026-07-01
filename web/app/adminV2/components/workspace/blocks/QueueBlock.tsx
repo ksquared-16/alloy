@@ -72,7 +72,6 @@ import { QueueRowPlacementPriorityV2Panel } from "@/app/adminV2/components/works
 import { WorkUnitQueueLaneRowSkeleton } from "@/components/admin/workspace/WorkUnitQueueCompactRowSkeleton";
 import RelatedRecordDrawerIconButton from "@/components/admin/drawer/RelatedRecordDrawerIconButton";
 import { useAdminDrawerOptional } from "@/contexts/AdminDrawerContext";
-import { ALLOY_OS_RUNTIME_ENABLED } from "@/lib/adminV2/runtime/alloyOsRuntimeFlag";
 import { alloySectionDomAttrs } from "@/lib/perf/alloySectionMap";
 import { perfIntent } from "@/lib/perf/perfNamespaceLog";
 import { useOperationalModeEntryOptional } from "@/lib/adminV2/runtime/operationalSubject/OperationalModeEntryContext";
@@ -1765,7 +1764,6 @@ function WorkUnitQueueLane({
   // In-queue prep only before the first subject drawer opens. Once a subject is selected (or split
   // is active), keep rows interactive — the legacy prep panel must not replace rows and block clicks.
   const operationalModePreparing =
-    ALLOY_OS_RUNTIME_ENABLED &&
     operationalEntry?.phase === "preparing" &&
     !splitActive &&
     !openDrawerOpportunityId;
@@ -1777,16 +1775,15 @@ function WorkUnitQueueLane({
   // presentation, so render compressed rows immediately. This never renders expanded legacy rows
   // once a subject is selected; it does not touch queue data, empty semantics, or reveal gates.
   const splitRenderActive =
-    splitActive || (ALLOY_OS_RUNTIME_ENABLED && Boolean(openDrawerOpportunityId));
+    splitActive || Boolean(openDrawerOpportunityId);
   // WU-05 single presentation owner. In Alloy OS runtime mode compressed rows are the ONLY allowed
   // presentation — the legacy full-width branch (LayoutRuntimeQueueRowView / CrmCompactQueuePreview)
   // is quarantined behind flag-off, so no stale phase / pre-split frame can flash it. `splitActive`
   // and the operational-entry signal remain as flag-off-safe contributors (and feed the active-row
   // highlight). Queue data, empty/known-empty semantics, and skeletons are untouched (handled before
   // the row map); `crm` is still required for compression.
-  const runtimeQueuePresentationLocked = ALLOY_OS_RUNTIME_ENABLED && operationalEntry != null;
-  const compressedRowPresentation =
-    ALLOY_OS_RUNTIME_ENABLED || splitRenderActive || runtimeQueuePresentationLocked;
+  const runtimeQueuePresentationLocked = operationalEntry != null;
+  const compressedRowPresentation = true;
   const listShellRef = useRef<HTMLDivElement>(null);
   const [refreshMinHeightPx, setRefreshMinHeightPx] = useState<number>();
   /** Client-only collapsed waitlist program/room groups (placement sections). */
@@ -1818,7 +1815,7 @@ function WorkUnitQueueLane({
   // this skips a decoupled per-lane fetch waterfall on the work-unit page. Reveal
   // gates and queue empty-state semantics are untouched.
   const layoutRuntimeRowsPossible = useMemo(
-    () => opportunityQueueLayoutRuntimeRowsPossible(queue.items, ALLOY_OS_RUNTIME_ENABLED),
+    () => opportunityQueueLayoutRuntimeRowsPossible(queue.items, true),
     [queue.items],
   );
   const queueLayoutRuntime = useOpportunityQueueLayoutRuntime(
@@ -1950,21 +1947,6 @@ function WorkUnitQueueLane({
       data-ws-queue-id={queue.id}
       aria-label={queue.title?.trim() || "Queue"}
     >
-      {showQueueHeader && !ALLOY_OS_RUNTIME_ENABLED ?
-        <header className="adminv2-ws-queue-header">
-          <div className="adminv2-ws-queue-title-row">
-            {queue.title?.trim() ? <h3 className="adminv2-ws-queue-title">{queue.title.trim()}</h3> : <span className="sr-only">Queue</span>}
-            {queue.countBadge != null ? (
-              <span
-                className="adminv2-ws-wu-queue-count-badge"
-                aria-label={queue.countBadgeAriaLabel ?? `${queue.countBadge} in queue`}
-              >
-                {queue.countBadge}
-              </span>
-            ) : null}
-          </div>
-        </header>
-      : null}
       {queue.rollupSummary ? <p className="adminv2-ws-wu-queue-summary">{queue.rollupSummary}</p> : null}
       {queue.sortCaption ? (
         <p className="adminv2-ws-wu-queue-sort-caption" role="note">
@@ -2164,8 +2146,7 @@ function WorkUnitQueueLane({
                 {compressedRowPresentation && crm ?
                     <>
                       {(() => {
-                        const cue =
-                          ALLOY_OS_RUNTIME_ENABLED ? compressedQueueRowCueFromItem(item, crm) : null;
+                        const cue = compressedQueueRowCueFromItem(item, crm);
                         const display = resolveCompressedQueueRowDisplay(item, crm, cue);
                         return (
                           <CompressedQueueRow
@@ -2181,8 +2162,7 @@ function WorkUnitQueueLane({
                           />
                         );
                       })()}
-                      {ALLOY_OS_RUNTIME_ENABLED ?
-                          (() => {
+                      {(() => {
                             const cue = compressedQueueRowCueFromItem(item, crm);
                             if (!compressedQueueRowShowsChildCount(cue) && !cue.rightCue) return null;
                             return (
@@ -2197,8 +2177,7 @@ function WorkUnitQueueLane({
                                 :   null}
                               </div>
                             );
-                          })()
-                      :   null}
+                          })()}
                     </>
                 : <>
                 {showLayoutQueueHold ?

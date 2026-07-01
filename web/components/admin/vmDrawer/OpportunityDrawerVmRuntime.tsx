@@ -9,7 +9,6 @@ import FocusPanelCompactHeader from "@/components/admin/focusPanel/FocusPanelCom
 import OpportunityFocusPanelModeBody from "@/components/admin/focusPanel/OpportunityFocusPanelModeBody";
 import { useAlloyOsRuntimeSplitActive } from "@/lib/adminV2/runtime/useAlloyOsRuntimeSplitActive";
 import {
-    ALLOY_OS_RUNTIME_ENABLED,
     alloyOsRuntimeSplitActive,
     isWorkUnitQueueSurfacePath,
 } from "@/lib/adminV2/runtime/alloyOsRuntimeFlag";
@@ -119,7 +118,6 @@ export default function OpportunityDrawerVmRuntime() {
     // (identical inputs) and is inert off a work-unit surface, without an active perspective, or
     // with no open drawer — so non-split drawer/modal presentation is unchanged.
     const focusPanelSplitIntent =
-        ALLOY_OS_RUNTIME_ENABLED &&
         alloyOsRuntimeSplitActive({
             perspectiveActive: Boolean(runtimePerspectiveAttrValue(activeRuntimePerspective)),
             drawerOpen: drawer.type != null,

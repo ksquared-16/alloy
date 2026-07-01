@@ -8,14 +8,12 @@
  * Default: OFF. Set `NEXT_PUBLIC_CONFIGURATION_RUNTIME_PHASE_3A=1`.
  */
 
-import { ALLOY_OS_RUNTIME_ENABLED } from "@/lib/adminV2/runtime/alloyOsRuntimeFlag";
-
 export const CONFIGURATION_RUNTIME_PHASE_3A_ENABLED =
     process.env.NEXT_PUBLIC_CONFIGURATION_RUNTIME_PHASE_3A === "1";
 
-/** Operator Work View / perspectives rail — Phase 3A or Alloy OS runtime. */
+/** Operator Work View / perspectives rail — always enabled (Alloy OS runtime is unconditionally on). */
 export function operatorOperationalPerspectivesEnabled(): boolean {
-    return CONFIGURATION_RUNTIME_PHASE_3A_ENABLED || ALLOY_OS_RUNTIME_ENABLED;
+    return true;
 }
 
 export const WORK_VIEW_PILL_SECTION_LABEL = "Work View";

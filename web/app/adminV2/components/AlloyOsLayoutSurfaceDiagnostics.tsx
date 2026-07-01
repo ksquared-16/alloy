@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 
-import { ALLOY_OS_RUNTIME_ENABLED } from "@/lib/adminV2/runtime/alloyOsRuntimeFlag";
 import {
     collectAlloyOsLayoutSurfaceReport,
     type AlloyOsLayoutSurfaceReport,
@@ -32,7 +31,6 @@ export default function AlloyOsLayoutSurfaceDiagnostics() {
     const [showOverlay, setShowOverlay] = useState(false);
 
     useEffect(() => {
-        if (!ALLOY_OS_RUNTIME_ENABLED) return;
         if (process.env.NODE_ENV === "production") return;
         if (typeof window === "undefined") return;
 

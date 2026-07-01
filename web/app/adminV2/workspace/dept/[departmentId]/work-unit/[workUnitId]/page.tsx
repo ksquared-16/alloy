@@ -80,7 +80,6 @@ import {
     workUnitQueueLaneRevealSettled,
 } from "@/lib/workspace/workUnitQueueLaneRevealState";
 import { useAdminDrawer } from "@/contexts/AdminDrawerContext";
-import { ALLOY_OS_RUNTIME_ENABLED } from "@/lib/adminV2/runtime/alloyOsRuntimeFlag";
 import {
     DEFAULT_OPERATIONAL_SUBJECT_OPEN_SOURCE,
     markManualOperationalSubjectSelection,
@@ -3961,7 +3960,6 @@ export default function AdminV2OpportunityWorkUnitPage() {
 
     const [operationalSubjectQueueRevision, setOperationalSubjectQueueRevision] = useState(0);
     useEffect(() => {
-        if (!ALLOY_OS_RUNTIME_ENABLED) return;
         setOperationalSubjectQueueRevision((tick) => tick + 1);
     }, [
         workUnitLaneReveal.mayPaintRows,
@@ -5222,7 +5220,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
     );
 
     useWorkUnitDefaultOperationalSubjectAutoOpen({
-        enabled: ALLOY_OS_RUNTIME_ENABLED,
+        enabled: true,
         workUnitId: workUnit?.id ?? null,
         workUnitKey: workUnit?.key ?? null,
         activeQueueKey: workUnitLaneReveal.activeQueueKey || selectedQueueKey,
@@ -5243,7 +5241,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
     });
 
     useOperationalModeEntryController({
-        enabled: ALLOY_OS_RUNTIME_ENABLED,
+        enabled: true,
         workUnitId: workUnit?.id ?? null,
         activeQueueKey: workUnitLaneReveal.activeQueueKey || selectedQueueKey,
         laneMayPaint: workUnitLaneReveal.mayPaintRows,
@@ -5263,7 +5261,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
     const resumeSubjectId =
         resumeSubjectEntityType && drawer.id != null ? String(drawer.id).trim() || null : null;
     useResumeSessionWriter({
-        enabled: ALLOY_OS_RUNTIME_ENABLED,
+        enabled: true,
         scope: { orgId, principalUserId, accessScopeFingerprint },
         workUnitSlug: slugRoute?.routeSlug ?? null,
         workUnitName: slugRoute?.workUnitName ?? workUnit?.name ?? null,
@@ -6056,7 +6054,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
     const operationalEntryRevealSnapshot = useMemo(
         () =>
             resolveOperationalModeEntrySnapshot({
-                enabled: ALLOY_OS_RUNTIME_ENABLED,
+                enabled: true,
                 workUnitId: workUnit?.id ?? null,
                 activeQueueKey: workUnitLaneReveal.activeQueueKey || selectedQueueKey,
                 laneMayPaint: workUnitLaneReveal.mayPaintRows,
@@ -6080,7 +6078,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
         ],
     );
     const operationalRevealPhaseReady =
-        !ALLOY_OS_RUNTIME_ENABLED || operationalEntryRevealSnapshot.phase === "ready";
+        operationalEntryRevealSnapshot.phase === "ready";
 
     // Bounded fallback: a subject that never resolves (e.g. resolution returns nothing) must not
     // strand the cold shell. After a short coordination window we reveal anyway (today's behavior).
@@ -6091,7 +6089,6 @@ export default function AdminV2OpportunityWorkUnitPage() {
         setOperationalRevealFallbackElapsed(false);
     }, [operationalRevealResetKey]);
     useEffect(() => {
-        if (!ALLOY_OS_RUNTIME_ENABLED) return;
         if (wuCoordinatedRevealDone) return; // warm path already revealed
         if (!workUnitAboveFoldPageReady) return; // wait for the normal gate first
         if (operationalRevealPhaseReady) return; // subject already coherent
@@ -6164,7 +6161,6 @@ export default function AdminV2OpportunityWorkUnitPage() {
     // Resume continuity: when arriving via the Resume affordance, restore queue scroll once rows
     // are painted for the matching work unit + lane. URL still drives subject/lane selection.
     useEffect(() => {
-        if (!ALLOY_OS_RUNTIME_ENABLED) return;
         if (!workUnitQueueRevealReady) return;
         const intent = consumeResumeIntent();
         if (!intent) return;
@@ -6197,9 +6193,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
     const workUnitKpiHasSnapshotSurface =
         !suppressWorkUnitKpiStrip && !showOipOnlyKpiStrip && Boolean(workUnitKpiContext);
     const workUnitKpiStripPlaceholder =
-        ALLOY_OS_RUNTIME_ENABLED && workUnitKpiHasSnapshotSurface
-            ? false
-            : workUnitKpiStripPlaceholderRaw;
+        workUnitKpiHasSnapshotSurface ? false : workUnitKpiStripPlaceholderRaw;
 
     const workUnitRoutePipeline = useMemo(
         () =>
@@ -6810,7 +6804,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
                                 // refreshes on idle AFTER the coordinated reveal. Suppress its independent
                                 // "Checking…" transient so it never pops a loader in over a ready surface —
                                 // values hydrate quietly in place instead.
-                                kpisLoading={ALLOY_OS_RUNTIME_ENABLED ? false : workflowKpisLoading}
+                                kpisLoading={false}
                                 kpis={{
                                     runs_today: workflowKpis.runs_today,
                                     failed_last_7d: workflowKpis.failed_last_7d,

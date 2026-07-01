@@ -1,17 +1,13 @@
 /**
- * Alloy OS runtime — first implementation slice (flag-gated).
+ * Alloy OS runtime — scope predicates and layout constants.
  *
- * This module owns the feature flag + scope predicates for the universal runtime
- * split behavior (Operational Mode: condensed queue + Focus Panel by default when subject resolves).
+ * This module owns the scope predicates for the universal runtime split behavior
+ * (Operational Mode: condensed queue + Focus Panel by default when subject resolves).
  * It introduces NO new runtime primitive and changes NO data/VM/reveal contract.
  *
- * Default: ON (build mode — this is the current runtime path, no longer experimental).
- * Emergency kill switch only: `NEXT_PUBLIC_ALLOY_OS_RUNTIME=0` restores the pre-split
- * no-op behavior. No env var is required to run or QA the runtime path.
+ * The runtime is unconditionally ON. The legacy `NEXT_PUBLIC_ALLOY_OS_RUNTIME=0` kill
+ * switch has been retired — all legacy fallback branches have been removed.
  */
-
-/** Build-time flag. Default ON. Emergency kill switch: `NEXT_PUBLIC_ALLOY_OS_RUNTIME=0`. */
-export const ALLOY_OS_RUNTIME_ENABLED = process.env.NEXT_PUBLIC_ALLOY_OS_RUNTIME !== "0";
 
 /** Root attribute that opts a document into the runtime token layer (tokens only). */
 export const ALLOY_OS_RUNTIME_ATTR = "data-alloy-os-runtime";
