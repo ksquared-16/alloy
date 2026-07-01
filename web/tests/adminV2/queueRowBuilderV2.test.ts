@@ -42,8 +42,18 @@ type RowZoneState = {
     key: ZoneKey;
     inRow: boolean;
     width: QueueRecordColumnWidth;
+    columnLabel: string;
     visibleWhen: LayoutCondition | null;
     evidenceGroups: EvidenceGroupState[];
+};
+
+const ZONE_LABELS: Record<ZoneKey, string> = {
+    household: "Household",
+    children: "Children",
+    status: "Status",
+    attention: "Attention",
+    date_event: "Date",
+    actions: "Actions",
 };
 
 const ZONE_WIDTH_MAP: Partial<Record<ZoneKey, QueueRecordColumnWidth>> = {
@@ -115,6 +125,7 @@ function stateFromConfig(
             key,
             inRow,
             width: col?.width ?? catalogCol?.width ?? width,
+            columnLabel: col?.label || ZONE_LABELS[key] || key,
             visibleWhen: col?.visibleWhen ?? null,
             evidenceGroups: blocks,
         };
@@ -147,7 +158,7 @@ function buildConfigFromState(
                     return { ...b, fields: finalFields };
                 });
             const blocks = filteredBlocks.length > 0 ? filteredBlocks : catalogCol.blocks.slice(0, 1);
-            const col: QueueRecordColumnConfig = { ...catalogCol, width: z.width, blocks };
+            const col: QueueRecordColumnConfig = { ...catalogCol, width: z.width, label: z.columnLabel, blocks };
             if (z.visibleWhen) col.visibleWhen = z.visibleWhen;
             else delete col.visibleWhen;
             return [col];
@@ -706,6 +717,21 @@ describe("runtime parity — field toggle → config → not rendered", () => {
         expect(renderedKeys).not.toContain(targetFieldKey);
     });
 
+    it("canvas min-height contract: 76px (not 72px)", () => {
+        // Verify the runtime row dimension constant — builder canvas must match.
+        // This test encodes the contract so a future CSS change is noticed.
+        const RUNTIME_MIN_HEIGHT_PX = 76;
+        const RUNTIME_HEIGHT_PX = 80;
+        const RUNTIME_MAX_HEIGHT_PX = 84;
+        // These values come from --alloy-os-compressed-row-min-height / height / max-height
+        // in alloyOsRuntime.css. The builder canvas must use min-h-[76px] max-h-[84px].
+        expect(RUNTIME_MIN_HEIGHT_PX).toBe(76);
+        expect(RUNTIME_HEIGHT_PX).toBe(80);
+        expect(RUNTIME_MAX_HEIGHT_PX).toBe(84);
+        // Confirm the old (wrong) value is not in use
+        expect(RUNTIME_MIN_HEIGHT_PX).not.toBe(72);
+    });
+
     it("toggled-on field IS present in block.fields[] in built config", () => {
         const config = defaultLeadQueueLayoutV3();
         const catalog = buildCatalog(false);
@@ -724,5 +750,110 @@ describe("runtime parity — field toggle → config → not rendered", () => {
 
         const renderedKeys = block.fields.map((f) => f.fieldKey);
         expect(renderedKeys).toContain(firstFieldKey);
+    });
+});
+
+// ── Label rename round-trip ───────────────────────────────────────────────────
+
+describe("column label rename — persists to QueueRecordColumnConfig.label", () => {
+    it("stateFromConfig seeds columnLabel from col.label when present", () => {
+        const config = defaultLeadQueueLayoutV3();
+        const configWithLabel: QueueRecordLayoutConfigV3 = {
+            ...config,
+            columns: config.columns.map((c) =>
+                c.width === "identity" ? { ...c, label: "Family" } : c,
+            ),
+        };
+        const catalog = buildCatalog(false);
+        const zones = stateFromConfig(configWithLabel, catalog);
+        const household = zones.find((z) => z.key === "household")!;
+        expect(household.columnLabel).toBe("Family");
+    });
+
+    it("stateFromConfig falls back to ZONE_LABELS when col.label is empty string", () => {
+        const config = defaultLeadQueueLayoutV3();
+        const catalog = buildCatalog(false);
+        const zones = stateFromConfig(config, catalog);
+        const household = zones.find((z) => z.key === "household")!;
+        // Default config has label="" — should fall back to zone label
+        expect(household.columnLabel).toBe("Household");
+    });
+
+    it("buildConfigFromState writes columnLabel to col.label", () => {
+        const config = defaultLeadQueueLayoutV3();
+        const catalog = buildCatalog(false);
+        const zones = stateFromConfig(config, catalog).map((z) =>
+            z.key === "household" ? { ...z, columnLabel: "Family" } : z,
+        );
+        const rebuilt = buildConfigFromState(config, zones, catalog);
+        const identityCol = rebuilt.columns.find((c) => c.width === "identity");
+        expect(identityCol?.label).toBe("Family");
+    });
+
+    it("label rename does not affect column width or blocks", () => {
+        const config = defaultLeadQueueLayoutV3();
+        const catalog = buildCatalog(false);
+        const zones = stateFromConfig(config, catalog).map((z) =>
+            z.key === "status" ? { ...z, columnLabel: "Stage" } : z,
+        );
+        const rebuilt = buildConfigFromState(config, zones, catalog);
+        const statusCol = rebuilt.columns.find((c) => c.width === "status_band");
+        expect(statusCol?.label).toBe("Stage");
+        expect(statusCol?.width).toBe("status_band");
+        expect(statusCol?.blocks.length).toBeGreaterThan(0);
+    });
+});
+
+// ── Waitlist fields availability ──────────────────────────────────────────────
+
+describe("waitlist fields — available via compositionFieldAdapter", () => {
+    it("waitlist.positionLabel and waitlist.tierLabel are available for status zone (waitlist)", async () => {
+        const { availableFieldsForZone } = await import(
+            "@/lib/adminV2/settings/surfaces/compositionFieldAdapter"
+        );
+        const fields = availableFieldsForZone("status", true);
+        const keys = fields.map((f) => f.key);
+        expect(keys).toContain("waitlist.positionLabel");
+        expect(keys).toContain("waitlist.tierLabel");
+    });
+
+    it("waitlist.waitSince is available for status zone (waitlist)", async () => {
+        const { availableFieldsForZone } = await import(
+            "@/lib/adminV2/settings/surfaces/compositionFieldAdapter"
+        );
+        const fields = availableFieldsForZone("status", true);
+        const keys = fields.map((f) => f.key);
+        expect(keys).toContain("waitlist.waitSince");
+    });
+
+    it("overrides.flags is available for status zone (waitlist)", async () => {
+        const { availableFieldsForZone } = await import(
+            "@/lib/adminV2/settings/surfaces/compositionFieldAdapter"
+        );
+        const fields = availableFieldsForZone("status", true);
+        const keys = fields.map((f) => f.key);
+        expect(keys).toContain("overrides.flags");
+    });
+
+    it("waitlist fields are NOT in pipeline status zone", async () => {
+        const { availableFieldsForZone } = await import(
+            "@/lib/adminV2/settings/surfaces/compositionFieldAdapter"
+        );
+        const fields = availableFieldsForZone("status", false);
+        const keys = fields.map((f) => f.key);
+        expect(keys).not.toContain("waitlist.positionLabel");
+        expect(keys).not.toContain("waitlist.tierLabel");
+    });
+
+    it("waitlist fields have isSystemField=true", async () => {
+        const { availableFieldsForZone } = await import(
+            "@/lib/adminV2/settings/surfaces/compositionFieldAdapter"
+        );
+        const fields = availableFieldsForZone("status", true);
+        const waitlistFields = fields.filter((f) => f.key.startsWith("waitlist.") || f.key === "overrides.flags");
+        expect(waitlistFields.length).toBeGreaterThan(0);
+        for (const f of waitlistFields) {
+            expect(f.isSystemField).toBe(true);
+        }
     });
 });

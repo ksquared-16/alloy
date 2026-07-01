@@ -85,6 +85,15 @@ describe("evidenceGroupsForZone — pipeline vs waitlist", () => {
         expect(groups[0]!.label).toBe("Waitlist & Placement");
     });
 
+    it("waitlist status group includes waitlist.positionLabel and waitlist.tierLabel", () => {
+        const groups = evidenceGroupsForZone("status", true);
+        const keys = groups.flatMap((g) => g.defaultFieldKeys);
+        expect(keys).toContain("waitlist.positionLabel");
+        expect(keys).toContain("waitlist.tierLabel");
+        expect(keys).toContain("waitlist.waitSince");
+        expect(keys).toContain("overrides.flags");
+    });
+
     it("pipeline status group is 'Stage & Disposition'", () => {
         const groups = evidenceGroupsForZone("status", false);
         expect(groups[0]!.key).toBe("stage_disposition");

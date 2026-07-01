@@ -112,6 +112,8 @@ type RowZoneState = {
     key: ZoneKey;
     inRow: boolean;
     width: QueueRecordColumnWidth;
+    /** Operator-supplied display label for this column. Persisted to QueueRecordColumnConfig.label. */
+    columnLabel: string;
     visibleWhen: LayoutCondition | null;
     evidenceGroups: EvidenceGroupState[];
 };
@@ -228,6 +230,7 @@ function stateFromConfig(
             key,
             inRow,
             width: col?.width ?? catalogCol?.width ?? width,
+            columnLabel: col?.label || ZONE_LABELS[key] || key,
             visibleWhen: col?.visibleWhen ?? null,
             evidenceGroups: blocks,
         };
@@ -266,7 +269,12 @@ function buildConfigFromState(
                 });
             const blocks = filteredBlocks.length > 0 ? filteredBlocks : catalogCol.blocks.slice(0, 1);
 
-            const col: QueueRecordColumnConfig = { ...catalogCol, width: z.width, blocks };
+            const col: QueueRecordColumnConfig = {
+                ...catalogCol,
+                width: z.width,
+                label: z.columnLabel,
+                blocks,
+            };
             if (z.visibleWhen) col.visibleWhen = z.visibleWhen;
             else delete col.visibleWhen;
             return [col];
@@ -319,7 +327,8 @@ function RowCanvas({
                 </p>
                 <p className="text-[10px] text-alloy-midnight/30">Drag to reorder · click to inspect</p>
             </div>
-            <div className="flex min-h-[72px] items-stretch divide-x divide-alloy-stone/10">
+            {/* Height matches runtime condensed row: min 76px, target 80px, max 84px */}
+            <div className="flex min-h-[76px] max-h-[84px] items-stretch divide-x divide-alloy-stone/10">
                 {inRow.map((z) => {
                     const isSelected = z.key === selectedKey;
                     const isDragTarget = z.key === dragOverKey;
@@ -535,6 +544,7 @@ function BlockInspector({
     placementOverrideEnabled,
     onClose,
     onSetWidth,
+    onSetLabel,
     onToggleGroup,
     onToggleField,
     onSetCondition,
@@ -546,6 +556,7 @@ function BlockInspector({
     placementOverrideEnabled: boolean;
     onClose: () => void;
     onSetWidth: (w: QueueRecordColumnWidth) => void;
+    onSetLabel: (label: string) => void;
     onToggleGroup: (blockId: string) => void;
     onToggleField: (blockId: string, fieldKey: string) => void;
     onSetCondition: (c: LayoutCondition) => void;
@@ -605,6 +616,26 @@ function BlockInspector({
                                 </button>
                             ))}
                         </div>
+                    </div>
+                )}
+
+                {/* Block label — operator-supplied display name */}
+                {!isActions && (
+                    <div>
+                        <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-alloy-midnight/35">
+                            Block label
+                        </p>
+                        <input
+                            type="text"
+                            value={zone.columnLabel}
+                            onChange={(e) => onSetLabel(e.target.value)}
+                            placeholder={ZONE_LABELS[zone.key]}
+                            className="w-full rounded border border-alloy-stone/20 bg-white px-2.5 py-1.5 text-[12px] text-alloy-midnight focus:border-alloy-pine focus:outline-none"
+                            data-inspector-label-input
+                        />
+                        <p className="mt-1 text-[10px] text-alloy-midnight/30">
+                            Renames this column (e.g. Household → Family). Saved to layout.
+                        </p>
                     </div>
                 )}
 
@@ -914,6 +945,10 @@ export default function QueueRowBuilderV2({ surfaceId = "pipeline-queue-row" }: 
         );
     }, []);
 
+    const setLabel = useCallback((key: ZoneKey, label: string) => {
+        mark((prev) => prev.map((z) => (z.key === key ? { ...z, columnLabel: label } : z)));
+    }, []);
+
     const toggleField = useCallback((key: ZoneKey, blockId: string, fieldKey: string) => {
         mark((prev) =>
             prev.map((z) =>
@@ -1013,6 +1048,7 @@ export default function QueueRowBuilderV2({ surfaceId = "pipeline-queue-row" }: 
                             placementOverrideEnabled={placementOverrideEnabled}
                             onClose={() => setSelectedKey(null)}
                             onSetWidth={(w) => setWidth(selectedZone.key, w)}
+                            onSetLabel={(label) => setLabel(selectedZone.key, label)}
                             onToggleGroup={(blockId) => toggleGroup(selectedZone.key, blockId)}
                             onToggleField={(blockId, fieldKey) => toggleField(selectedZone.key, blockId, fieldKey)}
                             onSetCondition={(c) => setCondition(selectedZone.key, c)}
