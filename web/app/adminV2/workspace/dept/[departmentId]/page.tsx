@@ -24,7 +24,6 @@ import {
 } from "@/lib/adminV2/workspaceSiteFilterClient";
 import {
     adminV2BeforeRouteNavigation,
-    adminV2CommitNavigation,
     adminV2PrepareNavHref,
 } from "@/lib/adminV2/shellNavigation";
 import { logAdminV2NavDebug } from "@/lib/debug/adminV2NavDebug";
