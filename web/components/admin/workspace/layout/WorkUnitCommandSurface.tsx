@@ -3,7 +3,8 @@
 import type { ReactNode } from "react";
 import type { KPIVm } from "@/lib/ui-v2/workspace-types";
 import type { ResolvedMetricMap } from "@/lib/metrics/fetchResolvedMetrics";
-import { WorkUnitOperationalAnswerStrip } from "@/components/admin/workspace/WorkUnitOperationalAnswerStrip";
+import { MetricPlacementRenderer } from "@/components/admin/metrics/MetricPlacementRenderer";
+import { WorkspaceQuietKpiReserve } from "@/components/admin/workspace/WorkspaceQuietLoadingReserve";
 import { alloySectionDomAttrs } from "@/lib/perf/alloySectionMap";
 
 type Props = {
@@ -49,9 +50,14 @@ export function WorkUnitCommandSurface({
                 data-workspace-zone="kpi-tiles"
                 {...alloySectionDomAttrs("WU-02")}
             >
-                <WorkUnitOperationalAnswerStrip
-                    workUnitId={workUnitId}
+                <MetricPlacementRenderer
+                    surface="work_unit_header"
                     surfaceKey={surfaceKey}
+                    placementZone="header_metrics"
+                    contextType="work_unit"
+                    contextId={workUnitId}
+                    layout="operational-answer"
+                    loadingReserve={<WorkspaceQuietKpiReserve id="wu-kpi-quiet-reserve" />}
                 />
             </div>
             {stagePills ?
