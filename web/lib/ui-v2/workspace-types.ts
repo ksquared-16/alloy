@@ -38,6 +38,63 @@ export type KPIVm = {
   kpiStatus?: string;
 };
 
+export type AnswerState =
+  | "healthy"   // operating within normal parameters
+  | "caution"   // approaching a threshold
+  | "critical"  // threshold breached — action warranted
+  | "empty"     // no data yet — intentional, not broken
+  | "stale"     // freshness expired
+  | "loading";
+
+export type AnswerTrend = {
+  direction: "up" | "down" | "flat";
+  magnitude: string;
+  window: string;
+  valence: "positive" | "negative" | "neutral";
+};
+
+export type OperationalAnswer = {
+  key: string;
+  label: string;
+  primaryValue: string;
+  state: AnswerState;
+  answer: string;
+  evidence?: string;
+  trend?: AnswerTrend;
+  freshness: { isLive: boolean; updatedAt?: string };
+  confidence?: number;
+  recommendedDrill?: {
+    label: string;
+    surface: string;
+    filter?: Record<string, unknown>;
+  };
+  emptyState: { message: string; action?: { label: string; key: string } };
+  lane: "operational" | "ai";
+  sourceCalculationKey: string;
+};
+
+/** Bridge: adapt legacy KPIVm to OperationalAnswer. */
+export function kpiVmToOperationalAnswer(k: KPIVm): OperationalAnswer {
+  const isRisk = k.tone === "risk";
+  const answer = isRisk ? "Needs attention" : "On track";
+  return {
+    key: k.id,
+    label: k.label,
+    primaryValue: k.unit ? `${k.value} ${k.unit}` : k.value,
+    state: isRisk ? "caution" : "healthy",
+    answer,
+    evidence: k.aiSummary,
+    trend: k.trend
+      ? { direction: k.trend, magnitude: "", window: "", valence: "neutral" }
+      : undefined,
+    freshness: { isLive: false },
+    recommendedDrill: { label: `Open ${answer.toLowerCase()}`, surface: k.id },
+    emptyState: { message: `No data for ${k.label}` },
+    lane: k.lane === "ai" ? "ai" : "operational",
+    sourceCalculationKey: k.id,
+  };
+}
+
 /** Queue row quick actions — labels/presentation only; execution hosts use entity id + action key. */
 export type QueueItemQuickActionVm = {
   id: string;

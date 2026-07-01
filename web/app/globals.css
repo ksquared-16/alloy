@@ -4,8 +4,8 @@
   /* Alloy Brand Colors — structural and semantic roles */
   /* Alloy Blue: sidebar, primary actions, focus, info states */
   --color-alloy-blue: #00458C;
-  /* Bend Pine: accent for active/success/emphasis/selected (not generic green) */
-  --color-alloy-pine: #273F52;
+  /* Bend Pine: accent for active/success/emphasis/selected (teal-green #00A283) */
+  --color-alloy-pine: #00A283;
   /* Ember: destructive, warning, archive, cancelled */
   --color-alloy-ember: #BC4300;
   /* Forge: primary/strong text */
@@ -32,6 +32,36 @@
   --color-admin-sidebar-bg: #ffffff;
   /* Font */
   --font-sans: var(--font-poppins), system-ui, sans-serif;
+}
+
+/* ============================================================================
+   Alloy Visual Language — canonical runtime tokens
+   Doctrine: docs/platform/design/alloy-visual-language.md
+   Components reference these tokens, never raw hex.
+   ============================================================================ */
+:root {
+  /* Brand */
+  --brand-primary:       #273F52;   /* Midnight Forge */
+  --brand-accent:        #00A283;   /* Bend Pine */
+  --brand-secondary:     #00458C;   /* Coastal Current */
+
+  /* Semantic state */
+  --state-positive:      #00A283;   /* Bend Pine */
+  --state-caution:       #BC4300;   /* Ember */
+  --state-critical:      #7C273A;   /* River Stone */
+  --state-intelligence:  #00458C;   /* Coastal Current */
+
+  /* Surface */
+  --surface-background:  #F4F6F9;   /* Alloy White */
+  --surface-panel:       #FFFFFF;
+  --surface-border:      rgba(39, 63, 82, 0.10);
+  --surface-border-strong: rgba(39, 63, 82, 0.18);
+
+  /* Text */
+  --text-primary:        #273F52;
+  --text-secondary:      rgba(39, 63, 82, 0.60);
+  --text-muted:          rgba(39, 63, 82, 0.40);
+  --text-disabled:       rgba(39, 63, 82, 0.25);
 }
 
 /* ============================================================================
