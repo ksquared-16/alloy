@@ -194,3 +194,147 @@ describe("Reduced-motion: opacity crossfade only, no per-component override", ()
         expect(css).toContain("prefers-reduced-motion");
     });
 });
+
+// ---------------------------------------------------------------------------
+// Skeleton chip pre-seeding — WU page cache written from workspace bootstrap
+// ---------------------------------------------------------------------------
+
+describe("Skeleton chips: workspace bootstrap pre-seeds WU page cache", () => {
+    it("writeWorkUnitPageCache is imported and called in the dept bootstrap resolution path", () => {
+        const src = read("app/adminV2/workspace/dept/[departmentId]/page.tsx");
+        // Must import writeWorkUnitPageCache from the session cache module
+        expect(src).toContain("writeWorkUnitPageCache");
+        // Must call it inside the dept bootstrap resolution block
+        expect(src).toContain("writeWorkUnitPageCache(orgId, principalUserId, accessScopeFingerprint");
+    });
+
+    it("pre-seeding passes queue_definition from raw bootstrap work units", () => {
+        const src = read("app/adminV2/workspace/dept/[departmentId]/page.tsx");
+        // queue_definition must be forwarded to the cache entry
+        const seedBlock = src.slice(
+            src.indexOf("writeWorkUnitPageCache(orgId"),
+            src.indexOf("writeWorkUnitPageCache(orgId") + 600
+        );
+        expect(seedBlock).toContain("queue_definition: wu.queue_definition");
+    });
+
+    it("pre-seeding skips work units with no queue_definition — no empty cache writes", () => {
+        const src = read("app/adminV2/workspace/dept/[departmentId]/page.tsx");
+        // Must guard: skip if queue_definition is absent
+        const seedBlock = src.slice(
+            src.indexOf("writeWorkUnitPageCache(orgId") - 300,
+            src.indexOf("writeWorkUnitPageCache(orgId") + 200
+        );
+        expect(seedBlock).toContain("!wu.queue_definition");
+    });
+
+    it("CachedWorkUnitPage type accepts queue_definition — cache shape is compatible", () => {
+        const cacheLib = read("lib/workspace/adminV2WorkspaceSessionCache.ts");
+        // The CachedWorkUnitPage workUnit shape must include queue_definition
+        expect(cacheLib).toContain("queue_definition");
+        expect(cacheLib).toContain("writeWorkUnitPageCache");
+    });
+});
+
+// ---------------------------------------------------------------------------
+// Workspace root → Work Unit: cold shell avoided for root-page navigation
+// ---------------------------------------------------------------------------
+
+describe("Workspace root bootstrap pre-seeds WU page cache", () => {
+    it("writeWorkUnitPageCache is imported in workspace root page", () => {
+        const src = read("app/adminV2/workspace/page.tsx");
+        expect(src).toContain("writeWorkUnitPageCache");
+    });
+
+    it("workspace root pre-seeds cache after WU fetch resolves", () => {
+        const src = read("app/adminV2/workspace/page.tsx");
+        // Must call writeWorkUnitPageCache with orgId and queue_definition guard
+        expect(src).toContain("writeWorkUnitPageCache(orgId, principalUserId, accessScopeFingerprint");
+        // Must guard: skip WUs without queue_definition
+        const seedBlock = src.slice(
+            src.indexOf("writeWorkUnitPageCache(orgId, principalUserId, accessScopeFingerprint") - 400,
+            src.indexOf("writeWorkUnitPageCache(orgId, principalUserId, accessScopeFingerprint") + 400
+        );
+        expect(seedBlock).toContain("!wu.queue_definition");
+    });
+
+    it("workspace root passes dept identity to WU page cache", () => {
+        const src = read("app/adminV2/workspace/page.tsx");
+        const seedBlock = src.slice(
+            src.indexOf("writeWorkUnitPageCache(orgId, principalUserId, accessScopeFingerprint"),
+            src.indexOf("writeWorkUnitPageCache(orgId, principalUserId, accessScopeFingerprint") + 600
+        );
+        // dept shape: { id, name, key }
+        expect(seedBlock).toContain("dept.id");
+        expect(seedBlock).toContain("dept.name");
+        // queue_definition forwarded from WU row
+        expect(seedBlock).toContain("queue_definition: wu.queue_definition");
+    });
+});
+
+// ---------------------------------------------------------------------------
+// Canonical Route Cleanup — dept-scoped WU URL is NOT the live renderer
+// ---------------------------------------------------------------------------
+
+describe("Canonical route cleanup: /work-unit/[slug] is sole WU renderer", () => {
+    it("WorkUnitSlugRouteHost renders AdminV2OpportunityWorkUnitPage — canonical renderer", () => {
+        const src = read("components/admin/workspace/WorkUnitSlugRouteHost.tsx");
+        // Must import from the dept-scoped page (component lives there) and render it
+        expect(src).toContain("AdminV2OpportunityWorkUnitPage");
+        expect(src).toContain("<AdminV2OpportunityWorkUnitPage");
+    });
+
+    it("next.config.ts redirects /admin/workspace/dept/:deptId/work-unit/:wuId away from the live surface", () => {
+        const config = read("next.config.ts");
+        expect(config).toContain("/admin/workspace/dept/:deptId/work-unit/:wuId");
+        expect(config).toContain('destination: "/workspace"');
+    });
+
+    it("next.config.ts redirects /adminV2/workspace/dept/:deptId/work-unit/:wuId away from the live surface", () => {
+        const config = read("next.config.ts");
+        expect(config).toContain("/adminV2/workspace/dept/:deptId/work-unit/:wuId");
+    });
+
+    it("LifecycleStageWorkspace uses operatorWorkUnitHrefFromKey — canonical WU URL", () => {
+        const src = read(
+            "components/adminV2/settings/lifecycle/LifecycleStageWorkspace.tsx"
+        );
+        expect(src).toContain("operatorWorkUnitHrefFromKey");
+        expect(src).not.toContain("/adminV2/workspace/dept/");
+    });
+
+    it("LifecycleStagePerspectivesEditor passes workUnitKey to buildOperationalViewPreviewRuntimeHref", () => {
+        const src = read(
+            "components/adminV2/settings/lifecycle/LifecycleStagePerspectivesEditor.tsx"
+        );
+        expect(src).toContain("workUnitKey");
+    });
+
+    it("buildOperationalViewPreviewRuntimeHref uses canonical slug URL when workUnitKey is present", () => {
+        const src = read(
+            "lib/adminV2/runtime/perspective/mergeOperationalViewMetadata.ts"
+        );
+        expect(src).toContain("operatorWorkUnitHrefFromKey");
+        expect(src).toContain("workUnitKey");
+        // Legacy fallback still uses /admin/ (redirected) not /adminV2/ directly
+        expect(src).not.toContain("/adminV2/workspace/dept/");
+    });
+
+    it("resolveWorkUnitWorkspaceHref accepts workUnitKey and uses canonical slug URL", () => {
+        const src = read("lib/forms/intakeRuntimeOrchestrationPresentation.ts");
+        expect(src).toContain("operatorWorkUnitHrefFromKey");
+        expect(src).toContain("workUnitKey");
+        expect(src).not.toContain("/adminV2/workspace/dept/");
+    });
+
+    it("canonical WU slug layout delegates to WorkUnitSlugRouteHost — no direct WU render", () => {
+        const layout = read("app/adminV2/workspace/work-unit/[workUnitSlug]/layout.tsx");
+        expect(layout).toContain("WorkUnitSlugRouteHost");
+    });
+
+    it("canonical WU slug page returns null — layout owns the render", () => {
+        const page = read("app/adminV2/workspace/work-unit/[workUnitSlug]/page.tsx");
+        expect(page).toContain("null");
+        expect(page).not.toContain("AdminV2OpportunityWorkUnitPage");
+    });
+});
