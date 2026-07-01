@@ -1,7 +1,7 @@
-import CommercialHubShell from "@/components/adminV2/commercial/CommercialHubShell";
+import { CommercialConfigWorkspace } from "@/components/adminV2/commercial/CommercialConfigWorkspace";
 
 export const dynamic = "force-dynamic";
 
 export default function SettingsCommercialPage() {
-    return <CommercialHubShell />;
+    return <CommercialConfigWorkspace />;
 }
