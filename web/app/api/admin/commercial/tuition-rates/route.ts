@@ -4,14 +4,14 @@ import { getAdminContextCached } from "@/lib/admin/getAdminContext";
 import type { TuitionRateRow } from "@/lib/commercial/tuitionRates";
 
 const SELECT_COLS =
-    "id, org_id, location_id, offering_id, cadence_key, payer_type, rate_cents, is_active, not_offered, metadata, created_at, updated_at";
+    "id, org_id, location_id, variant_id, cadence_key, payer_type, rate_cents, is_active, not_offered, metadata, created_at, updated_at";
 
 function mapRateRow(r: Record<string, unknown>): TuitionRateRow {
     return {
         id: String(r.id ?? ""),
         org_id: String(r.org_id ?? ""),
         location_id: (r.location_id as string | null | undefined) ?? null,
-        offering_id: String(r.offering_id ?? ""),
+        variant_id: String(r.variant_id ?? ""),
         cadence_key: String(r.cadence_key ?? ""),
         payer_type: String(r.payer_type ?? "private_pay"),
         rate_cents: Number(r.rate_cents ?? 0),
@@ -30,40 +30,52 @@ function mapRateRow(r: Record<string, unknown>): TuitionRateRow {
  * GET /api/admin/commercial/tuition-rates
  * Returns all tuition rates for the org.
  * Optional: ?location_id= — returns org defaults + that location only.
- * Optional: ?offering_id= — filter to a specific offering.
+ * Optional: ?variant_id= — filter to a specific variant.
+ * Optional: ?offering_id= — filter to all variants under an offering (joins via variants table).
  */
 export async function GET(request: NextRequest) {
     const ctx = await getAdminContextCached();
     if (!ctx.ok) {
         return NextResponse.json(
             { error: ctx.status === 401 ? "Unauthorized" : "Forbidden" },
-            { status: ctx.status }
+            { status: ctx.status },
         );
     }
 
     const { searchParams } = new URL(request.url);
     const locationId = (searchParams.get("location_id") ?? "").trim() || null;
+    const variantId = (searchParams.get("variant_id") ?? "").trim() || null;
     const offeringId = (searchParams.get("offering_id") ?? "").trim() || null;
 
     const supabase = createAdminClient();
+
+    // If filtering by offering_id, resolve variant_ids first
+    let variantIds: string[] | null = null;
+    if (offeringId) {
+        const { data: variants } = await supabase
+            .from("program_offering_variants")
+            .select("id")
+            .eq("offering_id", offeringId)
+            .eq("org_id", ctx.orgId);
+        variantIds = (variants ?? []).map((v: { id: string }) => v.id);
+        if (variantIds.length === 0) {
+            return NextResponse.json({ rates: [] });
+        }
+    }
+
     let q = supabase
         .from("commercial_tuition_rates")
         .select(SELECT_COLS)
         .eq("org_id", ctx.orgId)
-        .order("offering_id")
+        .order("variant_id")
         .order("cadence_key");
 
-    if (locationId) {
-        q = q.or(`location_id.is.null,location_id.eq.${locationId}`);
-    }
-    if (offeringId) {
-        q = q.eq("offering_id", offeringId);
-    }
+    if (locationId) q = q.or(`location_id.is.null,location_id.eq.${locationId}`);
+    if (variantId) q = q.eq("variant_id", variantId);
+    if (variantIds) q = q.in("variant_id", variantIds);
 
     const { data, error } = await q;
-    if (error) {
-        return NextResponse.json({ error: error.message }, { status: 500 });
-    }
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
     return NextResponse.json({
         rates: (data ?? []).map((r: Record<string, unknown>) => mapRateRow(r)),
@@ -73,14 +85,14 @@ export async function GET(request: NextRequest) {
 /**
  * POST /api/admin/commercial/tuition-rates
  * Create or update a tuition rate.
- * Body: { offering_id, cadence_key, rate_cents, location_id?, payer_type?, not_offered?, is_active? }
+ * Body: { variant_id, cadence_key, rate_cents, location_id?, payer_type?, not_offered?, is_active? }
  */
 export async function POST(request: NextRequest) {
     const ctx = await getAdminContextCached();
     if (!ctx.ok) {
         return NextResponse.json(
             { error: ctx.status === 401 ? "Unauthorized" : "Forbidden" },
-            { status: ctx.status }
+            { status: ctx.status },
         );
     }
 
@@ -91,7 +103,7 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
     }
 
-    const offering_id = String(body.offering_id ?? "").trim();
+    const variant_id = String(body.variant_id ?? "").trim();
     const cadence_key = String(body.cadence_key ?? "").trim();
     const not_offered = body.not_offered === true;
     const rate_cents = not_offered ? 0 : (body.rate_cents != null ? Number(body.rate_cents) : null);
@@ -99,7 +111,7 @@ export async function POST(request: NextRequest) {
     const payer_type = String(body.payer_type ?? "private_pay").trim();
     const is_active = body.is_active !== false;
 
-    if (!offering_id) return NextResponse.json({ error: "offering_id is required" }, { status: 400 });
+    if (!variant_id) return NextResponse.json({ error: "variant_id is required" }, { status: 400 });
     if (!cadence_key) return NextResponse.json({ error: "cadence_key is required" }, { status: 400 });
     if (!not_offered && (rate_cents === null || !Number.isFinite(rate_cents) || rate_cents < 0)) {
         return NextResponse.json({ error: "rate_cents must be a non-negative integer" }, { status: 400 });
@@ -107,17 +119,14 @@ export async function POST(request: NextRequest) {
 
     const supabase = createAdminClient();
 
-    // Validate offering belongs to org
-    const { data: offering } = await supabase
-        .from("program_offerings")
+    // Validate variant belongs to org
+    const { data: variant } = await supabase
+        .from("program_offering_variants")
         .select("id")
-        .eq("id", offering_id)
+        .eq("id", variant_id)
         .eq("org_id", ctx.orgId)
         .maybeSingle();
-
-    if (!offering) {
-        return NextResponse.json({ error: "Offering not found" }, { status: 404 });
-    }
+    if (!variant) return NextResponse.json({ error: "Variant not found" }, { status: 404 });
 
     // Validate location belongs to org if provided
     if (location_id) {
@@ -127,9 +136,7 @@ export async function POST(request: NextRequest) {
             .eq("id", location_id)
             .eq("org_id", ctx.orgId)
             .maybeSingle();
-        if (!loc) {
-            return NextResponse.json({ error: "Location not found" }, { status: 404 });
-        }
+        if (!loc) return NextResponse.json({ error: "Location not found" }, { status: 404 });
     }
 
     // find-then-update-or-insert (avoids upsert with nullable unique column)
@@ -137,7 +144,7 @@ export async function POST(request: NextRequest) {
         .from("commercial_tuition_rates")
         .select("id")
         .eq("org_id", ctx.orgId)
-        .eq("offering_id", offering_id)
+        .eq("variant_id", variant_id)
         .eq("cadence_key", cadence_key)
         .eq("payer_type", payer_type);
 
@@ -147,15 +154,15 @@ export async function POST(request: NextRequest) {
 
     const { data: existingRow } = await filteredQ.maybeSingle();
 
-    let data: Record<string, unknown> | null = null;
-    let error: { message: string } | null = null;
-
     const payload = {
         rate_cents: Math.round(rate_cents ?? 0),
         not_offered,
         is_active,
         updated_at: new Date().toISOString(),
     };
+
+    let data: Record<string, unknown> | null = null;
+    let dbError: { message: string } | null = null;
 
     if (existingRow) {
         const res = await supabase
@@ -166,14 +173,14 @@ export async function POST(request: NextRequest) {
             .select(SELECT_COLS)
             .single();
         data = res.data as Record<string, unknown> | null;
-        error = res.error;
+        dbError = res.error;
     } else {
         const res = await supabase
             .from("commercial_tuition_rates")
             .insert({
                 org_id: ctx.orgId,
                 location_id,
-                offering_id,
+                variant_id,
                 cadence_key,
                 payer_type,
                 ...payload,
@@ -181,12 +188,10 @@ export async function POST(request: NextRequest) {
             .select(SELECT_COLS)
             .single();
         data = res.data as Record<string, unknown> | null;
-        error = res.error;
+        dbError = res.error;
     }
 
-    if (error) {
-        return NextResponse.json({ error: error.message }, { status: 400 });
-    }
+    if (dbError) return NextResponse.json({ error: dbError.message }, { status: 400 });
 
     return NextResponse.json({ rate: mapRateRow(data as Record<string, unknown>) }, { status: 201 });
 }

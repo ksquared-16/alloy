@@ -1,25 +1,25 @@
 /**
- * Commercial Configuration — Tuition rates V2.
+ * Commercial Configuration — Tuition Rates V3.
  *
- * Rate grid: program_offering × billing_cadence → rate, per org or per site.
+ * Rate model: program_offering_variant × billing_cadence → rate, per org or per site.
  * Org default (location_id = null) is inherited by all sites unless a
  * site-level override exists.
  *
- * V2 model: offering_id (FK to program_offerings) + cadence_key
- * (item_key from commercial_billing_cadence option set) replace the V1
- * program_key / schedule_key / billing_period flat columns.
+ * V3 model: variant_id (FK to program_offering_variants) replaces offering_id.
+ * Rates always attach to variants — never directly to offerings or programs.
+ * Commercial owns rates. Programs owns offerings and variants.
  */
 
 export type TuitionRateRow = {
     id: string;
     org_id: string;
     location_id: string | null;
-    offering_id: string;
+    variant_id: string;
     cadence_key: string;
     payer_type: string;
     rate_cents: number;
     is_active: boolean;
-    /** Explicitly not offered — distinct from "no rate set yet". */
+    /** Explicitly not offered at this scope/cadence — distinct from "no rate set". */
     not_offered: boolean;
     metadata: Record<string, unknown>;
     created_at: string;
@@ -46,9 +46,9 @@ export function parseDollarsToCents(raw: string): number | null {
     return Math.round(val * 100);
 }
 
-/** Build a cell key for indexing the rate grid. */
-export function tuitionRateCellKey(offeringId: string, cadenceKey: string): string {
-    return `${offeringId}::${cadenceKey}`;
+/** Build a cell key for indexing the rate grid. V3: variant × cadence. */
+export function tuitionRateCellKey(variantId: string, cadenceKey: string): string {
+    return `${variantId}::${cadenceKey}`;
 }
 
 /**
@@ -63,14 +63,14 @@ export function buildTuitionRateMap(
 
     for (const r of rates) {
         if (r.location_id === null) {
-            map.set(tuitionRateCellKey(r.offering_id, r.cadence_key), r);
+            map.set(tuitionRateCellKey(r.variant_id, r.cadence_key), r);
         }
     }
 
     if (locationId) {
         for (const r of rates) {
             if (r.location_id === locationId) {
-                map.set(tuitionRateCellKey(r.offering_id, r.cadence_key), r);
+                map.set(tuitionRateCellKey(r.variant_id, r.cadence_key), r);
             }
         }
     }
@@ -86,7 +86,7 @@ export function buildLocationOnlyRateMap(
     const map = new Map<string, TuitionRateRow>();
     for (const r of rates) {
         if (r.location_id === locationId) {
-            map.set(tuitionRateCellKey(r.offering_id, r.cadence_key), r);
+            map.set(tuitionRateCellKey(r.variant_id, r.cadence_key), r);
         }
     }
     return map;
@@ -127,7 +127,7 @@ export function resolveCellState(
     };
 }
 
-/** Readiness: how many cells in the grid have rates set at the org level. */
+/** Readiness: how many variant×cadence cells have rates set at the org level. */
 export type TuitionReadiness = {
     total: number;
     configured: number;
@@ -137,18 +137,18 @@ export type TuitionReadiness = {
 };
 
 export function computeTuitionReadiness(
-    offeringIds: string[],
+    variantIds: string[],
     cadenceKeys: string[],
     rates: TuitionRateRow[],
 ): TuitionReadiness {
     const orgMap = buildTuitionRateMap(rates, null);
-    const total = offeringIds.length * cadenceKeys.length;
+    const total = variantIds.length * cadenceKeys.length;
     let configured = 0;
     let notOffered = 0;
 
-    for (const oid of offeringIds) {
+    for (const vid of variantIds) {
         for (const ck of cadenceKeys) {
-            const row = orgMap.get(tuitionRateCellKey(oid, ck));
+            const row = orgMap.get(tuitionRateCellKey(vid, ck));
             if (!row) continue;
             if (row.not_offered) notOffered++;
             else configured++;

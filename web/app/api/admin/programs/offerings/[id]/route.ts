@@ -11,17 +11,17 @@ const VALID_STATUSES = new Set<OfferingStatus>([
 /**
  * PATCH /api/admin/programs/offerings/[id]
  * Update label, status, sort_order, effective_start, effective_end, is_active, metadata.
- * attendance_type and quantity fields are immutable once rates exist.
+ * attendance_type changes are blocked if variants with rates exist.
  */
 export async function PATCH(
     request: NextRequest,
-    { params }: { params: Promise<{ id: string }> }
+    { params }: { params: Promise<{ id: string }> },
 ) {
     const ctx = await getAdminContextCached();
     if (!ctx.ok) {
         return NextResponse.json(
             { error: ctx.status === 401 ? "Unauthorized" : "Forbidden" },
-            { status: ctx.status }
+            { status: ctx.status },
         );
     }
     if (!["owner", "admin", "ops"].includes(ctx.role)) {
@@ -50,18 +50,10 @@ export async function PATCH(
         }
         patch.status = body.status;
     }
-    if (body.sort_order !== undefined) {
-        patch.sort_order = Number(body.sort_order);
-    }
-    if (body.effective_start !== undefined) {
-        patch.effective_start = body.effective_start ?? null;
-    }
-    if (body.effective_end !== undefined) {
-        patch.effective_end = body.effective_end ?? null;
-    }
-    if (typeof body.is_active === "boolean") {
-        patch.is_active = body.is_active;
-    }
+    if (body.sort_order !== undefined) patch.sort_order = Number(body.sort_order);
+    if (body.effective_start !== undefined) patch.effective_start = body.effective_start ?? null;
+    if (body.effective_end !== undefined) patch.effective_end = body.effective_end ?? null;
+    if (typeof body.is_active === "boolean") patch.is_active = body.is_active;
     if (body.metadata !== undefined) {
         patch.metadata =
             body.metadata != null && typeof body.metadata === "object" && !Array.isArray(body.metadata)
@@ -69,25 +61,29 @@ export async function PATCH(
                 : {};
     }
 
-    // Structural fields — allowed only when no rates reference this offering
-    const structuralFields = (["attendance_type", "quantity_type", "quantity_value"] as const).filter(
-        (f) => body[f] !== undefined,
-    );
-    if (structuralFields.length > 0) {
+    if (body.attendance_type !== undefined) {
+        // Block attendance_type change if any variant has rates
         const supabase = createAdminClient();
         const { count } = await supabase
             .from("commercial_tuition_rates")
             .select("id", { count: "exact", head: true })
-            .eq("offering_id", id);
+            .in(
+                "variant_id",
+                (
+                    await supabase
+                        .from("program_offering_variants")
+                        .select("id")
+                        .eq("offering_id", id)
+                        .eq("org_id", ctx.orgId)
+                ).data?.map((v: { id: string }) => v.id) ?? [],
+            );
         if (count && count > 0) {
             return NextResponse.json(
-                { error: "Cannot change attendance type or quantity — rates exist. Remove rates first." },
+                { error: "Cannot change attendance type — variants have rates. Remove rates first." },
                 { status: 409 },
             );
         }
-        for (const f of structuralFields) {
-            patch[f] = body[f] ?? null;
-        }
+        patch.attendance_type = body.attendance_type;
     }
 
     if (Object.keys(patch).length <= 1) {
@@ -100,7 +96,9 @@ export async function PATCH(
         .update(patch)
         .eq("id", id)
         .eq("org_id", ctx.orgId)
-        .select("id, org_id, program_key, label, attendance_type, quantity_type, quantity_value, status, effective_start, effective_end, sort_order, is_active, metadata, created_at, updated_at")
+        .select(
+            "id, org_id, program_key, label, attendance_type, status, effective_start, effective_end, sort_order, is_active, metadata, created_at, updated_at",
+        )
         .maybeSingle();
 
     if (error) return NextResponse.json({ error: error.message }, { status: 400 });
@@ -119,18 +117,18 @@ export async function PATCH(
 
 /**
  * DELETE /api/admin/programs/offerings/[id]
- * Soft-deletes by setting is_active=false if rates exist; hard-deletes if no rates.
- * Admin only.
+ * Soft-deletes (archives) if variants have rates; hard-deletes otherwise.
+ * Cascades to program_offering_variants on hard delete.
  */
 export async function DELETE(
     _request: NextRequest,
-    { params }: { params: Promise<{ id: string }> }
+    { params }: { params: Promise<{ id: string }> },
 ) {
     const ctx = await getAdminContextCached();
     if (!ctx.ok) {
         return NextResponse.json(
             { error: ctx.status === 401 ? "Unauthorized" : "Forbidden" },
-            { status: ctx.status }
+            { status: ctx.status },
         );
     }
     if (!["owner", "admin"].includes(ctx.role)) {
@@ -147,28 +145,35 @@ export async function DELETE(
         .eq("org_id", ctx.orgId)
         .maybeSingle();
 
-    if (!existing) {
-        return NextResponse.json({ error: "Offering not found" }, { status: 404 });
+    if (!existing) return NextResponse.json({ error: "Offering not found" }, { status: 404 });
+
+    // Check for rates via variants
+    const { data: variantIds } = await supabase
+        .from("program_offering_variants")
+        .select("id")
+        .eq("offering_id", id)
+        .eq("org_id", ctx.orgId);
+
+    const ids = (variantIds ?? []).map((v: { id: string }) => v.id);
+    let rateCount = 0;
+    if (ids.length > 0) {
+        const { count } = await supabase
+            .from("commercial_tuition_rates")
+            .select("id", { count: "exact", head: true })
+            .in("variant_id", ids);
+        rateCount = count ?? 0;
     }
 
-    // Check for attached rates
-    const { count } = await supabase
-        .from("commercial_tuition_rates")
-        .select("id", { count: "exact", head: true })
-        .eq("offering_id", id);
-
-    if (count && count > 0) {
-        // Soft-delete only — rates reference this offering
+    if (rateCount > 0) {
         await supabase
             .from("program_offerings")
             .update({ is_active: false, status: "archived", updated_at: new Date().toISOString() })
             .eq("id", id)
             .eq("org_id", ctx.orgId);
-
         return NextResponse.json({
             deleted: false,
             archived: true,
-            reason: `Offering has ${count} attached rate(s). Archived instead of deleted.`,
+            reason: `Offering has ${rateCount} attached rate(s) via variants. Archived instead of deleted.`,
         });
     }
 

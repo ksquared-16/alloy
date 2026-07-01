@@ -16,17 +16,24 @@ import {
 } from "@/lib/commercial/tuitionRates";
 import type { BillingCadence } from "@/lib/commercial/billingCadences";
 import type { ProgramOffering } from "@/lib/programs/programOfferings";
+import {
+    type ProgramOfferingVariant,
+    describeVariant,
+    sortVariants,
+    groupVariantsByOffering,
+    isDefaultVariant,
+} from "@/lib/programs/programOfferingVariants";
 
 // ─── TuitionCell ─────────────────────────────────────────────────────────────
 
 type CellProps = {
-    offeringId: string;
+    variantId: string;
     cadenceKey: string;
     rateRow: TuitionRateRow | undefined;
     orgDefaultRow: TuitionRateRow | undefined;
     locationId: string | null;
     onSave: (
-        offeringId: string,
+        variantId: string,
         cadenceKey: string,
         payload: { rate_cents?: number; not_offered?: boolean },
     ) => Promise<void>;
@@ -34,7 +41,7 @@ type CellProps = {
 };
 
 function TuitionCell({
-    offeringId,
+    variantId,
     cadenceKey,
     rateRow,
     orgDefaultRow,
@@ -65,14 +72,14 @@ function TuitionCell({
         const cents = parseDollarsToCents(draft);
         if (cents === null) { setEditing(false); return; }
         setSaving(true);
-        await onSave(offeringId, cadenceKey, { rate_cents: cents });
+        await onSave(variantId, cadenceKey, { rate_cents: cents });
         setSaving(false);
         setEditing(false);
     }
 
     async function toggleNotOffered() {
         setSaving(true);
-        await onSave(offeringId, cadenceKey, { not_offered: !isNotOffered });
+        await onSave(variantId, cadenceKey, { not_offered: !isNotOffered });
         setSaving(false);
     }
 
@@ -215,6 +222,7 @@ export function TuitionGridWorkspace() {
     const [scope, setScope] = useState<ConfigScope | null>(null);
 
     const [offerings, setOfferings] = useState<ProgramOffering[]>([]);
+    const [variants, setVariants] = useState<ProgramOfferingVariant[]>([]);
     const [cadences, setCadences] = useState<BillingCadence[]>([]);
 
     const [rates, setRates] = useState<TuitionRateRow[]>([]);
@@ -253,7 +261,20 @@ export function TuitionGridWorkspace() {
 
                 if (offeringRes.ok) {
                     const j = await offeringRes.json();
-                    setOfferings(j.offerings ?? []);
+                    const loadedOfferings: ProgramOffering[] = j.offerings ?? [];
+                    setOfferings(loadedOfferings);
+
+                    // Load variants for all offerings in parallel
+                    if (loadedOfferings.length > 0) {
+                        const variantResults = await Promise.all(
+                            loadedOfferings.map((o) =>
+                                fetch(`/api/admin/programs/offerings/${o.id}/variants`)
+                                    .then((r) => r.ok ? r.json() : { variants: [] })
+                                    .then((j: { variants?: ProgramOfferingVariant[] }) => j.variants ?? []),
+                            ),
+                        );
+                        setVariants(variantResults.flat());
+                    }
                 }
 
                 if (cadenceRes.ok) {
@@ -297,9 +318,10 @@ export function TuitionGridWorkspace() {
     const locationId = scope?.kind === "location" ? scope.locationId : null;
     const rateMap = buildTuitionRateMap(rates, locationId);
     const orgOnlyMap = buildTuitionRateMap(rates, null);
+    const variantsByOffering = groupVariantsByOffering(variants);
 
     const readiness = computeTuitionReadiness(
-        offerings.map((o) => o.id),
+        variants.map((v) => v.id),
         cadences.map((c) => c.item_key),
         allRates,
     );
@@ -312,14 +334,14 @@ export function TuitionGridWorkspace() {
     // ── Save helpers ──────────────────────────────────────────────────────────
 
     async function saveCell(
-        offeringId: string,
+        variantId: string,
         cadenceKey: string,
         payload: { rate_cents?: number; not_offered?: boolean },
     ) {
         setSaving(true);
         try {
             const body = {
-                offering_id: offeringId,
+                variant_id: variantId,
                 cadence_key: cadenceKey,
                 payer_type: "private_pay",
                 location_id: locationId,
@@ -364,7 +386,7 @@ export function TuitionGridWorkspace() {
                         method: "POST",
                         headers: { "Content-Type": "application/json" },
                         body: JSON.stringify({
-                            offering_id: r.offering_id,
+                            variant_id: r.variant_id,
                             cadence_key: r.cadence_key,
                             payer_type: r.payer_type,
                             location_id: locationId,
@@ -398,6 +420,12 @@ export function TuitionGridWorkspace() {
         );
     }
 
+    // Build ordered list of (offering, sorted variants) for grid rows
+    const offeringRows = offerings.map((offering) => ({
+        offering,
+        variants: sortVariants(variantsByOffering.get(offering.id) ?? []),
+    }));
+
     return (
         <div className="space-y-5">
             {/* Header */}
@@ -405,7 +433,7 @@ export function TuitionGridWorkspace() {
                 <div>
                     <h1 className="text-xl font-semibold text-gray-900">Tuition Grid</h1>
                     <p className="text-sm text-gray-500 mt-0.5">
-                        Offering × billing cadence rates. Org defaults inherit to all sites.
+                        Variant × billing cadence rates. Org defaults inherit to all sites.
                     </p>
                 </div>
                 <div className="flex rounded-md border border-gray-200 overflow-hidden text-sm flex-shrink-0">
@@ -435,7 +463,7 @@ export function TuitionGridWorkspace() {
                 </div>
             )}
 
-            {offerings.length > 0 && (
+            {variants.length > 0 && (
                 <ConfigReadinessCard readiness={readiness} scopeLabel="Org Default" />
             )}
 
@@ -467,7 +495,7 @@ export function TuitionGridWorkspace() {
 
                     {/* Grid */}
                     <div className="overflow-x-auto rounded-lg border border-gray-200 bg-white">
-                        {offerings.length === 0 ? (
+                        {offeringRows.length === 0 ? (
                             <div className="py-12 text-center text-sm text-gray-400">
                                 No offerings configured.{" "}
                                 <a href="/settings/commercial" className="text-pine-600 underline">
@@ -479,7 +507,7 @@ export function TuitionGridWorkspace() {
                                 <thead>
                                     <tr className="border-b border-gray-100 bg-gray-50">
                                         <th className="text-left px-4 py-2.5 font-medium text-gray-600 w-48">
-                                            Offering
+                                            Offering / Variant
                                         </th>
                                         {cadences.map((c) => (
                                             <th key={c.item_key} className="text-right px-3 py-2.5 font-medium text-gray-600 whitespace-nowrap">
@@ -489,27 +517,48 @@ export function TuitionGridWorkspace() {
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {offerings.map((offering, oi) => (
-                                        <tr key={offering.id} className={oi % 2 === 0 ? "bg-white" : "bg-gray-50/40"}>
-                                            <td className="px-4 py-2 font-medium text-gray-700 whitespace-nowrap">
-                                                {offering.label}
-                                            </td>
-                                            {cadences.map((cadence) => {
-                                                const cellKey = tuitionRateCellKey(offering.id, cadence.item_key);
-                                                return (
-                                                    <TuitionCell
-                                                        key={cellKey}
-                                                        offeringId={offering.id}
-                                                        cadenceKey={cadence.item_key}
-                                                        rateRow={rateMap.get(cellKey)}
-                                                        orgDefaultRow={orgOnlyMap.get(cellKey)}
-                                                        locationId={locationId}
-                                                        onSave={saveCell}
-                                                        onClear={clearCell}
-                                                    />
-                                                );
-                                            })}
-                                        </tr>
+                                    {offeringRows.map(({ offering, variants: offeringVariants }) => (
+                                        <>
+                                            {/* Offering group header row */}
+                                            <tr key={`offering-${offering.id}`} className="border-t border-gray-100 bg-gray-50/60">
+                                                <td
+                                                    colSpan={cadences.length + 1}
+                                                    className="px-4 py-1.5 text-xs font-semibold text-gray-500 uppercase tracking-wide"
+                                                >
+                                                    {offering.label}
+                                                </td>
+                                            </tr>
+                                            {/* One row per variant */}
+                                            {offeringVariants.map((variant, vi) => (
+                                                <tr
+                                                    key={variant.id}
+                                                    className={vi % 2 === 0 ? "bg-white" : "bg-gray-50/40"}
+                                                >
+                                                    <td className="px-4 py-2 text-gray-700 whitespace-nowrap pl-6">
+                                                        {isDefaultVariant(variant) ? (
+                                                            <span className="text-gray-400 italic text-xs">Default</span>
+                                                        ) : (
+                                                            describeVariant(variant)
+                                                        )}
+                                                    </td>
+                                                    {cadences.map((cadence) => {
+                                                        const cellKey = tuitionRateCellKey(variant.id, cadence.item_key);
+                                                        return (
+                                                            <TuitionCell
+                                                                key={cellKey}
+                                                                variantId={variant.id}
+                                                                cadenceKey={cadence.item_key}
+                                                                rateRow={rateMap.get(cellKey)}
+                                                                orgDefaultRow={orgOnlyMap.get(cellKey)}
+                                                                locationId={locationId}
+                                                                onSave={saveCell}
+                                                                onClear={clearCell}
+                                                            />
+                                                        );
+                                                    })}
+                                                </tr>
+                                            ))}
+                                        </>
                                     ))}
                                 </tbody>
                             </table>
@@ -556,7 +605,6 @@ export function TuitionGridWorkspace() {
                                 <option key={l.id} value={l.id}>{l.name}</option>
                             ))}
                         </select>
-
                     </div>
 
                     {compareLocationId && compareLocMap ? (
@@ -565,7 +613,7 @@ export function TuitionGridWorkspace() {
                                 <thead>
                                     <tr className="border-b border-gray-100 bg-gray-50">
                                         <th className="text-left px-4 py-2.5 font-medium text-gray-600 w-48">
-                                            Offering
+                                            Offering / Variant
                                         </th>
                                         {cadences.map((c) => (
                                             <th key={c.item_key} className="text-right px-3 py-2.5 font-medium text-gray-600 whitespace-nowrap">
@@ -575,23 +623,42 @@ export function TuitionGridWorkspace() {
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {offerings.map((offering, oi) => (
-                                        <tr key={offering.id} className={oi % 2 === 0 ? "bg-white" : "bg-gray-50/40"}>
-                                            <td className="px-4 py-2 font-medium text-gray-700 whitespace-nowrap">
-                                                {offering.label}
-                                            </td>
-                                            {cadences.map((cadence) => {
-                                                const cellKey = tuitionRateCellKey(offering.id, cadence.item_key);
-                                                return (
-                                                    <CompareCell
-                                                        key={cellKey}
-                                                        orgRow={orgOnlyMap.get(cellKey)}
-                                                        locRow={compareLocMap.get(cellKey)}
-                                                        locationLabel={compareLocLabel}
-                                                    />
-                                                );
-                                            })}
-                                        </tr>
+                                    {offeringRows.map(({ offering, variants: offeringVariants }) => (
+                                        <>
+                                            <tr key={`offering-${offering.id}`} className="border-t border-gray-100 bg-gray-50/60">
+                                                <td
+                                                    colSpan={cadences.length + 1}
+                                                    className="px-4 py-1.5 text-xs font-semibold text-gray-500 uppercase tracking-wide"
+                                                >
+                                                    {offering.label}
+                                                </td>
+                                            </tr>
+                                            {offeringVariants.map((variant, vi) => (
+                                                <tr
+                                                    key={variant.id}
+                                                    className={vi % 2 === 0 ? "bg-white" : "bg-gray-50/40"}
+                                                >
+                                                    <td className="px-4 py-2 text-gray-700 whitespace-nowrap pl-6">
+                                                        {isDefaultVariant(variant) ? (
+                                                            <span className="text-gray-400 italic text-xs">Default</span>
+                                                        ) : (
+                                                            describeVariant(variant)
+                                                        )}
+                                                    </td>
+                                                    {cadences.map((cadence) => {
+                                                        const cellKey = tuitionRateCellKey(variant.id, cadence.item_key);
+                                                        return (
+                                                            <CompareCell
+                                                                key={cellKey}
+                                                                orgRow={orgOnlyMap.get(cellKey)}
+                                                                locRow={compareLocMap.get(cellKey)}
+                                                                locationLabel={compareLocLabel}
+                                                            />
+                                                        );
+                                                    })}
+                                                </tr>
+                                            ))}
+                                        </>
                                     ))}
                                 </tbody>
                             </table>

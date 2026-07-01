@@ -3,6 +3,10 @@
  *
  * Ownership: Programs. Consumed by Commercial (rates), Enrollment,
  * Scheduling, Capacity, Attendance, Analytics, AI.
+ *
+ * An offering represents the attendance TYPE: Full Day, Part Day, Drop-In, etc.
+ * Quantity variants (2 days/week, 5 days/week) live in program_offering_variants.
+ * Commercial tuition rates attach to variants, not directly to offerings.
  */
 
 export type AttendanceType =
@@ -13,8 +17,6 @@ export type AttendanceType =
     | "before_school"
     | "after_school"
     | "custom";
-
-export type QuantityType = "days" | "hours" | "sessions" | "weeks" | "months";
 
 export type OfferingStatus =
     | "active"
@@ -30,8 +32,6 @@ export type ProgramOffering = {
     program_key: string;
     label: string;
     attendance_type: AttendanceType;
-    quantity_type: QuantityType | null;
-    quantity_value: number | null;
     status: OfferingStatus;
     effective_start: string | null;
     effective_end: string | null;
@@ -52,13 +52,13 @@ export const ATTENDANCE_TYPE_LABELS: Record<AttendanceType, string> = {
     custom: "Custom",
 };
 
-export const QUANTITY_TYPE_LABELS: Record<QuantityType, string> = {
-    days: "days/week",
-    hours: "hours/week",
-    sessions: "sessions/week",
-    weeks: "weeks",
-    months: "months",
-};
+/** Attendance types that do NOT typically have quantity variants (transparent default variant). */
+export const NO_QUANTITY_ATTENDANCE_TYPES = new Set<AttendanceType>([
+    "drop_in",
+    "hourly",
+    "before_school",
+    "after_school",
+]);
 
 export const OFFERING_STATUS_LABELS: Record<OfferingStatus, string> = {
     active: "Active",
@@ -71,21 +71,12 @@ export const OFFERING_STATUS_LABELS: Record<OfferingStatus, string> = {
 
 /** Whether an offering is customer-visible (not draft/retired/archived). */
 export function isOfferingVisible(offering: ProgramOffering): boolean {
-    return offering.is_active && (
-        offering.status === "active" ||
-        offering.status === "coming_soon" ||
-        offering.status === "seasonal"
+    return (
+        offering.is_active &&
+        (offering.status === "active" ||
+            offering.status === "coming_soon" ||
+            offering.status === "seasonal")
     );
-}
-
-/** Human-readable description of an offering's attendance pattern. */
-export function describeOffering(offering: ProgramOffering): string {
-    const base = ATTENDANCE_TYPE_LABELS[offering.attendance_type] ?? offering.attendance_type;
-    if (offering.quantity_value != null && offering.quantity_type != null) {
-        const unit = QUANTITY_TYPE_LABELS[offering.quantity_type] ?? offering.quantity_type;
-        return `${base} – ${offering.quantity_value} ${unit}`;
-    }
-    return base;
 }
 
 /** Sort offerings by sort_order then label. */

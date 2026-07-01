@@ -2,19 +2,18 @@ import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { logAdminAudit } from "@/lib/adminAuth";
-import type { ProgramOffering, AttendanceType, QuantityType, OfferingStatus } from "@/lib/programs/programOfferings";
+import type { ProgramOffering, AttendanceType, OfferingStatus } from "@/lib/programs/programOfferings";
 
 const VALID_ATTENDANCE_TYPES = new Set<AttendanceType>([
     "full_time", "part_time", "drop_in", "hourly", "before_school", "after_school", "custom",
 ]);
 
-const VALID_QUANTITY_TYPES = new Set<QuantityType>([
-    "days", "hours", "sessions", "weeks", "months",
-]);
-
 const VALID_STATUSES = new Set<OfferingStatus>([
     "active", "draft", "coming_soon", "seasonal", "retired", "archived",
 ]);
+
+const SELECT_COLS =
+    "id, org_id, program_key, label, attendance_type, status, effective_start, effective_end, sort_order, is_active, metadata, created_at, updated_at";
 
 function mapRow(r: Record<string, unknown>): ProgramOffering {
     return {
@@ -23,8 +22,6 @@ function mapRow(r: Record<string, unknown>): ProgramOffering {
         program_key: String(r.program_key ?? ""),
         label: String(r.label ?? ""),
         attendance_type: (r.attendance_type as AttendanceType) ?? "full_time",
-        quantity_type: (r.quantity_type as QuantityType | null) ?? null,
-        quantity_value: r.quantity_value != null ? Number(r.quantity_value) : null,
         status: (r.status as OfferingStatus) ?? "active",
         effective_start: (r.effective_start as string | null) ?? null,
         effective_end: (r.effective_end as string | null) ?? null,
@@ -50,7 +47,7 @@ export async function GET(request: NextRequest) {
     if (!ctx.ok) {
         return NextResponse.json(
             { error: ctx.status === 401 ? "Unauthorized" : "Forbidden" },
-            { status: ctx.status }
+            { status: ctx.status },
         );
     }
 
@@ -61,7 +58,7 @@ export async function GET(request: NextRequest) {
     const supabase = createAdminClient();
     let q = supabase
         .from("program_offerings")
-        .select("id, org_id, program_key, label, attendance_type, quantity_type, quantity_value, status, effective_start, effective_end, sort_order, is_active, metadata, created_at, updated_at")
+        .select(SELECT_COLS)
         .eq("org_id", ctx.orgId)
         .order("program_key")
         .order("sort_order")
@@ -71,9 +68,7 @@ export async function GET(request: NextRequest) {
     if (activeOnly) q = q.eq("is_active", true);
 
     const { data, error } = await q;
-    if (error) {
-        return NextResponse.json({ error: error.message }, { status: 500 });
-    }
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
     return NextResponse.json({
         offerings: (data ?? []).map((r: Record<string, unknown>) => mapRow(r)),
@@ -82,14 +77,16 @@ export async function GET(request: NextRequest) {
 
 /**
  * POST /api/admin/programs/offerings
- * Create a new program offering. Ops role required.
+ * Create a new program offering (attendance type). Ops role required.
+ * Automatically creates a default transparent variant for no-quantity types.
+ * Body: { program_key, label, attendance_type, status?, sort_order? }
  */
 export async function POST(request: NextRequest) {
     const ctx = await getAdminContextCached();
     if (!ctx.ok) {
         return NextResponse.json(
             { error: ctx.status === 401 ? "Unauthorized" : "Forbidden" },
-            { status: ctx.status }
+            { status: ctx.status },
         );
     }
     if (!["owner", "admin", "ops"].includes(ctx.role)) {
@@ -113,22 +110,9 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: "Invalid attendance_type" }, { status: 400 });
     }
 
-    const quantity_type = body.quantity_type != null
-        ? (String(body.quantity_type) as QuantityType)
-        : null;
-    if (quantity_type != null && !VALID_QUANTITY_TYPES.has(quantity_type)) {
-        return NextResponse.json({ error: "Invalid quantity_type" }, { status: 400 });
-    }
-
-    const quantity_value = body.quantity_value != null ? Number(body.quantity_value) : null;
-    if (quantity_value != null && (!Number.isFinite(quantity_value) || quantity_value <= 0)) {
-        return NextResponse.json({ error: "quantity_value must be a positive number" }, { status: 400 });
-    }
-
-    const status: OfferingStatus = (VALID_STATUSES.has(body.status as OfferingStatus)
-        ? body.status
-        : "active") as OfferingStatus;
-
+    const status: OfferingStatus = VALID_STATUSES.has(body.status as OfferingStatus)
+        ? (body.status as OfferingStatus)
+        : "active";
     const sort_order = typeof body.sort_order === "number" ? body.sort_order : 100;
     const effective_start = body.effective_start != null ? String(body.effective_start) : null;
     const effective_end = body.effective_end != null ? String(body.effective_end) : null;
@@ -145,34 +129,51 @@ export async function POST(request: NextRequest) {
             program_key,
             label,
             attendance_type,
-            quantity_type,
-            quantity_value,
             status,
             effective_start,
             effective_end,
             sort_order,
             metadata,
         })
-        .select("id, org_id, program_key, label, attendance_type, quantity_type, quantity_value, status, effective_start, effective_end, sort_order, is_active, metadata, created_at, updated_at")
+        .select(SELECT_COLS)
         .single();
 
     if (error) {
         if (error.code === "23505") {
             return NextResponse.json(
-                { error: "An offering with this attendance type and quantity already exists for this program" },
-                { status: 409 }
+                { error: "An offering with this attendance type already exists for this program" },
+                { status: 409 },
             );
         }
         return NextResponse.json({ error: error.message }, { status: 400 });
     }
 
+    const offering = mapRow(data as Record<string, unknown>);
+
+    // Always create a default transparent variant so rates have somewhere to attach.
+    const { data: variant } = await supabase
+        .from("program_offering_variants")
+        .insert({
+            org_id: ctx.orgId,
+            offering_id: offering.id,
+            label: null,
+            quantity_type: null,
+            quantity_value: null,
+            sort_order: 10,
+        })
+        .select("id")
+        .single();
+
     logAdminAudit({
         entity: "program_offerings",
-        id: String(data.id),
+        id: offering.id,
         changed_fields: ["created"],
         actor_user_id: ctx.userId,
         role: ctx.role,
     });
 
-    return NextResponse.json({ offering: mapRow(data as Record<string, unknown>) }, { status: 201 });
+    return NextResponse.json(
+        { offering, default_variant_id: variant?.id ?? null },
+        { status: 201 },
+    );
 }

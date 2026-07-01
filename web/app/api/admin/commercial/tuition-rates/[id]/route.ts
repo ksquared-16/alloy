@@ -4,14 +4,14 @@ import { getAdminContextCached } from "@/lib/admin/getAdminContext";
 import type { TuitionRateRow } from "@/lib/commercial/tuitionRates";
 
 const SELECT_COLS =
-    "id, org_id, location_id, offering_id, cadence_key, payer_type, rate_cents, is_active, not_offered, metadata, created_at, updated_at";
+    "id, org_id, location_id, variant_id, cadence_key, payer_type, rate_cents, is_active, not_offered, metadata, created_at, updated_at";
 
 function mapRateRow(r: Record<string, unknown>): TuitionRateRow {
     return {
         id: String(r.id ?? ""),
         org_id: String(r.org_id ?? ""),
         location_id: (r.location_id as string | null | undefined) ?? null,
-        offering_id: String(r.offering_id ?? ""),
+        variant_id: String(r.variant_id ?? ""),
         cadence_key: String(r.cadence_key ?? ""),
         payer_type: String(r.payer_type ?? "private_pay"),
         rate_cents: Number(r.rate_cents ?? 0),
@@ -29,13 +29,13 @@ function mapRateRow(r: Record<string, unknown>): TuitionRateRow {
 /** PATCH /api/admin/commercial/tuition-rates/[id] — update rate_cents, is_active, or not_offered. */
 export async function PATCH(
     request: NextRequest,
-    { params }: { params: Promise<{ id: string }> }
+    { params }: { params: Promise<{ id: string }> },
 ) {
     const ctx = await getAdminContextCached();
     if (!ctx.ok) {
         return NextResponse.json(
             { error: ctx.status === 401 ? "Unauthorized" : "Forbidden" },
-            { status: ctx.status }
+            { status: ctx.status },
         );
     }
 
@@ -53,7 +53,10 @@ export async function PATCH(
     if (body.rate_cents !== undefined) {
         const cents = Number(body.rate_cents);
         if (!Number.isFinite(cents) || cents < 0) {
-            return NextResponse.json({ error: "rate_cents must be a non-negative integer" }, { status: 400 });
+            return NextResponse.json(
+                { error: "rate_cents must be a non-negative integer" },
+                { status: 400 },
+            );
         }
         patch.rate_cents = Math.round(cents);
     }
@@ -79,16 +82,16 @@ export async function PATCH(
     return NextResponse.json({ rate: mapRateRow(data as Record<string, unknown>) });
 }
 
-/** DELETE /api/admin/commercial/tuition-rates/[id] — remove a rate (resets to org default). */
+/** DELETE /api/admin/commercial/tuition-rates/[id] — remove a rate (resets to org default or removes entry). */
 export async function DELETE(
     _request: NextRequest,
-    { params }: { params: Promise<{ id: string }> }
+    { params }: { params: Promise<{ id: string }> },
 ) {
     const ctx = await getAdminContextCached();
     if (!ctx.ok) {
         return NextResponse.json(
             { error: ctx.status === 401 ? "Unauthorized" : "Forbidden" },
-            { status: ctx.status }
+            { status: ctx.status },
         );
     }
 
@@ -102,9 +105,7 @@ export async function DELETE(
         .eq("org_id", ctx.orgId)
         .maybeSingle();
 
-    if (!existing) {
-        return NextResponse.json({ error: "Rate not found" }, { status: 404 });
-    }
+    if (!existing) return NextResponse.json({ error: "Rate not found" }, { status: 404 });
 
     const { error } = await supabase
         .from("commercial_tuition_rates")
