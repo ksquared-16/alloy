@@ -33,6 +33,52 @@ import type { WorkViewCompatQueueLane } from "@/lib/lifecycle/workViewsRuntimeCo
 import type { WorkViewConfigV1Stored } from "@/lib/lifecycle/workViewsConfigV1";
 import type { EntityLayoutRecord } from "@/lib/layout/layoutV2";
 import { publishedLayoutOptionsForAssignmentSlot } from "@/lib/layout/layoutAssignmentLayoutOptions";
+import { GRAIN_LABELS, validateWorkViewGrainConsistency } from "@/lib/lifecycle/stageGrainV1";
+import type { StageGrain } from "@/lib/lifecycle/stageGrainV1";
+
+function WorkViewGrainBanner({ stageGrains }: { stageGrains: (StageGrain | undefined)[] }) {
+    const defined = stageGrains.filter((g): g is StageGrain => g !== undefined);
+    const consistency = validateWorkViewGrainConsistency(stageGrains);
+
+    if (!consistency.valid) {
+        return (
+            <div
+                className="flex items-start gap-2 border-b border-red-200 bg-red-50 px-4 py-2.5"
+                data-testid="work-view-grain-mixed-warning"
+                role="alert"
+            >
+                <span className="mt-px text-red-600">⚠</span>
+                <p className="text-[12px] text-red-800">{consistency.message}</p>
+            </div>
+        );
+    }
+
+    if (defined.length === 0) {
+        return (
+            <div
+                className="flex items-center gap-2 border-b border-amber-200 bg-amber-50 px-4 py-2"
+                data-testid="work-view-grain-missing"
+            >
+                <span className="text-[11px] font-medium text-amber-800">Row type</span>
+                <span className="text-[11px] text-amber-700">Missing stage grain — configure Row type in each stage's Stage Context.</span>
+            </div>
+        );
+    }
+
+    const grain = defined[0];
+    return (
+        <div
+            className="flex items-center gap-3 border-b border-alloy-stone/20 bg-alloy-stone/[0.04] px-4 py-2"
+            data-testid="work-view-grain-banner"
+        >
+            <span className="text-[11px] font-medium text-alloy-midnight/60">Row type</span>
+            <span className="text-[11px] font-semibold text-alloy-midnight" data-testid="work-view-grain-label">
+                {GRAIN_LABELS[grain]}
+            </span>
+            <span className="text-[11px] text-alloy-midnight/40">· Inherited from included stages</span>
+        </div>
+    );
+}
 
 function WorkViewEditorSection({
     sectionId,
@@ -84,6 +130,7 @@ export default function WorkViewProcessEditorCard({
     departmentId,
     workUnitId,
     layouts,
+    stageGrains = [],
     queueLanes = [],
     onSelect: _onSelect,
     onChange,
@@ -94,6 +141,7 @@ export default function WorkViewProcessEditorCard({
     departmentId: string;
     workUnitId: string | null;
     layouts: EntityLayoutRecord[];
+    stageGrains?: (StageGrain | undefined)[];
     queueLanes?: WorkViewCompatQueueLane[];
     onSelect: () => void;
     onChange: (patch: Partial<WorkViewConfigV1Stored>) => void;
@@ -163,6 +211,8 @@ export default function WorkViewProcessEditorCard({
                     </button>
                 :   null}
             </header>
+
+            <WorkViewGrainBanner stageGrains={stageGrains} />
 
             <div className="space-y-0 px-4 pb-4">
                 <WorkViewEditorSection
@@ -238,11 +288,11 @@ export default function WorkViewProcessEditorCard({
                     testId="work-view-section-presentation"
                 >
                     <p className="mb-3 text-[11px] text-alloy-midnight/45">
-                        Choose surfaces for this Work View. Row type (grain) is inherited from the stage — use Work Views with matching grain for consistent queue rows.
+                        Select surfaces for this Work View. Surface owns presentation — Work View only selects which surface to use.
                     </p>
                     <div className="grid gap-2" data-testid={`process-work-view-presentation-${view.id}`}>
                         <LayoutAssignmentCard
-                            title="Queue row surface"
+                            title="Queue Row Surface"
                             subtitle="Work list presentation for this view."
                             selectedId={view.queue_layout_id ?? ""}
                             assignedRecord={queueRecord}
@@ -252,7 +302,7 @@ export default function WorkViewProcessEditorCard({
                             testIdPrefix={`process-work-view-queue-${view.id}`}
                         />
                         <LayoutAssignmentCard
-                            title="Focus panel layout"
+                            title="Focus Panel Surface"
                             subtitle="Selected record presentation for this view."
                             selectedId={view.focus_panel_layout_id ?? ""}
                             assignedRecord={drawerRecord}

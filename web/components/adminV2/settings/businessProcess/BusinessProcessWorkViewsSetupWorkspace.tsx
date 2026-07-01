@@ -2,14 +2,18 @@
 
 import WorkViewProcessEditorCard from "@/components/adminV2/settings/businessProcess/WorkViewProcessEditorCard";
 import { useWorkViewsConfiguration } from "@/components/adminV2/settings/businessProcess/WorkViewsConfigurationContext";
+import { validateWorkViewGrainConsistency } from "@/lib/lifecycle/stageGrainV1";
+import type { StageGrain } from "@/lib/lifecycle/stageGrainV1";
 
 export default function BusinessProcessWorkViewsSetupWorkspace({
     departmentId,
     workUnitId,
+    stageGrains = [],
     queueLanes = [],
 }: {
     departmentId: string;
     workUnitId: string | null;
+    stageGrains?: (StageGrain | undefined)[];
     queueLanes?: import("@/lib/lifecycle/workViewsRuntimeConvergence").WorkViewCompatQueueLane[];
 }) {
     const {
@@ -26,6 +30,8 @@ export default function BusinessProcessWorkViewsSetupWorkspace({
         drafts,
     } = useWorkViewsConfiguration();
 
+    const isMixedGrain = !validateWorkViewGrainConsistency(stageGrains).valid;
+
     if (loading) {
         return (
             <div className="process-config-setup-card p-8 text-sm text-alloy-midnight/50" data-testid="business-process-work-views-loading">
@@ -37,7 +43,7 @@ export default function BusinessProcessWorkViewsSetupWorkspace({
     return (
         <div className="space-y-3" data-testid="business-process-work-views-workspace">
             <p className="px-1 text-[11px] text-alloy-midnight/45">
-                Work Views define the operational lens — which rows operators see, how they are filtered, sorted, and what surface they use. Row type (grain) is set per stage in Stage → Stage Context. Use separate Work Views for stages with different row types.
+                Work Views define how operators consume process work. They choose which stages/work to include, how to group and sort them, and which surfaces present the rows.
             </p>
             {error ?
                 <p className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800" role="alert">
@@ -46,7 +52,12 @@ export default function BusinessProcessWorkViewsSetupWorkspace({
             :   null}
 
             <div className="flex flex-wrap items-center justify-end gap-2 process-config-workspace-toolbar">
-                {dirty ?
+                {isMixedGrain ?
+                    <span className="text-xs font-medium text-red-700" data-testid="work-views-mixed-grain-block">
+                        Mixed row types — resolve before saving
+                    </span>
+                :   null}
+                {dirty && !isMixedGrain ?
                     <span className="text-xs font-medium text-amber-800">Unsaved changes</span>
                 :   null}
                 {savedFlash ?
@@ -54,7 +65,7 @@ export default function BusinessProcessWorkViewsSetupWorkspace({
                 :   null}
                 <button
                     type="button"
-                    disabled={!dirty || saving}
+                    disabled={!dirty || saving || isMixedGrain}
                     onClick={() => void save()}
                     className="config-primary-btn config-primary-btn--sm"
                     data-testid="business-process-save-work-views"
@@ -70,6 +81,7 @@ export default function BusinessProcessWorkViewsSetupWorkspace({
                     departmentId={departmentId}
                     workUnitId={workUnitId}
                     layouts={layouts}
+                    stageGrains={stageGrains}
                     queueLanes={queueLanes}
                     onSelect={() => {}}
                     onChange={updateSelected}
