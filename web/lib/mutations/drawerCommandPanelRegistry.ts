@@ -17,7 +17,7 @@
  * Doctrine: docs/platform/modules/operational-mutation-platform.md
  */
 
-import type React from "react";
+import React from "react";
 import { UpdateLeadStatusPanel, type UpdateLeadStatusPanelProps } from "@/components/mutations/UpdateLeadStatusPanel";
 import { UPDATE_LEAD_STATUS_COMMAND_KEY } from "@/lib/mutations/domains/leadStatus";
 
