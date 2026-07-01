@@ -16,6 +16,7 @@ import {
     saveLifecycleStageRuntimeConfig,
     validateLifecycleStageRuntimeConfigSnapshot,
 } from "@/lib/lifecycle/saveLifecycleStageRuntimeConfig";
+import { parseStageV2DraftInput, persistStageV2DraftFields } from "@/lib/lifecycle/persistStageV2DraftFields";
 import type { LifecycleActivationV1 } from "@/lib/lifecycle/lifecycleActivationConfig";
 import { snapshotEnrollmentPipelineWorkUnit } from "@/lib/lifecycle/parseEnrollmentPipelineQueues";
 
@@ -66,6 +67,7 @@ export async function POST(request: NextRequest) {
         stage_operating_plan_v1?: unknown;
         status_rollup_v1?: unknown;
         perspectives_v1?: unknown;
+        stage_v2_draft?: unknown;
     } = {};
     try {
         body = (await request.json()) as typeof body;
@@ -181,6 +183,28 @@ export async function POST(request: NextRequest) {
                 ? { perspectivesV1 }
                 : {}),
         });
+
+        // Persist V2 builder stage fields if provided
+        const v2Draft = parseStageV2DraftInput(body.stage_v2_draft);
+        if (v2Draft && Object.keys(v2Draft).length > 0) {
+            const { data: deptRow } = await supabase
+                .from("departments")
+                .select("metadata")
+                .eq("id", departmentId)
+                .eq("org_id", ctx.orgId)
+                .maybeSingle();
+            const currentMetadata =
+                deptRow?.metadata != null && typeof deptRow.metadata === "object" && !Array.isArray(deptRow.metadata)
+                    ? (deptRow.metadata as Record<string, unknown>)
+                    : {};
+            await persistStageV2DraftFields(supabase, {
+                orgId: ctx.orgId,
+                departmentId,
+                stageKey,
+                metadata: currentMetadata,
+                draft: v2Draft,
+            });
+        }
 
         const pipelineSnapshot =
             result.workUnitId && result.queueDefinitionRaw != null

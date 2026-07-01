@@ -482,12 +482,47 @@ export function visibleFieldsForState(
  * concepts, in order, honoring collapsed/expanded). Returns the same reference
  * when there is nothing to apply, so the default (uncustomized) surface is a no-op.
  */
+/**
+ * Evaluate a single FocusPanelCardCondition against the operational record.
+ * The `concept` field is treated as a flat record key (dot-notation or verbatim).
+ * This is V1 evaluation: concept = path string looked up in record.
+ */
+function evaluateFocusPanelCondition(
+    record: Record<string, unknown>,
+    condition: FocusPanelCardCondition,
+): boolean {
+    const raw = record[condition.concept];
+    const isEmpty =
+        raw === null ||
+        raw === undefined ||
+        raw === "" ||
+        raw === "—" ||
+        (Array.isArray(raw) && raw.length === 0);
+    switch (condition.operator) {
+        case "exists":
+            return !isEmpty;
+        case "not_exists":
+            return isEmpty;
+        case "is":
+            return String(raw ?? "") === String(condition.value ?? "");
+        case "is_not":
+            return String(raw ?? "") !== String(condition.value ?? "");
+    }
+}
+
 export function composeEffectiveCardModel(
     baseModel: FocusPanelCardModel,
     config: FocusPanelCardConfig | null | undefined,
     record: Record<string, unknown>,
 ): FocusPanelCardModel {
     if (!config) return baseModel;
+
+    // Evaluate visible_when conditions before anything else. If any visible_when
+    // condition fails, hide the card entirely — no layout work needed.
+    const visibleWhen = (config.conditions ?? []).filter((c) => c.kind === "visible_when");
+    if (visibleWhen.length > 0 && !visibleWhen.every((c) => evaluateFocusPanelCondition(record, c))) {
+        return { ...baseModel, visible: false };
+    }
 
     const appearance = config.appearance;
     const title = appearance?.titleOverride?.trim();

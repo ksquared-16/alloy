@@ -100,6 +100,7 @@ import {
     applyOperationalViewsToPillSections,
     applyOperationalViewsToTabPlaceholders,
     buildOperationalViewHeaderSection,
+    ensureAllOperationalViewsInSections,
     relabelPrimaryPillSectionWorkView,
 } from "@/lib/adminV2/runtime/perspective/mergeOperationalViewMetadata";
 import {
@@ -1044,6 +1045,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
         let sections = buildWorkUnitAboveFoldPillSections({ ui: queueUi, sectionedSummaries: expanded });
         if (workViewPerspectivesEnabled && stageOperationalViews.length) {
             sections = applyOperationalViewsToPillSections(sections, stageOperationalViews);
+            sections = ensureAllOperationalViewsInSections(sections, stageOperationalViews);
         }
         if (workViewPerspectivesEnabled) {
             sections = relabelPrimaryPillSectionWorkView(sections);
@@ -1089,6 +1091,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
         let placeholders = buildWorkUnitAboveFoldPlaceholderSections({ ui: queueUi, sections: ordered });
         if (workViewPerspectivesEnabled && stageOperationalViews.length) {
             placeholders = applyOperationalViewsToTabPlaceholders(placeholders, stageOperationalViews);
+            placeholders = ensureAllOperationalViewsInSections(placeholders, stageOperationalViews);
         }
         if (workViewPerspectivesEnabled) {
             placeholders = relabelPrimaryPillSectionWorkView(placeholders);

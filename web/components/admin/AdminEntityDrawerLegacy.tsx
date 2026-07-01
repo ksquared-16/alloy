@@ -95,6 +95,9 @@ import {
     ADMINV2_OPEN_TOUR_OUTCOME_MODAL,
     ADMINV2_OPEN_TOUR_SCHEDULE_MODAL,
 } from "@/lib/tours/actions/tourBookingActionClient";
+import { UpdateStatusAddNoteModal } from "@/components/admin/opportunity/actions/UpdateStatusAddNoteModal";
+import { getDrawerCommandPanelRenderer } from "@/lib/mutations/drawerCommandPanelRegistry";
+import type { MutationResult } from "@/lib/mutations/types";
 import { AddPersonModal } from "@/components/admin/opportunity/actions/AddPersonModal";
 import { AddInquiryChildModal } from "@/components/admin/opportunity/actions/AddInquiryChildModal";
 import {
@@ -1954,6 +1957,9 @@ export function AdminEntityDrawerLegacy() {
         action: ResolvedActionForClient;
         /** Surfaces POST /api/admin/actions/execute audit context (registry placement). */
         executeContext?: { surface: string; section_key?: string | null };
+    } | null>(null);
+    const [mutationCommandState, setMutationCommandState] = useState<{
+        commandKey: string;
     } | null>(null);
     const [relatedPeopleRefreshKey, setRelatedPeopleRefreshKey] = useState(0);
     const [opportunityQueueDefinition, setOpportunityQueueDefinition] = useState<QueueDefinitionV1 | null>(null);
@@ -4481,6 +4487,10 @@ export function AdminEntityDrawerLegacy() {
                     return;
                 }
                 if (formKey) setActionFormState({ form_key: formKey, action: a, executeContext: { surface: "record_header" } });
+                return;
+            }
+            if (a.action_type === "mutation_command") {
+                setMutationCommandState({ commandKey: a.key });
                 return;
             }
             if (a.action_type === "navigate") {
@@ -19417,6 +19427,125 @@ export function AdminEntityDrawerLegacy() {
                                 throw new Error(json.error?.message ?? "Action failed");
                             }
                             const row = json.data?.execution_result?.row;
+                            if (row && typeof row === "object") {
+                                setData((prev) => (prev && typeof prev === "object" ? { ...prev, ...row } : prev));
+                            }
+                            setActionFormState(null);
+                            refetch();
+                            window.dispatchEvent(
+                                new CustomEvent("adminv2:opportunity-updated", { detail: { id: drawer.id, action_key: actionKey } })
+                            );
+                        } finally {
+                            setOpportunityActionLoading(null);
+                        }
+                    }}
+                />
+                {mutationCommandState && drawer.id && drawer.id !== "new" && (() => {
+                    // Panel selection is registry-driven — no hardcoded commandKey check here.
+                    // To add a new drawer-level mutation panel, register it in drawerCommandPanelRegistry.ts.
+                    const renderer = getDrawerCommandPanelRenderer(mutationCommandState.commandKey);
+                    if (!renderer) return null;
+                    return renderer({
+                        opportunityId: drawer.id,
+                        currentStatusKey:
+                            data && typeof data === "object"
+                                ? String((data as { status_key?: unknown }).status_key ?? "")
+                                : null,
+                        currentStatusLabel:
+                            (statusDefsForDrawer ?? []).find(
+                                (s) =>
+                                    s.status_key ===
+                                    (data && typeof data === "object"
+                                        ? (data as { status_key?: unknown }).status_key
+                                        : null)
+                            )?.status_label ?? null,
+                        statusOptions: (statusDefsForDrawer ?? [])
+                            .filter((s) => s.is_active !== false)
+                            .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
+                            .map((s) => ({
+                                value: String(s.status_key ?? ""),
+                                label: String(s.status_label ?? s.status_key ?? ""),
+                            })),
+                        workUnitId:
+                            data && typeof data === "object" &&
+                            (data as { work_unit_id?: unknown }).work_unit_id != null
+                                ? String((data as { work_unit_id?: unknown }).work_unit_id)
+                                : null,
+                        departmentId: opportunityWorkUnitDepartmentId,
+                        onClose: () => setMutationCommandState(null),
+                        onSuccess: (result: Extract<MutationResult, { status: "committed" }>) => {
+                            setMutationCommandState(null);
+                            setData((prev) =>
+                                prev && typeof prev === "object"
+                                    ? { ...prev, status_key: result.newState }
+                                    : prev
+                            );
+                            refetch();
+                            window.dispatchEvent(
+                                new CustomEvent("adminv2:opportunity-updated", {
+                                    detail: { id: drawer.id, action_key: mutationCommandState.commandKey },
+                                })
+                            );
+                        },
+                    });
+                })()}
+                <UpdateStatusAddNoteModal
+                    open={actionFormState?.form_key === "update_status_add_note"}
+                    onClose={() => setActionFormState(null)}
+                    title={actionFormState?.action?.label ?? "Update status"}
+                    initialStatusKey={(() => {
+                        if (!data || typeof data !== "object") return null;
+                        const v = (data as { status_key?: unknown }).status_key;
+                        const s = v != null ? String(v).trim() : "";
+                        return s || null;
+                    })()}
+                    statusOptions={(statusDefsForDrawer ?? [])
+                        .filter((s) => s.is_active !== false)
+                        .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
+                        .map((s) => ({
+                            value: String(s.status_key ?? ""),
+                            label: String(s.status_label ?? s.status_key ?? ""),
+                        }))}
+                    transitionContext={{
+                        entityType: "opportunities",
+                        departmentId: opportunityWorkUnitDepartmentId,
+                        workUnitId:
+                            data && typeof data === "object" && (data as { work_unit_id?: unknown }).work_unit_id != null
+                                ? String((data as { work_unit_id?: unknown }).work_unit_id)
+                                : null,
+                        actionKey: actionFormState?.action?.key ? String(actionFormState.action.key) : "update_status_add_note",
+                    }}
+                    onSubmit={async (payload) => {
+                        if (!drawer.id || drawer.id === "new" || drawer.type !== "opportunities") return;
+                        const actionKey = actionFormState?.action?.key ? String(actionFormState.action.key) : "update_status_add_note";
+                        setOpportunityActionLoading(actionKey);
+                        setSaveError(null);
+                        try {
+                            const workUnitId =
+                                data && typeof data === "object" && (data as { work_unit_id?: unknown }).work_unit_id != null
+                                    ? String((data as { work_unit_id?: unknown }).work_unit_id)
+                                    : null;
+                            const res = await fetch("/api/admin/actions/execute", {
+                                method: "POST",
+                                credentials: "include",
+                                headers: { "Content-Type": "application/json" },
+                                body: JSON.stringify({
+                                    action_key: actionKey,
+                                    entity_type: "opportunity",
+                                    entity_id: drawer.id,
+                                    context: { surface: "record_header", work_unit_id: workUnitId },
+                                    payload,
+                                }),
+                            });
+                            const json = (await res.json().catch(() => ({}))) as {
+                                ok?: boolean;
+                                error?: string;
+                                execution_result?: Record<string, unknown> & { row?: Record<string, unknown> };
+                            };
+                            if (!res.ok || !json.ok) {
+                                throw new Error(json.error ?? "Action failed");
+                            }
+                            const row = json.execution_result?.row;
                             if (row && typeof row === "object") {
                                 setData((prev) => (prev && typeof prev === "object" ? { ...prev, ...row } : prev));
                             }

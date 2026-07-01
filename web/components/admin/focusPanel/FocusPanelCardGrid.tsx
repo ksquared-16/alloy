@@ -22,6 +22,8 @@ import {
 } from "@/lib/adminV2/runtime/focusPanel/composition/composeFocusPanelSurface";
 import {
     planPublishedLayout,
+    publishedLayoutReadingOrder,
+    PUBLISHED_LAYOUT_MIN_PX,
     type FocusPanelPublishedLayout,
 } from "@/lib/adminV2/runtime/focusPanel/composition/focusPanelPublishedLayout";
 import type { CardCompositionPreference } from "@/lib/adminV2/runtime/focusPanel/cardCompositionModel";
@@ -136,16 +138,38 @@ export default function FocusPanelCardGrid({
 
     useEffect(() => {
         const el = containerRef.current;
-        if (!el || typeof ResizeObserver === "undefined") return;
-        const ro = new ResizeObserver((entries) => {
-            const width = entries[0]?.contentRect.width ?? el.clientWidth;
-            setColumns(computeFocusPanelGridColumns(width));
-            setWidthPx(width);
-        });
-        ro.observe(el);
-        setColumns(computeFocusPanelGridColumns(el.clientWidth));
-        setWidthPx(el.clientWidth);
-        return () => ro.disconnect();
+        if (!el) return;
+        // Robust width measurement. The grid fills its container (CSS width:100%), so its own
+        // box IS the real surface width. Two failure modes are guarded:
+        //   (a) transient ZERO/tiny readings during a tab reveal or panel transition — we
+        //       ignore them and keep the last valid width, so a flicker NEVER permanently
+        //       collapses the surface to a stacked fallback (the reported bug);
+        //   (b) a ResizeObserver that does not fire reliably during that reveal — we also
+        //       re-measure on rAF, on short delays after mount (once the transition settles),
+        //       and on window resize. Collapse therefore only triggers on a real, stable
+        //       sub-breakpoint width.
+        const commit = (raw: number) => {
+            const w = raw > 1 ? raw : (el.getBoundingClientRect().width || el.parentElement?.clientWidth || 0);
+            if (w <= 1) return; // transient zero — keep the last valid width
+            setColumns(computeFocusPanelGridColumns(w));
+            setWidthPx((prev) => (Math.abs(prev - w) < 0.5 ? prev : w));
+        };
+        const measure = () => commit(el.getBoundingClientRect().width);
+        measure();
+        const raf = requestAnimationFrame(measure);
+        const settle = [setTimeout(measure, 120), setTimeout(measure, 400)];
+        const ro =
+            typeof ResizeObserver !== "undefined"
+                ? new ResizeObserver((entries) => commit(entries[0]?.contentRect.width ?? el.getBoundingClientRect().width))
+                : null;
+        ro?.observe(el);
+        window.addEventListener("resize", measure);
+        return () => {
+            cancelAnimationFrame(raf);
+            settle.forEach(clearTimeout);
+            ro?.disconnect();
+            window.removeEventListener("resize", measure);
+        };
     }, []);
 
     // Before the ResizeObserver reports a width (SSR + first client paint), `widthPx`
@@ -171,6 +195,64 @@ export default function FocusPanelCardGrid({
             overrides: compositionOverrides,
         });
     }, [publishedLayout, composed, composeCards, measuredWidth, compositionOverrides]);
+
+    // ── Runtime state diagnostic (the "flash-then-reflow" tracer) ────────────
+    // A single snapshot of WHY the surface is rendering the strategy it is, on every
+    // render. Exposed as DOM attributes + `window.__focusPanelGridDiag` / a transition
+    // log; a dev console.warn fires whenever the strategy CHANGES (the reflow).
+    const diag = useMemo(() => {
+        let strategy: string;
+        let collapsed = false;
+        let reason: string;
+        if (publishedPlan) {
+            strategy = `published-${publishedPlan.strategy}`;
+            collapsed = publishedPlan.collapsed;
+            reason = collapsed
+                ? `collapsed: measured ${Math.round(measuredWidth)}px < ${PUBLISHED_LAYOUT_MIN_PX}px`
+                : `published ${publishedPlan.strategy} @ ${Math.round(measuredWidth)}px`;
+        } else if (composition) {
+            strategy = `composed-${composition.strategy}`;
+            reason = `composed ${composition.strategy} @ ${Math.round(measuredWidth)}px`;
+        } else {
+            strategy = "legacy-grid";
+            reason = `no published layout, no composition (composed=${composed})`;
+        }
+        return {
+            widthPx: Math.round(widthPx),
+            measuredWidth: Math.round(measuredWidth),
+            publishedLayout: publishedLayout ? "present" : "null",
+            publishedCards: publishedLayout ? publishedLayoutReadingOrder(publishedLayout).length : 0,
+            strategy,
+            collapsed,
+            areas: publishedPlan?.areas.length ?? 0,
+            lanes: publishedPlan?.lanes.length ?? composition?.lanes.length ?? 0,
+            rows: publishedPlan?.rows.length ?? 0,
+            order: publishedLayout ? publishedLayoutReadingOrder(publishedLayout) : (composeCards?.map((c) => c.key) ?? []),
+            reason,
+        };
+    }, [publishedPlan, composition, publishedLayout, composed, composeCards, widthPx, measuredWidth]);
+
+    const lastStrategy = useRef<string>("");
+    useEffect(() => {
+        if (typeof window === "undefined" || process.env.NODE_ENV === "production") return;
+        const w = window as unknown as { __focusPanelGridDiag?: unknown; __focusPanelGridLog?: unknown[] };
+        w.__focusPanelGridDiag = diag;
+        (w.__focusPanelGridLog ||= []).push(diag);
+        if (lastStrategy.current && lastStrategy.current !== diag.strategy) {
+            // The reflow: surface switched composition strategy after a state change.
+            // eslint-disable-next-line no-console
+            console.warn(`[focus-panel] strategy ${lastStrategy.current} → ${diag.strategy} · ${diag.reason}`);
+        }
+        lastStrategy.current = diag.strategy;
+    }, [diag]);
+
+    const diagAttrs = {
+        "data-fp-width-px": diag.widthPx,
+        "data-fp-measured-px": diag.measuredWidth,
+        "data-fp-collapsed": diag.collapsed ? "true" : "false",
+        "data-fp-published-cards": diag.publishedCards,
+        "data-fp-render-strategy": diag.strategy,
+    } as const;
 
     // Shared cell box — identical attributes in both paths so the depth/elevation CSS
     // (data-fp-elevated), refs, height reservation, and zoom origin all keep working.
@@ -227,10 +309,36 @@ export default function FocusPanelCardGrid({
                 data-focus-panel-split-layout={dataFocusPanelSplitLayout}
                 data-fp-depth={elevatedCellKey ? "active" : undefined}
                 data-fp-closing={closing ? "true" : undefined}
+                {...diagAttrs}
                 style={{ ["--alloy-os-fp-units" as string]: publishedPlan.columnBase }}
             >
                 {scrim}
-                {publishedPlan.strategy === "lanes" ? (
+                {publishedPlan.strategy === "grid" ? (
+                    // V5 responsive CSS Grid: each region places at colStart/rowStart and
+                    // spans columns/rows (vertical + horizontal spans, independent regions).
+                    <div
+                        className="alloy-os-fp-canvas alloy-os-fp-canvas--grid"
+                        data-fp-strategy="published-grid"
+                        style={{ ["--fp-grid-cols" as string]: publishedPlan.gridColumns }}
+                    >
+                        {publishedPlan.areas.map((area) => (
+                            <div
+                                key={area.card}
+                                className="alloy-os-fp-grid-area"
+                                data-fp-grid-area={area.card}
+                                data-fp-grid-col={`${area.colStart}/${area.colSpan}`}
+                                data-fp-grid-row={`${area.rowStart}/${area.rowSpan}`}
+                                style={{
+                                    gridColumn: `${area.colStart} / span ${area.colSpan}`,
+                                    gridRow: `${area.rowStart} / span ${area.rowSpan}`,
+                                    minHeight: area.minHeightPx ? `${area.minHeightPx}px` : undefined,
+                                }}
+                            >
+                                {renderCellBox(area.card, { dataWidthUnits: area.colSpan })}
+                            </div>
+                        ))}
+                    </div>
+                ) : publishedPlan.strategy === "lanes" ? (
                     // Column-major: each authored column flows as one continuous lane that
                     // fills its proportional width — the surface composes with no dead space
                     // (same lane mechanism as the auto-composition default).
@@ -307,6 +415,7 @@ export default function FocusPanelCardGrid({
                 data-focus-panel-split-layout={dataFocusPanelSplitLayout}
                 data-fp-depth={elevatedCellKey ? "active" : undefined}
                 data-fp-closing={closing ? "true" : undefined}
+                {...diagAttrs}
                 style={{ ["--alloy-os-fp-units" as string]: composition.columnBase }}
             >
                 {scrim}
@@ -356,6 +465,7 @@ export default function FocusPanelCardGrid({
             data-focus-panel-grid-columns={columns}
             data-focus-panel-split-layout={dataFocusPanelSplitLayout}
             data-fp-depth={elevatedCellKey ? "active" : undefined}
+            {...diagAttrs}
             style={{ ["--alloy-os-fp-cols" as string]: columns }}
         >
             {scrim}

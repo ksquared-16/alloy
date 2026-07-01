@@ -9,7 +9,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { getAdminContext } from "@/lib/admin/getAdminContext";
-import { isLayoutV2ConfigEnabledServer } from "@/lib/layout/featureFlag";
 import {
     clearBusinessProcessLayoutAssignment,
     listBusinessProcessLayoutAssignments,
@@ -20,13 +19,7 @@ import { validateBusinessProcessLayoutAssignmentInput } from "@/lib/layout/valid
 import { isLayoutAssignmentSurfaceKey } from "@/lib/layout/businessProcessLayoutAssignmentTypes";
 import { seedEnrollmentBusinessProcessLayoutAssignments } from "@/lib/layout/seedEnrollmentBusinessProcessLayoutAssignments";
 
-function notFound() {
-    return NextResponse.json({ error: "Not found" }, { status: 404 });
-}
-
 export async function GET(req: NextRequest) {
-    if (!isLayoutV2ConfigEnabledServer()) return notFound();
-
     const ctx = await getAdminContext();
     if (!ctx.ok) {
         return NextResponse.json({ error: ctx.status === 401 ? "Unauthorized" : "Forbidden" }, { status: ctx.status });
@@ -39,8 +32,6 @@ export async function GET(req: NextRequest) {
 }
 
 export async function PUT(req: NextRequest) {
-    if (!isLayoutV2ConfigEnabledServer()) return notFound();
-
     const ctx = await getAdminContext();
     if (!ctx.ok) {
         return NextResponse.json({ error: ctx.status === 401 ? "Unauthorized" : "Forbidden" }, { status: ctx.status });
@@ -115,8 +106,6 @@ export async function PUT(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-    if (!isLayoutV2ConfigEnabledServer()) return notFound();
-
     const ctx = await getAdminContext();
     if (!ctx.ok) {
         return NextResponse.json({ error: ctx.status === 401 ? "Unauthorized" : "Forbidden" }, { status: ctx.status });

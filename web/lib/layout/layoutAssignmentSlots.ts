@@ -28,36 +28,28 @@ export function layoutAssignmentSlotsForStage(stageKey: string): readonly Layout
 
     if (isEnrolled) {
         return [
-            { slotId: "queue", label: "Queue layout", surfaceKey: "queue_record" },
-            { slotId: "child_drawer", label: "Child drawer layout", surfaceKey: "child_drawer" },
-            { slotId: "person_drawer", label: "Person drawer layout", surfaceKey: "person_drawer", optional: true },
+            { slotId: "queue", label: "Queue Row Surface", surfaceKey: "queue_record" },
+            { slotId: "child_drawer", label: "Focus Panel Surface", surfaceKey: "child_drawer" },
         ];
     }
 
     const slots: LayoutAssignmentSlotDefinition[] = [
         {
             slotId: isWaitlist ? "waitlist_queue" : "queue",
-            label: isWaitlist ? "Waitlist queue layout" : "Queue layout",
+            label: isWaitlist ? "Waitlist Queue Row Surface" : "Queue Row Surface",
             surfaceKey: isWaitlist ? "waitlist_queue_record" : "queue_record",
         },
-        { slotId: "drawer", label: "Drawer layout", surfaceKey: "opportunity_drawer" },
+        { slotId: "drawer", label: "Focus Panel Surface", surfaceKey: "opportunity_drawer" },
     ];
 
     if (stage === "enrollment") {
         slots.push({
             slotId: "child_drawer",
-            label: "Child drawer layout",
+            label: "Child Focus Panel Surface",
             surfaceKey: "child_drawer",
             optional: true,
         });
     }
-
-    slots.push({
-        slotId: "person_drawer",
-        label: "Person drawer layout",
-        surfaceKey: "person_drawer",
-        optional: true,
-    });
 
     return slots;
 }

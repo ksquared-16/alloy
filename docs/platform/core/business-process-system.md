@@ -69,7 +69,7 @@ A **stage** is where operators **work a cohort of records** with shared expected
 
 | Operator question | Configuration surface |
 |-------------------|----------------------|
-| Who belongs here? | Queue membership, status filters, grain (case vs candidate) |
+| Who belongs here? | Queue membership, entry conditions, grain |
 | What work is expected? | Stage operating plan, task templates, action placements |
 | What does success look like? | Outcome picker, outcome rules (metadata) |
 | What is off track? | Attention rules, off-track criteria |
@@ -199,6 +199,36 @@ registered-action route, so the BPS never gains a parallel mutation path. See
 `../modules/actions-and-workflows.md` § Command Surface and
 `docs/sprints/06_2026/command_surface_v2.md`.
 
+### Stage grain
+
+Each stage declares a **grain** — the entity type that queue rows represent.
+
+| Example stage | Grain |
+|---|---|
+| Enrollment Intake | family |
+| Waitlist | child |
+| Attendance | child |
+| Billing | household |
+| Family Summary | household |
+
+Grain is a stage-level declaration, not a work-unit default. A single business process can contain stages at different grains. Queues built for a stage use the stage's grain.
+
+### Stage-action relationship and evaluation states
+
+Actions evaluated in stage context return one of five states:
+
+| State | Meaning |
+|---|---|
+| **Recommended** | Expected at this stage, all preconditions met |
+| **Ready** | Available and executable; not the highlighted next step |
+| **Warning** | Executable with advisory notices |
+| **Blocked** | Cannot execute; reason is shown to operator |
+| **Unavailable** | Not applicable in this context |
+
+**Actions do not disappear because of stage.** Blocked actions remain visible with their reason — operators can expedite (e.g. enroll a child who skipped the waitlist) while the platform still enforces business rules (e.g. placement confirmation required).
+
+See `docs/platform/modules/business-process-execution-platform.md` for the full action evaluation model and domain registry.
+
 ---
 
 ## Record (authoritative detail)
@@ -244,6 +274,7 @@ On enrollment departments, the needs-attention queue usually lives **inside** `e
 
 | Topic | Doc |
 |-------|-----|
+| Business Process Execution Platform | `../modules/business-process-execution-platform.md` |
 | Navigation & workspace landing | `navigation-and-workspace-doctrine.md` |
 | Queues & preview contract | `queue-system.md` |
 | Status ownership | `status-and-state-system.md` |
@@ -252,4 +283,4 @@ On enrollment departments, the needs-attention queue usually lives **inside** `e
 
 ## When this doc must be updated
 
-When operator hierarchy language changes, stage/work-unit binding rules change, or enrollment canonical patterns shift.
+When operator hierarchy language changes, stage/work-unit binding rules change, stage-action or grain model shifts, or enrollment canonical patterns change.

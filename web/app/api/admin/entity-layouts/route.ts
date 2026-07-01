@@ -15,6 +15,7 @@ import { getAdminContext } from "@/lib/admin/getAdminContext";
 import { logAdminAudit } from "@/lib/adminAuth";
 import { isLayoutV2ConfigEnabledServer } from "@/lib/layout/featureFlag";
 import { isLayoutSurface, type LayoutSurface } from "@/lib/layout/layoutV2";
+// isLayoutV2ConfigEnabledServer retained for POST (layout creation); GET is unconditional.
 import { parseLayoutDoc } from "@/lib/layout/layoutV2Schema";
 import { resolveLayout } from "@/lib/layout/layoutResolver";
 import { layoutDocFromRegistry, ALL_ENTITY_PRESENTATION_TYPES } from "@/lib/layout/migrateFromRegistry";
@@ -44,8 +45,6 @@ function notFound() {
 }
 
 export async function GET(request: NextRequest) {
-    if (!isLayoutV2ConfigEnabledServer()) return notFound();
-
     const ctx = await getAdminContext();
     if (!ctx.ok) {
         return NextResponse.json({ error: ctx.status === 401 ? "Unauthorized" : "Forbidden" }, { status: ctx.status });

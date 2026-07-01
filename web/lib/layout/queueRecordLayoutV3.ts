@@ -97,6 +97,12 @@ export type QueueRecordColumnConfig = {
     width: QueueRecordColumnWidth;
     scope: QueueRecordScope;
     blocks: QueueRecordBlockConfig[];
+    /**
+     * Optional zone-level visibility condition. When set, the entire column is hidden
+     * when the condition fails. V1: stored by the Queue Row Builder, evaluated by the
+     * queue row runtime renderer (deferred — runtime evaluation wired in V2).
+     */
+    visibleWhen?: LayoutCondition;
 };
 
 import type { QueueRecordFixedControls } from "@/lib/layout/queueRecordLayoutConfig";
@@ -458,31 +464,211 @@ export function collectRefKeysFromQueueRecordLayoutV3(config: QueueRecordLayoutC
     return [...keys];
 }
 
+/**
+ * Default candidate-grain waitlist queue layout.
+ *
+ * Standalone config — not derived from defaultLeadQueueLayoutV3.
+ * Column structure mirrors the pipeline layout zones but with waitlist-specific
+ * content in the status and candidate columns.
+ *
+ * Columns (in order):
+ *   1. household  (identity)    — household name + primary contact
+ *   2. candidate  (children)    — child name, program, room, schedule
+ *   3. placement  (status_band) — position label, tier, wait since, override flags
+ *   4. attention  (next_step)   — attention signal + attention widget
+ *   5. date       (date_event)  — wait since date
+ */
 export function defaultWaitlistQueueLayoutV3(): QueueRecordLayoutConfigV3 {
-    const lead = defaultLeadQueueLayoutV3();
+    // 1. Household column — same as pipeline
+    const household = createColumnFromScope({ type: "main_record" }, "Household");
+    household.width = "identity";
+    household.label = "";
+    household.blocks = [
+        {
+            type: "field_group",
+            id: nextQueueRecordBlockId("wl-household"),
+            fields: [
+                {
+                    id: nextQueueRecordFieldId("wl-household-name"),
+                    fieldKey: "customer.display_name",
+                    label: "Household name",
+                    emphasis: "title",
+                    icon: "home",
+                    display: "link",
+                    link: { target: "opportunity_drawer", idFieldKey: "opportunity.id" },
+                },
+                {
+                    id: nextQueueRecordFieldId("wl-primary-contact"),
+                    fieldKey: "person.primary_contact_name",
+                    label: "Primary contact",
+                    icon: "person",
+                    display: "link",
+                    link: { target: "person_drawer", idFieldKey: "opportunity.primary_person_id" },
+                },
+                {
+                    id: nextQueueRecordFieldId("wl-phone"),
+                    fieldKey: "person.phone",
+                    label: "Phone",
+                    showLabel: false,
+                    display: "phone",
+                    icon: "phone",
+                },
+            ],
+        },
+    ];
+
+    // 2. Candidate column — child + program + room + schedule
+    const candidateCol = createColumnFromScope(
+        { type: "repeated_related", relationshipKey: "children" },
+        "Candidate",
+    );
+    candidateCol.width = "children";
+    candidateCol.label = "";
+    const candidateRepeat = candidateCol.blocks[0];
+    if (candidateRepeat?.type === "repeated_record_block") {
+        candidateRepeat.display = "rows";
+        candidateRepeat.presentation = "row-list";
+        candidateRepeat.itemLabel = "Candidate";
+        candidateRepeat.maxItems = 3;
+        candidateRepeat.fields = [
+            {
+                id: nextQueueRecordFieldId("wl-child-name"),
+                fieldKey: "child.name",
+                label: "Child",
+                icon: "child",
+                display: "link",
+                link: { target: "child_drawer", idFieldKey: "child.id" },
+            },
+            {
+                id: nextQueueRecordFieldId("wl-program"),
+                fieldKey: "inquiry_child.program",
+                label: "Program",
+                display: "muted",
+                showLabel: false,
+                inlineWithPrevious: true,
+                visibleWhen: { type: "exists", path: "inquiry_child.program" },
+            },
+            {
+                id: nextQueueRecordFieldId("wl-room"),
+                fieldKey: "child.room",
+                label: "Room",
+                display: "muted",
+                showLabel: true,
+                visibleWhen: { type: "exists", path: "child.room" },
+            },
+            {
+                id: nextQueueRecordFieldId("wl-schedule"),
+                fieldKey: "inquiry_child.desired_schedule_type",
+                label: "Schedule",
+                display: "muted",
+                showLabel: true,
+                visibleWhen: { type: "exists", path: "inquiry_child.desired_schedule_type" },
+            },
+            {
+                id: nextQueueRecordFieldId("wl-start-date"),
+                fieldKey: "child.desired_start_date",
+                label: "Desired start",
+                display: "date",
+                showLabel: true,
+                visibleWhen: { type: "exists", path: "child.desired_start_date" },
+            },
+        ];
+    }
+
+    // 3. Placement column — position, tier, wait since, override flags
+    const placementCol = createColumnFromScope({ type: "lifecycle_context" }, "Placement");
+    placementCol.width = "status_band";
+    placementCol.label = "";
+    placementCol.blocks = [
+        {
+            type: "field_group",
+            id: nextQueueRecordBlockId("wl-placement"),
+            fields: [
+                {
+                    id: nextQueueRecordFieldId("wl-position"),
+                    fieldKey: "waitlist.positionLabel",
+                    label: "Position",
+                    display: "badge",
+                    showLabel: false,
+                    visibleWhen: { type: "exists", path: "waitlist.positionLabel" },
+                },
+                {
+                    id: nextQueueRecordFieldId("wl-tier"),
+                    fieldKey: "waitlist.tierLabel",
+                    label: "Tier",
+                    display: "badge",
+                    showLabel: false,
+                    visibleWhen: { type: "exists", path: "waitlist.tierLabel" },
+                },
+                {
+                    id: nextQueueRecordFieldId("wl-override-flags"),
+                    fieldKey: "overrides.flags",
+                    label: "Override",
+                    display: "badge",
+                    showLabel: false,
+                    visibleWhen: { type: "exists", path: "overrides.flags" },
+                },
+                {
+                    id: nextQueueRecordFieldId("wl-sibling"),
+                    fieldKey: "waitlist.siblingContext",
+                    label: "Sibling context",
+                    display: "muted",
+                    showLabel: false,
+                    visibleWhen: { type: "exists", path: "waitlist.siblingContext" },
+                },
+            ],
+        },
+    ];
+
+    // 4. Attention column — attention signal
+    const attentionCol = createColumnFromScope({ type: "lifecycle_context" }, "Attention");
+    attentionCol.width = "next_step";
+    attentionCol.label = "";
+    attentionCol.blocks = [
+        {
+            type: "field_group",
+            id: nextQueueRecordBlockId("wl-attention-context"),
+            fields: [
+                {
+                    id: nextQueueRecordFieldId("wl-attention-reason"),
+                    fieldKey: "opportunity.attention_reason",
+                    label: "Attention",
+                    showLabel: false,
+                    display: "muted",
+                    visibleWhen: { type: "exists", path: "opportunity.attention_reason" },
+                },
+            ],
+        },
+        createWidgetBlock("attention", "Attention", { displayMode: "compact" }),
+    ];
+
+    // 5. Date column — wait since
+    const dateCol = createColumnFromScope({ type: "main_record" }, "Wait Since");
+    dateCol.width = "date_event";
+    dateCol.label = "";
+    dateCol.blocks = [
+        {
+            type: "field_group",
+            id: nextQueueRecordBlockId("wl-dates"),
+            fields: [
+                {
+                    id: nextQueueRecordFieldId("wl-wait-since"),
+                    fieldKey: "waitlist.waitSince",
+                    label: "Waitlisted since",
+                    display: "date",
+                    showLabel: true,
+                    icon: "calendar",
+                    visibleWhen: { type: "exists", path: "waitlist.waitSince" },
+                },
+            ],
+        },
+    ];
+
     return {
-        ...lead,
-        columns: lead.columns.map((col) => {
-            if (col.scope.type === "repeated_related" && col.scope.relationshipKey === "children") {
-                return {
-                    ...col,
-                    label: "Candidate",
-                    blocks: col.blocks.map((b) =>
-                        b.type === "repeated_record_block" ?
-                            {
-                                ...b,
-                                fields: b.fields.map((f) =>
-                                    f.fieldKey === "inquiry_child.program" ?
-                                        { ...f, fieldKey: "inquiry_child.program", label: "Program" }
-                                    :   f,
-                                ),
-                            }
-                        :   b,
-                    ),
-                };
-            }
-            return col;
-        }),
+        variant: "operational-row",
+        version: 3,
+        columns: [household, candidateCol, placementCol, attentionCol, dateCol],
+        fixedControls: { actionsMenu: true, workWithBos: false, actionRailStyle: "stacked" },
     };
 }
 

@@ -9,7 +9,7 @@ type Props = {
 
 export function MetricSparkline({ label, points, loading = false, compact = false }: Props) {
     const width = compact ? 80 : 120;
-    const height = compact ? 24 : 32;
+    const height = compact ? 16 : 32;
     const finite = points.filter((p) => Number.isFinite(p));
     const min = finite.length ? Math.min(...finite) : 0;
     const max = finite.length ? Math.max(...finite) : 1;
@@ -29,7 +29,7 @@ export function MetricSparkline({ label, points, loading = false, compact = fals
                 <p className="mb-1 text-[10px] font-medium text-alloy-midnight/50">{label}</p>
             :   null}
             {loading || !finite.length ?
-                <div className="h-6 w-20 animate-pulse rounded bg-alloy-stone/10" />
+                <div className={`${compact ? "h-4" : "h-6"} w-20 animate-pulse rounded bg-alloy-stone/10`} />
             :   <svg width={width} height={height} aria-hidden="true" className="text-alloy-juniper">
                     <path d={path} fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
                 </svg>

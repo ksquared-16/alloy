@@ -7,6 +7,10 @@ import HouseholdCard from "@/components/admin/focusPanel/cards/HouseholdCard";
 import ChildrenCard from "@/components/admin/focusPanel/cards/ChildrenCard";
 import CurrentWorkCard from "@/components/admin/focusPanel/cards/CurrentWorkCard";
 import ReadinessCard from "@/components/admin/focusPanel/cards/ReadinessCard";
+import TourCard from "@/components/admin/focusPanel/cards/TourCard";
+import CommunicationsCard from "@/components/admin/focusPanel/cards/CommunicationsCard";
+import BillingPreviewCard from "@/components/admin/focusPanel/cards/BillingPreviewCard";
+import TimelineCard from "@/components/admin/focusPanel/cards/TimelineCard";
 import UniversalCard from "@/components/admin/focusPanel/UniversalCard";
 import ProofDoctrineLifecycleRail from "@/components/layout/proofShell/ProofDoctrineLifecycleRail";
 import OpportunityDrawerVmTabPanes from "@/components/admin/vmDrawer/OpportunityDrawerVmTabPanes";
@@ -123,6 +127,22 @@ export default function FocusPanelCardRenderer({
         return <ReadinessCard model={model} context={context} receded={receded} coordination={coordination} />;
     }
 
+    // Tour, Communications, BillingPreview, Timeline — pure cards on the Operational
+    // Context boundary. Each derives its answer from context.signals or context.truth.
+    // No compat wrapper needed.
+    if (model.key === "tour_summary") {
+        return <TourCard model={model} context={context} receded={receded} mutation={mutation} />;
+    }
+    if (model.key === "communications") {
+        return <CommunicationsCard model={model} context={context} receded={receded} mutation={mutation} />;
+    }
+    if (model.key === "billing_preview") {
+        return <BillingPreviewCard model={model} context={context} receded={receded} />;
+    }
+    if (model.key === "timeline") {
+        return <TimelineCard model={model} context={context} receded={receded} />;
+    }
+
     // Subject identity + observed truth derive from the Operational Context. Only the
     // not-yet-migrated drill cards below reach into the compat wrapper for the legacy
     // lifecycle rail + drawer-tab panes (Phase D1).
@@ -145,23 +165,6 @@ export default function FocusPanelCardRenderer({
                 lifecycleRailModel && lifecycleRailModel.steps.length > 0 ?
                     <ProofDoctrineLifecycleRail model={lifecycleRailModel} aria-label="Workflow steps" />
                 :   null;
-            break;
-        case "communications":
-            if (focusPanelMode !== "activity" && model.secondaryInsight) {
-                drillBody = <p className="alloy-os-ucard__secondary-line">{model.secondaryInsight}</p>;
-            }
-            break;
-        case "timeline":
-            if (drillDownAllowed) {
-                drillBody = (
-                    <OpportunityDrawerVmTabPanes
-                        drawerId={drawerId}
-                        drawerTab="activity"
-                        record={record}
-                        onSelectTab={compat.onSelectTab}
-                    />
-                );
-            }
             break;
         case "documents":
             if (drillDownAllowed) {

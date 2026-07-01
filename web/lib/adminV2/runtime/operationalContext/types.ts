@@ -95,15 +95,71 @@ export type OperationalTourSignal = {
     scheduled: boolean;
     startAt: string | null;
     statusLabel: string | null;
+    /** ID of the active tour_bookings row — present when scheduled=true, null otherwise. */
+    bookingId: string | null;
+};
+
+export type OperationalCommunicationsSignal = {
+    /** Number of outgoing messages scheduled for future delivery. */
+    scheduledSendCount: number;
+    /** ISO timestamp of the next configured follow-up, null when none. */
+    nextFollowUpAt: string | null;
+    /** True when there is any scheduled send or pending follow-up. */
+    hasOutreach: boolean;
+    /** ID of the next pending scheduled send, null when none. Used for cancel action. */
+    nextScheduledSendId: string | null;
+};
+
+/**
+ * Billing signal — projected billing configuration facts for the subject case.
+ * Deferred (read-only) until the billing assignment write path exists.
+ * @see docs/platform/operator/operational-grain-doctrine.md §7
+ */
+export type OperationalBillingSignal = {
+    /** True when the billing_configured flag is set on the composed record. */
+    billingConfigured: boolean;
+    billingContactName: string | null;
+    billingContactEmail: string | null;
+    tuitionRateLabel: string | null;
+    /** Fee balance in cents, null when not present or not applicable. */
+    feeBalanceCents: number | null;
+};
+
+/** Null-state billing signal for fixtures and contexts without billing data. */
+export const NULL_BILLING_SIGNAL: OperationalBillingSignal = {
+    billingConfigured: false,
+    billingContactName: null,
+    billingContactEmail: null,
+    tuitionRateLabel: null,
+    feeBalanceCents: null,
 };
 
 export type OperationalContextSignals = {
     work: OperationalWorkSignal;
     attention: OperationalAttentionSignal;
     tour: OperationalTourSignal;
+    communications: OperationalCommunicationsSignal;
+    /** Billing configuration signal (read-only projection; deferred mutation). */
+    billing: OperationalBillingSignal;
 };
 
+/**
+ * The operational grain of this context.
+ *
+ * - `"case"` — subject is an Opportunity (household/family). All Focus Panel
+ *   contexts are case-grain.
+ * - `"child"` — subject is an OCM (child within a case). Not yet used in the
+ *   Focus Panel; reserved for child-grain queue row contexts.
+ * - `"candidate"` — subject is a PlacementCandidate. Reserved for candidate-
+ *   grain queue row contexts (Waitlist queue).
+ *
+ * @see docs/platform/operator/operational-grain-doctrine.md §1
+ */
+export type OperationalGrain = "case" | "child" | "candidate";
+
 export type OperationalContext = {
+    /** Grain of this context — always "case" in the Focus Panel. */
+    grain: OperationalGrain;
     subject: OperationalSubjectRef;
     businessProcess: OperationalBusinessProcess;
     perspective: OperationalContextPerspective;

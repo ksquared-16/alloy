@@ -25,6 +25,13 @@ import { parseStageOperatingPlanV1 } from "@/lib/lifecycle/stageOperatingPlanV1"
 import type { EnrollmentManualTransitionPolicyV1 } from "@/lib/admin/enrollmentStatus/enrollmentStatusTransitionPolicy";
 import { parseEnrollmentManualTransitionPolicy } from "@/lib/admin/enrollmentStatus/enrollmentStatusTransitionPolicy";
 import { parseStatusRollupV1, type StatusRollupV1 } from "@/lib/lifecycle/statusRollupV1";
+import { parseStageActionCatalogV1, type StageActionCatalogV1 } from "@/lib/lifecycle/stageActionCatalogV1";
+import {
+    parseStageGrain,
+    parseSubjectResolutionStrategy,
+    type StageGrain,
+    type StageSubjectResolutionStrategy,
+} from "@/lib/lifecycle/stageGrainV1";
 
 export const LIFECYCLE_BUILDER_METADATA_KEY = "lifecycle_builder_v1" as const;
 
@@ -46,6 +53,20 @@ export type LifecycleBuilderStageRecord = {
     stage_operating_plan_v1?: StageOperatingPlanV1;
     /** Queue lane presentation overrides (Configuration Runtime). */
     perspectives_v1?: PerspectiveConfigV1Stored[];
+    /** Configured candidate actions and recommendation levels for this stage (BPEP Builder). */
+    action_catalog_v1?: StageActionCatalogV1;
+    /** V2 Builder — grain determines the queue row subject entity. */
+    grain?: StageGrain;
+    /** V2 Builder — freeform operator-authored stage purpose. */
+    purpose?: string;
+    /** V2 Builder — stable key of this stage's parent (for sub-stages). */
+    parent_stage_key?: string;
+    /** V2 Builder — whether operators can skip this stage. */
+    allow_skipping?: boolean;
+    /** V2 Builder — guidance text shown to operators while in this stage. */
+    operator_guidance?: string;
+    /** V2 Builder — how to resolve multi-child subject when action is invoked from family context. */
+    subject_resolution_strategy?: StageSubjectResolutionStrategy;
 };
 
 export type LifecycleBuilderProcessRecord = {
@@ -136,6 +157,7 @@ export function parseLifecycleBuilderV1(raw: unknown): LifecycleBuilderV1 | null
             const statusRollup = parseStatusRollupV1(sr.status_rollup_v1);
             const operatingPlan = parseStageOperatingPlanV1(sr.stage_operating_plan_v1);
             const perspectives = parsePerspectivesV1(sr.perspectives_v1);
+            const actionCatalog = parseStageActionCatalogV1(sr.action_catalog_v1);
             const track_key = typeof sr.track_key === "string" ? sr.track_key.trim() : undefined;
             stages.push({
                 id: sid,
@@ -149,6 +171,13 @@ export function parseLifecycleBuilderV1(raw: unknown): LifecycleBuilderV1 | null
                 ...(statusRollup ? { status_rollup_v1: statusRollup } : {}),
                 ...(operatingPlan ? { stage_operating_plan_v1: operatingPlan } : {}),
                 ...(perspectives ? { perspectives_v1: perspectives } : {}),
+                ...(actionCatalog ? { action_catalog_v1: actionCatalog } : {}),
+                ...(parseStageGrain(sr.grain) ? { grain: parseStageGrain(sr.grain) } : {}),
+                ...(typeof sr.purpose === "string" && sr.purpose.trim() ? { purpose: sr.purpose.trim() } : {}),
+                ...(typeof sr.parent_stage_key === "string" && sr.parent_stage_key ? { parent_stage_key: sr.parent_stage_key } : {}),
+                ...(typeof sr.allow_skipping === "boolean" ? { allow_skipping: sr.allow_skipping } : {}),
+                ...(typeof sr.operator_guidance === "string" && sr.operator_guidance ? { operator_guidance: sr.operator_guidance } : {}),
+                ...(parseSubjectResolutionStrategy(sr.subject_resolution_strategy) ? { subject_resolution_strategy: parseSubjectResolutionStrategy(sr.subject_resolution_strategy) } : {}),
             });
         }
         stages.sort((a, b) => a.sort_order - b.sort_order || a.label.localeCompare(b.label));

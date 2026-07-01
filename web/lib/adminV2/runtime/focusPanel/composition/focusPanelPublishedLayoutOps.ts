@@ -138,13 +138,20 @@ export function moveRow(
     return { rows };
 }
 
-/** Drop rows left empty (no cells / no cards) so the layout stays clean. */
+/**
+ * Drop rows left empty (no cells / no cards) so the layout stays clean.
+ *
+ * CRITICAL: preserve the V5 `grid` — it is the composition SOURCE OF TRUTH. Dropping it
+ * here (as the original rows-only prune did) persisted only the reading-order `rows`
+ * fallback, so the work-unit runtime rendered a full-width single-column STACK instead of
+ * the authored grid (the "correct → reflow to stacked" bug). When a grid is present the
+ * `rows` fallback is regenerated from it so the two never drift.
+ */
 function prune(layout: FocusPanelPublishedLayout): FocusPanelPublishedLayout {
-    return {
-        rows: layout.rows
-            .map((r) => ({ cells: r.cells.filter((c) => c.cards.length > 0) }))
-            .filter((r) => r.cells.length > 0),
-    };
+    const rows = layout.rows
+        .map((r) => ({ cells: r.cells.filter((c) => c.cards.length > 0) }))
+        .filter((r) => r.cells.length > 0);
+    return layout.grid ? { grid: layout.grid, rows } : { rows };
 }
 
 /** Add a card as a NEW cell at the end of a row (default half width). */

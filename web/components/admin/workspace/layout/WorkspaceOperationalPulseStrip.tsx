@@ -69,7 +69,7 @@ export function WorkspaceOperationalPulseStrip({ kpis: _kpis, oipResolved: _oipR
                 surface="workspace_header"
                 surfaceKey="default"
                 placementZone="primary_metrics"
-                layout="inline"
+                layout="row"
                 className="gap-x-6 gap-y-2"
                 loadingReserve={<PulseSlotReserve />}
             />
@@ -77,7 +77,7 @@ export function WorkspaceOperationalPulseStrip({ kpis: _kpis, oipResolved: _oipR
                 surface="workspace_header"
                 surfaceKey="default"
                 placementZone="secondary_metrics"
-                layout="inline"
+                layout="row"
                 className="gap-x-6 gap-y-2"
                 loadingReserve={<PulseSlotReserve />}
             />

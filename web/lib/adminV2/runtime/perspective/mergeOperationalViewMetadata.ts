@@ -96,6 +96,43 @@ export function applyOperationalViewsToPillSections<T extends { key: string; lab
         .filter((sec) => sec.queues.length > 0);
 }
 
+/**
+ * Ensure every visible operational view appears in pill sections, even those whose
+ * queue returned no records (and thus no summary). Missing views are appended to the
+ * primary section as synthetic zero-count entries and sorted by display_order.
+ */
+export function ensureAllOperationalViewsInSections<T extends { key: string; label: string }>(
+    sections: WorkUnitPillSection<T>[] | null,
+    views: readonly PerspectiveConfigV1Stored[],
+): WorkUnitPillSection<T>[] | null {
+    if (!sections?.length || !views.length) return sections;
+
+    const visible = sortOperationalViews(visibleOperationalViews(views));
+    if (!visible.length) return sections;
+
+    const presentKeys = new Set(sections.flatMap((s) => s.queues.map((q) => q.key)));
+    const missingViews = visible.filter((v) => !presentKeys.has(v.queue_key));
+    if (!missingViews.length) return sections;
+
+    const orderMap = new Map(visible.map((v, i) => [v.queue_key, v.display_order ?? i]));
+    const primaryKey = (sections.find((s) => s.key === "pipeline") ?? sections[0]).key;
+
+    return sections.map((s) => {
+        if (s.key !== primaryKey) return s;
+        const synthetic = missingViews.map(
+            (v) =>
+                ({ key: v.queue_key, label: v.label?.trim() || v.queue_key, priority: "standard" as const }) as unknown as T,
+        );
+        const combined = [...s.queues, ...synthetic];
+        const sorted = combined.slice().sort((a, b) => {
+            const oa = orderMap.get(a.key) ?? Number.MAX_SAFE_INTEGER;
+            const ob = orderMap.get(b.key) ?? Number.MAX_SAFE_INTEGER;
+            return oa !== ob ? oa - ob : a.label.localeCompare(b.label);
+        });
+        return { ...s, queues: sorted };
+    });
+}
+
 /** Apply configured labels to queue tab placeholders while summaries load. */
 export function applyOperationalViewsToTabPlaceholders<
     T extends { key: string; label: string; priority: "standard" | "attention" | "critical" },

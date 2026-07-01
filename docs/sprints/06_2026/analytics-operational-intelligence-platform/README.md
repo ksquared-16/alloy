@@ -63,6 +63,8 @@ Analytics never ends with a chart. It ends with operational work.
 | 1.5 | Header density compatibility + visual QA | ✅ Merged (`ca0ad6a7`) |
 | 2 | Surface composition beyond KPI tiles (charts, filters, drill grammar, command/report/optimization previews) | ✅ Merged (`8433f5ef`) |
 | 3 | Runtime convergence analysis — architecture roadmap, no broad implementation | ✅ [`04-runtime-convergence.md`](./04-runtime-convergence.md) |
+| 5 | Header tile height parity — Workspace Header and Work Unit Header tiles same height everywhere (KPI = Trend); compact sparkline fits within shell | ✅ Merged (`33c9544dc`, PR #41) |
+| 6 | Work Unit Header tile contrast (canvas bg on tile zone) + complete Work View pills (all `visible_in_rail` views, zero-count fills "—") | ✅ Merged (PR #45) |
 | 4+ | Wire real data (Phase A–E in convergence doc) | 🔜 Next execution |
 
 Dev preview: `/dev/analytics-surface-mocks` (404 in production).

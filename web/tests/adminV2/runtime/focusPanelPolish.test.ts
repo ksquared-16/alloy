@@ -245,7 +245,7 @@ describe("Targeted contact editing + depth history (QA)", () => {
 describe("Canvas builder mounted in the settings editor (Experience Builder V4)", () => {
     it("FocusPanelSummarySurfaceEditor mounts the canvas-first builder + persists via the existing flow", () => {
         const editor = readSrc("components/adminV2/settings/surfaces/FocusPanelSummarySurfaceEditor.tsx");
-        expect(editor).toContain("FocusPanelCanvasBuilder"); // canvas IS the editor (replaces Compose Layout)
+        expect(editor).toContain("FocusPanelGridCanvasBuilder"); // V5: the responsive GRID canvas IS the editor
         expect(editor).not.toContain("FocusPanelRowLayoutBuilder"); // the row-control panel is gone
         expect(editor).toContain("onSelectCard"); // selecting a card on the canvas opens the Inspector
         expect(editor).toContain("readFocusPanelPublishedLayout"); // loads existing metadata
@@ -255,13 +255,12 @@ describe("Canvas builder mounted in the settings editor (Experience Builder V4)"
         expect(editor).toContain("publishFocusPanelSummary"); // existing publish path
     });
 
-    it("Canvas owns composition (drag + direct resize); inspector owns behavior", () => {
-        const canvas = readSrc("components/admin/focusPanel/FocusPanelCanvasBuilder.tsx");
-        expect(canvas).toContain("data-canvas-resize-w"); // direct width resize handle
-        expect(canvas).toContain("data-canvas-resize-h"); // direct height resize handle
-        expect(canvas).toContain("snapWidthFromFraction"); // width snaps to a named token
-        expect(canvas).toContain("moveCardOntoCell"); // drag to stack
-        expect(canvas).toContain("moveCardToRowByCard"); // drag to move between rows
+    it("Canvas owns composition (drag + grid span resize); inspector owns behavior", () => {
+        const canvas = readSrc("components/admin/focusPanel/FocusPanelGridCanvasBuilder.tsx");
+        expect(canvas).toContain("data-grid-resize-w"); // right edge → span columns
+        expect(canvas).toContain("data-grid-resize-h"); // bottom edge → span rows (vertical spans)
+        expect(canvas).toContain("moveArea"); // drag to move a region (snaps to grid)
+        expect(canvas).toContain("resizeArea"); // edge drag resizes the region
         expect(canvas).toContain("onSelectCard"); // click selects → inspector
     });
 });
