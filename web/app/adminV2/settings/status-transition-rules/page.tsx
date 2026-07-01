@@ -82,7 +82,7 @@ export default function AdminV2SettingsStatusTransitionRulesPage() {
                         Automations
                     </Link>
                     ). Status <strong>display names</strong> are edited on{" "}
-                    <Link href="/admin/settings/statuses" className="font-medium text-alloy-pine hover:underline">
+                    <Link href="/settings/statuses" className="font-medium text-alloy-pine hover:underline">
                         Statuses
                     </Link>
                     . This table is read-only reference for this organization.

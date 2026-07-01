@@ -202,7 +202,7 @@ export default function KpiTargetsPanel({ canEdit }: { canEdit: boolean }) {
             </OipSectionCard>
             <p className="text-[11px] text-alloy-midnight/45">
                 To change where indicators appear, open{" "}
-                <Link href="/admin/settings/analytics?tab=visibility" className="font-medium text-alloy-pine hover:underline">
+                <Link href="/settings/calculations?tab=visibility" className="font-medium text-alloy-pine hover:underline">
                     Experience placement
                 </Link>
                 .

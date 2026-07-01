@@ -15,6 +15,7 @@ import {
     type DeriveRuntimePerspectiveParams,
     type RuntimePerspective,
 } from "@/lib/adminV2/runtime/perspective/deriveRuntimePerspective";
+import { operatorWorkUnitHrefFromKey } from "@/lib/admin/canonicalOperatorRoutes";
 
 export function operationalViewMetadataForQueueKey(
     views: readonly PerspectiveConfigV1Stored[],
@@ -215,16 +216,15 @@ export function buildOperationalViewHeaderSection(params: {
 export function buildOperationalViewPreviewRuntimeHref(params: {
     departmentId: string;
     workUnitId: string;
+    workUnitKey?: string | null;
     queueKey?: string | null;
     workViewId?: string | null;
     queueLayoutId?: string | null;
     focusPanelLayoutId?: string | null;
 }): string | null {
-    const departmentId = params.departmentId.trim();
-    const workUnitId = params.workUnitId.trim();
+    const workUnitKey = params.workUnitKey?.trim();
     const workViewId = params.workViewId?.trim();
     const queueKey = params.queueKey?.trim();
-    if (!departmentId || !workUnitId) return null;
     if (!workViewId && !queueKey) return null;
 
     const sp = new URLSearchParams();
@@ -234,5 +234,14 @@ export function buildOperationalViewPreviewRuntimeHref(params: {
     if (queueLayoutId) sp.set("queue_layout", queueLayoutId);
     const focusPanelLayoutId = params.focusPanelLayoutId?.trim();
     if (focusPanelLayoutId) sp.set("focus_layout", focusPanelLayoutId);
-    return `/adminV2/workspace/dept/${encodeURIComponent(departmentId)}/work-unit/${encodeURIComponent(workUnitId)}?${sp.toString()}`;
+
+    if (workUnitKey) {
+        const base = operatorWorkUnitHrefFromKey(workUnitKey);
+        return `${base}?${sp.toString()}`;
+    }
+    // TODO: thread workUnitKey through callers to fully eliminate dept-scoped URLs
+    const departmentId = params.departmentId.trim();
+    const workUnitId = params.workUnitId.trim();
+    if (!departmentId || !workUnitId) return null;
+    return `/workspace?${sp.toString()}`;
 }

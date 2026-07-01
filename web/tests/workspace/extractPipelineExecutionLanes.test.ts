@@ -42,4 +42,23 @@ describe("extractPipelineExecutionLanes", () => {
     it("resolvePipelineExecPanelTitle uses primary_total_label for v2 domain layout", () => {
         expect(resolvePipelineExecPanelTitle(ENROLLMENT_PIPELINE_QUEUE_DEFINITION_V2_BUNDLE.def)).toBe("Work Units");
     });
+
+    it("header includes all sibling work views — v2 domain sections become pill strip", () => {
+        const lanes = extractPipelineExecutionLanes(ENROLLMENT_PIPELINE_QUEUE_DEFINITION_V2_BUNDLE.def);
+        // All non-attention, non-internal sections must appear as pill candidates
+        const keys = lanes.map((l) => l.key);
+        expect(keys).toContain("new_leads");
+        expect(keys).toContain("tours");
+        expect(keys).toContain("communications_followup");
+        expect(keys).toContain("waitlist");
+        expect(keys).toContain("enrollment_offers");
+        expect(keys).toContain("enrollment_completed");
+        // Labels come from the queue definition (section display labels)
+        expect(lanes.find((l) => l.key === "enrollment_offers")?.label).toBe("Enrolling");
+        expect(lanes.find((l) => l.key === "enrollment_completed")?.label).toBe("Enrolled");
+        // Active Work View highlighted: the full sibling list is available to mark any lane active
+        const activeLane = lanes.find((l) => l.key === "new_leads");
+        expect(activeLane).toBeDefined();
+        expect(activeLane?.label).toBe("New Leads");
+    });
 });

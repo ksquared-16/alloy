@@ -36,9 +36,7 @@ const DRAWER_HOST_PREFIXES = [
     CANONICAL_ADMIN_WORKSPACE,
     ADMIN_SETTINGS_SUBPATH_PREFIX,
     ADMIN_FORMS_HREF,
-    "/adminV2/workspace",
     "/admin/v2/workspace",
-    "/adminV2/settings",
     "/admin/v2/settings",
     "/adminV2/forms",
     "/admin/v2/forms",
@@ -47,6 +45,8 @@ const DRAWER_HOST_PREFIXES = [
 export function adminV2PathHasDrawerHost(pathname: string): boolean {
     const raw = pathname.trim();
     if (
+        raw === OPERATOR_WORKSPACE_HREF ||
+        raw.startsWith(`${OPERATOR_WORKSPACE_HREF}/`) ||
         raw.startsWith("/adminV2/workspace") ||
         raw.startsWith("/admin/v2/workspace") ||
         raw.startsWith(`${CANONICAL_ADMIN_WORKSPACE}/`) ||

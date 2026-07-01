@@ -46,6 +46,7 @@ import {
 import type { LifecycleStageFieldRules } from "@/lib/lifecycle/lifecycleFieldRequirementsCatalog";
 import type { LifecycleStageFieldRulesStored } from "@/lib/lifecycle/lifecycleStageRequirementLevels";
 import type { LifecycleRequirementEntityKey } from "@/lib/lifecycle/lifecycleFieldRequirementsCatalog";
+import { operatorWorkUnitHrefFromKey } from "@/lib/admin/canonicalOperatorRoutes";
 
 export type LifecycleStageSaveUiState = "idle" | "unsaved" | "saving" | "saved" | "error";
 
@@ -214,9 +215,7 @@ export default function LifecycleStageWorkspace({
     }, [bootstrap?.status_rollup_v1, stageKey]);
 
     const previewHref =
-        departmentId.trim() && bootstrap?.pipeline?.id ?
-            `/adminV2/workspace/dept/${departmentId}/work-unit/${bootstrap.pipeline.id}`
-        :   null;
+        bootstrap?.pipeline?.key?.trim() ? operatorWorkUnitHrefFromKey(bootstrap.pipeline.key) : null;
 
     if (bootstrapLoading && !bootstrap) {
         return (

@@ -80,7 +80,7 @@ async function resolveConfiguredMetricList(
 }
 
 const OPPORTUNITY_BREAKDOWN_CAP = 5000;
-const WORKSPACE_LANDING_HREF = "/adminV2/workspace";
+const WORKSPACE_LANDING_HREF = "/workspace";
 
 export type BuildOperationalSurfaceParams = {
     supabase: SupabaseClient;

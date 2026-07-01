@@ -180,10 +180,10 @@ export function configApplyOutcomeToExecutionReceipt(
         detail: outcome.summary,
         occurredAt: at,
         followUp: outcome.showLayoutIntegrityLink ?
-            "Check layout integrity in Settings → Layouts."
+            "Check layout integrity in Settings → Surfaces."
         :   null,
         link: outcome.showLayoutIntegrityLink ?
-            { href: "/admin/settings/layouts", label: "Settings → Layouts" }
+            { href: "/settings/surfaces", label: "Settings → Surfaces" }
         :   null,
         operationRows: outcome.rows.map((r) => ({
             label: r.label,

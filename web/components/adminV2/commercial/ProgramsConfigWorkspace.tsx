@@ -178,7 +178,7 @@ export default function ProgramsConfigWorkspace() {
                 <div className="rounded-xl border border-alloy-forge/12 bg-white/90 p-6 text-center">
                     <p className="text-sm text-alloy-midnight/60">
                         Add a site location first in{" "}
-                        <Link href="/admin/settings/locations" className="text-alloy-pine underline">
+                        <Link href="/settings/locations" className="text-alloy-pine underline">
                             Settings → Locations
                         </Link>{" "}
                         to configure programs.

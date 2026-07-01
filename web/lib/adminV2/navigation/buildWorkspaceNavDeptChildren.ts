@@ -110,13 +110,14 @@ export function workspaceDeptQueueNavHref(
     workspaceBase: string,
     departmentId: string,
     workUnitId: string,
-    queueKey: string | null
+    queueKey: string | null,
+    workUnitKey?: string | null
 ): string {
     return workspaceNavChildHref(workspaceBase, departmentId, {
         rowKey: queueKey ? `${workUnitId}:${queueKey}` : workUnitId,
         label: "",
         workUnitId,
-        workUnitKey: null,
+        workUnitKey: workUnitKey ?? null,
         queueKey,
         kind: queueKey ? "configured_queue" : "work_unit",
     });

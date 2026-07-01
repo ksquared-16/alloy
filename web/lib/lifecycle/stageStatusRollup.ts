@@ -103,6 +103,6 @@ export function assignedStatusKeysFromMetadataRows(
 
 export function statusesSettingsHrefForEntity(entityType: StageStatusEntityType): string {
     return entityType === "opportunities"
-        ? "/admin/settings/statuses?entity_type=opportunities"
-        : "/admin/settings/statuses?entity_type=opportunity_customer_members";
+        ? "/settings/statuses?entity_type=opportunities"
+        : "/settings/statuses?entity_type=opportunity_customer_members";
 }

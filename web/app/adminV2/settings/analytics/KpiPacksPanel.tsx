@@ -69,14 +69,14 @@ export default function KpiPacksPanel({ onNavigateTab }: Props) {
                                 </div>
                                 <div className="flex shrink-0 flex-wrap gap-3">
                                     <Link
-                                        href="/admin/settings/analytics?tab=targets"
+                                        href="/settings/calculations?tab=targets"
                                         className={OIP_INLINE_ACTION_CLASS}
                                         onClick={() => onNavigateTab?.("targets")}
                                     >
                                         Edit targets
                                     </Link>
                                     <Link
-                                        href="/admin/settings/analytics?tab=visibility"
+                                        href="/settings/calculations?tab=visibility"
                                         className={OIP_INLINE_ACTION_CLASS}
                                         onClick={() => onNavigateTab?.("visibility")}
                                     >

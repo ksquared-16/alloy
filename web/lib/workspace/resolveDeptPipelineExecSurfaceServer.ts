@@ -37,7 +37,6 @@ async function probePipelineWorkUnit(params: {
         const bundle = tryLoadWorkUnitQueueDefinitionBundle(wu.queue_definition);
         if (!bundle) return null;
         const def = bundle.def;
-        if (def.ui?.layout !== "pipeline_with_attention") return null;
         const lanes = extractPipelineExecutionLanes(def);
         if (!lanes.length) return null;
 
@@ -79,6 +78,7 @@ async function probePipelineWorkUnit(params: {
 
         return {
             workUnitId: wu.id,
+            workUnitKey: wu.key ?? null,
             panelTitle,
             lanes: merged,
         } satisfies DeptPipelineExecSurface;

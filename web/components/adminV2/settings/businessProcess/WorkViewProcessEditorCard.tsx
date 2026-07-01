@@ -83,6 +83,7 @@ export default function WorkViewProcessEditorCard({
     selected,
     departmentId,
     workUnitId,
+    workUnitKey,
     layouts,
     queueLanes = [],
     onSelect: _onSelect,
@@ -93,6 +94,7 @@ export default function WorkViewProcessEditorCard({
     selected: boolean;
     departmentId: string;
     workUnitId: string | null;
+    workUnitKey?: string | null;
     layouts: EntityLayoutRecord[];
     queueLanes?: WorkViewCompatQueueLane[];
     onSelect: () => void;
@@ -110,6 +112,7 @@ export default function WorkViewProcessEditorCard({
             buildOperationalViewPreviewRuntimeHref({
                 departmentId,
                 workUnitId,
+                workUnitKey: workUnitKey ?? null,
                 queueKey: view.compat_queue_key,
                 workViewId: view.id,
                 queueLayoutId: view.queue_layout_id,

@@ -538,7 +538,7 @@ export default function LayoutGalleryClient({
             {!canMutate ?
                 <p className="text-xs text-alloy-midnight/50">
                     Read-only view.{" "}
-                    <Link href="/admin/settings/fields" className="text-alloy-pine underline">
+                    <Link href="/settings/fields" className="text-alloy-pine underline">
                         Field definitions
                     </Link>{" "}
                     remain editable based on your role.

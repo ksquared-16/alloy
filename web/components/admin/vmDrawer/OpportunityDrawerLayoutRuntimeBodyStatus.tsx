@@ -37,7 +37,7 @@ export default function OpportunityDrawerLayoutRuntimeBodyStatus({
     lastError,
     opportunityId,
 }: Props) {
-    const inspectorHref = `/adminV2/settings/layouts/effective?entity_type=opportunities&surface=drawer&opportunity_id=${encodeURIComponent(opportunityId)}`;
+    const inspectorHref = `/settings/surfaces/effective?entity_type=opportunities&surface=drawer&opportunity_id=${encodeURIComponent(opportunityId)}`;
 
     return (
         <details className="rounded-md border border-dashed border-alloy-stone/30 bg-alloy-stone/5 px-2.5 py-1.5 text-[11px] text-alloy-midnight/70">

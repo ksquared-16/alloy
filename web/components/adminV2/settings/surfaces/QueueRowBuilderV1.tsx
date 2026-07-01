@@ -783,7 +783,7 @@ function PublishToolbar({
 }: {
     dirty: boolean;
     publishing: boolean;
-    publishedAt: Date | null;
+    publishedAt: string | null;
     error: string | null;
     onPublish: () => void;
 }) {

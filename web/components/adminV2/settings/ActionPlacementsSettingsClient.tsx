@@ -287,7 +287,7 @@ export default function ActionPlacementsSettingsClient() {
                 <p className="max-w-3xl text-xs leading-relaxed">
                     Add buttons from the library, then manage where they appear. Status names and automation
                     behavior are managed separately on{" "}
-                    <Link href="/admin/settings/statuses" className="font-medium text-alloy-pine hover:underline">
+                    <Link href="/settings/statuses" className="font-medium text-alloy-pine hover:underline">
                         Statuses
                     </Link>{" "}
                     and{" "}

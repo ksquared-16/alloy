@@ -6,10 +6,12 @@ import { useWorkViewsConfiguration } from "@/components/adminV2/settings/busines
 export default function BusinessProcessWorkViewsSetupWorkspace({
     departmentId,
     workUnitId,
+    workUnitKey,
     queueLanes = [],
 }: {
     departmentId: string;
     workUnitId: string | null;
+    workUnitKey?: string | null;
     queueLanes?: import("@/lib/lifecycle/workViewsRuntimeConvergence").WorkViewCompatQueueLane[];
 }) {
     const {
@@ -69,6 +71,7 @@ export default function BusinessProcessWorkViewsSetupWorkspace({
                     selected
                     departmentId={departmentId}
                     workUnitId={workUnitId}
+                    workUnitKey={workUnitKey}
                     layouts={layouts}
                     queueLanes={queueLanes}
                     onSelect={() => {}}
