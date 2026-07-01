@@ -126,7 +126,7 @@ Scheduled send count or next follow-up date at a glance. Message thread history 
 
 ---
 
-### Billing Preview
+### Billing Preview (Financial Configuration)
 
 | | |
 |---|---|
@@ -135,12 +135,12 @@ Scheduled send count or next follow-up date at a glance. Message thread history 
 | **Tier** | Context |
 | **Operational question** | "Is billing configured and ready for this enrollment?" |
 | **Lifecycle** | Summary + Expanded |
-| **Evidence source** | `context.signals.billing` (via `buildBillingPreviewCardEvidence` → `OperationalBillingSignal`) |
+| **Evidence source** | `context.signals.billing` (via `buildBillingPreviewCardEvidence`); tuition rates from `GET /api/admin/financial-config/opportunity/[id]` (lazy, expanded only) |
 | **Capabilities** | supportsExpanded |
-| **Expansion groups** | billing_readiness |
+| **Expansion groups** | billing_readiness, placement_tuition, billing_responsibility |
 | **Footprint** | medium (1 column) |
 
-Configured/not-configured status chip + tuition rate label. Expanded reveals billing readiness checklist (billing contact · tuition rate). Read-only — billing truth is owned by the billing configuration workspace. Never fabricates financial values; only reports what is present in the composed record.
+Configured/not-configured status chip + tuition rate label. Expanded reveals: billing readiness checklist (billing contact · tuition rate), per-child placement + resolved tuition rate from `commercial_tuition_rates`, and billing responsibility section (missing-state until write path exists). Tuition rates are lazy-fetched via `useFinancialConfig` when the expanded overlay opens — not available in the summary. Read-only. Never fabricates financial values.
 
 ---
 

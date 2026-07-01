@@ -124,6 +124,7 @@ payer data.
 
 **Focus / Expanded (opened on demand)**:
 - Billing readiness checklist (billing contact ✓/○, tuition rate ✓/○)
+- Per-child placement + resolved tuition rate (lazy-fetched from `commercial_tuition_rates` via `/api/admin/financial-config/opportunity/[id]`)
 - Payer / responsibility sections — only when real payer records exist
 - Missing responsibility state — when no payer records exist
 - Future: activity/history area (last payment, next charge) — only when real charge records exist
@@ -218,10 +219,12 @@ When building a new domain card, verify:
 
 The Financial Configuration card is the reference implementation for this pattern.
 Its current state (`billing_preview` key, `BillingPreviewCard` component,
-`buildBillingPreviewCardEvidence`) demonstrates:
+`buildBillingPreviewCardEvidence`, `useFinancialConfig`, API route) demonstrates:
 
 - **Summary** with status chip + supporting line ✅
 - **Expanded** readiness checklist driven by real signal fields ✅
+- **Per-child tuition rate resolution** via `GET /api/admin/financial-config/opportunity/[id]` ✅
+- **Lazy fetch** — tuition rates only fetched when expanded overlay opens ✅
 - **Missing-state** handling when billing is not configured ✅
 - **Balance line** only when `fee_balance_cents > 0` ✅
 - **Zero fabrication** of financial values ✅

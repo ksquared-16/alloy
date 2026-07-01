@@ -21,6 +21,7 @@
  */
 
 import type { OperationalContext } from "@/lib/adminV2/runtime/operationalContext/types";
+import type { FinancialConfigEnrollment } from "@/lib/adminV2/runtime/focusPanel/financialConfig/financialConfigTypes";
 
 export type BillingPreviewReadinessItem = {
     label: string;
@@ -50,6 +51,12 @@ export type BillingPreviewCardEvidence = {
      * Empty array when no children are present.
      */
     placementFacts: BillingPlacementFact[];
+    /**
+     * Per-child tuition rate resolutions from the financial-config API.
+     * Null until the API response is available (lazy-loaded in expanded mode).
+     * Each entry correlates to a placement fact by ocmId.
+     */
+    enrollments: FinancialConfigEnrollment[] | null;
     /**
      * True when payer/responsibility records exist in the composed truth.
      * False (missing-state) until the billing responsibility write path is built.
@@ -88,8 +95,14 @@ function buildPlacementFacts(truth: Record<string, unknown>): BillingPlacementFa
         }));
 }
 
-/** Build financial configuration evidence from the Operational Context (pure derivation, no fetch). */
-export function buildBillingPreviewCardEvidence(context: OperationalContext): BillingPreviewCardEvidence {
+/**
+ * Build financial configuration evidence from the Operational Context (pure derivation, no fetch).
+ * Pass `enrollments` from `useFinancialConfig` when the expanded overlay is open.
+ */
+export function buildBillingPreviewCardEvidence(
+    context: OperationalContext,
+    enrollments: FinancialConfigEnrollment[] | null = null,
+): BillingPreviewCardEvidence {
     const { billingConfigured, billingContactName, billingContactEmail, tuitionRateLabel, feeBalanceCents } =
         context.signals.billing;
 
@@ -145,6 +158,7 @@ export function buildBillingPreviewCardEvidence(context: OperationalContext): Bi
         balanceLabel,
         readinessItems,
         placementFacts,
+        enrollments,
         responsibilityConfigured,
         answerLine,
         supportingLine,
