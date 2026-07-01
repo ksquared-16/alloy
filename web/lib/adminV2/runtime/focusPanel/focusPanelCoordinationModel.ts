@@ -117,6 +117,7 @@ export function isElevatedLevel(level: FocusPanelPerspectiveLevel): boolean {
 const OPERATIONAL_TRUTH_CARDS: ReadonlySet<FocusPanelCardKey> = new Set<FocusPanelCardKey>([
     "household",
     "children",
+    "billing_preview",
     "documents",
     "communications",
 ]);
