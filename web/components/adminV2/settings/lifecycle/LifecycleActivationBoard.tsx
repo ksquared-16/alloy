@@ -14,6 +14,7 @@ import LifecycleEnrollmentV2TemplateCard from "@/components/adminV2/settings/lif
 import LifecycleStageConfiguration from "@/components/adminV2/settings/lifecycle/LifecycleStageConfiguration";
 import type { LifecycleStageWorkspaceHandle } from "@/components/adminV2/settings/lifecycle/LifecycleStageWorkspace";
 import type { LifecycleStageSaveUiState } from "@/components/adminV2/settings/lifecycle/LifecycleStageWorkspace";
+import type { StageEditorV2Handle } from "@/components/adminV2/settings/lifecycle/StageEditorV2";
 import BusinessProcessActionsListColumn, {
     BusinessProcessActionsSetupWorkspace,
     useProcessActionsMatrixDraft,
@@ -173,7 +174,7 @@ export default function LifecycleActivationBoard({
     const [readyCheckRevision, setReadyCheckRevision] = useState(0);
     const [processSection, setProcessSection] = useState<BusinessProcessWorkspaceSection>("stages");
     const [selectedActionKey, setSelectedActionKey] = useState<LifecycleBaseActionKey | null>(null);
-    const workspaceHandleRef = useRef<LifecycleStageWorkspaceHandle | null>(null);
+    const workspaceHandleRef = useRef<StageEditorV2Handle | null>(null);
     const stageDirtyRef = useRef(false);
 
     const [statusesPayload, setStatusesPayload] = useState<EnrollmentStatusStagesPayload | null>(null);
@@ -794,6 +795,8 @@ export default function LifecycleActivationBoard({
                 ? handle.getStatusRollupDraft()
                 : (stageBootstrap?.status_rollup_v1 ?? null);
 
+        const v2Draft = handle?.isV2Dirty?.() ? handle.getV2Draft?.() : null;
+
         const contractBody = {
             department_id: runtimeDepartmentId,
             process_id: processId,
@@ -804,6 +807,7 @@ export default function LifecycleActivationBoard({
             queue_membership_v1: queueMembership,
             ...(stageOperatingPlan ? { stage_operating_plan_v1: stageOperatingPlan } : {}),
             ...(statusRollup ? { status_rollup_v1: statusRollup } : {}),
+            ...(v2Draft ? { stage_v2_draft: v2Draft } : {}),
         };
 
         try {
@@ -1752,6 +1756,8 @@ export default function LifecycleActivationBoard({
                                         stageKey={stageKey}
                                         stageLabel={stageLabel}
                                         lifecycleName={lifecycleName}
+                                        stageRecord={builderStages.find((s) => s.key === stageKey) ?? null}
+                                        allStages={builderStages}
                                         bootstrap={stageBootstrap}
                                         bootstrapLoading={stageBootstrapLoading}
                                         statusesError={statusesError}
