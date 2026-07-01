@@ -11,13 +11,21 @@ import {
 } from "@/components/adminV2/settings/configurationRuntime/ConfigurationModeLayout";
 import {
     type TuitionRateRow,
-    type TuitionBillingPeriod,
-    TUITION_BILLING_PERIODS,
     formatRateCents,
     parseDollarsToCents,
     tuitionRateCellKey,
     buildTuitionRateMap,
 } from "@/lib/commercial/tuitionRates";
+import {
+    type ProgramOffering,
+    type AttendanceType,
+    type QuantityType,
+    ATTENDANCE_TYPE_LABELS,
+    QUANTITY_TYPE_LABELS,
+    describeOffering,
+    sortOfferings,
+} from "@/lib/programs/programOfferings";
+import type { BillingCadence } from "@/lib/commercial/billingCadences";
 import {
     type LocationProgramCategoryRow,
     slugifyLocationProgramCategoryKey,
@@ -26,7 +34,6 @@ import {
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
-type OfferingItem = { id: string; item_key: string; label: string; sort_order: number };
 type SiteLocation = { id: string; name: string };
 type ProgramEntry = { key: string; label: string; siteCount: number };
 type SecondaryTab = "programs" | "tuition";
@@ -49,19 +56,29 @@ const PAYER_TABS: { key: PayerTab; label: string; available: boolean }[] = [
     { key: "corporate", label: "Corporate", available: false },
 ];
 
+const ATTENDANCE_OPTIONS: AttendanceType[] = [
+    "full_time",
+    "part_time",
+    "drop_in",
+    "before_school",
+    "after_school",
+    "hourly",
+    "custom",
+];
+
+const QUANTITY_OPTIONS: QuantityType[] = ["days", "hours", "sessions", "weeks", "months"];
+
 // ─── TuitionCell ───────────────────────────────────────────────────────────────
 
 type OnSave = (
-    programKey: string,
-    scheduleKey: string,
-    billingPeriod: TuitionBillingPeriod,
+    offeringId: string,
+    cadenceKey: string,
     payload: { rate_cents?: number; not_offered?: boolean },
 ) => Promise<void>;
 
 type CellProps = {
-    programKey: string;
-    scheduleKey: string;
-    billingPeriod: TuitionBillingPeriod;
+    offering: ProgramOffering;
+    cadence: BillingCadence;
     rateRow: TuitionRateRow | undefined;
     orgDefaultRow: TuitionRateRow | undefined;
     locationId: string | null;
@@ -70,9 +87,8 @@ type CellProps = {
 };
 
 function TuitionCell({
-    programKey,
-    scheduleKey,
-    billingPeriod,
+    offering,
+    cadence,
     rateRow,
     orgDefaultRow,
     locationId,
@@ -90,11 +106,19 @@ function TuitionCell({
     const isNotOffered = rateRow?.not_offered === true;
     const displayRate = rateRow && !isNotOffered ? rateRow.rate_cents : null;
     const inheritedRate =
-        isInherited && orgDefaultRow && !orgDefaultRow.not_offered ? orgDefaultRow.rate_cents : null;
+        isInherited && orgDefaultRow && !orgDefaultRow.not_offered
+            ? orgDefaultRow.rate_cents
+            : null;
 
     function startEdit() {
         if (isNotOffered) return;
-        setDraft(displayRate != null ? String(displayRate / 100) : inheritedRate != null ? String(inheritedRate / 100) : "");
+        setDraft(
+            displayRate != null
+                ? String(displayRate / 100)
+                : inheritedRate != null
+                  ? String(inheritedRate / 100)
+                  : "",
+        );
         setEditing(true);
         setTimeout(() => inputRef.current?.focus(), 0);
     }
@@ -106,14 +130,14 @@ function TuitionCell({
             return;
         }
         setSaving(true);
-        await onSave(programKey, scheduleKey, billingPeriod, { rate_cents: cents });
+        await onSave(offering.id, cadence.item_key, { rate_cents: cents });
         setSaving(false);
         setEditing(false);
     }
 
     async function toggleNotOffered() {
         setSaving(true);
-        await onSave(programKey, scheduleKey, billingPeriod, { not_offered: !isNotOffered });
+        await onSave(offering.id, cadence.item_key, { not_offered: !isNotOffered });
         setSaving(false);
     }
 
@@ -157,14 +181,13 @@ function TuitionCell({
                         : "text-alloy-midnight/20",
             ].join(" ")}
         >
-            {/* Click target for editing (not on not-offered cells) */}
             {!isNotOffered && (
                 <button
                     type="button"
                     onClick={startEdit}
                     className="absolute inset-0 w-full h-full hover:bg-alloy-stone/5 rounded"
                     tabIndex={0}
-                    aria-label={`Edit rate for ${scheduleKey} / ${billingPeriod}`}
+                    aria-label={`Set ${cadence.label} rate for ${offering.label}`}
                 />
             )}
 
@@ -211,7 +234,6 @@ function TuitionCell({
                 </span>
             )}
 
-            {/* Not-offered toggle (hover) */}
             {!isNotOffered && (
                 <button
                     type="button"
@@ -229,154 +251,208 @@ function TuitionCell({
     );
 }
 
-// ─── ScheduleOfferingsCard ─────────────────────────────────────────────────────
+// ─── OfferingsBuilderCard ──────────────────────────────────────────────────────
 
-type ScheduleOfferingsCardProps = {
-    items: OfferingItem[];
-    onAdd: (label: string, itemKey: string) => Promise<void>;
-    onRename: (itemId: string, label: string) => Promise<void>;
-    onDelete: (itemId: string, itemKey: string) => Promise<void>;
-    hasRatesForKey: (itemKey: string) => boolean;
+type OfferingsBuilderCardProps = {
+    offerings: ProgramOffering[];
+    onAdd: (fields: {
+        attendance_type: AttendanceType;
+        quantity_type: QuantityType | null;
+        quantity_value: number | null;
+        label: string;
+    }) => Promise<void>;
+    onUpdateStatus: (id: string, status: string) => Promise<void>;
+    onDelete: (id: string) => Promise<void>;
+    hasRatesForOffering: (id: string) => boolean;
 };
 
-function ScheduleOfferingsCard({
-    items,
+function OfferingsBuilderCard({
+    offerings,
     onAdd,
-    onRename,
+    onUpdateStatus,
     onDelete,
-    hasRatesForKey,
-}: ScheduleOfferingsCardProps) {
-    const [addLabel, setAddLabel] = useState("");
-    const [addKey, setAddKey] = useState("");
+    hasRatesForOffering,
+}: OfferingsBuilderCardProps) {
+    const [attendanceType, setAttendanceType] = useState<AttendanceType>("full_time");
+    const [quantityType, setQuantityType] = useState<QuantityType | null>("days");
+    const [quantityValue, setQuantityValue] = useState<string>("");
+    const [customLabel, setCustomLabel] = useState("");
     const [adding, setAdding] = useState(false);
-    const [editingId, setEditingId] = useState<string | null>(null);
-    const [editLabel, setEditLabel] = useState("");
 
     const inputCls =
         "rounded border border-alloy-forge/15 bg-white px-2 py-1 text-xs text-alloy-midnight focus:border-alloy-pine/40 focus:outline-none";
 
+    function derivedLabel(): string {
+        if (customLabel.trim()) return customLabel.trim();
+        const base = ATTENDANCE_TYPE_LABELS[attendanceType] ?? attendanceType;
+        if (quantityValue && quantityType) {
+            const unit = QUANTITY_TYPE_LABELS[quantityType] ?? quantityType;
+            return `${base} – ${quantityValue} ${unit}`;
+        }
+        return base;
+    }
+
     async function handleAdd() {
-        const label = addLabel.trim();
+        const label = derivedLabel();
         if (!label) return;
-        const key = addKey.trim()
-            ? slugifyLocationProgramCategoryKey(addKey)
-            : slugifyLocationProgramCategoryKey(label);
+        const qv = quantityValue ? parseFloat(quantityValue) : null;
+        const qt = qv != null && quantityType ? quantityType : null;
         setAdding(true);
-        await onAdd(label, key);
-        setAddLabel("");
-        setAddKey("");
+        await onAdd({
+            attendance_type: attendanceType,
+            quantity_type: qt,
+            quantity_value: qv,
+            label,
+        });
+        setQuantityValue("");
+        setCustomLabel("");
         setAdding(false);
     }
 
-    async function handleRename(item: OfferingItem) {
-        const next = editLabel.trim();
-        if (!next || next === item.label) {
-            setEditingId(null);
-            return;
-        }
-        await onRename(item.id, next);
-        setEditingId(null);
-    }
+    const needsQuantity =
+        attendanceType === "full_time" ||
+        attendanceType === "part_time" ||
+        attendanceType === "hourly";
 
     return (
-        <ConfigurationDetailCard title="What schedule offerings does this program have?">
-            {items.length > 0 && (
-                <div className="mb-3 overflow-hidden rounded-lg border border-alloy-stone/20">
-                    {items.map((item, i) => (
+        <ConfigurationDetailCard title="What offerings does this program have?">
+            {offerings.length > 0 && (
+                <div className="mb-4 overflow-hidden rounded-lg border border-alloy-stone/20">
+                    {offerings.map((o, i) => (
                         <div
-                            key={item.id}
+                            key={o.id}
                             className={[
-                                "flex items-center gap-2 px-3 py-2",
-                                i < items.length - 1 ? "border-b border-alloy-stone/10" : "",
+                                "flex items-center gap-3 px-3 py-2.5",
+                                i < offerings.length - 1 ? "border-b border-alloy-stone/10" : "",
                             ].join(" ")}
                         >
-                            <span className="font-mono text-[10px] text-alloy-midnight/30 w-32 shrink-0 truncate">
-                                {item.item_key}
-                            </span>
-                            {editingId === item.id ? (
-                                <input
-                                    autoFocus
-                                    value={editLabel}
-                                    onChange={(e) => setEditLabel(e.target.value)}
-                                    onBlur={() => void handleRename(item)}
-                                    onKeyDown={(e) => {
-                                        if (e.key === "Enter") void handleRename(item);
-                                        if (e.key === "Escape") setEditingId(null);
-                                    }}
-                                    className={`${inputCls} flex-1`}
-                                />
-                            ) : (
+                            <div className="flex-1 min-w-0">
+                                <p className="text-sm font-medium text-alloy-midnight truncate">
+                                    {o.label}
+                                </p>
+                                <p className="text-[10px] text-alloy-midnight/35 mt-0.5">
+                                    {describeOffering(o)}
+                                    {o.status !== "active" && (
+                                        <span className="ml-2 text-alloy-midnight/25 capitalize">
+                                            · {o.status}
+                                        </span>
+                                    )}
+                                </p>
+                            </div>
+                            <div className="flex items-center gap-2 shrink-0">
+                                <select
+                                    value={o.status}
+                                    onChange={(e) => void onUpdateStatus(o.id, e.target.value)}
+                                    className={`${inputCls} text-[10px] py-0.5`}
+                                >
+                                    <option value="active">Active</option>
+                                    <option value="coming_soon">Coming soon</option>
+                                    <option value="seasonal">Seasonal</option>
+                                    <option value="draft">Draft</option>
+                                    <option value="retired">Retired</option>
+                                    <option value="archived">Archived</option>
+                                </select>
                                 <button
                                     type="button"
-                                    onClick={() => {
-                                        setEditingId(item.id);
-                                        setEditLabel(item.label);
-                                    }}
-                                    className="flex-1 text-left text-sm text-alloy-midnight hover:text-alloy-pine"
+                                    onClick={() => void onDelete(o.id)}
+                                    className="text-alloy-midnight/20 hover:text-red-400 text-xs px-1 transition-colors"
+                                    title={
+                                        hasRatesForOffering(o.id)
+                                            ? "Has existing rates — will archive"
+                                            : "Remove offering"
+                                    }
                                 >
-                                    {item.label}
+                                    ×
                                 </button>
-                            )}
-                            <button
-                                type="button"
-                                onClick={() => void onDelete(item.id, item.item_key)}
-                                className="shrink-0 text-alloy-midnight/20 hover:text-red-400 text-xs px-1 transition-colors"
-                                title={
-                                    hasRatesForKey(item.item_key)
-                                        ? "This offering has tuition rates — deleting it will leave those rates without a display label"
-                                        : "Remove offering"
-                                }
-                            >
-                                ×
-                            </button>
+                            </div>
                         </div>
                     ))}
                 </div>
             )}
 
-            <div className="flex items-end gap-2 flex-wrap">
-                <label className="flex flex-col gap-0.5 min-w-[160px] flex-1">
-                    <span className="text-[10px] text-alloy-midnight/45">Label</span>
-                    <input
-                        type="text"
-                        value={addLabel}
-                        placeholder="e.g. Part Time – 3 days"
-                        disabled={adding}
-                        onChange={(e) => setAddLabel(e.target.value)}
-                        onKeyDown={(e) => {
-                            if (e.key === "Enter") void handleAdd();
-                        }}
-                        className={inputCls}
-                    />
-                </label>
-                <label className="flex flex-col gap-0.5 min-w-[120px]">
-                    <span className="text-[10px] text-alloy-midnight/45">
-                        Key <span className="text-alloy-midnight/25">(auto)</span>
-                    </span>
-                    <input
-                        type="text"
-                        value={addKey}
-                        placeholder="part_time_3d"
-                        disabled={adding}
-                        onChange={(e) => setAddKey(e.target.value)}
-                        className={`${inputCls} font-mono text-[11px]`}
-                    />
-                </label>
-                <button
-                    type="button"
-                    disabled={adding || !addLabel.trim()}
-                    onClick={() => void handleAdd()}
-                    className="rounded border border-alloy-pine/30 bg-alloy-pine/8 px-3 py-1.5 text-xs font-medium text-alloy-pine hover:bg-alloy-pine/12 disabled:opacity-50 transition-colors"
-                >
-                    {adding ? "Adding…" : "Add offering"}
-                </button>
-            </div>
+            {/* Add form */}
+            <div className="space-y-3">
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-alloy-midnight/35">
+                    Add offering
+                </p>
+                <div className="flex flex-wrap gap-2 items-end">
+                    <label className="flex flex-col gap-0.5">
+                        <span className="text-[10px] text-alloy-midnight/45">Attendance type</span>
+                        <select
+                            value={attendanceType}
+                            onChange={(e) => setAttendanceType(e.target.value as AttendanceType)}
+                            className={inputCls}
+                        >
+                            {ATTENDANCE_OPTIONS.map((t) => (
+                                <option key={t} value={t}>
+                                    {ATTENDANCE_TYPE_LABELS[t]}
+                                </option>
+                            ))}
+                        </select>
+                    </label>
 
-            <p className="mt-3 text-xs text-alloy-midnight/35 leading-relaxed">
-                Offerings appear as rows in the Tuition grid. Each key is permanent once set — only the label
-                can be renamed. Examples: "Full Time – 5 days" → <code className="font-mono bg-alloy-stone/20 px-1 rounded">full_time_5_days</code>.
-                Day patterns are encoded in the label and key (V2 will add an explicit day-count field).
-            </p>
+                    {needsQuantity && (
+                        <>
+                            <label className="flex flex-col gap-0.5 w-16">
+                                <span className="text-[10px] text-alloy-midnight/45">Count</span>
+                                <input
+                                    type="number"
+                                    min="1"
+                                    step="1"
+                                    value={quantityValue}
+                                    onChange={(e) => setQuantityValue(e.target.value)}
+                                    className={inputCls}
+                                    placeholder="5"
+                                />
+                            </label>
+                            <label className="flex flex-col gap-0.5">
+                                <span className="text-[10px] text-alloy-midnight/45">Unit</span>
+                                <select
+                                    value={quantityType ?? "days"}
+                                    onChange={(e) =>
+                                        setQuantityType(e.target.value as QuantityType)
+                                    }
+                                    className={inputCls}
+                                >
+                                    {QUANTITY_OPTIONS.map((q) => (
+                                        <option key={q} value={q}>
+                                            {QUANTITY_TYPE_LABELS[q]}
+                                        </option>
+                                    ))}
+                                </select>
+                            </label>
+                        </>
+                    )}
+
+                    <label className="flex flex-col gap-0.5 min-w-[140px] flex-1">
+                        <span className="text-[10px] text-alloy-midnight/45">
+                            Label{" "}
+                            <span className="text-alloy-midnight/25">
+                                (auto: {derivedLabel()})
+                            </span>
+                        </span>
+                        <input
+                            type="text"
+                            value={customLabel}
+                            placeholder={derivedLabel()}
+                            onChange={(e) => setCustomLabel(e.target.value)}
+                            onKeyDown={(e) => {
+                                if (e.key === "Enter") void handleAdd();
+                            }}
+                            className={inputCls}
+                        />
+                    </label>
+
+                    <button
+                        type="button"
+                        disabled={adding}
+                        onClick={() => void handleAdd()}
+                        className="rounded border border-alloy-pine/30 bg-alloy-pine/8 px-3 py-1.5 text-xs font-medium text-alloy-pine hover:bg-alloy-pine/12 disabled:opacity-50 transition-colors"
+                    >
+                        {adding ? "Adding…" : "Add"}
+                    </button>
+                </div>
+            </div>
         </ConfigurationDetailCard>
     );
 }
@@ -387,32 +463,36 @@ type ProgramsPanelProps = {
     program: ProgramEntry;
     locations: SiteLocation[];
     categories: LocationProgramCategoryRow[];
-    offeringItems: OfferingItem[];
+    offerings: ProgramOffering[];
     rates: TuitionRateRow[];
     onToggleSite: (siteId: string) => Promise<void>;
-    onAddOffering: (label: string, key: string) => Promise<void>;
-    onRenameOffering: (itemId: string, label: string) => Promise<void>;
-    onDeleteOffering: (itemId: string, itemKey: string) => Promise<void>;
+    onAddOffering: (fields: {
+        attendance_type: AttendanceType;
+        quantity_type: QuantityType | null;
+        quantity_value: number | null;
+        label: string;
+    }) => Promise<void>;
+    onUpdateOfferingStatus: (id: string, status: string) => Promise<void>;
+    onDeleteOffering: (id: string) => Promise<void>;
 };
 
 function ProgramsPanel({
     program,
     locations,
     categories,
-    offeringItems,
+    offerings,
     rates,
     onToggleSite,
     onAddOffering,
-    onRenameOffering,
+    onUpdateOfferingStatus,
     onDeleteOffering,
 }: ProgramsPanelProps) {
     const [togglingId, setTogglingId] = useState<string | null>(null);
-
     const programCats = categories.filter((c) => c.key === program.key);
 
-    function siteStatus(siteId: string): { active: boolean; rowId: string | null } {
+    function siteStatus(siteId: string) {
         const row = programCats.find((c) => c.location_id === siteId);
-        return { active: row?.is_active !== false, rowId: row?.id ?? null };
+        return { active: row?.is_active !== false };
     }
 
     async function handleToggle(siteId: string) {
@@ -421,20 +501,17 @@ function ProgramsPanel({
         setTogglingId(null);
     }
 
-    function hasRatesForKey(itemKey: string) {
-        return rates.some((r) => r.program_key === program.key && r.schedule_key === itemKey);
+    function hasRatesForOffering(id: string) {
+        return rates.some((r) => r.offering_id === id);
     }
 
     return (
         <div className="flex flex-col min-h-0 overflow-y-auto">
             <div className="p-6 space-y-5">
-                {/* Program heading */}
                 <div>
                     <h2 className="config-typo-workspace-title text-xl">{program.label}</h2>
-                    <span className="font-mono text-xs text-alloy-midnight/35">{program.key}</span>
                 </div>
 
-                {/* Location availability */}
                 <ConfigurationDetailCard title="Which locations offer this program?">
                     {locations.length === 0 ? (
                         <p className="text-sm text-alloy-midnight/40">
@@ -453,7 +530,9 @@ function ProgramsPanel({
                                         key={site.id}
                                         className="flex items-center justify-between gap-3 border-b border-alloy-stone/10 last:border-0 px-4 py-2.5"
                                     >
-                                        <span className="text-sm text-alloy-midnight">{site.name}</span>
+                                        <span className="text-sm text-alloy-midnight">
+                                            {site.name}
+                                        </span>
                                         <button
                                             type="button"
                                             disabled={toggling}
@@ -474,21 +553,19 @@ function ProgramsPanel({
                     )}
                 </ConfigurationDetailCard>
 
-                {/* Schedule offerings */}
-                <ScheduleOfferingsCard
-                    items={offeringItems}
+                <OfferingsBuilderCard
+                    offerings={offerings}
                     onAdd={onAddOffering}
-                    onRename={onRenameOffering}
+                    onUpdateStatus={onUpdateOfferingStatus}
                     onDelete={onDeleteOffering}
-                    hasRatesForKey={hasRatesForKey}
+                    hasRatesForOffering={hasRatesForOffering}
                 />
 
-                {/* Rooms note */}
                 <ConfigurationDetailCard title="Rooms">
                     <p className="text-sm text-alloy-midnight/55 leading-relaxed">
-                        Rooms are the operational children of programs — a Toddler room belongs under the
-                        Toddler program for scheduling and headcount purposes. Room assignment does not affect
-                        pricing: tuition is always set at the program level.
+                        Rooms are operational children of programs — a Toddler room belongs under
+                        the Toddler program for scheduling and headcount. Room assignment does not
+                        affect pricing: tuition is always set at the offering level.
                     </p>
                     <Link
                         href="/settings/locations"
@@ -506,7 +583,8 @@ function ProgramsPanel({
 
 type TuitionPanelProps = {
     program: ProgramEntry;
-    offeringItems: OfferingItem[];
+    offerings: ProgramOffering[];
+    cadences: BillingCadence[];
     locations: SiteLocation[];
     selectedScopeId: string | null;
     onScopeChange: (id: string | null) => void;
@@ -523,7 +601,8 @@ type TuitionPanelProps = {
 
 function TuitionPanel({
     program,
-    offeringItems,
+    offerings,
+    cadences,
     locations,
     selectedScopeId,
     onScopeChange,
@@ -538,19 +617,19 @@ function TuitionPanel({
     bulkCopying,
 }: TuitionPanelProps) {
     const selectedLocName = locations.find((l) => l.id === selectedScopeId)?.name ?? "Location";
-    const payerLabel = payerTab === "private" ? "private pay" : payerTab;
 
     return (
         <div className="flex flex-col min-h-0 overflow-y-auto">
             <div className="p-6 space-y-5">
-                {/* Program heading */}
                 <div>
                     <h2 className="config-typo-workspace-title text-xl">{program.label}</h2>
                 </div>
 
                 {/* Scope selector */}
                 <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-xs font-medium text-alloy-midnight/45 shrink-0">Viewing:</span>
+                    <span className="text-xs font-medium text-alloy-midnight/45 shrink-0">
+                        Viewing:
+                    </span>
                     <button
                         type="button"
                         onClick={() => onScopeChange(null)}
@@ -584,7 +663,11 @@ function TuitionPanel({
                 {selectedScopeId && (
                     <div className="flex items-center justify-between gap-3 rounded-lg border border-alloy-stone/25 bg-alloy-stone/8 px-4 py-2.5">
                         <p className="text-xs text-alloy-midnight/55 leading-relaxed">
-                            Viewing <strong className="font-medium text-alloy-midnight">{selectedLocName}</strong>.{" "}
+                            Viewing{" "}
+                            <strong className="font-medium text-alloy-midnight">
+                                {selectedLocName}
+                            </strong>
+                            .{" "}
                             <span className="inline-flex items-center gap-1">
                                 <span className="inline-block w-1.5 h-1.5 rounded-full bg-alloy-pine/70" />
                                 Green dot = location override.
@@ -626,27 +709,24 @@ function TuitionPanel({
                     ))}
                 </div>
 
-                {/* Tuition rate card */}
-                <ConfigurationDetailCard
-                    title={`What do we charge for ${program.label} — ${payerLabel}?`}
-                >
-                    {offeringItems.length === 0 ? (
+                {/* Rate grid */}
+                <ConfigurationDetailCard title={`${program.label} — tuition rates`}>
+                    {offerings.length === 0 ? (
                         <div className="py-6 text-center">
                             <p className="text-sm text-alloy-midnight/40">
-                                No schedule offerings configured.
+                                No offerings configured yet.
                             </p>
                             <p className="text-xs text-alloy-midnight/30 mt-1">
-                                Add offerings in the{" "}
-                                <button
-                                    type="button"
-                                    className="text-alloy-pine hover:underline"
-                                    onClick={() => {
-                                        /* handled by parent via secondary tab */
-                                    }}
-                                >
-                                    Programs tab
-                                </button>{" "}
-                                to populate this grid.
+                                Add offerings in the Programs tab to populate this grid.
+                            </p>
+                        </div>
+                    ) : cadences.length === 0 ? (
+                        <div className="py-6 text-center">
+                            <p className="text-sm text-alloy-midnight/40">
+                                No billing cadences configured.
+                            </p>
+                            <p className="text-xs text-alloy-midnight/30 mt-1">
+                                Run database migrations to seed billing cadences.
                             </p>
                         </div>
                     ) : (
@@ -655,36 +735,34 @@ function TuitionPanel({
                                 <thead>
                                     <tr>
                                         <th className="text-left pb-2.5 pr-3 text-xs font-medium text-alloy-midnight/45 border-b border-alloy-stone/20">
-                                            Schedule offering
+                                            Offering
                                         </th>
-                                        {TUITION_BILLING_PERIODS.map((bp) => (
+                                        {cadences.map((c) => (
                                             <th
-                                                key={bp.key}
+                                                key={c.item_key}
                                                 className="text-right px-2 pb-2.5 text-xs font-medium text-alloy-midnight/45 whitespace-nowrap border-b border-alloy-stone/20"
                                             >
-                                                {bp.label}
+                                                {c.label}
                                             </th>
                                         ))}
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {offeringItems.map((offering) => (
-                                        <tr key={offering.item_key} className="group/row">
+                                    {offerings.map((offering) => (
+                                        <tr key={offering.id} className="group/row">
                                             <td className="py-2.5 pr-3 font-medium text-alloy-midnight/70 border-b border-alloy-stone/10 whitespace-nowrap align-middle text-sm">
                                                 {offering.label}
                                             </td>
-                                            {TUITION_BILLING_PERIODS.map((bp) => {
+                                            {cadences.map((cadence) => {
                                                 const cellKey = tuitionRateCellKey(
-                                                    program.key,
-                                                    offering.item_key,
-                                                    bp.key,
+                                                    offering.id,
+                                                    cadence.item_key,
                                                 );
                                                 return (
                                                     <TuitionCell
                                                         key={cellKey}
-                                                        programKey={program.key}
-                                                        scheduleKey={offering.item_key}
-                                                        billingPeriod={bp.key}
+                                                        offering={offering}
+                                                        cadence={cadence}
                                                         rateRow={rateMap.get(cellKey)}
                                                         orgDefaultRow={orgOnlyMap.get(cellKey)}
                                                         locationId={locationId}
@@ -700,7 +778,7 @@ function TuitionPanel({
                         </div>
                     )}
 
-                    {offeringItems.length > 0 && (
+                    {offerings.length > 0 && cadences.length > 0 && (
                         <div className="flex flex-wrap gap-4 text-xs text-alloy-midnight/35 mt-4 pt-3 border-t border-alloy-stone/10">
                             {locationId && (
                                 <>
@@ -711,9 +789,7 @@ function TuitionPanel({
                                     <span className="italic">Italic = inherited from org</span>
                                 </>
                             )}
-                            <span>
-                                Click any cell to set a price.
-                            </span>
+                            <span>Click any cell to set a price.</span>
                             <span>
                                 <span className="line-through">N/A</span> = not offered
                             </span>
@@ -723,13 +799,11 @@ function TuitionPanel({
                 </ConfigurationDetailCard>
 
                 {/* Revenue mapping reference */}
-                <ConfigurationDetailCard
-                    title={`Where does ${program.label} tuition revenue land?`}
-                >
+                <ConfigurationDetailCard title={`Where does ${program.label} revenue land?`}>
                     <div className="flex items-start justify-between gap-4">
                         <p className="text-sm text-alloy-midnight/50 leading-relaxed">
-                            Revenue category mapping is inherited from Accounting configuration.
-                            GL codes and revenue categories are set there.
+                            Revenue category mapping is inherited from Accounting configuration. GL
+                            codes and revenue categories are set there.
                         </p>
                         <Link
                             href="/settings/financials"
@@ -766,7 +840,9 @@ function AddProgramForm({ onAdd }: AddProgramFormProps) {
     async function handleAdd() {
         const l = label.trim();
         if (!l) return;
-        const k = key.trim() ? slugifyLocationProgramCategoryKey(key) : slugifyLocationProgramCategoryKey(l);
+        const k = key.trim()
+            ? slugifyLocationProgramCategoryKey(key)
+            : slugifyLocationProgramCategoryKey(l);
         setAdding(true);
         await onAdd(l, k);
         setLabel("");
@@ -831,16 +907,17 @@ export function CommercialConfigWorkspace() {
     // Data
     const [locations, setLocations] = useState<SiteLocation[]>([]);
     const [categories, setCategories] = useState<LocationProgramCategoryRow[]>([]);
-    const [offeringItems, setOfferingItems] = useState<OfferingItem[]>([]);
+    const [offerings, setOfferings] = useState<ProgramOffering[]>([]);
+    const [cadences, setCadences] = useState<BillingCadence[]>([]);
     const [rates, setRates] = useState<TuitionRateRow[]>([]);
 
-    // Navigation state
+    // Navigation
     const [secondaryTab, setSecondaryTab] = useState<SecondaryTab>("programs");
     const [selectedProgramKey, setSelectedProgramKey] = useState<string | null>(null);
     const [selectedScopeId, setSelectedScopeId] = useState<string | null>(null);
     const [payerTab, setPayerTab] = useState<PayerTab>("private");
 
-    // ── Data loaders ──────────────────────────────────────────────────────────
+    // ── Loaders ───────────────────────────────────────────────────────────────
 
     const reloadRates = useCallback(async () => {
         try {
@@ -848,7 +925,7 @@ export function CommercialConfigWorkspace() {
             const json = (await res.json()) as { rates?: TuitionRateRow[] };
             setRates(json.rates ?? []);
         } catch {
-            // rates stay as-is on network error
+            // retain existing rates on network error
         }
     }, []);
 
@@ -862,39 +939,41 @@ export function CommercialConfigWorkspace() {
         }
     }, []);
 
-    const reloadOfferings = useCallback(async () => {
-        try {
-            const res = await fetch("/api/admin/option-sets/childcare_schedule_type");
-            const json = (await res.json()) as { items?: OfferingItem[] };
-            setOfferingItems(
-                [...(json.items ?? [])].sort((a, b) => a.sort_order - b.sort_order),
-            );
-        } catch {
-            // silent
-        }
-    }, []);
+    const reloadOfferings = useCallback(
+        async (programKey: string) => {
+            try {
+                const res = await fetch(
+                    `/api/admin/programs/offerings?program_key=${encodeURIComponent(programKey)}`,
+                );
+                const json = (await res.json()) as { offerings?: ProgramOffering[] };
+                setOfferings(sortOfferings(json.offerings ?? []));
+            } catch {
+                // silent
+            }
+        },
+        [],
+    );
 
     useEffect(() => {
         async function boot() {
             setLoading(true);
             try {
-                const [locRes, catRes, offerRes, ratesRes] = await Promise.all([
+                const [locRes, catRes, cadenceRes, ratesRes] = await Promise.all([
                     fetch("/api/admin/locations"),
                     fetch("/api/admin/location-program-categories?include_inactive=true"),
-                    fetch("/api/admin/option-sets/childcare_schedule_type"),
+                    fetch("/api/admin/commercial/billing-cadences"),
                     fetch("/api/admin/commercial/tuition-rates"),
                 ]);
 
                 const locJson = (await locRes.json()) as {
                     locations?: Record<string, unknown>[];
                 };
-                const rawLocs = (locJson.locations ?? []).filter(
-                    (l) => String(l.location_type ?? "") === "site",
-                );
-                const locs: SiteLocation[] = rawLocs.map((l) => ({
-                    id: String(l.id ?? ""),
-                    name: String(l.name ?? l.label ?? "Unnamed site"),
-                }));
+                const locs: SiteLocation[] = (locJson.locations ?? [])
+                    .filter((l) => String(l.location_type ?? "") === "site")
+                    .map((l) => ({
+                        id: String(l.id ?? ""),
+                        name: String(l.name ?? l.label ?? "Unnamed site"),
+                    }));
                 setLocations(locs);
 
                 const catJson = (await catRes.json()) as {
@@ -903,33 +982,29 @@ export function CommercialConfigWorkspace() {
                 const cats = catJson.categories ?? [];
                 setCategories(cats);
 
-                // First program selected by default
-                const byKey = new Map<string, { label: string; siteCount: number }>();
-                for (const c of cats) {
-                    if (c.is_active === false) continue;
-                    const existing = byKey.get(c.key);
-                    if (existing) {
-                        existing.siteCount++;
-                    } else {
-                        byKey.set(c.key, { label: c.label, siteCount: 1 });
-                    }
-                }
-                const progs = Array.from(byKey.entries()).map(([key, v]) => ({
-                    key,
-                    label: v.label,
-                    siteCount: v.siteCount,
-                }));
-                if (progs.length > 0 && !selectedProgramKey) {
-                    setSelectedProgramKey(progs[0].key);
-                }
-
-                const offerJson = (await offerRes.json()) as { items?: OfferingItem[] };
-                setOfferingItems(
-                    [...(offerJson.items ?? [])].sort((a, b) => a.sort_order - b.sort_order),
-                );
+                const cadenceJson = (await cadenceRes.json()) as {
+                    cadences?: BillingCadence[];
+                };
+                setCadences(cadenceJson.cadences ?? []);
 
                 const ratesJson = (await ratesRes.json()) as { rates?: TuitionRateRow[] };
                 setRates(ratesJson.rates ?? []);
+
+                // Derive programs from categories; auto-select first
+                const byKey = new Map<string, string>();
+                for (const c of cats) {
+                    if (!byKey.has(c.key)) byKey.set(c.key, c.label);
+                }
+                const firstKey = Array.from(byKey.keys())[0] ?? null;
+                if (firstKey) {
+                    setSelectedProgramKey(firstKey);
+                    // Load offerings for first program
+                    const offerRes = await fetch(
+                        `/api/admin/programs/offerings?program_key=${encodeURIComponent(firstKey)}`,
+                    );
+                    const offerJson = (await offerRes.json()) as { offerings?: ProgramOffering[] };
+                    setOfferings(sortOfferings(offerJson.offerings ?? []));
+                }
             } catch (e) {
                 setError(String(e));
             } finally {
@@ -937,32 +1012,21 @@ export function CommercialConfigWorkspace() {
             }
         }
         void boot();
-        // intentionally run once
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
+
+    // Reload offerings when the selected program changes
+    useEffect(() => {
+        if (selectedProgramKey) void reloadOfferings(selectedProgramKey);
+    }, [selectedProgramKey, reloadOfferings]);
 
     // ── Derived ────────────────────────────────────────────────────────────────
 
     const programs: ProgramEntry[] = (() => {
-        const byKey = new Map<string, { label: string; siteCount: number }>();
-        for (const c of categories) {
-            if (c.is_active === false) continue;
-            const existing = byKey.get(c.key);
-            if (existing) {
-                existing.siteCount++;
-            } else {
-                byKey.set(c.key, { label: c.label, siteCount: 1 });
-            }
-        }
-        // also include programs with is_active=true if none active shows in list
         const allByKey = new Map<string, { label: string; siteCount: number }>();
         for (const c of categories) {
-            if (!allByKey.has(c.key)) {
-                allByKey.set(c.key, { label: c.label, siteCount: 0 });
-            }
-            if (c.is_active !== false) {
-                allByKey.get(c.key)!.siteCount++;
-            }
+            if (!allByKey.has(c.key)) allByKey.set(c.key, { label: c.label, siteCount: 0 });
+            if (c.is_active !== false) allByKey.get(c.key)!.siteCount++;
         }
         return Array.from(allByKey.entries()).map(([key, v]) => ({
             key,
@@ -974,10 +1038,16 @@ export function CommercialConfigWorkspace() {
     const selectedProgram = programs.find((p) => p.key === selectedProgramKey) ?? null;
     const locationId: string | null = selectedScopeId;
 
-    const programRates = rates.filter((r) => r.program_key === selectedProgramKey);
-    const orgOnlyRates = programRates.filter((r) => r.location_id === null);
+    // Offerings for selected program (already in state from reloadOfferings)
+    const programOfferings = offerings;
+
+    const offeringIds = programOfferings.map((o) => o.id);
+    const offeringRates = rates.filter((r) => offeringIds.includes(r.offering_id));
+    const orgOnlyRates = offeringRates.filter((r) => r.location_id === null);
     const visibleRates = locationId
-        ? programRates.filter((r) => r.location_id === null || r.location_id === locationId)
+        ? offeringRates.filter(
+              (r) => r.location_id === null || r.location_id === locationId,
+          )
         : orgOnlyRates;
 
     const rateMap = buildTuitionRateMap(visibleRates, locationId);
@@ -986,7 +1056,6 @@ export function CommercialConfigWorkspace() {
     // ── Program mutations ─────────────────────────────────────────────────────
 
     async function addProgram(label: string, key: string) {
-        // Create the program at ALL active site locations
         const creates = locations.map((site) =>
             fetch("/api/admin/location-program-categories", {
                 method: "POST",
@@ -1017,7 +1086,6 @@ export function CommercialConfigWorkspace() {
             (c) => c.location_id === siteId && c.key === selectedProgramKey,
         );
         if (!existing) {
-            // Create
             await fetch("/api/admin/location-program-categories", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
@@ -1032,7 +1100,6 @@ export function CommercialConfigWorkspace() {
                 }),
             });
         } else {
-            // Toggle is_active
             await fetch("/api/admin/location-program-categories", {
                 method: "PATCH",
                 headers: { "Content-Type": "application/json" },
@@ -1046,82 +1113,82 @@ export function CommercialConfigWorkspace() {
 
     // ── Offering mutations ────────────────────────────────────────────────────
 
-    async function addOffering(label: string, itemKey: string) {
-        const nextOrder =
-            offeringItems.length > 0
-                ? Math.max(...offeringItems.map((i) => i.sort_order)) + 10
-                : 10;
-        const res = await fetch("/api/admin/option-sets/childcare_schedule_type/items", {
+    async function addOffering(fields: {
+        attendance_type: AttendanceType;
+        quantity_type: QuantityType | null;
+        quantity_value: number | null;
+        label: string;
+    }) {
+        if (!selectedProgramKey) return;
+        const res = await fetch("/api/admin/programs/offerings", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ item_key: itemKey, label, sort_order: nextOrder }),
+            body: JSON.stringify({
+                program_key: selectedProgramKey,
+                ...fields,
+                sort_order: offerings.length > 0 ? offerings.length * 10 + 10 : 10,
+            }),
         });
         if (!res.ok) {
             const j = (await res.json()) as { error?: string };
             setError(j.error ?? "Failed to add offering");
             return;
         }
-        await reloadOfferings();
+        if (selectedProgramKey) await reloadOfferings(selectedProgramKey);
     }
 
-    async function renameOffering(itemId: string, label: string) {
-        const res = await fetch(
-            `/api/admin/option-sets/childcare_schedule_type/items/${itemId}`,
-            {
-                method: "PATCH",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ label }),
-            },
-        );
+    async function updateOfferingStatus(id: string, status: string) {
+        const res = await fetch(`/api/admin/programs/offerings/${id}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ status }),
+        });
         if (!res.ok) {
             const j = (await res.json()) as { error?: string };
-            setError(j.error ?? "Failed to rename offering");
+            setError(j.error ?? "Failed to update offering");
             return;
         }
-        await reloadOfferings();
+        if (selectedProgramKey) await reloadOfferings(selectedProgramKey);
     }
 
-    async function deleteOffering(itemId: string, itemKey: string) {
-        const hasRates = rates.some((r) => r.schedule_key === itemKey);
+    async function deleteOffering(id: string) {
+        const hasRates = rates.some((r) => r.offering_id === id);
         if (hasRates) {
             const ok = window.confirm(
-                `"${itemKey}" has existing tuition rates. Deleting the offering will hide those rates from the grid (the data is preserved). Continue?`,
+                "This offering has existing tuition rates. It will be archived rather than deleted. Continue?",
             );
             if (!ok) return;
         }
-        const res = await fetch(
-            `/api/admin/option-sets/childcare_schedule_type/items/${itemId}`,
-            { method: "DELETE" },
-        );
+        const res = await fetch(`/api/admin/programs/offerings/${id}`, {
+            method: "DELETE",
+        });
         if (!res.ok) {
             const j = (await res.json()) as { error?: string };
             setError(j.error ?? "Failed to delete offering");
             return;
         }
-        await reloadOfferings();
+        if (selectedProgramKey) await reloadOfferings(selectedProgramKey);
     }
 
     // ── Tuition mutations ─────────────────────────────────────────────────────
 
     async function saveCell(
-        programKey: string,
-        scheduleKey: string,
-        billingPeriod: TuitionBillingPeriod,
+        offeringId: string,
+        cadenceKey: string,
         payload: { rate_cents?: number; not_offered?: boolean },
     ) {
         setSaving(true);
         try {
-            const body = {
-                program_key: programKey,
-                schedule_key: scheduleKey,
-                billing_period: billingPeriod,
-                location_id: locationId,
-                ...payload,
-            };
             const res = await fetch("/api/admin/commercial/tuition-rates", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(body),
+                body: JSON.stringify({
+                    offering_id: offeringId,
+                    cadence_key: cadenceKey,
+                    location_id: locationId,
+                    payer_type: "private_pay",
+                    ...payload,
+                }),
             });
             if (!res.ok) {
                 const j = (await res.json()) as { error?: string };
@@ -1148,7 +1215,7 @@ export function CommercialConfigWorkspace() {
         setBulkCopying(true);
         try {
             const orgRates = rates.filter(
-                (r) => r.location_id === null && r.program_key === selectedProgramKey,
+                (r) => r.location_id === null && offeringIds.includes(r.offering_id),
             );
             await Promise.all(
                 orgRates.map((r) =>
@@ -1156,10 +1223,10 @@ export function CommercialConfigWorkspace() {
                         method: "POST",
                         headers: { "Content-Type": "application/json" },
                         body: JSON.stringify({
-                            program_key: r.program_key,
-                            schedule_key: r.schedule_key,
-                            billing_period: r.billing_period,
+                            offering_id: r.offering_id,
+                            cadence_key: r.cadence_key,
                             location_id: locId,
+                            payer_type: r.payer_type,
                             rate_cents: r.rate_cents,
                             not_offered: r.not_offered,
                         }),
@@ -1262,17 +1329,18 @@ export function CommercialConfigWorkspace() {
                                 program={selectedProgram}
                                 locations={locations}
                                 categories={categories}
-                                offeringItems={offeringItems}
+                                offerings={programOfferings}
                                 rates={rates}
                                 onToggleSite={toggleSiteForProgram}
                                 onAddOffering={addOffering}
-                                onRenameOffering={renameOffering}
+                                onUpdateOfferingStatus={updateOfferingStatus}
                                 onDeleteOffering={deleteOffering}
                             />
                         ) : (
                             <TuitionPanel
                                 program={selectedProgram}
-                                offeringItems={offeringItems}
+                                offerings={programOfferings}
+                                cadences={cadences}
                                 locations={locations}
                                 selectedScopeId={selectedScopeId}
                                 onScopeChange={setSelectedScopeId}

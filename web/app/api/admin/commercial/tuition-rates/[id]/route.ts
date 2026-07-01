@@ -1,17 +1,20 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { getAdminContextCached } from "@/lib/admin/getAdminContext";
-import type { TuitionRateRow, TuitionBillingPeriod } from "@/lib/commercial/tuitionRates";
+import type { TuitionRateRow } from "@/lib/commercial/tuitionRates";
+
+const SELECT_COLS =
+    "id, org_id, location_id, offering_id, cadence_key, payer_type, rate_cents, is_active, not_offered, metadata, created_at, updated_at";
 
 function mapRateRow(r: Record<string, unknown>): TuitionRateRow {
     return {
         id: String(r.id ?? ""),
         org_id: String(r.org_id ?? ""),
         location_id: (r.location_id as string | null | undefined) ?? null,
-        program_key: String(r.program_key ?? ""),
-        schedule_key: String(r.schedule_key ?? ""),
+        offering_id: String(r.offering_id ?? ""),
+        cadence_key: String(r.cadence_key ?? ""),
+        payer_type: String(r.payer_type ?? "private_pay"),
         rate_cents: Number(r.rate_cents ?? 0),
-        billing_period: (r.billing_period as TuitionBillingPeriod) ?? "monthly",
         is_active: r.is_active !== false,
         not_offered: r.not_offered === true,
         metadata:
@@ -54,14 +57,8 @@ export async function PATCH(
         }
         patch.rate_cents = Math.round(cents);
     }
-
-    if (typeof body.is_active === "boolean") {
-        patch.is_active = body.is_active;
-    }
-
-    if (typeof body.not_offered === "boolean") {
-        patch.not_offered = body.not_offered;
-    }
+    if (typeof body.is_active === "boolean") patch.is_active = body.is_active;
+    if (typeof body.not_offered === "boolean") patch.not_offered = body.not_offered;
 
     if (Object.keys(patch).length <= 1) {
         return NextResponse.json({ error: "No fields to update" }, { status: 400 });
@@ -73,24 +70,18 @@ export async function PATCH(
         .update(patch)
         .eq("id", id)
         .eq("org_id", ctx.orgId)
-        .select(
-            "id, org_id, location_id, program_key, schedule_key, rate_cents, billing_period, is_active, not_offered, metadata, created_at, updated_at"
-        )
+        .select(SELECT_COLS)
         .maybeSingle();
 
-    if (error) {
-        return NextResponse.json({ error: error.message }, { status: 400 });
-    }
-    if (!data) {
-        return NextResponse.json({ error: "Rate not found" }, { status: 404 });
-    }
+    if (error) return NextResponse.json({ error: error.message }, { status: 400 });
+    if (!data) return NextResponse.json({ error: "Rate not found" }, { status: 404 });
 
     return NextResponse.json({ rate: mapRateRow(data as Record<string, unknown>) });
 }
 
 /** DELETE /api/admin/commercial/tuition-rates/[id] — remove a rate (resets to org default). */
 export async function DELETE(
-    request: NextRequest,
+    _request: NextRequest,
     { params }: { params: Promise<{ id: string }> }
 ) {
     const ctx = await getAdminContextCached();
@@ -106,7 +97,7 @@ export async function DELETE(
 
     const { data: existing } = await supabase
         .from("commercial_tuition_rates")
-        .select("id, location_id")
+        .select("id")
         .eq("id", id)
         .eq("org_id", ctx.orgId)
         .maybeSingle();
@@ -121,9 +112,7 @@ export async function DELETE(
         .eq("id", id)
         .eq("org_id", ctx.orgId);
 
-    if (error) {
-        return NextResponse.json({ error: error.message }, { status: 400 });
-    }
+    if (error) return NextResponse.json({ error: error.message }, { status: 400 });
 
     return NextResponse.json({ deleted: true });
 }

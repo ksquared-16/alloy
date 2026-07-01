@@ -1,19 +1,23 @@
 /**
- * Commercial Configuration — Tuition rates.
+ * Commercial Configuration — Tuition rates V2.
  *
- * Rate grid: program × schedule → rate, per org or per site.
- * Org default (location_id = null) is inherited by all sites
- * unless a site-level override exists.
+ * Rate grid: program_offering × billing_cadence → rate, per org or per site.
+ * Org default (location_id = null) is inherited by all sites unless a
+ * site-level override exists.
+ *
+ * V2 model: offering_id (FK to program_offerings) + cadence_key
+ * (item_key from commercial_billing_cadence option set) replace the V1
+ * program_key / schedule_key / billing_period flat columns.
  */
 
 export type TuitionRateRow = {
     id: string;
     org_id: string;
     location_id: string | null;
-    program_key: string;
-    schedule_key: string;
+    offering_id: string;
+    cadence_key: string;
+    payer_type: string;
     rate_cents: number;
-    billing_period: TuitionBillingPeriod;
     is_active: boolean;
     /** Explicitly not offered — distinct from "no rate set yet". */
     not_offered: boolean;
@@ -21,17 +25,6 @@ export type TuitionRateRow = {
     created_at: string;
     updated_at: string | null;
 };
-
-export type TuitionBillingPeriod = "weekly" | "biweekly" | "monthly" | "annual";
-
-export const TUITION_BILLING_PERIODS: { key: TuitionBillingPeriod; label: string }[] = [
-    { key: "weekly", label: "Weekly" },
-    { key: "biweekly", label: "Bi-weekly" },
-    { key: "monthly", label: "Monthly" },
-    { key: "annual", label: "Annual" },
-];
-
-export const DEFAULT_BILLING_PERIOD: TuitionBillingPeriod = "monthly";
 
 /** Format cents as a dollar string. */
 export function formatRateCents(cents: number): string {
@@ -54,12 +47,8 @@ export function parseDollarsToCents(raw: string): number | null {
 }
 
 /** Build a cell key for indexing the rate grid. */
-export function tuitionRateCellKey(
-    programKey: string,
-    scheduleKey: string,
-    billingPeriod: TuitionBillingPeriod,
-): string {
-    return `${programKey}::${scheduleKey}::${billingPeriod}`;
+export function tuitionRateCellKey(offeringId: string, cadenceKey: string): string {
+    return `${offeringId}::${cadenceKey}`;
 }
 
 /**
@@ -74,14 +63,14 @@ export function buildTuitionRateMap(
 
     for (const r of rates) {
         if (r.location_id === null) {
-            map.set(tuitionRateCellKey(r.program_key, r.schedule_key, r.billing_period), r);
+            map.set(tuitionRateCellKey(r.offering_id, r.cadence_key), r);
         }
     }
 
     if (locationId) {
         for (const r of rates) {
             if (r.location_id === locationId) {
-                map.set(tuitionRateCellKey(r.program_key, r.schedule_key, r.billing_period), r);
+                map.set(tuitionRateCellKey(r.offering_id, r.cadence_key), r);
             }
         }
     }
@@ -97,7 +86,7 @@ export function buildLocationOnlyRateMap(
     const map = new Map<string, TuitionRateRow>();
     for (const r of rates) {
         if (r.location_id === locationId) {
-            map.set(tuitionRateCellKey(r.program_key, r.schedule_key, r.billing_period), r);
+            map.set(tuitionRateCellKey(r.offering_id, r.cadence_key), r);
         }
     }
     return map;
@@ -119,7 +108,7 @@ export function resolveCellState(
     orgDefaultRow: TuitionRateRow | undefined,
     locationId: string | null,
 ): TuitionCellState {
-    const effective = rateRow; // already resolved with inheritance from buildTuitionRateMap
+    const effective = rateRow;
     if (!effective) return { kind: "unset" };
 
     const isOrgRow = effective.location_id === null;
@@ -148,19 +137,18 @@ export type TuitionReadiness = {
 };
 
 export function computeTuitionReadiness(
-    programKeys: string[],
-    scheduleKeys: string[],
-    billingPeriod: TuitionBillingPeriod,
+    offeringIds: string[],
+    cadenceKeys: string[],
     rates: TuitionRateRow[],
 ): TuitionReadiness {
     const orgMap = buildTuitionRateMap(rates, null);
-    const total = programKeys.length * scheduleKeys.length;
+    const total = offeringIds.length * cadenceKeys.length;
     let configured = 0;
     let notOffered = 0;
 
-    for (const pk of programKeys) {
-        for (const sk of scheduleKeys) {
-            const row = orgMap.get(tuitionRateCellKey(pk, sk, billingPeriod));
+    for (const oid of offeringIds) {
+        for (const ck of cadenceKeys) {
+            const row = orgMap.get(tuitionRateCellKey(oid, ck));
             if (!row) continue;
             if (row.not_offered) notOffered++;
             else configured++;
