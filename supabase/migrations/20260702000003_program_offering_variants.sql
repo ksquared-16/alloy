@@ -173,6 +173,74 @@ ALTER TABLE public.program_offerings
     DROP COLUMN IF EXISTS quantity_type,
     DROP COLUMN IF EXISTS quantity_value;
 
+-- ── Step 5: Merge duplicate offerings — old model allowed same attendance_type
+-- with different quantities; V3 requires one offering per type. For any group of
+-- offerings with the same (org_id, program_key, attendance_type), keep the oldest
+-- record and re-parent all variants from duplicates onto it, then delete duplicates.
+-- Also normalise offering labels (strip quantity info) and variant labels to
+-- "N days/week" format.
+
+DO $$
+DECLARE
+    dup RECORD;
+    canonical_id uuid;
+BEGIN
+    FOR dup IN
+        SELECT org_id, program_key, attendance_type
+        FROM public.program_offerings
+        GROUP BY org_id, program_key, attendance_type
+        HAVING COUNT(*) > 1
+    LOOP
+        -- Oldest row is canonical
+        SELECT id INTO canonical_id
+        FROM public.program_offerings
+        WHERE org_id = dup.org_id
+          AND program_key = dup.program_key
+          AND attendance_type = dup.attendance_type
+        ORDER BY created_at ASC
+        LIMIT 1;
+
+        -- Re-parent variants from duplicates → canonical
+        UPDATE public.program_offering_variants
+        SET offering_id = canonical_id
+        WHERE offering_id IN (
+            SELECT id FROM public.program_offerings
+            WHERE org_id = dup.org_id
+              AND program_key = dup.program_key
+              AND attendance_type = dup.attendance_type
+              AND id <> canonical_id
+        );
+
+        -- Delete duplicate offerings (now empty)
+        DELETE FROM public.program_offerings
+        WHERE org_id = dup.org_id
+          AND program_key = dup.program_key
+          AND attendance_type = dup.attendance_type
+          AND id <> canonical_id;
+
+        -- Strip quantity info from the canonical offering label (keep type name only)
+        UPDATE public.program_offerings
+        SET label = CASE attendance_type
+            WHEN 'full_time'    THEN 'Full Day'
+            WHEN 'part_time'    THEN 'Part Day'
+            WHEN 'drop_in'      THEN 'Drop-In'
+            WHEN 'before_school' THEN 'Before School'
+            WHEN 'after_school'  THEN 'After School'
+            WHEN 'hourly'       THEN 'Hourly'
+            ELSE label
+        END
+        WHERE id = canonical_id;
+    END LOOP;
+END $$;
+
+-- Normalise variant labels to "N day(s)/week" format
+UPDATE public.program_offering_variants
+SET label = CASE
+    WHEN quantity_value = 1 THEN '1 day/week'
+    ELSE quantity_value::text || ' days/week'
+END
+WHERE quantity_type = 'days' AND quantity_value IS NOT NULL;
+
 -- Update unique constraint: one offering type per (org, program, attendance_type)
 ALTER TABLE public.program_offerings
     DROP CONSTRAINT IF EXISTS program_offerings_unique;
