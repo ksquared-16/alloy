@@ -73,13 +73,13 @@ type UseQueueRowPublishResult = {
     publish: (config: QueueRecordLayoutConfigV3, placementOverrideEnabled?: boolean) => Promise<void>;
     publishing: boolean;
     error: string | null;
-    publishedAt: string | null;
+    publishedAt: Date | null;
 };
 
 export function useQueueRowPublish(surfaceId: string): UseQueueRowPublishResult {
     const [publishing, setPublishing] = useState(false);
     const [error, setError] = useState<string | null>(null);
-    const [publishedAt, setPublishedAt] = useState<string | null>(null);
+    const [publishedAt, setPublishedAt] = useState<Date | null>(null);
 
     const publish = useCallback(
         async (config: QueueRecordLayoutConfigV3, placementOverrideEnabled = false) => {
@@ -98,7 +98,7 @@ export function useQueueRowPublish(surfaceId: string): UseQueueRowPublishResult 
                 if (!res.ok) {
                     throw new Error((body.error as string | undefined) ?? `HTTP ${res.status}`);
                 }
-                setPublishedAt(new Date().toISOString());
+                setPublishedAt(new Date());
             } catch (err: unknown) {
                 setError((err as Error).message);
             } finally {
