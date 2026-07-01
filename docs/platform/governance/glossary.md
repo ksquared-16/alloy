@@ -59,6 +59,21 @@
 
 ---
 
+## Operational intelligence
+
+| Term | Meaning |
+|------|---------|
+| **Operational Answer** | Semantic output of an Operational Calculation — question, state, value, answer text, evidence, trend, freshness, drill target. Not a number; an answer. |
+| **Operational Calculation** | Registry-defined resolver that transforms Operational Facts into an Operational Answer. Owns all business logic including state thresholds and answer language. |
+| **Operational Instrument** | Runtime Presentation that renders an Operational Answer in Workspace Header, Work Unit Header, or Operational Intelligence panel. |
+| **Runtime Presentation** | Reusable renderer keyed by presentation type (`compact-instrument`, `expanded-instrument`, `tabular`, `badge`, `ai-narrative`). Selected by Surface Builder placement. |
+| **Operational Intelligence** | The operator surface for expanded signal review — not "analytics" or "dashboards". |
+| **Focus Panel** | Record detail surface. Previously called drawer. Not "drawer" in any operator-facing context. |
+
+Full doctrine: `../modules/operational-answers.md`.
+
+---
+
 ## Expanded glossary
 
 Additional terms (packet rollup, queue selection, etc.): `../../core/glossary.md` (transitional — vertical-specific detail).

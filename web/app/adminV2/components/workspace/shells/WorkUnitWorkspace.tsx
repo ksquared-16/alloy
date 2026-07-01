@@ -17,7 +17,8 @@ import {
     type WorkUnitAboveFoldHeaderHandlers,
 } from "@/app/adminV2/components/workspace/WorkUnitAboveFoldHeaderChips";
 import { WorkUnitAboveFoldActionsRail } from "@/app/adminV2/components/workspace/WorkUnitAboveFoldActionsRail";
-import { SignalBlock, KPIBlock, QueueBlock, WorkBlock } from "../blocks";
+import { SignalBlock, KPIBlock, OperationalAnswerStrip, QueueBlock, WorkBlock } from "../blocks";
+import { kpiVmToOperationalAnswer } from "@/lib/ui-v2/workspace-types";
 import { WorkspaceShellLayout } from "@/components/admin/workspace/WorkspaceShellLayout";
 import { WorkspaceQuietKpiReserve } from "@/components/admin/workspace/WorkspaceQuietLoadingReserve";
 
@@ -183,7 +184,10 @@ export default function WorkUnitWorkspace({
                 </div>
               ) : hasKpis ? (
                 <div data-workspace-zone="kpi-banner">
-                  <KPIBlock kpis={model.kpis} maxVisible={5} />
+                  <OperationalAnswerStrip
+                    answers={model.kpis.map(kpiVmToOperationalAnswer)}
+                    maxVisible={4}
+                  />
                 </div>
               ) : null}
             </div>

@@ -13924,3 +13924,208 @@ html[data-adminv2-workspace-shell="v2"] [data-ws-surface="work_unit"] .adminv2-w
 [data-drawer-vm-transition-hold="true"] {
   transition: opacity 180ms ease-out;
 }
+
+/* ==========================================================================
+   Operational Answer — Compact Instrument (alloy-ci-*)
+   Shared renderer for Workspace Header and Work Unit Header.
+   All color is authored via --alloy-* tokens that resolve to exact hex values
+   already used elsewhere in this file. No new hues introduced.
+   ========================================================================== */
+
+.alloy-answer-strip--compact {
+  --alloy-pine: var(--d-pine, #00a283);     /* Bend Pine — positive/healthy state */
+  --alloy-caution: #bc4300;                  /* Ember */
+  --alloy-critical: #7c273a;                 /* River Stone — not #8c3300 */
+  --alloy-ai: var(--d-brand, #00458c);      /* Coastal Current — not generic blue */
+  --alloy-band-bg: color-mix(in srgb, var(--alloy-pine) 3%, #f7f6f4);
+  --alloy-cell-border: color-mix(in srgb, var(--alloy-pine) 9%, transparent);
+
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+  background: var(--alloy-band-bg);
+  border-top: 0.5px solid var(--alloy-cell-border);
+}
+
+/* Empty strip */
+.alloy-ci--empty {
+  flex: 1;
+  padding: 8px 14px;
+  display: flex;
+  align-items: center;
+}
+
+.alloy-ci__empty-msg {
+  font-size: 9px;
+  font-weight: 500;
+  color: color-mix(in srgb, var(--alloy-pine) 30%, transparent);
+}
+
+/* Individual instrument cell */
+.alloy-ci {
+  flex: 1 1 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  padding: 7px 14px 8px;
+  border-right: 0.5px solid var(--alloy-cell-border);
+  position: relative;
+  cursor: default;
+  transition: background 0.1s ease;
+}
+
+.alloy-ci:last-child {
+  border-right: none;
+}
+
+.alloy-ci:hover {
+  background: color-mix(in srgb, var(--alloy-pine) 3%, transparent);
+}
+
+/* 2px inset top line — primary state encoding */
+.alloy-ci::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+}
+
+.alloy-ci--healthy::before  { background: color-mix(in srgb, var(--alloy-pine) 55%, transparent); }
+.alloy-ci--caution::before  { background: color-mix(in srgb, var(--alloy-caution) 65%, transparent); }
+.alloy-ci--critical::before { background: color-mix(in srgb, var(--alloy-critical) 70%, transparent); }
+.alloy-ci--ai::before       { background: color-mix(in srgb, var(--alloy-ai) 50%, transparent); }
+.alloy-ci--empty::before    { background: color-mix(in srgb, var(--alloy-pine) 12%, transparent); }
+.alloy-ci--stale::before    { background: color-mix(in srgb, var(--alloy-pine) 20%, transparent); }
+.alloy-ci--loading::before  { background: color-mix(in srgb, var(--alloy-pine) 12%, transparent); }
+
+/* Label row: dot + label text */
+.alloy-ci__top {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-bottom: 3px;
+}
+
+.alloy-ci__dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+.alloy-ci--healthy .alloy-ci__dot  { background: color-mix(in srgb, var(--alloy-pine) 55%, transparent); }
+.alloy-ci--caution .alloy-ci__dot  { background: color-mix(in srgb, var(--alloy-caution) 70%, transparent); }
+.alloy-ci--critical .alloy-ci__dot { background: color-mix(in srgb, var(--alloy-critical) 74%, transparent); }
+.alloy-ci--ai .alloy-ci__dot       { background: color-mix(in srgb, var(--alloy-ai) 56%, transparent); }
+.alloy-ci--empty .alloy-ci__dot    { background: color-mix(in srgb, var(--alloy-pine) 22%, transparent); }
+.alloy-ci--stale .alloy-ci__dot    { background: color-mix(in srgb, var(--alloy-pine) 28%, transparent); }
+
+.alloy-ci__label {
+  font-size: 8.5px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  color: color-mix(in srgb, var(--alloy-pine) 42%, transparent);
+  line-height: 1;
+}
+
+/* Primary value */
+.alloy-ci__value {
+  font-size: 21px;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  line-height: 1;
+  margin-bottom: 2px;
+  color: color-mix(in srgb, var(--alloy-pine) 92%, #1a1916);
+}
+
+.alloy-ci--caution .alloy-ci__value  { color: color-mix(in srgb, var(--alloy-caution) 85%, #1a0a00); }
+.alloy-ci--critical .alloy-ci__value { color: color-mix(in srgb, var(--alloy-critical) 90%, #0f0500); }
+.alloy-ci--ai .alloy-ci__value       { color: color-mix(in srgb, var(--alloy-ai) 82%, #0a0a1a); }
+.alloy-ci--empty .alloy-ci__value    {
+  color: color-mix(in srgb, var(--alloy-pine) 22%, transparent);
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: 0;
+}
+
+/* Answer text — semantic language authored by calculation */
+.alloy-ci__answer {
+  font-size: 9px;
+  font-weight: 600;
+  line-height: 1.2;
+  color: color-mix(in srgb, var(--alloy-pine) 60%, transparent);
+}
+
+.alloy-ci--caution .alloy-ci__answer  { color: color-mix(in srgb, var(--alloy-caution) 76%, transparent); }
+.alloy-ci--critical .alloy-ci__answer { color: color-mix(in srgb, var(--alloy-critical) 80%, transparent); }
+.alloy-ci--ai .alloy-ci__answer       { color: color-mix(in srgb, var(--alloy-ai) 72%, transparent); }
+.alloy-ci--empty .alloy-ci__answer    { color: color-mix(in srgb, var(--alloy-pine) 30%, transparent); }
+
+/* Evidence / supporting context */
+.alloy-ci__evidence {
+  font-size: 8px;
+  font-weight: 500;
+  color: color-mix(in srgb, var(--alloy-pine) 38%, transparent);
+  line-height: 1.25;
+  margin-top: 1px;
+}
+
+/* Footer: trend + freshness */
+.alloy-ci__foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+.alloy-ci__trend {
+  font-size: 8px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.alloy-ci__trend--positive { color: color-mix(in srgb, var(--alloy-pine) 62%, transparent); }
+.alloy-ci__trend--negative { color: color-mix(in srgb, var(--alloy-caution) 68%, transparent); }
+.alloy-ci__trend--neutral  { color: color-mix(in srgb, var(--alloy-pine) 30%, transparent); }
+
+.alloy-ci__fresh {
+  font-size: 7.5px;
+  color: color-mix(in srgb, var(--alloy-pine) 32%, transparent);
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  line-height: 1;
+}
+
+.alloy-ci__live-dot {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--alloy-pine);
+  opacity: 0.7;
+  flex-shrink: 0;
+}
+
+/* Drill affordance — hover-reveal, labeled */
+.alloy-ci__drill {
+  position: absolute;
+  bottom: 7px;
+  right: 10px;
+  font-size: 7.5px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: color-mix(in srgb, var(--alloy-pine) 24%, transparent);
+  opacity: 0;
+  transition: opacity 0.12s ease, color 0.1s ease;
+  pointer-events: none;
+}
+
+.alloy-ci:hover .alloy-ci__drill {
+  opacity: 1;
+  color: color-mix(in srgb, var(--alloy-pine) 54%, transparent);
+  pointer-events: auto;
+}

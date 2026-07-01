@@ -4,7 +4,8 @@ import type { CSSProperties } from "react";
 import { neutral, derived, brand } from "@/styles/tokens/colors";
 import type { CompanyWorkspaceModel } from "@/lib/ui-v2/workspace-types";
 import type { WorkspaceActionHandler } from "@/lib/ui-v2/workspace-actions";
-import { SignalBlock, KPIBlock, WorkBlock, ActionsBlock } from "../blocks";
+import { SignalBlock, KPIBlock, OperationalAnswerStrip, WorkBlock, ActionsBlock } from "../blocks";
+import { kpiVmToOperationalAnswer } from "@/lib/ui-v2/workspace-types";
 import CompanyDepartmentRollupCard from "../blocks/CompanyDepartmentRollupCard";
 import "../workspace.css";
 
@@ -112,7 +113,12 @@ export default function CompanyWorkspace({ model, onAction }: Props) {
                     ) : null}
                   </div>
                 ) : null}
-                {hasKpis ? <KPIBlock kpis={model.kpis} surface="company" /> : null}
+                {hasKpis ? (
+                  <OperationalAnswerStrip
+                    answers={model.kpis.map(kpiVmToOperationalAnswer)}
+                    maxVisible={5}
+                  />
+                ) : null}
               </div>
             ) : null}
 

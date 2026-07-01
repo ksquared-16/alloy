@@ -21,6 +21,69 @@ export type SignalVm = {
   meta?: { timestamp?: string; source?: string };
 };
 
+// ---------------------------------------------------------------------------
+// Operational Answer — semantic output of an Operational Calculation.
+// The renderer never invents business language; all fields are authored by
+// the calculation that produces this answer.
+// ---------------------------------------------------------------------------
+
+export type AnswerState =
+  | "healthy"   // operating within normal parameters
+  | "caution"   // approaching a threshold
+  | "critical"  // threshold breached — action warranted
+  | "empty"     // no data yet — intentional, not broken
+  | "stale"     // freshness expired
+  | "loading";
+
+export type AnswerTrend = {
+  direction: "up" | "down" | "flat";
+  magnitude: string;   // "+3", "−12%"
+  window: string;      // "this week", "vs. last 30d"
+  /** Decoupled from direction — enrollment up is positive; waitlist up may be negative. */
+  valence: "positive" | "negative" | "neutral";
+};
+
+export type OperationalAnswer = {
+  key: string;
+  label: string;
+  primaryValue: string;   // pre-formatted by calculation — "142", "89%", "—"
+  state: AnswerState;
+  answer: string;         // authored by calculation — "Healthy", "Approaching Full"
+  evidence?: string;      // supporting context — "2 classrooms remaining"
+  trend?: AnswerTrend;
+  freshness: { isLive: boolean; updatedAt?: string };
+  confidence?: number;    // 0–1; present only for AI/derived answers
+  recommendedDrill?: {
+    label: string;        // "Open Waitlist Queue"
+    surface: string;      // route or panel key
+    filter?: Record<string, unknown>;
+  };
+  emptyState: { message: string; action?: { label: string; key: string } };
+  lane: "operational" | "ai";
+  sourceCalculationKey: string;
+};
+
+/** Bridge: adapt legacy KPIVm to OperationalAnswer. Downstream calculations
+ *  should resolve to OperationalAnswer directly; this is for existing call sites. */
+export function kpiVmToOperationalAnswer(k: KPIVm): OperationalAnswer {
+  const isRisk = k.tone === "risk";
+  return {
+    key: k.id,
+    label: k.label,
+    primaryValue: k.unit ? `${k.value} ${k.unit}` : k.value,
+    state: isRisk ? "caution" : "healthy",
+    answer: isRisk ? "Needs attention" : "Healthy",
+    evidence: k.aiSummary,
+    trend: k.trend
+      ? { direction: k.trend, magnitude: "", window: "", valence: "neutral" }
+      : undefined,
+    freshness: { isLive: false },
+    emptyState: { message: `No data for ${k.label}` },
+    lane: k.lane === "ai" ? "ai" : "operational",
+    sourceCalculationKey: k.id,
+  };
+}
+
 export type KPIVm = {
   id: string;
   label: string;

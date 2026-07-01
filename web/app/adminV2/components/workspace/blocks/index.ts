@@ -1,5 +1,6 @@
 export { default as SignalBlock } from "./SignalBlock";
 export { default as KPIBlock } from "./KPIBlock";
+export { default as OperationalAnswerStrip } from "./OperationalAnswerStrip";
 export { default as QueueBlock } from "./QueueBlock";
 export { default as WorkBlock, RecordWorkflowActivityLead } from "./WorkBlock";
 export { default as ContextBlock } from "./ContextBlock";

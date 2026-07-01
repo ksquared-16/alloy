@@ -7,6 +7,7 @@ import type { WorkspaceActionHandler } from "@/lib/ui-v2/workspace-actions";
 import {
   SignalBlock,
   KPIBlock,
+  OperationalAnswerStrip,
   WorkBlock,
   RecordWorkflowActivityLead,
   ContextBlock,
@@ -14,6 +15,7 @@ import {
   RecordBodyBlock,
   RecordInteractionPanels,
 } from "../blocks";
+import { kpiVmToOperationalAnswer } from "@/lib/ui-v2/workspace-types";
 import "../workspace.css";
 
 type Props = {
@@ -145,7 +147,12 @@ export default function RecordWorkspace({ model, onAction }: Props) {
                     ) : null}
                   </div>
                 ) : null}
-                {hasKpis ? <KPIBlock kpis={kpis} surface="record" maxVisible={4} /> : null}
+                {hasKpis ? (
+                  <OperationalAnswerStrip
+                    answers={kpis.map(kpiVmToOperationalAnswer)}
+                    maxVisible={4}
+                  />
+                ) : null}
               </div>
             ) : null}
             <div
