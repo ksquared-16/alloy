@@ -61,6 +61,10 @@ const ENROLLMENT_READINESS_RULES: EnrollmentReadinessRule[] = [
 
 /** Canonical command key for child enrollment status mutations. Import this instead of using the string literal. */
 export const UPDATE_CHILD_ENROLLMENT_STATUS_COMMAND_KEY = "update_child_enrollment_status";
+/** Semantic command key for waitlisting a child. Routes to the same enrollment status domain. */
+export const WAITLIST_CHILD_COMMAND_KEY = "waitlist_child";
+/** Semantic command key for enrolling a child. Routes to the same enrollment status domain. */
+export const ENROLL_CHILD_COMMAND_KEY = "enroll_child";
 
 export const ENROLLMENT_STATUS_DOMAIN: MutationDomain = {
     key: "enrollment_status",

@@ -19,7 +19,7 @@
 
 import React from "react";
 import { UpdateLeadStatusPanel, type UpdateLeadStatusPanelProps } from "@/components/mutations/UpdateLeadStatusPanel";
-import { UPDATE_LEAD_STATUS_COMMAND_KEY } from "@/lib/mutations/domains/leadStatus";
+import { UPDATE_LEAD_STATUS_COMMAND_KEY, CLOSE_LEAD_COMMAND_KEY } from "@/lib/mutations/domains/leadStatus";
 
 /** Props passed to every drawer-level mutation command panel. */
 export type DrawerMutationPanelContext = UpdateLeadStatusPanelProps;
@@ -33,6 +33,9 @@ type PanelRenderer = (ctx: DrawerMutationPanelContext) => React.ReactElement | n
  */
 export const DRAWER_COMMAND_PANELS: Record<string, PanelRenderer> = {
     [UPDATE_LEAD_STATUS_COMMAND_KEY]: (ctx) => React.createElement(UpdateLeadStatusPanel, ctx),
+    // close_lead is a semantic alias — renders the same panel with the same status picker.
+    // Operator sees "Close Lead" in the action button; the panel title comes from the panel itself.
+    [CLOSE_LEAD_COMMAND_KEY]: (ctx) => React.createElement(UpdateLeadStatusPanel, ctx),
 };
 
 /**

@@ -75,25 +75,7 @@ import type { StatusMenuItemVm } from "@/lib/adminV2/viewModel/drawer/types";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { ChildEnrollmentStatusPanel } from "@/components/mutations/ChildEnrollmentStatusPanel";
 import type { MutationResult } from "@/lib/mutations/types";
-import { getDomainHandlerForCommand } from "@/lib/mutations/domainRegistry";
-import { UPDATE_CHILD_ENROLLMENT_STATUS_COMMAND_KEY } from "@/lib/mutations/domains/enrollmentStatus";
-
-/**
- * ROW-LEVEL MUTATION TRIGGER — temporary boundary note.
- *
- * The children section renders a per-OCM-row "Update status" mutation trigger.
- * This bypasses the action placement system because that system is section-scoped
- * (one fetch per section, entity_type: opportunity), not row-scoped.
- *
- * The trigger is gated on getDomainHandlerForCommand() so it disappears if the
- * command is ever unregistered — it is not permanently hardcoded unconditionally.
- *
- * Future: introduce a per-row action resolution system for OCM-grain actions.
- * When that exists, replace this trigger with a RowActionResolver component that
- * fetches actions for entity_type: opportunity_customer_member, entity_id: ocm_id.
- */
-const OCM_MUTATION_COMMAND_REGISTERED =
-    getDomainHandlerForCommand(UPDATE_CHILD_ENROLLMENT_STATUS_COMMAND_KEY) !== null;
+import { useOcmSectionActions } from "@/lib/platform/actions/useOcmSectionActions";
 
 /** Literal Tailwind classes (must not be composed at runtime). DOB column compact; Desired Start wider. */
 const INQUIRY_CHILD_DESKTOP_GRID_7 =
@@ -379,10 +361,17 @@ export default function OpportunityInquiryChildrenSection({
     // Mutation command state — tracks which child's enrollment status mutation panel is open.
     const [childMutationState, setChildMutationState] = useState<{
         ocmId: string;
+        commandKey: string;
         childDisplayName: string | null;
         currentStatusKey: string | null;
         currentStatusLabel: string | null;
     } | null>(null);
+
+    // Resolve OCM-grain actions from action_placements (placement-driven, not hardcoded).
+    // Uses the first available OCM id as anchor; result is the same for all children
+    // in the section since placements have no per-row conditions at this grain.
+    const anchorOcmId = rows.find((r) => r.ocm_id)?.ocm_id ?? null;
+    const { actions: ocmSectionActions } = useOcmSectionActions("children", anchorOcmId);
 
     useEffect(() => {
         setLocal((prev) => {
@@ -1677,21 +1666,27 @@ export default function OpportunityInquiryChildrenSection({
                                             {rowStatus(r.id)}
                                         </div>
                                     ) : null}
-                                    {r.ocm_id && OCM_MUTATION_COMMAND_REGISTERED ? (
-                                        <button
-                                            type="button"
-                                            className="mt-1 text-[9px] text-alloy-midnight/50 hover:text-alloy-midnight/80 underline underline-offset-2 transition-colors"
-                                            onClick={() =>
-                                                setChildMutationState({
-                                                    ocmId: r.ocm_id!,
-                                                    childDisplayName: displayName ?? null,
-                                                    currentStatusKey: st.outcome_status_key || r.outcome_status_key,
-                                                    currentStatusLabel: fallbackOutcome !== "—" ? fallbackOutcome : null,
-                                                })
-                                            }
-                                        >
-                                            Update status
-                                        </button>
+                                    {r.ocm_id && ocmSectionActions.length > 0 ? (
+                                        <div className="mt-1 flex flex-wrap gap-1.5">
+                                            {ocmSectionActions.map((action) => (
+                                                <button
+                                                    key={action.key}
+                                                    type="button"
+                                                    className="text-[9px] text-alloy-midnight/50 hover:text-alloy-midnight/80 underline underline-offset-2 transition-colors"
+                                                    onClick={() =>
+                                                        setChildMutationState({
+                                                            ocmId: r.ocm_id!,
+                                                            commandKey: action.key,
+                                                            childDisplayName: displayName ?? null,
+                                                            currentStatusKey: st.outcome_status_key || r.outcome_status_key,
+                                                            currentStatusLabel: fallbackOutcome !== "—" ? fallbackOutcome : null,
+                                                        })
+                                                    }
+                                                >
+                                                    {action.label}
+                                                </button>
+                                            ))}
+                                        </div>
                                     ) : null}
                                 </div>
                         </div>
@@ -1702,6 +1697,7 @@ export default function OpportunityInquiryChildrenSection({
                 {childMutationState && (
                     <ChildEnrollmentStatusPanel
                         ocmId={childMutationState.ocmId}
+                        commandKey={childMutationState.commandKey}
                         opportunityId={opportunityId ?? ""}
                         childDisplayName={childMutationState.childDisplayName}
                         currentStatusKey={childMutationState.currentStatusKey}
@@ -1712,6 +1708,7 @@ export default function OpportunityInquiryChildrenSection({
                         }))}
                         onClose={() => setChildMutationState(null)}
                         onSuccess={(result: Extract<MutationResult, { status: "committed" }>) => {
+                            const actionKey = childMutationState.commandKey;
                             setChildMutationState(null);
                             // Optimistically update local state for the mutated row
                             const ocmId = result.subjectId;
@@ -1728,7 +1725,7 @@ export default function OpportunityInquiryChildrenSection({
                             });
                             window.dispatchEvent(
                                 new CustomEvent("adminv2:opportunity-updated", {
-                                    detail: { id: opportunityId, action_key: UPDATE_CHILD_ENROLLMENT_STATUS_COMMAND_KEY },
+                                    detail: { id: opportunityId, action_key: actionKey },
                                 })
                             );
                         }}
