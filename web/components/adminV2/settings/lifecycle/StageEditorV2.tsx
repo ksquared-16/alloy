@@ -375,15 +375,15 @@ function SubjectResolutionField({
 // ─── Possible outcomes ────────────────────────────────────────────────────────
 
 const OUTCOME_TARGET_LABELS: Record<string, string> = {
-    update_family_case_status: "Updates family status",
-    update_child_enrollment_status: "Updates child enrollment status",
-    update_candidate_status: "Updates candidate status",
-    create_needs_attention: "Creates an attention flag",
-    create_next_work: "Creates follow-up work",
-    reopen_work: "Reopens existing work",
-    mark_stage_work_complete: "Marks stage work complete",
-    move_to_stage: "Moves subject to another stage",
-    no_movement: "No stage movement",
+    update_family_case_status: "Move to stage",
+    update_child_enrollment_status: "Move to stage",
+    update_candidate_status: "Move to stage",
+    create_needs_attention: "Create attention",
+    create_next_work: "Create follow-up work",
+    reopen_work: "Reopen work",
+    mark_stage_work_complete: "Complete stage work",
+    move_to_stage: "Move to stage",
+    no_movement: "Stay in stage",
 };
 
 function PossibleOutcomesSection({
@@ -410,13 +410,17 @@ function PossibleOutcomesSection({
             {outcomes.map((outcome) => {
                 const rules = outcomeRules.filter((r) => r.when_outcome_key === outcome.outcome_key);
                 const targets = rules.flatMap((r) => r.targets);
-                const statusTarget = targets.find(
-                    (t) =>
-                        t.kind === "update_family_case_status" ||
-                        t.kind === "update_child_enrollment_status" ||
-                        t.kind === "update_candidate_status",
-                );
                 const stageTarget = targets.find((t) => t.kind === "move_to_stage");
+                // Status targets (update_family_case_status etc.) are implied by move_to_stage;
+                // only show them standalone when there is no stage movement.
+                const closeTarget = !stageTarget
+                    ? targets.find(
+                          (t) =>
+                              t.kind === "update_family_case_status" ||
+                              t.kind === "update_child_enrollment_status" ||
+                              t.kind === "update_candidate_status",
+                      )
+                    : undefined;
                 const sideEffects = targets.filter(
                     (t) =>
                         t.kind !== "update_family_case_status" &&
@@ -444,26 +448,16 @@ function PossibleOutcomesSection({
                                         </span>
                                     ) : null}
                                 </div>
-                                {statusTarget ? (
-                                    <p className="mt-1 text-[11px] text-alloy-midnight/55">
-                                        {OUTCOME_TARGET_LABELS[statusTarget.kind] ?? statusTarget.kind.replace(/_/g, " ")}
-                                        {statusTarget.status_key ? (
-                                            <span className="ml-1.5 rounded bg-alloy-stone px-1.5 py-0.5 font-mono text-[10px] text-alloy-midnight/55">
-                                                {statusTarget.status_key}
-                                            </span>
-                                        ) : null}
-                                    </p>
-                                ) : null}
                                 {stageTarget ? (
                                     <p className="mt-1 text-[11px] text-alloy-blue">
-                                        Moves to stage:{" "}
+                                        Move to stage:{" "}
                                         <span className="font-semibold">{stageTarget.stage_key ?? "—"}</span>
                                     </p>
-                                ) : (
-                                    targets.length > 0 && !statusTarget ? (
-                                        <p className="mt-1 text-[11px] text-alloy-midnight/40">No stage movement</p>
-                                    ) : null
-                                )}
+                                ) : closeTarget ? (
+                                    <p className="mt-1 text-[11px] text-alloy-midnight/55">Close lead</p>
+                                ) : targets.length > 0 ? (
+                                    <p className="mt-1 text-[11px] text-alloy-midnight/40">Stay in stage</p>
+                                ) : null}
                                 {sideEffects.map((t, i) => (
                                     <p key={i} className="mt-0.5 text-[11px] text-alloy-midnight/45">
                                         {OUTCOME_TARGET_LABELS[t.kind] ?? t.kind.replace(/_/g, " ")}

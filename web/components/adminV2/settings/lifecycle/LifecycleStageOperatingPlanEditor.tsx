@@ -17,13 +17,13 @@ import {
     outcomesForWorkTemplate,
     resolveEffectivePrimaryWorkTemplate,
     setPrimaryWorkTemplate,
-    unattachedStageOutcomes,
 } from "@/lib/lifecycle/stageOperatingPlanConvergence";
 import type { StageOperatingPlanV1 } from "@/lib/lifecycle/stageOperatingPlanV1";
 import { STAGE_JOURNEY_SEGMENT_LABELS } from "@/lib/lifecycle/stageOperatingPlanUiLabels";
 import LifecycleStageAttentionRulesEditor from "@/components/adminV2/settings/lifecycle/LifecycleStageAttentionRulesEditor";
 import LifecycleStageWorkCompletionPolicyEditor from "@/components/adminV2/settings/lifecycle/LifecycleStageWorkCompletionPolicyEditor";
 import LifecycleStageOutcomeAutomationEditor from "@/components/adminV2/settings/lifecycle/LifecycleStageOutcomeAutomationEditor";
+
 
 export type LifecycleStageOperatingPlanEditorHandle = {
     getDraftPlan: () => StageOperatingPlanV1 | null;
@@ -83,7 +83,6 @@ const LifecycleStageOperatingPlanEditor = forwardRef<
     );
 
     const primaryWork = resolveEffectivePrimaryWorkTemplate({ work_templates: draft.work_templates });
-    const legacyOutcomes = unattachedStageOutcomes(draft.outcomes);
 
     return (
         <div className="space-y-4" data-testid="lifecycle-stage-operating-plan-editor">
@@ -444,49 +443,6 @@ const LifecycleStageOperatingPlanEditor = forwardRef<
                     </div>
                 </details>
             </div>
-
-            {legacyOutcomes.length ?
-                <div className="space-y-1.5 rounded-md border border-dashed border-alloy-forge/15 p-2">
-                    <span className="text-[11px] font-semibold text-alloy-midnight/75">
-                        Stage-level outcomes (legacy)
-                    </span>
-                    <p className="text-[10px] text-alloy-midnight/50">
-                        These outcomes are not attached to a work item. Runtime still reads them from the stage
-                        plan.
-                    </p>
-                    <ul className="space-y-1">
-                        {legacyOutcomes.map((outcome) => {
-                            const outcomeIndex = draft.outcomes.findIndex(
-                                (o) => o.outcome_key === outcome.outcome_key,
-                            );
-                            return (
-                                <li key={outcome.outcome_key} className="rounded border border-alloy-forge/10 px-2 py-1.5">
-                                    <input
-                                        className="mb-2 min-w-0 w-full rounded border border-alloy-forge/15 px-2 py-1 text-xs"
-                                        value={outcome.label}
-                                        onChange={(e) =>
-                                            setDraft((prev) => {
-                                                const outcomes = [...prev.outcomes];
-                                                outcomes[outcomeIndex] = { ...outcome, label: e.target.value };
-                                                return { ...prev, outcomes };
-                                            })
-                                        }
-                                    />
-                                    <LifecycleStageOutcomeAutomationEditor
-                                        outcomeKey={outcome.outcome_key}
-                                        outcomeLabel={outcome.label}
-                                        rules={draft.outcome_rules}
-                                        workTemplates={draft.work_templates}
-                                        onRulesChange={(outcome_rules) =>
-                                            setDraft((prev) => ({ ...prev, outcome_rules }))
-                                        }
-                                    />
-                                </li>
-                            );
-                        })}
-                    </ul>
-                </div>
-            :   null}
 
             <div
                 className="rounded-lg border border-alloy-forge/10 bg-white"

@@ -57,7 +57,7 @@ export default function LifecycleStageOutcomeAutomationEditor({
     return (
         <div className="mt-2 space-y-2 rounded border border-alloy-forge/10 bg-white px-2 py-1.5" data-testid={`stage-outcome-automation-${outcomeKey}`}>
             <label className="flex flex-wrap items-center gap-2 text-[10px] text-alloy-midnight/65">
-                Automation
+                What happens
                 <select
                     className="min-w-[10rem] rounded border border-alloy-forge/15 bg-white px-2 py-0.5 text-[10px]"
                     value={draft.kind}
@@ -91,7 +91,7 @@ export default function LifecycleStageOutcomeAutomationEditor({
 
             {draft.kind === "close_record" ?
                 <label className="flex flex-wrap items-center gap-2 text-[10px] text-alloy-midnight/65">
-                    Close status
+                    Closed status
                     <input
                         className="rounded border border-alloy-forge/15 px-2 py-0.5 text-[10px]"
                         value={draft.status_key ?? "closed"}

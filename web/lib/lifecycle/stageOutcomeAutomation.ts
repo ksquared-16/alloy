@@ -130,7 +130,7 @@ export function outcomeAutomationSummaryForOutcome(
     options?: { workTemplateLabelByKey?: Record<string, string> },
 ): string {
     const lines = outcomeAutomationSummaries(outcomeKey, rules, options);
-    if (!lines.length) return "No automation attached";
+    if (!lines.length) return "No action configured";
     return `${outcomeLabel} → ${lines.join(" · ")}`;
 }
 
@@ -250,12 +250,12 @@ export type OutcomeAutomationEditorOption = {
 };
 
 export const OUTCOME_AUTOMATION_OPTIONS: OutcomeAutomationEditorOption[] = [
-    { value: "none", label: "No automation" },
+    { value: "none", label: "No action" },
     { value: "stay_in_stage", label: "Stay in stage" },
-    { value: "move_to_stage", label: "Move to stage/status" },
-    { value: "close_record", label: "Close record" },
-    { value: "repeat_work", label: "Repeat work item" },
-    { value: "mark_needs_attention", label: "Mark needs attention" },
+    { value: "move_to_stage", label: "Move to stage" },
+    { value: "close_record", label: "Close lead" },
+    { value: "repeat_work", label: "Create follow-up work" },
+    { value: "mark_needs_attention", label: "Create attention" },
 ];
 
 export function normalizeOutcomeRulesOnPersist(
