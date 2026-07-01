@@ -87,8 +87,7 @@ export default function WorkUnitWorkspace({
   const hasKpiZone = hasKpis || kpiStripPlaceholder;
   const hasUnifiedHeader = hasHeaderSlot || hasKpiZone;
   const processName = model.focusLabel?.trim() || null;
-  const suppressLegacyBrief = hasUnifiedHeader;
-  const showBrief = hasBrief && !suppressLegacyBrief;
+  const showBrief = hasBrief && !hasUnifiedHeader;
   /** Unified command surface owns process/stage/pulse — no parallel brief/signal rows. */
   const hasTopStack = !hasUnifiedHeader && (showBrief || hasSignals || hasAwareness);
   const hasControlDeck = hasTopStack || hasUnifiedHeader;
