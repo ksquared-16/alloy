@@ -21,6 +21,7 @@ import type { OperationalSubjectViewModel } from "@/lib/adminV2/viewModel/drawer
 import type { StageWorkItemProjection } from "@/lib/lifecycle/stageWorkRuntimeTypes";
 import type { RuntimePerspective } from "@/lib/adminV2/runtime/perspective/deriveRuntimePerspective";
 import type {
+    OperationalBillingSignal,
     OperationalCommunicationsSignal,
     OperationalContext,
     OperationalContextSignals,
@@ -108,12 +109,29 @@ function rankWorkItem(item: OperationalWorkItem): number {
 }
 
 /**
- * Project work / attention / tour signals from the composed subject VM. This is
- * the bridge — cards never read these VM shapes directly; they observe
+ * Project billing configuration facts from the composed truth record.
+ * Reads flat truth keys set by the billing configuration runtime.
+ * Read-only — no billing mutation path exists yet (deferred, see §7 of grain doctrine).
+ */
+function buildBillingSignal(truth: Record<string, unknown>): OperationalBillingSignal {
+    return {
+        billingConfigured: Boolean(truth["billing_configured"]),
+        billingContactName:
+            trimOrNull(truth["billing_contact_name"]) ?? trimOrNull(truth["person.billing_contact_name"]),
+        billingContactEmail: trimOrNull(truth["billing_contact_email"]),
+        tuitionRateLabel: trimOrNull(truth["tuition_rate_label"]),
+        feeBalanceCents: typeof truth["fee_balance_cents"] === "number" ? truth["fee_balance_cents"] : null,
+    };
+}
+
+/**
+ * Project work / attention / tour / billing signals from the composed subject VM.
+ * The bridge — cards never read these VM shapes directly; they observe
  * `context.signals`. Read-once; no I/O.
  */
 function buildOperationalContextSignals(
     subjectVm: OperationalSubjectViewModel,
+    truth: Record<string, unknown>,
     now: Date,
 ): OperationalContextSignals {
     const stageRuntime = subjectVm.workspace.stage_work_runtime;
@@ -174,6 +192,7 @@ function buildOperationalContextSignals(
             bookingId: trimOrNull(nextBooking?.id),
         },
         communications: buildCommunicationsSignal(subjectVm),
+        billing: buildBillingSignal(truth),
     };
 }
 
@@ -217,7 +236,8 @@ export function buildOperationalContext(input: BuildOperationalContextInput): Op
             ? { missionLabel: perspective.defaultMission ?? perspective.label ?? null }
             : null,
         truth,
-        signals: buildOperationalContextSignals(subjectVm, new Date()),
+        grain: "case",
+        signals: buildOperationalContextSignals(subjectVm, truth, new Date()),
         capabilities: {
             canMutate,
             maskedChannels: input.maskedChannels ?? false,

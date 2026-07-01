@@ -9,6 +9,7 @@ import type { OperationalContext } from "@/lib/adminV2/runtime/operationalContex
 /** Minimal Operational Context wrapper for the pure evidence assembly. */
 function ctx(truth: Record<string, unknown>, label = "Household"): OperationalContext {
     return {
+        grain: "case",
         subject: { type: "opportunity", id: String(truth.id ?? "opp"), label },
         businessProcess: { key: null, label: null, stageKey: null },
         perspective: null,
@@ -18,6 +19,7 @@ function ctx(truth: Record<string, unknown>, label = "Household"): OperationalCo
             attention: { needsAttention: false, primaryReason: null, reasonCount: 0 },
             tour: { scheduled: false, startAt: null, statusLabel: null, bookingId: null },
             communications: { scheduledSendCount: 0, nextFollowUpAt: null, hasOutreach: false, nextScheduledSendId: null },
+            billing: { billingConfigured: false, billingContactName: null, billingContactEmail: null, tuitionRateLabel: null, feeBalanceCents: null },
         },
         capabilities: { canMutate: true, maskedChannels: false },
         status: "ready",

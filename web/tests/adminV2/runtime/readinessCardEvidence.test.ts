@@ -14,7 +14,8 @@ function signals(attention?: Partial<OperationalContextSignals["attention"]>): O
         work: { primary: null, items: [], openCount: 0, overdueCount: 0, nextActionLabel: null },
         attention: { needsAttention: false, primaryReason: null, reasonCount: 0, ...attention },
         tour: { scheduled: false, startAt: null, statusLabel: null, bookingId: null },
-            communications: { scheduledSendCount: 0, nextFollowUpAt: null, hasOutreach: false, nextScheduledSendId: null },
+        communications: { scheduledSendCount: 0, nextFollowUpAt: null, hasOutreach: false, nextScheduledSendId: null },
+        billing: { billingConfigured: false, billingContactName: null, billingContactEmail: null, tuitionRateLabel: null, feeBalanceCents: null },
     };
 }
 
@@ -23,6 +24,7 @@ function ctx(
     attention?: Partial<OperationalContextSignals["attention"]>,
 ): OperationalContext {
     return {
+        grain: "case",
         subject: { type: "opportunity", id: "opp-1", label: "Johnson Household" },
         businessProcess: { key: null, label: null, stageKey: null },
         perspective: null,
