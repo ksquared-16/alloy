@@ -1,12 +1,17 @@
 "use client";
 
-import { type ReactNode, useRef } from "react";
-import LifecycleStageWorkspace, {
-    type LifecycleStageSaveUiState,
-    type LifecycleStageWorkspaceHandle,
-} from "@/components/adminV2/settings/lifecycle/LifecycleStageWorkspace";
+import { useRef } from "react";
+import StageEditorV2, {
+    type StageEditorV2Handle,
+} from "@/components/adminV2/settings/lifecycle/StageEditorV2";
+import type { LifecycleStageSaveUiState } from "@/components/adminV2/settings/lifecycle/LifecycleStageWorkspace";
 import type { LifecycleStageBootstrapPayload } from "@/lib/lifecycle/lifecycleStageBootstrapTypes";
 import type { StatusRollupV1 } from "@/lib/lifecycle/statusRollupV1";
+import type { LifecycleRequirementEntityKey } from "@/lib/lifecycle/lifecycleFieldRequirementsCatalog";
+import type { LifecycleBuilderStageRecord } from "@/lib/lifecycle/lifecycleBuilderConfig";
+import type { ReactNode } from "react";
+
+export type { StageEditorV2Handle as LifecycleStageConfigurationHandle };
 
 export default function LifecycleStageConfiguration({
     departmentId,
@@ -14,12 +19,13 @@ export default function LifecycleStageConfiguration({
     stageKey,
     stageLabel,
     lifecycleName,
+    stageRecord,
+    allStages,
     bootstrap,
     bootstrapLoading,
     statusesError,
     onStatusRollupChange,
     validationSlot,
-    readyCheckRefreshKey,
     saveState,
     saveError,
     onSaveStage,
@@ -31,36 +37,37 @@ export default function LifecycleStageConfiguration({
     stageKey: string;
     stageLabel: string;
     lifecycleName: string;
+    stageRecord?: LifecycleBuilderStageRecord | null;
+    allStages?: LifecycleBuilderStageRecord[];
     bootstrap: LifecycleStageBootstrapPayload | null;
     bootstrapLoading: boolean;
     statusesError: string | null;
     onStatusRollupChange: (rollup: StatusRollupV1, flatKeys: string[]) => void;
-    validationSlot: ReactNode;
+    validationSlot?: ReactNode;
     readyCheckRefreshKey?: string;
     saveState: LifecycleStageSaveUiState;
     saveError: string | null;
     onSaveStage: () => void | Promise<void>;
     onDirtyChange?: (dirty: boolean) => void;
-    workspaceHandleRef?: React.RefObject<LifecycleStageWorkspaceHandle | null>;
+    workspaceHandleRef?: React.RefObject<StageEditorV2Handle | null>;
 }) {
-    const localRef = useRef<LifecycleStageWorkspaceHandle | null>(null);
+    const localRef = useRef<StageEditorV2Handle | null>(null);
     const ref = workspaceHandleRef ?? localRef;
 
     return (
-        <div data-testid="lifecycle-stage-configuration">
-            <LifecycleStageWorkspace
+        <div data-testid="lifecycle-stage-configuration" className="flex min-h-0 flex-1 flex-col overflow-y-auto">
+            <StageEditorV2
                 workspaceRef={ref}
                 departmentId={departmentId}
                 businessProcessKey={businessProcessKey}
                 stageKey={stageKey}
                 stageLabel={stageLabel}
-                lifecycleName={lifecycleName}
+                stageRecord={stageRecord}
+                allStages={allStages}
                 bootstrap={bootstrap}
                 bootstrapLoading={bootstrapLoading}
                 statusesError={statusesError}
                 onStatusRollupChange={onStatusRollupChange}
-                validationSlot={validationSlot}
-                readyCheckRefreshKey={readyCheckRefreshKey}
                 saveState={saveState}
                 saveError={saveError}
                 onSaveStage={onSaveStage}
