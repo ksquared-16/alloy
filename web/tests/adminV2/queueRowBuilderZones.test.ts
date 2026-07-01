@@ -6,6 +6,7 @@
  * round-tripping through zones is lossless for the columns the builder controls.
  *
  * Covered invariants:
+ *   Zone level:
  *   - defaultLeadQueueLayoutV3 zones: all content zones on, actions on
  *   - defaultWaitlistQueueLayoutV3 zones: same zone shape
  *   - Disabling a zone removes its column from columns array
@@ -14,6 +15,14 @@
  *   - Grain rule: case-grain pipeline row uses "opportunities" entity type
  *   - Grain rule: candidate-grain waitlist row uses "placement_candidate"
  *   - No fake placement actions in case-grain (pipeline-queue-row) config
+ *
+ *   Block (evidence group) level:
+ *   - zonesFromConfig extracts block states from each column
+ *   - All blocks are enabled by default (loaded config is the source of truth)
+ *   - Disabling a block removes it from the rebuilt column
+ *   - Keeping all blocks enabled preserves block order and ids
+ *   - Round-trip block state is stable (blocks → config → not modified)
+ *   - At least one block is always kept per enabled zone (safety floor)
  */
 
 import { describe, expect, it } from "vitest";
@@ -29,7 +38,17 @@ import { QUEUE_RECORD_LAYOUT_ZONES } from "@/lib/layout/surfaceLayoutRegistry";
 // ── Helpers (duplicated from builder to keep tests independent) ────────────
 
 type QueueRecordLayoutZone = (typeof QUEUE_RECORD_LAYOUT_ZONES)[number];
-type QueueRowZoneState = { zone: QueueRecordLayoutZone; enabled: boolean };
+
+// Zone-only state (used in basic zone tests)
+type QueueRowZoneStateSimple = { zone: QueueRecordLayoutZone; enabled: boolean };
+
+// Block-aware state (used in evidence group tests)
+type QueueRowBlockState = { blockId: string; enabled: boolean };
+type QueueRowZoneStateWithBlocks = {
+    zone: QueueRecordLayoutZone;
+    enabled: boolean;
+    blocks: QueueRowBlockState[];
+};
 
 const ZONE_WIDTH_MAP: Partial<Record<QueueRecordLayoutZone, QueueRecordColumnWidth>> = {
     household: "identity",
@@ -39,7 +58,7 @@ const ZONE_WIDTH_MAP: Partial<Record<QueueRecordLayoutZone, QueueRecordColumnWid
     date_event: "date_event",
 };
 
-function zonesFromConfig(config: QueueRecordLayoutConfigV3): QueueRowZoneState[] {
+function zonesFromConfig(config: QueueRecordLayoutConfigV3): QueueRowZoneStateSimple[] {
     const presentWidths = new Set(config.columns.map((c: QueueRecordColumnConfig) => c.width));
     return QUEUE_RECORD_LAYOUT_ZONES.map((zone) => ({
         zone,
@@ -50,9 +69,23 @@ function zonesFromConfig(config: QueueRecordLayoutConfigV3): QueueRowZoneState[]
     }));
 }
 
+function zonesWithBlocksFromConfig(config: QueueRecordLayoutConfigV3): QueueRowZoneStateWithBlocks[] {
+    const colByWidth = new Map(config.columns.map((c: QueueRecordColumnConfig) => [c.width, c]));
+    return QUEUE_RECORD_LAYOUT_ZONES.map((zone) => {
+        const width = ZONE_WIDTH_MAP[zone];
+        const col = width ? colByWidth.get(width) : undefined;
+        const enabled = zone === "actions" ? config.fixedControls.actionsMenu : Boolean(col);
+        const blocks: QueueRowBlockState[] = (col?.blocks ?? []).map((b) => ({
+            blockId: b.id,
+            enabled: true,
+        }));
+        return { zone, enabled, blocks };
+    });
+}
+
 function buildConfigFromZones(
     baseConfig: QueueRecordLayoutConfigV3,
-    zones: QueueRowZoneState[],
+    zones: QueueRowZoneStateSimple[],
 ): QueueRecordLayoutConfigV3 {
     const enabledZones = new Set(zones.filter((z) => z.enabled).map((z) => z.zone));
     const enabledWidths = new Set(
@@ -70,6 +103,37 @@ function buildConfigFromZones(
             ...baseConfig.fixedControls,
             actionsMenu: enabledZones.has("actions"),
         },
+    };
+}
+
+function buildConfigFromZonesWithBlocks(
+    baseConfig: QueueRecordLayoutConfigV3,
+    zones: QueueRowZoneStateWithBlocks[],
+): QueueRecordLayoutConfigV3 {
+    const enabledZones = new Set(zones.filter((z) => z.enabled).map((z) => z.zone));
+    const zonesByZone = new Map(zones.map((z) => [z.zone, z]));
+    const enabledWidths = new Set(
+        Object.entries(ZONE_WIDTH_MAP)
+            .filter(([zone]) => enabledZones.has(zone as QueueRecordLayoutZone))
+            .map(([, width]) => width),
+    );
+    const filteredColumns = baseConfig.columns
+        .filter((col: QueueRecordColumnConfig) => enabledWidths.has(col.width))
+        .map((col: QueueRecordColumnConfig) => {
+            const zoneKey = (Object.entries(ZONE_WIDTH_MAP) as Array<[QueueRecordLayoutZone, QueueRecordColumnWidth]>)
+                .find(([, w]) => w === col.width)?.[0];
+            const zoneState = zoneKey ? zonesByZone.get(zoneKey) : undefined;
+            if (!zoneState?.blocks.length) return col;
+            const enabledBlockIds = new Set(zoneState.blocks.filter((b) => b.enabled).map((b) => b.blockId));
+            const filteredBlocks = col.blocks.filter((b) => enabledBlockIds.has(b.id));
+            // Safety floor: keep at least one block per zone
+            const blocks = filteredBlocks.length > 0 ? filteredBlocks : col.blocks.slice(0, 1);
+            return { ...col, blocks };
+        });
+    return {
+        ...baseConfig,
+        columns: filteredColumns,
+        fixedControls: { ...baseConfig.fixedControls, actionsMenu: enabledZones.has("actions") },
     };
 }
 
@@ -252,6 +316,133 @@ describe("QueueRecordLayoutConfigV3 schema invariants", () => {
         const base = defaultLeadQueueLayoutV3();
         const zones = zonesFromConfig(base);
         const rebuilt = buildConfigFromZones(base, zones);
+        expect(rebuilt.variant).toBe("operational-row");
+        expect(rebuilt.version).toBe(3);
+    });
+
+    it("every block in every column has a non-empty id", () => {
+        for (const config of [defaultLeadQueueLayoutV3(), defaultWaitlistQueueLayoutV3()]) {
+            for (const col of config.columns) {
+                for (const block of col.blocks) {
+                    expect(typeof block.id).toBe("string");
+                    expect(block.id.length).toBeGreaterThan(0);
+                }
+            }
+        }
+    });
+});
+
+// ── Evidence group (block) level ─────────────────────────────────────────────
+
+describe("zonesWithBlocksFromConfig — block extraction", () => {
+    it("pipeline layout: each content zone has extracted blocks", () => {
+        const config = defaultLeadQueueLayoutV3();
+        const zones = zonesWithBlocksFromConfig(config);
+        for (const z of zones) {
+            if (z.zone === "actions") continue; // actions zone has no column blocks
+            if (!z.enabled) continue;
+            expect(z.blocks.length).toBeGreaterThan(0);
+        }
+    });
+
+    it("waitlist layout: children zone blocks present", () => {
+        const config = defaultWaitlistQueueLayoutV3();
+        const zones = zonesWithBlocksFromConfig(config);
+        const childrenZone = zones.find((z) => z.zone === "children");
+        expect(childrenZone?.blocks.length).toBeGreaterThan(0);
+    });
+
+    it("all extracted blocks are enabled=true by default", () => {
+        const config = defaultLeadQueueLayoutV3();
+        const zones = zonesWithBlocksFromConfig(config);
+        for (const z of zones) {
+            for (const b of z.blocks) {
+                expect(b.enabled).toBe(true);
+            }
+        }
+    });
+
+    it("extracted block ids match column block ids", () => {
+        const config = defaultLeadQueueLayoutV3();
+        const colByWidth = new Map(config.columns.map((c) => [c.width, c]));
+        const zones = zonesWithBlocksFromConfig(config);
+        for (const z of zones) {
+            const width = ZONE_WIDTH_MAP[z.zone];
+            if (!width) continue;
+            const col = colByWidth.get(width);
+            if (!col) continue;
+            const expectedIds = col.blocks.map((b) => b.id);
+            const extractedIds = z.blocks.map((b) => b.blockId);
+            expect(extractedIds).toEqual(expectedIds);
+        }
+    });
+});
+
+describe("buildConfigFromZonesWithBlocks — block filter effects", () => {
+    it("round-trip with all blocks enabled preserves block count", () => {
+        const config = defaultLeadQueueLayoutV3();
+        const zones = zonesWithBlocksFromConfig(config);
+        const rebuilt = buildConfigFromZonesWithBlocks(config, zones);
+        for (const col of config.columns) {
+            const rebuiltCol = rebuilt.columns.find((c: QueueRecordColumnConfig) => c.width === col.width);
+            expect(rebuiltCol?.blocks).toHaveLength(col.blocks.length);
+        }
+    });
+
+    it("disabling a block removes it from its column", () => {
+        const config = defaultLeadQueueLayoutV3();
+        const zones = zonesWithBlocksFromConfig(config);
+        // Find first zone with 2+ blocks
+        const zoneWithBlocks = zones.find((z) => z.blocks.length >= 2);
+        if (!zoneWithBlocks) return; // skip if no multi-block zone
+
+        const firstBlockId = zoneWithBlocks.blocks[0].blockId;
+        const updated = zones.map((z) =>
+            z.zone !== zoneWithBlocks.zone
+                ? z
+                : {
+                      ...z,
+                      blocks: z.blocks.map((b) =>
+                          b.blockId === firstBlockId ? { ...b, enabled: false } : b,
+                      ),
+                  },
+        );
+
+        const rebuilt = buildConfigFromZonesWithBlocks(config, updated);
+        const width = ZONE_WIDTH_MAP[zoneWithBlocks.zone];
+        const rebuiltCol = rebuilt.columns.find((c: QueueRecordColumnConfig) => c.width === width);
+        const ids = rebuiltCol?.blocks.map((b) => b.id) ?? [];
+        expect(ids).not.toContain(firstBlockId);
+    });
+
+    it("disabling all blocks in a zone keeps at least one block (safety floor)", () => {
+        const config = defaultLeadQueueLayoutV3();
+        const zones = zonesWithBlocksFromConfig(config);
+        // Disable all blocks in household zone
+        const updated = zones.map((z) =>
+            z.zone !== "household"
+                ? z
+                : { ...z, blocks: z.blocks.map((b) => ({ ...b, enabled: false })) },
+        );
+        const rebuilt = buildConfigFromZonesWithBlocks(config, updated);
+        const rebuiltHousehold = rebuilt.columns.find(
+            (c: QueueRecordColumnConfig) => c.width === "identity",
+        );
+        expect(rebuiltHousehold?.blocks.length).toBeGreaterThanOrEqual(1);
+    });
+
+    it("waitlist placement zone block extraction includes placement field blocks", () => {
+        const config = defaultWaitlistQueueLayoutV3();
+        const zones = zonesWithBlocksFromConfig(config);
+        const statusZone = zones.find((z) => z.zone === "status");
+        // status_band column in waitlist layout must have at least one block
+        expect(statusZone?.blocks.length).toBeGreaterThan(0);
+    });
+
+    it("variant and version are preserved through block-level round-trip", () => {
+        const config = defaultWaitlistQueueLayoutV3();
+        const zones = zonesWithBlocksFromConfig(config);
+        const rebuilt = buildConfigFromZonesWithBlocks(config, zones);
         expect(rebuilt.variant).toBe("operational-row");
         expect(rebuilt.version).toBe(3);
     });

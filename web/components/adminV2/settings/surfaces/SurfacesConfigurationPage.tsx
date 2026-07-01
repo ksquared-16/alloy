@@ -126,6 +126,17 @@ export default function SurfacesConfigurationPage() {
                                         subtitle={item.subtitle}
                                         onClick={() => setSelectedId(item.id)}
                                         testId={`surfaces-object-item-${item.id}`}
+                                        trailing={
+                                            item.grain ? (
+                                                <span
+                                                    className="flex-shrink-0 rounded bg-alloy-stone/10 px-1.5 py-0.5 text-[10px] font-medium text-alloy-midnight/50"
+                                                    title={item.entityType}
+                                                    data-queue-row-grain={item.grain}
+                                                >
+                                                    {item.grain}
+                                                </span>
+                                            ) : undefined
+                                        }
                                     />
                                 ))
                             )}

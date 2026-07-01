@@ -1,6 +1,6 @@
 # Queue Row Platform
 
-> **Status**: V1 — Builder persistence wired. Zone toggle → publish → runtime reads config. Placement signal projected. Grain model applied (Sprint 5).
+> **Status**: V1 — Builder persistence wired. Zone toggle + evidence group toggle → publish → runtime reads config. Placement signal projected. Grain model applied. Surface Library grain labels added.
 
 The Queue Row Platform mirrors the Focus Panel architecture for operational queue surfaces.
 The same doctrines apply: queue row widgets observe a `QueueRowOperationalContext` boundary;
@@ -163,7 +163,10 @@ Input: `{ candidateId, opportunityId, customerMemberId, candidateLabel, record, 
 Operators configure queue row surfaces at `/settings/surfaces → Queue Rows`.
 
 The builder exposes:
-- **Column zones**: household, children, status, attention, date/event, actions
+- **Column zones**: household, children, status, attention, date/event, actions — each independently on/off
+- **Evidence groups** (within each enabled zone): the blocks that compose the column — field groups,
+  repeating record blocks, widgets. Each block is individually toggleable. If all blocks in a zone are
+  disabled, one block is kept as a safety floor so the column always renders something.
 - **Placement override affordance** (waitlist rows only): toggles an inline override
   control on each row; operators with placement write permission set a manual tier
 
@@ -220,8 +223,10 @@ Both queue row surfaces appear in the Surface Library with `status: "published"`
 | Done | Deferred |
 |---|---|
 | Zone visibility toggle (enable/disable columns) | Per-zone field picker (add/remove fields within a column) |
-| Placement override affordance toggle (waitlist) | Zone reordering (drag or up/down) |
-| Publish to `entity_layouts` (create + publish draft) | Advanced block configuration (widgets, inline display) |
-| Runtime reads published config | Enrollment Offers queue row (child-grain) |
-| `GET` loads current published config on open | Placement override write path to `applyPlacementCandidateOverrides` |
+| Evidence group toggles (block-level visibility within zones) | Zone reordering (drag or up/down) |
+| Placement override affordance toggle (waitlist) | Advanced block configuration (widgets, inline display) |
+| Publish to `entity_layouts` (create + publish draft) | Enrollment Offers queue row (child-grain) |
+| Runtime reads published config | Placement override write path to `applyPlacementCandidateOverrides` |
+| `GET` loads current published config on open | |
 | Fallback to built-in defaults when no published layout exists | |
+| Surface Library grain + entity type labels | |
