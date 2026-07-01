@@ -1,6 +1,6 @@
 # Queue Row Platform
 
-> **Status**: V1 — Builder persistence wired. Zone toggle + evidence group toggle → publish → runtime reads config. Placement signal projected. Grain model applied. Surface Library grain labels added.
+> **Status**: V1.1 — Canvas builder with drag-to-reorder zones, evidence group inspector, condition inspector, action inspector. Focus Panel card conditions now evaluated at runtime (`visible_when` wired in `composeEffectiveCardModel`). Grain labels in Surface Library.
 
 The Queue Row Platform mirrors the Focus Panel architecture for operational queue surfaces.
 The same doctrines apply: queue row widgets observe a `QueueRowOperationalContext` boundary;
@@ -162,13 +162,22 @@ Input: `{ candidateId, opportunityId, customerMemberId, candidateLabel, record, 
 
 Operators configure queue row surfaces at `/settings/surfaces → Queue Rows`.
 
-The builder exposes:
-- **Column zones**: household, children, status, attention, date/event, actions — each independently on/off
-- **Evidence groups** (within each enabled zone): the blocks that compose the column — field groups,
-  repeating record blocks, widgets. Each block is individually toggleable. If all blocks in a zone are
-  disabled, one block is kept as a safety floor so the column always renders something.
-- **Placement override affordance** (waitlist rows only): toggles an inline override
-  control on each row; operators with placement write permission set a manual tier
+The builder is a canvas surface editor matching Focus Panel and Header builder interaction language:
+
+**Row preview canvas** — live visual strip at top showing enabled zones in order. Click a zone to select
+and expand it in the zone list below.
+
+**Drag-to-reorder zones** — ≡ drag handle on each zone card (PointerEvent-based). Zone order drives
+column array order in the published config.
+
+**Evidence group inspector** — expand a zone to see its blocks (field groups, repeaters, widgets) with
+individual on/off toggles. Safety floor: ≥1 block kept per enabled zone.
+
+**Condition inspector** — per-zone visibility condition (record path + operator + value). Stored in
+`QueueRecordColumnConfig.visibleWhen`. Runtime evaluation deferred to queue row renderer V2.
+
+**Action inspector** (actions zone) — actionsMenu on/off. Placement override affordance toggle
+(waitlist surface only) stored in `doc.metadata.queue_context.placement_override_enabled`.
 
 ### Persistence
 
@@ -222,11 +231,15 @@ Both queue row surfaces appear in the Surface Library with `status: "published"`
 
 | Done | Deferred |
 |---|---|
-| Zone visibility toggle (enable/disable columns) | Per-zone field picker (add/remove fields within a column) |
-| Evidence group toggles (block-level visibility within zones) | Zone reordering (drag or up/down) |
-| Placement override affordance toggle (waitlist) | Advanced block configuration (widgets, inline display) |
-| Publish to `entity_layouts` (create + publish draft) | Enrollment Offers queue row (child-grain) |
-| Runtime reads published config | Placement override write path to `applyPlacementCandidateOverrides` |
+| Row preview canvas (live zone strip) | Per-zone field picker (add/remove fields within a column) |
+| Drag-to-reorder zones (PointerEvent, order → column array order) | Advanced block configuration (widgets, inline display) |
+| Zone visibility toggle (enable/disable columns) | Enrollment Offers queue row (child-grain) |
+| Evidence group inspector (block-level on/off, safety floor) | Placement override write path to `applyPlacementCandidateOverrides` |
+| Condition inspector (per-zone visibleWhen — stored in column config) | Column-level condition runtime evaluation (queue row renderer V2) |
+| Action inspector (actionsMenu, placement override toggle) | |
+| Publish to `entity_layouts` (create + publish draft) | |
+| Runtime reads published config | |
 | `GET` loads current published config on open | |
 | Fallback to built-in defaults when no published layout exists | |
 | Surface Library grain + entity type labels | |
+| **Focus Panel card conditions** (`visible_when` evaluated in runtime) | `highlighted_when` / `read_only_when` / `collapsed_when` runtime effects |
