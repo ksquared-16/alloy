@@ -27,14 +27,20 @@ This sprint finishes the visible /settings/surfaces **Queue Row** configuration 
 - `surfacesBreadcrumbModel.ts` — builds `Surfaces / Section / Surface` and the nested form `Surfaces / Focus Panel / Children Card / Children Surface`, with clickable pop-to-depth targets. Tested.
 - `SurfacesConfigurationPage` renders the breadcrumb from the model; top-left **Surfaces** crumb returns to the library. Nested trail wires in when nested editing lands.
 
-## Staged (next slice — deliberately not half-wired)
+## Focus Panel nested-surface editing (outcomes 4, 5 — LANDED in the second slice)
 
-### 4 & 5. Focus Panel nested-surface editing + Add-Field custom fields
-The FP builder already has Add Field / add-remove-reorder / move-to-group and an Expanded tab (`FocusPanelCardInspector`). The nested-surface **engine** exists (`surfaceRegistry` + `openSurfaceId`, from PR #64). Remaining, staged for a focused slice to preserve quality:
-- Add `nestedSurfaceId`/`openSurfaceId` to the FP card/field model + ops.
-- Wire "View Children → Children Surface" drill in `FocusPanelSummarySurfaceEditor` (push nested trail into the breadcrumb) and render the nested surface's evidence groups for editing.
-- Route the FP Add-Field picker through the tenant-aware adapter (today it uses the static `focusPanelConceptCatalog`).
-- Persist nested surface config through the publish loop.
+Visible nested editing in /settings/surfaces → Focus Panel:
+- **Navigation:** the FP editor shows **Expansion surfaces** launchers (Children Card › Children Surface, Financial Configuration Card › Financial Configuration Surface). Opening one drills into a nested editor and the breadcrumb becomes `Surfaces / Focus Panel / Children Card / Children Surface`, with each crumb clickable back.
+- **`NestedSurfaceEditor`** renders each named evidence group with its selected fields, **+ Add Field** (compatible predefined + tenant custom, custom-badged), remove, reorder (↑/↓), and **Save & Publish**.
+- **Children Surface** groups: Child Summary · Placement · Schedule · Medical · Documents.
+- **Financial Configuration Surface** groups: Placement & Tuition · Billing Configuration · Billing Responsibility · History / Activity. Groups seed **empty** — no fake payers/invoices/estimates; only real compatible fields are offered, else an honest empty state.
+- **Custom-field wiring:** `availableFieldsForNamespaces` + `useTenantFieldDefinitions` → custom fields flow into namespace-compatible nested groups.
+- **Persistence:** real — `nestedSurfaceConfigService` writes `metadata.nestedSurfaces[surfaceId]` on the Focus Panel summary `entity_layouts` doc via the existing draft/publish loop.
+- **Runtime deferral:** live runtime does not consume nested surface configs yet — labeled presentation-runtime-ready in-UI.
+
+Models: `nestedSurfaceEditorModel.ts` (registry + ops), `nestedSurfaceConfigService.ts` (persistence), `NestedSurfaceEditor.tsx` (UI), wired in `SurfacesConfigurationPage`.
+
+## Staged (still deferred)
 
 ### Queue surface-entry collapse
 Retire the separate `waitlist-queue-row` catalog entry + API surface into one `queue-row` with a grain selector (the model + conditions already support it). Schema-level change to the catalog + route.
