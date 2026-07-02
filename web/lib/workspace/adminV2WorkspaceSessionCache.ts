@@ -5,8 +5,8 @@
 
 import type { OperatorLifecycleLandingCard } from "@/lib/admin/buildOperatorLifecycleLanding";
 import type { KPIVm } from "@/lib/ui-v2/workspace-types";
-import type { WorkspaceRootMetrics } from "@/components/admin/workspace/WorkspaceRootShell";
-import type { WorkspaceRootDepartmentRow, WorkspaceRootDeptTileStats } from "@/components/admin/workspace/WorkspaceRootDepartmentGrid";
+import type { WorkspaceRootMetrics } from "@/lib/workspace/workspaceRootMetrics";
+import type { WorkspaceRootDepartmentRow, WorkspaceRootDeptTileStats } from "@/lib/workspace/workspaceRootDepartmentTypes";
 
 const SCHEMA_V = 6 as const;
 

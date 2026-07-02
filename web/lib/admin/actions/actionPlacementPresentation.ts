@@ -42,7 +42,7 @@ export const SETTINGS_SURFACE_OPTIONS: readonly SettingsSurfaceOption[] = [
     {
         value: "right_rail",
         label: "Workspace (side panel)",
-        description: "Department or work-unit workspace side panel on /workspace/dept and /workspace/work-unit routes.",
+        description: "Work-unit workspace side panel on /workspace/work-unit routes.",
         requiresSectionKey: false,
     },
     {

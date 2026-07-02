@@ -2,6 +2,7 @@
  * Merge Business Process operational view metadata into runtime navigation + perspective.
  */
 
+import { operatorWorkUnitHrefFromKey } from "@/lib/admin/canonicalOperatorRoutes";
 import type { WorkUnitAboveFoldChipSection } from "@/lib/adminV2/routeShellPipeline/adapters/workUnit/aboveFoldTypes";
 import { WORK_VIEW_PILL_SECTION_LABEL } from "@/lib/adminV2/runtime/configurationRuntimeConvergenceFlag";
 import {
@@ -211,20 +212,23 @@ export function buildOperationalViewHeaderSection(params: {
     };
 }
 
-/** Preview Runtime — open work unit with Work View active (queue param optional when work_view is set). */
+/**
+ * Preview Runtime — open work unit with Work View active (queue param optional when work_view is set).
+ *
+ * Canonical operator route only (`/workspace/work-unit/:slug`): the dept/uuid work-unit page was
+ * retired with the legacy presentation tree, so a preview href requires the work unit platform key.
+ */
 export function buildOperationalViewPreviewRuntimeHref(params: {
-    departmentId: string;
-    workUnitId: string;
+    workUnitKey: string | null | undefined;
     queueKey?: string | null;
     workViewId?: string | null;
     queueLayoutId?: string | null;
     focusPanelLayoutId?: string | null;
 }): string | null {
-    const departmentId = params.departmentId.trim();
-    const workUnitId = params.workUnitId.trim();
+    const workUnitKey = params.workUnitKey?.trim();
     const workViewId = params.workViewId?.trim();
     const queueKey = params.queueKey?.trim();
-    if (!departmentId || !workUnitId) return null;
+    if (!workUnitKey) return null;
     if (!workViewId && !queueKey) return null;
 
     const sp = new URLSearchParams();
@@ -234,5 +238,5 @@ export function buildOperationalViewPreviewRuntimeHref(params: {
     if (queueLayoutId) sp.set("queue_layout", queueLayoutId);
     const focusPanelLayoutId = params.focusPanelLayoutId?.trim();
     if (focusPanelLayoutId) sp.set("focus_layout", focusPanelLayoutId);
-    return `/adminV2/workspace/dept/${encodeURIComponent(departmentId)}/work-unit/${encodeURIComponent(workUnitId)}?${sp.toString()}`;
+    return `${operatorWorkUnitHrefFromKey(workUnitKey)}?${sp.toString()}`;
 }

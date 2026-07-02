@@ -1785,8 +1785,7 @@ export default function LifecycleActivationBoard({
 
                     {processSection === "work-views" && processId ?
                         <BusinessProcessWorkViewsSetupWorkspace
-                            departmentId={runtimeDepartmentId}
-                            workUnitId={workUnitId}
+                            workUnitKey={pipeline?.key ?? null}
                             stageGrains={builderStages.map((s) => s.grain)}
                             queueLanes={workViewQueueLanes}
                         />

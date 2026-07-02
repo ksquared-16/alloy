@@ -1,4 +1,4 @@
-import type { WorkspaceRootDepartmentRow } from "@/components/admin/workspace/WorkspaceRootDepartmentGrid";
+import type { WorkspaceRootDepartmentRow } from "@/lib/workspace/workspaceRootDepartmentTypes";
 import { OPERATOR_WORKSPACE_HREF } from "@/lib/admin/canonicalOperatorRoutes";
 import { findWorkspaceRootCacheForPrincipal } from "@/lib/workspace/adminV2WorkspaceSessionCache";
 import { bustWorkspaceDepartmentsFetchDedupe } from "@/lib/workspace/workspaceAdminFetchDedupe";

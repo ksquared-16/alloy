@@ -3,7 +3,6 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
 import { diagnoseOpportunityDrawerComposedRevealReady } from "@/lib/admin/drawer/opportunityDrawerComposedRevealDiagnostics";
-import { queuePayloadMatchesActiveLane } from "@/lib/workspace/workUnitQueueLaneOwnership";
 import type { OpportunityDrawerOpenPreload } from "@/lib/admin/opportunityDrawerOpenCoordinator";
 
 const ROOT = process.cwd();
@@ -68,66 +67,5 @@ describe("performanceUiStabilityHotfix — opportunity drawer loading surface", 
         const ctx = read("contexts/AdminDrawerContext.tsx");
         expect(ctx).toContain("DRAWER_SWAP_BODY_MAX_HOLD_MS");
         expect(ctx).toContain("Promise.race");
-    });
-});
-
-describe("performanceUiStabilityHotfix — queue lane ownership", () => {
-    it("queuePayloadMatchesActiveLane rejects mismatched pill keys", () => {
-        expect(
-            queuePayloadMatchesActiveLane({
-                workUnitId: "wu-1",
-                activeWorkUnitId: "wu-1",
-                activeQueueKey: "qualification",
-                queueItems: { queue: { key: "lifecycle_lead" } },
-            })
-        ).toBe(false);
-        expect(
-            queuePayloadMatchesActiveLane({
-                workUnitId: "wu-1",
-                activeWorkUnitId: "wu-1",
-                activeQueueKey: "lifecycle_lead",
-                queueItems: { queue: { key: "lifecycle_lead" } },
-            })
-        ).toBe(true);
-    });
-
-    it("page gates display rows on queuePayloadMatchesActiveLane", () => {
-        const src = read(PAGE);
-        expect(src).toContain("queuePayloadMatchesActiveLane");
-        expect(src).toContain("authoritativeQueueItems");
-        expect(src).toContain("payloadMatchesActiveLane");
-        expect(src).not.toMatch(/pillSwitchRetainPaint/);
-    });
-
-    it("cache-miss pill switch clears stale rows instead of retaining under new pill", () => {
-        const src = read(PAGE);
-        const missBlock = src.slice(src.indexOf('markKpiPillCache("miss"'));
-        expect(missBlock).toContain("setQueueItems(null)");
-        expect(missBlock).toContain("queueRowsBufferRef.current = []");
-        expect(missBlock).not.toContain("lifecyclePillSwitchRetainRowsRef.current = true");
-    });
-
-    it("lifecycle WU cache miss clears queue before fetch", () => {
-        const src = read(PAGE);
-        const lifecycleMiss = src.indexOf("traceLifecyclePillQueueResult");
-        expect(lifecycleMiss).toBeGreaterThan(-1);
-        expect(src).toContain("setQueueItems(null)");
-        expect(src).toContain("queueRowsBufferRef.current = []");
-    });
-});
-
-describe("performanceUiStabilityHotfix — work-unit rail and reveal", () => {
-    it("workflow telemetry is always mounted in command rail", () => {
-        const src = read(PAGE);
-        expect(src).toContain("commandRailTelemetrySlot={");
-        expect(src).toMatch(/commandRailTelemetrySlot=\{\s*<AutomationWorkflowsBlock/);
-        expect(src).not.toMatch(/workUnitQueueRevealReady \? \(\s*<AutomationWorkflowsBlock/);
-    });
-
-    it("canonical loading surface wraps AlloyIdentityLoader", () => {
-        const loader = read("lib/adminV2/runtime/alloyCanonicalLoadingSurface.tsx");
-        expect(loader).toContain("AlloyIdentityLoader");
-        expect(loader).toContain("data-alloy-canonical-loading");
-        expect(loader).not.toContain("BosWorkingState");
     });
 });

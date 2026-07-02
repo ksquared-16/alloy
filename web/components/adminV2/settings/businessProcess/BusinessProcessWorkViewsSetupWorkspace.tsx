@@ -6,13 +6,11 @@ import { validateWorkViewGrainConsistency } from "@/lib/lifecycle/stageGrainV1";
 import type { StageGrain } from "@/lib/lifecycle/stageGrainV1";
 
 export default function BusinessProcessWorkViewsSetupWorkspace({
-    departmentId,
-    workUnitId,
+    workUnitKey,
     stageGrains = [],
     queueLanes = [],
 }: {
-    departmentId: string;
-    workUnitId: string | null;
+    workUnitKey: string | null;
     stageGrains?: (StageGrain | undefined)[];
     queueLanes?: import("@/lib/lifecycle/workViewsRuntimeConvergence").WorkViewCompatQueueLane[];
 }) {
@@ -78,8 +76,7 @@ export default function BusinessProcessWorkViewsSetupWorkspace({
                 <WorkViewProcessEditorCard
                     view={selected}
                     selected
-                    departmentId={departmentId}
-                    workUnitId={workUnitId}
+                    workUnitKey={workUnitKey}
                     layouts={layouts}
                     stageGrains={stageGrains}
                     queueLanes={queueLanes}

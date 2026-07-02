@@ -127,8 +127,7 @@ function WorkViewEditorSection({
 export default function WorkViewProcessEditorCard({
     view,
     selected,
-    departmentId,
-    workUnitId,
+    workUnitKey,
     layouts,
     stageGrains = [],
     queueLanes = [],
@@ -138,8 +137,7 @@ export default function WorkViewProcessEditorCard({
 }: {
     view: WorkViewConfigV1Stored;
     selected: boolean;
-    departmentId: string;
-    workUnitId: string | null;
+    workUnitKey: string | null;
     layouts: EntityLayoutRecord[];
     stageGrains?: (StageGrain | undefined)[];
     queueLanes?: WorkViewCompatQueueLane[];
@@ -153,17 +151,13 @@ export default function WorkViewProcessEditorCard({
     const drawerRecord =
         view.focus_panel_layout_id ? layouts.find((l) => l.id === view.focus_panel_layout_id) ?? null : null;
 
-    const previewHref =
-        workUnitId ?
-            buildOperationalViewPreviewRuntimeHref({
-                departmentId,
-                workUnitId,
-                queueKey: view.compat_queue_key,
-                workViewId: view.id,
-                queueLayoutId: view.queue_layout_id,
-                focusPanelLayoutId: view.focus_panel_layout_id,
-            })
-        :   null;
+    const previewHref = buildOperationalViewPreviewRuntimeHref({
+        workUnitKey,
+        queueKey: view.compat_queue_key,
+        workViewId: view.id,
+        queueLayoutId: view.queue_layout_id,
+        focusPanelLayoutId: view.focus_panel_layout_id,
+    });
 
     const displayTitle = view.label.trim() || "Untitled work view";
     const sortRules = normalizeWorkViewSorts(view.sort_v1, view.sorts_v1);

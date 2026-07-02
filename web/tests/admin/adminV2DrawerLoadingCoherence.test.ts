@@ -6,7 +6,6 @@ import {
     ADMINV2_DRAWER_OUTSIDE_CLICK_IGNORE_SELECTORS,
     shouldCloseAdminV2DrawerOnOutsideTarget,
 } from "@/lib/adminV2/drawerOutsideClick";
-import { DEPT_PAIRED_OPER_QUEUE_SKELETON_ROW_COUNT } from "@/components/admin/workspace/DepartmentPairedOperQueuesSkeleton";
 
 const webRoot = join(dirname(fileURLToPath(import.meta.url)), "../..");
 
@@ -73,41 +72,6 @@ describe("AdminV2 drawer outside click", () => {
     it("exports stable ignore selectors for command bar surfaces", () => {
         expect(ADMINV2_DRAWER_OUTSIDE_CLICK_IGNORE_SELECTORS).toContain("[data-adminv2-ai-command-bar]");
         expect(ADMINV2_DRAWER_OUTSIDE_CLICK_IGNORE_SELECTORS).toContain("[data-adminv2-ai-command-surface]");
-    });
-});
-
-describe("Dept paired oper loading alignment", () => {
-    it("legacy row skeleton keeps matched row count for throughput and attention", () => {
-        expect(DEPT_PAIRED_OPER_QUEUE_SKELETON_ROW_COUNT).toBe(5);
-        const src = read("components/admin/workspace/DepartmentPairedOperQueuesSkeleton.tsx");
-        expect(src).toContain('variant="throughput"');
-        expect(src).toContain('variant="attention"');
-        expect((src.match(/count=\{rowCount\}/g) ?? []).length).toBe(2);
-        expect(src).toContain("DeptPairedOperQuietReserve");
-    });
-
-    it("route cold shell uses bridge shell with oper-region loader (PR-4.6+)", () => {
-        const cold = read("components/admin/workspace/DepartmentWorkspaceColdShell.tsx");
-        expect(cold).toContain("DepartmentWorkspaceBridgeShell");
-        expect(cold).toContain("DeptOperationalRegionLoader");
-        expect(cold).toContain("WorkspaceQuietKpiReserve");
-        expect(cold).not.toContain("AdminV2RouteLoadingState");
-        expect(cold).not.toContain("DeptPairedOperQueuesSkeleton");
-    });
-});
-
-describe("Work-unit KPI and queue picker loading", () => {
-    it("defers KPI strip placeholder until queue reveal is ready", () => {
-        const src = read("app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page.tsx");
-        expect(src).toContain("workUnitKpiMetricsPending");
-        expect(src).toContain("workUnitQueueRevealReady");
-        expect(src).toMatch(/kpiStripPlaceholder=\{workUnitKpiStripPlaceholder/);
-    });
-
-    it("queue tab count pending uses skeleton pulse, not spinners", () => {
-        const src = read("app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page.tsx");
-        expect(src).toMatch(/countBadgePending[\s\S]*?skeleton-pulse/);
-        expect(src).not.toMatch(/countBadgePending[\s\S]*?animate-spin/);
     });
 });
 
@@ -202,107 +166,6 @@ describe("Drawer opportunity header grouped loading", () => {
         expect(src).not.toMatch(
             /opportunityWorkflowHeaderUsesQueuePreview[\s\S]*?min-h-\[2\.375rem\][\s\S]*?aria-hidden/,
         );
-    });
-});
-
-describe("Dept operational panel render-state", () => {
-    it("locks throughput presentation before reveal (no live pipeline vs WU swap)", () => {
-        const src = read("app/adminV2/workspace/dept/[departmentId]/page.tsx");
-        expect(src).toContain("deptThroughputPresentation");
-        expect(src).toContain("DeptThroughputPresentation");
-        expect(src).toContain("deptOperPanelTitleLocked");
-        expect(src).toMatch(/showPipelineLanes = deptThroughputPresentation === "pipeline_lanes"/);
-        expect(src).toMatch(/showWuThroughputRows = deptThroughputPresentation === "wu_summaries"/);
-        expect(src).not.toMatch(
-            /showWuThroughputRows[\s\S]*?!deptExpectsPipelineLanes/,
-        );
-    });
-
-    it("gates paired oper region only; shell/KPI/rail render under split readiness (PR-4.6+)", () => {
-        const src = read("app/adminV2/workspace/dept/[departmentId]/page.tsx");
-        expect(src).toContain("deptShellReady");
-        expect(src).toContain("deptTopSummaryReady");
-        expect(src).toContain("deptRailReady");
-        expect(src).toContain("deptOperationalRegionReady");
-        expect(src).toContain("deptPipelineProbeSettled");
-        expect(src).toContain("DeptOperationalRegionLoader");
-        expect(src).not.toContain("deptPageOperationalReady");
-        expect(src).not.toContain("AdminV2RouteLoadingState");
-        expect(src).not.toContain("DeptPairedOperQuietReserve");
-        expect(src).not.toContain("totalPending=");
-        expect(src).toMatch(/deptShellReady \? \([\s\S]*?DepartmentWorkspaceBridgeShell/);
-        expect(src).toMatch(
-            /deptOperationalRegionReady \? \([\s\S]*?throughputPairedPanels[\s\S]*?DeptOperationalRegionLoader/,
-        );
-        expect(src).toMatch(/enrollment_pipeline/);
-        expect(src).toMatch(/canUpgradeToPipeline/);
-        expect(src).toMatch(/setDeptPipelineExecLoading\(true\)/);
-        expect(src).toMatch(/deptThroughputWuRows\.map/);
-        expect(src).toMatch(/deptAttentionBuckets !== null[\s\S]*?No Needs Attention types configured/);
-    });
-
-    it("does not soft-reveal enrollment actions rail on dept page", () => {
-        const src = read("app/adminV2/workspace/dept/[departmentId]/page.tsx");
-        expect(src).toContain("deptRailReady");
-        expect(src).not.toMatch(
-            /railSlot[\s\S]*?adminv2-ws-soft-content-reveal[\s\S]*?ActionsBlock/,
-        );
-    });
-
-    it("legacy path parallelizes summaries with dept/wu; single attention fetch after WU list (Card 5)", () => {
-        const src = read("app/adminV2/workspace/dept/[departmentId]/page.tsx");
-        expect(src).toContain("summariesFetchPromise");
-        expect(src).not.toMatch(/void fetchDeptAttentionPreview\(cacheNaWuId\)/);
-        expect(src).toMatch(
-            /legacy fan-out[\s\S]*summariesFetchPromise[\s\S]*Promise\.all\(\[[\s\S]*?deptRoute/,
-        );
-        expect(src).toMatch(/void fetchDeptAttentionPreview\(naWuId\)/);
-        expect(src).toMatch(/if \(!deptOperationalRegionReady\) return/);
-        const operReadyGate =
-            src.match(/const deptOperationalRegionReady = useMemo\([\s\S]*?\]\);/)?.[0] ?? "";
-        expect(operReadyGate).not.toContain("deptKpiPlacementPending");
-        expect(operReadyGate).not.toContain("deptRailReady");
-        expect(operReadyGate).not.toContain("enrollmentDeptRightRail");
-        expect(operReadyGate).not.toContain("workflowKpis");
-    });
-
-    it("defers right-rail actions until oper region is ready", () => {
-        const src = read("app/adminV2/workspace/dept/[departmentId]/page.tsx");
-        expect(src).toMatch(
-            /fetchWorkspaceRightRailResolvedActions[\s\S]*?deptOperationalRegionReady/,
-        );
-    });
-});
-
-describe("Work-unit early action rail", () => {
-    it("fetches right-rail actions in parallel with work-unit bootstrap", () => {
-        const src = read("app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page.tsx");
-        expect(src).toContain("rightRailP");
-        expect(src).toMatch(/Promise\.all\(\[wuP, deptP, rightRailP\]\)/);
-        expect(src).toContain("setEnrollmentRightRailResolved");
-    });
-});
-
-describe("Work-unit queue-first loading coherence", () => {
-    it("uses shell-first cold shell + oper-lane loader; defers KPI/automation", () => {
-        const src = read("app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page.tsx");
-        expect(src).toContain("workUnitQueueRevealReady");
-        expect(src).toContain("WorkUnitWorkspaceColdShell");
-        expect(src).not.toContain("WorkUnitRouteSkeletonBody");
-        expect(src).toContain("operLaneLoading={workUnitOperLanePending}");
-        expect(src).toMatch(
-            /workUnitKpiStripPlaceholder = workUnitQueueRevealReady && workUnitKpiMetricsPending/,
-        );
-        expect(src).toMatch(/commandRailTelemetrySlot=\{[\s\S]*?workUnitQueueRevealReady/);
-        expect(src).not.toContain("wu-blocking-kpi-skeleton");
-    });
-
-    it("keeps oper lane in-region until bootstrap authority (no stale rows on nav)", () => {
-        const src = read("app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page.tsx");
-        expect(src).toContain("workUnitOperLanePending");
-        expect(src).toMatch(/workUnitPageBlockingLoad = loading && !workUnitShellReady/);
-        expect(src).toMatch(/readWorkUnitPageCache[\s\S]{0,600}setLoading\(false\)/);
-        expect(src).toMatch(/if \(!seededWorkUnitShellRef\.current\) \{\s*setLoading\(true\)/);
     });
 });
 

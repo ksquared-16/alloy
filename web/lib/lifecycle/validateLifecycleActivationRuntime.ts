@@ -61,7 +61,7 @@ import { departmentIdAllowed } from "@/lib/admin/accessScope";
 import { resolveLifecycleDepartmentWorkspaceAccess } from "@/lib/lifecycle/ensureLifecycleDepartmentWorkspaceAccess";
 import { isLifecycleBuilderOwnedDepartmentMetadata } from "@/lib/lifecycle/lifecycleBuilderOwned";
 import { fetchWorkspaceActiveDepartments } from "@/lib/workspace/workspaceActiveDepartments";
-import type { WorkspaceRootDepartmentRow } from "@/components/admin/workspace/WorkspaceRootDepartmentGrid";
+import type { WorkspaceRootDepartmentRow } from "@/lib/workspace/workspaceRootDepartmentTypes";
 import {
     traceWorkspaceRootDepartmentTiles,
     workspaceRenderedTileFailureReason,

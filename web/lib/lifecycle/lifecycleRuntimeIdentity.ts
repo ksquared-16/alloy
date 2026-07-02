@@ -1,3 +1,4 @@
+import { OPERATOR_WORKSPACE_HREF } from "@/lib/admin/canonicalOperatorRoutes";
 import type { LifecycleCatalogEntry, LifecycleCatalogSource } from "@/lib/lifecycle/lifecycleCatalogTypes";
 import { lifecycleCatalogId } from "@/lib/lifecycle/lifecycleCatalog";
 
@@ -113,6 +114,12 @@ export function syncCatalogToRuntimeIdentity(
     };
 }
 
+/**
+ * Workspace landing for a runtime department. The dept-scoped workspace page was retired with the
+ * legacy presentation tree (Presentation Runtime V2) — the operator workspace (`/workspace`) is the
+ * canonical landing; its process tiles cover every active department.
+ */
 export function workspaceDeptHref(runtimeDepartmentId: string): string {
-    return `/adminV2/workspace/dept/${encodeURIComponent(runtimeDepartmentId.trim())}`;
+    void runtimeDepartmentId;
+    return OPERATOR_WORKSPACE_HREF;
 }
