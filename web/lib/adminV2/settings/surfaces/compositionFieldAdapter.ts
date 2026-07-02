@@ -228,6 +228,47 @@ function tenantFieldsForGroup(
 // ── Public API ────────────────────────────────────────────────────────────────
 
 /**
+ * Available composition fields for an arbitrary set of accepted namespaces —
+ * used by nested surface groups (Children Surface, Financial Configuration
+ * Surface) which are NOT queue zones but still declare `acceptedNamespaces`.
+ *
+ * Returns platform starter fields (from `QUEUE_FIELD_CATALOG`) whose namespace is
+ * accepted, PLUS tenant custom fields whose namespace is accepted. Never
+ * fabricates a field — only real platform + real tenant fields are returned, so
+ * a group with no compatible real fields returns an empty list (honest empty
+ * state, no fake payers/invoices/estimates).
+ */
+export function availableFieldsForNamespaces(
+    namespaces: readonly AvailableFieldEntityNamespace[],
+    tenantFieldDefinitions?: readonly TenantFieldDefinitionRow[],
+): AvailableField[] {
+    const acceptedSet = new Set(namespaces);
+    const out: AvailableField[] = [];
+    const seen = new Set<string>();
+    // Platform starter fields whose namespace is accepted.
+    for (const key of Object.keys(QUEUE_FIELD_CATALOG)) {
+        const field = resolveQueueField(key);
+        if (acceptedSet.has(field.entityNamespace) && !seen.has(field.key)) {
+            seen.add(field.key);
+            out.push(field);
+        }
+    }
+    // Tenant custom fields whose namespace is accepted.
+    if (tenantFieldDefinitions && tenantFieldDefinitions.length > 0) {
+        const catalogFields = buildTenantLayoutCatalogFields(tenantFieldDefinitions, "pipeline_queue_row");
+        for (const cf of catalogFields) {
+            const available = tenantCatalogFieldToAvailable(cf);
+            if (!available) continue;
+            if (acceptedSet.has(available.entityNamespace) && !seen.has(available.key)) {
+                seen.add(available.key);
+                out.push(available);
+            }
+        }
+    }
+    return out;
+}
+
+/**
  * Return the available composition fields for a specific evidence group within a zone.
  *
  * Platform starter fields (`defaultFieldKeys`) PLUS any operator-created custom

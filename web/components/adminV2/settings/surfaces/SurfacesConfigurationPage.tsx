@@ -12,6 +12,20 @@ import FocusPanelSummarySurfaceEditor from "@/components/adminV2/settings/surfac
 import OperationalIntelligenceSurfaceBuilder from "@/components/adminV2/settings/surfaces/OperationalIntelligenceSurfaceBuilder";
 import { WorkspaceHeaderSurfaceBuilder, WorkUnitHeaderSurfaceBuilder } from "@/components/adminV2/settings/surfaces/HeaderSurfaceBuilders";
 import QueueRowBuilderV2 from "@/components/adminV2/settings/surfaces/QueueRowBuilderV2";
+import NestedSurfaceEditor from "@/components/adminV2/settings/surfaces/NestedSurfaceEditor";
+import { buildSurfacesBreadcrumb } from "@/lib/adminV2/settings/surfaces/surfacesBreadcrumbModel";
+import {
+    CHILDREN_SURFACE_ID,
+    FINANCIAL_CONFIG_SURFACE_ID,
+    nestedSurfaceLabel,
+} from "@/lib/adminV2/settings/surfaces/nestedSurfaceEditorModel";
+import { useState as useReactState } from "react";
+
+/** Card → nested surface launchers shown in the Focus Panel editor. */
+const FOCUS_PANEL_NESTED_LAUNCHERS: { cardLabel: string; surfaceId: string }[] = [
+    { cardLabel: "Children Card", surfaceId: CHILDREN_SURFACE_ID },
+    { cardLabel: "Financial Configuration Card", surfaceId: FINANCIAL_CONFIG_SURFACE_ID },
+];
 import { SurfaceLibrary } from "@/components/platform/surfaceBuilder/SurfaceLibrary";
 import {
     useSurfacesConfigurationSettings,
@@ -34,6 +48,14 @@ export default function SurfacesConfigurationPage() {
 
     const editing = Boolean(selectedObject?.editor);
     const activeSectionLabel = sections.find((s) => s.key === section)?.label ?? "";
+    // Nested-surface drill (Focus Panel → Children Card → Children Surface).
+    const [nestedSurfaceId, setNestedSurfaceId] = useReactState<string | null>(null);
+    const nestedLauncher = nestedSurfaceId
+        ? FOCUS_PANEL_NESTED_LAUNCHERS.find((l) => l.surfaceId === nestedSurfaceId) ?? null
+        : null;
+    const nestedTrail = nestedLauncher
+        ? [nestedLauncher.cardLabel, nestedSurfaceLabel(nestedLauncher.surfaceId)]
+        : undefined;
     // Catalogued (non-editor) surface with a composition preview — e.g. Dashboard / Analytics.
     const previewObject = selectedObject && !selectedObject.editor && selectedObject.previewHref ? selectedObject : null;
 
@@ -57,18 +79,41 @@ export default function SurfacesConfigurationPage() {
                             data-testid="surfaces-breadcrumb"
                         >
                             <p className="text-xs text-alloy-midnight/55">
-                                <button
-                                    type="button"
-                                    data-testid="surfaces-breadcrumb-home"
-                                    onClick={() => setSelectedId(null)}
-                                    className="font-medium text-alloy-midnight/70 hover:text-alloy-pine"
-                                >
-                                    Surfaces
-                                </button>
-                                <span className="mx-1 text-alloy-midnight/30">›</span>
-                                <span>{activeSectionLabel}</span>
-                                <span className="mx-1 text-alloy-midnight/30">›</span>
-                                <span className="font-medium text-alloy-midnight/80">{selectedObject.title}</span>
+                                {buildSurfacesBreadcrumb({
+                                    sectionLabel: activeSectionLabel,
+                                    surfaceTitle: selectedObject.title,
+                                    nestedTrail,
+                                }).map((crumb, i, all) => {
+                                    const isLast = i === all.length - 1;
+                                    const handleClick =
+                                        crumb.target === "root" ? () => { setNestedSurfaceId(null); setSelectedId(null); }
+                                        : crumb.target === "surface" ? () => setNestedSurfaceId(null)
+                                        : typeof crumb.target === "number" ? () => setNestedSurfaceId(null)
+                                        : null;
+                                    return (
+                                        <span key={`${crumb.label}-${i}`}>
+                                            {i > 0 && <span className="mx-1 text-alloy-midnight/30">›</span>}
+                                            {handleClick ? (
+                                                <button
+                                                    type="button"
+                                                    data-testid={i === 0 ? "surfaces-breadcrumb-home" : undefined}
+                                                    data-breadcrumb-crumb={i}
+                                                    onClick={handleClick}
+                                                    className="font-medium text-alloy-midnight/70 hover:text-alloy-pine"
+                                                >
+                                                    {crumb.label}
+                                                </button>
+                                            ) : (
+                                                <span
+                                                    data-breadcrumb-crumb={i}
+                                                    className={isLast ? "font-medium text-alloy-midnight/80" : undefined}
+                                                >
+                                                    {crumb.label}
+                                                </span>
+                                            )}
+                                        </span>
+                                    );
+                                })}
                             </p>
                             <button
                                 type="button"
@@ -89,8 +134,33 @@ export default function SurfacesConfigurationPage() {
                                 <WorkUnitHeaderSurfaceBuilder />
                             ) : selectedObject.editor === "queue-row-builder" ? (
                                 <QueueRowBuilderV2 surfaceId={selectedObject.id} />
+                            ) : nestedSurfaceId ? (
+                                <NestedSurfaceEditor surfaceId={nestedSurfaceId} />
                             ) : (
-                                <FocusPanelSummarySurfaceEditor />
+                                <div className="flex h-full min-h-0 flex-col gap-3">
+                                    {/* Nested surface launchers: click a card to configure its expansion surface. */}
+                                    <div className="flex flex-wrap items-center gap-2" data-focus-panel-nested-launchers>
+                                        <span className="text-[10px] font-semibold uppercase tracking-wide text-alloy-midnight/35">
+                                            Expansion surfaces
+                                        </span>
+                                        {FOCUS_PANEL_NESTED_LAUNCHERS.map((l) => (
+                                            <button
+                                                key={l.surfaceId}
+                                                type="button"
+                                                onClick={() => setNestedSurfaceId(l.surfaceId)}
+                                                className="flex items-center gap-1 rounded-full border border-alloy-stone/20 bg-white px-2.5 py-1 text-[11px] font-medium text-alloy-midnight/65 hover:border-alloy-pine/40 hover:text-alloy-pine"
+                                                data-open-nested-surface={l.surfaceId}
+                                            >
+                                                {l.cardLabel}
+                                                <span className="text-alloy-midnight/30">›</span>
+                                                {nestedSurfaceLabel(l.surfaceId)}
+                                            </button>
+                                        ))}
+                                    </div>
+                                    <div className="min-h-0 flex-1">
+                                        <FocusPanelSummarySurfaceEditor />
+                                    </div>
+                                </div>
                             )}
                         </div>
                     </div>
