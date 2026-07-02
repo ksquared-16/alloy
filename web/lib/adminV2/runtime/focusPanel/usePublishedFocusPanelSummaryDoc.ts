@@ -56,18 +56,33 @@ function invalidate(): Promise<LayoutDoc | null> {
 }
 
 export function usePublishedFocusPanelSummaryDoc(enabled: boolean): LayoutDoc | null {
-    const [doc, setDoc] = useState<LayoutDoc | null>(cache.loaded ? cache.doc : null);
+    return usePublishedFocusPanelSummaryDocState(enabled).doc;
+}
+
+/**
+ * Same load as {@link usePublishedFocusPanelSummaryDoc} but also reports whether the fetch
+ * has SETTLED (`loaded`). The pending Focus Panel skeleton needs this: until the published
+ * doc settles it cannot know whether the org uses a custom layout, so it must not commit to
+ * the code-default composition (which would then reflow to the published layout on load).
+ * `loaded` true with `doc` null means "settled, no published doc → use the default".
+ */
+export function usePublishedFocusPanelSummaryDocState(
+    enabled: boolean,
+): { doc: LayoutDoc | null; loaded: boolean } {
+    const [state, setState] = useState<{ doc: LayoutDoc | null; loaded: boolean }>(
+        cache.loaded ? { doc: cache.doc, loaded: true } : { doc: null, loaded: false },
+    );
 
     useEffect(() => {
         if (!enabled) return;
         let active = true;
         void ensureLoad().then((resolved) => {
-            if (active && resolved) setDoc(resolved);
+            if (active) setState({ doc: resolved, loaded: true });
         });
 
         const onPublished = () => {
             void invalidate().then((resolved) => {
-                if (active) setDoc(resolved);
+                if (active) setState({ doc: resolved, loaded: true });
             });
         };
         window.addEventListener(FOCUS_PANEL_SUMMARY_PUBLISHED_EVENT, onPublished);
@@ -77,5 +92,5 @@ export function usePublishedFocusPanelSummaryDoc(enabled: boolean): LayoutDoc | 
         };
     }, [enabled]);
 
-    return doc;
+    return state;
 }

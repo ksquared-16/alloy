@@ -24,7 +24,7 @@ import { useMemo } from "react";
 import FocusPanelCardGrid from "@/components/admin/focusPanel/FocusPanelCardGrid";
 import { deriveFocusPanelSummaryCompositionInputs } from "@/lib/adminV2/runtime/focusPanel/deriveFocusPanelSummaryCompositionInputs";
 import { FOCUS_PANEL_SUMMARY_DEFAULT_DOC } from "@/lib/adminV2/runtime/focusPanel/buildFocusPanelSummaryDefaultDoc";
-import { usePublishedFocusPanelSummaryDoc } from "@/lib/adminV2/runtime/focusPanel/usePublishedFocusPanelSummaryDoc";
+import { usePublishedFocusPanelSummaryDocState } from "@/lib/adminV2/runtime/focusPanel/usePublishedFocusPanelSummaryDoc";
 import type { FocusPanelMode } from "@/lib/adminV2/runtime/focusPanel/focusPanelMode";
 
 /** Inert placeholder body — the card shell shape with a pulse, no content, aria-hidden. */
@@ -48,26 +48,34 @@ function PlaceholderCard() {
 export default function FocusPanelSummarySkeleton({ mode }: { mode: FocusPanelMode }) {
     const isSummary = mode === "summary";
     // Mounting this hook triggers the module-cached published-doc load EARLY, so by the
-    // time the record payload resolves the doc is already warm (no late reflow).
-    const publishedDoc = usePublishedFocusPanelSummaryDoc(isSummary);
-    const activeDoc = isSummary ? publishedDoc ?? FOCUS_PANEL_SUMMARY_DEFAULT_DOC : null;
+    // time the record payload resolves the doc is already warm. We gate the composed grid on
+    // the fetch having SETTLED: until then we cannot know the org's real layout, and picking
+    // the code default now would REFLOW to the published layout on load (the exact flash we
+    // are removing). The record VM always resolves AFTER the doc, so once the resolved body
+    // can render, the doc is settled — the skeleton and resolved surface pick the same grid.
+    const { doc: publishedDoc, loaded: docLoaded } = usePublishedFocusPanelSummaryDocState(isSummary);
+    const activeDoc = isSummary && docLoaded ? publishedDoc ?? FOCUS_PANEL_SUMMARY_DEFAULT_DOC : null;
 
     // Record-free inputs (NO cards) → all published cells present. Same strategy the
     // resolved body derives with the same doc, so the pending → resolved layout is stable.
     const inputs = useMemo(
-        () => (isSummary ? deriveFocusPanelSummaryCompositionInputs(activeDoc) : null),
-        [isSummary, activeDoc],
+        () => (activeDoc ? deriveFocusPanelSummaryCompositionInputs(activeDoc) : null),
+        [activeDoc],
     );
 
-    // Non-summary modes are not composed grids — reserve a single stable placeholder card.
+    // Non-summary modes (or the brief pre-settle window on the first Focus Panel open of a
+    // session) reserve a stable neutral placeholder — never a composed grid that would later
+    // reflow to the published layout.
     if (!isSummary || !inputs) {
         return (
             <div
                 data-testid="inline-focus-panel-skeleton"
                 data-inline-focus-panel-pending="true"
                 data-focus-panel-skeleton-mode={mode}
+                className="flex flex-col gap-3"
             >
                 <PlaceholderCard />
+                {isSummary ? <PlaceholderCard /> : null}
             </div>
         );
     }
