@@ -13,6 +13,11 @@ import {
     type OperatorLifecycleDepartmentRow,
     type OperatorLifecycleWorkUnitRow,
 } from "@/lib/admin/buildOperatorLifecycleLanding";
+import {
+    alloyRuntimeTrace,
+    hrefHasWorkViewOrQueueParam,
+    workViewSlugFromHref,
+} from "@/lib/perf/alloyRuntimeTrace";
 
 const DEPARTMENT_COLUMNS =
     "id, org_id, key, name, description, sort_order, is_active, metadata, created_at, updated_at";
@@ -66,7 +71,28 @@ export async function loadOperatorLifecycleLandingCardsServer(): Promise<Operato
             })().catch(() => [] as OperatorLifecycleWorkUnitRow[]),
         ]);
 
-        return buildOperatorLifecycleLandingCards({ catalogEntries, departments, workUnits });
+        const cards = buildOperatorLifecycleLandingCards({ catalogEntries, departments, workUnits });
+
+        // WS.PROCESS_TILE_WORK_VIEWS server-side trace (Vercel logs) — the generated
+        // Workspace tile hrefs are built here from configured Work Views. Proves the
+        // hrefs are clean slugs (no work_view=/queue=) before they ever reach the client.
+        for (const card of cards) {
+            alloyRuntimeTrace("WS.PROCESS_TILE_WORK_VIEWS", {
+                source: "configured_work_views",
+                server_side: true,
+                process_label: card.label,
+                process_key: card.processKey,
+                work_view_labels: card.workQueues.map((wq) => wq.label),
+                work_view_slugs: card.workQueues.map((wq) => workViewSlugFromHref(wq.href)),
+                work_view_keys: card.workQueues.map((wq) => wq.platformKey),
+                hrefs: card.workQueues.map((wq) => wq.href),
+                any_href_has_work_view_or_queue: card.workQueues.some((wq) =>
+                    hrefHasWorkViewOrQueueParam(wq.href),
+                ),
+            });
+        }
+
+        return cards;
     } catch {
         return [];
     }

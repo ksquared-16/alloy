@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createAdminClient } from "@/lib/supabaseAdmin";
+import { alloyRuntimeTrace } from "@/lib/perf/alloyRuntimeTrace";
 import { attachStageWorkRuntimeToOpportunityQueueRows } from "@/lib/lifecycle/attachStageWorkRuntimeToQueueRows";
 import { isLayoutRuntimeOpportunityQueueBodyEnabledServer } from "@/lib/layout/featureFlag";
 import type { QueueConfig, QueueDefinitionV1, QueueFilter } from "@/lib/config/queueDefinitionSchema";
@@ -2602,6 +2603,40 @@ export async function buildQueueSummariesSharedBootstrap(orgId: string): Promise
     return value;
 }
 
+/**
+ * Server-side golden-flow trace (Vercel logs) for a work unit's resolved queue
+ * summaries: the configured Work View pills + counts (WU.HEADER) and each lane's
+ * key / API row count / first record id (WU.QUEUE_REGION). No PII — ids/keys/
+ * labels/counts only.
+ */
+function emitWorkUnitQueueRuntimeTrace(workUnitId: string, summaries: QueueSummary[]): void {
+    const firstPreviewId = (preview: unknown[]): string | null => {
+        const first = preview[0] as { id?: unknown; opportunityId?: unknown } | undefined;
+        const raw = first?.opportunityId ?? first?.id;
+        return typeof raw === "string" && raw.trim() ? raw : null;
+    };
+    alloyRuntimeTrace("WU.HEADER", {
+        source: "configured_work_view_queue",
+        server_side: true,
+        work_unit_id: workUnitId,
+        work_view_pill_labels: summaries.map((s) => s.label),
+        work_view_pill_keys: summaries.map((s) => s.key),
+        work_view_pill_counts: summaries.map((s) => s.count),
+        rendered_pill_count: summaries.length,
+    });
+    for (const s of summaries) {
+        alloyRuntimeTrace("WU.QUEUE_REGION", {
+            source: "configured_work_view_queue",
+            server_side: true,
+            work_unit_id: workUnitId,
+            queue_key: s.key,
+            api_row_count: s.count,
+            preview_row_count: s.preview.length,
+            first_row_record_id: firstPreviewId(s.preview),
+        });
+    }
+}
+
 export async function getWorkUnitQueueSummaries(params: {
     orgId: string;
     workUnitId: string;
@@ -3429,6 +3464,8 @@ export async function getWorkUnitQueueSummaries(params: {
             return stubDeferredQueueSummary(q, def);
         })
     );
+
+    emitWorkUnitQueueRuntimeTrace(params.workUnitId, summaries);
 
     const scopeMeta = workUnitScopeTotalFromSummaries(def, summaries);
     const scopePayload = {

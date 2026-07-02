@@ -102,38 +102,38 @@ function ProcessNavTile({
     const router = useRouter();
 
     return (
-        <Link
-            href={lifecycle.entryHref}
-            prefetch={shouldDisableAdminV2LinkPrefetch(lifecycle.entryHref) ? false : undefined}
-            className="group block w-full no-underline text-inherit"
-            {...adminV2NavigationClickedItemProps(clickedKey)}
-            onMouseEnter={() =>
-                warmOperatorWorkUnitEntryFromHref(lifecycle.entryHref, null, "business_process_tile_hover")
-            }
-            onFocus={() =>
-                warmOperatorWorkUnitEntryFromHref(lifecycle.entryHref, null, "business_process_tile_focus")
-            }
-            onClick={(e) => {
-                if (isModifiedNavClick(e)) return;
-                e.preventDefault();
-                const href = lifecycle.entryHref;
-                void runAdminV2NavigationTransition({
-                    href,
-                    clickedKey,
-                    variant: "work_unit",
-                    commitFirst: true,
-                    prepare: () => {
-                        const { workUnitSlug } = parseOperatorWorkUnitEntryHref(href);
-                        if (!workUnitSlug) return;
-                        warmOperatorWorkUnitEntryFromHref(href, null, "business_process_tile_click");
-                    },
-                    commit: () => router.push(href),
-                });
-            }}
+        <article
+            className={`${WS_LAYOUT.processNavTile} ${domain.leftRail}`}
+            data-ws-business-process-tile="true"
         >
-            <article
-                className={`${WS_LAYOUT.processNavTile} ${domain.leftRail}`}
-                data-ws-business-process-tile="true"
+            <Link
+                href={lifecycle.entryHref}
+                prefetch={shouldDisableAdminV2LinkPrefetch(lifecycle.entryHref) ? false : undefined}
+                className="group block w-full no-underline text-inherit"
+                {...adminV2NavigationClickedItemProps(clickedKey)}
+                onMouseEnter={() =>
+                    warmOperatorWorkUnitEntryFromHref(lifecycle.entryHref, null, "business_process_tile_hover")
+                }
+                onFocus={() =>
+                    warmOperatorWorkUnitEntryFromHref(lifecycle.entryHref, null, "business_process_tile_focus")
+                }
+                onClick={(e) => {
+                    if (isModifiedNavClick(e)) return;
+                    e.preventDefault();
+                    const href = lifecycle.entryHref;
+                    void runAdminV2NavigationTransition({
+                        href,
+                        clickedKey,
+                        variant: "work_unit",
+                        commitFirst: true,
+                        prepare: () => {
+                            const { workUnitSlug } = parseOperatorWorkUnitEntryHref(href);
+                            if (!workUnitSlug) return;
+                            warmOperatorWorkUnitEntryFromHref(href, null, "business_process_tile_click");
+                        },
+                        commit: () => router.push(href),
+                    });
+                }}
             >
                 <div className="flex flex-1 flex-col px-4 pb-3 pt-3.5">
                     <div className="flex items-center gap-3">
@@ -228,12 +228,18 @@ function ProcessNavTile({
                         </span>
                     </div>
                 </div>
-            </article>
-        </Link>
+            </Link>
+            <WorkViewEntryList
+                workQueues={lifecycle.workQueues}
+                clickedKey={clickedKey}
+                processLabel={lifecycle.label}
+                processKey={lifecycle.processKey}
+            />
+        </article>
     );
 }
 
-/** Work View entry links below a process tile — WS.PROCESS_TILE_WORK_VIEWS. */
+/** Work View entry links inside the process tile body — WS.PROCESS_TILE_WORK_VIEWS. */
 function WorkViewEntryList({
     workQueues,
     clickedKey,
@@ -267,7 +273,7 @@ function WorkViewEntryList({
     if (!workQueues.length) return null;
     return (
         <div
-            className="flex flex-wrap gap-x-1 gap-y-1 px-2 pt-1.5 pb-2"
+            className="flex flex-wrap gap-x-1 gap-y-1 border-t border-alloy-midnight/8 px-4 pb-3 pt-2"
             data-alloy-section="WS.PROCESS_TILE_WORK_VIEWS"
         >
             {workQueues.map((wq) => (
@@ -366,12 +372,6 @@ export function WorkspaceRootLifecycleGrid({ lifecycles, pending = false }: Prop
                             inlineMetrics={inlineMetrics}
                             previewShowsAttention={previewShowsAttention}
                             hasAttention={hasAttention}
-                        />
-                        <WorkViewEntryList
-                            workQueues={lifecycle.workQueues}
-                            clickedKey={clickedKey}
-                            processLabel={lifecycle.label}
-                            processKey={lifecycle.processKey}
                         />
                     </div>
                 );
