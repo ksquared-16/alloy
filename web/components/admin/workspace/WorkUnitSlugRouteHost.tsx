@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
-import AdminV2OpportunityWorkUnitPage from "@/app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page";
+import { PresentationRuntime } from "@/components/presentation/PresentationRuntime";
 import { WorkUnitWorkspaceColdShell } from "@/components/admin/workspace/WorkUnitWorkspaceColdShell";
 import { WorkUnitSlugRouteProvider, type WorkUnitSlugRouteValue } from "@/contexts/WorkUnitSlugRouteContext";
 import {
@@ -155,7 +155,7 @@ export default function WorkUnitSlugRouteHost({
 
     return (
         <WorkUnitSlugRouteProvider value={providerValue}>
-            <AdminV2OpportunityWorkUnitPage />
+            <PresentationRuntime surface="work-unit" />
         </WorkUnitSlugRouteProvider>
     );
 }
