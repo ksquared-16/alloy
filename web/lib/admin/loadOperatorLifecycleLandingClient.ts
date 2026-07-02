@@ -197,7 +197,15 @@ export async function loadOperatorLifecycleLandingCards(options?: {
 
         if (options?.includeRollups !== false && cards.length) {
             try {
-                cards = await fetchLifecycleRollupsForCards(cards, workUnits, departments, init);
+                // Rollups are enrichment, never a gate: sidebar/workspace NAV renders from the
+                // base cards, so a slow or hung summaries endpoint must not wedge navigation
+                // ("Loading processes…" forever). Bounded wait, then null metric fallbacks.
+                const ROLLUPS_BUDGET_MS = 8_000;
+                const enriched = await Promise.race([
+                    fetchLifecycleRollupsForCards(cards, workUnits, departments, init),
+                    new Promise<null>((resolve) => setTimeout(() => resolve(null), ROLLUPS_BUDGET_MS)),
+                ]);
+                if (enriched) cards = enriched;
             } catch {
                 // Rollups are optional — cards still render with null metric fallbacks.
             }
