@@ -30,7 +30,7 @@ export function WorkUnitHeader({
                 {processLabel ?? ""}
             </h1>
             {workViewLabel ? (
-                <span className="text-sm leading-snug text-alloy-stone">{workViewLabel}</span>
+                <span className="text-sm font-medium leading-snug text-alloy-midnight/65">{workViewLabel}</span>
             ) : null}
         </header>
     );

@@ -68,8 +68,11 @@ export function FocusPanelSurface({
         >
             <FocusPanelOpenContext.Provider value={value}>
                 {inlineRecordSelected ? (
-                    <div className="flex flex-col gap-4 xl:flex-row xl:items-start">
-                        <div className="min-w-0 xl:w-[40%] xl:min-w-[20rem] xl:max-w-[34rem] xl:shrink-0">
+                    // Side-by-side only when the record column gets real room (≥2xl after app
+                    // chrome + right rail); below that the queue stacks above the record so the
+                    // Focus Panel composition never renders in a squeezed column.
+                    <div className="flex flex-col gap-4 2xl:flex-row 2xl:items-start">
+                        <div className="min-w-0 2xl:w-[36%] 2xl:min-w-[18rem] 2xl:max-w-[30rem] 2xl:shrink-0">
                             {children}
                         </div>
                         <div className="min-w-0 flex-1">
