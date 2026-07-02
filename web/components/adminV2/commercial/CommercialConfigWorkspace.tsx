@@ -69,7 +69,7 @@ type SiteLocation = { id: string; name: string };
 type ProgramEntry = { key: string; label: string; siteCount: number };
 type SecondaryTab = "programs" | "tuition";
 type PayerTab = "private" | "subsidy" | "corporate";
-type SectionTab = "programs_tuition" | "fees";
+type SectionTab = "programs_tuition" | "fees" | "accounting";
 
 type RatePayload = {
     rate_cents?: number;
@@ -86,7 +86,7 @@ const SECTION_TABS = [
     { key: "funding" as const, label: "Funding", available: false },
     { key: "fees" as const, label: "Catalog", available: true },
     { key: "policies" as const, label: "Policies", available: false },
-    { key: "accounting" as const, label: "Accounting", available: false },
+    { key: "accounting" as const, label: "Accounting", available: true },
     { key: "simulator" as const, label: "Simulator", available: false },
 ];
 
@@ -187,7 +187,7 @@ function GridCell({ variant, cadence, rateRow, orgDefaultRow, locationId, onSave
                         placeholder="0.00"
                     />
                     <button type="button" onClick={() => void commitEdit()} disabled={saving} className="text-xs font-semibold text-alloy-pine hover:text-alloy-pine/70 disabled:opacity-40 leading-none">✓</button>
-                    <button type="button" onClick={() => { setEditing(false); setShowDates(false); }} className="text-[11px] text-alloy-midnight/30 hover:text-alloy-midnight/60 leading-none">✕</button>
+                    <button type="button" onClick={() => { setEditing(false); setShowDates(false); }} className="text-[11px] text-alloy-midnight/45 hover:text-alloy-midnight/60 leading-none">✕</button>
                 </div>
 
                 {/* Effective dates — absolutely positioned below cell, never affects row height */}
@@ -195,7 +195,7 @@ function GridCell({ variant, cadence, rateRow, orgDefaultRow, locationId, onSave
                     <button
                         type="button"
                         onClick={() => setShowDates(true)}
-                        className="absolute right-3 top-full mt-0.5 text-[10px] text-alloy-midnight/30 hover:text-alloy-midnight/55 transition-colors z-10 whitespace-nowrap"
+                        className="absolute right-3 top-full mt-0.5 text-[10px] text-alloy-midnight/45 hover:text-alloy-midnight/55 transition-colors z-10 whitespace-nowrap"
                     >
                         + dates
                     </button>
@@ -220,7 +220,7 @@ function GridCell({ variant, cadence, rateRow, orgDefaultRow, locationId, onSave
                                 className="mt-0.5 w-full rounded border border-alloy-stone/25 px-1 py-0.5 text-[11px] text-alloy-midnight/70 focus:outline-none"
                             />
                         </label>
-                        <button type="button" onClick={() => setShowDates(false)} className="text-[9px] text-alloy-midnight/30 hover:text-alloy-midnight/55">✕ close</button>
+                        <button type="button" onClick={() => setShowDates(false)} className="text-[9px] text-alloy-midnight/45 hover:text-alloy-midnight/55">✕ close</button>
                     </div>
                 )}
             </td>
@@ -233,7 +233,7 @@ function GridCell({ variant, cadence, rateRow, orgDefaultRow, locationId, onSave
             className={[
                 "px-3 py-2.5 text-right text-sm group/cell select-none whitespace-nowrap",
                 saving ? "opacity-50" : "",
-                isNotOffered ? "text-alloy-midnight/25" : isInherited ? "italic text-alloy-midnight/40" : "text-alloy-midnight",
+                isNotOffered ? "text-alloy-midnight/40" : isInherited ? "italic text-alloy-midnight/40" : "text-alloy-midnight",
                 !isNotOffered ? "cursor-pointer hover:bg-alloy-stone/5" : "",
             ].join(" ")}
             onClick={isNotOffered ? undefined : startEdit}
@@ -241,28 +241,28 @@ function GridCell({ variant, cadence, rateRow, orgDefaultRow, locationId, onSave
             {isNotOffered ? (
                 <span className="inline-flex items-center gap-1">
                     <span className="line-through text-xs">N/A</span>
-                    <button type="button" onClick={(e) => { e.stopPropagation(); void toggleNotOffered(); }} className="opacity-0 group-hover/cell:opacity-100 text-[10px] text-alloy-midnight/30 hover:text-alloy-midnight/60" title="Mark as offered">↩</button>
+                    <button type="button" onClick={(e) => { e.stopPropagation(); void toggleNotOffered(); }} className="opacity-0 group-hover/cell:opacity-100 text-[10px] text-alloy-midnight/45 hover:text-alloy-midnight/60" title="Mark as offered">↩</button>
                 </span>
             ) : displayRate != null ? (
                 <span className="inline-flex items-center gap-1">
                     {isLocOverride && <span className="w-1.5 h-1.5 rounded-full bg-alloy-pine/70 shrink-0" />}
                     <span>{formatRateCents(displayRate)}</span>
                     {rateRow?.effective_start && (
-                        <span className="opacity-0 group-hover/cell:opacity-100 text-[9px] text-alloy-midnight/30 font-normal not-italic" title={`Effective ${rateRow.effective_start}${rateRow.effective_end ? ` – ${rateRow.effective_end}` : ""}`}>📅</span>
+                        <span className="opacity-0 group-hover/cell:opacity-100 text-[9px] text-alloy-midnight/45 font-normal not-italic" title={`Effective ${rateRow.effective_start}${rateRow.effective_end ? ` – ${rateRow.effective_end}` : ""}`}>📅</span>
                     )}
                     <span className="opacity-0 group-hover/cell:opacity-100 inline-flex gap-0.5">
-                        <button type="button" onClick={(e) => { e.stopPropagation(); void toggleNotOffered(); }} className="text-[10px] text-alloy-midnight/25 hover:text-alloy-midnight/55" title="Mark N/A">⊘</button>
+                        <button type="button" onClick={(e) => { e.stopPropagation(); void toggleNotOffered(); }} className="text-[10px] text-alloy-midnight/40 hover:text-alloy-midnight/55" title="Mark N/A">⊘</button>
                         {!isInherited && rateRow?.id && (
                             <button type="button" onClick={(e) => { e.stopPropagation(); void onClear(rateRow.id); }} className="text-[10px] text-alloy-midnight/20 hover:text-red-400" title="Clear rate">×</button>
                         )}
                     </span>
                 </span>
             ) : showOrgFallback ? (
-                <span className="text-alloy-midnight/25 italic text-xs">{formatRateCents(orgDefaultRow!.rate_cents)}</span>
+                <span className="text-alloy-midnight/40 italic text-xs">{formatRateCents(orgDefaultRow!.rate_cents)}</span>
             ) : (
                 <span className="text-alloy-midnight/35 group-hover/cell:text-alloy-pine/50 transition-colors">
                     —
-                    <button type="button" onClick={(e) => { e.stopPropagation(); void toggleNotOffered(); }} className="opacity-0 group-hover/cell:opacity-100 ml-1 text-[10px] text-alloy-midnight/25 hover:text-alloy-midnight/55" title="Mark N/A">⊘</button>
+                    <button type="button" onClick={(e) => { e.stopPropagation(); void toggleNotOffered(); }} className="opacity-0 group-hover/cell:opacity-100 ml-1 text-[10px] text-alloy-midnight/40 hover:text-alloy-midnight/55" title="Mark N/A">⊘</button>
                 </span>
             )}
         </td>
@@ -340,7 +340,7 @@ function OfferingRateGrid({ offering, variants, cadences, rateMap, orgOnlyMap, l
                         )
                     )}
                     {activeCadences.length === 0 && availableCadences.length === 0 && (
-                        <span className="text-xs text-alloy-midnight/25">All cadences added</span>
+                        <span className="text-xs text-alloy-midnight/40">All cadences added</span>
                     )}
                 </div>
             </div>
@@ -351,12 +351,12 @@ function OfferingRateGrid({ offering, variants, cadences, rateMap, orgOnlyMap, l
                 <p className="px-4 py-3 text-xs text-alloy-midnight/35">No rate bases yet — use "+ Add rate basis" above to start.</p>
             ) : (
                 <div className="overflow-x-auto overflow-y-visible">
-                    <table className="w-auto min-w-full text-sm">
+                    <table className="w-auto text-sm">
                         <thead>
                             <tr className="border-b border-alloy-stone/10">
-                                <th className="text-left px-4 py-1.5 text-xs font-medium text-alloy-midnight/55 w-20" />
+                                <th className="text-left px-4 py-1.5 text-xs font-medium text-alloy-midnight/55 w-24" />
                                 {activeCadences.map((c) => (
-                                    <th key={c.item_key} className="text-right px-3 py-1.5 text-xs font-medium text-alloy-midnight/50 whitespace-nowrap">{c.label}</th>
+                                    <th key={c.item_key} className="text-right px-3 py-1.5 text-xs font-semibold text-alloy-midnight/60 whitespace-nowrap">{c.label}</th>
                                 ))}
                             </tr>
                         </thead>
@@ -365,7 +365,7 @@ function OfferingRateGrid({ offering, variants, cadences, rateMap, orgOnlyMap, l
                                 <tr key={variant.id} className={`border-b border-alloy-stone/8 last:border-0 ${vi % 2 === 1 ? "bg-alloy-stone/3" : ""}`}>
                                     <td className="px-4 py-2 text-xs text-alloy-midnight/55 font-medium whitespace-nowrap">
                                         {isDefaultVariant(variant)
-                                            ? <span className="italic text-alloy-midnight/30">Default</span>
+                                            ? <span className="italic text-alloy-midnight/45">Default</span>
                                             : describeVariant(variant)}
                                     </td>
                                     {activeCadences.map((cadence) => {
@@ -472,7 +472,7 @@ function VariantBulkBuilder({ offering, variants, rates, onAddVariants, onUpdate
                                     <p className="text-sm font-medium text-alloy-midnight truncate">
                                         {isDefaultVariant(v) ? <span className="text-alloy-midnight/40 italic">Default</span> : describeVariant(v)}
                                     </p>
-                                    {v.status !== "active" && <p className="text-[10px] text-alloy-midnight/30 capitalize">{v.status}</p>}
+                                    {v.status !== "active" && <p className="text-[10px] text-alloy-midnight/45 capitalize">{v.status}</p>}
                                 </div>
                                 {!isDefaultVariant(v) && (
                                     <div className="flex items-center gap-2 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -553,11 +553,11 @@ function OfferingGroup({ offering, variants, rates, onAddVariants, onUpdateVaria
         <div className="border border-alloy-stone/20 rounded-lg overflow-hidden">
             <div className="flex items-center gap-3 px-4 py-2.5 bg-alloy-stone/5 group">
                 <button type="button" onClick={() => setExpanded((v) => !v)} className="flex items-center gap-2 flex-1 min-w-0 text-left">
-                    <span className={`text-alloy-midnight/30 text-xs transition-transform ${expanded ? "rotate-90" : ""}`}>▶</span>
+                    <span className={`text-alloy-midnight/45 text-xs transition-transform ${expanded ? "rotate-90" : ""}`}>▶</span>
                     <span className="text-sm font-medium text-alloy-midnight">{offering.label}</span>
                     <span className="text-xs text-alloy-midnight/35">{ATTENDANCE_TYPE_LABELS[offering.attendance_type]}</span>
-                    <span className="text-xs text-alloy-midnight/25">{variantCount} variant{variantCount !== 1 ? "s" : ""}</span>
-                    {offering.status !== "active" && <span className="text-[10px] text-alloy-midnight/25 capitalize">{offering.status}</span>}
+                    <span className="text-xs text-alloy-midnight/40">{variantCount} variant{variantCount !== 1 ? "s" : ""}</span>
+                    {offering.status !== "active" && <span className="text-[10px] text-alloy-midnight/40 capitalize">{offering.status}</span>}
                 </button>
                 <div className="flex items-center gap-2 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
                     <button type="button" onClick={onEdit} className="text-xs text-alloy-midnight/35 hover:text-alloy-pine">Edit</button>
@@ -784,7 +784,7 @@ function TuitionPanel({ program, offerings, variantsByOffering, cadences, locati
                 {/* Payer tabs */}
                 <div className="flex border-b border-alloy-stone/20">
                     {PAYER_TABS.map((tab) => (
-                        <button key={tab.key} type="button" disabled={!tab.available} onClick={() => { if (tab.available) onPayerTabChange(tab.key); }} className={`px-4 py-2 text-sm -mb-px border-b-2 transition-colors ${payerTab === tab.key ? "border-alloy-pine text-alloy-pine font-medium" : tab.available ? "border-transparent text-alloy-midnight/50 hover:text-alloy-midnight" : "border-transparent text-alloy-midnight/25 cursor-not-allowed"}`}>
+                        <button key={tab.key} type="button" disabled={!tab.available} onClick={() => { if (tab.available) onPayerTabChange(tab.key); }} className={`px-4 py-2 text-sm -mb-px border-b-2 transition-colors ${payerTab === tab.key ? "border-alloy-pine text-alloy-pine font-medium" : tab.available ? "border-transparent text-alloy-midnight/60 hover:text-alloy-midnight" : "border-transparent text-alloy-midnight/40 cursor-not-allowed"}`}>
                             {tab.label}
                         </button>
                     ))}
@@ -808,7 +808,7 @@ function TuitionPanel({ program, offerings, variantsByOffering, cadences, locati
                                 onClear={onClear}
                             />
                         ))}
-                        <p className="text-xs text-alloy-midnight/30 pt-1">Click any cell to set a rate. Hover to mark N/A. Effective dates (optional) appear in the rate editor.</p>
+                        <p className="text-xs text-alloy-midnight/45 pt-1">Click any cell to set a rate. Hover to mark N/A. Effective dates (optional) appear in the rate editor.</p>
                     </div>
                 )}
             </div>
@@ -849,10 +849,10 @@ function AddProgramForm({ onAdd }: { onAdd: (label: string, key: string) => Prom
 
 // ─── Fees & Add-ons shared helpers ─────────────────────────────────────────────
 
-function ScopeBadge({ locationId, programKey, locations }: { locationId: string | null; programKey: string | null; locations: { id: string; name: string }[] }) {
-    const label = formatScope(locationId, programKey, locations);
+function ScopeBadge({ locationId, programKey, locations, programs }: { locationId: string | null; programKey: string | null; locations: { id: string; name: string }[]; programs?: { key: string; label: string }[] }) {
+    const label = formatScope(locationId, programKey, locations, programs);
     return (
-        <span className="text-[10px] text-alloy-midnight/40 bg-alloy-stone/10 rounded px-1.5 py-0.5 whitespace-nowrap">
+        <span className="text-[10px] text-alloy-midnight/55 bg-alloy-stone/10 rounded px-1.5 py-0.5 whitespace-nowrap">
             {label}
         </span>
     );
@@ -1016,6 +1016,111 @@ function SaveBar({ onSave, onCancel, saving, disabled }: { onSave: () => void; o
             <button type="button" onClick={onSave} disabled={saving || disabled} className="rounded bg-alloy-pine px-3 py-1 text-xs font-medium text-white hover:bg-alloy-pine/85 disabled:opacity-40 transition-colors">
                 {saving ? "Saving…" : "Save"}
             </button>
+        </div>
+    );
+}
+
+// ─── AccountingReferencePanel ──────────────────────────────────────────────────
+// Reference view (not a full engine). Shows how Commercial revenue categories
+// flow into Accounting: products reference a revenue category; Accounting maps
+// each category to a GL code and decides where money posts.
+
+function AccountingReferencePanel({ products, categories, loading }: {
+    products: CommercialProduct[];
+    categories: CommercialCategory[];
+    loading: boolean;
+}) {
+    // Distinct revenue categories referenced across the catalog, with usage counts.
+    const revenueCategories = useMemo(() => {
+        const counts = new Map<string, number>();
+        for (const p of products) {
+            const rc = (p.revenue_category ?? "").trim();
+            if (rc) counts.set(rc, (counts.get(rc) ?? 0) + 1);
+        }
+        return Array.from(counts.entries()).map(([label, count]) => ({ label, count })).sort((a, b) => a.label.localeCompare(b.label));
+    }, [products]);
+
+    const uncategorizedCount = useMemo(
+        () => products.filter(p => !(p.revenue_category ?? "").trim()).length,
+        [products],
+    );
+
+    if (loading) {
+        return <div className="flex items-center justify-center flex-1 text-sm text-alloy-midnight/55 py-16">Loading…</div>;
+    }
+
+    return (
+        <div className="flex-1 overflow-y-auto">
+            <div className="max-w-2xl mx-auto px-6 py-8 space-y-6">
+
+                <div>
+                    <h2 className="text-base font-semibold text-alloy-midnight">Accounting</h2>
+                    <p className="text-xs text-alloy-midnight/60 mt-0.5">
+                        Where commercial revenue posts. GL mapping lives here.
+                    </p>
+                </div>
+
+                {/* Flow model */}
+                <div className="rounded-lg border border-alloy-pine/25 bg-alloy-pine/3 px-4 py-4">
+                    <div className="flex items-center gap-2 text-xs font-medium flex-wrap">
+                        <span className="rounded-md bg-white border border-alloy-stone/25 px-2.5 py-1 text-alloy-midnight/70">Commercial product</span>
+                        <span className="text-alloy-pine/70">references →</span>
+                        <span className="rounded-md bg-alloy-pine/10 border border-alloy-pine/30 px-2.5 py-1 text-alloy-pine font-semibold">Revenue category</span>
+                        <span className="text-alloy-pine/70">maps to →</span>
+                        <span className="rounded-md bg-white border border-alloy-stone/25 px-2.5 py-1 text-alloy-midnight/70">GL code</span>
+                    </div>
+                    <p className="text-[11px] text-alloy-midnight/60 mt-2.5 leading-relaxed">
+                        Commercial defines <span className="font-medium text-alloy-midnight/75">what</span> a charge is. Accounting decides <span className="font-medium text-alloy-midnight/75">where</span> it posts. Each product carries a revenue category as a reference label; Accounting maps that label to a GL code in your chart of accounts.
+                    </p>
+                </div>
+
+                {/* Revenue categories in use */}
+                <section className="space-y-3">
+                    <div className="flex items-center gap-2">
+                        <h3 className="text-sm font-semibold text-alloy-midnight">Revenue categories in use</h3>
+                        {revenueCategories.length > 0 && (
+                            <span className="text-[10px] text-alloy-midnight/55 bg-alloy-stone/10 rounded-full px-1.5 py-0.5">{revenueCategories.length}</span>
+                        )}
+                    </div>
+
+                    {revenueCategories.length === 0 ? (
+                        <div className="rounded-lg border border-dashed border-alloy-stone/25 px-4 py-6 text-center">
+                            <p className="text-sm text-alloy-midnight/55">No revenue categories referenced yet.</p>
+                            <p className="text-xs text-alloy-midnight/50 mt-1">Add a revenue category on a product in the Catalog tab, then map it to a GL code here.</p>
+                        </div>
+                    ) : (
+                        <div className="rounded-lg border border-alloy-stone/20 overflow-hidden">
+                            <div className="grid grid-cols-[1fr_auto_auto] gap-3 px-4 py-2 bg-alloy-stone/5 border-b border-alloy-stone/15 text-[10px] font-medium text-alloy-midnight/55 uppercase tracking-wide">
+                                <span>Revenue category</span>
+                                <span className="text-right">Products</span>
+                                <span className="text-right">GL code</span>
+                            </div>
+                            {revenueCategories.map(rc => (
+                                <div key={rc.label} className="grid grid-cols-[1fr_auto_auto] gap-3 px-4 py-2.5 border-b border-alloy-stone/8 last:border-0 items-center">
+                                    <span className="text-sm text-alloy-midnight font-medium">{rc.label}</span>
+                                    <span className="text-xs text-alloy-midnight/60 text-right tabular-nums">{rc.count}</span>
+                                    <span className="text-[11px] text-alloy-midnight/45 text-right italic">Not mapped</span>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+
+                    {uncategorizedCount > 0 && (
+                        <p className="text-[11px] text-alloy-midnight/55">
+                            {uncategorizedCount} product{uncategorizedCount !== 1 ? "s" : ""} without a revenue category — set one in the Catalog to control where it posts.
+                        </p>
+                    )}
+                </section>
+
+                {/* Scope note */}
+                <section className="rounded-lg border border-alloy-stone/15 bg-alloy-stone/3 px-4 py-3">
+                    <p className="text-xs font-medium text-alloy-midnight/60 mb-1">What lives here</p>
+                    <p className="text-xs text-alloy-midnight/55 leading-relaxed">
+                        GL code mapping and revenue posting rules belong to Accounting. This is the reference model — full GL configuration and posting are a later stage. Commercial products reference categories; Accounting owns the chart-of-accounts mapping.
+                    </p>
+                </section>
+
+            </div>
         </div>
     );
 }
@@ -1231,33 +1336,39 @@ function CommercialCatalogPanel({
         <div className="rounded-lg border border-alloy-pine/35 bg-alloy-pine/3 p-5 space-y-4">
             <CField label="Name *" value={name} onChange={setName} placeholder="e.g. Registration Fee" required />
 
-            {/* Commercial type — pill selector (drives the form) */}
+            {/* Commercial type — guided selection cards (choosing a product behavior) */}
             <div className="space-y-1.5">
                 <span className="text-[10px] font-medium text-alloy-midnight/55 uppercase tracking-wide">
-                    Commercial type{!editingId && " *"}
+                    What kind of product is this?{!editingId && " *"}
                 </span>
-                <div className="flex gap-2 flex-wrap">
-                    {COMMERCIAL_TYPE_OPTIONS.map(opt => (
-                        <button
-                            key={opt.key}
-                            type="button"
-                            disabled={!!editingId}
-                            onClick={() => { if (!editingId) setCommercialType(opt.key); }}
-                            className={[
-                                "rounded-full px-3 py-1 text-xs font-medium border transition-colors",
-                                commercialType === opt.key
-                                    ? "bg-alloy-pine text-white border-alloy-pine"
-                                    : "bg-white text-alloy-midnight/60 border-alloy-stone/30 hover:border-alloy-pine/40 hover:text-alloy-pine",
-                                editingId ? "opacity-60 cursor-not-allowed" : "cursor-pointer",
-                            ].join(" ")}
-                        >{opt.label}</button>
-                    ))}
+                <div className="grid grid-cols-3 gap-2">
+                    {COMMERCIAL_TYPE_OPTIONS.map(opt => {
+                        const selected = commercialType === opt.key;
+                        return (
+                            <button
+                                key={opt.key}
+                                type="button"
+                                disabled={!!editingId}
+                                onClick={() => { if (!editingId) setCommercialType(opt.key); }}
+                                className={[
+                                    "text-left rounded-lg border p-3 transition-all",
+                                    selected
+                                        ? "border-alloy-pine bg-alloy-pine/5 shadow-sm ring-1 ring-alloy-pine/30"
+                                        : "border-alloy-stone/25 bg-white hover:border-alloy-pine/40 hover:shadow-xs",
+                                    editingId && !selected ? "opacity-40 cursor-not-allowed" : editingId ? "cursor-not-allowed" : "cursor-pointer",
+                                ].join(" ")}
+                            >
+                                <div className="flex items-center justify-between mb-1">
+                                    <span className={`text-sm font-semibold ${selected ? "text-alloy-pine" : "text-alloy-midnight"}`}>{opt.label}</span>
+                                    <span className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center ${selected ? "border-alloy-pine bg-alloy-pine" : "border-alloy-stone/35"}`}>
+                                        {selected && <span className="w-1.5 h-1.5 rounded-full bg-white" />}
+                                    </span>
+                                </div>
+                                <p className="text-[11px] leading-snug text-alloy-midnight/60">{opt.description}</p>
+                            </button>
+                        );
+                    })}
                 </div>
-                {commercialType && (
-                    <p className="text-[10px] text-alloy-midnight/55">
-                        {COMMERCIAL_TYPE_OPTIONS.find(o => o.key === commercialType)?.description}
-                    </p>
-                )}
             </div>
 
             {commercialType && (
@@ -1378,7 +1489,7 @@ function CommercialCatalogPanel({
                                                     ) : (
                                                         <span className="text-[10px] text-alloy-midnight/60 bg-alloy-stone/8 rounded px-1.5 py-0.5">Due: {depositBehavior(p)?.due_timing}</span>
                                                     )}
-                                                    <ScopeBadge locationId={p.location_id} programKey={p.program_key} locations={locations} />
+                                                    <ScopeBadge locationId={p.location_id} programKey={p.program_key} locations={locations} programs={programs} />
                                                     {p.revenue_category && (
                                                         <span className="text-[10px] text-alloy-midnight/55 italic">{p.revenue_category}</span>
                                                     )}
@@ -1531,7 +1642,7 @@ export function CommercialConfigWorkspace() {
     }, [selectedProgramKey, reloadOfferingsAndVariants]);
 
     useEffect(() => {
-        if (activeSection === "fees") void loadFeesData();
+        if (activeSection === "fees" || activeSection === "accounting") void loadFeesData();
     }, [activeSection, loadFeesData]);
 
     // ── Derived ────────────────────────────────────────────────────────────────
@@ -1663,8 +1774,8 @@ export function CommercialConfigWorkspace() {
                         key={tab.key}
                         type="button"
                         disabled={!tab.available}
-                        onClick={() => { if (tab.available && (tab.key === "programs_tuition" || tab.key === "fees")) setActiveSection(tab.key); }}
-                        className={`px-4 py-3 text-sm -mb-px border-b-2 transition-colors whitespace-nowrap ${activeSection === tab.key ? "border-alloy-pine text-alloy-pine font-medium" : tab.available ? "border-transparent text-alloy-midnight/50 hover:text-alloy-midnight" : "border-transparent text-alloy-midnight/45 cursor-not-allowed"}`}
+                        onClick={() => { if (tab.available && (tab.key === "programs_tuition" || tab.key === "fees" || tab.key === "accounting")) setActiveSection(tab.key); }}
+                        className={`px-4 py-3 text-sm -mb-px border-b-2 transition-colors whitespace-nowrap ${activeSection === tab.key ? "border-alloy-pine text-alloy-pine font-medium" : tab.available ? "border-transparent text-alloy-midnight/60 hover:text-alloy-midnight" : "border-transparent text-alloy-midnight/45 cursor-not-allowed"}`}
                     >
                         {tab.label}
                     </button>
@@ -1678,7 +1789,9 @@ export function CommercialConfigWorkspace() {
                 </div>
             )}
 
-            {activeSection === "fees" ? (
+            {activeSection === "accounting" ? (
+                <AccountingReferencePanel products={products} categories={commercialCategories} loading={feesLoading} />
+            ) : activeSection === "fees" ? (
                 <CommercialCatalogPanel
                     products={products}
                     categories={commercialCategories}

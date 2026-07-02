@@ -19,9 +19,9 @@
 export type CommercialType = "fee" | "addon" | "deposit";
 
 export const COMMERCIAL_TYPE_OPTIONS: { key: CommercialType; label: string; description: string }[] = [
-  { key: "fee",     label: "Fee",     description: "Required or auto-triggered charge — registration, materials, annual fees" },
-  { key: "addon",   label: "Add-on",  description: "Optional product families enroll in — extended care, enrichment, passes" },
-  { key: "deposit", label: "Deposit", description: "Held amount collected at enrollment with potential refund or credit" },
+  { key: "fee",     label: "Fee",     description: "Required or triggered charges like registration, materials, or late pickup" },
+  { key: "addon",   label: "Add-on",  description: "Optional products or services like lunch, extended care, enrichment, or passes" },
+  { key: "deposit", label: "Deposit", description: "A held amount collected to reserve a spot or secure enrollment" },
 ];
 
 export const COMMERCIAL_TYPE_LABELS: Record<CommercialType, string> = {
@@ -169,9 +169,13 @@ export function formatScope(
   locationId: string | null,
   programKey: string | null,
   locations: { id: string; name: string }[],
+  programs?: { key: string; label: string }[],
 ): string {
   const parts: string[] = [];
-  if (programKey) parts.push(programKey);
+  if (programKey) {
+    const prog = programs?.find((p) => p.key === programKey);
+    parts.push(prog?.label ?? programKey);
+  }
   if (locationId) {
     const loc = locations.find((l) => l.id === locationId);
     if (loc) parts.push(loc.name);

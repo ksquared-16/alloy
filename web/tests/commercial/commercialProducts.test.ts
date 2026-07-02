@@ -223,6 +223,14 @@ describe("formatScope", () => {
     it("unknown location dropped", () => {
         expect(formatScope("loc-x", null, LOCATIONS)).toBe("All programs");
     });
+    it("resolves program label when programs provided", () => {
+        const programs = [{ key: "infant", label: "Infant" }, { key: "toddler", label: "Toddler" }];
+        expect(formatScope(null, "infant", LOCATIONS, programs)).toBe("Infant");
+        expect(formatScope("loc-1", "toddler", LOCATIONS, programs)).toBe("Toddler · Main Campus");
+    });
+    it("falls back to raw program key when no match", () => {
+        expect(formatScope(null, "preschool", LOCATIONS, [{ key: "infant", label: "Infant" }])).toBe("preschool");
+    });
 });
 
 describe("PACKAGE_UNIT_TYPE_OPTIONS", () => {
