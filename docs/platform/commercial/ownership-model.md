@@ -128,9 +128,11 @@ Tuition Rate       → Revenue Category → GL Account   (forward-compat column;
 **GL accounts — reuse the existing primitive.** Alloy already has a full chart of accounts: the `gl_accounts` table (+ `gl_account_mappings`, `gl_journal_entries/lines`, `ledger_transactions`) with a live API (`/api/admin/financials/accounts`) and service layer (`lib/financials/gl/glConfigService`). Commercial does **not** own a GL-account table. (An earlier draft created `commercial_gl_accounts`; it was corrective-removed in migration `20260713000002` because `gl_accounts` already exists.)
 
 **Revenue categories (`commercial_revenue_categories`)** — Commercial-owned, org-scoped: `label`, `mapped_gl_account_id` (FK → `gl_accounts`), `sort_order`, `is_active`. The legacy free-text `gl_code` column is retained transitional but no longer used or exposed. The Accounting tab has three sub-sections:
-- **Revenue Categories** — create categories, map each to a GL account (dropdown of `gl_accounts`), product usage count, delete.
-- **GL Accounts** — read-only view of the shared chart of accounts.
+- **Revenue Categories** — create categories, map each to a GL account (dropdown of active `gl_accounts`), product usage count, delete.
+- **GL Accounts** — **operable** chart of accounts: create (code/name/type), edit, archive/restore — via the existing `/api/admin/financials/accounts` (POST + `[id]` PATCH; **admin-role required**). No new GL table.
 - **Mapping Review** — flags unmapped categories ("Needs accounting mapping") and shows the product → category → GL account chain.
+
+**GL accounts are org-scoped.** The 6 demo `gl_accounts` seeded in the DB belong only to the *Alloy Bend* org; *Firefly Early Learning* (the dev org) had none, so its Accounting → GL Accounts read empty ("No GL accounts configured"). This was correct org-scoping, not a bug — the fix is that GL accounts are now creatable in the tab, so each org populates its own chart.
 
 **Catalog integration:** products reference a revenue category via `revenue_category_id` (FK → `commercial_revenue_categories`) — a dropdown of configured categories, **no free-form GL code and no free-form revenue-category text**. If the chosen category is unmapped, the form and card show "Needs accounting mapping". The legacy free-text `revenue_category` column is retained transitional for backfill.
 

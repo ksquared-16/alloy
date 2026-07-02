@@ -1039,10 +1039,19 @@ function FormStep({ label, hint }: { label: string; hint?: string }) {
 // Accounting V1. Reuses the canonical chart of accounts (gl_accounts, via
 // /api/admin/financials/accounts). Operators map each commercial Revenue Category
 // to an existing GL account. No new GL-account table, no free-form GL codes.
-// Sections: GL Accounts (read-only chart) · Revenue Categories (map) · Mapping Review.
+// Sections: GL Accounts (create/edit/archive) · Revenue Categories (map) · Mapping Review.
+// GL accounts are read/written via the existing /api/admin/financials/accounts.
 
 type GlAccountLite = { id: string; code: string; name: string; type: string; is_active: boolean };
 type AccountingTab = "revenue_categories" | "gl_accounts" | "mapping_review";
+
+const GL_ACCOUNT_TYPES: { key: string; label: string }[] = [
+    { key: "revenue", label: "Revenue" },
+    { key: "liability", label: "Liability" },
+    { key: "asset", label: "Asset" },
+    { key: "expense", label: "Expense" },
+    { key: "equity", label: "Equity" },
+];
 
 function AccountingReferencePanel({ products, loading }: {
     products: CommercialProduct[];
@@ -1052,6 +1061,7 @@ function AccountingReferencePanel({ products, loading }: {
     const [revenueCats, setRevenueCats] = useState<CommercialRevenueCategory[]>([]);
     const [glAccounts, setGlAccounts] = useState<GlAccountLite[]>([]);
     const [dataLoading, setDataLoading] = useState(true);
+    const [glError, setGlError] = useState<string | null>(null);
 
     const [adding, setAdding] = useState(false);
     const [newLabel, setNewLabel] = useState("");
@@ -1059,6 +1069,17 @@ function AccountingReferencePanel({ products, loading }: {
     const [savingNew, setSavingNew] = useState(false);
     const [mappingId, setMappingId] = useState<string | null>(null);
     const [savingMap, setSavingMap] = useState(false);
+
+    // GL account authoring
+    const [glAdding, setGlAdding] = useState(false);
+    const [glCode, setGlCode] = useState("");
+    const [glName, setGlName] = useState("");
+    const [glType, setGlType] = useState("revenue");
+    const [glSaving, setGlSaving] = useState(false);
+    const [glEditingId, setGlEditingId] = useState<string | null>(null);
+    const [glEditCode, setGlEditCode] = useState("");
+    const [glEditName, setGlEditName] = useState("");
+    const [glEditType, setGlEditType] = useState("revenue");
 
     useEffect(() => {
         let cancelled = false;
@@ -1073,7 +1094,7 @@ function AccountingReferencePanel({ products, loading }: {
                 const glJson = (await glRes.json()) as { data?: GlAccountLite[] };
                 if (!cancelled) {
                     setRevenueCats(sortRevenueCategories(rcJson.revenue_categories ?? []));
-                    setGlAccounts((glJson.data ?? []).filter(a => a.is_active !== false));
+                    setGlAccounts(glJson.data ?? []);
                 }
             } catch { /* retain */ }
             finally { if (!cancelled) setDataLoading(false); }
@@ -1086,6 +1107,57 @@ function AccountingReferencePanel({ products, loading }: {
         glAccounts.forEach(a => m.set(a.id, a));
         return m;
     }, [glAccounts]);
+
+    // Active accounts only, sorted by code — used for the mapping dropdowns.
+    const activeGl = useMemo(
+        () => glAccounts.filter(a => a.is_active !== false).sort((a, b) => a.code.localeCompare(b.code)),
+        [glAccounts],
+    );
+    const sortedGl = useMemo(() => [...glAccounts].sort((a, b) => a.code.localeCompare(b.code)), [glAccounts]);
+
+    async function createGlAccount() {
+        const code = glCode.trim();
+        const name = glName.trim();
+        if (!code) return;
+        setGlSaving(true); setGlError(null);
+        try {
+            const res = await fetch("/api/admin/financials/accounts", {
+                method: "POST", headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ code, name: name || code, type: glType }),
+            });
+            const json = (await res.json()) as GlAccountLite & { error?: string };
+            if (!res.ok || json.error) { setGlError(json.error ?? "Could not create GL account"); return; }
+            setGlAccounts(prev => [...prev, json]);
+            setGlAdding(false); setGlCode(""); setGlName(""); setGlType("revenue");
+        } finally { setGlSaving(false); }
+    }
+
+    function startGlEdit(a: GlAccountLite) { setGlEditingId(a.id); setGlEditCode(a.code); setGlEditName(a.name); setGlEditType(a.type); }
+
+    async function saveGlEdit(id: string) {
+        setGlSaving(true); setGlError(null);
+        try {
+            const res = await fetch(`/api/admin/financials/accounts/${id}`, {
+                method: "PATCH", headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ code: glEditCode.trim(), name: glEditName.trim(), type: glEditType }),
+            });
+            const json = (await res.json()) as GlAccountLite & { error?: string };
+            if (!res.ok || json.error) { setGlError(json.error ?? "Could not update GL account"); return; }
+            setGlAccounts(prev => prev.map(a => a.id === id ? json : a));
+            setGlEditingId(null);
+        } finally { setGlSaving(false); }
+    }
+
+    async function setGlActive(a: GlAccountLite, isActive: boolean) {
+        setGlError(null);
+        const res = await fetch(`/api/admin/financials/accounts/${a.id}`, {
+            method: "PATCH", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ is_active: isActive }),
+        });
+        const json = (await res.json()) as GlAccountLite & { error?: string };
+        if (!res.ok || json.error) { setGlError(json.error ?? "Could not update GL account"); return; }
+        setGlAccounts(prev => prev.map(x => x.id === a.id ? json : x));
+    }
 
     // Product usage per revenue category — counts both the FK and legacy free-text label.
     const productCountFor = useCallback((rc: CommercialRevenueCategory) => {
@@ -1202,7 +1274,7 @@ function AccountingReferencePanel({ products, loading }: {
                                         <span className="text-[10px] font-medium text-alloy-midnight/55 uppercase tracking-wide">GL account</span>
                                         <select value={newGlId} onChange={e => setNewGlId(e.target.value)} className="mt-0.5 block w-full rounded border border-alloy-stone/25 px-2 py-1 text-sm text-alloy-midnight focus:border-alloy-bend-pine focus:outline-none focus:ring-2 focus:ring-alloy-bend-pine/20 bg-white">
                                             <option value="">Unmapped</option>
-                                            {glAccounts.map(a => <option key={a.id} value={a.id}>{a.code} · {a.name}</option>)}
+                                            {activeGl.map(a => <option key={a.id} value={a.id}>{a.code} · {a.name}</option>)}
                                         </select>
                                     </label>
                                 </div>
@@ -1239,7 +1311,7 @@ function AccountingReferencePanel({ products, loading }: {
                                                 <span className="flex items-center gap-1 justify-end">
                                                     <select defaultValue={rc.mapped_gl_account_id ?? ""} onChange={e => void mapCategory(rc.id, e.target.value)} disabled={savingMap} className="rounded border border-alloy-bend-pine/40 px-1.5 py-0.5 text-xs text-alloy-midnight bg-white focus:outline-none focus:ring-2 focus:ring-alloy-bend-pine/20" autoFocus>
                                                         <option value="">Unmapped</option>
-                                                        {glAccounts.map(a => <option key={a.id} value={a.id}>{a.code} · {a.name}</option>)}
+                                                        {activeGl.map(a => <option key={a.id} value={a.id}>{a.code} · {a.name}</option>)}
                                                     </select>
                                                     <button type="button" onClick={() => setMappingId(null)} className="text-xs text-alloy-midnight/45 hover:text-alloy-midnight">✕</button>
                                                 </span>
@@ -1258,30 +1330,95 @@ function AccountingReferencePanel({ products, loading }: {
                     </section>
                 )}
 
-                {/* ── GL Accounts (read-only chart of accounts) ── */}
+                {/* ── GL Accounts (operable chart of accounts) ── */}
                 {tab === "gl_accounts" && (
                     <section className="space-y-3">
-                        <p className="text-xs text-alloy-midnight/60">
-                            The chart of accounts. Owned by Accounting — managed in Financials configuration; shown here for reference.
-                        </p>
-                        {glAccounts.length === 0 ? (
-                            <div className="rounded-xl border border-dashed border-alloy-stone/25 px-4 py-6 text-center text-sm text-alloy-midnight/60">No GL accounts configured.</div>
-                        ) : (
-                            <div className="rounded-xl border border-alloy-stone/20 overflow-hidden">
-                                <div className="grid grid-cols-[auto_1fr_auto] gap-3 px-4 py-2 bg-alloy-stone/5 border-b border-alloy-stone/15 text-[10px] font-medium text-alloy-midnight/55 uppercase tracking-wide">
-                                    <span>Code</span>
-                                    <span>Account</span>
-                                    <span className="text-right">Type</span>
+                        <div className="flex items-center justify-between">
+                            <p className="text-xs text-alloy-midnight/60">The chart of accounts. Shared with Financials; revenue categories map to these.</p>
+                            {!glAdding && (
+                                <button type="button" onClick={() => { setGlAdding(true); setGlError(null); }} className="flex items-center gap-1.5 rounded-md bg-alloy-bend-pine px-3 py-1.5 text-xs font-medium text-white hover:bg-alloy-bend-pine/85 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-alloy-bend-pine/40">
+                                    <span className="text-sm leading-none">+</span> GL account
+                                </button>
+                            )}
+                        </div>
+
+                        {glError && (
+                            <div className="text-xs text-red-600 bg-red-50 border border-red-200 rounded px-3 py-2">{glError}</div>
+                        )}
+
+                        {glAdding && (
+                            <div className="rounded-xl border border-alloy-stone/20 bg-white p-4 shadow-sm space-y-3">
+                                <div className="grid grid-cols-[7rem_1fr_8rem] gap-3">
+                                    <label className="block">
+                                        <span className="text-[10px] font-medium text-alloy-midnight/55 uppercase tracking-wide">Code *</span>
+                                        <input value={glCode} onChange={e => setGlCode(e.target.value)} placeholder="4050" className="mt-0.5 block w-full rounded border border-alloy-stone/25 px-2 py-1 text-sm font-mono text-alloy-midnight placeholder:text-alloy-midnight/38 focus:border-alloy-bend-pine focus:outline-none focus:ring-2 focus:ring-alloy-bend-pine/20" />
+                                    </label>
+                                    <label className="block">
+                                        <span className="text-[10px] font-medium text-alloy-midnight/55 uppercase tracking-wide">Account name *</span>
+                                        <input value={glName} onChange={e => setGlName(e.target.value)} placeholder="e.g. Enrichment Revenue" className="mt-0.5 block w-full rounded border border-alloy-stone/25 px-2 py-1 text-sm text-alloy-midnight placeholder:text-alloy-midnight/38 focus:border-alloy-bend-pine focus:outline-none focus:ring-2 focus:ring-alloy-bend-pine/20" />
+                                    </label>
+                                    <label className="block">
+                                        <span className="text-[10px] font-medium text-alloy-midnight/55 uppercase tracking-wide">Type</span>
+                                        <select value={glType} onChange={e => setGlType(e.target.value)} className="mt-0.5 block w-full rounded border border-alloy-stone/25 px-2 py-1 text-sm text-alloy-midnight focus:border-alloy-bend-pine focus:outline-none focus:ring-2 focus:ring-alloy-bend-pine/20 bg-white">
+                                            {GL_ACCOUNT_TYPES.map(t => <option key={t.key} value={t.key}>{t.label}</option>)}
+                                        </select>
+                                    </label>
                                 </div>
-                                {glAccounts.map(a => (
-                                    <div key={a.id} className="grid grid-cols-[auto_1fr_auto] gap-3 px-4 py-2.5 border-b border-alloy-stone/8 last:border-0 items-center">
-                                        <span className="text-xs text-alloy-midnight/70 font-mono">{a.code}</span>
-                                        <span className="text-sm text-alloy-midnight">{a.name}</span>
-                                        <span className="text-[11px] text-alloy-midnight/55 text-right capitalize">{a.type}</span>
-                                    </div>
-                                ))}
+                                <div className="flex items-center justify-end gap-2">
+                                    <button type="button" onClick={() => { setGlAdding(false); setGlCode(""); setGlName(""); setGlType("revenue"); setGlError(null); }} className="text-xs text-alloy-midnight/55 hover:text-alloy-midnight px-2 py-1">Cancel</button>
+                                    <button type="button" onClick={() => void createGlAccount()} disabled={glSaving || !glCode.trim()} className="rounded bg-alloy-bend-pine px-3 py-1 text-xs font-medium text-white hover:bg-alloy-bend-pine/85 disabled:opacity-40">{glSaving ? "Saving…" : "Save"}</button>
+                                </div>
                             </div>
                         )}
+
+                        {sortedGl.length === 0 && !glAdding ? (
+                            <div className="rounded-xl border border-dashed border-alloy-stone/25 px-4 py-6 text-center">
+                                <p className="text-sm text-alloy-midnight/60">No GL accounts yet.</p>
+                                <button type="button" onClick={() => setGlAdding(true)} className="text-xs text-alloy-bend-pine hover:text-alloy-bend-pine/80 font-medium mt-1">+ Add the first account</button>
+                            </div>
+                        ) : sortedGl.length > 0 ? (
+                            <div className="rounded-xl border border-alloy-stone/20 overflow-hidden">
+                                <div className="grid grid-cols-[6rem_1fr_6rem_auto] gap-3 px-4 py-2 bg-alloy-stone/5 border-b border-alloy-stone/15 text-[10px] font-medium text-alloy-midnight/55 uppercase tracking-wide">
+                                    <span>Code</span>
+                                    <span>Account</span>
+                                    <span>Type</span>
+                                    <span />
+                                </div>
+                                {sortedGl.map(a => {
+                                    const editing = glEditingId === a.id;
+                                    const inactive = a.is_active === false;
+                                    return (
+                                        <div key={a.id} className={`group grid grid-cols-[6rem_1fr_6rem_auto] gap-3 px-4 py-2.5 border-b border-alloy-stone/8 last:border-0 items-center ${inactive ? "opacity-55" : ""}`}>
+                                            {editing ? (
+                                                <>
+                                                    <input value={glEditCode} onChange={e => setGlEditCode(e.target.value)} className="rounded border border-alloy-bend-pine/40 px-1.5 py-0.5 text-xs font-mono focus:outline-none focus:ring-2 focus:ring-alloy-bend-pine/20" />
+                                                    <input value={glEditName} onChange={e => setGlEditName(e.target.value)} className="rounded border border-alloy-bend-pine/40 px-1.5 py-0.5 text-sm focus:outline-none focus:ring-2 focus:ring-alloy-bend-pine/20" />
+                                                    <select value={glEditType} onChange={e => setGlEditType(e.target.value)} className="rounded border border-alloy-bend-pine/40 px-1 py-0.5 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-alloy-bend-pine/20">
+                                                        {GL_ACCOUNT_TYPES.map(t => <option key={t.key} value={t.key}>{t.label}</option>)}
+                                                    </select>
+                                                    <span className="flex items-center gap-1 justify-end">
+                                                        <button type="button" onClick={() => void saveGlEdit(a.id)} disabled={glSaving} className="text-xs font-medium text-alloy-bend-pine hover:text-alloy-bend-pine/70 disabled:opacity-40">✓</button>
+                                                        <button type="button" onClick={() => setGlEditingId(null)} className="text-xs text-alloy-midnight/45 hover:text-alloy-midnight">✕</button>
+                                                    </span>
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <span className="text-xs text-alloy-midnight/70 font-mono">{a.code}</span>
+                                                    <span className="text-sm text-alloy-midnight">{a.name}{inactive && <span className="ml-1.5 text-[10px] text-alloy-midnight/45">(archived)</span>}</span>
+                                                    <span className="text-[11px] text-alloy-midnight/55 capitalize">{a.type}</span>
+                                                    <span className="flex items-center gap-2 justify-end opacity-0 group-hover:opacity-100 transition-opacity">
+                                                        <button type="button" onClick={() => startGlEdit(a)} className="text-[11px] text-alloy-midnight/55 hover:text-alloy-bend-pine">Edit</button>
+                                                        {inactive
+                                                            ? <button type="button" onClick={() => void setGlActive(a, true)} className="text-[11px] text-alloy-bend-pine/80 hover:text-alloy-bend-pine">Restore</button>
+                                                            : <button type="button" onClick={() => void setGlActive(a, false)} className="text-[11px] text-alloy-midnight/45 hover:text-alloy-ember">Archive</button>}
+                                                    </span>
+                                                </>
+                                            )}
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        ) : null}
                     </section>
                 )}
 
