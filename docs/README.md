@@ -22,6 +22,8 @@ For behavior-changing work, include **`docs/platform/governance/design-and-opera
 
 **Presentation Runtime (unifying presentation architecture):** How every operator surface — queue row, Focus Panel, dashboard, document, POS, portal — becomes one **Design Surface** authored in one **Experience Builder**, built renderer-first on three axes (composition: Design Surface → Zone → Card → Slot → Renderer; selection: Perspective; audience: Viewpoint), with Analytics as a Dashboard category, is defined in **`platform/operator/presentation-runtime-doctrine.md`** (design stage). Full sprint: `sprints/06_2026/presentation-runtime-architecture/`.
 
+**Experience Builder V3 — Universal Surface Composition (frozen, July 2026):** The composition model that unifies every builder — `Surface → Canvas → Component → Evidence Group → Composition Item` (a **Card is one Component type**), with **Expanded = Open Surface** (nested via `openSurfaceId`) — is frozen in **`platform/operator/experience-builder-v3-universal-surface-composition.md`**. The /surfaces builders now author real, persisted configuration for it (stacked queue rows, grain/conditions, custom fields by namespace, nested surface editing for Children + Financial Configuration). **Presentation Runtime adoption starts from `platform/operator/presentation-runtime-carry-forward.md`** — what the live runtime must consume, the deferral list, and what it must NOT redesign. PRs #61/#63/#64/#68.
+
 ---
 
 ## What Alloy is

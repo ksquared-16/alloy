@@ -247,3 +247,16 @@ and the card re-renders from refreshed truth.
   existing route + record-patch refresh.
 - Editing is targeted (row-level); only truth-owning cards edit.
 - No new interaction primitive beyond the three above; no new runtime architecture.
+
+---
+
+## Presentation Runtime V3 — nested surface editing (July 2026, PR #68)
+
+`/settings/surfaces → Focus Panel` now supports **nested surface editing**: an *Expansion surfaces* launcher opens **Children Surface** and **Financial Configuration Surface** (`Surfaces / Focus Panel / Children Card / Children Surface` breadcrumb, clickable back). Inside, `NestedSurfaceEditor` lets operators view fields, **+ Add Field** (compatible predefined + tenant custom, badged), remove, reorder, and **Save & Publish**.
+
+- Children Surface groups: Child Summary · Placement · Schedule · Medical · Documents.
+- Financial Configuration groups: Placement & Tuition · Billing Configuration · Billing Responsibility · History / Activity. Seeds empty; **no fake payers/invoices/estimates** — only real compatible fields, else an honest empty state.
+- **Persistence:** `metadata.nestedSurfaces[surfaceId]` on the Focus Panel summary `entity_layouts` doc, via the existing draft/publish loop.
+- **Runtime deferral:** live runtime does not render nested surface configs yet — presentation-runtime-ready. See [`presentation-runtime-carry-forward.md`](./presentation-runtime-carry-forward.md).
+
+This supersedes the earlier "Expansion never creates a new surface" invariant: **Expanded = Open Surface** (a nested Surface via `openSurfaceId`), per [`experience-builder-v3-universal-surface-composition.md`](./experience-builder-v3-universal-surface-composition.md) §3.

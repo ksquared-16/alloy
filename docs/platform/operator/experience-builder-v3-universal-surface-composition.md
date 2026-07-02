@@ -239,18 +239,17 @@ That is the architectural destination: Alloy stops inventing framework and start
 | Universal model (`universalSurfaceModel.ts`): Surface → Canvas → Component → Evidence Group → Composition Item | ✅ landed |
 | `openSurfaceId` recursion primitive + registry with cycle-safe resolution (`surfaceRegistry.ts`) | ✅ landed |
 | Field availability — adapter capability (`acceptedNamespaces` + tenant merge) | ✅ landed + tested **at the adapter level** |
-| Field availability — builder UI call-site (pass loaded `field_definitions` into the adapter) | **staged follow-on** — `QueueRowBuilderV2` still calls the adapter without tenant defs, so custom fields are NOT yet visible in the builder UI |
-| Children Surface — recursive proof (Record → Record Surface, self-referential) | ✅ landed + tested **at model/registry level** |
-| Financial Configuration Surface — recursive proof (Operational → Operational) | ✅ landed + tested **at model/registry level** |
+| Field availability — builder UI call-site (pass loaded `field_definitions` into the adapter) | ✅ **landed (PR #68)** — Queue Row Builder + Nested Surface Editor pass tenant defs; custom fields visible in Add Field by namespace |
+| Children Surface — recursive proof (Record → Record Surface, self-referential) | ✅ landed + tested (model/registry) — **editable in /surfaces (PR #68)** |
+| Financial Configuration Surface — recursive proof (Operational → Operational) | ✅ landed + tested (model/registry) — **editable in /surfaces (PR #68)** |
 | Evidence Group terminology (retire abstract "Details" → "Overview") | ✅ landed (runtime-visible: default group label) |
-| Runtime overlay render swap (ChildrenCard renders composed Children Surface instead of hardcoded `FocusedChild`) | **staged follow-on** — the recursion engine + specs are proven; no runtime component imports the registry yet |
-| Queue stacked-sections schema + grain axis + waitlist-as-condition | **staged follow-on** (schema-version bump; documented, not landed here to keep runtime stable) |
-| Surface Library single-registry cutover (retire the two hand-synced catalogs) | **staged follow-on** — `surfaceRegistry` is the target seam |
+| Nested surface **editing** in /surfaces (open card → nested surface → configure fields → persist) | ✅ **landed (PR #68)** — `NestedSurfaceEditor`, persists `metadata.nestedSurfaces[surfaceId]` |
+| Stacked condensed queue row + grain/conditions | ✅ **landed (PR #68)** — `column.rowIndex` + `queueRowGrainModel`; authored + persisted |
+| Runtime overlay render swap (live render of nested Surface + stacked rows + `visibleWhen`) | **deferred → Runtime Adoption** — see [`presentation-runtime-carry-forward.md`](./presentation-runtime-carry-forward.md) |
+| Surface Library single-registry cutover / queue surface-entry collapse | **deferred → Runtime Adoption** |
 
-### 9a. What is visible in the running app after this PR
+### 9a. Authoring vs live runtime (be precise)
 
-**One user-visible change:** the default evidence-group label is now **"Overview"** (was "Overview" ← "Details") — appears where a card has no explicitly named groups.
+**Authored + persisted today (PR #68):** stacked queue rows (`rowIndex`), grain + waitlist-as-condition (`visibleWhen`), custom fields by namespace in the builders, and **nested surface editing** for Children Surface + Financial Configuration Surface (persisted to the Focus Panel summary doc metadata).
 
-**Everything else is engine/model-level**, not yet surfaced in the UI: the universal model, the surface registry + recursion primitive, the two proof surfaces, and the adapter's custom-field-by-namespace capability all exist and are tested, but **no builder screen or runtime overlay consumes them yet**. This PR freezes the model and proves it; the live-render and builder-call-site cutovers are the staged follow-ons above.
-
-Deferred items are explicitly staged, not silently dropped — see the PR summary and the audit's gap ledger.
+**Not yet consumed by the live operator runtime:** stacked-row render, `visibleWhen` evaluation, and nested-surface render. These are the Runtime Adoption seams — the single source of truth for what to build next is [`presentation-runtime-carry-forward.md`](./presentation-runtime-carry-forward.md). Nothing was silently dropped.

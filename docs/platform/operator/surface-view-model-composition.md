@@ -175,3 +175,14 @@ The same pattern extends to configuration/Settings surfaces: compose a `Settings
 whose `reveal.canCommit` is the settings hub's existing readiness, list the settings sections as the
 bundle, and patch live values after commit. Adopt it when a Settings surface shows staggered loading;
 do not pre-build it speculatively.
+
+---
+
+## Presentation Runtime V3 — surface registry + nested surfaces (July 2026)
+
+The canonical composition model is frozen in [`experience-builder-v3-universal-surface-composition.md`](./experience-builder-v3-universal-surface-composition.md): `Surface → Canvas → Component → Evidence Group → Composition Item`, a **Card is one Component type**, and **Expanded = Open Surface** (nested via `openSurfaceId`).
+
+- **Surface registry** — `web/lib/platform/surfaceComposition/surfaceRegistry.ts` catalogs `SurfaceSpec`s and resolves the `openSurfaceId` graph with cycle-safe walking. This is the target single registry the Surface Library should read from (retiring the two hand-synced catalogs — deferred).
+- **Nested surfaces** — Children Surface + Financial Configuration Surface are registered surfaces, editable in /surfaces (PR #68) and persisted per surface id.
+
+Runtime consumption of nested surfaces is deferred — see [`presentation-runtime-carry-forward.md`](./presentation-runtime-carry-forward.md).
