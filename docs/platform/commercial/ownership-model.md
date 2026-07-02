@@ -181,6 +181,24 @@ These domains are planned but not implemented. Do not build until explicitly sco
 
 Current model: `commercial_tuition_rates` is private-pay tuition only. `payer_type` exists on the row to support funding source differentiation later, but no split logic is built yet.
 
+## Color token audit (Bend Pine vs Midnight Forge)
+
+The Commercial UI's "old blue admin" look traced to a **mislabeled brand token**, not a Commercial styling bug.
+
+| Brand role | Correct hex | Token that holds it |
+|---|---|---|
+| Bend Pine (active/success/selected accent) | `#00A283` | `--color-alloy-juniper` (misnamed); now also `--color-alloy-bend-pine` (canonical) |
+| Midnight Forge (structural slate) | `#273F52` | `--color-alloy-pine` (misnamed "Bend Pine"); now also `--color-alloy-midnight-forge` (canonical) |
+| Alloy Blue | `#00458C` | `--color-alloy-blue` ✅ |
+| Ember | `#BC4300` | `--color-alloy-ember` ✅ |
+| River Stone | `#F4F6F9` | `--color-alloy-stone` ✅ |
+
+**Defect:** `--color-alloy-pine` = `#273F52` (Midnight Forge) but its comment claimed "Bend Pine." The true Bend Pine green (`#00A283`) lives under `alloy-juniper` — confirmed by `alloyOsRuntime.css` ("Bend Pine (alloy-juniper == #00A283)"). `alloy-pine` is used across ~240 files, mostly as a slate accent (intended Midnight Forge), so its value must **not** be flipped to green.
+
+**Correction (Phase 0, non-breaking):** added canonical, brand-honest aliases `--color-alloy-bend-pine` (`#00A283`) and `--color-alloy-midnight-forge` (`#273F52`) — same values, correct names. Corrected the misleading comments. `alloy-pine` / `alloy-juniper` retained as deprecated same-value aliases. Commercial now uses `alloy-bend-pine`. Zero visual change outside Commercial (which stays the same green).
+
+**Migration (Phases 1–2, deferred, per-intent review):** migrate each `alloy-pine` usage to `bend-pine` (accent) or `midnight-forge` (slate) by inspection; reconcile the `--home-*` mirror; remove deprecated aliases once usage is zero. The `#18273A` deep-ink under `alloy-forge`/`alloy-midnight` (6,117 text usages) is a separate role, out of scope.
+
 ## API surface
 
 ```

@@ -1,18 +1,31 @@
 @import "tailwindcss";
 
 @theme {
-  /* Alloy Brand Colors — structural and semantic roles */
+  /* ── Alloy Brand Colors — canonical, brand-doctrine names ───────────────────
+     Brand values: Bend Pine #00A283 · Midnight Forge #273F52 · Alloy Blue #00458C
+                   · Ember #BC4300 · River Stone #F4F6F9.
+     Prefer these canonical tokens in new code. The legacy `alloy-pine` /
+     `alloy-juniper` names below are RETAINED as same-value aliases for back-compat
+     and are being migrated out (see docs/platform/commercial/ownership-model.md
+     token audit). Do NOT reuse `alloy-pine` — it is Midnight Forge's value under a
+     misleading name. */
+  --color-alloy-bend-pine: #00A283;      /* Bend Pine — active/success/selected accent */
+  --color-alloy-midnight-forge: #273F52; /* Midnight Forge — structural slate/anchor */
+
   /* Alloy Blue: sidebar, primary actions, focus, info states */
   --color-alloy-blue: #00458C;
-  /* Bend Pine: accent for active/success/emphasis/selected (not generic green) */
+  /* LEGACY ALIAS — value is Midnight Forge (#273F52), NOT Bend Pine. Historically
+     mislabeled "Bend Pine"; kept for back-compat. New code: use alloy-midnight-forge
+     for slate, or alloy-bend-pine for the green accent. */
   --color-alloy-pine: #273F52;
   /* Ember: destructive, warning, archive, cancelled */
   --color-alloy-ember: #BC4300;
-  /* Forge: primary/strong text */
+  /* Forge: primary/strong text (deep ink #18273A — darker than brand Midnight Forge) */
   --color-alloy-forge: #18273A;
   /* River Stone: workspace background, neutral surfaces */
   --color-alloy-stone: #F4F6F9;
-  /* Juniper: success/active/completed (teal-green accent) */
+  /* Bend Pine (#00A283). This is the true brand Bend Pine; adminV2 already treats
+     alloy-juniper == Bend Pine. Alias of alloy-bend-pine; prefer the canonical name. */
   --color-alloy-juniper: #00A283;
   --color-alloy-midnight: #18273A;
   /* Admin / productized palette */
