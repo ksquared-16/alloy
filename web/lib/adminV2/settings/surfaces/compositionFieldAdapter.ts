@@ -119,6 +119,12 @@ const QUEUE_FIELD_CATALOG: Record<string, { label: string; namespace: AvailableF
     "inquiry_child.program": { label: "Program", namespace: "inquiry_child" },
     "inquiry_child.desired_schedule_type": { label: "Schedule Type", namespace: "inquiry_child" },
     "inquiry_child.desired_program_category": { label: "Program Category", namespace: "inquiry_child" },
+    // waitlist computed (available on waitlist queue rows)
+    "waitlist.positionLabel": { label: "Waitlist Position", namespace: "queue_row", hint: "status_pill" },
+    "waitlist.tierLabel": { label: "Priority Tier", namespace: "queue_row", hint: "status_pill" },
+    "waitlist.waitSince": { label: "Wait Since", namespace: "queue_row", hint: "date" },
+    "waitlist.siblingContext": { label: "Sibling Context", namespace: "queue_row" },
+    "overrides.flags": { label: "Override Flags", namespace: "queue_row", hint: "status_pill" },
 };
 
 /**

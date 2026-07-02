@@ -33,6 +33,7 @@ import {
     useQueueRowPublish,
 } from "@/lib/adminV2/settings/surfaces/useQueueRowBuilder";
 import { namedEvidenceGroupsForZone } from "@/lib/adminV2/settings/surfaces/compositionFieldAdapter";
+import { ALLOY_OS_QUEUE_COMPRESSED_WIDTH_PX } from "@/lib/adminV2/runtime/alloyOsRuntimeFlag";
 
 // ── Zone key ─────────────────────────────────────────────────────────────────
 
@@ -112,6 +113,8 @@ type RowZoneState = {
     key: ZoneKey;
     inRow: boolean;
     width: QueueRecordColumnWidth;
+    /** Operator-supplied display label for this column. Persisted to QueueRecordColumnConfig.label. */
+    columnLabel: string;
     visibleWhen: LayoutCondition | null;
     evidenceGroups: EvidenceGroupState[];
 };
@@ -228,6 +231,7 @@ function stateFromConfig(
             key,
             inRow,
             width: col?.width ?? catalogCol?.width ?? width,
+            columnLabel: col?.label || ZONE_LABELS[key] || key,
             visibleWhen: col?.visibleWhen ?? null,
             evidenceGroups: blocks,
         };
@@ -266,7 +270,12 @@ function buildConfigFromState(
                 });
             const blocks = filteredBlocks.length > 0 ? filteredBlocks : catalogCol.blocks.slice(0, 1);
 
-            const col: QueueRecordColumnConfig = { ...catalogCol, width: z.width, blocks };
+            const col: QueueRecordColumnConfig = {
+                ...catalogCol,
+                width: z.width,
+                label: z.columnLabel,
+                blocks,
+            };
             if (z.visibleWhen) col.visibleWhen = z.visibleWhen;
             else delete col.visibleWhen;
             return [col];
@@ -312,14 +321,32 @@ function RowCanvas({
     const inRow = zones.filter((z) => z.inRow);
 
     return (
-        <div className="overflow-hidden rounded-xl border border-alloy-stone/14 bg-white shadow-sm" data-canvas>
+        <div className="overflow-hidden rounded-xl border border-alloy-stone/14 bg-alloy-stone/[0.03] shadow-sm" data-canvas>
             <div className="flex items-center justify-between border-b border-alloy-stone/10 px-4 py-2">
                 <p className="text-[10px] font-semibold uppercase tracking-wide text-alloy-midnight/40">
                     Row canvas
+                    <span className="ml-1.5 font-normal normal-case tracking-normal text-alloy-midnight/30">
+                        · condensed rail {ALLOY_OS_QUEUE_COMPRESSED_WIDTH_PX}px
+                    </span>
                 </p>
                 <p className="text-[10px] text-alloy-midnight/30">Drag to reorder · click to inspect</p>
             </div>
-            <div className="flex min-h-[72px] items-stretch divide-x divide-alloy-stone/10">
+            {/*
+             * Runtime-width frame: the condensed queue row renders inside a fixed
+             * ~440px rail (--alloy-os-queue-compressed-width) whenever the Focus Panel
+             * is docked. The builder area is wider, so we center the row strip inside a
+             * fixed-width frame instead of stretching it full-width — the preview then
+             * matches the true runtime geometry (width + height + gaps).
+             */}
+            <div className="flex justify-center px-4 py-4">
+                <div
+                    className="overflow-hidden rounded-lg border border-alloy-stone/12 bg-white shadow-sm"
+                    style={{ width: ALLOY_OS_QUEUE_COMPRESSED_WIDTH_PX, maxWidth: ALLOY_OS_QUEUE_COMPRESSED_WIDTH_PX }}
+                    data-canvas-runtime-frame
+                    data-canvas-runtime-width={ALLOY_OS_QUEUE_COMPRESSED_WIDTH_PX}
+                >
+            {/* Height matches runtime condensed row: min 76px, target 80px, max 84px */}
+            <div className="flex min-h-[76px] max-h-[84px] items-stretch divide-x divide-alloy-stone/10">
                 {inRow.map((z) => {
                     const isSelected = z.key === selectedKey;
                     const isDragTarget = z.key === dragOverKey;
@@ -365,10 +392,10 @@ function RowCanvas({
                                 </button>
                             )}
 
-                            {/* Content */}
+                            {/* Content — label reflects operator rename (columnLabel), falls back to zone name */}
                             <div className="px-3 pb-3 pt-5">
                                 <p className={`truncate text-[10px] font-semibold uppercase tracking-wide ${isSelected ? "text-alloy-pine" : "text-alloy-midnight/40"}`}>
-                                    {ZONE_LABELS[z.key]}
+                                    {z.columnLabel || ZONE_LABELS[z.key]}
                                 </p>
                                 {sample.filter(Boolean).map((line, i) => (
                                     <p key={i} className="mt-0.5 truncate text-[11px] text-alloy-midnight/50">
@@ -384,6 +411,8 @@ function RowCanvas({
                         No zones in row — add from library below
                     </div>
                 )}
+            </div>
+                </div>
             </div>
         </div>
     );
@@ -535,6 +564,7 @@ function BlockInspector({
     placementOverrideEnabled,
     onClose,
     onSetWidth,
+    onSetLabel,
     onToggleGroup,
     onToggleField,
     onSetCondition,
@@ -546,6 +576,7 @@ function BlockInspector({
     placementOverrideEnabled: boolean;
     onClose: () => void;
     onSetWidth: (w: QueueRecordColumnWidth) => void;
+    onSetLabel: (label: string) => void;
     onToggleGroup: (blockId: string) => void;
     onToggleField: (blockId: string, fieldKey: string) => void;
     onSetCondition: (c: LayoutCondition) => void;
@@ -605,6 +636,26 @@ function BlockInspector({
                                 </button>
                             ))}
                         </div>
+                    </div>
+                )}
+
+                {/* Block label — operator-supplied display name */}
+                {!isActions && (
+                    <div>
+                        <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-alloy-midnight/35">
+                            Block label
+                        </p>
+                        <input
+                            type="text"
+                            value={zone.columnLabel}
+                            onChange={(e) => onSetLabel(e.target.value)}
+                            placeholder={ZONE_LABELS[zone.key]}
+                            className="w-full rounded border border-alloy-stone/20 bg-white px-2.5 py-1.5 text-[12px] text-alloy-midnight focus:border-alloy-pine focus:outline-none"
+                            data-inspector-label-input
+                        />
+                        <p className="mt-1 text-[10px] text-alloy-midnight/30">
+                            Renames this column (e.g. Household → Family). Saved to layout.
+                        </p>
                     </div>
                 )}
 
@@ -914,6 +965,10 @@ export default function QueueRowBuilderV2({ surfaceId = "pipeline-queue-row" }: 
         );
     }, []);
 
+    const setLabel = useCallback((key: ZoneKey, label: string) => {
+        mark((prev) => prev.map((z) => (z.key === key ? { ...z, columnLabel: label } : z)));
+    }, []);
+
     const toggleField = useCallback((key: ZoneKey, blockId: string, fieldKey: string) => {
         mark((prev) =>
             prev.map((z) =>
@@ -1013,6 +1068,7 @@ export default function QueueRowBuilderV2({ surfaceId = "pipeline-queue-row" }: 
                             placementOverrideEnabled={placementOverrideEnabled}
                             onClose={() => setSelectedKey(null)}
                             onSetWidth={(w) => setWidth(selectedZone.key, w)}
+                            onSetLabel={(label) => setLabel(selectedZone.key, label)}
                             onToggleGroup={(blockId) => toggleGroup(selectedZone.key, blockId)}
                             onToggleField={(blockId, fieldKey) => toggleField(selectedZone.key, blockId, fieldKey)}
                             onSetCondition={(c) => setCondition(selectedZone.key, c)}

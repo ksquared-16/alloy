@@ -107,6 +107,15 @@ describe("availableFieldsForGroup — fields for a specific group", () => {
         const keys = fields.map((f) => f.key);
         expect(keys).toContain("inquiry_child.desired_schedule_type");
     });
+
+    it("waitlist_position group includes waitlist.positionLabel and overrides.flags", () => {
+        const fields = availableFieldsForGroup("status", "waitlist_position", true);
+        const keys = fields.map((f) => f.key);
+        expect(keys).toContain("waitlist.positionLabel");
+        expect(keys).toContain("waitlist.tierLabel");
+        expect(keys).toContain("waitlist.waitSince");
+        expect(keys).toContain("overrides.flags");
+    });
 });
 
 describe("namedEvidenceGroupsForZone — groups with available fields", () => {
@@ -182,13 +191,13 @@ describe("V1 scope — static composition fields only, no custom fields", () => 
 
     it("namedEvidenceGroupsForZone only exposes platform-defined fields (no custom fields)", () => {
         // Confirm the named groups contain no dynamically injected tenant fields.
-        // All field keys must follow the refKey pattern: "namespace.field"
+        // All field keys must follow the refKey pattern: "namespace.fieldName" (camelCase allowed)
         for (const zone of ["household", "children", "status", "attention", "date_event"]) {
             const groups = namedEvidenceGroupsForZone(zone);
             for (const group of groups) {
                 for (const field of group.availableFields) {
-                    // System fields follow "namespace.field_name" pattern
-                    expect(field.key).toMatch(/^[a-z_]+\.[a-z_]+$/);
+                    // System fields follow "namespace.fieldName" pattern (camelCase keys allowed)
+                    expect(field.key).toMatch(/^[a-z_]+\.[a-zA-Z_]+$/);
                     expect(field.isSystemField).toBe(true);
                 }
             }
