@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
     computeOperationalProjection,
+    computeWorkViewOperationalSignals,
     diagnoseRecordWorkViewPlacement,
     enrichRowsWithDerivedStage,
     recordMatchesWorkView,
@@ -188,5 +189,46 @@ describe("Focus Panel membership against the active Work View", () => {
         expect(resolveFocusPanelScope({ record: newLead, activeView: null })).toEqual({ kind: "no_active_view" });
         // Record not yet loaded → don't assert out-of-scope.
         expect(resolveFocusPanelScope({ record: null, activeView: VIEWS[3] })).toEqual({ kind: "in_scope" });
+    });
+});
+
+describe("computeWorkViewOperationalSignals — per-view attention/overdue from base rows", () => {
+    // Base rows carry the generic `_queue_row_context` the queue attaches to every opportunity row.
+    const row = (
+        id: string,
+        status: string,
+        opts: { attention?: boolean; overdue?: boolean } = {},
+    ) => ({
+        id,
+        status_key: status,
+        _queue_row_context: {
+            attention_summary: { needs_attention: opts.attention === true, primary_reason_label: null },
+            current_work_summary: opts.overdue
+                ? { label: "Review", state: "open", due_label: "Overdue" }
+                : { label: "Review", state: "open", due_label: "Upcoming" },
+        },
+    });
+
+    it("counts attention/overdue per view using the SAME predicates as the counts", () => {
+        const baseRows = [
+            row("a", "new_inquiry", { attention: true }),
+            row("b", "new_inquiry", { overdue: true }),
+            row("c", "waitlist", { attention: true, overdue: true }),
+            row("d", "tour_scheduled"),
+        ];
+        const signals = computeWorkViewOperationalSignals({ baseRows, workViews: VIEWS });
+
+        // All Leads (include-all): 2 attention (a, c), 2 overdue (b, c).
+        expect(signals.all_leads).toEqual({ attentionCount: 2, overdueCount: 2 });
+        // New Leads (status=new_inquiry): rows a, b → 1 attention, 1 overdue.
+        expect(signals.new_leads).toEqual({ attentionCount: 1, overdueCount: 1 });
+        // Waitlist (status=waitlist): row c → 1 attention, 1 overdue.
+        expect(signals.waitlist).toEqual({ attentionCount: 1, overdueCount: 1 });
+    });
+
+    it("rows without `_queue_row_context` contribute no signal (never a fabricated one)", () => {
+        const baseRows = [{ id: "x", status_key: "new_inquiry" }];
+        const signals = computeWorkViewOperationalSignals({ baseRows, workViews: VIEWS });
+        expect(signals.new_leads).toEqual({ attentionCount: 0, overdueCount: 0 });
     });
 });

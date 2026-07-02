@@ -51,6 +51,14 @@ export type WorkViewLinkModel = {
     count: number | null;
     /** Workspace tile links soft-navigate; Work Unit pills select in-page (null). */
     href: string | null;
+    /**
+     * Secondary operational context for the Workspace tile row (records needing attention /
+     * overdue in this view) — from the operational projection. Null when unresolved or on the
+     * Work Unit pill path (pills show none). A row renders an attention indicator only when
+     * `attentionCount` is a positive number.
+     */
+    attentionCount: number | null;
+    overdueCount: number | null;
 };
 
 /** A process tile — the collapsed state of a process on the Workspace surface. */
@@ -185,6 +193,8 @@ export function workViewLinkFromWorkQueuePreview(
         isActive: false,
         count,
         href: entry.href,
+        attentionCount: entry.attention_count ?? null,
+        overdueCount: entry.overdue_count ?? null,
     };
 }
 
@@ -215,6 +225,9 @@ export function workViewLinkModelsFromConfiguredViews(
             isActive: view.id === args.activeWorkViewId,
             count: args.countForView?.(view) ?? null,
             href: null,
+            // Work Unit pills show no per-view operational indicators (Workspace-tile only).
+            attentionCount: null,
+            overdueCount: null,
         }));
 }
 

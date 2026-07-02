@@ -82,8 +82,8 @@ describe("processTileModelFromLandingCard", () => {
         });
         expect(tile.performanceMetrics).toEqual([{ label: "Tour conversion", value: "42%" }]);
         expect(tile.workViews).toEqual([
-            { id: "new_leads", label: "New Leads", isActive: false, count: null, href: "/workspace/work-unit/new-leads" },
-            { id: "tours", label: "Tours", isActive: false, count: null, href: "/workspace/work-unit/tours" },
+            { id: "new_leads", label: "New Leads", isActive: false, count: null, href: "/workspace/work-unit/new-leads", attentionCount: null, overdueCount: null },
+            { id: "tours", label: "Tours", isActive: false, count: null, href: "/workspace/work-unit/tours", attentionCount: null, overdueCount: null },
         ]);
     });
 
@@ -194,14 +194,14 @@ describe("workViewLinkModelsFromConfiguredViews", () => {
         });
 
         expect(links).toEqual([
-            { id: "wv-a", label: "New Leads", isActive: false, count: null, href: null },
-            { id: "wv-b", label: "Tours", isActive: true, count: 5, href: null },
+            { id: "wv-a", label: "New Leads", isActive: false, count: null, href: null, attentionCount: null, overdueCount: null },
+            { id: "wv-b", label: "Tours", isActive: true, count: 5, href: null, attentionCount: null, overdueCount: null },
         ]);
     });
 
     it("resolves counts as null when no resolver is supplied", () => {
         const links = workViewLinkModelsFromConfiguredViews([workView()], { activeWorkViewId: null });
-        expect(links).toEqual([{ id: "wv-1", label: "All Leads", isActive: false, count: null, href: null }]);
+        expect(links).toEqual([{ id: "wv-1", label: "All Leads", isActive: false, count: null, href: null, attentionCount: null, overdueCount: null }]);
     });
 });
 

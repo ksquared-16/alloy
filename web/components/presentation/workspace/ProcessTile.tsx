@@ -1,16 +1,20 @@
 "use client";
 
 /**
- * Presentation Runtime V2 — WS.PROCESS_TILE: the collapsed state of a process.
+ * Presentation Runtime V2 — WS.PROCESS_TILE: a process's operational launchpad.
  *
- * Clicking the tile expands the process — soft nav to `/workspace/work-unit/<slug>`
- * (the only navigation on the Workspace surface). Per the navigation contract, loading
- * belongs to the destination: no local spinner, just intent-warm the slug route on
- * pointer intent so the destination paints warm.
+ * The tile answers "where should I work?" — not "how many records exist?". It leads with the
+ * process's meaningful operational STATE (what needs attention), makes the configured Work
+ * Views the body (each row is "open this work"), and keeps counts visible but secondary.
+ *
+ * The tile itself is NOT interactive: only the Work View rows and the Open → control respond
+ * to the pointer (no whole-card hover, no whole-card click). Open → soft-navigates to the
+ * process entry; per the navigation contract loading belongs to the destination, so there is
+ * no local spinner — the slug route is warmed on pointer intent instead.
  */
 
 import { useMemo } from "react";
-import { useRouter } from "next/navigation";
+import Link from "next/link";
 import type { ProcessTileModel } from "@/lib/presentation/runtime";
 import {
     parseOperatorWorkUnitEntryHref,
@@ -22,38 +26,27 @@ import {
 } from "@/components/presentation/runtimeLabels";
 import { WorkViewList } from "./WorkViewList";
 
-const TILE_METRIC_PREVIEW_CAP = 3;
-
 export function ProcessTile({ process }: { process: ProcessTileModel }) {
-    const router = useRouter();
     const slug = useMemo(
         () => parseOperatorWorkUnitEntryHref(process.entryHref).workUnitSlug,
         [process.entryHref],
     );
-
     const warm = () => {
         if (slug) void warmWorkUnitSlugRoute(slug, "workspace_tile");
     };
 
-    const hasAttention = process.needsAttentionCount != null && process.needsAttentionCount > 0;
-    const metrics = process.performanceMetrics.slice(0, TILE_METRIC_PREVIEW_CAP);
+    const attention = process.needsAttentionCount;
+    const hasAttention = attention != null && attention > 0;
 
     return (
-        <div
+        <article
             {...runtimeLabelProps(PRESENTATION_RUNTIME_LABELS.processTile)}
+            data-alloy-section="WS.PROCESS_TILE"
             data-process-id={process.id}
-            role="link"
-            tabIndex={0}
-            aria-label={`Open ${process.label}`}
-            onPointerEnter={warm}
-            onPointerDown={warm}
-            onClick={() => router.push(process.entryHref)}
-            onKeyDown={(e) => {
-                if (e.key === "Enter") router.push(process.entryHref);
-            }}
-            className="group flex h-full min-h-[10rem] cursor-pointer flex-col overflow-hidden rounded-xl border border-alloy-juniper/20 border-l-[4px] border-l-alloy-juniper/70 bg-white shadow-[0_1px_4px_rgba(15,23,42,0.05)] transition-colors hover:border-alloy-juniper/35 hover:shadow-[0_4px_12px_rgba(0,162,131,0.12)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-alloy-juniper/60"
+            className="flex h-full min-h-[10rem] flex-col overflow-hidden rounded-xl border border-alloy-juniper/20 border-l-[4px] border-l-alloy-juniper/70 bg-white shadow-[0_1px_4px_rgba(15,23,42,0.05)]"
         >
             <div className="flex flex-1 flex-col px-4 pb-3 pt-3.5">
+                {/* Identity — configured process label + description (not a link). */}
                 <div>
                     <h3 className="min-w-0 text-base font-semibold leading-snug text-alloy-midnight">
                         {process.label}
@@ -65,79 +58,64 @@ export function ProcessTile({ process }: { process: ProcessTileModel }) {
                     ) : null}
                 </div>
 
-                {metrics.length ? (
-                    <ul className="mt-2.5 space-y-1.5">
-                        {metrics.map((metric) => {
-                            const attentionMetric =
-                                metric.label.toLowerCase().includes("needs attention") &&
-                                metric.value !== "—";
-                            return (
-                                <li
-                                    key={metric.label}
-                                    className="flex items-baseline justify-between gap-2 text-xs"
-                                >
-                                    <span className="min-w-0 truncate font-medium text-alloy-midnight/55">
-                                        {metric.label}
-                                    </span>
-                                    <span
-                                        className={`shrink-0 font-semibold tabular-nums ${
-                                            attentionMetric ? "text-alloy-ember" : "text-alloy-midnight"
-                                        }`}
-                                    >
-                                        {metric.value}
-                                    </span>
-                                </li>
-                            );
-                        })}
-                    </ul>
+                {/* Operational state — the headline. Attention forward (ember) when work is
+                    waiting, a calm "clear" when the process is up to date; hidden when the
+                    rollup didn't resolve (never a fabricated state). */}
+                {attention != null ? (
+                    <div className="mt-2.5 flex items-center gap-1.5 text-xs">
+                        {hasAttention ? (
+                            <>
+                                <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-alloy-ember" />
+                                <span className="font-semibold text-alloy-ember">
+                                    {attention.toLocaleString()} need attention
+                                </span>
+                            </>
+                        ) : (
+                            <>
+                                <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-alloy-juniper/50" />
+                                <span className="font-medium text-alloy-midnight/50">
+                                    Nothing needs attention
+                                </span>
+                            </>
+                        )}
+                    </div>
                 ) : null}
 
+                {/* Work Views — the launchpad body. */}
                 {process.workViews.length ? (
-                    <div className="mt-2.5 space-y-1.5 border-t border-alloy-midnight/8 pt-2.5">
-                        <p className="text-[9px] font-bold uppercase tracking-[0.1em] text-alloy-midnight/45">
+                    <div className="mt-2.5 border-t border-alloy-midnight/8 pt-2.5">
+                        <p className="mb-1 text-[9px] font-bold uppercase tracking-[0.1em] text-alloy-midnight/45">
                             Work Views
                         </p>
                         <WorkViewList workViews={process.workViews} />
                     </div>
                 ) : null}
 
-                <div className="mt-auto flex items-end justify-between gap-3 border-t border-alloy-midnight/8 pt-2.5">
-                    {/* A stat renders only when its rollup resolved (non-null) — missing data
-                        is hidden, never presented as a meaningful value. */}
-                    <div className="flex gap-4">
-                        {process.activeRecordCount != null ? (
-                            <div>
-                                <div className="text-[8px] font-semibold uppercase tracking-wide text-alloy-midnight/40">
-                                    Active
-                                </div>
-                                <div className="text-[11px] font-semibold tabular-nums text-alloy-midnight/70">
-                                    {process.activeRecordCount.toLocaleString()}
-                                </div>
-                            </div>
-                        ) : null}
-                        {process.needsAttentionCount != null ? (
-                            <div>
-                                <div className="text-[8px] font-semibold uppercase tracking-wide text-alloy-midnight/40">
-                                    Attention
-                                </div>
-                                <div
-                                    className={`text-[11px] font-semibold tabular-nums ${
-                                        hasAttention ? "text-alloy-ember" : "text-alloy-midnight/70"
-                                    }`}
-                                >
-                                    {process.needsAttentionCount.toLocaleString()}
-                                </div>
-                            </div>
-                        ) : null}
-                    </div>
-                    <span
-                        aria-hidden
-                        className="shrink-0 rounded-md border border-alloy-juniper/35 bg-alloy-juniper/10 px-2.5 py-1.5 text-xs font-bold tracking-wide text-alloy-juniper transition-colors group-hover:border-alloy-juniper group-hover:bg-alloy-juniper group-hover:text-white"
+                {/* Footer — secondary count + the Open control (one of the two interactive
+                    elements; the tile body itself never navigates). */}
+                <div className="mt-auto flex items-center justify-between gap-3 border-t border-alloy-midnight/8 pt-2.5">
+                    {process.activeRecordCount != null ? (
+                        <span className="text-[11px] text-alloy-midnight/45">
+                            <span className="font-semibold tabular-nums text-alloy-midnight/60">
+                                {process.activeRecordCount.toLocaleString()}
+                            </span>{" "}
+                            active
+                        </span>
+                    ) : (
+                        <span aria-hidden />
+                    )}
+                    <Link
+                        href={process.entryHref}
+                        aria-label={`Open ${process.label}`}
+                        onPointerEnter={warm}
+                        onPointerDown={warm}
+                        onFocus={warm}
+                        className="shrink-0 rounded-md border border-alloy-juniper/35 bg-alloy-juniper/10 px-2.5 py-1.5 text-xs font-bold tracking-wide text-alloy-juniper no-underline transition-colors hover:border-alloy-juniper hover:bg-alloy-juniper hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-alloy-juniper"
                     >
                         Open →
-                    </span>
+                    </Link>
                 </div>
             </div>
-        </div>
+        </article>
     );
 }

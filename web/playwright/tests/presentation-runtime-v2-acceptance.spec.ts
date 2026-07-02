@@ -45,7 +45,21 @@ test.describe("Presentation Runtime V2 acceptance", () => {
         await expect(page.locator(L("WS.HEADER_CALCULATIONS"))).toBeVisible();
         await expect(page.locator(L("WS.PROCESS_GRID"))).toBeVisible();
         const tiles = page.locator(L("WS.PROCESS_TILE"));
-        await expect(tiles.first()).toBeVisible({ timeout: 60_000 });
+        const firstTileEl = tiles.first();
+        await expect(firstTileEl).toBeVisible({ timeout: 60_000 });
+
+        // WS.PROCESS_TILE interaction contract: the tile is NOT itself a link/button — only
+        // its Work View rows and the Open control respond to the pointer. Each tile owns one
+        // WS.PROCESS_TILE_WORK_VIEWS section.
+        await expect(firstTileEl).toHaveJSProperty("tagName", "ARTICLE");
+        expect(await firstTileEl.getAttribute("role")).toBeNull();
+        await expect(firstTileEl.locator("a", { hasText: "Open →" })).toHaveCount(1);
+        await expect(
+            firstTileEl.locator(`${L("WS.PROCESS_TILE_WORK_VIEWS")} a[href*="/work-unit/"]`).first(),
+        ).toBeVisible();
+        expect(
+            await firstTileEl.locator('[data-alloy-section="WS.PROCESS_TILE_WORK_VIEWS"]').count(),
+        ).toBe(1);
 
         // Single ownership on the live DOM (tiles/views are per-item labels, counted > 0).
         for (const single of ["WS.SURFACE", "WS.HEADER", "WS.HEADER_CALCULATIONS", "WS.PROCESS_GRID"]) {
@@ -62,7 +76,8 @@ test.describe("Presentation Runtime V2 acceptance", () => {
 
         const firstTile = page.locator(L("WS.PROCESS_TILE")).first();
         await expect(firstTile).toBeVisible({ timeout: 60_000 });
-        await firstTile.click();
+        // The tile body is inert — the Open control navigates to the process entry.
+        await firstTile.locator("a", { hasText: "Open →" }).click();
 
         // Path routing, no query-string routing.
         await page.waitForURL(/\/workspace\/work-unit\/[a-z0-9-]+/, { timeout: 120_000 });

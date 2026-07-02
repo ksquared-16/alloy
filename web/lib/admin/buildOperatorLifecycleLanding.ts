@@ -65,6 +65,14 @@ export type OperatorLifecycleWorkQueuePreview = {
     base_queue_key?: string | null;
     /** Label-derived route key (platform `_` form) — `href`'s slug; the active-state match key. */
     route_key?: string | null;
+    /**
+     * Secondary, decision-supporting operational signals for this view — records needing
+     * attention / overdue, from the operational projection's already-fetched base rows
+     * (`computeWorkViewOperationalSignals`). Undefined until the client rollup pass resolves
+     * them (or when base rows are unavailable); null-safe consumers show no indicator then.
+     */
+    attention_count?: number | null;
+    overdue_count?: number | null;
 };
 
 export type OperatorLifecycleLandingCard = {

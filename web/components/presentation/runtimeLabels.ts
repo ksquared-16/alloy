@@ -12,7 +12,7 @@ export const PRESENTATION_RUNTIME_LABELS = {
     workspaceHeaderCalculations: "WS.HEADER_CALCULATIONS",
     processGrid: "WS.PROCESS_GRID",
     processTile: "WS.PROCESS_TILE",
-    workViewList: "WS.WORK_VIEWS",
+    processTileWorkViews: "WS.PROCESS_TILE_WORK_VIEWS",
     workUnitSurface: "WU.SURFACE",
     workUnitHeader: "WU.HEADER",
     workUnitAnswers: "WU.ANSWERS",

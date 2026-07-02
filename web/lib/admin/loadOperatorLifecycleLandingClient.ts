@@ -7,9 +7,11 @@ import {
 } from "@/lib/admin/buildOperatorLifecycleLanding";
 import {
     applyOperatorLifecycleLandingRollups,
+    applyWorkViewOperationalSignalsToCards,
     resolveLifecycleRollupsFromDepartmentSummaries,
     type LifecycleDepartmentSummariesResponse,
 } from "@/lib/admin/resolveOperatorLifecycleLandingRollups";
+import { savedWorkViewsFromDepartmentMetadata } from "@/lib/lifecycle/resolveWorkViewRuntimeContext";
 import {
     enrichEnrollmentOperationalSurfaceForDepartment,
     enrollmentOperationalSurfaceNeedsHydration,
@@ -20,7 +22,12 @@ import { pickDeptPipelineWorkUnit } from "@/lib/workspace/pickDeptPipelineWorkUn
 import { tryLoadWorkUnitQueueDefinitionBundle } from "@/lib/config/queueDefinitionV2Runtime";
 import { getQueueUiConfig } from "@/lib/ui-v2/queueUiConfig";
 import { findAllRecordsQueueKey } from "@/lib/workspace/workUnitQueueDerived";
-import type { OperationalProjectionRow, StatusStageMap } from "@/lib/lifecycle/operationalProjection";
+import {
+    computeWorkViewOperationalSignals,
+    type OperationalProjectionRow,
+    type StatusStageMap,
+    type WorkViewOperationalSignals,
+} from "@/lib/lifecycle/operationalProjection";
 
 /** Cap on all-records base rows fetched for the operational projection (per department pipeline). */
 const PROJECTION_BASE_ROWS_LIMIT = 500;
@@ -164,6 +171,46 @@ async function fetchLifecycleRollupsForCards(
     return enriched;
 }
 
+/**
+ * Per-Work-View operational signals (attention/overdue) for the process tiles — generic,
+ * from the operational projection's base rows + each view's predicates (no process-specific
+ * logic). Fetched INDEPENDENTLY of the department queue-summaries so a slow/hung summaries
+ * endpoint never hides them (they ride only the base-rows queue fetch, which is dedupe-cached
+ * and shared with the projection). Cards without resolvable base rows are returned unchanged.
+ */
+async function fetchWorkViewOperationalSignalsForCards(
+    cards: OperatorLifecycleLandingCard[],
+    workUnits: OperatorLifecycleWorkUnitRow[],
+    departments: OperatorLifecycleDepartmentRow[],
+    init: RequestInit,
+): Promise<OperatorLifecycleLandingCard[]> {
+    const departmentIds = [...new Set(cards.map((c) => c.departmentId).filter(Boolean))];
+    if (!departmentIds.length) return cards;
+
+    const statusStageMap = await fetchOpportunityStatusStageMap(init);
+    const departmentsById = new Map(departments.map((d) => [d.id, d] as const));
+    const signalsByDepartment = new Map<string, Record<string, WorkViewOperationalSignals>>();
+
+    await Promise.all(
+        departmentIds.map(async (departmentId) => {
+            const baseRows = await fetchPipelineBaseRowsForDepartment(departmentId, workUnits, init);
+            if (!baseRows?.length) return;
+            const workViews = savedWorkViewsFromDepartmentMetadata(departmentsById.get(departmentId)?.metadata);
+            if (!workViews.length) return;
+            signalsByDepartment.set(
+                departmentId,
+                computeWorkViewOperationalSignals({
+                    baseRows,
+                    workViews,
+                    statusStageMap: statusStageMap ?? undefined,
+                }),
+            );
+        }),
+    );
+
+    return applyWorkViewOperationalSignalsToCards(cards, signalsByDepartment);
+}
+
 export async function loadOperatorLifecycleLandingCards(options?: {
     force?: boolean;
     /** When false, skip department queue-summary rollups (metrics show —). */
@@ -196,19 +243,29 @@ export async function loadOperatorLifecycleLandingCards(options?: {
         });
 
         if (options?.includeRollups !== false && cards.length) {
-            try {
-                // Rollups are enrichment, never a gate: sidebar/workspace NAV renders from the
-                // base cards, so a slow or hung summaries endpoint must not wedge navigation
-                // ("Loading processes…" forever). Bounded wait, then null metric fallbacks.
-                const ROLLUPS_BUDGET_MS = 8_000;
-                const enriched = await Promise.race([
-                    fetchLifecycleRollupsForCards(cards, workUnits, departments, init),
-                    new Promise<null>((resolve) => setTimeout(() => resolve(null), ROLLUPS_BUDGET_MS)),
-                ]);
-                if (enriched) cards = enriched;
-            } catch {
-                // Rollups are optional — cards still render with null metric fallbacks.
-            }
+            const BUDGET_MS = 8_000;
+            const withBudget = (work: Promise<OperatorLifecycleLandingCard[]>) =>
+                Promise.race([
+                    work,
+                    new Promise<null>((resolve) => setTimeout(() => resolve(null), BUDGET_MS)),
+                ]).catch(() => null);
+
+            // Per-view operational signals ride only the base-rows queue fetch — resolved FIRST
+            // and independently so the tiles' attention/overdue context survives even when the
+            // summaries endpoint below is slow or hung.
+            const withSignals = await withBudget(
+                fetchWorkViewOperationalSignalsForCards(cards, workUnits, departments, init),
+            );
+            if (withSignals) cards = withSignals;
+
+            // Summary rollups (active/needs-attention counts + enrollment surface) are enrichment,
+            // never a gate: sidebar/workspace NAV renders from the base cards, so a slow/hung
+            // summaries endpoint must not wedge navigation. Bounded; on timeout the signal-enriched
+            // cards above are preserved.
+            const enriched = await withBudget(
+                fetchLifecycleRollupsForCards(cards, workUnits, departments, init),
+            );
+            if (enriched) cards = enriched;
         }
 
         cachedCards = cards;

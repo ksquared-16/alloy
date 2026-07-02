@@ -1,5 +1,6 @@
 import { pickDeptPipelineWorkUnit } from "@/lib/workspace/pickDeptPipelineWorkUnit";
 import type { OperatorLifecycleLandingCard, OperatorLifecycleWorkUnitRow } from "@/lib/admin/buildOperatorLifecycleLanding";
+import type { WorkViewOperationalSignals } from "@/lib/lifecycle/operationalProjection";
 
 export type LifecycleQueueSummaryRow = {
     key?: string;
@@ -75,5 +76,29 @@ export function applyOperatorLifecycleLandingRollups(
             activeRecordCount: rollups.activeRecordCount,
             needsAttentionCount: rollups.needsAttentionCount,
         };
+    });
+}
+
+/**
+ * Attach per-Work-View operational signals (attention/overdue) to a card's work-queue
+ * entries, matched by `work_view_id` within the card's department. Signals are secondary
+ * decision context; a view with no computed signals is left untouched (no indicator).
+ */
+export function applyWorkViewOperationalSignalsToCards(
+    cards: OperatorLifecycleLandingCard[],
+    signalsByDepartment: ReadonlyMap<string, Record<string, WorkViewOperationalSignals>>,
+): OperatorLifecycleLandingCard[] {
+    return cards.map((card) => {
+        const signals = signalsByDepartment.get(card.departmentId);
+        if (!signals) return card;
+        let changed = false;
+        const workQueues = card.workQueues.map((entry) => {
+            const viewId = entry.work_view_id?.trim();
+            const sig = viewId ? signals[viewId] : undefined;
+            if (!sig) return entry;
+            changed = true;
+            return { ...entry, attention_count: sig.attentionCount, overdue_count: sig.overdueCount };
+        });
+        return changed ? { ...card, workQueues } : card;
     });
 }
