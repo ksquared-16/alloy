@@ -123,6 +123,13 @@ test.describe("Presentation Runtime V2 acceptance", () => {
             await expect(
                 page.locator(".adminv2-drawer-modal-panel, .adminv2-drawer-sidebar-panel"),
             ).toHaveCount(0);
+            // Loading contract: with a record selected the FP surface never shows the
+            // canonical "Preparing…" loading surface — the pending skeleton is a published
+            // card grid, and the resolved body swaps content in place (no layout flash).
+            await expect(
+                page.locator(`${L("FP.SURFACE")} [data-alloy-canonical-loading="true"]`),
+            ).toHaveCount(0);
+            await expect(page.locator(L("FP.SURFACE"))).not.toContainText("Preparing");
             // Selected row carries the persistent rail for the open record.
             await expect(
                 page.locator(`${L("WU.QUEUE_ROW")}[data-queue-row-active="true"]`).first(),

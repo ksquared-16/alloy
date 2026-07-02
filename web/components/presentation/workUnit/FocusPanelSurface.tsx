@@ -64,6 +64,7 @@ export function FocusPanelSurface({
     return (
         <div
             {...runtimeLabelProps(PRESENTATION_RUNTIME_LABELS.focusPanelSurface)}
+            data-alloy-section="FP.SURFACE"
             data-focus-panel-open={isOpen ? "true" : "false"}
         >
             <FocusPanelOpenContext.Provider value={value}>

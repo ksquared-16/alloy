@@ -23,10 +23,27 @@
  *
  * Action modals (create work, tour, send form, …) still portal to `document.body` via
  * `VmDrawerActionModalsPortal` — they are transient action chrome, not record surface.
+ *
+ * PENDING (loading contract): while the selected subject's payload resolves, the body
+ * renders `FocusPanelSummarySkeleton` — the SAME published-grid strategy the resolved
+ * body will, with inert pulse placeholders — so the layout does not swap (no centered
+ * "Preparing…" surface, no card-grid pop-in). On a row → row switch `holdPriorPayload`
+ * holds the PRIOR resolved grid instead of the skeleton. The seed header
+ * (`FocusPanelCompactHeader`) is the switch acknowledgment; the sticky header container
+ * reserves a stable min-height so seed → resolved never jumps vertically.
+ *
+ * DRILL-IN (deferred gap): drill-in inside the Focus Panel uses the existing in-panel
+ * coordination model (`coordination.requestFocus` — a referencing card asks an owner
+ * card to open a Perspective; ESC/back pops the depth history). There is NO Open-Surface
+ * registry / recursion yet (Experience Builder V3's "Expanded = Open Surface" is not
+ * wired to a runtime registry). Open Surface recursion is a DOCUMENTED deferred gap;
+ * this pass preserves the current in-panel handoff model and adds no one-off drill paths.
+ * @see docs/platform/experience/presentation-runtime-v2.md
  */
 
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import FocusPanelCompactHeader from "@/components/admin/focusPanel/FocusPanelCompactHeader";
+import FocusPanelSummarySkeleton from "@/components/admin/focusPanel/FocusPanelSummarySkeleton";
 import OpportunityFocusPanelHeader from "@/components/admin/focusPanel/OpportunityFocusPanelHeader";
 import OpportunityFocusPanelModeBody from "@/components/admin/focusPanel/OpportunityFocusPanelModeBody";
 import OpportunityDrawerBodySaveBar from "@/components/admin/vmDrawer/OpportunityDrawerBodySaveBar";
@@ -40,7 +57,6 @@ import { resolvePortalRecordManageAccess } from "@/lib/admin/adminPortalRolePick
 import { resolveFocusPanelSubjectReveal } from "@/lib/admin/drawer/focusPanelSubjectReveal";
 import { formatOpportunityInquiryDrawerTitle } from "@/lib/admin/drawer/opportunityInquiryDrawerTitle";
 import { useBosOpportunityDrawerContextSeed } from "@/lib/adminV2/bos/useBosDrawerOperationalContextSeed";
-import { AlloyCanonicalLoadingSurface } from "@/lib/adminV2/runtime/alloyCanonicalLoadingSurface";
 import { useFocusPanelMode } from "@/lib/adminV2/runtime/focusPanel/useFocusPanelMode";
 import { resolveOpportunityVmStatusCanMutate } from "@/lib/adminV2/viewModel/drawer/vmRuntime/resolveOpportunityVmStatusCanMutate";
 import { resolveOpportunityVmStatusLabel } from "@/lib/adminV2/viewModel/drawer/vmRuntime/resolveOpportunityVmStatusLabel";
@@ -192,6 +208,15 @@ export function InlineOpportunityFocusPanel() {
             { displayVm, record }
             : null;
 
+    // Row → row switch: hold the PRIOR resolved grid (loading contract) instead of the
+    // skeleton. During a hold `displayVm`/`record` still carry the prior subject's payload
+    // (the payload hook returns the held VM), so the previously-resolved composed grid stays
+    // on screen while the new subject fetches — no flash back to a placeholder.
+    const heldPrior =
+        !resolved && holdPriorPayload && displayVm != null && record != null ?
+            { displayVm, record }
+            : null;
+
     const seedTitle = drawer.opportunityQueuePreviewSeed?.title?.trim() || opportunitySingular;
 
     return (
@@ -203,7 +228,12 @@ export function InlineOpportunityFocusPanel() {
                 aria-label="Focus Panel"
                 className="flex max-h-[calc(100vh-6rem)] min-h-0 flex-col overflow-hidden rounded-lg border border-alloy-stone/18 bg-white"
             >
-                <div className="sticky top-0 z-10 shrink-0 border-b border-alloy-stone/12 bg-white">
+                <div
+                    className="sticky top-0 z-10 shrink-0 border-b border-alloy-stone/12 bg-white"
+                    // Reserve a stable height so the seed compact header (short) → resolved
+                    // header (taller: status control + actions) does not jump vertically.
+                    style={{ minHeight: "5.25rem" }}
+                >
                     {resolved ?
                         <OpportunityFocusPanelHeader
                             title={drawerTitle}
@@ -269,11 +299,23 @@ export function InlineOpportunityFocusPanel() {
                             onSelectTab={selectFromDrawerTab}
                             onHeaderAction={onActionSelect}
                         />
-                    : subjectPending ?
-                        <AlloyCanonicalLoadingSurface
-                            message={`Preparing ${opportunitySingular}…`}
-                            data-testid="inline-focus-panel-pending"
+                    : heldPrior ?
+                        // Hold the prior resolved grid during a row → row switch (no flash).
+                        <OpportunityFocusPanelModeBody
+                            mode={focusPanelMode}
+                            displayVm={heldPrior.displayVm}
+                            drawerId={String(heldPrior.displayVm.entity.id)}
+                            record={heldPrior.record}
+                            drawerTitle={drawerTitle}
+                            statusLabel={statusLabel}
+                            canMutate={statusCanMutate}
+                            onSelectTab={selectFromDrawerTab}
+                            onHeaderAction={onActionSelect}
                         />
+                    : subjectPending ?
+                        // Pending final-layout load: the published-grid skeleton (same
+                        // strategy + cell positions as resolved) — never a centered spinner.
+                        <FocusPanelSummarySkeleton mode={focusPanelMode} />
                         : null}
                 </div>
                 {resolved ?

@@ -52,6 +52,7 @@ import { appendWorkspaceSiteToPath, appendWorkspaceSiteToUrl } from "@/lib/admin
 import { resolveWorkUnitQueueRowsFetchLimit } from "@/lib/adminV2/workUnitQueueRowsFetchLimit";
 import { dedupeAdminFetch } from "@/lib/workspace/workspaceAdminFetchDedupe";
 import { workspaceDataFetchInit } from "@/lib/workspace/workspaceDataFetch";
+import { prefetchOpportunityDrawerOnRowIntent } from "@/lib/admin/opportunityDrawerIntentPrefetch";
 import type { SurfaceDoc } from "@/lib/platform/surfaceBuilder/surfaceDefinition";
 import type { QueueItemsResult, QueueSummary } from "@/lib/queues/types";
 import { useOperationalAnswers } from "./useOperationalAnswers";
@@ -501,6 +502,13 @@ export function useWorkUnitSurfaceRuntime(): WorkUnitSurfaceRuntime {
     );
 
     // ── First-row auto-open: once, after the first queue settle (doctrine acceptance) ────
+    // WARM step: before the auto-open commits, prefetch the first record's drawer VM so the
+    // inline Focus Panel resolves fast + coordinated — `useOpportunityDrawerVmPayload` finds
+    // the payload warm and swaps skeleton → published grid with minimal pending time. This
+    // reuses the existing hover/focus intent prefetch (no bespoke fetch); the published Focus
+    // Panel summary doc is already module-cached (the skeleton mounting triggers it early).
+    // Queue behavior is NOT serialized behind FP: the warm call is fire-and-forget and the
+    // same auto-open guards (deep-link / drawer-open / zero-rows) are unchanged.
     const autoOpenDoneRef = useRef(false);
     useEffect(() => {
         if (autoOpenDoneRef.current) return;
@@ -509,7 +517,25 @@ export function useWorkUnitSurfaceRuntime(): WorkUnitSurfaceRuntime {
         if (slugRoute?.routeRecordId) return; // deep link owns the Focus Panel subject
         if ((drawer.type != null && drawer.id != null) || isOpportunityDrawerOpening) return;
         const first = rows[0];
-        if (first) openRecord(first);
+        if (!first) return;
+        // Warm the first opportunity record's drawer VM as/just before the auto-open (same
+        // resolved id + workspace context openRecord uses), so the payload is in-flight/ready
+        // by the time the inline panel mounts.
+        if (first.entityType === "opportunity" && departmentId && workUnitId) {
+            const warmId = first.context?.drawer_open?.entity_id?.trim() || first.entityId;
+            if (warmId) {
+                prefetchOpportunityDrawerOnRowIntent(
+                    warmId,
+                    {
+                        work_unit_id: workUnitId,
+                        department_id: departmentId,
+                        work_view_id: runtimeCtx.workViewId ?? null,
+                    },
+                    opportunityQueuePreviewSeedFromRowContext(first.context),
+                );
+            }
+        }
+        openRecord(first);
     }, [
         queueLoading,
         queueResult,
@@ -519,6 +545,9 @@ export function useWorkUnitSurfaceRuntime(): WorkUnitSurfaceRuntime {
         drawer.id,
         isOpportunityDrawerOpening,
         openRecord,
+        departmentId,
+        workUnitId,
+        runtimeCtx.workViewId,
     ]);
 
     // ── Header identity: configured labels ONLY (no internal keys, no humanized slugs) ──
