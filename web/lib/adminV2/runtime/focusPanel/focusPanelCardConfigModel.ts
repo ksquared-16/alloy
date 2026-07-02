@@ -204,9 +204,13 @@ export type FocusPanelConfiguredRelatedView = {
     label: string;
 };
 
-/** The group legacy flat `fields` migrate into when a card has no explicit groups. */
+/**
+ * The group legacy flat `fields` migrate into when a card has no explicit groups.
+ * The internal id is stable ("details"); the operator-facing label is "Overview" —
+ * V3 doctrine forbids exposing the abstract "Details" to operators (§6 naming).
+ */
 export const DEFAULT_EVIDENCE_GROUP_ID = "details" as const;
-export const DEFAULT_EVIDENCE_GROUP_LABEL = "Details" as const;
+export const DEFAULT_EVIDENCE_GROUP_LABEL = "Overview" as const;
 
 /** Complete per-card configuration persisted on the section metadata. */
 export type FocusPanelCardConfig = {
