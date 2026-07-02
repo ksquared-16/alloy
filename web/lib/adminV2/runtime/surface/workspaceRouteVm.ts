@@ -1,4 +1,5 @@
 import type { OperatorLifecycleLandingCard } from "@/lib/admin/buildOperatorLifecycleLanding";
+import type { WorkspaceHeaderCalculationCardVm } from "@/lib/presentation/runtime/workspaceHeaderCards";
 
 /**
  * Canonical server-composed **Route VM** for the `/workspace` surface
@@ -25,6 +26,12 @@ export type WorkspaceRouteVm = {
     };
     firstPaint: {
         lifecycleCards: readonly OperatorLifecycleLandingCard[];
+        /**
+         * Published Workspace Header cards (server-resolved values). Null when the org has
+         * no published surface or the loader failed — the client runtime falls back to the
+         * code-owned default strip through the same VM/renderer path.
+         */
+        headerCalculations: readonly WorkspaceHeaderCalculationCardVm[] | null;
     };
 };
 
@@ -33,7 +40,7 @@ export const EMPTY_WORKSPACE_ROUTE_VM: WorkspaceRouteVm = {
     surface: "workspace",
     version: 1,
     context: { orgId: null, orgName: null, accessScopeFingerprint: "" },
-    firstPaint: { lifecycleCards: [] },
+    firstPaint: { lifecycleCards: [], headerCalculations: null },
 };
 
 /**
@@ -45,11 +52,16 @@ export const EMPTY_WORKSPACE_ROUTE_VM: WorkspaceRouteVm = {
 export function composeWorkspaceRouteVm(input: {
     context: WorkspaceRouteVm["context"];
     lifecycleCards: readonly OperatorLifecycleLandingCard[];
+    /** Published Workspace Header cards — omitted/null means "not published / unavailable". */
+    headerCalculations?: readonly WorkspaceHeaderCalculationCardVm[] | null;
 }): WorkspaceRouteVm {
     return {
         surface: "workspace",
         version: 1,
         context: input.context,
-        firstPaint: { lifecycleCards: input.lifecycleCards },
+        firstPaint: {
+            lifecycleCards: input.lifecycleCards,
+            headerCalculations: input.headerCalculations ?? null,
+        },
     };
 }

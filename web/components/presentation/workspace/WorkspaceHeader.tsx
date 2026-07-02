@@ -12,7 +12,10 @@ import {
 
 export function WorkspaceHeader({ orgName }: { orgName: string | null }) {
     return (
-        <header {...runtimeLabelProps(PRESENTATION_RUNTIME_LABELS.workspaceHeader)}>
+        <header
+            {...runtimeLabelProps(PRESENTATION_RUNTIME_LABELS.workspaceHeader)}
+            data-alloy-section="WS.HEADER"
+        >
             {orgName ? (
                 <>
                     <p className="text-[10px] font-medium uppercase tracking-[0.1em] text-alloy-stone">

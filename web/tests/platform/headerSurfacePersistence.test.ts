@@ -126,6 +126,45 @@ describe("Header placement ⇄ SurfaceDoc mapping", () => {
     });
 });
 
+describe("configured title round-trip (publish keeps card titles)", () => {
+    it("headerViewsToDoc surfaces the persisted visualization label as config.title", () => {
+        const doc = headerViewsToDoc(views);
+        // sortOrder 0 first → "Attn", then "Leads"
+        expect(doc.sections[0].cards[0].config).toMatchObject({ title: "Attn" });
+        expect(doc.sections[0].cards[1].config).toMatchObject({ title: "Leads" });
+    });
+
+    it("headerDocToDesired carries the configured title (trimmed), drops blanks", () => {
+        const doc: SurfaceDoc = {
+            sections: [
+                {
+                    sectionId: IMPLICIT_SECTION_ID,
+                    title: "",
+                    cards: [
+                        { instanceId: "a", cardTypeKey: "kpi", contentId: "enrollment.lead_count", config: { rendererKey: "kpi_card", title: "  New families  " } },
+                        { instanceId: "b", cardTypeKey: "kpi", contentId: "ops.needs_attention_count", config: { rendererKey: "kpi_card", title: "   " } },
+                        { instanceId: "c", cardTypeKey: "kpi", contentId: "ops.work_overdue_count", config: { rendererKey: "kpi_card" } },
+                    ],
+                },
+            ],
+        };
+        const desired = headerDocToDesired(doc);
+        expect(desired[0]).toMatchObject({ sourceKey: "enrollment.lead_count", title: "New families" });
+        expect(desired[1]).not.toHaveProperty("title");
+        expect(desired[2]).not.toHaveProperty("title");
+    });
+
+    it("title round-trips view→doc→desired (the publish input carries the operator's title)", () => {
+        const titled: HeaderPlacementView[] = [
+            { id: "t1", sourceKey: "enrollment.lead_count", vizType: "kpi_card", label: "New families", sortOrder: 0 },
+        ];
+        const desired = headerDocToDesired(headerViewsToDoc(titled));
+        // saveHeaderSurfaceDoc persists desired.title as the visualization label, and the
+        // next load re-surfaces that label as config.title — the full cycle is stable.
+        expect(desired[0]).toMatchObject({ sourceKey: "enrollment.lead_count", title: "New families" });
+    });
+});
+
 describe("humanizeSourceKey", () => {
     it("uses the last segment only", () => {
         expect(humanizeSourceKey("ops.work_overdue_count")).toBe("Work overdue count");

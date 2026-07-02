@@ -3,9 +3,11 @@
 /**
  * Presentation Runtime V2 — the ONE render site for operational answers.
  *
- * Both surfaces mount this component (Workspace as WS.ANSWERS, Work Unit as WU.ANSWERS);
- * nothing else renders an OperationalAnswerModel. Answers with a drill href soft-navigate
- * to the canonical work-unit route; exploratory-only answers render non-navigable.
+ * The Work Unit surface mounts this component (WU.ANSWERS); nothing else renders an
+ * OperationalAnswerModel. (The Workspace header strip renders the published Workspace
+ * Header surface via WS.HEADER_CALCULATIONS instead.) Answers with a drill href
+ * soft-navigate to the canonical work-unit route; exploratory-only answers render
+ * non-navigable.
  */
 
 import Link from "next/link";

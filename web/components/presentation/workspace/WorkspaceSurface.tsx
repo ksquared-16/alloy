@@ -13,8 +13,8 @@ import {
     PRESENTATION_RUNTIME_LABELS,
     runtimeLabelProps,
 } from "@/components/presentation/runtimeLabels";
-import { OperationalAnswersRow } from "@/components/presentation/shared/OperationalAnswersRow";
 import { WorkspaceHeader } from "./WorkspaceHeader";
+import { WorkspaceHeaderCalculations } from "./WorkspaceHeaderCalculations";
 import { ProcessGrid } from "./ProcessGrid";
 
 /** House loading style: neutral blocks, no spinners. */
@@ -50,11 +50,13 @@ export function WorkspaceSurface() {
                 <WorkspaceSurfaceSkeleton />
             ) : (
                 <>
-                    <WorkspaceHeader orgName={model.header.orgName} />
-                    <OperationalAnswersRow
-                        answers={model.answers}
-                        label={PRESENTATION_RUNTIME_LABELS.workspaceAnswers}
-                    />
+                    {/* ONE header section: title + published calculation cards commit together
+                        (the Route VM seed makes the cards data-complete at first commit — no
+                        strip skeleton, no pop-in, no layout shift). */}
+                    <section className="flex flex-col gap-3">
+                        <WorkspaceHeader orgName={model.header.orgName} />
+                        <WorkspaceHeaderCalculations cards={model.header.calculations} />
+                    </section>
                     <ProcessGrid processes={model.processes} />
                 </>
             )}

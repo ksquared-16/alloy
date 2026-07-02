@@ -22,6 +22,7 @@ import type { WorkViewConfigV1Stored } from "@/lib/lifecycle/workViewsConfigV1";
 import type { QueueItemsResult } from "@/lib/queues/types";
 import type { OipMetricKey } from "@/lib/metrics/types";
 import type { ResolvedMetricMap } from "@/lib/metrics/fetchResolvedMetrics";
+import type { WorkspaceHeaderCalculationCardVm } from "./workspaceHeaderCards";
 import { findOperationalCalculation } from "@/lib/analytics/calculations/registry";
 import { getDrillContract } from "@/lib/analytics/runtime/drillResolver";
 import { operatorWorkUnitHrefFromKey } from "@/lib/admin/canonicalOperatorRoutes";
@@ -84,8 +85,15 @@ export type QueueRowModel = {
 
 /** WS.SURFACE — resolved model for the Workspace surface. */
 export type WorkspaceSurfaceModel = {
-    header: { orgName: string | null };
-    answers: OperationalAnswerModel[];
+    header: {
+        orgName: string | null;
+        /**
+         * The published Workspace Header calculation cards (WS.HEADER_CALCULATIONS) —
+         * server-seeded from the Route VM, code-owned fallback when no surface is
+         * published, values refined in place by the warm cache after mount.
+         */
+        calculations: WorkspaceHeaderCalculationCardVm[];
+    };
     processes: ProcessTileModel[];
     ready: boolean;
 };

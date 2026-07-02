@@ -24,6 +24,16 @@ export {
 } from "./types";
 
 export {
+    fallbackWorkspaceHeaderCardVms,
+    refineWorkspaceHeaderCardVms,
+    seedWorkspaceHeaderCalculations,
+    workspaceHeaderCalculationKeys,
+    workspaceHeaderCardVmsFromViews,
+    type WorkspaceHeaderCalculationCardVm,
+    type WorkspaceHeaderResolvedValue,
+} from "./workspaceHeaderCards";
+
+export {
     useOperationalAnswers,
     type OperationalAnswersResult,
     type OperationalAnswersScope,

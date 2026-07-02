@@ -30,6 +30,12 @@ export type OperationalAnswersScope = {
 
 export type OperationalAnswersResult = {
     answers: OperationalAnswerModel[];
+    /**
+     * The raw resolved map for the scope (null until a snapshot/prefetch lands). Card-style
+     * consumers (WS.HEADER_CALCULATIONS) patch values/status in place from this — unlike
+     * `answers`, it keeps no-data entries so cards never appear/disappear.
+     */
+    resolved: ResolvedMetricMap | null;
     /** True once a warm snapshot or the prefetch has settled (answers patch quietly after). */
     settled: boolean;
 };
@@ -86,5 +92,5 @@ export function useOperationalAnswers(scope: OperationalAnswersScope): Operation
         [keys, resolved],
     );
 
-    return { answers, settled };
+    return { answers, resolved, settled };
 }

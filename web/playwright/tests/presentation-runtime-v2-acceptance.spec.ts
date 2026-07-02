@@ -33,14 +33,23 @@ test.describe("Presentation Runtime V2 acceptance", () => {
     test("workspace surface renders the presentation tree", async ({ page }) => {
         await gotoWorkspace(page);
 
+        // WS.HEADER reveal is atomic: title + published calculation cards commit together.
+        // The first commit that shows the header title must ALREADY contain the strip —
+        // non-retrying count assertions, no fresh wait for the cards.
         await expect(page.locator(L("WS.HEADER"))).toBeVisible();
+        expect(await page.locator('[data-alloy-section="WS.HEADER"]').count()).toBe(1);
+        expect(await page.locator('[data-alloy-section="WS.HEADER_CALCULATIONS"]').count()).toBe(1);
+        await expect(page.locator(L("WS.HEADER_CALCULATIONS"))).toBeVisible();
         await expect(page.locator(L("WS.PROCESS_GRID"))).toBeVisible();
         const tiles = page.locator(L("WS.PROCESS_TILE"));
         await expect(tiles.first()).toBeVisible({ timeout: 60_000 });
 
         // Single ownership on the live DOM (tiles/views are per-item labels, counted > 0).
-        for (const single of ["WS.SURFACE", "WS.HEADER", "WS.PROCESS_GRID"]) {
+        for (const single of ["WS.SURFACE", "WS.HEADER", "WS.HEADER_CALCULATIONS", "WS.PROCESS_GRID"]) {
             await expect(page.locator(L(single))).toHaveCount(1);
+        }
+        for (const section of ["WS.HEADER", "WS.HEADER_CALCULATIONS"]) {
+            await expect(page.locator(`[data-alloy-section="${section}"]`)).toHaveCount(1);
         }
         await capture(page, "workspace-surface");
     });

@@ -51,6 +51,8 @@ export type DesiredHeaderPlacement = {
     sourceKey: string;
     vizType: MetricVisualizationType;
     sortOrder: number;
+    /** Configured card title (builder `config.title`) — persisted as the visualization label. */
+    title?: string;
     size?: string;
     accent?: string;
     showHealthChip?: boolean;
@@ -58,7 +60,11 @@ export type DesiredHeaderPlacement = {
 
 /* ---- pure mapping (unit-testable) ---- */
 
-/** Header placements → a single-section SurfaceDoc (size/accent carried in card config). */
+/**
+ * Header placements → a single-section SurfaceDoc (size/accent carried in card config).
+ * The persisted visualization label surfaces back as `config.title` so the builder's
+ * Title field round-trips (edit → publish → reload shows the configured title).
+ */
 export function headerViewsToDoc(views: readonly HeaderPlacementView[]): SurfaceDoc {
     const cards = [...views]
         .sort((a, b) => a.sortOrder - b.sortOrder)
@@ -69,6 +75,7 @@ export function headerViewsToDoc(views: readonly HeaderPlacementView[]): Surface
             config: {
                 rendererKey: v.vizType,
                 visibility: "on",
+                ...(v.label ? { title: v.label } : {}),
                 ...(v.size ? { size: v.size } : {}),
                 ...(v.accent ? { accent: v.accent } : {}),
                 ...(v.showHealthChip !== undefined ? { showHealthChip: v.showHealthChip ? "on" : "off" } : {}),
@@ -88,10 +95,12 @@ export function headerDocToDesired(doc: SurfaceDoc): DesiredHeaderPlacement[] {
             const vizType = cardTypeToVizType(card.cardTypeKey, cfg.rendererKey);
             if (!vizType) return;
             seen.add(card.contentId);
+            const title = typeof cfg.title === "string" ? cfg.title.trim() : "";
             out.push({
                 sourceKey: card.contentId,
                 vizType,
                 sortOrder: out.length * 10,
+                ...(title ? { title } : {}),
                 ...(typeof cfg.size === "string" ? { size: cfg.size } : {}),
                 ...(typeof cfg.accent === "string" ? { accent: cfg.accent } : {}),
                 ...(cfg.showHealthChip === "on" ? { showHealthChip: true } : cfg.showHealthChip === "off" ? { showHealthChip: false } : {}),
@@ -185,8 +194,23 @@ async function ensureDefinitionId(supabase: SupabaseClient, orgId: string, sourc
     return data?.id ?? null;
 }
 
-async function loadViews(supabase: SupabaseClient, orgId: string, surface: HeaderSurface): Promise<HeaderPlacementView[]> {
-    const resolved = await resolvePlacementsForSurface({ supabase, orgId, surface: surface as MetricSurface });
+/**
+ * Load the flattened placement views for a header surface (org-scoped, active + visible
+ * only, sort_order ascending). `placementZone` narrows to the runtime zone — the workspace
+ * first-paint loader reads exactly what the header runtime renders.
+ */
+export async function loadHeaderSurfaceViews(
+    supabase: SupabaseClient,
+    orgId: string,
+    surface: HeaderSurface,
+    placementZone?: string,
+): Promise<HeaderPlacementView[]> {
+    const resolved = await resolvePlacementsForSurface({
+        supabase,
+        orgId,
+        surface: surface as MetricSurface,
+        ...(placementZone ? { placementZone } : {}),
+    });
     return resolved
         .filter((p) => p.definition.source_type === "oip_adapter" && Boolean(p.definition.source_key))
         .map((p) => {
@@ -205,11 +229,44 @@ async function loadViews(supabase: SupabaseClient, orgId: string, surface: Heade
 }
 
 export async function loadHeaderSurfaceDoc(supabase: SupabaseClient, orgId: string, surface: HeaderSurface): Promise<SurfaceDoc> {
-    return headerViewsToDoc(await loadViews(supabase, orgId, surface));
+    return headerViewsToDoc(await loadHeaderSurfaceViews(supabase, orgId, surface));
+}
+
+/**
+ * The label a header card persists to `metric_visualizations.label`: the configured title
+ * wins; otherwise keep the currently-persisted label; otherwise the registry/humanized
+ * fallback (never the raw source key).
+ */
+function desiredHeaderLabel(d: DesiredHeaderPlacement, labelBySource: Map<string, string>): string {
+    return (
+        d.title ??
+        labelBySource.get(d.sourceKey) ??
+        getMetricSourceAdapter(d.sourceKey)?.label ??
+        humanizeSourceKey(d.sourceKey)
+    );
+}
+
+/**
+ * `ensureVisualizationId` only writes the label on create / renderer change — sync an
+ * existing visualization's label when the configured title differs from what is stored.
+ */
+async function syncVisualizationLabel(
+    supabase: SupabaseClient,
+    orgId: string,
+    vizId: string,
+    label: string,
+    currentLabel: string | undefined,
+): Promise<void> {
+    if (label === currentLabel) return;
+    await supabase
+        .from("metric_visualizations")
+        .update({ label, updated_at: new Date().toISOString() })
+        .eq("id", vizId)
+        .eq("org_id", orgId);
 }
 
 export async function saveHeaderSurfaceDoc(supabase: SupabaseClient, orgId: string, surface: HeaderSurface, doc: SurfaceDoc): Promise<SurfaceDoc> {
-    const current = await loadViews(supabase, orgId, surface);
+    const current = await loadHeaderSurfaceViews(supabase, orgId, surface);
     const desired = headerDocToDesired(doc);
     const labelBySource = new Map(current.map((v) => [v.sourceKey, v.label]));
     const plan = diffHeaderPlacements(current, desired);
@@ -221,9 +278,12 @@ export async function saveHeaderSurfaceDoc(supabase: SupabaseClient, orgId: stri
             console.warn(`[HeaderSurface] skipping create for unknown source key: ${c.sourceKey}`);
             continue;
         }
-        const createLabel = labelBySource.get(c.sourceKey) ?? getMetricSourceAdapter(c.sourceKey)?.label ?? humanizeSourceKey(c.sourceKey);
+        const createLabel = desiredHeaderLabel(c, labelBySource);
         const vizId = await ensureVisualizationId(supabase, orgId, prefix, definitionId, c.sourceKey, c.vizType, createLabel);
         if (!vizId) continue;
+        // A visualization may already exist from a previously-removed placement — make the
+        // configured title stick regardless of the ensure path taken.
+        if (c.title) await syncVisualizationLabel(supabase, orgId, vizId, createLabel, labelBySource.get(c.sourceKey));
         await supabase.from("metric_placements").insert({
             org_id: orgId,
             visualization_id: vizId,
@@ -244,9 +304,12 @@ export async function saveHeaderSurfaceDoc(supabase: SupabaseClient, orgId: stri
             console.warn(`[HeaderSurface] skipping update for unknown source key: ${u.sourceKey}`);
             continue;
         }
-        const updateLabel = labelBySource.get(u.sourceKey) ?? getMetricSourceAdapter(u.sourceKey)?.label ?? humanizeSourceKey(u.sourceKey);
+        const updateLabel = desiredHeaderLabel(u, labelBySource);
         const vizId = await ensureVisualizationId(supabase, orgId, prefix, definitionId, u.sourceKey, u.vizType, updateLabel);
         if (!vizId) continue;
+        // Persist a configured title onto the existing visualization (ensure only writes
+        // the label when the renderer type changes).
+        if (u.title) await syncVisualizationLabel(supabase, orgId, vizId, updateLabel, labelBySource.get(u.sourceKey));
         await supabase
             .from("metric_placements")
             .update({
@@ -270,5 +333,5 @@ export async function saveHeaderSurfaceDoc(supabase: SupabaseClient, orgId: stri
             .eq("org_id", orgId);
     }
 
-    return headerViewsToDoc(await loadViews(supabase, orgId, surface));
+    return headerViewsToDoc(await loadHeaderSurfaceViews(supabase, orgId, surface));
 }
