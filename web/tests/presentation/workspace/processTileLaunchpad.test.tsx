@@ -85,6 +85,41 @@ describe("WorkViewList — per-view operational context (config-driven)", () => 
         // Section marker + single ownership.
         expect(el.querySelectorAll('[data-alloy-section="WS.PROCESS_TILE_WORK_VIEWS"]')).toHaveLength(1);
     });
+
+    it("shows ONE secondary signal per row: attention takes priority over overdue", () => {
+        const el = render(
+            <WorkViewList
+                workViews={[
+                    // Attention wins even when the view is also overdue.
+                    view({ id: "a", label: "A", count: 4, attentionCount: 2, overdueCount: 3 }),
+                    // No attention → overdue is the signal.
+                    view({ id: "b", label: "B", count: 4, attentionCount: 0, overdueCount: 1 }),
+                    // Clear → no signal chip.
+                    view({ id: "c", label: "C", count: 4, attentionCount: 0, overdueCount: 0 }),
+                ]}
+            />,
+        );
+        expect(el.querySelector('[data-work-view-id="a"] a')?.getAttribute("aria-label")).toContain(
+            "2 need attention",
+        );
+        expect(el.querySelector('[data-work-view-id="b"] a')?.getAttribute("aria-label")).toContain(
+            "1 overdue",
+        );
+        const clear = el.querySelector('[data-work-view-id="c"] a')?.getAttribute("aria-label") ?? "";
+        expect(clear).not.toContain("attention");
+        expect(clear).not.toContain("overdue");
+    });
+
+    it("keeps a stable count slot: a placeholder when the count is pending, the number when resolved", () => {
+        const pending = render(<WorkViewList workViews={[view({ id: "p", label: "P", count: null })]} />);
+        // Pending count renders a placeholder (never blank / collapsed) so the slot width holds.
+        expect(pending.querySelector('[data-work-view-id="p"] .animate-pulse')).not.toBeNull();
+        pending.remove();
+
+        const resolved = render(<WorkViewList workViews={[view({ id: "p", label: "P", count: 7 })]} />);
+        expect(resolved.querySelector('[data-work-view-id="p"] .animate-pulse')).toBeNull();
+        expect(resolved.textContent).toContain("7");
+    });
 });
 
 function tile(over: Partial<ProcessTileModel>): ProcessTileModel {
@@ -120,12 +155,16 @@ describe("ProcessTile — launchpad, not dashboard", () => {
         expect(ember?.textContent).toContain("3 need attention");
     });
 
-    it("shows a calm state when the process is clear, and hides it when unresolved", () => {
+    it("ALWAYS shows an operational summary — calm 'no urgent work' when clear OR unresolved", () => {
+        // Requirement: the summary area never collapses; a calm default beats a fabricated
+        // number when the attention rollup is zero or unavailable.
         const clear = render(<ProcessTile process={tile({ needsAttentionCount: 0 })} />);
-        expect(clear.textContent).toContain("Nothing needs attention");
+        expect(clear.textContent).toContain("No urgent work in this process");
+        expect(clear.textContent).not.toContain("need attention");
         clear.remove();
 
         const unresolved = render(<ProcessTile process={tile({ needsAttentionCount: null })} />);
+        expect(unresolved.textContent).toContain("No urgent work in this process");
         expect(unresolved.textContent).not.toContain("need attention");
     });
 

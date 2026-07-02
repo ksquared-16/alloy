@@ -3,14 +3,19 @@
 /**
  * Presentation Runtime V2 — WS.PROCESS_TILE: a process's operational launchpad.
  *
- * The tile answers "where should I work?" — not "how many records exist?". It leads with the
- * process's meaningful operational STATE (what needs attention), makes the configured Work
- * Views the body (each row is "open this work"), and keeps counts visible but secondary.
+ * The tile answers "where should I work?" — not "how many records exist?". It ALWAYS leads
+ * with an operational summary (a calm "no urgent work" state, or a stronger attention state
+ * when work is waiting), makes the configured Work Views the body (each row is "open this
+ * work"), and keeps counts visible but secondary.
  *
  * The tile itself is NOT interactive: only the Work View rows and the Open → control respond
  * to the pointer (no whole-card hover, no whole-card click). Open → soft-navigates to the
  * process entry; per the navigation contract loading belongs to the destination, so there is
  * no local spinner — the slug route is warmed on pointer intent instead.
+ *
+ * Pure presenter of `ProcessTileModel` — a future universal SurfaceRenderer can render the
+ * same model (summary / work-views / footer as Surface Components) without a structural
+ * change here (PR #64 drop-in).
  */
 
 import { useMemo } from "react";
@@ -26,6 +31,33 @@ import {
 } from "@/components/presentation/runtimeLabels";
 import { WorkViewList } from "./WorkViewList";
 
+/**
+ * The operational summary — ALWAYS present so the tile reads as a launchpad, never a bare
+ * menu. Strong + ember when work needs attention; a calm operational state otherwise (and
+ * when the attention rollup is unavailable — a calm default beats a fabricated number).
+ */
+function OperationalSummary({ needsAttention }: { needsAttention: number | null }) {
+    const attention = typeof needsAttention === "number" && needsAttention > 0 ? needsAttention : null;
+    if (attention != null) {
+        return (
+            <div className="mt-2.5 flex min-h-[2.25rem] items-center gap-2 rounded-lg bg-alloy-ember/[0.07] px-2.5 py-1.5">
+                <span aria-hidden className="h-2 w-2 shrink-0 rounded-full bg-alloy-ember" />
+                <span className="text-xs font-semibold text-alloy-ember">
+                    {attention.toLocaleString()} need attention
+                </span>
+            </div>
+        );
+    }
+    return (
+        <div className="mt-2.5 flex min-h-[2.25rem] items-center gap-2 rounded-lg bg-alloy-midnight/[0.03] px-2.5 py-1.5">
+            <span aria-hidden className="h-2 w-2 shrink-0 rounded-full bg-alloy-juniper/45" />
+            <span className="text-xs font-medium text-alloy-midnight/55">
+                No urgent work in this process
+            </span>
+        </div>
+    );
+}
+
 export function ProcessTile({ process }: { process: ProcessTileModel }) {
     const slug = useMemo(
         () => parseOperatorWorkUnitEntryHref(process.entryHref).workUnitSlug,
@@ -34,9 +66,6 @@ export function ProcessTile({ process }: { process: ProcessTileModel }) {
     const warm = () => {
         if (slug) void warmWorkUnitSlugRoute(slug, "workspace_tile");
     };
-
-    const attention = process.needsAttentionCount;
-    const hasAttention = attention != null && attention > 0;
 
     return (
         <article
@@ -58,28 +87,7 @@ export function ProcessTile({ process }: { process: ProcessTileModel }) {
                     ) : null}
                 </div>
 
-                {/* Operational state — the headline. Attention forward (ember) when work is
-                    waiting, a calm "clear" when the process is up to date; hidden when the
-                    rollup didn't resolve (never a fabricated state). */}
-                {attention != null ? (
-                    <div className="mt-2.5 flex items-center gap-1.5 text-xs">
-                        {hasAttention ? (
-                            <>
-                                <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-alloy-ember" />
-                                <span className="font-semibold text-alloy-ember">
-                                    {attention.toLocaleString()} need attention
-                                </span>
-                            </>
-                        ) : (
-                            <>
-                                <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-alloy-juniper/50" />
-                                <span className="font-medium text-alloy-midnight/50">
-                                    Nothing needs attention
-                                </span>
-                            </>
-                        )}
-                    </div>
-                ) : null}
+                <OperationalSummary needsAttention={process.needsAttentionCount} />
 
                 {/* Work Views — the launchpad body. */}
                 {process.workViews.length ? (
@@ -110,7 +118,7 @@ export function ProcessTile({ process }: { process: ProcessTileModel }) {
                         onPointerEnter={warm}
                         onPointerDown={warm}
                         onFocus={warm}
-                        className="shrink-0 rounded-md border border-alloy-juniper/35 bg-alloy-juniper/10 px-2.5 py-1.5 text-xs font-bold tracking-wide text-alloy-juniper no-underline transition-colors hover:border-alloy-juniper hover:bg-alloy-juniper hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-alloy-juniper"
+                        className="shrink-0 rounded-md border border-alloy-juniper/35 bg-alloy-juniper/10 px-2.5 py-1.5 text-xs font-bold tracking-wide text-alloy-juniper no-underline transition-colors hover:border-alloy-juniper hover:bg-alloy-juniper hover:text-white active:bg-alloy-juniper/80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-alloy-juniper"
                     >
                         Open →
                     </Link>
