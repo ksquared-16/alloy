@@ -17,21 +17,25 @@ import {
     buildTuitionRateMap,
 } from "@/lib/commercial/tuitionRates";
 import {
-    type CommercialFee,
-    type CommercialAddon,
-    type CommercialDeposit,
+    type CommercialProduct,
+    type CommercialCategory,
     type CommercialType,
     FREQUENCY_OPTIONS,
     COMMERCIAL_TYPE_OPTIONS,
     DUE_TIMING_OPTIONS,
-    FEE_TYPE_SUGGESTIONS,
-    ADDON_TYPE_SUGGESTIONS,
     PACKAGE_UNIT_TYPE_OPTIONS,
     formatScope,
     frequencyLabel,
-    isPackageAddon,
+    isPackageProduct,
     describePackage,
-} from "@/lib/commercial/feesAddons";
+    feeIsRequired,
+    depositBehavior,
+    getPackage,
+    buildBehavior,
+    activeCategories,
+    categoryLabel,
+    sortProducts,
+} from "@/lib/commercial/commercialProducts";
 import {
     type ProgramOffering,
     type AttendanceType,
@@ -1017,62 +1021,45 @@ function SaveBar({ onSave, onCancel, saving, disabled }: { onSave: () => void; o
 }
 
 // ─── CommercialCatalogPanel ────────────────────────────────────────────────────
-// Unified catalog: fees, add-ons, and deposits in one list.
-// The commercial type selector drives which configuration fields appear.
-
-type CatalogItem =
-    | { _kind: "fee"; item: CommercialFee }
-    | { _kind: "addon"; item: CommercialAddon }
-    | { _kind: "deposit"; item: CommercialDeposit };
+// Single source of truth: commercial_products. The commercial type selector
+// drives which behavior fields appear. Category is chosen from configurable
+// commercial_categories. No legacy tables, no internal keys exposed.
 
 function CommercialCatalogPanel({
-    fees,
-    addons,
-    deposits,
+    products,
+    categories,
     locations,
     programs,
     loading,
-    onFeeCreated,
-    onFeeUpdated,
-    onFeeDeleted,
-    onAddonCreated,
-    onAddonUpdated,
-    onAddonDeleted,
-    onDepositCreated,
-    onDepositUpdated,
-    onDepositDeleted,
+    onProductCreated,
+    onProductUpdated,
+    onProductDeleted,
+    onCategoryCreated,
 }: {
-    fees: CommercialFee[];
-    addons: CommercialAddon[];
-    deposits: CommercialDeposit[];
+    products: CommercialProduct[];
+    categories: CommercialCategory[];
     locations: { id: string; name: string }[];
     programs: { key: string; label: string; siteCount: number }[];
     loading: boolean;
-    onFeeCreated: (f: CommercialFee) => void;
-    onFeeUpdated: (f: CommercialFee) => void;
-    onFeeDeleted: (id: string) => void;
-    onAddonCreated: (a: CommercialAddon) => void;
-    onAddonUpdated: (a: CommercialAddon) => void;
-    onAddonDeleted: (id: string) => void;
-    onDepositCreated: (d: CommercialDeposit) => void;
-    onDepositUpdated: (d: CommercialDeposit) => void;
-    onDepositDeleted: (id: string) => void;
+    onProductCreated: (p: CommercialProduct) => void;
+    onProductUpdated: (p: CommercialProduct) => void;
+    onProductDeleted: (id: string) => void;
+    onCategoryCreated: (c: CommercialCategory) => void;
 }) {
     // ── Shared form state ─────────────────────────────────────────────────────────
     const [name, setName] = useState("");
     const [commercialType, setCommercialType] = useState<CommercialType | "">("");
     const [amount, setAmount] = useState("");
+    const [categoryId, setCategoryId] = useState("");
     const [revCat, setRevCat] = useState("");
     const [locId, setLocId] = useState("");
     const [progKey, setProgKey] = useState("");
     const [effStart, setEffStart] = useState("");
     const [effEnd, setEffEnd] = useState("");
     // Fee-specific
-    const [feeType, setFeeType] = useState("");
     const [feeFreq, setFeeFreq] = useState("");
     const [feeRequired, setFeeRequired] = useState(true);
     // Addon-specific
-    const [addonType, setAddonType] = useState("");
     const [addonFreq, setAddonFreq] = useState("monthly");
     const [addonIsPkg, setAddonIsPkg] = useState(false);
     const [pkgCount, setPkgCount] = useState("");
@@ -1086,121 +1073,117 @@ function CommercialCatalogPanel({
     const [adding, setAdding] = useState(false);
     const [editingId, setEditingId] = useState<string | null>(null);
     const [saving, setSaving] = useState(false);
+    // Inline "add category"
+    const [addingCategory, setAddingCategory] = useState(false);
+    const [newCategoryLabel, setNewCategoryLabel] = useState("");
+    const [savingCategory, setSavingCategory] = useState(false);
 
-    // Derive category suggestions from existing items + seeds
-    const categorySuggestions = useMemo(() => {
-        const set = new Set<string>();
-        fees.forEach(f => { if (f.fee_type) set.add(f.fee_type); });
-        addons.forEach(a => { if (a.addon_type) set.add(a.addon_type); });
-        FEE_TYPE_SUGGESTIONS.forEach(s => set.add(s));
-        ADDON_TYPE_SUGGESTIONS.forEach(s => set.add(s));
-        return Array.from(set).sort();
-    }, [fees, addons]);
-
-    // Unified sorted list
-    const allItems: CatalogItem[] = useMemo(() => [
-        ...fees.map(f => ({ _kind: "fee" as const, item: f })),
-        ...addons.map(a => ({ _kind: "addon" as const, item: a })),
-        ...deposits.map(d => ({ _kind: "deposit" as const, item: d })),
-    ].sort((a, b) => a.item.name.localeCompare(b.item.name)), [fees, addons, deposits]);
+    const catOptions = useMemo(() => activeCategories(categories), [categories]);
+    const sorted = useMemo(() => sortProducts(products), [products]);
 
     function reset() {
-        setName(""); setCommercialType(""); setAmount(""); setRevCat("");
+        setName(""); setCommercialType(""); setAmount(""); setCategoryId(""); setRevCat("");
         setLocId(""); setProgKey(""); setEffStart(""); setEffEnd("");
-        setFeeType(""); setFeeFreq(""); setFeeRequired(true);
-        setAddonType(""); setAddonFreq("monthly"); setAddonIsPkg(false);
+        setFeeFreq(""); setFeeRequired(true);
+        setAddonFreq("monthly"); setAddonIsPkg(false);
         setPkgCount(""); setPkgUnit("uses"); setPkgExpiry("");
         setDepositTiming("At enrollment"); setDepositRefundable(true); setDepositApplyToBalance(false);
+        setAddingCategory(false); setNewCategoryLabel("");
     }
     function startAdd() { reset(); setEditingId(null); setAdding(true); }
     function cancel() { reset(); setAdding(false); setEditingId(null); }
 
-    function startEdit(c: CatalogItem) {
+    function startEdit(p: CommercialProduct) {
         reset();
         setAdding(false);
-        setEditingId(c.item.id);
-        setName(c.item.name);
-        setRevCat(c.item.revenue_category ?? "");
-        setLocId(c.item.location_id ?? "");
-        setProgKey(c.item.program_key ?? "");
-        setEffStart(c.item.effective_start ?? "");
-        setEffEnd(c.item.effective_end ?? "");
-        setAmount(String(c.item.amount_cents / 100));
-        if (c._kind === "fee") {
-            setCommercialType("fee");
-            setFeeType(c.item.fee_type); setFeeFreq(c.item.cadence_key ?? ""); setFeeRequired(c.item.is_required);
-        } else if (c._kind === "addon") {
-            setCommercialType("addon");
-            setAddonType(c.item.addon_type); setAddonFreq(c.item.cadence_key);
-            const isPkg = isPackageAddon(c.item);
-            setAddonIsPkg(isPkg);
-            setPkgCount(c.item.package_unit_count != null ? String(c.item.package_unit_count) : "");
-            setPkgUnit(c.item.package_unit_type ?? "uses");
-            setPkgExpiry(c.item.package_expires_days != null ? String(c.item.package_expires_days) : "");
+        setEditingId(p.id);
+        setName(p.name);
+        setCommercialType(p.commercial_type);
+        setAmount(String(p.amount_cents / 100));
+        setCategoryId(p.category_id ?? "");
+        setRevCat(p.revenue_category ?? "");
+        setLocId(p.location_id ?? "");
+        setProgKey(p.program_key ?? "");
+        setEffStart(p.effective_start ?? "");
+        setEffEnd(p.effective_end ?? "");
+        if (p.commercial_type === "fee") {
+            setFeeFreq(p.cadence_key ?? ""); setFeeRequired(feeIsRequired(p));
+        } else if (p.commercial_type === "addon") {
+            setAddonFreq(p.cadence_key ?? "monthly");
+            const pkg = getPackage(p);
+            setAddonIsPkg(!!pkg);
+            setPkgCount(pkg?.unit_count != null ? String(pkg.unit_count) : "");
+            setPkgUnit(pkg?.unit_type ?? "uses");
+            setPkgExpiry(pkg?.expires_days != null ? String(pkg.expires_days) : "");
         } else {
-            setCommercialType("deposit");
-            setDepositTiming(c.item.due_timing); setDepositRefundable(c.item.is_refundable); setDepositApplyToBalance(c.item.apply_to_balance);
+            const b = depositBehavior(p);
+            setDepositTiming(b?.due_timing ?? "At enrollment");
+            setDepositRefundable(b?.refundable !== false);
+            setDepositApplyToBalance(b?.apply_to_balance === true);
         }
     }
 
     const formValid = name.trim().length > 0 && !!commercialType
         && Number.isFinite(parseFloat(amount)) && parseFloat(amount) >= 0
-        && (commercialType !== "fee" || feeType.trim().length > 0)
-        && (commercialType !== "addon" || (addonType.trim().length > 0 && addonFreq.length > 0));
+        && (commercialType !== "addon" || addonFreq.length > 0);
 
     async function save() {
-        if (!formValid) return;
+        if (!formValid || !commercialType) return;
         const cents = Math.round(parseFloat(amount) * 100);
+        const cadence_key = commercialType === "fee" ? (feeFreq || null)
+            : commercialType === "addon" ? addonFreq
+            : null;
+        const behavior = buildBehavior(commercialType, {
+            required: feeRequired,
+            isPackage: addonIsPkg,
+            packageCount: pkgCount ? parseInt(pkgCount, 10) : null,
+            packageUnit: pkgUnit,
+            packageExpiresDays: pkgExpiry ? parseInt(pkgExpiry, 10) : null,
+            refundable: depositRefundable,
+            applyToBalance: depositApplyToBalance,
+            dueTiming: depositTiming,
+        });
+        const body = {
+            name: name.trim(),
+            commercial_type: commercialType,
+            category_id: categoryId || null,
+            amount_cents: cents,
+            cadence_key,
+            revenue_category: revCat.trim() || null,
+            location_id: locId || null,
+            program_key: progKey || null,
+            effective_start: effStart || null,
+            effective_end: effEnd || null,
+            behavior,
+        };
         setSaving(true);
         try {
-            if (commercialType === "fee") {
-                const body = { name: name.trim(), fee_type: feeType.trim(), amount_cents: cents, is_required: feeRequired, cadence_key: feeFreq || null, location_id: locId || null, program_key: progKey || null, effective_start: effStart || null, effective_end: effEnd || null, revenue_category: revCat.trim() || null };
-                if (editingId) {
-                    const r = await fetch(`/api/admin/commercial/fees/${editingId}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-                    const j = (await r.json()) as { fee?: CommercialFee };
-                    if (j.fee) { onFeeUpdated(j.fee); cancel(); }
-                } else {
-                    const r = await fetch("/api/admin/commercial/fees", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-                    const j = (await r.json()) as { fee?: CommercialFee };
-                    if (j.fee) { onFeeCreated(j.fee); cancel(); }
-                }
-            } else if (commercialType === "addon") {
-                const body = { name: name.trim(), addon_type: addonType.trim(), amount_cents: cents, cadence_key: addonFreq, location_id: locId || null, program_key: progKey || null, effective_start: effStart || null, effective_end: effEnd || null, revenue_category: revCat.trim() || null, package_unit_count: addonIsPkg && pkgCount ? parseInt(pkgCount, 10) : null, package_unit_type: addonIsPkg ? pkgUnit : null, package_expires_days: addonIsPkg && pkgExpiry ? parseInt(pkgExpiry, 10) : null };
-                if (editingId) {
-                    const r = await fetch(`/api/admin/commercial/addons/${editingId}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-                    const j = (await r.json()) as { addon?: CommercialAddon };
-                    if (j.addon) { onAddonUpdated(j.addon); cancel(); }
-                } else {
-                    const r = await fetch("/api/admin/commercial/addons", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-                    const j = (await r.json()) as { addon?: CommercialAddon };
-                    if (j.addon) { onAddonCreated(j.addon); cancel(); }
-                }
+            if (editingId) {
+                const r = await fetch(`/api/admin/commercial/products/${editingId}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+                const j = (await r.json()) as { product?: CommercialProduct };
+                if (j.product) { onProductUpdated(j.product); cancel(); }
             } else {
-                const body = { name: name.trim(), amount_cents: cents, is_refundable: depositRefundable, apply_to_balance: depositApplyToBalance, due_timing: depositTiming || "At enrollment", location_id: locId || null, program_key: progKey || null, effective_start: effStart || null, effective_end: effEnd || null, revenue_category: revCat.trim() || null };
-                if (editingId) {
-                    const r = await fetch(`/api/admin/commercial/deposits/${editingId}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-                    const j = (await r.json()) as { deposit?: CommercialDeposit };
-                    if (j.deposit) { onDepositUpdated(j.deposit); cancel(); }
-                } else {
-                    const r = await fetch("/api/admin/commercial/deposits", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-                    const j = (await r.json()) as { deposit?: CommercialDeposit };
-                    if (j.deposit) { onDepositCreated(j.deposit); cancel(); }
-                }
+                const r = await fetch("/api/admin/commercial/products", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+                const j = (await r.json()) as { product?: CommercialProduct };
+                if (j.product) { onProductCreated(j.product); cancel(); }
             }
         } finally { setSaving(false); }
     }
 
-    async function deleteItem(c: CatalogItem) {
-        if (c._kind === "fee") {
-            await fetch(`/api/admin/commercial/fees/${c.item.id}`, { method: "DELETE" });
-            onFeeDeleted(c.item.id);
-        } else if (c._kind === "addon") {
-            await fetch(`/api/admin/commercial/addons/${c.item.id}`, { method: "DELETE" });
-            onAddonDeleted(c.item.id);
-        } else {
-            await fetch(`/api/admin/commercial/deposits/${c.item.id}`, { method: "DELETE" });
-            onDepositDeleted(c.item.id);
-        }
+    async function deleteProduct(p: CommercialProduct) {
+        await fetch(`/api/admin/commercial/products/${p.id}`, { method: "DELETE" });
+        onProductDeleted(p.id);
+    }
+
+    async function saveNewCategory() {
+        const label = newCategoryLabel.trim();
+        if (!label) return;
+        setSavingCategory(true);
+        try {
+            const r = await fetch("/api/admin/commercial/categories", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ label }) });
+            const j = (await r.json()) as { category?: CommercialCategory };
+            if (j.category) { onCategoryCreated(j.category); setCategoryId(j.category.id); setAddingCategory(false); setNewCategoryLabel(""); }
+        } finally { setSavingCategory(false); }
     }
 
     const TYPE_BADGE: Record<CommercialType, string> = {
@@ -1216,11 +1199,39 @@ function CommercialCatalogPanel({
 
     const isFormOpen = adding || editingId !== null;
 
+    const categoryField = (
+        <div className="space-y-1.5">
+            <div className="flex items-center justify-between">
+                <span className="text-[10px] font-medium text-alloy-midnight/55 uppercase tracking-wide">Category</span>
+                {!addingCategory && (
+                    <button type="button" onClick={() => setAddingCategory(true)} className="text-[10px] text-alloy-pine/75 hover:text-alloy-pine font-medium">+ New category</button>
+                )}
+            </div>
+            {addingCategory ? (
+                <div className="flex items-center gap-2">
+                    <input
+                        value={newCategoryLabel}
+                        onChange={e => setNewCategoryLabel(e.target.value)}
+                        placeholder="e.g. After-school"
+                        className="flex-1 rounded border border-alloy-stone/25 px-2 py-1 text-sm text-alloy-midnight placeholder:text-alloy-midnight/38 focus:border-alloy-pine/50 focus:outline-none"
+                    />
+                    <button type="button" onClick={() => void saveNewCategory()} disabled={savingCategory || !newCategoryLabel.trim()} className="rounded bg-alloy-pine px-2.5 py-1 text-xs font-medium text-white hover:bg-alloy-pine/85 disabled:opacity-40">{savingCategory ? "…" : "Add"}</button>
+                    <button type="button" onClick={() => { setAddingCategory(false); setNewCategoryLabel(""); }} className="text-xs text-alloy-midnight/45 hover:text-alloy-midnight px-1">Cancel</button>
+                </div>
+            ) : (
+                <select value={categoryId} onChange={e => setCategoryId(e.target.value)} className="block w-full rounded border border-alloy-stone/25 px-2 py-1 text-sm text-alloy-midnight focus:border-alloy-pine/50 focus:outline-none bg-white">
+                    <option value="">Uncategorized</option>
+                    {catOptions.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
+                </select>
+            )}
+        </div>
+    );
+
     const formPanel = (
         <div className="rounded-lg border border-alloy-pine/35 bg-alloy-pine/3 p-5 space-y-4">
             <CField label="Name *" value={name} onChange={setName} placeholder="e.g. Registration Fee" required />
 
-            {/* Commercial type — pill selector */}
+            {/* Commercial type — pill selector (drives the form) */}
             <div className="space-y-1.5">
                 <span className="text-[10px] font-medium text-alloy-midnight/55 uppercase tracking-wide">
                     Commercial type{!editingId && " *"}
@@ -1251,24 +1262,27 @@ function CommercialCatalogPanel({
 
             {commercialType && (
                 <>
-                    <CField label="Amount ($) *" value={amount} onChange={setAmount} placeholder="0.00" />
+                    <div className="grid grid-cols-2 gap-3">
+                        <CField label="Amount ($) *" value={amount} onChange={setAmount} placeholder="0.00" />
+                        {commercialType === "fee" && (
+                            <CSelect label="Frequency" value={feeFreq} onChange={setFeeFreq} options={FREQUENCY_OPTIONS.map(o => ({ key: o.key, label: o.label }))} />
+                        )}
+                        {commercialType === "addon" && (
+                            <CSelect label="Frequency *" value={addonFreq} onChange={setAddonFreq} options={FREQUENCY_OPTIONS.map(o => ({ key: o.key, label: o.label }))} />
+                        )}
+                        {commercialType === "deposit" && (
+                            <CSelect label="When is it due?" value={depositTiming} onChange={setDepositTiming} options={DUE_TIMING_OPTIONS} />
+                        )}
+                    </div>
+
+                    {categoryField}
 
                     {commercialType === "fee" && (
-                        <>
-                            <div className="grid grid-cols-2 gap-3">
-                                <CSuggest label="Category *" value={feeType} onChange={setFeeType} suggestions={categorySuggestions} placeholder="e.g. Registration fee" />
-                                <CSelect label="Frequency" value={feeFreq} onChange={setFeeFreq} options={FREQUENCY_OPTIONS.map(o => ({ key: o.key, label: o.label }))} />
-                            </div>
-                            <CToggle label="Required" checked={feeRequired} onChange={setFeeRequired} hint="Applied automatically to all enrollments" />
-                        </>
+                        <CToggle label="Required" checked={feeRequired} onChange={setFeeRequired} hint="Applied automatically to all enrollments" />
                     )}
 
                     {commercialType === "addon" && (
                         <>
-                            <div className="grid grid-cols-2 gap-3">
-                                <CSuggest label="Category *" value={addonType} onChange={setAddonType} suggestions={categorySuggestions} placeholder="e.g. Extended care" />
-                                <CSelect label="Frequency *" value={addonFreq} onChange={setAddonFreq} options={FREQUENCY_OPTIONS.map(o => ({ key: o.key, label: o.label }))} />
-                            </div>
                             <CToggle label="This is a pass or package" checked={addonIsPkg} onChange={setAddonIsPkg} hint="e.g. 5-session pass valid 30 days" />
                             {addonIsPkg && (
                                 <div className="grid grid-cols-3 gap-3 pl-4 border-l-2 border-alloy-pine/20">
@@ -1281,13 +1295,10 @@ function CommercialCatalogPanel({
                     )}
 
                     {commercialType === "deposit" && (
-                        <>
-                            <CSelect label="When is it due?" value={depositTiming} onChange={setDepositTiming} options={DUE_TIMING_OPTIONS} />
-                            <div className="flex items-center gap-6">
-                                <CToggle label="Refundable" checked={depositRefundable} onChange={setDepositRefundable} />
-                                <CToggle label="Apply to first balance" checked={depositApplyToBalance} onChange={setDepositApplyToBalance} hint="Credits toward first tuition charge" />
-                            </div>
-                        </>
+                        <div className="flex items-center gap-6">
+                            <CToggle label="Refundable" checked={depositRefundable} onChange={setDepositRefundable} />
+                            <CToggle label="Apply to first balance" checked={depositApplyToBalance} onChange={setDepositApplyToBalance} hint="Credits toward first tuition charge" />
+                        </div>
                     )}
 
                     <ScopeFields locationId={locId} setLocationId={setLocId} programKey={progKey} setProgramKey={setProgKey} locations={locations} programs={programs} />
@@ -1315,7 +1326,7 @@ function CommercialCatalogPanel({
                     <div>
                         <h2 className="text-base font-semibold text-alloy-midnight">Commercial Catalog</h2>
                         <p className="text-xs text-alloy-midnight/60 mt-0.5">
-                            Everything beyond tuition — {fees.length + addons.length + deposits.length} item{fees.length + addons.length + deposits.length !== 1 ? "s" : ""} configured.
+                            Everything beyond tuition — {products.length} item{products.length !== 1 ? "s" : ""} configured.
                         </p>
                     </div>
                     {!isFormOpen && (
@@ -1331,61 +1342,57 @@ function CommercialCatalogPanel({
 
                 {adding && formPanel}
 
-                {allItems.length === 0 && !adding ? (
+                {sorted.length === 0 && !adding ? (
                     <EmptySlate label="Nothing configured yet. Add your first fee, add-on, or deposit." onAdd={startAdd} />
-                ) : allItems.length > 0 ? (
+                ) : sorted.length > 0 ? (
                     <div className="space-y-2">
-                        {allItems.map(c => (
-                            <div key={`${c._kind}-${c.item.id}`}>
-                                {editingId === c.item.id ? formPanel : (
-                                    <CommercialCard onClick={() => startEdit(c)}>
+                        {sorted.map(p => (
+                            <div key={p.id}>
+                                {editingId === p.id ? formPanel : (
+                                    <CommercialCard onClick={() => startEdit(p)}>
                                         <div className="flex items-start justify-between gap-3">
                                             <div className="min-w-0 flex-1 space-y-0.5">
                                                 <div className="flex items-center gap-2 flex-wrap">
-                                                    <span className="text-sm font-medium text-alloy-midnight">{c.item.name}</span>
-                                                    <span className={`text-[10px] font-medium rounded px-1.5 py-0.5 ${TYPE_BADGE[c._kind]}`}>{TYPE_LABEL[c._kind]}</span>
-                                                    {c._kind === "fee" && c.item.fee_type && (
-                                                        <span className="text-[10px] text-alloy-midnight/55 bg-alloy-stone/10 rounded px-1.5 py-0.5">{c.item.fee_type}</span>
+                                                    <span className="text-sm font-medium text-alloy-midnight">{p.name}</span>
+                                                    <span className={`text-[10px] font-medium rounded px-1.5 py-0.5 ${TYPE_BADGE[p.commercial_type]}`}>{TYPE_LABEL[p.commercial_type]}</span>
+                                                    {p.category_id && categoryLabel(p.category_id, categories) && (
+                                                        <span className="text-[10px] text-alloy-midnight/55 bg-alloy-stone/10 rounded px-1.5 py-0.5">{categoryLabel(p.category_id, categories)}</span>
                                                     )}
-                                                    {c._kind === "addon" && c.item.addon_type && (
-                                                        <span className="text-[10px] text-alloy-midnight/55 bg-alloy-stone/10 rounded px-1.5 py-0.5">{c.item.addon_type}</span>
-                                                    )}
-                                                    {c._kind === "fee" && c.item.is_required && (
+                                                    {p.commercial_type === "fee" && feeIsRequired(p) && (
                                                         <span className="text-[10px] text-alloy-pine/80 font-medium">Required</span>
                                                     )}
-                                                    {c._kind === "addon" && isPackageAddon(c.item) && (
-                                                        <span className="text-[10px] text-alloy-midnight/55 bg-alloy-stone/8 rounded px-1.5 py-0.5">{describePackage(c.item)}</span>
+                                                    {p.commercial_type === "addon" && isPackageProduct(p) && (
+                                                        <span className="text-[10px] text-alloy-midnight/55 bg-alloy-stone/8 rounded px-1.5 py-0.5">{describePackage(p)}</span>
                                                     )}
-                                                    {c._kind === "deposit" && c.item.is_refundable && (
+                                                    {p.commercial_type === "deposit" && depositBehavior(p)?.refundable && (
                                                         <span className="text-[10px] text-alloy-midnight/55 bg-alloy-stone/10 rounded px-1.5 py-0.5">Refundable</span>
                                                     )}
-                                                    {c._kind === "deposit" && c.item.apply_to_balance && (
+                                                    {p.commercial_type === "deposit" && depositBehavior(p)?.apply_to_balance && (
                                                         <span className="text-[10px] text-alloy-pine/70 bg-alloy-pine/6 rounded px-1.5 py-0.5">Credits balance</span>
                                                     )}
                                                 </div>
                                                 <div className="flex items-center gap-2 flex-wrap">
-                                                    <span className="text-sm font-semibold text-alloy-midnight">{formatAmount(c.item.amount_cents)}</span>
-                                                    {c._kind !== "deposit" && (
-                                                        <FreqBadge cadenceKey={c._kind === "fee" ? c.item.cadence_key : c.item.cadence_key} />
+                                                    <span className="text-sm font-semibold text-alloy-midnight">{formatAmount(p.amount_cents)}</span>
+                                                    {p.commercial_type !== "deposit" ? (
+                                                        <span className="text-[10px] text-alloy-pine/70 bg-alloy-pine/6 rounded px-1.5 py-0.5 whitespace-nowrap font-medium">{frequencyLabel(p.cadence_key)}</span>
+                                                    ) : (
+                                                        <span className="text-[10px] text-alloy-midnight/60 bg-alloy-stone/8 rounded px-1.5 py-0.5">Due: {depositBehavior(p)?.due_timing}</span>
                                                     )}
-                                                    {c._kind === "deposit" && (
-                                                        <span className="text-[10px] text-alloy-midnight/60 bg-alloy-stone/8 rounded px-1.5 py-0.5">Due: {c.item.due_timing}</span>
-                                                    )}
-                                                    <ScopeBadge locationId={c.item.location_id} programKey={c.item.program_key} locations={locations} />
-                                                    {c.item.revenue_category && (
-                                                        <span className="text-[10px] text-alloy-midnight/55 italic">{c.item.revenue_category}</span>
+                                                    <ScopeBadge locationId={p.location_id} programKey={p.program_key} locations={locations} />
+                                                    {p.revenue_category && (
+                                                        <span className="text-[10px] text-alloy-midnight/55 italic">{p.revenue_category}</span>
                                                     )}
                                                 </div>
-                                                {(c.item.effective_start || c.item.effective_end) && (
+                                                {(p.effective_start || p.effective_end) && (
                                                     <p className="text-[10px] text-alloy-midnight/55">
-                                                        {c.item.effective_start ? `Active from ${c.item.effective_start}` : ""}
-                                                        {c.item.effective_end ? ` · expires ${c.item.effective_end}` : ""}
+                                                        {p.effective_start ? `Active from ${p.effective_start}` : ""}
+                                                        {p.effective_end ? ` · expires ${p.effective_end}` : ""}
                                                     </p>
                                                 )}
                                             </div>
                                             <button
                                                 type="button"
-                                                onClick={e => { e.stopPropagation(); void deleteItem(c); }}
+                                                onClick={e => { e.stopPropagation(); void deleteProduct(p); }}
                                                 className="opacity-0 group-hover:opacity-100 text-[11px] text-alloy-midnight/35 hover:text-red-400 transition-all flex-shrink-0 px-1"
                                                 title="Remove from catalog"
                                             >✕</button>
@@ -1400,7 +1407,7 @@ function CommercialCatalogPanel({
                 <section className="rounded-lg border border-alloy-stone/15 bg-alloy-stone/3 px-4 py-3">
                     <p className="text-xs font-medium text-alloy-midnight/60 mb-1">Revenue mapping</p>
                     <p className="text-xs text-alloy-midnight/55 leading-relaxed">
-                        The <span className="font-medium text-alloy-midnight/65">Revenue category</span> field is a reference label. Accounting maps it to GL codes — Commercial defines what a charge is; Accounting decides where it posts.
+                        <span className="font-medium text-alloy-midnight/65">Category</span> groups products for your team. <span className="font-medium text-alloy-midnight/65">Revenue category</span> is the reference Accounting maps to a GL code — Commercial defines what a charge is; Accounting decides where it posts.
                     </p>
                 </section>
 
@@ -1431,10 +1438,9 @@ export function CommercialConfigWorkspace() {
     const [selectedScopeId, setSelectedScopeId] = useState<string | null>(null);
     const [payerTab, setPayerTab] = useState<PayerTab>("private");
 
-    // Fees & add-ons state (lazy-loaded when fees tab is first activated)
-    const [fees, setFees] = useState<CommercialFee[]>([]);
-    const [addons, setAddons] = useState<CommercialAddon[]>([]);
-    const [deposits, setDeposits] = useState<CommercialDeposit[]>([]);
+    // Commercial Catalog state (lazy-loaded when the Catalog tab is first activated)
+    const [products, setProducts] = useState<CommercialProduct[]>([]);
+    const [commercialCategories, setCommercialCategories] = useState<CommercialCategory[]>([]);
     const [feesLoading, setFeesLoading] = useState(false);
     const feesLoadedRef = useRef(false);
 
@@ -1458,17 +1464,14 @@ export function CommercialConfigWorkspace() {
         if (feesLoadedRef.current) return;
         setFeesLoading(true);
         try {
-            const [feesRes, addonsRes, depositsRes] = await Promise.all([
-                fetch("/api/admin/commercial/fees"),
-                fetch("/api/admin/commercial/addons"),
-                fetch("/api/admin/commercial/deposits"),
+            const [productsRes, catsRes] = await Promise.all([
+                fetch("/api/admin/commercial/products"),
+                fetch("/api/admin/commercial/categories?include_inactive=true"),
             ]);
-            const feesJson = (await feesRes.json()) as { fees?: CommercialFee[] };
-            const addonsJson = (await addonsRes.json()) as { addons?: CommercialAddon[] };
-            const depositsJson = (await depositsRes.json()) as { deposits?: CommercialDeposit[] };
-            setFees(feesJson.fees ?? []);
-            setAddons(addonsJson.addons ?? []);
-            setDeposits(depositsJson.deposits ?? []);
+            const productsJson = (await productsRes.json()) as { products?: CommercialProduct[] };
+            const catsJson = (await catsRes.json()) as { categories?: CommercialCategory[] };
+            setProducts(productsJson.products ?? []);
+            setCommercialCategories(catsJson.categories ?? []);
             feesLoadedRef.current = true;
         } catch { /* retain */ }
         finally { setFeesLoading(false); }
@@ -1677,21 +1680,15 @@ export function CommercialConfigWorkspace() {
 
             {activeSection === "fees" ? (
                 <CommercialCatalogPanel
-                    fees={fees}
-                    addons={addons}
-                    deposits={deposits}
+                    products={products}
+                    categories={commercialCategories}
                     locations={locations}
                     programs={programs}
                     loading={feesLoading}
-                    onFeeCreated={(fee) => setFees((prev) => [...prev, fee])}
-                    onFeeUpdated={(fee) => setFees((prev) => prev.map((f) => f.id === fee.id ? fee : f))}
-                    onFeeDeleted={(id) => setFees((prev) => prev.filter((f) => f.id !== id))}
-                    onAddonCreated={(addon) => setAddons((prev) => [...prev, addon])}
-                    onAddonUpdated={(addon) => setAddons((prev) => prev.map((a) => a.id === addon.id ? addon : a))}
-                    onAddonDeleted={(id) => setAddons((prev) => prev.filter((a) => a.id !== id))}
-                    onDepositCreated={(deposit) => setDeposits((prev) => [...prev, deposit])}
-                    onDepositUpdated={(deposit) => setDeposits((prev) => prev.map((d) => d.id === deposit.id ? deposit : d))}
-                    onDepositDeleted={(id) => setDeposits((prev) => prev.filter((d) => d.id !== id))}
+                    onProductCreated={(p) => setProducts((prev) => sortProducts([...prev, p]))}
+                    onProductUpdated={(p) => setProducts((prev) => sortProducts(prev.map((x) => x.id === p.id ? p : x)))}
+                    onProductDeleted={(id) => setProducts((prev) => prev.filter((x) => x.id !== id))}
+                    onCategoryCreated={(c) => setCommercialCategories((prev) => [...prev, c])}
                 />
             ) : (
                 <ConfigurationShell queueColumn={programQueueColumn}>

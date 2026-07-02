@@ -5,7 +5,7 @@
 | Layer | Owns | Does not own |
 |---|---|---|
 | **Programs** | `program_offerings`, `program_offering_variants` | Rates, billing, cadences |
-| **Commercial** | `commercial_tuition_rates`, `billing_cadences` | Offering structure, variant quantities |
+| **Commercial** | `commercial_products` (+ `commercial_categories`), `commercial_tuition_rates`, `billing_cadences` | Offering structure, variant quantities, charge posting |
 | **Billing** | Posting, charges, obligations | Rate decisions |
 
 ## Hierarchy
@@ -82,64 +82,87 @@ Location
 
 When room-based scheduling is built, the join will be `program_offerings ↔ rooms` (many-to-many), not `commercial_tuition_rates ↔ rooms`. Rates stay program/variant-scoped.
 
-## Commercial Catalog
+## Commercial Product — the canonical primitive
 
-The UI presents a unified **Commercial Catalog** — one list of everything the center charges beyond tuition. The `commercial_type` (Fee / Add-on / Deposit) drives which configuration fields appear. Records are stored in three separate tables; the catalog is a UI unification.
+Fee, Add-on, and Deposit are **not separate entities**. They are `commercial_type` values of one **Commercial Product** primitive, differentiated by typed **behavior**, not by structure. The Commercial Catalog is the single source of truth: `commercial_products`.
 
-### Fees (`commercial_fees`)
+```
+commercial_products                        ← the primitive (single table)
+  ├─ commercial_type   fee | addon | deposit    ← open discriminator (extensible)
+  ├─ category_id       FK → commercial_categories   ← operator-managed config
+  ├─ amount_cents
+  ├─ cadence_key       (frequency; null = one-time)
+  ├─ scope             location_id, program_key
+  ├─ revenue_category  (Accounting maps → GL)
+  ├─ effective_start / effective_end
+  ├─ behavior          jsonb (typed per commercial_type)
+  ├─ is_active, metadata
+  └─ source_table / source_id   ← transitional provenance (see below)
+```
 
-Required or triggered charges beyond tuition. Examples: registration fee, application fee, materials fee, annual re-enrollment fee.
+### Why one primitive
 
-- `fee_type` — free-text operator label (no DB constraint). UI shows seed suggestions; operators can use their own labels.
-- `cadence_key = null` → one-time. Non-null (e.g. `monthly`) → recurring.
-- `is_required` distinguishes a mandatory charge from an optional one.
-- `effective_start / effective_end` — optional. Null = "always active from day one." Setting a date means "activates on / expires on."
-- `revenue_category` — reference label; Accounting maps it to a GL code.
+~80% of every fee/addon/deposit row was identical (name, scope, amount, effective dates, revenue_category, cadence, is_active, metadata). The differences were **behavioral flags describing how Billing treats the charge**, not structural. Unifying passes all three primitive tests — shared identity, differences-as-values, and downstream simplification (Billing gets one input contract). The open discriminator absorbs future charge types (tuition credit, sibling discount, late fee, scholarship) without a new table or a new UI section each time.
 
-### Add-ons (`commercial_addons`)
+### Typed behavior (jsonb)
 
-Optional commercial products families can elect. Examples: extended care, enrichment, lunch, 5-session passes.
+`behavior` carries the type-specific rules. Shape is validated at the API/lib layer, not by DB constraints, so new types flex freely:
 
-- `addon_type` — free-text operator label.
-- `cadence_key` — required frequency key from `FREQUENCY_OPTIONS`.
-- Package fields (`package_unit_count`, `package_unit_type`, `package_expires_days`) — all nullable; non-null = pass/package product.
-- `effective_start / effective_end`, `revenue_category` — same semantics as fees.
+| `commercial_type` | `behavior` shape |
+|---|---|
+| `fee` | `{ required: boolean }` |
+| `addon` | `{ package?: { unit_count, unit_type, expires_days } }` — absent = plain add-on |
+| `deposit` | `{ refundable: boolean, apply_to_balance: boolean, due_timing: string }` |
 
-### Deposits (`commercial_deposits`)
+Accessors live in `lib/commercial/commercialProducts.ts` (`feeIsRequired`, `getPackage`, `depositBehavior`, `buildBehavior`). Promote a behavior key to a real column only when Billing needs to query/index on it.
 
-A deposit is a separate primitive — not a fee subtype — because it has a distinct refund lifecycle.
+### Commercial Categories (`commercial_categories`)
 
-- `is_refundable`: whether the deposit is returned on departure.
-- `apply_to_balance`: whether the deposit is credited toward the first tuition charge at billing time.
-- `due_timing` — human-readable operator label stored as-is (e.g. "At enrollment", "Before first day"). `normalizeDueTiming()` converts any legacy internal keys on read. UI provides `DUE_TIMING_OPTIONS` dropdown.
-- Refund processing is owned by Billing V2 (not yet built).
+Operator-managed configuration, **not** free text. Org-scoped option set (same pattern as `billing_cadences` / `location_program_categories`): `key`, `label`, `sort_order`, `is_active`. Seeded per org with Registration, Enrollment, Materials, Transportation, Food, Enrichment, Other. Operators can add their own.
 
-### Effective dates (all three tables)
+`category_id` is the merchandising/grouping axis (childcare language, catalog grouping, reporting rollup). It is **distinct from `revenue_category`**, which is the Accounting-facing reference that maps to a GL code. Two different jobs — both retained.
 
-`effective_start = null` means "active from day one" — not unset but deliberately unbounded. Only set a date when the item activates on a specific future date or was active only during a specific period. Never require entry.
+### Effective dates
+
+`effective_start = null` means "active from day one" — deliberately unbounded, not unset. Only set a date when the product activates on a specific future date or was active only during a specific period. Never required.
 
 ### Scope model
 
-All three tables share the same scope pattern:
-
 | `location_id` | `program_key` | Scope |
 |---|---|---|
-| null | null | Org-wide default — applies to all programs at all locations |
-| non-null | null | Location-specific — applies to all programs at that location |
-| null | non-null | Program-specific — applies to that program at all locations |
+| null | null | Org-wide default — all programs, all locations |
+| non-null | null | Location-specific |
+| null | non-null | Program-specific — all locations |
 | non-null | non-null | Program + location — most specific |
 
-Scope resolution is currently UI-side only. There is no server-side inheritance or fallback — each record is independent. The `formatScope` helper in `lib/commercial/feesAddons.ts` formats scope for display.
+Scope resolution is UI-side only; each record is independent. `formatScope` in `lib/commercial/commercialProducts.ts` formats for display.
+
+## Legacy tables — transitional
+
+`commercial_fees`, `commercial_addons`, `commercial_deposits` are **retained as transitional storage** for backward compatibility. They are **no longer the source of truth** and the Commercial Catalog UI no longer reads them. The migration `20260711000001_commercial_products_primitive.sql` is **non-destructive** — it creates the new tables and backfills products from the legacy rows (idempotent via `(source_table, source_id)`), keeping the old tables intact.
+
+- Backfilled products carry `source_table` / `source_id` provenance.
+- Legacy free-text `fee_type` / `addon_type` are preserved in `metadata.legacy_type`; category is best-effort matched to a seeded category (case-insensitive label), falling back to "Other".
+- The legacy `/api/admin/commercial/{fees,addons,deposits}` routes and `lib/commercial/feesAddons.ts` remain temporarily for backcompat.
+
+### Future cleanup step (deferred — do not run yet)
+
+Once `commercial_products` is confirmed authoritative across all consumers:
+1. Repoint any remaining reader of the legacy tables to `commercial_products`.
+2. Remove the legacy API routes (`fees`, `addons`, `deposits`) and `lib/commercial/feesAddons.ts`.
+3. Drop `commercial_fees`, `commercial_addons`, `commercial_deposits` in a dedicated destructive migration (separate PR, explicit approval).
+
+**Guardrail:** the catalog has one source of truth after this sprint — `commercial_products`. Old tables exist only as transitional storage.
 
 ### What is deferred
 
-The following are **not** built in Commercial Experience 02 and must not be added until explicitly scoped:
+Not built in this sprint; do not add until explicitly scoped:
 
-- Operator-managed categories table (V1: free-text + derived suggestions from existing items)
-- Automated fee triggers (posting a fee when a condition fires)
-- Family-level overrides (waiving or adjusting a fee for a specific family)
-- Add-on enrollment linkage (tracking which families have elected an add-on)
-- Refund lifecycle and deposit release (Billing V2 domain)
+- Tuition collapse — tuition stays Program → Offering → Variant → `commercial_tuition_rates` (matrix-priced). Long-term it may become a Commercial Product with a pricing strategy, but not now.
+- Automated triggers (posting a charge when a condition fires) — Policies domain
+- Family-level overrides (waiving/adjusting for a specific family) — Policies domain
+- Add-on enrollment linkage (which families elected a product) — separate domain
+- Refund lifecycle, deposit release, package consumption — Billing V2
 
 ## Future commercial domains (not yet built)
 
@@ -164,6 +187,15 @@ PATCH/DELETE /api/admin/programs/offerings/[id]/variants/[variantId]
 
 GET/POST /api/admin/commercial/tuition-rates        (body: { variant_id, cadence_key, … })
 PATCH/DELETE /api/admin/commercial/tuition-rates/[id]
+
+# Commercial Catalog (canonical)
+GET/POST /api/admin/commercial/products             (body: { name, commercial_type, category_id, amount_cents, cadence_key, behavior, … })
+PATCH/DELETE /api/admin/commercial/products/[id]     (commercial_type is immutable after create)
+GET/POST /api/admin/commercial/categories           (body: { label, key?, sort_order? })
+PATCH/DELETE /api/admin/commercial/categories/[id]   (DELETE soft-archives if products reference it)
+
+# Legacy (transitional — do not build on)
+GET/POST/PATCH/DELETE /api/admin/commercial/{fees,addons,deposits}
 ```
 
 The `GET /tuition-rates` endpoint accepts `?offering_id=` for backward compatibility — it resolves the offering's variant IDs internally and returns all matching rates.
