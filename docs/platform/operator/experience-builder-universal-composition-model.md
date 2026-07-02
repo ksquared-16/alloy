@@ -378,7 +378,20 @@ The builder inspector shows **composition fields** — the platform-defined set 
 
 4. **Focus Panel evidence assembly** — `buildHouseholdCardEvidence`, `buildChildrenCardEvidence`, etc. must be refactored to read from `config.evidenceGroups[].fields[]` rather than fixed field paths. Requires a `CardFieldsConfig` intermediate type.
 
+5. **Focus Panel concept catalog** — the `CONCEPT_TREE` in `focusPanelConceptCatalog.ts` is a **static, hand-maintained tree** of business concepts (Primary Contact, Children, Program, Stage & Status, …). It has no connection to `TenantFieldDefinitionRow` or the tenant field catalog. Adding a concept today means editing `CONCEPT_TREE` and its `resolveConceptValue` switch. Dynamic custom-concept availability is deferred to V2 alongside the adapter integration above.
+
 Until V2 ships, operators who create custom fields that need to appear in builders should request refKey allow-list additions via platform support.
+
+### Surface Builder Parity Correction (2026-07-01) — catalog expansion, NOT custom-field integration
+
+The parity correction sprint (PR #63) expanded the **predefined composition catalog** — it did **not** wire operator-created custom fields into any builder. Specifically:
+
+- Added waitlist/placement composition fields (`waitlist.positionLabel`, `waitlist.tierLabel`, `waitlist.waitSince`, `waitlist.siblingContext`, `overrides.flags`) to `QUEUE_FIELD_CATALOG`. These are platform-defined fields already present in `defaultWaitlistQueueLayoutV3()`, each guarded by a `visibleWhen: { type: "exists" }` condition so they render only when a persisted source exists.
+- Extended the Focus Panel `CONCEPT_TREE` with additional **predefined** concepts (Primary Contact address fields; Stage & Status branch; Program placement leaves).
+
+Both changes are **composition field catalog expansion**. The custom-field catalog integration described in items 1–5 above remains deferred to V2. Do not describe the builders as surfacing operator-created custom fields.
+
+**Runtime label note:** the queue row column `label` (rename hook, `QueueRecordColumnConfig.label`) persists to the LayoutDoc and is reflected in the builder canvas preview. The **condensed** runtime row (`OperationalQueueRecordRow`) passes `hideColumnLabel`, so column labels are intentionally suppressed in the condensed grain; the label applies where a labeled column context renders it (`QueueRecordScopedColumn` with `hideColumnLabel` unset).
 
 ---
 

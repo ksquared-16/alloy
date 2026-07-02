@@ -374,10 +374,10 @@ function RowCanvas({
                                 </button>
                             )}
 
-                            {/* Content */}
+                            {/* Content — label reflects operator rename (columnLabel), falls back to zone name */}
                             <div className="px-3 pb-3 pt-5">
                                 <p className={`truncate text-[10px] font-semibold uppercase tracking-wide ${isSelected ? "text-alloy-pine" : "text-alloy-midnight/40"}`}>
-                                    {ZONE_LABELS[z.key]}
+                                    {z.columnLabel || ZONE_LABELS[z.key]}
                                 </p>
                                 {sample.filter(Boolean).map((line, i) => (
                                     <p key={i} className="mt-0.5 truncate text-[11px] text-alloy-midnight/50">
