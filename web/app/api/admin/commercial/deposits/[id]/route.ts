@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { getAdminContextCached } from "@/lib/admin/getAdminContext";
 import type { CommercialDeposit } from "@/lib/commercial/feesAddons";
+import { normalizeDueTiming } from "@/lib/commercial/feesAddons";
 
 const SELECT_COLS =
     "id, org_id, location_id, program_key, name, description, amount_cents, is_refundable, apply_to_balance, due_timing, effective_start, effective_end, revenue_category, is_active, metadata, created_at, updated_at";
@@ -17,7 +18,7 @@ function mapRow(r: Record<string, unknown>): CommercialDeposit {
         amount_cents: Number(r.amount_cents ?? 0),
         is_refundable: r.is_refundable !== false,
         apply_to_balance: r.apply_to_balance === true,
-        due_timing: String(r.due_timing ?? "at_enrollment"),
+        due_timing: normalizeDueTiming(String(r.due_timing ?? "At enrollment")),
         effective_start: (r.effective_start as string | null | undefined) ?? null,
         effective_end: (r.effective_end as string | null | undefined) ?? null,
         revenue_category: (r.revenue_category as string | null | undefined) ?? null,

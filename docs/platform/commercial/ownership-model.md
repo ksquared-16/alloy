@@ -82,26 +82,28 @@ Location
 
 When room-based scheduling is built, the join will be `program_offerings ↔ rooms` (many-to-many), not `commercial_tuition_rates ↔ rooms`. Rates stay program/variant-scoped.
 
-## Fees, Add-ons & Deposits
+## Commercial Catalog
 
-Three separate primitives — not subtypes of one another.
+The UI presents a unified **Commercial Catalog** — one list of everything the center charges beyond tuition. The `commercial_type` (Fee / Add-on / Deposit) drives which configuration fields appear. Records are stored in three separate tables; the catalog is a UI unification.
 
 ### Fees (`commercial_fees`)
 
 Required or triggered charges beyond tuition. Examples: registration fee, application fee, materials fee, annual re-enrollment fee.
 
-- `fee_type` enum: `registration | application | materials | annual | other`
-- `cadence_key = null` → one-time. Non-null (e.g. `annual`) → recurring.
+- `fee_type` — free-text operator label (no DB constraint). UI shows seed suggestions; operators can use their own labels.
+- `cadence_key = null` → one-time. Non-null (e.g. `monthly`) → recurring.
 - `is_required` distinguishes a mandatory charge from an optional one.
-- Commercial owns fee definitions and amounts. Billing owns when and whether to post the charge.
+- `effective_start / effective_end` — optional. Null = "always active from day one." Setting a date means "activates on / expires on."
+- `revenue_category` — reference label; Accounting maps it to a GL code.
 
 ### Add-ons (`commercial_addons`)
 
-Optional recurring or one-time commercial products families can elect. Examples: extended care, enrichment, lunch program, transportation.
+Optional commercial products families can elect. Examples: extended care, enrichment, lunch, 5-session passes.
 
-- `addon_type` enum: `extended_care | enrichment | lunch | transport | other`
-- `cadence_key` is required (e.g. `monthly`, `weekly`, `per_session`, `one_time`).
-- An add-on is a commercial product definition. Enrollment linkage (which families elected this add-on) is a separate domain not yet built.
+- `addon_type` — free-text operator label.
+- `cadence_key` — required frequency key from `FREQUENCY_OPTIONS`.
+- Package fields (`package_unit_count`, `package_unit_type`, `package_expires_days`) — all nullable; non-null = pass/package product.
+- `effective_start / effective_end`, `revenue_category` — same semantics as fees.
 
 ### Deposits (`commercial_deposits`)
 
@@ -109,8 +111,12 @@ A deposit is a separate primitive — not a fee subtype — because it has a dis
 
 - `is_refundable`: whether the deposit is returned on departure.
 - `apply_to_balance`: whether the deposit is credited toward the first tuition charge at billing time.
-- `due_timing` enum: `at_enrollment | at_acceptance | at_contract | other`
+- `due_timing` — human-readable operator label stored as-is (e.g. "At enrollment", "Before first day"). `normalizeDueTiming()` converts any legacy internal keys on read. UI provides `DUE_TIMING_OPTIONS` dropdown.
 - Refund processing is owned by Billing V2 (not yet built).
+
+### Effective dates (all three tables)
+
+`effective_start = null` means "active from day one" — not unset but deliberately unbounded. Only set a date when the item activates on a specific future date or was active only during a specific period. Never require entry.
 
 ### Scope model
 
@@ -129,7 +135,7 @@ Scope resolution is currently UI-side only. There is no server-side inheritance 
 
 The following are **not** built in Commercial Experience 02 and must not be added until explicitly scoped:
 
-- Pass/package model (enrollment in a bundle of add-on sessions)
+- Operator-managed categories table (V1: free-text + derived suggestions from existing items)
 - Automated fee triggers (posting a fee when a condition fires)
 - Family-level overrides (waiving or adjusting a fee for a specific family)
 - Add-on enrollment linkage (tracking which families have elected an add-on)

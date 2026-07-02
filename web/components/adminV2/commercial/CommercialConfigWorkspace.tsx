@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import {
     ConfigurationShell,
@@ -20,10 +20,12 @@ import {
     type CommercialFee,
     type CommercialAddon,
     type CommercialDeposit,
+    type CommercialType,
     FREQUENCY_OPTIONS,
+    COMMERCIAL_TYPE_OPTIONS,
+    DUE_TIMING_OPTIONS,
     FEE_TYPE_SUGGESTIONS,
     ADDON_TYPE_SUGGESTIONS,
-    DEPOSIT_TIMING_SUGGESTIONS,
     PACKAGE_UNIT_TYPE_OPTIONS,
     formatScope,
     frequencyLabel,
@@ -78,7 +80,7 @@ type OnSave = (variantId: string, cadenceKey: string, payload: RatePayload) => P
 const SECTION_TABS = [
     { key: "programs_tuition" as const, label: "Programs & tuition", available: true },
     { key: "funding" as const, label: "Funding", available: false },
-    { key: "fees" as const, label: "Fees & add-ons", available: true },
+    { key: "fees" as const, label: "Catalog", available: true },
     { key: "policies" as const, label: "Policies", available: false },
     { key: "accounting" as const, label: "Accounting", available: false },
     { key: "simulator" as const, label: "Simulator", available: false },
@@ -168,7 +170,7 @@ function GridCell({ variant, cadence, rateRow, orgDefaultRow, locationId, onSave
     if (editing) {
         return (
             // Identical padding/sizing to read mode — grid stays locked
-            <td className="px-3 py-2.5 text-right text-sm relative whitespace-nowrap" style={{ minWidth: 120 }}>
+            <td className="px-3 py-2.5 text-right text-sm relative whitespace-nowrap" style={{ minWidth: 88 }}>
                 {/* Price row — right-aligned to match read mode */}
                 <div className="flex items-center justify-end gap-1">
                     <span className="text-xs text-alloy-midnight/35 select-none">$</span>
@@ -197,7 +199,7 @@ function GridCell({ variant, cadence, rateRow, orgDefaultRow, locationId, onSave
                     <div className="absolute right-0 top-full mt-0.5 z-20 w-48 rounded border border-alloy-stone/20 bg-white shadow-sm p-2 space-y-1.5 text-left">
                         <p className="text-[9px] text-alloy-midnight/35">Leave blank if rate applies now.</p>
                         <label className="block">
-                            <span className="text-[9px] font-medium text-alloy-midnight/45 uppercase tracking-wide">Effective from</span>
+                            <span className="text-[9px] font-medium text-alloy-midnight/55 uppercase tracking-wide">Activates on</span>
                             <input
                                 type="date"
                                 value={effectiveStart}
@@ -206,7 +208,7 @@ function GridCell({ variant, cadence, rateRow, orgDefaultRow, locationId, onSave
                             />
                         </label>
                         <label className="block">
-                            <span className="text-[9px] font-medium text-alloy-midnight/45 uppercase tracking-wide">Ends on <span className="font-normal normal-case">(optional)</span></span>
+                            <span className="text-[9px] font-medium text-alloy-midnight/55 uppercase tracking-wide">Expires on <span className="font-normal normal-case">(optional)</span></span>
                             <input
                                 type="date"
                                 value={effectiveEnd}
@@ -223,7 +225,7 @@ function GridCell({ variant, cadence, rateRow, orgDefaultRow, locationId, onSave
 
     return (
         <td
-            style={{ minWidth: 120 }}
+            style={{ minWidth: 88 }}
             className={[
                 "px-3 py-2.5 text-right text-sm group/cell select-none whitespace-nowrap",
                 saving ? "opacity-50" : "",
@@ -254,7 +256,7 @@ function GridCell({ variant, cadence, rateRow, orgDefaultRow, locationId, onSave
             ) : showOrgFallback ? (
                 <span className="text-alloy-midnight/25 italic text-xs">{formatRateCents(orgDefaultRow!.rate_cents)}</span>
             ) : (
-                <span className="text-alloy-midnight/18 group-hover/cell:text-alloy-pine/50 transition-colors">
+                <span className="text-alloy-midnight/35 group-hover/cell:text-alloy-pine/50 transition-colors">
                     —
                     <button type="button" onClick={(e) => { e.stopPropagation(); void toggleNotOffered(); }} className="opacity-0 group-hover/cell:opacity-100 ml-1 text-[10px] text-alloy-midnight/25 hover:text-alloy-midnight/55" title="Mark N/A">⊘</button>
                 </span>
@@ -345,10 +347,10 @@ function OfferingRateGrid({ offering, variants, cadences, rateMap, orgOnlyMap, l
                 <p className="px-4 py-3 text-xs text-alloy-midnight/35">No rate bases yet — use "+ Add rate basis" above to start.</p>
             ) : (
                 <div className="overflow-x-auto overflow-y-visible">
-                    <table className="w-full text-sm">
+                    <table className="w-auto min-w-full text-sm">
                         <thead>
                             <tr className="border-b border-alloy-stone/10">
-                                <th className="text-left px-4 py-1.5 text-xs font-medium text-alloy-midnight/40 w-32" />
+                                <th className="text-left px-4 py-1.5 text-xs font-medium text-alloy-midnight/55 w-20" />
                                 {activeCadences.map((c) => (
                                     <th key={c.item_key} className="text-right px-3 py-1.5 text-xs font-medium text-alloy-midnight/50 whitespace-nowrap">{c.label}</th>
                                 ))}
@@ -885,7 +887,7 @@ function CField({ label, value, onChange, placeholder, type = "text", required }
                 value={value}
                 onChange={e => onChange(e.target.value)}
                 placeholder={placeholder}
-                className="mt-0.5 block w-full rounded border border-alloy-stone/25 px-2 py-1 text-sm text-alloy-midnight placeholder:text-alloy-midnight/25 focus:border-alloy-pine/50 focus:outline-none"
+                className="mt-0.5 block w-full rounded border border-alloy-stone/25 px-2 py-1 text-sm text-alloy-midnight placeholder:text-alloy-midnight/38 focus:border-alloy-pine/50 focus:outline-none"
             />
         </label>
     );
@@ -902,7 +904,7 @@ function CSuggest({ label, value, onChange, suggestions, placeholder }: { label:
                 value={value}
                 onChange={e => onChange(e.target.value)}
                 placeholder={placeholder ?? "Type or choose…"}
-                className="mt-0.5 block w-full rounded border border-alloy-stone/25 px-2 py-1 text-sm text-alloy-midnight placeholder:text-alloy-midnight/25 focus:border-alloy-pine/50 focus:outline-none"
+                className="mt-0.5 block w-full rounded border border-alloy-stone/25 px-2 py-1 text-sm text-alloy-midnight placeholder:text-alloy-midnight/38 focus:border-alloy-pine/50 focus:outline-none"
             />
             <datalist id={id}>
                 {suggestions.map(s => <option key={s} value={s} />)}
@@ -1014,9 +1016,16 @@ function SaveBar({ onSave, onCancel, saving, disabled }: { onSave: () => void; o
     );
 }
 
-// ─── FeesAddonsPanel ───────────────────────────────────────────────────────────
+// ─── CommercialCatalogPanel ────────────────────────────────────────────────────
+// Unified catalog: fees, add-ons, and deposits in one list.
+// The commercial type selector drives which configuration fields appear.
 
-function FeesAddonsPanel({
+type CatalogItem =
+    | { _kind: "fee"; item: CommercialFee }
+    | { _kind: "addon"; item: CommercialAddon }
+    | { _kind: "deposit"; item: CommercialDeposit };
+
+function CommercialCatalogPanel({
     fees,
     addons,
     deposits,
@@ -1049,444 +1058,349 @@ function FeesAddonsPanel({
     onDepositUpdated: (d: CommercialDeposit) => void;
     onDepositDeleted: (id: string) => void;
 }) {
-    // ── Fee form ──────────────────────────────────────────────────────────────────
-    const [addingFee, setAddingFee] = useState(false);
-    const [editingFeeId, setEditingFeeId] = useState<string | null>(null);
-    const [feeName, setFeeName] = useState("");
-    const [feeCategory, setFeeCategory] = useState("");
-    const [feeAmount, setFeeAmount] = useState("");
-    const [feeCadenceKey, setFeeCadenceKey] = useState("");
+    // ── Shared form state ─────────────────────────────────────────────────────────
+    const [name, setName] = useState("");
+    const [commercialType, setCommercialType] = useState<CommercialType | "">("");
+    const [amount, setAmount] = useState("");
+    const [revCat, setRevCat] = useState("");
+    const [locId, setLocId] = useState("");
+    const [progKey, setProgKey] = useState("");
+    const [effStart, setEffStart] = useState("");
+    const [effEnd, setEffEnd] = useState("");
+    // Fee-specific
+    const [feeType, setFeeType] = useState("");
+    const [feeFreq, setFeeFreq] = useState("");
     const [feeRequired, setFeeRequired] = useState(true);
-    const [feeLocationId, setFeeLocationId] = useState("");
-    const [feeProgramKey, setFeeProgramKey] = useState("");
-    const [feeEffStart, setFeeEffStart] = useState("");
-    const [feeEffEnd, setFeeEffEnd] = useState("");
-    const [feeRevCat, setFeeRevCat] = useState("");
-    const [savingFee, setSavingFee] = useState(false);
-
-    function resetFeeForm() {
-        setFeeName(""); setFeeCategory(""); setFeeAmount(""); setFeeCadenceKey("");
-        setFeeRequired(true); setFeeLocationId(""); setFeeProgramKey("");
-        setFeeEffStart(""); setFeeEffEnd(""); setFeeRevCat("");
-    }
-    function startAddFee() { resetFeeForm(); setEditingFeeId(null); setAddingFee(true); }
-    function startEditFee(f: CommercialFee) {
-        setEditingFeeId(f.id);
-        setFeeName(f.name); setFeeCategory(f.fee_type); setFeeAmount(String(f.amount_cents / 100));
-        setFeeCadenceKey(f.cadence_key ?? ""); setFeeRequired(f.is_required);
-        setFeeLocationId(f.location_id ?? ""); setFeeProgramKey(f.program_key ?? "");
-        setFeeEffStart(f.effective_start ?? ""); setFeeEffEnd(f.effective_end ?? "");
-        setFeeRevCat(f.revenue_category ?? "");
-        setAddingFee(false);
-    }
-    function cancelFee() { setAddingFee(false); setEditingFeeId(null); resetFeeForm(); }
-
-    async function saveFee() {
-        const cents = Math.round(parseFloat(feeAmount) * 100);
-        if (!feeName.trim() || !feeCategory.trim() || !Number.isFinite(cents) || cents < 0) return;
-        setSavingFee(true);
-        const body = {
-            name: feeName.trim(), fee_type: feeCategory.trim(), amount_cents: cents,
-            is_required: feeRequired, cadence_key: feeCadenceKey || null,
-            location_id: feeLocationId || null, program_key: feeProgramKey || null,
-            effective_start: feeEffStart || null, effective_end: feeEffEnd || null,
-            revenue_category: feeRevCat.trim() || null,
-        };
-        try {
-            if (editingFeeId) {
-                const res = await fetch(`/api/admin/commercial/fees/${editingFeeId}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-                const j = (await res.json()) as { fee?: CommercialFee };
-                if (j.fee) { onFeeUpdated(j.fee); cancelFee(); }
-            } else {
-                const res = await fetch("/api/admin/commercial/fees", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-                const j = (await res.json()) as { fee?: CommercialFee };
-                if (j.fee) { onFeeCreated(j.fee); cancelFee(); }
-            }
-        } finally { setSavingFee(false); }
-    }
-
-    async function deleteFee(id: string) {
-        await fetch(`/api/admin/commercial/fees/${id}`, { method: "DELETE" });
-        onFeeDeleted(id);
-    }
-
-    // ── Addon form ────────────────────────────────────────────────────────────────
-    const [addingAddon, setAddingAddon] = useState(false);
-    const [editingAddonId, setEditingAddonId] = useState<string | null>(null);
-    const [addonName, setAddonName] = useState("");
-    const [addonCategory, setAddonCategory] = useState("");
-    const [addonAmount, setAddonAmount] = useState("");
-    const [addonCadenceKey, setAddonCadenceKey] = useState("monthly");
-    const [addonLocationId, setAddonLocationId] = useState("");
-    const [addonProgramKey, setAddonProgramKey] = useState("");
-    const [addonEffStart, setAddonEffStart] = useState("");
-    const [addonEffEnd, setAddonEffEnd] = useState("");
-    const [addonRevCat, setAddonRevCat] = useState("");
-    const [addonPkgCount, setAddonPkgCount] = useState("");
-    const [addonPkgUnit, setAddonPkgUnit] = useState("uses");
-    const [addonPkgExpiry, setAddonPkgExpiry] = useState("");
-    const [addonIsPackage, setAddonIsPackage] = useState(false);
-    const [savingAddon, setSavingAddon] = useState(false);
-
-    function resetAddonForm() {
-        setAddonName(""); setAddonCategory(""); setAddonAmount(""); setAddonCadenceKey("monthly");
-        setAddonLocationId(""); setAddonProgramKey("");
-        setAddonEffStart(""); setAddonEffEnd(""); setAddonRevCat("");
-        setAddonPkgCount(""); setAddonPkgUnit("uses"); setAddonPkgExpiry(""); setAddonIsPackage(false);
-    }
-    function startAddAddon() { resetAddonForm(); setEditingAddonId(null); setAddingAddon(true); }
-    function startEditAddon(a: CommercialAddon) {
-        setEditingAddonId(a.id);
-        setAddonName(a.name); setAddonCategory(a.addon_type); setAddonAmount(String(a.amount_cents / 100));
-        setAddonCadenceKey(a.cadence_key); setAddonLocationId(a.location_id ?? ""); setAddonProgramKey(a.program_key ?? "");
-        setAddonEffStart(a.effective_start ?? ""); setAddonEffEnd(a.effective_end ?? "");
-        setAddonRevCat(a.revenue_category ?? "");
-        const isPkg = isPackageAddon(a);
-        setAddonIsPackage(isPkg);
-        setAddonPkgCount(a.package_unit_count != null ? String(a.package_unit_count) : "");
-        setAddonPkgUnit(a.package_unit_type ?? "uses");
-        setAddonPkgExpiry(a.package_expires_days != null ? String(a.package_expires_days) : "");
-        setAddingAddon(false);
-    }
-    function cancelAddon() { setAddingAddon(false); setEditingAddonId(null); resetAddonForm(); }
-
-    async function saveAddon() {
-        const cents = Math.round(parseFloat(addonAmount) * 100);
-        if (!addonName.trim() || !addonCategory.trim() || !addonCadenceKey || !Number.isFinite(cents) || cents < 0) return;
-        setSavingAddon(true);
-        const body = {
-            name: addonName.trim(), addon_type: addonCategory.trim(), amount_cents: cents,
-            cadence_key: addonCadenceKey,
-            location_id: addonLocationId || null, program_key: addonProgramKey || null,
-            effective_start: addonEffStart || null, effective_end: addonEffEnd || null,
-            revenue_category: addonRevCat.trim() || null,
-            package_unit_count: addonIsPackage && addonPkgCount ? parseInt(addonPkgCount, 10) : null,
-            package_unit_type: addonIsPackage && addonPkgUnit ? addonPkgUnit : null,
-            package_expires_days: addonIsPackage && addonPkgExpiry ? parseInt(addonPkgExpiry, 10) : null,
-        };
-        try {
-            if (editingAddonId) {
-                const res = await fetch(`/api/admin/commercial/addons/${editingAddonId}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-                const j = (await res.json()) as { addon?: CommercialAddon };
-                if (j.addon) { onAddonUpdated(j.addon); cancelAddon(); }
-            } else {
-                const res = await fetch("/api/admin/commercial/addons", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-                const j = (await res.json()) as { addon?: CommercialAddon };
-                if (j.addon) { onAddonCreated(j.addon); cancelAddon(); }
-            }
-        } finally { setSavingAddon(false); }
-    }
-
-    async function deleteAddon(id: string) {
-        await fetch(`/api/admin/commercial/addons/${id}`, { method: "DELETE" });
-        onAddonDeleted(id);
-    }
-
-    // ── Deposit form ──────────────────────────────────────────────────────────────
-    const [addingDeposit, setAddingDeposit] = useState(false);
-    const [editingDepositId, setEditingDepositId] = useState<string | null>(null);
-    const [depositName, setDepositName] = useState("");
-    const [depositAmount, setDepositAmount] = useState("");
+    // Addon-specific
+    const [addonType, setAddonType] = useState("");
+    const [addonFreq, setAddonFreq] = useState("monthly");
+    const [addonIsPkg, setAddonIsPkg] = useState(false);
+    const [pkgCount, setPkgCount] = useState("");
+    const [pkgUnit, setPkgUnit] = useState("uses");
+    const [pkgExpiry, setPkgExpiry] = useState("");
+    // Deposit-specific
+    const [depositTiming, setDepositTiming] = useState("At enrollment");
     const [depositRefundable, setDepositRefundable] = useState(true);
     const [depositApplyToBalance, setDepositApplyToBalance] = useState(false);
-    const [depositTiming, setDepositTiming] = useState("at_enrollment");
-    const [depositLocationId, setDepositLocationId] = useState("");
-    const [depositProgramKey, setDepositProgramKey] = useState("");
-    const [depositEffStart, setDepositEffStart] = useState("");
-    const [depositEffEnd, setDepositEffEnd] = useState("");
-    const [depositRevCat, setDepositRevCat] = useState("");
-    const [savingDeposit, setSavingDeposit] = useState(false);
+    // Control
+    const [adding, setAdding] = useState(false);
+    const [editingId, setEditingId] = useState<string | null>(null);
+    const [saving, setSaving] = useState(false);
 
-    function resetDepositForm() {
-        setDepositName(""); setDepositAmount(""); setDepositRefundable(true); setDepositApplyToBalance(false);
-        setDepositTiming("at_enrollment"); setDepositLocationId(""); setDepositProgramKey("");
-        setDepositEffStart(""); setDepositEffEnd(""); setDepositRevCat("");
-    }
-    function startAddDeposit() { resetDepositForm(); setEditingDepositId(null); setAddingDeposit(true); }
-    function startEditDeposit(d: CommercialDeposit) {
-        setEditingDepositId(d.id);
-        setDepositName(d.name); setDepositAmount(String(d.amount_cents / 100));
-        setDepositRefundable(d.is_refundable); setDepositApplyToBalance(d.apply_to_balance);
-        setDepositTiming(d.due_timing); setDepositLocationId(d.location_id ?? ""); setDepositProgramKey(d.program_key ?? "");
-        setDepositEffStart(d.effective_start ?? ""); setDepositEffEnd(d.effective_end ?? "");
-        setDepositRevCat(d.revenue_category ?? "");
-        setAddingDeposit(false);
-    }
-    function cancelDeposit() { setAddingDeposit(false); setEditingDepositId(null); resetDepositForm(); }
+    // Derive category suggestions from existing items + seeds
+    const categorySuggestions = useMemo(() => {
+        const set = new Set<string>();
+        fees.forEach(f => { if (f.fee_type) set.add(f.fee_type); });
+        addons.forEach(a => { if (a.addon_type) set.add(a.addon_type); });
+        FEE_TYPE_SUGGESTIONS.forEach(s => set.add(s));
+        ADDON_TYPE_SUGGESTIONS.forEach(s => set.add(s));
+        return Array.from(set).sort();
+    }, [fees, addons]);
 
-    async function saveDeposit() {
-        const cents = Math.round(parseFloat(depositAmount) * 100);
-        if (!depositName.trim() || !Number.isFinite(cents) || cents < 0) return;
-        setSavingDeposit(true);
-        const body = {
-            name: depositName.trim(), amount_cents: cents,
-            is_refundable: depositRefundable, apply_to_balance: depositApplyToBalance,
-            due_timing: depositTiming || "at_enrollment",
-            location_id: depositLocationId || null, program_key: depositProgramKey || null,
-            effective_start: depositEffStart || null, effective_end: depositEffEnd || null,
-            revenue_category: depositRevCat.trim() || null,
-        };
+    // Unified sorted list
+    const allItems: CatalogItem[] = useMemo(() => [
+        ...fees.map(f => ({ _kind: "fee" as const, item: f })),
+        ...addons.map(a => ({ _kind: "addon" as const, item: a })),
+        ...deposits.map(d => ({ _kind: "deposit" as const, item: d })),
+    ].sort((a, b) => a.item.name.localeCompare(b.item.name)), [fees, addons, deposits]);
+
+    function reset() {
+        setName(""); setCommercialType(""); setAmount(""); setRevCat("");
+        setLocId(""); setProgKey(""); setEffStart(""); setEffEnd("");
+        setFeeType(""); setFeeFreq(""); setFeeRequired(true);
+        setAddonType(""); setAddonFreq("monthly"); setAddonIsPkg(false);
+        setPkgCount(""); setPkgUnit("uses"); setPkgExpiry("");
+        setDepositTiming("At enrollment"); setDepositRefundable(true); setDepositApplyToBalance(false);
+    }
+    function startAdd() { reset(); setEditingId(null); setAdding(true); }
+    function cancel() { reset(); setAdding(false); setEditingId(null); }
+
+    function startEdit(c: CatalogItem) {
+        reset();
+        setAdding(false);
+        setEditingId(c.item.id);
+        setName(c.item.name);
+        setRevCat(c.item.revenue_category ?? "");
+        setLocId(c.item.location_id ?? "");
+        setProgKey(c.item.program_key ?? "");
+        setEffStart(c.item.effective_start ?? "");
+        setEffEnd(c.item.effective_end ?? "");
+        setAmount(String(c.item.amount_cents / 100));
+        if (c._kind === "fee") {
+            setCommercialType("fee");
+            setFeeType(c.item.fee_type); setFeeFreq(c.item.cadence_key ?? ""); setFeeRequired(c.item.is_required);
+        } else if (c._kind === "addon") {
+            setCommercialType("addon");
+            setAddonType(c.item.addon_type); setAddonFreq(c.item.cadence_key);
+            const isPkg = isPackageAddon(c.item);
+            setAddonIsPkg(isPkg);
+            setPkgCount(c.item.package_unit_count != null ? String(c.item.package_unit_count) : "");
+            setPkgUnit(c.item.package_unit_type ?? "uses");
+            setPkgExpiry(c.item.package_expires_days != null ? String(c.item.package_expires_days) : "");
+        } else {
+            setCommercialType("deposit");
+            setDepositTiming(c.item.due_timing); setDepositRefundable(c.item.is_refundable); setDepositApplyToBalance(c.item.apply_to_balance);
+        }
+    }
+
+    const formValid = name.trim().length > 0 && !!commercialType
+        && Number.isFinite(parseFloat(amount)) && parseFloat(amount) >= 0
+        && (commercialType !== "fee" || feeType.trim().length > 0)
+        && (commercialType !== "addon" || (addonType.trim().length > 0 && addonFreq.length > 0));
+
+    async function save() {
+        if (!formValid) return;
+        const cents = Math.round(parseFloat(amount) * 100);
+        setSaving(true);
         try {
-            if (editingDepositId) {
-                const res = await fetch(`/api/admin/commercial/deposits/${editingDepositId}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-                const j = (await res.json()) as { deposit?: CommercialDeposit };
-                if (j.deposit) { onDepositUpdated(j.deposit); cancelDeposit(); }
+            if (commercialType === "fee") {
+                const body = { name: name.trim(), fee_type: feeType.trim(), amount_cents: cents, is_required: feeRequired, cadence_key: feeFreq || null, location_id: locId || null, program_key: progKey || null, effective_start: effStart || null, effective_end: effEnd || null, revenue_category: revCat.trim() || null };
+                if (editingId) {
+                    const r = await fetch(`/api/admin/commercial/fees/${editingId}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+                    const j = (await r.json()) as { fee?: CommercialFee };
+                    if (j.fee) { onFeeUpdated(j.fee); cancel(); }
+                } else {
+                    const r = await fetch("/api/admin/commercial/fees", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+                    const j = (await r.json()) as { fee?: CommercialFee };
+                    if (j.fee) { onFeeCreated(j.fee); cancel(); }
+                }
+            } else if (commercialType === "addon") {
+                const body = { name: name.trim(), addon_type: addonType.trim(), amount_cents: cents, cadence_key: addonFreq, location_id: locId || null, program_key: progKey || null, effective_start: effStart || null, effective_end: effEnd || null, revenue_category: revCat.trim() || null, package_unit_count: addonIsPkg && pkgCount ? parseInt(pkgCount, 10) : null, package_unit_type: addonIsPkg ? pkgUnit : null, package_expires_days: addonIsPkg && pkgExpiry ? parseInt(pkgExpiry, 10) : null };
+                if (editingId) {
+                    const r = await fetch(`/api/admin/commercial/addons/${editingId}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+                    const j = (await r.json()) as { addon?: CommercialAddon };
+                    if (j.addon) { onAddonUpdated(j.addon); cancel(); }
+                } else {
+                    const r = await fetch("/api/admin/commercial/addons", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+                    const j = (await r.json()) as { addon?: CommercialAddon };
+                    if (j.addon) { onAddonCreated(j.addon); cancel(); }
+                }
             } else {
-                const res = await fetch("/api/admin/commercial/deposits", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-                const j = (await res.json()) as { deposit?: CommercialDeposit };
-                if (j.deposit) { onDepositCreated(j.deposit); cancelDeposit(); }
+                const body = { name: name.trim(), amount_cents: cents, is_refundable: depositRefundable, apply_to_balance: depositApplyToBalance, due_timing: depositTiming || "At enrollment", location_id: locId || null, program_key: progKey || null, effective_start: effStart || null, effective_end: effEnd || null, revenue_category: revCat.trim() || null };
+                if (editingId) {
+                    const r = await fetch(`/api/admin/commercial/deposits/${editingId}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+                    const j = (await r.json()) as { deposit?: CommercialDeposit };
+                    if (j.deposit) { onDepositUpdated(j.deposit); cancel(); }
+                } else {
+                    const r = await fetch("/api/admin/commercial/deposits", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+                    const j = (await r.json()) as { deposit?: CommercialDeposit };
+                    if (j.deposit) { onDepositCreated(j.deposit); cancel(); }
+                }
             }
-        } finally { setSavingDeposit(false); }
+        } finally { setSaving(false); }
     }
 
-    async function deleteDeposit(id: string) {
-        await fetch(`/api/admin/commercial/deposits/${id}`, { method: "DELETE" });
-        onDepositDeleted(id);
+    async function deleteItem(c: CatalogItem) {
+        if (c._kind === "fee") {
+            await fetch(`/api/admin/commercial/fees/${c.item.id}`, { method: "DELETE" });
+            onFeeDeleted(c.item.id);
+        } else if (c._kind === "addon") {
+            await fetch(`/api/admin/commercial/addons/${c.item.id}`, { method: "DELETE" });
+            onAddonDeleted(c.item.id);
+        } else {
+            await fetch(`/api/admin/commercial/deposits/${c.item.id}`, { method: "DELETE" });
+            onDepositDeleted(c.item.id);
+        }
     }
 
-    // ── Fee form panel ────────────────────────────────────────────────────────────
-    const feeFormValid = feeName.trim().length > 0 && feeCategory.trim().length > 0 && parseFloat(feeAmount) >= 0;
-    const feeFormPanel = (
-        <div className="rounded-lg border border-alloy-pine/30 bg-alloy-pine/3 p-4 space-y-3">
-            <div className="grid grid-cols-2 gap-3">
-                <CField label="Name *" value={feeName} onChange={setFeeName} placeholder="e.g. Registration Fee" required />
-                <CSuggest label="Category *" value={feeCategory} onChange={setFeeCategory} suggestions={FEE_TYPE_SUGGESTIONS} />
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-                <CField label="Amount ($) *" value={feeAmount} onChange={setFeeAmount} placeholder="0.00" type="text" />
-                <CSelect label="Frequency" value={feeCadenceKey} onChange={setFeeCadenceKey} options={FREQUENCY_OPTIONS.map(o => ({ key: o.key, label: o.label }))} />
-            </div>
-            <div className="flex items-center gap-4">
-                <CToggle label="Required" checked={feeRequired} onChange={setFeeRequired} hint="Applied to all enrollments automatically" />
-            </div>
-            <ScopeFields locationId={feeLocationId} setLocationId={setFeeLocationId} programKey={feeProgramKey} setProgramKey={setFeeProgramKey} locations={locations} programs={programs} />
-            <EffectiveDateFields start={feeEffStart} end={feeEffEnd} onStart={setFeeEffStart} onEnd={setFeeEffEnd} />
-            <CField label="Revenue category" value={feeRevCat} onChange={setFeeRevCat} placeholder="e.g. Program Revenue" />
-            <SaveBar onSave={saveFee} onCancel={cancelFee} saving={savingFee} disabled={!feeFormValid} />
-        </div>
-    );
+    const TYPE_BADGE: Record<CommercialType, string> = {
+        fee:     "bg-alloy-pine/8 text-alloy-pine/80",
+        addon:   "bg-alloy-stone/12 text-alloy-midnight/60",
+        deposit: "bg-alloy-forge/5 text-alloy-midnight/65",
+    };
+    const TYPE_LABEL: Record<CommercialType, string> = { fee: "Fee", addon: "Add-on", deposit: "Deposit" };
 
-    // ── Addon form panel ──────────────────────────────────────────────────────────
-    const addonFormValid = addonName.trim().length > 0 && addonCategory.trim().length > 0 && addonCadenceKey.length > 0 && parseFloat(addonAmount) >= 0;
-    const addonFormPanel = (
-        <div className="rounded-lg border border-alloy-pine/30 bg-alloy-pine/3 p-4 space-y-3">
-            <div className="grid grid-cols-2 gap-3">
-                <CField label="Name *" value={addonName} onChange={setAddonName} placeholder="e.g. Extended Care" required />
-                <CSuggest label="Category *" value={addonCategory} onChange={setAddonCategory} suggestions={ADDON_TYPE_SUGGESTIONS} />
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-                <CField label="Amount ($) *" value={addonAmount} onChange={setAddonAmount} placeholder="0.00" />
-                <CSelect label="Frequency *" value={addonCadenceKey} onChange={setAddonCadenceKey} options={FREQUENCY_OPTIONS.filter(o => o.key !== "").map(o => ({ key: o.key, label: o.label }))} />
-            </div>
-            <CToggle label="This is a pass or package" checked={addonIsPackage} onChange={setAddonIsPackage} hint="e.g. 5 uses valid 30 days" />
-            {addonIsPackage && (
-                <div className="grid grid-cols-3 gap-3 pl-4 border-l-2 border-alloy-pine/20">
-                    <CField label="Unit count" value={addonPkgCount} onChange={setAddonPkgCount} placeholder="5" type="number" />
-                    <CSelect label="Unit type" value={addonPkgUnit} onChange={setAddonPkgUnit} options={PACKAGE_UNIT_TYPE_OPTIONS.map(u => ({ key: u, label: u }))} />
-                    <CField label="Expires after (days)" value={addonPkgExpiry} onChange={setAddonPkgExpiry} placeholder="30" type="number" />
+    function formatAmount(cents: number) {
+        return `$${(cents / 100).toLocaleString("en-US", { minimumFractionDigits: cents % 100 === 0 ? 0 : 2 })}`;
+    }
+
+    const isFormOpen = adding || editingId !== null;
+
+    const formPanel = (
+        <div className="rounded-lg border border-alloy-pine/35 bg-alloy-pine/3 p-5 space-y-4">
+            <CField label="Name *" value={name} onChange={setName} placeholder="e.g. Registration Fee" required />
+
+            {/* Commercial type — pill selector */}
+            <div className="space-y-1.5">
+                <span className="text-[10px] font-medium text-alloy-midnight/55 uppercase tracking-wide">
+                    Commercial type{!editingId && " *"}
+                </span>
+                <div className="flex gap-2 flex-wrap">
+                    {COMMERCIAL_TYPE_OPTIONS.map(opt => (
+                        <button
+                            key={opt.key}
+                            type="button"
+                            disabled={!!editingId}
+                            onClick={() => { if (!editingId) setCommercialType(opt.key); }}
+                            className={[
+                                "rounded-full px-3 py-1 text-xs font-medium border transition-colors",
+                                commercialType === opt.key
+                                    ? "bg-alloy-pine text-white border-alloy-pine"
+                                    : "bg-white text-alloy-midnight/60 border-alloy-stone/30 hover:border-alloy-pine/40 hover:text-alloy-pine",
+                                editingId ? "opacity-60 cursor-not-allowed" : "cursor-pointer",
+                            ].join(" ")}
+                        >{opt.label}</button>
+                    ))}
                 </div>
-            )}
-            <ScopeFields locationId={addonLocationId} setLocationId={setAddonLocationId} programKey={addonProgramKey} setProgramKey={setAddonProgramKey} locations={locations} programs={programs} />
-            <EffectiveDateFields start={addonEffStart} end={addonEffEnd} onStart={setAddonEffStart} onEnd={setAddonEffEnd} />
-            <CField label="Revenue category" value={addonRevCat} onChange={setAddonRevCat} placeholder="e.g. Enrichment Revenue" />
-            <SaveBar onSave={saveAddon} onCancel={cancelAddon} saving={savingAddon} disabled={!addonFormValid} />
-        </div>
-    );
+                {commercialType && (
+                    <p className="text-[10px] text-alloy-midnight/55">
+                        {COMMERCIAL_TYPE_OPTIONS.find(o => o.key === commercialType)?.description}
+                    </p>
+                )}
+            </div>
 
-    // ── Deposit form panel ────────────────────────────────────────────────────────
-    const depositFormValid = depositName.trim().length > 0 && parseFloat(depositAmount) >= 0;
-    const depositFormPanel = (
-        <div className="rounded-lg border border-alloy-pine/30 bg-alloy-pine/3 p-4 space-y-3">
-            <div className="grid grid-cols-2 gap-3">
-                <CField label="Name *" value={depositName} onChange={setDepositName} placeholder="e.g. Enrollment Deposit" required />
-                <CField label="Amount ($) *" value={depositAmount} onChange={setDepositAmount} placeholder="500.00" />
-            </div>
-            <CSuggest label="When is it due?" value={depositTiming} onChange={setDepositTiming} suggestions={DEPOSIT_TIMING_SUGGESTIONS} />
-            <div className="flex items-center gap-6">
-                <CToggle label="Refundable" checked={depositRefundable} onChange={setDepositRefundable} />
-                <CToggle label="Apply to first balance" checked={depositApplyToBalance} onChange={setDepositApplyToBalance} hint="Credits toward first tuition charge" />
-            </div>
-            <ScopeFields locationId={depositLocationId} setLocationId={setDepositLocationId} programKey={depositProgramKey} setProgramKey={setDepositProgramKey} locations={locations} programs={programs} />
-            <EffectiveDateFields start={depositEffStart} end={depositEffEnd} onStart={setDepositEffStart} onEnd={setDepositEffEnd} />
-            <CField label="Revenue category" value={depositRevCat} onChange={setDepositRevCat} placeholder="e.g. Deposits Held" />
-            <SaveBar onSave={saveDeposit} onCancel={cancelDeposit} saving={savingDeposit} disabled={!depositFormValid} />
+            {commercialType && (
+                <>
+                    <CField label="Amount ($) *" value={amount} onChange={setAmount} placeholder="0.00" />
+
+                    {commercialType === "fee" && (
+                        <>
+                            <div className="grid grid-cols-2 gap-3">
+                                <CSuggest label="Category *" value={feeType} onChange={setFeeType} suggestions={categorySuggestions} placeholder="e.g. Registration fee" />
+                                <CSelect label="Frequency" value={feeFreq} onChange={setFeeFreq} options={FREQUENCY_OPTIONS.map(o => ({ key: o.key, label: o.label }))} />
+                            </div>
+                            <CToggle label="Required" checked={feeRequired} onChange={setFeeRequired} hint="Applied automatically to all enrollments" />
+                        </>
+                    )}
+
+                    {commercialType === "addon" && (
+                        <>
+                            <div className="grid grid-cols-2 gap-3">
+                                <CSuggest label="Category *" value={addonType} onChange={setAddonType} suggestions={categorySuggestions} placeholder="e.g. Extended care" />
+                                <CSelect label="Frequency *" value={addonFreq} onChange={setAddonFreq} options={FREQUENCY_OPTIONS.map(o => ({ key: o.key, label: o.label }))} />
+                            </div>
+                            <CToggle label="This is a pass or package" checked={addonIsPkg} onChange={setAddonIsPkg} hint="e.g. 5-session pass valid 30 days" />
+                            {addonIsPkg && (
+                                <div className="grid grid-cols-3 gap-3 pl-4 border-l-2 border-alloy-pine/20">
+                                    <CField label="Count" value={pkgCount} onChange={setPkgCount} placeholder="5" type="number" />
+                                    <CSelect label="Unit" value={pkgUnit} onChange={setPkgUnit} options={PACKAGE_UNIT_TYPE_OPTIONS.map(u => ({ key: u, label: u }))} />
+                                    <CField label="Expires after (days)" value={pkgExpiry} onChange={setPkgExpiry} placeholder="30" type="number" />
+                                </div>
+                            )}
+                        </>
+                    )}
+
+                    {commercialType === "deposit" && (
+                        <>
+                            <CSelect label="When is it due?" value={depositTiming} onChange={setDepositTiming} options={DUE_TIMING_OPTIONS} />
+                            <div className="flex items-center gap-6">
+                                <CToggle label="Refundable" checked={depositRefundable} onChange={setDepositRefundable} />
+                                <CToggle label="Apply to first balance" checked={depositApplyToBalance} onChange={setDepositApplyToBalance} hint="Credits toward first tuition charge" />
+                            </div>
+                        </>
+                    )}
+
+                    <ScopeFields locationId={locId} setLocationId={setLocId} programKey={progKey} setProgramKey={setProgKey} locations={locations} programs={programs} />
+                    <div className="grid grid-cols-2 gap-3">
+                        <CField label="Activates on (optional)" value={effStart} onChange={setEffStart} type="date" />
+                        <CField label="Expires on (optional)" value={effEnd} onChange={setEffEnd} type="date" />
+                    </div>
+                    <CField label="Revenue category" value={revCat} onChange={setRevCat} placeholder="e.g. Program Revenue" />
+                </>
+            )}
+
+            <SaveBar onSave={() => void save()} onCancel={cancel} saving={saving} disabled={!formValid} />
         </div>
     );
 
     if (loading) {
-        return <div className="flex items-center justify-center flex-1 text-sm text-alloy-midnight/35 py-16">Loading…</div>;
+        return <div className="flex items-center justify-center flex-1 text-sm text-alloy-midnight/55 py-16">Loading…</div>;
     }
 
     return (
         <div className="flex-1 overflow-y-auto">
-            <div className="max-w-2xl mx-auto px-6 py-8 space-y-10">
+            <div className="max-w-2xl mx-auto px-6 py-8 space-y-6">
 
-                {/* ── Fees ─────────────────────────────────────────────────────── */}
-                <section className="space-y-3">
-                    <SectionHeader title="Fees" count={fees.length} onAdd={startAddFee} adding={addingFee} />
-                    <p className="text-xs text-alloy-midnight/40">Required or auto-triggered charges beyond tuition — registration, materials, annual fees.</p>
+                <div className="flex items-center justify-between">
+                    <div>
+                        <h2 className="text-base font-semibold text-alloy-midnight">Commercial Catalog</h2>
+                        <p className="text-xs text-alloy-midnight/60 mt-0.5">
+                            Everything beyond tuition — {fees.length + addons.length + deposits.length} item{fees.length + addons.length + deposits.length !== 1 ? "s" : ""} configured.
+                        </p>
+                    </div>
+                    {!isFormOpen && (
+                        <button
+                            type="button"
+                            onClick={startAdd}
+                            className="flex items-center gap-1.5 rounded-md bg-alloy-pine px-3 py-1.5 text-xs font-medium text-white hover:bg-alloy-pine/85 transition-colors"
+                        >
+                            <span className="text-sm leading-none">+</span> Add item
+                        </button>
+                    )}
+                </div>
 
-                    {addingFee && feeFormPanel}
+                {adding && formPanel}
 
-                    {fees.length === 0 && !addingFee ? (
-                        <EmptySlate label="No fees configured yet." onAdd={startAddFee} />
-                    ) : (
-                        <div className="space-y-2">
-                            {fees.map(fee => (
-                                <div key={fee.id}>
-                                    {editingFeeId === fee.id ? feeFormPanel : (
-                                        <CommercialCard onClick={() => startEditFee(fee)}>
-                                            <div className="flex items-start justify-between gap-3">
-                                                <div className="min-w-0 flex-1">
-                                                    <div className="flex items-center gap-2 flex-wrap">
-                                                        <span className="text-sm font-medium text-alloy-midnight truncate">{fee.name}</span>
-                                                        <span className="text-[10px] text-alloy-midnight/45 bg-alloy-stone/10 rounded px-1.5 py-0.5">{fee.fee_type}</span>
-                                                        {fee.is_required && <span className="text-[10px] text-alloy-pine/70 font-medium">Required</span>}
-                                                    </div>
-                                                    <div className="flex items-center gap-2 mt-1 flex-wrap">
-                                                        <span className="text-sm font-semibold text-alloy-midnight">
-                                                            {fee.amount_cents === 0 ? "$0" : `$${(fee.amount_cents / 100).toLocaleString("en-US", { minimumFractionDigits: fee.amount_cents % 100 === 0 ? 0 : 2 })}`}
-                                                        </span>
-                                                        <FreqBadge cadenceKey={fee.cadence_key} />
-                                                        <ScopeBadge locationId={fee.location_id} programKey={fee.program_key} locations={locations} />
-                                                        {fee.revenue_category && <span className="text-[10px] text-alloy-midnight/35 italic">{fee.revenue_category}</span>}
-                                                    </div>
-                                                    {(fee.effective_start || fee.effective_end) && (
-                                                        <p className="text-[10px] text-alloy-midnight/30 mt-0.5">
-                                                            {fee.effective_start ? `From ${fee.effective_start}` : ""}
-                                                            {fee.effective_end ? ` · Until ${fee.effective_end}` : ""}
-                                                        </p>
+                {allItems.length === 0 && !adding ? (
+                    <EmptySlate label="Nothing configured yet. Add your first fee, add-on, or deposit." onAdd={startAdd} />
+                ) : allItems.length > 0 ? (
+                    <div className="space-y-2">
+                        {allItems.map(c => (
+                            <div key={`${c._kind}-${c.item.id}`}>
+                                {editingId === c.item.id ? formPanel : (
+                                    <CommercialCard onClick={() => startEdit(c)}>
+                                        <div className="flex items-start justify-between gap-3">
+                                            <div className="min-w-0 flex-1 space-y-0.5">
+                                                <div className="flex items-center gap-2 flex-wrap">
+                                                    <span className="text-sm font-medium text-alloy-midnight">{c.item.name}</span>
+                                                    <span className={`text-[10px] font-medium rounded px-1.5 py-0.5 ${TYPE_BADGE[c._kind]}`}>{TYPE_LABEL[c._kind]}</span>
+                                                    {c._kind === "fee" && c.item.fee_type && (
+                                                        <span className="text-[10px] text-alloy-midnight/55 bg-alloy-stone/10 rounded px-1.5 py-0.5">{c.item.fee_type}</span>
+                                                    )}
+                                                    {c._kind === "addon" && c.item.addon_type && (
+                                                        <span className="text-[10px] text-alloy-midnight/55 bg-alloy-stone/10 rounded px-1.5 py-0.5">{c.item.addon_type}</span>
+                                                    )}
+                                                    {c._kind === "fee" && c.item.is_required && (
+                                                        <span className="text-[10px] text-alloy-pine/80 font-medium">Required</span>
+                                                    )}
+                                                    {c._kind === "addon" && isPackageAddon(c.item) && (
+                                                        <span className="text-[10px] text-alloy-midnight/55 bg-alloy-stone/8 rounded px-1.5 py-0.5">{describePackage(c.item)}</span>
+                                                    )}
+                                                    {c._kind === "deposit" && c.item.is_refundable && (
+                                                        <span className="text-[10px] text-alloy-midnight/55 bg-alloy-stone/10 rounded px-1.5 py-0.5">Refundable</span>
+                                                    )}
+                                                    {c._kind === "deposit" && c.item.apply_to_balance && (
+                                                        <span className="text-[10px] text-alloy-pine/70 bg-alloy-pine/6 rounded px-1.5 py-0.5">Credits balance</span>
                                                     )}
                                                 </div>
-                                                <button
-                                                    type="button"
-                                                    onClick={e => { e.stopPropagation(); void deleteFee(fee.id); }}
-                                                    className="opacity-0 group-hover:opacity-100 text-[11px] text-alloy-midnight/25 hover:text-red-400 transition-all flex-shrink-0 px-1"
-                                                    title="Delete fee"
-                                                >✕</button>
-                                            </div>
-                                        </CommercialCard>
-                                    )}
-                                </div>
-                            ))}
-                        </div>
-                    )}
-                </section>
-
-                {/* ── Add-ons ───────────────────────────────────────────────────── */}
-                <section className="space-y-3">
-                    <SectionHeader title="Add-ons" count={addons.length} onAdd={startAddAddon} adding={addingAddon} />
-                    <p className="text-xs text-alloy-midnight/40">Optional commercial products families can enroll in — extended care, enrichment, lunch, passes.</p>
-
-                    {addingAddon && addonFormPanel}
-
-                    {addons.length === 0 && !addingAddon ? (
-                        <EmptySlate label="No add-ons configured yet." onAdd={startAddAddon} />
-                    ) : (
-                        <div className="space-y-2">
-                            {addons.map(addon => (
-                                <div key={addon.id}>
-                                    {editingAddonId === addon.id ? addonFormPanel : (
-                                        <CommercialCard onClick={() => startEditAddon(addon)}>
-                                            <div className="flex items-start justify-between gap-3">
-                                                <div className="min-w-0 flex-1">
-                                                    <div className="flex items-center gap-2 flex-wrap">
-                                                        <span className="text-sm font-medium text-alloy-midnight truncate">{addon.name}</span>
-                                                        <span className="text-[10px] text-alloy-midnight/45 bg-alloy-stone/10 rounded px-1.5 py-0.5">{addon.addon_type}</span>
-                                                        {isPackageAddon(addon) && (
-                                                            <span className="text-[10px] text-alloy-midnight/50 bg-alloy-stone/8 rounded px-1.5 py-0.5">
-                                                                📦 {describePackage(addon)}
-                                                            </span>
-                                                        )}
-                                                    </div>
-                                                    <div className="flex items-center gap-2 mt-1 flex-wrap">
-                                                        <span className="text-sm font-semibold text-alloy-midnight">
-                                                            ${(addon.amount_cents / 100).toLocaleString("en-US", { minimumFractionDigits: addon.amount_cents % 100 === 0 ? 0 : 2 })}
-                                                        </span>
-                                                        <FreqBadge cadenceKey={addon.cadence_key} />
-                                                        <ScopeBadge locationId={addon.location_id} programKey={addon.program_key} locations={locations} />
-                                                        {addon.revenue_category && <span className="text-[10px] text-alloy-midnight/35 italic">{addon.revenue_category}</span>}
-                                                    </div>
-                                                    {(addon.effective_start || addon.effective_end) && (
-                                                        <p className="text-[10px] text-alloy-midnight/30 mt-0.5">
-                                                            {addon.effective_start ? `From ${addon.effective_start}` : ""}
-                                                            {addon.effective_end ? ` · Until ${addon.effective_end}` : ""}
-                                                        </p>
+                                                <div className="flex items-center gap-2 flex-wrap">
+                                                    <span className="text-sm font-semibold text-alloy-midnight">{formatAmount(c.item.amount_cents)}</span>
+                                                    {c._kind !== "deposit" && (
+                                                        <FreqBadge cadenceKey={c._kind === "fee" ? c.item.cadence_key : c.item.cadence_key} />
+                                                    )}
+                                                    {c._kind === "deposit" && (
+                                                        <span className="text-[10px] text-alloy-midnight/60 bg-alloy-stone/8 rounded px-1.5 py-0.5">Due: {c.item.due_timing}</span>
+                                                    )}
+                                                    <ScopeBadge locationId={c.item.location_id} programKey={c.item.program_key} locations={locations} />
+                                                    {c.item.revenue_category && (
+                                                        <span className="text-[10px] text-alloy-midnight/55 italic">{c.item.revenue_category}</span>
                                                     )}
                                                 </div>
-                                                <button
-                                                    type="button"
-                                                    onClick={e => { e.stopPropagation(); void deleteAddon(addon.id); }}
-                                                    className="opacity-0 group-hover:opacity-100 text-[11px] text-alloy-midnight/25 hover:text-red-400 transition-all flex-shrink-0 px-1"
-                                                    title="Delete add-on"
-                                                >✕</button>
+                                                {(c.item.effective_start || c.item.effective_end) && (
+                                                    <p className="text-[10px] text-alloy-midnight/55">
+                                                        {c.item.effective_start ? `Active from ${c.item.effective_start}` : ""}
+                                                        {c.item.effective_end ? ` · expires ${c.item.effective_end}` : ""}
+                                                    </p>
+                                                )}
                                             </div>
-                                        </CommercialCard>
-                                    )}
-                                </div>
-                            ))}
-                        </div>
-                    )}
-                </section>
+                                            <button
+                                                type="button"
+                                                onClick={e => { e.stopPropagation(); void deleteItem(c); }}
+                                                className="opacity-0 group-hover:opacity-100 text-[11px] text-alloy-midnight/35 hover:text-red-400 transition-all flex-shrink-0 px-1"
+                                                title="Remove from catalog"
+                                            >✕</button>
+                                        </div>
+                                    </CommercialCard>
+                                )}
+                            </div>
+                        ))}
+                    </div>
+                ) : null}
 
-                {/* ── Deposits ─────────────────────────────────────────────────── */}
-                <section className="space-y-3">
-                    <SectionHeader title="Deposits" count={deposits.length} onAdd={startAddDeposit} adding={addingDeposit} />
-                    <p className="text-xs text-alloy-midnight/40">Held amounts collected at enrollment. Refund lifecycle managed by Billing.</p>
-
-                    {addingDeposit && depositFormPanel}
-
-                    {deposits.length === 0 && !addingDeposit ? (
-                        <EmptySlate label="No deposits configured yet." onAdd={startAddDeposit} />
-                    ) : (
-                        <div className="space-y-2">
-                            {deposits.map(dep => (
-                                <div key={dep.id}>
-                                    {editingDepositId === dep.id ? depositFormPanel : (
-                                        <CommercialCard onClick={() => startEditDeposit(dep)}>
-                                            <div className="flex items-start justify-between gap-3">
-                                                <div className="min-w-0 flex-1">
-                                                    <div className="flex items-center gap-2 flex-wrap">
-                                                        <span className="text-sm font-medium text-alloy-midnight truncate">{dep.name}</span>
-                                                        {dep.is_refundable && <span className="text-[10px] text-alloy-midnight/50 bg-alloy-stone/10 rounded px-1.5 py-0.5">Refundable</span>}
-                                                        {dep.apply_to_balance && <span className="text-[10px] text-alloy-pine/60 bg-alloy-pine/6 rounded px-1.5 py-0.5">Credits balance</span>}
-                                                    </div>
-                                                    <div className="flex items-center gap-2 mt-1 flex-wrap">
-                                                        <span className="text-sm font-semibold text-alloy-midnight">
-                                                            ${(dep.amount_cents / 100).toLocaleString("en-US", { minimumFractionDigits: dep.amount_cents % 100 === 0 ? 0 : 2 })}
-                                                        </span>
-                                                        <span className="text-[10px] text-alloy-midnight/40">Due: {dep.due_timing.replace(/_/g, " ")}</span>
-                                                        <ScopeBadge locationId={dep.location_id} programKey={dep.program_key} locations={locations} />
-                                                        {dep.revenue_category && <span className="text-[10px] text-alloy-midnight/35 italic">{dep.revenue_category}</span>}
-                                                    </div>
-                                                    {(dep.effective_start || dep.effective_end) && (
-                                                        <p className="text-[10px] text-alloy-midnight/30 mt-0.5">
-                                                            {dep.effective_start ? `From ${dep.effective_start}` : ""}
-                                                            {dep.effective_end ? ` · Until ${dep.effective_end}` : ""}
-                                                        </p>
-                                                    )}
-                                                </div>
-                                                <button
-                                                    type="button"
-                                                    onClick={e => { e.stopPropagation(); void deleteDeposit(dep.id); }}
-                                                    className="opacity-0 group-hover:opacity-100 text-[11px] text-alloy-midnight/25 hover:text-red-400 transition-all flex-shrink-0 px-1"
-                                                    title="Delete deposit"
-                                                >✕</button>
-                                            </div>
-                                        </CommercialCard>
-                                    )}
-                                </div>
-                            ))}
-                        </div>
-                    )}
-                </section>
-
-                {/* ── Revenue mapping reference note ───────────────────────────── */}
                 <section className="rounded-lg border border-alloy-stone/15 bg-alloy-stone/3 px-4 py-3">
-                    <p className="text-xs font-medium text-alloy-midnight/50 mb-1">Revenue mapping</p>
-                    <p className="text-xs text-alloy-midnight/35 leading-relaxed">
-                        The <span className="font-medium text-alloy-midnight/50">Revenue category</span> field on each item is a reference label that Accounting will map to GL codes.
-                        Commercial defines what a charge is. Accounting decides where it posts.
+                    <p className="text-xs font-medium text-alloy-midnight/60 mb-1">Revenue mapping</p>
+                    <p className="text-xs text-alloy-midnight/55 leading-relaxed">
+                        The <span className="font-medium text-alloy-midnight/65">Revenue category</span> field is a reference label. Accounting maps it to GL codes — Commercial defines what a charge is; Accounting decides where it posts.
                     </p>
                 </section>
 
@@ -1747,7 +1661,7 @@ export function CommercialConfigWorkspace() {
                         type="button"
                         disabled={!tab.available}
                         onClick={() => { if (tab.available && (tab.key === "programs_tuition" || tab.key === "fees")) setActiveSection(tab.key); }}
-                        className={`px-4 py-3 text-sm -mb-px border-b-2 transition-colors whitespace-nowrap ${activeSection === tab.key ? "border-alloy-pine text-alloy-pine font-medium" : tab.available ? "border-transparent text-alloy-midnight/50 hover:text-alloy-midnight" : "border-transparent text-alloy-midnight/28 cursor-not-allowed"}`}
+                        className={`px-4 py-3 text-sm -mb-px border-b-2 transition-colors whitespace-nowrap ${activeSection === tab.key ? "border-alloy-pine text-alloy-pine font-medium" : tab.available ? "border-transparent text-alloy-midnight/50 hover:text-alloy-midnight" : "border-transparent text-alloy-midnight/45 cursor-not-allowed"}`}
                     >
                         {tab.label}
                     </button>
@@ -1762,7 +1676,7 @@ export function CommercialConfigWorkspace() {
             )}
 
             {activeSection === "fees" ? (
-                <FeesAddonsPanel
+                <CommercialCatalogPanel
                     fees={fees}
                     addons={addons}
                     deposits={deposits}
@@ -1785,7 +1699,7 @@ export function CommercialConfigWorkspace() {
                         <div className="flex flex-col min-h-0 flex-1">
                             <div className="flex border-b border-alloy-stone/15 px-6 bg-white flex-shrink-0">
                                 {(["programs", "tuition"] as const).map((tab) => (
-                                    <button key={tab} type="button" onClick={() => setSecondaryTab(tab)} className={`px-3 py-2.5 text-sm capitalize -mb-px border-b-2 transition-colors ${secondaryTab === tab ? "border-alloy-midnight text-alloy-midnight font-medium" : "border-transparent text-alloy-midnight/45 hover:text-alloy-midnight"}`}>
+                                    <button key={tab} type="button" onClick={() => setSecondaryTab(tab)} className={`px-3 py-2.5 text-sm capitalize -mb-px border-b-2 transition-colors ${secondaryTab === tab ? "border-alloy-pine text-alloy-pine font-medium" : "border-transparent text-alloy-midnight/55 hover:text-alloy-midnight"}`}>
                                         {tab}
                                     </button>
                                 ))}
