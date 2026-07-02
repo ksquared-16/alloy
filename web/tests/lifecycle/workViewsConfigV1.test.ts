@@ -71,6 +71,13 @@ describe("work_views_v1 metadata", () => {
         });
         expect(effective[0]?.label).toBe("New families today");
         expect(effective[0]?.compat_queue_key).toBe("new_families");
+        // Membership filter must carry the stage KEY (matches lifecycle_stage_key at runtime),
+        // not the display label — else the seeded Work View would match nothing.
+        expect(effective[0]?.filters_v1?.[0]).toEqual({
+            field_key: "opportunity_stage",
+            operator: "equals",
+            value: "lead",
+        });
     });
 
     it("normalizes display order", () => {
