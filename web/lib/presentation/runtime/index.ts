@@ -24,6 +24,13 @@ export {
 } from "./types";
 
 export {
+    mapQueueRowSurfaceToCompactConfig,
+    type CompactRowConfig,
+    type CompactRowSlotConfig,
+    type CompactRowSlots,
+} from "./queueRowSurfaceConfig";
+
+export {
     fallbackWorkspaceHeaderCardVms,
     refineWorkspaceHeaderCardVms,
     seedWorkspaceHeaderCalculations,

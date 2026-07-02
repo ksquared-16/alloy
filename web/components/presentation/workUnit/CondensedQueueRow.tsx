@@ -15,9 +15,20 @@
  * Rows without an attached context render the entity-id fallback card — still clickable.
  * The entire card is one button; opens flow through the FocusPanelSurface seam via
  * `onOpen`. Only fields the frozen contract provides are rendered — nothing invented.
+ *
+ * The optional `rowConfig` (from the published Queue Row surface, mapped onto the compact
+ * slots) tunes PLACEMENT only: it can hide a slot (`visible:false`) or override a slot's
+ * label. When absent (unpublished / fetch failed) the row renders pure generic-context —
+ * every slot visible, no label overrides — exactly as before. Config never invents content:
+ * a slot with no context value stays empty regardless of config. Row order/membership are
+ * server-owned (Work View sort_v1 via QueueService) — this component never sorts.
  */
 
-import { queueRowSubjectDisplayName, type QueueRowModel } from "@/lib/presentation/runtime";
+import {
+    queueRowSubjectDisplayName,
+    type CompactRowSlots,
+    type QueueRowModel,
+} from "@/lib/presentation/runtime";
 import {
     PRESENTATION_RUNTIME_LABELS,
     runtimeLabelProps,
@@ -75,13 +86,24 @@ function groupedCountLabel(context: RowContext): string | null {
     return `${count} ${unit}`;
 }
 
+/** A slot renders when config is absent or the config marks it visible. */
+function slotVisible(slot: CompactRowSlots[keyof CompactRowSlots] | undefined): boolean {
+    return slot?.visible !== false;
+}
+
 export function CondensedQueueRow({
     row,
+    rowConfig,
     onOpen,
     isFirst,
     isSelected,
 }: {
     row: QueueRowModel;
+    /**
+     * Compact-slot config from the published Queue Row surface (visibility + label
+     * overrides). Absent → pure generic-context rendering (all slots visible, no overrides).
+     */
+    rowConfig?: CompactRowSlots;
     onOpen: (row: QueueRowModel) => void;
     isFirst?: boolean;
     /** Row's record is the one open in the inline Focus Panel — persistent selected rail. */
@@ -111,20 +133,33 @@ export function CondensedQueueRow({
         );
     }
 
+    // Per-slot visibility from the published surface (absent config → all visible). The
+    // subject slot is the row's identity anchor and is always rendered; config visibility
+    // gates only the secondary slots.
+    const showStatus = slotVisible(rowConfig?.status);
+    const showContact = slotVisible(rowConfig?.contact);
+    const showAttention = slotVisible(rowConfig?.attention);
+    const showWork = slotVisible(rowConfig?.work);
+    const showGroupCount = slotVisible(rowConfig?.groupCount);
+
     const displayName = queueRowSubjectDisplayName(context);
-    const stageLabel = context.row_status_label || context.row_stage;
-    const needsAttention = context.attention_summary?.needs_attention === true;
+    // Status pill: config label override where present, else the generic context value.
+    const stageLabel = showStatus
+        ? rowConfig?.status?.label ?? (context.row_status_label || context.row_stage)
+        : null;
+    const needsAttention = showAttention && context.attention_summary?.needs_attention === true;
     const attentionReason = needsAttention
         ? context.attention_summary?.primary_reason_label ?? null
         : null;
-    const line2 = contactLine(context);
-    const countChip = groupedCountLabel(context);
-    const workLabel =
-        context.current_work_summary?.label ??
-        context.next_best_action?.label ??
-        context.work_summary?.primary_open_label ??
-        null;
-    const dueLabel = context.current_work_summary?.due_label ?? null;
+    const line2 = showContact ? contactLine(context) : null;
+    const countChip = showGroupCount ? groupedCountLabel(context) : null;
+    const workLabel = showWork
+        ? context.current_work_summary?.label ??
+          context.next_best_action?.label ??
+          context.work_summary?.primary_open_label ??
+          null
+        : null;
+    const dueLabel = showWork ? context.current_work_summary?.due_label ?? null : null;
     const hasFooterLine = countChip != null || workLabel != null || dueLabel != null;
 
     return (

@@ -76,9 +76,22 @@ import {
     type WorkUnitSurfaceIntents,
     type WorkUnitSurfaceModel,
 } from "./types";
+import { mapQueueRowSurfaceToCompactConfig } from "./queueRowSurfaceConfig";
+import type { QueueRecordLayoutConfigV3 } from "@/lib/layout/queueRecordLayoutV3";
 
 /** Drawer open provenance for Focus Panel opens from the presentation runtime queue. */
 const PRESENTATION_RUNTIME_QUEUE_ROW_OPEN_SOURCE = "presentation_runtime_queue_row";
+
+/**
+ * Published Queue Row surface id for the Work Unit queue. PRV2's work-unit queue is the
+ * OPPORTUNITY queue (`entity_type: "opportunity"`), whose published compact-row surface is
+ * "pipeline-queue-row" (GET /api/admin/queue-row-layout/{surfaceId}). Job/schedule lanes
+ * have no published queue-row surface → null (skip fetch, generic-context fallback). The
+ * queue's entity_type comes from the rows RESULT, not config; to avoid coupling the config
+ * batch to the rows fetch we assume the opportunity surface here (documented). If a future
+ * work unit exposes a non-opportunity primary queue, derive this from the queue definition.
+ */
+const WORK_UNIT_QUEUE_ROW_SURFACE_ID = "pipeline-queue-row";
 
 /**
  * Validate a Work View's base lane against THIS work unit's queue definition. A department's
@@ -123,6 +136,12 @@ export function useWorkUnitSurfaceRuntime(): WorkUnitSurfaceRuntime {
     // so the header card SET is known at configSettled (reveals with title + pills, no late
     // pop-in). null on error / no publish → the seed uses the code-owned fallback.
     const [headerDoc, setHeaderDoc] = useState<SurfaceDoc | null>(null);
+    // The published Queue Row surface config (`QueueRecordLayoutConfigV3`) — fetched in the
+    // SAME config Promise.all so the compact row's slot visibility/labels are known at
+    // configSettled. Pure enrichment: catch → null (generic-context fallback), never blocks
+    // reveal, never changes row ordering/counts. PRV2's work-unit queue is the OPPORTUNITY
+    // queue, so the surfaceId is the pipeline queue-row surface (see WORK_UNIT_QUEUE_ROW_SURFACE_ID).
+    const [queueRowLayoutConfig, setQueueRowLayoutConfig] = useState<QueueRecordLayoutConfigV3 | null>(null);
     const [configSettled, setConfigSettled] = useState(false);
 
     useEffect(() => {
@@ -145,8 +164,20 @@ export function useWorkUnitSurfaceRuntime(): WorkUnitSurfaceRuntime {
             dedupeAdminFetch(`/api/admin/analytics/surfaces/work_unit_header/doc`, init)
                 .then((res) => (res.ok ? res.json() : null))
                 .catch(() => null),
+            // Published Queue Row surface config — the compact condensed row consumes its
+            // field visibility / labels. Enrichment only: never rejects the batch, config
+            // null → generic-context fallback. Server falls back to the built-in default
+            // when unpublished, so a 200 here already carries a usable config.
+            WORK_UNIT_QUEUE_ROW_SURFACE_ID
+                ? dedupeAdminFetch(
+                      `/api/admin/queue-row-layout/${encodeURIComponent(WORK_UNIT_QUEUE_ROW_SURFACE_ID)}`,
+                      init,
+                  )
+                      .then((res) => (res.ok ? res.json() : null))
+                      .catch(() => null)
+                : Promise.resolve(null),
         ])
-            .then(([dept, wu, deptUnits, headerDocRes]) => {
+            .then(([dept, wu, deptUnits, headerDocRes, queueRowLayoutRes]) => {
                 if (cancelled) return;
                 setDeptMetadata((dept as { metadata?: unknown } | null)?.metadata ?? null);
                 setQueueDefinition((wu as { queue_definition?: unknown } | null)?.queue_definition ?? null);
@@ -158,6 +189,14 @@ export function useWorkUnitSurfaceRuntime(): WorkUnitSurfaceRuntime {
                 setHeaderDoc(
                     doc && typeof doc === "object" && Array.isArray((doc as { sections?: unknown }).sections)
                         ? (doc as SurfaceDoc)
+                        : null,
+                );
+                const rowLayout = (queueRowLayoutRes as { config?: unknown } | null)?.config ?? null;
+                setQueueRowLayoutConfig(
+                    rowLayout
+                        && typeof rowLayout === "object"
+                        && Array.isArray((rowLayout as { columns?: unknown }).columns)
+                        ? (rowLayout as QueueRecordLayoutConfigV3)
                         : null,
                 );
             })
@@ -291,6 +330,14 @@ export function useWorkUnitSurfaceRuntime(): WorkUnitSurfaceRuntime {
 
     // THE count model: the `total` of the same rows response that renders the queue.
     const totalCount = useMemo(() => queueTotalCountFromQueueItemsResult(queueResult), [queueResult]);
+
+    // Compact-row slot config from the published Queue Row surface (visibility + labels).
+    // Presentation-only: does NOT touch row order/membership/count. Generic-context fallback
+    // (all slots visible, no overrides) when the surface is unpublished / the fetch failed.
+    const queueRowConfig = useMemo(
+        () => mapQueueRowSurfaceToCompactConfig(queueRowLayoutConfig).slots,
+        [queueRowLayoutConfig],
+    );
 
     // ── Canonical locations: where each visible view's count/rows are DEFINED ───────────
     // Host work unit + base lane per view (`resolveWorkViewCanonicalLocation`) — the same
@@ -505,6 +552,7 @@ export function useWorkUnitSurfaceRuntime(): WorkUnitSurfaceRuntime {
                 totalCount,
                 loading: queueLoading,
                 error: queueError,
+                rowConfig: queueRowConfig,
             },
             activeWorkViewId: runtimeCtx.workViewId,
             selectedRecordId,
@@ -519,6 +567,7 @@ export function useWorkUnitSurfaceRuntime(): WorkUnitSurfaceRuntime {
             workViews,
             rows,
             totalCount,
+            queueRowConfig,
             queueLoading,
             queueError,
             runtimeCtx.workViewId,

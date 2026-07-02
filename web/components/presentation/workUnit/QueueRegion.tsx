@@ -97,6 +97,7 @@ export function QueueRegion({
                             <li key={`${row.entityType}:${row.entityId}`}>
                                 <CondensedQueueRow
                                     row={row}
+                                    rowConfig={queue.rowConfig}
                                     onOpen={openRecord}
                                     isFirst={index === 0}
                                     isSelected={rowIsSelected(row, selectedRecordId)}

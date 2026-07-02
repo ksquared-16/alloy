@@ -24,6 +24,7 @@ import type { OipMetricKey } from "@/lib/metrics/types";
 import type { ResolvedMetricMap } from "@/lib/metrics/fetchResolvedMetrics";
 import type { WorkspaceHeaderCalculationCardVm } from "./workspaceHeaderCards";
 import type { WorkUnitHeaderCalculationCardVm } from "./workUnitHeaderCards";
+import type { CompactRowSlots } from "./queueRowSurfaceConfig";
 import { findOperationalCalculation } from "@/lib/analytics/calculations/registry";
 import { getDrillContract } from "@/lib/analytics/runtime/drillResolver";
 import { operatorWorkUnitHrefFromKey } from "@/lib/admin/canonicalOperatorRoutes";
@@ -133,6 +134,13 @@ export type WorkUnitSurfaceModel = {
         totalCount: number | null;
         loading: boolean;
         error: string | null;
+        /**
+         * Published Queue Row surface config mapped onto the COMPACT row anatomy's fixed
+         * slots (visibility + label overrides). Server owns row order/membership/filtering;
+         * this only tunes per-slot placement of the compact card. Generic-context fallback
+         * (all slots visible, no overrides) when the surface is unpublished / fetch failed.
+         */
+        rowConfig: CompactRowSlots;
     };
     activeWorkViewId: string | null;
     /**
