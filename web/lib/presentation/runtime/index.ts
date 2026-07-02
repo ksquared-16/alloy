@@ -6,9 +6,11 @@
 export {
     drillHrefForMetricKey,
     operationalAnswerModelsFromResolvedMetrics,
+    opportunityQueuePreviewSeedFromRowContext,
     processTileModelFromLandingCard,
     queueRowModelFromQueueItem,
     queueRowModelsFromQueueItemsResult,
+    queueRowSubjectDisplayName,
     queueTotalCountFromQueueItemsResult,
     workViewLinkFromWorkQueuePreview,
     workViewLinkModelsFromConfiguredViews,

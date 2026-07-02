@@ -16,6 +16,7 @@ import type {
     OperatorLifecycleLandingCard,
     OperatorLifecycleWorkQueuePreview,
 } from "@/lib/admin/buildOperatorLifecycleLanding";
+import type { OpportunityDrawerQueuePreviewSeed } from "@/lib/admin/opportunityDrawerQueuePreviewSeed";
 import type { QueueRowContext } from "@/lib/workUnits/lifecycleSubjectContracts";
 import type { WorkViewConfigV1Stored } from "@/lib/lifecycle/workViewsConfigV1";
 import type { QueueItemsResult } from "@/lib/queues/types";
@@ -107,6 +108,12 @@ export type WorkUnitSurfaceModel = {
         error: string | null;
     };
     activeWorkViewId: string | null;
+    /**
+     * The currently selected Focus Panel record (opportunity) id — `drawer.id` from the
+     * global drawer store when an opportunity subject is selected, else null. Queue rows
+     * use it to render the persistent selected rail.
+     */
+    selectedRecordId: string | null;
     ready: boolean;
 };
 
@@ -219,6 +226,44 @@ export function processTileModelFromLandingCard(card: OperatorLifecycleLandingCa
         needsAttentionCount: card.needsAttentionCount,
         workViews: card.workQueues.map(workViewLinkFromWorkQueuePreview),
         performanceMetrics: card.performanceMetrics ?? [],
+    };
+}
+
+/**
+ * Subject display for a queue row context: single subject name; grouped rows join
+ * subjects or fall back to the row count. The ONE subject-title derivation — the
+ * condensed queue row and the Focus Panel open seed both render it, so the inline
+ * panel's seed header can never disagree with the clicked row.
+ */
+export function queueRowSubjectDisplayName(context: QueueRowContext): string {
+    if (context.row_presentation_mode === "grouped_subjects") {
+        if (context.row_subjects?.length) {
+            return context.row_subjects.map((s) => s.display_name).join(", ");
+        }
+        if (context.row_count != null) {
+            const unit = (context.row_count_unit ?? "records").replace(/_/g, " ");
+            return `${context.row_count} ${unit}`;
+        }
+    }
+    return context.row_subject.display_name;
+}
+
+/**
+ * Ephemeral Focus Panel header seed from a queue row's frozen context — owns the
+ * subject identity from the click until the record payload resolves (see
+ * `resolveFocusPanelSubjectReveal`). Null when the row carried no context (the panel
+ * falls back to the entity-label placeholder title).
+ */
+export function opportunityQueuePreviewSeedFromRowContext(
+    context: QueueRowContext | null,
+): OpportunityDrawerQueuePreviewSeed | null {
+    if (!context) return null;
+    const title = queueRowSubjectDisplayName(context).trim();
+    if (!title) return null;
+    return {
+        title,
+        statusLabel: context.row_status_label?.trim() || null,
+        stageLabel: context.row_stage?.trim() || null,
     };
 }
 

@@ -8,7 +8,7 @@
  * (`useFocusPanelOpen`). States: loading skeletons, quiet inline error, empty, rows.
  */
 
-import type { WorkUnitSurfaceModel } from "@/lib/presentation/runtime";
+import type { QueueRowModel, WorkUnitSurfaceModel } from "@/lib/presentation/runtime";
 import {
     PRESENTATION_RUNTIME_LABELS,
     runtimeLabelProps,
@@ -28,7 +28,27 @@ function QueueRowSkeleton() {
     );
 }
 
-export function QueueRegion({ queue }: { queue: WorkUnitSurfaceModel["queue"] }) {
+/**
+ * A row is selected when its identity matches the open Focus Panel record — either the
+ * row's own entity id or the frozen contract's `drawer_open` anchor (grouped rows open
+ * their case opportunity, so the anchor is the id the drawer store holds).
+ */
+function rowIsSelected(row: QueueRowModel, selectedRecordId: string | null): boolean {
+    if (!selectedRecordId) return false;
+    return (
+        row.entityId === selectedRecordId ||
+        row.context?.drawer_open.entity_id === selectedRecordId
+    );
+}
+
+export function QueueRegion({
+    queue,
+    selectedRecordId = null,
+}: {
+    queue: WorkUnitSurfaceModel["queue"];
+    /** Currently open inline Focus Panel record — rows render the selected rail. */
+    selectedRecordId?: string | null;
+}) {
     const { openRecord } = useFocusPanelOpen();
 
     return (
@@ -62,7 +82,12 @@ export function QueueRegion({ queue }: { queue: WorkUnitSurfaceModel["queue"] })
                     <ul role="list" className="divide-y divide-alloy-stone/12">
                         {queue.rows.map((row, index) => (
                             <li key={`${row.entityType}:${row.entityId}`}>
-                                <CondensedQueueRow row={row} onOpen={openRecord} isFirst={index === 0} />
+                                <CondensedQueueRow
+                                    row={row}
+                                    onOpen={openRecord}
+                                    isFirst={index === 0}
+                                    isSelected={rowIsSelected(row, selectedRecordId)}
+                                />
                             </li>
                         ))}
                     </ul>

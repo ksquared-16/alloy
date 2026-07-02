@@ -9,3 +9,4 @@ export { WorkViewPillStrip } from "./WorkViewPillStrip";
 export { QueueRegion } from "./QueueRegion";
 export { CondensedQueueRow } from "./CondensedQueueRow";
 export { FocusPanelSurface, useFocusPanelOpen } from "./FocusPanelSurface";
+export { InlineOpportunityFocusPanel } from "./InlineOpportunityFocusPanel";

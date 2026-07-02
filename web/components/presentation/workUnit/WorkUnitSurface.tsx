@@ -77,7 +77,7 @@ export function WorkUnitSurface() {
                         />
                         <WorkViewPillStrip workViews={model.workViews} onSelect={intents.selectWorkView} />
                         <FocusPanelSurface openRecord={intents.openRecord}>
-                            <QueueRegion queue={model.queue} />
+                            <QueueRegion queue={model.queue} selectedRecordId={model.selectedRecordId} />
                         </FocusPanelSurface>
                     </div>
                     <RightRailSurface />

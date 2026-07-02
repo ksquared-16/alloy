@@ -7,9 +7,11 @@ import type { ResolvedMetricMap } from "@/lib/metrics/fetchResolvedMetrics";
 import {
     drillHrefForMetricKey,
     operationalAnswerModelsFromResolvedMetrics,
+    opportunityQueuePreviewSeedFromRowContext,
     processTileModelFromLandingCard,
     queueRowModelFromQueueItem,
     queueRowModelsFromQueueItemsResult,
+    queueRowSubjectDisplayName,
     workViewLinkModelsFromConfiguredViews,
 } from "@/lib/presentation/runtime/types";
 
@@ -137,6 +139,44 @@ describe("queueRowModelFromQueueItem", () => {
         const rows = queueRowModelsFromQueueItemsResult(result);
         expect(rows.map((r) => r.entityId)).toEqual(["opp-1", "opp-3"]);
         expect(rows.every((r) => r.entityType === "opportunity")).toBe(true);
+    });
+});
+
+describe("queueRowSubjectDisplayName / opportunityQueuePreviewSeedFromRowContext", () => {
+    it("derives the single-subject title and the Focus Panel open seed from the same contract", () => {
+        const context = queueRowContext("opp-1");
+
+        expect(queueRowSubjectDisplayName(context)).toBe("Jordan Lee");
+        expect(opportunityQueuePreviewSeedFromRowContext(context)).toEqual({
+            title: "Jordan Lee",
+            statusLabel: "New Lead",
+            stageLabel: "New Leads",
+        });
+    });
+
+    it("joins grouped subjects and falls back to the row count unit", () => {
+        const grouped: QueueRowContext = {
+            ...queueRowContext("opp-2"),
+            row_presentation_mode: "grouped_subjects",
+            row_subjects: [
+                { subject_type: "child", subject_id: "c-1", display_name: "Avery Lee" },
+                { subject_type: "child", subject_id: "c-2", display_name: "Rowan Lee" },
+            ],
+        };
+        expect(queueRowSubjectDisplayName(grouped)).toBe("Avery Lee, Rowan Lee");
+        expect(opportunityQueuePreviewSeedFromRowContext(grouped)?.title).toBe("Avery Lee, Rowan Lee");
+
+        const counted: QueueRowContext = {
+            ...queueRowContext("opp-3"),
+            row_presentation_mode: "grouped_subjects",
+            row_count: 3,
+            row_count_unit: "enrollment_track",
+        };
+        expect(queueRowSubjectDisplayName(counted)).toBe("3 enrollment track");
+    });
+
+    it("returns null seed when the row carried no context (placeholder title owns identity)", () => {
+        expect(opportunityQueuePreviewSeedFromRowContext(null)).toBeNull();
     });
 });
 

@@ -46,6 +46,7 @@ import { resolveWorkUnitOipMetricKeys } from "@/lib/kpi/workspaceOipExposure";
 import type { QueueItemsResult, QueueSummary } from "@/lib/queues/types";
 import { useOperationalAnswers } from "./useOperationalAnswers";
 import {
+    opportunityQueuePreviewSeedFromRowContext,
     queueRowModelsFromQueueItemsResult,
     queueTotalCountFromQueueItemsResult,
     workViewLinkModelsFromConfiguredViews,
@@ -349,15 +350,27 @@ export function useWorkUnitSurfaceRuntime(): WorkUnitSurfaceRuntime {
             }
             // Opportunity rows: the frozen contract's drawer_open is authoritative identity
             // (grouped rows anchor on the case opportunity). URL sync after openDrawer is
-            // owned by WorkUnitSlugRouteHost — not duplicated here.
+            // owned by WorkUnitSlugRouteHost — not duplicated here. The workspace context
+            // scopes header actions / focus-panel layout to this work unit + active view;
+            // the preview seed lets the inline Focus Panel own the clicked subject identity
+            // before the record payload resolves (resolveFocusPanelSubjectReveal).
             const drawerOpen = row.context?.drawer_open ?? null;
             openDrawer({
                 type: "opportunities",
                 id: drawerOpen?.entity_id?.trim() || row.entityId,
                 source: PRESENTATION_RUNTIME_QUEUE_ROW_OPEN_SOURCE,
+                opportunityWorkspaceContext:
+                    departmentId && workUnitId ?
+                        {
+                            work_unit_id: workUnitId,
+                            department_id: departmentId,
+                            work_view_id: runtimeCtx.workViewId ?? null,
+                        }
+                        : null,
+                opportunityQueuePreviewSeed: opportunityQueuePreviewSeedFromRowContext(row.context),
             });
         },
-        [openDrawer],
+        [openDrawer, departmentId, workUnitId, runtimeCtx.workViewId],
     );
 
     // ── First-row auto-open: once, after the first queue settle (doctrine acceptance) ────
@@ -394,6 +407,10 @@ export function useWorkUnitSurfaceRuntime(): WorkUnitSurfaceRuntime {
     }, [deptMetadata, slugRoute?.departmentName]);
     const workViewLabel = runtimeCtx.workView?.label?.trim() || null;
 
+    // ── Selected record: the drawer store is THE selection state (no parallel store) ────
+    const selectedRecordId =
+        drawer.type === "opportunities" && drawer.id != null ? String(drawer.id) : null;
+
     // ── Resolved model ───────────────────────────────────────────────────────────────────
     const model = useMemo<WorkUnitSurfaceModel>(
         () => ({
@@ -410,6 +427,7 @@ export function useWorkUnitSurfaceRuntime(): WorkUnitSurfaceRuntime {
                 error: queueError,
             },
             activeWorkViewId: runtimeCtx.workViewId,
+            selectedRecordId,
             // Above-fold identity + configured views resolved; queue carries its own state.
             ready: slugRoute != null && configSettled,
         }),
@@ -424,6 +442,7 @@ export function useWorkUnitSurfaceRuntime(): WorkUnitSurfaceRuntime {
             queueLoading,
             queueError,
             runtimeCtx.workViewId,
+            selectedRecordId,
             configSettled,
         ],
     );

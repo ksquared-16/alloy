@@ -82,6 +82,26 @@ test.describe("Presentation Runtime V2 acceptance", () => {
             await expect(page.locator(`${L("FP.SURFACE")}[data-focus-panel-open="true"]`)).toBeVisible({
                 timeout: 60_000,
             });
+            // The record renders as the INLINE Focus Panel region INSIDE FP.SURFACE …
+            await expect(
+                page.locator(`${L("FP.SURFACE")} [data-inline-focus-panel="true"]`),
+            ).toBeVisible({ timeout: 60_000 });
+            // … and NEVER as the drawer/modal overlay (Drawer.tsx portal chrome absent).
+            await expect(page.locator('[data-adminv2-drawer="true"]')).toHaveCount(0);
+            await expect(
+                page.locator(".adminv2-drawer-modal-panel, .adminv2-drawer-sidebar-panel"),
+            ).toHaveCount(0);
+            // Selected row carries the persistent rail for the open record.
+            await expect(
+                page.locator(`${L("WU.QUEUE_ROW")}[data-queue-row-active="true"]`).first(),
+            ).toBeVisible({ timeout: 60_000 });
+        } else {
+            // Zero rows: no panel — open state false and no inline record surface.
+            await expect(page.locator(L("FP.SURFACE"))).toHaveAttribute(
+                "data-focus-panel-open",
+                "false",
+            );
+            await expect(page.locator('[data-inline-focus-panel="true"]')).toHaveCount(0);
         }
         await capture(page, "work-unit-surface");
     });

@@ -9,40 +9,37 @@
  * through the FocusPanelSurface seam via `onOpen`.
  */
 
-import type { QueueRowContext } from "@/lib/workUnits/lifecycleSubjectContracts";
-import type { QueueRowModel } from "@/lib/presentation/runtime";
+import { queueRowSubjectDisplayName, type QueueRowModel } from "@/lib/presentation/runtime";
 import {
     PRESENTATION_RUNTIME_LABELS,
     runtimeLabelProps,
 } from "@/components/presentation/runtimeLabels";
 
-/** Subject display: single subject name; grouped rows join subjects or fall back to count. */
-function subjectDisplayName(context: QueueRowContext): string {
-    if (context.row_presentation_mode === "grouped_subjects") {
-        if (context.row_subjects?.length) {
-            return context.row_subjects.map((s) => s.display_name).join(", ");
-        }
-        if (context.row_count != null) {
-            const unit = (context.row_count_unit ?? "records").replace(/_/g, " ");
-            return `${context.row_count} ${unit}`;
-        }
-    }
-    return context.row_subject.display_name;
-}
-
 const ROW_BUTTON_CLASS =
-    "flex w-full items-center gap-2.5 px-3 py-2 text-left transition-colors hover:bg-alloy-juniper/[0.04] active:bg-alloy-juniper/[0.08] focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-alloy-juniper";
+    "relative flex w-full items-center gap-2.5 px-3 py-2 text-left transition-colors hover:bg-alloy-juniper/[0.04] active:bg-alloy-juniper/[0.08] focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-alloy-juniper";
+
+/** Persistent selected-record wash — same juniper language as the row's hover/active states. */
+const ROW_SELECTED_CLASS = " bg-alloy-juniper/[0.07] hover:bg-alloy-juniper/[0.09]";
+
+/** Persistent selected rail — marks the record currently open in the inline Focus Panel. */
+function SelectedRail() {
+    return <span aria-hidden className="absolute inset-y-0 left-0 w-[3px] bg-alloy-juniper" />;
+}
 
 export function CondensedQueueRow({
     row,
     onOpen,
     isFirst,
+    isSelected,
 }: {
     row: QueueRowModel;
     onOpen: (row: QueueRowModel) => void;
     isFirst?: boolean;
+    /** Row's record is the one open in the inline Focus Panel — persistent selected rail. */
+    isSelected?: boolean;
 }) {
     const context = row.context;
+    const rowClass = isSelected ? ROW_BUTTON_CLASS + ROW_SELECTED_CLASS : ROW_BUTTON_CLASS;
 
     if (!context) {
         return (
@@ -52,9 +49,11 @@ export function CondensedQueueRow({
                 data-entity-id={row.entityId}
                 data-entity-type={row.entityType}
                 data-queue-row-first={isFirst ? "true" : undefined}
+                data-queue-row-active={isSelected ? "true" : undefined}
                 onClick={() => onOpen(row)}
-                className={ROW_BUTTON_CLASS}
+                className={rowClass}
             >
+                {isSelected ? <SelectedRail /> : null}
                 <span className="min-w-0 flex-1 truncate text-[13px] leading-4 text-alloy-midnight/70">
                     {row.entityId}
                 </span>
@@ -81,12 +80,14 @@ export function CondensedQueueRow({
             data-entity-id={row.entityId}
             data-entity-type={row.entityType}
             data-queue-row-first={isFirst ? "true" : undefined}
+            data-queue-row-active={isSelected ? "true" : undefined}
             data-needs-attention={needsAttention ? "true" : undefined}
             onClick={() => onOpen(row)}
-            className={ROW_BUTTON_CLASS}
+            className={rowClass}
         >
+            {isSelected ? <SelectedRail /> : null}
             <span className="min-w-0 flex-1 truncate text-[13px] font-semibold leading-4 text-alloy-midnight">
-                {subjectDisplayName(context)}
+                {queueRowSubjectDisplayName(context)}
             </span>
             {stageLabel ? (
                 <span className="max-w-[10rem] shrink-0 truncate rounded-full border border-alloy-midnight/15 bg-white px-2 py-0.5 text-[10px] font-semibold leading-[13px] text-alloy-midnight/60">
