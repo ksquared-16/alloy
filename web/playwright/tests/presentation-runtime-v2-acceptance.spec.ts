@@ -87,8 +87,13 @@ test.describe("Presentation Runtime V2 acceptance", () => {
         await expect(page.locator(L("WU.HEADER"))).toBeVisible();
         await expect(page.locator(L("WU.QUEUE"))).toBeVisible({ timeout: 60_000 });
 
+        // WU.HEADER reveal is atomic: title + published calculation cards + pills commit
+        // together under model.ready. Section markers resolve to exactly one render site.
+        expect(await page.locator('[data-alloy-section="WU.HEADER"]').count()).toBe(1);
+        expect(await page.locator('[data-alloy-section="WU.WORK_VIEW_PILLS"]').count()).toBe(1);
+
         // Horizontal Work View pills (present when the process has configured views).
-        const pillStrip = page.locator(L("WU.WORK_VIEWS"));
+        const pillStrip = page.locator(L("WU.WORK_VIEW_PILLS"));
         if (await pillStrip.count()) {
             await expect(pillStrip).toBeVisible();
         }

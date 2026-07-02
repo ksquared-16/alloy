@@ -24,6 +24,7 @@ export function WorkUnitHeader({
     return (
         <header
             {...runtimeLabelProps(PRESENTATION_RUNTIME_LABELS.workUnitHeader)}
+            data-alloy-section="WU.HEADER"
             className="flex flex-col gap-0.5"
         >
             <h1 className="text-xl font-semibold leading-tight text-alloy-midnight">

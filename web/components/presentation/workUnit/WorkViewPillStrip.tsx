@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * Presentation Runtime V2 — WU.WORK_VIEWS.
+ * Presentation Runtime V2 — WU.WORK_VIEW_PILLS.
  *
  * Horizontal pill strip of the configured Work Views for the process (`work_views_v1`,
  * resolved by the runtime). Selection is in-page — no navigation, no query-string writes.
@@ -25,6 +25,7 @@ export function WorkViewPillStrip({
     return (
         <div
             {...runtimeLabelProps(PRESENTATION_RUNTIME_LABELS.workViewPillStrip)}
+            data-alloy-section="WU.WORK_VIEW_PILLS"
             role="tablist"
             aria-label="Work views"
             className="flex items-center gap-2 overflow-x-auto pb-0.5"

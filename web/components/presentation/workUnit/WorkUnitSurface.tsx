@@ -7,10 +7,13 @@
  * tree that calls the runtime hook — subcomponents receive resolved models + intents as
  * props and never fetch (docs/platform/experience/presentation-runtime-v2.md).
  *
- * Composition (doctrine order): WorkUnitHeader → OperationalAnswersRow (WU.ANSWERS) →
- * WorkViewPillStrip → QueueRegion inside FocusPanelSurface, with RightRailSurface as the
- * right column. An empty rail renders as a hidden zero-footprint anchor, so the main
- * column takes the full width (display:none flex items reserve no column and no gap).
+ * Composition (doctrine order): WorkUnitHeader + WorkUnitHeaderCalculations
+ * (WU.HEADER_CALCULATIONS — the published Work Unit Header surface) inside one header
+ * <section> → WorkViewPillStrip → QueueRegion inside FocusPanelSurface, with
+ * RightRailSurface as the right column. Header title, cards, and pills all commit under the
+ * single `model.ready` reveal, so they appear together (no pop-in/shift). An empty rail
+ * renders as a hidden zero-footprint anchor, so the main column takes the full width
+ * (display:none flex items reserve no column and no gap).
  */
 
 import { useWorkUnitSurfaceRuntime } from "@/lib/presentation/runtime";
@@ -18,9 +21,9 @@ import {
     PRESENTATION_RUNTIME_LABELS,
     runtimeLabelProps,
 } from "@/components/presentation/runtimeLabels";
-import { OperationalAnswersRow } from "@/components/presentation/shared/OperationalAnswersRow";
 import { RightRailSurface } from "@/components/presentation/rightRail/RightRailSurface";
 import { WorkUnitHeader } from "./WorkUnitHeader";
+import { WorkUnitHeaderCalculations } from "./WorkUnitHeaderCalculations";
 import { WorkViewPillStrip } from "./WorkViewPillStrip";
 import { QueueRegion } from "./QueueRegion";
 import { FocusPanelSurface } from "./FocusPanelSurface";
@@ -68,14 +71,13 @@ export function WorkUnitSurface() {
             ) : (
                 <div className="flex flex-col gap-6 lg:flex-row lg:items-start">
                     <div className="min-w-0 flex-1 space-y-4">
-                        <WorkUnitHeader
-                            processLabel={model.header.processLabel}
-                            workViewLabel={model.header.workViewLabel}
-                        />
-                        <OperationalAnswersRow
-                            answers={model.answers}
-                            label={PRESENTATION_RUNTIME_LABELS.workUnitAnswers}
-                        />
+                        <section className="space-y-3">
+                            <WorkUnitHeader
+                                processLabel={model.header.processLabel}
+                                workViewLabel={model.header.workViewLabel}
+                            />
+                            <WorkUnitHeaderCalculations cards={model.header.calculations} />
+                        </section>
                         <WorkViewPillStrip workViews={model.workViews} onSelect={intents.selectWorkView} />
                         <FocusPanelSurface openRecord={intents.openRecord}>
                             <QueueRegion queue={model.queue} selectedRecordId={model.selectedRecordId} />

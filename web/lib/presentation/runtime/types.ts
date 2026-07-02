@@ -23,6 +23,7 @@ import type { QueueItemsResult } from "@/lib/queues/types";
 import type { OipMetricKey } from "@/lib/metrics/types";
 import type { ResolvedMetricMap } from "@/lib/metrics/fetchResolvedMetrics";
 import type { WorkspaceHeaderCalculationCardVm } from "./workspaceHeaderCards";
+import type { WorkUnitHeaderCalculationCardVm } from "./workUnitHeaderCards";
 import { findOperationalCalculation } from "@/lib/analytics/calculations/registry";
 import { getDrillContract } from "@/lib/analytics/runtime/drillResolver";
 import { operatorWorkUnitHrefFromKey } from "@/lib/admin/canonicalOperatorRoutes";
@@ -114,8 +115,18 @@ export type WorkUnitSurfaceModel = {
      * configured Work View's label. Internal structure names (work-unit `name`/`key`) and
      * humanized slugs never surface here.
      */
-    header: { processLabel: string | null; workViewLabel: string | null };
-    answers: OperationalAnswerModel[];
+    header: {
+        processLabel: string | null;
+        workViewLabel: string | null;
+        /**
+         * The published Work Unit Header calculation cards (WU.HEADER_CALCULATIONS) —
+         * seeded from the client-fetched surface doc (values no-data), code-owned fallback
+         * when no surface is published, values refined in place by the warm cache after
+         * mount. The card SET is part of `ready` (rides `configSettled`) so title + cards +
+         * pills commit together.
+         */
+        calculations: WorkUnitHeaderCalculationCardVm[];
+    };
     workViews: WorkViewLinkModel[];
     queue: {
         rows: QueueRowModel[];

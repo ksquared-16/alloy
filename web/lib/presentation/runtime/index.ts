@@ -34,6 +34,14 @@ export {
 } from "./workspaceHeaderCards";
 
 export {
+    fallbackWorkUnitHeaderCards,
+    seedWorkUnitHeaderCards,
+    workUnitHeaderCardsFromDoc,
+    workUnitHeaderCalculationKeys,
+    type WorkUnitHeaderCalculationCardVm,
+} from "./workUnitHeaderCards";
+
+export {
     useOperationalAnswers,
     type OperationalAnswersResult,
     type OperationalAnswersScope,

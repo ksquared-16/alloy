@@ -52,9 +52,15 @@ import { appendWorkspaceSiteToPath, appendWorkspaceSiteToUrl } from "@/lib/admin
 import { resolveWorkUnitQueueRowsFetchLimit } from "@/lib/adminV2/workUnitQueueRowsFetchLimit";
 import { dedupeAdminFetch } from "@/lib/workspace/workspaceAdminFetchDedupe";
 import { workspaceDataFetchInit } from "@/lib/workspace/workspaceDataFetch";
-import { resolveWorkUnitOipMetricKeys } from "@/lib/kpi/workspaceOipExposure";
+import type { SurfaceDoc } from "@/lib/platform/surfaceBuilder/surfaceDefinition";
 import type { QueueItemsResult, QueueSummary } from "@/lib/queues/types";
 import { useOperationalAnswers } from "./useOperationalAnswers";
+import { refineWorkspaceHeaderCardVms } from "./workspaceHeaderCards";
+import {
+    seedWorkUnitHeaderCards,
+    workUnitHeaderCalculationKeys,
+    type WorkUnitHeaderCalculationCardVm,
+} from "./workUnitHeaderCards";
 import {
     queueRowsRouteForView,
     useWorkViewTotals,
@@ -113,6 +119,10 @@ export function useWorkUnitSurfaceRuntime(): WorkUnitSurfaceRuntime {
     const [deptWorkUnits, setDeptWorkUnits] = useState<
         WorkViewCanonicalLocationWorkUnitRow[] | null
     >(null);
+    // The published "Work Unit Header" surface doc — fetched in the SAME config Promise.all
+    // so the header card SET is known at configSettled (reveals with title + pills, no late
+    // pop-in). null on error / no publish → the seed uses the code-owned fallback.
+    const [headerDoc, setHeaderDoc] = useState<SurfaceDoc | null>(null);
     const [configSettled, setConfigSettled] = useState(false);
 
     useEffect(() => {
@@ -130,14 +140,25 @@ export function useWorkUnitSurfaceRuntime(): WorkUnitSurfaceRuntime {
             dedupeAdminFetch(`/api/admin/work-units?department_id=${encodeURIComponent(departmentId)}`, init)
                 .then((res) => (res.ok ? res.json() : null))
                 .catch(() => null),
+            // Published "Work Unit Header" surface doc — org-scoped, rides configSettled so
+            // the header card SET reveals with the title + pills. Never rejects the batch.
+            dedupeAdminFetch(`/api/admin/analytics/surfaces/work_unit_header/doc`, init)
+                .then((res) => (res.ok ? res.json() : null))
+                .catch(() => null),
         ])
-            .then(([dept, wu, deptUnits]) => {
+            .then(([dept, wu, deptUnits, headerDocRes]) => {
                 if (cancelled) return;
                 setDeptMetadata((dept as { metadata?: unknown } | null)?.metadata ?? null);
                 setQueueDefinition((wu as { queue_definition?: unknown } | null)?.queue_definition ?? null);
                 const items = (deptUnits as { items?: unknown } | null)?.items;
                 setDeptWorkUnits(
                     Array.isArray(items) ? (items as WorkViewCanonicalLocationWorkUnitRow[]) : null,
+                );
+                const doc = (headerDocRes as { doc?: unknown } | null)?.doc ?? null;
+                setHeaderDoc(
+                    doc && typeof doc === "object" && Array.isArray((doc as { sections?: unknown }).sections)
+                        ? (doc as SurfaceDoc)
+                        : null,
                 );
             })
             .finally(() => {
@@ -329,13 +350,35 @@ export function useWorkUnitSurfaceRuntime(): WorkUnitSurfaceRuntime {
         [savedViews, runtimeCtx.workViewId, totalCount, canonicalLocationByViewId, canonicalTotals],
     );
 
-    // ── Operational answers: OIP warm cache scoped to the work unit ─────────────────────
-    const answerKeys = useMemo(() => resolveWorkUnitOipMetricKeys(undefined), []);
-    const { answers } = useOperationalAnswers({
+    // ── Header calculations: the published Work Unit Header surface ─────────────────────
+    // The card SET is fixed once the surface doc settles (it rides `configSettled`, so the
+    // strip reveals with the title + pills — no separate late fetch, no pop-in). Seed from
+    // the doc when it has cards, else the code-owned fallback. The warm cache only refines
+    // value/status in place afterward (set/order/labels/chrome never change).
+    const [seededHeaderCards, setSeededHeaderCards] = useState<WorkUnitHeaderCalculationCardVm[]>([]);
+    const headerSeededRef = useRef(false);
+    useEffect(() => {
+        if (headerSeededRef.current || !configSettled) return;
+        headerSeededRef.current = true;
+        setSeededHeaderCards(seedWorkUnitHeaderCards(headerDoc));
+    }, [configSettled, headerDoc]);
+
+    const headerCalculationKeys = useMemo(
+        () => workUnitHeaderCalculationKeys(seededHeaderCards),
+        [seededHeaderCards],
+    );
+    const { resolved: headerCalculationsResolved } = useOperationalAnswers({
         siteId: selectedSiteId,
         workUnitId,
-        keys: answerKeys,
+        keys: headerCalculationKeys,
     });
+    const headerCalculations = useMemo(
+        () =>
+            headerCalculationsResolved
+                ? refineWorkspaceHeaderCardVms(seededHeaderCards, headerCalculationsResolved)
+                : seededHeaderCards,
+        [seededHeaderCards, headerCalculationsResolved],
+    );
 
     // ── Intents ──────────────────────────────────────────────────────────────────────────
     const router = useRouter();
@@ -454,8 +497,8 @@ export function useWorkUnitSurfaceRuntime(): WorkUnitSurfaceRuntime {
             header: {
                 processLabel,
                 workViewLabel,
+                calculations: headerCalculations,
             },
-            answers,
             workViews,
             queue: {
                 rows,
@@ -472,7 +515,7 @@ export function useWorkUnitSurfaceRuntime(): WorkUnitSurfaceRuntime {
             slugRoute,
             processLabel,
             workViewLabel,
-            answers,
+            headerCalculations,
             workViews,
             rows,
             totalCount,
