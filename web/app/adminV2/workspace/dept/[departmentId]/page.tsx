@@ -216,6 +216,7 @@ type DeptAttentionBucket = {
 
 type DeptPipelineExecSurface = {
     workUnitId: string;
+    workUnitKey: string | null;
     panelTitle: string;
     lanes: Array<{
         key: string;

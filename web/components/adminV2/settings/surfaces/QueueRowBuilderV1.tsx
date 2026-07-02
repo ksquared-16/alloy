@@ -993,7 +993,7 @@ export default function QueueRowBuilderV1({ surfaceId = "pipeline-queue-row" }: 
                 <PublishToolbar
                     dirty={dirty}
                     publishing={publishing}
-                    publishedAt={publishedAt}
+                    publishedAt={publishedAt ? publishedAt.toISOString() : null}
                     error={publishError}
                     onPublish={handlePublish}
                 />
