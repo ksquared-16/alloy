@@ -23,3 +23,15 @@ export function workUnitRouteSlugToKey(slug: string): string {
 export function workUnitRouteSlugsEquivalent(a: string, b: string): boolean {
     return workUnitRouteSlugToKey(a) === workUnitRouteSlugToKey(b);
 }
+
+/**
+ * Route key for a configured Work View — derived from its LABEL, not its id. View ids are
+ * slugified from the label the view was CREATED with and survive renames ("Active Pipeline"
+ * can carry id `new_work_view_2`), so id-based slugs leak internal keys into operator URLs.
+ * Label-derived slugs stay configured-vocabulary end to end; renames rename the URL.
+ * Returns null when the label yields nothing routable (label-less views are not navigable).
+ */
+export function workViewRouteKeyFromLabel(label: string | null | undefined): string | null {
+    const key = workUnitRouteSlugToKey(label ?? "");
+    return key.length ? key.slice(0, 48) : null;
+}

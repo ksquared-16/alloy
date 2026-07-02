@@ -20,6 +20,10 @@ import {
 const RENAMED_WORK_VIEWS = [
     { id: "fresh_prospects", label: "Fresh Prospects", compat_queue_key: "new_leads", display_order: 1 },
     { id: "momentum", label: "Momentum", display_order: 2 },
+    // Real-world case: view ids are slugified from the CREATION-time name and survive renames.
+    // This view was created as "New work view 2" and later renamed — routing must follow the
+    // configured label ("hot-list"), never the fossilized internal id.
+    { id: "new_work_view_2", label: "Hot List", display_order: 3 },
 ];
 
 const DEPT_ID = "dept-1";
@@ -63,11 +67,13 @@ describe("renamed Work View labels flow purely from config", () => {
         workUnits: [HOST_WORK_UNIT],
     });
 
-    it("nav entries render the renamed labels and view-slug hrefs", () => {
-        expect(navEntries.map((e) => e.label)).toEqual(["Fresh Prospects", "Momentum"]);
+    it("nav entries render the renamed labels and LABEL-derived slug hrefs", () => {
+        expect(navEntries.map((e) => e.label)).toEqual(["Fresh Prospects", "Momentum", "Hot List"]);
         expect(navEntries.map((e) => e.href)).toEqual([
             "/workspace/work-unit/fresh-prospects",
             "/workspace/work-unit/momentum",
+            // NOT /workspace/work-unit/new-work-view-2 — the internal id never routes outward.
+            "/workspace/work-unit/hot-list",
         ]);
     });
 
@@ -81,7 +87,7 @@ describe("renamed Work View labels flow purely from config", () => {
 
     it("workspace tile WorkViewLinkModels carry the renamed labels", () => {
         const links = navEntries.map(workViewLinkFromWorkQueuePreview);
-        expect(links.map((l) => l.label)).toEqual(["Fresh Prospects", "Momentum"]);
+        expect(links.map((l) => l.label)).toEqual(["Fresh Prospects", "Momentum", "Hot List"]);
         for (const link of links) {
             expectNoInternalLeak(link.label);
             if (link.href) expectNoInternalLeak(link.href);
@@ -91,7 +97,7 @@ describe("renamed Work View labels flow purely from config", () => {
     it("work-unit pill models carry the renamed labels from the same config", () => {
         const views = savedWorkViewsFromDepartmentMetadata(DEPT_METADATA);
         const pills = workViewLinkModelsFromConfiguredViews(views, { activeWorkViewId: "momentum" });
-        expect(pills.map((p) => p.label)).toEqual(["Fresh Prospects", "Momentum"]);
+        expect(pills.map((p) => p.label)).toEqual(["Fresh Prospects", "Momentum", "Hot List"]);
         expect(pills.find((p) => p.id === "momentum")?.isActive).toBe(true);
         for (const pill of pills) expectNoInternalLeak(pill.label);
     });
@@ -100,6 +106,9 @@ describe("renamed Work View labels flow purely from config", () => {
         for (const [slug, viewId] of [
             ["fresh-prospects", "fresh_prospects"],
             ["momentum", "momentum"],
+            // Label slug resolves the renamed view; the fossil id slug still resolves (old links).
+            ["hot-list", "new_work_view_2"],
+            ["new-work-view-2", "new_work_view_2"],
         ] as const) {
             const result = resolveWorkUnitByRouteSlug({
                 slug,

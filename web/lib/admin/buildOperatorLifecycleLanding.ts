@@ -18,6 +18,7 @@ import {
     operatorWorkUnitHrefFromKey,
     operatorWorkUnitHrefFromWorkViewSlug,
 } from "@/lib/admin/canonicalOperatorRoutes";
+import { workViewRouteKeyFromLabel } from "@/lib/admin/workUnitRouteSlug";
 import { savedWorkViewsFromDepartmentMetadata } from "@/lib/lifecycle/resolveWorkViewRuntimeContext";
 import {
     extractDrawerLifecycleExecutionLanes,
@@ -188,11 +189,19 @@ function workViewNavEntriesForDepartment(args: {
                     (a.display_order ?? Number.MAX_SAFE_INTEGER) - (b.display_order ?? Number.MAX_SAFE_INTEGER)
                     || a.label.localeCompare(b.label),
             )
-            .map((view) => ({
-                label: view.label.trim(),
-                platformKey: view.id,
-                href: operatorWorkUnitHrefFromWorkViewSlug(view.id),
-            }));
+            .flatMap((view) => {
+                // Slug from the configured LABEL, never the internal id (ids survive renames —
+                // "Active Pipeline" can carry id `new_work_view_2`; see workViewRouteKeyFromLabel).
+                const routeKey = workViewRouteKeyFromLabel(view.label);
+                if (!routeKey) return [];
+                return [
+                    {
+                        label: view.label.trim(),
+                        platformKey: view.id,
+                        href: operatorWorkUnitHrefFromWorkViewSlug(routeKey),
+                    },
+                ];
+            });
     }
 
     // Legacy fallback — no configured Work Views: derive nav from queue lanes / stage perspectives.

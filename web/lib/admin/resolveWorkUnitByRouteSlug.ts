@@ -8,7 +8,11 @@ import {
     extractPipelineExecutionLanes,
 } from "@/lib/workspace/extractPipelineExecutionLanes";
 import { pickDeptWorkViewHostWorkUnit } from "@/lib/workspace/pickDeptPipelineWorkUnit";
-import { workUnitKeyToRouteSlug, workUnitRouteSlugToKey } from "@/lib/admin/workUnitRouteSlug";
+import {
+    workUnitKeyToRouteSlug,
+    workUnitRouteSlugToKey,
+    workViewRouteKeyFromLabel,
+} from "@/lib/admin/workUnitRouteSlug";
 
 export type WorkUnitRouteSlugRow = {
     id: string;
@@ -152,8 +156,12 @@ function findConfiguredWorkViewMatch(
     );
     for (const dept of ordered) {
         if (dept.metadata == null) continue;
+        // Label-derived slug first (operator vocabulary; renames rename the URL). Internal view
+        // id second — kept only so pre-rename links keep resolving (ids survive label renames).
+        const views = savedWorkViewsFromDepartmentMetadata(dept.metadata);
         const view =
-            savedWorkViewsFromDepartmentMetadata(dept.metadata).find((v) => v.id === platformKey) ??
+            views.find((v) => workViewRouteKeyFromLabel(v.label) === platformKey) ??
+            views.find((v) => v.id === platformKey) ??
             null;
         if (!view) continue;
         const deptRows = rows.filter((row) => row.department_id === dept.id);
