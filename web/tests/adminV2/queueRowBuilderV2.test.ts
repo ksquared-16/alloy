@@ -9,7 +9,10 @@
  *   - LayoutDoc publish: output config matches expected shape
  */
 
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
+import { ALLOY_OS_QUEUE_COMPRESSED_WIDTH_PX } from "@/lib/adminV2/runtime/alloyOsRuntimeFlag";
 import {
     defaultLeadQueueLayoutV3,
     defaultWaitlistQueueLayoutV3,
@@ -715,6 +718,37 @@ describe("runtime parity — field toggle → config → not rendered", () => {
         // → Runtime reads this array → field is not rendered
         const renderedKeys = block.fields.map((f) => f.fieldKey);
         expect(renderedKeys).not.toContain(targetFieldKey);
+    });
+
+    it("canvas width contract: shared 440px runtime rail constant", () => {
+        // The condensed queue row renders inside a fixed ~440px rail
+        // (--alloy-os-queue-compressed-width) when the Focus Panel is docked.
+        // The builder canvas MUST use the same shared constant, not full width.
+        expect(ALLOY_OS_QUEUE_COMPRESSED_WIDTH_PX).toBe(440);
+    });
+
+    it("shared TS constant matches the runtime CSS token value", () => {
+        // Bind the builder preview width to the runtime source of truth:
+        // the constant and the --alloy-os-queue-compressed-width CSS var must agree.
+        const cssPath = fileURLToPath(
+            new URL("../../app/adminV2/components/alloyOsRuntime.css", import.meta.url),
+        );
+        const css = readFileSync(cssPath, "utf8");
+        const match = css.match(/--alloy-os-queue-compressed-width:\s*(\d+)px/);
+        expect(match).not.toBeNull();
+        const cssValue = Number(match![1]);
+        expect(cssValue).toBe(ALLOY_OS_QUEUE_COMPRESSED_WIDTH_PX);
+    });
+
+    it("builder canvas references the shared constant (not a magic full-width value)", () => {
+        // Guard: QueueRowBuilderV2.tsx must import and use ALLOY_OS_QUEUE_COMPRESSED_WIDTH_PX
+        // for the runtime-width frame, so preview width tracks the runtime rail.
+        const builderPath = fileURLToPath(
+            new URL("../../components/adminV2/settings/surfaces/QueueRowBuilderV2.tsx", import.meta.url),
+        );
+        const src = readFileSync(builderPath, "utf8");
+        expect(src).toContain("ALLOY_OS_QUEUE_COMPRESSED_WIDTH_PX");
+        expect(src).toContain("data-canvas-runtime-frame");
     });
 
     it("canvas min-height contract: 76px (not 72px)", () => {

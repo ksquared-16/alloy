@@ -393,6 +393,24 @@ Both changes are **composition field catalog expansion**. The custom-field catal
 
 **Runtime label note:** the queue row column `label` (rename hook, `QueueRecordColumnConfig.label`) persists to the LayoutDoc and is reflected in the builder canvas preview. The **condensed** runtime row (`OperationalQueueRecordRow`) passes `hideColumnLabel`, so column labels are intentionally suppressed in the condensed grain; the label applies where a labeled column context renders it (`QueueRecordScopedColumn` with `hideColumnLabel` unset).
 
+### Queue row preview width contract
+
+The condensed queue row is not full-width at runtime. When the Focus Panel is docked (record selected → `data-alloy-os-runtime-split`) — or in the preparing/empty operational modes — the queue rail compresses to a **fixed width**:
+
+| Token / constant | Value | Source |
+|---|---|---|
+| `--alloy-os-queue-compressed-width` (CSS) | `440px` | `alloyOsRuntime.css` |
+| `ALLOY_OS_QUEUE_COMPRESSED_WIDTH_PX` (TS) | `440` | `alloyOsRuntimeFlag.ts` (acceptable band 430–450px) |
+
+Inside that 440px rail, the row shell (`.adminv2-os-crow`) is `width: 100%` with:
+- `grid-template-columns: 3px 32px minmax(0, 1fr) minmax(72px, 88px)` — rail · avatar · flexible main · fixed right cue
+- `column-gap: 8px`
+- `padding: 8px 10px 8px 0`
+- `box-sizing: border-box`
+- height band 76 / 80 / 84px (min / target / max)
+
+**Builder implication:** the `/settings/surfaces` Queue Row Builder canvas must NOT stretch the row strip to the full builder width. It renders the row inside a **centered 440px runtime-width frame** (bound to `ALLOY_OS_QUEUE_COMPRESSED_WIDTH_PX`, labeled "condensed rail 440px") so the preview matches the true runtime geometry. The frame is a fixed preview width — the runtime rail is not responsive within the operational split (it holds 440px; only the outer department-browse view, which is a different presenter, is fluid).
+
 ---
 
 ## Naming Standards

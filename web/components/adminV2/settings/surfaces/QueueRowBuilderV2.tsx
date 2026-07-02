@@ -33,6 +33,7 @@ import {
     useQueueRowPublish,
 } from "@/lib/adminV2/settings/surfaces/useQueueRowBuilder";
 import { namedEvidenceGroupsForZone } from "@/lib/adminV2/settings/surfaces/compositionFieldAdapter";
+import { ALLOY_OS_QUEUE_COMPRESSED_WIDTH_PX } from "@/lib/adminV2/runtime/alloyOsRuntimeFlag";
 
 // ── Zone key ─────────────────────────────────────────────────────────────────
 
@@ -320,13 +321,30 @@ function RowCanvas({
     const inRow = zones.filter((z) => z.inRow);
 
     return (
-        <div className="overflow-hidden rounded-xl border border-alloy-stone/14 bg-white shadow-sm" data-canvas>
+        <div className="overflow-hidden rounded-xl border border-alloy-stone/14 bg-alloy-stone/[0.03] shadow-sm" data-canvas>
             <div className="flex items-center justify-between border-b border-alloy-stone/10 px-4 py-2">
                 <p className="text-[10px] font-semibold uppercase tracking-wide text-alloy-midnight/40">
                     Row canvas
+                    <span className="ml-1.5 font-normal normal-case tracking-normal text-alloy-midnight/30">
+                        · condensed rail {ALLOY_OS_QUEUE_COMPRESSED_WIDTH_PX}px
+                    </span>
                 </p>
                 <p className="text-[10px] text-alloy-midnight/30">Drag to reorder · click to inspect</p>
             </div>
+            {/*
+             * Runtime-width frame: the condensed queue row renders inside a fixed
+             * ~440px rail (--alloy-os-queue-compressed-width) whenever the Focus Panel
+             * is docked. The builder area is wider, so we center the row strip inside a
+             * fixed-width frame instead of stretching it full-width — the preview then
+             * matches the true runtime geometry (width + height + gaps).
+             */}
+            <div className="flex justify-center px-4 py-4">
+                <div
+                    className="overflow-hidden rounded-lg border border-alloy-stone/12 bg-white shadow-sm"
+                    style={{ width: ALLOY_OS_QUEUE_COMPRESSED_WIDTH_PX, maxWidth: ALLOY_OS_QUEUE_COMPRESSED_WIDTH_PX }}
+                    data-canvas-runtime-frame
+                    data-canvas-runtime-width={ALLOY_OS_QUEUE_COMPRESSED_WIDTH_PX}
+                >
             {/* Height matches runtime condensed row: min 76px, target 80px, max 84px */}
             <div className="flex min-h-[76px] max-h-[84px] items-stretch divide-x divide-alloy-stone/10">
                 {inRow.map((z) => {
@@ -393,6 +411,8 @@ function RowCanvas({
                         No zones in row — add from library below
                     </div>
                 )}
+            </div>
+                </div>
             </div>
         </div>
     );
