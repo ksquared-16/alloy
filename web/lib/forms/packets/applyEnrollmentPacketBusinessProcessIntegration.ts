@@ -94,14 +94,19 @@ export async function applyEnrollmentPacketBusinessProcessIntegration(params: {
 
     const previous = ocm.outcome_status_key;
 
-    if (kind === "packet_sent") {
+    // S4 collapse: the granular packet dispositions (registration_pending / paperwork_pending /
+    // start_date_scheduled) all fold into the single canonical child status `enrolling`.
+    if (kind === "packet_sent" || kind === "submitted_for_review" || kind === "review_approved") {
+        // Packet_sent / submitted / approved all land on `enrolling`; skip a redundant no-op
+        // write (and duplicate work-intent spawn) when the child is already there.
+        if (previous === "enrolling") return;
         const result = await emitDomainChildLifecycleStatusChangedEvent({
             supabase,
             orgId,
             opportunityId,
             opportunityCustomerMemberId: ocm.id,
             previousStatusKey: previous,
-            nextStatusKey: "registration_pending",
+            nextStatusKey: "enrolling",
             domain: PACKET_DOMAIN,
             domainEntityId: packetSessionId,
             actorUserId,
@@ -115,59 +120,7 @@ export async function applyEnrollmentPacketBusinessProcessIntegration(params: {
             userId: actorUserId,
             opportunityId,
             previousStatusKey: previous,
-            nextStatusKey: "registration_pending",
-        });
-        return;
-    }
-
-    if (kind === "submitted_for_review") {
-        const result = await emitDomainChildLifecycleStatusChangedEvent({
-            supabase,
-            orgId,
-            opportunityId,
-            opportunityCustomerMemberId: ocm.id,
-            previousStatusKey: previous,
-            nextStatusKey: "paperwork_pending",
-            domain: PACKET_DOMAIN,
-            domainEntityId: packetSessionId,
-            actorUserId,
-            source: "domain_lifecycle:enrollment_packet",
-            metadata: { packet_session_id: packetSessionId, kind },
-        });
-        if (result.error) throw new Error(result.error.message);
-        await onChildDispositionEntrySpawnWorkIntent({
-            supabase,
-            orgId,
-            userId: actorUserId,
-            opportunityId,
-            previousStatusKey: previous,
-            nextStatusKey: "paperwork_pending",
-        });
-        return;
-    }
-
-    if (kind === "review_approved") {
-        const result = await emitDomainChildLifecycleStatusChangedEvent({
-            supabase,
-            orgId,
-            opportunityId,
-            opportunityCustomerMemberId: ocm.id,
-            previousStatusKey: previous,
-            nextStatusKey: "start_date_scheduled",
-            domain: PACKET_DOMAIN,
-            domainEntityId: packetSessionId,
-            actorUserId,
-            source: "domain_lifecycle:enrollment_packet",
-            metadata: { packet_session_id: packetSessionId, kind },
-        });
-        if (result.error) throw new Error(result.error.message);
-        await onChildDispositionEntrySpawnWorkIntent({
-            supabase,
-            orgId,
-            userId: actorUserId,
-            opportunityId,
-            previousStatusKey: previous,
-            nextStatusKey: "start_date_scheduled",
+            nextStatusKey: "enrolling",
         });
         return;
     }
@@ -178,18 +131,22 @@ export async function applyEnrollmentPacketBusinessProcessIntegration(params: {
     }
 
     if (kind === "review_rejected") {
+        // S4 collapse: rejection is a terminal `not_enrolling` child status.
+        // TODO: persist close_reason_key `family_withdrew` once
+        // emitDomainChildLifecycleStatusChangedEvent / updateOpportunityCustomerMemberLifecycleStatus
+        // support a close_reason parameter (they currently do not).
         const result = await emitDomainChildLifecycleStatusChangedEvent({
             supabase,
             orgId,
             opportunityId,
             opportunityCustomerMemberId: ocm.id,
             previousStatusKey: previous,
-            nextStatusKey: "family_withdrew",
+            nextStatusKey: "not_enrolling",
             domain: PACKET_DOMAIN,
             domainEntityId: packetSessionId,
             actorUserId,
             source: "domain_lifecycle:enrollment_packet",
-            metadata: { packet_session_id: packetSessionId, kind },
+            metadata: { packet_session_id: packetSessionId, kind, close_reason_key: "family_withdrew" },
         });
         if (result.error) throw new Error(result.error.message);
     }

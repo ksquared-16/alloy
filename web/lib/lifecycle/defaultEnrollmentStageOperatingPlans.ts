@@ -234,7 +234,10 @@ const ENROLLMENT_STAGE_OPERATING_DEFAULTS: Record<string, Omit<StageOperatingPla
                 rule_key: "completed_decision_pending",
                 when_outcome_key: "tour_completed",
                 targets: [
-                    { kind: "update_child_enrollment_status", disposition_key: "tour_completed" },
+                    // Tour completion is family-grain (S4/S8): case stays `open` and advances to
+                    // the decision stage. It does NOT set a child enrollment disposition.
+                    { kind: "update_family_case_status", status_key: "open" },
+                    { kind: "move_to_stage", stage_key: "decision" },
                     { kind: "mark_stage_work_complete" },
                 ],
             },
@@ -338,7 +341,7 @@ const ENROLLMENT_STAGE_OPERATING_DEFAULTS: Record<string, Omit<StageOperatingPla
                 rule_key: "withdrew",
                 when_outcome_key: "family_withdrew",
                 targets: [
-                    { kind: "update_child_enrollment_status", disposition_key: "family_withdrew" },
+                    { kind: "update_child_enrollment_status", disposition_key: "not_enrolling", close_reason_key: "family_withdrew" },
                     { kind: "move_to_stage", stage_key: "closed_withdrawn" },
                 ],
             },
@@ -384,7 +387,7 @@ const ENROLLMENT_STAGE_OPERATING_DEFAULTS: Record<string, Omit<StageOperatingPla
                 rule_key: "offer_to_enrolling",
                 when_outcome_key: "spot_offered",
                 targets: [
-                    { kind: "update_child_enrollment_status", disposition_key: "offer_pending" },
+                    { kind: "update_child_enrollment_status", disposition_key: "waitlisted" },
                     { kind: "move_to_stage", stage_key: "enrollment" },
                     { kind: "mark_stage_work_complete" },
                 ],
@@ -446,7 +449,7 @@ const ENROLLMENT_STAGE_OPERATING_DEFAULTS: Record<string, Omit<StageOperatingPla
                 rule_key: "withdrew",
                 when_outcome_key: "family_withdrew",
                 targets: [
-                    { kind: "update_child_enrollment_status", disposition_key: "family_withdrew" },
+                    { kind: "update_child_enrollment_status", disposition_key: "not_enrolling", close_reason_key: "family_withdrew" },
                     { kind: "mark_stage_work_complete" },
                 ],
             },
@@ -636,7 +639,8 @@ const ENROLLMENT_STAGE_OPERATING_DEFAULTS: Record<string, Omit<StageOperatingPla
                 rule_key: "completed_to_decision",
                 when_outcome_key: "tour_completed",
                 targets: [
-                    { kind: "update_family_case_status", status_key: "decision_pending" },
+                    // Case status collapses to `open` (S4); the decision phase is a stage move.
+                    { kind: "update_family_case_status", status_key: "open" },
                     { kind: "move_to_stage", stage_key: "decision_pending" },
                     { kind: "mark_stage_work_complete" },
                 ],
@@ -650,7 +654,7 @@ const ENROLLMENT_STAGE_OPERATING_DEFAULTS: Record<string, Omit<StageOperatingPla
                 rule_key: "not_interested_closed",
                 when_outcome_key: "not_interested",
                 targets: [
-                    { kind: "update_family_case_status", status_key: "not_a_fit" },
+                    { kind: "update_family_case_status", status_key: "closed", close_reason_key: "not_a_fit" },
                     { kind: "mark_stage_work_complete" },
                 ],
             },
@@ -681,7 +685,9 @@ const ENROLLMENT_STAGE_OPERATING_DEFAULTS: Record<string, Omit<StageOperatingPla
                 rule_key: "to_enrolling",
                 when_outcome_key: "enrolling",
                 targets: [
-                    { kind: "update_child_enrollment_status", disposition_key: "offer_pending" },
+                    // Decision → enrolling: child disposition becomes `enrolling` and the
+                    // child track moves to the enrolling stage (S4/S8).
+                    { kind: "update_child_enrollment_status", disposition_key: "enrolling" },
                     { kind: "move_to_stage", stage_key: "enrolling" },
                     { kind: "mark_stage_work_complete" },
                 ],
@@ -699,7 +705,7 @@ const ENROLLMENT_STAGE_OPERATING_DEFAULTS: Record<string, Omit<StageOperatingPla
                 rule_key: "declined_closed",
                 when_outcome_key: "declined",
                 targets: [
-                    { kind: "update_child_enrollment_status", disposition_key: "family_withdrew" },
+                    { kind: "update_child_enrollment_status", disposition_key: "not_enrolling", close_reason_key: "not_moving_forward" },
                     { kind: "move_to_stage", stage_key: "withdrawn" },
                     { kind: "mark_stage_work_complete" },
                 ],
@@ -739,7 +745,7 @@ const ENROLLMENT_STAGE_OPERATING_DEFAULTS: Record<string, Omit<StageOperatingPla
                 rule_key: "accepted_enrolling",
                 when_outcome_key: "accepted",
                 targets: [
-                    { kind: "update_child_enrollment_status", disposition_key: "registration_pending" },
+                    { kind: "update_child_enrollment_status", disposition_key: "enrolling" },
                     { kind: "move_to_stage", stage_key: "enrolling" },
                     { kind: "mark_stage_work_complete" },
                 ],
