@@ -99,7 +99,15 @@ Current Work Component             → Current Work Surface
 
 ### 3.1 The recursion primitive
 
-A Component (or one of its Evidence Groups) declares an **`openSurfaceId`**. When the operator opens it (Expanded/Workspace depth), the runtime **composes and renders that named Surface** through the *same* compose + grid path — not a bespoke expanded view, not "more fields."
+A Component (or one of its Evidence Groups) declares an **`openSurfaceId`**. When the operator opens it (Expanded/Workspace depth), the runtime is intended to **compose and render that named Surface** through the *same* compose + grid path — not a bespoke expanded view, not "more fields."
+
+> **Wiring status (be precise).** The primitive and its resolution are **landed and
+> tested at the engine level** (`universalSurfaceModel` + `surfaceRegistry`:
+> `resolveOpenSurface`, `walkSurfaceGraph`, cycle-safe). **No live runtime component
+> imports the registry yet** — the Focus Panel overlay still renders its existing
+> in-card views. Rendering a resolved Surface inside the live overlay (the
+> `ChildrenCard` swap) is a **staged follow-on** (§9). In this PR, recursion is proven
+> at the model/registry level, not visible in the running app.
 
 ```
 component.depth.expanded = { openSurfaceId: "children_surface" }
@@ -112,8 +120,8 @@ component.depth.expanded = { openSurfaceId: "children_surface" }
 
 | Proof | Proves | Path |
 |-------|--------|------|
-| **Children Surface** | `Record → Record Surface` — a record component opens a composed record surface | `ChildrenCard` "View children" → composed Children Surface → child row change-subject → recursion |
-| **Financial Configuration Surface** | `Operational Surface → Operational Surface` — the platform is **not** just record layouts; a configuration/question surface opens another surface (Configuration → History → Actions) | Financial Config component → Financial Config Surface |
+| **Children Surface** | `Record → Record Surface` — a record component opens a composed record surface | (intended live path) `ChildrenCard` "View children" → composed Children Surface → child row change-subject → recursion. **In this PR:** proven at model/registry level (self-referential spec + cycle-safe walk), live overlay render deferred (§9). |
+| **Financial Configuration Surface** | `Operational Surface → Operational Surface` — the platform is **not** just record layouts; a configuration/question surface opens another surface (Configuration → History → Actions) | Financial Config component → Financial Config Surface. **In this PR:** proven at model/registry level, live render deferred (§9). |
 
 Children proves recursion. Financial Configuration proves the model generalizes beyond record drawers to **operational/configuration** surfaces — so no one can say "that's just another drawer."
 
@@ -156,8 +164,20 @@ Result:                   available in every group whose acceptedNamespaces ∋ 
 ```
 
 - Availability = **platform starter fields ∪ tenant custom fields** whose namespace is accepted by the group. The starter list is a floor, never a ceiling.
-- The tenant-field machinery already exists (`tenantLayoutFieldPickerCatalog.buildTenantLayoutCatalogFields`, namespace mapping, surface-compatibility gate) and is wired into drawer/queue pickers. V3 wires it into the composition adapter so **operator-created fields flow into every compatible builder automatically** — Preferred Language, Employer, Referred By, Pickup Code, Emergency Notes appear wherever their namespace is accepted.
-- The queue/layout validator allow-list auto-extends for tenant refKeys that pass namespace compatibility, so published configs referencing custom fields validate.
+- The tenant-field machinery already exists (`tenantLayoutFieldPickerCatalog.buildTenantLayoutCatalogFields`, namespace mapping, surface-compatibility gate) and is wired into drawer/queue pickers.
+
+> **Wiring status (be precise).** V3 wires this into the **composition adapter**
+> (`compositionFieldAdapter.namedEvidenceGroupsForZone(zone, isWaitlist, tenantFieldDefinitions)`):
+> when a caller passes tenant field definitions, custom fields whose namespace is
+> accepted by a group are returned in that group's `availableFields`. This is
+> **landed and tested at the adapter level.** The **builder UI call-site is NOT yet
+> wired** — `QueueRowBuilderV2` still calls the adapter *without* tenant definitions,
+> so custom fields do **not** appear in the builder UI in this PR. Passing loaded
+> `field_definitions` from the builder (as the drawer field-catalog route already
+> does) is a **staged follow-on** (§9). Until then, custom-field availability is an
+> adapter capability, not a visible builder feature.
+
+- The queue/layout validator allow-list auto-extends for tenant refKeys that pass namespace compatibility, so published configs referencing custom fields validate. (Also an available seam, wired at publish integration.)
 
 **What must never be hardcoded again:** the *available* field set. `defaultFieldKeys` are legitimate **defaults** (what a group seeds with), never the **availability boundary**.
 
@@ -218,12 +238,19 @@ That is the architectural destination: Alloy stops inventing framework and start
 | Doctrine frozen (this doc) | ✅ landed |
 | Universal model (`universalSurfaceModel.ts`): Surface → Canvas → Component → Evidence Group → Composition Item | ✅ landed |
 | `openSurfaceId` recursion primitive + registry with cycle-safe resolution (`surfaceRegistry.ts`) | ✅ landed |
-| Field availability wired into composition adapter (`acceptedNamespaces` + tenant merge) | ✅ landed + tested |
-| Children Surface — recursive proof (Record → Record Surface, self-referential) | ✅ landed + tested |
-| Financial Configuration Surface — recursive proof (Operational → Operational) | ✅ landed + tested |
-| Evidence Group terminology (retire abstract "Details" → "Overview") | ✅ landed |
-| Runtime overlay render swap (ChildrenCard renders composed Children Surface instead of hardcoded `FocusedChild`) | **staged follow-on** — the recursion engine + specs are proven; wiring the live Focus Panel overlay to render a registered surface is the next render-integration step |
+| Field availability — adapter capability (`acceptedNamespaces` + tenant merge) | ✅ landed + tested **at the adapter level** |
+| Field availability — builder UI call-site (pass loaded `field_definitions` into the adapter) | **staged follow-on** — `QueueRowBuilderV2` still calls the adapter without tenant defs, so custom fields are NOT yet visible in the builder UI |
+| Children Surface — recursive proof (Record → Record Surface, self-referential) | ✅ landed + tested **at model/registry level** |
+| Financial Configuration Surface — recursive proof (Operational → Operational) | ✅ landed + tested **at model/registry level** |
+| Evidence Group terminology (retire abstract "Details" → "Overview") | ✅ landed (runtime-visible: default group label) |
+| Runtime overlay render swap (ChildrenCard renders composed Children Surface instead of hardcoded `FocusedChild`) | **staged follow-on** — the recursion engine + specs are proven; no runtime component imports the registry yet |
 | Queue stacked-sections schema + grain axis + waitlist-as-condition | **staged follow-on** (schema-version bump; documented, not landed here to keep runtime stable) |
 | Surface Library single-registry cutover (retire the two hand-synced catalogs) | **staged follow-on** — `surfaceRegistry` is the target seam |
+
+### 9a. What is visible in the running app after this PR
+
+**One user-visible change:** the default evidence-group label is now **"Overview"** (was "Overview" ← "Details") — appears where a card has no explicitly named groups.
+
+**Everything else is engine/model-level**, not yet surfaced in the UI: the universal model, the surface registry + recursion primitive, the two proof surfaces, and the adapter's custom-field-by-namespace capability all exist and are tested, but **no builder screen or runtime overlay consumes them yet**. This PR freezes the model and proves it; the live-render and builder-call-site cutovers are the staged follow-ons above.
 
 Deferred items are explicitly staged, not silently dropped — see the PR summary and the audit's gap ledger.
