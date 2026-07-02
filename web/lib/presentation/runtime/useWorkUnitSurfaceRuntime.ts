@@ -18,12 +18,16 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAdminDrawer } from "@/contexts/AdminDrawerContext";
+import { useWorkspaceOrg } from "@/contexts/WorkspaceOrgContext";
 import { useWorkUnitSlugRouteOptional } from "@/contexts/WorkUnitSlugRouteContext";
 import { useWorkspaceSiteFilter } from "@/contexts/WorkspaceSiteFilterContext";
 import {
     resolveActiveWorkViewRuntimeContext,
     savedWorkViewsFromDepartmentMetadata,
 } from "@/lib/lifecycle/resolveWorkViewRuntimeContext";
+import { tryLoadWorkUnitQueueDefinitionBundle } from "@/lib/config/queueDefinitionV2Runtime";
+import { getQueueUiConfig } from "@/lib/ui-v2/queueUiConfig";
+import { findAllRecordsQueueKey } from "@/lib/workspace/workUnitQueueDerived";
 import { appendWorkspaceSiteToUrl } from "@/lib/adminV2/workspaceSiteFilterClient";
 import { resolveWorkUnitQueueRowsFetchLimit } from "@/lib/adminV2/workUnitQueueRowsFetchLimit";
 import { dedupeAdminFetch } from "@/lib/workspace/workspaceAdminFetchDedupe";
@@ -53,8 +57,11 @@ export function useWorkUnitSurfaceRuntime(): WorkUnitSurfaceRuntime {
     const selectedSiteId = siteFilter?.selectedSiteId ?? null;
     const { drawer, isOpportunityDrawerOpening, openDrawer } = useAdminDrawer();
 
-    const departmentId = slugRoute?.departmentId ?? null;
-    const workUnitId = slugRoute?.workUnitId ?? null;
+    // Fetches gate on org readiness: the queue route resolves visibility under the org/auth
+    // gate, and a request racing org-context bootstrap 404s transiently.
+    const { orgId } = useWorkspaceOrg();
+    const departmentId = orgId ? slugRoute?.departmentId ?? null : null;
+    const workUnitId = orgId ? slugRoute?.workUnitId ?? null : null;
 
     // ── Work Views: department metadata (`work_views_v1`) + host queue_definition ──────
     const [deptMetadata, setDeptMetadata] = useState<unknown | null>(null);
@@ -137,7 +144,16 @@ export function useWorkUnitSurfaceRuntime(): WorkUnitSurfaceRuntime {
     const [queueError, setQueueError] = useState<string | null>(null);
     const queueRequestSeq = useRef(0);
 
-    const fetchQueueKey = runtimeCtx.queueKey;
+    // A department's Work Views can bind lanes that exist on sibling work units. Validate the
+    // resolved base lane against THIS work unit's queue definition; when absent, fall back to
+    // its all-records lane — the server still applies the view's predicates via `work_view_id`.
+    const fetchQueueKey = useMemo(() => {
+        const base = runtimeCtx.queueKey;
+        const bundle = queueDefinition != null ? tryLoadWorkUnitQueueDefinitionBundle(queueDefinition) : null;
+        if (!bundle) return base;
+        if (base && bundle.def.queues.some((q) => q.key === base)) return base;
+        return findAllRecordsQueueKey(bundle.def, getQueueUiConfig(bundle.def)) ?? base;
+    }, [runtimeCtx.queueKey, queueDefinition]);
     const summaryForLane = useMemo(
         () => summaries?.find((s) => s.key === fetchQueueKey || s.resolved_queue_key === fetchQueueKey) ?? null,
         [summaries, fetchQueueKey],
@@ -149,7 +165,9 @@ export function useWorkUnitSurfaceRuntime(): WorkUnitSurfaceRuntime {
     const fetchLimit = resolveWorkUnitQueueRowsFetchLimit(settledLaneCount);
 
     useEffect(() => {
-        if (!workUnitId || !fetchQueueKey) return;
+        // Wait for config settle: the lane validation above needs the queue definition, and a
+        // rows fetch racing org/config bootstrap 404s transiently.
+        if (!workUnitId || !fetchQueueKey || !configSettled) return;
         const seq = ++queueRequestSeq.current;
         setQueueLoading(true);
         setQueueError(null);
@@ -179,7 +197,7 @@ export function useWorkUnitSurfaceRuntime(): WorkUnitSurfaceRuntime {
             .finally(() => {
                 if (seq === queueRequestSeq.current) setQueueLoading(false);
             });
-    }, [workUnitId, fetchQueueKey, runtimeCtx.workViewId, selectedSiteId, fetchLimit]);
+    }, [workUnitId, fetchQueueKey, runtimeCtx.workViewId, selectedSiteId, fetchLimit, configSettled]);
 
     const rows = useMemo(
         () => (queueResult ? queueRowModelsFromQueueItemsResult(queueResult) : []),
