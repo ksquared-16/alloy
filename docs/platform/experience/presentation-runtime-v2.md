@@ -76,3 +76,44 @@ Focus Panel. No dead queue page. No duplicate runtime. No layered presentation.
 
 Only after the new presentation works: delete the old presentation tree, obsolete adapters,
 obsolete tests, obsolete render paths. Two presentation runtimes never coexist past cutover.
+
+---
+
+## Section ownership & runtime labels (as built)
+
+Every visible section has exactly ONE owner, stamped with a `data-runtime-label` and (for
+top-level sections) a `data-alloy-section`. Full ownership audit, config sources, and loading
+owners live in **`presentation-runtime-v2-handoff.md` §2**. Summary:
+
+| Label | Owner (`web/`) | Config/data source |
+| --- | --- | --- |
+| `WS.HEADER` / `WS.HEADER_CALCULATIONS` | `components/presentation/workspace/WorkspaceHeader.tsx` / `WorkspaceHeaderCalculations.tsx` | published `workspace_header` surface (metric_placements) + OIP warm cache |
+| `WS.PROCESS_TILE` / `WS.PROCESS_GRID` | `components/presentation/workspace/ProcessTile.tsx` / `ProcessGrid.tsx` | `OperatorLifecycleLandingCard` |
+| `WS.PROCESS_TILE_WORK_VIEWS` | `components/presentation/workspace/WorkViewList.tsx` | landing `workQueues` + `useWorkViewTotals` |
+| `WU.HEADER` / `WU.HEADER_CALCULATIONS` | `components/presentation/workUnit/WorkUnitHeader.tsx` / `WorkUnitHeaderCalculations.tsx` | published `work_unit_header` surface doc + OIP warm cache |
+| `WU.WORK_VIEW_PILLS` | `components/presentation/workUnit/WorkViewPillStrip.tsx` | configured views + `useWorkViewTotals` (active = live rows total) |
+| `WU.QUEUE` | `components/presentation/workUnit/QueueRegion.tsx` | rows API (`work_view_id`); order = Work View `sort_v1` (server) |
+| `WU.QUEUE_ROW` | `components/presentation/workUnit/CondensedQueueRow.tsx` | frozen `QueueRowContext` + published Queue Row surface (`pipeline-queue-row`) for slot visibility/labels |
+| `FP.SURFACE` | `components/presentation/workUnit/FocusPanelSurface.tsx` + `InlineOpportunityFocusPanel.tsx` | published Focus Panel Summary doc (composition engine) + drawer VM; modal shell suppressed on work-unit paths |
+| `RR.SURFACE` | `components/presentation/rightRail/RightRailSurface.tsx` | inline anchor (hidden when empty) — the VISIBLE command rail is the shell rail below |
+| `LEFT_NAV` (shell) | `app/adminV2/components/Sidebar.tsx` | `OperatorLifecycleLandingCard` (same as tiles) + `useWorkViewTotals` counts |
+| `RIGHT_RAIL` (shell) | `app/adminV2/components/AdminV2PersistentCommandRail.tsx` + `workspace/WorkspaceCommandRailShell.tsx` + `CommandRailBosMount.tsx` | page-registered Actions/Telemetry + `GlobalAssistantContext` (BOS) |
+
+Both shell rails mount in `app/adminV2/components/AdminV2Shell.tsx` ABOVE the route children →
+persistent (never remounted) across `/workspace ↔ /workspace/work-unit/*` and row switches.
+
+## Loading & reveal contract (as built)
+
+Shell first, content fills in. No rail-level spinner or skeleton-collapse. WS/WU surfaces reveal
+atomically under `model.ready` (WS = Route-VM seed; WU = `configSettled`, which includes the
+published header doc + queue-row config). Metric cards, work-view count badges, and the left-nav
+count use FIXED slots with stable placeholders — values fill in place, no layout jump. FP.SURFACE
+pending renders the SAME published card grid with card-shaped placeholders (gated on the published
+doc settling, so pending strategy == resolved strategy) — no "Preparing…" spinner, no modal, no
+arrangement reflow. Full detail in `presentation-runtime-v2-handoff.md` §5–§6.
+
+## Handoff
+
+Session-to-session transition package (ownership audit, deletion inventory, deletion execution
+plan, known risks, deferred items, recommended next task) lives in
+**`presentation-runtime-v2-handoff.md`**.
