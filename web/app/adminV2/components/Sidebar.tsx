@@ -35,6 +35,12 @@ import {
     SidebarTasksNavItem,
 } from "@/app/adminV2/components/SidebarModalNavItems";
 import { appendWorkspaceSiteToPath, readStickyWorkspaceSiteIdForNavigation } from "@/lib/adminV2/workspaceSiteFilterClient";
+import { useWorkspaceSiteFilter } from "@/contexts/WorkspaceSiteFilterContext";
+import {
+    useWorkViewTotals,
+    workViewTotalKey,
+    type WorkViewTotalTarget,
+} from "@/lib/presentation/runtime/useWorkViewTotals";
 import { useActiveAdminV2WorkspaceModal } from "@/lib/adminV2/useActiveWorkspaceModal";
 import SidebarConfigurationModeNav from "@/app/adminV2/components/SidebarConfigurationModeNav";
 import { readInboxUnreadCountCache } from "@/lib/adminV2/inboxNavUnreadCache";
@@ -129,6 +135,44 @@ function SidebarNav({
             return next;
         });
     }, []);
+
+    // Canonical Work View counts — the SAME source the Workspace tile list and Work Unit pill
+    // strip resolve from (`useWorkViewTotals`: the view's `work_view_id` evaluated at its
+    // canonical location — host work unit + base lane). Left-nav count == tile count == pill
+    // count for the same view by construction. Fetches DEDUPE via `dedupeAdminFetch`, so calling
+    // the hook here does not double-fetch what the WS/WU surfaces already request.
+    //
+    // Site scope: prefer the shell site-filter context (what WS/WU counts use) so the numbers
+    // agree; fall back to the sticky nav site id when the sidebar renders outside the provider
+    // (non-workspace shell branch), matching the scope hrefs already carry.
+    const siteFilter = useWorkspaceSiteFilter();
+    const selectedSiteId = siteFilter
+        ? siteFilter.selectedSiteId
+        : readStickyWorkspaceSiteIdForNavigation();
+
+    const workViewTotalTargets = useMemo<WorkViewTotalTarget[]>(() => {
+        const seen = new Set<string>();
+        const out: WorkViewTotalTarget[] = [];
+        for (const card of lifecycleCards) {
+            for (const entry of card.workQueues) {
+                const viewId = entry.work_view_id?.trim();
+                const workUnitId = entry.host_work_unit_id?.trim();
+                const baseQueueKey = entry.base_queue_key?.trim();
+                if (!viewId || !workUnitId || !baseQueueKey) continue;
+                const key = workViewTotalKey(workUnitId, viewId);
+                if (seen.has(key)) continue;
+                seen.add(key);
+                out.push({ viewId, workUnitId, baseQueueKey });
+            }
+        }
+        return out;
+    }, [lifecycleCards]);
+
+    const workViewTotals = useWorkViewTotals({
+        targets: workViewTotalTargets,
+        selectedSiteId,
+        enabled: lifecycleCards.length > 0,
+    });
 
     // ShellNavigationSurfaceViewModel — the persistent left nav is mounted ABOVE the route (in
     // AdminV2Shell) so it commits once and never remounts across workspace/work-unit navigation.
@@ -289,8 +333,25 @@ function SidebarNav({
                                                 workUnitSlug,
                                                 entry.route_key ?? entry.platformKey,
                                             );
+                                        const viewId = entry.work_view_id?.trim();
+                                        const hostWorkUnitId = entry.host_work_unit_id?.trim();
+                                        // Canonical count for this view (host-scoped key); null =
+                                        // pending/unresolved → stable placeholder, never a wrong number.
+                                        const count =
+                                            viewId && hostWorkUnitId
+                                                ? workViewTotals.get(
+                                                      workViewTotalKey(hostWorkUnitId, viewId),
+                                                  ) ?? null
+                                                : null;
+                                        // Only reserve the count slot for entries that HAVE a canonical
+                                        // location (a real view total); label-only entries stay label-only.
+                                        const hasCountSlot = Boolean(viewId && hostWorkUnitId);
                                         return (
-                                            <li key={entry.platformKey} role="none">
+                                            <li
+                                                key={entry.platformKey}
+                                                role="none"
+                                                data-work-view-id={viewId ?? entry.platformKey}
+                                            >
                                                 <AdminV2NavLink
                                                     href={childHref}
                                                     active={childActive}
@@ -312,7 +373,26 @@ function SidebarNav({
                                                         )
                                                     }
                                                 >
-                                                    <span className="truncate">{entry.label}</span>
+                                                    <span className="flex w-full items-center gap-2">
+                                                        <span className="min-w-0 flex-1 truncate">
+                                                            {entry.label}
+                                                        </span>
+                                                        {hasCountSlot ? (
+                                                            <span
+                                                                className="adminv2-sidebar-queue-count shrink-0 text-right tabular-nums"
+                                                                aria-hidden={count == null}
+                                                            >
+                                                                {count == null ? (
+                                                                    <span
+                                                                        className="adminv2-sidebar-queue-count-pending inline-block h-2.5 w-4 animate-pulse rounded-sm bg-white/20 align-middle"
+                                                                        aria-hidden="true"
+                                                                    />
+                                                                ) : (
+                                                                    count
+                                                                )}
+                                                            </span>
+                                                        ) : null}
+                                                    </span>
                                                 </AdminV2NavLink>
                                             </li>
                                         );
