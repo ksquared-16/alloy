@@ -15,6 +15,7 @@ import type { ProcessTracksV1 } from "@/lib/businessProcesses/processConfigTypes
 import { ENROLLMENT_PROCESS_KEY } from "@/lib/lifecycle/lifecycleProcessTypes";
 import { defaultEnrollmentQueueMembershipForStage } from "@/lib/businessProcessTemplates/enrollmentQueueMembershipDefaults";
 import { defaultStageOperatingPlanForEnrollmentStage } from "@/lib/lifecycle/defaultEnrollmentStageOperatingPlans";
+import type { StageGrain } from "@/lib/lifecycle/stageGrainV1";
 
 export const ENROLLMENT_TEMPLATE_PROCESS_KEY = ENROLLMENT_PROCESS_KEY;
 
@@ -96,6 +97,9 @@ export function buildEnrollmentTemplateStageRecords(): LifecycleBuilderStageReco
     return ENROLLMENT_STAGE_SPECS.map((spec, index) => {
         const membership = defaultEnrollmentQueueMembershipForStage(spec.key) ?? undefined;
         const operatingPlan = defaultStageOperatingPlanForEnrollmentStage(spec.key) ?? undefined;
+        // Seed the row-type grain so Work Views can be scoped per grain (family vs child) and the
+        // grain banner has data. Family track = one row per case; child track = one row per enrollment track.
+        const grain: StageGrain = spec.track_key === ENROLLMENT_TRACK_CHILD_KEY ? "child" : "family";
         return {
             id: randomUUID(),
             key: spec.key,
@@ -103,6 +107,7 @@ export function buildEnrollmentTemplateStageRecords(): LifecycleBuilderStageReco
             track_key: spec.track_key,
             sort_order: index,
             is_active: true,
+            grain,
             ...(membership ? { queue_membership_v1: membership } : {}),
             ...(operatingPlan ? { stage_operating_plan_v1: operatingPlan } : {}),
         };

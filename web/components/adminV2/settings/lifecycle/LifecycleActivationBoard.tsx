@@ -1788,6 +1788,7 @@ export default function LifecycleActivationBoard({
                             departmentId={runtimeDepartmentId}
                             workUnitId={workUnitId}
                             stageGrains={builderStages.map((s) => s.grain)}
+                            stageGrainByKey={Object.fromEntries(builderStages.map((s) => [s.key, s.grain]))}
                             queueLanes={workViewQueueLanes}
                         />
                     :   null}
