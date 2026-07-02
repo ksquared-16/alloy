@@ -20,7 +20,7 @@ function WorkViewRowBody({ view }: { view: WorkViewLinkModel }) {
         <>
             <span className="min-w-0 truncate">{view.label}</span>
             {view.count != null ? (
-                <span className="shrink-0 rounded-full bg-alloy-stone/12 px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-alloy-midnight/70">
+                <span className="shrink-0 rounded-full bg-alloy-juniper/10 px-2 py-0.5 text-[10px] font-bold tabular-nums text-alloy-juniper">
                     {view.count.toLocaleString()}
                 </span>
             ) : null}
@@ -28,12 +28,15 @@ function WorkViewRowBody({ view }: { view: WorkViewLinkModel }) {
     );
 }
 
+const ROW_BODY_CLASS =
+    "flex items-center justify-between gap-3 px-1.5 py-1.5 text-xs font-semibold text-alloy-midnight/75";
+
 export function WorkViewList({ workViews }: { workViews: WorkViewLinkModel[] }) {
     if (!workViews.length) return null;
     return (
         <ul
             {...runtimeLabelProps(PRESENTATION_RUNTIME_LABELS.workViewList)}
-            className="flex flex-col gap-0.5"
+            className="flex flex-col divide-y divide-alloy-midnight/[0.06]"
             aria-label="Work views"
         >
             {workViews.map((view) => (
@@ -42,12 +45,12 @@ export function WorkViewList({ workViews }: { workViews: WorkViewLinkModel[] }) 
                         <Link
                             href={view.href}
                             onClick={(e) => e.stopPropagation()}
-                            className="flex items-center justify-between gap-2 rounded px-1.5 py-1 text-xs font-medium text-alloy-midnight/70 transition-colors hover:bg-alloy-juniper/8 hover:text-alloy-juniper"
+                            className={`${ROW_BODY_CLASS} no-underline transition-colors hover:bg-alloy-juniper/[0.06] hover:text-alloy-juniper focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-alloy-juniper`}
                         >
                             <WorkViewRowBody view={view} />
                         </Link>
                     ) : (
-                        <div className="flex items-center justify-between gap-2 rounded px-1.5 py-1 text-xs font-medium text-alloy-midnight/70">
+                        <div className={ROW_BODY_CLASS}>
                             <WorkViewRowBody view={view} />
                         </div>
                     )}

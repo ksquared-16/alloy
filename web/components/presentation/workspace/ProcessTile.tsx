@@ -57,63 +57,87 @@ export function ProcessTile({ process }: { process: ProcessTileModel }) {
             onKeyDown={(e) => {
                 if (e.key === "Enter") router.push(process.entryHref);
             }}
-            className="group flex h-full cursor-pointer flex-col gap-2.5 rounded-lg border border-alloy-stone/18 bg-white px-4 py-3.5 transition-colors hover:border-alloy-juniper/50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-alloy-juniper/60"
+            className="group flex h-full min-h-[10rem] cursor-pointer flex-col overflow-hidden rounded-xl border border-alloy-juniper/20 border-l-[4px] border-l-alloy-juniper/70 bg-white shadow-[0_1px_4px_rgba(15,23,42,0.05)] transition-colors hover:border-alloy-juniper/35 hover:shadow-[0_4px_12px_rgba(0,162,131,0.12)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-alloy-juniper/60"
         >
-            <div>
-                <h3 className="text-[15px] font-semibold leading-snug text-alloy-midnight group-hover:text-alloy-juniper">
-                    {process.label}
-                </h3>
-                {process.description ? (
-                    <p className="mt-0.5 text-xs leading-snug text-alloy-midnight/55">
-                        {process.description}
-                    </p>
+            <div className="flex flex-1 flex-col px-4 pb-3 pt-3.5">
+                <div>
+                    <h3 className="min-w-0 text-base font-semibold leading-snug text-alloy-midnight">
+                        {process.label}
+                    </h3>
+                    {process.description ? (
+                        <p className="mt-1 text-xs leading-relaxed text-alloy-midnight/62">
+                            {process.description}
+                        </p>
+                    ) : null}
+                </div>
+
+                {metrics.length ? (
+                    <ul className="mt-2.5 space-y-1.5">
+                        {metrics.map((metric) => {
+                            const attentionMetric =
+                                metric.label.toLowerCase().includes("needs attention") &&
+                                metric.value !== "—";
+                            return (
+                                <li
+                                    key={metric.label}
+                                    className="flex items-baseline justify-between gap-2 text-xs"
+                                >
+                                    <span className="min-w-0 truncate font-medium text-alloy-midnight/55">
+                                        {metric.label}
+                                    </span>
+                                    <span
+                                        className={`shrink-0 font-semibold tabular-nums ${
+                                            attentionMetric ? "text-alloy-ember" : "text-alloy-midnight"
+                                        }`}
+                                    >
+                                        {metric.value}
+                                    </span>
+                                </li>
+                            );
+                        })}
+                    </ul>
                 ) : null}
-            </div>
 
-            <div className="flex gap-5">
-                <div>
-                    <div className="text-[10px] font-medium uppercase tracking-[0.1em] text-alloy-stone">
-                        Active
+                {process.workViews.length ? (
+                    <div className="mt-2.5 space-y-1.5 border-t border-alloy-midnight/8 pt-2.5">
+                        <p className="text-[9px] font-bold uppercase tracking-[0.1em] text-alloy-midnight/45">
+                            Work Views
+                        </p>
+                        <WorkViewList workViews={process.workViews} />
                     </div>
-                    <div className="text-sm font-semibold tabular-nums text-alloy-midnight">
-                        {formatCount(process.activeRecordCount)}
+                ) : null}
+
+                <div className="mt-auto flex items-end justify-between gap-3 border-t border-alloy-midnight/8 pt-2.5">
+                    <div className="flex gap-4">
+                        <div>
+                            <div className="text-[8px] font-semibold uppercase tracking-wide text-alloy-midnight/40">
+                                Active
+                            </div>
+                            <div className="text-[11px] font-semibold tabular-nums text-alloy-midnight/70">
+                                {formatCount(process.activeRecordCount)}
+                            </div>
+                        </div>
+                        <div>
+                            <div className="text-[8px] font-semibold uppercase tracking-wide text-alloy-midnight/40">
+                                Attention
+                            </div>
+                            <div
+                                className={`text-[11px] font-semibold tabular-nums ${
+                                    hasAttention ? "text-alloy-ember" : "text-alloy-midnight/70"
+                                }`}
+                            >
+                                {formatCount(process.needsAttentionCount)}
+                            </div>
+                        </div>
                     </div>
-                </div>
-                <div>
-                    <div className="text-[10px] font-medium uppercase tracking-[0.1em] text-alloy-stone">
-                        Attention
-                    </div>
-                    <div
-                        className={`text-sm font-semibold tabular-nums ${hasAttention ? "text-alloy-ember" : "text-alloy-midnight"}`}
+                    <span
+                        aria-hidden
+                        className="shrink-0 rounded-md border border-alloy-juniper/35 bg-alloy-juniper/10 px-2.5 py-1.5 text-xs font-bold tracking-wide text-alloy-juniper transition-colors group-hover:border-alloy-juniper group-hover:bg-alloy-juniper group-hover:text-white"
                     >
-                        {formatCount(process.needsAttentionCount)}
-                    </div>
+                        Open →
+                    </span>
                 </div>
             </div>
-
-            {metrics.length ? (
-                <ul className="space-y-1 border-t border-alloy-stone/18 pt-2">
-                    {metrics.map((metric) => (
-                        <li
-                            key={metric.label}
-                            className="flex items-baseline justify-between gap-2 text-xs"
-                        >
-                            <span className="min-w-0 truncate font-medium text-alloy-midnight/55">
-                                {metric.label}
-                            </span>
-                            <span className="shrink-0 font-semibold tabular-nums text-alloy-midnight">
-                                {metric.value}
-                            </span>
-                        </li>
-                    ))}
-                </ul>
-            ) : null}
-
-            {process.workViews.length ? (
-                <div className="mt-auto border-t border-alloy-stone/18 pt-2">
-                    <WorkViewList workViews={process.workViews} />
-                </div>
-            ) : null}
         </div>
     );
 }

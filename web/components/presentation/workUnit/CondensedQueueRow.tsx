@@ -31,7 +31,7 @@ function subjectDisplayName(context: QueueRowContext): string {
 }
 
 const ROW_BUTTON_CLASS =
-    "flex w-full items-center gap-2 px-3 py-2 text-left transition-colors hover:bg-alloy-stone/10";
+    "flex w-full items-center gap-2.5 px-3 py-2 text-left transition-colors hover:bg-alloy-juniper/[0.04] active:bg-alloy-juniper/[0.08] focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-alloy-juniper";
 
 export function CondensedQueueRow({
     row,
@@ -55,7 +55,9 @@ export function CondensedQueueRow({
                 onClick={() => onOpen(row)}
                 className={ROW_BUTTON_CLASS}
             >
-                <span className="min-w-0 flex-1 truncate text-sm text-alloy-midnight">{row.entityId}</span>
+                <span className="min-w-0 flex-1 truncate text-[13px] leading-4 text-alloy-midnight/70">
+                    {row.entityId}
+                </span>
             </button>
         );
     }
@@ -83,30 +85,36 @@ export function CondensedQueueRow({
             onClick={() => onOpen(row)}
             className={ROW_BUTTON_CLASS}
         >
-            <span className="min-w-0 flex-1 truncate text-sm font-medium text-alloy-midnight">
+            <span className="min-w-0 flex-1 truncate text-[13px] font-semibold leading-4 text-alloy-midnight">
                 {subjectDisplayName(context)}
             </span>
             {stageLabel ? (
-                <span className="shrink-0 rounded-full border border-alloy-stone/30 px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.1em] text-alloy-midnight/70">
+                <span className="max-w-[10rem] shrink-0 truncate rounded-full border border-alloy-midnight/15 bg-white px-2 py-0.5 text-[10px] font-semibold leading-[13px] text-alloy-midnight/60">
                     {stageLabel}
                 </span>
             ) : null}
             {needsAttention ? (
-                <span className="flex min-w-0 shrink items-center gap-1" title={attentionReason ?? undefined}>
+                <span className="flex min-w-0 shrink items-center gap-1.5" title={attentionReason ?? undefined}>
                     <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-alloy-ember" aria-hidden />
                     {attentionReason ? (
-                        <span className="truncate text-xs text-alloy-ember">{attentionReason}</span>
+                        <span className="truncate text-[11px] font-semibold text-alloy-ember">
+                            {attentionReason}
+                        </span>
                     ) : (
                         <span className="sr-only">Needs attention</span>
                     )}
                 </span>
             ) : null}
-            <span className="ml-auto flex shrink-0 items-center gap-2">
+            <span className="ml-auto flex shrink-0 items-baseline gap-2">
                 {workLabel ? (
-                    <span className="max-w-[16rem] truncate text-xs text-alloy-midnight/70">{workLabel}</span>
+                    <span className="max-w-[16rem] truncate text-[11px] text-alloy-midnight/60">
+                        {workLabel}
+                    </span>
                 ) : null}
                 {dueLabel ? (
-                    <span className="whitespace-nowrap text-[11px] text-alloy-stone">{dueLabel}</span>
+                    <span className="whitespace-nowrap text-[10px] font-semibold tabular-nums text-alloy-midnight/45">
+                        {dueLabel}
+                    </span>
                 ) : null}
             </span>
         </button>
