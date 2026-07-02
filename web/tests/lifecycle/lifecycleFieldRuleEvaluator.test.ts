@@ -78,9 +78,9 @@ describe("lifecycleFieldRuleEvaluator", () => {
                 inquiry_children: [
                     {
                         id: "ocm-1",
-                        desired_program_type: "infant",
-                        desired_schedule_type: "full_time",
-                        desired_start_date: "2026-09-01",
+                        program_category_id: "cat-infant",
+                        schedule_type: "full_time",
+                        start_date: "2026-09-01",
                     },
                 ],
             },

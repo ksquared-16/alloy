@@ -178,6 +178,9 @@ export async function executeCreateLeadAction(
         name: displayName,
         source: trim(input.merged.source) || "manual",
         status_key: statusKeyForLead,
+        // Explicit persisted process stage at intake (S4 status collapse): a new lead enters the
+        // Lead stage. Stage is no longer derived from status — it is written here and by outcomes.
+        stage_key: "lead",
         work_unit_id: workUnitId,
         metadata: {
             created_via: "create_lead",

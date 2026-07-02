@@ -71,7 +71,7 @@ export const GATHER_VALUES_WITH_MEDIUM_CONFIDENCE: Record<string, string> = {
     source: "Website inquiry",
     intake_notes: "Wants a tour next week",
     child_date_of_birth: "",
-    child_desired_start_date: "",
+    child_start_date: "",
 };
 
 export const GATHER_VALUES_FILLED: Record<string, string> = {
@@ -85,5 +85,5 @@ export const GATHER_VALUES_FILLED: Record<string, string> = {
     source: "Website inquiry",
     intake_notes: "Wants a tour next week, flexible on start date",
     child_date_of_birth: "",
-    child_desired_start_date: "",
+    child_start_date: "",
 };

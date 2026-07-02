@@ -39,7 +39,7 @@ function safeMeta(raw: unknown): Record<string, unknown> {
 function resolveFromMemberSources(input: {
     ocmMetadata?: Record<string, unknown> | null;
     candidateMetadata?: Record<string, unknown> | null;
-    desiredProgramType?: string | null;
+    programKey?: string | null;
     dateOfBirth?: string | null;
 }): ResolveProgramRoomCohortResult | null {
     const ocmMd = safeMeta(input.ocmMetadata);
@@ -67,7 +67,7 @@ function resolveFromMemberSources(input: {
         return fromDob;
     };
 
-    if (!Object.keys(memberMeta).length && !input.desiredProgramType?.trim()) {
+    if (!Object.keys(memberMeta).length && !input.programKey?.trim()) {
         return tryDob();
     }
 
@@ -78,8 +78,8 @@ function resolveFromMemberSources(input: {
             (typeof memberMeta.demo_program_label === "string" ? memberMeta.demo_program_label : null),
         program_room_group:
             (typeof memberMeta.program_room_group === "string" ? memberMeta.program_room_group : null) ??
-            (typeof input.desiredProgramType === "string" ? input.desiredProgramType : null),
-        desired_program_type: input.desiredProgramType ?? null,
+            (typeof input.programKey === "string" ? input.programKey : null),
+        program_key: input.programKey ?? null,
         program_room_cohort_key:
             typeof memberMeta.program_room_cohort_key === "string" ? memberMeta.program_room_cohort_key : null,
         program_room_group_label:
@@ -102,7 +102,7 @@ function resolveFromMemberSources(input: {
 export function resolvePlacementCandidateCohortFromMember(input: {
     ocmMetadata?: Record<string, unknown> | null;
     candidateMetadata?: Record<string, unknown> | null;
-    desiredProgramType?: string | null;
+    programKey?: string | null;
     programRoomCohortKey?: string | null;
     dateOfBirth?: string | null;
 }): ResolveProgramRoomCohortResult {
@@ -123,7 +123,7 @@ export function resolvePlacementCandidateCohortFromMember(input: {
         resolveFromMemberSources(input) ??
         resolveProgramRoomCohort({
             metadata: safeMeta(input.ocmMetadata),
-            desired_program_type: input.desiredProgramType ?? null,
+            program_key: input.programKey ?? null,
         })
     );
 }
@@ -135,43 +135,43 @@ export function resolvePlacementCandidateCohortForQueue(input: {
     ocmProgramRoomCohortKey?: string | null;
     candidateMetadata?: Record<string, unknown> | null;
     ocmMetadata?: Record<string, unknown> | null;
-    desiredProgramType?: string | null;
+    programKey?: string | null;
     dateOfBirth?: string | null;
 }): { program_room_cohort_key: string; program_room_group_label: string } {
     const storedKey = input.storedKey.trim();
     const storedLabel = input.storedLabel.trim();
     const ocmKey = (input.ocmProgramRoomCohortKey ?? "").trim();
-    const desiredType = (input.desiredProgramType ?? "").trim();
+    const programKey = (input.programKey ?? "").trim();
 
     const toStored = (key: string, label: string) => {
         const n = normalizePlacementWaitlistCohort(key, label);
         return { program_room_cohort_key: n.cohortKey, program_room_group_label: n.cohortLabel };
     };
 
-    // Inquiry drawer canonical program key — align queue sections/labels with OCM desired_program_type.
-    if (desiredType) {
-        const fromDesired =
+    // Inquiry drawer canonical program key — align queue sections/labels with the OCM program category key.
+    if (programKey) {
+        const fromProgram =
             resolveFromMemberSources({
                 ocmMetadata: input.ocmMetadata,
                 candidateMetadata: input.candidateMetadata,
-                desiredProgramType: desiredType,
+                programKey,
                 dateOfBirth: input.dateOfBirth,
             }) ??
             resolveProgramRoomCohort({
                 metadata: safeMeta(input.ocmMetadata),
-                desired_program_type: desiredType,
+                program_key: programKey,
             });
         if (
-            fromDesired.program_room_cohort_key &&
-            fromDesired.program_room_cohort_key !== "unknown_program_room" &&
+            fromProgram.program_room_cohort_key &&
+            fromProgram.program_room_cohort_key !== "unknown_program_room" &&
             !looksLikeCombinedProgramRoomCohort(
-                fromDesired.program_room_cohort_key,
-                fromDesired.program_room_group_label
+                fromProgram.program_room_cohort_key,
+                fromProgram.program_room_group_label
             )
         ) {
-            const desiredKey = fromDesired.program_room_cohort_key.trim();
-            if (!storedKey || storedKey !== desiredKey || (ocmKey && ocmKey !== desiredKey)) {
-                return toStored(fromDesired.program_room_cohort_key, fromDesired.program_room_group_label);
+            const programCohortKey = fromProgram.program_room_cohort_key.trim();
+            if (!storedKey || storedKey !== programCohortKey || (ocmKey && ocmKey !== programCohortKey)) {
+                return toStored(fromProgram.program_room_cohort_key, fromProgram.program_room_group_label);
             }
         }
     }
@@ -183,7 +183,7 @@ export function resolvePlacementCandidateCohortForQueue(input: {
             const fromOcm = resolvePlacementCandidateCohortFromMember({
                 ocmMetadata: input.ocmMetadata,
                 candidateMetadata: input.candidateMetadata,
-                desiredProgramType: input.desiredProgramType,
+                programKey: input.programKey,
                 programRoomCohortKey: ocmKey,
                 dateOfBirth: input.dateOfBirth,
             });

@@ -40,7 +40,7 @@ const CONTEXT: OperationalContext = {
                 desired_program_label: "Preschool",
                 program_room_cohort_label: "Butterflies Room",
                 desired_schedule_label: "M–F · 8:30a – 2:30p",
-                desired_start_date: "Aug 20, 2024",
+                start_date: "Aug 20, 2024",
                 outcome_status_label: "Enrolled",
                 outcome_status_key: "enrolled",
             },

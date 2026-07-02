@@ -929,7 +929,7 @@ function legacyMiddleHasContent(slots: CrmCompactRowSemanticSlots): boolean {
       (!multi && (slots.childName?.trim() || slots.programContext?.trim())) ||
       (slots.programContext?.trim() && !multi && !slots.childName?.trim()) ||
       timingLine ||
-      slots.desiredStartDateDisplay != null ||
+      slots.startDateDisplay != null ||
       slots.tourContext != null ||
       slots.roomContext?.trim() ||
       slots.ageBandContext?.trim() ||
@@ -1059,12 +1059,12 @@ function LegacyCrmCompactQueueMiddle({
   }
 
   let timingHandled = false;
-  if (slots.desiredStartDateDisplay != null || slots.tourContext != null) {
+  if (slots.startDateDisplay != null || slots.tourContext != null) {
     const th: string[] = [];
     const tv: string[] = [];
-    if (slots.desiredStartDateDisplay != null) {
-      th.push(slots.rowPreviewLabelDesiredStartDate ?? DL.desired_start_date);
-      tv.push(slots.desiredStartDateDisplay ?? "—");
+    if (slots.startDateDisplay != null) {
+      th.push(slots.rowPreviewLabelStartDate ?? DL.start_date);
+      tv.push(slots.startDateDisplay ?? "—");
     }
     if (slots.tourContext != null) {
       th.push(slots.rowPreviewLabelTourDate ?? DL.tour_date);

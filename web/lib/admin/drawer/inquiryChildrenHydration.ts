@@ -26,16 +26,17 @@ export type InquiryChildHydrateRow = {
     last_name: string | null;
     dob: string | null;
     age: string | null;
-    desired_program_type: string | null;
-    desired_program_category_id: string | null;
+    program_category_id: string | null;
+    /** Stable program key derived from the category FK (or opportunity default) — display only. */
+    program_key: string | null;
     desired_program_label: string | null;
-    desired_schedule_type: string | null;
+    schedule_type: string | null;
     desired_schedule_label: string | null;
     outcome_status_key: string | null;
     outcome_status_label: string | null;
     fit_status: string | null;
     notes: string | null;
-    desired_start_date: string | null;
+    start_date: string | null;
     location_id?: string | null;
     location_label?: string | null;
     program_room_cohort_key?: string | null;
@@ -195,8 +196,8 @@ export function mergeHouseholdActiveChildrenIntoInquiryChildren(
         const last_name = identity.last_name;
         const display_name = identity.display_name ?? `${cmId.slice(0, 8)}…`;
 
-        const desiredProgramType = oppDefaultProgramType;
-        const desiredScheduleType = oppDefaultScheduleType;
+        const defaultProgramKey = oppDefaultProgramType;
+        const scheduleType = oppDefaultScheduleType;
         const memMeta = (m.metadata ?? null) as Record<string, unknown> | null;
         const demoProgramLabel =
             memMeta && typeof memMeta.demo_program_label === "string"
@@ -212,22 +213,22 @@ export function mergeHouseholdActiveChildrenIntoInquiryChildren(
             last_name,
             dob,
             age: age ? age.label : null,
-            desired_program_type: desiredProgramType,
-            desired_program_category_id: null,
+            program_category_id: null,
+            program_key: defaultProgramKey,
             desired_program_label:
-                optionLabelFromBatchMap(optionLabelMap, "childcare_program_type", desiredProgramType) ??
+                optionLabelFromBatchMap(optionLabelMap, "childcare_program_type", defaultProgramKey) ??
                 demoProgramLabel,
-            desired_schedule_type: desiredScheduleType,
+            schedule_type: scheduleType,
             desired_schedule_label: optionLabelFromBatchMap(
                 optionLabelMap,
                 "childcare_schedule_type",
-                desiredScheduleType
+                scheduleType
             ),
             outcome_status_key: null,
             outcome_status_label: null,
             fit_status: null,
             notes: null,
-            desired_start_date: null,
+            start_date: null,
             custom_fields: {},
             metadata: (m.metadata as Record<string, unknown>) ?? null,
             created_at: null,

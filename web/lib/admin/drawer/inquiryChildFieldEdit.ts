@@ -13,11 +13,11 @@ export type InquiryChildIdentityPatch = {
 };
 
 export type InquiryChildOcmPatch = {
-    desired_start_date?: string | null;
+    start_date?: string | null;
     location_id?: string | null;
     program_room_cohort_key?: string | null;
-    desired_program_type?: string | null;
-    desired_schedule_type?: string | null;
+    program_category_id?: string | null;
+    schedule_type?: string | null;
     outcome_status_key?: string | null;
     notes?: string | null;
     [key: string]: string | null | undefined;
@@ -213,8 +213,9 @@ function normEditorKey(v: string | null | undefined): string {
 export type InquiryChildRowEditorLocal = {
     location_id: string;
     program_room_cohort_key: string;
-    desired_program_type: string;
-    desired_schedule_type: string;
+    /** Program picker value = location_program_categories.id (the stored FK). */
+    program_category_id: string;
+    schedule_type: string;
     outcome_status_key: string;
     notes: string;
     desired_start_edit: string;
@@ -224,26 +225,26 @@ export type InquiryChildRowEditorLocal = {
 export type InquiryChildRowEditorBaseline = {
     location_id?: string | null;
     program_room_cohort_key?: string | null;
-    desired_program_type?: string | null;
-    desired_schedule_type?: string | null;
+    program_category_id?: string | null;
+    schedule_type?: string | null;
     outcome_status_key?: string | null;
     notes?: string | null;
-    desired_start_date?: string | null;
+    start_date?: string | null;
     custom_fields?: Record<string, unknown> | null;
 };
 
 export function buildInquiryChildOcmPatchFromEditorLocal(args: {
     row: InquiryChildRowEditorBaseline;
     local: InquiryChildRowEditorLocal;
-    opportunityDesiredStartDate?: string | null;
+    opportunityStartDate?: string | null;
     customFieldKeys?: string[];
 }): InquiryChildOcmPatch {
     const patch: InquiryChildOcmPatch = {};
     const pairs: Array<[keyof InquiryChildOcmPatch, string, string | null | undefined]> = [
         ["location_id", args.local.location_id, args.row.location_id],
         ["program_room_cohort_key", args.local.program_room_cohort_key, args.row.program_room_cohort_key],
-        ["desired_program_type", args.local.desired_program_type, args.row.desired_program_type],
-        ["desired_schedule_type", args.local.desired_schedule_type, args.row.desired_schedule_type],
+        ["program_category_id", args.local.program_category_id, args.row.program_category_id],
+        ["schedule_type", args.local.schedule_type, args.row.schedule_type],
         ["outcome_status_key", args.local.outcome_status_key, args.row.outcome_status_key],
         ["notes", args.local.notes, args.row.notes],
     ];
@@ -254,16 +255,16 @@ export function buildInquiryChildOcmPatchFromEditorLocal(args: {
     }
 
     const oppNorm = normEditorKey(
-        args.opportunityDesiredStartDate ? String(args.opportunityDesiredStartDate).slice(0, 10) : ""
+        args.opportunityStartDate ? String(args.opportunityStartDate).slice(0, 10) : ""
     );
     const nextStart = normEditorKey(args.local.desired_start_edit);
     const prevStart = normEditorKey(
-        args.row.desired_start_date ? String(args.row.desired_start_date).slice(0, 10) : ""
+        args.row.start_date ? String(args.row.start_date).slice(0, 10) : ""
     );
     const normalizedNext = !nextStart || nextStart === oppNorm ? null : nextStart;
     const normalizedPrev = !prevStart || prevStart === oppNorm ? null : prevStart;
     if (normalizedNext !== normalizedPrev) {
-        patch.desired_start_date = normalizedNext;
+        patch.start_date = normalizedNext;
     }
 
     for (const fieldKey of args.customFieldKeys ?? []) {
@@ -282,7 +283,7 @@ export function inquiryChildEditorRowIsDirty(args: {
     local: InquiryChildRowEditorLocal;
     identityDraft: InquiryChildIdentityPatch;
     identityBaseline: InquiryChildIdentityPatch;
-    opportunityDesiredStartDate?: string | null;
+    opportunityStartDate?: string | null;
     customFieldKeys?: string[];
 }): boolean {
     if (inquiryChildIdentityHasChanges(args.identityDraft, args.identityBaseline)) return true;
@@ -290,7 +291,7 @@ export function inquiryChildEditorRowIsDirty(args: {
         buildInquiryChildOcmPatchFromEditorLocal({
             row: args.row,
             local: args.local,
-            opportunityDesiredStartDate: args.opportunityDesiredStartDate,
+            opportunityStartDate: args.opportunityStartDate,
             customFieldKeys: args.customFieldKeys,
         })
     ).length > 0;

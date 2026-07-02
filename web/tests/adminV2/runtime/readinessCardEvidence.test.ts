@@ -57,7 +57,7 @@ describe("buildReadinessCardEvidence", () => {
                     child({
                         desired_program_label: "Preschool",
                         desired_schedule_label: "Full day",
-                        desired_start_date: "2025-08-26",
+                        start_date: "2025-08-26",
                     }),
                 ],
             }),
@@ -111,7 +111,7 @@ describe("buildReadinessCardEvidence", () => {
                     id: "opp-1",
                     "person.primary_contact_name": "Sarah Johnson",
                     _inquiry_children: [
-                        child({ desired_program_label: "Preschool", desired_schedule_label: "Full day", desired_start_date: "2025-08-26" }),
+                        child({ desired_program_label: "Preschool", desired_schedule_label: "Full day", start_date: "2025-08-26" }),
                     ],
                 },
                 { needsAttention: true, primaryReason: "Immunization record missing", reasonCount: 1 },

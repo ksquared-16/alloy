@@ -116,7 +116,7 @@ export default function LocationSchedulePatternsSettingsPanel({ siteId, onError,
                 <h3 className="text-[10px] font-semibold uppercase tracking-wide text-alloy-pine">Schedules</h3>
                 <p className="mt-1 text-[11px] text-alloy-midnight/55">
                     Site schedule patterns. Matched at approval handoff from enrollment schedule proposals
-                    (`desired_schedule_type`).
+                    (`schedule_type`).
                 </p>
             </div>
 

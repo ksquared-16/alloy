@@ -93,13 +93,13 @@ function resolveStatusLabel(row: Record<string, unknown>, statusKey: string): st
 function buildSubjectPlacementFromInquiryChildRaw(raw: Record<string, unknown>): SubjectPlacementContext | null {
     const location_id = trimOrNull(raw.location_id);
     const location_label = trimOrNull(raw.location_label);
-    const program_key = trimOrNull(raw.desired_program_type);
+    const program_key = trimOrNull(raw.program_key);
     const program_label =
         trimOrNull(raw.desired_program_label) ??
         (program_key ? humanizeSnakeCaseToken(program_key) : null);
     const room_id = trimOrNull(raw.program_room_cohort_key);
     const room_label = trimOrNull(raw.program_room_cohort_label);
-    const schedule_key = trimOrNull(raw.desired_schedule_type);
+    const schedule_key = trimOrNull(raw.schedule_type);
     const schedule_label =
         trimOrNull(raw.desired_schedule_label) ??
         (schedule_key ? humanizeSnakeCaseToken(schedule_key) : null);

@@ -22,9 +22,9 @@ import type { WaitlistCandidateCardVM } from "@/lib/layout/waitlist/waitlistCand
 /** Sample candidate for the Waitlist card preview (tier/position shown as runtime-supplied). */
 const WAITLIST_PREVIEW_VM: WaitlistCandidateCardVM = {
     candidateId: "preview", opportunityId: "preview", isSyntheticFallback: false,
-    child: { name: "Avery Nguyen (3y)", ageLabel: "3y", programLabel: "Toddler", desiredStartDate: "Aug 2026" },
+    child: { name: "Avery Nguyen (3y)", ageLabel: "3y", programLabel: "Toddler", startDate: "Aug 2026" },
     household: { name: "Nguyen", primaryContactName: "Jordan Nguyen", phone: "(555) 010-2244", email: "jordan@example.com", locationName: "North Campus" },
-    waitlist: { cohortKey: "toddler", cohortLabel: "Toddler", cohortSectionTitle: "Toddler waitlist", tierLabel: "Sibling enrolled", positionLabel: "Position 3/12", positionMode: "live", waitSince: "May 15, 2026", desiredStartDate: "Aug 2026", status: "waitlisted", shadowMode: false },
+    waitlist: { cohortKey: "toddler", cohortLabel: "Toddler", cohortSectionTitle: "Toddler waitlist", tierLabel: "Sibling enrolled", positionLabel: "Position 3/12", positionMode: "live", waitSince: "May 15, 2026", startDate: "Aug 2026", status: "waitlisted", shadowMode: false },
     overrides: { hasActive: true, kinds: ["pin"], pinned: true, manuallyAdjusted: true, reason: "Sibling cohort alignment" },
     actions: { canOpen: true, canMessage: true, canCreateOffer: true, canOverride: true, canAskBos: true },
     widgets: {},

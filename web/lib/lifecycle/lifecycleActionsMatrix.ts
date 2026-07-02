@@ -33,7 +33,9 @@ import {
 export const LIFECYCLE_ACTIONS_MATRIX_BASE_ACTION_ORDER: readonly LifecycleBaseActionKey[] = [
     "create_record",
     "quick_message",
-    "change_status",
+    "waitlist_child",
+    "enroll_child",
+    "close_lead",
     "add_person",
     "add_child",
     "send_form",

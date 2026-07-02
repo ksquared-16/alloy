@@ -80,12 +80,12 @@ function mapLegacyFactsWithoutHousehold(input: {
                 });
             }
         }
-        if (fact.fact_type === "date" && !seen.has(keys.child_desired_start_date)) {
+        if (fact.fact_type === "date" && !seen.has(keys.child_start_date)) {
             pushCandidate(candidates, seen, {
-                payload_key: keys.child_desired_start_date,
+                payload_key: keys.child_start_date,
                 rule_id:
-                    fieldByPayloadKey(spec, keys.child_desired_start_date)?.rule_id ??
-                    "child:desired_start_date",
+                    fieldByPayloadKey(spec, keys.child_start_date)?.rule_id ??
+                    "child:start_date",
                 value: String(fact.normalized_value ?? fact.raw_value),
                 confidence: fact.confidence === "high" ? "high" : "medium",
                 fact_ids: [fact.fact_id],
@@ -196,13 +196,13 @@ export function mapFactsToCreateLeadIntake(input: {
         });
     }
 
-    if (household.desired_start_date && !seen.has(keys.child_desired_start_date)) {
+    if (household.start_date && !seen.has(keys.child_start_date)) {
         push({
-            payload_key: keys.child_desired_start_date,
+            payload_key: keys.child_start_date,
             rule_id:
-                fieldByPayloadKey(input.spec, keys.child_desired_start_date)?.rule_id ??
-                "child:desired_start_date",
-            value: household.desired_start_date,
+                fieldByPayloadKey(input.spec, keys.child_start_date)?.rule_id ??
+                "child:start_date",
+            value: household.start_date,
             confidence: "high",
             fact_ids: [],
             validation_state: "valid",

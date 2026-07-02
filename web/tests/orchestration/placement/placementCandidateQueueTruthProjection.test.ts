@@ -46,12 +46,12 @@ describe("resolvePlacementCandidateCohortForQueue stale repair", () => {
         expect(cohort.program_room_group_label).toContain("Toddler");
     });
 
-    it("prefers OCM desired_program_type over stale program_room_cohort_key (Williams-style)", () => {
+    it("prefers OCM program category key over stale program_room_cohort_key (Williams-style)", () => {
         const riley = resolvePlacementCandidateCohortForQueue({
             storedKey: "infant",
             storedLabel: "Infant",
             ocmProgramRoomCohortKey: "infant",
-            desiredProgramType: "toddler",
+            programKey: "toddler",
         });
         expect(riley.program_room_cohort_key).toMatch(/toddler/i);
 
@@ -59,7 +59,7 @@ describe("resolvePlacementCandidateCohortForQueue stale repair", () => {
             storedKey: "preschool",
             storedLabel: "Preschool",
             ocmProgramRoomCohortKey: "preschool",
-            desiredProgramType: "infant",
+            programKey: "infant",
         });
         expect(quinn.program_room_cohort_key).toMatch(/infant/i);
     });

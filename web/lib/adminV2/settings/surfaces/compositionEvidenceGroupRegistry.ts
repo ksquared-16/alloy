@@ -104,8 +104,8 @@ export const QUEUE_ZONE_EVIDENCE_GROUPS: Record<string, readonly CompositionEvid
             defaultFieldKeys: [
                 "inquiry_child.program",
                 "child.room",
-                "inquiry_child.desired_schedule_type",
-                "child.desired_start_date",
+                "inquiry_child.schedule_type",
+                "child.start_date",
             ],
             acceptedNamespaces: ["child", "inquiry_child"],
         },
@@ -171,9 +171,9 @@ export const QUEUE_ZONE_EVIDENCE_GROUPS_WAITLIST: Partial<typeof QUEUE_ZONE_EVID
             label: "Placement Request",
             purpose: "What placement is this candidate waiting for?",
             defaultFieldKeys: [
-                "inquiry_child.desired_program_category",
-                "inquiry_child.desired_schedule_type",
-                "child.desired_start_date",
+                "inquiry_child.program_category",
+                "inquiry_child.schedule_type",
+                "child.start_date",
             ],
             acceptedNamespaces: ["child", "inquiry_child"],
         },

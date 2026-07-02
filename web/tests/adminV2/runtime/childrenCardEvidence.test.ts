@@ -53,7 +53,7 @@ describe("buildChildrenCardEvidence", () => {
                         desired_schedule_label: "M–F · Full day",
                         outcome_status_key: "enrolled",
                         outcome_status_label: "Enrolled",
-                        desired_start_date: "2025-08-26",
+                        start_date: "2025-08-26",
                     },
                 ],
             }),
@@ -101,8 +101,8 @@ describe("buildChildrenCardEvidence", () => {
             ctx({
                 id: "opp-1",
                 _inquiry_children: [
-                    { id: "c1", display_name: "Emma", outcome_status_key: "enrolled", outcome_status_label: "Enrolled", desired_program_label: "Preschool", desired_schedule_label: "Full day", desired_start_date: "2025-08-26" },
-                    { id: "c2", display_name: "Liam", outcome_status_key: "enrolled", outcome_status_label: "Enrolled", desired_program_label: "Toddler", desired_schedule_label: "Half day", desired_start_date: "2025-08-26" },
+                    { id: "c1", display_name: "Emma", outcome_status_key: "enrolled", outcome_status_label: "Enrolled", desired_program_label: "Preschool", desired_schedule_label: "Full day", start_date: "2025-08-26" },
+                    { id: "c2", display_name: "Liam", outcome_status_key: "enrolled", outcome_status_label: "Enrolled", desired_program_label: "Toddler", desired_schedule_label: "Half day", start_date: "2025-08-26" },
                     { id: "c3", display_name: "Noah", outcome_status_key: "waitlisted", outcome_status_label: "Waitlisted" },
                 ],
             }),

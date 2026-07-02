@@ -102,8 +102,6 @@ const LEGACY_HOME_SERVICES_KEYS: Readonly<Record<string, readonly string[]>> = {
         "email_consent",
         "program_type",
         "schedule_type",
-        "desired_program_type",
-        "desired_schedule_type",
         "discount_amount",
         "discount_code",
         "discount_validated_at",
@@ -165,9 +163,8 @@ const INTEGRATION_KEYS: Readonly<Record<string, readonly string[]>> = {
     inquiry_child: ["external_id", "external_source"],
 };
 
-const LEGACY_COMPATIBILITY_KEYS: Readonly<Record<string, readonly string[]>> = {
-    inquiry_child: ["desired_program_type"],
-};
+/** Empty since the canonical-fields migration dropped the last legacy alias (desired_program_type). */
+const LEGACY_COMPATIBILITY_KEYS: Readonly<Record<string, readonly string[]>> = {};
 
 const RELATIONSHIP_REFERENCE_KEYS: Readonly<Record<string, readonly string[]>> = {
     opportunity: [
@@ -204,14 +201,14 @@ export const CHILDCARE_CANONICAL_OPERATOR_FIELDS: Readonly<Record<string, readon
         "tour_date",
         "tour_time",
         "tour_status",
-        "desired_start_date",
+        "start_date",
     ],
     inquiry_child: [
-        "desired_start_date",
+        "start_date",
         "location_id",
-        "desired_program_category_id",
+        "program_category_id",
         "program_room_cohort_key",
-        "desired_schedule_type",
+        "schedule_type",
         "first_name",
         "last_name",
         "date_of_birth",
@@ -257,7 +254,6 @@ function classifyByPattern(entityType: string, fieldKey: string): FieldCatalogCl
         return "legacy_home_services";
     }
     if (/^estimated_price|^monetary_value|^job_date|^job_time/.test(key)) return "legacy_home_services";
-    if (key === "desired_program_type") return "legacy_compatibility";
     if (key === "outcome_status_key") return "system_workflow";
     if (key === "customer_type" || key === "customer_number") return "integration";
     if (et === "opportunity" && /^tour_/.test(key) && key !== "tour_date" && key !== "tour_time" && key !== "tour_status") {
@@ -374,20 +370,13 @@ export function isChildcareCanonicalField(entityType: string, fieldKey: string):
     return keys?.includes(fieldKey.trim()) ?? false;
 }
 
-/** Program MVP — canonical storage for desired program on inquiry child. */
+/** Program MVP — canonical storage for the program on inquiry child (sole program field since the canonical-fields migration). */
 export const CHILDCARE_PROGRAM_FIELD_MODEL = {
-    canonical_field_key: "desired_program_category_id",
-    legacy_alias_field_key: "desired_program_type",
+    canonical_field_key: "program_category_id",
     entity_type: "inquiry_child",
     storage_table: "opportunity_customer_members",
-    storage_column: "desired_program_category_id",
+    storage_column: "program_category_id",
     option_source: "programs_for_location" as const,
     depends_on_field_key: "location_id" as const,
     operator_label: "Program",
-    legacy_label: "Program",
 } as const;
-
-/** Whether a child program field key is the legacy alias (not operator-selectable). */
-export function isLegacyChildProgramFieldKey(fieldKey: string): boolean {
-    return fieldKey.trim() === CHILDCARE_PROGRAM_FIELD_MODEL.legacy_alias_field_key;
-}

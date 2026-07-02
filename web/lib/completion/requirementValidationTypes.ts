@@ -110,10 +110,10 @@ export type InquiryChildCompletionSnapshot = {
     first_name?: string | null;
     last_name?: string | null;
     location_id?: string | null;
-    desired_program_type?: string | null;
+    program_category_id?: string | null;
     program_room_cohort_key?: string | null;
-    desired_schedule_type?: string | null;
-    desired_start_date?: string | null;
+    schedule_type?: string | null;
+    start_date?: string | null;
     outcome_status_key?: string | null;
     /** Profile fields — hydrated from customer_member when available. */
     dob?: string | null;

@@ -110,8 +110,8 @@ describe("queuePlacementWaitlistCandidatePresentation", () => {
                 program_room_cohort_key: "infant",
                 program_room_group_label: "Infant",
                 site_id: "site-a",
-                desired_program_type: "infant",
-                desired_program_category_id: "cat-infant",
+                program_key: "infant",
+                program_category_id: "cat-infant",
                 bucket: "tier_general_waitlist",
                 placement_priority_v2: {
                     placement_candidate_id: "pc-1",
@@ -138,7 +138,7 @@ describe("queuePlacementWaitlistCandidatePresentation", () => {
         );
         expect(vm?.cohortSectionTitle).toBe("Babies waitlist");
         expect(vm?.siteId).toBe("site-a");
-        expect(vm?.desiredProgramType).toBe("infant");
+        expect(vm?.programKey).toBe("infant");
     });
 
     it("parses manual position adjustment from pin override", () => {

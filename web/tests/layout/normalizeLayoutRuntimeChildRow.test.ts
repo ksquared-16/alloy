@@ -59,11 +59,11 @@ describe("normalizeLayoutRuntimeChildRow", () => {
                 first_name: "Jim",
                 last_name: "Pat",
                 display_name: "Jim Pat",
-                desired_program_type: "infant",
+                program_category_id: "cat-infant",
             },
         ]);
         expect(rows).toHaveLength(1);
         expect(rows[0]?.["child.first_name"]).toBe("Jim");
-        expect(rows[0]?.["inquiry_child.desired_program_type"]).toBe("infant");
+        expect(rows[0]?.["inquiry_child.program_category_id"]).toBe("cat-infant");
     });
 });

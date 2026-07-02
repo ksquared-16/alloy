@@ -13,7 +13,6 @@ import {
 import { updateOpportunityCustomerMemberLifecycleStatus } from "@/lib/opportunities/updateOpportunityCustomerMemberLifecycleStatus";
 import { validateInquiryChildPlacementPatch } from "@/lib/admin/drawer/inquiryChildPlacementScope";
 import { syncPlacementCandidateFromOcm } from "@/lib/orchestration/placement/syncPlacementCandidateFromOcm";
-import { enrichOcmProgramCategoryFields } from "@/lib/locations/resolveOcmProgramCategoryFields";
 import { assertNoChildProfileKeysOnOcmPatch } from "@/lib/fields/canonicalStrictMode";
 
 export async function PATCH(
@@ -50,8 +49,8 @@ export async function PATCH(
             updates.notes = typeof v === "string" ? v : v == null ? null : String(v);
             continue;
         }
-        if (k === "desired_start_date") {
-            updates.desired_start_date =
+        if (k === "start_date") {
+            updates.start_date =
                 v === "" || v == null ? null : normalizeIsoDateOnly(typeof v === "string" ? v : String(v));
             continue;
         }
@@ -64,8 +63,8 @@ export async function PATCH(
                 v === "" || v == null ? null : typeof v === "string" ? v.trim() || null : null;
             continue;
         }
-        if (k === "desired_program_category_id") {
-            updates.desired_program_category_id =
+        if (k === "program_category_id") {
+            updates.program_category_id =
                 v === "" || v == null ? null : typeof v === "string" ? v.trim() || null : null;
             continue;
         }
@@ -86,7 +85,7 @@ export async function PATCH(
     const { data: existingOcm } = await supabase
         .from("opportunity_customer_members")
         .select(
-            "id, opportunity_id, outcome_status_key, location_id, program_room_cohort_key, desired_program_type"
+            "id, opportunity_id, outcome_status_key, location_id, program_room_cohort_key, program_category_id"
         )
         .eq("id", id)
         .eq("org_id", ctx.orgId)
@@ -113,7 +112,7 @@ export async function PATCH(
     const existing = existingOcm as {
         location_id?: string | null;
         program_room_cohort_key?: string | null;
-        desired_program_type?: string | null;
+        program_category_id?: string | null;
     };
     const placementValidation = validateInquiryChildPlacementPatch({
         location_id:
@@ -122,10 +121,10 @@ export async function PATCH(
             "program_room_cohort_key" in updates
                 ? (updates.program_room_cohort_key as string | null)
                 : existing.program_room_cohort_key,
-        desired_program_type:
-            "desired_program_type" in updates
-                ? (updates.desired_program_type as string | null)
-                : existing.desired_program_type,
+        program_category_id:
+            "program_category_id" in updates
+                ? (updates.program_category_id as string | null)
+                : existing.program_category_id,
     });
     if (!placementValidation.ok) {
         return NextResponse.json(
@@ -135,27 +134,6 @@ export async function PATCH(
             },
             { status: 400 }
         );
-    }
-
-    if (
-        Object.prototype.hasOwnProperty.call(updates, "desired_program_type") ||
-        Object.prototype.hasOwnProperty.call(updates, "location_id")
-    ) {
-        const enriched = await enrichOcmProgramCategoryFields(supabase, {
-            orgId: ctx.orgId,
-            locationId:
-                "location_id" in updates ? (updates.location_id as string | null) : existing.location_id,
-            desiredProgramType:
-                "desired_program_type" in updates
-                    ? (updates.desired_program_type as string | null)
-                    : existing.desired_program_type,
-            desiredProgramCategoryId:
-                "desired_program_category_id" in updates
-                    ? (updates.desired_program_category_id as string | null)
-                    : undefined,
-        });
-        updates.desired_program_type = enriched.desired_program_type;
-        updates.desired_program_category_id = enriched.desired_program_category_id;
     }
 
     if (Object.prototype.hasOwnProperty.call(updates, "outcome_status_key")) {
@@ -190,7 +168,7 @@ export async function PATCH(
         .eq("id", id)
         .eq("org_id", ctx.orgId)
         .select(
-            "id, org_id, opportunity_id, customer_member_id, location_id, program_room_cohort_key, desired_program_type, desired_program_category_id, desired_schedule_type, desired_start_date, outcome_status_key, notes, updated_at"
+            "id, org_id, opportunity_id, customer_member_id, location_id, program_room_cohort_key, program_category_id, schedule_type, start_date, outcome_status_key, notes, updated_at"
         )
         .single();
 

@@ -40,8 +40,8 @@ export function parsePlacementWaitlistCandidateRowVm(
         cohortKey,
         cohortLabel,
         siteId: o.site_id,
-        desiredProgramType: o.desired_program_type,
-        desiredProgramCategoryId: o.desired_program_category_id,
+        programKey: o.program_key,
+        programCategoryId: o.program_category_id,
         locationCategoryContext: context,
     });
     const bucketLabel = formatPlacementBucketLabel(o.bucket);
@@ -106,8 +106,8 @@ export function parsePlacementWaitlistCandidateRowVm(
         cohortKey,
         cohortLabel,
         siteId: o.site_id?.trim() || null,
-        desiredProgramType: o.desired_program_type?.trim() || null,
-        desiredProgramCategoryId: o.desired_program_category_id?.trim() || null,
+        programKey: o.program_key?.trim() || null,
+        programCategoryId: o.program_category_id?.trim() || null,
         cohortSectionTitle: waitlistSection.sectionTitle,
         bucketLabel,
         waitSinceLabel: waitSince,

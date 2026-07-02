@@ -93,7 +93,7 @@ export function buildPlacementDemoOpportunityMetadataFragment(scenario: Placemen
         enrollment_operational: {
             wait_since: staggerWaitSinceIso(idx >= 0 ? idx : 0),
         },
-        desired_start_date: "2025-09-01",
+        start_date: "2025-09-01",
         placement_fact_inputs_v1: { program_room_group: room },
         program_label: `${room} — Demo waitlist`,
     };

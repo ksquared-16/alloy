@@ -70,7 +70,7 @@ describe("field display runtime helpers", () => {
 
     it("formats date values using editor date format", () => {
         const formatted = formatLayoutEditorFieldDateValue(
-            "child.desired_start_date",
+            "child.start_date",
             "2024-06-15",
             "date",
             "medium",

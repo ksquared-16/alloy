@@ -47,8 +47,8 @@ describe("fieldPickerContextCatalog", () => {
 
     it("drawer and queue share childcare catalog labels for common refs", () => {
         expect(resolveFieldPickerLabel("opportunity.tour_date")).toBe(resolveLayoutEditorFieldRefLabel("opportunity.tour_date"));
-        expect(resolveFieldPickerLabel("inquiry_child.desired_program_type")).toBe(
-            resolveLayoutEditorFieldRefLabel("inquiry_child.desired_program_type"),
+        expect(resolveFieldPickerLabel("inquiry_child.program_category_id")).toBe(
+            resolveLayoutEditorFieldRefLabel("inquiry_child.program_category_id"),
         );
     });
 

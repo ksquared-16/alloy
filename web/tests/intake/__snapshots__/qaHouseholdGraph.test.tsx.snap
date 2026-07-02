@@ -190,7 +190,7 @@ Bend, Oregon 97701",
     },
   ],
   "commit_limited_to_primary": false,
-  "desired_start_date": null,
+  "start_date": null,
   "household_contacts": [
     {
       "kind": "email",

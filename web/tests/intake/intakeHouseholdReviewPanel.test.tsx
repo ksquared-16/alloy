@@ -108,7 +108,7 @@ const SAMPLE_HOUSEHOLD: IntakeHouseholdCandidate = {
     source: null,
     notes: null,
     program_interest: null,
-    desired_start_date: null,
+    start_date: null,
     relationships: [],
     unassigned_fact_ids: [],
     unmapped_facts: [],

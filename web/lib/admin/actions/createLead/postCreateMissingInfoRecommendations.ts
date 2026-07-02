@@ -7,10 +7,10 @@ import type { ActionIntakeSpec } from "@/lib/lifecycle/actionIntakeSpecTypes";
  */
 const TEMPORARY_FOLLOW_UP_PAYLOAD_KEYS = [
     "child_date_of_birth",
-    "child_desired_start_date",
+    "child_start_date",
     "child_program",
     "location_id",
-    "child_desired_schedule_type",
+    "child_schedule_type",
 ] as const;
 
 function labelForField(spec: ActionIntakeSpec | null | undefined, payloadKey: string): string {

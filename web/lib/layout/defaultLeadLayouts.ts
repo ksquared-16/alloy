@@ -161,7 +161,7 @@ export function buildLeadDrawerDefaultDoc(): LayoutDoc {
             { label: "Child", refKey: "child.name", width: "medium", adornment: { position: "left", icon: "child", action: { type: "open_drawer", entity: "child", idPath: "child.id" } } },
             { label: "DOB / Age", refKey: "child.dob_age", width: "medium" },
             { label: "Program", refKey: "child.program", width: "medium" },
-            { label: "Desired start", refKey: "child.desired_start_date", width: "medium", renderHint: "date" },
+            { label: "Desired start", refKey: "child.start_date", width: "medium", renderHint: "date" },
             { label: "Schedule", refKey: "child.schedule", width: "medium" },
             { label: "Classroom", refKey: "child.room", width: "medium" },
             { label: "Location", refKey: "child.location", width: "medium" },
@@ -378,7 +378,7 @@ export function buildEnrollmentWaitlistQueueDoc(): LayoutDoc {
             col(id(base, "r1"), 1, HALF, [fieldItem(id(base, "r1c1"), "child.location", "Site / location", "text")]),
         ]),
         row(id(base, "r2"), [
-            col(id(base, "r2"), 0, HALF, [fieldItem(id(base, "r2c0"), "child.desired_start_date", "Desired start", "date")]),
+            col(id(base, "r2"), 0, HALF, [fieldItem(id(base, "r2c0"), "child.start_date", "Desired start", "date")]),
             col(id(base, "r2"), 1, HALF, [fieldItem(id(base, "r2c1"), "child.room", "Room preference", "text")]),
         ]),
     ]);

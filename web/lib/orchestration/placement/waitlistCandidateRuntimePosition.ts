@@ -90,8 +90,8 @@ export function readWaitlistCandidateSectionKey(
         cohortKey,
         cohortLabel,
         siteId: scope.siteId,
-        desiredProgramType: scope.desiredProgramType,
-        desiredProgramCategoryId: scope.desiredProgramCategoryId,
+        programKey: scope.programKey,
+        programCategoryId: scope.programCategoryId,
         locationCategoryContext: context,
     }).sectionKey;
 }

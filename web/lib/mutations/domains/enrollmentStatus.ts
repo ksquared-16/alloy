@@ -31,7 +31,7 @@ type EnrollmentReadinessRule = {
     targetStatusKeys: string[];
     /** OCM fields that must be non-null before transitioning to any of the target statuses */
     requiredFields: Array<{
-        field: keyof { desired_start_date: unknown; location_id: unknown };
+        field: keyof { start_date: unknown; location_id: unknown };
         missingCode: string;
         missingMessage: string;
     }>;
@@ -46,8 +46,8 @@ const ENROLLMENT_READINESS_RULES: EnrollmentReadinessRule[] = [
         targetStatusKeys: ["enrolled", "approved", "waitlisted"],
         requiredFields: [
             {
-                field: "desired_start_date",
-                missingCode: "missing_desired_start_date",
+                field: "start_date",
+                missingCode: "missing_start_date",
                 missingMessage: "Desired start date is required before moving to this status.",
             },
             {

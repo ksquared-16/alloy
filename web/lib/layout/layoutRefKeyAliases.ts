@@ -30,18 +30,25 @@ export const DEPRECATED_LAYOUT_REFKEY_NAMESPACES = ["child_inquiry"] as const;
  */
 export const LAYOUT_REFKEY_ALIASES: Readonly<Record<string, string>> = {
     // Deprecated child_inquiry.* → inquiry_child.*
-    "child_inquiry.desired_start_date": "inquiry_child.desired_start_date",
-    "child_inquiry.program": "inquiry_child.desired_program_type",
+    "child_inquiry.start_date": "inquiry_child.start_date",
+    "child_inquiry.program": "inquiry_child.program_category_id",
     "child_inquiry.status": "inquiry_child.outcome_status_key",
     "child_inquiry.child_name": "child.name", // repeater summary — interim until FC-3 binding
 
+    // Enrollment Alignment S2 — legacy "desired_*" participation keys (stored docs
+    // that missed the 20260711 migration still resolve; alias-on-read only).
+    "inquiry_child.desired_start_date": "inquiry_child.start_date",
+    "inquiry_child.desired_schedule_type": "inquiry_child.schedule_type",
+    "inquiry_child.desired_program_category_id": "inquiry_child.program_category_id",
+    "inquiry_child.desired_program_type": "inquiry_child.program_category_id",
+
     // Participation fields incorrectly namespaced as child.* → inquiry_child.*
-    "child.program": "inquiry_child.desired_program_type",
-    "child.desired_start_date": "inquiry_child.desired_start_date",
+    "child.program": "inquiry_child.program_category_id",
+    "child.start_date": "inquiry_child.start_date",
     "child.status": "inquiry_child.outcome_status_key",
     "child.location": "inquiry_child.location_id",
     "child.room": "inquiry_child.program_room_cohort_key",
-    "child.schedule": "inquiry_child.desired_schedule_type",
+    "child.schedule": "inquiry_child.schedule_type",
 
     // Person curated keys → registry-aligned keys
     "person.primary_phone": "person.phone",

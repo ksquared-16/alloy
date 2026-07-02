@@ -332,6 +332,7 @@ import {
     resolvePersonDrawerTransitionSnapshot,
 } from "@/lib/admin/drawer/personDrawerOpenSeed";
 import { personDrawerOperatingSummaryVisible } from "@/lib/admin/person/personDrawerShellPolicy";
+import { humanizeStatusKey } from "@/lib/admin/status/humanizeStatusKey";
 import { openViewPersonFromOpportunity } from "@/lib/admin/drawer/openViewPersonFromOpportunity";
 import { entityDataMatchesDrawer } from "@/lib/admin/drawer/entityDataMatchesDrawer";
 import {
@@ -7122,6 +7123,7 @@ export function AdminEntityDrawerLegacy() {
                 // Normalize nullable date fields: HTML date inputs emit "" when cleared.
                 // Sending job_date: "" causes Postgres "invalid input syntax for type date".
                 if (typeof payload.job_date === "string" && payload.job_date.trim() === "") payload.job_date = null;
+                // desired_start_date is the opportunity-level legacy field key — not the OCM column.
                 for (const dk of ["desired_start_date", "tour_date"] as const) {
                     const tv = payload[dk];
                     if (tv === "" || tv === undefined || (typeof tv === "string" && tv.trim() === "")) {
@@ -11297,7 +11299,8 @@ export function AdminEntityDrawerLegacy() {
                     <OpportunityInquiryChildrenSection
                         rows={drawerChildRows}
                         opportunityId={drawer.id ?? undefined}
-                        opportunityDesiredStartDate={(() => {
+                        opportunityStartDate={(() => {
+                            // Opportunity-level legacy field key — not the OCM column.
                             const rawStart =
                                 d.desired_start_date ??
                                 (d.metadata as Record<string, unknown> | null)?.desired_start_date;
@@ -14372,7 +14375,7 @@ export function AdminEntityDrawerLegacy() {
                                                                 {o.name?.trim() || o.id.slice(0, 8) + "…"}
                                                             </button>
                                                             <span className="text-alloy-muted ml-1">
-                                                                {o.status_key ? `· ${o.status_key}` : ""}
+                                                                {o.status_key ? `· ${getStatusLabel(o.status_key) || o.status_key}` : ""}
                                                                 {o.quote_total != null ? ` · ${formatMoneyFromDollars(Number(o.quote_total))}` : ""}
                                                                 {o.job_date ? ` · ${displayDate(String(o.job_date))}` : ""}
                                                             </span>
@@ -14861,7 +14864,7 @@ export function AdminEntityDrawerLegacy() {
                                         id: s.id,
                                         entityType: "schedules" as const,
                                         label: s.start_at ? displayDateTime(String(s.start_at)) : "Visit",
-                                        meta: [s.end_at ? displayDateTime(String(s.end_at)) : null, s.status_key ? String(s.status_key) : null, s.price_cents != null ? formatMoneyFromCents(s.price_cents) : null]
+                                        meta: [s.end_at ? displayDateTime(String(s.end_at)) : null, s.status_key ? humanizeStatusKey(String(s.status_key)) : null, s.price_cents != null ? formatMoneyFromCents(s.price_cents) : null]
                                             .filter(Boolean)
                                             .join(" · ") || undefined,
                                     }));
@@ -15425,7 +15428,7 @@ export function AdminEntityDrawerLegacy() {
                                                                             ? "First"
                                                                             : "—"}
                                                                 </td>
-                                                                <td className="py-1 pr-2">{s.status_key ?? "—"}</td>
+                                                                <td className="py-1 pr-2">{s.status_key ? humanizeStatusKey(String(s.status_key)) : "—"}</td>
                                                                 <td className="py-1 pr-2">
                                                                     {s.price_cents != null ? formatMoneyFromCents(s.price_cents) : "—"}
                                                                 </td>
@@ -17866,7 +17869,7 @@ export function AdminEntityDrawerLegacy() {
                                                                                             <td className="py-1 pr-2">
                                                                                                 {s.price_cents != null ? formatMoneyFromCents(s.price_cents) : "—"}
                                                                                             </td>
-                                                                                            <td className="py-1 pr-2">{s.status_key ?? "—"}</td>
+                                                                                            <td className="py-1 pr-2">{s.status_key ? humanizeStatusKey(String(s.status_key)) : "—"}</td>
                                                                                             <td className="py-1 pr-2">{s.assigned_vendor_id ? `${String(s.assigned_vendor_id).slice(0, 8)}…` : "—"}</td>
                                                                                             <td className="py-1 pr-2">{s.posted ? "Yes" : "No"}</td>
                                                                                         </tr>

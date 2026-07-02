@@ -6,6 +6,8 @@
 export type OpportunityActionPatchBody = {
     status_key?: string | null;
     lost_reason?: string | null;
+    /** Terminal detail persisted alongside a `closed` case status (S4 collapse). */
+    close_reason_key?: string | null;
 };
 
 /** Actions implemented in this slice — unknown keys are ignored at execution time. */
@@ -21,13 +23,18 @@ export type OpportunityRecordActionEventKey = (typeof OPPORTUNITY_RECORD_ACTION_
 export function mapOpportunityRecordActionToPatch(eventKey: string): OpportunityActionPatchBody | null {
     switch (eventKey) {
         case "qualify_opportunity":
-            return { status_key: "contacted" };
+            // Post-collapse (S4), the case container is simply `open`; qualification is
+            // lead work, not a distinct case status.
+            return { status_key: "open" };
         case "start_quote":
-            return { status_key: "tour_scheduled" };
+            // No meaningful case-status change post-collapse — keep the case `open`.
+            return { status_key: "open" };
         case "mark_won":
-            return { status_key: "enrolled" };
+            // Enrollment success is CHILD-grain (mark_enrolled on the child track), not the
+            // case container. A successful case stays `open`; there is no "won" case status.
+            return { status_key: "open" };
         case "mark_lost":
-            return { status_key: "lost", lost_reason: "Marked lost (workspace)" };
+            return { status_key: "closed", close_reason_key: "lost" };
         default:
             return null;
     }

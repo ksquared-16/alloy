@@ -116,7 +116,7 @@ describe("layoutBuilderPreviewFidelity", () => {
                                 presentationMode: "compact",
                                 primaryRow: { fields: ["child.first_name", "child.last_name", "child.age"] },
                                 secondaryRow: {
-                                    fields: ["child.dob_age", "inquiry_child.desired_start_date", "child.status"],
+                                    fields: ["child.dob_age", "inquiry_child.start_date", "child.status"],
                                 },
                                 tertiaryRow: { fields: ["child.location", "child.program", "child.room"] },
                             }),

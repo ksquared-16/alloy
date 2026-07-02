@@ -56,8 +56,8 @@ function mapInquiryChildRaw(raw: Record<string, unknown>): QueueRelevantInquiryC
     const displayName =
         trimOrNull(raw.display_name) ?? trimOrNull(raw.child_display_name) ?? "Child";
     const programParts = [
-        trimOrNull(raw.desired_program_type),
-        trimOrNull(raw.desired_schedule_type),
+        trimOrNull(raw.program_key),
+        trimOrNull(raw.schedule_type),
     ].filter(Boolean);
     return {
         subject_id: subjectId,

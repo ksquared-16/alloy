@@ -32,10 +32,9 @@ export const CREATE_LEAD_PAYLOAD_KEY_BY_RULE: Readonly<Record<string, string>> =
     "child:age_group": "child_age_group",
     "child:location": "child_location_id",
     "child:program_interest": "child_program",
-    "child:desired_schedule": "child_desired_schedule_type",
-    "child:desired_start_date": "child_desired_start_date",
+    "child:desired_schedule": "child_schedule_type",
+    "child:start_date": "child_start_date",
     "child:classroom": "child_program_room_cohort_key",
-    "child:start_date": "child_desired_start_date",
     "opportunity:location": "location_id",
 };
 
@@ -68,7 +67,7 @@ export function inferActionIntakeValueKind(
     if (
         ruleId.includes("date") ||
         fieldKey === "date_of_birth" ||
-        fieldKey === "desired_start_date" ||
+        fieldKey === "start_date" ||
         fieldKey === "enrollment_date"
     ) {
         return "date";

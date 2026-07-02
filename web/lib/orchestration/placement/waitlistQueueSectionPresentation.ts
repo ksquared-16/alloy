@@ -37,8 +37,8 @@ export function resolveWaitlistQueueSection(params: {
     cohortLabel?: string | null;
     legacyProgramGroupLabel?: string | null;
     siteId?: string | null;
-    desiredProgramType?: string | null;
-    desiredProgramCategoryId?: string | null;
+    programKey?: string | null;
+    programCategoryId?: string | null;
     locationCategoryContext?: WaitlistProgramCategoryContext | null;
 }): {
     sectionKey: string;
@@ -50,8 +50,8 @@ export function resolveWaitlistQueueSection(params: {
             cohortKey: params.cohortKey,
             cohortLabel: params.cohortLabel ?? params.legacyProgramGroupLabel,
             siteId: params.siteId,
-            desiredProgramType: params.desiredProgramType,
-            desiredProgramCategoryId: params.desiredProgramCategoryId,
+            programKey: params.programKey,
+            programCategoryId: params.programCategoryId,
         },
         params.locationCategoryContext
     );
@@ -69,8 +69,8 @@ export type WaitlistQueueItemSectionInput = {
         cohortKey: string;
         cohortLabel: string;
         siteId?: string | null;
-        desiredProgramType?: string | null;
-        desiredProgramCategoryId?: string | null;
+        programKey?: string | null;
+        programCategoryId?: string | null;
     } | null;
     placementPriorityV2?: {
         primaryCohortLabel?: string | null;
@@ -91,8 +91,8 @@ export function resolveWaitlistQueueItemSection(
             cohortKey: c.cohortKey,
             cohortLabel: c.cohortLabel,
             siteId: c.siteId,
-            desiredProgramType: c.desiredProgramType,
-            desiredProgramCategoryId: c.desiredProgramCategoryId,
+            programKey: c.programKey,
+            programCategoryId: c.programCategoryId,
             locationCategoryContext: context,
         });
         return { sectionKey: s.sectionKey, sectionTitle: s.sectionTitle };

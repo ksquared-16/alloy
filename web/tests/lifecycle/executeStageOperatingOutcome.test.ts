@@ -165,25 +165,43 @@ describe("executeStageOperatingOutcome", () => {
         expect(mockInstantiate).toHaveBeenCalledTimes(1);
     });
 
-    it("move_to_stage is a passthrough when paired with update_family_case_status", async () => {
+    it("move_to_stage persists the family case stage_key (S4) alongside status update", async () => {
         const { updateOpportunityStatusWithEvent } = await import(
             "@/lib/opportunities/updateOpportunityStatusWithEvent"
         );
-        const plan = defaultStageOperatingPlanForEnrollmentStage("qualification")!;
-        plan.outcome_rules = [
-            {
-                rule_key: "qualified_move",
-                when_outcome_key: "qualified",
-                targets: [
-                    { kind: "update_family_case_status", status_key: "contacted" },
-                    { kind: "move_to_stage", stage_key: "qualification" },
-                    { kind: "mark_stage_work_complete" },
-                ],
-            },
-        ];
+        const updateSpy = vi.fn().mockReturnThis();
+        const eqSpy = vi.fn().mockReturnThis();
+        const supabase = {
+            from: vi.fn(() => ({
+                update: (...args: unknown[]) => {
+                    updateSpy(...args);
+                    return { eq: (...a: unknown[]) => { eqSpy(...a); return { eq: eqSpy }; } };
+                },
+            })),
+        };
+        const plan = {
+            version: 1 as const,
+            lifecycle_key: "enrollment",
+            stage_key: "tour",
+            journey_segment: "family" as const,
+            work_templates: [],
+            outcomes: [],
+            attention_rules: [],
+            outcome_rules: [
+                {
+                    rule_key: "qualified_move",
+                    when_outcome_key: "qualified",
+                    targets: [
+                        { kind: "update_family_case_status" as const, status_key: "open" },
+                        { kind: "move_to_stage" as const, stage_key: "tour" },
+                        { kind: "mark_stage_work_complete" as const },
+                    ],
+                },
+            ],
+        };
 
         const result = await executeStageOperatingOutcome({
-            supabase: { from: vi.fn() } as never,
+            supabase: supabase as never,
             orgId: "org-1",
             userId: "user-1",
             departmentId: "dept-1",
@@ -195,5 +213,9 @@ describe("executeStageOperatingOutcome", () => {
         expect(result.errors).toEqual([]);
         expect(result.status_updated).toBe(true);
         expect(updateOpportunityStatusWithEvent).toHaveBeenCalled();
+        // move_to_stage writes the persisted stage_key column on the family case.
+        expect(updateSpy).toHaveBeenCalledWith(
+            expect.objectContaining({ stage_key: "tour" }),
+        );
     });
 });

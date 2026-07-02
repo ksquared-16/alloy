@@ -269,7 +269,9 @@ const ACTION_HELP: Partial<Record<LifecycleBaseActionKey, string>> = {
     add_child: "Adds a child profile and associates them with the family record.",
     send_form: "Sends a configured form link and tracks completion on the record.",
     schedule_tour: "Books a tour slot and writes scheduling context to the record timeline.",
-    change_status: "Updates enrollment or pipeline status with audit and workflow side effects.",
+    waitlist_child: "Moves a child to a waitlist status with audit and workflow side effects.",
+    enroll_child: "Confirms a child's enrollment with audit and workflow side effects.",
+    close_lead: "Closes or loses this lead with audit and workflow side effects.",
     create_task: "Creates an operator task tied to the record with due date and assignee.",
     quick_message: "Opens a quick message composer prefilled with record context.",
 };

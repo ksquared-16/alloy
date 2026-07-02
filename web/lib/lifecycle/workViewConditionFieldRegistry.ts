@@ -76,7 +76,7 @@ const DATE_OPERATORS: readonly WorkViewFilterOperatorV1[] = ["equals", "date_is"
  * absent — they survive only as legacy aliases (see {@link LEGACY_FIELD_KEY_ALIASES}).
  *
  * Enrollment "Start with current Enrollment needs" set: Stage, Lead Status, Enrollment Status,
- * Campus/School, Program, Room, Desired Start, Needs Attention, Current Work.
+ * Campus/School, Program, Room, Start date, Needs Attention, Current Work.
  */
 export const WORK_VIEW_CONDITION_FIELD_DEFS: readonly WorkViewConditionFieldDef[] = [
     {
@@ -152,14 +152,14 @@ export const WORK_VIEW_CONDITION_FIELD_DEFS: readonly WorkViewConditionFieldDef[
         runtimeSupported: true,
     },
     {
-        key: "desired_start_date",
-        label: "Desired Start",
+        key: "start_date",
+        label: "Start date",
         group: "child",
         subject: "child",
         valueKind: "date_preset",
         optionSource: { kind: "date" },
         operators: DATE_OPERATORS,
-        runtimeField: "desired_start_date",
+        runtimeField: "start_date",
         runtimeSupported: true,
     },
     {

@@ -18,9 +18,10 @@ export type FormIntakeChildHint = {
     location_id?: string | null;
     /** Waitlist cohort key (`opportunity_customer_members.program_room_cohort_key`). */
     program_room_cohort_key?: string | null;
-    desired_program_type?: string | null;
-    desired_schedule_type?: string | null;
-    desired_start_date?: string | null;
+    /** Stable program key captured on the form; resolved to `opportunity_customer_members.program_category_id` at apply time. */
+    program_key?: string | null;
+    schedule_type?: string | null;
+    start_date?: string | null;
 };
 
 export type FormIntakeOpportunityHint = {

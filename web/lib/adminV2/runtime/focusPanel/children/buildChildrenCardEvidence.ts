@@ -128,7 +128,7 @@ export function buildChildrenCardEvidence(context: OperationalContext): Children
         const room = trimOrNull(row.program_room_cohort_label) ?? trimOrNull(row.location_label);
         const schedule = trimOrNull(row.desired_schedule_label);
         const teacher = trimOrNull((row as { teacher_label?: unknown }).teacher_label);
-        const startDate = trimOrNull(row.desired_start_date);
+        const startDate = trimOrNull(row.start_date);
         const statusLabel = trimOrNull(row.outcome_status_label);
         const statusKey = trimOrNull(row.outcome_status_key);
         const declined = statusKey?.toLowerCase().includes("declin") ?? false;

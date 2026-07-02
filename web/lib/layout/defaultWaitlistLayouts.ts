@@ -93,7 +93,7 @@ export function buildWaitlistCandidateCardDefaultDoc(): LayoutDoc {
         fieldItem(base, "household.email", "Email", "body.contact", "text", ICON("mail")),
         fieldItem(base, "child.programLabel", "Program", "body.program_fit", "text"),
         fieldItem(base, "waitlist.cohortSectionTitle", "Cohort", "body.program_fit", "text"),
-        fieldItem(base, "child.desiredStartDate", "Desired start", "body.availability", "date", ICON("calendar")),
+        fieldItem(base, "child.startDate", "Desired start", "body.availability", "date", ICON("calendar")),
         fieldItem(base, "overrides.flags", "Overrides", "body.override_flags", "badge"),
     ];
 

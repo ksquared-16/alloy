@@ -99,7 +99,7 @@ export function personRecordHasPersonLevelPlacementFields(record: Record<string,
         "assigned_location_id",
         "program_label",
         "category_label",
-        "desired_program_type",
+        "program_category_id",
         "classroom_label",
     ];
     return blockedKeys.some((key) => trimOrNull(record[key]) != null);

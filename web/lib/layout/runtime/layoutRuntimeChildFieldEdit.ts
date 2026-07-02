@@ -21,9 +21,9 @@ const CHILD_IDENTITY_REF_KEYS = {
 } as const;
 
 const INQUIRY_CHILD_OCM_REF_KEYS = {
-    "inquiry_child.desired_program_type": "desired_program_type",
-    "inquiry_child.desired_schedule_type": "desired_schedule_type",
-    "inquiry_child.desired_start_date": "desired_start_date",
+    "inquiry_child.program_category_id": "program_category_id",
+    "inquiry_child.schedule_type": "schedule_type",
+    "inquiry_child.start_date": "start_date",
     "inquiry_child.outcome_status_key": "outcome_status_key",
     "inquiry_child.location_id": "location_id",
     "inquiry_child.program_room_cohort_key": "program_room_cohort_key",
@@ -126,13 +126,13 @@ function ocmPatchFromDraft(
             draft[`${rowKey}::inquiry_child.program_room_cohort_key`]
             ?? baseline[`${rowKey}::inquiry_child.program_room_cohort_key`]
             ?? "",
-        desired_program_type:
-            draft[`${rowKey}::inquiry_child.desired_program_type`]
-            ?? baseline[`${rowKey}::inquiry_child.desired_program_type`]
+        program_category_id:
+            draft[`${rowKey}::inquiry_child.program_category_id`]
+            ?? baseline[`${rowKey}::inquiry_child.program_category_id`]
             ?? "",
-        desired_schedule_type:
-            draft[`${rowKey}::inquiry_child.desired_schedule_type`]
-            ?? baseline[`${rowKey}::inquiry_child.desired_schedule_type`]
+        schedule_type:
+            draft[`${rowKey}::inquiry_child.schedule_type`]
+            ?? baseline[`${rowKey}::inquiry_child.schedule_type`]
             ?? "",
         outcome_status_key:
             draft[`${rowKey}::inquiry_child.outcome_status_key`]
@@ -140,8 +140,8 @@ function ocmPatchFromDraft(
             ?? "",
         notes: draft[`${rowKey}::inquiry_child.notes`] ?? baseline[`${rowKey}::inquiry_child.notes`] ?? "",
         desired_start_edit:
-            draft[`${rowKey}::inquiry_child.desired_start_date`]
-            ?? baseline[`${rowKey}::inquiry_child.desired_start_date`]
+            draft[`${rowKey}::inquiry_child.start_date`]
+            ?? baseline[`${rowKey}::inquiry_child.start_date`]
             ?? "",
         custom: {},
     };
@@ -150,19 +150,19 @@ function ocmPatchFromDraft(
         program_room_cohort_key:
             baseline[`${rowKey}::inquiry_child.program_room_cohort_key`]
             ?? readLayoutRuntimeRepeaterFieldRaw(row, "inquiry_child.program_room_cohort_key"),
-        desired_program_type:
-            baseline[`${rowKey}::inquiry_child.desired_program_type`]
-            ?? readLayoutRuntimeRepeaterFieldRaw(row, "inquiry_child.desired_program_type"),
-        desired_schedule_type:
-            baseline[`${rowKey}::inquiry_child.desired_schedule_type`]
-            ?? readLayoutRuntimeRepeaterFieldRaw(row, "inquiry_child.desired_schedule_type"),
+        program_category_id:
+            baseline[`${rowKey}::inquiry_child.program_category_id`]
+            ?? readLayoutRuntimeRepeaterFieldRaw(row, "inquiry_child.program_category_id"),
+        schedule_type:
+            baseline[`${rowKey}::inquiry_child.schedule_type`]
+            ?? readLayoutRuntimeRepeaterFieldRaw(row, "inquiry_child.schedule_type"),
         outcome_status_key:
             baseline[`${rowKey}::inquiry_child.outcome_status_key`]
             ?? readLayoutRuntimeRepeaterFieldRaw(row, "inquiry_child.outcome_status_key"),
         notes: baseline[`${rowKey}::inquiry_child.notes`] ?? readLayoutRuntimeRepeaterFieldRaw(row, "inquiry_child.notes"),
-        desired_start_date:
-            baseline[`${rowKey}::inquiry_child.desired_start_date`]
-            ?? readLayoutRuntimeRepeaterFieldRaw(row, "inquiry_child.desired_start_date"),
+        start_date:
+            baseline[`${rowKey}::inquiry_child.start_date`]
+            ?? readLayoutRuntimeRepeaterFieldRaw(row, "inquiry_child.start_date"),
         custom_fields: {},
     };
     return buildInquiryChildOcmPatchFromEditorLocal({
@@ -313,13 +313,13 @@ function standaloneOcmPatchFromDraft(
             draft["inquiry_child.program_room_cohort_key"]
             ?? baseline["inquiry_child.program_room_cohort_key"]
             ?? "",
-        desired_program_type:
-            draft["inquiry_child.desired_program_type"]
-            ?? baseline["inquiry_child.desired_program_type"]
+        program_category_id:
+            draft["inquiry_child.program_category_id"]
+            ?? baseline["inquiry_child.program_category_id"]
             ?? "",
-        desired_schedule_type:
-            draft["inquiry_child.desired_schedule_type"]
-            ?? baseline["inquiry_child.desired_schedule_type"]
+        schedule_type:
+            draft["inquiry_child.schedule_type"]
+            ?? baseline["inquiry_child.schedule_type"]
             ?? "",
         outcome_status_key:
             draft["inquiry_child.outcome_status_key"]
@@ -327,8 +327,8 @@ function standaloneOcmPatchFromDraft(
             ?? "",
         notes: draft["inquiry_child.notes"] ?? baseline["inquiry_child.notes"] ?? "",
         desired_start_edit:
-            draft["inquiry_child.desired_start_date"]
-            ?? baseline["inquiry_child.desired_start_date"]
+            draft["inquiry_child.start_date"]
+            ?? baseline["inquiry_child.start_date"]
             ?? "",
         custom: {},
     };
@@ -337,19 +337,19 @@ function standaloneOcmPatchFromDraft(
         program_room_cohort_key:
             baseline["inquiry_child.program_room_cohort_key"]
             ?? readStandaloneChildFieldRaw(record, "inquiry_child.program_room_cohort_key"),
-        desired_program_type:
-            baseline["inquiry_child.desired_program_type"]
-            ?? readStandaloneChildFieldRaw(record, "inquiry_child.desired_program_type"),
-        desired_schedule_type:
-            baseline["inquiry_child.desired_schedule_type"]
-            ?? readStandaloneChildFieldRaw(record, "inquiry_child.desired_schedule_type"),
+        program_category_id:
+            baseline["inquiry_child.program_category_id"]
+            ?? readStandaloneChildFieldRaw(record, "inquiry_child.program_category_id"),
+        schedule_type:
+            baseline["inquiry_child.schedule_type"]
+            ?? readStandaloneChildFieldRaw(record, "inquiry_child.schedule_type"),
         outcome_status_key:
             baseline["inquiry_child.outcome_status_key"]
             ?? readStandaloneChildFieldRaw(record, "inquiry_child.outcome_status_key"),
         notes: baseline["inquiry_child.notes"] ?? readStandaloneChildFieldRaw(record, "inquiry_child.notes"),
-        desired_start_date:
-            baseline["inquiry_child.desired_start_date"]
-            ?? readStandaloneChildFieldRaw(record, "inquiry_child.desired_start_date"),
+        start_date:
+            baseline["inquiry_child.start_date"]
+            ?? readStandaloneChildFieldRaw(record, "inquiry_child.start_date"),
         custom_fields: {},
     };
     return buildInquiryChildOcmPatchFromEditorLocal({

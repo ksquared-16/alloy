@@ -37,7 +37,7 @@ function leadPickerFromCuratedFallback() {
 
 describe("Configuration QA fix pass", () => {
     it("hides child placement fields from Lead default fields", () => {
-        for (const key of ["program_type", "schedule_type", "desired_program_type", "desired_schedule_type"]) {
+        for (const key of ["program_type", "schedule_type"]) {
             expect(isChildcareLegacyOrSystemField("opportunity", key)).toBe(true);
         }
     });

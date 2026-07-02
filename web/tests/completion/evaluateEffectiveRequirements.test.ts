@@ -16,7 +16,7 @@ function oppRecord(overrides: Record<string, unknown> = {}) {
         status_key: "enrolling",
         primary_person_id: "person-parent",
         location_id: "loc-1",
-        desired_program_type: "infant",
+        program_category_id: "cat-infant",
         metadata: {},
         _inquiry_children: [
             {
@@ -24,10 +24,10 @@ function oppRecord(overrides: Record<string, unknown> = {}) {
                 person_id: "person-child",
                 first_name: "Kid",
                 last_name: "One",
-                desired_program_type: "infant",
+                program_category_id: "cat-infant",
                 program_room_cohort_key: "room-a",
-                desired_schedule_type: "full_day",
-                desired_start_date: "2026-06-15",
+                schedule_type: "full_day",
+                start_date: "2026-06-15",
             },
         ],
         ...overrides,
@@ -41,10 +41,10 @@ describe("evaluateEffectiveRequirements — approve_enrollment", () => {
                 {
                     id: "ocm-1",
                     person_id: "person-child",
-                    desired_program_type: "infant",
+                    program_category_id: "cat-infant",
                     program_room_cohort_key: "",
-                    desired_schedule_type: "full_day",
-                    desired_start_date: "2026-06-15",
+                    schedule_type: "full_day",
+                    start_date: "2026-06-15",
                 },
             ],
         });
@@ -83,7 +83,7 @@ describe("evaluateEffectiveRequirements — move_to_waitlist", () => {
             record: oppRecord({ _inquiry_children: [{ id: "ocm-1" }] }),
         });
         expect(result.ok).toBe(false);
-        expect(result.blocking.some((v) => v.field_key === "inquiry_children" || v.field_key === "desired_program_type")).toBe(
+        expect(result.blocking.some((v) => v.field_key === "inquiry_children" || v.field_key === "program_category_id")).toBe(
             true
         );
     });
@@ -98,9 +98,9 @@ describe("evaluateEffectiveRequirements — move_to_waitlist", () => {
                 _inquiry_children: [
                     {
                         id: "ocm-1",
-                        desired_program_type: "infant",
-                        desired_schedule_type: null,
-                        desired_start_date: null,
+                        program_category_id: "cat-infant",
+                        schedule_type: null,
+                        start_date: null,
                     },
                 ],
             }),
@@ -181,7 +181,7 @@ describe("BOS preflight attachment", () => {
             recommended_action: { key: "approve_enrollment", label: "Approve Enrollment", action_family: "workflow" },
         } as unknown as OperationalRecommendationV1;
         const enriched = enrichOperationalRecommendationWithActionPreflight(rec, oppRecord({
-            _inquiry_children: [{ id: "ocm-1", desired_program_type: "infant" }],
+            _inquiry_children: [{ id: "ocm-1", program_category_id: "cat-infant" }],
         }));
         expect(enriched.recommended_action_preflight?.executable).toBe(false);
         expect(enriched.recommended_action_preflight?.preflight.ok).toBe(false);

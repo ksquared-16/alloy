@@ -23,8 +23,8 @@ export function writeLayoutRuntimeRepeaterFieldRaw(
         if (ns === "inquiry_child" && field === "location_id") {
             next.location_id = value;
         }
-        if (ns === "inquiry_child" && field === "desired_program_type") {
-            next.desired_program_type = value;
+        if (ns === "inquiry_child" && field === "program_category_id") {
+            next.program_category_id = value;
         }
         if (ns === "inquiry_child" && field === "program_room_cohort_key") {
             next.program_room_cohort_key = value;

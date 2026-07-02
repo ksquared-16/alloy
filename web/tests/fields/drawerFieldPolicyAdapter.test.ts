@@ -107,7 +107,8 @@ describe("drawerFieldPolicyAdapter", () => {
         expect(vendor?.policyMode).toBe("never_policy_controlled");
     });
 
-    it("defers tour and desired_start_date", () => {
+    it("defers tour and legacy opportunity desired_start_date", () => {
+        // desired_start_date is the opportunity-level legacy field key (metadata storage) — not the OCM column
         expect(
             resolveDrawerFieldPolicy("opportunity", { field_key: "desired_start_date", is_system: true })?.policyMode
         ).toBe("deferred");

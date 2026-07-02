@@ -19,8 +19,8 @@ import { stagesForTrack } from "@/lib/businessProcesses/businessProcessConfigRea
 import { ENROLLMENT_TRACK_FAMILY_KEY } from "@/lib/businessProcessTemplates/enrollmentProcessTemplate";
 
 describe("Enrollment process template", () => {
-    it("defines nine rollup stages across two tracks", () => {
-        expect(ENROLLMENT_STAGE_SPECS).toHaveLength(9);
+    it("defines eight rollup stages across two tracks (qualification folded into lead)", () => {
+        expect(ENROLLMENT_STAGE_SPECS).toHaveLength(8);
     });
 
     it("apply template adds tracks, stages, and split rule", () => {
@@ -35,12 +35,12 @@ describe("Enrollment process template", () => {
         };
         const next = applyEnrollmentTemplateToProcess(process);
         expect(next.tracks_v1?.tracks).toHaveLength(2);
-        expect(next.stages).toHaveLength(9);
+        expect(next.stages).toHaveLength(8);
         expect(next.tracks_v1?.split_rules[0]?.from_stage_key).toBe("decision");
     });
 
     it("family track stages map to case membership defaults", () => {
-        for (const key of ["lead", "qualification", "tour", "decision", "closed"]) {
+        for (const key of ["lead", "tour", "decision", "closed"]) {
             expect(defaultEnrollmentQueueMembershipForStage(key)?.subject_type).toBe("case");
         }
     });
@@ -89,7 +89,6 @@ describe("Enrollment process template", () => {
         };
         expect(stagesForTrack(process, ENROLLMENT_TRACK_FAMILY_KEY).map((s) => s.key)).toEqual([
             "lead",
-            "qualification",
             "tour",
             "decision",
             "closed",

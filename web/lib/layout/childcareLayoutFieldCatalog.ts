@@ -302,25 +302,25 @@ export const CHILDCARE_STARTER_FIELD_CATALOG: ChildcareCatalogFieldEntry[] = [
     }),
 
     // Child enrollment — inquiry_child.* / OCM
-    childField("inquiry_child.desired_program_type", "Program interest", "select", 110, {
+    childField("inquiry_child.program_category_id", "Program", "select", 110, {
         entityType: "inquiry_child",
-        fieldKey: "desired_program_type",
+        fieldKey: "program_category_id",
         storageTable: "opportunity_customer_members",
-        storageColumn: "desired_program_type",
+        storageColumn: "program_category_id",
         enrollmentDetail: true,
     }),
-    childField("inquiry_child.desired_schedule_type", "Schedule interest", "select", 120, {
+    childField("inquiry_child.schedule_type", "Schedule", "select", 120, {
         entityType: "inquiry_child",
-        fieldKey: "desired_schedule_type",
+        fieldKey: "schedule_type",
         storageTable: "opportunity_customer_members",
-        storageColumn: "desired_schedule_type",
+        storageColumn: "schedule_type",
         enrollmentDetail: true,
     }),
-    childField("inquiry_child.desired_start_date", "Desired start date", "date", 130, {
+    childField("inquiry_child.start_date", "Start date", "date", 130, {
         entityType: "inquiry_child",
-        fieldKey: "desired_start_date",
+        fieldKey: "start_date",
         storageTable: "opportunity_customer_members",
-        storageColumn: "desired_start_date",
+        storageColumn: "start_date",
         enrollmentDetail: true,
     }),
     childField("inquiry_child.program_room_cohort_key", "Room / cohort", "select", 140, {
@@ -483,6 +483,8 @@ export const CHILDCARE_REMOVED_FROM_PICKER_REF_KEYS = [
     "location.address_line1",
     "location.operating_hours",
     "location.status",
+    // Opportunity-level legacy field (metadata storage) — NOT the OCM participation
+    // field renamed in the 20260711 S2 migration; keeps its stored legacy key.
     "opportunity.desired_start_date",
     "opportunity.program_type",
     "opportunity.schedule_type",
@@ -528,7 +530,7 @@ export const CHILDCARE_HIDDEN_REF_KEYS = new Set<string>([
     "person.person_number",
     "location.location_number",
     "child.program",
-    "child.desired_start_date",
+    "child.start_date",
     "child.status",
     "child.location",
     "child.room",

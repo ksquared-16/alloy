@@ -79,38 +79,36 @@ describe("placement foundation — field validation", () => {
 });
 
 describe("placement foundation — cascade metadata", () => {
-    it("room depends on desired_program_category_id", () => {
+    it("room depends on program_category_id", () => {
         const meta = inquiryChildPlacementMetadataForRefKey("inquiry_child.program_room_cohort_key");
-        expect(meta?.depends_on_field_key).toBe("desired_program_category_id");
+        expect(meta?.depends_on_field_key).toBe("program_category_id");
         expect(meta?.option_source).toBe("rooms_for_location_program");
     });
 
     it("program category metadata is location-scoped", () => {
-        const meta = inquiryChildPlacementMetadataForRefKey("inquiry_child.desired_program_category_id");
+        const meta = inquiryChildPlacementMetadataForRefKey("inquiry_child.program_category_id");
         expect(meta?.option_source).toBe("programs_for_location");
         expect(meta?.depends_on_field_key).toBe("location_id");
     });
 });
 
 describe("placement foundation — room cascade", () => {
-    it("resolves program filter key from category id when type is empty", () => {
+    it("resolves program filter key from the category FK", () => {
         expect(
             resolveProgramKeyForRoomCascade({
-                desired_program_category_id: "cat-infant",
-                desired_program_type: "",
+                program_category_id: "cat-infant",
                 categories: CATEGORIES,
             }),
         ).toBe("infant");
     });
 
-    it("falls back to desired_program_type when category id absent", () => {
+    it("returns undefined when category id absent (FK is the sole program field)", () => {
         expect(
             resolveProgramKeyForRoomCascade({
-                desired_program_category_id: "",
-                desired_program_type: "preschool",
+                program_category_id: "",
                 categories: CATEGORIES,
             }),
-        ).toBe("preschool");
+        ).toBeUndefined();
     });
 
     it("filters room options by school and program category key", () => {
@@ -167,15 +165,15 @@ describe("placement foundation — lead vs child school", () => {
 describe("placement foundation — cascade field resets", () => {
     it("changing program category clears room in form state", () => {
         const next = applyInquiryChildPlacementFieldChange(
-            "desired_program_category_id",
+            "program_category_id",
             "cat-infant",
             {
                 location_id: "site-north",
-                desired_program_category_id: "cat-old",
+                program_category_id: "cat-old",
                 program_room_cohort_key: "room-infant-a",
             },
         );
         expect(next.program_room_cohort_key).toBe("");
-        expect(inquiryChildPlacementRoleForFieldKey("desired_program_category_id")).toBe("program");
+        expect(inquiryChildPlacementRoleForFieldKey("program_category_id")).toBe("program");
     });
 });

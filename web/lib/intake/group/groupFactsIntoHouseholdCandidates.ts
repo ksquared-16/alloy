@@ -351,7 +351,7 @@ export function groupFactsIntoHouseholdCandidates(facts: IntakeFact[]): IntakeHo
         notes: notesFact ? String(notesFact.normalized_value ?? notesFact.raw_value).trim() : null,
         program_interest:
             programFact ? String(programFact.normalized_value ?? programFact.raw_value).trim() : null,
-        desired_start_date:
+        start_date:
             startDateFact ? String(startDateFact.normalized_value ?? startDateFact.raw_value).trim() : null,
         relationships,
         unassigned_fact_ids,

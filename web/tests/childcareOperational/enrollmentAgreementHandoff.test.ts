@@ -42,10 +42,10 @@ function handoffStore(overrides?: {
         opportunity_id: OPP_ID,
         customer_member_id: MEMBER_ID,
         location_id: SITE_ID,
-        desired_program_type: "infant",
+        program_category_id: PROGRAM_ID,
         program_room_cohort_key: UNIT_ID,
-        desired_schedule_type: "full_time",
-        desired_start_date: "2026-06-15",
+        schedule_type: "full_time",
+        start_date: "2026-06-15",
         person_id: "person-1",
         ...overrides?.ocm,
     };
@@ -200,9 +200,9 @@ describe("enrollmentAgreementHandoff", () => {
         );
     });
 
-    it("creates placement but skips schedule when desired_schedule_type is missing", async () => {
+    it("creates placement but skips schedule when schedule_type is missing", async () => {
         const supabase = createOperationalEnrollmentMockSupabase(
-            handoffStore({ ocm: { desired_schedule_type: null } })
+            handoffStore({ ocm: { schedule_type: null } })
         );
         const result = await executeOperationalEnrollmentHandoffFromApprovedOpportunity({
             supabase,
@@ -215,7 +215,7 @@ describe("enrollmentAgreementHandoff", () => {
         expect(result.children[0]?.agreement.outcome).toBe("created");
         expect(result.children[0]?.placement.outcome).toBe("created");
         expect(result.children[0]?.schedule_assignment.outcome).toBe("skipped");
-        expect(result.children[0]?.schedule_assignment.warning).toBe("no_desired_schedule_type");
+        expect(result.children[0]?.schedule_assignment.warning).toBe("no_schedule_type");
     });
 
     it("partial when multiple children and one lacks matching schedule pattern", async () => {
@@ -228,10 +228,10 @@ describe("enrollmentAgreementHandoff", () => {
                         opportunity_id: OPP_ID,
                         customer_member_id: MEMBER_ID,
                         location_id: SITE_ID,
-                        desired_program_type: "infant",
+                        program_category_id: PROGRAM_ID,
                         program_room_cohort_key: UNIT_ID,
-                        desired_schedule_type: "full_time",
-                        desired_start_date: "2026-06-15",
+                        schedule_type: "full_time",
+                        start_date: "2026-06-15",
                         person_id: "person-1",
                     },
                     {
@@ -240,10 +240,10 @@ describe("enrollmentAgreementHandoff", () => {
                         opportunity_id: OPP_ID,
                         customer_member_id: MEMBER_ID_2,
                         location_id: SITE_ID,
-                        desired_program_type: "infant",
+                        program_category_id: PROGRAM_ID,
                         program_room_cohort_key: UNIT_ID,
-                        desired_schedule_type: "part_time",
-                        desired_start_date: "2026-06-15",
+                        schedule_type: "part_time",
+                        start_date: "2026-06-15",
                         person_id: "person-2",
                     },
                 ],

@@ -182,7 +182,7 @@ describe("optional fields — do not block creation", () => {
         expect(byKey.child_last_name).toBe("Lee");
         expect(byKey.child_age).toBe("3");
         expect(byKey.child_program?.toLowerCase()).toContain("preschool");
-        expect(byKey.child_desired_start_date).toBe("August");
+        expect(byKey.child_start_date).toBe("August");
         expect(byKey.source).toBe("Website");
     });
 });

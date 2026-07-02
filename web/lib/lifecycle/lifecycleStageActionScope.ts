@@ -13,7 +13,8 @@ export const LIFECYCLE_ACTION_SCOPE_LABELS: Record<LifecycleActionScope, string>
 export const LIFECYCLE_BUILDER_CONFIGURED_KEY = "lifecycle_builder_configured" as const;
 
 export function defaultActionScopeForBaseKey(baseActionKey: string): LifecycleActionScope {
-    if (baseActionKey === "create_record" || baseActionKey === "change_status" || baseActionKey === "create_task") {
+    // close_lead can apply at any stage (lifecycle-wide); waitlist/enroll are stage-scoped verbs.
+    if (baseActionKey === "create_record" || baseActionKey === "close_lead" || baseActionKey === "create_task") {
         return "lifecycle";
     }
     return "stage";

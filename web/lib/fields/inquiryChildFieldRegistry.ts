@@ -30,12 +30,11 @@ export function isFieldDefinitionEntityType(value: string): value is FieldDefini
 
 /** Native columns on opportunity_customer_members exposed for configuration. */
 export const INQUIRY_CHILD_NATIVE_OCM_FIELD_KEYS = [
-    "desired_start_date",
+    "start_date",
     "location_id",
     "program_room_cohort_key",
-    "desired_program_type",
-    "desired_program_category_id",
-    "desired_schedule_type",
+    "program_category_id",
+    "schedule_type",
     "outcome_status_key",
     "notes",
 ] as const;
@@ -44,12 +43,12 @@ export type InquiryChildNativeOcmFieldKey = (typeof INQUIRY_CHILD_NATIVE_OCM_FIE
 
 /**
  * Default option_set_key for native inquiry_child select fields (fallback when field_definitions.config absent).
- * Program interest uses location-scoped cascade (`programs_for_location`) — not org-wide option_set.
+ * Program uses location-scoped cascade (`programs_for_location`) — not org-wide option_set.
  */
 export const INQUIRY_CHILD_NATIVE_OPTION_SET_KEYS: Partial<
     Record<InquiryChildNativeOcmFieldKey, string>
 > = {
-    desired_schedule_type: "childcare_schedule_type",
+    schedule_type: "childcare_schedule_type",
 };
 
 export function fallbackOptionSetKeyForInquiryChildField(fieldKey: string): string | null {
@@ -83,9 +82,9 @@ export type InquiryChildNativeFieldManifestRow = {
 
 export const INQUIRY_CHILD_NATIVE_FIELD_MANIFEST: InquiryChildNativeFieldManifestRow[] = [
     {
-        field_key: "desired_start_date",
+        field_key: "start_date",
         field_type: "date",
-        label: "Desired start",
+        label: "Start date",
         section_key: "inquiry_participation",
         sort_order: 10,
         is_visible_in_drawer: true,
@@ -112,7 +111,7 @@ export const INQUIRY_CHILD_NATIVE_FIELD_MANIFEST: InquiryChildNativeFieldManifes
         },
     },
     {
-        field_key: "desired_program_category_id",
+        field_key: "program_category_id",
         field_type: "select",
         label: "Program",
         section_key: "inquiry_participation",
@@ -128,19 +127,8 @@ export const INQUIRY_CHILD_NATIVE_FIELD_MANIFEST: InquiryChildNativeFieldManifes
             depends_on_field_key: "location_id",
             storage_class: "native_column",
             storage_table: "opportunity_customer_members",
-            storage_column: "desired_program_category_id",
+            storage_column: "program_category_id",
         },
-    },
-    {
-        field_key: "desired_program_type",
-        field_type: "select",
-        label: "Program",
-        section_key: "inquiry_participation",
-        sort_order: 19,
-        is_visible_in_drawer: false,
-        is_visible_in_form: false,
-        is_visible_in_table: false,
-        config: { option_source: "programs_for_location", depends_on_field_key: "location_id" },
     },
     {
         field_key: "program_room_cohort_key",
@@ -156,14 +144,14 @@ export const INQUIRY_CHILD_NATIVE_FIELD_MANIFEST: InquiryChildNativeFieldManifes
             option_source: "rooms_for_location_program",
             field_kind: "entity_reference",
             target_entity_type: "location",
-            depends_on_field_key: "desired_program_category_id",
+            depends_on_field_key: "program_category_id",
             storage_class: "native_column",
             storage_table: "opportunity_customer_members",
             storage_column: "program_room_cohort_key",
         },
     },
     {
-        field_key: "desired_schedule_type",
+        field_key: "schedule_type",
         field_type: "select",
         label: "Schedule",
         section_key: "inquiry_participation",
@@ -218,9 +206,9 @@ export type InquiryChildFieldDefLike = {
     sort_order?: number;
 };
 
-/** Drawer column for desired_start_date when configured visible. */
+/** Drawer column for start_date when configured visible. */
 export function inquiryChildDrawerShowsDesiredStart(defs: InquiryChildFieldDefLike[]): boolean {
-    const row = defs.find((d) => d.field_key === "desired_start_date" && d.is_active !== false);
+    const row = defs.find((d) => d.field_key === "start_date" && d.is_active !== false);
     if (!row) return true;
     return row.is_visible_in_drawer !== false;
 }

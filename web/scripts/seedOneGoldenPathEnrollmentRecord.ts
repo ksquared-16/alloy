@@ -30,6 +30,7 @@ import { randomUUID } from "crypto";
 import { config as loadEnv } from "dotenv";
 import { resolve } from "path";
 import { createAdminClient } from "@/lib/supabaseAdmin";
+import { resolveProgramCategoryId } from "@/lib/locations/resolveOcmProgramCategoryFields";
 import { normalizeOpportunityWritePayload } from "@/lib/opportunityIdentity";
 import { assertAllowedStatusKey } from "@/lib/admin/statusDefinitionsResolve";
 import {
@@ -254,6 +255,7 @@ async function main(): Promise<void> {
             demo_seed_package: GOLDEN_PATH_SEED_PACKAGE,
             program_label: "Preschool — 3–4 years",
             age_group: "Ages 36–48 mo",
+            // opportunity-level legacy metadata key — not the OCM column
             desired_start_date: desiredStart,
             inquiry_source: "website",
             notes: "Golden-path demo: single child, new inquiry, ready for enrollment workspace QA.",
@@ -278,13 +280,23 @@ async function main(): Promise<void> {
         opportunityId = (createdOpp as { id: string }).id;
     }
 
+    // Canonical program field: resolve the category FK by site + stable key (like the S2 migration backfill).
+    const programCategoryId = await resolveProgramCategoryId(supabase, {
+        orgId,
+        locationId: siteLocationId,
+        programKey: "preschool",
+    });
+    if (!programCategoryId) {
+        console.warn("seedOneGoldenPathEnrollmentRecord: no 'preschool' program category for site — seeding OCM without program_category_id");
+    }
+
     const { error: ocmErr } = await supabase.from("opportunity_customer_members").upsert(
         {
             org_id: orgId,
             opportunity_id: opportunityId,
             customer_member_id: childMemberId,
-            desired_program_type: "preschool",
-            desired_schedule_type: "full_time",
+            ...(programCategoryId ? { program_category_id: programCategoryId } : {}),
+            schedule_type: "full_time",
             outcome_status_key: "interested",
             notes: "Preschool full-time; golden-path seed child.",
             metadata: m,

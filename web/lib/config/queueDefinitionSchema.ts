@@ -101,13 +101,13 @@ const queueUiRowPreviewSchema = z
                     "email",
                     "child_name",
                     "program",
-                    "desired_start_date",
+                    "start_date",
                     "tour_date",
                 ])
             )
             .default(["title", "status"]),
         actions: z
-            .array(z.enum(["open", "call", "email", "message", "orchestrator", "update_status"]))
+            .array(z.enum(["open", "call", "email", "message", "orchestrator"]))
             .default(["open"]),
         field_labels: z.record(z.string(), z.string()).nullish(),
     })

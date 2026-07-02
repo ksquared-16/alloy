@@ -58,7 +58,7 @@ describe("Child drawer preset", () => {
             "Child Summary",
             "Program & Enrollment",
             "Family",
-            "Schedule & Attendance",
+            "Enrollment & schedule",
             "Notes / Communication",
             "Recent Activity",
             "Documents",
@@ -67,7 +67,7 @@ describe("Child drawer preset", () => {
     it("uses canonical child.* / inquiry_child.* refKeys — never new child_inquiry.*", () => {
         const refs = refKeysOf(doc);
         expect(refs).toContain("inquiry_child.program");
-        expect(refs).toContain("inquiry_child.desired_program_type");
+        expect(refs).toContain("inquiry_child.program_category_id");
         expect(refs).toContain("family_adults");
         expect(refs).toContain("program_enrollment");
         expect(refs).toContain("family");

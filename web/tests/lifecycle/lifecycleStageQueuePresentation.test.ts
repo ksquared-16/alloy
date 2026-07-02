@@ -32,7 +32,7 @@ describe("lifecycleStageQueuePresentation", () => {
                 "primary_contact",
                 "child_name",
                 "program",
-                "desired_start_date",
+                "start_date",
             ])
         );
         expect(preview?.fields).not.toContain("tour_date");

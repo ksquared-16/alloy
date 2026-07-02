@@ -34,15 +34,8 @@ export const INQUIRY_CHILD_PLACEMENT_FIELD_METADATA: Record<
         option_source: "locations",
         entity_scope: "inquiry_child",
     },
-    desired_program_type: {
-        ocm_field_key: "desired_program_type",
-        control_type: "select",
-        option_source: "programs_for_location",
-        depends_on_field_key: "location_id",
-        entity_scope: "inquiry_child",
-    },
-    desired_program_category_id: {
-        ocm_field_key: "desired_program_category_id",
+    program_category_id: {
+        ocm_field_key: "program_category_id",
         control_type: "select",
         option_source: "programs_for_location",
         depends_on_field_key: "location_id",
@@ -52,17 +45,17 @@ export const INQUIRY_CHILD_PLACEMENT_FIELD_METADATA: Record<
         ocm_field_key: "program_room_cohort_key",
         control_type: "select",
         option_source: "rooms_for_location_program",
-        depends_on_field_key: "desired_program_category_id",
+        depends_on_field_key: "program_category_id",
         entity_scope: "inquiry_child",
     },
-    desired_schedule_type: {
-        ocm_field_key: "desired_schedule_type",
+    schedule_type: {
+        ocm_field_key: "schedule_type",
         control_type: "select",
         option_source: "option_set",
         option_set_key: "childcare_schedule_type",
         entity_scope: "inquiry_child",
     },
-    desired_start_date: undefined,
+    start_date: undefined,
     outcome_status_key: {
         ocm_field_key: "outcome_status_key",
         control_type: "select",

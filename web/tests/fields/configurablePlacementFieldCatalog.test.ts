@@ -33,7 +33,7 @@ const CHILD_PROGRAM_CONFIG = {
     depends_on_field_key: "location_id",
     storage_class: "native_column",
     storage_table: "opportunity_customer_members",
-    storage_column: "desired_program_category_id",
+    storage_column: "program_category_id",
 };
 
 const CHILD_ROOM_CONFIG = {
@@ -41,7 +41,7 @@ const CHILD_ROOM_CONFIG = {
     option_source: "rooms_for_location_program",
     field_kind: "entity_reference",
     target_entity_type: "location",
-    depends_on_field_key: "desired_program_category_id",
+    depends_on_field_key: "program_category_id",
     storage_class: "native_column",
     storage_table: "opportunity_customer_members",
     storage_column: "program_room_cohort_key",
@@ -98,15 +98,15 @@ describe("configurablePlacementFieldCatalog", () => {
     it("lists missing templates when field_definitions row absent", () => {
         const missing = listMissingPlacementFieldTemplatesForEntity("inquiry_child", ["outcome_status_key"]);
         expect(missing.map((t) => t.field_key)).toEqual(
-            expect.arrayContaining(["location_id", "desired_program_category_id", "program_room_cohort_key"]),
+            expect.arrayContaining(["location_id", "program_category_id", "program_room_cohort_key"]),
         );
     });
 
     it("program template depends on school; room depends on program category", () => {
-        const program = findConfigurablePlacementFieldTemplate("inquiry_child", "desired_program_category_id");
+        const program = findConfigurablePlacementFieldTemplate("inquiry_child", "program_category_id");
         const room = findConfigurablePlacementFieldTemplate("inquiry_child", "program_room_cohort_key");
         expect(program?.config.depends_on_field_key).toBe("location_id");
-        expect(room?.config.depends_on_field_key).toBe("desired_program_category_id");
+        expect(room?.config.depends_on_field_key).toBe("program_category_id");
     });
 
     it("catalog count includes lead school + child placement trio", () => {
@@ -116,7 +116,7 @@ describe("configurablePlacementFieldCatalog", () => {
 
 describe("layout runtime reads catalog cascade config", () => {
     it("program control is location-scoped select from catalog", () => {
-        const control = resolveLayoutRuntimeFieldControl("inquiry_child.desired_program_category_id");
+        const control = resolveLayoutRuntimeFieldControl("inquiry_child.program_category_id");
         expect(control.controlType).toBe("select");
         expect(control.option_source).toBe("programs_for_location");
         expect(control.depends_on_field_key).toBe("location_id");
@@ -125,19 +125,19 @@ describe("layout runtime reads catalog cascade config", () => {
     it("room control depends on program category from catalog", () => {
         const control = resolveLayoutRuntimeFieldControl("inquiry_child.program_room_cohort_key");
         expect(control.option_source).toBe("rooms_for_location_program");
-        expect(control.depends_on_field_key).toBe("desired_program_category_id");
+        expect(control.depends_on_field_key).toBe("program_category_id");
     });
 
     it("field_definitions.config overrides catalog when provided", () => {
         const control = resolveLayoutRuntimeFieldControl("inquiry_child.program_room_cohort_key", {
             field_type: "select",
-            config: { option_source: "rooms_for_location_program", depends_on_field_key: "desired_program_type" },
+            config: { option_source: "rooms_for_location_program", depends_on_field_key: "location_id" },
         });
-        expect(control.depends_on_field_key).toBe("desired_program_type");
+        expect(control.depends_on_field_key).toBe("location_id");
     });
 
     it("placementCascadeConfigForEntityField resolves child program cascade", () => {
-        expect(placementCascadeConfigForEntityField("inquiry_child", "desired_program_category_id")).toMatchObject({
+        expect(placementCascadeConfigForEntityField("inquiry_child", "program_category_id")).toMatchObject({
             option_source: "programs_for_location",
             depends_on_field_key: "location_id",
         });

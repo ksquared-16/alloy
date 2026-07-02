@@ -97,7 +97,7 @@ function supabaseForApprove(options: { completionOk?: boolean }) {
             ? { ok: true, blocking: [], recommended: [], warnings: [], requirements: [] }
             : {
                   ok: false,
-                  blocking: [{ field_key: "desired_schedule_type", message: "Required" }],
+                  blocking: [{ field_key: "schedule_type", message: "Required" }],
                   recommended: [],
                   warnings: [],
                   requirements: [],

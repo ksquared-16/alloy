@@ -116,11 +116,12 @@ describe("resolveOpportunityQueueLaneRouting — full lane coverage", () => {
         expect(routing.countUnit).toBe("enrollment_tracks");
     });
 
-    it("routes Enrolling via OCM builder", () => {
+    it("routes Enrolling via OCM builder by stage", () => {
         const routing = routingForStage("enrollment", "enrollment_offers");
         expect(routing.routingSource).toBe("builder");
         expect(routing.ocmTrackLaneCtx?.stageKey).toBe("enrollment");
-        expect(routing.ocmTrackLaneCtx?.dispositionKeys).toContain("offer_pending");
+        // S4: membership is by stage_key; default disposition keys are now empty.
+        expect(routing.ocmTrackLaneCtx?.dispositionKeys).toEqual([]);
     });
 
     it("routes Tour via case-grain builder membership", () => {
@@ -134,9 +135,10 @@ describe("resolveOpportunityQueueLaneRouting — full lane coverage", () => {
         const routing = routingForStage("waitlist", "waitlist");
         expect(routing.routingSource).toBe("builder");
         expect(routing.waitlistGrainCtx?.membershipSource).toBe("builder");
+        // S4: waitlist default membership no longer enumerates dispositions; child_lifecycle_statuses
+        // falls back to the queue definition's own filter (["waitlisted"]).
         expect(routing.waitlistGrainCtx?.filters.child_lifecycle_statuses).toEqual([
             "waitlisted",
-            "waitlist_paused",
         ]);
         expect(routing.countUnit).toBe("candidates");
     });

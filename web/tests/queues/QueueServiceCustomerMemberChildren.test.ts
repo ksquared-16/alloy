@@ -52,7 +52,7 @@ describe("QueueService — customer_members → CRM compact children (pure helpe
         expect(lines[0]!.primary).toContain(age);
     });
 
-    it("secondary uses OCM desired_program_type (not DOB-derived mock program)", () => {
+    it("secondary uses OCM program key (not DOB-derived mock program)", () => {
         const lookup = new Map([["childcare_program_type\0toddler", "Toddler"]]);
         const ctx = {
             opportunityId: "opp-1",
@@ -62,9 +62,9 @@ describe("QueueService — customer_members → CRM compact children (pure helpe
                     {
                         opportunity_id: "opp-1",
                         customer_member_id: "cm-1",
-                        desired_program_type: "toddler",
+                        program_key: "toddler",
                         location_id: null,
-                        desired_program_category_id: null,
+                        program_category_id: null,
                     },
                 ],
             ]),
@@ -106,7 +106,7 @@ describe("QueueService — customer_members → CRM compact children (pure helpe
         expect(lines[0]!.secondary).toBeNull();
     });
 
-    it("prefers member metadata program_label only when OCM has no desired_program_type", () => {
+    it("prefers member metadata program_label only when OCM has no program category", () => {
         const lines = buildCrmCompactStructuredLinesFromCustomerMembers(
             [
                 {

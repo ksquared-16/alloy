@@ -3,7 +3,7 @@
  */
 
 import { LIFECYCLE_STAGE_LABELS, type LifecycleOperatorStage } from "@/lib/completion/lifecycleProgressionRequirementsCatalog";
-import { ENROLLMENT_STAGE_STATUS_KEYS } from "@/lib/lifecycle/enrollmentProcessStageBindings";
+import { ENROLLMENT_LEGACY_STAGE_STATUS_KEYS } from "@/lib/businessProcessTemplates/enrollmentLegacyCompat";
 import type {
     EnrollmentStatusDestinationKey,
     EnrollmentStatusTransitionDestinationOption,
@@ -23,7 +23,7 @@ const OPERATOR_DESTINATIONS: readonly EnrollmentStatusDestinationKey[] = [
 const PARKING_LOT_DESTINATIONS = new Set<EnrollmentStatusDestinationKey>(["waitlist"]);
 
 function defaultStatusForOperatorStage(stage: LifecycleOperatorStage, grain: EnrollmentStatusTransitionGrain): string {
-    const keys = ENROLLMENT_STAGE_STATUS_KEYS[stage];
+    const keys = ENROLLMENT_LEGACY_STAGE_STATUS_KEYS[stage];
     if (grain === "case") {
         return keys[0] ?? stage;
     }

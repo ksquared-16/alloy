@@ -88,12 +88,12 @@ const PIPELINE_QUEUE_CHILD_REPEATER_FIELD_REFS = [
     "child.status",
     "child.location",
     "child.date_of_birth",
-    "child.desired_start_date",
+    "child.start_date",
     "child.room",
     "inquiry_child.program",
-    "inquiry_child.desired_program_type",
-    "inquiry_child.desired_schedule_type",
-    "inquiry_child.desired_start_date",
+    "inquiry_child.program_category_id",
+    "inquiry_child.schedule_type",
+    "inquiry_child.start_date",
     "inquiry_child.location_id",
     "inquiry_child.program_room_cohort_key",
     "inquiry_child.outcome_status_key",
@@ -103,7 +103,7 @@ const PIPELINE_QUEUE_CHILD_REPEATER_FIELD_REFS = [
 /** Waitlist candidate anchor fields from placement waitlist preview builder. */
 const WAITLIST_QUEUE_ROW_ANCHOR_FIELD_REFS = [
     ...PIPELINE_QUEUE_ROW_ANCHOR_FIELD_REFS,
-    "child.desired_start_date",
+    "child.start_date",
     ...WAITLIST_PLACEMENT_FIELD_KEYS,
     "candidateId",
 ] as const;

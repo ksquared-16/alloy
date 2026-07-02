@@ -174,7 +174,7 @@ export function resolveConceptValue(
         case "Program":
             if (leaf === "Name") return trimOrNull(record["program.name"]);
             if (leaf === "Schedule") return trimOrNull(record["program.schedule"]);
-            if (leaf === "Desired Start") return trimOrNull(record["child.desired_start_date"]);
+            if (leaf === "Desired Start") return trimOrNull(record["child.start_date"]);
             if (leaf === "Room") return trimOrNull(record["child.room"]);
             if (leaf === "Location") return trimOrNull(record["opportunity.location"]);
             return null;

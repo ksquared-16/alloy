@@ -34,11 +34,10 @@ export type LifecycleFieldRuleBinding = {
         | "first_name"
         | "last_name"
         | "location_id"
-        | "desired_program_type"
-        | "desired_program_category_id"
+        | "program_category_id"
         | "program_room_cohort_key"
-        | "desired_schedule_type"
-        | "desired_start_date";
+        | "schedule_type"
+        | "start_date";
     /** opportunity.values or metadata key when value_source is opportunity* */
     opportunity_field?: string;
     metadata_key?: string;
@@ -127,12 +126,11 @@ export const LIFECYCLE_FIELD_RULE_BINDINGS: readonly LifecycleFieldRuleBinding[]
     {
         rule_id: "child:program_interest",
         entity: "child",
-        field_key: "desired_program_category_id",
+        field_key: "program_category_id",
         value_source: "inquiry_child",
-        ocm_field: "desired_program_category_id",
+        ocm_field: "program_category_id",
         form_capture_keys: [
-            "desired_program_category_id",
-            "desired_program_type",
+            "program_category_id",
             "Desired program",
             "Program Interest",
             "Program",
@@ -163,20 +161,20 @@ export const LIFECYCLE_FIELD_RULE_BINDINGS: readonly LifecycleFieldRuleBinding[]
     {
         rule_id: "child:desired_schedule",
         entity: "child",
-        field_key: "desired_schedule_type",
+        field_key: "schedule_type",
         value_source: "inquiry_child",
-        ocm_field: "desired_schedule_type",
-        form_capture_keys: ["desired_schedule_type", "Desired schedule", "Schedule Type", "Desired Schedule"],
+        ocm_field: "schedule_type",
+        form_capture_keys: ["schedule_type", "Desired schedule", "Schedule Type", "Desired Schedule"],
         runtime_enforced: true,
         form_coverage_supported: true,
     },
     {
-        rule_id: "child:desired_start_date",
+        rule_id: "child:start_date",
         entity: "child",
-        field_key: "desired_start_date",
+        field_key: "start_date",
         value_source: "inquiry_child",
-        ocm_field: "desired_start_date",
-        form_capture_keys: ["desired_start_date", "Desired start date", "Start Date", "Desired Start Date"],
+        ocm_field: "start_date",
+        form_capture_keys: ["start_date", "Desired start date", "Start Date", "Desired Start Date"],
         runtime_enforced: true,
         form_coverage_supported: true,
     },
@@ -193,10 +191,10 @@ export const LIFECYCLE_FIELD_RULE_BINDINGS: readonly LifecycleFieldRuleBinding[]
     {
         rule_id: "child:start_date",
         entity: "child",
-        field_key: "desired_start_date",
+        field_key: "start_date",
         value_source: "inquiry_child",
-        ocm_field: "desired_start_date",
-        form_capture_keys: ["desired_start_date", "Start Date"],
+        ocm_field: "start_date",
+        form_capture_keys: ["start_date", "Start Date"],
         runtime_enforced: true,
         form_coverage_supported: true,
     },

@@ -48,7 +48,7 @@ export function buildQueueRowPreviewQuickActionsFromConfig(
             out.push({ id: "open", label: "Open", actionId: "open_record", variant: "primary" });
             continue;
         }
-        if (key === "message" || key === "orchestrator" || key === "update_status") {
+        if (key === "message" || key === "orchestrator") {
             continue;
         }
         if (key === "call" && cap.phoneTel && phone) {

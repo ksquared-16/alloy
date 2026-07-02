@@ -58,28 +58,30 @@ describe("stage status source routing", () => {
         ).toBe("child");
     });
 
-    it("filters enrollment disposition rows by stage metadata and template keys", () => {
+    it("filters collapsed enrollment disposition rows by persisted stage metadata (S4)", () => {
+        // S4: statuses collapse to waitlisted|enrolling|enrolled|withdrawn|not_enrolling and stage
+        // membership is by the persisted stage_key metadata — no template status→stage expansion.
         const rows = [
             row("waitlisted", "Waitlisted", {
                 alloy_layer: "enrollment_disposition",
                 stage_key: "waitlist",
             }),
-            row("offer_pending", "Offer pending", {
+            row("enrolling", "Enrolling", {
                 alloy_layer: "enrollment_disposition",
                 stage_key: "enrolling",
             }),
-            row("new_inquiry", "New inquiry", {
+            row("enrolled", "Enrolled", {
                 alloy_layer: "enrollment_disposition",
-                stage_key: "lead",
+                stage_key: "enrolled",
             }),
         ];
 
         const waitlist = filterEnrollmentTrackStatusRowsForStage(rows, "waitlist");
-        expect(waitlist.map((r) => r.status_key)).toEqual(["waitlisted", "offer_pending"]);
+        expect(waitlist.map((r) => r.status_key)).toEqual(["waitlisted"]);
 
         const enrolling = filterEnrollmentTrackStatusRowsForStage(rows, "enrolling");
-        expect(enrolling.map((r) => r.status_key)).toContain("offer_pending");
-        expect(enrolling.map((r) => r.status_key)).not.toContain("new_inquiry");
+        expect(enrolling.map((r) => r.status_key)).toContain("enrolling");
+        expect(enrolling.map((r) => r.status_key)).not.toContain("waitlisted");
     });
 
     it("excludes generic opportunity case container statuses from family track picker", () => {
@@ -97,20 +99,21 @@ describe("stage status source routing", () => {
         expect(matched.map((r) => r.status_key)).toEqual(["new_inquiry"]);
     });
 
-    it("matches closed_withdrawn via template disposition keys", () => {
+    it("matches closed_withdrawn via persisted stage metadata (S4)", () => {
+        // S4: collapsed terminal child statuses are withdrawn|not_enrolling and membership keys off
+        // the persisted stage_key metadata, not template disposition-key expansion.
         const rows = [
-            row("family_withdrew", "Family withdrew", {
+            row("not_enrolling", "Not enrolling", {
                 alloy_layer: "enrollment_disposition",
-                stage_key: "tour",
+                stage_key: "closed_withdrawn",
             }),
             row("withdrawn", "Withdrawn", {
                 alloy_layer: "enrollment_disposition",
-                stage_key: "tour",
-                deprecated: true,
+                stage_key: "closed_withdrawn",
             }),
         ];
 
         const matched = filterEnrollmentTrackStatusRowsForStage(rows, "closed_withdrawn");
-        expect(matched.map((r) => r.status_key).sort()).toEqual(["family_withdrew", "withdrawn"]);
+        expect(matched.map((r) => r.status_key).sort()).toEqual(["not_enrolling", "withdrawn"]);
     });
 });

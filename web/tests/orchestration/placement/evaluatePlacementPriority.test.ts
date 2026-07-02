@@ -133,7 +133,7 @@ describe("evaluatePlacementPriority", () => {
         const r = evalChildcare({
             program_room_group: { presence: "present", value: "Infant" },
             wait_since: { presence: "present", value: "2024-06-01T12:00:00.000Z" },
-            desired_start_date: { presence: "present", value: "2025-09-01T00:00:00.000Z" },
+            start_date: { presence: "present", value: "2025-09-01T00:00:00.000Z" },
         });
         expect(r.ok).toBe(true);
         if (r.ok) {

@@ -52,7 +52,7 @@ describe("enrollmentStatusParkingLotBypass", () => {
                 makeRequirementViolation({
                     entity_type: "inquiry_child",
                     entity_id: "ocm-1",
-                    field_key: "desired_program_category_id",
+                    field_key: "program_category_id",
                     label: "Program",
                     requirement_type: "required_before_action",
                     blocking_level: "hard_block",
@@ -61,7 +61,7 @@ describe("enrollmentStatusParkingLotBypass", () => {
                 makeRequirementViolation({
                     entity_type: "inquiry_child",
                     entity_id: "ocm-1",
-                    field_key: "desired_schedule_type",
+                    field_key: "schedule_type",
                     label: "Desired Schedule",
                     requirement_type: "required_before_action",
                     blocking_level: "hard_block",
@@ -75,8 +75,8 @@ describe("enrollmentStatusParkingLotBypass", () => {
         // Field-based intake requirements must remain hard blocks.
         expect(cleared.ok).toBe(false);
         expect(cleared.blocking.map((v) => v.field_key)).toEqual([
-            "desired_program_category_id",
-            "desired_schedule_type",
+            "program_category_id",
+            "schedule_type",
         ]);
         expect(cleared.blocking.some((v) => v.field_key === "bypass_reason")).toBe(false);
     });
@@ -88,7 +88,7 @@ describe("enrollmentStatusParkingLotBypass", () => {
                 makeRequirementViolation({
                     entity_type: "inquiry_child",
                     entity_id: "ocm-1",
-                    field_key: "desired_program_category_id",
+                    field_key: "program_category_id",
                     label: "Program",
                     requirement_type: "required_before_action",
                     blocking_level: "hard_block" as const,

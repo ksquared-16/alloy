@@ -285,7 +285,7 @@ function computeCrmTimingSegments(
     want: (f: QueueUiRowPreviewField) => boolean,
     labels: Record<string, string>
 ): WorkUnitQueueCrmTimingSegmentVm[] | null {
-    const wantD = want("desired_start_date");
+    const wantD = want("start_date");
     const wantT = want("tour_date");
     if (!wantD && !wantT) return null;
 
@@ -309,8 +309,8 @@ function computeCrmTimingSegments(
     const tourVal = wantT ? (tourDirect || (tourFormatted.trim() ? tourFormatted : "—")) : "";
 
     const segments: WorkUnitQueueCrmTimingSegmentVm[] = [];
-    if (wantD && desiredVal && labels.desired_start_date) {
-        segments.push({ label: labels.desired_start_date, value: desiredVal });
+    if (wantD && desiredVal && labels.start_date) {
+        segments.push({ label: labels.start_date, value: desiredVal });
     }
     if (wantT && labels.tour_date) {
         segments.push({ label: labels.tour_date, value: tourVal });
@@ -489,7 +489,7 @@ export function buildCrmQueueRowPreviewPresentation(
     | "contactPhoneDisplay"
     | "contactEmail"
     | "contactSnippet"
-    | "desiredStartDateDisplay"
+    | "startDateDisplay"
     | "ageBandContext"
     | "tourContext"
     | "crmCompactTimingValueLine"
@@ -500,14 +500,14 @@ export function buildCrmQueueRowPreviewPresentation(
     | "rowPreviewLabelPrimaryContact"
     | "rowPreviewLabelPhone"
     | "rowPreviewLabelEmail"
-    | "rowPreviewLabelDesiredStartDate"
+    | "rowPreviewLabelStartDate"
     | "rowPreviewLabelTourDate"
     | "rowPreviewLabelAgeBand"
 > {
     const labels = mergeQueueRowPreviewFieldLabels(rowPreviewFieldLabels);
     const contact = deriveStructuredContactFromQueueRow(row, want);
 
-    const wantD = want("desired_start_date");
+    const wantD = want("start_date");
     const wantT = want("tour_date");
 
     const tourDirect = typeof row._tour_queue_display === "string" ? row._tour_queue_display.trim() : "";
@@ -539,7 +539,7 @@ export function buildCrmQueueRowPreviewPresentation(
 
     return {
         ...contact,
-        desiredStartDateDisplay: wantD && desiredVal ? desiredVal : null,
+        startDateDisplay: wantD && desiredVal ? desiredVal : null,
         ageBandContext,
         tourContext: wantT ? tourVal : null,
         crmCompactTimingValueLine,
@@ -550,7 +550,7 @@ export function buildCrmQueueRowPreviewPresentation(
         rowPreviewLabelPrimaryContact: labels.primary_contact ?? null,
         rowPreviewLabelPhone: labels.phone ?? null,
         rowPreviewLabelEmail: labels.email ?? null,
-        rowPreviewLabelDesiredStartDate: labels.desired_start_date ?? null,
+        rowPreviewLabelStartDate: labels.start_date ?? null,
         rowPreviewLabelTourDate: labels.tour_date ?? null,
         rowPreviewLabelAgeBand: labels.age_band ?? null,
     };
