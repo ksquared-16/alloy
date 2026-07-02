@@ -4,7 +4,10 @@
  * Presentation Runtime V2 — RR.SURFACE.
  *
  * The right-rail shell — owns the single RR runtime label. Action content is a later
- * slice; for now the shell renders children when provided, otherwise a quiet empty state.
+ * slice. With no children the rail has ZERO footprint: a hidden anchor keeps the
+ * RR.SURFACE label in the DOM (single-ownership grep/spec still resolve exactly one
+ * render site) but reserves no column — the main content fills the full width. With
+ * children, the visible rail column renders.
  */
 
 import type { ReactNode } from "react";
@@ -14,6 +17,17 @@ import {
 } from "@/components/presentation/runtimeLabels";
 
 export function RightRailSurface({ children }: { children?: ReactNode }) {
+    if (children == null) {
+        return (
+            <aside
+                hidden
+                {...runtimeLabelProps(PRESENTATION_RUNTIME_LABELS.rightRailSurface)}
+                aria-label="Actions"
+                data-right-rail-empty="true"
+            />
+        );
+    }
+
     return (
         <aside
             {...runtimeLabelProps(PRESENTATION_RUNTIME_LABELS.rightRailSurface)}
@@ -24,11 +38,7 @@ export function RightRailSurface({ children }: { children?: ReactNode }) {
                 <span className="block text-[10px] font-medium uppercase tracking-[0.1em] text-alloy-stone">
                     Actions
                 </span>
-                {children != null ? (
-                    <div className="mt-2 space-y-2">{children}</div>
-                ) : (
-                    <p className="mt-2 text-sm text-alloy-midnight/60">No actions for this view</p>
-                )}
+                <div className="mt-2 space-y-2">{children}</div>
             </div>
         </aside>
     );

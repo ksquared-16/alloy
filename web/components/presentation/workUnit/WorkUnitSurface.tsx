@@ -9,7 +9,8 @@
  *
  * Composition (doctrine order): WorkUnitHeader → OperationalAnswersRow (WU.ANSWERS) →
  * WorkViewPillStrip → QueueRegion inside FocusPanelSurface, with RightRailSurface as the
- * right column (rail collapses under the main column on narrow widths).
+ * right column. An empty rail renders as a hidden zero-footprint anchor, so the main
+ * column takes the full width (display:none flex items reserve no column and no gap).
  */
 
 import { useWorkUnitSurfaceRuntime } from "@/lib/presentation/runtime";

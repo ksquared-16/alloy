@@ -12,9 +12,9 @@
  *   (b) provides `useFocusPanelOpen()` so queue rows open records through one seam,
  *   (c) mirrors drawer state as `data-focus-panel-open` for acceptance/choreography, and
  *   (d) owns the queue↔panel two-column layout: with a record selected the queue
- *       (children) compresses to a bounded left column and the inline panel fills the
- *       right; with nothing selected the queue is the single full-width column. The
- *       column change is layout-only — no animated widths.
+ *       (children) compresses to a FIXED-width left column and the inline panel fills
+ *       all remaining width; with nothing selected the queue is the single full-width
+ *       column. The column change is layout-only — no animated widths.
  */
 
 import { createContext, useContext, useMemo, type ReactNode } from "react";
@@ -68,13 +68,12 @@ export function FocusPanelSurface({
         >
             <FocusPanelOpenContext.Provider value={value}>
                 {inlineRecordSelected ? (
-                    // Side-by-side only when the record column gets real room (≥2xl after app
-                    // chrome + right rail); below that the queue stacks above the record so the
-                    // Focus Panel composition never renders in a squeezed column.
-                    <div className="flex flex-col gap-4 2xl:flex-row 2xl:items-start">
-                        <div className="min-w-0 2xl:w-[36%] 2xl:min-w-[18rem] 2xl:max-w-[30rem] 2xl:shrink-0">
-                            {children}
-                        </div>
+                    // Staging split: fixed-width queue column on the left, record panel fills
+                    // ALL remaining width to the command-rail edge (no max-width cap). Engages
+                    // at xl; below that the queue stacks above the record so the Focus Panel
+                    // composition never renders in a squeezed column.
+                    <div className="flex flex-col gap-4 xl:flex-row xl:items-start">
+                        <div className="min-w-0 xl:w-[24rem] xl:shrink-0">{children}</div>
                         <div className="min-w-0 flex-1">
                             <InlineOpportunityFocusPanel />
                         </div>

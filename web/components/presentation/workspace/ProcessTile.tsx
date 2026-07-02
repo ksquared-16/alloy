@@ -22,12 +22,6 @@ import {
 } from "@/components/presentation/runtimeLabels";
 import { WorkViewList } from "./WorkViewList";
 
-/** Counts render "—" when the rollup has not resolved (null), never a fake zero. */
-function formatCount(count: number | null): string {
-    if (count == null || !Number.isFinite(count)) return "—";
-    return count.toLocaleString();
-}
-
 const TILE_METRIC_PREVIEW_CAP = 3;
 
 export function ProcessTile({ process }: { process: ProcessTileModel }) {
@@ -108,27 +102,33 @@ export function ProcessTile({ process }: { process: ProcessTileModel }) {
                 ) : null}
 
                 <div className="mt-auto flex items-end justify-between gap-3 border-t border-alloy-midnight/8 pt-2.5">
+                    {/* A stat renders only when its rollup resolved (non-null) — missing data
+                        is hidden, never presented as a meaningful value. */}
                     <div className="flex gap-4">
-                        <div>
-                            <div className="text-[8px] font-semibold uppercase tracking-wide text-alloy-midnight/40">
-                                Active
+                        {process.activeRecordCount != null ? (
+                            <div>
+                                <div className="text-[8px] font-semibold uppercase tracking-wide text-alloy-midnight/40">
+                                    Active
+                                </div>
+                                <div className="text-[11px] font-semibold tabular-nums text-alloy-midnight/70">
+                                    {process.activeRecordCount.toLocaleString()}
+                                </div>
                             </div>
-                            <div className="text-[11px] font-semibold tabular-nums text-alloy-midnight/70">
-                                {formatCount(process.activeRecordCount)}
+                        ) : null}
+                        {process.needsAttentionCount != null ? (
+                            <div>
+                                <div className="text-[8px] font-semibold uppercase tracking-wide text-alloy-midnight/40">
+                                    Attention
+                                </div>
+                                <div
+                                    className={`text-[11px] font-semibold tabular-nums ${
+                                        hasAttention ? "text-alloy-ember" : "text-alloy-midnight/70"
+                                    }`}
+                                >
+                                    {process.needsAttentionCount.toLocaleString()}
+                                </div>
                             </div>
-                        </div>
-                        <div>
-                            <div className="text-[8px] font-semibold uppercase tracking-wide text-alloy-midnight/40">
-                                Attention
-                            </div>
-                            <div
-                                className={`text-[11px] font-semibold tabular-nums ${
-                                    hasAttention ? "text-alloy-ember" : "text-alloy-midnight/70"
-                                }`}
-                            >
-                                {formatCount(process.needsAttentionCount)}
-                            </div>
-                        </div>
+                        ) : null}
                     </div>
                     <span
                         aria-hidden

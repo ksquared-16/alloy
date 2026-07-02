@@ -5,7 +5,9 @@
  *
  * The one render site for queue rows. Receives the resolved queue slice from the
  * Work Unit surface model and opens records through the FocusPanelSurface seam
- * (`useFocusPanelOpen`). States: loading skeletons, quiet inline error, empty, rows.
+ * (`useFocusPanelOpen`). Rows are self-chromed split-view CARDS stacked with small
+ * gaps (staging parity) — the region supplies the stack, not row chrome. States:
+ * loading skeletons (card-shaped), quiet inline error, empty, rows.
  */
 
 import type { QueueRowModel, WorkUnitSurfaceModel } from "@/lib/presentation/runtime";
@@ -18,12 +20,20 @@ import { useFocusPanelOpen } from "./FocusPanelSurface";
 
 const QUEUE_SKELETON_ROW_COUNT = 3;
 
+/** Card-shaped skeleton — mirrors the split-view card anatomy (avatar + two lines + pill). */
 function QueueRowSkeleton() {
     return (
-        <li className="flex items-center gap-2 px-3 py-2" aria-hidden>
-            <span className="block h-3.5 w-[min(48%,12rem)] animate-pulse rounded bg-alloy-stone/40" />
-            <span className="block h-3 w-16 animate-pulse rounded-full bg-alloy-stone/30" />
-            <span className="ml-auto block h-3 w-[min(24%,7rem)] animate-pulse rounded bg-alloy-stone/25" />
+        <li className="rounded-lg border border-alloy-stone/18 bg-white px-3 py-2.5" aria-hidden>
+            <span className="flex items-start gap-2.5">
+                <span className="block h-8 w-8 shrink-0 animate-pulse rounded-full bg-alloy-stone/30" />
+                <span className="min-w-0 flex-1 space-y-1.5">
+                    <span className="flex items-center justify-between gap-2">
+                        <span className="block h-3.5 w-[min(48%,10rem)] animate-pulse rounded bg-alloy-stone/40" />
+                        <span className="block h-3 w-14 shrink-0 animate-pulse rounded-full bg-alloy-stone/30" />
+                    </span>
+                    <span className="block h-3 w-[min(64%,14rem)] animate-pulse rounded bg-alloy-stone/25" />
+                </span>
+            </span>
         </li>
     );
 }
@@ -57,13 +67,16 @@ export function QueueRegion({
             aria-label="Queue"
         >
             {queue.loading ? (
-                <div className="rounded-lg border border-alloy-stone/18 bg-white">
-                    <ul role="list" aria-busy="true" aria-label="Loading queue rows" className="divide-y divide-alloy-stone/12">
-                        {Array.from({ length: QUEUE_SKELETON_ROW_COUNT }, (_, i) => (
-                            <QueueRowSkeleton key={`queue-row-skeleton-${i}`} />
-                        ))}
-                    </ul>
-                </div>
+                <ul
+                    role="list"
+                    aria-busy="true"
+                    aria-label="Loading queue rows"
+                    className="flex flex-col gap-2"
+                >
+                    {Array.from({ length: QUEUE_SKELETON_ROW_COUNT }, (_, i) => (
+                        <QueueRowSkeleton key={`queue-row-skeleton-${i}`} />
+                    ))}
+                </ul>
             ) : queue.error ? (
                 <p
                     role="alert"
@@ -78,8 +91,8 @@ export function QueueRegion({
                     </p>
                 </div>
             ) : (
-                <div className="rounded-lg border border-alloy-stone/18 bg-white">
-                    <ul role="list" className="divide-y divide-alloy-stone/12">
+                <div>
+                    <ul role="list" className="flex flex-col gap-2">
                         {queue.rows.map((row, index) => (
                             <li key={`${row.entityType}:${row.entityId}`}>
                                 <CondensedQueueRow
@@ -92,7 +105,7 @@ export function QueueRegion({
                         ))}
                     </ul>
                     {queue.totalCount != null ? (
-                        <p className="border-t border-alloy-stone/12 px-3 py-1.5 text-[11px] tabular-nums text-alloy-midnight/60">
+                        <p className="px-1 pt-1.5 text-[11px] tabular-nums text-alloy-midnight/60">
                             {queue.totalCount} {queue.totalCount === 1 ? "record" : "records"}
                         </p>
                     ) : null}
