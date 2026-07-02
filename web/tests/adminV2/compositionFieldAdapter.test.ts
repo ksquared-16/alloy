@@ -17,6 +17,15 @@ import {
     namedEvidenceGroupsForZone,
     isFieldAvailableForZone,
 } from "@/lib/adminV2/settings/surfaces/compositionFieldAdapter";
+import type { TenantFieldDefinitionRow } from "@/lib/layout/tenantLayoutFieldPickerCatalog";
+
+// Operator-created custom fields spanning four namespaces (V3 §5 availability).
+const CUSTOM_FIELDS: TenantFieldDefinitionRow[] = [
+    { field_key: "preferred_language", label: "Preferred Language", entity_type: "person", field_type: "text", is_system: false, is_active: true },
+    { field_key: "pickup_code", label: "Pickup Code", entity_type: "customer_member", field_type: "text", is_system: false, is_active: true },
+    { field_key: "referred_by", label: "Referred By", entity_type: "opportunity", field_type: "text", is_system: false, is_active: true },
+    { field_key: "employer", label: "Employer", entity_type: "customer", field_type: "text", is_system: false, is_active: true },
+];
 
 describe("availableFieldsForZone — field list per zone", () => {
     it("household zone returns at least one field", () => {
@@ -202,6 +211,63 @@ describe("V1 scope — static composition fields only, no custom fields", () => 
                 }
             }
         }
+    });
+});
+
+describe("V3 §5 — custom fields flow into groups by accepted namespace", () => {
+    it("no tenant defs supplied → starter fields only (back-compat)", () => {
+        const withNone = availableFieldsForGroup("household", "primary_contact");
+        const keys = withNone.map((f) => f.key);
+        expect(keys).not.toContain("person.preferred_language");
+        expect(keys).not.toContain("customer.employer");
+        // and every field is a system starter field
+        expect(withNone.every((f) => f.isSystemField)).toBe(true);
+    });
+
+    it("person custom field appears in a group that accepts [customer, person]", () => {
+        const fields = availableFieldsForGroup("household", "primary_contact", false, CUSTOM_FIELDS);
+        const keys = fields.map((f) => f.key);
+        expect(keys).toContain("person.preferred_language");
+        expect(keys).toContain("customer.employer");
+        const custom = fields.find((f) => f.key === "person.preferred_language")!;
+        expect(custom.isSystemField).toBe(false);
+        expect(custom.entityNamespace).toBe("person");
+        expect(custom.label).toBe("Preferred Language");
+    });
+
+    it("person custom field does NOT appear in a group that accepts only [child, inquiry_child]", () => {
+        const fields = availableFieldsForGroup("children", "child_summary", false, CUSTOM_FIELDS);
+        const keys = fields.map((f) => f.key);
+        expect(keys).not.toContain("person.preferred_language");
+        // but a child-namespace custom field DOES
+        expect(keys).toContain("child.pickup_code");
+    });
+
+    it("opportunity custom field appears in the status/stage_disposition group", () => {
+        const fields = availableFieldsForGroup("status", "stage_disposition", false, CUSTOM_FIELDS);
+        expect(fields.map((f) => f.key)).toContain("opportunity.referred_by");
+    });
+
+    it("namedEvidenceGroupsForZone merges custom fields per group by namespace", () => {
+        const groups = namedEvidenceGroupsForZone("household", false, CUSTOM_FIELDS);
+        const primary = groups.find((g) => g.key === "primary_contact")!;
+        const keys = primary.availableFields.map((f) => f.key);
+        expect(keys).toContain("person.preferred_language");
+        expect(keys).toContain("customer.employer");
+    });
+
+    it("availableFieldsForZone includes custom fields but never duplicates keys", () => {
+        const fields = availableFieldsForZone("household", false, CUSTOM_FIELDS);
+        const keys = fields.map((f) => f.key);
+        expect(keys).toContain("person.preferred_language");
+        expect(new Set(keys).size).toBe(keys.length);
+    });
+
+    it("a custom field never lands in a group whose namespace rejects it (no cross-contamination)", () => {
+        // child.pickup_code must NOT appear in the opportunity-only status group
+        const status = availableFieldsForGroup("status", "stage_disposition", false, CUSTOM_FIELDS);
+        expect(status.map((f) => f.key)).not.toContain("child.pickup_code");
+        expect(status.map((f) => f.key)).not.toContain("person.preferred_language");
     });
 });
 
