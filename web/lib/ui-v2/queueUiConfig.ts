@@ -18,8 +18,7 @@ export type QueueUiRowPreviewAction =
     | "call"
     | "email"
     | "message"
-    | "orchestrator"
-    | "update_status";
+    | "orchestrator";
 
 /** Default captions for CRM compact row groups; override via queue definition `ui.row_preview.field_labels`. */
 export const DEFAULT_QUEUE_ROW_PREVIEW_FIELD_LABELS: Record<string, string> = {

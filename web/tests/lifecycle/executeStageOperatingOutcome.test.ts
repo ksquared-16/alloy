@@ -179,18 +179,26 @@ describe("executeStageOperatingOutcome", () => {
                 },
             })),
         };
-        const plan = defaultStageOperatingPlanForEnrollmentStage("qualification")!;
-        plan.outcome_rules = [
-            {
-                rule_key: "qualified_move",
-                when_outcome_key: "qualified",
-                targets: [
-                    { kind: "update_family_case_status", status_key: "open" },
-                    { kind: "move_to_stage", stage_key: "qualification" },
-                    { kind: "mark_stage_work_complete" },
-                ],
-            },
-        ];
+        const plan = {
+            version: 1 as const,
+            lifecycle_key: "enrollment",
+            stage_key: "tour",
+            journey_segment: "family" as const,
+            work_templates: [],
+            outcomes: [],
+            attention_rules: [],
+            outcome_rules: [
+                {
+                    rule_key: "qualified_move",
+                    when_outcome_key: "qualified",
+                    targets: [
+                        { kind: "update_family_case_status" as const, status_key: "open" },
+                        { kind: "move_to_stage" as const, stage_key: "tour" },
+                        { kind: "mark_stage_work_complete" as const },
+                    ],
+                },
+            ],
+        };
 
         const result = await executeStageOperatingOutcome({
             supabase: supabase as never,
@@ -207,7 +215,7 @@ describe("executeStageOperatingOutcome", () => {
         expect(updateOpportunityStatusWithEvent).toHaveBeenCalled();
         // move_to_stage writes the persisted stage_key column on the family case.
         expect(updateSpy).toHaveBeenCalledWith(
-            expect.objectContaining({ stage_key: "qualification" }),
+            expect.objectContaining({ stage_key: "tour" }),
         );
     });
 });

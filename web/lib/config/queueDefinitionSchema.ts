@@ -107,7 +107,7 @@ const queueUiRowPreviewSchema = z
             )
             .default(["title", "status"]),
         actions: z
-            .array(z.enum(["open", "call", "email", "message", "orchestrator", "update_status"]))
+            .array(z.enum(["open", "call", "email", "message", "orchestrator"]))
             .default(["open"]),
         field_labels: z.record(z.string(), z.string()).nullish(),
     })

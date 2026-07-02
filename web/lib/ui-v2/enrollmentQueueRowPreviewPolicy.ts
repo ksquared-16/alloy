@@ -3,11 +3,14 @@ import type { QueueUiRowPreviewAction } from "@/lib/ui-v2/queueUiConfig";
 /** Canonical enrollment queue row preview: Open only — Message/Ask BOS come from action placements. */
 export const ENROLLMENT_QUEUE_ROW_PREVIEW_ACTIONS: QueueUiRowPreviewAction[] = ["open"];
 
-/** Preview JSON must not author configurable actions; placements own these tokens. */
+/**
+ * Preview JSON must not author configurable actions; placements own these tokens.
+ * Status changes are never a generic quick action — they surface as domain-verb
+ * placements (Waitlist Child, Enroll Child, Close Lead), not from queue preview JSON.
+ */
 const PLACEMENT_AUTHORED_PREVIEW_TOKENS = new Set<QueueUiRowPreviewAction>([
     "message",
     "orchestrator",
-    "update_status",
 ]);
 
 const ENROLLMENT_STRIPPED_PREVIEW_TOKENS = new Set<QueueUiRowPreviewAction>([
