@@ -91,7 +91,13 @@ export type WorkspaceSurfaceModel = {
 
 /** WU.SURFACE — resolved model for the Work Unit surface. */
 export type WorkUnitSurfaceModel = {
-    header: { processLabel: string | null; workUnitName: string };
+    /**
+     * Operator-facing identity — configured labels only. `processLabel` is the configured
+     * lifecycle process label (department name fallback); `workViewLabel` is the ACTIVE
+     * configured Work View's label. Internal structure names (work-unit `name`/`key`) and
+     * humanized slugs never surface here.
+     */
+    header: { processLabel: string | null; workViewLabel: string | null };
     answers: OperationalAnswerModel[];
     workViews: WorkViewLinkModel[];
     queue: {
@@ -162,8 +168,9 @@ export function workViewLinkFromWorkQueuePreview(
 /**
  * Work Unit pill-strip links from the configured Work Views (`work_views_v1`) — the same
  * list the Workspace tile renders (built by `workViewNavEntriesForDepartment`). Hidden
- * views are dropped; ordering follows `display_order` then label. `countForView` resolves
- * a lane count when one exists (null renders as no badge). Pills select in-page → no href.
+ * views are dropped; a view without a configured label is a config bug and is omitted
+ * (never rendered as a raw internal id). Ordering follows `display_order` then label.
+ * `countForView` resolves a count (null renders as no badge). Pills select in-page → no href.
  */
 export function workViewLinkModelsFromConfiguredViews(
     views: readonly WorkViewConfigV1Stored[],
@@ -173,7 +180,7 @@ export function workViewLinkModelsFromConfiguredViews(
     },
 ): WorkViewLinkModel[] {
     return views
-        .filter((view) => view.visible_in_runtime !== false)
+        .filter((view) => view.visible_in_runtime !== false && !!view.label?.trim())
         .sort(
             (a, b) =>
                 (a.display_order ?? Number.MAX_SAFE_INTEGER) - (b.display_order ?? Number.MAX_SAFE_INTEGER)
@@ -181,11 +188,24 @@ export function workViewLinkModelsFromConfiguredViews(
         )
         .map((view) => ({
             id: view.id,
-            label: view.label?.trim() || view.id,
+            label: view.label.trim(),
             isActive: view.id === args.activeWorkViewId,
             count: args.countForView?.(view) ?? null,
             href: null,
         }));
+}
+
+/**
+ * THE queue count for a Work View — the `total` of the same `QueueItemsResult` that renders
+ * the rows (`count_mode=exact`). Pill counts and `queue.totalCount` both derive from this so
+ * the badge can never disagree with the rendered rows. `total_omitted` / missing → null
+ * (no badge beats a wrong badge).
+ */
+export function queueTotalCountFromQueueItemsResult(
+    result: Pick<QueueItemsResult, "total" | "total_omitted"> | null | undefined,
+): number | null {
+    if (!result || result.total_omitted) return null;
+    return typeof result.total === "number" && Number.isFinite(result.total) ? result.total : null;
 }
 
 /** Workspace process tile from an operator lifecycle landing card (values pre-resolved). */

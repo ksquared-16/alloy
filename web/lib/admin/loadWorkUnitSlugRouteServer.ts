@@ -2,7 +2,10 @@ import "server-only";
 
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { loadAdminRouteGate } from "@/lib/admin/adminRouteGate";
-import { fetchWorkUnitsForSlugResolution } from "@/lib/admin/fetchWorkUnitsForSlugResolution";
+import {
+    fetchDepartmentsForSlugResolution,
+    fetchWorkUnitsForSlugResolution,
+} from "@/lib/admin/fetchWorkUnitsForSlugResolution";
 import { resolveWorkUnitByRouteSlug } from "@/lib/admin/resolveWorkUnitByRouteSlug";
 import { workUnitRouteSlugToKey } from "@/lib/admin/workUnitRouteSlug";
 import type { WorkUnitSlugRouteCacheEntry } from "@/lib/admin/workUnitSlugRouteCache";
@@ -43,16 +46,13 @@ export async function loadWorkUnitSlugRouteMetaServer(
             platformKey,
         });
 
-        const deptIds = [...new Set(workUnits.map((row) => row.department_id).filter(Boolean))];
-        let departments: { id: string; key: string | null; name: string | null }[] = [];
-        if (deptIds.length) {
-            const { data } = await supabase
-                .from("departments")
-                .select("id, key, name")
-                .eq("org_id", gate.orgId)
-                .in("id", deptIds);
-            departments = (data ?? []).map((d) => ({ id: d.id, key: d.key ?? null, name: d.name ?? null }));
-        }
+        // Department metadata carries the configured Work Views (`work_views_v1`) that the
+        // resolver's `work_view` slug kind matches against (candidate departments only).
+        const departments = await fetchDepartmentsForSlugResolution({
+            supabase,
+            orgId: gate.orgId,
+            departmentIds: workUnits.map((row) => row.department_id),
+        });
 
         const result = resolveWorkUnitByRouteSlug({ slug, workUnits, departments });
         // not_found / ambiguous → defer to the client fallback (it renders the precise message).
@@ -68,6 +68,7 @@ export async function loadWorkUnitSlugRouteMetaServer(
             workUnitKey: match.workUnitKey,
             workUnitName: match.workUnitName,
             initialQueueKey: match.initialQueueKey,
+            initialWorkViewId: match.initialWorkViewId,
         };
     } catch {
         return null;

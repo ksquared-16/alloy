@@ -1,10 +1,13 @@
 import { tryLoadWorkUnitQueueDefinitionBundle } from "@/lib/config/queueDefinitionV2Runtime";
 import { operatorStageKeysForPipelineQueueKey } from "@/lib/lifecycle/enrollmentProcessStageQueueKeys";
 import { lifecycleStageWorkUnitKey } from "@/lib/lifecycle/lifecycleStageWorkUnit";
+import { savedWorkViewsFromDepartmentMetadata } from "@/lib/lifecycle/resolveWorkViewRuntimeContext";
+import type { WorkViewConfigV1Stored } from "@/lib/lifecycle/workViewsConfigV1";
 import {
     extractDrawerLifecycleExecutionLanes,
     extractPipelineExecutionLanes,
 } from "@/lib/workspace/extractPipelineExecutionLanes";
+import { pickDeptWorkViewHostWorkUnit } from "@/lib/workspace/pickDeptPipelineWorkUnit";
 import { workUnitKeyToRouteSlug, workUnitRouteSlugToKey } from "@/lib/admin/workUnitRouteSlug";
 
 export type WorkUnitRouteSlugRow = {
@@ -17,7 +20,7 @@ export type WorkUnitRouteSlugRow = {
     is_active?: boolean | null;
 };
 
-export type WorkUnitRouteSlugMatchKind = "work_unit_key" | "queue_lane_key";
+export type WorkUnitRouteSlugMatchKind = "work_unit_key" | "work_view" | "queue_lane_key";
 
 export type ResolvedWorkUnitRouteSlug = {
     kind: WorkUnitRouteSlugMatchKind;
@@ -28,6 +31,8 @@ export type ResolvedWorkUnitRouteSlug = {
     routeSlug: string;
     /** When kind is `queue_lane_key`, the lane to select on the resolved work unit. */
     initialQueueKey: string | null;
+    /** When kind is `work_view`, the configured Work View to select on the resolved work unit. */
+    initialWorkViewId: string | null;
 };
 
 export type AmbiguousWorkUnitRouteSlugCandidate = {
@@ -44,7 +49,13 @@ export type ResolveWorkUnitRouteSlugResult =
     | { status: "not_found" }
     | { status: "ambiguous"; candidates: AmbiguousWorkUnitRouteSlugCandidate[] };
 
-type DepartmentHint = { id: string; key: string | null; name: string | null };
+type DepartmentHint = {
+    id: string;
+    key: string | null;
+    name: string | null;
+    /** `departments.metadata` — required for `work_view` slug matching (configured `work_views_v1`). */
+    metadata?: unknown;
+};
 
 function preferDepartmentKey(deptKey: string | null | undefined): number {
     const k = (deptKey ?? "").trim().toLowerCase();
@@ -107,6 +118,51 @@ function findLifecycleStageWorkUnitForQueueLane(
     return narrowed.length === 1 ? narrowed[0]! : null;
 }
 
+/**
+ * Host work unit for a configured Work View: the work unit owning the view's bound lane
+ * (`compat_queue_key`) when one exists, else the department's pipeline/stage work unit —
+ * the same host `workViewNavEntriesForDepartment` targets when it builds the view's nav entry.
+ */
+function hostWorkUnitForConfiguredWorkView(
+    view: WorkViewConfigV1Stored,
+    deptRows: WorkUnitRouteSlugRow[],
+    departmentId: string,
+    departmentsById: Map<string, DepartmentHint>,
+): WorkUnitRouteSlugRow | null {
+    const compat = view.compat_queue_key?.trim();
+    if (compat) {
+        const laneOwner =
+            findQueueLaneOwner(deptRows, compat) ??
+            findLifecycleStageWorkUnitForQueueLane(deptRows, compat, departmentsById);
+        if (laneOwner) return laneOwner;
+    }
+    return pickDeptWorkViewHostWorkUnit(deptRows, departmentId);
+}
+
+function findConfiguredWorkViewMatch(
+    platformKey: string,
+    rows: WorkUnitRouteSlugRow[],
+    departments: DepartmentHint[],
+    departmentsById: Map<string, DepartmentHint>,
+): { view: WorkViewConfigV1Stored; departmentId: string; host: WorkUnitRouteSlugRow } | null {
+    const ordered = [...departments].sort(
+        (a, b) =>
+            preferDepartmentKey(a.key) - preferDepartmentKey(b.key) ||
+            (a.name ?? a.id).localeCompare(b.name ?? b.id),
+    );
+    for (const dept of ordered) {
+        if (dept.metadata == null) continue;
+        const view =
+            savedWorkViewsFromDepartmentMetadata(dept.metadata).find((v) => v.id === platformKey) ??
+            null;
+        if (!view) continue;
+        const deptRows = rows.filter((row) => row.department_id === dept.id);
+        const host = hostWorkUnitForConfiguredWorkView(view, deptRows, dept.id, departmentsById);
+        if (host) return { view, departmentId: dept.id, host };
+    }
+    return null;
+}
+
 function disambiguateWorkUnitKeyMatches(
     rows: WorkUnitRouteSlugRow[],
     departmentsById: Map<string, DepartmentHint>,
@@ -139,8 +195,16 @@ function disambiguateWorkUnitKeyMatches(
 }
 
 /**
- * Resolve operator `/workspace/work-unit/:slug` to a work unit (+ optional queue lane).
- * Slug source: `work_units.key` first; else configured pipeline queue lane keys.
+ * Resolve operator `/workspace/work-unit/:slug` to a work unit (+ optional work view / queue lane).
+ *
+ * Precedence:
+ *   1. `work_unit_key`  — an explicit work-unit key is structural identity; it always wins.
+ *   2. `work_view`      — configured Work View ids (`work_views_v1`) are the operator-facing
+ *      routing namespace. They must outrank raw queue-lane keys because a view created from a
+ *      lane shares its slugified id (e.g. "New Leads" → `new_leads` view id AND `new_leads`
+ *      lane key): the configured view must win so the route selects the view (its label,
+ *      predicates, and count), not the bare lane.
+ *   3. `queue_lane_key` — legacy pipeline lane slugs for departments without configured views.
  */
 export function resolveWorkUnitByRouteSlug(args: {
     slug: string;
@@ -172,6 +236,7 @@ export function resolveWorkUnitByRouteSlug(args: {
                 workUnitName: row.name,
                 routeSlug,
                 initialQueueKey: null,
+                initialWorkViewId: null,
             },
         };
     }
@@ -190,6 +255,7 @@ export function resolveWorkUnitByRouteSlug(args: {
                     workUnitName: row.name,
                     routeSlug,
                     initialQueueKey: null,
+                    initialWorkViewId: null,
                 },
             };
         }
@@ -209,6 +275,29 @@ export function resolveWorkUnitByRouteSlug(args: {
         };
     }
 
+    // Configured Work View id match — outranks queue-lane slugs (see precedence doc above).
+    const workViewMatch = findConfiguredWorkViewMatch(
+        platformKey,
+        activeRows,
+        args.departments ?? [],
+        departmentsById,
+    );
+    if (workViewMatch) {
+        return {
+            status: "resolved",
+            match: {
+                kind: "work_view",
+                workUnitId: workViewMatch.host.id,
+                departmentId: workViewMatch.departmentId,
+                workUnitKey: workViewMatch.host.key,
+                workUnitName: workViewMatch.host.name,
+                routeSlug,
+                initialQueueKey: null,
+                initialWorkViewId: workViewMatch.view.id,
+            },
+        };
+    }
+
     const laneOwner = findQueueLaneOwner(activeRows, platformKey);
     if (laneOwner) {
         return {
@@ -221,6 +310,7 @@ export function resolveWorkUnitByRouteSlug(args: {
                 workUnitName: laneOwner.name,
                 routeSlug,
                 initialQueueKey: platformKey,
+                initialWorkViewId: null,
             },
         };
     }
@@ -241,6 +331,7 @@ export function resolveWorkUnitByRouteSlug(args: {
                 workUnitName: lifecycleStageOwner.name,
                 routeSlug,
                 initialQueueKey: null,
+                initialWorkViewId: null,
             },
         };
     }

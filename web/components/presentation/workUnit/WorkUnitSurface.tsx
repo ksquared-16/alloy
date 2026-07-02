@@ -69,7 +69,7 @@ export function WorkUnitSurface() {
                     <div className="min-w-0 flex-1 space-y-4">
                         <WorkUnitHeader
                             processLabel={model.header.processLabel}
-                            workUnitName={model.header.workUnitName}
+                            workViewLabel={model.header.workViewLabel}
                         />
                         <OperationalAnswersRow
                             answers={model.answers}

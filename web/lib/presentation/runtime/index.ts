@@ -9,6 +9,7 @@ export {
     processTileModelFromLandingCard,
     queueRowModelFromQueueItem,
     queueRowModelsFromQueueItemsResult,
+    queueTotalCountFromQueueItemsResult,
     workViewLinkFromWorkQueuePreview,
     workViewLinkModelsFromConfiguredViews,
     type OperationalAnswerModel,

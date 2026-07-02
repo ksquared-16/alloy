@@ -11,10 +11,7 @@ import {
 } from "@/lib/admin/canonicalOperatorRoutes";
 import { syncOperatorWorkUnitUrlInBrowser } from "@/lib/admin/operatorWorkUnitDrawerUrlSync";
 import { isLeavingWorkUnitSurface } from "@/lib/admin/workUnitOutboundHold";
-import {
-    humanizeWorkUnitRouteSlug,
-    warmWorkUnitSlugRoute,
-} from "@/lib/admin/operatorWorkUnitEntryWarm";
+import { warmWorkUnitSlugRoute } from "@/lib/admin/operatorWorkUnitEntryWarm";
 import {
     peekWorkUnitSlugRouteCache,
     putWorkUnitSlugRouteCache,
@@ -131,9 +128,11 @@ export default function WorkUnitSlugRouteHost({
             return null;
         }
         const cached = peekWorkUnitSlugRouteCache(workUnitSlug);
+        // Configured names only — never a label fabricated from the URL slug. Uncached →
+        // neutral empty title (a config-owned surface must not invent operator-facing labels).
         return (
             <WorkUnitWorkspaceColdShell
-                workUnitTitle={cached?.workUnitName ?? humanizeWorkUnitRouteSlug(workUnitSlug)}
+                workUnitTitle={cached?.departmentName ?? cached?.workUnitName ?? ""}
                 departmentId={cached?.departmentId}
                 reserveActionsRail
             />

@@ -4,10 +4,14 @@
  * Presentation Runtime V2 — WU.SURFACE resolution + intents.
  *
  * Resolves the WorkUnitSurfaceModel from the existing data layer, reused verbatim:
- *   - identity            — slug route context (`WorkUnitSlugRouteHost` owns URL sync)
+ *   - identity            — slug route context (`WorkUnitSlugRouteHost` owns URL sync);
+ *                           header labels come from configured department metadata only
  *   - work views          — department `work_views_v1` via `resolveActiveWorkViewRuntimeContext`
- *   - queue counts        — GET /api/admin/work-units/{id}/queues (QueueSummary)
- *   - queue rows          — GET /api/admin/queues/{id}/{queueKey} (work-view filters server-side)
+ *   - queue rows + counts — GET /api/admin/queues/{id}/{queueKey}?work_view_id=… — ONE
+ *                           evaluation path: the active pill count is the `total` of the same
+ *                           response that renders the rows; inactive pills fetch their own
+ *                           totals (limit=1) from the same route. Lane summaries only size
+ *                           the rows fetch — never a displayed count.
  *   - operational answers — OIP warm cache scoped to the work unit
  *   - Focus Panel open    — `useAdminDrawer().openDrawer` (in-page; queue stays mounted)
  *
@@ -23,8 +27,14 @@ import { useWorkUnitSlugRouteOptional } from "@/contexts/WorkUnitSlugRouteContex
 import { useWorkspaceSiteFilter } from "@/contexts/WorkspaceSiteFilterContext";
 import {
     resolveActiveWorkViewRuntimeContext,
+    resolveWorkViewBaseQueueKey,
     savedWorkViewsFromDepartmentMetadata,
 } from "@/lib/lifecycle/resolveWorkViewRuntimeContext";
+import {
+    activeLifecycleProcess,
+    lifecycleBuilderFromDepartmentMetadata,
+} from "@/lib/lifecycle/lifecycleBuilderConfig";
+import type { WorkViewConfigV1Stored } from "@/lib/lifecycle/workViewsConfigV1";
 import { tryLoadWorkUnitQueueDefinitionBundle } from "@/lib/config/queueDefinitionV2Runtime";
 import { getQueueUiConfig } from "@/lib/ui-v2/queueUiConfig";
 import { findAllRecordsQueueKey } from "@/lib/workspace/workUnitQueueDerived";
@@ -37,6 +47,7 @@ import type { QueueItemsResult, QueueSummary } from "@/lib/queues/types";
 import { useOperationalAnswers } from "./useOperationalAnswers";
 import {
     queueRowModelsFromQueueItemsResult,
+    queueTotalCountFromQueueItemsResult,
     workViewLinkModelsFromConfiguredViews,
     type QueueRowModel,
     type WorkUnitSurfaceIntents,
@@ -45,6 +56,39 @@ import {
 
 /** Drawer open provenance for Focus Panel opens from the presentation runtime queue. */
 const PRESENTATION_RUNTIME_QUEUE_ROW_OPEN_SOURCE = "presentation_runtime_queue_row";
+
+/**
+ * Validate a Work View's base lane against THIS work unit's queue definition. A department's
+ * Work Views can bind lanes that exist on sibling work units; when the lane is absent here,
+ * fall back to this unit's all-records lane — the server still applies the view's predicates
+ * via `work_view_id`.
+ */
+function validatedBaseQueueKeyForUnit(base: string | null, queueDefinition: unknown): string | null {
+    const bundle = queueDefinition != null ? tryLoadWorkUnitQueueDefinitionBundle(queueDefinition) : null;
+    if (!bundle) return base;
+    if (base && bundle.def.queues.some((q) => q.key === base)) return base;
+    return findAllRecordsQueueKey(bundle.def, getQueueUiConfig(bundle.def)) ?? base;
+}
+
+/** Rows-API route for a Work View count/rows fetch — the ONE evaluation path for queue numbers. */
+function queueRowsRouteForView(args: {
+    workUnitId: string;
+    baseQueueKey: string;
+    workViewId: string | null;
+    limit: number;
+    selectedSiteId: string | null;
+}): string {
+    const qs = new URLSearchParams({
+        limit: String(args.limit),
+        offset: "0",
+        count_mode: "exact",
+    });
+    if (args.workViewId) qs.set("work_view_id", args.workViewId);
+    return appendWorkspaceSiteToUrl(
+        `/api/admin/queues/${encodeURIComponent(args.workUnitId)}/${encodeURIComponent(args.baseQueueKey)}?${qs.toString()}`,
+        args.selectedSiteId,
+    );
+}
 
 export type WorkUnitSurfaceRuntime = {
     model: WorkUnitSurfaceModel;
@@ -94,23 +138,31 @@ export function useWorkUnitSurfaceRuntime(): WorkUnitSurfaceRuntime {
         };
     }, [departmentId, workUnitId]);
 
-    // Active Work View is in-page state; null = resolver default (first visible view).
+    // Active Work View is in-page state; before any user pill selection the route decides:
+    // a work-view slug (`/workspace/work-unit/active-pipeline`) seeds `initialWorkViewId`,
+    // a lane slug seeds `initialQueueKey`. null = resolver default (first visible view).
     const [selectedWorkViewId, setSelectedWorkViewId] = useState<string | null>(null);
+    const routeWorkViewId = slugRoute?.initialWorkViewId ?? null;
+    const activeWorkViewIdInput = selectedWorkViewId ?? routeWorkViewId;
 
     const runtimeCtx = useMemo(
         () =>
             resolveActiveWorkViewRuntimeContext({
                 departmentMetadata: deptMetadata,
-                workViewId: selectedWorkViewId,
-                queueKey: selectedWorkViewId ? null : slugRoute?.initialQueueKey ?? null,
+                workViewId: activeWorkViewIdInput,
+                queueKey: activeWorkViewIdInput ? null : slugRoute?.initialQueueKey ?? null,
                 queueDefinition,
             }),
-        [deptMetadata, selectedWorkViewId, slugRoute?.initialQueueKey, queueDefinition],
+        [deptMetadata, activeWorkViewIdInput, slugRoute?.initialQueueKey, queueDefinition],
     );
 
     const savedViews = useMemo(() => savedWorkViewsFromDepartmentMetadata(deptMetadata), [deptMetadata]);
 
-    // ── Queue counts: work-unit queue summaries (QueueSummary.count is THE count model) ──
+    // ── Queue lane summaries: FETCH-SIZING HEURISTIC ONLY (never a pill/badge count) ──────
+    // Pill counts and `queue.totalCount` come from the queue rows API (`work_view_id`
+    // predicate path) — the same evaluation that renders the rows. Lane summaries evaluate
+    // lanes (`compat_queue_key`), a DIFFERENT path that disagrees with view predicates; they
+    // are kept only to size the rows fetch so the loaded page covers the lane.
     const [summaries, setSummaries] = useState<QueueSummary[] | null>(null);
     const summariesRequestSeq = useRef(0);
 
@@ -144,16 +196,10 @@ export function useWorkUnitSurfaceRuntime(): WorkUnitSurfaceRuntime {
     const [queueError, setQueueError] = useState<string | null>(null);
     const queueRequestSeq = useRef(0);
 
-    // A department's Work Views can bind lanes that exist on sibling work units. Validate the
-    // resolved base lane against THIS work unit's queue definition; when absent, fall back to
-    // its all-records lane — the server still applies the view's predicates via `work_view_id`.
-    const fetchQueueKey = useMemo(() => {
-        const base = runtimeCtx.queueKey;
-        const bundle = queueDefinition != null ? tryLoadWorkUnitQueueDefinitionBundle(queueDefinition) : null;
-        if (!bundle) return base;
-        if (base && bundle.def.queues.some((q) => q.key === base)) return base;
-        return findAllRecordsQueueKey(bundle.def, getQueueUiConfig(bundle.def)) ?? base;
-    }, [runtimeCtx.queueKey, queueDefinition]);
+    const fetchQueueKey = useMemo(
+        () => validatedBaseQueueKeyForUnit(runtimeCtx.queueKey, queueDefinition),
+        [runtimeCtx.queueKey, queueDefinition],
+    );
     const summaryForLane = useMemo(
         () => summaries?.find((s) => s.key === fetchQueueKey || s.resolved_queue_key === fetchQueueKey) ?? null,
         [summaries, fetchQueueKey],
@@ -171,16 +217,13 @@ export function useWorkUnitSurfaceRuntime(): WorkUnitSurfaceRuntime {
         const seq = ++queueRequestSeq.current;
         setQueueLoading(true);
         setQueueError(null);
-        const qs = new URLSearchParams({
-            limit: String(fetchLimit),
-            offset: "0",
-            count_mode: "exact",
-        });
-        if (runtimeCtx.workViewId) qs.set("work_view_id", runtimeCtx.workViewId);
-        const route = appendWorkspaceSiteToUrl(
-            `/api/admin/queues/${encodeURIComponent(workUnitId)}/${encodeURIComponent(fetchQueueKey)}?${qs.toString()}`,
+        const route = queueRowsRouteForView({
+            workUnitId,
+            baseQueueKey: fetchQueueKey,
+            workViewId: runtimeCtx.workViewId,
+            limit: fetchLimit,
             selectedSiteId,
-        );
+        });
         void dedupeAdminFetch(route, workspaceDataFetchInit())
             .then(async (res) => {
                 const json = (await res.json().catch(() => ({}))) as { error?: string };
@@ -204,26 +247,70 @@ export function useWorkUnitSurfaceRuntime(): WorkUnitSurfaceRuntime {
         [queueResult],
     );
 
-    const totalCount = useMemo(() => {
-        if (queueResult && !queueResult.total_omitted) return queueResult.total;
-        return settledLaneCount ?? null;
-    }, [queueResult, settledLaneCount]);
+    // THE count model: the `total` of the same rows response that renders the queue.
+    const totalCount = useMemo(() => queueTotalCountFromQueueItemsResult(queueResult), [queueResult]);
+
+    // ── Per-view counts: SAME evaluation path as the rendered rows ──────────────────────
+    // Every visible view's count comes from the queue rows API with that view's
+    // `work_view_id` (limit=1, count_mode=exact) — never from lane summaries, which
+    // evaluate lanes instead of view predicates (the root cause of swapped pill counts).
+    const [viewCounts, setViewCounts] = useState<Record<string, number>>({});
+    const viewCountsSeq = useRef(0);
+
+    useEffect(() => {
+        if (!workUnitId || !configSettled) return;
+        const seq = ++viewCountsSeq.current;
+        setViewCounts({}); // identity/config/site changed — stale counts must not linger
+        const views = savedViews.filter((view) => view.visible_in_runtime !== false);
+        if (!views.length) return;
+
+        const countForViewFetch = async (view: WorkViewConfigV1Stored): Promise<readonly [string, number | null]> => {
+            const baseQueueKey = validatedBaseQueueKeyForUnit(
+                resolveWorkViewBaseQueueKey(view, null, queueDefinition),
+                queueDefinition,
+            );
+            if (!baseQueueKey) return [view.id, null] as const;
+            const route = queueRowsRouteForView({
+                workUnitId,
+                baseQueueKey,
+                workViewId: view.id,
+                limit: 1,
+                selectedSiteId,
+            });
+            try {
+                const res = await dedupeAdminFetch(route, workspaceDataFetchInit());
+                if (!res.ok) return [view.id, null] as const;
+                const json = (await res.json().catch(() => null)) as QueueItemsResult | null;
+                return [view.id, queueTotalCountFromQueueItemsResult(json)] as const;
+            } catch {
+                return [view.id, null] as const;
+            }
+        };
+
+        void Promise.all(views.map(countForViewFetch)).then((entries) => {
+            // Stale-response guard: only the latest request generation may apply.
+            if (seq !== viewCountsSeq.current) return;
+            const next: Record<string, number> = {};
+            for (const [id, count] of entries) {
+                if (typeof count === "number") next[id] = count;
+            }
+            setViewCounts(next);
+        });
+    }, [workUnitId, configSettled, savedViews, queueDefinition, selectedSiteId]);
 
     // ── Work View pills: same configured views the Workspace tile lists ─────────────────
+    // Invariant: the ACTIVE view's count IS `queue.totalCount` (same rows response); inactive
+    // views use their own rows-API totals. null while loading → no badge (never a wrong badge).
     const workViews = useMemo(
         () =>
             workViewLinkModelsFromConfiguredViews(savedViews, {
                 activeWorkViewId: runtimeCtx.workViewId,
                 countForView: (view) => {
-                    const laneKey = view.compat_queue_key?.trim();
-                    if (!laneKey || !summaries) return null;
-                    const summary = summaries.find((s) => s.key === laneKey || s.resolved_queue_key === laneKey);
-                    // Deferred counts are placeholder zeros (`summary_mode=initial`) — no badge beats a wrong badge.
-                    if (!summary || summary.counts_deferred) return null;
-                    return typeof summary.count === "number" ? summary.count : null;
+                    if (view.id === runtimeCtx.workViewId) return totalCount;
+                    return viewCounts[view.id] ?? null;
                 },
             }),
-        [savedViews, runtimeCtx.workViewId, summaries],
+        [savedViews, runtimeCtx.workViewId, totalCount, viewCounts],
     );
 
     // ── Operational answers: OIP warm cache scoped to the work unit ─────────────────────
@@ -294,12 +381,25 @@ export function useWorkUnitSurfaceRuntime(): WorkUnitSurfaceRuntime {
         openRecord,
     ]);
 
+    // ── Header identity: configured labels ONLY (no internal keys, no humanized slugs) ──
+    // Title = the configured lifecycle process label from department metadata; department
+    // name is the fallback while metadata loads / when no process is configured. Subtitle =
+    // the ACTIVE configured Work View's label. Work-unit `name` never surfaces (internal
+    // structure name, e.g. "Enrollment Pipeline").
+    const processLabel = useMemo(() => {
+        const configured = activeLifecycleProcess(
+            lifecycleBuilderFromDepartmentMetadata(deptMetadata),
+        )?.name?.trim();
+        return configured || slugRoute?.departmentName || null;
+    }, [deptMetadata, slugRoute?.departmentName]);
+    const workViewLabel = runtimeCtx.workView?.label?.trim() || null;
+
     // ── Resolved model ───────────────────────────────────────────────────────────────────
     const model = useMemo<WorkUnitSurfaceModel>(
         () => ({
             header: {
-                processLabel: slugRoute?.departmentName ?? null,
-                workUnitName: slugRoute?.workUnitName ?? "",
+                processLabel,
+                workViewLabel,
             },
             answers,
             workViews,
@@ -315,6 +415,8 @@ export function useWorkUnitSurfaceRuntime(): WorkUnitSurfaceRuntime {
         }),
         [
             slugRoute,
+            processLabel,
+            workViewLabel,
             answers,
             workViews,
             rows,

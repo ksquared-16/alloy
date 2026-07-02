@@ -5,7 +5,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
     clearWorkUnitSlugInflightForTests,
-    humanizeWorkUnitRouteSlug,
     parseOperatorWorkUnitEntryHref,
     warmDefaultOperatorLifecycleEntries,
     warmOperatorWorkUnitEntryFromHref,
@@ -44,8 +43,9 @@ describe("platform surface perf stabilization pass 2", () => {
         expect(parseOperatorWorkUnitEntryHref("/workspace/work-unit/new-leads").workUnitSlug).toBe("new-leads");
     });
 
-    it("humanizes route slug for cold-shell title", () => {
-        expect(humanizeWorkUnitRouteSlug("new-leads")).toBe("New Leads");
+    it("cold-shell title never fabricates a label from the URL slug (configured names only)", () => {
+        const host = read("components/admin/workspace/WorkUnitSlugRouteHost.tsx");
+        expect(host).not.toContain("humanizeWorkUnitRouteSlug");
     });
 
     it("warmWorkUnitSlugRoute dedupes inflight slug fetches", async () => {
@@ -76,10 +76,12 @@ describe("platform surface perf stabilization pass 2", () => {
         putWorkUnitSlugRouteCache("new-leads", {
             routeSlug: "new-leads",
             departmentId: "dept-1",
+            departmentName: null,
             workUnitId: "wu-1",
             workUnitKey: "new_leads",
             workUnitName: "New Leads",
             initialQueueKey: "inbox",
+            initialWorkViewId: null,
         });
 
         warmOperatorWorkUnitEntryFromHref("/workspace/work-unit/new-leads", null, "test");
@@ -99,10 +101,12 @@ describe("platform surface perf stabilization pass 2", () => {
         putWorkUnitSlugRouteCache("new-leads", {
             routeSlug: "new-leads",
             departmentId: "dept-1",
+            departmentName: null,
             workUnitId: "wu-1",
             workUnitKey: "new_leads",
             workUnitName: "New Leads",
             initialQueueKey: "inbox",
+            initialWorkViewId: null,
         });
 
         warmDefaultOperatorLifecycleEntries(

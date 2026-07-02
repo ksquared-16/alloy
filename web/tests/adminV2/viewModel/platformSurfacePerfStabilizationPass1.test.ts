@@ -106,10 +106,12 @@ describe("platform surface perf stabilization pass 1", () => {
         putWorkUnitSlugRouteCache("new-leads", {
             routeSlug: "new-leads",
             departmentId: "dept-1",
+            departmentName: null,
             workUnitId: "wu-1",
             workUnitKey: "new_leads",
             workUnitName: "New Leads",
             initialQueueKey: "inbox",
+            initialWorkViewId: null,
         });
 
         expect(peekWorkUnitSlugRouteCache("new-leads")?.workUnitId).toBe("wu-1");
