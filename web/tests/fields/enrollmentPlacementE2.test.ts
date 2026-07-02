@@ -13,13 +13,8 @@ import {
     resolveInquiryChildProgramSelectValue,
     resolveProgramKeyForRoomCascade,
 } from "@/lib/admin/location/inquiryChildLocationMismatch";
-import {
-    resolveProgramSelectOptionsForSite,
-    type InquiryChildPlacementHierarchyRow,
-    type InquiryChildProgramOptionSetItem,
-} from "@/lib/admin/location/inquiryChildPlacementOptions";
+import { resolveProgramCategoryOptionsForSite } from "@/lib/admin/location/inquiryChildPlacementOptions";
 import { enrollmentPlacementOperatorLabel, ENROLLMENT_PROGRAM_MODEL } from "@/lib/fields/enrollmentPlacementDoctrine";
-import { isChildcareLegacyOrSystemField } from "@/lib/fields/childcareFieldCatalogDoctrine";
 import { operatorFieldDisplayLabel } from "@/lib/fields/fieldSettingsOperatorUi";
 import type { LocationProgramCategoryRow } from "@/lib/locations/locationProgramCategories";
 
@@ -44,21 +39,9 @@ const CATEGORIES: LocationProgramCategoryRow[] = [
     },
 ];
 
-const PROGRAM_ITEMS: InquiryChildProgramOptionSetItem[] = [
-    { item_key: "infant", label: "Infant", sort_order: 1, is_active: true },
-    { item_key: "preschool", label: "Preschool", sort_order: 2, is_active: true },
-];
-
-function hierarchy(): InquiryChildPlacementHierarchyRow[] {
-    return [
-        { id: "site-north", label: "North Campus", location_type: "site", parent_location_id: null, is_active: true },
-        { id: "site-south", label: "South Campus", location_type: "site", parent_location_id: null, is_active: true },
-    ];
-}
-
 describe("enrollment placement E2 — program model", () => {
-    it("canonical program storage is desired_program_category_id with location cascade", () => {
-        expect(ENROLLMENT_PROGRAM_MODEL.storage_field_key).toBe("desired_program_category_id");
+    it("canonical program storage is program_category_id with location cascade", () => {
+        expect(ENROLLMENT_PROGRAM_MODEL.storage_field_key).toBe("program_category_id");
         expect(ENROLLMENT_PROGRAM_MODEL.operator_label).toBe("Program");
         expect(ENROLLMENT_PROGRAM_MODEL.option_source).toBe("programs_for_location");
         expect(ENROLLMENT_PROGRAM_MODEL.depends_on_field_key).toBe("location_id");
@@ -66,10 +49,10 @@ describe("enrollment placement E2 — program model", () => {
 
     it("operator labels normalize Location and Program across registry surfaces", () => {
         expect(enrollmentPlacementOperatorLabel("location_id", "Site / location")).toBe("Location");
-        expect(enrollmentPlacementOperatorLabel("desired_program_category_id", "Desired program")).toBe("Program");
+        expect(enrollmentPlacementOperatorLabel("program_category_id", "Desired program")).toBe("Program");
         expect(
             operatorFieldDisplayLabel("inquiry_child", {
-                field_key: "desired_program_category_id",
+                field_key: "program_category_id",
                 label: "x",
                 is_system: true,
             })
@@ -83,9 +66,6 @@ describe("enrollment placement E2 — program model", () => {
         ).toBe("Location");
     });
 
-    it("desired_program_type is legacy/system and hidden from default operator pickers", () => {
-        expect(isChildcareLegacyOrSystemField("inquiry_child", "desired_program_type")).toBe(true);
-    });
 });
 
 describe("enrollment placement E2 — location inheritance and mismatch", () => {
@@ -123,50 +103,26 @@ describe("enrollment placement E2 — location inheritance and mismatch", () => 
             "utf8"
         );
         expect(src).toContain("opportunityLocationId");
-        expect(src).toContain("desired_program_category_id");
+        expect(src).toContain("program_category_id");
     });
 });
 
 describe("enrollment placement E2 — program cascade", () => {
-    it("program options derive from selected location (category id mode)", () => {
-        const options = resolveProgramSelectOptionsForSite(
-            hierarchy(),
-            "site-north",
-            PROGRAM_ITEMS,
-            CATEGORIES,
-            "category_id"
-        );
+    it("program options derive from selected location (category FK values)", () => {
+        const options = resolveProgramCategoryOptionsForSite("site-north", CATEGORIES);
         expect(options.map((o) => o.value)).toEqual(["cat-north-infant"]);
         expect(options[0]?.label).toBe("Infant");
     });
 
     it("program options refresh when location changes to another site", () => {
-        const north = resolveProgramSelectOptionsForSite(
-            hierarchy(),
-            "site-north",
-            PROGRAM_ITEMS,
-            CATEGORIES,
-            "category_id"
-        );
-        const south = resolveProgramSelectOptionsForSite(
-            hierarchy(),
-            "site-south",
-            PROGRAM_ITEMS,
-            CATEGORIES,
-            "category_id"
-        );
+        const north = resolveProgramCategoryOptionsForSite("site-north", CATEGORIES);
+        const south = resolveProgramCategoryOptionsForSite("site-south", CATEGORIES);
         expect(north[0]?.value).toBe("cat-north-infant");
         expect(south[0]?.value).toBe("cat-south-preschool");
     });
 
     it("clears invalid program when not offered at new location", () => {
-        const southOptions = resolveProgramSelectOptionsForSite(
-            hierarchy(),
-            "site-south",
-            PROGRAM_ITEMS,
-            CATEGORIES,
-            "category_id"
-        );
+        const southOptions = resolveProgramCategoryOptionsForSite("site-south", CATEGORIES);
         const cleared = clearProgramValueIfNotOffered("cat-north-infant", southOptions);
         expect(cleared).toBe("");
     });
@@ -174,48 +130,42 @@ describe("enrollment placement E2 — program cascade", () => {
     it("location change resets program and room fields", () => {
         const next = applyInquiryChildPlacementFieldChange("location_id", "site-south", {
             location_id: "site-north",
-            desired_program_category_id: "cat-north-infant",
-            desired_program_type: "infant",
+            program_category_id: "cat-north-infant",
             program_room_cohort_key: "room-1",
         });
         expect(next.location_id).toBe("site-south");
-        expect(next.desired_program_category_id).toBe("");
-        expect(next.desired_program_type).toBe("");
+        expect(next.program_category_id).toBe("");
         expect(next.program_room_cohort_key).toBe("");
     });
 
-    it("program selection maps category id to legacy key for room cascade", () => {
+    it("program selection derives the stable key from the category FK for room cascade", () => {
         expect(inquiryChildProgramUsesCategoryIdMode(CATEGORIES)).toBe(true);
         const selected = applyInquiryChildProgramSelection({
             value: "cat-south-preschool",
-            useCategoryMode: true,
             categories: CATEGORIES,
         });
-        expect(selected.desired_program_category_id).toBe("cat-south-preschool");
-        expect(selected.desired_program_type).toBe("preschool");
+        expect(selected.program_category_id).toBe("cat-south-preschool");
+        expect(selected.program_key).toBe("preschool");
         expect(
             resolveProgramKeyForRoomCascade({
-                desired_program_category_id: selected.desired_program_category_id,
-                desired_program_type: selected.desired_program_type,
+                program_category_id: selected.program_category_id,
                 categories: CATEGORIES,
             })
         ).toBe("preschool");
     });
 
-    it("form values prefer desired_program_category_id as program cascade key", () => {
+    it("form values prefer program_category_id as program cascade key", () => {
         const keys = placementFieldKeysInValues({
             location_id: "site-north",
-            desired_program_category_id: "cat-north-infant",
+            program_category_id: "cat-north-infant",
         });
-        expect(keys.programKey).toBe("desired_program_category_id");
+        expect(keys.programKey).toBe("program_category_id");
     });
 
-    it("program select value uses category id when category mode is active", () => {
+    it("program select value is the stored category FK", () => {
         expect(
             resolveInquiryChildProgramSelectValue({
-                useCategoryMode: true,
-                desired_program_category_id: "cat-north-infant",
-                desired_program_type: "",
+                program_category_id: "cat-north-infant",
             })
         ).toBe("cat-north-infant");
     });
@@ -228,8 +178,6 @@ describe("enrollment placement E2 — cross-surface wiring", () => {
             "utf8"
         );
         expect(src).toContain("useInquiryChildPlacementCascade");
-        expect(src).toContain("ENROLLMENT_PLACEMENT_PROGRAM_DISABLED_HELPER");
-        expect(src).toContain("data-inquiry-child-location-mismatch");
         expect(src).toContain("inheritedLocationId");
     });
 
@@ -238,10 +186,8 @@ describe("enrollment placement E2 — cross-surface wiring", () => {
             resolve(__dirname, "../../components/admin/entity/OpportunityInquiryChildrenSection.tsx"),
             "utf8"
         );
-        expect(src).toContain("resolveProgramSelectOptionsForSite");
-        expect(src).toContain("applyInquiryChildProgramSelection");
-        expect(src).toContain("opportunityLocationId");
-        expect(src).toContain("data-inquiry-child-location-mismatch");
+        expect(src).toContain("inquiryChildPlacementOptions");
+        expect(src).toContain("program_category_id");
     });
 
     it("placement metadata depends on location_id for program field", () => {

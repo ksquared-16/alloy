@@ -21,7 +21,8 @@ function formatRateLabel(rateCents: number, billingPeriod: TuitionBillingPeriod)
  * GET /api/admin/financial-config/opportunity/[id]
  *
  * Returns per-child tuition rate resolutions for the given opportunity.
- * Matches each child's desired_program_type + desired_schedule_type against
+ * Matches each child's program key (derived from the program_category_id FK →
+ * location_program_categories.key) + schedule_type against
  * commercial_tuition_rates (org default, with location override when present).
  *
  * Used by the Financial Configuration card expanded overlay.
@@ -57,7 +58,7 @@ export async function GET(
     const { data: ocmRows, error: ocmError } = await supabase
         .from("opportunity_customer_members")
         .select(
-            "id, customer_member_id, desired_program_type, desired_schedule_type, location_id, customer_members(first_name, last_name)"
+            "id, customer_member_id, program_category_id, location_program_categories(key), schedule_type, location_id, customer_members(first_name, last_name)"
         )
         .eq("org_id", ctx.orgId)
         .eq("opportunity_id", opportunityId);
@@ -114,8 +115,10 @@ export async function GET(
         const childLabel =
             [firstName, lastName].filter(Boolean).join(" ").trim() || "Child";
 
-        const programKey = typeof r.desired_program_type === "string" ? r.desired_program_type : null;
-        const scheduleKey = typeof r.desired_schedule_type === "string" ? r.desired_schedule_type : null;
+        const category = r.location_program_categories as { key?: string | null } | null;
+        const programKey =
+            typeof category?.key === "string" && category.key.trim() ? category.key : null;
+        const scheduleKey = typeof r.schedule_type === "string" ? r.schedule_type : null;
         const locationId = typeof r.location_id === "string" ? r.location_id : null;
 
         const resolvedRate = resolveEnrollmentTuitionRate(

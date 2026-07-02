@@ -339,7 +339,7 @@ describe("buildLeadEnrollmentCardMetaPresentation", () => {
             {
                 "child.dob_age": "Jan 1, 2026 · 5m",
                 "child.program": "Infant Full Day",
-                "child.desired_start_date": "Aug 8, 2026",
+                "child.start_date": "Aug 8, 2026",
                 "child.schedule": "",
                 "child.room": "",
                 "child.location": "North Campus",
@@ -348,7 +348,7 @@ describe("buildLeadEnrollmentCardMetaPresentation", () => {
             [
                 { label: "DOB / Age", refKey: "child.dob_age", width: "medium" },
                 { label: "Program", refKey: "child.program", width: "medium" },
-                { label: "Desired start", refKey: "child.desired_start_date", width: "medium" },
+                { label: "Desired start", refKey: "child.start_date", width: "medium" },
                 { label: "Schedule", refKey: "child.schedule", width: "medium" },
                 { label: "Classroom", refKey: "child.room", width: "medium" },
                 { label: "Location", refKey: "child.location", width: "medium" },

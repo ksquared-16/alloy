@@ -17,16 +17,16 @@ import type { TaskAssistEntitySearchCandidate } from "@/lib/agent/taskAssist/tas
 const WEB_ROOT = join(process.cwd());
 
 describe("lifecycleRuntimeUxPolish", () => {
-    it("standard lifecycle rows include desired_start_date and tour_date when present in field list", () => {
+    it("standard lifecycle rows include start_date and tour_date when present in field list", () => {
         const fields = lifecycleStageQueueRowPreviewFields("lead");
-        expect(fields).toContain("desired_start_date");
+        expect(fields).toContain("start_date");
         expect(fields).toContain("tour_date");
     });
 
-    it("tour stage rows show tour_date before desired_start_date", () => {
+    it("tour stage rows show tour_date before start_date", () => {
         const fields = lifecycleStageQueueRowPreviewFields("tour");
         const tourIdx = fields.indexOf("tour_date");
-        const startIdx = fields.indexOf("desired_start_date");
+        const startIdx = fields.indexOf("start_date");
         expect(tourIdx).toBeGreaterThanOrEqual(0);
         expect(startIdx).toBeGreaterThan(tourIdx);
     });

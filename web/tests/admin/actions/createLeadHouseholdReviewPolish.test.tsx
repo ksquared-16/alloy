@@ -90,7 +90,7 @@ const HOUSEHOLD: IntakeHouseholdCandidate = {
     source: null,
     notes: null,
     program_interest: null,
-    desired_start_date: null,
+    start_date: null,
     relationships: [],
     unassigned_fact_ids: [],
     unmapped_facts: [],
@@ -241,7 +241,7 @@ describe("resolveCreateLeadPostCreateRecommendations", () => {
         child_first_name: "Mckenzie",
         child_last_name: "Wright",
         child_program: "prog-1",
-        child_desired_start_date: "2026-09-01",
+        child_start_date: "2026-09-01",
         location_id: "site-1",
     };
 
@@ -278,7 +278,7 @@ describe("ActionWorkspaceSuccessState configured recommendations", () => {
             child_first_name: "Mckenzie",
             location_id: "site-1",
             child_program: "prog-1",
-            child_desired_start_date: "2026-09-01",
+            child_start_date: "2026-09-01",
         };
         const recommendations = resolveCreateLeadPostCreateRecommendations(values, {
             availableActionKeys: ["schedule_tour"],

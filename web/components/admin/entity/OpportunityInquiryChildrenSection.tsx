@@ -32,9 +32,12 @@ import {
     type InquiryChildLocationHierarchyRow,
 } from "@/lib/admin/drawer/inquiryChildPlacementScope";
 import { applyInquiryChildPlacementFieldChange } from "@/lib/admin/location/inquiryChildPlacementFieldKeys";
-import { resolveProgramsOfferedForSite } from "@/lib/admin/location/inquiryChildPlacementOptions";
+import { resolveProgramSelectOptionsForSite } from "@/lib/admin/location/inquiryChildPlacementOptions";
 import { resolveProgramKeyForRoomCascade } from "@/lib/admin/location/inquiryChildLocationMismatch";
-import type { LocationProgramCategoryRow } from "@/lib/locations/locationProgramCategories";
+import {
+    findLocationProgramCategory,
+    type LocationProgramCategoryRow,
+} from "@/lib/locations/locationProgramCategories";
 import { loadWorkspaceChildcareInquiryOptionSets } from "@/lib/workspace/workspaceChildcareInquiryOptionSets";
 import { dedupeAdminFetchWithTtl } from "@/lib/workspace/workspaceAdminFetchDedupe";
 import { workspaceDataFetchInit } from "@/lib/workspace/workspaceDataFetch";
@@ -114,15 +117,16 @@ export type InquiryChildRow = {
     ocm_id?: string | null;
     dob: string | null;
     age: string | null;
-    desired_program_type: string | null;
-    desired_program_category_id?: string | null;
+    program_category_id?: string | null;
+    /** Stable program key derived from the category FK — display only, never persisted. */
+    program_key?: string | null;
     desired_program_label: string | null;
-    desired_schedule_type: string | null;
+    schedule_type: string | null;
     desired_schedule_label: string | null;
     outcome_status_key: string | null;
     outcome_status_label: string | null;
     notes: string | null;
-    desired_start_date?: string | null;
+    start_date?: string | null;
     location_id?: string | null;
     location_label?: string | null;
     program_room_cohort_key?: string | null;
@@ -141,8 +145,9 @@ type StatusRow = {
 type OcmLocalState = {
     location_id: string;
     program_room_cohort_key: string;
-    desired_program_type: string;
-    desired_schedule_type: string;
+    /** Program picker value = location_program_categories.id (the stored FK). */
+    program_category_id: string;
+    schedule_type: string;
     outcome_status_key: string;
     notes: string;
     desired_start_edit: string;
@@ -156,20 +161,20 @@ function normalizeKey(v: string | null | undefined): string {
 function ocmPlacementFieldMap(st: OcmLocalState): Record<string, string> {
     return {
         location_id: st.location_id,
-        desired_program_type: st.desired_program_type,
+        program_category_id: st.program_category_id,
         program_room_cohort_key: st.program_room_cohort_key,
     };
 }
 
 function applyOcmPlacementCascade(
-    fieldKey: "location_id" | "desired_program_type",
+    fieldKey: "location_id" | "program_category_id",
     value: string,
     st: OcmLocalState,
-): Pick<OcmLocalState, "location_id" | "desired_program_type" | "program_room_cohort_key"> {
+): Pick<OcmLocalState, "location_id" | "program_category_id" | "program_room_cohort_key"> {
     const next = applyInquiryChildPlacementFieldChange(fieldKey, value, ocmPlacementFieldMap(st));
     return {
         location_id: next.location_id ?? "",
-        desired_program_type: next.desired_program_type ?? "",
+        program_category_id: next.program_category_id ?? "",
         program_room_cohort_key: next.program_room_cohort_key ?? "",
     };
 }
@@ -194,15 +199,15 @@ function isWaitlistedInquiryOutcome(outcomeKey: string, outcomeLabel: string): b
 
 function inquiryChildRowAttention(args: {
     dob: string | null;
-    desiredProgramType: string;
-    desiredScheduleType: string;
+    programCategoryId: string;
+    scheduleType: string;
     outcomeKey: string;
     outcomeLabel: string;
 }): boolean {
-    const { dob, desiredProgramType, desiredScheduleType, outcomeKey, outcomeLabel } = args;
+    const { dob, programCategoryId, scheduleType, outcomeKey, outcomeLabel } = args;
     const missingDob = !normalizeKey(dob);
-    const missingProgram = !normalizeKey(desiredProgramType);
-    const missingSchedule = !normalizeKey(desiredScheduleType);
+    const missingProgram = !normalizeKey(programCategoryId);
+    const missingSchedule = !normalizeKey(scheduleType);
     const waitlisted = isWaitlistedInquiryOutcome(outcomeKey, outcomeLabel);
     const k = outcomeKey.toLowerCase();
     const l = outcomeLabel.toLowerCase();
@@ -297,7 +302,7 @@ export default function OpportunityInquiryChildrenSection({
     rows,
     canEdit,
     opportunityId,
-    opportunityDesiredStartDate = null,
+    opportunityStartDate = null,
     onOpenChild,
     opportunityRecord = {},
     opportunityWorkspaceContext = null,
@@ -320,7 +325,7 @@ export default function OpportunityInquiryChildrenSection({
     canEdit: boolean;
     opportunityId?: string;
     /** Household/inquiry-level desired start for inheritance display when child OCM value is null. */
-    opportunityDesiredStartDate?: string | null;
+    opportunityStartDate?: string | null;
     onOpenChild?: (row: Pick<InquiryChildRow, "person_id" | "customer_member_id" | "display_name">) => void;
     opportunityRecord?: Record<string, unknown>;
     opportunityWorkspaceContext?: { work_unit_id: string; department_id: string } | null;
@@ -379,8 +384,8 @@ export default function OpportunityInquiryChildrenSection({
             for (const r of rows) {
                 if (!r.id) continue;
                 const startDisplay = resolveInquiryChildDesiredStartDisplay(
-                    r.desired_start_date,
-                    opportunityDesiredStartDate
+                    r.start_date,
+                    opportunityStartDate
                 );
                 const custom: Record<string, string> = {};
                 for (const [k, v] of Object.entries(r.custom_fields ?? {})) {
@@ -391,8 +396,8 @@ export default function OpportunityInquiryChildrenSection({
                 next[r.id] = {
                     location_id: normalizeKey(r.location_id),
                     program_room_cohort_key: normalizeKey(r.program_room_cohort_key),
-                    desired_program_type: normalizeKey(r.desired_program_type),
-                    desired_schedule_type: normalizeKey(r.desired_schedule_type),
+                    program_category_id: normalizeKey(r.program_category_id),
+                    schedule_type: normalizeKey(r.schedule_type),
                     outcome_status_key: normalizeKey(r.outcome_status_key),
                     notes: (r.notes ?? "").toString(),
                     desired_start_edit: startDisplay.inputValue,
@@ -555,11 +560,11 @@ export default function OpportunityInquiryChildrenSection({
     }, [enrichmentFetchEnabled]);
 
     const showDesiredStartColumn = inquiryChildDrawerShowsDesiredStart(fieldDefs);
-    const desiredStartLabel = labelForInquiryChildFieldKey(fieldDefs, "desired_start_date", "Desired start");
+    const desiredStartLabel = labelForInquiryChildFieldKey(fieldDefs, "start_date", "Desired start");
     const locationLabel = labelForInquiryChildFieldKey(fieldDefs, "location_id", "Location");
-    const programLabel = labelForInquiryChildFieldKey(fieldDefs, "desired_program_type", "Program");
+    const programLabel = labelForInquiryChildFieldKey(fieldDefs, "program_category_id", "Program");
     const roomLabel = labelForInquiryChildFieldKey(fieldDefs, "program_room_cohort_key", "Room");
-    const scheduleLabel = labelForInquiryChildFieldKey(fieldDefs, "desired_schedule_type", "Schedule");
+    const scheduleLabel = labelForInquiryChildFieldKey(fieldDefs, "schedule_type", "Schedule");
     const statusLabel = labelForInquiryChildFieldKey(fieldDefs, "outcome_status_key", "Status");
 
     const childStatusMenuForRow = useCallback(
@@ -669,7 +674,7 @@ export default function OpportunityInquiryChildrenSection({
         await patchOpportunityCustomerMemberFromInquiryChild(ocmId, patch);
         const oppId = opportunityId?.trim() ?? "";
         const affectsWaitlist = Object.keys(patch).some((k) =>
-            ["location_id", "program_room_cohort_key", "desired_program_type", "outcome_status_key"].includes(k)
+            ["location_id", "program_room_cohort_key", "program_category_id", "outcome_status_key"].includes(k)
         );
         if (oppId && affectsWaitlist && typeof window !== "undefined") {
             window.dispatchEvent(
@@ -712,7 +717,7 @@ export default function OpportunityInquiryChildrenSection({
                 local: st,
                 identityDraft,
                 identityBaseline,
-                opportunityDesiredStartDate,
+                opportunityStartDate,
                 customFieldKeys,
             })
         ) {
@@ -751,7 +756,7 @@ export default function OpportunityInquiryChildrenSection({
             const ocmPatch = buildInquiryChildOcmPatchFromEditorLocal({
                 row,
                 local: st,
-                opportunityDesiredStartDate,
+                opportunityStartDate,
                 customFieldKeys,
             });
             if (Object.keys(ocmPatch).length > 0) {
@@ -770,10 +775,16 @@ export default function OpportunityInquiryChildrenSection({
                             first_name: identityDraft.first_name || row.first_name,
                             last_name: identityDraft.last_name || row.last_name,
                             dob: identityDraft.dob || row.dob,
-                            desired_program_type:
-                                st.desired_program_type || row.desired_program_type,
-                            desired_schedule_type:
-                                st.desired_schedule_type || row.desired_schedule_type,
+                            program_category_id:
+                                st.program_category_id || row.program_category_id,
+                            program_key:
+                                resolveProgramKeyForRoomCascade({
+                                    program_category_id:
+                                        st.program_category_id || normalizeKey(row.program_category_id),
+                                    categories: locationProgramCategories,
+                                }) ?? row.program_key,
+                            schedule_type:
+                                st.schedule_type || row.schedule_type,
                             program_room_cohort_key:
                                 st.program_room_cohort_key || row.program_room_cohort_key,
                             location_label:
@@ -797,7 +808,8 @@ export default function OpportunityInquiryChildrenSection({
         customDrawerDefs,
         local,
         identityLocal,
-        opportunityDesiredStartDate,
+        locationProgramCategories,
+        opportunityStartDate,
         opportunityId,
         onChildrenMutated,
         programLabelByKey,
@@ -812,8 +824,8 @@ export default function OpportunityInquiryChildrenSection({
             for (const r of rows) {
                 if (!r.id) continue;
                 const startDisplay = resolveInquiryChildDesiredStartDisplay(
-                    r.desired_start_date,
-                    opportunityDesiredStartDate
+                    r.start_date,
+                    opportunityStartDate
                 );
                 const custom: Record<string, string> = {};
                 for (const [k, v] of Object.entries(r.custom_fields ?? {})) {
@@ -824,8 +836,8 @@ export default function OpportunityInquiryChildrenSection({
                 next[r.id] = {
                     location_id: normalizeKey(r.location_id),
                     program_room_cohort_key: normalizeKey(r.program_room_cohort_key),
-                    desired_program_type: normalizeKey(r.desired_program_type),
-                    desired_schedule_type: normalizeKey(r.desired_schedule_type),
+                    program_category_id: normalizeKey(r.program_category_id),
+                    schedule_type: normalizeKey(r.schedule_type),
                     outcome_status_key: normalizeKey(r.outcome_status_key),
                     notes: (r.notes ?? "").toString(),
                     desired_start_edit: startDisplay.inputValue,
@@ -854,7 +866,7 @@ export default function OpportunityInquiryChildrenSection({
             }
             return next;
         });
-    }, [rows, opportunityDesiredStartDate]);
+    }, [rows, opportunityStartDate]);
 
     const inquiryChildrenSectionIsDirty = useCallback(() => {
         return rows.some((r) => {
@@ -866,11 +878,11 @@ export default function OpportunityInquiryChildrenSection({
                 local: st,
                 identityDraft,
                 identityBaseline: identityBaselineForRow(r),
-                opportunityDesiredStartDate,
+                opportunityStartDate,
                 customFieldKeys,
             });
         });
-    }, [rows, local, identityLocal, opportunityDesiredStartDate, customFieldKeys]);
+    }, [rows, local, identityLocal, opportunityStartDate, customFieldKeys]);
 
     const inquiryChildrenOptimisticSnapshotRef = useRef<{
         local: typeof local;
@@ -887,11 +899,11 @@ export default function OpportunityInquiryChildrenSection({
                 local: st,
                 identityDraft,
                 identityBaseline: identityBaselineForRow(r),
-                opportunityDesiredStartDate,
+                opportunityStartDate,
                 customFieldKeys,
             });
         });
-    }, [rows, local, identityLocal, opportunityDesiredStartDate, customFieldKeys]);
+    }, [rows, local, identityLocal, opportunityStartDate, customFieldKeys]);
 
     const applyInquiryChildrenOptimistic = useCallback(() => {
         const dirtyRows = dirtyInquiryChildRows();
@@ -917,8 +929,14 @@ export default function OpportunityInquiryChildrenSection({
                     first_name: identityDraft.first_name || row.first_name,
                     last_name: identityDraft.last_name || row.last_name,
                     dob: identityDraft.dob || row.dob,
-                    desired_program_type: st.desired_program_type || row.desired_program_type,
-                    desired_schedule_type: st.desired_schedule_type || row.desired_schedule_type,
+                    program_category_id: st.program_category_id || row.program_category_id,
+                    program_key:
+                        resolveProgramKeyForRoomCascade({
+                            program_category_id:
+                                st.program_category_id || normalizeKey(row.program_category_id),
+                            categories: locationProgramCategories,
+                        }) ?? row.program_key,
+                    schedule_type: st.schedule_type || row.schedule_type,
                     program_room_cohort_key: st.program_room_cohort_key || row.program_room_cohort_key,
                     location_label:
                         (st.location_id ? siteLabelById.get(st.location_id) : null) ?? row.location_label,
@@ -931,6 +949,7 @@ export default function OpportunityInquiryChildrenSection({
         dirtyInquiryChildRows,
         identityLocal,
         local,
+        locationProgramCategories,
         opportunityId,
         programLabelByKey,
         siteLabelById,
@@ -1141,14 +1160,14 @@ export default function OpportunityInquiryChildrenSection({
                             :   formatDate(r.dob)
                         :   ageLabel || "—";
                     const startFallback = resolveInquiryChildDesiredStartDisplay(
-                        r.desired_start_date,
-                        opportunityDesiredStartDate
+                        r.start_date,
+                        opportunityStartDate
                     );
                     const st: OcmLocalState = local[r.id] ?? {
                         location_id: normalizeKey(r.location_id),
                         program_room_cohort_key: normalizeKey(r.program_room_cohort_key),
-                        desired_program_type: normalizeKey(r.desired_program_type),
-                        desired_schedule_type: normalizeKey(r.desired_schedule_type),
+                        program_category_id: normalizeKey(r.program_category_id),
+                        schedule_type: normalizeKey(r.schedule_type),
                         outcome_status_key: normalizeKey(r.outcome_status_key),
                         notes: (r.notes ?? "").toString(),
                         desired_start_edit: startFallback.inputValue,
@@ -1160,8 +1179,8 @@ export default function OpportunityInquiryChildrenSection({
                         ),
                     };
                     const desiredStartInherited =
-                        !normalizeIsoDateOnly(r.desired_start_date) &&
-                        !!normalizeIsoDateOnly(opportunityDesiredStartDate);
+                        !normalizeIsoDateOnly(r.start_date) &&
+                        !!normalizeIsoDateOnly(opportunityStartDate);
                     const saving = !!savingById[r.id];
                     const rowCanEdit = canEdit && !isMetadataOnly;
                     const identity = identityLocal[r.id] ?? {
@@ -1177,22 +1196,24 @@ export default function OpportunityInquiryChildrenSection({
                             local: st,
                             identityDraft: identity,
                             identityBaseline,
-                            opportunityDesiredStartDate,
+                            opportunityStartDate,
                             customFieldKeys: customDrawerDefs.map((d) => d.field_key),
                         });
                     const displayName =
                         [identity.first_name, identity.last_name].filter(Boolean).join(" ").trim() || name;
                     const fallbackProgram =
                         resolveInquiryChildProgramCategoryLabel({
-                            desired_program_type:
-                                st.desired_program_type || normalizeKey(r.desired_program_type),
+                            program_category_id:
+                                st.program_category_id || normalizeKey(r.program_category_id),
+                            program_key: normalizeKey(r.program_key) || null,
                             desired_program_label: r.desired_program_label,
                             optionLabelLookup: programLabelByKey,
+                            locationProgramCategories,
                         }) ?? "—";
                     const fallbackSchedule =
                         (r.desired_schedule_label ?? "").trim() ||
-                        (st.desired_schedule_type
-                            ? (scheduleLabelByKey.get(st.desired_schedule_type) ?? st.desired_schedule_type)
+                        (st.schedule_type
+                            ? (scheduleLabelByKey.get(st.schedule_type) ?? st.schedule_type)
                             : "—");
                     const fallbackOutcome =
                         (r.outcome_status_label ?? "").trim() ||
@@ -1208,20 +1229,27 @@ export default function OpportunityInquiryChildrenSection({
                             ? (roomLabelByKey.get(st.program_room_cohort_key) ?? st.program_room_cohort_key)
                             : "—");
                     const programFieldsDisabled = isInquiryChildPlacementProgramFieldDisabled(st.location_id);
+                    // Option values are category ids — the stored OCM program_category_id FK.
                     const rowProgramOptions = placementSelectOptionsWithCurrent(
-                        resolveProgramsOfferedForSite(
+                        resolveProgramSelectOptionsForSite(
                             locationItems,
                             st.location_id,
                             programItems,
-                            locationProgramCategories
+                            locationProgramCategories,
+                            "category_id",
                         ),
-                        st.desired_program_type,
-                        (k) => programLabelByKey.get(k) ?? k,
+                        st.program_category_id,
+                        (categoryId) =>
+                            findLocationProgramCategory({
+                                categories: locationProgramCategories,
+                                categoryId,
+                                includeInactive: true,
+                            })?.label ?? categoryId,
                     );
                     const programFilterKey =
                         resolveProgramKeyForRoomCascade({
-                            desired_program_category_id: r.desired_program_category_id ?? "",
-                            desired_program_type: st.desired_program_type || normalizeKey(r.desired_program_type),
+                            program_category_id:
+                                st.program_category_id || normalizeKey(r.program_category_id),
                             categories: locationProgramCategories,
                         }) ?? undefined;
                     const rowRoomOptions = placementSelectOptionsWithCurrent(
@@ -1239,8 +1267,8 @@ export default function OpportunityInquiryChildrenSection({
                     });
                     const attention = inquiryChildRowAttention({
                         dob: r.dob,
-                        desiredProgramType: st.desired_program_type || normalizeKey(r.desired_program_type),
-                        desiredScheduleType: st.desired_schedule_type || normalizeKey(r.desired_schedule_type),
+                        programCategoryId: st.program_category_id || normalizeKey(r.program_category_id),
+                        scheduleType: st.schedule_type || normalizeKey(r.schedule_type),
                         outcomeKey: st.outcome_status_key,
                         outcomeLabel: fallbackOutcome,
                     });
@@ -1378,7 +1406,7 @@ export default function OpportunityInquiryChildrenSection({
                                     )}
                                 </div>
                                 {showDesiredStartColumn ? (
-                                    <div className={INQUIRY_CHILD_CELL} data-inquiry-field="desired_start_date">
+                                    <div className={INQUIRY_CHILD_CELL} data-inquiry-field="start_date">
                                         <div className={INQUIRY_CHILD_MOBILE_LABEL}>
                                             {desiredStartLabel}
                                         </div>
@@ -1512,12 +1540,12 @@ export default function OpportunityInquiryChildrenSection({
                                     <div className={INQUIRY_CHILD_MOBILE_LABEL}>{programLabel}</div>
                                     {rowCanEdit ? (
                                         <select
-                                            value={st.desired_program_type}
+                                            value={st.program_category_id}
                                             disabled={saving || programFieldsDisabled}
                                             title={programFieldsDisabled ? INQUIRY_CHILD_PLACEMENT_SCOPE_LIMITATION : undefined}
                                             onChange={(e) => {
                                                 const placement = applyOcmPlacementCascade(
-                                                    "desired_program_type",
+                                                    "program_category_id",
                                                     e.target.value,
                                                     st,
                                                 );
@@ -1576,15 +1604,15 @@ export default function OpportunityInquiryChildrenSection({
                                         <span className={readOnlyText}>{fallbackCohort}</span>
                                     )}
                                 </div>
-                                <div className={INQUIRY_CHILD_CELL} data-inquiry-field="desired_schedule_type">
+                                <div className={INQUIRY_CHILD_CELL} data-inquiry-field="schedule_type">
                                     <div className={INQUIRY_CHILD_MOBILE_LABEL}>{scheduleLabel}</div>
                                     {rowCanEdit ? (
                                         <select
-                                            value={st.desired_schedule_type}
+                                            value={st.schedule_type}
                                             disabled={saving}
                                             onChange={(e) => {
                                                 const v = e.target.value;
-                                                setLocal((p) => ({ ...p, [r.id]: { ...st, desired_schedule_type: v } }));
+                                                setLocal((p) => ({ ...p, [r.id]: { ...st, schedule_type: v } }));
                                             }}
                                             className={fieldSelect}
                                             aria-label={`${scheduleLabel} for ${displayName}`}

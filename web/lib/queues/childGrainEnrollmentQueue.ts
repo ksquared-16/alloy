@@ -113,13 +113,27 @@ export type ChildGrainOcmQueryRow = {
     opportunity_id: string;
     customer_member_id: string;
     outcome_status_key: string | null;
-    desired_program_type: string | null;
-    desired_schedule_type: string | null;
+    program_category_id: string | null;
+    /** Embedded program category (OCM program_category_id FK → location_program_categories). */
+    location_program_categories?:
+        | { key?: string | null; label?: string | null }
+        | Array<{ key?: string | null; label?: string | null }>
+        | null;
+    schedule_type: string | null;
     updated_at: string | null;
     created_at: string | null;
     opportunities: OpportunityPreview | OpportunityPreview[];
     customer_members: CustomerMemberPreview | CustomerMemberPreview[] | null;
 };
+
+/** Canonical program key (location_program_categories.key) for a child-grain OCM row. */
+export function programKeyFromChildGrainOcmRow(row: ChildGrainOcmQueryRow): string | null {
+    const cat = Array.isArray(row.location_program_categories)
+        ? (row.location_program_categories[0] ?? null)
+        : (row.location_program_categories ?? null);
+    const key = typeof cat?.key === "string" ? cat.key.trim() : "";
+    return key || null;
+}
 
 function readJoinedSingle<T extends { id?: string }>(value: T | T[] | null | undefined): T | null {
     if (value == null) return null;
@@ -149,7 +163,7 @@ function readCustomerMemberDisplayName(cm: CustomerMemberPreview | null): string
 }
 
 function programLineFromOcm(row: ChildGrainOcmQueryRow): string | null {
-    const parts = [row.desired_program_type?.trim(), row.desired_schedule_type?.trim()].filter(Boolean);
+    const parts = [programKeyFromChildGrainOcmRow(row), row.schedule_type?.trim()].filter(Boolean);
     return parts.length ? parts.join(" · ") : null;
 }
 
@@ -177,7 +191,7 @@ async function queryEnrollmentOffersOcmRows(params: {
     let q = params.supabase
         .from("opportunity_customer_members")
         .select(
-            `id, org_id, opportunity_id, customer_member_id, outcome_status_key, desired_program_type, desired_schedule_type, updated_at, created_at,
+            `id, org_id, opportunity_id, customer_member_id, outcome_status_key, program_category_id, location_program_categories(key, label), schedule_type, updated_at, created_at,
             opportunities!inner (
                 id, name, title, status_key, customer_id, primary_person_id, primary_contact_id, work_unit_id, location_id, metadata, created_at, updated_at
             ),

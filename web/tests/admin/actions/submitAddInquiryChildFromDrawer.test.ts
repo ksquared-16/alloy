@@ -72,11 +72,11 @@ describe("submitAddInquiryChildFromDrawer", () => {
                 first_name: "Sam",
                 last_name: "Lee",
                 date_of_birth: "2020-05-01",
-                program: "infant",
+                program_category_id: "33333333-3333-4333-8333-333333333333",
                 location_id: "11111111-1111-4111-8111-111111111111",
                 program_room_cohort_key: "22222222-2222-4222-8222-222222222222",
-                desired_schedule_type: "full_day",
-                desired_start_date: "2026-09-01",
+                schedule_type: "full_day",
+                start_date: "2026-09-01",
             },
             fetchFn: fetchFn as unknown as typeof fetch,
         });
@@ -91,16 +91,16 @@ describe("submitAddInquiryChildFromDrawer", () => {
         expect(patchOpportunityCustomerMemberFromInquiryChild).toHaveBeenCalledWith(
             "ocm-1",
             expect.objectContaining({
-                desired_program_type: "infant",
-                desired_schedule_type: "full_day",
-                desired_start_date: "2026-09-01",
+                program_category_id: "33333333-3333-4333-8333-333333333333",
+                schedule_type: "full_day",
+                start_date: "2026-09-01",
                 location_id: "11111111-1111-4111-8111-111111111111",
                 program_room_cohort_key: "22222222-2222-4222-8222-222222222222",
             })
         );
     });
 
-    it("perserves stable program key and room unit id on OCM patch", async () => {
+    it("preserves program category FK and room unit id on OCM patch", async () => {
         const fetchFn = vi.fn(async () => ({
             ok: true,
             json: async () => ({ id: "cm-new", person_id: "person-new" }),
@@ -113,7 +113,7 @@ describe("submitAddInquiryChildFromDrawer", () => {
                 first_name: "Sam",
                 last_name: "Lee",
                 age_group: "toddler",
-                program: "preschool",
+                program_category_id: "44444444-4444-4444-8444-444444444444",
                 location_id: "11111111-1111-4111-8111-111111111111",
                 program_room_cohort_key: "22222222-2222-4222-8222-222222222222",
             },
@@ -123,7 +123,7 @@ describe("submitAddInquiryChildFromDrawer", () => {
         expect(patchOpportunityCustomerMemberFromInquiryChild).toHaveBeenCalledWith(
             "ocm-1",
             expect.objectContaining({
-                desired_program_type: "preschool",
+                program_category_id: "44444444-4444-4444-8444-444444444444",
                 location_id: "11111111-1111-4111-8111-111111111111",
                 program_room_cohort_key: "22222222-2222-4222-8222-222222222222",
             })
@@ -164,7 +164,7 @@ describe("submitAddInquiryChildFromDrawer", () => {
                 first_name: "Sam",
                 last_name: "Lee",
                 age_group: "toddler",
-                program: "preschool",
+                program_category_id: "44444444-4444-4444-8444-444444444444",
             },
             fetchFn,
         });
@@ -172,7 +172,7 @@ describe("submitAddInquiryChildFromDrawer", () => {
         expect(patchOpportunityCustomerMemberFromInquiryChild).toHaveBeenCalledWith(
             "ocm-1",
             expect.objectContaining({
-                desired_program_type: "preschool",
+                program_category_id: "44444444-4444-4444-8444-444444444444",
                 location_id: "11111111-1111-4111-8111-111111111111",
             }),
         );

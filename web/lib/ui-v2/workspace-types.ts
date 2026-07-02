@@ -183,7 +183,7 @@ export type CrmCompactRowSemanticSlots = {
   /** Single-child fallback person id when `childName` is set without `childrenLines`. */
   childPersonId?: string | null;
   /** Desired start date, date-only MM-DD-YYYY (UTC), or `—` when the field is in row preview but missing. */
-  desiredStartDateDisplay?: string | null;
+  startDateDisplay?: string | null;
   /**
    * Tour / timing (normalized). `—` when `tour_date` is in row preview but missing.
    * Prefer `crmCompactTimingValueLine` for work-unit CRM layout.
@@ -203,7 +203,7 @@ export type CrmCompactRowSemanticSlots = {
   rowPreviewLabelPrimaryContact?: string | null;
   rowPreviewLabelPhone?: string | null;
   rowPreviewLabelEmail?: string | null;
-  rowPreviewLabelDesiredStartDate?: string | null;
+  rowPreviewLabelStartDate?: string | null;
   rowPreviewLabelTourDate?: string | null;
   rowPreviewLabelAgeBand?: string | null;
   programContext: string | null;
@@ -330,8 +330,9 @@ export type QueueRowPlacementWaitlistCandidateVm = {
   cohortKey: string;
   cohortLabel: string;
   siteId?: string | null;
-  desiredProgramType?: string | null;
-  desiredProgramCategoryId?: string | null;
+  /** Canonical program key (location_program_categories.key) derived from OCM program_category_id. */
+  programKey?: string | null;
+  programCategoryId?: string | null;
   cohortSectionTitle: string;
   bucketLabel: string;
   waitSinceLabel: string | null;

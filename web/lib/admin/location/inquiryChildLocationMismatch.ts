@@ -61,48 +61,34 @@ export function inquiryChildProgramUsesCategoryIdMode(
     return categories.some((c) => c.is_active !== false);
 }
 
+/** Program select value for OCM-persisting pickers — the stored value IS the category FK. */
 export function resolveInquiryChildProgramSelectValue(args: {
-    useCategoryMode: boolean;
-    desired_program_category_id: string;
-    desired_program_type: string;
+    program_category_id: string;
 }): string {
-    if (args.useCategoryMode) return args.desired_program_category_id.trim();
-    return args.desired_program_type.trim();
+    return args.program_category_id.trim();
 }
 
-/** Program key for room cascade — resolves from category id when present. */
+/** Program key for room cascade — derived from the category FK (sole OCM program field). */
 export function resolveProgramKeyForRoomCascade(args: {
-    desired_program_category_id: string;
-    desired_program_type: string;
+    program_category_id: string;
     categories: ReadonlyArray<LocationProgramCategoryRow>;
 }): string | undefined {
-    const catId = args.desired_program_category_id.trim();
-    if (catId) {
-        const cat = findLocationProgramCategory({ categories: args.categories, categoryId: catId });
-        if (cat?.key) return cat.key;
-    }
-    const key = args.desired_program_type.trim();
-    return key || undefined;
+    const catId = args.program_category_id.trim();
+    if (!catId) return undefined;
+    const cat = findLocationProgramCategory({ categories: args.categories, categoryId: catId });
+    return cat?.key || undefined;
 }
 
-/** Maps program picker value → canonical OCM program fields. */
+/** Maps program picker value (category id) → canonical FK + derived stable key. */
 export function applyInquiryChildProgramSelection(args: {
     value: string;
-    useCategoryMode: boolean;
     categories: ReadonlyArray<LocationProgramCategoryRow>;
-}): { desired_program_category_id: string; desired_program_type: string } {
+}): { program_category_id: string; program_key: string } {
     const value = args.value.trim();
-    if (!value) return { desired_program_category_id: "", desired_program_type: "" };
-    if (args.useCategoryMode) {
-        const cat = findLocationProgramCategory({ categories: args.categories, categoryId: value });
-        return {
-            desired_program_category_id: value,
-            desired_program_type: cat?.key ?? "",
-        };
-    }
-    const cat = findLocationProgramCategory({ categories: args.categories, key: value });
+    if (!value) return { program_category_id: "", program_key: "" };
+    const cat = findLocationProgramCategory({ categories: args.categories, categoryId: value });
     return {
-        desired_program_category_id: cat?.id ?? "",
-        desired_program_type: value,
+        program_category_id: value,
+        program_key: cat?.key ?? "",
     };
 }

@@ -468,14 +468,14 @@ export default function LayoutRuntimeDrawerEditProvider({
                 const ocmKey = inquiryChildOcmFieldKeyFromLayoutRefKey(resolved);
                 if (ocmKey && isInquiryChildPlacementFieldKey(ocmKey) && rowKey) {
                     const current: Record<string, string> = {};
-                    for (const placementKey of ["location_id", "desired_program_type", "program_room_cohort_key"] as const) {
+                    for (const placementKey of ["location_id", "program_category_id", "program_room_cohort_key"] as const) {
                         const rk = layoutRefKeyForInquiryChildOcmField(placementKey);
                         current[placementKey] = draft[composeDraftKey(rk, rowKey)] ?? "";
                     }
                     const next = applyInquiryChildPlacementFieldChange(ocmKey, value, current);
                     setDraft((prev) => {
                         const merged = { ...prev };
-                        for (const placementKey of ["location_id", "desired_program_type", "program_room_cohort_key"] as const) {
+                        for (const placementKey of ["location_id", "program_category_id", "program_room_cohort_key"] as const) {
                             const rk = layoutRefKeyForInquiryChildOcmField(placementKey);
                             merged[composeDraftKey(rk, rowKey)] = next[placementKey] ?? "";
                         }

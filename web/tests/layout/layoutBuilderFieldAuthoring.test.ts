@@ -84,7 +84,7 @@ describe("layoutBuilderFieldAuthoring", () => {
         expect(child["child.name"]).toBe("Avery Johnson");
         expect(child["child.age"]).toBe("4");
         expect(child["child.program"]).toBe("Preschool");
-        expect(child["inquiry_child.desired_start_date"]).toBe("2026-08-19");
+        expect(child["inquiry_child.start_date"]).toBe("2026-08-19");
     });
 
     it("lists common quick-pick field ref keys", () => {

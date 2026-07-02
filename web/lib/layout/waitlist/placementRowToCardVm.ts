@@ -18,8 +18,8 @@ import type { WaitlistCandidateCardVM } from "./waitlistCandidateCardVm";
 export type WaitlistCardVmExtras = {
     householdId?: string;
     childId?: string;
-    /** Candidate `desired_start_date` (not carried by the projection VM today). */
-    desiredStartDate?: string;
+    /** Candidate `start_date` (not carried by the projection VM today). */
+    startDate?: string;
     /** Candidate lifecycle/status label (waitlisted / offer_pending / …). */
     status?: string;
     child?: { ageLabel?: string; birthdate?: string; programLabel?: string; schedulePreference?: string };
@@ -65,7 +65,7 @@ export function placementCandidateVmToCardVm(
             ageLabel: trimOrUndef(extras.child?.ageLabel),
             birthdate: trimOrUndef(extras.child?.birthdate),
             programLabel: trimOrUndef(extras.child?.programLabel) ?? trimOrUndef(row.cohortLabel),
-            desiredStartDate: trimOrUndef(extras.desiredStartDate),
+            startDate: trimOrUndef(extras.startDate),
             schedulePreference: trimOrUndef(extras.child?.schedulePreference),
         },
 
@@ -87,7 +87,7 @@ export function placementCandidateVmToCardVm(
             positionMode: row.runtimePositionMode,
             positionHelp: trimOrUndef(row.runtimePositionHelp) ?? trimOrUndef(row.runtimePositionPrecedenceNote),
             waitSince: trimOrUndef(row.waitSinceLabel),
-            desiredStartDate: trimOrUndef(extras.desiredStartDate),
+            startDate: trimOrUndef(extras.startDate),
             status: trimOrUndef(extras.status),
             shadowMode: Boolean(row.shadowMode),
             linkModeLabel: trimOrUndef(row.linkModeLabel),

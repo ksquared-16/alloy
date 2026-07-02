@@ -469,7 +469,7 @@ describe("drawerAboveFoldCoordinatedReveal policy", () => {
     it("opportunity composed open requires hydrated inquiry children", () => {
         expect(
             opportunityInquiryChildrenCoordinatedReady(
-                { _inquiry_children: [{ person_id: "c1", desired_program_type: "toddler" }] },
+                { _inquiry_children: [{ person_id: "c1", program_category_id: "cat-toddler" }] },
                 true
             )
         ).toBe(false);

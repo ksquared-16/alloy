@@ -114,11 +114,11 @@ const QUEUE_FIELD_CATALOG: Record<string, { label: string; namespace: AvailableF
     "child.date_of_birth": { label: "Date of Birth", namespace: "child", hint: "date" },
     "child.status": { label: "Child Status", namespace: "child", hint: "status_pill" },
     "child.room": { label: "Room", namespace: "child" },
-    "child.desired_start_date": { label: "Desired Start Date", namespace: "child", hint: "date" },
+    "child.start_date": { label: "Desired Start Date", namespace: "child", hint: "date" },
     // inquiry_child
     "inquiry_child.program": { label: "Program", namespace: "inquiry_child" },
-    "inquiry_child.desired_schedule_type": { label: "Schedule Type", namespace: "inquiry_child" },
-    "inquiry_child.desired_program_category": { label: "Program Category", namespace: "inquiry_child" },
+    "inquiry_child.schedule_type": { label: "Schedule Type", namespace: "inquiry_child" },
+    "inquiry_child.program_category": { label: "Program Category", namespace: "inquiry_child" },
     // waitlist computed (available on waitlist queue rows)
     "waitlist.positionLabel": { label: "Waitlist Position", namespace: "queue_row", hint: "status_pill" },
     "waitlist.tierLabel": { label: "Priority Tier", namespace: "queue_row", hint: "status_pill" },

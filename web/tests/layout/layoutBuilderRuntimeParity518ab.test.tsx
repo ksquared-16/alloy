@@ -72,7 +72,7 @@ function compactChildrenItem(): LayoutItem {
             { refKey: "child.name", label: "Name" },
             { refKey: "child.dob_age", label: "Age" },
             { refKey: "child.date_of_birth", label: "DOB", editable: true },
-            { refKey: "inquiry_child.desired_start_date", label: "Start Date", editable: true },
+            { refKey: "inquiry_child.start_date", label: "Start Date", editable: true },
             { refKey: "child.status", label: "Status", editable: true },
         ],
     };
@@ -103,7 +103,7 @@ describe("layoutBuilderRuntimeParity 5.18AB", () => {
                             "child.name": "Emyrson Wright",
                             "child.dob_age": "4y",
                             "child.date_of_birth": "2021-08-14",
-                            "inquiry_child.desired_start_date": "2025-09-01",
+                            "inquiry_child.start_date": "2025-09-01",
                             "child.status": "new_lead",
                         },
                     ]}

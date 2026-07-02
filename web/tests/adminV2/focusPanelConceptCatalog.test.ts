@@ -244,7 +244,7 @@ describe("resolveConceptValue — Program branch extended leaves", () => {
     const record = {
         "program.name": "Full Day",
         "program.schedule": "M-F 7am-6pm",
-        "child.desired_start_date": "2026-09-01",
+        "child.start_date": "2026-09-01",
         "child.room": "Sunflower Room",
         "opportunity.location": "Main Campus",
     };

@@ -11,7 +11,7 @@ export type QueueUiRowPreviewField =
     | "email"
     | "child_name"
     | "program"
-    | "desired_start_date"
+    | "start_date"
     | "tour_date";
 export type QueueUiRowPreviewAction =
     | "open"
@@ -36,7 +36,7 @@ export const DEFAULT_QUEUE_ROW_PREVIEW_FIELD_LABELS: Record<string, string> = {
     timing: "Timing",
     /** CRM compact section above multi- or single-child rows with program. */
     children_programs: "Children / Programs",
-    desired_start_date: "Desired Start Date",
+    start_date: "Start date",
     tour_date: "Tour",
     age_band: "Age band",
     room: "Room",

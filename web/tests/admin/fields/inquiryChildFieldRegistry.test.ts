@@ -18,19 +18,19 @@ describe("inquiryChildFieldRegistry", () => {
     });
 
     it("reserves native OCM field keys for custom field creation", () => {
-        expect(isReservedInquiryChildFieldKey("desired_start_date")).toBe(true);
+        expect(isReservedInquiryChildFieldKey("start_date")).toBe(true);
         expect(isReservedInquiryChildFieldKey("custom_note")).toBe(false);
-        expect(INQUIRY_CHILD_NATIVE_OCM_FIELD_KEYS).toContain("desired_start_date");
+        expect(INQUIRY_CHILD_NATIVE_OCM_FIELD_KEYS).toContain("start_date");
         expect(INQUIRY_CHILD_NATIVE_OCM_FIELD_KEYS).toContain("location_id");
         expect(INQUIRY_CHILD_NATIVE_OCM_FIELD_KEYS).toContain("program_room_cohort_key");
     });
 
     it("partitions PATCH body into native and custom keys", () => {
         const { native, custom } = partitionInquiryChildPatchBody({
-            desired_start_date: "2026-09-01",
+            start_date: "2026-09-01",
             allergy_notes: "peanuts",
         });
-        expect(native.desired_start_date).toBe("2026-09-01");
+        expect(native.start_date).toBe("2026-09-01");
         expect(custom.allergy_notes).toBe("peanuts");
     });
 
@@ -50,7 +50,7 @@ describe("inquiryChildFieldRegistry", () => {
     it("inquiryChildDrawerShowsDesiredStart respects visibility flag", () => {
         expect(
             inquiryChildDrawerShowsDesiredStart([
-                { field_key: "desired_start_date", field_type: "date", label: "Desired start", is_visible_in_drawer: false },
+                { field_key: "start_date", field_type: "date", label: "Desired start", is_visible_in_drawer: false },
             ])
         ).toBe(false);
     });
@@ -59,10 +59,10 @@ describe("inquiryChildFieldRegistry", () => {
         const { INQUIRY_CHILD_NATIVE_FIELD_MANIFEST } = await import("@/lib/fields/inquiryChildFieldRegistry");
         const byKey = Object.fromEntries(INQUIRY_CHILD_NATIVE_FIELD_MANIFEST.map((r) => [r.field_key, r]));
         expect(byKey.location_id?.label).toBe("School / Location");
-        expect(byKey.desired_program_category_id?.label).toBe("Program");
+        expect(byKey.program_category_id?.label).toBe("Program");
         expect(byKey.program_room_cohort_key?.label).toBe("Room");
         expect(byKey.outcome_status_key?.label).toBe("Status");
-        expect(byKey.desired_program_category_id?.sort_order).toBeLessThan(
+        expect(byKey.program_category_id?.sort_order).toBeLessThan(
             byKey.program_room_cohort_key?.sort_order ?? 0,
         );
     });

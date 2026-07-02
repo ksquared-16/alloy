@@ -82,7 +82,7 @@ export async function POST(request: NextRequest) {
             customer_member_id: customerMemberId,
         })
         .select(
-            "id, org_id, opportunity_id, customer_member_id, desired_program_type, desired_schedule_type, desired_start_date, outcome_status_key, notes, updated_at"
+            "id, org_id, opportunity_id, customer_member_id, program_category_id, schedule_type, start_date, outcome_status_key, notes, updated_at"
         )
         .single();
 

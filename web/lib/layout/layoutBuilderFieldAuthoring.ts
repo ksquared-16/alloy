@@ -11,7 +11,7 @@ export const EXPERIENCE_BUILDER_COMMON_FIELD_REF_KEYS = [
     "child.first_name",
     "child.last_name",
     "child.age",
-    "inquiry_child.desired_program_type",
-    "inquiry_child.desired_start_date",
+    "inquiry_child.program_category_id",
+    "inquiry_child.start_date",
     "customer.name",
 ] as const;

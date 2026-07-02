@@ -18,8 +18,8 @@ function waitlistSectionKey(
         cohortKey: cohort.cohortKey,
         cohortLabel: cohort.cohortLabel,
         siteId: scope.siteId,
-        desiredProgramType: scope.desiredProgramType,
-        desiredProgramCategoryId: scope.desiredProgramCategoryId,
+        programKey: scope.programKey,
+        programCategoryId: scope.programCategoryId,
         locationCategoryContext: context,
     }).sectionKey;
 }

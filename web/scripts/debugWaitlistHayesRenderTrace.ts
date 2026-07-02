@@ -115,19 +115,29 @@ async function main() {
 
     const { data: members } = await supabase
         .from("customer_members")
-        .select("display_name, metadata, desired_program_type")
+        .select("display_name, metadata")
         .eq("customer_id", (hayesOpp as { customer_id?: string }).customer_id ?? "");
+
+    // Program labels come from the OCM program_category_id FK (canonical program field).
+    const { data: ocmPrograms } = await supabase
+        .from("opportunity_customer_members")
+        .select("program_category_id, location_program_categories(label)")
+        .eq("org_id", ORG)
+        .eq("opportunity_id", hayesOpp.id);
+    const categoryLabels = (ocmPrograms ?? [])
+        .map((r) => (r.location_program_categories as { label?: string | null } | null | undefined)?.label)
+        .filter((l): l is string => typeof l === "string" && l.trim().length > 0);
 
     const programParts = (members ?? [])
         .map((m) => {
             const md = m.metadata as Record<string, unknown> | null;
             return (
                 (typeof md?.program_label === "string" ? md.program_label : null) ??
-                (typeof md?.demo_program_label === "string" ? md.demo_program_label : null) ??
-                m.desired_program_type
+                (typeof md?.demo_program_label === "string" ? md.demo_program_label : null)
             );
         })
-        .filter(Boolean);
+        .filter(Boolean)
+        .concat(categoryLabels);
     const combinedProgram = programParts.join(" · ");
 
     const enrichedRow: Record<string, unknown> = {

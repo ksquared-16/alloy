@@ -1,6 +1,6 @@
 /**
  * Location-owned program categories — single source of truth for site offerings.
- * Keys align with legacy OCM `desired_program_type` text storage.
+ * Stable keys identify categories across sites; OCM stores the category FK (`program_category_id`).
  */
 
 import { slugifyAdminKey } from "@/lib/admin/slugifyAdminKey";
@@ -147,7 +147,7 @@ export function resolveProgramCategoryIdForSiteKey(
     return row?.id ?? null;
 }
 
-/** Stable key slug for new location program categories (stored on OCM `desired_program_type`). */
+/** Stable key slug for new location program categories. */
 export function slugifyLocationProgramCategoryKey(label: string): string {
     return slugifyAdminKey(label);
 }

@@ -353,9 +353,9 @@ describe("executeCreateLeadAction validation", () => {
             child_last_name: "Nguyen",
             location_id: "11111111-1111-4111-8111-111111111111",
             child_program: "infant",
-            child_desired_schedule_type: "full_day",
+            child_schedule_type: "full_day",
             child_program_room_cohort_key: "22222222-2222-4222-8222-222222222222",
-            child_desired_start_date: "2026-09-01",
+            child_start_date: "2026-09-01",
         };
         const res = await executeCreateLeadAction(sb as never, ctx as never, { merged });
         expect(res.ok).toBe(true);

@@ -20,7 +20,7 @@ export function unitProgramCategoryTokens(row: InquiryChildPlacementHierarchyRow
 
     if (row.metadata != null && typeof row.metadata === "object" && !Array.isArray(row.metadata)) {
         const meta = row.metadata as Record<string, unknown>;
-        for (const key of ["program_category_id", "program_category_key", "desired_program_type", "category"]) {
+        for (const key of ["program_category_id", "program_category_key", "category"]) {
             const value = meta[key];
             if (typeof value === "string" && value.trim()) tokens.add(value.trim());
         }

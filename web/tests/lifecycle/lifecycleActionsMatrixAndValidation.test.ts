@@ -104,6 +104,6 @@ describe("lifecycle actions matrix and validation cleanup", () => {
                 resolve(root, "../docs/sprints/06_2026/desired_start_field_audit.md"),
                 "utf8"
             )
-        ).toContain("child:desired_start_date");
+        ).toContain("child:start_date");
     });
 });

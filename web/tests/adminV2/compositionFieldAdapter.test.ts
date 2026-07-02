@@ -102,10 +102,10 @@ describe("availableFieldsForGroup — fields for a specific group", () => {
         expect(fields).toHaveLength(0);
     });
 
-    it("waitlist placement_request group includes inquiry_child.desired_schedule_type", () => {
+    it("waitlist placement_request group includes inquiry_child.schedule_type", () => {
         const fields = availableFieldsForGroup("children", "placement_request", true);
         const keys = fields.map((f) => f.key);
-        expect(keys).toContain("inquiry_child.desired_schedule_type");
+        expect(keys).toContain("inquiry_child.schedule_type");
     });
 
     it("waitlist_position group includes waitlist.positionLabel and overrides.flags", () => {

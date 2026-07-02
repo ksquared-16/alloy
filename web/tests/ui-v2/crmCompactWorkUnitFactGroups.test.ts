@@ -14,7 +14,7 @@ const allFields: QueueUiRowPreviewField[] = [
     "email",
     "child_name",
     "program",
-    "desired_start_date",
+    "start_date",
     "tour_date",
 ];
 

@@ -52,7 +52,7 @@ export function resolveLayoutRuntimeFieldControl(
     if (LAYOUT_RUNTIME_BOOLEAN_REF_KEYS.has(normalized)) {
         return { controlType: "select", option_source: "layout_boolean" };
     }
-    if (normalized === "child.date_of_birth" || normalized === "inquiry_child.desired_start_date") {
+    if (normalized === "child.date_of_birth" || normalized === "inquiry_child.start_date") {
         return { controlType: "date" };
     }
 

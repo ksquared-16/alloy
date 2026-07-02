@@ -14,7 +14,7 @@ describe("enrollmentScheduleDoctrine", () => {
             desired_program_label: "Infant",
             program_room_cohort_label: "Infant A",
             desired_schedule_label: "Full time",
-            desired_start_date: "2026-09-01",
+            start_date: "2026-09-01",
         });
         expect(intent.scheduleProposal).toBe("Full time");
         expect(hasEnrollmentPlacementIntent(intent)).toBe(true);

@@ -75,7 +75,7 @@ export async function loadOpportunityPlacementCandidates(params: {
     const { data: rawCandidates, error: candErr } = await supabase
         .from("placement_candidates")
         .select(
-            "id, org_id, opportunity_id, customer_id, opportunity_customer_member_id, customer_member_id, person_id, site_id, is_synthetic_fallback, program_room_cohort_key, program_room_group_label, wait_since, desired_start_date, status, seed_key, metadata, customer_members(display_name, person_id)"
+            "id, org_id, opportunity_id, customer_id, opportunity_customer_member_id, customer_member_id, person_id, site_id, is_synthetic_fallback, program_room_cohort_key, program_room_group_label, wait_since, start_date, status, seed_key, metadata, customer_members(display_name, person_id)"
         )
         .eq("org_id", orgId)
         .eq("opportunity_id", opportunityId)
@@ -155,7 +155,7 @@ export async function loadOpportunityPlacementCandidates(params: {
             program_room_cohort_key: c.program_room_cohort_key,
             program_room_group_label: c.program_room_group_label,
             wait_since: c.wait_since,
-            desired_start_date: c.desired_start_date,
+            start_date: c.start_date,
             child: {
                 opportunity_customer_member_id: c.opportunity_customer_member_id,
                 customer_member_id: c.customer_member_id,

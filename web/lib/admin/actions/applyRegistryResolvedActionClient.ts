@@ -595,8 +595,8 @@ export async function applyRegistryResolvedActionClient(
                 (actionKey === "assign_classroom" || intent === "assign_classroom"
                     ? "program_room_cohort_key"
                     : actionKey === "assign_schedule" || intent === "assign_schedule"
-                      ? "desired_schedule_type"
-                      : "desired_start_date");
+                      ? "schedule_type"
+                      : "start_date");
             dispatchFocusInquiryChildren(eid, field as InquiryChildrenFocusField);
             return { ok: true };
         }

@@ -23,8 +23,9 @@ export type HouseholdInquiryChildRecord = {
     /** Presentation — loaded for queue sibling context lines only. */
     child_display_name?: string | null;
     program_room_cohort_key?: string | null;
-    desired_program_type?: string | null;
-    desired_program_category_id?: string | null;
+    /** Canonical program key (location_program_categories.key) derived from program_category_id. */
+    program_key?: string | null;
+    program_category_id?: string | null;
 };
 
 export type HouseholdActivePlacementCandidateRecord = {

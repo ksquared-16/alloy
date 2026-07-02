@@ -72,7 +72,7 @@ describe("QueueService — placement projection hookup", () => {
                     program_room_cohort_key: "infant",
                     program_room_group_label: "Infant",
                     wait_since: "2024-01-01T00:00:00.000Z",
-                    desired_start_date: null,
+                    start_date: null,
                     status: "active",
                     seed_key: null,
                     metadata: null,

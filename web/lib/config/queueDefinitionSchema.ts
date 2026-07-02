@@ -101,7 +101,7 @@ const queueUiRowPreviewSchema = z
                     "email",
                     "child_name",
                     "program",
-                    "desired_start_date",
+                    "start_date",
                     "tour_date",
                 ])
             )

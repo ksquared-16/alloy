@@ -293,7 +293,7 @@ export function buildOpportunityQueueRowRecordFromPreview(
             "child.program": pickDisplay(waitlist.cohortLabel) ?? "",
             "child.location": pickDisplay(waitlist.cohortSectionTitle, waitlist.cohortLabel) ?? "",
             "child.status": pickDisplay(waitlist.bucketLabel) ?? "",
-            "child.desired_start_date": pickDisplay(waitlist.waitSinceLabel) ?? "",
+            "child.start_date": pickDisplay(waitlist.waitSinceLabel) ?? "",
             "child.room": "",
             "waitlist.positionLabel": pickDisplay(waitlist.runtimePositionLabel) ?? "",
             "waitlist.tierLabel": pickDisplay(waitlist.bucketLabel) ?? "",

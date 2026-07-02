@@ -45,7 +45,7 @@ export async function buildPersonEnrollmentMirrorRowsForMemberIds(
     const { data: ocmRows } = await supabase
         .from("opportunity_customer_members")
         .select(
-            "id, opportunity_id, customer_member_id, location_id, desired_program_type, program_room_cohort_key, outcome_status_key"
+            "id, opportunity_id, customer_member_id, location_id, program_category_id, location_program_categories(key, label), program_room_cohort_key, outcome_status_key"
         )
         .eq("org_id", orgId)
         .in("customer_member_id", ids)
@@ -57,11 +57,14 @@ export async function buildPersonEnrollmentMirrorRowsForMemberIds(
 
     const oppIds = [...new Set(ocmList.map((r: { opportunity_id: string }) => r.opportunity_id))];
 
-    // Fetch opportunities and program labels in parallel (program labels are independent of opps)
-    const programPairs = ocmList.map((r: { desired_program_type?: string | null }) => ({
-        setKey: "childcare_program_type",
-        itemKey: r.desired_program_type,
-    }));
+    // Fetch opportunities and program labels in parallel (program labels are independent of opps).
+    // Legacy option-set labels are looked up by the key derived from the embedded category.
+    const programPairs = ocmList.map(
+        (r: { location_program_categories?: { key?: string | null } | null }) => ({
+            setKey: "childcare_program_type",
+            itemKey: r.location_program_categories?.key,
+        })
+    );
     const [oppResResult, programLabels] = await Promise.all([
         oppIds.length > 0
             ? supabase
@@ -134,7 +137,8 @@ export async function buildPersonEnrollmentMirrorRowsForMemberIds(
             opportunity_id: string;
             customer_member_id: string;
             location_id?: string | null;
-            desired_program_type?: string | null;
+            program_category_id?: string | null;
+            location_program_categories?: { key?: string | null; label?: string | null } | null;
             program_room_cohort_key?: string | null;
             outcome_status_key?: string | null;
         };
@@ -147,9 +151,11 @@ export async function buildPersonEnrollmentMirrorRowsForMemberIds(
         const roomKey = trimOrNull(ocm.program_room_cohort_key);
         const siteRow = siteId ? locById.get(siteId) : undefined;
         const roomRow = roomKey ? locById.get(roomKey) : undefined;
-        const programKey = trimOrNull(ocm.desired_program_type);
+        const programKey = trimOrNull(ocm.location_program_categories?.key);
         const programLabel = resolveInquiryChildProgramCategoryLabel({
-            desired_program_type: programKey,
+            program_category_id: trimOrNull(ocm.program_category_id),
+            program_key: programKey,
+            desired_program_label: trimOrNull(ocm.location_program_categories?.label),
             optionLabelLookup: programLabels,
         });
         const outcomeKey = trimOrNull(ocm.outcome_status_key);

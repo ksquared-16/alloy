@@ -83,6 +83,7 @@ function buildOpportunityInquiryLinesLite(
   };
   push("program_type", "Program", out.program_type);
   push("schedule_type", "Schedule", out.schedule_type);
+  // Opportunity-level legacy field key — not the OCM column (S2 renamed OCM only).
   push("desired_start_date", "Desired start", out.desired_start_date);
   const defs =
     (out._field_definitions as
@@ -271,12 +272,12 @@ type CmBootstrapRow = {
 type OcmJoinRow = {
   id: string;
   customer_member_id: string;
-  desired_start_date?: string | null;
+  start_date?: string | null;
   location_id?: string | null;
   program_room_cohort_key?: string | null;
-  desired_program_type?: string | null;
-  desired_program_category_id?: string | null;
-  desired_schedule_type?: string | null;
+  program_category_id?: string | null;
+  location_program_categories?: { key?: string | null; label?: string | null } | null;
+  schedule_type?: string | null;
   outcome_status_key?: string | null;
   fit_status?: string | null;
   notes?: string | null;
@@ -296,16 +297,17 @@ type InquiryHydrateChild = {
   age: string | null;
   linked_on_inquiry: boolean;
   ocm_id: string | null;
-  desired_program_type: string | null;
-  desired_program_category_id: string | null;
+  program_category_id: string | null;
+  /** Stable program key derived from the category FK (or opportunity default) — display only. */
+  program_key: string | null;
   desired_program_label: string | null;
-  desired_schedule_type: string | null;
+  schedule_type: string | null;
   desired_schedule_label: string | null;
   outcome_status_key: string | null;
   outcome_status_label: string | null;
   fit_status: string | null;
   notes: string | null;
-  desired_start_date: string | null;
+  start_date: string | null;
   location_id?: string | null;
   location_label?: string | null;
   program_room_cohort_key?: string | null;
@@ -317,7 +319,7 @@ type InquiryHydrateChild = {
 };
 
 const OCM_INQUIRY_SELECT_COLUMNS =
-  "id, customer_member_id, desired_start_date, location_id, program_room_cohort_key, desired_program_type, desired_program_category_id, desired_schedule_type, outcome_status_key, fit_status, notes, metadata, created_at, updated_at";
+  "id, customer_member_id, start_date, location_id, program_room_cohort_key, program_category_id, location_program_categories(key, label), schedule_type, outcome_status_key, fit_status, notes, metadata, created_at, updated_at";
 
 async function batchLocationLabelsForOrg(
   supabase: AdminSupabase,
@@ -374,20 +376,24 @@ function mapOcmJoinRowsToInquiryChildrenBlock(
     });
     const dob = identity.dob;
     const age = ageFromDobIso(dob);
-    const desiredProgramType =
-      trimOrNull(r.desired_program_type) ?? oppDefaultProgramType;
-    const desiredProgramCategoryId = trimOrNull(r.desired_program_category_id);
-    const desiredScheduleType =
-      trimOrNull(r.desired_schedule_type) ?? oppDefaultScheduleType;
+    const programCategoryId = trimOrNull(r.program_category_id);
+    const embeddedCategoryKey = trimOrNull(r.location_program_categories?.key);
+    const embeddedCategoryLabel = trimOrNull(r.location_program_categories?.label);
+    // Derived display key: embedded category key, else opportunity-level default program key.
+    const programKey = embeddedCategoryKey ?? (programCategoryId ? null : oppDefaultProgramType);
+    const scheduleType =
+      trimOrNull(r.schedule_type) ?? oppDefaultScheduleType;
     const outcomeStatusKey = trimOrNull(r.outcome_status_key);
     const desiredProgramLabel = resolveInquiryChildProgramCategoryLabel({
-      desired_program_type: desiredProgramType,
+      program_category_id: programCategoryId,
+      program_key: programKey,
+      desired_program_label: embeddedCategoryLabel,
       optionLabelLookup: optionLabelMap,
     });
     const desiredScheduleLabel = optionLabelFromBatchMap(
       optionLabelMap,
       "childcare_schedule_type",
-      desiredScheduleType,
+      scheduleType,
     );
     const locationId = trimOrNull(r.location_id);
     const cohortKey = trimOrNull(r.program_room_cohort_key);
@@ -419,16 +425,16 @@ function mapOcmJoinRowsToInquiryChildrenBlock(
       age: age ? age.label : null,
       linked_on_inquiry: true,
       ocm_id: r.id,
-      desired_program_type: desiredProgramType,
-      desired_program_category_id: desiredProgramCategoryId,
+      program_category_id: programCategoryId,
+      program_key: programKey,
       desired_program_label: desiredProgramLabel,
-      desired_schedule_type: desiredScheduleType,
+      schedule_type: scheduleType,
       desired_schedule_label: desiredScheduleLabel,
       outcome_status_key: outcomeStatusKey,
       outcome_status_label: outcomeStatusLabel,
       fit_status: trimOrNull(r.fit_status),
       notes: trimOrNull(r.notes),
-      desired_start_date: normalizeIsoDateOnly(r.desired_start_date),
+      start_date: normalizeIsoDateOnly(r.start_date),
       location_id: locationId,
       location_label: locationId ? (locationLabelById.get(locationId) ?? null) : null,
       program_room_cohort_key: cohortKey,
@@ -472,24 +478,24 @@ function applyInquiryChildrenMetadataFallbacks(
           ocm_id: null,
           dob: typeof row.dob === "string" ? row.dob : null,
           age: typeof row.age === "string" ? row.age : null,
-          desired_program_type:
+          program_category_id: null,
+          program_key:
             typeof row.program_type_key === "string"
               ? trimOrNull(row.program_type_key)
               : null,
-          desired_program_category_id: null,
           desired_program_label:
             typeof row.program_label === "string"
               ? trimOrNull(row.program_label)
               : typeof row.program_short === "string"
                 ? trimOrNull(row.program_short)
                 : null,
-          desired_schedule_type: null,
+          schedule_type: null,
           desired_schedule_label: null,
           outcome_status_key: null,
           outcome_status_label: null,
           fit_status: null,
           notes: typeof row.notes === "string" ? trimOrNull(row.notes) : null,
-          desired_start_date: null,
+          start_date: null,
           custom_fields: {},
           metadata: (row.metadata as Record<string, unknown>) ?? {
             source: "opportunity_metadata",
@@ -523,18 +529,18 @@ function applyInquiryChildrenMetadataFallbacks(
           ocm_id: null,
           dob: typeof md.child_dob === "string" ? md.child_dob : null,
           age: typeof md.child_age === "string" ? md.child_age : null,
-          desired_program_type:
+          program_category_id: null,
+          program_key:
             typeof md.program_type_key === "string"
               ? trimOrNull(md.program_type_key)
               : null,
-          desired_program_category_id: null,
           desired_program_label:
             typeof md.program_label === "string"
               ? trimOrNull(md.program_label)
               : typeof md.demo_requested_program === "string"
                 ? trimOrNull(md.demo_requested_program)
                 : null,
-          desired_schedule_type:
+          schedule_type:
             typeof md.schedule_type_key === "string"
               ? trimOrNull(md.schedule_type_key)
               : null,
@@ -546,7 +552,7 @@ function applyInquiryChildrenMetadataFallbacks(
           outcome_status_label: null,
           fit_status: null,
           notes: typeof md.notes === "string" ? trimOrNull(md.notes) : null,
-          desired_start_date: null,
+          start_date: null,
           custom_fields: {},
           metadata: { source: "opportunity_metadata_demo_child_name" },
           created_at: null,
@@ -1769,6 +1775,7 @@ export async function respondOpportunityEntityGet(
   lapSegment("relationship_displays_attach");
 
   const oppMeta = (opp.metadata ?? null) as Record<string, unknown> | null;
+  // Opportunity-level legacy field key — not the OCM column (S2 renamed OCM only).
   const metaDesired =
     oppMeta && typeof oppMeta.desired_start_date === "string"
       ? oppMeta.desired_start_date.trim()

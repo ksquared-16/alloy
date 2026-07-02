@@ -31,7 +31,7 @@ export type WaitlistCandidateCardVM = {
         ageLabel?: string;
         birthdate?: string;
         programLabel?: string;
-        desiredStartDate?: string;
+        startDate?: string;
         schedulePreference?: string;
     };
 
@@ -58,7 +58,7 @@ export type WaitlistCandidateCardVM = {
         positionMode?: "preview" | "live";
         positionHelp?: string;
         waitSince?: string;
-        desiredStartDate?: string;
+        startDate?: string;
         status?: string;
         shadowMode: boolean;
         linkModeLabel?: string;
@@ -121,7 +121,7 @@ export function waitlistCardVmToProofRecord(vm: WaitlistCandidateCardVM): Record
         "child.name": vm.child.name,
         "child.ageLabel": vm.child.ageLabel ?? null,
         "child.programLabel": vm.child.programLabel ?? null,
-        "child.desiredStartDate": vm.child.desiredStartDate ?? null,
+        "child.startDate": vm.child.startDate ?? null,
         "child.schedulePreference": vm.child.schedulePreference ?? null,
         // household
         "household.name": vm.household.name ?? null,
@@ -135,7 +135,7 @@ export function waitlistCardVmToProofRecord(vm: WaitlistCandidateCardVM): Record
         "waitlist.tierLabel": vm.waitlist.tierLabel ?? null,
         "waitlist.positionLabel": vm.waitlist.positionLabel ?? null,
         "waitlist.waitSince": vm.waitlist.waitSince ?? null,
-        "waitlist.desiredStartDate": vm.waitlist.desiredStartDate ?? null,
+        "waitlist.startDate": vm.waitlist.startDate ?? null,
         "waitlist.status": vm.waitlist.status ?? null,
         "waitlist.linkModeLabel": vm.waitlist.linkModeLabel ?? null,
         "waitlist.siblingContext": vm.waitlist.siblingContextLines?.length ? vm.waitlist.siblingContextLines.join(" · ") : null,

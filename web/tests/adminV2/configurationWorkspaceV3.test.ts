@@ -5,10 +5,7 @@ import {
     ENROLLMENT_PLACEMENT_PHASE_REQUIREMENTS,
     placementRequiredForPhase,
 } from "@/lib/fields/enrollmentPlacementPhaseRequirements";
-import {
-    ENROLLMENT_PLACEMENT_LEGACY_PROGRAM_FIELD_KEY,
-    enrollmentPlacementOperatorLabel,
-} from "@/lib/fields/enrollmentPlacementDoctrine";
+import { enrollmentPlacementOperatorLabel } from "@/lib/fields/enrollmentPlacementDoctrine";
 import { isChildcareLegacyOrSystemField } from "@/lib/fields/childcareFieldCatalogDoctrine";
 import { CONFIGURATION_WORKSPACE_ADVANCED_ITEMS } from "@/lib/adminV2/configurationWorkspaceDomains";
 
@@ -51,7 +48,6 @@ describe("Configuration Workspace V3 — enrollment workflow readiness", () => {
         expect(panel).toContain('data-testid="location-site-programs"');
         expect(panel).toContain('data-testid="location-site-rooms"');
         expect(panel).not.toContain('data-testid="location-site-schedules"');
-        expect(panel).not.toContain("desired_program_type");
     });
 
     it("business process track explainer shows family/child stages and decision split", () => {
@@ -74,14 +70,12 @@ describe("Configuration Workspace V3 — enrollment workflow readiness", () => {
         expect(workspace).toContain("defaultOpen");
     });
 
-    it("program label visible and internal keys hidden in operator paths", () => {
-        expect(enrollmentPlacementOperatorLabel("desired_program_category_id", "Desired program")).toBe("Program");
-        expect(isChildcareLegacyOrSystemField("inquiry_child", ENROLLMENT_PLACEMENT_LEGACY_PROGRAM_FIELD_KEY)).toBe(
-            true
-        );
+    it("program label visible and canonical program storage in operator paths", () => {
+        expect(enrollmentPlacementOperatorLabel("program_category_id", "Desired program")).toBe("Program");
+        // Canonical program storage stays operator-configurable, not hidden as legacy/system.
+        expect(isChildcareLegacyOrSystemField("inquiry_child", "program_category_id")).toBe(false);
         const addChild = read("components/admin/opportunity/actions/AddInquiryChildModal.tsx");
-        expect(addChild).toContain("Program");
-        expect(addChild).not.toMatch(/desired_program_type.*label/i);
+        expect(addChild).toContain("program_category_id");
     });
 
     it("status ownership remains clean — statuses vocabulary only", () => {

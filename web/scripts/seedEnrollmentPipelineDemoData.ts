@@ -242,6 +242,7 @@ async function ensureOpportunity(
             // Operational display fields (keep in metadata for now; identity is person-backed).
             program_label: prog.program_label,
             age_group: prog.age_group,
+            // opportunity-level legacy metadata key — not the OCM column
             desired_start_date: desiredStart,
             tour_date: tourDate,
             notes: note,

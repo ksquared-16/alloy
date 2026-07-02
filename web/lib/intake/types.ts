@@ -148,7 +148,7 @@ export type IntakeHouseholdCandidate = {
     source: string | null;
     notes: string | null;
     program_interest: string | null;
-    desired_start_date: string | null;
+    start_date: string | null;
     relationships: IntakeRelationshipCandidate[];
     unassigned_fact_ids: string[];
     /** Full unassigned facts for review/debug surfaces. */

@@ -101,12 +101,13 @@ export function buildQueueRowDisplayPatchFromInquiryChildRow(
     optionLabelLookup?: Map<string, string> | ReadonlyMap<string, string>
 ): OpportunityQueueRowDisplayPatch {
     const program = resolveInquiryChildProgramCategoryLabel({
-        desired_program_type: row.desired_program_type,
+        program_category_id: row.program_category_id,
+        program_key: row.program_key,
         desired_program_label: row.desired_program_label,
         optionLabelLookup,
     });
     const schedule = resolveInquiryChildScheduleLabel({
-        desired_schedule_type: row.desired_schedule_type,
+        schedule_type: row.schedule_type,
         desired_schedule_label: row.desired_schedule_label,
         optionLabelLookup,
     });

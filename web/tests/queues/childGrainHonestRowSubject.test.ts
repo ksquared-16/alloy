@@ -59,7 +59,7 @@ describe("Phase B honest row_subject on existing grain rows", () => {
                             display_name: "Mia Hayes",
                             outcome_status_key: "offer_pending",
                             location_id: "loc-1",
-                            desired_program_type: "preschool",
+                            program_key: "preschool",
                         },
                     ],
                 },

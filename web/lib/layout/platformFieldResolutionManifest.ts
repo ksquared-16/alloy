@@ -55,7 +55,7 @@ export type PlatformFieldManifestEntry = {
 /** Mis-grained / deprecated refKeys — never emitted by layout-config picker. */
 export const BLOCKED_LAYOUT_PICKER_REF_KEYS = new Set<string>([
     "child.program",
-    "child.desired_start_date",
+    "child.start_date",
     "child.status",
     "child.location",
     "child.room",

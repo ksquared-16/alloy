@@ -16,7 +16,7 @@ describe("actionPreflightDrawerEvents", () => {
                     summary: "Blocked",
                     blocking: [
                         {
-                            field_key: "desired_schedule_type",
+                            field_key: "schedule_type",
                             label: "Schedule",
                             reason: "Schedule is required.",
                             source: "action",

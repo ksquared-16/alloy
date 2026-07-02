@@ -1,9 +1,11 @@
 /**
  * Map form intake child hints → opportunity_customer_members placement columns (Card 4).
- * Pure — no Supabase.
+ * Resolves the captured program key to the canonical `program_category_id` FK.
  */
 
+import type { SupabaseClient } from "@supabase/supabase-js";
 import type { FormIntakeChildHint } from "@/lib/forms/intake/formLeadCaptureTypes";
+import { resolveProgramCategoryId } from "@/lib/locations/resolveOcmProgramCategoryFields";
 
 export type IntakeChildPlacementScopeSource =
     | "child_field"
@@ -14,9 +16,9 @@ export type IntakeChildPlacementScopeSource =
 export type ResolvedIntakeChildOcmFields = {
     location_id: string | null;
     program_room_cohort_key: string | null;
-    desired_program_type: string | null;
-    desired_schedule_type: string | null;
-    desired_start_date: string | null;
+    program_category_id: string | null;
+    schedule_type: string | null;
+    start_date: string | null;
     placement_scope: {
         location_source: IntakeChildPlacementScopeSource;
         cohort_source: "child_field" | "none";
@@ -40,11 +42,15 @@ function trimDateOnly(raw: string | null | undefined): string | null {
     return t && /^\d{4}-\d{2}-\d{2}$/.test(t) ? t : null;
 }
 
-export function resolveIntakeChildOcmFields(params: {
-    child: FormIntakeChildHint;
-    opportunityLocationId?: string | null;
-    linkDefaultLocationId?: string | null;
-}): ResolvedIntakeChildOcmFields {
+export async function resolveIntakeChildOcmFields(
+    supabase: SupabaseClient,
+    params: {
+        orgId: string;
+        child: FormIntakeChildHint;
+        opportunityLocationId?: string | null;
+        linkDefaultLocationId?: string | null;
+    }
+): Promise<ResolvedIntakeChildOcmFields> {
     const childSite = trimUuid(params.child.location_id);
     const oppSite = trimUuid(params.opportunityLocationId);
     const linkSite = trimUuid(params.linkDefaultLocationId);
@@ -65,12 +71,27 @@ export function resolveIntakeChildOcmFields(params: {
     const cohort = trimKey(params.child.program_room_cohort_key);
     const cohort_source: "child_field" | "none" = cohort ? "child_field" : "none";
 
+    // Forms capture the stable program key; resolve it to the category FK by
+    // org + location + key (mirrors the canonical-fields migration backfill).
+    // A value that is already a category uuid passes through unchanged.
+    const programKey = trimKey(params.child.program_key);
+    let program_category_id: string | null = null;
+    if (programKey) {
+        program_category_id = UUID_RE.test(programKey)
+            ? programKey
+            : await resolveProgramCategoryId(supabase, {
+                  orgId: params.orgId,
+                  locationId: location_id,
+                  programKey,
+              });
+    }
+
     return {
         location_id,
         program_room_cohort_key: cohort,
-        desired_program_type: trimKey(params.child.desired_program_type),
-        desired_schedule_type: trimKey(params.child.desired_schedule_type),
-        desired_start_date: trimDateOnly(params.child.desired_start_date),
+        program_category_id,
+        schedule_type: trimKey(params.child.schedule_type),
+        start_date: trimDateOnly(params.child.start_date),
         placement_scope: {
             location_source,
             cohort_source,
@@ -98,9 +119,9 @@ export function buildOcmInsertFromIntakeChildFields(
         customer_member_id: base.customer_member_id,
         ...(resolved.location_id ? { location_id: resolved.location_id } : {}),
         ...(resolved.program_room_cohort_key ? { program_room_cohort_key: resolved.program_room_cohort_key } : {}),
-        ...(resolved.desired_program_type ? { desired_program_type: resolved.desired_program_type } : {}),
-        ...(resolved.desired_schedule_type ? { desired_schedule_type: resolved.desired_schedule_type } : {}),
-        ...(resolved.desired_start_date ? { desired_start_date: resolved.desired_start_date } : {}),
+        ...(resolved.program_category_id ? { program_category_id: resolved.program_category_id } : {}),
+        ...(resolved.schedule_type ? { schedule_type: resolved.schedule_type } : {}),
+        ...(resolved.start_date ? { start_date: resolved.start_date } : {}),
         metadata,
     };
 }

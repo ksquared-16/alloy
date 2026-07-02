@@ -110,10 +110,9 @@ export function expectedCreateLeadOcmRow(args: {
         customerMemberId: args.customerMemberId,
         ocm: {
             location_id: null,
-            desired_program_type: null,
-            desired_program_category_id: null,
-            desired_schedule_type: null,
-            desired_start_date: null,
+            program_category_id: null,
+            schedule_type: null,
+            start_date: null,
             program_room_cohort_key: null,
             notes: null,
         },

@@ -9,6 +9,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { RecordScopeConstraints } from "@/lib/admin/accessScope";
 import {
     enrollmentOffersChildQueueRowId,
+    programKeyFromChildGrainOcmRow,
     type ChildGrainOcmQueryRow,
 } from "@/lib/queues/childGrainEnrollmentQueue";
 import { legacyChildTrackLaneForQueueKey, legacyOcmDispositionKeysForStage } from "@/lib/businessProcessTemplates/enrollmentLegacyCompat";
@@ -53,7 +54,7 @@ type CustomerMemberPreview = {
 export type OcmEnrollmentTrackQueryRow = ChildGrainOcmQueryRow & {
     location_id: string | null;
     program_room_cohort_key: string | null;
-    desired_start_date: string | null;
+    start_date: string | null;
 };
 
 function readJoinedSingle<T extends { id?: string }>(value: T | T[] | null | undefined): T | null {
@@ -84,7 +85,7 @@ function readCustomerMemberDisplayName(cm: CustomerMemberPreview | null): string
 }
 
 function programLineFromOcm(row: OcmEnrollmentTrackQueryRow): string | null {
-    const parts = [row.desired_program_type?.trim(), row.desired_schedule_type?.trim()].filter(Boolean);
+    const parts = [programKeyFromChildGrainOcmRow(row), row.schedule_type?.trim()].filter(Boolean);
     return parts.length ? parts.join(" · ") : null;
 }
 
@@ -111,7 +112,7 @@ async function queryOcmEnrollmentTrackRows(params: {
         .from("opportunity_customer_members")
         .select(
             `id, org_id, opportunity_id, customer_member_id, outcome_status_key,
-            desired_program_type, desired_schedule_type, location_id, program_room_cohort_key, desired_start_date,
+            program_category_id, location_program_categories(key, label), schedule_type, location_id, program_room_cohort_key, start_date,
             updated_at, created_at,
             opportunities!inner (
                 id, name, title, status_key, customer_id, primary_person_id, primary_contact_id, work_unit_id, location_id, metadata, created_at, updated_at
@@ -238,16 +239,17 @@ export function buildOcmEnrollmentTrackQueueRow(
             outcome_status_key: lifecycleStatus,
             location_id: ocmLocationId,
             program_room_cohort_key: row.program_room_cohort_key?.trim() || null,
-            desired_program_type: row.desired_program_type?.trim() || null,
-            desired_schedule_type: row.desired_schedule_type?.trim() || null,
-            desired_start_date: row.desired_start_date?.trim() || null,
+            program_key: programKeyFromChildGrainOcmRow(row),
+            program_category_id: row.program_category_id?.trim() || null,
+            schedule_type: row.schedule_type?.trim() || null,
+            start_date: row.start_date?.trim() || null,
         },
         // Per-subject placement hints for honest QueueRowContext (Phase A).
         _row_subject_placement: {
             location_id: ocmLocationId ?? oppLocationId,
-            program_key: row.desired_program_type?.trim() || null,
+            program_key: programKeyFromChildGrainOcmRow(row),
             room_id: row.program_room_cohort_key?.trim() || null,
-            schedule_key: row.desired_schedule_type?.trim() || null,
+            schedule_key: row.schedule_type?.trim() || null,
         },
     };
 }

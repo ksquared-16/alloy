@@ -7122,6 +7122,7 @@ export function AdminEntityDrawerLegacy() {
                 // Normalize nullable date fields: HTML date inputs emit "" when cleared.
                 // Sending job_date: "" causes Postgres "invalid input syntax for type date".
                 if (typeof payload.job_date === "string" && payload.job_date.trim() === "") payload.job_date = null;
+                // desired_start_date is the opportunity-level legacy field key — not the OCM column.
                 for (const dk of ["desired_start_date", "tour_date"] as const) {
                     const tv = payload[dk];
                     if (tv === "" || tv === undefined || (typeof tv === "string" && tv.trim() === "")) {
@@ -11297,7 +11298,8 @@ export function AdminEntityDrawerLegacy() {
                     <OpportunityInquiryChildrenSection
                         rows={drawerChildRows}
                         opportunityId={drawer.id ?? undefined}
-                        opportunityDesiredStartDate={(() => {
+                        opportunityStartDate={(() => {
+                            // Opportunity-level legacy field key — not the OCM column.
                             const rawStart =
                                 d.desired_start_date ??
                                 (d.metadata as Record<string, unknown> | null)?.desired_start_date;

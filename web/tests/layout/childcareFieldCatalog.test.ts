@@ -76,8 +76,8 @@ describe("childcare starter field catalog manifest", () => {
 
     it("includes child enrollment fields under child operator entity", () => {
         const childKeys = childcareCatalogRefKeysForOperatorEntity("child");
-        expect(childKeys).toContain("inquiry_child.desired_start_date");
-        expect(childKeys).toContain("inquiry_child.desired_program_type");
+        expect(childKeys).toContain("inquiry_child.start_date");
+        expect(childKeys).toContain("inquiry_child.program_category_id");
         expect(childKeys).toContain("child.allergies");
         expect(childKeys).toContain("child.gender");
         expect(childKeys).not.toContain("person.allergies");
@@ -147,7 +147,7 @@ describe("childcare layout field catalog seed migration", () => {
             "special_instructions",
             "program_type",
             "schedule_type",
-            "desired_start_date",
+            "start_date",
             "relationship_to_child",
             "primary_contact",
             "address_line1",

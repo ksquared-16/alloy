@@ -20,8 +20,8 @@ describe("parseCreateLeadChildParticipationPayload", () => {
             child_date_of_birth: "2022-03-15",
             child_location_id: SITE_ID,
             child_program: "infant",
-            child_desired_schedule_type: "full_day",
-            child_desired_start_date: "2026-09-01",
+            child_schedule_type: "full_day",
+            child_start_date: "2026-09-01",
             child_program_room_cohort_key: ROOM_ID,
             child_notes: "Sibling attends",
         });
@@ -30,23 +30,23 @@ describe("parseCreateLeadChildParticipationPayload", () => {
         expect(parsed!.identity.display_name).toBe("Riley Nguyen");
         expect(parsed!.ocm).toEqual({
             location_id: SITE_ID,
-            desired_program_type: "infant",
-            desired_program_category_id: null,
-            desired_schedule_type: "full_day",
-            desired_start_date: "2026-09-01",
+            program_key: "infant",
+            program_category_id: null,
+            schedule_type: "full_day",
+            start_date: "2026-09-01",
             program_room_cohort_key: ROOM_ID,
             notes: "Sibling attends",
         });
     });
 
-    it("stores program item_key not display label", () => {
+    it("parses intake program item_key (not display label) for FK resolution at persist", () => {
         const parsed = parseCreateLeadChildParticipationPayload({
             child_first_name: "Sam",
             child_last_name: "Lee",
             child_program: "preschool",
         });
-        expect(parsed!.ocm.desired_program_type).toBe("preschool");
-        expect(parsed!.ocm.desired_program_type).not.toBe("Preschool");
+        expect(parsed!.ocm.program_key).toBe("preschool");
+        expect(parsed!.ocm.program_key).not.toBe("Preschool");
     });
 
     it("stores room unit location id not label", () => {
@@ -103,17 +103,17 @@ describe("parseCreateLeadChildParticipationPayload", () => {
 });
 
 describe("buildCreateLeadOcmInsertRow", () => {
-    it("writes stable keys to OCM insert row", () => {
+    it("writes stable keys to OCM insert row (FK-only program; the key is never stored)", () => {
         const row = buildCreateLeadOcmInsertRow({
             orgId: "org-1",
             opportunityId: "opp-1",
             customerMemberId: "cm-1",
             ocm: {
                 location_id: SITE_ID,
-                desired_program_type: "infant",
-                desired_program_category_id: null,
-                desired_schedule_type: "full_day",
-                desired_start_date: "2026-09-01",
+                program_key: "infant",
+                program_category_id: CATEGORY_ID,
+                schedule_type: "full_day",
+                start_date: "2026-09-01",
                 program_room_cohort_key: ROOM_ID,
                 notes: "Notes",
             },
@@ -123,12 +123,13 @@ describe("buildCreateLeadOcmInsertRow", () => {
             opportunity_id: "opp-1",
             customer_member_id: "cm-1",
             location_id: SITE_ID,
-            desired_program_type: "infant",
-            desired_schedule_type: "full_day",
-            desired_start_date: "2026-09-01",
+            program_category_id: CATEGORY_ID,
+            schedule_type: "full_day",
+            start_date: "2026-09-01",
             program_room_cohort_key: ROOM_ID,
             notes: "Notes",
         });
+        expect(row).not.toHaveProperty("program_key");
     });
 });
 
@@ -195,9 +196,9 @@ describe("applyCreateLeadChildParticipation", () => {
             child_last_name: "Nguyen",
             child_location_id: SITE_ID,
             child_program: "infant",
-            child_desired_schedule_type: "full_day",
+            child_schedule_type: "full_day",
             child_program_room_cohort_key: ROOM_ID,
-            child_desired_start_date: "2026-09-01",
+            child_start_date: "2026-09-01",
         };
 
         const result = await applyCreateLeadChildParticipation(sb as never, {
@@ -213,11 +214,10 @@ describe("applyCreateLeadChildParticipation", () => {
             opportunity_id: "opp-1",
             customer_member_id: "cm-1",
             location_id: SITE_ID,
-            desired_program_type: "infant",
-            desired_program_category_id: CATEGORY_ID,
-            desired_schedule_type: "full_day",
+            program_category_id: CATEGORY_ID,
+            schedule_type: "full_day",
             program_room_cohort_key: ROOM_ID,
-            desired_start_date: "2026-09-01",
+            start_date: "2026-09-01",
             // A brand-new lead's child has no enrollment disposition yet — never write `new_inquiry`.
             outcome_status_key: null,
         });

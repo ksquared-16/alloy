@@ -28,7 +28,7 @@ describe("workViewConditionFieldRegistry", () => {
         expect(labelByKey.child_enrollment_status).toBe("Enrollment Status");
         expect(labelByKey.program).toBe("Program");
         expect(labelByKey.room).toBe("Room");
-        expect(labelByKey.desired_start_date).toBe("Desired Start");
+        expect(labelByKey.start_date).toBe("Start date");
         expect(labelByKey.needs_attention).toBe("Needs Attention");
         expect(labelByKey.current_work).toBe("Current Work");
     });
@@ -44,7 +44,7 @@ describe("workViewConditionFieldRegistry", () => {
                 "site", // Campus/School
                 "program",
                 "room",
-                "desired_start_date", // Desired Start
+                "start_date", // Start date
                 "needs_attention",
                 "current_work",
             ]),
@@ -59,7 +59,7 @@ describe("workViewConditionFieldRegistry", () => {
         const byKey = Object.fromEntries(groups.map((g) => [g.key, g.fields.map((f) => f.key)]));
         expect(byKey.lead).toEqual(expect.arrayContaining(["opportunity_stage", "opportunity_status"]));
         expect(byKey.child).toEqual(
-            expect.arrayContaining(["child_enrollment_status", "program", "room", "desired_start_date"]),
+            expect.arrayContaining(["child_enrollment_status", "program", "room", "start_date"]),
         );
         expect(byKey.household).toContain("site");
         expect(byKey.operational).toEqual(expect.arrayContaining(["needs_attention", "current_work"]));

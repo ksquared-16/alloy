@@ -23,13 +23,7 @@ import {
     emitPlacementCreatedEvent,
     emitScheduleAssignmentCreatedEvent,
 } from "@/lib/childcareOperational/operationalEnrollmentEvents";
-import {
-    findLocationProgramCategory,
-    type LocationProgramCategoryRow,
-} from "@/lib/locations/locationProgramCategories";
-
 const HANDOFF_SOURCE_KEY = "approve_enrollment_handoff";
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 function trimOrNull(v: unknown): string | null {
     const s = v != null ? String(v).trim() : "";
@@ -74,10 +68,10 @@ type OcmHandoffRow = {
     id: string;
     customer_member_id: string | null;
     location_id: string | null;
-    desired_program_type: string | null;
+    program_category_id: string | null;
     program_room_cohort_key: string | null;
-    desired_schedule_type: string | null;
-    desired_start_date: string | null;
+    schedule_type: string | null;
+    start_date: string | null;
     person_id?: string | null;
 };
 
@@ -92,38 +86,13 @@ export type ExecuteOperationalEnrollmentHandoffInput = {
     correlationId?: string | null;
 };
 
-function resolveProgramCategoryId(
-    categories: ReadonlyArray<LocationProgramCategoryRow>,
-    siteLocationId: string,
-    desiredProgramType: string | null
-): string | null {
-    const raw = trimOrNull(desiredProgramType);
-    if (!raw) return null;
-
-    if (UUID_RE.test(raw)) {
-        const byId = findLocationProgramCategory({
-            categories,
-            categoryId: raw,
-            locationId: siteLocationId,
-        });
-        return byId?.id ?? null;
-    }
-
-    const byKey = findLocationProgramCategory({
-        categories,
-        locationId: siteLocationId,
-        key: raw,
-    });
-    return byKey?.id ?? null;
-}
-
-async function resolveSchedulePatternForDesiredType(
+async function resolveSchedulePatternForScheduleType(
     supabase: SupabaseClient,
     orgId: string,
     siteLocationId: string,
-    desiredScheduleType: string | null
+    scheduleTypeInput: string | null
 ) {
-    const scheduleType = trimOrNull(desiredScheduleType);
+    const scheduleType = trimOrNull(scheduleTypeInput);
     if (!scheduleType) return null;
 
     const patterns = await listSchedulePatterns(supabase, orgId, {
@@ -145,7 +114,6 @@ async function loadHandoffContext(
     opportunityLocationId: string | null;
     customerId: string | null;
     ocmRows: OcmHandoffRow[];
-    programCategories: LocationProgramCategoryRow[];
 }> {
     const { data: opp, error: oppErr } = await supabase
         .from("opportunities")
@@ -164,7 +132,7 @@ async function loadHandoffContext(
     const { data: ocmData, error: ocmErr } = await supabase
         .from("opportunity_customer_members")
         .select(
-            "id, customer_member_id, location_id, desired_program_type, program_room_cohort_key, desired_schedule_type, desired_start_date, person_id"
+            "id, customer_member_id, location_id, program_category_id, program_room_cohort_key, schedule_type, start_date, person_id"
         )
         .eq("org_id", orgId)
         .eq("opportunity_id", opportunityId);
@@ -173,21 +141,11 @@ async function loadHandoffContext(
         throw new OperationalEnrollmentServiceError("db_error", ocmErr.message);
     }
 
-    const { data: categoryData, error: catErr } = await supabase
-        .from("location_program_categories")
-        .select("id, org_id, location_id, key, label, sort_order, is_active, metadata")
-        .eq("org_id", orgId);
-
-    if (catErr) {
-        throw new OperationalEnrollmentServiceError("db_error", catErr.message);
-    }
-
     const oppRow = opp as { location_id?: string | null; customer_id?: string | null };
     return {
         opportunityLocationId: trimOrNull(oppRow.location_id),
         customerId: trimOrNull(oppRow.customer_id),
         ocmRows: (ocmData ?? []) as OcmHandoffRow[],
-        programCategories: (categoryData ?? []) as LocationProgramCategoryRow[],
     };
 }
 
@@ -198,7 +156,6 @@ async function handoffSingleChild(input: {
     customerId: string | null;
     opportunityLocationId: string | null;
     ocm: OcmHandoffRow;
-    programCategories: ReadonlyArray<LocationProgramCategoryRow>;
     todayYmd: string;
     startDateYmd: string;
     actorUserId?: string | null;
@@ -295,11 +252,8 @@ async function handoffSingleChild(input: {
         }
     }
 
-    const programCategoryId = resolveProgramCategoryId(
-        input.programCategories,
-        siteLocationId,
-        input.ocm.desired_program_type
-    );
+    // Canonical program FK straight off the OCM row — no key→category resolution.
+    const programCategoryId = trimOrNull(input.ocm.program_category_id);
     const roomLocationId = trimOrNull(input.ocm.program_room_cohort_key);
     const hasPlacementFields = Boolean(programCategoryId || roomLocationId);
 
@@ -356,11 +310,11 @@ async function handoffSingleChild(input: {
         }
     }
 
-    const desiredScheduleType = trimOrNull(input.ocm.desired_schedule_type);
-    if (!desiredScheduleType) {
+    const scheduleType = trimOrNull(input.ocm.schedule_type);
+    if (!scheduleType) {
         result.schedule_assignment = {
             outcome: "skipped",
-            warning: "no_desired_schedule_type",
+            warning: "no_schedule_type",
         };
     } else {
         const existingAssignment = await getOperationalScheduleAssignmentForAgreement(
@@ -372,18 +326,18 @@ async function handoffSingleChild(input: {
             result.schedule_assignment = { outcome: "reused", id: existingAssignment.id };
         } else {
             try {
-                const pattern = await resolveSchedulePatternForDesiredType(
+                const pattern = await resolveSchedulePatternForScheduleType(
                     input.supabase,
                     input.orgId,
                     siteLocationId,
-                    desiredScheduleType
+                    scheduleType
                 );
                 if (!pattern) {
                     result.schedule_assignment = {
                         outcome: "warning",
-                        warning: `no_schedule_pattern_for:${desiredScheduleType}`,
+                        warning: `no_schedule_pattern_for:${scheduleType}`,
                     };
-                    warnings.push(`schedule_pattern_missing:${desiredScheduleType}`);
+                    warnings.push(`schedule_pattern_missing:${scheduleType}`);
                 } else {
                     const assignment = await createInitialScheduleAssignment(input.supabase, {
                         orgId: input.orgId,
@@ -391,7 +345,7 @@ async function handoffSingleChild(input: {
                         schedulePatternId: pattern.id,
                         startDate: input.startDateYmd,
                         sourceKey: HANDOFF_SOURCE_KEY,
-                        metadata: { handoff: true, schedule_type_key: desiredScheduleType },
+                        metadata: { handoff: true, schedule_type_key: scheduleType },
                         actorUserId: input.actorUserId,
                         todayYmd: input.todayYmd,
                     });
@@ -439,7 +393,7 @@ export async function executeOperationalEnrollmentHandoffFromApprovedOpportunity
 
     for (const ocm of ctx.ocmRows) {
         const startDateYmd =
-            trimOrNull(ocm.desired_start_date) ??
+            trimOrNull(ocm.start_date) ??
             trimOrNull(input.enrollmentDateYmd) ??
             input.todayYmd;
 
@@ -450,7 +404,6 @@ export async function executeOperationalEnrollmentHandoffFromApprovedOpportunity
             customerId: ctx.customerId,
             opportunityLocationId: ctx.opportunityLocationId,
             ocm,
-            programCategories: ctx.programCategories,
             todayYmd: input.todayYmd,
             startDateYmd,
             actorUserId: input.actorUserId,

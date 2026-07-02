@@ -75,7 +75,7 @@ async function loadDepartmentMetadata(
         : null;
 }
 
-function filterChildrenToScope(
+export function filterChildrenToScope(
     children: Array<Record<string, unknown>>,
     scope: EnrollmentStatusTransitionScope,
 ): Array<Record<string, unknown>> {

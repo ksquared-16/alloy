@@ -40,7 +40,7 @@ describe("operational system field registry", () => {
         const ids = new Set(OPERATIONAL_FORM_SYSTEM_FIELDS.map((e) => e.id));
         expect(ids.has("child_first_name")).toBe(true);
         expect(ids.has("guardian_email")).toBe(true);
-        expect(ids.has("desired_start_date")).toBe(true);
+        expect(ids.has("start_date")).toBe(true);
     });
 });
 

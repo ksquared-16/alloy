@@ -13,18 +13,18 @@ export function mapRawInquiryChildrenToDrawerRows(raw: unknown[]): InquiryChildR
             display_name: r.display_name != null ? String(r.display_name) : null,
             dob: r.dob != null && String(r.dob).trim() ? String(r.dob) : null,
             age: r.age != null && String(r.age).trim() ? String(r.age) : null,
-            desired_program_type:
-                r.desired_program_type != null && String(r.desired_program_type).trim()
-                    ? String(r.desired_program_type)
+            program_category_id:
+                r.program_category_id != null && String(r.program_category_id).trim()
+                    ? String(r.program_category_id)
                     : null,
-            desired_program_category_id:
-                r.desired_program_category_id != null && String(r.desired_program_category_id).trim()
-                    ? String(r.desired_program_category_id)
+            program_key:
+                r.program_key != null && String(r.program_key).trim()
+                    ? String(r.program_key)
                     : null,
             desired_program_label: r.desired_program_label != null ? String(r.desired_program_label) : null,
-            desired_schedule_type:
-                r.desired_schedule_type != null && String(r.desired_schedule_type).trim()
-                    ? String(r.desired_schedule_type)
+            schedule_type:
+                r.schedule_type != null && String(r.schedule_type).trim()
+                    ? String(r.schedule_type)
                     : null,
             desired_schedule_label: r.desired_schedule_label != null ? String(r.desired_schedule_label) : null,
             outcome_status_key:
@@ -33,8 +33,8 @@ export function mapRawInquiryChildrenToDrawerRows(raw: unknown[]): InquiryChildR
                     : null,
             outcome_status_label: r.outcome_status_label != null ? String(r.outcome_status_label) : null,
             notes: r.notes != null ? String(r.notes) : null,
-            desired_start_date:
-                r.desired_start_date != null ? String(r.desired_start_date).slice(0, 10) : null,
+            start_date:
+                r.start_date != null ? String(r.start_date).slice(0, 10) : null,
             location_id:
                 r.location_id != null && String(r.location_id).trim() ? String(r.location_id) : null,
             location_label: r.location_label != null ? String(r.location_label) : null,

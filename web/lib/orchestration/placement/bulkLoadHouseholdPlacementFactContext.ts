@@ -4,6 +4,7 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { HouseholdPlacementFactHouseholdSlice } from "@/lib/orchestration/placement/householdPlacementFacts";
+import { firstNestedRecord } from "@/lib/orchestration/placement/normalizeSupabaseNestedRelation";
 import { resolvePlacementCandidateChildDisplayName } from "@/lib/orchestration/placement/resolvePlacementCandidateChildDisplayName";
 import { resolvePlacementCandidateCohortForQueue } from "@/lib/orchestration/placement/resolvePlacementCandidateCohortForQueue";
 
@@ -34,7 +35,7 @@ export async function bulkLoadHouseholdPlacementFactContext(params: {
     const { data: ocmRows, error: ocmErr } = await params.supabase
         .from("opportunity_customer_members")
         .select(
-            "id, customer_member_id, outcome_status_key, location_id, program_room_cohort_key, desired_program_type, desired_program_category_id, customer_members(display_name, first_name, last_name, persons(first_name, last_name)), opportunities!inner(customer_id)"
+            "id, customer_member_id, outcome_status_key, location_id, program_room_cohort_key, program_category_id, location_program_categories(key), customer_members(display_name, first_name, last_name, persons(first_name, last_name)), opportunities!inner(customer_id)"
         )
         .eq("org_id", params.orgId)
         .in("opportunities.customer_id", ids);
@@ -50,8 +51,8 @@ export async function bulkLoadHouseholdPlacementFactContext(params: {
             outcome_status_key: string | null;
             location_id?: string | null;
             program_room_cohort_key?: string | null;
-            desired_program_type?: string | null;
-            desired_program_category_id?: string | null;
+            program_category_id?: string | null;
+            location_program_categories?: { key?: string | null } | Array<{ key?: string | null }> | null;
             customer_members?: {
                 display_name?: string | null;
                 first_name?: string | null;
@@ -67,11 +68,15 @@ export async function bulkLoadHouseholdPlacementFactContext(params: {
         const childDisplayName =
             resolvePlacementCandidateChildDisplayName({ ocmMember: row.customer_members ?? null }) ??
             null;
+        const programKey =
+            (typeof firstNestedRecord(row.location_program_categories)?.key === "string"
+                ? String(firstNestedRecord(row.location_program_categories)?.key).trim()
+                : "") || null;
         const cohort = resolvePlacementCandidateCohortForQueue({
             storedKey: row.program_room_cohort_key ?? "",
             storedLabel: row.program_room_cohort_key ?? "",
             ocmProgramRoomCohortKey: row.program_room_cohort_key,
-            desiredProgramType: row.desired_program_type,
+            programKey,
         });
 
         out.get(customerId)!.inquiry_children.push({
@@ -81,8 +86,8 @@ export async function bulkLoadHouseholdPlacementFactContext(params: {
             location_id: row.location_id ?? null,
             child_display_name: childDisplayName,
             program_room_cohort_key: cohort.program_room_cohort_key,
-            desired_program_type: row.desired_program_type ?? null,
-            desired_program_category_id: row.desired_program_category_id ?? null,
+            program_key: programKey,
+            program_category_id: row.program_category_id ?? null,
         });
     }
 

@@ -113,7 +113,7 @@ async function resolveFamiliesForSpec(
             let q = supabase.from("opportunity_customer_members").select("opportunity_id").eq("org_id", orgId);
             for (const f of childFilters) {
                 if (f.kind === "child_enrollment_status") q = q.in("outcome_status_key", f.status_keys);
-                else if (f.kind === "program") q = q.in("desired_program_category_id", f.program_category_ids);
+                else if (f.kind === "program") q = q.in("program_category_id", f.program_category_ids);
             }
             const { data: ocm, error } = await q.limit(OPP_SCAN_CAP * 2);
             if (error) {
