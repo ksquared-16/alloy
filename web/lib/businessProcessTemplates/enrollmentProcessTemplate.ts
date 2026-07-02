@@ -22,12 +22,12 @@ export const ENROLLMENT_TRACK_FAMILY_KEY = "family_track" as const;
 export const ENROLLMENT_TRACK_CHILD_KEY = "child_track" as const;
 
 export const ENROLLMENT_FAMILY_STAGE_SPECS = [
-    { key: "lead", label: "Lead", track_key: ENROLLMENT_TRACK_FAMILY_KEY },
-    { key: "qualification", label: "Qualification", track_key: ENROLLMENT_TRACK_FAMILY_KEY },
+    { key: "lead", label: "New Lead", track_key: ENROLLMENT_TRACK_FAMILY_KEY },
     { key: "tour", label: "Tour", track_key: ENROLLMENT_TRACK_FAMILY_KEY },
-    { key: "decision", label: "Decision", track_key: ENROLLMENT_TRACK_FAMILY_KEY },
+    { key: "decision", label: "Placement / Decision", track_key: ENROLLMENT_TRACK_FAMILY_KEY },
     { key: "closed", label: "Closed", track_key: ENROLLMENT_TRACK_FAMILY_KEY },
 ] as const;
+// `qualification` removed (Part 9): no distinct work — folded into the Lead stage's qualify_fit work.
 
 export const ENROLLMENT_CHILD_STAGE_SPECS = [
     { key: "waitlist", label: "Waitlist", track_key: ENROLLMENT_TRACK_CHILD_KEY },
@@ -45,11 +45,10 @@ export const ENROLLMENT_STATUS_ROLLUP_HINTS: Record<
     string,
     { family_status_examples?: string[]; enrollment_status_examples?: string[] }
 > = {
-    lead: { family_status_examples: ["New Lead", "Contacting"] },
-    qualification: { family_status_examples: ["Qualified"] },
-    tour: { family_status_examples: ["Tour Requested", "Tour Scheduled", "Tour Completed"] },
-    decision: { family_status_examples: ["Decision Pending"] },
-    closed: { family_status_examples: ["Closed", "Withdrawn", "Lost"] },
+    lead: { family_status_examples: ["Open"] },
+    tour: { family_status_examples: ["Open"] },
+    decision: { family_status_examples: ["Open"] },
+    closed: { family_status_examples: ["Closed"] },
     waitlist: { enrollment_status_examples: ["Waitlisted", "Offer Pending"] },
     enrolling: { enrollment_status_examples: ["Enrolling", "Future Start"] },
     enrolled: { enrollment_status_examples: ["Enrolled"] },
