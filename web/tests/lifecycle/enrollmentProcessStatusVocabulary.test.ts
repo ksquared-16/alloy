@@ -79,12 +79,24 @@ const CHILD_PIPELINE_ROWS = [
 ];
 
 describe("enrollment process status vocabulary", () => {
-    it("defines family and child canonical vocabulary rows", () => {
-        expect(ENROLLMENT_FAMILY_TRACK_STATUS_VOCABULARY.length).toBeGreaterThan(0);
-        expect(ENROLLMENT_CHILD_TRACK_STATUS_VOCABULARY.length).toBeGreaterThan(0);
-        expect(enrollmentStatusVocabularyForStage("lead", "opportunities").map((r) => r.status_label)).toEqual([
-            "New Lead",
-            "Contacting",
+    it("defines the collapsed family and child durable-status vocabulary (S4)", () => {
+        // Case durable status collapses to open|closed.
+        expect(ENROLLMENT_FAMILY_TRACK_STATUS_VOCABULARY.map((r) => r.status_key)).toEqual([
+            "open",
+            "closed",
+        ]);
+        // Child disposition collapses to waitlisted|enrolling|enrolled|withdrawn|not_enrolling.
+        expect(ENROLLMENT_CHILD_TRACK_STATUS_VOCABULARY.map((r) => r.status_key)).toEqual([
+            "waitlisted",
+            "enrolling",
+            "enrolled",
+            "withdrawn",
+            "not_enrolling",
+        ]);
+        // Stage is no longer status-derived — the deprecated forStage helper returns the full set.
+        expect(enrollmentStatusVocabularyForStage("lead", "opportunities").map((r) => r.status_key)).toEqual([
+            "open",
+            "closed",
         ]);
     });
 

@@ -103,27 +103,37 @@ async function queryOcmEnrollmentTrackRows(params: {
     recordScopeConstraints: RecordScopeConstraints | null;
     locationScopeSource: QueueMembershipLocationScopeSource;
 }): Promise<OcmEnrollmentTrackQueryRow[]> {
-    const statusKeys =
-        params.dispositionKeys?.length ?
-            [...params.dispositionKeys]
-        :   [...legacyOcmDispositionKeysForStage(params.stageKey)];
-    if (!statusKeys.length) return [];
+    // S4: membership is by the persisted `stage_key` column, NOT by matching status against
+    // included_disposition_keys. The disposition keys are retained only as a legacy fallback for
+    // records that have no persisted stage_key yet (un-migrated) or lanes without a stage key.
+    const stageKey = params.stageKey.trim();
     let q = params.supabase
         .from("opportunity_customer_members")
         .select(
-            `id, org_id, opportunity_id, customer_member_id, outcome_status_key,
+            `id, org_id, opportunity_id, customer_member_id, outcome_status_key, stage_key,
             program_category_id, location_program_categories(key, label), schedule_type, location_id, program_room_cohort_key, start_date,
             updated_at, created_at,
             opportunities!inner (
-                id, name, title, status_key, customer_id, primary_person_id, primary_contact_id, work_unit_id, location_id, metadata, created_at, updated_at
+                id, name, title, status_key, stage_key, customer_id, primary_person_id, primary_contact_id, work_unit_id, location_id, metadata, created_at, updated_at
             ),
             customer_members (
                 id, display_name, first_name, last_name, dob, person_id, relationship, is_active
             )`
         )
         .eq("org_id", params.orgId)
-        .eq("opportunities.work_unit_id", params.workUnitId)
-        .in("outcome_status_key", statusKeys);
+        .eq("opportunities.work_unit_id", params.workUnitId);
+
+    if (stageKey) {
+        q = q.eq("stage_key", stageKey);
+    } else {
+        // Legacy fallback: no stage key on the lane — filter by disposition/status keys.
+        const statusKeys =
+            params.dispositionKeys?.length ?
+                [...params.dispositionKeys]
+            :   [...legacyOcmDispositionKeysForStage(params.stageKey)];
+        if (!statusKeys.length) return [];
+        q = q.in("outcome_status_key", statusKeys);
+    }
 
     q = applyOcmLocationScopeToQuery(q, params.recordScopeConstraints, params.locationScopeSource);
 

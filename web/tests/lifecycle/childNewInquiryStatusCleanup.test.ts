@@ -15,6 +15,7 @@ describe("Child enrollment status — eliminate new_inquiry / 'New Inquiry'", ()
             customerMemberId: "cm-1",
             ocm: {
                 location_id: null,
+                program_key: null,
                 program_category_id: null,
                 schedule_type: null,
                 start_date: null,
@@ -43,7 +44,7 @@ describe("Child enrollment status — eliminate new_inquiry / 'New Inquiry'", ()
     it("no operator-facing 'New Inquiry' copy remains in status-label sources", () => {
         const files = [
             "lib/admin/opportunityActivityTimelineFormat.ts",
-            "lib/lifecycle/enrollmentProcessStageBindings.ts",
+            // enrollmentProcessStageBindings.ts was deleted in S4 (status→stage map removed).
             "lib/completion/lifecycleStageWorkspaceMapping.ts",
         ];
         for (const rel of files) {

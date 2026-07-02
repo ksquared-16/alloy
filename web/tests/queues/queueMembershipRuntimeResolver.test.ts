@@ -163,7 +163,7 @@ describe("resolveOpportunityQueueLaneRouting", () => {
         expect(routing.ocmTrackLaneCtx).toBeNull();
     });
 
-    it("tracks_v1 + valid child config routes OCM builder with disposition keys (no env)", () => {
+    it("tracks_v1 + valid child config routes OCM builder by stage (no env)", () => {
         const routing = resolveOpportunityQueueLaneRouting({
             normalized: { isV2: true, queues: [] } as never,
             executableQueueKey: "enrollment_completed",
@@ -172,7 +172,9 @@ describe("resolveOpportunityQueueLaneRouting", () => {
         });
         expect(routing.routingSource).toBe("builder");
         expect(routing.ocmTrackLaneCtx?.membershipSource).toBe("builder");
-        expect(routing.ocmTrackLaneCtx?.dispositionKeys).toEqual(["enrolled"]);
+        expect(routing.ocmTrackLaneCtx?.stageKey).toBe("enrolled");
+        // S4: membership is by stage_key; default disposition keys are now empty.
+        expect(routing.ocmTrackLaneCtx?.dispositionKeys).toEqual([]);
         expect(routing.ocmTrackLaneCtx?.countUnit).toBe("enrollment_tracks");
     });
 
@@ -267,9 +269,10 @@ describe("resolveOpportunityQueueLaneRouting", () => {
         });
         expect(routing.routingSource).toBe("builder");
         expect(routing.waitlistGrainCtx?.membershipSource).toBe("builder");
+        // S4: waitlist default membership no longer enumerates dispositions; child_lifecycle_statuses
+        // falls back to the queue definition's own filter (["waitlisted"]).
         expect(routing.waitlistGrainCtx?.filters.child_lifecycle_statuses).toEqual([
             "waitlisted",
-            "waitlist_paused",
         ]);
         expect(routing.waitlistGrainCtx?.countUnit).toBe("candidates");
     });

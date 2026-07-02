@@ -40,136 +40,118 @@ export const ENROLLMENT_TEMPLATE_STAGE_KEYS = new Set([
     "withdrawn",
 ]);
 
+/**
+ * S4 status collapse: membership is by the persisted `stage_key` column, not by matching status
+ * against included_*_keys. These specs therefore carry only subject_type / count_unit /
+ * location_scope_source per stage; the included_*_keys arrays are intentionally empty (kept on the
+ * type for stored-config back-compat parsing / legacy fallback only).
+ */
 const ENROLLMENT_MEMBERSHIP_DEFAULTS: Record<string, EnrollmentMembershipSpec> = {
     lead: {
         subject_type: "case",
         count_unit: "cases",
         included_disposition_keys: [],
-        included_status_keys: ["new_inquiry", "open", "new", "needs_qualification"],
     },
     qualification: {
         subject_type: "case",
         count_unit: "cases",
         included_disposition_keys: [],
-        included_status_keys: ["qualified"],
     },
     tour: {
         subject_type: "case",
         count_unit: "cases",
         included_disposition_keys: [],
-        included_status_keys: ["tour_requested", "tour_scheduled", "tour_completed"],
     },
     decision: {
         subject_type: "case",
         count_unit: "cases",
         included_disposition_keys: [],
-        included_status_keys: ["decision_pending"],
     },
     closed: {
         subject_type: "case",
         count_unit: "cases",
         included_disposition_keys: [],
-        included_status_keys: ["lost", "withdrawn", "not_a_fit", "aged_out", "not_enrolling"],
     },
     waitlist: {
         subject_type: "candidate",
         count_unit: "candidates",
         location_scope_source: "placement_site",
-        included_disposition_keys: ["waitlisted", "offer_pending", "waitlist_paused"],
+        included_disposition_keys: [],
     },
     enrolling: {
         subject_type: "child",
         count_unit: "enrollment_tracks",
         location_scope_source: "ocm_site",
-        included_disposition_keys: [
-            "enrolling",
-            "registration_pending",
-            "paperwork_pending",
-            "start_date_scheduled",
-        ],
+        included_disposition_keys: [],
     },
     enrollment: {
         subject_type: "child",
         count_unit: "enrollment_tracks",
         location_scope_source: "ocm_site",
-        included_disposition_keys: [
-            "enrolling",
-            "registration_pending",
-            "paperwork_pending",
-            "start_date_scheduled",
-        ],
+        included_disposition_keys: [],
     },
     closed_withdrawn: {
         subject_type: "child",
         count_unit: "enrollment_tracks",
         location_scope_source: "ocm_site",
-        included_disposition_keys: [
-            "withdrawn",
-            "family_withdrew",
-            "not_moving_forward",
-            "aged_out",
-            "not_enrolling",
-        ],
+        included_disposition_keys: [],
     },
     enrolled: {
         subject_type: "child",
         count_unit: "enrollment_tracks",
         location_scope_source: "ocm_site",
-        included_disposition_keys: ["enrolled"],
+        included_disposition_keys: [],
     },
     new_lead: {
         subject_type: "case",
         count_unit: "cases",
         included_disposition_keys: [],
-        included_status_keys: ["new_inquiry", "open", "new"],
     },
     contacting: {
         subject_type: "case",
         count_unit: "cases",
-        included_disposition_keys: ["needs_contact", "contact_attempted"],
-        included_status_keys: ["open", "contact_attempted"],
+        included_disposition_keys: [],
     },
     tour_scheduled: {
         subject_type: "child",
         count_unit: "enrollment_tracks",
         location_scope_source: "ocm_site",
-        included_disposition_keys: ["tour_requested", "tour_scheduled"],
+        included_disposition_keys: [],
     },
     tour_completed: {
         subject_type: "child",
         count_unit: "enrollment_tracks",
         location_scope_source: "ocm_site",
-        included_disposition_keys: ["tour_completed"],
+        included_disposition_keys: [],
     },
     decision_pending: {
         subject_type: "child",
         count_unit: "enrollment_tracks",
         location_scope_source: "ocm_site",
-        included_disposition_keys: ["decision_pending"],
+        included_disposition_keys: [],
     },
     closed_lost: {
         subject_type: "case",
         count_unit: "cases",
         included_disposition_keys: [],
-        included_status_keys: ["closed", "lost"],
     },
     offered_spot: {
         subject_type: "child",
         count_unit: "enrollment_tracks",
         location_scope_source: "ocm_site",
-        included_disposition_keys: ["offer_pending"],
+        included_disposition_keys: [],
     },
     future_start: {
         subject_type: "child",
         count_unit: "enrollment_tracks",
         location_scope_source: "ocm_site",
-        included_disposition_keys: ["start_date_scheduled"],
+        included_disposition_keys: [],
     },
     withdrawn: {
         subject_type: "child",
         count_unit: "enrollment_tracks",
         location_scope_source: "ocm_site",
-        included_disposition_keys: ["family_withdrew", "withdrawn"],
+        included_disposition_keys: [],
     },
 };
 

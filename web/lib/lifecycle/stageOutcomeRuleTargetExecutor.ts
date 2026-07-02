@@ -44,6 +44,7 @@ export async function applyStageOutcomeRuleTarget(
         case "update_family_case_status": {
             const statusKey = target.status_key?.trim();
             if (!statusKey) return { error: "Missing family case status key" };
+            const closeReasonKey = target.close_reason_key?.trim();
             const res = await updateOpportunityStatusWithEvent({
                 supabase,
                 orgId,
@@ -51,6 +52,8 @@ export async function applyStageOutcomeRuleTarget(
                 newStatusKey: statusKey,
                 actorUserId: userId,
                 normalizeContext: "stage_operating_plan_outcome",
+                // Persist close reason alongside the durable status (S4 collapse).
+                ...(closeReasonKey ? { additionalPatch: { close_reason_key: closeReasonKey } } : {}),
                 eventMetadata: { source: "stage_operating_plan_v1", stage_key: stageKey },
             });
             if (res.error) return { error: res.error.message };
@@ -74,6 +77,17 @@ export async function applyStageOutcomeRuleTarget(
                 rowGrain: "child",
             });
             if (res.error) return { error: res.error.message };
+            // Persist close reason alongside the terminal disposition (S4 collapse).
+            const closeReasonKey = target.close_reason_key?.trim();
+            if (closeReasonKey) {
+                const { error: crErr } = await supabase
+                    .from("opportunity_customer_members")
+                    .update({ close_reason_key: closeReasonKey, updated_at: new Date().toISOString() })
+                    .eq("id", ocmId)
+                    .eq("org_id", orgId)
+                    .eq("opportunity_id", subject.opportunity_id);
+                if (crErr) return { error: crErr.message };
+            }
             return { status_updated: true };
         }
 
@@ -159,8 +173,32 @@ export async function applyStageOutcomeRuleTarget(
             return {};
         }
 
-        case "move_to_stage":
+        case "move_to_stage": {
+            // Stage is a persisted process-state column (S4). Outcome execution is the
+            // authoritative writer of stage_key on the family case or the child track.
+            const targetStageKey = target.stage_key?.trim();
+            if (!targetStageKey) return { error: "Missing target stage key" };
+            const nowIso = new Date().toISOString();
+            if (subject.journey_segment === "child") {
+                const ocmId = subject.opportunity_customer_member_id?.trim();
+                if (!ocmId) return { error: "Child enrollment track required for move_to_stage" };
+                const { error } = await supabase
+                    .from("opportunity_customer_members")
+                    .update({ stage_key: targetStageKey, updated_at: nowIso })
+                    .eq("id", ocmId)
+                    .eq("org_id", orgId)
+                    .eq("opportunity_id", subject.opportunity_id);
+                if (error) return { error: error.message };
+                return {};
+            }
+            const { error } = await supabase
+                .from("opportunities")
+                .update({ stage_key: targetStageKey, updated_at: nowIso })
+                .eq("id", subject.opportunity_id)
+                .eq("org_id", orgId);
+            if (error) return { error: error.message };
             return {};
+        }
 
         default:
             return { error: `Unsupported target kind` };

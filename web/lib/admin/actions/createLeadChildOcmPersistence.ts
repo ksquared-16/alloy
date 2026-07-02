@@ -110,6 +110,10 @@ export function buildCreateLeadOcmInsertRow(args: {
         // Leave outcome_status_key null so the child badge is suppressed until enrollment starts —
         // do NOT write `new_inquiry` (which has no OCM definition and humanizes to "New Inquiry").
         outcome_status_key: null,
+        // No child process stage at lead creation: the child rides the family track until a
+        // decision creates the enrollment participation. Stage is a persisted column (S4) — leave
+        // it null now; outcome execution writes it when the child enters waitlist/enrolling/etc.
+        stage_key: null,
         metadata: { source: "create_lead" },
         ...(ocm.location_id ? { location_id: ocm.location_id } : {}),
         ...(ocm.program_category_id

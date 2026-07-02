@@ -1976,11 +1976,11 @@ function buildOpportunityNeedsAttentionCandidateOrExpr(
 export const NEEDS_ATTENTION_OPPORTUNITY_FETCH_CAP = 5000;
 
 const NEEDS_ATTENTION_OPPORTUNITY_SELECT_DEFAULT =
-    "id, name, status_key, quote_total, estimated_price_cents, monetary_value_cents, customer_id, primary_person_id, primary_contact_id, work_unit_id, location_id, metadata, created_at, updated_at";
+    "id, name, status_key, stage_key, quote_total, estimated_price_cents, monetary_value_cents, customer_id, primary_person_id, primary_contact_id, work_unit_id, location_id, metadata, created_at, updated_at";
 
 /** Dept bucket / count paths — same resolver fields, smaller row payload. */
 export const NEEDS_ATTENTION_OPPORTUNITY_SELECT_RESOLVER_MINIMAL =
-    "id, status_key, quote_total, estimated_price_cents, monetary_value_cents, customer_id, primary_person_id, primary_contact_id, metadata, created_at, updated_at";
+    "id, status_key, stage_key, quote_total, estimated_price_cents, monetary_value_cents, customer_id, primary_person_id, primary_contact_id, metadata, created_at, updated_at";
 
 /**
  * When queue summaries only need counts (department cards), use a smaller cap so we do not pull 5k rows
@@ -3334,7 +3334,7 @@ export async function getWorkUnitQueueSummaries(params: {
         const countQ = applyOpsToJobQuery(oppScopedCountBase() as never, ops);
         let previewQ0 = supabase
             .from("opportunities")
-            .select("id, name, title, status_key, customer_id, primary_person_id, primary_contact_id, work_unit_id, location_id, metadata, created_at, updated_at")
+            .select("id, name, title, status_key, stage_key, customer_id, primary_person_id, primary_contact_id, work_unit_id, location_id, metadata, created_at, updated_at")
             .eq("org_id", params.orgId);
         if (opportunityScopeBundle) {
             previewQ0 = applyOpportunityQueueWorkUnitScope(
@@ -4421,7 +4421,7 @@ export async function getWorkUnitQueueItems(params: {
 
     let itemsBaseRaw = supabase
         .from("opportunities")
-        .select("id, name, status_key, customer_id, primary_person_id, primary_contact_id, location_id, metadata, created_at, updated_at")
+        .select("id, name, status_key, stage_key, customer_id, primary_person_id, primary_contact_id, location_id, metadata, created_at, updated_at")
         .eq("org_id", params.orgId);
     if (opportunityScopeBundle) {
         itemsBaseRaw = applyOpportunityQueueWorkUnitScope(

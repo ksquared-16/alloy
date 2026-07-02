@@ -228,10 +228,21 @@ async function ensureOpportunity(
         statusKey === "ready_to_enroll";
     const tourDate = tourEligible ? isoDateOnly(new Date(now.getTime() + (2 + (now.getDate() % 6)) * 86400000)) : null;
 
+    // S4 status collapse: durable status is open|closed; the pipeline position becomes the
+    // persisted stage_key column. The demo spec's `statusKey` names the legacy pipeline position.
+    const demoStageKey =
+        statusKey === "waitlisted" ? "waitlist"
+        : statusKey === "enrolled" ? "enrolled"
+        : statusKey === "ready_to_enroll" || statusKey === "application_in_progress" ? "enrolling"
+        : statusKey === "tour_scheduled" || statusKey === "tour_completed" ? "tour"
+        : "lead";
+    const demoDurableStatus = statusKey === "lost" ? "closed" : "open";
+
     const insertRow: Record<string, unknown> = {
         org_id: orgId,
         name: `Enrollment — ${familyLast} Family`,
-        status_key: statusKey,
+        status_key: demoDurableStatus,
+        stage_key: demoStageKey,
         work_unit_id: workUnitId,
         customer_id: customerId,
         primary_person_id: guardianPersonId,

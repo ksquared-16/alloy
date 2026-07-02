@@ -103,32 +103,42 @@ export const STATUS_RESEED_PERSON_LEGACY_KEYS = [
     "graduated",
 ] as const;
 
-/** OCM keys preserved; labels updated only. */
+/**
+ * Collapsed child enrollment disposition statuses on OCM (S4 status collapse).
+ * Durable outcomes only: waitlisted | enrolling | enrolled | withdrawn | not_enrolling
+ * (plus the implicit null in-process). Removed keys (offer_pending, waitlist_paused,
+ * registration_pending, paperwork_pending, start_date_scheduled, family_withdrew,
+ * not_moving_forward, aged_out, tour_*, decision_pending, new_inquiry, …) are deactivated.
+ */
 export const STATUS_RESEED_OCM_ENROLLMENT_STATUSES: StatusReseedRow[] = [
-    { status_key: "new_inquiry", status_label: "New Lead", sort_order: 10 },
-    { status_key: "needs_qualification", status_label: "Contacting", sort_order: 20 },
-    { status_key: "qualified", status_label: "Qualified", sort_order: 30 },
-    { status_key: "tour_requested", status_label: "Tour Requested", sort_order: 40 },
-    { status_key: "tour_scheduled", status_label: "Tour Scheduled", sort_order: 50 },
-    { status_key: "tour_completed", status_label: "Tour Completed", sort_order: 60 },
-    { status_key: "decision_pending", status_label: "Decision Pending", sort_order: 70 },
-    { status_key: "waitlisted", status_label: "Waiting", sort_order: 80 },
-    { status_key: "waitlist_paused", status_label: "Waiting Paused", sort_order: 90 },
-    { status_key: "offer_pending", status_label: "Offer Pending", sort_order: 100 },
-    { status_key: "registration_pending", status_label: "Registration Pending", sort_order: 110 },
-    { status_key: "paperwork_pending", status_label: "Paperwork Pending", sort_order: 120 },
-    { status_key: "start_date_scheduled", status_label: "Start Date Scheduled", sort_order: 130 },
-    { status_key: "enrolled", status_label: "Enrolled", sort_order: 140 },
-    { status_key: "not_enrolling", status_label: "Not Enrolling", sort_order: 150 },
-    { status_key: "interested", status_label: "Interested", sort_order: 160 },
-    { status_key: "enrolling", status_label: "Enrolling", sort_order: 170 },
-    { status_key: "deferred", status_label: "Deferred", sort_order: 180 },
-    { status_key: "family_withdrew", status_label: "Family Withdrew", sort_order: 190 },
-    { status_key: "not_moving_forward", status_label: "Not Moving Forward", sort_order: 200 },
-    { status_key: "not_a_fit", status_label: "Not a Fit", sort_order: 210 },
-    { status_key: "withdrawn", status_label: "Withdrawn", sort_order: 220 },
-    { status_key: "aged_out", status_label: "No Longer Eligible", sort_order: 230 },
+    { status_key: "waitlisted", status_label: "Waitlisted", sort_order: 10 },
+    { status_key: "enrolling", status_label: "Enrolling", sort_order: 20 },
+    { status_key: "enrolled", status_label: "Enrolled", sort_order: 30 },
+    { status_key: "withdrawn", status_label: "Withdrawn", sort_order: 40 },
+    { status_key: "not_enrolling", status_label: "Not Enrolling", sort_order: 50 },
 ];
+
+/** Legacy OCM enrollment keys removed by the S4 status collapse — deactivate on reseed. */
+export const STATUS_RESEED_OCM_ENROLLMENT_LEGACY_KEYS = [
+    "new_inquiry",
+    "needs_qualification",
+    "qualified",
+    "tour_requested",
+    "tour_scheduled",
+    "tour_completed",
+    "decision_pending",
+    "waitlist_paused",
+    "offer_pending",
+    "registration_pending",
+    "paperwork_pending",
+    "start_date_scheduled",
+    "interested",
+    "deferred",
+    "family_withdrew",
+    "not_moving_forward",
+    "not_a_fit",
+    "aged_out",
+] as const;
 
 export const OPPORTUNITY_LEGACY_STATUS_BACKFILL_TO_OPEN = [
     ...STATUS_RESEED_OPPORTUNITY_LEGACY_KEYS,

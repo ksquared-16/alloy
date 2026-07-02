@@ -25,10 +25,19 @@ export type QueueMembershipPlacementScope =
 export type QueueMembershipV1 = {
     version: 1;
     lifecycle_key: string;
+    /** Membership owner (S4): a record belongs to this lane when its persisted `stage_key` matches. */
     stage_key: string;
     subject_type: QueueMembershipSubjectType;
     count_unit: QueueMembershipCountUnit;
+    /**
+     * @deprecated Membership is by `stage_key` (S4 status collapse). Retained as a legacy
+     * filter fallback for un-migrated records only; do NOT use for membership decisions.
+     */
     included_disposition_keys: string[];
+    /**
+     * @deprecated Membership is by `stage_key` (S4 status collapse). Retained for stored-config
+     * back-compat parsing only.
+     */
     included_status_keys?: string[];
     location_scope_source?: QueueMembershipLocationScopeSource | null;
     placement_scope?: QueueMembershipPlacementScope | null;
