@@ -18,6 +18,23 @@ implementation conflicted with BPEP doctrine it was aligned, not preserved.
   `close_reason_key`, canonical fields (`start_date`/`schedule_type`/`program_category_id`), and the
   collapsed `status_definitions` all ship in migrations 000000/000100.
 
+## Reset Operational State — script (new)
+
+`web/scripts/resetOperationalState.ts` (`npm run dev:reset:operational-state`) — **delete instances,
+keep the operating system.** Dry-run by default; `--execute` requires
+`CONFIRM_RESET_OPERATIONAL_STATE=true` + `RESET_ORG_ID` + `SUPABASE_SERVICE_ROLE_KEY`; refuses
+production. It delegates deletion to the vetted, **config-preserving** `enrollment_runtime_reset`
+path (preserves `departments`/`work_units` = BP/Work View/stage config, persons/customers linked to
+non-target records, and locations; scopes `field_values` deletes to operational entity types), then
+**verifies**: config tables (`departments`, `work_units`, `status_definitions`, `field_definitions`,
+`locations`, `action_definitions`, `entity_layouts`, …) still populated AND enrollment-core operational
+tables (`opportunities`, `opportunity_customer_members`, `operational_tasks`) empty — failing the run if
+configuration was lost or operational rows remain.
+- **You run (dev/staging):** `npm run dev:reset:operational-state` (dry-run, review the plan), then
+  `CONFIRM_RESET_OPERATIONAL_STATE=true RESET_ORG_ID=<org> npm run dev:reset:operational-state -- --execute`.
+- Deletion logic validated by reuse (the underlying execute path is production tooling); SQL of the
+  new auto-seeder cleanup migration was validated in an isolated scratch schema.
+
 ## Part 2 — Clean environment ✅ (code) / ▶ (run against your DB)
 - **No automatic business seeders remain.** The sole auto-seeder (migration `20260423143000`, Rivera
   family) is now neutralized by migration `20260712000000`; all `seed*`/`demo:*`/`dev:tenant:childcare`
@@ -53,11 +70,17 @@ filters use `opportunity_stage` (runtime-supported). Outcome execution writes du
 `stage_key` (canonical flow, no status-list membership).
 - **Fixed this pass:** the default Work View seed filtered on the stage *label* instead of the stage
   *key* — it would have matched nothing. Now uses the key.
+- **Fixed this pass (Task 8):** the default Work View compat seed filtered on the stage *label*
+  (`"New Lead"`) instead of the stage *key* (`lead`); the runtime matches the key, so seeded Work Views
+  matched nothing. Now uses the key (test-locked).
 - **Follow-up requiring your stack:** the legacy `enrollmentPipelineQueueDefinition` lanes still filter by
-  `case_status`/`child_lifecycle_status` (post-collapse every open case is `open`, so status can't
-  separate lead/tour/decision, and tour/follow-up lanes filter deleted keys). The stage-based
-  builder/projection path supersedes it, but which path renders a given org's lane is feature-flag/config
-  dependent — confirm on the live stack (acceptance SQL check `B`), then cut those lanes to `stage_key`.
+  `case_status`/`child_lifecycle_status`. A newly created lead (`status_key=open`) DOES appear in the
+  `new_leads` lane via its `open` value, so it is not invisible — but post-collapse every open case is
+  `open`, so those status lanes can no longer *separate* lead/tour/decision. The doctrine path (work
+  views/projection) is stage-based and correct; the legacy queue V2 runtime has no `stage` filter type,
+  so cutting its lanes to `stage_key` means adding a `stage` filter type + evaluator support. Deferred as
+  a discrete change because it touches load-bearing queue runtime that must be validated on a live stack
+  (which path renders is org/flag dependent — settle with acceptance SQL check `B`).
 
 ## Part 7 — Builder V2 (▶ live UI verification is yours)
 Persistence contracts (grain, work, outcomes, requirements, work views, surfaces, actions) are wired and
