@@ -6,6 +6,10 @@
  * Resolves the WorkspaceSurfaceModel from the existing data layer, reused verbatim:
  *   - header / first-paint tiles — server-composed workspace Route VM
  *   - process tiles              — operator lifecycle landing cards (peek → load refine)
+ *   - work-view counts           — canonical-location totals (`useWorkViewTotals`): each
+ *                                  view's count is the rows-API exact total at its host
+ *                                  work unit + base lane — the SAME source the Work Unit
+ *                                  pill counts and rendered rows read
  *   - operational answers        — OIP warm cache (shared `useOperationalAnswers`)
  *
  * Presentation components receive this model and never fetch
@@ -23,6 +27,11 @@ import {
 } from "@/lib/admin/loadOperatorLifecycleLandingClient";
 import { resolveWorkspaceOipMetricKeys } from "@/lib/kpi/workspaceOipExposure";
 import { useOperationalAnswers } from "./useOperationalAnswers";
+import {
+    useWorkViewTotals,
+    workViewTotalKey,
+    type WorkViewTotalTarget,
+} from "./useWorkViewTotals";
 import { processTileModelFromLandingCard, type WorkspaceSurfaceModel } from "./types";
 
 /** Warmest available first paint: session peek, else the server-composed Route VM seed. */
@@ -36,7 +45,7 @@ function seedLifecycleCards(
 
 export function useWorkspaceSurfaceRuntime(): WorkspaceSurfaceModel {
     const routeVm = useWorkspaceRouteVm();
-    const { orgName } = useWorkspaceOrg();
+    const { orgId, orgName } = useWorkspaceOrg();
     const siteFilter = useWorkspaceSiteFilter();
     const selectedSiteId = siteFilter?.selectedSiteId ?? null;
 
@@ -65,7 +74,49 @@ export function useWorkspaceSurfaceRuntime(): WorkspaceSurfaceModel {
     const answerKeys = useMemo(() => resolveWorkspaceOipMetricKeys(undefined, false), []);
     const { answers } = useOperationalAnswers({ siteId: selectedSiteId, keys: answerKeys });
 
-    const processes = useMemo(() => cards.map(processTileModelFromLandingCard), [cards]);
+    // ── Work View counts: canonical-location totals (ONE count source) ─────────────────
+    // Each configured view's nav entry carries its canonical location (host work unit +
+    // base lane); the count is the rows-API exact total there — the same number the Work
+    // Unit pill shows and the same total the rendered rows report after navigating.
+    const workViewTotalTargets = useMemo<WorkViewTotalTarget[]>(() => {
+        const seen = new Set<string>();
+        const out: WorkViewTotalTarget[] = [];
+        for (const card of cards) {
+            for (const entry of card.workQueues) {
+                const viewId = entry.work_view_id?.trim();
+                const workUnitId = entry.host_work_unit_id?.trim();
+                const baseQueueKey = entry.base_queue_key?.trim();
+                if (!viewId || !workUnitId || !baseQueueKey) continue;
+                const key = workViewTotalKey(workUnitId, viewId);
+                if (seen.has(key)) continue;
+                seen.add(key);
+                out.push({ viewId, workUnitId, baseQueueKey });
+            }
+        }
+        return out;
+    }, [cards]);
+
+    // Gate on org readiness — a totals request racing org-context bootstrap 404s transiently.
+    const workViewTotals = useWorkViewTotals({
+        targets: workViewTotalTargets,
+        selectedSiteId,
+        enabled: orgId != null,
+    });
+
+    const processes = useMemo(
+        () =>
+            cards.map((card) =>
+                processTileModelFromLandingCard(card, {
+                    countForWorkView: (entry) => {
+                        const viewId = entry.work_view_id?.trim();
+                        const workUnitId = entry.host_work_unit_id?.trim();
+                        if (!viewId || !workUnitId) return null;
+                        return workViewTotals.get(workViewTotalKey(workUnitId, viewId)) ?? null;
+                    },
+                }),
+            ),
+        [cards, workViewTotals],
+    );
 
     return useMemo<WorkspaceSurfaceModel>(
         () => ({

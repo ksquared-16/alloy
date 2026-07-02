@@ -139,7 +139,9 @@ export function drillHrefForMetricKey(key: string): string | null {
 
 /**
  * Map warm-cache resolved metrics to answer models, preserving `keys` order. Keys without
- * a resolved value are omitted (the answers row shows real values, not placeholders).
+ * a resolved value — missing, empty, or the no-data em dash ("—") — are omitted: the
+ * answers strip shows real values, never rows of placeholders. Real zeros ("0") are data
+ * and stay.
  */
 export function operationalAnswerModelsFromResolvedMetrics(
     keys: readonly OipMetricKey[],
@@ -148,26 +150,32 @@ export function operationalAnswerModelsFromResolvedMetrics(
     const out: OperationalAnswerModel[] = [];
     for (const key of keys) {
         const item = resolved[key];
-        if (!item?.formatted_value) continue;
+        const formattedValue =
+            typeof item?.formatted_value === "string" ? item.formatted_value.trim() : "";
+        if (!formattedValue || formattedValue === "—") continue;
         out.push({
             key,
-            label: item.label ?? key,
-            formattedValue: item.formatted_value,
+            label: item?.label ?? key,
+            formattedValue,
             href: drillHrefForMetricKey(key),
         });
     }
     return out;
 }
 
-/** Workspace tile work-view link from a landing card nav entry (carries its own slug href). */
+/**
+ * Workspace tile work-view link from a landing card nav entry (carries its own slug href).
+ * `count` is the view's canonical-location total (`useWorkViewTotals`) — null renders no badge.
+ */
 export function workViewLinkFromWorkQueuePreview(
     entry: OperatorLifecycleWorkQueuePreview,
+    count: number | null = null,
 ): WorkViewLinkModel {
     return {
         id: entry.platformKey,
         label: entry.label,
         isActive: false,
-        count: null,
+        count,
         href: entry.href,
     };
 }
@@ -215,8 +223,18 @@ export function queueTotalCountFromQueueItemsResult(
     return typeof result.total === "number" && Number.isFinite(result.total) ? result.total : null;
 }
 
-/** Workspace process tile from an operator lifecycle landing card (values pre-resolved). */
-export function processTileModelFromLandingCard(card: OperatorLifecycleLandingCard): ProcessTileModel {
+/**
+ * Workspace process tile from an operator lifecycle landing card (values pre-resolved).
+ * `countForWorkView` resolves each work-view row's count from the view's canonical
+ * location totals — the SAME source the Work Unit pill counts read, so tile and pill
+ * numbers agree for the same view. Absent/null → no badge.
+ */
+export function processTileModelFromLandingCard(
+    card: OperatorLifecycleLandingCard,
+    args?: {
+        countForWorkView?: (entry: OperatorLifecycleWorkQueuePreview) => number | null;
+    },
+): ProcessTileModel {
     return {
         id: card.id,
         label: card.label,
@@ -224,7 +242,9 @@ export function processTileModelFromLandingCard(card: OperatorLifecycleLandingCa
         entryHref: card.entryHref,
         activeRecordCount: card.activeRecordCount,
         needsAttentionCount: card.needsAttentionCount,
-        workViews: card.workQueues.map(workViewLinkFromWorkQueuePreview),
+        workViews: card.workQueues.map((entry) =>
+            workViewLinkFromWorkQueuePreview(entry, args?.countForWorkView?.(entry) ?? null),
+        ),
         performanceMetrics: card.performanceMetrics ?? [],
     };
 }

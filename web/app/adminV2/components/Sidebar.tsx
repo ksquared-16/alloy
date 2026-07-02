@@ -277,10 +277,18 @@ function SidebarNav({
                                     >
                                     {lifecycle.workQueues.map((entry) => {
                                         const childHref = workspaceHref(entry.href);
+                                        // Active match on the entry's ROUTE key (the slug its href
+                                        // navigates to). Work-view entries carry `route_key` derived
+                                        // from the configured LABEL; `platformKey` is the internal
+                                        // view id, which diverges after a rename ("Hot List" can
+                                        // carry id `new_work_view_2`) and must not drive highlighting.
                                         const childActive =
                                             !modalOpen &&
                                             workUnitSlug != null &&
-                                            workUnitRouteSlugsEquivalent(workUnitSlug, entry.platformKey);
+                                            workUnitRouteSlugsEquivalent(
+                                                workUnitSlug,
+                                                entry.route_key ?? entry.platformKey,
+                                            );
                                         return (
                                             <li key={entry.platformKey} role="none">
                                                 <AdminV2NavLink

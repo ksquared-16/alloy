@@ -9,42 +9,58 @@
  *   - work views          — department `work_views_v1` via `resolveActiveWorkViewRuntimeContext`
  *   - queue rows + counts — GET /api/admin/queues/{id}/{queueKey}?work_view_id=… — ONE
  *                           evaluation path: the active pill count is the `total` of the same
- *                           response that renders the rows; inactive pills fetch their own
- *                           totals (limit=1) from the same route. Lane summaries only size
- *                           the rows fetch — never a displayed count.
+ *                           response that renders the rows; inactive pills read their views'
+ *                           CANONICAL-location totals (`useWorkViewTotals` — host work unit +
+ *                           base lane, the same numbers the Workspace tile shows). Lane
+ *                           summaries only size the rows fetch — never a displayed count.
  *   - operational answers — OIP warm cache scoped to the work unit
  *   - Focus Panel open    — `useAdminDrawer().openDrawer` (in-page; queue stays mounted)
  *
- * Work View selection is in-page React state (doctrine: path routing only — no
- * query-string routing for view selection). Presentation components receive the resolved
- * model + intents and never fetch (docs/platform/experience/presentation-runtime-v2.md).
+ * Work View selection NAVIGATES: a pill click soft-pushes the view's label-derived slug
+ * (`/workspace/work-unit/active-pipeline` — path routing only, no query strings, record id
+ * not carried). The destination route re-seeds `initialWorkViewId`; an optimistic local
+ * selection highlights the pill instantly while the push resolves. Presentation components
+ * receive the resolved model + intents and never fetch
+ * (docs/platform/experience/presentation-runtime-v2.md).
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { useAdminDrawer } from "@/contexts/AdminDrawerContext";
 import { useWorkspaceOrg } from "@/contexts/WorkspaceOrgContext";
 import { useWorkUnitSlugRouteOptional } from "@/contexts/WorkUnitSlugRouteContext";
 import { useWorkspaceSiteFilter } from "@/contexts/WorkspaceSiteFilterContext";
 import {
     resolveActiveWorkViewRuntimeContext,
-    resolveWorkViewBaseQueueKey,
     savedWorkViewsFromDepartmentMetadata,
 } from "@/lib/lifecycle/resolveWorkViewRuntimeContext";
 import {
     activeLifecycleProcess,
     lifecycleBuilderFromDepartmentMetadata,
 } from "@/lib/lifecycle/lifecycleBuilderConfig";
-import type { WorkViewConfigV1Stored } from "@/lib/lifecycle/workViewsConfigV1";
 import { tryLoadWorkUnitQueueDefinitionBundle } from "@/lib/config/queueDefinitionV2Runtime";
 import { getQueueUiConfig } from "@/lib/ui-v2/queueUiConfig";
 import { findAllRecordsQueueKey } from "@/lib/workspace/workUnitQueueDerived";
-import { appendWorkspaceSiteToUrl } from "@/lib/adminV2/workspaceSiteFilterClient";
+import {
+    resolveWorkViewCanonicalLocation,
+    type WorkViewCanonicalLocation,
+    type WorkViewCanonicalLocationWorkUnitRow,
+} from "@/lib/workspace/resolveWorkViewCanonicalLocation";
+import { operatorWorkUnitHrefFromWorkViewSlug } from "@/lib/admin/canonicalOperatorRoutes";
+import { workViewRouteKeyFromLabel } from "@/lib/admin/workUnitRouteSlug";
+import { appendWorkspaceSiteToPath, appendWorkspaceSiteToUrl } from "@/lib/adminV2/workspaceSiteFilterClient";
 import { resolveWorkUnitQueueRowsFetchLimit } from "@/lib/adminV2/workUnitQueueRowsFetchLimit";
 import { dedupeAdminFetch } from "@/lib/workspace/workspaceAdminFetchDedupe";
 import { workspaceDataFetchInit } from "@/lib/workspace/workspaceDataFetch";
 import { resolveWorkUnitOipMetricKeys } from "@/lib/kpi/workspaceOipExposure";
 import type { QueueItemsResult, QueueSummary } from "@/lib/queues/types";
 import { useOperationalAnswers } from "./useOperationalAnswers";
+import {
+    queueRowsRouteForView,
+    useWorkViewTotals,
+    workViewTotalKey,
+    type WorkViewTotalTarget,
+} from "./useWorkViewTotals";
 import {
     opportunityQueuePreviewSeedFromRowContext,
     queueRowModelsFromQueueItemsResult,
@@ -71,26 +87,6 @@ function validatedBaseQueueKeyForUnit(base: string | null, queueDefinition: unkn
     return findAllRecordsQueueKey(bundle.def, getQueueUiConfig(bundle.def)) ?? base;
 }
 
-/** Rows-API route for a Work View count/rows fetch — the ONE evaluation path for queue numbers. */
-function queueRowsRouteForView(args: {
-    workUnitId: string;
-    baseQueueKey: string;
-    workViewId: string | null;
-    limit: number;
-    selectedSiteId: string | null;
-}): string {
-    const qs = new URLSearchParams({
-        limit: String(args.limit),
-        offset: "0",
-        count_mode: "exact",
-    });
-    if (args.workViewId) qs.set("work_view_id", args.workViewId);
-    return appendWorkspaceSiteToUrl(
-        `/api/admin/queues/${encodeURIComponent(args.workUnitId)}/${encodeURIComponent(args.baseQueueKey)}?${qs.toString()}`,
-        args.selectedSiteId,
-    );
-}
-
 export type WorkUnitSurfaceRuntime = {
     model: WorkUnitSurfaceModel;
     intents: WorkUnitSurfaceIntents;
@@ -109,8 +105,14 @@ export function useWorkUnitSurfaceRuntime(): WorkUnitSurfaceRuntime {
     const workUnitId = orgId ? slugRoute?.workUnitId ?? null : null;
 
     // ── Work Views: department metadata (`work_views_v1`) + host queue_definition ──────
+    // Dept work units are fetched alongside so every visible view's CANONICAL location
+    // (host unit + base lane — `resolveWorkViewCanonicalLocation`) resolves client-side;
+    // pill counts and pill navigation both read it.
     const [deptMetadata, setDeptMetadata] = useState<unknown | null>(null);
     const [queueDefinition, setQueueDefinition] = useState<unknown | null>(null);
+    const [deptWorkUnits, setDeptWorkUnits] = useState<
+        WorkViewCanonicalLocationWorkUnitRow[] | null
+    >(null);
     const [configSettled, setConfigSettled] = useState(false);
 
     useEffect(() => {
@@ -125,11 +127,18 @@ export function useWorkUnitSurfaceRuntime(): WorkUnitSurfaceRuntime {
             dedupeAdminFetch(`/api/admin/work-units/${encodeURIComponent(workUnitId)}`, init)
                 .then((res) => (res.ok ? res.json() : null))
                 .catch(() => null),
+            dedupeAdminFetch(`/api/admin/work-units?department_id=${encodeURIComponent(departmentId)}`, init)
+                .then((res) => (res.ok ? res.json() : null))
+                .catch(() => null),
         ])
-            .then(([dept, wu]) => {
+            .then(([dept, wu, deptUnits]) => {
                 if (cancelled) return;
                 setDeptMetadata((dept as { metadata?: unknown } | null)?.metadata ?? null);
                 setQueueDefinition((wu as { queue_definition?: unknown } | null)?.queue_definition ?? null);
+                const items = (deptUnits as { items?: unknown } | null)?.items;
+                setDeptWorkUnits(
+                    Array.isArray(items) ? (items as WorkViewCanonicalLocationWorkUnitRow[]) : null,
+                );
             })
             .finally(() => {
                 if (!cancelled) setConfigSettled(true);
@@ -139,10 +148,21 @@ export function useWorkUnitSurfaceRuntime(): WorkUnitSurfaceRuntime {
         };
     }, [departmentId, workUnitId]);
 
-    // Active Work View is in-page state; before any user pill selection the route decides:
-    // a work-view slug (`/workspace/work-unit/active-pipeline`) seeds `initialWorkViewId`,
-    // a lane slug seeds `initialQueueKey`. null = resolver default (first visible view).
-    const [selectedWorkViewId, setSelectedWorkViewId] = useState<string | null>(null);
+    // Active Work View: the ROUTE decides — a work-view slug (`/workspace/work-unit/
+    // active-pipeline`) seeds `initialWorkViewId`, a lane slug seeds `initialQueueKey`.
+    // The local selection is only the OPTIMISTIC pill highlight between a pill click and
+    // the pushed route re-seeding: it is KEYED to the route slug it was made on, so the
+    // moment the route commits (pill push, tile/nav click, back/forward) it derives away
+    // and the URL owns the view — no reset effect, no stale in-page selection.
+    const routeSlug = slugRoute?.routeSlug ?? null;
+    const [optimisticSelection, setOptimisticSelection] = useState<{
+        routeSlug: string | null;
+        workViewId: string;
+    } | null>(null);
+    const selectedWorkViewId =
+        optimisticSelection && optimisticSelection.routeSlug === routeSlug
+            ? optimisticSelection.workViewId
+            : null;
     const routeWorkViewId = slugRoute?.initialWorkViewId ?? null;
     const activeWorkViewIdInput = selectedWorkViewId ?? routeWorkViewId;
 
@@ -251,67 +271,62 @@ export function useWorkUnitSurfaceRuntime(): WorkUnitSurfaceRuntime {
     // THE count model: the `total` of the same rows response that renders the queue.
     const totalCount = useMemo(() => queueTotalCountFromQueueItemsResult(queueResult), [queueResult]);
 
-    // ── Per-view counts: SAME evaluation path as the rendered rows ──────────────────────
+    // ── Canonical locations: where each visible view's count/rows are DEFINED ───────────
+    // Host work unit + base lane per view (`resolveWorkViewCanonicalLocation`) — the same
+    // location the Workspace tile counts, the left-nav hrefs, and the by-slug resolver
+    // target, so every surface reads one number per view.
+    const canonicalLocationByViewId = useMemo(() => {
+        const map = new Map<string, WorkViewCanonicalLocation>();
+        if (!departmentId || !deptWorkUnits?.length) return map;
+        for (const view of savedViews) {
+            if (view.visible_in_runtime === false) continue;
+            const location = resolveWorkViewCanonicalLocation(view, deptWorkUnits, departmentId);
+            if (location) map.set(view.id, location);
+        }
+        return map;
+    }, [savedViews, deptWorkUnits, departmentId]);
+
+    // ── Per-view counts: canonical-location totals (SAME source as the Workspace tile) ──
     // Every visible view's count comes from the queue rows API with that view's
-    // `work_view_id` (limit=1, count_mode=exact) — never from lane summaries, which
-    // evaluate lanes instead of view predicates (the root cause of swapped pill counts).
-    const [viewCounts, setViewCounts] = useState<Record<string, number>>({});
-    const viewCountsSeq = useRef(0);
-
-    useEffect(() => {
-        if (!workUnitId || !configSettled) return;
-        const seq = ++viewCountsSeq.current;
-        setViewCounts({}); // identity/config/site changed — stale counts must not linger
-        const views = savedViews.filter((view) => view.visible_in_runtime !== false);
-        if (!views.length) return;
-
-        const countForViewFetch = async (view: WorkViewConfigV1Stored): Promise<readonly [string, number | null]> => {
-            const baseQueueKey = validatedBaseQueueKeyForUnit(
-                resolveWorkViewBaseQueueKey(view, null, queueDefinition),
-                queueDefinition,
-            );
-            if (!baseQueueKey) return [view.id, null] as const;
-            const route = queueRowsRouteForView({
-                workUnitId,
-                baseQueueKey,
-                workViewId: view.id,
-                limit: 1,
-                selectedSiteId,
+    // `work_view_id` (limit=1, count_mode=exact) at its canonical location — never from
+    // lane summaries, which evaluate lanes instead of view predicates (the root cause of
+    // swapped pill counts).
+    const workViewTotalTargets = useMemo<WorkViewTotalTarget[]>(() => {
+        const out: WorkViewTotalTarget[] = [];
+        for (const [viewId, location] of canonicalLocationByViewId) {
+            out.push({
+                viewId,
+                workUnitId: location.workUnitId,
+                baseQueueKey: location.baseQueueKey,
             });
-            try {
-                const res = await dedupeAdminFetch(route, workspaceDataFetchInit());
-                if (!res.ok) return [view.id, null] as const;
-                const json = (await res.json().catch(() => null)) as QueueItemsResult | null;
-                return [view.id, queueTotalCountFromQueueItemsResult(json)] as const;
-            } catch {
-                return [view.id, null] as const;
-            }
-        };
+        }
+        return out;
+    }, [canonicalLocationByViewId]);
 
-        void Promise.all(views.map(countForViewFetch)).then((entries) => {
-            // Stale-response guard: only the latest request generation may apply.
-            if (seq !== viewCountsSeq.current) return;
-            const next: Record<string, number> = {};
-            for (const [id, count] of entries) {
-                if (typeof count === "number") next[id] = count;
-            }
-            setViewCounts(next);
-        });
-    }, [workUnitId, configSettled, savedViews, queueDefinition, selectedSiteId]);
+    const canonicalTotals = useWorkViewTotals({
+        targets: workViewTotalTargets,
+        selectedSiteId,
+        enabled: configSettled,
+    });
 
     // ── Work View pills: same configured views the Workspace tile lists ─────────────────
-    // Invariant: the ACTIVE view's count IS `queue.totalCount` (same rows response); inactive
-    // views use their own rows-API totals. null while loading → no badge (never a wrong badge).
+    // Invariant: the ACTIVE view's count IS `queue.totalCount` (same rows response as the
+    // rendered rows); inactive views read their canonical-location totals. null while
+    // loading → no badge (never a wrong badge).
     const workViews = useMemo(
         () =>
             workViewLinkModelsFromConfiguredViews(savedViews, {
                 activeWorkViewId: runtimeCtx.workViewId,
                 countForView: (view) => {
                     if (view.id === runtimeCtx.workViewId) return totalCount;
-                    return viewCounts[view.id] ?? null;
+                    const location = canonicalLocationByViewId.get(view.id);
+                    if (!location) return null;
+                    return (
+                        canonicalTotals.get(workViewTotalKey(location.workUnitId, view.id)) ?? null
+                    );
                 },
             }),
-        [savedViews, runtimeCtx.workViewId, totalCount, viewCounts],
+        [savedViews, runtimeCtx.workViewId, totalCount, canonicalLocationByViewId, canonicalTotals],
     );
 
     // ── Operational answers: OIP warm cache scoped to the work unit ─────────────────────
@@ -323,11 +338,33 @@ export function useWorkUnitSurfaceRuntime(): WorkUnitSurfaceRuntime {
     });
 
     // ── Intents ──────────────────────────────────────────────────────────────────────────
-    const selectWorkView = useCallback((workViewId: string) => {
-        const id = workViewId.trim();
-        if (!id) return;
-        setSelectedWorkViewId((prev) => (prev === id ? prev : id));
-    }, []);
+    const router = useRouter();
+    const selectWorkView = useCallback(
+        (workViewId: string) => {
+            const id = workViewId.trim();
+            if (!id) return;
+            // Optimistic highlight — the pill flips instantly; once the pushed route
+            // commits, the slug-keyed selection derives away and the URL owns the view.
+            setOptimisticSelection({ routeSlug, workViewId: id });
+            // Soft navigation to the view's LABEL-derived slug (never the internal id) —
+            // the SAME URL a Workspace tile or left-nav click produces. Path routing only
+            // (no `work_view=`/`queue=` queries); the record id is never carried across
+            // view switches. The destination renders the view ON its canonical host, so
+            // rendered rows = the pill's canonical total by construction.
+            const view = savedViews.find((v) => v.id === id) ?? null;
+            const targetRouteKey =
+                canonicalLocationByViewId.get(id)?.routeKey ??
+                workViewRouteKeyFromLabel(view?.label);
+            if (!targetRouteKey) return; // label-less view (config bug): in-page select only
+            router.push(
+                appendWorkspaceSiteToPath(
+                    operatorWorkUnitHrefFromWorkViewSlug(targetRouteKey),
+                    selectedSiteId,
+                ),
+            );
+        },
+        [savedViews, canonicalLocationByViewId, router, selectedSiteId, routeSlug],
+    );
 
     const openRecord = useCallback(
         (row: QueueRowModel) => {

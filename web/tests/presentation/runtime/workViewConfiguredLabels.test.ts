@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { resolveOperatorLifecycleWorkQueueNavEntriesForDepartment } from "@/lib/admin/buildOperatorLifecycleLanding";
 import { resolveWorkUnitByRouteSlug } from "@/lib/admin/resolveWorkUnitByRouteSlug";
+import { workUnitRouteSlugsEquivalent } from "@/lib/admin/workUnitRouteSlug";
 import { RAW_ENROLLMENT_PIPELINE_QUEUE_DEFINITION_V2 } from "@/lib/config/enrollmentPipelineQueueDefinitionV2";
 import { savedWorkViewsFromDepartmentMetadata } from "@/lib/lifecycle/resolveWorkViewRuntimeContext";
 import type { WorkViewConfigV1Stored } from "@/lib/lifecycle/workViewsConfigV1";
@@ -83,6 +84,41 @@ describe("renamed Work View labels flow purely from config", () => {
             expectNoInternalLeak(entry.href);
             expect(entry.href).not.toContain("?");
         }
+    });
+
+    it("entries carry route_key (label-derived) + the view's canonical count location", () => {
+        expect(navEntries.map((e) => e.route_key)).toEqual([
+            "fresh_prospects",
+            "momentum",
+            // Label-derived — NOT the fossil id `new_work_view_2`.
+            "hot_list",
+        ]);
+        expect(navEntries.map((e) => e.work_view_id)).toEqual([
+            "fresh_prospects",
+            "momentum",
+            "new_work_view_2",
+        ]);
+        // Canonical location: every view counts/renders on the dept pipeline host; the
+        // lane-bound view uses its lane, predicate-only views use the all-records lane.
+        expect(navEntries.every((e) => e.host_work_unit_id === "wu-pipeline")).toBe(true);
+        expect(navEntries.map((e) => e.base_queue_key)).toEqual([
+            "new_leads",
+            "pipeline_total",
+            "pipeline_total",
+        ]);
+    });
+
+    it("sidebar active-state matches on route_key: the slug in href, not the fossil id", () => {
+        for (const entry of navEntries) {
+            const hrefSlug = entry.href.split("/").pop()!;
+            // The sidebar highlights via workUnitRouteSlugsEquivalent(urlSlug, route_key) —
+            // this must hold for every entry (tile, left nav, and URL share one slug).
+            expect(workUnitRouteSlugsEquivalent(hrefSlug, entry.route_key ?? "")).toBe(true);
+        }
+        // The renamed view is exactly why platformKey (view id) must NOT drive the match.
+        const renamed = navEntries.find((e) => e.label === "Hot List")!;
+        expect(workUnitRouteSlugsEquivalent("hot-list", renamed.platformKey)).toBe(false);
+        expect(workUnitRouteSlugsEquivalent("hot-list", renamed.route_key ?? "")).toBe(true);
     });
 
     it("workspace tile WorkViewLinkModels carry the renamed labels", () => {

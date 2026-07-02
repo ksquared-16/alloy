@@ -28,6 +28,7 @@ import {
     pickDeptPipelineWorkUnit,
     pickDeptWorkViewHostWorkUnit,
 } from "@/lib/workspace/pickDeptPipelineWorkUnit";
+import { resolveWorkViewCanonicalLocation } from "@/lib/workspace/resolveWorkViewCanonicalLocation";
 import { tryLoadWorkUnitQueueDefinitionBundle } from "@/lib/config/queueDefinitionV2Runtime";
 import {
     operatorOperationalPerspectivesEnabled,
@@ -53,6 +54,17 @@ export type OperatorLifecycleWorkQueuePreview = {
     label: string;
     platformKey: string;
     href: string;
+    /**
+     * Configured Work View identity + canonical count/rows location — present on work-view
+     * entries only (`resolveWorkViewCanonicalLocation`). The Workspace tile resolves its
+     * per-view counts from (host_work_unit_id, base_queue_key, work_view_id) — the SAME
+     * source the Work Unit pill counts and rendered rows read, so the numbers agree.
+     */
+    work_view_id?: string | null;
+    host_work_unit_id?: string | null;
+    base_queue_key?: string | null;
+    /** Label-derived route key (platform `_` form) — `href`'s slug; the active-state match key. */
+    route_key?: string | null;
 };
 
 export type OperatorLifecycleLandingCard = {
@@ -194,11 +206,22 @@ function workViewNavEntriesForDepartment(args: {
                 // "Active Pipeline" can carry id `new_work_view_2`; see workViewRouteKeyFromLabel).
                 const routeKey = workViewRouteKeyFromLabel(view.label);
                 if (!routeKey) return [];
+                // Canonical location: host unit + base lane the view's count/rows are defined
+                // on — the same host the slug in `href` resolves to (shared precedence).
+                const canonical = resolveWorkViewCanonicalLocation(
+                    view,
+                    args.workUnits,
+                    args.departmentId,
+                );
                 return [
                     {
                         label: view.label.trim(),
                         platformKey: view.id,
                         href: operatorWorkUnitHrefFromWorkViewSlug(routeKey),
+                        work_view_id: view.id,
+                        host_work_unit_id: canonical?.workUnitId ?? null,
+                        base_queue_key: canonical?.baseQueueKey ?? null,
+                        route_key: routeKey,
                     },
                 ];
             });

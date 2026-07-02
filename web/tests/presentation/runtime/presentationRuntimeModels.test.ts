@@ -244,4 +244,43 @@ describe("operationalAnswerModelsFromResolvedMetrics", () => {
         expect(drillHrefForMetricKey("comms.delivery_rate")).toBeNull();
         expect(drillHrefForMetricKey("not.a.calculation")).toBeNull();
     });
+
+    it("omits no-data values (empty, whitespace, em dash) — real zeros stay", () => {
+        const resolved = {
+            "enrollment.lead_count": {
+                metric_key: "enrollment.lead_count",
+                label: "New leads",
+                formatted_value: "0",
+            },
+            "comms.delivery_rate": {
+                metric_key: "comms.delivery_rate",
+                label: "Delivery rate",
+                formatted_value: "—",
+            },
+            "ops.work_overdue_count": {
+                metric_key: "ops.work_overdue_count",
+                label: "Overdue",
+                formatted_value: "   ",
+            },
+            "ops.needs_attention_count": {
+                metric_key: "ops.needs_attention_count",
+                label: "Needs attention",
+                formatted_value: "",
+            },
+        } as unknown as ResolvedMetricMap;
+
+        const answers = operationalAnswerModelsFromResolvedMetrics(
+            [
+                "enrollment.lead_count",
+                "comms.delivery_rate",
+                "ops.work_overdue_count",
+                "ops.needs_attention_count",
+            ],
+            resolved,
+        );
+
+        // The strip never renders rows of dashes — but "0" is data, not absence.
+        expect(answers.map((a) => a.key)).toEqual(["enrollment.lead_count"]);
+        expect(answers[0]?.formattedValue).toBe("0");
+    });
 });

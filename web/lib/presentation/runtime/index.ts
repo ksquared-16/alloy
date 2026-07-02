@@ -29,6 +29,13 @@ export {
     type OperationalAnswersScope,
 } from "./useOperationalAnswers";
 
+export {
+    queueRowsRouteForView,
+    useWorkViewTotals,
+    workViewTotalKey,
+    type WorkViewTotalTarget,
+} from "./useWorkViewTotals";
+
 export { useWorkspaceSurfaceRuntime } from "./useWorkspaceSurfaceRuntime";
 
 export { useWorkUnitSurfaceRuntime, type WorkUnitSurfaceRuntime } from "./useWorkUnitSurfaceRuntime";

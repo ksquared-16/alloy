@@ -1,13 +1,11 @@
-import { tryLoadWorkUnitQueueDefinitionBundle } from "@/lib/config/queueDefinitionV2Runtime";
 import { operatorStageKeysForPipelineQueueKey } from "@/lib/lifecycle/enrollmentProcessStageQueueKeys";
 import { lifecycleStageWorkUnitKey } from "@/lib/lifecycle/lifecycleStageWorkUnit";
 import { savedWorkViewsFromDepartmentMetadata } from "@/lib/lifecycle/resolveWorkViewRuntimeContext";
 import type { WorkViewConfigV1Stored } from "@/lib/lifecycle/workViewsConfigV1";
 import {
-    extractDrawerLifecycleExecutionLanes,
-    extractPipelineExecutionLanes,
-} from "@/lib/workspace/extractPipelineExecutionLanes";
-import { pickDeptWorkViewHostWorkUnit } from "@/lib/workspace/pickDeptPipelineWorkUnit";
+    findQueueLaneOwnerWorkUnit,
+    hostWorkUnitForConfiguredWorkView,
+} from "@/lib/workspace/resolveWorkViewCanonicalLocation";
 import {
     workUnitKeyToRouteSlug,
     workUnitRouteSlugToKey,
@@ -76,29 +74,6 @@ function sortWorkUnitRows(rows: WorkUnitRouteSlugRow[]): WorkUnitRouteSlugRow[] 
     });
 }
 
-function pipelineExecutionLanesForRow(row: WorkUnitRouteSlugRow) {
-    const bundle = tryLoadWorkUnitQueueDefinitionBundle(row.queue_definition);
-    if (!bundle) return [];
-    const primary = extractPipelineExecutionLanes(bundle.def);
-    return primary.length > 0 ? primary : extractDrawerLifecycleExecutionLanes(bundle.def);
-}
-
-function findQueueLaneOwner(
-    rows: WorkUnitRouteSlugRow[],
-    laneKey: string,
-): WorkUnitRouteSlugRow | null {
-    const normalizedLane = laneKey.trim().toLowerCase();
-    if (!normalizedLane) return null;
-
-    for (const row of sortWorkUnitRows(rows)) {
-        const lanes = pipelineExecutionLanesForRow(row);
-        if (lanes.some((lane) => lane.key.trim().toLowerCase() === normalizedLane)) {
-            return row;
-        }
-    }
-    return null;
-}
-
 function findLifecycleStageWorkUnitForQueueLane(
     rows: WorkUnitRouteSlugRow[],
     laneKey: string,
@@ -122,32 +97,10 @@ function findLifecycleStageWorkUnitForQueueLane(
     return narrowed.length === 1 ? narrowed[0]! : null;
 }
 
-/**
- * Host work unit for a configured Work View: the work unit owning the view's bound lane
- * (`compat_queue_key`) when one exists, else the department's pipeline/stage work unit —
- * the same host `workViewNavEntriesForDepartment` targets when it builds the view's nav entry.
- */
-function hostWorkUnitForConfiguredWorkView(
-    view: WorkViewConfigV1Stored,
-    deptRows: WorkUnitRouteSlugRow[],
-    departmentId: string,
-    departmentsById: Map<string, DepartmentHint>,
-): WorkUnitRouteSlugRow | null {
-    const compat = view.compat_queue_key?.trim();
-    if (compat) {
-        const laneOwner =
-            findQueueLaneOwner(deptRows, compat) ??
-            findLifecycleStageWorkUnitForQueueLane(deptRows, compat, departmentsById);
-        if (laneOwner) return laneOwner;
-    }
-    return pickDeptWorkViewHostWorkUnit(deptRows, departmentId);
-}
-
 function findConfiguredWorkViewMatch(
     platformKey: string,
     rows: WorkUnitRouteSlugRow[],
     departments: DepartmentHint[],
-    departmentsById: Map<string, DepartmentHint>,
 ): { view: WorkViewConfigV1Stored; departmentId: string; host: WorkUnitRouteSlugRow } | null {
     const ordered = [...departments].sort(
         (a, b) =>
@@ -165,7 +118,10 @@ function findConfiguredWorkViewMatch(
             null;
         if (!view) continue;
         const deptRows = rows.filter((row) => row.department_id === dept.id);
-        const host = hostWorkUnitForConfiguredWorkView(view, deptRows, dept.id, departmentsById);
+        // Canonical host — the SAME shared precedence the landing nav builder and the surface
+        // runtimes resolve (resolveWorkViewCanonicalLocation), so a view's URL always lands on
+        // the unit its tile/pill counts were measured on.
+        const host = hostWorkUnitForConfiguredWorkView(view, deptRows, dept.id);
         if (host) return { view, departmentId: dept.id, host };
     }
     return null;
@@ -288,7 +244,6 @@ export function resolveWorkUnitByRouteSlug(args: {
         platformKey,
         activeRows,
         args.departments ?? [],
-        departmentsById,
     );
     if (workViewMatch) {
         return {
@@ -306,7 +261,7 @@ export function resolveWorkUnitByRouteSlug(args: {
         };
     }
 
-    const laneOwner = findQueueLaneOwner(activeRows, platformKey);
+    const laneOwner = findQueueLaneOwnerWorkUnit(activeRows, platformKey);
     if (laneOwner) {
         return {
             status: "resolved",
