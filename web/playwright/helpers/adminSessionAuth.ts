@@ -133,7 +133,10 @@ export async function ensureAdminPlaywrightSession(page: Page): Promise<void> {
         }))
     );
 
-    await page.goto("/workspace", { waitUntil: "networkidle", timeout: 120_000 });
+    // NOT networkidle: authenticated surfaces keep long-lived requests open (and the dept
+    // queue-summaries endpoint can hang), so network-idle may never settle. The auth check
+    // only needs the navigation to commit somewhere.
+    await page.goto("/workspace", { waitUntil: "domcontentloaded", timeout: 120_000 });
     const pathname = new URL(page.url()).pathname;
     if (pathname === "/login" || pathname.startsWith("/unauthorized")) {
         throw new Error(`Session cookies did not unlock workspace (landed on ${pathname})`);

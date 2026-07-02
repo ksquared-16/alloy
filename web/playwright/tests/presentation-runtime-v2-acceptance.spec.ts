@@ -30,6 +30,9 @@ async function gotoWorkspace(page: Page): Promise<void> {
 }
 
 test.describe("Presentation Runtime V2 acceptance", () => {
+    // Internal waits run to 60s each (cold dev-server compiles); the 30s default clips them.
+    test.describe.configure({ timeout: 180_000 });
+
     test("workspace surface renders the presentation tree", async ({ page }) => {
         await gotoWorkspace(page);
 

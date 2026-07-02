@@ -62,6 +62,22 @@ describe("Header placement ⇄ SurfaceDoc mapping", () => {
         ]);
     });
 
+    it("visibility:off cards are not desired — publish hides their placements", () => {
+        const doc: SurfaceDoc = {
+            sections: [
+                {
+                    sectionId: IMPLICIT_SECTION_ID,
+                    title: "",
+                    cards: [
+                        { instanceId: "a", cardTypeKey: "kpi", contentId: "enrollment.lead_count", config: { rendererKey: "kpi_card", visibility: "on" } },
+                        { instanceId: "b", cardTypeKey: "kpi", contentId: "forms.completion_rate", config: { rendererKey: "kpi_card", visibility: "off" } },
+                    ],
+                },
+            ],
+        };
+        expect(headerDocToDesired(doc).map((d) => d.sourceKey)).toEqual(["enrollment.lead_count"]);
+    });
+
     it("diffs by source_key (idempotent) and classifies add/remove", () => {
         const same = headerDocToDesired(headerViewsToDoc(views));
         const noop = diffHeaderPlacements(views, same);

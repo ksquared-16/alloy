@@ -92,6 +92,9 @@ export function headerDocToDesired(doc: SurfaceDoc): DesiredHeaderPlacement[] {
         section.cards.forEach((card) => {
             if (!card.contentId || seen.has(card.contentId)) return;
             const cfg = (card.config ?? {}) as Record<string, unknown>;
+            // A card toggled off is not a desired placement — the diff then hides any
+            // existing row for its metric, so "hidden cards are hidden" holds at runtime.
+            if (cfg.visibility === "off") return;
             const vizType = cardTypeToVizType(card.cardTypeKey, cfg.rendererKey);
             if (!vizType) return;
             seen.add(card.contentId);
