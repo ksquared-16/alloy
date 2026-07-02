@@ -5,7 +5,8 @@ import type { CSSProperties } from "react";
 import type { DepartmentWorkspaceModel } from "@/lib/ui-v2/workspace-types";
 import { operationalWorkspaceShellStyle } from "@/lib/visualContext";
 import type { WorkspaceActionHandler } from "@/lib/ui-v2/workspace-actions";
-import { SignalBlock, KPIBlock, QueueBlock, WorkBlock } from "../blocks";
+import { SignalBlock, KPIBlock as _KPIBlock, OperationalAnswerStrip, QueueBlock, WorkBlock } from "../blocks";
+import { kpiVmToOperationalAnswer } from "@/lib/ui-v2/workspace-types";
 import { WorkspaceCommandRailActionsSection } from "@/app/adminV2/components/workspace/WorkspaceCommandRailActionsSection";
 import { countActionsVm } from "@/lib/bos/countActionsVm";
 import "../workspace.css";
@@ -97,7 +98,12 @@ export default function DepartmentWorkspace({ model, onAction }: Props) {
                     ) : null}
                   </div>
                 ) : null}
-                {hasKpis ? <KPIBlock kpis={model.kpis} surface="department" /> : null}
+                {hasKpis ? (
+                  <OperationalAnswerStrip
+                    answers={model.kpis.map(kpiVmToOperationalAnswer)}
+                    maxVisible={5}
+                  />
+                ) : null}
               </div>
             ) : null}
             <div

@@ -14065,3 +14065,107 @@ html[data-adminv2-workspace-shell="v2"] [data-ws-surface="work_unit"] .adminv2-w
 [data-drawer-vm-transition-hold="true"] {
   transition: opacity 180ms ease-out;
 }
+
+/* ─── Operational Answer Strip ─────────────────────────────────────────────
+   alloy-ci = Compact Instrument. State color appears ONLY on the dot and
+   answer text — never on cell backgrounds or the value field.
+   ─────────────────────────────────────────────────────────────────────── */
+
+.alloy-answer-strip--compact {
+  --alloy-pine:        var(--d-pine, #00a283);   /* Bend Pine */
+  --alloy-caution:     #bc4300;                  /* Ember */
+  --alloy-critical:    #7c273a;                  /* River Stone */
+  --alloy-ai:          var(--d-brand, #00458c);  /* Coastal Current */
+  --alloy-band-bg:     var(--d-surface, #ffffff);
+  --alloy-cell-border: rgba(39, 63, 82, 0.07);
+
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+  background: var(--alloy-band-bg);
+  border-top: 0.5px solid var(--alloy-cell-border);
+}
+
+.alloy-ci {
+  flex: 1 1 0;
+  display: flex;
+  flex-direction: column;
+  padding: 5px 13px 6px;
+  border-right: 0.5px solid var(--alloy-cell-border);
+  cursor: default;
+  transition: background 0.1s ease, box-shadow 0.1s ease;
+}
+.alloy-ci:last-child {
+  border-right: none;
+}
+
+.alloy-ci--drillable { cursor: pointer; }
+.alloy-ci--drillable:hover {
+  background: rgba(39, 63, 82, 0.018);
+  box-shadow: inset 0 0 0 0.5px rgba(39, 63, 82, 0.09);
+}
+
+.alloy-ci__label {
+  font-size: 9px;
+  font-weight: 500;
+  letter-spacing: 0.03em;
+  color: rgba(39, 63, 82, 0.38);
+  line-height: 1;
+  margin-bottom: 2px;
+  text-transform: uppercase;
+}
+
+/* Grid overlay: answer ↔ drill CTA cross-fade on hover, no layout shift */
+.alloy-ci__answer-wrap {
+  display: grid;
+  margin-bottom: 2px;
+}
+.alloy-ci__answer,
+.alloy-ci__answer-drill {
+  grid-area: 1 / 1;
+  font-size: 10.5px;
+  font-weight: 500;
+  line-height: 1.25;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  transition: opacity 0.13s ease;
+}
+.alloy-ci__answer-drill {
+  opacity: 0;
+  color: rgba(39, 63, 82, 0.55);
+}
+.alloy-ci--drillable:hover .alloy-ci__answer      { opacity: 0; }
+.alloy-ci--drillable:hover .alloy-ci__answer-drill { opacity: 1; }
+
+/* State color on dot + answer text only */
+.alloy-ci--healthy  .alloy-ci__answer { color: color-mix(in srgb, var(--alloy-pine)     68%, transparent); }
+.alloy-ci--caution  .alloy-ci__answer { color: color-mix(in srgb, var(--alloy-caution)  72%, transparent); }
+.alloy-ci--critical .alloy-ci__answer { color: color-mix(in srgb, var(--alloy-critical) 76%, transparent); }
+.alloy-ci--ai       .alloy-ci__answer { color: color-mix(in srgb, var(--alloy-ai)       68%, transparent); }
+.alloy-ci--empty    .alloy-ci__answer,
+.alloy-ci--stale    .alloy-ci__answer,
+.alloy-ci--loading  .alloy-ci__answer { color: rgba(39, 63, 82, 0.35); }
+
+.alloy-ci__dot {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: currentColor;
+}
+
+/* Value: always structural Midnight Forge, never state-colored */
+.alloy-ci__value {
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  line-height: 1;
+  color: #273f52;
+}
+
+.alloy-ci__empty-msg {
+  font-size: 10px;
+  color: rgba(39, 63, 82, 0.35);
+  padding: 10px 13px;
+}

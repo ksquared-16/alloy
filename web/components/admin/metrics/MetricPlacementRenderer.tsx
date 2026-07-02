@@ -6,12 +6,51 @@ import { ANALYTICS_V2_SNAPSHOTS_UPDATED } from "@/app/adminV2/settings/analytics
 import { MetricVisualRenderer } from "@/components/admin/metrics/MetricVisualRenderer";
 import { placementRenderToEvaluation } from "@/lib/metrics/platform/renderMetricPlacements";
 import type { MetricPlacementRenderItem } from "@/lib/metrics/platform/renderMetricPlacements";
+import type { MetricHealthState } from "@/lib/metrics/platform/types";
 import { fetchMetricRenderBundle } from "@/lib/metrics/platform/fetchMetricRender";
 import {
     metricRenderItemsHaveValues,
     readMetricRenderBundleCache,
     writeMetricRenderBundleCache,
 } from "@/lib/metrics/platform/metricRenderBundleCache";
+import { resolveMetricDisplayLabel } from "@/lib/metrics/platform/metricSourceRegistry";
+import type { OperationalAnswer, AnswerState } from "@/lib/ui-v2/workspace-types";
+import OperationalAnswerStrip from "@/app/adminV2/components/workspace/blocks/OperationalAnswerStrip";
+
+function healthToAnswerState(h: MetricHealthState): AnswerState {
+    if (h === "healthy")  return "healthy";
+    if (h === "warning")  return "caution";
+    if (h === "critical") return "critical";
+    return "empty";
+}
+
+function healthToAnswer(h: MetricHealthState): string {
+    if (h === "healthy")  return "On track";
+    if (h === "warning")  return "Needs attention";
+    if (h === "critical") return "Action required";
+    return "No data";
+}
+
+function placementToOperationalAnswer(item: MetricPlacementRenderItem): OperationalAnswer {
+    const viz = item.visualization;
+    const def = item.definition;
+    const label = resolveMetricDisplayLabel(
+        (viz.display_config as { labelOverride?: string }).labelOverride ?? viz.label,
+        def.label,
+        def.source_key,
+    );
+    return {
+        key: def.key,
+        label,
+        primaryValue: item.formattedValue,
+        state: healthToAnswerState(item.healthState),
+        answer: healthToAnswer(item.healthState),
+        freshness: { isLive: false },
+        emptyState: { message: `No data for ${label}` },
+        lane: "operational",
+        sourceCalculationKey: def.key,
+    };
+}
 
 type Props = {
     surface: string;
@@ -19,7 +58,7 @@ type Props = {
     placementZone?: string;
     contextType?: string;
     contextId?: string | null;
-    layout?: "grid" | "row" | "inline";
+    layout?: "grid" | "row" | "inline" | "operational-answer";
     className?: string;
     /** Owner when the slot has resolved with no configured placements (e.g. OIP fallback). */
     emptyFallback?: ReactNode;
@@ -95,6 +134,17 @@ export function MetricPlacementRenderer({
     // - loading + empty → stable reserve (holds final placement; never an empty cold paint).
     // - resolved empty  → `emptyFallback` owner (e.g. OIP strip) only when no placements exist.
     if (!items.length) return loading ? (loadingReserve ?? emptyFallback ?? null) : (emptyFallback ?? null);
+
+    // Compact Operational Answer strip — renders placement data through OperationalAnswerStrip
+    // (the canonical header presentation). Same data path, different visual layer.
+    if (layout === "operational-answer") {
+        return (
+            <OperationalAnswerStrip
+                answers={items.map(placementToOperationalAnswer)}
+                maxVisible={5}
+            />
+        );
+    }
 
     const layoutClass =
         layout === "row" ? "flex flex-wrap gap-2"

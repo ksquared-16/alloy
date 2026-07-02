@@ -28,9 +28,6 @@ export function WorkUnitCommandSurface({
     surfaceKey = "default",
 }: Props) {
     const processLine = processName?.trim() ?? "";
-    const showProcessRow = Boolean(processLine || stagePills);
-
-    if (!showProcessRow) return null;
 
     return (
         <div
@@ -56,7 +53,7 @@ export function WorkUnitCommandSurface({
                     placementZone="header_metrics"
                     contextType="work_unit"
                     contextId={workUnitId}
-                    layout="row"
+                    layout="operational-answer"
                     loadingReserve={<WorkspaceQuietKpiReserve id="wu-kpi-quiet-reserve" />}
                 />
             </div>

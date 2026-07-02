@@ -121,20 +121,12 @@ html[data-alloy-os-runtime="on"]
   flex-direction: column;
   gap: 0;
   width: 100%;
-  background: var(--alloy-os-surface, #fff);
-  border: 1px solid var(--alloy-os-border, #e5e9ef);
-  border-left: 2px solid var(--alloy-os-bend-pine, #00a283);
-  border-radius: var(--alloy-os-radius-md, 8px) var(--alloy-os-radius-md, 8px) 0 0;
-  box-shadow: none;
 }
 .adminv2-os-context__row {
   display: flex;
   align-items: center;
   width: 100%;
   padding-inline: 12px;
-}
-.adminv2-os-context__row + .adminv2-os-context__row {
-  border-top: 1px solid var(--alloy-os-border, #e5e9ef);
 }
 
 /* Title row */
@@ -154,14 +146,13 @@ html[data-alloy-os-runtime="on"]
   text-overflow: ellipsis;
 }
 
-/* Compact metric tile row — wrapping row of fixed-width KPI/Trend tiles (V2 header surface). */
+/* OA strip row — zero padding so alloy-answer-strip cells are flush; no background (cells self-contain). */
 .adminv2-os-context__metric-tiles {
-  padding-block: 10px;
-  align-items: flex-start;
-  flex-wrap: wrap;
-  gap: 8px;
+  padding: 0;
+  align-items: stretch;
+  flex-wrap: nowrap;
+  gap: 0;
   min-height: 0;
-  background: var(--alloy-os-canvas, #f6f8fc);
 }
 
 /* Inline KPI strip — integrated chips, not floating tiles (V1 legacy, retained for CSS completeness) */
