@@ -1331,7 +1331,7 @@ async function enrichOpportunityRows(params: {
                   supabase
                       .from("opportunity_customer_members")
                       .select(
-                          "opportunity_id, customer_member_id, location_id, start_date, program_category_id, location_program_categories(key), customer_members(id, person_id, display_name, first_name, last_name, dob)",
+                          "opportunity_id, customer_member_id, location_id, start_date, program_category_id, location_program_categories(key, label), customer_members(id, person_id, display_name, first_name, last_name, dob)",
                       )
                       .eq("org_id", orgId)
                       .in("opportunity_id", opportunityIds as any)
@@ -1372,7 +1372,10 @@ async function enrichOpportunityRows(params: {
             location_id?: string | null;
             start_date?: string | null;
             program_category_id?: string | null;
-            location_program_categories?: { key?: string | null } | Array<{ key?: string | null }> | null;
+            location_program_categories?:
+                | { key?: string | null; label?: string | null }
+                | Array<{ key?: string | null; label?: string | null }>
+                | null;
             customer_members?: unknown;
         };
         const oid = String(row.opportunity_id ?? "").trim();
@@ -1390,6 +1393,7 @@ async function enrichOpportunityRows(params: {
                 customer_member_id: memberId,
                 location_id: String(row.location_id ?? "").trim() || null,
                 program_key: String(embeddedCategory?.key ?? "").trim() || null,
+                program_label: String(embeddedCategory?.label ?? "").trim() || null,
                 program_category_id: String(row.program_category_id ?? "").trim() || null,
             });
         }

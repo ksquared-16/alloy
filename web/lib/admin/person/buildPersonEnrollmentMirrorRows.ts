@@ -60,10 +60,20 @@ export async function buildPersonEnrollmentMirrorRowsForMemberIds(
     // Fetch opportunities and program labels in parallel (program labels are independent of opps).
     // Legacy option-set labels are looked up by the key derived from the embedded category.
     const programPairs = ocmList.map(
-        (r: { location_program_categories?: { key?: string | null } | null }) => ({
-            setKey: "childcare_program_type",
-            itemKey: r.location_program_categories?.key,
-        })
+        (r: {
+            location_program_categories?:
+                | { key?: string | null }
+                | { key?: string | null }[]
+                | null;
+        }) => {
+            const embedded = Array.isArray(r.location_program_categories)
+                ? (r.location_program_categories[0] ?? null)
+                : (r.location_program_categories ?? null);
+            return {
+                setKey: "childcare_program_type",
+                itemKey: embedded?.key,
+            };
+        }
     );
     const [oppResResult, programLabels] = await Promise.all([
         oppIds.length > 0
