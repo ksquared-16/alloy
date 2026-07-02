@@ -70,6 +70,48 @@ export function enrollmentStatusVocabularyForStage(
         : [...ENROLLMENT_CHILD_TRACK_STATUS_VOCABULARY];
 }
 
+/**
+ * Which durable states land in each enrollment stage (for Stage Context "membership" display).
+ * Membership itself is the persisted `stage_key`; this maps a stage to the durable status value(s)
+ * a record in that stage carries, so operators can see how a record lands here.
+ */
+export const ENROLLMENT_STAGE_DURABLE_STATES: Record<
+    string,
+    { entity: EnrollmentStatusVocabularyEntity; grain: "family" | "child"; status_keys: string[] }
+> = {
+    // Family / lead grain — case durable status is open until closed; position is the stage.
+    lead: { entity: "opportunities", grain: "family", status_keys: ["open"] },
+    tour: { entity: "opportunities", grain: "family", status_keys: ["open"] },
+    decision: { entity: "opportunities", grain: "family", status_keys: ["open"] },
+    closed: { entity: "opportunities", grain: "family", status_keys: ["closed"] },
+    // Child / enrollment grain — per-child durable enrollment state.
+    waitlist: { entity: "opportunity_customer_members", grain: "child", status_keys: ["waitlisted"] },
+    enrolling: { entity: "opportunity_customer_members", grain: "child", status_keys: ["enrolling"] },
+    enrolled: { entity: "opportunity_customer_members", grain: "child", status_keys: ["enrolled"] },
+    closed_withdrawn: {
+        entity: "opportunity_customer_members",
+        grain: "child",
+        status_keys: ["withdrawn", "not_enrolling"],
+    },
+};
+
+/** Stage membership for display: durable state key+label pairs that belong in a stage, or null if unknown. */
+export function enrollmentStageMembership(
+    stageKey: string
+): { grain: "family" | "child"; states: { key: string; label: string }[] } | null {
+    const entry = ENROLLMENT_STAGE_DURABLE_STATES[stageKey.trim()];
+    if (!entry) return null;
+    const vocab =
+        entry.entity === "opportunities"
+            ? ENROLLMENT_FAMILY_TRACK_STATUS_VOCABULARY
+            : ENROLLMENT_CHILD_TRACK_STATUS_VOCABULARY;
+    const states = entry.status_keys.map((key) => {
+        const row = vocab.find((r) => r.status_key === key);
+        return { key, label: row?.status_label ?? key };
+    });
+    return { grain: entry.grain, states };
+}
+
 export function enrollmentStatusVocabularyMetadata(
     row: EnrollmentStatusVocabularyRow
 ): Record<string, unknown> {

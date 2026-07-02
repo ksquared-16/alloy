@@ -158,7 +158,7 @@ describe("business process runtime cleanup", () => {
     });
 
     it("status settings expose Lead, Enrollment, and People — not Children", () => {
-        expect(STATUS_SETTINGS_SECTION_TITLES.opportunities).toBe("Lead / Case Statuses");
+        expect(STATUS_SETTINGS_SECTION_TITLES.opportunities).toBe("Lead Statuses");
         expect(STATUS_SETTINGS_SECTION_TITLES.opportunity_customer_members).toBe("Enrollment Statuses");
         expect(STATUS_SETTINGS_SECTION_TITLES.persons).toBe("People Statuses");
         expect(STATUS_SETTINGS_SECTION_TITLES).not.toHaveProperty("children");

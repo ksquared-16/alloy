@@ -79,6 +79,40 @@ export function parseSubjectResolutionStrategy(raw: unknown): StageSubjectResolu
 // ── Work View grain consistency ───────────────────────────────────────────────
 
 /**
+ * Stage keys a Work View's filters reference (via the `opportunity_stage` predicate). A Work View is
+ * a filter predicate, not a container of stages — so its grain must be derived from ONLY the stages it
+ * actually scopes to, not from every stage in the process. Empty result = the view spans all stages.
+ */
+export function stageKeysReferencedByWorkView(
+    filters: ReadonlyArray<{ field_key?: string; operator?: string; value?: unknown }> | null | undefined
+): string[] {
+    const keys = new Set<string>();
+    for (const f of filters ?? []) {
+        if (f?.field_key !== "opportunity_stage") continue;
+        if (typeof f.value === "string" && f.value.trim()) keys.add(f.value.trim());
+        else if (Array.isArray(f.value)) {
+            for (const v of f.value) if (typeof v === "string" && v.trim()) keys.add(v.trim());
+        }
+    }
+    return [...keys];
+}
+
+/**
+ * Grains of the stages a Work View actually includes. Scopes the mixed-grain check to the view's
+ * filtered stages so a single-grain view (e.g. New Leads → stage `lead`) is not flagged mixed merely
+ * because the process also has child-grain stages. Falls back to all stage grains when the view
+ * references no specific stage.
+ */
+export function resolveWorkViewStageGrains(
+    filters: ReadonlyArray<{ field_key?: string; operator?: string; value?: unknown }> | null | undefined,
+    stageGrainByKey: Record<string, StageGrain | undefined>
+): (StageGrain | undefined)[] {
+    const keys = stageKeysReferencedByWorkView(filters);
+    if (keys.length === 0) return Object.values(stageGrainByKey);
+    return keys.map((k) => stageGrainByKey[k]);
+}
+
+/**
  * Validates that all defined stage grains in a flat Work View are identical.
  * A flat Work View cannot mix grains — each row type produces a different
  * queue entry shape. Mixed-grain views should be split or use grouped lanes.

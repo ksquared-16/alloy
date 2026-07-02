@@ -21,23 +21,32 @@ loadEnv({ path: resolve(process.cwd(), ".env") });
 const DEFAULT_ORG_ID = "93667019-bd28-49b5-a688-acc9bb1e0a19";
 const ENTITY_TYPE = "opportunities";
 
+// Collapsed durable Lead (opportunities) statuses only: open | closed. Stage position (New Lead /
+// Tour / Decision) is in the Business Process, not status (Enrollment Alignment).
 const CHILDCARE_STATUS_ORDER: Array<{ key: string; label: string }> = [
-  { key: "new_inquiry", label: "New inquiry" },
-  { key: "contacted", label: "Contacted" },
-  { key: "tour_scheduled", label: "Tour scheduled" },
-  { key: "tour_completed", label: "Tour completed" },
-  { key: "application_in_progress", label: "Application in progress" },
-  { key: "ready_to_enroll", label: "Ready to enroll" },
-  { key: "waitlisted", label: "Waitlisted" },
-  { key: "enrolled", label: "Enrolled" },
-  { key: "lost", label: "Lost" },
+  { key: "open", label: "Open" },
+  { key: "closed", label: "Closed" },
 ];
 
 const ALLOW = new Set(CHILDCARE_STATUS_ORDER.map((x) => x.key));
 const FORCE_DEACTIVATE = new Set([
-  "needs_a_quote",
+  // Legacy operational-work/stage statuses collapsed away — deactivate if present.
+  "new_inquiry",
+  "needs_qualification",
+  "contacted",
   "conversation_had",
   "qualified",
+  "tour_requested",
+  "tour_scheduled",
+  "tour_completed",
+  "tour_no_show",
+  "application_in_progress",
+  "decision_pending",
+  "ready_to_enroll",
+  "waitlisted",
+  "enrolled",
+  "lost",
+  "needs_a_quote",
   "new",
   "scheduled",
   "booked",

@@ -45,6 +45,7 @@ import type { LifecycleBuilderStageRecord } from "@/lib/lifecycle/lifecycleBuild
 import type { StageCandidateAction } from "@/lib/lifecycle/stageActionCatalogV1";
 import type { StageOperatingPlanV1 } from "@/lib/lifecycle/stageOperatingPlanV1";
 import type { QueueMembershipV1 } from "@/lib/lifecycle/queueMembershipV1";
+import { enrollmentStageMembership } from "@/lib/lifecycle/enrollmentProcessStatusVocabulary";
 import type { LifecycleStageSaveUiState } from "@/components/adminV2/settings/lifecycle/LifecycleStageWorkspace";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -807,6 +808,45 @@ export default function StageEditorV2({
                             <SubjectResolutionField value={subjectResolution} onChange={setSubjectResolution} />
                         </Field>
                     ) : null}
+
+                    {(() => {
+                        const membership = enrollmentStageMembership(stageKey);
+                        if (!membership) return null;
+                        const question =
+                            membership.grain === "child"
+                                ? "Which child records belong here?"
+                                : "Which leads belong here?";
+                        const subject = membership.grain === "child" ? "Children" : "Leads";
+                        return (
+                            <Subsection label="Stage membership" description={question}>
+                                <div
+                                    className="rounded-lg border border-alloy-stone/25 bg-alloy-stone/[0.03] px-4 py-3"
+                                    data-testid="stage-membership-context"
+                                >
+                                    <p className="text-[12px] text-alloy-midnight/70">
+                                        {subject} with <span className="font-medium text-alloy-midnight">stage = {stageKey}</span> belong to this stage.
+                                    </p>
+                                    <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                                        <span className="text-[11px] text-alloy-midnight/45">
+                                            {membership.grain === "child" ? "Child enrollment state:" : "Lead status:"}
+                                        </span>
+                                        {membership.states.map((s) => (
+                                            <span
+                                                key={s.key}
+                                                className="rounded-full bg-alloy-pine/10 px-2 py-0.5 text-[11px] font-medium text-alloy-pine"
+                                                data-testid={`stage-membership-state-${s.key}`}
+                                            >
+                                                {s.label}
+                                            </span>
+                                        ))}
+                                    </div>
+                                    <p className="mt-2 text-[10.5px] text-alloy-midnight/40">
+                                        Records land here when an outcome moves them to this stage. Membership is the persisted stage — not a status filter.
+                                    </p>
+                                </div>
+                            </Subsection>
+                        );
+                    })()}
                 </Section>
 
                 {/* ── Section 3: Operational Experience ── */}
