@@ -104,6 +104,27 @@ export function activeCategories(cats: CommercialCategory[]): CommercialCategory
   return sortCategories(cats.filter(c => c.is_active !== false));
 }
 
+// ─── Revenue category (Accounting-facing) ───────────────────────────────────
+
+export type CommercialRevenueCategory = {
+  id: string;
+  org_id: string;
+  label: string;
+  gl_code: string | null;
+  sort_order: number;
+  is_active: boolean;
+  metadata: Record<string, unknown>;
+  created_at: string;
+  updated_at: string | null;
+};
+
+export function sortRevenueCategories(cats: CommercialRevenueCategory[]): CommercialRevenueCategory[] {
+  return [...cats].sort((a, b) => {
+    const d = (a.sort_order ?? 100) - (b.sort_order ?? 100);
+    return d !== 0 ? d : a.label.localeCompare(b.label);
+  });
+}
+
 // ─── Product ─────────────────────────────────────────────────────────────────
 
 export type CommercialProduct = {

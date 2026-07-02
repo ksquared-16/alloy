@@ -19,7 +19,9 @@ import {
 import {
     type CommercialProduct,
     type CommercialCategory,
+    type CommercialRevenueCategory,
     type CommercialType,
+    sortRevenueCategories,
     FREQUENCY_OPTIONS,
     COMMERCIAL_TYPE_OPTIONS,
     DUE_TIMING_OPTIONS,
@@ -111,7 +113,7 @@ const BULK_PRESETS: Record<string, number[]> = {
 };
 
 const inputCls =
-    "rounded border border-alloy-forge/15 bg-white px-2 py-1 text-xs text-alloy-midnight focus:border-alloy-pine/40 focus:outline-none";
+    "rounded border border-alloy-forge/15 bg-white px-2 py-1 text-xs text-alloy-midnight focus:border-alloy-juniper/40 focus:outline-none";
 
 // ─── GridCell ──────────────────────────────────────────────────────────────────
 // Inline-editable cell in the offering×cadence rate table.
@@ -183,10 +185,10 @@ function GridCell({ variant, cadence, rateRow, orgDefaultRow, locationId, onSave
                         value={draft}
                         onChange={(e) => setDraft(e.target.value)}
                         onKeyDown={(e) => { if (e.key === "Enter") void commitEdit(); if (e.key === "Escape") { setEditing(false); setShowDates(false); } }}
-                        className="w-16 rounded border border-alloy-pine/45 px-1 py-0 text-sm text-right leading-5 focus:outline-none focus:border-alloy-pine bg-white"
+                        className="w-16 rounded border border-alloy-juniper/45 px-1 py-0 text-sm text-right leading-5 focus:outline-none focus:border-alloy-juniper bg-white"
                         placeholder="0.00"
                     />
-                    <button type="button" onClick={() => void commitEdit()} disabled={saving} className="text-xs font-semibold text-alloy-pine hover:text-alloy-pine/70 disabled:opacity-40 leading-none">✓</button>
+                    <button type="button" onClick={() => void commitEdit()} disabled={saving} className="text-xs font-semibold text-alloy-juniper hover:text-alloy-juniper/70 disabled:opacity-40 leading-none">✓</button>
                     <button type="button" onClick={() => { setEditing(false); setShowDates(false); }} className="text-[11px] text-alloy-midnight/45 hover:text-alloy-midnight/60 leading-none">✕</button>
                 </div>
 
@@ -245,7 +247,7 @@ function GridCell({ variant, cadence, rateRow, orgDefaultRow, locationId, onSave
                 </span>
             ) : displayRate != null ? (
                 <span className="inline-flex items-center gap-1">
-                    {isLocOverride && <span className="w-1.5 h-1.5 rounded-full bg-alloy-pine/70 shrink-0" />}
+                    {isLocOverride && <span className="w-1.5 h-1.5 rounded-full bg-alloy-juniper/70 shrink-0" />}
                     <span>{formatRateCents(displayRate)}</span>
                     {rateRow?.effective_start && (
                         <span className="opacity-0 group-hover/cell:opacity-100 text-[9px] text-alloy-midnight/45 font-normal not-italic" title={`Effective ${rateRow.effective_start}${rateRow.effective_end ? ` – ${rateRow.effective_end}` : ""}`}>📅</span>
@@ -260,7 +262,7 @@ function GridCell({ variant, cadence, rateRow, orgDefaultRow, locationId, onSave
             ) : showOrgFallback ? (
                 <span className="text-alloy-midnight/40 italic text-xs">{formatRateCents(orgDefaultRow!.rate_cents)}</span>
             ) : (
-                <span className="text-alloy-midnight/35 group-hover/cell:text-alloy-pine/50 transition-colors">
+                <span className="text-alloy-midnight/35 group-hover/cell:text-alloy-juniper/50 transition-colors">
                     —
                     <button type="button" onClick={(e) => { e.stopPropagation(); void toggleNotOffered(); }} className="opacity-0 group-hover/cell:opacity-100 ml-1 text-[10px] text-alloy-midnight/40 hover:text-alloy-midnight/55" title="Mark N/A">⊘</button>
                 </span>
@@ -330,11 +332,11 @@ function OfferingRateGrid({ offering, variants, cadences, rateMap, orgOnlyMap, l
                                 <select value={newKey} onChange={(e) => setNewKey(e.target.value)} className={inputCls}>
                                     {availableCadences.map((c) => <option key={c.item_key} value={c.item_key}>{c.label}</option>)}
                                 </select>
-                                <button type="button" onClick={confirmAddCol} className="rounded border border-alloy-pine/30 bg-alloy-pine/8 px-2 py-0.5 text-xs font-medium text-alloy-pine hover:bg-alloy-pine/12">Add</button>
+                                <button type="button" onClick={confirmAddCol} className="rounded border border-alloy-juniper/30 bg-alloy-juniper/8 px-2 py-0.5 text-xs font-medium text-alloy-juniper hover:bg-alloy-juniper/12">Add</button>
                                 <button type="button" onClick={() => setAddingCol(false)} className="text-xs text-alloy-midnight/35 hover:text-alloy-midnight">✕</button>
                             </div>
                         ) : (
-                            <button type="button" onClick={openAddCol} className="text-xs text-alloy-pine/70 hover:text-alloy-pine transition-colors flex items-center gap-0.5">
+                            <button type="button" onClick={openAddCol} className="text-xs text-alloy-juniper/70 hover:text-alloy-juniper transition-colors flex items-center gap-0.5">
                                 <span className="text-sm leading-none">+</span> Add rate basis
                             </button>
                         )
@@ -448,7 +450,7 @@ function VariantBulkBuilder({ offering, variants, rates, onAddVariants, onUpdate
                 <div className="overflow-hidden rounded-lg border border-alloy-stone/20">
                     {sorted.map((v, i) =>
                         editingId === v.id ? (
-                            <div key={v.id} className="px-3 py-3 bg-alloy-pine/5 border-b border-alloy-stone/15 space-y-2">
+                            <div key={v.id} className="px-3 py-3 bg-alloy-juniper/5 border-b border-alloy-stone/15 space-y-2">
                                 <div className="flex flex-wrap gap-2 items-end">
                                     <label className="flex flex-col gap-0.5 flex-1 min-w-[140px]">
                                         <span className="text-[10px] text-alloy-midnight/45">Label</span>
@@ -462,7 +464,7 @@ function VariantBulkBuilder({ offering, variants, rates, onAddVariants, onUpdate
                                     </label>
                                 </div>
                                 <div className="flex items-center gap-2">
-                                    <button type="button" onClick={() => void saveEdit()} disabled={savingEdit} className="rounded border border-alloy-pine/30 bg-alloy-pine/8 px-3 py-1 text-xs font-medium text-alloy-pine hover:bg-alloy-pine/12 disabled:opacity-50">{savingEdit ? "Saving…" : "Save"}</button>
+                                    <button type="button" onClick={() => void saveEdit()} disabled={savingEdit} className="rounded border border-alloy-juniper/30 bg-alloy-juniper/8 px-3 py-1 text-xs font-medium text-alloy-juniper hover:bg-alloy-juniper/12 disabled:opacity-50">{savingEdit ? "Saving…" : "Save"}</button>
                                     <button type="button" onClick={() => setEditingId(null)} className="text-xs text-alloy-midnight/40 hover:text-alloy-midnight">Cancel</button>
                                 </div>
                             </div>
@@ -476,7 +478,7 @@ function VariantBulkBuilder({ offering, variants, rates, onAddVariants, onUpdate
                                 </div>
                                 {!isDefaultVariant(v) && (
                                     <div className="flex items-center gap-2 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
-                                        <button type="button" onClick={() => startEdit(v)} className="text-xs text-alloy-midnight/35 hover:text-alloy-pine px-1">Edit</button>
+                                        <button type="button" onClick={() => startEdit(v)} className="text-xs text-alloy-midnight/35 hover:text-alloy-juniper px-1">Edit</button>
                                         <button type="button" onClick={() => void onDeleteVariant(v.id)} className="text-alloy-midnight/20 hover:text-red-400 text-xs px-1" title={hasRates(v.id) ? "Has rates — will archive" : "Remove"}>×</button>
                                     </div>
                                 )}
@@ -503,7 +505,7 @@ function VariantBulkBuilder({ offering, variants, rates, onAddVariants, onUpdate
                             const selected = selectedCounts.has(count);
                             return (
                                 <button key={count} type="button" disabled={exists} onClick={() => toggleCount(count)}
-                                    className={`rounded-full px-2.5 py-1 text-xs font-medium border transition-colors ${exists ? "border-alloy-stone/15 bg-alloy-stone/8 text-alloy-midnight/20 cursor-not-allowed line-through" : selected ? "border-alloy-pine bg-alloy-pine text-white" : "border-alloy-stone/30 bg-white text-alloy-midnight/55 hover:border-alloy-pine/50 hover:text-alloy-pine"}`}
+                                    className={`rounded-full px-2.5 py-1 text-xs font-medium border transition-colors ${exists ? "border-alloy-stone/15 bg-alloy-stone/8 text-alloy-midnight/20 cursor-not-allowed line-through" : selected ? "border-alloy-juniper bg-alloy-juniper text-white" : "border-alloy-stone/30 bg-white text-alloy-midnight/55 hover:border-alloy-juniper/50 hover:text-alloy-juniper"}`}
                                 >
                                     {count}
                                 </button>
@@ -511,7 +513,7 @@ function VariantBulkBuilder({ offering, variants, rates, onAddVariants, onUpdate
                         })}
                         <div className="flex items-center gap-1">
                             <input type="number" min="1" step="0.5" value={customCount} onChange={(e) => setCustomCount(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") addCustomCount(); }} placeholder="Other" className={`${inputCls} w-16 text-center`} />
-                            <button type="button" onClick={addCustomCount} className="text-xs text-alloy-midnight/40 hover:text-alloy-pine">+</button>
+                            <button type="button" onClick={addCustomCount} className="text-xs text-alloy-midnight/40 hover:text-alloy-juniper">+</button>
                         </div>
                     </div>
                     {newCounts.length > 0 && (
@@ -522,7 +524,7 @@ function VariantBulkBuilder({ offering, variants, rates, onAddVariants, onUpdate
                                     <span key={count} className="text-xs text-alloy-midnight/60 bg-white rounded border border-alloy-stone/20 px-2 py-0.5">{autoVariantLabel(count, quantityType)}</span>
                                 ))}
                             </div>
-                            <button type="button" disabled={adding} onClick={() => void handleBulkAdd()} className="rounded border border-alloy-pine/30 bg-alloy-pine/8 px-3 py-1.5 text-xs font-medium text-alloy-pine hover:bg-alloy-pine/12 disabled:opacity-50">
+                            <button type="button" disabled={adding} onClick={() => void handleBulkAdd()} className="rounded border border-alloy-juniper/30 bg-alloy-juniper/8 px-3 py-1.5 text-xs font-medium text-alloy-juniper hover:bg-alloy-juniper/12 disabled:opacity-50">
                                 {adding ? "Adding…" : `Add ${newCounts.length} variant${newCounts.length !== 1 ? "s" : ""}`}
                             </button>
                         </div>
@@ -560,7 +562,7 @@ function OfferingGroup({ offering, variants, rates, onAddVariants, onUpdateVaria
                     {offering.status !== "active" && <span className="text-[10px] text-alloy-midnight/40 capitalize">{offering.status}</span>}
                 </button>
                 <div className="flex items-center gap-2 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <button type="button" onClick={onEdit} className="text-xs text-alloy-midnight/35 hover:text-alloy-pine">Edit</button>
+                    <button type="button" onClick={onEdit} className="text-xs text-alloy-midnight/35 hover:text-alloy-juniper">Edit</button>
                     <button type="button" onClick={onDelete} className="text-alloy-midnight/20 hover:text-red-400 text-xs">×</button>
                 </div>
             </div>
@@ -643,7 +645,7 @@ function ProgramsPanel({ program, locations, categories, offerings, variants, ra
                     <div className="space-y-3">
                         {offerings.map((o) =>
                             editingOfferingId === o.id ? (
-                                <div key={o.id} className="border border-alloy-pine/30 rounded-lg px-4 py-3 bg-alloy-pine/5 space-y-2.5">
+                                <div key={o.id} className="border border-alloy-juniper/30 rounded-lg px-4 py-3 bg-alloy-juniper/5 space-y-2.5">
                                     <div className="flex flex-wrap gap-2 items-end">
                                         <label className="flex flex-col gap-0.5 flex-1 min-w-[140px]">
                                             <span className="text-[10px] text-alloy-midnight/45">Label</span>
@@ -657,7 +659,7 @@ function ProgramsPanel({ program, locations, categories, offerings, variants, ra
                                         </label>
                                     </div>
                                     <div className="flex items-center gap-2">
-                                        <button type="button" onClick={() => void saveOfferingEdit()} disabled={savingOffering || !editOfferingLabel.trim()} className="rounded border border-alloy-pine/30 bg-alloy-pine/8 px-3 py-1 text-xs font-medium text-alloy-pine hover:bg-alloy-pine/12 disabled:opacity-50">{savingOffering ? "Saving…" : "Save"}</button>
+                                        <button type="button" onClick={() => void saveOfferingEdit()} disabled={savingOffering || !editOfferingLabel.trim()} className="rounded border border-alloy-juniper/30 bg-alloy-juniper/8 px-3 py-1 text-xs font-medium text-alloy-juniper hover:bg-alloy-juniper/12 disabled:opacity-50">{savingOffering ? "Saving…" : "Save"}</button>
                                         <button type="button" onClick={() => setEditingOfferingId(null)} className="text-xs text-alloy-midnight/40 hover:text-alloy-midnight">Cancel</button>
                                     </div>
                                 </div>
@@ -691,7 +693,7 @@ function ProgramsPanel({ program, locations, categories, offerings, variants, ra
                                     <span className="text-[10px] text-alloy-midnight/45">Label</span>
                                     <input type="text" value={addLabel} placeholder={ATTENDANCE_TYPE_LABELS[addAttType]} onChange={(e) => setAddLabel(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") void handleAddOffering(); }} className={inputCls} />
                                 </label>
-                                <button type="button" disabled={addingOffering || existingTypes.has(addAttType)} onClick={() => void handleAddOffering()} className="rounded border border-alloy-pine/30 bg-alloy-pine/8 px-3 py-1.5 text-xs font-medium text-alloy-pine hover:bg-alloy-pine/12 disabled:opacity-50">
+                                <button type="button" disabled={addingOffering || existingTypes.has(addAttType)} onClick={() => void handleAddOffering()} className="rounded border border-alloy-juniper/30 bg-alloy-juniper/8 px-3 py-1.5 text-xs font-medium text-alloy-juniper hover:bg-alloy-juniper/12 disabled:opacity-50">
                                     {addingOffering ? "Adding…" : "Add"}
                                 </button>
                             </div>
@@ -702,13 +704,13 @@ function ProgramsPanel({ program, locations, categories, offerings, variants, ra
                 {/* Location availability — compact summary, expandable */}
                 <div className="flex items-center justify-between rounded-lg border border-alloy-stone/20 px-4 py-2.5">
                     {locations.length === 0 ? (
-                        <span className="text-xs text-alloy-midnight/40">No site locations. <Link href="/settings/locations" className="text-alloy-pine hover:underline">Add locations →</Link></span>
+                        <span className="text-xs text-alloy-midnight/40">No site locations. <Link href="/settings/locations" className="text-alloy-juniper hover:underline">Add locations →</Link></span>
                     ) : (
                         <>
                             <span className="text-xs text-alloy-midnight/55">
                                 Offered at <strong className="text-alloy-midnight">{offeredCount}</strong> of <strong className="text-alloy-midnight">{locations.length}</strong> site{locations.length !== 1 ? "s" : ""}
                             </span>
-                            <button type="button" onClick={() => setLocExpanded((v) => !v)} className="text-xs text-alloy-pine hover:underline shrink-0 ml-4">
+                            <button type="button" onClick={() => setLocExpanded((v) => !v)} className="text-xs text-alloy-juniper hover:underline shrink-0 ml-4">
                                 {locExpanded ? "Collapse" : "Configure →"}
                             </button>
                         </>
@@ -766,16 +768,16 @@ function TuitionPanel({ program, offerings, variantsByOffering, cadences, locati
                     <span className="text-xs font-medium text-alloy-midnight/45 shrink-0">Viewing:</span>
                     <button type="button" onClick={() => onScopeChange(null)} className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${selectedScopeId === null ? "bg-alloy-midnight text-white border-alloy-midnight" : "bg-white text-alloy-midnight/55 border-alloy-stone/30 hover:border-alloy-midnight/35"}`}>Org defaults</button>
                     {locations.map((loc) => (
-                        <button key={loc.id} type="button" onClick={() => onScopeChange(loc.id)} className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${selectedScopeId === loc.id ? "bg-alloy-pine text-white border-alloy-pine" : "bg-white text-alloy-midnight/55 border-alloy-stone/30 hover:border-alloy-pine/35"}`}>{loc.name}</button>
+                        <button key={loc.id} type="button" onClick={() => onScopeChange(loc.id)} className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${selectedScopeId === loc.id ? "bg-alloy-juniper text-white border-alloy-juniper" : "bg-white text-alloy-midnight/55 border-alloy-stone/30 hover:border-alloy-juniper/35"}`}>{loc.name}</button>
                     ))}
                 </div>
 
                 {selectedScopeId && (
                     <div className="flex items-center justify-between gap-3 rounded-lg border border-alloy-stone/25 bg-alloy-stone/8 px-4 py-2.5">
                         <p className="text-xs text-alloy-midnight/55">
-                            <strong className="font-medium text-alloy-midnight">{selectedLocName}</strong> — <span className="inline-flex items-center gap-1"><span className="inline-block w-1.5 h-1.5 rounded-full bg-alloy-pine/70" /> green dot = override.</span> Italic = inherited.
+                            <strong className="font-medium text-alloy-midnight">{selectedLocName}</strong> — <span className="inline-flex items-center gap-1"><span className="inline-block w-1.5 h-1.5 rounded-full bg-alloy-juniper/70" /> green dot = override.</span> Italic = inherited.
                         </p>
-                        <button type="button" disabled={bulkCopying} onClick={() => void onCopyOrgToLocation(selectedScopeId)} className="shrink-0 text-xs font-medium text-alloy-pine hover:underline disabled:opacity-50">
+                        <button type="button" disabled={bulkCopying} onClick={() => void onCopyOrgToLocation(selectedScopeId)} className="shrink-0 text-xs font-medium text-alloy-juniper hover:underline disabled:opacity-50">
                             {bulkCopying ? "Copying…" : "Copy org rates →"}
                         </button>
                     </div>
@@ -784,7 +786,7 @@ function TuitionPanel({ program, offerings, variantsByOffering, cadences, locati
                 {/* Payer tabs */}
                 <div className="flex border-b border-alloy-stone/20">
                     {PAYER_TABS.map((tab) => (
-                        <button key={tab.key} type="button" disabled={!tab.available} onClick={() => { if (tab.available) onPayerTabChange(tab.key); }} className={`px-4 py-2 text-sm -mb-px border-b-2 transition-colors ${payerTab === tab.key ? "border-alloy-pine text-alloy-pine font-medium" : tab.available ? "border-transparent text-alloy-midnight/60 hover:text-alloy-midnight" : "border-transparent text-alloy-midnight/40 cursor-not-allowed"}`}>
+                        <button key={tab.key} type="button" disabled={!tab.available} onClick={() => { if (tab.available) onPayerTabChange(tab.key); }} className={`px-4 py-2 text-sm -mb-px border-b-2 transition-colors ${payerTab === tab.key ? "border-alloy-juniper text-alloy-juniper font-medium" : tab.available ? "border-transparent text-alloy-midnight/60 hover:text-alloy-midnight" : "border-transparent text-alloy-midnight/40 cursor-not-allowed"}`}>
                             {tab.label}
                         </button>
                     ))}
@@ -839,7 +841,7 @@ function AddProgramForm({ onAdd }: { onAdd: (label: string, key: string) => Prom
                     <span className="text-[10px] text-alloy-midnight/40">Name</span>
                     <input type="text" value={label} placeholder="e.g. Summer Camp" disabled={adding} onChange={(e) => setLabel(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") void handleAdd(); }} className={inputCls} />
                 </label>
-                <button type="button" disabled={adding || !label.trim()} onClick={() => void handleAdd()} className="rounded border border-alloy-pine/30 bg-alloy-pine/8 px-3 py-1.5 text-xs font-medium text-alloy-pine hover:bg-alloy-pine/12 disabled:opacity-50">
+                <button type="button" disabled={adding || !label.trim()} onClick={() => void handleAdd()} className="rounded border border-alloy-juniper/30 bg-alloy-juniper/8 px-3 py-1.5 text-xs font-medium text-alloy-juniper hover:bg-alloy-juniper/12 disabled:opacity-50">
                     {adding ? "Adding…" : "Add"}
                 </button>
             </div>
@@ -860,7 +862,7 @@ function ScopeBadge({ locationId, programKey, locations, programs }: { locationI
 
 function FreqBadge({ cadenceKey }: { cadenceKey: string | null }) {
     return (
-        <span className="text-[10px] text-alloy-pine/70 bg-alloy-pine/6 rounded px-1.5 py-0.5 whitespace-nowrap font-medium">
+        <span className="text-[10px] text-alloy-juniper/70 bg-alloy-juniper/6 rounded px-1.5 py-0.5 whitespace-nowrap font-medium">
             {frequencyLabel(cadenceKey)}
         </span>
     );
@@ -871,7 +873,7 @@ function CommercialCard({ children, onClick, editing }: { children: React.ReactN
         <div
             className={[
                 "group rounded-lg border px-4 py-3 transition-all",
-                editing ? "border-alloy-pine/40 bg-alloy-pine/3 shadow-sm" : "border-alloy-stone/20 bg-white hover:border-alloy-stone/35 hover:shadow-xs",
+                editing ? "border-alloy-juniper/40 bg-alloy-juniper/3 shadow-sm" : "border-alloy-stone/20 bg-white hover:border-alloy-stone/35 hover:shadow-xs",
                 onClick && !editing ? "cursor-pointer" : "",
             ].join(" ")}
             onClick={editing ? undefined : onClick}
@@ -891,7 +893,7 @@ function CField({ label, value, onChange, placeholder, type = "text", required }
                 value={value}
                 onChange={e => onChange(e.target.value)}
                 placeholder={placeholder}
-                className="mt-0.5 block w-full rounded border border-alloy-stone/25 px-2 py-1 text-sm text-alloy-midnight placeholder:text-alloy-midnight/38 focus:border-alloy-pine/50 focus:outline-none"
+                className="mt-0.5 block w-full rounded border border-alloy-stone/25 px-2 py-1 text-sm text-alloy-midnight placeholder:text-alloy-midnight/38 focus:border-alloy-juniper focus:outline-none focus:ring-2 focus:ring-alloy-juniper/20"
             />
         </label>
     );
@@ -908,7 +910,7 @@ function CSuggest({ label, value, onChange, suggestions, placeholder }: { label:
                 value={value}
                 onChange={e => onChange(e.target.value)}
                 placeholder={placeholder ?? "Type or choose…"}
-                className="mt-0.5 block w-full rounded border border-alloy-stone/25 px-2 py-1 text-sm text-alloy-midnight placeholder:text-alloy-midnight/38 focus:border-alloy-pine/50 focus:outline-none"
+                className="mt-0.5 block w-full rounded border border-alloy-stone/25 px-2 py-1 text-sm text-alloy-midnight placeholder:text-alloy-midnight/38 focus:border-alloy-juniper focus:outline-none focus:ring-2 focus:ring-alloy-juniper/20"
             />
             <datalist id={id}>
                 {suggestions.map(s => <option key={s} value={s} />)}
@@ -924,7 +926,7 @@ function CSelect({ label, value, onChange, options }: { label: string; value: st
             <select
                 value={value}
                 onChange={e => onChange(e.target.value)}
-                className="mt-0.5 block w-full rounded border border-alloy-stone/25 px-2 py-1 text-sm text-alloy-midnight focus:border-alloy-pine/50 focus:outline-none bg-white"
+                className="mt-0.5 block w-full rounded border border-alloy-stone/25 px-2 py-1 text-sm text-alloy-midnight focus:border-alloy-juniper focus:outline-none focus:ring-2 focus:ring-alloy-juniper/20 bg-white"
             >
                 {options.map(o => <option key={o.key} value={o.key}>{o.label}</option>)}
             </select>
@@ -937,7 +939,7 @@ function CToggle({ label, checked, onChange, hint }: { label: string; checked: b
         <label className="flex items-center gap-2 cursor-pointer select-none">
             <div
                 onClick={() => onChange(!checked)}
-                className={`w-7 h-4 rounded-full transition-colors flex-shrink-0 ${checked ? "bg-alloy-pine" : "bg-alloy-stone/30"}`}
+                className={`w-7 h-4 rounded-full transition-colors flex-shrink-0 ${checked ? "bg-alloy-juniper" : "bg-alloy-stone/30"}`}
             >
                 <div className={`w-3 h-3 rounded-full bg-white shadow-sm mt-0.5 transition-transform ${checked ? "translate-x-3.5" : "translate-x-0.5"}`} />
             </div>
@@ -957,14 +959,14 @@ function ScopeFields({ locationId, setLocationId, programKey, setProgramKey, loc
         <div className="grid grid-cols-2 gap-3">
             <label className="block">
                 <span className="text-[10px] font-medium text-alloy-midnight/45 uppercase tracking-wide">Location scope</span>
-                <select value={locationId} onChange={e => setLocationId(e.target.value)} className="mt-0.5 block w-full rounded border border-alloy-stone/25 px-2 py-1 text-sm text-alloy-midnight focus:border-alloy-pine/50 focus:outline-none bg-white">
+                <select value={locationId} onChange={e => setLocationId(e.target.value)} className="mt-0.5 block w-full rounded border border-alloy-stone/25 px-2 py-1 text-sm text-alloy-midnight focus:border-alloy-juniper focus:outline-none focus:ring-2 focus:ring-alloy-juniper/20 bg-white">
                     <option value="">All locations (org default)</option>
                     {locations.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
                 </select>
             </label>
             <label className="block">
                 <span className="text-[10px] font-medium text-alloy-midnight/45 uppercase tracking-wide">Program scope</span>
-                <select value={programKey} onChange={e => setProgramKey(e.target.value)} className="mt-0.5 block w-full rounded border border-alloy-stone/25 px-2 py-1 text-sm text-alloy-midnight focus:border-alloy-pine/50 focus:outline-none bg-white">
+                <select value={programKey} onChange={e => setProgramKey(e.target.value)} className="mt-0.5 block w-full rounded border border-alloy-stone/25 px-2 py-1 text-sm text-alloy-midnight focus:border-alloy-juniper focus:outline-none focus:ring-2 focus:ring-alloy-juniper/20 bg-white">
                     <option value="">All programs</option>
                     {programs.map(p => <option key={p.key} value={p.key}>{p.label}</option>)}
                 </select>
@@ -990,7 +992,7 @@ function SectionHeader({ title, count, onAdd, adding }: { title: string; count: 
                 {count > 0 && <span className="text-[10px] text-alloy-midnight/35 bg-alloy-stone/10 rounded-full px-1.5 py-0.5">{count}</span>}
             </div>
             {!adding && (
-                <button type="button" onClick={onAdd} className="flex items-center gap-1 text-xs text-alloy-pine/75 hover:text-alloy-pine transition-colors font-medium">
+                <button type="button" onClick={onAdd} className="flex items-center gap-1 text-xs text-alloy-juniper/75 hover:text-alloy-juniper transition-colors font-medium">
                     <span className="text-sm leading-none">+</span> Add
                 </button>
             )}
@@ -1002,7 +1004,7 @@ function EmptySlate({ label, onAdd }: { label: string; onAdd: () => void }) {
     return (
         <div className="rounded-lg border border-dashed border-alloy-stone/25 px-4 py-6 text-center">
             <p className="text-sm text-alloy-midnight/35 mb-2">{label}</p>
-            <button type="button" onClick={onAdd} className="text-xs text-alloy-pine/70 hover:text-alloy-pine font-medium transition-colors">
+            <button type="button" onClick={onAdd} className="text-xs text-alloy-juniper/70 hover:text-alloy-juniper font-medium transition-colors">
                 + Add one
             </button>
         </div>
@@ -1013,9 +1015,20 @@ function SaveBar({ onSave, onCancel, saving, disabled }: { onSave: () => void; o
     return (
         <div className="flex items-center justify-end gap-2 pt-1">
             <button type="button" onClick={onCancel} className="text-xs text-alloy-midnight/45 hover:text-alloy-midnight transition-colors px-2 py-1">Cancel</button>
-            <button type="button" onClick={onSave} disabled={saving || disabled} className="rounded bg-alloy-pine px-3 py-1 text-xs font-medium text-white hover:bg-alloy-pine/85 disabled:opacity-40 transition-colors">
+            <button type="button" onClick={onSave} disabled={saving || disabled} className="rounded bg-alloy-juniper px-3 py-1 text-xs font-medium text-white hover:bg-alloy-juniper/85 disabled:opacity-40 transition-colors">
                 {saving ? "Saving…" : "Save"}
             </button>
+        </div>
+    );
+}
+
+// Section divider inside the product configuration panel.
+function FormStep({ label, hint }: { label: string; hint?: string }) {
+    return (
+        <div className="flex items-center gap-2 pt-1">
+            <span className="text-[10px] font-semibold text-alloy-juniper uppercase tracking-wide whitespace-nowrap">{label}</span>
+            <span className="flex-1 h-px bg-alloy-stone/20" />
+            {hint && <span className="text-[10px] text-alloy-midnight/50 whitespace-nowrap">{hint}</span>}
         </div>
     );
 }
@@ -1025,27 +1038,103 @@ function SaveBar({ onSave, onCancel, saving, disabled }: { onSave: () => void; o
 // flow into Accounting: products reference a revenue category; Accounting maps
 // each category to a GL code and decides where money posts.
 
-function AccountingReferencePanel({ products, categories, loading }: {
+function AccountingReferencePanel({ products, loading }: {
     products: CommercialProduct[];
-    categories: CommercialCategory[];
     loading: boolean;
 }) {
-    // Distinct revenue categories referenced across the catalog, with usage counts.
-    const revenueCategories = useMemo(() => {
-        const counts = new Map<string, number>();
-        for (const p of products) {
-            const rc = (p.revenue_category ?? "").trim();
-            if (rc) counts.set(rc, (counts.get(rc) ?? 0) + 1);
-        }
-        return Array.from(counts.entries()).map(([label, count]) => ({ label, count })).sort((a, b) => a.label.localeCompare(b.label));
+    const [revenueCats, setRevenueCats] = useState<CommercialRevenueCategory[]>([]);
+    const [rcLoading, setRcLoading] = useState(true);
+    const [adding, setAdding] = useState(false);
+    const [newLabel, setNewLabel] = useState("");
+    const [newGl, setNewGl] = useState("");
+    const [savingNew, setSavingNew] = useState(false);
+    const [editingId, setEditingId] = useState<string | null>(null);
+    const [editGl, setEditGl] = useState("");
+    const [savingEdit, setSavingEdit] = useState(false);
+
+    useEffect(() => {
+        let cancelled = false;
+        (async () => {
+            setRcLoading(true);
+            try {
+                const res = await fetch("/api/admin/commercial/revenue-categories?include_inactive=true");
+                const json = (await res.json()) as { revenue_categories?: CommercialRevenueCategory[] };
+                if (!cancelled) setRevenueCats(sortRevenueCategories(json.revenue_categories ?? []));
+            } catch { /* retain */ }
+            finally { if (!cancelled) setRcLoading(false); }
+        })();
+        return () => { cancelled = true; };
+    }, []);
+
+    // Count catalog products referencing each revenue category label (case-insensitive).
+    const productCountFor = useCallback((label: string) => {
+        const l = label.trim().toLowerCase();
+        return products.filter(p => (p.revenue_category ?? "").trim().toLowerCase() === l).length;
     }, [products]);
 
-    const uncategorizedCount = useMemo(
-        () => products.filter(p => !(p.revenue_category ?? "").trim()).length,
-        [products],
-    );
+    // Labels used on products that have no managed revenue category yet.
+    const unmappedLabels = useMemo(() => {
+        const managed = new Set(revenueCats.map(c => c.label.trim().toLowerCase()));
+        const seen = new Map<string, number>();
+        for (const p of products) {
+            const rc = (p.revenue_category ?? "").trim();
+            if (rc && !managed.has(rc.toLowerCase())) seen.set(rc, (seen.get(rc) ?? 0) + 1);
+        }
+        return Array.from(seen.entries()).map(([label, count]) => ({ label, count })).sort((a, b) => a.label.localeCompare(b.label));
+    }, [products, revenueCats]);
 
-    if (loading) {
+    async function addCategory() {
+        const label = newLabel.trim();
+        if (!label) return;
+        setSavingNew(true);
+        try {
+            const res = await fetch("/api/admin/commercial/revenue-categories", {
+                method: "POST", headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ label, gl_code: newGl.trim() || null }),
+            });
+            const json = (await res.json()) as { revenue_category?: CommercialRevenueCategory };
+            if (json.revenue_category) {
+                setRevenueCats(prev => sortRevenueCategories([...prev, json.revenue_category!]));
+                setNewLabel(""); setNewGl(""); setAdding(false);
+            }
+        } finally { setSavingNew(false); }
+    }
+
+    function startEditGl(rc: CommercialRevenueCategory) { setEditingId(rc.id); setEditGl(rc.gl_code ?? ""); }
+
+    async function saveGl(id: string) {
+        setSavingEdit(true);
+        try {
+            const res = await fetch(`/api/admin/commercial/revenue-categories/${id}`, {
+                method: "PATCH", headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ gl_code: editGl.trim() || null }),
+            });
+            const json = (await res.json()) as { revenue_category?: CommercialRevenueCategory };
+            if (json.revenue_category) {
+                setRevenueCats(prev => prev.map(c => c.id === id ? json.revenue_category! : c));
+                setEditingId(null);
+            }
+        } finally { setSavingEdit(false); }
+    }
+
+    async function deleteCategory(id: string) {
+        await fetch(`/api/admin/commercial/revenue-categories/${id}`, { method: "DELETE" });
+        setRevenueCats(prev => prev.filter(c => c.id !== id));
+    }
+
+    async function adoptLabel(label: string) {
+        setSavingNew(true);
+        try {
+            const res = await fetch("/api/admin/commercial/revenue-categories", {
+                method: "POST", headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ label }),
+            });
+            const json = (await res.json()) as { revenue_category?: CommercialRevenueCategory };
+            if (json.revenue_category) setRevenueCats(prev => sortRevenueCategories([...prev, json.revenue_category!]));
+        } finally { setSavingNew(false); }
+    }
+
+    if (loading || rcLoading) {
         return <div className="flex items-center justify-center flex-1 text-sm text-alloy-midnight/55 py-16">Loading…</div>;
     }
 
@@ -1053,70 +1142,118 @@ function AccountingReferencePanel({ products, categories, loading }: {
         <div className="flex-1 overflow-y-auto">
             <div className="max-w-2xl mx-auto px-6 py-8 space-y-6">
 
-                <div>
-                    <h2 className="text-base font-semibold text-alloy-midnight">Accounting</h2>
-                    <p className="text-xs text-alloy-midnight/60 mt-0.5">
-                        Where commercial revenue posts. GL mapping lives here.
-                    </p>
+                <div className="flex items-center justify-between">
+                    <div>
+                        <h2 className="text-base font-semibold text-alloy-midnight">Accounting</h2>
+                        <p className="text-xs text-alloy-midnight/60 mt-0.5">Where commercial revenue posts. GL mapping lives here.</p>
+                    </div>
+                    {!adding && (
+                        <button type="button" onClick={() => setAdding(true)} className="flex items-center gap-1.5 rounded-md bg-alloy-juniper px-3 py-1.5 text-xs font-medium text-white hover:bg-alloy-juniper/85 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-alloy-juniper/40">
+                            <span className="text-sm leading-none">+</span> Revenue category
+                        </button>
+                    )}
                 </div>
 
                 {/* Flow model */}
-                <div className="rounded-lg border border-alloy-pine/25 bg-alloy-pine/3 px-4 py-4">
+                <div className="rounded-xl border border-alloy-juniper/25 bg-alloy-juniper/5 px-4 py-4">
                     <div className="flex items-center gap-2 text-xs font-medium flex-wrap">
-                        <span className="rounded-md bg-white border border-alloy-stone/25 px-2.5 py-1 text-alloy-midnight/70">Commercial product</span>
-                        <span className="text-alloy-pine/70">references →</span>
-                        <span className="rounded-md bg-alloy-pine/10 border border-alloy-pine/30 px-2.5 py-1 text-alloy-pine font-semibold">Revenue category</span>
-                        <span className="text-alloy-pine/70">maps to →</span>
-                        <span className="rounded-md bg-white border border-alloy-stone/25 px-2.5 py-1 text-alloy-midnight/70">GL code</span>
+                        <span className="rounded-md bg-white border border-alloy-stone/25 px-2.5 py-1 text-alloy-midnight/75">Commercial product</span>
+                        <span className="text-alloy-juniper">references →</span>
+                        <span className="rounded-md bg-alloy-juniper/12 border border-alloy-juniper/30 px-2.5 py-1 text-alloy-juniper font-semibold">Revenue category</span>
+                        <span className="text-alloy-juniper">maps to →</span>
+                        <span className="rounded-md bg-white border border-alloy-stone/25 px-2.5 py-1 text-alloy-midnight/75">GL code</span>
                     </div>
-                    <p className="text-[11px] text-alloy-midnight/60 mt-2.5 leading-relaxed">
-                        Commercial defines <span className="font-medium text-alloy-midnight/75">what</span> a charge is. Accounting decides <span className="font-medium text-alloy-midnight/75">where</span> it posts. Each product carries a revenue category as a reference label; Accounting maps that label to a GL code in your chart of accounts.
+                    <p className="text-[11px] text-alloy-midnight/65 mt-2.5 leading-relaxed">
+                        Commercial defines <span className="font-medium text-alloy-midnight/80">what</span> a charge is. Accounting decides <span className="font-medium text-alloy-midnight/80">where</span> it posts — map each revenue category to a GL code in your chart of accounts.
                     </p>
                 </div>
 
-                {/* Revenue categories in use */}
+                {/* Add form */}
+                {adding && (
+                    <div className="rounded-xl border border-alloy-stone/20 bg-white p-4 shadow-sm space-y-3">
+                        <div className="grid grid-cols-2 gap-3">
+                            <label className="block">
+                                <span className="text-[10px] font-medium text-alloy-midnight/55 uppercase tracking-wide">Revenue category *</span>
+                                <input value={newLabel} onChange={e => setNewLabel(e.target.value)} placeholder="e.g. Program Revenue" className="mt-0.5 block w-full rounded border border-alloy-stone/25 px-2 py-1 text-sm text-alloy-midnight placeholder:text-alloy-midnight/38 focus:border-alloy-juniper focus:outline-none focus:ring-2 focus:ring-alloy-juniper/20" />
+                            </label>
+                            <label className="block">
+                                <span className="text-[10px] font-medium text-alloy-midnight/55 uppercase tracking-wide">GL code (optional)</span>
+                                <input value={newGl} onChange={e => setNewGl(e.target.value)} placeholder="e.g. 4000-100" className="mt-0.5 block w-full rounded border border-alloy-stone/25 px-2 py-1 text-sm text-alloy-midnight placeholder:text-alloy-midnight/38 focus:border-alloy-juniper focus:outline-none focus:ring-2 focus:ring-alloy-juniper/20" />
+                            </label>
+                        </div>
+                        <div className="flex items-center justify-end gap-2">
+                            <button type="button" onClick={() => { setAdding(false); setNewLabel(""); setNewGl(""); }} className="text-xs text-alloy-midnight/55 hover:text-alloy-midnight px-2 py-1">Cancel</button>
+                            <button type="button" onClick={() => void addCategory()} disabled={savingNew || !newLabel.trim()} className="rounded bg-alloy-juniper px-3 py-1 text-xs font-medium text-white hover:bg-alloy-juniper/85 disabled:opacity-40">{savingNew ? "Saving…" : "Save"}</button>
+                        </div>
+                    </div>
+                )}
+
+                {/* Managed revenue categories */}
                 <section className="space-y-3">
                     <div className="flex items-center gap-2">
-                        <h3 className="text-sm font-semibold text-alloy-midnight">Revenue categories in use</h3>
-                        {revenueCategories.length > 0 && (
-                            <span className="text-[10px] text-alloy-midnight/55 bg-alloy-stone/10 rounded-full px-1.5 py-0.5">{revenueCategories.length}</span>
-                        )}
+                        <h3 className="text-sm font-semibold text-alloy-midnight">Revenue categories</h3>
+                        {revenueCats.length > 0 && <span className="text-[10px] text-alloy-midnight/55 bg-alloy-stone/10 rounded-full px-1.5 py-0.5">{revenueCats.length}</span>}
                     </div>
 
-                    {revenueCategories.length === 0 ? (
-                        <div className="rounded-lg border border-dashed border-alloy-stone/25 px-4 py-6 text-center">
-                            <p className="text-sm text-alloy-midnight/55">No revenue categories referenced yet.</p>
-                            <p className="text-xs text-alloy-midnight/50 mt-1">Add a revenue category on a product in the Catalog tab, then map it to a GL code here.</p>
+                    {revenueCats.length === 0 ? (
+                        <div className="rounded-xl border border-dashed border-alloy-stone/25 px-4 py-6 text-center">
+                            <p className="text-sm text-alloy-midnight/60">No revenue categories yet.</p>
+                            <button type="button" onClick={() => setAdding(true)} className="text-xs text-alloy-juniper hover:text-alloy-juniper/80 font-medium mt-1">+ Add the first one</button>
                         </div>
                     ) : (
-                        <div className="rounded-lg border border-alloy-stone/20 overflow-hidden">
-                            <div className="grid grid-cols-[1fr_auto_auto] gap-3 px-4 py-2 bg-alloy-stone/5 border-b border-alloy-stone/15 text-[10px] font-medium text-alloy-midnight/55 uppercase tracking-wide">
+                        <div className="rounded-xl border border-alloy-stone/20 overflow-hidden">
+                            <div className="grid grid-cols-[1fr_auto_auto_auto] gap-3 px-4 py-2 bg-alloy-stone/5 border-b border-alloy-stone/15 text-[10px] font-medium text-alloy-midnight/55 uppercase tracking-wide">
                                 <span>Revenue category</span>
                                 <span className="text-right">Products</span>
                                 <span className="text-right">GL code</span>
+                                <span />
                             </div>
-                            {revenueCategories.map(rc => (
-                                <div key={rc.label} className="grid grid-cols-[1fr_auto_auto] gap-3 px-4 py-2.5 border-b border-alloy-stone/8 last:border-0 items-center">
-                                    <span className="text-sm text-alloy-midnight font-medium">{rc.label}</span>
-                                    <span className="text-xs text-alloy-midnight/60 text-right tabular-nums">{rc.count}</span>
-                                    <span className="text-[11px] text-alloy-midnight/45 text-right italic">Not mapped</span>
-                                </div>
-                            ))}
+                            {revenueCats.map(rc => {
+                                const count = productCountFor(rc.label);
+                                const isEditing = editingId === rc.id;
+                                return (
+                                    <div key={rc.id} className="group grid grid-cols-[1fr_auto_auto_auto] gap-3 px-4 py-2.5 border-b border-alloy-stone/8 last:border-0 items-center">
+                                        <span className="text-sm text-alloy-midnight font-medium">{rc.label}</span>
+                                        <span className="text-xs text-alloy-midnight/65 text-right tabular-nums">{count}</span>
+                                        {isEditing ? (
+                                            <span className="flex items-center gap-1 justify-end">
+                                                <input value={editGl} onChange={e => setEditGl(e.target.value)} placeholder="GL code" className="w-24 rounded border border-alloy-juniper/40 px-1.5 py-0.5 text-xs text-alloy-midnight focus:border-alloy-juniper focus:outline-none focus:ring-2 focus:ring-alloy-juniper/20" autoFocus />
+                                                <button type="button" onClick={() => void saveGl(rc.id)} disabled={savingEdit} className="text-xs font-medium text-alloy-juniper hover:text-alloy-juniper/70 disabled:opacity-40">✓</button>
+                                                <button type="button" onClick={() => setEditingId(null)} className="text-xs text-alloy-midnight/45 hover:text-alloy-midnight">✕</button>
+                                            </span>
+                                        ) : (
+                                            <button type="button" onClick={() => startEditGl(rc)} className="text-right text-[11px] group/gl focus:outline-none">
+                                                {rc.gl_code
+                                                    ? <span className="text-alloy-midnight/70 font-mono">{rc.gl_code}</span>
+                                                    : <span className="text-alloy-juniper/80 group-hover/gl:text-alloy-juniper">+ Map GL code</span>}
+                                            </button>
+                                        )}
+                                        <button type="button" onClick={() => void deleteCategory(rc.id)} className="opacity-0 group-hover:opacity-100 text-[11px] text-alloy-midnight/40 hover:text-red-400 transition-all px-1" title="Remove revenue category">✕</button>
+                                    </div>
+                                );
+                            })}
                         </div>
                     )}
 
-                    {uncategorizedCount > 0 && (
-                        <p className="text-[11px] text-alloy-midnight/55">
-                            {uncategorizedCount} product{uncategorizedCount !== 1 ? "s" : ""} without a revenue category — set one in the Catalog to control where it posts.
-                        </p>
+                    {unmappedLabels.length > 0 && (
+                        <div className="rounded-lg border border-alloy-gold/30 bg-alloy-gold/5 px-3 py-2.5">
+                            <p className="text-[11px] font-medium text-alloy-midnight/70 mb-1.5">Referenced on products but not managed here</p>
+                            <div className="flex flex-wrap gap-1.5">
+                                {unmappedLabels.map(u => (
+                                    <button key={u.label} type="button" onClick={() => void adoptLabel(u.label)} disabled={savingNew} className="inline-flex items-center gap-1 rounded-full border border-alloy-juniper/30 bg-white px-2 py-0.5 text-[11px] text-alloy-midnight/70 hover:border-alloy-juniper hover:text-alloy-juniper transition-colors disabled:opacity-40">
+                                        {u.label} <span className="text-alloy-midnight/45">· {u.count}</span> <span className="text-alloy-juniper">+</span>
+                                    </button>
+                                ))}
+                            </div>
+                            <p className="text-[10px] text-alloy-midnight/55 mt-1.5">Click to manage a label and give it a GL code.</p>
+                        </div>
                     )}
                 </section>
 
-                {/* Scope note */}
                 <section className="rounded-lg border border-alloy-stone/15 bg-alloy-stone/3 px-4 py-3">
                     <p className="text-xs font-medium text-alloy-midnight/60 mb-1">What lives here</p>
-                    <p className="text-xs text-alloy-midnight/55 leading-relaxed">
-                        GL code mapping and revenue posting rules belong to Accounting. This is the reference model — full GL configuration and posting are a later stage. Commercial products reference categories; Accounting owns the chart-of-accounts mapping.
+                    <p className="text-xs text-alloy-midnight/60 leading-relaxed">
+                        GL code mapping and revenue posting rules belong to Accounting. Commercial products reference categories by label; Accounting owns the chart-of-accounts mapping. Full posting is a later stage.
                     </p>
                 </section>
 
@@ -1292,7 +1429,7 @@ function CommercialCatalogPanel({
     }
 
     const TYPE_BADGE: Record<CommercialType, string> = {
-        fee:     "bg-alloy-pine/8 text-alloy-pine/80",
+        fee:     "bg-alloy-juniper/8 text-alloy-juniper/80",
         addon:   "bg-alloy-stone/12 text-alloy-midnight/60",
         deposit: "bg-alloy-forge/5 text-alloy-midnight/65",
     };
@@ -1309,7 +1446,7 @@ function CommercialCatalogPanel({
             <div className="flex items-center justify-between">
                 <span className="text-[10px] font-medium text-alloy-midnight/55 uppercase tracking-wide">Category</span>
                 {!addingCategory && (
-                    <button type="button" onClick={() => setAddingCategory(true)} className="text-[10px] text-alloy-pine/75 hover:text-alloy-pine font-medium">+ New category</button>
+                    <button type="button" onClick={() => setAddingCategory(true)} className="text-[10px] text-alloy-juniper/75 hover:text-alloy-juniper font-medium">+ New category</button>
                 )}
             </div>
             {addingCategory ? (
@@ -1318,13 +1455,13 @@ function CommercialCatalogPanel({
                         value={newCategoryLabel}
                         onChange={e => setNewCategoryLabel(e.target.value)}
                         placeholder="e.g. After-school"
-                        className="flex-1 rounded border border-alloy-stone/25 px-2 py-1 text-sm text-alloy-midnight placeholder:text-alloy-midnight/38 focus:border-alloy-pine/50 focus:outline-none"
+                        className="flex-1 rounded border border-alloy-stone/25 px-2 py-1 text-sm text-alloy-midnight placeholder:text-alloy-midnight/38 focus:border-alloy-juniper focus:outline-none focus:ring-2 focus:ring-alloy-juniper/20"
                     />
-                    <button type="button" onClick={() => void saveNewCategory()} disabled={savingCategory || !newCategoryLabel.trim()} className="rounded bg-alloy-pine px-2.5 py-1 text-xs font-medium text-white hover:bg-alloy-pine/85 disabled:opacity-40">{savingCategory ? "…" : "Add"}</button>
+                    <button type="button" onClick={() => void saveNewCategory()} disabled={savingCategory || !newCategoryLabel.trim()} className="rounded bg-alloy-juniper px-2.5 py-1 text-xs font-medium text-white hover:bg-alloy-juniper/85 disabled:opacity-40">{savingCategory ? "…" : "Add"}</button>
                     <button type="button" onClick={() => { setAddingCategory(false); setNewCategoryLabel(""); }} className="text-xs text-alloy-midnight/45 hover:text-alloy-midnight px-1">Cancel</button>
                 </div>
             ) : (
-                <select value={categoryId} onChange={e => setCategoryId(e.target.value)} className="block w-full rounded border border-alloy-stone/25 px-2 py-1 text-sm text-alloy-midnight focus:border-alloy-pine/50 focus:outline-none bg-white">
+                <select value={categoryId} onChange={e => setCategoryId(e.target.value)} className="block w-full rounded border border-alloy-stone/25 px-2 py-1 text-sm text-alloy-midnight focus:border-alloy-juniper focus:outline-none focus:ring-2 focus:ring-alloy-juniper/20 bg-white">
                     <option value="">Uncategorized</option>
                     {catOptions.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
                 </select>
@@ -1333,8 +1470,13 @@ function CommercialCatalogPanel({
     );
 
     const formPanel = (
-        <div className="rounded-lg border border-alloy-pine/35 bg-alloy-pine/3 p-5 space-y-4">
-            <CField label="Name *" value={name} onChange={setName} placeholder="e.g. Registration Fee" required />
+        <div className="rounded-xl border border-alloy-stone/20 bg-white p-6 space-y-5 shadow-sm">
+            <div className="flex items-center gap-2 pb-1">
+                <span className="w-1.5 h-1.5 rounded-full bg-alloy-juniper" />
+                <h3 className="text-sm font-semibold text-alloy-midnight">{editingId ? "Edit product" : "New commercial product"}</h3>
+            </div>
+
+            <CField label="What are you charging for? *" value={name} onChange={setName} placeholder="e.g. Registration Fee" required />
 
             {/* Commercial type — guided selection cards (choosing a product behavior) */}
             <div className="space-y-1.5">
@@ -1351,16 +1493,16 @@ function CommercialCatalogPanel({
                                 disabled={!!editingId}
                                 onClick={() => { if (!editingId) setCommercialType(opt.key); }}
                                 className={[
-                                    "text-left rounded-lg border p-3 transition-all",
+                                    "text-left rounded-xl border p-3.5 transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-alloy-juniper/40",
                                     selected
-                                        ? "border-alloy-pine bg-alloy-pine/5 shadow-sm ring-1 ring-alloy-pine/30"
-                                        : "border-alloy-stone/25 bg-white hover:border-alloy-pine/40 hover:shadow-xs",
+                                        ? "border-alloy-juniper bg-alloy-juniper/8 shadow-sm ring-1 ring-alloy-juniper/30"
+                                        : "border-alloy-stone/25 bg-white hover:border-alloy-juniper/40 hover:shadow-sm",
                                     editingId && !selected ? "opacity-40 cursor-not-allowed" : editingId ? "cursor-not-allowed" : "cursor-pointer",
                                 ].join(" ")}
                             >
                                 <div className="flex items-center justify-between mb-1">
-                                    <span className={`text-sm font-semibold ${selected ? "text-alloy-pine" : "text-alloy-midnight"}`}>{opt.label}</span>
-                                    <span className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center ${selected ? "border-alloy-pine bg-alloy-pine" : "border-alloy-stone/35"}`}>
+                                    <span className={`text-sm font-semibold ${selected ? "text-alloy-juniper" : "text-alloy-midnight"}`}>{opt.label}</span>
+                                    <span className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center ${selected ? "border-alloy-juniper bg-alloy-juniper" : "border-alloy-stone/35"}`}>
                                         {selected && <span className="w-1.5 h-1.5 rounded-full bg-white" />}
                                     </span>
                                 </div>
@@ -1373,6 +1515,8 @@ function CommercialCatalogPanel({
 
             {commercialType && (
                 <>
+                    {/* ── Pricing ── */}
+                    <FormStep label="Pricing" />
                     <div className="grid grid-cols-2 gap-3">
                         <CField label="Amount ($) *" value={amount} onChange={setAmount} placeholder="0.00" />
                         {commercialType === "fee" && (
@@ -1386,8 +1530,6 @@ function CommercialCatalogPanel({
                         )}
                     </div>
 
-                    {categoryField}
-
                     {commercialType === "fee" && (
                         <CToggle label="Required" checked={feeRequired} onChange={setFeeRequired} hint="Applied automatically to all enrollments" />
                     )}
@@ -1396,7 +1538,7 @@ function CommercialCatalogPanel({
                         <>
                             <CToggle label="This is a pass or package" checked={addonIsPkg} onChange={setAddonIsPkg} hint="e.g. 5-session pass valid 30 days" />
                             {addonIsPkg && (
-                                <div className="grid grid-cols-3 gap-3 pl-4 border-l-2 border-alloy-pine/20">
+                                <div className="grid grid-cols-3 gap-3 pl-4 border-l-2 border-alloy-juniper/25">
                                     <CField label="Count" value={pkgCount} onChange={setPkgCount} placeholder="5" type="number" />
                                     <CSelect label="Unit" value={pkgUnit} onChange={setPkgUnit} options={PACKAGE_UNIT_TYPE_OPTIONS.map(u => ({ key: u, label: u }))} />
                                     <CField label="Expires after (days)" value={pkgExpiry} onChange={setPkgExpiry} placeholder="30" type="number" />
@@ -1412,11 +1554,17 @@ function CommercialCatalogPanel({
                         </div>
                     )}
 
+                    {/* ── Where it applies ── */}
+                    <FormStep label="Where it applies" />
                     <ScopeFields locationId={locId} setLocationId={setLocId} programKey={progKey} setProgramKey={setProgKey} locations={locations} programs={programs} />
                     <div className="grid grid-cols-2 gap-3">
                         <CField label="Activates on (optional)" value={effStart} onChange={setEffStart} type="date" />
                         <CField label="Expires on (optional)" value={effEnd} onChange={setEffEnd} type="date" />
                     </div>
+
+                    {/* ── Revenue ── */}
+                    <FormStep label="Revenue" hint="Groups the product for reporting and Accounting" />
+                    {categoryField}
                     <CField label="Revenue category" value={revCat} onChange={setRevCat} placeholder="e.g. Program Revenue" />
                 </>
             )}
@@ -1444,7 +1592,7 @@ function CommercialCatalogPanel({
                         <button
                             type="button"
                             onClick={startAdd}
-                            className="flex items-center gap-1.5 rounded-md bg-alloy-pine px-3 py-1.5 text-xs font-medium text-white hover:bg-alloy-pine/85 transition-colors"
+                            className="flex items-center gap-1.5 rounded-md bg-alloy-juniper px-3 py-1.5 text-xs font-medium text-white hover:bg-alloy-juniper/85 transition-colors"
                         >
                             <span className="text-sm leading-none">+</span> Add item
                         </button>
@@ -1470,7 +1618,7 @@ function CommercialCatalogPanel({
                                                         <span className="text-[10px] text-alloy-midnight/55 bg-alloy-stone/10 rounded px-1.5 py-0.5">{categoryLabel(p.category_id, categories)}</span>
                                                     )}
                                                     {p.commercial_type === "fee" && feeIsRequired(p) && (
-                                                        <span className="text-[10px] text-alloy-pine/80 font-medium">Required</span>
+                                                        <span className="text-[10px] text-alloy-juniper/80 font-medium">Required</span>
                                                     )}
                                                     {p.commercial_type === "addon" && isPackageProduct(p) && (
                                                         <span className="text-[10px] text-alloy-midnight/55 bg-alloy-stone/8 rounded px-1.5 py-0.5">{describePackage(p)}</span>
@@ -1479,13 +1627,13 @@ function CommercialCatalogPanel({
                                                         <span className="text-[10px] text-alloy-midnight/55 bg-alloy-stone/10 rounded px-1.5 py-0.5">Refundable</span>
                                                     )}
                                                     {p.commercial_type === "deposit" && depositBehavior(p)?.apply_to_balance && (
-                                                        <span className="text-[10px] text-alloy-pine/70 bg-alloy-pine/6 rounded px-1.5 py-0.5">Credits balance</span>
+                                                        <span className="text-[10px] text-alloy-juniper/70 bg-alloy-juniper/6 rounded px-1.5 py-0.5">Credits balance</span>
                                                     )}
                                                 </div>
                                                 <div className="flex items-center gap-2 flex-wrap">
                                                     <span className="text-sm font-semibold text-alloy-midnight">{formatAmount(p.amount_cents)}</span>
                                                     {p.commercial_type !== "deposit" ? (
-                                                        <span className="text-[10px] text-alloy-pine/70 bg-alloy-pine/6 rounded px-1.5 py-0.5 whitespace-nowrap font-medium">{frequencyLabel(p.cadence_key)}</span>
+                                                        <span className="text-[10px] text-alloy-juniper/70 bg-alloy-juniper/6 rounded px-1.5 py-0.5 whitespace-nowrap font-medium">{frequencyLabel(p.cadence_key)}</span>
                                                     ) : (
                                                         <span className="text-[10px] text-alloy-midnight/60 bg-alloy-stone/8 rounded px-1.5 py-0.5">Due: {depositBehavior(p)?.due_timing}</span>
                                                     )}
@@ -1775,7 +1923,7 @@ export function CommercialConfigWorkspace() {
                         type="button"
                         disabled={!tab.available}
                         onClick={() => { if (tab.available && (tab.key === "programs_tuition" || tab.key === "fees" || tab.key === "accounting")) setActiveSection(tab.key); }}
-                        className={`px-4 py-3 text-sm -mb-px border-b-2 transition-colors whitespace-nowrap ${activeSection === tab.key ? "border-alloy-pine text-alloy-pine font-medium" : tab.available ? "border-transparent text-alloy-midnight/60 hover:text-alloy-midnight" : "border-transparent text-alloy-midnight/45 cursor-not-allowed"}`}
+                        className={`px-4 py-3 text-sm -mb-px border-b-2 transition-colors whitespace-nowrap focus:outline-none focus-visible:ring-2 focus-visible:ring-alloy-juniper/40 rounded-sm ${activeSection === tab.key ? "border-alloy-juniper text-alloy-juniper font-medium" : tab.available ? "border-transparent text-alloy-midnight/60 hover:text-alloy-midnight" : "border-transparent text-alloy-midnight/45 cursor-not-allowed"}`}
                     >
                         {tab.label}
                     </button>
@@ -1790,7 +1938,7 @@ export function CommercialConfigWorkspace() {
             )}
 
             {activeSection === "accounting" ? (
-                <AccountingReferencePanel products={products} categories={commercialCategories} loading={feesLoading} />
+                <AccountingReferencePanel products={products} loading={feesLoading} />
             ) : activeSection === "fees" ? (
                 <CommercialCatalogPanel
                     products={products}
@@ -1809,7 +1957,7 @@ export function CommercialConfigWorkspace() {
                         <div className="flex flex-col min-h-0 flex-1">
                             <div className="flex border-b border-alloy-stone/15 px-6 bg-white flex-shrink-0">
                                 {(["programs", "tuition"] as const).map((tab) => (
-                                    <button key={tab} type="button" onClick={() => setSecondaryTab(tab)} className={`px-3 py-2.5 text-sm capitalize -mb-px border-b-2 transition-colors ${secondaryTab === tab ? "border-alloy-pine text-alloy-pine font-medium" : "border-transparent text-alloy-midnight/55 hover:text-alloy-midnight"}`}>
+                                    <button key={tab} type="button" onClick={() => setSecondaryTab(tab)} className={`px-3 py-2.5 text-sm capitalize -mb-px border-b-2 transition-colors ${secondaryTab === tab ? "border-alloy-juniper text-alloy-juniper font-medium" : "border-transparent text-alloy-midnight/55 hover:text-alloy-midnight"}`}>
                                         {tab}
                                     </button>
                                 ))}

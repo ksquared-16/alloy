@@ -116,6 +116,10 @@ commercial_products                        ← the primitive (single table)
 
 Accessors live in `lib/commercial/commercialProducts.ts` (`feeIsRequired`, `getPackage`, `depositBehavior`, `buildBehavior`). Promote a behavior key to a real column only when Billing needs to query/index on it.
 
+### Revenue categories (`commercial_revenue_categories`) — Accounting-facing
+
+Operator-managed mapping surface owned by the **Accounting** tab. Org-scoped: `label`, `gl_code` (placeholder), `sort_order`, `is_active`. A commercial product carries a free-text `revenue_category` **label**; Accounting maps that label to a GL code here. The Accounting tab lists managed categories, allows inline GL-code editing, counts catalog products referencing each label (case-insensitive), and surfaces product labels not yet managed so they can be adopted. This is the reference model — GL posting itself is a later stage.
+
 ### Commercial Categories (`commercial_categories`)
 
 Operator-managed configuration, **not** free text. Org-scoped option set (same pattern as `billing_cadences` / `location_program_categories`): `key`, `label`, `sort_order`, `is_active`. Seeded per org with Registration, Enrollment, Materials, Transportation, Food, Enrichment, Other. Operators can add their own.
@@ -193,6 +197,8 @@ GET/POST /api/admin/commercial/products             (body: { name, commercial_ty
 PATCH/DELETE /api/admin/commercial/products/[id]     (commercial_type is immutable after create)
 GET/POST /api/admin/commercial/categories           (body: { label, key?, sort_order? })
 PATCH/DELETE /api/admin/commercial/categories/[id]   (DELETE soft-archives if products reference it)
+GET/POST /api/admin/commercial/revenue-categories    (body: { label, gl_code? })   ← Accounting tab
+PATCH/DELETE /api/admin/commercial/revenue-categories/[id]
 
 # Legacy (transitional — do not build on)
 GET/POST/PATCH/DELETE /api/admin/commercial/{fees,addons,deposits}

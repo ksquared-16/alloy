@@ -11,6 +11,7 @@ import {
     depositBehavior,
     sortProducts,
     sortCategories,
+    sortRevenueCategories,
     activeCategories,
     categoryLabel,
     FREQUENCY_OPTIONS,
@@ -20,6 +21,7 @@ import {
     PACKAGE_UNIT_TYPE_OPTIONS,
     type CommercialProduct,
     type CommercialCategory,
+    type CommercialRevenueCategory,
     type CommercialType,
 } from "@/lib/commercial/commercialProducts";
 
@@ -192,6 +194,25 @@ describe("categories helpers", () => {
         expect(categoryLabel("c2", cats)).toBe("Enrollment");
         expect(categoryLabel(null, cats)).toBe("");
         expect(categoryLabel("missing", cats)).toBe("");
+    });
+});
+
+describe("sortRevenueCategories", () => {
+    function rc(overrides: Partial<CommercialRevenueCategory>): CommercialRevenueCategory {
+        return { id: "r", org_id: "o", label: "X", gl_code: null, sort_order: 100, is_active: true, metadata: {}, created_at: "", updated_at: null, ...overrides };
+    }
+    it("orders by sort_order then label", () => {
+        const cats = [rc({ id: "b", label: "Beta", sort_order: 20 }), rc({ id: "a", label: "Alpha", sort_order: 10 }), rc({ id: "c", label: "Gamma", sort_order: 10 })];
+        expect(sortRevenueCategories(cats).map(c => c.id)).toEqual(["a", "c", "b"]);
+    });
+    it("does not mutate input", () => {
+        const cats = [rc({ label: "Z", sort_order: 2 }), rc({ label: "A", sort_order: 1 })];
+        sortRevenueCategories(cats);
+        expect(cats[0].label).toBe("Z");
+    });
+    it("preserves gl_code through sort", () => {
+        const cats = [rc({ label: "Program Revenue", gl_code: "4000-100" })];
+        expect(sortRevenueCategories(cats)[0].gl_code).toBe("4000-100");
     });
 });
 
