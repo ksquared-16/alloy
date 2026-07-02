@@ -22,6 +22,8 @@ import {
     type CommercialRevenueCategory,
     type CommercialType,
     sortRevenueCategories,
+    activeRevenueCategories,
+    isRevenueCategoryMapped,
     FREQUENCY_OPTIONS,
     COMMERCIAL_TYPE_OPTIONS,
     DUE_TIMING_OPTIONS,
@@ -1034,54 +1036,67 @@ function FormStep({ label, hint }: { label: string; hint?: string }) {
 }
 
 // ─── AccountingReferencePanel ──────────────────────────────────────────────────
-// Reference view (not a full engine). Shows how Commercial revenue categories
-// flow into Accounting: products reference a revenue category; Accounting maps
-// each category to a GL code and decides where money posts.
+// Accounting V1. Reuses the canonical chart of accounts (gl_accounts, via
+// /api/admin/financials/accounts). Operators map each commercial Revenue Category
+// to an existing GL account. No new GL-account table, no free-form GL codes.
+// Sections: GL Accounts (read-only chart) · Revenue Categories (map) · Mapping Review.
+
+type GlAccountLite = { id: string; code: string; name: string; type: string; is_active: boolean };
+type AccountingTab = "revenue_categories" | "gl_accounts" | "mapping_review";
 
 function AccountingReferencePanel({ products, loading }: {
     products: CommercialProduct[];
     loading: boolean;
 }) {
+    const [tab, setTab] = useState<AccountingTab>("revenue_categories");
     const [revenueCats, setRevenueCats] = useState<CommercialRevenueCategory[]>([]);
-    const [rcLoading, setRcLoading] = useState(true);
+    const [glAccounts, setGlAccounts] = useState<GlAccountLite[]>([]);
+    const [dataLoading, setDataLoading] = useState(true);
+
     const [adding, setAdding] = useState(false);
     const [newLabel, setNewLabel] = useState("");
-    const [newGl, setNewGl] = useState("");
+    const [newGlId, setNewGlId] = useState("");
     const [savingNew, setSavingNew] = useState(false);
-    const [editingId, setEditingId] = useState<string | null>(null);
-    const [editGl, setEditGl] = useState("");
-    const [savingEdit, setSavingEdit] = useState(false);
+    const [mappingId, setMappingId] = useState<string | null>(null);
+    const [savingMap, setSavingMap] = useState(false);
 
     useEffect(() => {
         let cancelled = false;
         (async () => {
-            setRcLoading(true);
+            setDataLoading(true);
             try {
-                const res = await fetch("/api/admin/commercial/revenue-categories?include_inactive=true");
-                const json = (await res.json()) as { revenue_categories?: CommercialRevenueCategory[] };
-                if (!cancelled) setRevenueCats(sortRevenueCategories(json.revenue_categories ?? []));
+                const [rcRes, glRes] = await Promise.all([
+                    fetch("/api/admin/commercial/revenue-categories?include_inactive=true"),
+                    fetch("/api/admin/financials/accounts"),
+                ]);
+                const rcJson = (await rcRes.json()) as { revenue_categories?: CommercialRevenueCategory[] };
+                const glJson = (await glRes.json()) as { data?: GlAccountLite[] };
+                if (!cancelled) {
+                    setRevenueCats(sortRevenueCategories(rcJson.revenue_categories ?? []));
+                    setGlAccounts((glJson.data ?? []).filter(a => a.is_active !== false));
+                }
             } catch { /* retain */ }
-            finally { if (!cancelled) setRcLoading(false); }
+            finally { if (!cancelled) setDataLoading(false); }
         })();
         return () => { cancelled = true; };
     }, []);
 
-    // Count catalog products referencing each revenue category label (case-insensitive).
-    const productCountFor = useCallback((label: string) => {
-        const l = label.trim().toLowerCase();
-        return products.filter(p => (p.revenue_category ?? "").trim().toLowerCase() === l).length;
+    const glById = useMemo(() => {
+        const m = new Map<string, GlAccountLite>();
+        glAccounts.forEach(a => m.set(a.id, a));
+        return m;
+    }, [glAccounts]);
+
+    // Product usage per revenue category — counts both the FK and legacy free-text label.
+    const productCountFor = useCallback((rc: CommercialRevenueCategory) => {
+        const label = rc.label.trim().toLowerCase();
+        return products.filter(p =>
+            p.revenue_category_id === rc.id ||
+            (!p.revenue_category_id && (p.revenue_category ?? "").trim().toLowerCase() === label)
+        ).length;
     }, [products]);
 
-    // Labels used on products that have no managed revenue category yet.
-    const unmappedLabels = useMemo(() => {
-        const managed = new Set(revenueCats.map(c => c.label.trim().toLowerCase()));
-        const seen = new Map<string, number>();
-        for (const p of products) {
-            const rc = (p.revenue_category ?? "").trim();
-            if (rc && !managed.has(rc.toLowerCase())) seen.set(rc, (seen.get(rc) ?? 0) + 1);
-        }
-        return Array.from(seen.entries()).map(([label, count]) => ({ label, count })).sort((a, b) => a.label.localeCompare(b.label));
-    }, [products, revenueCats]);
+    const unmappedCount = useMemo(() => revenueCats.filter(c => !c.mapped_gl_account_id).length, [revenueCats]);
 
     async function addCategory() {
         const label = newLabel.trim();
@@ -1090,31 +1105,29 @@ function AccountingReferencePanel({ products, loading }: {
         try {
             const res = await fetch("/api/admin/commercial/revenue-categories", {
                 method: "POST", headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ label, gl_code: newGl.trim() || null }),
+                body: JSON.stringify({ label, mapped_gl_account_id: newGlId || null }),
             });
             const json = (await res.json()) as { revenue_category?: CommercialRevenueCategory };
             if (json.revenue_category) {
                 setRevenueCats(prev => sortRevenueCategories([...prev, json.revenue_category!]));
-                setNewLabel(""); setNewGl(""); setAdding(false);
+                setNewLabel(""); setNewGlId(""); setAdding(false);
             }
         } finally { setSavingNew(false); }
     }
 
-    function startEditGl(rc: CommercialRevenueCategory) { setEditingId(rc.id); setEditGl(rc.gl_code ?? ""); }
-
-    async function saveGl(id: string) {
-        setSavingEdit(true);
+    async function mapCategory(id: string, glId: string) {
+        setSavingMap(true);
         try {
             const res = await fetch(`/api/admin/commercial/revenue-categories/${id}`, {
                 method: "PATCH", headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ gl_code: editGl.trim() || null }),
+                body: JSON.stringify({ mapped_gl_account_id: glId || null }),
             });
             const json = (await res.json()) as { revenue_category?: CommercialRevenueCategory };
             if (json.revenue_category) {
                 setRevenueCats(prev => prev.map(c => c.id === id ? json.revenue_category! : c));
-                setEditingId(null);
+                setMappingId(null);
             }
-        } finally { setSavingEdit(false); }
+        } finally { setSavingMap(false); }
     }
 
     async function deleteCategory(id: string) {
@@ -1122,138 +1135,214 @@ function AccountingReferencePanel({ products, loading }: {
         setRevenueCats(prev => prev.filter(c => c.id !== id));
     }
 
-    async function adoptLabel(label: string) {
-        setSavingNew(true);
-        try {
-            const res = await fetch("/api/admin/commercial/revenue-categories", {
-                method: "POST", headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ label }),
-            });
-            const json = (await res.json()) as { revenue_category?: CommercialRevenueCategory };
-            if (json.revenue_category) setRevenueCats(prev => sortRevenueCategories([...prev, json.revenue_category!]));
-        } finally { setSavingNew(false); }
-    }
-
-    if (loading || rcLoading) {
+    if (loading || dataLoading) {
         return <div className="flex items-center justify-center flex-1 text-sm text-alloy-midnight/55 py-16">Loading…</div>;
     }
 
+    const glLabel = (id: string | null) => {
+        if (!id) return null;
+        const a = glById.get(id);
+        return a ? `${a.code} · ${a.name}` : null;
+    };
+
+    const TABS: { key: AccountingTab; label: string }[] = [
+        { key: "revenue_categories", label: "Revenue Categories" },
+        { key: "gl_accounts", label: "GL Accounts" },
+        { key: "mapping_review", label: "Mapping Review" },
+    ];
+
     return (
         <div className="flex-1 overflow-y-auto">
-            <div className="max-w-2xl mx-auto px-6 py-8 space-y-6">
+            <div className="max-w-2xl mx-auto px-6 py-8 space-y-5">
 
-                <div className="flex items-center justify-between">
-                    <div>
-                        <h2 className="text-base font-semibold text-alloy-midnight">Accounting</h2>
-                        <p className="text-xs text-alloy-midnight/60 mt-0.5">Where commercial revenue posts. GL mapping lives here.</p>
-                    </div>
-                    {!adding && (
-                        <button type="button" onClick={() => setAdding(true)} className="flex items-center gap-1.5 rounded-md bg-alloy-bend-pine px-3 py-1.5 text-xs font-medium text-white hover:bg-alloy-bend-pine/85 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-alloy-bend-pine/40">
-                            <span className="text-sm leading-none">+</span> Revenue category
-                        </button>
-                    )}
-                </div>
-
-                {/* Flow model */}
-                <div className="rounded-xl border border-alloy-bend-pine/25 bg-alloy-bend-pine/5 px-4 py-4">
-                    <div className="flex items-center gap-2 text-xs font-medium flex-wrap">
-                        <span className="rounded-md bg-white border border-alloy-stone/25 px-2.5 py-1 text-alloy-midnight/75">Commercial product</span>
-                        <span className="text-alloy-bend-pine">references →</span>
-                        <span className="rounded-md bg-alloy-bend-pine/12 border border-alloy-bend-pine/30 px-2.5 py-1 text-alloy-bend-pine font-semibold">Revenue category</span>
-                        <span className="text-alloy-bend-pine">maps to →</span>
-                        <span className="rounded-md bg-white border border-alloy-stone/25 px-2.5 py-1 text-alloy-midnight/75">GL code</span>
-                    </div>
-                    <p className="text-[11px] text-alloy-midnight/65 mt-2.5 leading-relaxed">
-                        Commercial defines <span className="font-medium text-alloy-midnight/80">what</span> a charge is. Accounting decides <span className="font-medium text-alloy-midnight/80">where</span> it posts — map each revenue category to a GL code in your chart of accounts.
+                <div>
+                    <h2 className="text-base font-semibold text-alloy-midnight">Accounting</h2>
+                    <p className="text-xs text-alloy-midnight/60 mt-0.5">
+                        Commercial product → revenue category → GL account. Accounting owns the chart of accounts.
                     </p>
                 </div>
 
-                {/* Add form */}
-                {adding && (
-                    <div className="rounded-xl border border-alloy-stone/20 bg-white p-4 shadow-sm space-y-3">
-                        <div className="grid grid-cols-2 gap-3">
-                            <label className="block">
-                                <span className="text-[10px] font-medium text-alloy-midnight/55 uppercase tracking-wide">Revenue category *</span>
-                                <input value={newLabel} onChange={e => setNewLabel(e.target.value)} placeholder="e.g. Program Revenue" className="mt-0.5 block w-full rounded border border-alloy-stone/25 px-2 py-1 text-sm text-alloy-midnight placeholder:text-alloy-midnight/38 focus:border-alloy-bend-pine focus:outline-none focus:ring-2 focus:ring-alloy-bend-pine/20" />
-                            </label>
-                            <label className="block">
-                                <span className="text-[10px] font-medium text-alloy-midnight/55 uppercase tracking-wide">GL code (optional)</span>
-                                <input value={newGl} onChange={e => setNewGl(e.target.value)} placeholder="e.g. 4000-100" className="mt-0.5 block w-full rounded border border-alloy-stone/25 px-2 py-1 text-sm text-alloy-midnight placeholder:text-alloy-midnight/38 focus:border-alloy-bend-pine focus:outline-none focus:ring-2 focus:ring-alloy-bend-pine/20" />
-                            </label>
+                {/* Sub-tabs */}
+                <div className="flex gap-1 border-b border-alloy-stone/20">
+                    {TABS.map(t => (
+                        <button
+                            key={t.key}
+                            type="button"
+                            onClick={() => setTab(t.key)}
+                            className={`px-3 py-2 text-sm -mb-px border-b-2 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-alloy-bend-pine/40 rounded-sm ${tab === t.key ? "border-alloy-bend-pine text-alloy-bend-pine font-medium" : "border-transparent text-alloy-midnight/60 hover:text-alloy-midnight"}`}
+                        >
+                            {t.label}
+                            {t.key === "mapping_review" && unmappedCount > 0 && (
+                                <span className="ml-1.5 text-[10px] text-alloy-ember bg-alloy-ember/10 rounded-full px-1.5 py-0.5">{unmappedCount}</span>
+                            )}
+                        </button>
+                    ))}
+                </div>
+
+                {/* ── Revenue Categories ── */}
+                {tab === "revenue_categories" && (
+                    <section className="space-y-3">
+                        <div className="flex items-center justify-between">
+                            <p className="text-xs text-alloy-midnight/60">Commercial-owned categories that map to a GL account.</p>
+                            {!adding && (
+                                <button type="button" onClick={() => setAdding(true)} className="flex items-center gap-1.5 rounded-md bg-alloy-bend-pine px-3 py-1.5 text-xs font-medium text-white hover:bg-alloy-bend-pine/85 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-alloy-bend-pine/40">
+                                    <span className="text-sm leading-none">+</span> Revenue category
+                                </button>
+                            )}
                         </div>
-                        <div className="flex items-center justify-end gap-2">
-                            <button type="button" onClick={() => { setAdding(false); setNewLabel(""); setNewGl(""); }} className="text-xs text-alloy-midnight/55 hover:text-alloy-midnight px-2 py-1">Cancel</button>
-                            <button type="button" onClick={() => void addCategory()} disabled={savingNew || !newLabel.trim()} className="rounded bg-alloy-bend-pine px-3 py-1 text-xs font-medium text-white hover:bg-alloy-bend-pine/85 disabled:opacity-40">{savingNew ? "Saving…" : "Save"}</button>
-                        </div>
-                    </div>
+
+                        {adding && (
+                            <div className="rounded-xl border border-alloy-stone/20 bg-white p-4 shadow-sm space-y-3">
+                                <div className="grid grid-cols-2 gap-3">
+                                    <label className="block">
+                                        <span className="text-[10px] font-medium text-alloy-midnight/55 uppercase tracking-wide">Revenue category *</span>
+                                        <input value={newLabel} onChange={e => setNewLabel(e.target.value)} placeholder="e.g. Program Revenue" className="mt-0.5 block w-full rounded border border-alloy-stone/25 px-2 py-1 text-sm text-alloy-midnight placeholder:text-alloy-midnight/38 focus:border-alloy-bend-pine focus:outline-none focus:ring-2 focus:ring-alloy-bend-pine/20" />
+                                    </label>
+                                    <label className="block">
+                                        <span className="text-[10px] font-medium text-alloy-midnight/55 uppercase tracking-wide">GL account</span>
+                                        <select value={newGlId} onChange={e => setNewGlId(e.target.value)} className="mt-0.5 block w-full rounded border border-alloy-stone/25 px-2 py-1 text-sm text-alloy-midnight focus:border-alloy-bend-pine focus:outline-none focus:ring-2 focus:ring-alloy-bend-pine/20 bg-white">
+                                            <option value="">Unmapped</option>
+                                            {glAccounts.map(a => <option key={a.id} value={a.id}>{a.code} · {a.name}</option>)}
+                                        </select>
+                                    </label>
+                                </div>
+                                <div className="flex items-center justify-end gap-2">
+                                    <button type="button" onClick={() => { setAdding(false); setNewLabel(""); setNewGlId(""); }} className="text-xs text-alloy-midnight/55 hover:text-alloy-midnight px-2 py-1">Cancel</button>
+                                    <button type="button" onClick={() => void addCategory()} disabled={savingNew || !newLabel.trim()} className="rounded bg-alloy-bend-pine px-3 py-1 text-xs font-medium text-white hover:bg-alloy-bend-pine/85 disabled:opacity-40">{savingNew ? "Saving…" : "Save"}</button>
+                                </div>
+                            </div>
+                        )}
+
+                        {revenueCats.length === 0 && !adding ? (
+                            <div className="rounded-xl border border-dashed border-alloy-stone/25 px-4 py-6 text-center">
+                                <p className="text-sm text-alloy-midnight/60">No revenue categories yet.</p>
+                                <button type="button" onClick={() => setAdding(true)} className="text-xs text-alloy-bend-pine hover:text-alloy-bend-pine/80 font-medium mt-1">+ Add the first one</button>
+                            </div>
+                        ) : revenueCats.length > 0 ? (
+                            <div className="rounded-xl border border-alloy-stone/20 overflow-hidden">
+                                <div className="grid grid-cols-[1fr_auto_auto] gap-3 px-4 py-2 bg-alloy-stone/5 border-b border-alloy-stone/15 text-[10px] font-medium text-alloy-midnight/55 uppercase tracking-wide">
+                                    <span>Revenue category</span>
+                                    <span className="text-right">Products</span>
+                                    <span className="text-right">GL account</span>
+                                </div>
+                                {revenueCats.map(rc => {
+                                    const isMapping = mappingId === rc.id;
+                                    const mapped = glLabel(rc.mapped_gl_account_id);
+                                    return (
+                                        <div key={rc.id} className="group grid grid-cols-[1fr_auto_auto] gap-3 px-4 py-2.5 border-b border-alloy-stone/8 last:border-0 items-center">
+                                            <span className="text-sm text-alloy-midnight font-medium flex items-center gap-1.5">
+                                                {rc.label}
+                                                <button type="button" onClick={() => void deleteCategory(rc.id)} className="opacity-0 group-hover:opacity-100 text-[11px] text-alloy-midnight/40 hover:text-red-400 transition-all" title="Remove">✕</button>
+                                            </span>
+                                            <span className="text-xs text-alloy-midnight/65 text-right tabular-nums">{productCountFor(rc)}</span>
+                                            {isMapping ? (
+                                                <span className="flex items-center gap-1 justify-end">
+                                                    <select defaultValue={rc.mapped_gl_account_id ?? ""} onChange={e => void mapCategory(rc.id, e.target.value)} disabled={savingMap} className="rounded border border-alloy-bend-pine/40 px-1.5 py-0.5 text-xs text-alloy-midnight bg-white focus:outline-none focus:ring-2 focus:ring-alloy-bend-pine/20" autoFocus>
+                                                        <option value="">Unmapped</option>
+                                                        {glAccounts.map(a => <option key={a.id} value={a.id}>{a.code} · {a.name}</option>)}
+                                                    </select>
+                                                    <button type="button" onClick={() => setMappingId(null)} className="text-xs text-alloy-midnight/45 hover:text-alloy-midnight">✕</button>
+                                                </span>
+                                            ) : (
+                                                <button type="button" onClick={() => setMappingId(rc.id)} className="text-right text-[11px] focus:outline-none">
+                                                    {mapped
+                                                        ? <span className="text-alloy-midnight/70 font-mono">{mapped}</span>
+                                                        : <span className="text-alloy-ember/90 hover:text-alloy-ember">Needs accounting mapping</span>}
+                                                </button>
+                                            )}
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        ) : null}
+                    </section>
                 )}
 
-                {/* Managed revenue categories */}
-                <section className="space-y-3">
-                    <div className="flex items-center gap-2">
-                        <h3 className="text-sm font-semibold text-alloy-midnight">Revenue categories</h3>
-                        {revenueCats.length > 0 && <span className="text-[10px] text-alloy-midnight/55 bg-alloy-stone/10 rounded-full px-1.5 py-0.5">{revenueCats.length}</span>}
-                    </div>
+                {/* ── GL Accounts (read-only chart of accounts) ── */}
+                {tab === "gl_accounts" && (
+                    <section className="space-y-3">
+                        <p className="text-xs text-alloy-midnight/60">
+                            The chart of accounts. Owned by Accounting — managed in Financials configuration; shown here for reference.
+                        </p>
+                        {glAccounts.length === 0 ? (
+                            <div className="rounded-xl border border-dashed border-alloy-stone/25 px-4 py-6 text-center text-sm text-alloy-midnight/60">No GL accounts configured.</div>
+                        ) : (
+                            <div className="rounded-xl border border-alloy-stone/20 overflow-hidden">
+                                <div className="grid grid-cols-[auto_1fr_auto] gap-3 px-4 py-2 bg-alloy-stone/5 border-b border-alloy-stone/15 text-[10px] font-medium text-alloy-midnight/55 uppercase tracking-wide">
+                                    <span>Code</span>
+                                    <span>Account</span>
+                                    <span className="text-right">Type</span>
+                                </div>
+                                {glAccounts.map(a => (
+                                    <div key={a.id} className="grid grid-cols-[auto_1fr_auto] gap-3 px-4 py-2.5 border-b border-alloy-stone/8 last:border-0 items-center">
+                                        <span className="text-xs text-alloy-midnight/70 font-mono">{a.code}</span>
+                                        <span className="text-sm text-alloy-midnight">{a.name}</span>
+                                        <span className="text-[11px] text-alloy-midnight/55 text-right capitalize">{a.type}</span>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </section>
+                )}
 
-                    {revenueCats.length === 0 ? (
-                        <div className="rounded-xl border border-dashed border-alloy-stone/25 px-4 py-6 text-center">
-                            <p className="text-sm text-alloy-midnight/60">No revenue categories yet.</p>
-                            <button type="button" onClick={() => setAdding(true)} className="text-xs text-alloy-bend-pine hover:text-alloy-bend-pine/80 font-medium mt-1">+ Add the first one</button>
+                {/* ── Mapping Review ── */}
+                {tab === "mapping_review" && (
+                    <section className="space-y-3">
+                        <div className="rounded-xl border border-alloy-bend-pine/25 bg-alloy-bend-pine/5 px-4 py-3">
+                            <div className="flex items-center gap-2 text-xs font-medium flex-wrap">
+                                <span className="rounded-md bg-white border border-alloy-stone/25 px-2.5 py-1 text-alloy-midnight/75">Commercial product</span>
+                                <span className="text-alloy-bend-pine">→</span>
+                                <span className="rounded-md bg-alloy-bend-pine/12 border border-alloy-bend-pine/30 px-2.5 py-1 text-alloy-bend-pine font-semibold">Revenue category</span>
+                                <span className="text-alloy-bend-pine">→</span>
+                                <span className="rounded-md bg-white border border-alloy-stone/25 px-2.5 py-1 text-alloy-midnight/75">GL account</span>
+                            </div>
                         </div>
-                    ) : (
+
+                        {unmappedCount > 0 ? (
+                            <div className="rounded-lg border border-alloy-ember/30 bg-alloy-ember/5 px-3 py-2.5">
+                                <p className="text-xs font-medium text-alloy-midnight/75 mb-1.5">Unmapped revenue categories ({unmappedCount})</p>
+                                <div className="flex flex-wrap gap-1.5">
+                                    {revenueCats.filter(c => !c.mapped_gl_account_id).map(c => (
+                                        <span key={c.id} className="inline-flex items-center gap-1 rounded-full border border-alloy-ember/30 bg-white px-2 py-0.5 text-[11px] text-alloy-midnight/70">
+                                            {c.label} <span className="text-alloy-midnight/45">· {productCountFor(c)} product{productCountFor(c) !== 1 ? "s" : ""}</span>
+                                        </span>
+                                    ))}
+                                </div>
+                                <p className="text-[10px] text-alloy-midnight/55 mt-1.5">Map these on the Revenue Categories tab so their revenue posts to a GL account.</p>
+                            </div>
+                        ) : (
+                            <p className="text-xs text-alloy-bend-pine">All revenue categories are mapped to a GL account.</p>
+                        )}
+
                         <div className="rounded-xl border border-alloy-stone/20 overflow-hidden">
-                            <div className="grid grid-cols-[1fr_auto_auto_auto] gap-3 px-4 py-2 bg-alloy-stone/5 border-b border-alloy-stone/15 text-[10px] font-medium text-alloy-midnight/55 uppercase tracking-wide">
+                            <div className="grid grid-cols-[1fr_auto_1fr] gap-3 px-4 py-2 bg-alloy-stone/5 border-b border-alloy-stone/15 text-[10px] font-medium text-alloy-midnight/55 uppercase tracking-wide">
                                 <span>Revenue category</span>
                                 <span className="text-right">Products</span>
-                                <span className="text-right">GL code</span>
-                                <span />
+                                <span>GL account</span>
                             </div>
                             {revenueCats.map(rc => {
-                                const count = productCountFor(rc.label);
-                                const isEditing = editingId === rc.id;
+                                const mapped = glLabel(rc.mapped_gl_account_id);
                                 return (
-                                    <div key={rc.id} className="group grid grid-cols-[1fr_auto_auto_auto] gap-3 px-4 py-2.5 border-b border-alloy-stone/8 last:border-0 items-center">
+                                    <div key={rc.id} className="grid grid-cols-[1fr_auto_1fr] gap-3 px-4 py-2.5 border-b border-alloy-stone/8 last:border-0 items-center">
                                         <span className="text-sm text-alloy-midnight font-medium">{rc.label}</span>
-                                        <span className="text-xs text-alloy-midnight/65 text-right tabular-nums">{count}</span>
-                                        {isEditing ? (
-                                            <span className="flex items-center gap-1 justify-end">
-                                                <input value={editGl} onChange={e => setEditGl(e.target.value)} placeholder="GL code" className="w-24 rounded border border-alloy-bend-pine/40 px-1.5 py-0.5 text-xs text-alloy-midnight focus:border-alloy-bend-pine focus:outline-none focus:ring-2 focus:ring-alloy-bend-pine/20" autoFocus />
-                                                <button type="button" onClick={() => void saveGl(rc.id)} disabled={savingEdit} className="text-xs font-medium text-alloy-bend-pine hover:text-alloy-bend-pine/70 disabled:opacity-40">✓</button>
-                                                <button type="button" onClick={() => setEditingId(null)} className="text-xs text-alloy-midnight/45 hover:text-alloy-midnight">✕</button>
-                                            </span>
-                                        ) : (
-                                            <button type="button" onClick={() => startEditGl(rc)} className="text-right text-[11px] group/gl focus:outline-none">
-                                                {rc.gl_code
-                                                    ? <span className="text-alloy-midnight/70 font-mono">{rc.gl_code}</span>
-                                                    : <span className="text-alloy-bend-pine/80 group-hover/gl:text-alloy-bend-pine">+ Map GL code</span>}
-                                            </button>
-                                        )}
-                                        <button type="button" onClick={() => void deleteCategory(rc.id)} className="opacity-0 group-hover:opacity-100 text-[11px] text-alloy-midnight/40 hover:text-red-400 transition-all px-1" title="Remove revenue category">✕</button>
+                                        <span className="text-xs text-alloy-midnight/65 text-right tabular-nums">{productCountFor(rc)}</span>
+                                        {mapped
+                                            ? <span className="text-[11px] text-alloy-midnight/70 font-mono">{mapped}</span>
+                                            : <span className="text-[11px] text-alloy-ember/90">Needs accounting mapping</span>}
                                     </div>
                                 );
                             })}
+                            {revenueCats.length === 0 && (
+                                <div className="px-4 py-4 text-xs text-alloy-midnight/55">No revenue categories yet.</div>
+                            )}
                         </div>
-                    )}
-
-                    {unmappedLabels.length > 0 && (
-                        <div className="rounded-lg border border-alloy-gold/30 bg-alloy-gold/5 px-3 py-2.5">
-                            <p className="text-[11px] font-medium text-alloy-midnight/70 mb-1.5">Referenced on products but not managed here</p>
-                            <div className="flex flex-wrap gap-1.5">
-                                {unmappedLabels.map(u => (
-                                    <button key={u.label} type="button" onClick={() => void adoptLabel(u.label)} disabled={savingNew} className="inline-flex items-center gap-1 rounded-full border border-alloy-bend-pine/30 bg-white px-2 py-0.5 text-[11px] text-alloy-midnight/70 hover:border-alloy-bend-pine hover:text-alloy-bend-pine transition-colors disabled:opacity-40">
-                                        {u.label} <span className="text-alloy-midnight/45">· {u.count}</span> <span className="text-alloy-bend-pine">+</span>
-                                    </button>
-                                ))}
-                            </div>
-                            <p className="text-[10px] text-alloy-midnight/55 mt-1.5">Click to manage a label and give it a GL code.</p>
-                        </div>
-                    )}
-                </section>
+                    </section>
+                )}
 
                 <section className="rounded-lg border border-alloy-stone/15 bg-alloy-stone/3 px-4 py-3">
                     <p className="text-xs font-medium text-alloy-midnight/60 mb-1">What lives here</p>
                     <p className="text-xs text-alloy-midnight/60 leading-relaxed">
-                        GL code mapping and revenue posting rules belong to Accounting. Commercial products reference categories by label; Accounting owns the chart-of-accounts mapping. Full posting is a later stage.
+                        GL accounts are the shared chart of accounts (owned by Accounting/Financials). Commercial revenue categories map to them by reference — Commercial never stores GL codes directly. Posting itself is a later stage.
                     </p>
                 </section>
 
@@ -1270,6 +1359,7 @@ function AccountingReferencePanel({ products, loading }: {
 function CommercialCatalogPanel({
     products,
     categories,
+    revenueCategories,
     locations,
     programs,
     loading,
@@ -1280,6 +1370,7 @@ function CommercialCatalogPanel({
 }: {
     products: CommercialProduct[];
     categories: CommercialCategory[];
+    revenueCategories: CommercialRevenueCategory[];
     locations: { id: string; name: string }[];
     programs: { key: string; label: string; siteCount: number }[];
     loading: boolean;
@@ -1293,7 +1384,7 @@ function CommercialCatalogPanel({
     const [commercialType, setCommercialType] = useState<CommercialType | "">("");
     const [amount, setAmount] = useState("");
     const [categoryId, setCategoryId] = useState("");
-    const [revCat, setRevCat] = useState("");
+    const [revCatId, setRevCatId] = useState("");
     const [locId, setLocId] = useState("");
     const [progKey, setProgKey] = useState("");
     const [effStart, setEffStart] = useState("");
@@ -1324,7 +1415,7 @@ function CommercialCatalogPanel({
     const sorted = useMemo(() => sortProducts(products), [products]);
 
     function reset() {
-        setName(""); setCommercialType(""); setAmount(""); setCategoryId(""); setRevCat("");
+        setName(""); setCommercialType(""); setAmount(""); setCategoryId(""); setRevCatId("");
         setLocId(""); setProgKey(""); setEffStart(""); setEffEnd("");
         setFeeFreq(""); setFeeRequired(true);
         setAddonFreq("monthly"); setAddonIsPkg(false);
@@ -1343,7 +1434,7 @@ function CommercialCatalogPanel({
         setCommercialType(p.commercial_type);
         setAmount(String(p.amount_cents / 100));
         setCategoryId(p.category_id ?? "");
-        setRevCat(p.revenue_category ?? "");
+        setRevCatId(p.revenue_category_id ?? "");
         setLocId(p.location_id ?? "");
         setProgKey(p.program_key ?? "");
         setEffStart(p.effective_start ?? "");
@@ -1391,7 +1482,7 @@ function CommercialCatalogPanel({
             category_id: categoryId || null,
             amount_cents: cents,
             cadence_key,
-            revenue_category: revCat.trim() || null,
+            revenue_category_id: revCatId || null,
             location_id: locId || null,
             program_key: progKey || null,
             effective_start: effStart || null,
@@ -1565,7 +1656,29 @@ function CommercialCatalogPanel({
                     {/* ── Revenue ── */}
                     <FormStep label="Revenue" hint="Groups the product for reporting and Accounting" />
                     {categoryField}
-                    <CField label="Revenue category" value={revCat} onChange={setRevCat} placeholder="e.g. Program Revenue" />
+                    <label className="block">
+                        <span className="text-[10px] font-medium text-alloy-midnight/55 uppercase tracking-wide">Revenue category</span>
+                        <select
+                            value={revCatId}
+                            onChange={e => setRevCatId(e.target.value)}
+                            className="mt-0.5 block w-full rounded border border-alloy-stone/25 px-2 py-1 text-sm text-alloy-midnight focus:border-alloy-bend-pine focus:outline-none focus:ring-2 focus:ring-alloy-bend-pine/20 bg-white"
+                        >
+                            <option value="">None</option>
+                            {activeRevenueCategories(revenueCategories).map(rc => (
+                                <option key={rc.id} value={rc.id}>{rc.label}</option>
+                            ))}
+                        </select>
+                        {revCatId && (() => {
+                            const rc = revenueCategories.find(c => c.id === revCatId);
+                            if (rc && !isRevenueCategoryMapped(rc)) {
+                                return <span className="mt-1 inline-block text-[10px] text-alloy-ember/90">Needs accounting mapping — map it to a GL account in the Accounting tab.</span>;
+                            }
+                            return null;
+                        })()}
+                        {revenueCategories.length === 0 && (
+                            <span className="mt-1 inline-block text-[10px] text-alloy-midnight/50">Create revenue categories in the Accounting tab.</span>
+                        )}
+                    </label>
                 </>
             )}
 
@@ -1638,9 +1751,16 @@ function CommercialCatalogPanel({
                                                         <span className="text-[10px] text-alloy-midnight/60 bg-alloy-stone/8 rounded px-1.5 py-0.5">Due: {depositBehavior(p)?.due_timing}</span>
                                                     )}
                                                     <ScopeBadge locationId={p.location_id} programKey={p.program_key} locations={locations} programs={programs} />
-                                                    {p.revenue_category && (
-                                                        <span className="text-[10px] text-alloy-midnight/55 italic">{p.revenue_category}</span>
-                                                    )}
+                                                    {(() => {
+                                                        const rc = p.revenue_category_id ? revenueCategories.find(c => c.id === p.revenue_category_id) : null;
+                                                        if (rc) {
+                                                            return isRevenueCategoryMapped(rc)
+                                                                ? <span className="text-[10px] text-alloy-midnight/55 italic">{rc.label}</span>
+                                                                : <span className="text-[10px] text-alloy-ember/90">{rc.label} · needs mapping</span>;
+                                                        }
+                                                        if (p.revenue_category) return <span className="text-[10px] text-alloy-midnight/45 italic">{p.revenue_category}</span>;
+                                                        return null;
+                                                    })()}
                                                 </div>
                                                 {(p.effective_start || p.effective_end) && (
                                                     <p className="text-[10px] text-alloy-midnight/55">
@@ -1700,6 +1820,7 @@ export function CommercialConfigWorkspace() {
     // Commercial Catalog state (lazy-loaded when the Catalog tab is first activated)
     const [products, setProducts] = useState<CommercialProduct[]>([]);
     const [commercialCategories, setCommercialCategories] = useState<CommercialCategory[]>([]);
+    const [revenueCategories, setRevenueCategories] = useState<CommercialRevenueCategory[]>([]);
     const [feesLoading, setFeesLoading] = useState(false);
     const feesLoadedRef = useRef(false);
 
@@ -1723,14 +1844,17 @@ export function CommercialConfigWorkspace() {
         if (feesLoadedRef.current) return;
         setFeesLoading(true);
         try {
-            const [productsRes, catsRes] = await Promise.all([
+            const [productsRes, catsRes, revCatsRes] = await Promise.all([
                 fetch("/api/admin/commercial/products"),
                 fetch("/api/admin/commercial/categories?include_inactive=true"),
+                fetch("/api/admin/commercial/revenue-categories"),
             ]);
             const productsJson = (await productsRes.json()) as { products?: CommercialProduct[] };
             const catsJson = (await catsRes.json()) as { categories?: CommercialCategory[] };
+            const revCatsJson = (await revCatsRes.json()) as { revenue_categories?: CommercialRevenueCategory[] };
             setProducts(productsJson.products ?? []);
             setCommercialCategories(catsJson.categories ?? []);
+            setRevenueCategories(revCatsJson.revenue_categories ?? []);
             feesLoadedRef.current = true;
         } catch { /* retain */ }
         finally { setFeesLoading(false); }
@@ -1943,6 +2067,7 @@ export function CommercialConfigWorkspace() {
                 <CommercialCatalogPanel
                     products={products}
                     categories={commercialCategories}
+                    revenueCategories={revenueCategories}
                     locations={locations}
                     programs={programs}
                     loading={feesLoading}

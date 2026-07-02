@@ -116,9 +116,25 @@ commercial_products                        ← the primitive (single table)
 
 Accessors live in `lib/commercial/commercialProducts.ts` (`feeIsRequired`, `getPackage`, `depositBehavior`, `buildBehavior`). Promote a behavior key to a real column only when Billing needs to query/index on it.
 
-### Revenue categories (`commercial_revenue_categories`) — Accounting-facing
+### Accounting V1 — Revenue Category → GL Account
 
-Operator-managed mapping surface owned by the **Accounting** tab. Org-scoped: `label`, `gl_code` (placeholder), `sort_order`, `is_active`. A commercial product carries a free-text `revenue_category` **label**; Accounting maps that label to a GL code here. The Accounting tab lists managed categories, allows inline GL-code editing, counts catalog products referencing each label (case-insensitive), and surfaces product labels not yet managed so they can be adopted. This is the reference model — GL posting itself is a later stage.
+**Chain:**
+```
+Commercial Product → Revenue Category → GL Account
+Tuition Rate       → Revenue Category → GL Account   (forward-compat column; UI wiring is next)
+```
+**Accounting owns GL accounts. Commercial never stores GL codes directly** — it references a revenue category, which maps to a GL account.
+
+**GL accounts — reuse the existing primitive.** Alloy already has a full chart of accounts: the `gl_accounts` table (+ `gl_account_mappings`, `gl_journal_entries/lines`, `ledger_transactions`) with a live API (`/api/admin/financials/accounts`) and service layer (`lib/financials/gl/glConfigService`). Commercial does **not** own a GL-account table. (An earlier draft created `commercial_gl_accounts`; it was corrective-removed in migration `20260713000002` because `gl_accounts` already exists.)
+
+**Revenue categories (`commercial_revenue_categories`)** — Commercial-owned, org-scoped: `label`, `mapped_gl_account_id` (FK → `gl_accounts`), `sort_order`, `is_active`. The legacy free-text `gl_code` column is retained transitional but no longer used or exposed. The Accounting tab has three sub-sections:
+- **Revenue Categories** — create categories, map each to a GL account (dropdown of `gl_accounts`), product usage count, delete.
+- **GL Accounts** — read-only view of the shared chart of accounts.
+- **Mapping Review** — flags unmapped categories ("Needs accounting mapping") and shows the product → category → GL account chain.
+
+**Catalog integration:** products reference a revenue category via `revenue_category_id` (FK → `commercial_revenue_categories`) — a dropdown of configured categories, **no free-form GL code and no free-form revenue-category text**. If the chosen category is unmapped, the form and card show "Needs accounting mapping". The legacy free-text `revenue_category` column is retained transitional for backfill.
+
+**V2 (deferred):** optionally bridge mapped revenue categories into `gl_account_mappings` so the existing posting resolver sees Commercial categories through the same chain; wire `commercial_tuition_rates.revenue_category_id` into the Tuition UI. No posting, exports, funding, or policies in V1.
 
 ### Commercial Categories (`commercial_categories`)
 
@@ -215,8 +231,10 @@ GET/POST /api/admin/commercial/products             (body: { name, commercial_ty
 PATCH/DELETE /api/admin/commercial/products/[id]     (commercial_type is immutable after create)
 GET/POST /api/admin/commercial/categories           (body: { label, key?, sort_order? })
 PATCH/DELETE /api/admin/commercial/categories/[id]   (DELETE soft-archives if products reference it)
-GET/POST /api/admin/commercial/revenue-categories    (body: { label, gl_code? })   ← Accounting tab
-PATCH/DELETE /api/admin/commercial/revenue-categories/[id]
+# Accounting V1 — Revenue Category → GL Account
+GET/POST /api/admin/commercial/revenue-categories    (body: { label, mapped_gl_account_id? })
+PATCH/DELETE /api/admin/commercial/revenue-categories/[id]   (PATCH maps → gl_accounts)
+GET/POST/PATCH /api/admin/financials/accounts        ← EXISTING chart of accounts (gl_accounts); reused, not rebuilt
 
 # Legacy (transitional — do not build on)
 GET/POST/PATCH/DELETE /api/admin/commercial/{fees,addons,deposits}

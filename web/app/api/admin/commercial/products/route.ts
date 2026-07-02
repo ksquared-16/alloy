@@ -4,7 +4,7 @@ import { getAdminContextCached } from "@/lib/admin/getAdminContext";
 import type { CommercialProduct, CommercialType } from "@/lib/commercial/commercialProducts";
 
 const SELECT_COLS =
-    "id, org_id, location_id, program_key, name, description, commercial_type, category_id, amount_cents, cadence_key, revenue_category, effective_start, effective_end, behavior, is_active, metadata, source_table, source_id, created_at, updated_at";
+    "id, org_id, location_id, program_key, name, description, commercial_type, category_id, amount_cents, cadence_key, revenue_category, revenue_category_id, effective_start, effective_end, behavior, is_active, metadata, source_table, source_id, created_at, updated_at";
 
 const VALID_TYPES: CommercialType[] = ["fee", "addon", "deposit"];
 
@@ -21,6 +21,7 @@ function mapRow(r: Record<string, unknown>): CommercialProduct {
         amount_cents: Number(r.amount_cents ?? 0),
         cadence_key: (r.cadence_key as string | null | undefined) ?? null,
         revenue_category: (r.revenue_category as string | null | undefined) ?? null,
+        revenue_category_id: (r.revenue_category_id as string | null | undefined) ?? null,
         effective_start: (r.effective_start as string | null | undefined) ?? null,
         effective_end: (r.effective_end as string | null | undefined) ?? null,
         behavior: r.behavior != null && typeof r.behavior === "object" && !Array.isArray(r.behavior) ? (r.behavior as Record<string, unknown>) : {},
@@ -88,6 +89,7 @@ export async function POST(request: NextRequest) {
             amount_cents: Math.round(amount_cents),
             cadence_key: body.cadence_key != null ? String(body.cadence_key).trim() || null : null,
             revenue_category: body.revenue_category != null ? String(body.revenue_category).trim() || null : null,
+            revenue_category_id: body.revenue_category_id != null ? String(body.revenue_category_id).trim() || null : null,
             effective_start: body.effective_start != null ? String(body.effective_start).trim() || null : null,
             effective_end: body.effective_end != null ? String(body.effective_end).trim() || null : null,
             behavior,

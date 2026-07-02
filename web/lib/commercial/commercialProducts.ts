@@ -104,13 +104,24 @@ export function activeCategories(cats: CommercialCategory[]): CommercialCategory
   return sortCategories(cats.filter(c => c.is_active !== false));
 }
 
+// ─── GL Account (reuses the canonical chart of accounts) ─────────────────────
+// The Chart of Accounts is the pre-existing `gl_accounts` table. See
+// lib/financials/gl/glConfigTypes.ts (GlAccountRow). Commercial does NOT own a
+// GL-account table — revenue categories map to gl_accounts by id.
+
+export function formatGlAccount(a: { code: string; name: string }): string {
+  return `${a.code} · ${a.name}`;
+}
+
 // ─── Revenue category (Accounting-facing) ───────────────────────────────────
 
 export type CommercialRevenueCategory = {
   id: string;
   org_id: string;
   label: string;
+  /** @deprecated free-text GL code — superseded by mapped_gl_account_id. Kept transitional. */
   gl_code: string | null;
+  mapped_gl_account_id: string | null;
   sort_order: number;
   is_active: boolean;
   metadata: Record<string, unknown>;
@@ -123,6 +134,19 @@ export function sortRevenueCategories(cats: CommercialRevenueCategory[]): Commer
     const d = (a.sort_order ?? 100) - (b.sort_order ?? 100);
     return d !== 0 ? d : a.label.localeCompare(b.label);
   });
+}
+
+export function activeRevenueCategories(cats: CommercialRevenueCategory[]): CommercialRevenueCategory[] {
+  return sortRevenueCategories(cats.filter(c => c.is_active !== false));
+}
+
+export function isRevenueCategoryMapped(c: CommercialRevenueCategory): boolean {
+  return !!c.mapped_gl_account_id;
+}
+
+export function revenueCategoryLabel(id: string | null, cats: CommercialRevenueCategory[]): string {
+  if (!id) return "";
+  return cats.find(c => c.id === id)?.label ?? "";
 }
 
 // ─── Product ─────────────────────────────────────────────────────────────────
@@ -138,7 +162,9 @@ export type CommercialProduct = {
   category_id: string | null;
   amount_cents: number;
   cadence_key: string | null;   // null = one-time
+  /** @deprecated free-text label — superseded by revenue_category_id. Kept transitional. */
   revenue_category: string | null;
+  revenue_category_id: string | null;
   effective_start: string | null;  // null = active from day one
   effective_end: string | null;
   behavior: CommercialBehavior;

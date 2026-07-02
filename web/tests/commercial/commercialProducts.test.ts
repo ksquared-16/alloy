@@ -12,6 +12,10 @@ import {
     sortProducts,
     sortCategories,
     sortRevenueCategories,
+    activeRevenueCategories,
+    isRevenueCategoryMapped,
+    revenueCategoryLabel,
+    formatGlAccount,
     activeCategories,
     categoryLabel,
     FREQUENCY_OPTIONS,
@@ -35,7 +39,7 @@ function makeProduct(overrides: Partial<CommercialProduct> = {}): CommercialProd
         id: "p1", org_id: "org1", location_id: null, program_key: null,
         name: "Registration Fee", description: null,
         commercial_type: "fee", category_id: null,
-        amount_cents: 5000, cadence_key: null, revenue_category: null,
+        amount_cents: 5000, cadence_key: null, revenue_category: null, revenue_category_id: null,
         effective_start: null, effective_end: null,
         behavior: {}, is_active: true, metadata: {},
         source_table: null, source_id: null,
@@ -199,7 +203,7 @@ describe("categories helpers", () => {
 
 describe("sortRevenueCategories", () => {
     function rc(overrides: Partial<CommercialRevenueCategory>): CommercialRevenueCategory {
-        return { id: "r", org_id: "o", label: "X", gl_code: null, sort_order: 100, is_active: true, metadata: {}, created_at: "", updated_at: null, ...overrides };
+        return { id: "r", org_id: "o", label: "X", gl_code: null, mapped_gl_account_id: null, sort_order: 100, is_active: true, metadata: {}, created_at: "", updated_at: null, ...overrides };
     }
     it("orders by sort_order then label", () => {
         const cats = [rc({ id: "b", label: "Beta", sort_order: 20 }), rc({ id: "a", label: "Alpha", sort_order: 10 }), rc({ id: "c", label: "Gamma", sort_order: 10 })];
@@ -213,6 +217,29 @@ describe("sortRevenueCategories", () => {
     it("preserves gl_code through sort", () => {
         const cats = [rc({ label: "Program Revenue", gl_code: "4000-100" })];
         expect(sortRevenueCategories(cats)[0].gl_code).toBe("4000-100");
+    });
+});
+
+describe("revenue category mapping helpers", () => {
+    function rc(overrides: Partial<CommercialRevenueCategory>): CommercialRevenueCategory {
+        return { id: "r", org_id: "o", label: "Program Revenue", gl_code: null, mapped_gl_account_id: null, sort_order: 100, is_active: true, metadata: {}, created_at: "", updated_at: null, ...overrides };
+    }
+    it("isRevenueCategoryMapped true only when mapped_gl_account_id set", () => {
+        expect(isRevenueCategoryMapped(rc({ mapped_gl_account_id: "gl-1" }))).toBe(true);
+        expect(isRevenueCategoryMapped(rc({ mapped_gl_account_id: null }))).toBe(false);
+    });
+    it("activeRevenueCategories excludes inactive and sorts", () => {
+        const cats = [rc({ id: "b", label: "Beta", sort_order: 20 }), rc({ id: "a", label: "Alpha", sort_order: 10 }), rc({ id: "c", label: "Gone", is_active: false, sort_order: 5 })];
+        expect(activeRevenueCategories(cats).map(c => c.id)).toEqual(["a", "b"]);
+    });
+    it("revenueCategoryLabel resolves id", () => {
+        const cats = [rc({ id: "x", label: "Enrichment" })];
+        expect(revenueCategoryLabel("x", cats)).toBe("Enrichment");
+        expect(revenueCategoryLabel(null, cats)).toBe("");
+        expect(revenueCategoryLabel("missing", cats)).toBe("");
+    });
+    it("formatGlAccount renders code · name", () => {
+        expect(formatGlAccount({ code: "4000", name: "Tuition Revenue" })).toBe("4000 · Tuition Revenue");
     });
 });
 

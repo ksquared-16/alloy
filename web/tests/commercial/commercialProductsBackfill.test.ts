@@ -21,7 +21,7 @@ function product(overrides: Partial<CommercialProduct>): CommercialProduct {
     return {
         id: "p", org_id: "o", location_id: null, program_key: null,
         name: "x", description: null, commercial_type: "fee", category_id: null,
-        amount_cents: 0, cadence_key: null, revenue_category: null,
+        amount_cents: 0, cadence_key: null, revenue_category: null, revenue_category_id: null,
         effective_start: null, effective_end: null, behavior: {},
         is_active: true, metadata: {}, source_table: "commercial_fees", source_id: "legacy-1",
         created_at: "", updated_at: null, ...overrides,
