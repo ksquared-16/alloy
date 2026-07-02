@@ -40,7 +40,7 @@
 |------|----------------|
 | first_name, last_name, dob, display_name, relationship | Enrollment case facts |
 | person_id (optional identity link) | outcome_status_key |
-| Config: preferred_name, gender, allergies, medical_notes, special_instructions | desired_start_date, location_id, program |
+| Config: preferred_name, gender, allergies, medical_notes, special_instructions | start_date, location_id, program |
 
 **Storage:** Native columns + `field_values` (`entity_type = customer_member`).  
 **PATCH:** `/api/admin/customer-members/[id]` (native + field_values).  
@@ -52,8 +52,9 @@
 
 | Owns | Does not own |
 |------|----------------|
-| status_key (case grain) | Per-child outcome status |
-| location_id, source, customer_id, primary_person_id | Child profile fields |
+| status_key (`open` \| `closed`) + close_reason_key (case grain) | Per-child outcome status |
+| stage_key (Enrollment Process position — written by outcome execution only) | Child profile fields |
+| location_id, source, customer_id, primary_person_id | |
 | monetary/quote fields, work_unit_id, metadata | |
 
 **SELECT contract:** `OPPORTUNITY_CANONICAL_ADMIN_SELECT`.  
@@ -61,20 +62,25 @@
 
 ---
 
-### `opportunity_customer_members` — child enrollment participation
+### `opportunity_customer_members` — Enrollment Process Participation
 
-| Operator entity_type | `inquiry_child` |
+| Operator entity_type | `enrollment_participation` (formerly `inquiry_child` — removed by the Enrollment Alignment sprint; "inquiry" is not a platform concept) |
 | Storage table | `opportunity_customer_members` |
+
+One canonical child (`customer_members`) + one process participation (this record). The
+participation owns per-child enrollment facts across the whole process — proposal through
+commitment; the stage determines interpretation.
 
 | Owns | Does not own |
 |------|----------------|
-| desired_start_date, location_id, desired_program_* | first_name, dob, gender, health |
-| program_room_cohort_key, desired_schedule_type | |
-| outcome_status_key (child enrollment outcome) | |
+| start_date, location_id, program_category_id | first_name, dob, gender, health |
+| program_room_cohort_key, schedule_type | |
+| outcome_status_key (durable child enrollment state) + close_reason_key | |
+| stage_key (child-track process position — written by outcome execution only) | |
 | notes | |
 
-**PATCH:** `/api/admin/opportunity-customer-members/[id]` — enrollment fields only; profile keys rejected.  
-**Registry:** `web/lib/fields/inquiryChildFieldRegistry.ts`.
+**PATCH:** `/api/admin/opportunity-customer-members/[id]` — participation fields only; profile keys rejected.  
+**Registry:** `web/lib/fields/enrollmentParticipationFieldRegistry.ts`.
 
 ---
 
@@ -85,7 +91,7 @@
 | field_key, field_type, label, section, options config | Actual field values |
 | entity_type scope | Native column values |
 
-**Guard:** `validateFieldDefinitionOwnership` — profile fields cannot register on `inquiry_child`; enrollment fields cannot register on `customer_member`.
+**Guard:** `validateFieldDefinitionOwnership` — profile fields cannot register on `enrollment_participation`; enrollment fields cannot register on `customer_member`.
 
 ---
 
@@ -106,12 +112,16 @@ Entity types include `opportunities`, `opportunity_customer_members`, `persons`,
 ### `status_transition_rules` — allowed status movement
 
 Binds Business Process transitions to valid `status_key` changes per entity type.
+**Not used for enrollment entities** — outcome execution owns enrollment state movement
+(see `docs/platform/core/stage-membership-and-outcomes.md`).
 
 ---
 
 ### `action_definitions` — action metadata
 
-Registered admin actions (`update_enrollment_status`, relationship actions, etc.) with guardrails and placement config.
+Registered admin actions with guardrails and placement config. Operator-exposed actions are
+domain verbs (`schedule_tour`, `waitlist_child`, `enroll_child`, `close_lead`, …) — no generic
+status mutation actions.
 
 ---
 
@@ -121,7 +131,7 @@ Registered admin actions (`update_enrollment_status`, relationship actions, etc.
 |--------|-------------------|--------|
 | **programs** | Location-scoped program categories, room cohorts | Partial via `location_program_categories` |
 | **rooms** | Physical/virtual cohort assignment | Partial via `program_room_cohort_key` on OCM |
-| **schedules** | Desired vs enrolled schedule | OCM `desired_schedule_type`; enrolled TBD |
+| **schedules** | Requested vs enrolled schedule | OCM `schedule_type` (canonical field; stage determines interpretation); enrolled via `schedule_assignments` |
 | **attendance** | Daily presence records | Not canonical in CRM layer |
 | **billing** | Invoices, payment methods | `customers` stripe refs; full billing TBD |
 | **tuition** | Rate plans, enrollment billing | Not implemented |

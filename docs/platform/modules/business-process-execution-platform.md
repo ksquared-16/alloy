@@ -384,12 +384,17 @@ Outbox contract:
 
 ### Domain Registry
 
-There is no generic "Update Status." Every domain is explicitly typed with its own handler.
+There is no generic "Update Status" — not in the runtime, and not on operator surfaces. Every
+domain is explicitly typed with its own handler, and operators reach it only through domain
+verbs bound to stage outcomes (`waitlist_child`, `enroll_child`, `close_lead`, …). The
+Enrollment Alignment sprint removed the operator-facing `update_status` / `update_enrollment_status`
+actions; the typed domains below remain the internal mutation mechanism invoked by outcome execution.
 
 | Domain key | Subject | Canonical field |
 |---|---|---|
-| `lead_status` | `opportunity` | `opportunities.status_key` |
-| `enrollment_status` | `opportunity_customer_member` | `opportunity_customer_members.outcome_status_key` |
+| `lead_status` | `opportunity` | `opportunities.status_key` (`open`\|`closed`) + `close_reason_key` |
+| `enrollment_status` | `opportunity_customer_member` | `opportunity_customer_members.outcome_status_key` + `close_reason_key` |
+| `stage` | `opportunity` / `opportunity_customer_member` | `stage_key` (moved by `move_to_stage` outcome targets only) |
 | `person_status` | `person` | `persons.status_key` |
 | `account_status` | `customer` | `customers.status_key` |
 

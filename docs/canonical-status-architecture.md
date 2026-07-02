@@ -1,143 +1,115 @@
 # Canonical Status Architecture
 
-**Status:** Phase 5 formal contract (June 2026)  
-**Platform reference:** `docs/platform/core/status-and-state-system.md`
+**Status:** Enrollment Alignment contract (July 2026) — supersedes the Phase 5 contract
+**Platform reference:** `docs/platform/core/status-and-state-system.md`,
+`docs/platform/core/stage-membership-and-outcomes.md`
 
-Status layers **must not be collapsed** into a single field. Each layer answers a different question.
+Status is **durable truth only**. Operational progress is Work. Operational position is Stage.
+The three must never be collapsed into one field — and status must never re-encode the other two.
+
+```
+Entity → Process → Stage → Work → Outcome → Durable State → Work View → Surface
+```
 
 ---
 
 ## Layer definitions
 
-### Business Process Stage
+### Business Process Stage (operational position)
 
-| Question | Where is this record in the operator journey? |
+| Question | Where is this record in the process right now? |
 |----------|------------------------------------------------|
-| Storage | Business Process config (`enrollment_pipeline` stages) |
-| Runtime | Queue lane membership, stage operating plan |
-| Mutable by | Stage transition rules, outcome picker, BP config |
+| Storage | `opportunities.stage_key`, `opportunity_customer_members.stage_key` |
+| Written by | Outcome execution (`move_to_stage` targets) and intake. Nothing else. |
+| Membership | Stage cohorts, Work View scoping, stage work spawning |
 
-**Not** the same as entity `status_key` — stages are journey steps; status keys are durable entity state.
+Stage is process state, not entity truth. It is persisted (not derived from status lists) and
+owned by the process runtime. Stage membership asks "what belongs here?" — the answer is
+`stage_key`, never a status filter.
 
 ---
 
-### Business Status (case grain)
+### Case Status (family grain) — durable truth
 
-| Question | What is the enrollment case state? |
-|----------|-------------------------------------|
+| Question | Does this family have an open enrollment case? |
+|----------|------------------------------------------------|
 | Storage | `opportunities.status_key` |
-| Vocabulary | `status_definitions` (`entity_type = opportunities`) |
-| Examples | new_inquiry, touring, follow_up, closed_won |
-| Mutable by | Actions, workflows, bounded PATCH, stage bindings |
+| Vocabulary | `open` \| `closed` (+ `close_reason_key`: `lost` \| `withdrawn` \| `not_a_fit` \| `aged_out` \| `other`) |
+| Mutable by | Outcome execution and domain actions only |
 
-**Implemented:** Runtime reads `status_key` only. Legacy `opportunities.status` text deprecated.
-
----
-
-### Person Status
-
-| Question | What is this person's platform status? |
-|----------|----------------------------------------|
-| Storage | `persons.status_key` |
-| Vocabulary | `status_definitions` (`entity_type = persons`) |
-| Mutable by | Admin actions, PATCH |
+Everything the previous 13-key vocabulary encoded beyond open/closed was operational
+work (`tour_scheduled`, `needs_qualification`, `decision_pending`, …) and now lives on
+Stage + Work.
 
 ---
 
-### Household Status
+### Child Enrollment Status (participation grain) — durable truth
 
-| Question | What is the account/household status? |
-|----------|---------------------------------------|
-| Storage | `customers.status_key` |
-| Vocabulary | `status_definitions` (`entity_type = customers`) |
-
----
-
-### Child Enrollment Outcome Status
-
-| Question | What is this child's enrollment outcome on this case? |
-|----------|------------------------------------------------------|
+| Question | What is this child's enrollment outcome on this participation? |
+|----------|----------------------------------------------------------------|
 | Storage | `opportunity_customer_members.outcome_status_key` |
-| Vocabulary | `status_definitions` (`entity_type = opportunity_customer_members`) |
-| Examples | new_inquiry, waitlisted, enrolling, enrolled, withdrawn |
-| Mutable by | `update_enrollment_status`, enrollment actions |
+| Vocabulary | `null` (in process, pre-outcome) \| `waitlisted` \| `enrolling` \| `enrolled` \| `withdrawn` \| `not_enrolling` (+ `close_reason_key`) |
+| Mutable by | Outcome execution and domain actions only |
 
-**Critical:** Do not use case `opportunities.status_key` as every child's enrollment state.
+Registration/paperwork/offer progress is Work. Waitlist pause is placement-candidate state
+(`placement_candidates.status = paused`), not an enrollment status.
 
----
-
-### Readiness
-
-| Question | Is required information complete for the next action? |
-|----------|------------------------------------------------------|
-| Storage | **None** — computed |
-| Source | `evaluateCompletionRequirements`, lifecycle field_rules |
-| Examples | Missing child first name before schedule_tour |
-
-Readiness is **not** a status. Do not persist readiness as `status_key`.
+**Critical:** do not use case `opportunities.status_key` as any child's enrollment state.
 
 ---
 
-### Needs Attention
+### Person Status / Household Status
 
-| Question | Does an operator need to act on this record now? |
-|----------|--------------------------------------------------|
-| Storage | **None** — resolver output |
-| Source | `resolveOpportunityAttention`, BOS recommendations |
-| Examples | Stale follow-up, missing tour outcome |
-
-Needs Attention is **not** a status.
+Unchanged: `persons.status_key`, `customers.status_key` via `status_definitions`.
 
 ---
 
-### Current Work
+### Work (operational progress)
 
-| Question | What task is actively in progress? |
-|----------|-----------------------------------|
-| Storage | Operational tasks, work intents |
-| Source | Task tables, stage spawn rules |
+| Question | What operational work is in flight, and how far along is it? |
+|----------|--------------------------------------------------------------|
+| Storage | Work items / work intents (spawned from `stage_operating_plan_v1.work_templates`) |
+| Examples | Confirm Tour, Conduct Tour, Follow Up, Collect Registration, Extend Offer |
 
-Distinct from enrollment outcome status.
-
----
-
-### Task State
-
-| Question | What is the state of an assigned task? |
-|----------|----------------------------------------|
-| Storage | Task / work item rows |
-| Examples | open, in_progress, completed, cancelled |
+Work changes constantly; durable status rarely changes. Anything phrased as an activity is
+Work, never a status.
 
 ---
 
-### Workflow Run State
+### Outcomes (the only mutation mechanism)
 
-| Question | Where is this automation execution? |
-|----------|-------------------------------------|
-| Storage | `workflow_runs`, step execution tables |
-| Examples | pending, running, completed, failed |
+Outcomes complete Work and are the **only** path that changes durable state:
 
-Orchestration only — not CRM business status.
+```
+Work completed → Outcome selected → Outcome rule targets execute:
+    durable state write (status_key / outcome_status_key / close_reason_key)
+    + stage move (stage_key)
+    → stage membership updates → Work Views refresh
+```
+
+Direct status PATCH from operator surfaces is prohibited. Operator actions are domain verbs
+(`schedule_tour`, `waitlist_child`, `enroll_child`, `mark_enrolled`, `withdraw_child`,
+`close_lead`) that resolve to outcome executions in the runtime's typed status domains.
 
 ---
 
-### Mission / Objective
+### Readiness / Needs Attention
 
-| Question | What is the operator or agent objective? |
-|----------|------------------------------------------|
-| Storage | BOS / assist context (session-scoped) |
-| Examples | Review waitlist candidate, complete tour follow-up |
+Unchanged: both computed, never persisted, never statuses
+(`evaluateCompletionRequirements`, `resolveOpportunityAttention`).
 
-Ephemeral coordination — not durable entity status.
+### Task State / Workflow Run State / Mission
+
+Unchanged (see previous contract): orchestration and coordination state, not business status.
 
 ---
 
 ## Two-grain enrollment (frozen)
 
-| Grain | Column | Scope |
-|-------|--------|-------|
-| Case | `opportunities.status_key` | Family coordination |
-| Child enrollment | `OCM.outcome_status_key` | Per-child outcome |
+| Grain | Durable state | Stage position | Scope |
+|-------|---------------|----------------|-------|
+| Case | `opportunities.status_key` + `close_reason_key` | `opportunities.stage_key` | Family coordination |
+| Child participation | `OCM.outcome_status_key` + `close_reason_key` | `OCM.stage_key` | Per-child outcome |
 
 ---
 
@@ -145,25 +117,20 @@ Ephemeral coordination — not durable entity status.
 
 | Operation | Rule |
 |-----------|------|
-| Runtime read | `resolveCanonicalStatusKey`, `resolveOcmOutcomeStatusKey` — `status_key` / `outcome_status_key` only |
-| Runtime write | `rejectLegacyTextStatusPatch` — blocks text `status` in PATCH bodies |
-| Display | `status_definitions` labels via `resolveOpportunityStatusDisplay` — no legacy text fallback |
-| Maintenance | `resolveLegacyStatusKeyWithTextFallback` — scripts/backfill only |
+| Runtime read | `status_key` / `outcome_status_key` / `stage_key` columns only |
+| Runtime write | Outcome execution + typed status domains; no free-form status PATCH |
+| Display | `status_definitions` labels; close reasons via `close_reason_key` |
+| Membership | `stage_key` equality — never status lists, never queue filter duplication |
 
----
+## Removed by the Enrollment Alignment sprint
 
-## Configuration surfaces
-
-| Surface | Path |
-|---------|------|
-| Status definitions | Settings → Statuses |
-| Stage ↔ status binding | Business Process builder |
-| Transition rules | `status_transition_rules` |
-| Enrollment status action | `update_enrollment_status` |
-
----
-
-## Planned (not yet production-active)
-
-- Lifecycle strict mode activation (readiness gates) — tooling shipped, activation deferred pending OCM QA.
-- DB-level FK from `status_key` → `status_definitions` — deferred pending orphan cleanup.
+- Case statuses: `new_inquiry`, `needs_qualification`, `qualified`, `tour_requested`,
+  `tour_scheduled`, `tour_completed`, `tour_no_show`, `decision_pending`, and the five
+  terminal variants (now `closed` + reason).
+- Child statuses: `offer_pending`, `waitlist_paused`, `registration_pending`,
+  `paperwork_pending`, `start_date_scheduled`, and the four terminal variants
+  (now `withdrawn` / `not_enrolling` + reason).
+- Status-derived stage membership (`ENROLLMENT_STAGE_STATUS_KEYS`,
+  `queue_membership_v1.included_status_keys` / `included_disposition_keys`).
+- `status_transition_rules` for enrollment entities (outcomes own movement).
+- Operator-exposed generic `update_status` / `update_enrollment_status` actions.
