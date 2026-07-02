@@ -48,9 +48,11 @@ describe("WS.* section labels", () => {
         expect(countOccurrences(src, '"WS.PROCESS_TILE"')).toBeGreaterThanOrEqual(1);
     });
 
-    it("WS.PROCESS_TILE_WORK_VIEWS appears exactly once — owned by WorkViewEntryList", () => {
+    it("WS.PROCESS_TILE_WORK_VIEWS DOM section appears exactly once — owned by WorkViewEntryList", () => {
+        // Count the DOM ownership attribute specifically — the section name may also
+        // appear as the canonical runtime trace label (alloyRuntimeTrace argument).
         const src = readFile("components/admin/workspace/WorkspaceRootLifecycleGrid.tsx");
-        expect(countOccurrences(src, '"WS.PROCESS_TILE_WORK_VIEWS"')).toBe(1);
+        expect(countOccurrences(src, 'data-alloy-section="WS.PROCESS_TILE_WORK_VIEWS"')).toBe(1);
     });
 
     it("WS.PROCESS_GRID is not present in WorkspaceRootShell (no duplicate ownership)", () => {

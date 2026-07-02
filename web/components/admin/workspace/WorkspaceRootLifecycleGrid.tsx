@@ -1,8 +1,13 @@
 "use client";
 
-import type { MouseEvent } from "react";
+import { useEffect, type MouseEvent } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import {
+    alloyRuntimeTrace,
+    hrefHasWorkViewOrQueueParam,
+    workViewSlugFromHref,
+} from "@/lib/perf/alloyRuntimeTrace";
 import {
     adminV2NavigationClickedItemProps,
     runAdminV2NavigationTransition,
@@ -232,11 +237,33 @@ function ProcessNavTile({
 function WorkViewEntryList({
     workQueues,
     clickedKey,
+    processLabel,
+    processKey,
 }: {
     workQueues: readonly OperatorLifecycleWorkQueuePreview[];
     clickedKey: string;
+    processLabel: string;
+    processKey: string;
 }) {
     const router = useRouter();
+
+    // WS.PROCESS_TILE_WORK_VIEWS canonical runtime trace — proves the tile links
+    // are built from configured Work Views and that no href leaks work_view=/queue=.
+    useEffect(() => {
+        alloyRuntimeTrace("WS.PROCESS_TILE_WORK_VIEWS", {
+            source: "configured_work_views",
+            process_label: processLabel,
+            process_key: processKey,
+            work_view_labels: workQueues.map((wq) => wq.label),
+            work_view_slugs: workQueues.map((wq) => workViewSlugFromHref(wq.href)),
+            work_view_keys: workQueues.map((wq) => wq.platformKey),
+            hrefs: workQueues.map((wq) => wq.href),
+            any_href_has_work_view_or_queue: workQueues.some((wq) =>
+                hrefHasWorkViewOrQueueParam(wq.href),
+            ),
+        });
+    }, [workQueues, processLabel, processKey]);
+
     if (!workQueues.length) return null;
     return (
         <div
@@ -343,6 +370,8 @@ export function WorkspaceRootLifecycleGrid({ lifecycles, pending = false }: Prop
                         <WorkViewEntryList
                             workQueues={lifecycle.workQueues}
                             clickedKey={clickedKey}
+                            processLabel={lifecycle.label}
+                            processKey={lifecycle.processKey}
                         />
                     </div>
                 );

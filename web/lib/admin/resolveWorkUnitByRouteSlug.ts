@@ -6,6 +6,7 @@ import {
     extractPipelineExecutionLanes,
 } from "@/lib/workspace/extractPipelineExecutionLanes";
 import { workUnitKeyToRouteSlug, workUnitRouteSlugToKey } from "@/lib/admin/workUnitRouteSlug";
+import { alloyRuntimeTrace } from "@/lib/perf/alloyRuntimeTrace";
 
 export type WorkUnitRouteSlugRow = {
     id: string;
@@ -156,15 +157,48 @@ export function resolveWorkUnitByRouteSlug(args: {
         (args.departments ?? []).map((d) => [d.id, d] as const),
     );
 
+    // WU.ROUTE_RESOLVE canonical runtime trace — emit the configured identity the
+    // incoming slug resolved to. Runs server-side (by-slug API / server loader),
+    // so it lands in Vercel logs as the second link of the golden-flow chain.
+    const resolved = (
+        match: ResolvedWorkUnitRouteSlug,
+    ): ResolveWorkUnitRouteSlugResult => {
+        alloyRuntimeTrace("WU.ROUTE_RESOLVE", {
+            source: "configured_work_units",
+            incoming_slug: args.slug,
+            route_slug: match.routeSlug,
+            resolved_work_unit_id: match.workUnitId,
+            resolved_work_unit_key: match.workUnitKey,
+            resolved_process_label: match.workUnitName,
+            resolved_active_work_view_key: match.initialQueueKey ?? match.workUnitKey,
+            resolved_queue_key: match.initialQueueKey,
+            match_kind: match.kind,
+        });
+        return { status: "resolved", match };
+    };
+
     const directMatches = activeRows.filter(
         (row) => (row.key ?? "").trim().toLowerCase() === platformKey,
     );
 
     if (directMatches.length === 1) {
         const row = directMatches[0]!;
-        return {
-            status: "resolved",
-            match: {
+        return resolved({
+            kind: "work_unit_key",
+            workUnitId: row.id,
+            departmentId: row.department_id,
+            workUnitKey: row.key,
+            workUnitName: row.name,
+            routeSlug,
+            initialQueueKey: null,
+        });
+    }
+
+    if (directMatches.length > 1) {
+        const narrowed = disambiguateWorkUnitKeyMatches(directMatches, departmentsById);
+        if (narrowed.length === 1) {
+            const row = narrowed[0]!;
+            return resolved({
                 kind: "work_unit_key",
                 workUnitId: row.id,
                 departmentId: row.department_id,
@@ -172,26 +206,7 @@ export function resolveWorkUnitByRouteSlug(args: {
                 workUnitName: row.name,
                 routeSlug,
                 initialQueueKey: null,
-            },
-        };
-    }
-
-    if (directMatches.length > 1) {
-        const narrowed = disambiguateWorkUnitKeyMatches(directMatches, departmentsById);
-        if (narrowed.length === 1) {
-            const row = narrowed[0]!;
-            return {
-                status: "resolved",
-                match: {
-                    kind: "work_unit_key",
-                    workUnitId: row.id,
-                    departmentId: row.department_id,
-                    workUnitKey: row.key,
-                    workUnitName: row.name,
-                    routeSlug,
-                    initialQueueKey: null,
-                },
-            };
+            });
         }
         return {
             status: "ambiguous",
@@ -211,18 +226,15 @@ export function resolveWorkUnitByRouteSlug(args: {
 
     const laneOwner = findQueueLaneOwner(activeRows, platformKey);
     if (laneOwner) {
-        return {
-            status: "resolved",
-            match: {
-                kind: "queue_lane_key",
-                workUnitId: laneOwner.id,
-                departmentId: laneOwner.department_id,
-                workUnitKey: laneOwner.key,
-                workUnitName: laneOwner.name,
-                routeSlug,
-                initialQueueKey: platformKey,
-            },
-        };
+        return resolved({
+            kind: "queue_lane_key",
+            workUnitId: laneOwner.id,
+            departmentId: laneOwner.department_id,
+            workUnitKey: laneOwner.key,
+            workUnitName: laneOwner.name,
+            routeSlug,
+            initialQueueKey: platformKey,
+        });
     }
 
     const lifecycleStageOwner = findLifecycleStageWorkUnitForQueueLane(
@@ -231,18 +243,15 @@ export function resolveWorkUnitByRouteSlug(args: {
         departmentsById,
     );
     if (lifecycleStageOwner) {
-        return {
-            status: "resolved",
-            match: {
-                kind: "work_unit_key",
-                workUnitId: lifecycleStageOwner.id,
-                departmentId: lifecycleStageOwner.department_id,
-                workUnitKey: lifecycleStageOwner.key,
-                workUnitName: lifecycleStageOwner.name,
-                routeSlug,
-                initialQueueKey: null,
-            },
-        };
+        return resolved({
+            kind: "work_unit_key",
+            workUnitId: lifecycleStageOwner.id,
+            departmentId: lifecycleStageOwner.department_id,
+            workUnitKey: lifecycleStageOwner.key,
+            workUnitName: lifecycleStageOwner.name,
+            routeSlug,
+            initialQueueKey: null,
+        });
     }
 
     return { status: "not_found" };

@@ -17,6 +17,12 @@ import type {
 } from "@/lib/ui-v2/workspace-types";
 import type { WorkspaceActionHandler } from "@/lib/ui-v2/workspace-actions";
 import { logAdminV2QueueRowClick } from "@/lib/debug/adminV2QueueRowClickDebug";
+import { alloyRuntimeTrace } from "@/lib/perf/alloyRuntimeTrace";
+import { useWorkUnitSlugRouteOptional } from "@/contexts/WorkUnitSlugRouteContext";
+import {
+    isEmptyLaneNoAutoOpen,
+    shouldAutoOpenFirstQueueRow,
+} from "@/lib/workspace/focusPanelAutoOpen";
 import { logQueueRowOpenHandler } from "@/lib/debug/queueRowClickDebug";
 import {
   prefetchOpportunityDrawerOnRowIntent,
@@ -130,9 +136,19 @@ function fireQueueRowOpenRecord(
   queue: QueueVm,
   item: QueueItemVm,
   onAction: WorkspaceActionHandler,
-  surface: "card" | "keyboard" | "chip"
+  surface: "card" | "keyboard" | "chip" | "auto_first_row"
 ) {
   const actionEntityId = queueItemOpportunityId(item);
+  const autoOpen = surface === "auto_first_row";
+  // WU.FOCUS_PANEL canonical runtime trace — final link of the golden-flow chain.
+  // No PII: only the record id, source, and booleans.
+  alloyRuntimeTrace("WU.FOCUS_PANEL", {
+    source: "configured_queue_rows",
+    auto_open: autoOpen,
+    selected_record_id: actionEntityId,
+    selected_record_source: autoOpen ? "default_first_row" : "row_click",
+    focus_panel_opened: true,
+  });
   logQueueRowOpenHandler("record_open", `QueueBlock_${surface}`, "fireQueueRowOpenRecord", actionEntityId);
   logAdminV2QueueRowClick({
     phase: "queue_row_click",
@@ -1868,6 +1884,68 @@ function WorkUnitQueueLane({
         : queue.items,
     [queue.items, waitlistPlacementSections, waitlistCategoryContext]
   );
+
+  const firstRowRecordId =
+    displayQueueItems.length > 0 ? queueItemOpportunityId(displayQueueItems[0]!) : null;
+
+  // A record already selected via the canonical /work-unit/:slug/:recordId URL must
+  // win over first-row auto-open — the slug route host opens that record itself.
+  // Read it from the slug route context (null outside the slug route provider).
+  const slugRoute = useWorkUnitSlugRouteOptional();
+  const routeRecordIdFromPath = slugRoute?.routeRecordId ?? null;
+
+  // WU.QUEUE_REGION canonical runtime trace — counts + first row for the active lane.
+  useEffect(() => {
+    alloyRuntimeTrace("WU.QUEUE_REGION", {
+      source: "configured_work_view_queue",
+      active_work_view_key: queue.drillWorkUnitKey ?? null,
+      queue_key: queue.id,
+      business_process_key: queue.businessProcessKey ?? null,
+      api_row_count: queue.items.length,
+      rendered_row_count: displayQueueItems.length,
+      first_row_record_id: firstRowRecordId,
+    });
+  }, [queue.id, queue.drillWorkUnitKey, queue.businessProcessKey, queue.items.length, displayQueueItems.length, firstRowRecordId]);
+
+  // Focus Panel auto-open: the first visible queue row opens by default so the
+  // operator lands on a record, not an empty surface. Fires once per queue, and
+  // never when a record is already selected (route deep-link or open drawer) or
+  // when the lane has zero rows. Zero-row lanes trace auto_open:false and keep
+  // the empty state.
+  const autoOpenedQueueIdsRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    const decisionInput = {
+      rowCount: displayQueueItems.length,
+      alreadyAutoOpened: autoOpenedQueueIdsRef.current.has(queue.id),
+      hasRouteRecordId: Boolean(routeRecordIdFromPath),
+      hasOpenDrawerRecord: Boolean(openDrawerOpportunityId),
+      hasPendingRowOpen: Boolean(queueRowOpenPendingOpportunityId),
+    };
+
+    if (isEmptyLaneNoAutoOpen(decisionInput)) {
+      autoOpenedQueueIdsRef.current.add(queue.id);
+      alloyRuntimeTrace("WU.FOCUS_PANEL", {
+        source: "configured_queue_rows",
+        auto_open: false,
+        selected_record_id: null,
+        selected_record_source: "default_first_row",
+        focus_panel_opened: false,
+      });
+      return;
+    }
+
+    if (shouldAutoOpenFirstQueueRow(decisionInput)) {
+      autoOpenedQueueIdsRef.current.add(queue.id);
+      fireQueueRowOpenRecord(queue, displayQueueItems[0]!, onAction, "auto_first_row");
+    }
+  }, [
+    queue,
+    displayQueueItems,
+    onAction,
+    openDrawerOpportunityId,
+    queueRowOpenPendingOpportunityId,
+    routeRecordIdFromPath,
+  ]);
 
   useLayoutEffect(() => {
     if (!queue.rowsRefreshing) {

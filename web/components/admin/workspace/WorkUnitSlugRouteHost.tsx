@@ -21,6 +21,7 @@ import {
     type WorkUnitSlugRouteCacheEntry,
 } from "@/lib/admin/workUnitSlugRouteCache";
 import { tracePlatformDrawerVm } from "@/lib/perf/platformSurfacePerfTrace";
+import { alloyRuntimeTrace } from "@/lib/perf/alloyRuntimeTrace";
 import { useAdminDrawer } from "@/contexts/AdminDrawerContext";
 import { workUnitRouteSlugToKey } from "@/lib/admin/workUnitRouteSlug";
 
@@ -104,6 +105,15 @@ export default function WorkUnitSlugRouteHost({
         }
         deepLinkOpenedRef.current = routeRecordIdFromPath;
         tracePlatformDrawerVm("wu_slug_deeplink_open", { opportunity_id: routeRecordIdFromPath });
+        // WU.FOCUS_PANEL canonical runtime trace — opened from the canonical
+        // /work-unit/:slug/:recordId deep-link route (not first-row auto-open).
+        alloyRuntimeTrace("WU.FOCUS_PANEL", {
+            source: "workspace_slug_record_url",
+            auto_open: false,
+            selected_record_id: routeRecordIdFromPath,
+            selected_record_source: "route_record_id",
+            focus_panel_opened: true,
+        });
         openDrawer({ type: "opportunities", id: routeRecordIdFromPath, source: "workspace_slug_record_url" });
     }, [drawer.id, drawer.type, openDrawer, routeRecordIdFromPath, state.phase]);
 
