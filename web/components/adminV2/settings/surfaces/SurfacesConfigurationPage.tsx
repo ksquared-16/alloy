@@ -12,6 +12,7 @@ import FocusPanelSummarySurfaceEditor from "@/components/adminV2/settings/surfac
 import OperationalIntelligenceSurfaceBuilder from "@/components/adminV2/settings/surfaces/OperationalIntelligenceSurfaceBuilder";
 import { WorkspaceHeaderSurfaceBuilder, WorkUnitHeaderSurfaceBuilder } from "@/components/adminV2/settings/surfaces/HeaderSurfaceBuilders";
 import QueueRowBuilderV2 from "@/components/adminV2/settings/surfaces/QueueRowBuilderV2";
+import { buildSurfacesBreadcrumb } from "@/lib/adminV2/settings/surfaces/surfacesBreadcrumbModel";
 import { SurfaceLibrary } from "@/components/platform/surfaceBuilder/SurfaceLibrary";
 import {
     useSurfacesConfigurationSettings,
@@ -57,18 +58,36 @@ export default function SurfacesConfigurationPage() {
                             data-testid="surfaces-breadcrumb"
                         >
                             <p className="text-xs text-alloy-midnight/55">
-                                <button
-                                    type="button"
-                                    data-testid="surfaces-breadcrumb-home"
-                                    onClick={() => setSelectedId(null)}
-                                    className="font-medium text-alloy-midnight/70 hover:text-alloy-pine"
-                                >
-                                    Surfaces
-                                </button>
-                                <span className="mx-1 text-alloy-midnight/30">›</span>
-                                <span>{activeSectionLabel}</span>
-                                <span className="mx-1 text-alloy-midnight/30">›</span>
-                                <span className="font-medium text-alloy-midnight/80">{selectedObject.title}</span>
+                                {buildSurfacesBreadcrumb({
+                                    sectionLabel: activeSectionLabel,
+                                    surfaceTitle: selectedObject.title,
+                                    // nestedTrail wired when nested-surface editing lands (staged).
+                                }).map((crumb, i, all) => {
+                                    const isLast = i === all.length - 1;
+                                    return (
+                                        <span key={`${crumb.label}-${i}`}>
+                                            {i > 0 && <span className="mx-1 text-alloy-midnight/30">›</span>}
+                                            {crumb.target === "root" ? (
+                                                <button
+                                                    type="button"
+                                                    data-testid={i === 0 ? "surfaces-breadcrumb-home" : undefined}
+                                                    data-breadcrumb-crumb={i}
+                                                    onClick={() => setSelectedId(null)}
+                                                    className="font-medium text-alloy-midnight/70 hover:text-alloy-pine"
+                                                >
+                                                    {crumb.label}
+                                                </button>
+                                            ) : (
+                                                <span
+                                                    data-breadcrumb-crumb={i}
+                                                    className={isLast ? "font-medium text-alloy-midnight/80" : undefined}
+                                                >
+                                                    {crumb.label}
+                                                </span>
+                                            )}
+                                        </span>
+                                    );
+                                })}
                             </p>
                             <button
                                 type="button"

@@ -103,6 +103,15 @@ export type QueueRecordColumnConfig = {
      * queue row runtime renderer (deferred — runtime evaluation wired in V2).
      */
     visibleWhen?: LayoutCondition;
+    /**
+     * Stacked-section index within the condensed row (Presentation Runtime V3).
+     * Columns sharing a `rowIndex` render on the same horizontal line; higher
+     * indices stack below. **Back-compat: absent = 0** (single flat strip, the
+     * legacy behavior). The Queue Row Builder authors this; the live /work-unit
+     * runtime does not consume stacking yet (presentation-runtime-ready — see
+     * queue row platform doc), so the builder preview labels it accordingly.
+     */
+    rowIndex?: number;
 };
 
 import type { QueueRecordFixedControls } from "@/lib/layout/queueRecordLayoutConfig";
