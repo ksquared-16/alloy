@@ -1,5 +1,7 @@
 # Commercial Ownership Model
 
+> **Status: ✅ Commercial Platform V1 — SHIPPED & FROZEN (2026-07-03).** Canonical overview: **[Commercial Platform V1](commercial-platform-v1.md)**. This document is the exhaustive per-table / per-API reference and migration-ledger record that sits beneath it. Future phases (Billing, Policies, Funding, Simulator) consume these primitives — they do not redesign them.
+
 ## Layer responsibilities
 
 | Layer | Owns | Does not own |

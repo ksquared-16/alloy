@@ -1,6 +1,6 @@
 # Commercial Configuration
 
-**Status:** V1 — Programs & Tuition (June 2026).
+**Status:** ✅ **Commercial Platform V1 — SHIPPED & FROZEN (2026-07-03).** Now spans Programs & Tuition, the unified Catalog (Commercial Products: fees/add-ons/deposits), Commercial & Revenue Categories, and GL Account integration. Canonical architecture: **[Commercial Platform V1](../commercial/commercial-platform-v1.md)**.
 
 ---
 
