@@ -91,10 +91,8 @@ export function WorkUnitSurface() {
                             <QueueRegion queue={model.queue} selectedRecordId={model.selectedRecordId} />
                         </FocusPanelSurface>
                     </div>
-                    <RightRailSurface>
-                        {model.rightRailActions.length ? (
-                            <WorkUnitRightRailActions actions={model.rightRailActions} />
-                        ) : null}
+                    <RightRailSurface count={model.rightRailActions.length}>
+                        <WorkUnitRightRailActions actions={model.rightRailActions} />
                     </RightRailSurface>
                 </div>
             )}

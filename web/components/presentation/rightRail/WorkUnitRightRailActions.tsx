@@ -57,6 +57,19 @@ export function WorkUnitRightRailActions({ actions }: { actions: ResolvedActionF
         [router, openDrawer, departmentId, workUnitId, selectedRecordId],
     );
 
+    // Stable empty state — the rail is a permanent part of the Work Unit structure, so when no
+    // actions are configured/resolved it holds its place with a calm message (never a gap).
+    if (!actions.length) {
+        return (
+            <p
+                data-right-rail-empty-state="true"
+                className="px-1 py-1 text-[13px] leading-5 text-alloy-midnight/55"
+            >
+                No actions available.
+            </p>
+        );
+    }
+
     return (
         <>
             <div className="flex flex-col gap-2">

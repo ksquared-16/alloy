@@ -85,6 +85,14 @@ describe("WorkUnitRightRailActions", () => {
         expect(typeof host.openCreateLead).toBe("function");
     });
 
+    it("shows a stable empty state (not a gap) when no actions are configured", () => {
+        const el = render(<WorkUnitRightRailActions actions={[]} />);
+        expect(el.querySelector('[data-right-rail-empty-state="true"]')?.textContent).toBe(
+            "No actions available.",
+        );
+        expect(el.querySelectorAll("button[data-right-rail-action]")).toHaveLength(0);
+    });
+
     it("maps display_style menu_item → secondary control (else primary)", () => {
         const el = render(
             <WorkUnitRightRailActions

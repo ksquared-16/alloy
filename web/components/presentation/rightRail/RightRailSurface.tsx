@@ -3,11 +3,12 @@
 /**
  * Presentation Runtime V2 — RR.SURFACE.
  *
- * The right-rail shell — owns the single RR runtime label. Action content is a later
- * slice. With no children the rail has ZERO footprint: a hidden anchor keeps the
- * RR.SURFACE label in the DOM (single-ownership grep/spec still resolve exactly one
- * render site) but reserves no column — the main content fills the full width. With
- * children, the visible rail column renders.
+ * The right-rail shell — owns the single RR runtime label and renders the "Actions (N)"
+ * header + action content passed as children (the Work Unit surface supplies the resolved
+ * configured actions via `WorkUnitRightRailActions`, which owns its own empty state so the
+ * rail is a permanent part of the Work Unit structure). With NO children the rail keeps its
+ * historical ZERO footprint: a hidden anchor keeps the RR.SURFACE label in the DOM
+ * (single-ownership grep/spec still resolve exactly one render site) but reserves no column.
  */
 
 import type { ReactNode } from "react";
@@ -16,7 +17,14 @@ import {
     runtimeLabelProps,
 } from "@/components/presentation/runtimeLabels";
 
-export function RightRailSurface({ children }: { children?: ReactNode }) {
+export function RightRailSurface({
+    children,
+    count = null,
+}: {
+    children?: ReactNode;
+    /** Action count for the "Actions (N)" header; omit/0 → plain "Actions". */
+    count?: number | null;
+}) {
     if (children == null) {
         return (
             <aside
@@ -39,7 +47,7 @@ export function RightRailSurface({ children }: { children?: ReactNode }) {
         >
             <div className="rounded-lg border border-alloy-stone/18 bg-white px-3 py-3">
                 <span className="block text-[10px] font-medium uppercase tracking-[0.1em] text-alloy-stone">
-                    Actions
+                    Actions{count != null && count > 0 ? ` (${count})` : ""}
                 </span>
                 <div className="mt-2 space-y-2">{children}</div>
             </div>

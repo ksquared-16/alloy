@@ -11,10 +11,11 @@
  *   (a) stamps the FP.SURFACE runtime label on the region root,
  *   (b) provides `useFocusPanelOpen()` so queue rows open records through one seam,
  *   (c) mirrors drawer state as `data-focus-panel-open` for acceptance/choreography, and
- *   (d) owns the queue↔panel two-column layout: with a record selected the queue
- *       (children) compresses to a FIXED-width left column and the inline panel fills
- *       all remaining width; with nothing selected the queue is the single full-width
- *       column. The column change is layout-only — no animated widths.
+ *   (d) owns the queue↔panel two-column layout as a PERMANENT structure: the queue is
+ *       always the FIXED-width left column and the Focus Panel is always the right region,
+ *       so the operational model never collapses to a bare canvas. With a record selected
+ *       the inline panel renders; otherwise a calm "Select a record to begin" placeholder
+ *       holds the structure. Layout-only — no animated widths, no section that disappears.
  */
 
 import { createContext, useContext, useMemo, type ReactNode } from "react";
@@ -42,6 +43,23 @@ export function useFocusPanelOpen(): FocusPanelOpenContextValue {
         throw new Error("useFocusPanelOpen must be used within FocusPanelSurface");
     }
     return ctx;
+}
+
+/**
+ * Stable Focus Panel empty state — holds the right column of the permanent structure when no
+ * record is selected (queue empty, or the operator has not opened a record). Reserves height so
+ * the layout does not jump when a record opens into it.
+ */
+function FocusPanelPlaceholder() {
+    return (
+        <section
+            data-inline-focus-panel="empty"
+            aria-label="Focus Panel"
+            className="flex min-h-[16rem] items-center justify-center rounded-lg border border-alloy-stone/18 bg-white px-6 py-10 text-center"
+        >
+            <p className="text-sm text-alloy-midnight/55">Select a record to begin.</p>
+        </section>
+    );
 }
 
 export function FocusPanelSurface({
@@ -76,20 +94,21 @@ export function FocusPanelSurface({
             data-focus-panel-open={isOpen ? "true" : "false"}
         >
             <FocusPanelOpenContext.Provider value={value}>
-                {inlineRecordSelected ? (
-                    // Staging split: fixed-width queue column on the left, record panel fills
-                    // ALL remaining width to the command-rail edge (no max-width cap). Engages
-                    // at xl; below that the queue stacks above the record so the Focus Panel
-                    // composition never renders in a squeezed column.
-                    <div className="flex flex-col gap-4 xl:flex-row xl:items-start">
-                        <div className="min-w-0 xl:w-[24rem] xl:shrink-0">{children}</div>
-                        <div className="min-w-0 flex-1">
+                {/* Permanent two-column structure: fixed-width queue column on the left, the
+                    Focus Panel region always on the right. Engages at xl; below that the queue
+                    stacks above the panel so the composition never renders in a squeezed column.
+                    The right column shows the inline record when selected, else the stable
+                    placeholder — the structure itself never disappears. */}
+                <div className="flex flex-col gap-4 xl:flex-row xl:items-start">
+                    <div className="min-w-0 xl:w-[24rem] xl:shrink-0">{children}</div>
+                    <div className="min-w-0 flex-1">
+                        {inlineRecordSelected ? (
                             <InlineOpportunityFocusPanel />
-                        </div>
+                        ) : (
+                            <FocusPanelPlaceholder />
+                        )}
                     </div>
-                ) : (
-                    children
-                )}
+                </div>
             </FocusPanelOpenContext.Provider>
         </div>
     );
