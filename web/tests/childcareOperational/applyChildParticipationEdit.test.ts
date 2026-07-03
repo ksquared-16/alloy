@@ -13,12 +13,15 @@ const CM = "child-A";
 type Rec = Record<string, unknown>;
 
 function mockSupabase(cfg: { pi: Rec | null; agreement?: Rec | null; placement?: Rec | null; schedule?: Rec | null; pattern?: Rec | null }) {
-    const captured: Record<string, Rec | null> & { ocmAccess: number } = {
-        process_instancesUpdate: null,
-        child_enrollment_agreementsUpdate: null,
-        child_placementsUpdate: null,
-        schedule_assignmentsUpdate: null,
+    const captured = {
+        process_instancesUpdate: null as Rec | null,
+        child_enrollment_agreementsUpdate: null as Rec | null,
+        child_placementsUpdate: null as Rec | null,
+        schedule_assignmentsUpdate: null as Rec | null,
         ocmAccess: 0,
+    };
+    const captureUpdate = (table: string, p: Rec) => {
+        (captured as unknown as Record<string, Rec | null>)[`${table}Update`] = p;
     };
     const client = {
         from(table: string) {
@@ -28,7 +31,7 @@ function mockSupabase(cfg: { pi: Rec | null; agreement?: Rec | null; placement?:
             let patch: Rec | null = null;
             const builder: Rec = {
                 select(c?: string) { cols = c ?? "*"; return builder; },
-                update(p: Rec) { op = "update"; patch = p; captured[`${table}Update`] = p; return builder; },
+                update(p: Rec) { op = "update"; patch = p; captureUpdate(table, p); return builder; },
                 eq() { return builder; },
                 in() { return builder; },
                 or() { return builder; },
