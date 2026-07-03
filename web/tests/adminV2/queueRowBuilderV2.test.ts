@@ -751,6 +751,27 @@ describe("runtime parity — field toggle → config → not rendered", () => {
         expect(src).toContain("data-canvas-runtime-frame");
     });
 
+    it("Phase 2: builder canvas renders the REAL runtime CondensedQueueRow (shared, not a mock)", () => {
+        // Proof of the runtime-authoring seam: the builder must render the same
+        // presentation component the /work-unit runtime renders, fed by the same
+        // config→slots mapper — and must NOT carry the old mock-tile scaffolding.
+        const builderPath = fileURLToPath(
+            new URL("../../components/adminV2/settings/surfaces/QueueRowBuilderV2.tsx", import.meta.url),
+        );
+        const src = readFileSync(builderPath, "utf8");
+        // Imports the shared runtime presenter + the shared runtime config mapper.
+        expect(src).toContain('from "@/components/presentation/workUnit/CondensedQueueRow"');
+        expect(src).toContain("mapQueueRowSurfaceToCompactConfig");
+        // Actually renders the shared component in the canvas.
+        expect(src).toContain("<CondensedQueueRow");
+        // Edit overlay is layered on top of the real row.
+        expect(src).toContain("data-canvas-runtime-row");
+        expect(src).toContain("data-canvas-overlay");
+        // The old fake-row scaffolding is gone (no mock sample lines / flex weights).
+        expect(src).not.toContain("ZONE_SAMPLE");
+        expect(src).not.toContain("ZONE_FLEX");
+    });
+
     it("canvas min-height contract: 76px (not 72px)", () => {
         // Verify the runtime row dimension constant — builder canvas must match.
         // This test encodes the contract so a future CSS change is noticed.
