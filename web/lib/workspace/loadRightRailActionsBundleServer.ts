@@ -15,7 +15,10 @@ export async function loadRightRailActionsBundleServer(params: {
     departmentId: string;
     workUnitId: string;
     entityType?: string;
-    /** When set, only these surfaces are resolved (e.g. `["department"]` on /dept, `["work_unit"]` on /work-unit). */
+    /**
+     * When set, only these surfaces are resolved. Defaults to `["right_rail", "work_unit", "department"]`
+     * so the /work-unit rail includes operator-configured `right_rail` (side-panel) placements.
+     */
     placementSurfaces?: readonly ActionSurface[];
 }): Promise<ResolvedActionForClient[]> {
     const { orgId, departmentId, workUnitId, entityType = "opportunity" } = params;
