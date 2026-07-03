@@ -26,7 +26,7 @@ type Any = Record<string, unknown>;
 const ok = (label: string, pass: boolean, detail?: unknown) =>
     console.log(`${pass ? "PASS" : "FAIL"}  ${label}${detail !== undefined ? "  :: " + JSON.stringify(detail) : ""}`);
 
-async function nextNumber(supabase: Any, table: string, col: string): Promise<number> {
+async function nextNumber(supabase: any, table: string, col: string): Promise<number> {
     const { data } = await (supabase as any).from(table).select(col).order(col, { ascending: false }).limit(1).maybeSingle();
     const n = data ? Number((data as Any)[col]) : 0;
     return (Number.isFinite(n) ? n : 0) + 1 + Math.floor(Math.random() * 1000);

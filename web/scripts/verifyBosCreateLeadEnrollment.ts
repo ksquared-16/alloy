@@ -32,7 +32,7 @@ const ok = (label: string, pass: boolean, detail?: unknown) => {
     if (!pass) defects.push(label);
 };
 
-async function disposition(supabase: Any, oppId: string, cmId: string, key: string) {
+async function disposition(supabase: any, oppId: string, cmId: string, key: string) {
     return applyStageOutcomeRuleTarget(supabase as never, {
         orgId: ORG,
         userId: "00000000-0000-4000-8000-000000000001",
