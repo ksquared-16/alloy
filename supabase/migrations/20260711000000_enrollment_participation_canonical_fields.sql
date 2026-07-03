@@ -70,13 +70,20 @@ ALTER TABLE public.placement_candidates
 -- 3. Field registry vocabulary (field_definitions / field_values)
 -- -----------------------------------------------------------------------------
 
--- Drop the legacy Program text field definition outright.
+-- Drop the legacy Program text field definition + its stored values.
+-- `field_values` is NORMALIZED: it references `field_definitions` via `field_definition_id`
+-- (there is no `field_values.field_key` column), so delete values via a subselect.
 DELETE FROM public.field_values
-WHERE entity_type = 'inquiry_child' AND field_key = 'desired_program_type';
+WHERE field_definition_id IN (
+    SELECT id FROM public.field_definitions
+    WHERE entity_type = 'inquiry_child' AND field_key = 'desired_program_type'
+);
 DELETE FROM public.field_definitions
 WHERE entity_type = 'inquiry_child' AND field_key = 'desired_program_type';
 
--- Rename remaining canonical field keys (guarded against pre-existing targets).
+-- Rename remaining canonical field keys on field_definitions (guarded against pre-existing targets).
+-- No field_values update is needed: values reference the definition by field_definition_id, so the
+-- key rename applies automatically to every stored value.
 UPDATE public.field_definitions fd
 SET field_key = m.new_key,
     label = m.new_label
@@ -93,16 +100,6 @@ WHERE fd.entity_type = 'inquiry_child'
         AND dup.entity_type = fd.entity_type
         AND dup.field_key = m.new_key
   );
-
-UPDATE public.field_values fv
-SET field_key = m.new_key
-FROM (VALUES
-    ('desired_start_date', 'start_date'),
-    ('desired_schedule_type', 'schedule_type'),
-    ('desired_program_category_id', 'program_category_id')
-) AS m(old_key, new_key)
-WHERE fv.entity_type = 'inquiry_child'
-  AND fv.field_key = m.old_key;
 
 -- -----------------------------------------------------------------------------
 -- 4. Stored layout documents + process/work-unit config referencing field keys

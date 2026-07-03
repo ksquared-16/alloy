@@ -21,18 +21,18 @@ values (
     true,
     '{}'::jsonb
 )
-on conflict (key) do update
+on conflict (key) where org_id is null do update
   set label          = excluded.label,
       action_type    = excluded.action_type,
       entity_type    = excluded.entity_type,
       payload_schema = excluded.payload_schema,
       is_active      = excluded.is_active;
 
--- Placement: Focus Panel Manage overflow
-insert into action_placements (action_definition_id, surface, slot, sort_order, is_active, metadata)
-select ad.id, 'record_header', 'overflow', 20, true, '{}'::jsonb
+-- Placement: Focus Panel Manage overflow (action_placements uses order_index, no metadata col)
+insert into action_placements (action_definition_id, surface, slot, order_index, is_active)
+select ad.id, 'record_header', 'overflow', 20, true
 from action_definitions ad
-where ad.key = 'close_lead'
+where ad.key = 'close_lead' and ad.org_id is null
 on conflict do nothing;
 
 -- ─── waitlist_child ──────────────────────────────────────────────────────────
@@ -47,7 +47,7 @@ values (
     true,
     '{}'::jsonb
 )
-on conflict (key) do update
+on conflict (key) where org_id is null do update
   set label          = excluded.label,
       action_type    = excluded.action_type,
       entity_type    = excluded.entity_type,
@@ -55,10 +55,10 @@ on conflict (key) do update
       is_active      = excluded.is_active;
 
 -- Placement: record section / children (appears as row-level action on child rows)
-insert into action_placements (action_definition_id, surface, slot, section_key, sort_order, is_active, metadata)
-select ad.id, 'record_section', 'primary', 'children', 20, true, '{}'::jsonb
+insert into action_placements (action_definition_id, surface, slot, section_key, order_index, is_active)
+select ad.id, 'record_section', 'primary', 'children', 20, true
 from action_definitions ad
-where ad.key = 'waitlist_child'
+where ad.key = 'waitlist_child' and ad.org_id is null
 on conflict do nothing;
 
 -- ─── enroll_child ────────────────────────────────────────────────────────────
@@ -73,7 +73,7 @@ values (
     true,
     '{}'::jsonb
 )
-on conflict (key) do update
+on conflict (key) where org_id is null do update
   set label          = excluded.label,
       action_type    = excluded.action_type,
       entity_type    = excluded.entity_type,
@@ -81,8 +81,8 @@ on conflict (key) do update
       is_active      = excluded.is_active;
 
 -- Placement: record section / children (appears as row-level action on child rows)
-insert into action_placements (action_definition_id, surface, slot, section_key, sort_order, is_active, metadata)
-select ad.id, 'record_section', 'primary', 'children', 30, true, '{}'::jsonb
+insert into action_placements (action_definition_id, surface, slot, section_key, order_index, is_active)
+select ad.id, 'record_section', 'primary', 'children', 30, true
 from action_definitions ad
-where ad.key = 'enroll_child'
+where ad.key = 'enroll_child' and ad.org_id is null
 on conflict do nothing;
