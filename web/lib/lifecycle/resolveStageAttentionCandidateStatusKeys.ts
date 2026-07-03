@@ -7,7 +7,7 @@
 
 import { NEW_LEAD_STATUS_KEY } from "@/lib/admin/actions/createLeadActionConstants";
 import { defaultStageOperatingPlanForEnrollmentStage } from "@/lib/lifecycle/defaultEnrollmentStageOperatingPlans";
-import { ENROLLMENT_STAGE_STATUS_KEYS } from "@/lib/lifecycle/enrollmentProcessStageBindings";
+import { ENROLLMENT_LEGACY_STAGE_STATUS_KEYS } from "@/lib/businessProcessTemplates/enrollmentLegacyCompat";
 import {
     activeLifecycleProcess,
     asOperatorStageKey,
@@ -64,7 +64,7 @@ function statusKeysForStageAttentionPrefilter(
 
     const operator = asOperatorStageKey(stage.key);
     if (operator) {
-        for (const sk of ENROLLMENT_STAGE_STATUS_KEYS[operator]) {
+        for (const sk of ENROLLMENT_LEGACY_STAGE_STATUS_KEYS[operator]) {
             const t = trimStatusKey(sk);
             if (t) keys.add(t);
         }

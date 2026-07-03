@@ -84,8 +84,8 @@ describe("layoutBuilderRuntimeParity 5.18AC child program_enrollment section", (
         const vmRecord = {
             first_name: "Riley",
             last_name: "Brooks",
-            desired_program_type: "Infants",
-            desired_start_date: "2026-09-01",
+            program_category_id: "cat-infants",
+            start_date: "2026-09-01",
             _enrollment_mirror: [{ id: "ocm-1", customer_member_id: "cm-1", opportunity_id: "opp-1" }],
         };
         const record = mergeChildLayoutRuntimeWidgetRecord(buildProofChildRecord(), vmRecord);

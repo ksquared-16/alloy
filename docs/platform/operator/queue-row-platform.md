@@ -243,3 +243,15 @@ Both queue row surfaces appear in the Surface Library with `status: "published"`
 | Fallback to built-in defaults when no published layout exists | |
 | Surface Library grain + entity type labels | |
 | **Focus Panel card conditions** (`visible_when` evaluated in runtime) | `highlighted_when` / `read_only_when` / `collapsed_when` runtime effects |
+
+---
+
+## Presentation Runtime V3 — stacked rows + grain/conditions (July 2026, PR #68)
+
+The Queue Row Builder now authors, and the queue layout doc persists:
+
+- **Stacked condensed rows** — `QueueRecordColumnConfig.rowIndex` (0/1/2) groups columns into stacked sections inside the fixed **440px** condensed rail (`Household | Status` / `Children | Attention` / `Actions`). Back-compat: absent `rowIndex` = row 0 = the legacy single strip.
+- **One Queue Row, grain + conditions** — waitlist is a **condition** (`placement_status = waitlisted` via `visibleWhen`), not a separate surface; grain is `family` | `child`. Model: `queueRowGrainModel.ts`. No fake fields — placement override offered only when a persisted source exists.
+- **Custom fields by namespace** — the builder passes tenant `field_definitions` into the composition adapter; operator-created fields appear in every namespace-compatible group's Add Field.
+
+**Runtime deferral:** the live `/work-unit` `OperationalQueueRecordRow` does not yet render stacking or evaluate `visibleWhen`. See [`presentation-runtime-carry-forward.md`](./presentation-runtime-carry-forward.md) §3–4 for the adoption seams.

@@ -24,10 +24,12 @@ const HIERARCHY_TTL_MS = 1500;
 
 export function useInquiryChildPlacementCascade(params: {
     locationValue: string;
-    /** Legacy program type key or category id when category-first mode is active. */
+    /**
+     * Program picker value: `location_program_categories.id` for OCM-persisting selects,
+     * or the stable program key for create_lead flows (`child_program`, FK resolved at persist).
+     */
     programValue: string;
     programCategoryId?: string;
-    programType?: string;
 }): {
     siteOptions: { value: string; label: string }[];
     programOptions: { value: string; label: string }[];
@@ -82,16 +84,16 @@ export function useInquiryChildPlacementCascade(params: {
 
     const siteId = params.locationValue.trim();
     const programCategoryId = (params.programCategoryId ?? "").trim();
-    const programType = (params.programType ?? params.programValue).trim();
-    const programFilterKey = useMemo(
-        () =>
-            resolveProgramKeyForRoomCascade({
-                desired_program_category_id: programCategoryId,
-                desired_program_type: programType,
-                categories: locationCategories,
-            }) ?? "",
-        [locationCategories, programCategoryId, programType],
-    );
+    const programValue = params.programValue.trim();
+    const programFilterKey = useMemo(() => {
+        const fromCategory = resolveProgramKeyForRoomCascade({
+            program_category_id: programCategoryId || programValue,
+            categories: locationCategories,
+        });
+        if (fromCategory) return fromCategory;
+        // create_lead flows carry the stable program key directly (child_program).
+        return programCategoryId ? "" : programValue;
+    }, [locationCategories, programCategoryId, programValue]);
 
     const programOptions = useMemo(
         () => resolveProgramsOfferedForSite(hierarchy, siteId, programItems, locationCategories),

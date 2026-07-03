@@ -4,6 +4,7 @@ import { runStatusDefinitionsInventory } from "@/lib/admin/statusDefinitionsInve
 import {
     OPPORTUNITY_LEGACY_STATUS_BACKFILL_TO_OPEN,
     PERSON_LEGACY_STATUS_BACKFILL_TO_PRE_ENROLLED,
+    STATUS_RESEED_OCM_ENROLLMENT_LEGACY_KEYS,
     STATUS_RESEED_OCM_ENROLLMENT_STATUSES,
     STATUS_RESEED_OPPORTUNITY_CASE_STATUSES,
     STATUS_RESEED_OPPORTUNITY_LEGACY_KEYS,
@@ -313,10 +314,20 @@ export async function runStatusDefinitionsReseed(
         STATUS_RESEED_OCM_ENROLLMENT_STATUSES,
         execute
     );
+    const ocmDeactivate =
+        deactivateLegacy ?
+            await deactivateLegacyKeys(
+                supabase,
+                orgId,
+                "opportunity_customer_members",
+                STATUS_RESEED_OCM_ENROLLMENT_LEGACY_KEYS,
+                execute
+            )
+        :   0;
     layers.push({
         entity_type: "opportunity_customer_members",
         ...ocmUpsert,
-        deactivated: 0,
+        deactivated: ocmDeactivate,
     });
 
     let backfillResult: StatusReseedResult["backfill"] = null;

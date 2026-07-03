@@ -264,7 +264,8 @@ export default function OpportunityDrawerInquiryWorkflowOverview({
                         rows={drawerChildRows}
                         highlightSubjectIds={subjectFocusPresentation.highlightSubjectIds}
                         opportunityId={drawerId}
-                        opportunityDesiredStartDate={(() => {
+                        opportunityStartDate={(() => {
+                            // Opportunity-level legacy field key — not the OCM column.
                             const rawStart =
                                 record.desired_start_date ??
                                 (record.metadata as Record<string, unknown> | null)?.desired_start_date;

@@ -118,7 +118,7 @@ describe("buildOpportunityLayoutRuntimeRecordFromVm", () => {
                     {
                         id: "row-1",
                         display_name: "Alex Johnson",
-                        desired_start_date: "2026-09-01",
+                        start_date: "2026-09-01",
                         location_label: "Main Campus",
                         program_room_cohort_label: "Infant AM",
                         outcome_status_label: "Active inquiry",

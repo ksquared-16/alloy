@@ -148,12 +148,13 @@ describe("business process runtime cleanup", () => {
         expect(draft.outcomes[0]?.outcome_key).toBe("paid");
     });
 
-    it("enrollment template uses rollup stages (9), not 13 legacy stages", () => {
-        expect(ENROLLMENT_FAMILY_STAGE_SPECS).toHaveLength(5);
+    it("enrollment template uses rollup stages (8) — qualification folded into lead (Part 9)", () => {
+        expect(ENROLLMENT_FAMILY_STAGE_SPECS).toHaveLength(4);
         expect(ENROLLMENT_CHILD_STAGE_SPECS).toHaveLength(4);
-        expect(ENROLLMENT_STAGE_SPECS).toHaveLength(9);
+        expect(ENROLLMENT_STAGE_SPECS).toHaveLength(8);
         expect(ENROLLMENT_STAGE_SPECS.map((s) => s.key)).not.toContain("new_lead");
         expect(ENROLLMENT_STAGE_SPECS.map((s) => s.key)).not.toContain("contacting");
+        expect(ENROLLMENT_STAGE_SPECS.map((s) => s.key)).not.toContain("qualification");
     });
 
     it("status settings expose Lead, Enrollment, and People — not Children", () => {

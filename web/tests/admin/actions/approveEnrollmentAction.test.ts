@@ -79,10 +79,10 @@ function completeChild() {
         first_name: "Kid",
         last_name: "One",
         location_id: "loc-1",
-        desired_program_type: "infant",
+        program_category_id: "cat-infant",
         program_room_cohort_key: "room-a",
-        desired_schedule_type: "full_day",
-        desired_start_date: "2026-06-15",
+        schedule_type: "full_day",
+        start_date: "2026-06-15",
     };
 }
 
@@ -107,16 +107,16 @@ function supabaseForApprove(options: {
                       {
                           field_key: options.blockingField ?? "program_room_cohort_key",
                           label:
-                              options.blockingField === "desired_schedule_type"
+                              options.blockingField === "schedule_type"
                                   ? "Schedule"
-                                  : options.blockingField === "desired_start_date"
+                                  : options.blockingField === "start_date"
                                     ? "Start date"
                                     : "Classroom",
                           severity: "required",
                           reason:
-                              options.blockingField === "desired_schedule_type"
+                              options.blockingField === "schedule_type"
                                   ? "Schedule is required before enrollment approval."
-                                  : options.blockingField === "desired_start_date"
+                                  : options.blockingField === "start_date"
                                     ? "Start date is required before enrollment approval."
                                     : "Classroom or placement target is required before enrollment approval.",
                           source: "action",
@@ -199,7 +199,7 @@ describe("approve_enrollment action", () => {
     });
 
     it("blocks when required placement fields are missing", async () => {
-        const supabase = supabaseForApprove({ completionOk: false, blockingField: "desired_schedule_type" });
+        const supabase = supabaseForApprove({ completionOk: false, blockingField: "schedule_type" });
         const result = await executeAdminAction(
             supabase as never,
             { orgId: "org-1", userId: "user-1" },
@@ -212,7 +212,7 @@ describe("approve_enrollment action", () => {
         expect(result.ok).toBe(false);
         if (result.ok) return;
         expect(result.status).toBe(400);
-        expect(result.completion_requirements?.blocking.some((v) => v.field_key === "desired_schedule_type")).toBe(
+        expect(result.completion_requirements?.blocking.some((v) => v.field_key === "schedule_type")).toBe(
             true
         );
         expect(result.action_preflight?.title).toContain("Approve enrollment");
@@ -298,10 +298,10 @@ describe("approve_enrollment action rules", () => {
                     {
                         id: "c1",
                         person_id: "child-1",
-                        desired_program_type: "infant",
-                        desired_start_date: "2026-06-01",
+                        program_category_id: "cat-infant",
+                        start_date: "2026-06-01",
                         program_room_cohort_key: "",
-                        desired_schedule_type: "",
+                        schedule_type: "",
                     },
                 ],
             },
@@ -309,7 +309,7 @@ describe("approve_enrollment action rules", () => {
         });
         const blocked = evaluateLifecycleActionRequirements(blockedCtx);
         expect(blocked.blocking.some((v) => v.field_key === "program_room_cohort_key")).toBe(true);
-        expect(blocked.blocking.some((v) => v.field_key === "desired_schedule_type")).toBe(true);
+        expect(blocked.blocking.some((v) => v.field_key === "schedule_type")).toBe(true);
 
         const okCtx = buildCompletionContextFromRecord({
             entity_type: "opportunity",
@@ -320,7 +320,7 @@ describe("approve_enrollment action rules", () => {
         });
         const ok = evaluateLifecycleActionRequirements(okCtx);
         expect(ok.blocking.some((v) => v.field_key === "program_room_cohort_key")).toBe(false);
-        expect(ok.blocking.some((v) => v.field_key === "desired_schedule_type")).toBe(false);
+        expect(ok.blocking.some((v) => v.field_key === "schedule_type")).toBe(false);
     });
 });
 

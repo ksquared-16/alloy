@@ -28,7 +28,18 @@ export type ConceptBranch = { label: string; leaves: ConceptLeaf[] };
 
 /** Concept tree under the Enrollment root (drives the picker). */
 export const CONCEPT_TREE: ConceptBranch[] = [
-    { label: "Primary Contact", leaves: [{ label: "Name" }, { label: "Phone" }, { label: "Email" }] },
+    {
+        label: "Primary Contact",
+        leaves: [
+            { label: "Name" },
+            { label: "Phone" },
+            { label: "Email" },
+            { label: "Address" },
+            { label: "City" },
+            { label: "State" },
+            { label: "ZIP" },
+        ],
+    },
     { label: "Secondary Contact", leaves: [{ label: "Name" }, { label: "Phone" }, { label: "Email" }] },
     { label: "Additional Contacts", leaves: [{ label: "Count" }, { label: "Summary" }] },
     {
@@ -46,7 +57,17 @@ export const CONCEPT_TREE: ConceptBranch[] = [
     { label: "Emergency Contacts", leaves: [{ label: "Count" }, { label: "Summary" }] },
     { label: "Assigned Employee", leaves: [{ label: "Name" }, { label: "Employee ID" }, { label: "Email" }] },
     { label: "Billing", leaves: [{ label: "Balance" }, { label: "Status" }, { label: "Autopay" }] },
-    { label: "Program", leaves: [{ label: "Name" }, { label: "Schedule" }] },
+    {
+        label: "Program",
+        leaves: [
+            { label: "Name" },
+            { label: "Schedule" },
+            { label: "Desired Start" },
+            { label: "Room" },
+            { label: "Location" },
+        ],
+    },
+    { label: "Stage & Status", leaves: [{ label: "Stage" }, { label: "Status" }, { label: "Location" }] },
 ];
 
 /** Build a concept path string from branch + leaf. */
@@ -103,6 +124,10 @@ export function resolveConceptValue(
                 return trimOrNull(record["person.primary_contact_name"]) ?? trimOrNull(primaryPerson?.label);
             if (leaf === "Phone") return trimOrNull(record["person.primary_phone"]);
             if (leaf === "Email") return trimOrNull(record["person.primary_email"]);
+            if (leaf === "Address") return trimOrNull(record["person.primary_address_line1"]);
+            if (leaf === "City") return trimOrNull(record["person.primary_address_city"]);
+            if (leaf === "State") return trimOrNull(record["person.primary_address_state"]);
+            if (leaf === "ZIP") return trimOrNull(record["person.primary_address_postal_code"]);
             return null;
         case "Secondary Contact":
             if (leaf === "Name") return trimOrNull(record["person.secondary_contact_name"]);
@@ -149,6 +174,14 @@ export function resolveConceptValue(
         case "Program":
             if (leaf === "Name") return trimOrNull(record["program.name"]);
             if (leaf === "Schedule") return trimOrNull(record["program.schedule"]);
+            if (leaf === "Desired Start") return trimOrNull(record["child.start_date"]);
+            if (leaf === "Room") return trimOrNull(record["child.room"]);
+            if (leaf === "Location") return trimOrNull(record["opportunity.location"]);
+            return null;
+        case "Stage & Status":
+            if (leaf === "Stage") return trimOrNull(record["queue_row.stage_label"]);
+            if (leaf === "Status") return trimOrNull(record["opportunity.status_label"]);
+            if (leaf === "Location") return trimOrNull(record["opportunity.location"]);
             return null;
         default:
             return null;

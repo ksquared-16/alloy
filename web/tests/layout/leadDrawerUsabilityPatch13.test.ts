@@ -84,7 +84,7 @@ describe("formatLeadEnrollmentCardMetaLine", () => {
         const row = (buildProofOpportunityRecord().enrollment_children as Record<string, string>[])[0]!;
         const metaColumns: LayoutCollectionColumn[] = [
             { refKey: "child.program", label: "Preschool" },
-            { refKey: "inquiry_child.desired_start_date", label: "Desired start", renderHint: "date" },
+            { refKey: "inquiry_child.start_date", label: "Desired start", renderHint: "date" },
             { refKey: "inquiry_child.outcome_status_key", label: "Status" },
         ];
         const line = formatLeadEnrollmentCardMetaLine(row, metaColumns);

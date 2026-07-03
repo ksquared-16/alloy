@@ -50,8 +50,8 @@ export const TUITION_PERIOD_PREFERENCE: TuitionBillingPeriod[] = [
  * Resolve the best-matching tuition rate for a given program + schedule.
  *
  * @param rates     Active, non-not-offered rows from commercial_tuition_rates.
- * @param programKey  Child's desired_program_type.
- * @param scheduleKey Child's desired_schedule_type.
+ * @param programKey  Child's stable program key — derived from the OCM program_category_id FK (location_program_categories.key).
+ * @param scheduleKey Child's schedule_type.
  * @param locationId  Child's enrolled location_id (for override priority), or null.
  * @param formatLabel Called to produce the rateLabel string. Injected so this function
  *                    has no I/O dependency and is pure.

@@ -7,9 +7,9 @@ export type FormIntakeChildFieldPaths = {
     dob?: string;
     location_id?: string;
     program_room_cohort_key?: string;
-    desired_program_type?: string;
-    desired_schedule_type?: string;
-    desired_start_date?: string;
+    program_key?: string;
+    schedule_type?: string;
+    start_date?: string;
 };
 
 /** Top-level `values` field ids used to populate `payload.meta.intake` for lead capture (configurable per link). */
@@ -25,9 +25,9 @@ export type FormIntakeValueFieldPaths = {
     child_dob?: string;
     child_location_id?: string;
     child_program_room_cohort_key?: string;
-    child_desired_program_type?: string;
-    child_desired_schedule_type?: string;
-    child_desired_start_date?: string;
+    child_program_key?: string;
+    child_schedule_type?: string;
+    child_start_date?: string;
     /** Distinct children — when non-empty, overrides single `child_*` paths. */
     children?: FormIntakeChildFieldPaths[];
 };
@@ -43,7 +43,7 @@ export const DEFAULT_FORM_INTAKE_VALUE_PATHS: FormIntakeValueFieldPaths = {
     child_last_name: "child_last_name",
     child_dob: "child_dob",
     child_program_room_cohort_key: "program_room_preference",
-    child_desired_start_date: "desired_start_date",
+    child_start_date: "start_date",
 };
 
 function readTrimmedString(values: Record<string, unknown>, fieldId: string | undefined): string | null {
@@ -79,11 +79,11 @@ function buildChildHintFromPaths(
         childDobRaw && /^\d{4}-\d{2}-\d{2}$/.test(childDobRaw) ? childDobRaw : null;
     const location_id = readUuidValue(values, paths.location_id);
     const program_room_cohort_key = readTrimmedString(values, paths.program_room_cohort_key);
-    const desired_program_type = readTrimmedString(values, paths.desired_program_type);
-    const desired_schedule_type = readTrimmedString(values, paths.desired_schedule_type);
-    const desired_start_dateRaw = readTrimmedString(values, paths.desired_start_date);
-    const desired_start_date =
-        desired_start_dateRaw && /^\d{4}-\d{2}-\d{2}$/.test(desired_start_dateRaw) ? desired_start_dateRaw : null;
+    const program_key = readTrimmedString(values, paths.program_key);
+    const schedule_type = readTrimmedString(values, paths.schedule_type);
+    const start_dateRaw = readTrimmedString(values, paths.start_date);
+    const start_date =
+        start_dateRaw && /^\d{4}-\d{2}-\d{2}$/.test(start_dateRaw) ? start_dateRaw : null;
 
     if (
         !childFirst &&
@@ -91,9 +91,9 @@ function buildChildHintFromPaths(
         !childDobValid &&
         !location_id &&
         !program_room_cohort_key &&
-        !desired_program_type &&
-        !desired_schedule_type &&
-        !desired_start_date
+        !program_key &&
+        !schedule_type &&
+        !start_date
     ) {
         return null;
     }
@@ -106,9 +106,9 @@ function buildChildHintFromPaths(
             [childFirst, childLast].filter(Boolean).join(" ").trim() || childFirst || childLast || null,
         location_id,
         program_room_cohort_key,
-        desired_program_type,
-        desired_schedule_type,
-        desired_start_date,
+        program_key,
+        schedule_type,
+        start_date,
     };
 }
 
@@ -181,9 +181,9 @@ export function buildFormIntakeMetaFromPayload(input: {
                   dob: paths.child_dob,
                   location_id: paths.child_location_id,
                   program_room_cohort_key: paths.child_program_room_cohort_key,
-                  desired_program_type: paths.child_desired_program_type,
-                  desired_schedule_type: paths.child_desired_schedule_type,
-                  desired_start_date: paths.child_desired_start_date,
+                  program_key: paths.child_program_key,
+                  schedule_type: paths.child_schedule_type,
+                  start_date: paths.child_start_date,
               })
             : null;
 

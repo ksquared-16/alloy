@@ -272,7 +272,7 @@ describe("create lead BOS guidance", () => {
                 child_first_name: "Sam",
                 child_program: "prog-1",
                 location_id: "loc-1",
-                child_desired_start_date: "2026-09-01",
+                child_start_date: "2026-09-01",
             },
             { availableActionKeys: ["schedule_tour", "send_welcome_email"] },
         );

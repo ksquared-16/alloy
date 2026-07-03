@@ -407,8 +407,8 @@ describe("queue record field picker — operator labels (P0)", () => {
         const sharedRefs = [
             "opportunity.tour_date",
             "person.primary_contact_name",
-            "inquiry_child.desired_start_date",
-            "inquiry_child.desired_program_type",
+            "inquiry_child.start_date",
+            "inquiry_child.program_category_id",
         ];
         for (const refKey of sharedRefs) {
             expect(resolveFieldPickerLabel(refKey, "waitlist_queue_row")).toBe(resolveLayoutEditorFieldRefLabel(refKey));

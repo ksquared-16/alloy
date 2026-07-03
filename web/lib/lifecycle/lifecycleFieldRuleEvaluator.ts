@@ -247,9 +247,9 @@ function evaluateChildRule(
     const fieldLabels: Record<string, string> = {
         first_name: "First Name",
         last_name: "Last Name",
-        desired_program_type: "Program Interest",
-        desired_schedule_type: "Desired Schedule",
-        desired_start_date: "Desired Start Date",
+        program_category_id: "Program Interest",
+        schedule_type: "Desired Schedule",
+        start_date: "Desired Start Date",
         program_room_cohort_key: "Classroom or Room",
     };
 
@@ -270,10 +270,6 @@ function evaluateChildRule(
         const childId = trimOrNull(child.person_id) ?? trimOrNull(child.id) ?? "unknown";
         const value = child[binding.ocm_field as keyof InquiryChildCompletionSnapshot];
         if (!completionValueEmpty(value)) continue;
-        if (binding.ocm_field === "desired_program_type") {
-            const alt = child.program_room_cohort_key;
-            if (!completionValueEmpty(alt)) continue;
-        }
         violations.push(
             fieldViolation(ctx, {
                 rule_id: ruleId,

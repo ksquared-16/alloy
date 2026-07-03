@@ -54,12 +54,12 @@ describe("Create Lead BOS intake — field source parity with the standard exper
     });
 
     it("Schedule is a canonical option-set select (childcare_schedule_type)", () => {
-        expect(byKey.child_desired_schedule_type?.value_kind).toBe("select");
-        expect(byKey.child_desired_schedule_type?.option_set_key).toBe("childcare_schedule_type");
+        expect(byKey.child_schedule_type?.value_kind).toBe("select");
+        expect(byKey.child_schedule_type?.option_set_key).toBe("childcare_schedule_type");
     });
 
     it("Desired start is a date; parents are text/email/phone (no placement select)", () => {
-        expect(byKey.child_desired_start_date?.value_kind).toBe("date");
+        expect(byKey.child_start_date?.value_kind).toBe("date");
         expect(byKey.first_name?.value_kind).toBe("text");
         expect(byKey.last_name?.value_kind).toBe("text");
         expect(byKey.email?.value_kind).toBe("email");

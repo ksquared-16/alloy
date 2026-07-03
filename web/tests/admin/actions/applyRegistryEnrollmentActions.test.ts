@@ -85,20 +85,20 @@ describe("applyRegistryResolvedActionClient enrollment actions", () => {
         );
     });
 
-    it("assign_schedule defaults focus_field to desired_schedule_type", async () => {
+    it("assign_schedule defaults focus_field to schedule_type", async () => {
         await applyRegistryResolvedActionClient(action("assign_schedule", { intent: "assign_schedule" }), host());
         expect(dispatchEvent).toHaveBeenCalledWith(
             expect.objectContaining({
-                detail: expect.objectContaining({ field: "desired_schedule_type" }),
+                detail: expect.objectContaining({ field: "schedule_type" }),
             })
         );
     });
 
-    it("set_start_date defaults focus_field to desired_start_date", async () => {
+    it("set_start_date defaults focus_field to start_date", async () => {
         await applyRegistryResolvedActionClient(action("set_start_date", { intent: "set_start_date" }), host());
         expect(dispatchEvent).toHaveBeenCalledWith(
             expect.objectContaining({
-                detail: expect.objectContaining({ field: "desired_start_date" }),
+                detail: expect.objectContaining({ field: "start_date" }),
             })
         );
     });

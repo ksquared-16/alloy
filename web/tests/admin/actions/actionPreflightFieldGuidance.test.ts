@@ -3,9 +3,9 @@ import { resolveActionPreflightFieldGuidance } from "@/lib/admin/actions/actionP
 
 describe("actionPreflightFieldGuidance", () => {
     it("maps enrollment field keys to inquiry children focus", () => {
-        expect(resolveActionPreflightFieldGuidance("desired_start_date")).toEqual({
+        expect(resolveActionPreflightFieldGuidance("start_date")).toEqual({
             kind: "inquiry_children",
-            field: "desired_start_date",
+            field: "start_date",
         });
         expect(resolveActionPreflightFieldGuidance("inquiry_children")).toEqual({
             kind: "inquiry_children",

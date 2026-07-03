@@ -38,7 +38,7 @@ export const ENROLLMENT_LEAD_CAPTURE_DEMO_SCHEMA = {
         {
             id: "sec_interest",
             title: "Enrollment interest",
-            field_ids: ["child_first_name", "desired_start_date", "notes"],
+            field_ids: ["child_first_name", "start_date", "notes"],
         },
     ],
     fields: [
@@ -68,7 +68,7 @@ export const ENROLLMENT_LEAD_CAPTURE_DEMO_SCHEMA = {
             required: false,
         },
         {
-            id: "desired_start_date",
+            id: "start_date",
             type: "date",
             label: "Desired start date (optional)",
             required: false,

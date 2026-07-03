@@ -144,10 +144,10 @@ describe("readinessResult contract", () => {
                 _inquiry_children: [
                     {
                         id: "ocm-1",
-                        desired_program_type: "infant",
+                        program_category_id: "cat-infant",
                         program_room_cohort_key: "",
-                        desired_schedule_type: "full_day",
-                        desired_start_date: "2026-06-15",
+                        schedule_type: "full_day",
+                        start_date: "2026-06-15",
                     },
                 ],
             },
@@ -235,10 +235,10 @@ describe("evaluateOperationalReadiness wrapper", () => {
             _inquiry_children: [
                 {
                     id: "ocm-1",
-                    desired_program_type: "infant",
+                    program_category_id: "cat-infant",
                     program_room_cohort_key: "",
-                    desired_schedule_type: "full_day",
-                    desired_start_date: "2026-06-15",
+                    schedule_type: "full_day",
+                    start_date: "2026-06-15",
                 },
             ],
         };

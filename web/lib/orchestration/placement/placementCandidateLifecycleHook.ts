@@ -46,7 +46,7 @@ export async function ensurePlacementCandidateForWaitlistedChild(
     const { data: ocmData, error: ocmErr } = await supabase
         .from("opportunity_customer_members")
         .select(
-            "id, customer_member_id, outcome_status_key, desired_start_date, desired_program_type, location_id, program_room_cohort_key, metadata, customer_members(person_id, display_name, metadata, persons(date_of_birth))"
+            "id, customer_member_id, outcome_status_key, start_date, program_category_id, location_program_categories(key), location_id, program_room_cohort_key, metadata, customer_members(person_id, display_name, metadata, persons(date_of_birth))"
         )
         .eq("id", params.opportunityCustomerMemberId)
         .eq("org_id", params.orgId)

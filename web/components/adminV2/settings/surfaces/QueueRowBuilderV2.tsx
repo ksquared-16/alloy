@@ -33,6 +33,9 @@ import {
     useQueueRowPublish,
 } from "@/lib/adminV2/settings/surfaces/useQueueRowBuilder";
 import { namedEvidenceGroupsForZone } from "@/lib/adminV2/settings/surfaces/compositionFieldAdapter";
+import { ALLOY_OS_QUEUE_COMPRESSED_WIDTH_PX } from "@/lib/adminV2/runtime/alloyOsRuntimeFlag";
+import { MAX_STACKED_ROWS, clampRowIndex, stackedRows as computeStackedRows, type StackedItem } from "@/lib/adminV2/settings/surfaces/queueRowStackedModel";
+import { useTenantFieldDefinitions } from "@/lib/adminV2/settings/surfaces/useTenantFieldDefinitions";
 
 // ── Zone key ─────────────────────────────────────────────────────────────────
 
@@ -112,6 +115,10 @@ type RowZoneState = {
     key: ZoneKey;
     inRow: boolean;
     width: QueueRecordColumnWidth;
+    /** Operator-supplied display label for this column. Persisted to QueueRecordColumnConfig.label. */
+    columnLabel: string;
+    /** Stacked-section index within the condensed rail (0/1/2). Persisted to column.rowIndex. */
+    rowIndex: number;
     visibleWhen: LayoutCondition | null;
     evidenceGroups: EvidenceGroupState[];
 };
@@ -149,7 +156,7 @@ function blockDescription(block: QueueRecordBlockConfig): string {
 // ── State ↔ Config ────────────────────────────────────────────────────────────
 
 /** Build a catalog of all known zones from the default config for this grain. */
-function buildCatalog(isWaitlist: boolean): Map<ZoneKey, QueueRecordColumnConfig> {
+export function buildCatalog(isWaitlist: boolean): Map<ZoneKey, QueueRecordColumnConfig> {
     const defaultCfg = isWaitlist ? defaultWaitlistQueueLayoutV3() : defaultLeadQueueLayoutV3();
     const catalog = new Map<ZoneKey, QueueRecordColumnConfig>();
     for (const col of defaultCfg.columns) {
@@ -159,10 +166,11 @@ function buildCatalog(isWaitlist: boolean): Map<ZoneKey, QueueRecordColumnConfig
     return catalog;
 }
 
-function stateFromConfig(
+export function stateFromConfig(
     config: QueueRecordLayoutConfigV3,
     catalog: Map<ZoneKey, QueueRecordColumnConfig>,
     isWaitlist = false,
+    tenantFieldDefinitions?: readonly import("@/lib/layout/tenantLayoutFieldPickerCatalog").TenantFieldDefinitionRow[],
 ): RowZoneState[] {
     const colByWidth = new Map(config.columns.map((c) => [c.width, c]));
 
@@ -187,8 +195,10 @@ function stateFromConfig(
             ? config.fixedControls.actionsMenu
             : Boolean(col);
 
-        // Named evidence groups from the registry — drives labeled inspector sections
-        const registryGroups = namedEvidenceGroupsForZone(key, isWaitlist);
+        // Named evidence groups from the registry — drives labeled inspector sections.
+        // Passing tenantFieldDefinitions merges operator-created custom fields into
+        // each group's availableFields by accepted namespace (V3 doctrine §5).
+        const registryGroups = namedEvidenceGroupsForZone(key, isWaitlist, tenantFieldDefinitions);
 
         const blocks = (col?.blocks ?? catalogCol?.blocks ?? []).map((b, i) => {
             // Map this block to a registry group (by index order)
@@ -228,13 +238,15 @@ function stateFromConfig(
             key,
             inRow,
             width: col?.width ?? catalogCol?.width ?? width,
+            columnLabel: col?.label || ZONE_LABELS[key] || key,
+            rowIndex: clampRowIndex(col?.rowIndex ?? 0),
             visibleWhen: col?.visibleWhen ?? null,
             evidenceGroups: blocks,
         };
     });
 }
 
-function buildConfigFromState(
+export function buildConfigFromState(
     baseConfig: QueueRecordLayoutConfigV3,
     zones: RowZoneState[],
     catalog: Map<ZoneKey, QueueRecordColumnConfig>,
@@ -266,7 +278,13 @@ function buildConfigFromState(
                 });
             const blocks = filteredBlocks.length > 0 ? filteredBlocks : catalogCol.blocks.slice(0, 1);
 
-            const col: QueueRecordColumnConfig = { ...catalogCol, width: z.width, blocks };
+            const col: QueueRecordColumnConfig = {
+                ...catalogCol,
+                width: z.width,
+                label: z.columnLabel,
+                rowIndex: clampRowIndex(z.rowIndex),
+                blocks,
+            };
             if (z.visibleWhen) col.visibleWhen = z.visibleWhen;
             else delete col.visibleWhen;
             return [col];
@@ -311,79 +329,119 @@ function RowCanvas({
 }) {
     const inRow = zones.filter((z) => z.inRow);
 
+    // Group placed zones into stacked sections by rowIndex (Presentation Runtime V3).
+    const rows = computeStackedRows(
+        inRow.map((z): StackedItem => ({ key: z.key, rowIndex: clampRowIndex(z.rowIndex), inRow: true })),
+    );
+
+    const renderTile = (z: RowZoneState) => {
+        const isSelected = z.key === selectedKey;
+        const isDragTarget = z.key === dragOverKey;
+        const sample = ZONE_SAMPLE[z.key];
+        const flex = ZONE_FLEX[z.key];
+        return (
+            <div
+                key={z.key}
+                style={{ flex }}
+                className={[
+                    "group relative min-w-0 cursor-pointer select-none",
+                    isSelected ? "bg-alloy-pine/[0.06] ring-1 ring-inset ring-alloy-pine/30" : "hover:bg-alloy-stone/[0.04]",
+                    isDragTarget && dragHalf === "left" ? "border-l-2 border-alloy-pine" : "",
+                    isDragTarget && dragHalf === "right" ? "border-r-2 border-alloy-pine" : "",
+                ].join(" ")}
+                draggable
+                onDragStart={(e) => onDragStart(e, z.key)}
+                onDragOver={(e) => onDragOver(e, z.key)}
+                onDrop={(e) => onDrop(e, z.key)}
+                onDragEnd={onDragEnd}
+                onClick={() => onSelect(z.key)}
+                data-canvas-zone={z.key}
+                data-canvas-row={z.rowIndex}
+                data-canvas-selected={isSelected || undefined}
+            >
+                <span
+                    className="absolute right-1 top-1 cursor-grab text-[10px] leading-none text-alloy-midnight/20 opacity-0 group-hover:opacity-100 active:cursor-grabbing"
+                    aria-hidden
+                >
+                    ⠿
+                </span>
+                {z.key !== "actions" && (
+                    <button
+                        type="button"
+                        className="absolute left-1 top-1 hidden rounded text-[10px] leading-none text-alloy-midnight/30 hover:text-red-400 group-hover:block"
+                        onClick={(e) => { e.stopPropagation(); onRemove(z.key); }}
+                        aria-label={`Remove ${ZONE_LABELS[z.key]}`}
+                        data-canvas-remove={z.key}
+                    >
+                        ✕
+                    </button>
+                )}
+                <div className="px-3 pb-2 pt-4">
+                    <p className={`truncate text-[10px] font-semibold uppercase tracking-wide ${isSelected ? "text-alloy-pine" : "text-alloy-midnight/40"}`}>
+                        {z.columnLabel || ZONE_LABELS[z.key]}
+                    </p>
+                    {sample.filter(Boolean).map((line, i) => (
+                        <p key={i} className="mt-0.5 truncate text-[11px] text-alloy-midnight/50">
+                            {line}
+                        </p>
+                    ))}
+                </div>
+            </div>
+        );
+    };
+
     return (
-        <div className="overflow-hidden rounded-xl border border-alloy-stone/14 bg-white shadow-sm" data-canvas>
+        <div className="overflow-hidden rounded-xl border border-alloy-stone/14 bg-alloy-stone/[0.03] shadow-sm" data-canvas>
             <div className="flex items-center justify-between border-b border-alloy-stone/10 px-4 py-2">
                 <p className="text-[10px] font-semibold uppercase tracking-wide text-alloy-midnight/40">
                     Row canvas
+                    <span className="ml-1.5 font-normal normal-case tracking-normal text-alloy-midnight/30">
+                        · condensed rail {ALLOY_OS_QUEUE_COMPRESSED_WIDTH_PX}px
+                    </span>
                 </p>
-                <p className="text-[10px] text-alloy-midnight/30">Drag to reorder · click to inspect</p>
+                <p className="text-[10px] text-alloy-midnight/30">Stacked sections · click to inspect · set Row in inspector</p>
             </div>
-            <div className="flex min-h-[72px] items-stretch divide-x divide-alloy-stone/10">
-                {inRow.map((z) => {
-                    const isSelected = z.key === selectedKey;
-                    const isDragTarget = z.key === dragOverKey;
-                    const sample = ZONE_SAMPLE[z.key];
-                    const flex = ZONE_FLEX[z.key];
-                    return (
+            {/*
+             * Runtime-width frame: the condensed queue row renders inside a fixed
+             * ~440px rail (--alloy-os-queue-compressed-width) whenever the Focus Panel
+             * is docked. The builder area is wider, so we center the row strip inside a
+             * fixed-width frame instead of stretching it full-width — the preview then
+             * matches the true runtime geometry (width + height + gaps).
+             */}
+            <div className="flex justify-center px-4 py-4">
+                <div
+                    className="overflow-hidden rounded-lg border border-alloy-stone/12 bg-white shadow-sm"
+                    style={{ width: ALLOY_OS_QUEUE_COMPRESSED_WIDTH_PX, maxWidth: ALLOY_OS_QUEUE_COMPRESSED_WIDTH_PX }}
+                    data-canvas-runtime-frame
+                    data-canvas-runtime-width={ALLOY_OS_QUEUE_COMPRESSED_WIDTH_PX}
+                >
+            {/*
+             * Stacked sections: each rowIndex renders as its own horizontal strip
+             * (min 40px), stacked vertically inside the fixed 440px rail. One row =
+             * the legacy condensed row. The live /work-unit runtime does not consume
+             * stacking yet — this preview is presentation-runtime-ready.
+             */}
+            {rows.length === 0 ? (
+                <div className="flex min-h-[76px] items-center justify-center py-6 text-[12px] text-alloy-midnight/30">
+                    No blocks in row — add from library below
+                </div>
+            ) : (
+                <div className="divide-y divide-alloy-stone/12" data-canvas-stacked-rows={rows.length}>
+                    {rows.map((row) => (
                         <div
-                            key={z.key}
-                            style={{ flex }}
-                            className={[
-                                "group relative min-w-0 cursor-pointer select-none",
-                                isSelected ? "bg-alloy-pine/[0.06] ring-1 ring-inset ring-alloy-pine/30" : "hover:bg-alloy-stone/[0.04]",
-                                isDragTarget && dragHalf === "left" ? "border-l-2 border-alloy-pine" : "",
-                                isDragTarget && dragHalf === "right" ? "border-r-2 border-alloy-pine" : "",
-                            ].join(" ")}
-                            draggable
-                            onDragStart={(e) => onDragStart(e, z.key)}
-                            onDragOver={(e) => onDragOver(e, z.key)}
-                            onDrop={(e) => onDrop(e, z.key)}
-                            onDragEnd={onDragEnd}
-                            onClick={() => onSelect(z.key)}
-                            data-canvas-zone={z.key}
-                            data-canvas-selected={isSelected || undefined}
+                            key={row.rowIndex}
+                            className="flex min-h-[42px] items-stretch divide-x divide-alloy-stone/10"
+                            data-canvas-stacked-row={row.rowIndex}
                         >
-                            {/* Drag handle — top-right dot grid */}
-                            <span
-                                className="absolute right-1 top-1 cursor-grab text-[10px] leading-none text-alloy-midnight/20 opacity-0 group-hover:opacity-100 active:cursor-grabbing"
-                                aria-hidden
-                            >
-                                ⠿
-                            </span>
-
-                            {/* Remove button — appears on hover, hidden for actions */}
-                            {z.key !== "actions" && (
-                                <button
-                                    type="button"
-                                    className="absolute left-1 top-1 hidden rounded text-[10px] leading-none text-alloy-midnight/30 hover:text-red-400 group-hover:block"
-                                    onClick={(e) => { e.stopPropagation(); onRemove(z.key); }}
-                                    aria-label={`Remove ${ZONE_LABELS[z.key]}`}
-                                    data-canvas-remove={z.key}
-                                >
-                                    ✕
-                                </button>
-                            )}
-
-                            {/* Content */}
-                            <div className="px-3 pb-3 pt-5">
-                                <p className={`truncate text-[10px] font-semibold uppercase tracking-wide ${isSelected ? "text-alloy-pine" : "text-alloy-midnight/40"}`}>
-                                    {ZONE_LABELS[z.key]}
-                                </p>
-                                {sample.filter(Boolean).map((line, i) => (
-                                    <p key={i} className="mt-0.5 truncate text-[11px] text-alloy-midnight/50">
-                                        {line}
-                                    </p>
-                                ))}
-                            </div>
+                            {row.items
+                                .map((it) => inRow.find((z) => z.key === it.key))
+                                .filter((z): z is RowZoneState => Boolean(z))
+                                .map((z) => renderTile(z))}
                         </div>
-                    );
-                })}
-                {inRow.length === 0 && (
-                    <div className="flex flex-1 items-center justify-center py-6 text-[12px] text-alloy-midnight/30">
-                        No zones in row — add from library below
-                    </div>
-                )}
+                    ))}
+                </div>
+            )}
+                </div>
             </div>
         </div>
     );
@@ -535,6 +593,8 @@ function BlockInspector({
     placementOverrideEnabled,
     onClose,
     onSetWidth,
+    onSetRow,
+    onSetLabel,
     onToggleGroup,
     onToggleField,
     onSetCondition,
@@ -546,6 +606,8 @@ function BlockInspector({
     placementOverrideEnabled: boolean;
     onClose: () => void;
     onSetWidth: (w: QueueRecordColumnWidth) => void;
+    onSetRow: (rowIndex: number) => void;
+    onSetLabel: (label: string) => void;
     onToggleGroup: (blockId: string) => void;
     onToggleField: (blockId: string, fieldKey: string) => void;
     onSetCondition: (c: LayoutCondition) => void;
@@ -605,6 +667,55 @@ function BlockInspector({
                                 </button>
                             ))}
                         </div>
+                    </div>
+                )}
+
+                {/* Row (stacked section) selector — moves the block between rows */}
+                {!isActions && (
+                    <div>
+                        <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-alloy-midnight/35">
+                            Row (stacked section)
+                        </p>
+                        <div className="flex flex-wrap gap-1.5">
+                            {Array.from({ length: MAX_STACKED_ROWS }, (_, i) => i).map((r) => (
+                                <button
+                                    key={r}
+                                    type="button"
+                                    onClick={() => onSetRow(r)}
+                                    className={`rounded-full px-2.5 py-1 text-[11px] font-medium transition-colors ${
+                                        clampRowIndex(zone.rowIndex) === r
+                                            ? "bg-alloy-pine text-white"
+                                            : "border border-alloy-stone/20 bg-white text-alloy-midnight/60 hover:border-alloy-pine/40 hover:text-alloy-pine"
+                                    }`}
+                                    data-inspector-row={r}
+                                >
+                                    Row {r + 1}
+                                </button>
+                            ))}
+                        </div>
+                        <p className="mt-1 text-[10px] text-alloy-midnight/30">
+                            Stacked rows render inside the 440px condensed rail. Runtime consumption is presentation-runtime-ready (deferred).
+                        </p>
+                    </div>
+                )}
+
+                {/* Block label — operator-supplied display name */}
+                {!isActions && (
+                    <div>
+                        <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-alloy-midnight/35">
+                            Block label
+                        </p>
+                        <input
+                            type="text"
+                            value={zone.columnLabel}
+                            onChange={(e) => onSetLabel(e.target.value)}
+                            placeholder={ZONE_LABELS[zone.key]}
+                            className="w-full rounded border border-alloy-stone/20 bg-white px-2.5 py-1.5 text-[12px] text-alloy-midnight focus:border-alloy-pine focus:outline-none"
+                            data-inspector-label-input
+                        />
+                        <p className="mt-1 text-[10px] text-alloy-midnight/30">
+                            Renames this column (e.g. Household → Family). Saved to layout.
+                        </p>
                     </div>
                 )}
 
@@ -805,6 +916,8 @@ export default function QueueRowBuilderV2({ surfaceId = "pipeline-queue-row" }: 
 
     const { data: serverData, loading, error: loadError } = useQueueRowLayoutConfig(surfaceId);
     const { publish, publishing, error: publishError, publishedAt } = useQueueRowPublish(surfaceId);
+    // Operator-created custom fields — merged into compatible groups' Add Field lists.
+    const { tenantFieldDefinitions } = useTenantFieldDefinitions(isWaitlist ? "placement_candidate" : "opportunities");
 
     const defaultConfig = isWaitlist ? defaultWaitlistQueueLayoutV3() : defaultLeadQueueLayoutV3();
 
@@ -820,13 +933,15 @@ export default function QueueRowBuilderV2({ surfaceId = "pipeline-queue-row" }: 
     const [dragOverKey, setDragOverKey] = useState<ZoneKey | null>(null);
     const [dragHalf, setDragHalf] = useState<"left" | "right" | null>(null);
 
-    // Init from server data
+    // Init from server data. Re-runs when tenant field definitions load so custom
+    // fields appear in each group's Add Field list. (Resets local edits — acceptable:
+    // tenant defs resolve once, near-instantly, on mount.)
     useEffect(() => {
         if (!serverData) return;
-        setZones(stateFromConfig(serverData.config, catalog.current, isWaitlist));
+        setZones(stateFromConfig(serverData.config, catalog.current, isWaitlist, tenantFieldDefinitions));
         setPlacementOverrideEnabled(serverData.placementOverrideEnabled);
         setDirty(false);
-    }, [serverData]);
+    }, [serverData, tenantFieldDefinitions, isWaitlist]);
 
     function mark(updater: (prev: RowZoneState[]) => RowZoneState[]) {
         setZones(updater);
@@ -901,6 +1016,11 @@ export default function QueueRowBuilderV2({ surfaceId = "pipeline-queue-row" }: 
         mark((prev) => prev.map((z) => (z.key === key ? { ...z, width: w } : z)));
     }, []);
 
+    // Move a block to a stacked row (Presentation Runtime V3).
+    const setRow = useCallback((key: ZoneKey, rowIndex: number) => {
+        mark((prev) => prev.map((z) => (z.key === key ? { ...z, rowIndex: clampRowIndex(rowIndex), inRow: true } : z)));
+    }, []);
+
     const toggleGroup = useCallback((key: ZoneKey, blockId: string) => {
         mark((prev) =>
             prev.map((z) =>
@@ -912,6 +1032,10 @@ export default function QueueRowBuilderV2({ surfaceId = "pipeline-queue-row" }: 
                 },
             ),
         );
+    }, []);
+
+    const setLabel = useCallback((key: ZoneKey, label: string) => {
+        mark((prev) => prev.map((z) => (z.key === key ? { ...z, columnLabel: label } : z)));
     }, []);
 
     const toggleField = useCallback((key: ZoneKey, blockId: string, fieldKey: string) => {
@@ -1013,6 +1137,8 @@ export default function QueueRowBuilderV2({ surfaceId = "pipeline-queue-row" }: 
                             placementOverrideEnabled={placementOverrideEnabled}
                             onClose={() => setSelectedKey(null)}
                             onSetWidth={(w) => setWidth(selectedZone.key, w)}
+                            onSetRow={(rowIndex) => setRow(selectedZone.key, rowIndex)}
+                            onSetLabel={(label) => setLabel(selectedZone.key, label)}
                             onToggleGroup={(blockId) => toggleGroup(selectedZone.key, blockId)}
                             onToggleField={(blockId, fieldKey) => toggleField(selectedZone.key, blockId, fieldKey)}
                             onSetCondition={(c) => setCondition(selectedZone.key, c)}

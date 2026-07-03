@@ -58,13 +58,13 @@ describe("mergeChildLayoutRuntimeWidgetRecord", () => {
 
     it("fills enrollment scalars from VM when layout values are blank", () => {
         const merged = mergeChildLayoutRuntimeWidgetRecord(
-            { id: "child-1", "child.id": "child-1", "inquiry_child.desired_program_type": "—" },
+            { id: "child-1", "child.id": "child-1", "inquiry_child.program_category_id": "—" },
             {
                 first_name: "Riley",
-                desired_program_type: "Infants",
+                program_category_id: "cat-infants",
                 _enrollment_mirror: [{ id: "ocm-1", customer_member_id: "cm-1", opportunity_id: "opp-1" }],
             },
         );
-        expect(merged["inquiry_child.desired_program_type"]).toBe("Infants");
+        expect(merged["inquiry_child.program_category_id"]).toBe("cat-infants");
     });
 });

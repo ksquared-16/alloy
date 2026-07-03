@@ -14,10 +14,10 @@ type InquiryChildRevalidateRow = InquiryChildOcmPlacementSource & {
 export function inquiryChildOcmPlacementLabelsIncomplete(
     row: InquiryChildOcmPlacementSource & { location_id?: string | null; location_label?: string | null }
 ): boolean {
-    const programType = trimOrNull(row.desired_program_type);
-    if (programType && !trimOrNull(row.desired_program_label)) return true;
+    const programSet = trimOrNull(row.program_category_id) ?? trimOrNull(row.program_key);
+    if (programSet && !trimOrNull(row.desired_program_label)) return true;
 
-    const scheduleType = trimOrNull(row.desired_schedule_type);
+    const scheduleType = trimOrNull(row.schedule_type);
     if (scheduleType && !trimOrNull(row.desired_schedule_label)) return true;
 
     const roomKey = trimOrNull(row.program_room_cohort_key);

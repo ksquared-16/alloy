@@ -25,7 +25,7 @@ export const CREATE_LEAD_UNIFIED_OPTIONAL_KEYS = [
     "child_last_name",
     "child_date_of_birth",
     "child_age",
-    "child_desired_start_date",
+    "child_start_date",
     "child_program",
     "child_program_room_cohort_key",
     "source",
@@ -60,7 +60,7 @@ export const CREATE_LEAD_GATHER_FIELDS: readonly ActionWorkspaceGatherField[] = 
         placement_select: "site_room",
     },
     {
-        payload_key: "child_desired_schedule_type",
+        payload_key: "child_schedule_type",
         field_label: "Schedule interest",
         section: "child",
         section_label: "Child",
@@ -68,7 +68,7 @@ export const CREATE_LEAD_GATHER_FIELDS: readonly ActionWorkspaceGatherField[] = 
         value_kind: "select",
         option_set_key: "childcare_schedule_type",
     },
-    { payload_key: "child_desired_start_date", field_label: "Desired start date", section: "child", section_label: "Child", tier: "optional", value_kind: "date" },
+    { payload_key: "child_start_date", field_label: "Desired start date", section: "child", section_label: "Child", tier: "optional", value_kind: "date" },
     {
         payload_key: "location_id",
         field_label: "Location",

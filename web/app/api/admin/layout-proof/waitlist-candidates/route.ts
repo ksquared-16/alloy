@@ -32,7 +32,7 @@ type CandRow = {
     program_room_cohort_key: string;
     program_room_group_label: string | null;
     wait_since: string | null;
-    desired_start_date: string | null;
+    start_date: string | null;
     status: string | null;
 };
 
@@ -69,7 +69,7 @@ export async function GET() {
     try {
         const { data: candData, error: candErr } = await supabase
             .from("placement_candidates")
-            .select("id, opportunity_id, customer_id, person_id, site_id, is_synthetic_fallback, program_room_cohort_key, program_room_group_label, wait_since, desired_start_date, status")
+            .select("id, opportunity_id, customer_id, person_id, site_id, is_synthetic_fallback, program_room_cohort_key, program_room_group_label, wait_since, start_date, status")
             .eq("org_id", ctx.orgId)
             .in("status", ["active", "paused"])
             .limit(MAX);
@@ -157,7 +157,7 @@ export async function GET() {
                     ageLabel: age,
                     birthdate: child?.date_of_birth ?? undefined,
                     programLabel: cohortLabel,
-                    desiredStartDate: formatDateLabel(c.desired_start_date),
+                    startDate: formatDateLabel(c.start_date),
                 },
                 household: {
                     name: (c.customer_id ? customerName.get(c.customer_id) : undefined) || undefined,
@@ -174,7 +174,7 @@ export async function GET() {
                     tierLabel: undefined,
                     positionLabel: undefined,
                     waitSince: formatDateLabel(c.wait_since),
-                    desiredStartDate: formatDateLabel(c.desired_start_date),
+                    startDate: formatDateLabel(c.start_date),
                     status: c.status ?? undefined,
                     shadowMode: false,
                 },

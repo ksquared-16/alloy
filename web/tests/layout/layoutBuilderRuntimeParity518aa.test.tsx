@@ -32,7 +32,7 @@ function childrenCardListItem(): LayoutItem {
             { refKey: "child.name", label: "Name" },
             { refKey: "child.dob_age", label: "Age" },
             { refKey: "child.date_of_birth", label: "DOB", editable: true },
-            { refKey: "inquiry_child.desired_start_date", label: "Start Date", editable: true },
+            { refKey: "inquiry_child.start_date", label: "Start Date", editable: true },
             { refKey: "child.status", label: "Status", editable: true },
         ],
     };

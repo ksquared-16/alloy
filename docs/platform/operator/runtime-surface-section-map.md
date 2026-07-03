@@ -196,3 +196,9 @@ New surface sections must:
 
 Tests in `web/tests/perf/alloySectionMap.test.ts` enforce registry/doc alignment and the
 snapshot/blocking contract.
+
+---
+
+## Presentation Runtime carry-forward (July 2026)
+
+Authoring for the Presentation Runtime is complete (PRs #61/#63/#64/#68). What the live runtime must now **consume** (and must NOT redesign) is specified in [`presentation-runtime-carry-forward.md`](./presentation-runtime-carry-forward.md): stacked queue rows (`rowIndex`), `visibleWhen` evaluation, and nested-surface render (`metadata.nestedSurfaces[surfaceId]` via the `openSurfaceId` registry).

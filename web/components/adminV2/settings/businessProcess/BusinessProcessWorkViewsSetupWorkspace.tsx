@@ -2,16 +2,19 @@
 
 import WorkViewProcessEditorCard from "@/components/adminV2/settings/businessProcess/WorkViewProcessEditorCard";
 import { useWorkViewsConfiguration } from "@/components/adminV2/settings/businessProcess/WorkViewsConfigurationContext";
-import { validateWorkViewGrainConsistency } from "@/lib/lifecycle/stageGrainV1";
+import { resolveWorkViewStageGrains, validateWorkViewGrainConsistency } from "@/lib/lifecycle/stageGrainV1";
 import type { StageGrain } from "@/lib/lifecycle/stageGrainV1";
 
 export default function BusinessProcessWorkViewsSetupWorkspace({
     workUnitKey,
     stageGrains = [],
+    stageGrainByKey,
     queueLanes = [],
 }: {
     workUnitKey: string | null;
     stageGrains?: (StageGrain | undefined)[];
+    /** stage key → grain. When provided, mixed-grain is evaluated per-view (its filtered stages), not process-wide. */
+    stageGrainByKey?: Record<string, StageGrain | undefined>;
     queueLanes?: import("@/lib/lifecycle/workViewsRuntimeConvergence").WorkViewCompatQueueLane[];
 }) {
     const {
@@ -28,7 +31,12 @@ export default function BusinessProcessWorkViewsSetupWorkspace({
         drafts,
     } = useWorkViewsConfiguration();
 
-    const isMixedGrain = !validateWorkViewGrainConsistency(stageGrains).valid;
+    // Mixed-grain is evaluated for the SELECTED view against the stages it filters to (not the whole
+    // process) — a single-grain view must not be blocked because the process also has other-grain stages.
+    const grainsForSelected = stageGrainByKey
+        ? resolveWorkViewStageGrains(selected?.filters_v1, stageGrainByKey)
+        : stageGrains;
+    const isMixedGrain = !validateWorkViewGrainConsistency(grainsForSelected).valid;
 
     if (loading) {
         return (
@@ -79,6 +87,7 @@ export default function BusinessProcessWorkViewsSetupWorkspace({
                     workUnitKey={workUnitKey}
                     layouts={layouts}
                     stageGrains={stageGrains}
+                    stageGrainByKey={stageGrainByKey}
                     queueLanes={queueLanes}
                     onSelect={() => {}}
                     onChange={updateSelected}

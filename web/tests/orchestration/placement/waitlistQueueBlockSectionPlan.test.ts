@@ -99,7 +99,7 @@ describe("waitlistQueueBlockSectionPlan live QueueBlock path", () => {
                     cohortKey: "infant",
                     cohortLabel: "Infant",
                     siteId: "site-a",
-                    desiredProgramType: "infant",
+                    programKey: "infant",
                 },
             },
             {
@@ -108,7 +108,7 @@ describe("waitlistQueueBlockSectionPlan live QueueBlock path", () => {
                     cohortKey: "preschool_3_4",
                     cohortLabel: "Preschool",
                     siteId: "site-a",
-                    desiredProgramType: "preschool",
+                    programKey: "preschool",
                 },
             },
         ];

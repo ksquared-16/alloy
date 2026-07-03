@@ -205,17 +205,17 @@ describe("evaluateWorkViewFiltersV1 — V3 predicate model (AND/OR + new fields)
         expect(filterQueueRowsByWorkViewFilters(rows, filters, "all")).toHaveLength(0);
     });
 
-    it("resolves the new room / desired_start_date / current_work fields", () => {
+    it("resolves the new room / start_date / current_work fields", () => {
         expect(
             evaluateWorkViewFiltersForRow(south, [
                 { field_key: "room", operator: "equals", value: "Toddler 1" },
             ]).pass,
         ).toBe(true);
 
-        const startRow = { id: "o2", desired_start_date: "2026-09-01" };
+        const startRow = { id: "o2", start_date: "2026-09-01" };
         expect(
             evaluateWorkViewFiltersForRow(startRow, [
-                { field_key: "desired_start_date", operator: "date_is", value: "2026-09-01" },
+                { field_key: "start_date", operator: "date_is", value: "2026-09-01" },
             ]).pass,
         ).toBe(true);
 

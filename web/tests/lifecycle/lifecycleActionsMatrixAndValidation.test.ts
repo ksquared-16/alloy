@@ -35,17 +35,20 @@ describe("lifecycle actions matrix and validation cleanup", () => {
         );
     });
 
-    it("matrix base action order includes eight curated actions", () => {
+    it("matrix base action order exposes domain verbs, not a generic Change Status", () => {
         expect(LIFECYCLE_ACTIONS_MATRIX_BASE_ACTION_ORDER).toEqual([
             "create_record",
             "quick_message",
-            "change_status",
+            "waitlist_child",
+            "enroll_child",
+            "close_lead",
             "add_person",
             "add_child",
             "send_form",
             "schedule_tour",
             "create_task",
         ]);
+        expect(LIFECYCLE_ACTIONS_MATRIX_BASE_ACTION_ORDER).not.toContain("change_status");
     });
 
     it("configured actions default empty for new lifecycle", () => {
@@ -104,6 +107,6 @@ describe("lifecycle actions matrix and validation cleanup", () => {
                 resolve(root, "../docs/sprints/06_2026/desired_start_field_audit.md"),
                 "utf8"
             )
-        ).toContain("child:desired_start_date");
+        ).toContain("child:start_date");
     });
 });

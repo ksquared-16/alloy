@@ -35,8 +35,8 @@ describe("queue CRM compact program — OCM authoritative", () => {
                     opportunity_id: "opp-1",
                     customer_member_id: "cm-1",
                     location_id: SITE_ID,
-                    desired_program_type: "toddler",
-                    desired_program_category_id: "cat-toddler",
+                    program_key: "toddler",
+                    program_category_id: "cat-toddler",
                 },
             ],
         ]);
@@ -70,8 +70,8 @@ describe("queue CRM compact program — OCM authoritative", () => {
                     opportunity_id: "opp-1",
                     customer_member_id: "cm-1",
                     location_id: SITE_ID,
-                    desired_program_type: "toddler",
-                    desired_program_category_id: "cat-toddler",
+                    program_key: "toddler",
+                    program_category_id: "cat-toddler",
                 },
             ],
         ]);
@@ -99,7 +99,7 @@ describe("queue CRM compact program — OCM authoritative", () => {
                 {
                     display_name: "Lucas Murphy",
                     program_label: "Preschool — 3–4 years",
-                    desired_program_type: "preschool",
+                    program_key: "preschool",
                 },
             ],
             lookup,
@@ -109,10 +109,10 @@ describe("queue CRM compact program — OCM authoritative", () => {
         expect(merged[0]?.secondary).toBe("Toddler Care");
     });
 
-    it("demo_program_label does not override OCM desired_program_type when option map is empty", () => {
+    it("demo_program_label does not override OCM program key when option map is empty", () => {
         expect(
             resolveInquiryChildProgramCategoryLabel({
-                desired_program_type: "toddler",
+                program_key: "toddler",
                 demo_program_label: "Preschool — 3–4 years",
                 optionLabelLookup: new Map(),
             })
@@ -126,8 +126,8 @@ describe("queue CRM compact program — OCM authoritative", () => {
                     opportunity_id: "opp-1",
                     customer_member_id: "cm-1",
                     location_id: SITE_ID,
-                    desired_program_type: "toddler",
-                    desired_program_category_id: "cat-toddler",
+                    program_key: "toddler",
+                    program_category_id: "cat-toddler",
                 },
                 optionLabelLookup: new Map([["childcare_program_type\0toddler", "Toddler"]]),
                 locationProgramCategories: LOCATION_CATEGORIES,

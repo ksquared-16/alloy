@@ -11,12 +11,11 @@ export type ActionPreflightFieldGuidance =
 
 const INQUIRY_FIELD_MAP: Record<string, InquiryChildrenFocusField> = {
     program_room_cohort_key: "program_room_cohort_key",
-    desired_schedule_type: "desired_schedule_type",
-    desired_start_date: "desired_start_date",
-    desired_program_type: "program_room_cohort_key",
+    schedule_type: "schedule_type",
+    start_date: "start_date",
+    program_category_id: "program_room_cohort_key",
     classroom: "program_room_cohort_key",
-    schedule: "desired_schedule_type",
-    start_date: "desired_start_date",
+    schedule: "schedule_type",
 };
 
 export function resolveActionPreflightFieldGuidance(

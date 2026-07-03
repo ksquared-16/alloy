@@ -89,9 +89,9 @@ describe("evaluateLifecycleActionRequirements with overrides", () => {
                     id: "ocm-1",
                     first_name: "Kid",
                     last_name: "One",
-                    desired_program_type: "infant",
-                    desired_schedule_type: null,
-                    desired_start_date: null,
+                    program_category_id: "cat-infant",
+                    schedule_type: null,
+                    start_date: null,
                 },
             ],
             department_metadata: buildLifecycleRequirementsOverridePatch({

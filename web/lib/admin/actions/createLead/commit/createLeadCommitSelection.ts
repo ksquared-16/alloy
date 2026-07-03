@@ -26,9 +26,9 @@ export type CreateLeadCommitRecord = {
     dob: string | null;
     age_display: string | null;
     program_interest: string | null;
-    desired_start_date: string | null;
+    start_date: string | null;
     program_room_cohort_key: string | null;
-    desired_schedule_type: string | null;
+    schedule_type: string | null;
     extra_payload_values: Record<string, string>;
     include_in_commit: boolean;
     primary: boolean;
@@ -74,9 +74,9 @@ export type CreateLeadCommitSelectionPatch = Partial<
         | "role"
         | "dob"
         | "program_interest"
-        | "desired_start_date"
+        | "start_date"
         | "program_room_cohort_key"
-        | "desired_schedule_type"
+        | "schedule_type"
         | "extra_payload_values"
         | "include_in_commit"
         | "primary"
@@ -155,9 +155,9 @@ function parentRecordFromCandidate(
         dob: person.dob,
         age_display: personAgeDisplay(person),
         program_interest: person.program_interest,
-        desired_start_date: null,
+        start_date: null,
         program_room_cohort_key: null,
-        desired_schedule_type: null,
+        schedule_type: null,
         extra_payload_values: {},
         include_in_commit: false,
         primary: index === 0,
@@ -190,9 +190,9 @@ function childRecordFromCandidate(
         dob: isoDateOnly(person.dob),
         age_display: personAgeDisplay(person),
         program_interest: person.program_interest ?? household.program_interest,
-        desired_start_date: household.desired_start_date,
+        start_date: household.start_date,
         program_room_cohort_key: null,
-        desired_schedule_type: null,
+        schedule_type: null,
         extra_payload_values: {},
         include_in_commit: false,
         primary: index === 0,
@@ -371,9 +371,9 @@ export function syncCreateLeadValuesFromCommitSelection(
     next.child_last_name = child?.last_name ?? "";
     next.child_date_of_birth = child?.dob ?? "";
     if (child?.program_interest) next.child_program = child.program_interest;
-    if (child?.desired_start_date) next.child_desired_start_date = child.desired_start_date;
+    if (child?.start_date) next.child_start_date = child.start_date;
     if (child?.program_room_cohort_key) next.child_program_room_cohort_key = child.program_room_cohort_key;
-    if (child?.desired_schedule_type) next.child_desired_schedule_type = child.desired_schedule_type;
+    if (child?.schedule_type) next.child_schedule_type = child.schedule_type;
     if (child?.extra_payload_values) {
         for (const [payloadKey, value] of Object.entries(child.extra_payload_values)) {
             if ((value ?? "").trim()) next[payloadKey] = value;

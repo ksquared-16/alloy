@@ -25,10 +25,10 @@ const mockRpc = vi.fn().mockResolvedValue({
 
 function makeOcmSupabase(params: {
     statusKey?: string;
-    desiredStartDate?: string | null;
+    startDate?: string | null;
     locationId?: string | null;
 } = {}) {
-    const { statusKey = "inquiry", desiredStartDate = "2026-09-01", locationId = "loc-123" } = params;
+    const { statusKey = "inquiry", startDate = "2026-09-01", locationId = "loc-123" } = params;
     return {
         from: vi.fn().mockImplementation((table: string) => ({
             select: vi.fn().mockReturnValue({
@@ -36,7 +36,7 @@ function makeOcmSupabase(params: {
                     eq: vi.fn().mockReturnValue({
                         maybeSingle: vi.fn().mockResolvedValue({
                             data: table === "opportunity_customer_members"
-                                ? { outcome_status_key: statusKey, opportunity_id: "opp-123", desired_start_date: desiredStartDate, location_id: locationId }
+                                ? { outcome_status_key: statusKey, opportunity_id: "opp-123", start_date: startDate, location_id: locationId }
                                 : null,
                             error: null,
                         }),
@@ -107,8 +107,8 @@ describe("Enrollment Status Runtime — previewOnly (no readiness gaps)", () => 
 });
 
 describe("Enrollment Status Runtime — readiness gating", () => {
-    it("returns readinessGaps in preview when desired_start_date is missing for waitlisted", async () => {
-        const ctx = { ...BASE_CTX, supabase: makeOcmSupabase({ desiredStartDate: null, locationId: "loc-123" }) };
+    it("returns readinessGaps in preview when start_date is missing for waitlisted", async () => {
+        const ctx = { ...BASE_CTX, supabase: makeOcmSupabase({ startDate: null, locationId: "loc-123" }) };
         const result = await executeMutation(ctx, BASE_INTENT, { previewOnly: true });
         expect(result.status).toBe("previewed");
         if (result.status !== "previewed") return;
@@ -128,7 +128,7 @@ describe("Enrollment Status Runtime — readiness gating", () => {
     it("does NOT gate readiness for status keys outside placement-required set", async () => {
         const inquiryIntent = { ...BASE_INTENT, targetState: "inquiry" };
         // even with missing fields, non-placement-required transitions should not be gated
-        const ctx = { ...BASE_CTX, supabase: makeOcmSupabase({ desiredStartDate: null, locationId: null, statusKey: "waitlisted" }) };
+        const ctx = { ...BASE_CTX, supabase: makeOcmSupabase({ startDate: null, locationId: null, statusKey: "waitlisted" }) };
         const result = await executeMutation(ctx, inquiryIntent, { previewOnly: true });
         expect(result.status).toBe("previewed");
         if (result.status !== "previewed") return;

@@ -18,7 +18,7 @@ function candidate(id: string, waitSince: string, cohort: string): PlacementCand
         program_room_cohort_key: cohort,
         program_room_group_label: cohort,
         wait_since: waitSince,
-        desired_start_date: null,
+        start_date: null,
         status: "active",
         seed_key: null,
         metadata: null,

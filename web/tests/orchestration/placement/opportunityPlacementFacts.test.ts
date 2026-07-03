@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { buildOpportunityPlacementFacts } from "@/lib/orchestration/placement/adapters/opportunityPlacementFacts";
 import {
-    CHILDCARE_PLACEMENT_FACT_DESIRED_START_DATE,
+    CHILDCARE_PLACEMENT_FACT_START_DATE,
     CHILDCARE_PLACEMENT_FACT_FLAG_COMMUNITY_PRIORITY,
     CHILDCARE_PLACEMENT_FACT_FLAG_EMPLOYEE_HOUSEHOLD,
     CHILDCARE_PLACEMENT_FACT_FLAG_SIBLING_ENROLLED,
@@ -61,12 +61,13 @@ describe("buildOpportunityPlacementFacts", () => {
         });
     });
 
-    it("extracts desired_start_date from metadata", () => {
+    it("extracts start_date fact from legacy opportunity metadata key", () => {
         const bag = buildOpportunityPlacementFacts({
+            // `desired_start_date` is the opportunity-level legacy metadata key — not the OCM column.
             metadata: { desired_start_date: "2025-09-01" },
         });
-        expect(bag[CHILDCARE_PLACEMENT_FACT_DESIRED_START_DATE]?.presence).toBe("present");
-        expect((bag[CHILDCARE_PLACEMENT_FACT_DESIRED_START_DATE] as { value?: string }).value).toBe("2025-09-01");
+        expect(bag[CHILDCARE_PLACEMENT_FACT_START_DATE]?.presence).toBe("present");
+        expect((bag[CHILDCARE_PLACEMENT_FACT_START_DATE] as { value?: string }).value).toBe("2025-09-01");
     });
 
     it("extracts boolean flags from placement_fact_inputs_v1", () => {

@@ -972,6 +972,7 @@ async function ensureOpportunity(
             program_label,
             age_group,
             ...(inquiryList.length ? { inquiry_children: inquiryList } : {}),
+            // opportunity-level legacy metadata key — not the OCM column
             desired_start_date: isoDateOnly(desired),
             tour_date: tourDate ? isoDateOnly(tourDate) : null,
             ...(tourTimeValue ? { tour_time: tourTimeValue } : {}),

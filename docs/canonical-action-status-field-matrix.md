@@ -1,6 +1,6 @@
 # Canonical Action / Status / Field Matrix
 
-**Status:** Phase 5 formal contract (June 2026)
+**Status:** Enrollment Alignment contract (July 2026) — supersedes the Phase 5 contract
 
 Cross-reference for which actions may mutate which canonical fields and statuses.
 
@@ -8,13 +8,16 @@ Cross-reference for which actions may mutate which canonical fields and statuses
 
 ## Status mutations
 
+Durable enrollment state changes **only** through outcome execution (and the typed status
+domains it invokes). Operator surfaces expose domain verbs, never a generic status write.
+
 | Action / path | Target entity | Column | Allowed | Forbidden |
 |---------------|---------------|--------|---------|-----------|
-| `update_enrollment_status` | OCM | `outcome_status_key` | Yes | Legacy text status |
-| Change case status (BP / action) | opportunity | `status_key` | Yes | `opportunities.status` text |
-| Enrollment intake / Create Lead | opportunity + OCM | `status_key`, `outcome_status_key` | Yes | Ad-hoc text status |
-| Generic entity PATCH | opportunity, person, customer | `status_key` | Yes (policy-bounded) | `status` text column |
-| Workflow effects | per effect config | `status_key` | Yes | Parallel status copies |
+| Stage outcome rule targets | opportunity + OCM | `status_key`, `outcome_status_key`, `close_reason_key`, `stage_key` | Yes (canonical path) | Bypassing outcome execution |
+| Domain actions (`waitlist_child`, `enroll_child`, `close_lead`, …) | opportunity / OCM | via typed domain → outcome | Yes | Generic `update_status` |
+| Enrollment intake / Create Lead | opportunity + OCM | `status_key=open`, `stage_key=lead` | Yes | Ad-hoc text status |
+| Workflow effects | per effect config | typed domain | Yes | Parallel status copies |
+| Any PATCH | any CRM entity | `status_key` / `outcome_status_key` / `stage_key` | **No** | Direct status PATCH removed |
 | Any PATCH | any CRM entity | `status` (text) | **No** | Blocked Phase 1 |
 
 ---
@@ -24,7 +27,7 @@ Cross-reference for which actions may mutate which canonical fields and statuses
 | Field group | Write route | Entity | Blocked on |
 |-------------|-------------|--------|------------|
 | Profile (name, dob, health) | PATCH customer-members | customer_member | OCM PATCH |
-| Enrollment (start date, program, room) | PATCH opportunity-customer-members | inquiry_child / OCM | customer_member for enrollment keys |
+| Enrollment (`start_date`, `program_category_id`, `schedule_type`, room) | PATCH opportunity-customer-members | enrollment_participation / OCM | customer_member for enrollment keys |
 | Case facts | PATCH opportunity | opportunity | OCM |
 
 Guard: `assertNoChildProfileKeysOnOcmPatch`, `validateFieldDefinitionOwnership`.
@@ -45,11 +48,13 @@ Guard: `assertNoChildProfileKeysOnOcmPatch`, `validateFieldDefinitionOwnership`.
 
 | Action key | Reads | Writes | Status impact |
 |------------|-------|--------|---------------|
-| `update_enrollment_status` | OCM, status_definitions, transition rules | `outcome_status_key` | Child enrollment outcome |
-| `move_to_waitlist` | Case + OCM context | OCM outcome, may touch case status | Per BP config |
-| `schedule_tour` | Opportunity, persons, children | metadata / tour booking | Case status via BP |
-| `add_inquiry_child` | customer_members | Creates OCM row | Sets initial outcome_status_key |
-| `approve_enrollment` | Completion preflight | OCM + case fields | Enrollment outcome |
+| `schedule_tour` | Opportunity, persons, children | tour booking; stage → `tour` via outcome | Stage move (case) |
+| `waitlist_child` | Case + OCM context | OCM outcome `waitlisted`, child `stage_key=waitlist` | Child enrollment outcome |
+| `enroll_child` | Case + OCM context | OCM outcome `enrolling`, child `stage_key=enrolling` | Child enrollment outcome |
+| `mark_enrolled` | Completion preflight | OCM outcome `enrolled`; agreement handoff | Enrollment outcome |
+| `withdraw_child` | OCM context | OCM outcome `withdrawn`/`not_enrolling` + `close_reason_key` | Terminal child outcome |
+| `close_lead` | Case context | `status_key=closed` + `close_reason_key` | Terminal case status |
+| `add_enrollment_participation` | customer_members | Creates OCM row | `outcome_status_key=null` at intake |
 | Relationship actions | persons, customer_persons | Join rows | None on status_key directly |
 
 Full catalog: `action_definitions` seeds + `docs/platform/core/status-and-state-system.md`.
@@ -73,6 +78,7 @@ Full catalog: `action_definitions` seeds + `docs/platform/core/status-and-state-
 | Pattern | Enforcement |
 |---------|-------------|
 | Legacy text `status` in PATCH | `rejectLegacyTextStatusPatch` |
+| Direct `status_key`/`outcome_status_key`/`stage_key` PATCH | Outcome execution is the only writer |
 | Profile fields on OCM | `findCustomerMemberProfileKeysInPatch` |
 | Wrong entity_type in field_definitions POST | `validateFieldDefinitionOwnership` |
 | Non-canonical status values | `assertAllowedStatusKey` (API) |

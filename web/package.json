@@ -64,6 +64,7 @@
         "demo:delete:one-family": "tsx scripts/deleteDemoSeedFamily.ts",
         "demo:cleanup:dry": "tsx scripts/demoRuntimeCleanupDryRun.ts",
         "demo:cleanup:execute": "tsx scripts/demoRuntimeCleanupExecute.ts",
+        "dev:reset:operational-state": "tsx scripts/resetOperationalState.ts",
         "demo:seed:golden-path": "tsx scripts/seedOneGoldenPathEnrollmentRecord.ts",
         "dev:layout:publish-lead-drawer-v2": "tsx --tsconfig tsconfig.json scripts/publishLeadDrawerV2ForOrg.ts",
         "dev:layout:publish-lead-drawer-v2:execute": "tsx --tsconfig tsconfig.json scripts/publishLeadDrawerV2ForOrg.ts --execute",

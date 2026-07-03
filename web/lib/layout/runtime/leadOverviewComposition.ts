@@ -64,7 +64,7 @@ export const DEFAULT_LEAD_ENROLLMENT_COMPOSITION_PRIMARY_COLUMN_REFS = [
     "child.name",
     "child.dob_age",
     "child.program",
-    "child.desired_start_date",
+    "child.start_date",
     "child.schedule",
     "child.status",
 ] as const;

@@ -73,7 +73,7 @@ describe("default Lead drawer — Children & Enrollment table", () => {
             "child.name",
             "child.dob_age",
             "child.program",
-            "child.desired_start_date",
+            "child.start_date",
             "child.schedule",
             "child.room",
             "child.location",

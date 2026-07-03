@@ -33,16 +33,22 @@ describe("opportunityDrawerRecordNeedsRevalidate", () => {
         expect(opportunityDrawerRestoreShouldHoldLoading(full)).toBe(false);
     });
 
-    it("snapshotInquiryChildrenNeedHydrate when inquiry child has program type but no label", () => {
+    it("snapshotInquiryChildrenNeedHydrate when inquiry child has program set but no label", () => {
         expect(
             inquiryChildOcmPlacementLabelsIncomplete({
-                desired_program_type: "toddler",
+                program_category_id: "cat-1",
+                desired_program_label: null,
+            })
+        ).toBe(true);
+        expect(
+            inquiryChildOcmPlacementLabelsIncomplete({
+                program_key: "toddler",
                 desired_program_label: null,
             })
         ).toBe(true);
         const record = {
             _record_surface: "full",
-            _inquiry_children: [{ desired_program_type: "toddler", desired_program_label: null }],
+            _inquiry_children: [{ program_category_id: "cat-1", desired_program_label: null }],
         };
         expect(snapshotInquiryChildrenNeedHydrate(record)).toBe(true);
         expect(snapshotNeedsFullRevalidate(record)).toBe(true);
@@ -55,9 +61,9 @@ describe("opportunityDrawerRecordNeedsRevalidate", () => {
                 _record_surface: "full",
                 _inquiry_children: [
                     {
-                        desired_program_type: "toddler",
+                        program_category_id: "cat-1",
                         desired_program_label: "Toddler Program",
-                        desired_schedule_type: "full_day",
+                        schedule_type: "full_day",
                         desired_schedule_label: "Full day",
                         location_id: "loc-1",
                         location_label: "West Campus",

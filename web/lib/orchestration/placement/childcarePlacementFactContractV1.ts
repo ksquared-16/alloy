@@ -9,7 +9,7 @@
 export const CHILDCARE_PLACEMENT_FACT_WAIT_SINCE = "wait_since" as const;
 
 /** Desired enrollment start (ISO 8601 date or instant). Optional tie-breaker. */
-export const CHILDCARE_PLACEMENT_FACT_DESIRED_START_DATE = "desired_start_date" as const;
+export const CHILDCARE_PLACEMENT_FACT_START_DATE = "start_date" as const;
 
 /** Employee household policy flag. */
 export const CHILDCARE_PLACEMENT_FACT_FLAG_EMPLOYEE_HOUSEHOLD = "flag_employee_household" as const;
@@ -44,7 +44,7 @@ export const CHILDCARE_PLACEMENT_V1_PREDICATE_FACT_KEYS = [
 /** Tie-break facts used by preset `tie_breakers`. */
 export const CHILDCARE_PLACEMENT_V1_TIEBREAK_FACT_KEYS = [
     CHILDCARE_PLACEMENT_FACT_WAIT_SINCE,
-    CHILDCARE_PLACEMENT_FACT_DESIRED_START_DATE,
+    CHILDCARE_PLACEMENT_FACT_START_DATE,
 ] as const;
 
 /**

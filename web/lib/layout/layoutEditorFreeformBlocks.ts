@@ -162,7 +162,7 @@ export function buildCustomLayoutBlock(input: CreateCustomBlockInput): LayoutIte
             columns: [
                 { label: "Child", refKey: "child.name", width: "medium" },
                 { label: "Program", refKey: "child.program", width: "medium" },
-                { label: "Desired start", refKey: "child.desired_start_date", width: "medium", renderHint: "date" },
+                { label: "Desired start", refKey: "child.start_date", width: "medium", renderHint: "date" },
                 { label: "DOB / Age", refKey: "child.dob_age", width: "medium" },
                 { label: "Status", refKey: "child.status", width: "medium", renderHint: "status" },
             ],

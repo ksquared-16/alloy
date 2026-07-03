@@ -166,12 +166,12 @@ describe("child row template nested fields", () => {
         const row = layout[1];
         expect(row?.columnCount).toBe(3);
         expect(row?.columns[0]?.items[0]?.refKey).toBe("child.program");
-        expect(row?.columns[1]?.items[0]?.refKey).toBe("child.desired_start_date");
+        expect(row?.columns[1]?.items[0]?.refKey).toBe("child.start_date");
         expect(row?.columns[2]?.items[0]?.refKey).toBe("child.dob_age");
 
         const runtimeLayout = resolveChildRowTemplateRowLayout(findBlock(insert.doc, insert.blockItemId)!);
         expect(runtimeLayout?.[1]?.slots[0]?.refKey).toBe("child.program");
-        expect(runtimeLayout?.[1]?.slots[1]?.refKey).toBe("child.desired_start_date");
+        expect(runtimeLayout?.[1]?.slots[1]?.refKey).toBe("child.start_date");
         expect(runtimeLayout?.[1]?.slots[2]?.refKey).toBe("child.dob_age");
     });
 });

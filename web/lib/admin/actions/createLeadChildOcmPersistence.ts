@@ -5,7 +5,7 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { findOrCreateChildPersonInOrg } from "@/lib/admin/person/findOrCreateChildPersonInOrg";
-import { enrichOcmProgramCategoryFields } from "@/lib/locations/resolveOcmProgramCategoryFields";
+import { resolveProgramCategoryId } from "@/lib/locations/resolveOcmProgramCategoryFields";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -30,10 +30,11 @@ function trimDateOnly(v: unknown): string | null {
 
 export type CreateLeadChildOcmFields = {
     location_id: string | null;
-    desired_program_type: string | null;
-    desired_program_category_id: string | null;
-    desired_schedule_type: string | null;
-    desired_start_date: string | null;
+    /** Stable program key from intake (`child_program`) — resolved to `program_category_id`, never stored. */
+    program_key: string | null;
+    program_category_id: string | null;
+    schedule_type: string | null;
+    start_date: string | null;
     program_room_cohort_key: string | null;
     notes: string | null;
 };
@@ -61,15 +62,14 @@ export function parseCreateLeadChildParticipationPayload(
     const ocm: CreateLeadChildOcmFields = {
         // Lead-level location_id belongs on the opportunity — never infer child participation from it.
         location_id: trimUuid(merged.child_location_id),
-        desired_program_type:
-            trimStableKey(merged.child_program) ?? trimStableKey(merged.desired_program_type),
-        desired_program_category_id:
+        program_key: trimStableKey(merged.child_program),
+        program_category_id:
             trimUuid(merged.child_program_category_id) ??
-            trimUuid(merged.desired_program_category_id),
-        desired_schedule_type:
-            trimStableKey(merged.child_desired_schedule_type) ?? trimStableKey(merged.desired_schedule_type),
-        desired_start_date:
-            trimDateOnly(merged.child_desired_start_date) ?? trimDateOnly(merged.desired_start_date),
+            trimUuid(merged.program_category_id),
+        schedule_type:
+            trimStableKey(merged.child_schedule_type) ?? trimStableKey(merged.schedule_type),
+        start_date:
+            trimDateOnly(merged.child_start_date) ?? trimDateOnly(merged.start_date),
         program_room_cohort_key:
             trimUuid(merged.child_program_room_cohort_key) ??
             trimUuid(merged.program_room_cohort_key),
@@ -110,14 +110,17 @@ export function buildCreateLeadOcmInsertRow(args: {
         // Leave outcome_status_key null so the child badge is suppressed until enrollment starts —
         // do NOT write `new_inquiry` (which has no OCM definition and humanizes to "New Inquiry").
         outcome_status_key: null,
+        // No child process stage at lead creation: the child rides the family track until a
+        // decision creates the enrollment participation. Stage is a persisted column (S4) — leave
+        // it null now; outcome execution writes it when the child enters waitlist/enrolling/etc.
+        stage_key: null,
         metadata: { source: "create_lead" },
         ...(ocm.location_id ? { location_id: ocm.location_id } : {}),
-        ...(ocm.desired_program_type ? { desired_program_type: ocm.desired_program_type } : {}),
-        ...(ocm.desired_program_category_id
-            ? { desired_program_category_id: ocm.desired_program_category_id }
+        ...(ocm.program_category_id
+            ? { program_category_id: ocm.program_category_id }
             : {}),
-        ...(ocm.desired_schedule_type ? { desired_schedule_type: ocm.desired_schedule_type } : {}),
-        ...(ocm.desired_start_date ? { desired_start_date: ocm.desired_start_date } : {}),
+        ...(ocm.schedule_type ? { schedule_type: ocm.schedule_type } : {}),
+        ...(ocm.start_date ? { start_date: ocm.start_date } : {}),
         ...(ocm.program_room_cohort_key ? { program_room_cohort_key: ocm.program_room_cohort_key } : {}),
         ...(ocm.notes ? { notes: ocm.notes } : {}),
     };
@@ -180,20 +183,21 @@ export async function applyCreateLeadChildParticipationFromIdentity(
     }
     const customerMemberId = String((cm as { id: string }).id);
 
-    const enrichedProgram = await enrichOcmProgramCategoryFields(supabase, {
-        orgId: params.orgId,
-        locationId: params.ocm.location_id,
-        desiredProgramType: params.ocm.desired_program_type,
-        desiredProgramCategoryId: params.ocm.desired_program_category_id,
-    });
+    // FK-only program storage: resolve the intake program key against the child's site.
+    const programCategoryId =
+        trimUuid(params.ocm.program_category_id) ??
+        (await resolveProgramCategoryId(supabase, {
+            orgId: params.orgId,
+            locationId: params.ocm.location_id,
+            programKey: params.ocm.program_key,
+        }));
     const ocmRow = buildCreateLeadOcmInsertRow({
         orgId: params.orgId,
         opportunityId: params.opportunityId,
         customerMemberId,
         ocm: {
             ...params.ocm,
-            desired_program_type: enrichedProgram.desired_program_type,
-            desired_program_category_id: enrichedProgram.desired_program_category_id,
+            program_category_id: programCategoryId,
         },
     });
 

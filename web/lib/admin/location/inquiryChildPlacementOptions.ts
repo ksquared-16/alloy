@@ -61,9 +61,53 @@ function programLabelAndOrder(items: InquiryChildProgramOptionSetItem[]): {
 }
 
 /**
- * Active program options offered at a site.
+ * Program options for OCM-persisting program selects — value = `location_program_categories.id`
+ * (the stored OCM `program_category_id` FK). Only configured categories can produce storable
+ * FK values; when none exist for the site there is nothing storable, so no options are returned
+ * (the legacy unit-metadata key derivation cannot be persisted on OCM).
+ */
+export function resolveProgramCategoryOptionsForSite(
+    siteId: string | null | undefined,
+    locationCategories?: ReadonlyArray<LocationProgramCategoryRow>
+): InquiryChildPlacementSelectOption[] {
+    const site = (siteId ?? "").trim();
+    if (!site) return [];
+    return resolveActiveProgramCategoriesForSite(locationCategories ?? [], site).map((c) => ({
+        value: c.id,
+        label: c.label,
+    }));
+}
+
+export type InquiryChildProgramOptionValueMode = "category_id" | "key";
+
+/**
+ * Program select options for a site with explicit value semantics:
+ * - "category_id": values are `location_program_categories.id` (storable OCM FK) — use for
+ *   selects that PATCH OCM `program_category_id` directly. Empty when no categories configured.
+ * - "key": values are stable program keys — use for create_lead flows (`child_program`)
+ *   where the FK is resolved at persist time; includes the legacy unit-metadata fallback.
+ */
+export function resolveProgramSelectOptionsForSite(
+    locations: InquiryChildPlacementHierarchyRow[],
+    siteId: string | null | undefined,
+    programItems: InquiryChildProgramOptionSetItem[],
+    locationCategories: ReadonlyArray<LocationProgramCategoryRow> | undefined,
+    valueMode: InquiryChildProgramOptionValueMode
+): InquiryChildPlacementSelectOption[] {
+    if (valueMode === "category_id") {
+        return resolveProgramCategoryOptionsForSite(siteId, locationCategories);
+    }
+    return resolveProgramsOfferedForSite(locations, siteId, programItems, locationCategories);
+}
+
+/**
+ * Active program options offered at a site, valued by stable program KEY.
  * Prefers `location_program_categories` when provided; otherwise derives from unit
  * `metadata.category` keyed against legacy program item labels.
+ *
+ * Key-valued options are for flows that persist a key and resolve the FK at write time
+ * (create_lead `child_program` → resolveProgramCategoryId). Selects that PATCH OCM directly
+ * must use {@link resolveProgramCategoryOptionsForSite} (category-id values) instead.
  */
 export function resolveProgramsOfferedForSite(
     locations: InquiryChildPlacementHierarchyRow[],

@@ -15,6 +15,7 @@ import type { ProcessTracksV1 } from "@/lib/businessProcesses/processConfigTypes
 import { ENROLLMENT_PROCESS_KEY } from "@/lib/lifecycle/lifecycleProcessTypes";
 import { defaultEnrollmentQueueMembershipForStage } from "@/lib/businessProcessTemplates/enrollmentQueueMembershipDefaults";
 import { defaultStageOperatingPlanForEnrollmentStage } from "@/lib/lifecycle/defaultEnrollmentStageOperatingPlans";
+import type { StageGrain } from "@/lib/lifecycle/stageGrainV1";
 
 export const ENROLLMENT_TEMPLATE_PROCESS_KEY = ENROLLMENT_PROCESS_KEY;
 
@@ -22,12 +23,12 @@ export const ENROLLMENT_TRACK_FAMILY_KEY = "family_track" as const;
 export const ENROLLMENT_TRACK_CHILD_KEY = "child_track" as const;
 
 export const ENROLLMENT_FAMILY_STAGE_SPECS = [
-    { key: "lead", label: "Lead", track_key: ENROLLMENT_TRACK_FAMILY_KEY },
-    { key: "qualification", label: "Qualification", track_key: ENROLLMENT_TRACK_FAMILY_KEY },
+    { key: "lead", label: "New Lead", track_key: ENROLLMENT_TRACK_FAMILY_KEY },
     { key: "tour", label: "Tour", track_key: ENROLLMENT_TRACK_FAMILY_KEY },
-    { key: "decision", label: "Decision", track_key: ENROLLMENT_TRACK_FAMILY_KEY },
+    { key: "decision", label: "Placement / Decision", track_key: ENROLLMENT_TRACK_FAMILY_KEY },
     { key: "closed", label: "Closed", track_key: ENROLLMENT_TRACK_FAMILY_KEY },
 ] as const;
+// `qualification` removed (Part 9): no distinct work — folded into the Lead stage's qualify_fit work.
 
 export const ENROLLMENT_CHILD_STAGE_SPECS = [
     { key: "waitlist", label: "Waitlist", track_key: ENROLLMENT_TRACK_CHILD_KEY },
@@ -45,11 +46,10 @@ export const ENROLLMENT_STATUS_ROLLUP_HINTS: Record<
     string,
     { family_status_examples?: string[]; enrollment_status_examples?: string[] }
 > = {
-    lead: { family_status_examples: ["New Lead", "Contacting"] },
-    qualification: { family_status_examples: ["Qualified"] },
-    tour: { family_status_examples: ["Tour Requested", "Tour Scheduled", "Tour Completed"] },
-    decision: { family_status_examples: ["Decision Pending"] },
-    closed: { family_status_examples: ["Closed", "Withdrawn", "Lost"] },
+    lead: { family_status_examples: ["Open"] },
+    tour: { family_status_examples: ["Open"] },
+    decision: { family_status_examples: ["Open"] },
+    closed: { family_status_examples: ["Closed"] },
     waitlist: { enrollment_status_examples: ["Waitlisted", "Offer Pending"] },
     enrolling: { enrollment_status_examples: ["Enrolling", "Future Start"] },
     enrolled: { enrollment_status_examples: ["Enrolled"] },
@@ -97,6 +97,9 @@ export function buildEnrollmentTemplateStageRecords(): LifecycleBuilderStageReco
     return ENROLLMENT_STAGE_SPECS.map((spec, index) => {
         const membership = defaultEnrollmentQueueMembershipForStage(spec.key) ?? undefined;
         const operatingPlan = defaultStageOperatingPlanForEnrollmentStage(spec.key) ?? undefined;
+        // Seed the row-type grain so Work Views can be scoped per grain (family vs child) and the
+        // grain banner has data. Family track = one row per case; child track = one row per enrollment track.
+        const grain: StageGrain = spec.track_key === ENROLLMENT_TRACK_CHILD_KEY ? "child" : "family";
         return {
             id: randomUUID(),
             key: spec.key,
@@ -104,6 +107,7 @@ export function buildEnrollmentTemplateStageRecords(): LifecycleBuilderStageReco
             track_key: spec.track_key,
             sort_order: index,
             is_active: true,
+            grain,
             ...(membership ? { queue_membership_v1: membership } : {}),
             ...(operatingPlan ? { stage_operating_plan_v1: operatingPlan } : {}),
         };

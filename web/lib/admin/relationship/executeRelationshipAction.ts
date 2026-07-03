@@ -47,10 +47,10 @@ function trim(value: unknown): string {
 
 const EMPTY_CHILD_OCM: CreateLeadChildOcmFields = {
     location_id: null,
-    desired_program_type: null,
-    desired_program_category_id: null,
-    desired_schedule_type: null,
-    desired_start_date: null,
+    program_key: null,
+    program_category_id: null,
+    schedule_type: null,
+    start_date: null,
     program_room_cohort_key: null,
     notes: null,
 };

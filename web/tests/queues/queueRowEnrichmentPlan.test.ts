@@ -38,7 +38,7 @@ function crmLeadUi() {
                     "email",
                     "child_name",
                     "program",
-                    "desired_start_date",
+                    "start_date",
                     "tour_date",
                 ],
                 actions: ["open"],

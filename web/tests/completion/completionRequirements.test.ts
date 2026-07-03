@@ -167,14 +167,14 @@ describe("completion guardrails — opportunity", () => {
                             id: "c1",
                             first_name: "Kid",
                             last_name: "One",
-                            desired_program_type: "infant",
-                            desired_start_date: "",
+                            program_category_id: "cat-infant",
+                            start_date: "",
                         },
                     ],
                 },
             })
         );
-        expect(r.blocking.some((v) => v.field_key === "desired_start_date")).toBe(true);
+        expect(r.blocking.some((v) => v.field_key === "start_date")).toBe(true);
     });
 
     it("requires primary contact and at least one child", () => {

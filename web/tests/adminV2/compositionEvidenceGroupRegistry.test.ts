@@ -68,6 +68,39 @@ describe("QUEUE_ZONE_EVIDENCE_GROUPS — named groups, no abstract labels", () =
     });
 });
 
+describe("V3 §5 — every canonical group declares acceptedNamespaces", () => {
+    it("all queue zone groups declare acceptedNamespaces", () => {
+        for (const [zone, groups] of Object.entries(QUEUE_ZONE_EVIDENCE_GROUPS)) {
+            for (const group of groups) {
+                expect(
+                    Array.isArray(group.acceptedNamespaces) && group.acceptedNamespaces.length > 0,
+                    `zone ${zone} group ${group.key} must declare acceptedNamespaces`,
+                ).toBe(true);
+            }
+        }
+    });
+
+    it("all Focus Panel card groups declare acceptedNamespaces", () => {
+        for (const [card, groups] of Object.entries(FOCUS_PANEL_CARD_EVIDENCE_GROUPS)) {
+            for (const group of groups ?? []) {
+                expect(
+                    Array.isArray(group.acceptedNamespaces) && group.acceptedNamespaces.length > 0,
+                    `card ${card} group ${group.key} must declare acceptedNamespaces`,
+                ).toBe(true);
+            }
+        }
+    });
+
+    it("household accepts person/customer; children accept child but not person", () => {
+        const household = QUEUE_ZONE_EVIDENCE_GROUPS["household"]![0]!;
+        expect(household.acceptedNamespaces).toContain("person");
+        expect(household.acceptedNamespaces).toContain("customer");
+        const childSummary = QUEUE_ZONE_EVIDENCE_GROUPS["children"]![0]!;
+        expect(childSummary.acceptedNamespaces).toContain("child");
+        expect(childSummary.acceptedNamespaces).not.toContain("person");
+    });
+});
+
 describe("evidenceGroupsForZone — pipeline vs waitlist", () => {
     it("returns pipeline children groups when isWaitlist=false", () => {
         const groups = evidenceGroupsForZone("children", false);
@@ -83,6 +116,15 @@ describe("evidenceGroupsForZone — pipeline vs waitlist", () => {
         const groups = evidenceGroupsForZone("status", true);
         expect(groups[0]!.key).toBe("waitlist_position");
         expect(groups[0]!.label).toBe("Waitlist & Placement");
+    });
+
+    it("waitlist status group includes waitlist.positionLabel and waitlist.tierLabel", () => {
+        const groups = evidenceGroupsForZone("status", true);
+        const keys = groups.flatMap((g) => g.defaultFieldKeys);
+        expect(keys).toContain("waitlist.positionLabel");
+        expect(keys).toContain("waitlist.tierLabel");
+        expect(keys).toContain("waitlist.waitSince");
+        expect(keys).toContain("overrides.flags");
     });
 
     it("pipeline status group is 'Stage & Disposition'", () => {

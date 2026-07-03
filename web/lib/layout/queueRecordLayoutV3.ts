@@ -103,6 +103,15 @@ export type QueueRecordColumnConfig = {
      * queue row runtime renderer (deferred — runtime evaluation wired in V2).
      */
     visibleWhen?: LayoutCondition;
+    /**
+     * Stacked-section index within the condensed row (Presentation Runtime V3).
+     * Columns sharing a `rowIndex` render on the same horizontal line; higher
+     * indices stack below. **Back-compat: absent = 0** (single flat strip, the
+     * legacy behavior). The Queue Row Builder authors this; the live /work-unit
+     * runtime does not consume stacking yet (presentation-runtime-ready — see
+     * queue row platform doc), so the builder preview labels it accordingly.
+     */
+    rowIndex?: number;
 };
 
 import type { QueueRecordFixedControls } from "@/lib/layout/queueRecordLayoutConfig";
@@ -558,19 +567,19 @@ export function defaultWaitlistQueueLayoutV3(): QueueRecordLayoutConfigV3 {
             },
             {
                 id: nextQueueRecordFieldId("wl-schedule"),
-                fieldKey: "inquiry_child.desired_schedule_type",
+                fieldKey: "inquiry_child.schedule_type",
                 label: "Schedule",
                 display: "muted",
                 showLabel: true,
-                visibleWhen: { type: "exists", path: "inquiry_child.desired_schedule_type" },
+                visibleWhen: { type: "exists", path: "inquiry_child.schedule_type" },
             },
             {
                 id: nextQueueRecordFieldId("wl-start-date"),
-                fieldKey: "child.desired_start_date",
+                fieldKey: "child.start_date",
                 label: "Desired start",
                 display: "date",
                 showLabel: true,
-                visibleWhen: { type: "exists", path: "child.desired_start_date" },
+                visibleWhen: { type: "exists", path: "child.start_date" },
             },
         ];
     }

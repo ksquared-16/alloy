@@ -28,28 +28,39 @@ import type { QueueRowContext } from "@/lib/workUnits/lifecycleSubjectContracts"
 
 export type OperationalProjectionRow = Record<string, unknown>;
 
-/** `status_key` → process stage key (from `status_definitions.metadata.process_stage_key`). */
+/**
+ * @deprecated Stage is no longer derived from status (S4 collapse). Kept only as a
+ * legacy-safety fallback for rows that carry neither `stage_key` nor `lifecycle_stage_key`.
+ */
 export type StatusStageMap = Record<string, string>;
 
 /**
- * Materialize the process **stage** onto rows that carry only a **status**. Stage is a roll-up over
- * statuses: a record's stage = the stage its `status_key` belongs to. Opportunities do not store
- * `lifecycle_stage_key` (it is null in practice), so a Work View's Stage predicate (e.g. New Leads =
- * `opportunity_stage equals "lead"`) cannot evaluate until the stage is derived from the status. This
- * sets `lifecycle_stage_key` (the field the evaluator reads) from `statusStageMap[status_key]` when the
- * row lacks one — leaving any explicit stage untouched.
+ * Materialize the process **stage** onto rows so a Work View's Stage predicate (e.g. New Leads =
+ * `opportunity_stage equals "lead"`) can evaluate against `lifecycle_stage_key` (the field the
+ * evaluator reads).
+ *
+ * Stage is now a **persisted column** (`stage_key` on opportunities / OCM), written only by outcome
+ * execution + intake — it is no longer derived from status. Primary source is `row.stage_key`. The
+ * `statusStageMap` param is vestigial and used ONLY as a legacy-safety fallback when a row has neither
+ * `lifecycle_stage_key` nor `stage_key` (e.g. un-backfilled legacy rows). Explicit `lifecycle_stage_key`
+ * is left untouched.
  */
 export function enrichRowsWithDerivedStage<T extends OperationalProjectionRow>(
     rows: readonly T[],
     statusStageMap: StatusStageMap | null | undefined,
 ): T[] {
-    if (!statusStageMap) return [...rows];
     return rows.map((row) => {
         const existing =
             typeof row.lifecycle_stage_key === "string" && row.lifecycle_stage_key.trim()
                 ? row.lifecycle_stage_key
                 : null;
         if (existing) return row;
+        // Primary source: the persisted stage_key column.
+        const persistedStage =
+            typeof row.stage_key === "string" && row.stage_key.trim() ? row.stage_key.trim() : null;
+        if (persistedStage) return { ...row, lifecycle_stage_key: persistedStage } as T;
+        // Legacy-safety fallback only: derive from status when no persisted stage exists.
+        if (!statusStageMap) return row;
         const status = typeof row.status_key === "string" ? row.status_key.trim() : "";
         const stage = status ? statusStageMap[status] : undefined;
         return stage ? ({ ...row, lifecycle_stage_key: stage } as T) : row;
@@ -84,7 +95,7 @@ export function computeOperationalProjection(params: {
     baseRows: ReadonlyArray<OperationalProjectionRow>;
     workViews: ReadonlyArray<WorkViewConfigV1Stored>;
     includeRows?: boolean;
-    /** Derive `opportunity_stage` from `status_key` so Stage predicates evaluate (see enrichRowsWithDerivedStage). */
+    /** @deprecated Legacy-safety fallback only — stage now comes from the persisted `stage_key` column (see enrichRowsWithDerivedStage). */
     statusStageMap?: StatusStageMap | null;
 }): OperationalProjection {
     const baseRows = enrichRowsWithDerivedStage(

@@ -144,7 +144,7 @@ export const FIELD_PICKER_QUEUE_LABEL_OVERRIDES: Record<string, string> = {
     "child.status": "Status",
     "child.location": "Location",
     "child.room": "Room",
-    "child.desired_start_date": "Desired start date",
+    "child.start_date": "Desired start date",
     "customer.display_name": "Household name",
     "customer.name": "Household name",
     "waitlist.positionLabel": "Waitlist position",

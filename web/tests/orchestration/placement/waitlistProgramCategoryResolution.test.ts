@@ -36,7 +36,7 @@ describe("waitlistProgramCategoryResolution", () => {
         const resolved = resolveWaitlistProgramCategorySection(
             {
                 siteId: SITE_A,
-                desiredProgramCategoryId: "cat-toddler",
+                programCategoryId: "cat-toddler",
                 cohortKey: "toddler_a",
                 cohortLabel: "Toddler A",
             },
@@ -70,7 +70,7 @@ describe("waitlistProgramCategoryResolution", () => {
     it("resolveWaitlistQueueSection threads location labels into section titles", () => {
         const section = resolveWaitlistQueueSection({
             siteId: SITE_A,
-            desiredProgramType: "infant",
+            programKey: "infant",
             locationCategoryContext: { categories: siteCategories },
         });
         expect(section.sectionTitle).toBe("Babies waitlist");

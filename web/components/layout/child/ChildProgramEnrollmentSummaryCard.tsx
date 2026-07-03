@@ -2,7 +2,7 @@
 
 import { GraduationCap } from "lucide-react";
 import LeadOperatingSummaryCard from "@/components/layout/lead/LeadOperatingSummaryCard";
-import type { ProofRuntimeRecord } from "@/lib/layout/runtime/proofRecordContext";
+import { isOpaqueIdValue, type ProofRuntimeRecord } from "@/lib/layout/runtime/proofRecordContext";
 import {
     PRESENTATION_DATA_VALUE_COMPACT,
     PRESENTATION_EMPTY_STATE,
@@ -23,10 +23,11 @@ type Props = {
 };
 
 export default function ChildProgramEnrollmentSummaryCard({ record }: Props) {
+    const programCategoryValue = record["inquiry_child.program_category_id"];
     const program = pickLine(
         record["inquiry_child.program"],
         record["child.program"],
-        record["inquiry_child.desired_program_type"],
+        isOpaqueIdValue(programCategoryValue) ? null : programCategoryValue,
         record.program_label,
     );
     const status = pickLine(

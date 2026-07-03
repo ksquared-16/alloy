@@ -51,7 +51,7 @@ describe("seedLayoutDocFromCurrent", () => {
                             layout: "single_section",
                             row_preview: {
                                 variant: "crm_compact",
-                                fields: ["title", "status", "primary_contact", "phone", "desired_start_date"],
+                                fields: ["title", "status", "primary_contact", "phone", "start_date"],
                                 actions: ["open", "call"],
                             },
                         },
@@ -70,7 +70,7 @@ describe("seedLayoutDocFromCurrent", () => {
             "status",
             "primary_contact",
             "phone",
-            "desired_start_date",
+            "start_date",
         ]);
         expect(items.find((i) => i.kind === "widget_placeholder")?.refKey).toBe("row_actions");
         expect(items.find((i) => i.refKey === "status")?.renderHint).toBe("status");

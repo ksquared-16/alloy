@@ -64,6 +64,8 @@ export type StageOutcomeRuleTargetV1 = {
     kind: StageOutcomeRuleTargetKind;
     status_key?: string | null;
     disposition_key?: string | null;
+    /** Reason written alongside a terminal status (update_family_case_status / update_child_enrollment_status). */
+    close_reason_key?: string | null;
     candidate_status?: "active" | "paused" | "withdrawn" | "placed" | null;
     attention_reason?: string | null;
     wait_bucket?: string | null;
@@ -232,6 +234,8 @@ function parseTarget(raw: unknown): StageOutcomeRuleTargetV1 | null {
     if (status_key) target.status_key = status_key;
     const disposition_key = trimNonEmpty(o.disposition_key);
     if (disposition_key) target.disposition_key = disposition_key;
+    const close_reason_key = trimNonEmpty(o.close_reason_key);
+    if (close_reason_key) target.close_reason_key = close_reason_key;
     const candidate_status = trimNonEmpty(o.candidate_status);
     if (candidate_status && CANDIDATE_STATUSES.has(candidate_status)) {
         target.candidate_status = candidate_status as StageOutcomeRuleTargetV1["candidate_status"];

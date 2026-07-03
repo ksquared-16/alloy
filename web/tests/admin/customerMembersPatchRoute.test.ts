@@ -122,11 +122,11 @@ describe("validateCustomerMemberPatchBody", () => {
     });
 
     it("rejects OCM/enrollment fields", () => {
-        const result = validateCustomerMemberPatchBody({ desired_start_date: "2026-09-01" });
+        const result = validateCustomerMemberPatchBody({ start_date: "2026-09-01" });
         expect(result.ok).toBe(false);
         if (!result.ok) {
             expect(result.error).toContain("inquiry_child");
-            expect(result.error).toContain("desired_start_date");
+            expect(result.error).toContain("start_date");
         }
     });
 
@@ -334,7 +334,7 @@ describe("OCM route isolation — profile config fields stay off inquiry_child",
         expect(assertNoChildProfileKeysOnOcmPatch({ gender: "female" })).toBeTruthy();
         expect(assertNoChildProfileKeysOnOcmPatch({ allergies: "peanut" })).toBeTruthy();
         expect(assertNoChildProfileKeysOnOcmPatch({ medical_notes: "asthma" })).toBeTruthy();
-        expect(assertNoChildProfileKeysOnOcmPatch({ desired_start_date: "2026-09-01" })).toBeNull();
+        expect(assertNoChildProfileKeysOnOcmPatch({ start_date: "2026-09-01" })).toBeNull();
     });
 
     it("customer_member PATCH targets customer_member entity_type only", async () => {

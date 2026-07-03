@@ -2,7 +2,6 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
-    ENROLLMENT_PLACEMENT_LEGACY_PROGRAM_FIELD_KEY,
     ENROLLMENT_PROGRAM_MODEL,
     LOCATION_OWNERSHIP_MODEL,
     enrollmentPlacementOperatorLabel,
@@ -53,13 +52,12 @@ describe("Configuration Workspace V2 — workflow QA readiness", () => {
         expect(LOCATION_OWNERSHIP_MODEL.rooms.required_at).toBe("enrollment_placement");
     });
 
-    it("operator Program model uses category storage not legacy key label", () => {
+    it("operator Program model uses category storage as the sole program field", () => {
         expect(ENROLLMENT_PROGRAM_MODEL.operator_label).toBe("Program");
-        expect(ENROLLMENT_PROGRAM_MODEL.storage_field_key).toBe("desired_program_category_id");
-        expect(enrollmentPlacementOperatorLabel("desired_program_category_id", "Desired program")).toBe("Program");
-        expect(isChildcareLegacyOrSystemField("inquiry_child", ENROLLMENT_PLACEMENT_LEGACY_PROGRAM_FIELD_KEY)).toBe(
-            true
-        );
+        expect(ENROLLMENT_PROGRAM_MODEL.storage_field_key).toBe("program_category_id");
+        expect(enrollmentPlacementOperatorLabel("program_category_id", "Desired program")).toBe("Program");
+        // Canonical program storage stays operator-configurable, not hidden as legacy/system.
+        expect(isChildcareLegacyOrSystemField("inquiry_child", "program_category_id")).toBe(false);
     });
 
     it("hides unfinished entities from operator Fields hub", () => {
@@ -106,10 +104,9 @@ describe("Configuration Workspace V2 — workflow QA readiness", () => {
 
         const next = applyInquiryChildPlacementFieldChange("location_id", "site-south", {
             location_id: "site-north",
-            desired_program_category_id: "cat-north",
-            desired_program_type: "infant",
+            program_category_id: "cat-north",
         });
-        expect(next.desired_program_category_id).toBe("");
+        expect(next.program_category_id).toBe("");
     });
 
     it("statuses page does not own stage assignment", () => {
@@ -147,8 +144,7 @@ describe("Configuration Workspace V2 — workflow QA readiness", () => {
     it("locations page communicates ownership without internal field keys", () => {
         const loc = read("components/adminV2/settings/LocationsHierarchySettingsClient.tsx");
         expect(loc).toContain("LocationSiteConfigurationWorkspace");
-        expect(loc).not.toContain("desired_program_type");
-        expect(loc).not.toContain("desired_program_category_id");
+        expect(loc).not.toContain("program_category_id");
     });
 
     it("settings surfaces use hero headers and left nav", () => {

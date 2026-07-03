@@ -14,7 +14,7 @@ describe("enrollmentQueueRowPreviewPolicy", () => {
 
     it("strips call, email, and placement-authored tokens", () => {
         expect(normalizeEnrollmentQueueRowPreviewActions(["call", "open", "email", "message"])).toEqual(["open"]);
-        expect(normalizeEnrollmentQueueRowPreviewActions(["open", "orchestrator", "update_status"])).toEqual(["open"]);
+        expect(normalizeEnrollmentQueueRowPreviewActions(["open", "orchestrator"])).toEqual(["open"]);
     });
 
     it("stripPlacementAuthoredPreviewTokens removes message for all queues", () => {

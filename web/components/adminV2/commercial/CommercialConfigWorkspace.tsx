@@ -20,13 +20,15 @@ import {
     type CommercialFee,
     type CommercialAddon,
     type CommercialDeposit,
-    type FeeType,
-    type AddonType,
-    type DepositTiming,
-    FEE_TYPE_LABELS,
-    ADDON_TYPE_LABELS,
-    DEPOSIT_TIMING_LABELS,
+    FREQUENCY_OPTIONS,
+    FEE_TYPE_SUGGESTIONS,
+    ADDON_TYPE_SUGGESTIONS,
+    DEPOSIT_TIMING_SUGGESTIONS,
+    PACKAGE_UNIT_TYPE_OPTIONS,
     formatScope,
+    frequencyLabel,
+    isPackageAddon,
+    describePackage,
 } from "@/lib/commercial/feesAddons";
 import {
     type ProgramOffering,
@@ -839,6 +841,179 @@ function AddProgramForm({ onAdd }: { onAdd: (label: string, key: string) => Prom
     );
 }
 
+// ─── Fees & Add-ons shared helpers ─────────────────────────────────────────────
+
+function ScopeBadge({ locationId, programKey, locations }: { locationId: string | null; programKey: string | null; locations: { id: string; name: string }[] }) {
+    const label = formatScope(locationId, programKey, locations);
+    return (
+        <span className="text-[10px] text-alloy-midnight/40 bg-alloy-stone/10 rounded px-1.5 py-0.5 whitespace-nowrap">
+            {label}
+        </span>
+    );
+}
+
+function FreqBadge({ cadenceKey }: { cadenceKey: string | null }) {
+    return (
+        <span className="text-[10px] text-alloy-pine/70 bg-alloy-pine/6 rounded px-1.5 py-0.5 whitespace-nowrap font-medium">
+            {frequencyLabel(cadenceKey)}
+        </span>
+    );
+}
+
+function CommercialCard({ children, onClick, editing }: { children: React.ReactNode; onClick?: () => void; editing?: boolean }) {
+    return (
+        <div
+            className={[
+                "group rounded-lg border px-4 py-3 transition-all",
+                editing ? "border-alloy-pine/40 bg-alloy-pine/3 shadow-sm" : "border-alloy-stone/20 bg-white hover:border-alloy-stone/35 hover:shadow-xs",
+                onClick && !editing ? "cursor-pointer" : "",
+            ].join(" ")}
+            onClick={editing ? undefined : onClick}
+        >
+            {children}
+        </div>
+    );
+}
+
+// Shared text input styled consistently
+function CField({ label, value, onChange, placeholder, type = "text", required }: { label: string; value: string; onChange: (v: string) => void; placeholder?: string; type?: string; required?: boolean }) {
+    return (
+        <label className="block">
+            <span className="text-[10px] font-medium text-alloy-midnight/45 uppercase tracking-wide">{label}{required && <span className="text-red-400 ml-0.5">*</span>}</span>
+            <input
+                type={type}
+                value={value}
+                onChange={e => onChange(e.target.value)}
+                placeholder={placeholder}
+                className="mt-0.5 block w-full rounded border border-alloy-stone/25 px-2 py-1 text-sm text-alloy-midnight placeholder:text-alloy-midnight/25 focus:border-alloy-pine/50 focus:outline-none"
+            />
+        </label>
+    );
+}
+
+// Datalist-backed freeform select (suggestions, not enforced)
+function CSuggest({ label, value, onChange, suggestions, placeholder }: { label: string; value: string; onChange: (v: string) => void; suggestions: string[]; placeholder?: string }) {
+    const id = `suggest-${label.replace(/\s/g, "-").toLowerCase()}`;
+    return (
+        <label className="block">
+            <span className="text-[10px] font-medium text-alloy-midnight/45 uppercase tracking-wide">{label}</span>
+            <input
+                list={id}
+                value={value}
+                onChange={e => onChange(e.target.value)}
+                placeholder={placeholder ?? "Type or choose…"}
+                className="mt-0.5 block w-full rounded border border-alloy-stone/25 px-2 py-1 text-sm text-alloy-midnight placeholder:text-alloy-midnight/25 focus:border-alloy-pine/50 focus:outline-none"
+            />
+            <datalist id={id}>
+                {suggestions.map(s => <option key={s} value={s} />)}
+            </datalist>
+        </label>
+    );
+}
+
+function CSelect({ label, value, onChange, options }: { label: string; value: string; onChange: (v: string) => void; options: { key: string; label: string }[] }) {
+    return (
+        <label className="block">
+            <span className="text-[10px] font-medium text-alloy-midnight/45 uppercase tracking-wide">{label}</span>
+            <select
+                value={value}
+                onChange={e => onChange(e.target.value)}
+                className="mt-0.5 block w-full rounded border border-alloy-stone/25 px-2 py-1 text-sm text-alloy-midnight focus:border-alloy-pine/50 focus:outline-none bg-white"
+            >
+                {options.map(o => <option key={o.key} value={o.key}>{o.label}</option>)}
+            </select>
+        </label>
+    );
+}
+
+function CToggle({ label, checked, onChange, hint }: { label: string; checked: boolean; onChange: (v: boolean) => void; hint?: string }) {
+    return (
+        <label className="flex items-center gap-2 cursor-pointer select-none">
+            <div
+                onClick={() => onChange(!checked)}
+                className={`w-7 h-4 rounded-full transition-colors flex-shrink-0 ${checked ? "bg-alloy-pine" : "bg-alloy-stone/30"}`}
+            >
+                <div className={`w-3 h-3 rounded-full bg-white shadow-sm mt-0.5 transition-transform ${checked ? "translate-x-3.5" : "translate-x-0.5"}`} />
+            </div>
+            <span className="text-sm text-alloy-midnight/70">{label}</span>
+            {hint && <span className="text-[10px] text-alloy-midnight/35">{hint}</span>}
+        </label>
+    );
+}
+
+function ScopeFields({ locationId, setLocationId, programKey, setProgramKey, locations, programs }: {
+    locationId: string; setLocationId: (v: string) => void;
+    programKey: string; setProgramKey: (v: string) => void;
+    locations: { id: string; name: string }[];
+    programs: { key: string; label: string }[];
+}) {
+    return (
+        <div className="grid grid-cols-2 gap-3">
+            <label className="block">
+                <span className="text-[10px] font-medium text-alloy-midnight/45 uppercase tracking-wide">Location scope</span>
+                <select value={locationId} onChange={e => setLocationId(e.target.value)} className="mt-0.5 block w-full rounded border border-alloy-stone/25 px-2 py-1 text-sm text-alloy-midnight focus:border-alloy-pine/50 focus:outline-none bg-white">
+                    <option value="">All locations (org default)</option>
+                    {locations.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
+                </select>
+            </label>
+            <label className="block">
+                <span className="text-[10px] font-medium text-alloy-midnight/45 uppercase tracking-wide">Program scope</span>
+                <select value={programKey} onChange={e => setProgramKey(e.target.value)} className="mt-0.5 block w-full rounded border border-alloy-stone/25 px-2 py-1 text-sm text-alloy-midnight focus:border-alloy-pine/50 focus:outline-none bg-white">
+                    <option value="">All programs</option>
+                    {programs.map(p => <option key={p.key} value={p.key}>{p.label}</option>)}
+                </select>
+            </label>
+        </div>
+    );
+}
+
+function EffectiveDateFields({ start, end, onStart, onEnd }: { start: string; end: string; onStart: (v: string) => void; onEnd: (v: string) => void }) {
+    return (
+        <div className="grid grid-cols-2 gap-3">
+            <CField label="Effective from" value={start} onChange={onStart} type="date" />
+            <CField label="Ends on (optional)" value={end} onChange={onEnd} type="date" />
+        </div>
+    );
+}
+
+function SectionHeader({ title, count, onAdd, adding }: { title: string; count: number; onAdd: () => void; adding: boolean }) {
+    return (
+        <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+                <h3 className="text-sm font-semibold text-alloy-midnight">{title}</h3>
+                {count > 0 && <span className="text-[10px] text-alloy-midnight/35 bg-alloy-stone/10 rounded-full px-1.5 py-0.5">{count}</span>}
+            </div>
+            {!adding && (
+                <button type="button" onClick={onAdd} className="flex items-center gap-1 text-xs text-alloy-pine/75 hover:text-alloy-pine transition-colors font-medium">
+                    <span className="text-sm leading-none">+</span> Add
+                </button>
+            )}
+        </div>
+    );
+}
+
+function EmptySlate({ label, onAdd }: { label: string; onAdd: () => void }) {
+    return (
+        <div className="rounded-lg border border-dashed border-alloy-stone/25 px-4 py-6 text-center">
+            <p className="text-sm text-alloy-midnight/35 mb-2">{label}</p>
+            <button type="button" onClick={onAdd} className="text-xs text-alloy-pine/70 hover:text-alloy-pine font-medium transition-colors">
+                + Add one
+            </button>
+        </div>
+    );
+}
+
+function SaveBar({ onSave, onCancel, saving, disabled }: { onSave: () => void; onCancel: () => void; saving: boolean; disabled?: boolean }) {
+    return (
+        <div className="flex items-center justify-end gap-2 pt-1">
+            <button type="button" onClick={onCancel} className="text-xs text-alloy-midnight/45 hover:text-alloy-midnight transition-colors px-2 py-1">Cancel</button>
+            <button type="button" onClick={onSave} disabled={saving || disabled} className="rounded bg-alloy-pine px-3 py-1 text-xs font-medium text-white hover:bg-alloy-pine/85 disabled:opacity-40 transition-colors">
+                {saving ? "Saving…" : "Save"}
+            </button>
+        </div>
+    );
+}
+
 // ─── FeesAddonsPanel ───────────────────────────────────────────────────────────
 
 function FeesAddonsPanel({
@@ -861,611 +1036,465 @@ function FeesAddonsPanel({
     fees: CommercialFee[];
     addons: CommercialAddon[];
     deposits: CommercialDeposit[];
-    locations: SiteLocation[];
-    programs: ProgramEntry[];
+    locations: { id: string; name: string }[];
+    programs: { key: string; label: string; siteCount: number }[];
     loading: boolean;
-    onFeeCreated: (fee: CommercialFee) => void;
-    onFeeUpdated: (fee: CommercialFee) => void;
+    onFeeCreated: (f: CommercialFee) => void;
+    onFeeUpdated: (f: CommercialFee) => void;
     onFeeDeleted: (id: string) => void;
-    onAddonCreated: (addon: CommercialAddon) => void;
-    onAddonUpdated: (addon: CommercialAddon) => void;
+    onAddonCreated: (a: CommercialAddon) => void;
+    onAddonUpdated: (a: CommercialAddon) => void;
     onAddonDeleted: (id: string) => void;
-    onDepositCreated: (deposit: CommercialDeposit) => void;
-    onDepositUpdated: (deposit: CommercialDeposit) => void;
+    onDepositCreated: (d: CommercialDeposit) => void;
+    onDepositUpdated: (d: CommercialDeposit) => void;
     onDepositDeleted: (id: string) => void;
 }) {
-    // ── Fee form state ──
+    // ── Fee form ──────────────────────────────────────────────────────────────────
     const [addingFee, setAddingFee] = useState(false);
+    const [editingFeeId, setEditingFeeId] = useState<string | null>(null);
     const [feeName, setFeeName] = useState("");
-    const [feeType, setFeeType] = useState<FeeType>("registration");
+    const [feeCategory, setFeeCategory] = useState("");
     const [feeAmount, setFeeAmount] = useState("");
+    const [feeCadenceKey, setFeeCadenceKey] = useState("");
     const [feeRequired, setFeeRequired] = useState(true);
-    const [feeCadence, setFeeCadence] = useState("");
     const [feeLocationId, setFeeLocationId] = useState("");
     const [feeProgramKey, setFeeProgramKey] = useState("");
+    const [feeEffStart, setFeeEffStart] = useState("");
+    const [feeEffEnd, setFeeEffEnd] = useState("");
+    const [feeRevCat, setFeeRevCat] = useState("");
     const [savingFee, setSavingFee] = useState(false);
-    const [editingFeeId, setEditingFeeId] = useState<string | null>(null);
 
-    // ── Addon form state ──
-    const [addingAddon, setAddingAddon] = useState(false);
-    const [addonName, setAddonName] = useState("");
-    const [addonType, setAddonType] = useState<AddonType>("extended_care");
-    const [addonAmount, setAddonAmount] = useState("");
-    const [addonCadence, setAddonCadence] = useState("monthly");
-    const [addonLocationId, setAddonLocationId] = useState("");
-    const [addonProgramKey, setAddonProgramKey] = useState("");
-    const [savingAddon, setSavingAddon] = useState(false);
-    const [editingAddonId, setEditingAddonId] = useState<string | null>(null);
-
-    // ── Deposit form state ──
-    const [addingDeposit, setAddingDeposit] = useState(false);
-    const [depositName, setDepositName] = useState("");
-    const [depositAmount, setDepositAmount] = useState("");
-    const [depositRefundable, setDepositRefundable] = useState(true);
-    const [depositApplyToBalance, setDepositApplyToBalance] = useState(false);
-    const [depositTiming, setDepositTiming] = useState<DepositTiming>("at_enrollment");
-    const [depositLocationId, setDepositLocationId] = useState("");
-    const [depositProgramKey, setDepositProgramKey] = useState("");
-    const [savingDeposit, setSavingDeposit] = useState(false);
-    const [editingDepositId, setEditingDepositId] = useState<string | null>(null);
-
-    // ── Edit buffers (reuse fee/addon/deposit form state for inline edit) ──
-    function startEditFee(fee: CommercialFee) {
-        setEditingFeeId(fee.id);
-        setFeeName(fee.name);
-        setFeeType(fee.fee_type);
-        setFeeAmount(String(fee.amount_cents / 100));
-        setFeeRequired(fee.is_required);
-        setFeeCadence(fee.cadence_key ?? "");
-        setFeeLocationId(fee.location_id ?? "");
-        setFeeProgramKey(fee.program_key ?? "");
+    function resetFeeForm() {
+        setFeeName(""); setFeeCategory(""); setFeeAmount(""); setFeeCadenceKey("");
+        setFeeRequired(true); setFeeLocationId(""); setFeeProgramKey("");
+        setFeeEffStart(""); setFeeEffEnd(""); setFeeRevCat("");
     }
-
-    function startEditAddon(addon: CommercialAddon) {
-        setEditingAddonId(addon.id);
-        setAddonName(addon.name);
-        setAddonType(addon.addon_type);
-        setAddonAmount(String(addon.amount_cents / 100));
-        setAddonCadence(addon.cadence_key);
-        setAddonLocationId(addon.location_id ?? "");
-        setAddonProgramKey(addon.program_key ?? "");
+    function startAddFee() { resetFeeForm(); setEditingFeeId(null); setAddingFee(true); }
+    function startEditFee(f: CommercialFee) {
+        setEditingFeeId(f.id);
+        setFeeName(f.name); setFeeCategory(f.fee_type); setFeeAmount(String(f.amount_cents / 100));
+        setFeeCadenceKey(f.cadence_key ?? ""); setFeeRequired(f.is_required);
+        setFeeLocationId(f.location_id ?? ""); setFeeProgramKey(f.program_key ?? "");
+        setFeeEffStart(f.effective_start ?? ""); setFeeEffEnd(f.effective_end ?? "");
+        setFeeRevCat(f.revenue_category ?? "");
+        setAddingFee(false);
     }
+    function cancelFee() { setAddingFee(false); setEditingFeeId(null); resetFeeForm(); }
 
-    function startEditDeposit(deposit: CommercialDeposit) {
-        setEditingDepositId(deposit.id);
-        setDepositName(deposit.name);
-        setDepositAmount(String(deposit.amount_cents / 100));
-        setDepositRefundable(deposit.is_refundable);
-        setDepositApplyToBalance(deposit.apply_to_balance);
-        setDepositTiming(deposit.due_timing);
-        setDepositLocationId(deposit.location_id ?? "");
-        setDepositProgramKey(deposit.program_key ?? "");
-    }
-
-    // ── Fee handlers ──
-    async function handleCreateFee() {
+    async function saveFee() {
         const cents = Math.round(parseFloat(feeAmount) * 100);
-        if (!feeName.trim() || !Number.isFinite(cents) || cents < 0) return;
+        if (!feeName.trim() || !feeCategory.trim() || !Number.isFinite(cents) || cents < 0) return;
         setSavingFee(true);
+        const body = {
+            name: feeName.trim(), fee_type: feeCategory.trim(), amount_cents: cents,
+            is_required: feeRequired, cadence_key: feeCadenceKey || null,
+            location_id: feeLocationId || null, program_key: feeProgramKey || null,
+            effective_start: feeEffStart || null, effective_end: feeEffEnd || null,
+            revenue_category: feeRevCat.trim() || null,
+        };
         try {
-            const res = await fetch("/api/admin/commercial/fees", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    name: feeName.trim(),
-                    fee_type: feeType,
-                    amount_cents: cents,
-                    is_required: feeRequired,
-                    cadence_key: feeCadence.trim() || null,
-                    location_id: feeLocationId || null,
-                    program_key: feeProgramKey.trim() || null,
-                }),
-            });
-            const j = (await res.json()) as { fee?: CommercialFee };
-            if (j.fee) { onFeeCreated(j.fee); setAddingFee(false); setFeeName(""); setFeeAmount(""); }
+            if (editingFeeId) {
+                const res = await fetch(`/api/admin/commercial/fees/${editingFeeId}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+                const j = (await res.json()) as { fee?: CommercialFee };
+                if (j.fee) { onFeeUpdated(j.fee); cancelFee(); }
+            } else {
+                const res = await fetch("/api/admin/commercial/fees", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+                const j = (await res.json()) as { fee?: CommercialFee };
+                if (j.fee) { onFeeCreated(j.fee); cancelFee(); }
+            }
         } finally { setSavingFee(false); }
     }
 
-    async function handleUpdateFee(id: string) {
-        const cents = Math.round(parseFloat(feeAmount) * 100);
-        if (!feeName.trim() || !Number.isFinite(cents) || cents < 0) return;
-        setSavingFee(true);
-        try {
-            const res = await fetch(`/api/admin/commercial/fees/${id}`, {
-                method: "PATCH",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    name: feeName.trim(),
-                    fee_type: feeType,
-                    amount_cents: cents,
-                    is_required: feeRequired,
-                    cadence_key: feeCadence.trim() || null,
-                    location_id: feeLocationId || null,
-                    program_key: feeProgramKey.trim() || null,
-                }),
-            });
-            const j = (await res.json()) as { fee?: CommercialFee };
-            if (j.fee) { onFeeUpdated(j.fee); setEditingFeeId(null); }
-        } finally { setSavingFee(false); }
-    }
-
-    async function handleDeleteFee(id: string) {
-        if (!window.confirm("Delete this fee?")) return;
+    async function deleteFee(id: string) {
         await fetch(`/api/admin/commercial/fees/${id}`, { method: "DELETE" });
         onFeeDeleted(id);
     }
 
-    // ── Addon handlers ──
-    async function handleCreateAddon() {
+    // ── Addon form ────────────────────────────────────────────────────────────────
+    const [addingAddon, setAddingAddon] = useState(false);
+    const [editingAddonId, setEditingAddonId] = useState<string | null>(null);
+    const [addonName, setAddonName] = useState("");
+    const [addonCategory, setAddonCategory] = useState("");
+    const [addonAmount, setAddonAmount] = useState("");
+    const [addonCadenceKey, setAddonCadenceKey] = useState("monthly");
+    const [addonLocationId, setAddonLocationId] = useState("");
+    const [addonProgramKey, setAddonProgramKey] = useState("");
+    const [addonEffStart, setAddonEffStart] = useState("");
+    const [addonEffEnd, setAddonEffEnd] = useState("");
+    const [addonRevCat, setAddonRevCat] = useState("");
+    const [addonPkgCount, setAddonPkgCount] = useState("");
+    const [addonPkgUnit, setAddonPkgUnit] = useState("uses");
+    const [addonPkgExpiry, setAddonPkgExpiry] = useState("");
+    const [addonIsPackage, setAddonIsPackage] = useState(false);
+    const [savingAddon, setSavingAddon] = useState(false);
+
+    function resetAddonForm() {
+        setAddonName(""); setAddonCategory(""); setAddonAmount(""); setAddonCadenceKey("monthly");
+        setAddonLocationId(""); setAddonProgramKey("");
+        setAddonEffStart(""); setAddonEffEnd(""); setAddonRevCat("");
+        setAddonPkgCount(""); setAddonPkgUnit("uses"); setAddonPkgExpiry(""); setAddonIsPackage(false);
+    }
+    function startAddAddon() { resetAddonForm(); setEditingAddonId(null); setAddingAddon(true); }
+    function startEditAddon(a: CommercialAddon) {
+        setEditingAddonId(a.id);
+        setAddonName(a.name); setAddonCategory(a.addon_type); setAddonAmount(String(a.amount_cents / 100));
+        setAddonCadenceKey(a.cadence_key); setAddonLocationId(a.location_id ?? ""); setAddonProgramKey(a.program_key ?? "");
+        setAddonEffStart(a.effective_start ?? ""); setAddonEffEnd(a.effective_end ?? "");
+        setAddonRevCat(a.revenue_category ?? "");
+        const isPkg = isPackageAddon(a);
+        setAddonIsPackage(isPkg);
+        setAddonPkgCount(a.package_unit_count != null ? String(a.package_unit_count) : "");
+        setAddonPkgUnit(a.package_unit_type ?? "uses");
+        setAddonPkgExpiry(a.package_expires_days != null ? String(a.package_expires_days) : "");
+        setAddingAddon(false);
+    }
+    function cancelAddon() { setAddingAddon(false); setEditingAddonId(null); resetAddonForm(); }
+
+    async function saveAddon() {
         const cents = Math.round(parseFloat(addonAmount) * 100);
-        if (!addonName.trim() || !addonCadence.trim() || !Number.isFinite(cents) || cents < 0) return;
+        if (!addonName.trim() || !addonCategory.trim() || !addonCadenceKey || !Number.isFinite(cents) || cents < 0) return;
         setSavingAddon(true);
+        const body = {
+            name: addonName.trim(), addon_type: addonCategory.trim(), amount_cents: cents,
+            cadence_key: addonCadenceKey,
+            location_id: addonLocationId || null, program_key: addonProgramKey || null,
+            effective_start: addonEffStart || null, effective_end: addonEffEnd || null,
+            revenue_category: addonRevCat.trim() || null,
+            package_unit_count: addonIsPackage && addonPkgCount ? parseInt(addonPkgCount, 10) : null,
+            package_unit_type: addonIsPackage && addonPkgUnit ? addonPkgUnit : null,
+            package_expires_days: addonIsPackage && addonPkgExpiry ? parseInt(addonPkgExpiry, 10) : null,
+        };
         try {
-            const res = await fetch("/api/admin/commercial/addons", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    name: addonName.trim(),
-                    addon_type: addonType,
-                    amount_cents: cents,
-                    cadence_key: addonCadence.trim(),
-                    location_id: addonLocationId || null,
-                    program_key: addonProgramKey.trim() || null,
-                }),
-            });
-            const j = (await res.json()) as { addon?: CommercialAddon };
-            if (j.addon) { onAddonCreated(j.addon); setAddingAddon(false); setAddonName(""); setAddonAmount(""); }
+            if (editingAddonId) {
+                const res = await fetch(`/api/admin/commercial/addons/${editingAddonId}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+                const j = (await res.json()) as { addon?: CommercialAddon };
+                if (j.addon) { onAddonUpdated(j.addon); cancelAddon(); }
+            } else {
+                const res = await fetch("/api/admin/commercial/addons", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+                const j = (await res.json()) as { addon?: CommercialAddon };
+                if (j.addon) { onAddonCreated(j.addon); cancelAddon(); }
+            }
         } finally { setSavingAddon(false); }
     }
 
-    async function handleUpdateAddon(id: string) {
-        const cents = Math.round(parseFloat(addonAmount) * 100);
-        if (!addonName.trim() || !addonCadence.trim() || !Number.isFinite(cents) || cents < 0) return;
-        setSavingAddon(true);
-        try {
-            const res = await fetch(`/api/admin/commercial/addons/${id}`, {
-                method: "PATCH",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    name: addonName.trim(),
-                    addon_type: addonType,
-                    amount_cents: cents,
-                    cadence_key: addonCadence.trim(),
-                    location_id: addonLocationId || null,
-                    program_key: addonProgramKey.trim() || null,
-                }),
-            });
-            const j = (await res.json()) as { addon?: CommercialAddon };
-            if (j.addon) { onAddonUpdated(j.addon); setEditingAddonId(null); }
-        } finally { setSavingAddon(false); }
-    }
-
-    async function handleDeleteAddon(id: string) {
-        if (!window.confirm("Delete this add-on?")) return;
+    async function deleteAddon(id: string) {
         await fetch(`/api/admin/commercial/addons/${id}`, { method: "DELETE" });
         onAddonDeleted(id);
     }
 
-    // ── Deposit handlers ──
-    async function handleCreateDeposit() {
+    // ── Deposit form ──────────────────────────────────────────────────────────────
+    const [addingDeposit, setAddingDeposit] = useState(false);
+    const [editingDepositId, setEditingDepositId] = useState<string | null>(null);
+    const [depositName, setDepositName] = useState("");
+    const [depositAmount, setDepositAmount] = useState("");
+    const [depositRefundable, setDepositRefundable] = useState(true);
+    const [depositApplyToBalance, setDepositApplyToBalance] = useState(false);
+    const [depositTiming, setDepositTiming] = useState("at_enrollment");
+    const [depositLocationId, setDepositLocationId] = useState("");
+    const [depositProgramKey, setDepositProgramKey] = useState("");
+    const [depositEffStart, setDepositEffStart] = useState("");
+    const [depositEffEnd, setDepositEffEnd] = useState("");
+    const [depositRevCat, setDepositRevCat] = useState("");
+    const [savingDeposit, setSavingDeposit] = useState(false);
+
+    function resetDepositForm() {
+        setDepositName(""); setDepositAmount(""); setDepositRefundable(true); setDepositApplyToBalance(false);
+        setDepositTiming("at_enrollment"); setDepositLocationId(""); setDepositProgramKey("");
+        setDepositEffStart(""); setDepositEffEnd(""); setDepositRevCat("");
+    }
+    function startAddDeposit() { resetDepositForm(); setEditingDepositId(null); setAddingDeposit(true); }
+    function startEditDeposit(d: CommercialDeposit) {
+        setEditingDepositId(d.id);
+        setDepositName(d.name); setDepositAmount(String(d.amount_cents / 100));
+        setDepositRefundable(d.is_refundable); setDepositApplyToBalance(d.apply_to_balance);
+        setDepositTiming(d.due_timing); setDepositLocationId(d.location_id ?? ""); setDepositProgramKey(d.program_key ?? "");
+        setDepositEffStart(d.effective_start ?? ""); setDepositEffEnd(d.effective_end ?? "");
+        setDepositRevCat(d.revenue_category ?? "");
+        setAddingDeposit(false);
+    }
+    function cancelDeposit() { setAddingDeposit(false); setEditingDepositId(null); resetDepositForm(); }
+
+    async function saveDeposit() {
         const cents = Math.round(parseFloat(depositAmount) * 100);
         if (!depositName.trim() || !Number.isFinite(cents) || cents < 0) return;
         setSavingDeposit(true);
+        const body = {
+            name: depositName.trim(), amount_cents: cents,
+            is_refundable: depositRefundable, apply_to_balance: depositApplyToBalance,
+            due_timing: depositTiming || "at_enrollment",
+            location_id: depositLocationId || null, program_key: depositProgramKey || null,
+            effective_start: depositEffStart || null, effective_end: depositEffEnd || null,
+            revenue_category: depositRevCat.trim() || null,
+        };
         try {
-            const res = await fetch("/api/admin/commercial/deposits", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    name: depositName.trim(),
-                    amount_cents: cents,
-                    is_refundable: depositRefundable,
-                    apply_to_balance: depositApplyToBalance,
-                    due_timing: depositTiming,
-                    location_id: depositLocationId || null,
-                    program_key: depositProgramKey.trim() || null,
-                }),
-            });
-            const j = (await res.json()) as { deposit?: CommercialDeposit };
-            if (j.deposit) { onDepositCreated(j.deposit); setAddingDeposit(false); setDepositName(""); setDepositAmount(""); }
+            if (editingDepositId) {
+                const res = await fetch(`/api/admin/commercial/deposits/${editingDepositId}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+                const j = (await res.json()) as { deposit?: CommercialDeposit };
+                if (j.deposit) { onDepositUpdated(j.deposit); cancelDeposit(); }
+            } else {
+                const res = await fetch("/api/admin/commercial/deposits", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+                const j = (await res.json()) as { deposit?: CommercialDeposit };
+                if (j.deposit) { onDepositCreated(j.deposit); cancelDeposit(); }
+            }
         } finally { setSavingDeposit(false); }
     }
 
-    async function handleUpdateDeposit(id: string) {
-        const cents = Math.round(parseFloat(depositAmount) * 100);
-        if (!depositName.trim() || !Number.isFinite(cents) || cents < 0) return;
-        setSavingDeposit(true);
-        try {
-            const res = await fetch(`/api/admin/commercial/deposits/${id}`, {
-                method: "PATCH",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    name: depositName.trim(),
-                    amount_cents: cents,
-                    is_refundable: depositRefundable,
-                    apply_to_balance: depositApplyToBalance,
-                    due_timing: depositTiming,
-                    location_id: depositLocationId || null,
-                    program_key: depositProgramKey.trim() || null,
-                }),
-            });
-            const j = (await res.json()) as { deposit?: CommercialDeposit };
-            if (j.deposit) { onDepositUpdated(j.deposit); setEditingDepositId(null); }
-        } finally { setSavingDeposit(false); }
-    }
-
-    async function handleDeleteDeposit(id: string) {
-        if (!window.confirm("Delete this deposit?")) return;
+    async function deleteDeposit(id: string) {
         await fetch(`/api/admin/commercial/deposits/${id}`, { method: "DELETE" });
         onDepositDeleted(id);
     }
 
-    // ── Shared scope inputs ──
-    function ScopeInputs({ locationId, setLocationId, programKey, setProgramKey }: {
-        locationId: string;
-        setLocationId: (v: string) => void;
-        programKey: string;
-        setProgramKey: (v: string) => void;
-    }) {
-        return (
-            <div className="flex flex-wrap gap-2">
-                <label className="flex flex-col gap-0.5">
-                    <span className="text-[10px] text-alloy-midnight/45">Location (optional)</span>
-                    <select value={locationId} onChange={(e) => setLocationId(e.target.value)} className={inputCls}>
-                        <option value="">All locations</option>
-                        {locations.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
-                    </select>
-                </label>
-                <label className="flex flex-col gap-0.5">
-                    <span className="text-[10px] text-alloy-midnight/45">Program (optional)</span>
-                    {programs.length > 0 ? (
-                        <select value={programKey} onChange={(e) => setProgramKey(e.target.value)} className={inputCls}>
-                            <option value="">All programs</option>
-                            {programs.map((p) => <option key={p.key} value={p.key}>{p.label}</option>)}
-                        </select>
-                    ) : (
-                        <input type="text" value={programKey} onChange={(e) => setProgramKey(e.target.value)} placeholder="program_key" className={`${inputCls} w-32`} />
-                    )}
-                </label>
+    // ── Fee form panel ────────────────────────────────────────────────────────────
+    const feeFormValid = feeName.trim().length > 0 && feeCategory.trim().length > 0 && parseFloat(feeAmount) >= 0;
+    const feeFormPanel = (
+        <div className="rounded-lg border border-alloy-pine/30 bg-alloy-pine/3 p-4 space-y-3">
+            <div className="grid grid-cols-2 gap-3">
+                <CField label="Name *" value={feeName} onChange={setFeeName} placeholder="e.g. Registration Fee" required />
+                <CSuggest label="Category *" value={feeCategory} onChange={setFeeCategory} suggestions={FEE_TYPE_SUGGESTIONS} />
             </div>
-        );
-    }
+            <div className="grid grid-cols-2 gap-3">
+                <CField label="Amount ($) *" value={feeAmount} onChange={setFeeAmount} placeholder="0.00" type="text" />
+                <CSelect label="Frequency" value={feeCadenceKey} onChange={setFeeCadenceKey} options={FREQUENCY_OPTIONS.map(o => ({ key: o.key, label: o.label }))} />
+            </div>
+            <div className="flex items-center gap-4">
+                <CToggle label="Required" checked={feeRequired} onChange={setFeeRequired} hint="Applied to all enrollments automatically" />
+            </div>
+            <ScopeFields locationId={feeLocationId} setLocationId={setFeeLocationId} programKey={feeProgramKey} setProgramKey={setFeeProgramKey} locations={locations} programs={programs} />
+            <EffectiveDateFields start={feeEffStart} end={feeEffEnd} onStart={setFeeEffStart} onEnd={setFeeEffEnd} />
+            <CField label="Revenue category" value={feeRevCat} onChange={setFeeRevCat} placeholder="e.g. Program Revenue" />
+            <SaveBar onSave={saveFee} onCancel={cancelFee} saving={savingFee} disabled={!feeFormValid} />
+        </div>
+    );
+
+    // ── Addon form panel ──────────────────────────────────────────────────────────
+    const addonFormValid = addonName.trim().length > 0 && addonCategory.trim().length > 0 && addonCadenceKey.length > 0 && parseFloat(addonAmount) >= 0;
+    const addonFormPanel = (
+        <div className="rounded-lg border border-alloy-pine/30 bg-alloy-pine/3 p-4 space-y-3">
+            <div className="grid grid-cols-2 gap-3">
+                <CField label="Name *" value={addonName} onChange={setAddonName} placeholder="e.g. Extended Care" required />
+                <CSuggest label="Category *" value={addonCategory} onChange={setAddonCategory} suggestions={ADDON_TYPE_SUGGESTIONS} />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+                <CField label="Amount ($) *" value={addonAmount} onChange={setAddonAmount} placeholder="0.00" />
+                <CSelect label="Frequency *" value={addonCadenceKey} onChange={setAddonCadenceKey} options={FREQUENCY_OPTIONS.filter(o => o.key !== "").map(o => ({ key: o.key, label: o.label }))} />
+            </div>
+            <CToggle label="This is a pass or package" checked={addonIsPackage} onChange={setAddonIsPackage} hint="e.g. 5 uses valid 30 days" />
+            {addonIsPackage && (
+                <div className="grid grid-cols-3 gap-3 pl-4 border-l-2 border-alloy-pine/20">
+                    <CField label="Unit count" value={addonPkgCount} onChange={setAddonPkgCount} placeholder="5" type="number" />
+                    <CSelect label="Unit type" value={addonPkgUnit} onChange={setAddonPkgUnit} options={PACKAGE_UNIT_TYPE_OPTIONS.map(u => ({ key: u, label: u }))} />
+                    <CField label="Expires after (days)" value={addonPkgExpiry} onChange={setAddonPkgExpiry} placeholder="30" type="number" />
+                </div>
+            )}
+            <ScopeFields locationId={addonLocationId} setLocationId={setAddonLocationId} programKey={addonProgramKey} setProgramKey={setAddonProgramKey} locations={locations} programs={programs} />
+            <EffectiveDateFields start={addonEffStart} end={addonEffEnd} onStart={setAddonEffStart} onEnd={setAddonEffEnd} />
+            <CField label="Revenue category" value={addonRevCat} onChange={setAddonRevCat} placeholder="e.g. Enrichment Revenue" />
+            <SaveBar onSave={saveAddon} onCancel={cancelAddon} saving={savingAddon} disabled={!addonFormValid} />
+        </div>
+    );
+
+    // ── Deposit form panel ────────────────────────────────────────────────────────
+    const depositFormValid = depositName.trim().length > 0 && parseFloat(depositAmount) >= 0;
+    const depositFormPanel = (
+        <div className="rounded-lg border border-alloy-pine/30 bg-alloy-pine/3 p-4 space-y-3">
+            <div className="grid grid-cols-2 gap-3">
+                <CField label="Name *" value={depositName} onChange={setDepositName} placeholder="e.g. Enrollment Deposit" required />
+                <CField label="Amount ($) *" value={depositAmount} onChange={setDepositAmount} placeholder="500.00" />
+            </div>
+            <CSuggest label="When is it due?" value={depositTiming} onChange={setDepositTiming} suggestions={DEPOSIT_TIMING_SUGGESTIONS} />
+            <div className="flex items-center gap-6">
+                <CToggle label="Refundable" checked={depositRefundable} onChange={setDepositRefundable} />
+                <CToggle label="Apply to first balance" checked={depositApplyToBalance} onChange={setDepositApplyToBalance} hint="Credits toward first tuition charge" />
+            </div>
+            <ScopeFields locationId={depositLocationId} setLocationId={setDepositLocationId} programKey={depositProgramKey} setProgramKey={setDepositProgramKey} locations={locations} programs={programs} />
+            <EffectiveDateFields start={depositEffStart} end={depositEffEnd} onStart={setDepositEffStart} onEnd={setDepositEffEnd} />
+            <CField label="Revenue category" value={depositRevCat} onChange={setDepositRevCat} placeholder="e.g. Deposits Held" />
+            <SaveBar onSave={saveDeposit} onCancel={cancelDeposit} saving={savingDeposit} disabled={!depositFormValid} />
+        </div>
+    );
 
     if (loading) {
-        return <div className="flex items-center justify-center h-64"><p className="text-sm text-alloy-midnight/40">Loading…</p></div>;
+        return <div className="flex items-center justify-center flex-1 text-sm text-alloy-midnight/35 py-16">Loading…</div>;
     }
 
     return (
-        <div className="flex flex-col min-h-0 overflow-y-auto">
-            <div className="p-6 space-y-8 max-w-3xl">
+        <div className="flex-1 overflow-y-auto">
+            <div className="max-w-2xl mx-auto px-6 py-8 space-y-10">
 
-                {/* ── Fees section ── */}
-                <div>
-                    <div className="flex items-center justify-between mb-3">
-                        <h3 className="text-sm font-semibold text-alloy-midnight">Fees</h3>
-                        {!addingFee && (
-                            <button type="button" onClick={() => setAddingFee(true)} className="text-xs text-alloy-pine/70 hover:text-alloy-pine flex items-center gap-0.5">
-                                <span className="text-sm leading-none">+</span> Add fee
-                            </button>
-                        )}
-                    </div>
+                {/* ── Fees ─────────────────────────────────────────────────────── */}
+                <section className="space-y-3">
+                    <SectionHeader title="Fees" count={fees.length} onAdd={startAddFee} adding={addingFee} />
+                    <p className="text-xs text-alloy-midnight/40">Required or auto-triggered charges beyond tuition — registration, materials, annual fees.</p>
 
-                    {addingFee && (
-                        <div className="mb-3 border border-alloy-pine/25 rounded-lg px-4 py-3 bg-alloy-pine/5 space-y-2.5">
-                            <p className="text-[10px] font-semibold uppercase tracking-wide text-alloy-midnight/40">New fee</p>
-                            <div className="flex flex-wrap gap-2 items-end">
-                                <label className="flex flex-col gap-0.5 flex-1 min-w-[140px]">
-                                    <span className="text-[10px] text-alloy-midnight/45">Name</span>
-                                    <input type="text" value={feeName} onChange={(e) => setFeeName(e.target.value)} placeholder="e.g. Registration fee" className={inputCls} autoFocus />
-                                </label>
-                                <label className="flex flex-col gap-0.5">
-                                    <span className="text-[10px] text-alloy-midnight/45">Type</span>
-                                    <select value={feeType} onChange={(e) => setFeeType(e.target.value as FeeType)} className={inputCls}>
-                                        {(Object.keys(FEE_TYPE_LABELS) as FeeType[]).map((k) => <option key={k} value={k}>{FEE_TYPE_LABELS[k]}</option>)}
-                                    </select>
-                                </label>
-                                <label className="flex flex-col gap-0.5">
-                                    <span className="text-[10px] text-alloy-midnight/45">Amount ($)</span>
-                                    <input type="number" min="0" step="0.01" value={feeAmount} onChange={(e) => setFeeAmount(e.target.value)} placeholder="0.00" className={`${inputCls} w-24`} />
-                                </label>
-                                <label className="flex flex-col gap-0.5">
-                                    <span className="text-[10px] text-alloy-midnight/45">Cadence</span>
-                                    <input type="text" value={feeCadence} onChange={(e) => setFeeCadence(e.target.value)} placeholder="blank = one-time" className={`${inputCls} w-28`} />
-                                </label>
-                                <label className="flex items-center gap-1.5 self-end pb-1">
-                                    <input type="checkbox" checked={feeRequired} onChange={(e) => setFeeRequired(e.target.checked)} />
-                                    <span className="text-xs text-alloy-midnight/55">Required</span>
-                                </label>
-                            </div>
-                            <ScopeInputs locationId={feeLocationId} setLocationId={setFeeLocationId} programKey={feeProgramKey} setProgramKey={setFeeProgramKey} />
-                            <div className="flex items-center gap-2 pt-1">
-                                <button type="button" disabled={savingFee || !feeName.trim()} onClick={() => void handleCreateFee()} className="rounded border border-alloy-pine/30 bg-alloy-pine/8 px-3 py-1 text-xs font-medium text-alloy-pine hover:bg-alloy-pine/12 disabled:opacity-50">
-                                    {savingFee ? "Saving…" : "Add fee"}
-                                </button>
-                                <button type="button" onClick={() => setAddingFee(false)} className="text-xs text-alloy-midnight/40 hover:text-alloy-midnight">Cancel</button>
-                            </div>
+                    {addingFee && feeFormPanel}
+
+                    {fees.length === 0 && !addingFee ? (
+                        <EmptySlate label="No fees configured yet." onAdd={startAddFee} />
+                    ) : (
+                        <div className="space-y-2">
+                            {fees.map(fee => (
+                                <div key={fee.id}>
+                                    {editingFeeId === fee.id ? feeFormPanel : (
+                                        <CommercialCard onClick={() => startEditFee(fee)}>
+                                            <div className="flex items-start justify-between gap-3">
+                                                <div className="min-w-0 flex-1">
+                                                    <div className="flex items-center gap-2 flex-wrap">
+                                                        <span className="text-sm font-medium text-alloy-midnight truncate">{fee.name}</span>
+                                                        <span className="text-[10px] text-alloy-midnight/45 bg-alloy-stone/10 rounded px-1.5 py-0.5">{fee.fee_type}</span>
+                                                        {fee.is_required && <span className="text-[10px] text-alloy-pine/70 font-medium">Required</span>}
+                                                    </div>
+                                                    <div className="flex items-center gap-2 mt-1 flex-wrap">
+                                                        <span className="text-sm font-semibold text-alloy-midnight">
+                                                            {fee.amount_cents === 0 ? "$0" : `$${(fee.amount_cents / 100).toLocaleString("en-US", { minimumFractionDigits: fee.amount_cents % 100 === 0 ? 0 : 2 })}`}
+                                                        </span>
+                                                        <FreqBadge cadenceKey={fee.cadence_key} />
+                                                        <ScopeBadge locationId={fee.location_id} programKey={fee.program_key} locations={locations} />
+                                                        {fee.revenue_category && <span className="text-[10px] text-alloy-midnight/35 italic">{fee.revenue_category}</span>}
+                                                    </div>
+                                                    {(fee.effective_start || fee.effective_end) && (
+                                                        <p className="text-[10px] text-alloy-midnight/30 mt-0.5">
+                                                            {fee.effective_start ? `From ${fee.effective_start}` : ""}
+                                                            {fee.effective_end ? ` · Until ${fee.effective_end}` : ""}
+                                                        </p>
+                                                    )}
+                                                </div>
+                                                <button
+                                                    type="button"
+                                                    onClick={e => { e.stopPropagation(); void deleteFee(fee.id); }}
+                                                    className="opacity-0 group-hover:opacity-100 text-[11px] text-alloy-midnight/25 hover:text-red-400 transition-all flex-shrink-0 px-1"
+                                                    title="Delete fee"
+                                                >✕</button>
+                                            </div>
+                                        </CommercialCard>
+                                    )}
+                                </div>
+                            ))}
                         </div>
                     )}
+                </section>
 
-                    <div className="space-y-1.5">
-                        {fees.length === 0 && !addingFee && (
-                            <p className="text-xs text-alloy-midnight/35 py-2">No fees configured.</p>
-                        )}
-                        {fees.map((fee) => (
-                            editingFeeId === fee.id ? (
-                                <div key={fee.id} className="border border-alloy-pine/25 rounded-lg px-4 py-3 bg-alloy-pine/5 space-y-2.5">
-                                    <div className="flex flex-wrap gap-2 items-end">
-                                        <label className="flex flex-col gap-0.5 flex-1 min-w-[140px]">
-                                            <span className="text-[10px] text-alloy-midnight/45">Name</span>
-                                            <input type="text" value={feeName} onChange={(e) => setFeeName(e.target.value)} className={inputCls} autoFocus />
-                                        </label>
-                                        <label className="flex flex-col gap-0.5">
-                                            <span className="text-[10px] text-alloy-midnight/45">Type</span>
-                                            <select value={feeType} onChange={(e) => setFeeType(e.target.value as FeeType)} className={inputCls}>
-                                                {(Object.keys(FEE_TYPE_LABELS) as FeeType[]).map((k) => <option key={k} value={k}>{FEE_TYPE_LABELS[k]}</option>)}
-                                            </select>
-                                        </label>
-                                        <label className="flex flex-col gap-0.5">
-                                            <span className="text-[10px] text-alloy-midnight/45">Amount ($)</span>
-                                            <input type="number" min="0" step="0.01" value={feeAmount} onChange={(e) => setFeeAmount(e.target.value)} className={`${inputCls} w-24`} />
-                                        </label>
-                                        <label className="flex flex-col gap-0.5">
-                                            <span className="text-[10px] text-alloy-midnight/45">Cadence</span>
-                                            <input type="text" value={feeCadence} onChange={(e) => setFeeCadence(e.target.value)} placeholder="blank = one-time" className={`${inputCls} w-28`} />
-                                        </label>
-                                        <label className="flex items-center gap-1.5 self-end pb-1">
-                                            <input type="checkbox" checked={feeRequired} onChange={(e) => setFeeRequired(e.target.checked)} />
-                                            <span className="text-xs text-alloy-midnight/55">Required</span>
-                                        </label>
-                                    </div>
-                                    <ScopeInputs locationId={feeLocationId} setLocationId={setFeeLocationId} programKey={feeProgramKey} setProgramKey={setFeeProgramKey} />
-                                    <div className="flex items-center gap-2 pt-1">
-                                        <button type="button" disabled={savingFee} onClick={() => void handleUpdateFee(fee.id)} className="rounded border border-alloy-pine/30 bg-alloy-pine/8 px-3 py-1 text-xs font-medium text-alloy-pine hover:bg-alloy-pine/12 disabled:opacity-50">
-                                            {savingFee ? "Saving…" : "Save"}
-                                        </button>
-                                        <button type="button" onClick={() => setEditingFeeId(null)} className="text-xs text-alloy-midnight/40 hover:text-alloy-midnight">Cancel</button>
-                                    </div>
+                {/* ── Add-ons ───────────────────────────────────────────────────── */}
+                <section className="space-y-3">
+                    <SectionHeader title="Add-ons" count={addons.length} onAdd={startAddAddon} adding={addingAddon} />
+                    <p className="text-xs text-alloy-midnight/40">Optional commercial products families can enroll in — extended care, enrichment, lunch, passes.</p>
+
+                    {addingAddon && addonFormPanel}
+
+                    {addons.length === 0 && !addingAddon ? (
+                        <EmptySlate label="No add-ons configured yet." onAdd={startAddAddon} />
+                    ) : (
+                        <div className="space-y-2">
+                            {addons.map(addon => (
+                                <div key={addon.id}>
+                                    {editingAddonId === addon.id ? addonFormPanel : (
+                                        <CommercialCard onClick={() => startEditAddon(addon)}>
+                                            <div className="flex items-start justify-between gap-3">
+                                                <div className="min-w-0 flex-1">
+                                                    <div className="flex items-center gap-2 flex-wrap">
+                                                        <span className="text-sm font-medium text-alloy-midnight truncate">{addon.name}</span>
+                                                        <span className="text-[10px] text-alloy-midnight/45 bg-alloy-stone/10 rounded px-1.5 py-0.5">{addon.addon_type}</span>
+                                                        {isPackageAddon(addon) && (
+                                                            <span className="text-[10px] text-alloy-midnight/50 bg-alloy-stone/8 rounded px-1.5 py-0.5">
+                                                                📦 {describePackage(addon)}
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                    <div className="flex items-center gap-2 mt-1 flex-wrap">
+                                                        <span className="text-sm font-semibold text-alloy-midnight">
+                                                            ${(addon.amount_cents / 100).toLocaleString("en-US", { minimumFractionDigits: addon.amount_cents % 100 === 0 ? 0 : 2 })}
+                                                        </span>
+                                                        <FreqBadge cadenceKey={addon.cadence_key} />
+                                                        <ScopeBadge locationId={addon.location_id} programKey={addon.program_key} locations={locations} />
+                                                        {addon.revenue_category && <span className="text-[10px] text-alloy-midnight/35 italic">{addon.revenue_category}</span>}
+                                                    </div>
+                                                    {(addon.effective_start || addon.effective_end) && (
+                                                        <p className="text-[10px] text-alloy-midnight/30 mt-0.5">
+                                                            {addon.effective_start ? `From ${addon.effective_start}` : ""}
+                                                            {addon.effective_end ? ` · Until ${addon.effective_end}` : ""}
+                                                        </p>
+                                                    )}
+                                                </div>
+                                                <button
+                                                    type="button"
+                                                    onClick={e => { e.stopPropagation(); void deleteAddon(addon.id); }}
+                                                    className="opacity-0 group-hover:opacity-100 text-[11px] text-alloy-midnight/25 hover:text-red-400 transition-all flex-shrink-0 px-1"
+                                                    title="Delete add-on"
+                                                >✕</button>
+                                            </div>
+                                        </CommercialCard>
+                                    )}
                                 </div>
-                            ) : (
-                                <div key={fee.id} className="flex items-center gap-3 border border-alloy-stone/20 rounded-lg px-3 py-2.5 group hover:border-alloy-stone/35 transition-colors">
-                                    <div className="flex-1 min-w-0">
-                                        <div className="flex items-center gap-2 flex-wrap">
-                                            <span className="text-sm font-medium text-alloy-midnight">{fee.name}</span>
-                                            <span className="rounded-full bg-alloy-stone/15 px-2 py-0.5 text-[10px] text-alloy-midnight/55">{FEE_TYPE_LABELS[fee.fee_type]}</span>
-                                            {fee.is_required && <span className="rounded-full bg-blue-50 border border-blue-200 px-2 py-0.5 text-[10px] text-blue-600">Required</span>}
-                                        </div>
-                                        <div className="flex items-center gap-3 mt-0.5">
-                                            <span className="text-xs font-semibold text-alloy-midnight">{formatRateCents(fee.amount_cents)}</span>
-                                            <span className="text-xs text-alloy-midnight/40">{fee.cadence_key ? fee.cadence_key : "One-time"}</span>
-                                            <span className="text-xs text-alloy-midnight/30">{formatScope(fee.location_id, fee.program_key, locations)}</span>
-                                        </div>
-                                    </div>
-                                    <div className="flex items-center gap-2 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
-                                        <button type="button" onClick={() => startEditFee(fee)} className="text-xs text-alloy-midnight/35 hover:text-alloy-pine px-1">Edit</button>
-                                        <button type="button" onClick={() => void handleDeleteFee(fee.id)} className="text-alloy-midnight/20 hover:text-red-400 text-xs px-1">×</button>
-                                    </div>
-                                </div>
-                            )
-                        ))}
-                    </div>
-                </div>
-
-                {/* ── Add-ons section ── */}
-                <div>
-                    <div className="flex items-center justify-between mb-3">
-                        <h3 className="text-sm font-semibold text-alloy-midnight">Add-ons</h3>
-                        {!addingAddon && (
-                            <button type="button" onClick={() => setAddingAddon(true)} className="text-xs text-alloy-pine/70 hover:text-alloy-pine flex items-center gap-0.5">
-                                <span className="text-sm leading-none">+</span> Add add-on
-                            </button>
-                        )}
-                    </div>
-
-                    {addingAddon && (
-                        <div className="mb-3 border border-alloy-pine/25 rounded-lg px-4 py-3 bg-alloy-pine/5 space-y-2.5">
-                            <p className="text-[10px] font-semibold uppercase tracking-wide text-alloy-midnight/40">New add-on</p>
-                            <div className="flex flex-wrap gap-2 items-end">
-                                <label className="flex flex-col gap-0.5 flex-1 min-w-[140px]">
-                                    <span className="text-[10px] text-alloy-midnight/45">Name</span>
-                                    <input type="text" value={addonName} onChange={(e) => setAddonName(e.target.value)} placeholder="e.g. Extended care" className={inputCls} autoFocus />
-                                </label>
-                                <label className="flex flex-col gap-0.5">
-                                    <span className="text-[10px] text-alloy-midnight/45">Type</span>
-                                    <select value={addonType} onChange={(e) => setAddonType(e.target.value as AddonType)} className={inputCls}>
-                                        {(Object.keys(ADDON_TYPE_LABELS) as AddonType[]).map((k) => <option key={k} value={k}>{ADDON_TYPE_LABELS[k]}</option>)}
-                                    </select>
-                                </label>
-                                <label className="flex flex-col gap-0.5">
-                                    <span className="text-[10px] text-alloy-midnight/45">Amount ($)</span>
-                                    <input type="number" min="0" step="0.01" value={addonAmount} onChange={(e) => setAddonAmount(e.target.value)} placeholder="0.00" className={`${inputCls} w-24`} />
-                                </label>
-                                <label className="flex flex-col gap-0.5">
-                                    <span className="text-[10px] text-alloy-midnight/45">Cadence</span>
-                                    <input type="text" value={addonCadence} onChange={(e) => setAddonCadence(e.target.value)} placeholder="monthly" className={`${inputCls} w-28`} />
-                                </label>
-                            </div>
-                            <ScopeInputs locationId={addonLocationId} setLocationId={setAddonLocationId} programKey={addonProgramKey} setProgramKey={setAddonProgramKey} />
-                            <div className="flex items-center gap-2 pt-1">
-                                <button type="button" disabled={savingAddon || !addonName.trim() || !addonCadence.trim()} onClick={() => void handleCreateAddon()} className="rounded border border-alloy-pine/30 bg-alloy-pine/8 px-3 py-1 text-xs font-medium text-alloy-pine hover:bg-alloy-pine/12 disabled:opacity-50">
-                                    {savingAddon ? "Saving…" : "Add add-on"}
-                                </button>
-                                <button type="button" onClick={() => setAddingAddon(false)} className="text-xs text-alloy-midnight/40 hover:text-alloy-midnight">Cancel</button>
-                            </div>
+                            ))}
                         </div>
                     )}
+                </section>
 
-                    <div className="space-y-1.5">
-                        {addons.length === 0 && !addingAddon && (
-                            <p className="text-xs text-alloy-midnight/35 py-2">No add-ons configured.</p>
-                        )}
-                        {addons.map((addon) => (
-                            editingAddonId === addon.id ? (
-                                <div key={addon.id} className="border border-alloy-pine/25 rounded-lg px-4 py-3 bg-alloy-pine/5 space-y-2.5">
-                                    <div className="flex flex-wrap gap-2 items-end">
-                                        <label className="flex flex-col gap-0.5 flex-1 min-w-[140px]">
-                                            <span className="text-[10px] text-alloy-midnight/45">Name</span>
-                                            <input type="text" value={addonName} onChange={(e) => setAddonName(e.target.value)} className={inputCls} autoFocus />
-                                        </label>
-                                        <label className="flex flex-col gap-0.5">
-                                            <span className="text-[10px] text-alloy-midnight/45">Type</span>
-                                            <select value={addonType} onChange={(e) => setAddonType(e.target.value as AddonType)} className={inputCls}>
-                                                {(Object.keys(ADDON_TYPE_LABELS) as AddonType[]).map((k) => <option key={k} value={k}>{ADDON_TYPE_LABELS[k]}</option>)}
-                                            </select>
-                                        </label>
-                                        <label className="flex flex-col gap-0.5">
-                                            <span className="text-[10px] text-alloy-midnight/45">Amount ($)</span>
-                                            <input type="number" min="0" step="0.01" value={addonAmount} onChange={(e) => setAddonAmount(e.target.value)} className={`${inputCls} w-24`} />
-                                        </label>
-                                        <label className="flex flex-col gap-0.5">
-                                            <span className="text-[10px] text-alloy-midnight/45">Cadence</span>
-                                            <input type="text" value={addonCadence} onChange={(e) => setAddonCadence(e.target.value)} className={`${inputCls} w-28`} />
-                                        </label>
-                                    </div>
-                                    <ScopeInputs locationId={addonLocationId} setLocationId={setAddonLocationId} programKey={addonProgramKey} setProgramKey={setAddonProgramKey} />
-                                    <div className="flex items-center gap-2 pt-1">
-                                        <button type="button" disabled={savingAddon} onClick={() => void handleUpdateAddon(addon.id)} className="rounded border border-alloy-pine/30 bg-alloy-pine/8 px-3 py-1 text-xs font-medium text-alloy-pine hover:bg-alloy-pine/12 disabled:opacity-50">
-                                            {savingAddon ? "Saving…" : "Save"}
-                                        </button>
-                                        <button type="button" onClick={() => setEditingAddonId(null)} className="text-xs text-alloy-midnight/40 hover:text-alloy-midnight">Cancel</button>
-                                    </div>
+                {/* ── Deposits ─────────────────────────────────────────────────── */}
+                <section className="space-y-3">
+                    <SectionHeader title="Deposits" count={deposits.length} onAdd={startAddDeposit} adding={addingDeposit} />
+                    <p className="text-xs text-alloy-midnight/40">Held amounts collected at enrollment. Refund lifecycle managed by Billing.</p>
+
+                    {addingDeposit && depositFormPanel}
+
+                    {deposits.length === 0 && !addingDeposit ? (
+                        <EmptySlate label="No deposits configured yet." onAdd={startAddDeposit} />
+                    ) : (
+                        <div className="space-y-2">
+                            {deposits.map(dep => (
+                                <div key={dep.id}>
+                                    {editingDepositId === dep.id ? depositFormPanel : (
+                                        <CommercialCard onClick={() => startEditDeposit(dep)}>
+                                            <div className="flex items-start justify-between gap-3">
+                                                <div className="min-w-0 flex-1">
+                                                    <div className="flex items-center gap-2 flex-wrap">
+                                                        <span className="text-sm font-medium text-alloy-midnight truncate">{dep.name}</span>
+                                                        {dep.is_refundable && <span className="text-[10px] text-alloy-midnight/50 bg-alloy-stone/10 rounded px-1.5 py-0.5">Refundable</span>}
+                                                        {dep.apply_to_balance && <span className="text-[10px] text-alloy-pine/60 bg-alloy-pine/6 rounded px-1.5 py-0.5">Credits balance</span>}
+                                                    </div>
+                                                    <div className="flex items-center gap-2 mt-1 flex-wrap">
+                                                        <span className="text-sm font-semibold text-alloy-midnight">
+                                                            ${(dep.amount_cents / 100).toLocaleString("en-US", { minimumFractionDigits: dep.amount_cents % 100 === 0 ? 0 : 2 })}
+                                                        </span>
+                                                        <span className="text-[10px] text-alloy-midnight/40">Due: {dep.due_timing.replace(/_/g, " ")}</span>
+                                                        <ScopeBadge locationId={dep.location_id} programKey={dep.program_key} locations={locations} />
+                                                        {dep.revenue_category && <span className="text-[10px] text-alloy-midnight/35 italic">{dep.revenue_category}</span>}
+                                                    </div>
+                                                    {(dep.effective_start || dep.effective_end) && (
+                                                        <p className="text-[10px] text-alloy-midnight/30 mt-0.5">
+                                                            {dep.effective_start ? `From ${dep.effective_start}` : ""}
+                                                            {dep.effective_end ? ` · Until ${dep.effective_end}` : ""}
+                                                        </p>
+                                                    )}
+                                                </div>
+                                                <button
+                                                    type="button"
+                                                    onClick={e => { e.stopPropagation(); void deleteDeposit(dep.id); }}
+                                                    className="opacity-0 group-hover:opacity-100 text-[11px] text-alloy-midnight/25 hover:text-red-400 transition-all flex-shrink-0 px-1"
+                                                    title="Delete deposit"
+                                                >✕</button>
+                                            </div>
+                                        </CommercialCard>
+                                    )}
                                 </div>
-                            ) : (
-                                <div key={addon.id} className="flex items-center gap-3 border border-alloy-stone/20 rounded-lg px-3 py-2.5 group hover:border-alloy-stone/35 transition-colors">
-                                    <div className="flex-1 min-w-0">
-                                        <div className="flex items-center gap-2 flex-wrap">
-                                            <span className="text-sm font-medium text-alloy-midnight">{addon.name}</span>
-                                            <span className="rounded-full bg-alloy-stone/15 px-2 py-0.5 text-[10px] text-alloy-midnight/55">{ADDON_TYPE_LABELS[addon.addon_type]}</span>
-                                        </div>
-                                        <div className="flex items-center gap-3 mt-0.5">
-                                            <span className="text-xs font-semibold text-alloy-midnight">{formatRateCents(addon.amount_cents)}</span>
-                                            <span className="text-xs text-alloy-midnight/40">{addon.cadence_key}</span>
-                                            <span className="text-xs text-alloy-midnight/30">{formatScope(addon.location_id, addon.program_key, locations)}</span>
-                                        </div>
-                                    </div>
-                                    <div className="flex items-center gap-2 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
-                                        <button type="button" onClick={() => startEditAddon(addon)} className="text-xs text-alloy-midnight/35 hover:text-alloy-pine px-1">Edit</button>
-                                        <button type="button" onClick={() => void handleDeleteAddon(addon.id)} className="text-alloy-midnight/20 hover:text-red-400 text-xs px-1">×</button>
-                                    </div>
-                                </div>
-                            )
-                        ))}
-                    </div>
-                </div>
-
-                {/* ── Deposits section ── */}
-                <div>
-                    <div className="flex items-center justify-between mb-3">
-                        <h3 className="text-sm font-semibold text-alloy-midnight">Deposits</h3>
-                        {!addingDeposit && (
-                            <button type="button" onClick={() => setAddingDeposit(true)} className="text-xs text-alloy-pine/70 hover:text-alloy-pine flex items-center gap-0.5">
-                                <span className="text-sm leading-none">+</span> Add deposit
-                            </button>
-                        )}
-                    </div>
-
-                    {addingDeposit && (
-                        <div className="mb-3 border border-alloy-pine/25 rounded-lg px-4 py-3 bg-alloy-pine/5 space-y-2.5">
-                            <p className="text-[10px] font-semibold uppercase tracking-wide text-alloy-midnight/40">New deposit</p>
-                            <div className="flex flex-wrap gap-2 items-end">
-                                <label className="flex flex-col gap-0.5 flex-1 min-w-[140px]">
-                                    <span className="text-[10px] text-alloy-midnight/45">Name</span>
-                                    <input type="text" value={depositName} onChange={(e) => setDepositName(e.target.value)} placeholder="e.g. Security deposit" className={inputCls} autoFocus />
-                                </label>
-                                <label className="flex flex-col gap-0.5">
-                                    <span className="text-[10px] text-alloy-midnight/45">Amount ($)</span>
-                                    <input type="number" min="0" step="0.01" value={depositAmount} onChange={(e) => setDepositAmount(e.target.value)} placeholder="0.00" className={`${inputCls} w-24`} />
-                                </label>
-                                <label className="flex flex-col gap-0.5">
-                                    <span className="text-[10px] text-alloy-midnight/45">Due timing</span>
-                                    <select value={depositTiming} onChange={(e) => setDepositTiming(e.target.value as DepositTiming)} className={inputCls}>
-                                        {(Object.keys(DEPOSIT_TIMING_LABELS) as DepositTiming[]).map((k) => <option key={k} value={k}>{DEPOSIT_TIMING_LABELS[k]}</option>)}
-                                    </select>
-                                </label>
-                                <label className="flex items-center gap-1.5 self-end pb-1">
-                                    <input type="checkbox" checked={depositRefundable} onChange={(e) => setDepositRefundable(e.target.checked)} />
-                                    <span className="text-xs text-alloy-midnight/55">Refundable</span>
-                                </label>
-                                <label className="flex items-center gap-1.5 self-end pb-1">
-                                    <input type="checkbox" checked={depositApplyToBalance} onChange={(e) => setDepositApplyToBalance(e.target.checked)} />
-                                    <span className="text-xs text-alloy-midnight/55">Apply to balance</span>
-                                </label>
-                            </div>
-                            <ScopeInputs locationId={depositLocationId} setLocationId={setDepositLocationId} programKey={depositProgramKey} setProgramKey={setDepositProgramKey} />
-                            <div className="flex items-center gap-2 pt-1">
-                                <button type="button" disabled={savingDeposit || !depositName.trim()} onClick={() => void handleCreateDeposit()} className="rounded border border-alloy-pine/30 bg-alloy-pine/8 px-3 py-1 text-xs font-medium text-alloy-pine hover:bg-alloy-pine/12 disabled:opacity-50">
-                                    {savingDeposit ? "Saving…" : "Add deposit"}
-                                </button>
-                                <button type="button" onClick={() => setAddingDeposit(false)} className="text-xs text-alloy-midnight/40 hover:text-alloy-midnight">Cancel</button>
-                            </div>
+                            ))}
                         </div>
                     )}
+                </section>
 
-                    <div className="space-y-1.5">
-                        {deposits.length === 0 && !addingDeposit && (
-                            <p className="text-xs text-alloy-midnight/35 py-2">No deposits configured.</p>
-                        )}
-                        {deposits.map((deposit) => (
-                            editingDepositId === deposit.id ? (
-                                <div key={deposit.id} className="border border-alloy-pine/25 rounded-lg px-4 py-3 bg-alloy-pine/5 space-y-2.5">
-                                    <div className="flex flex-wrap gap-2 items-end">
-                                        <label className="flex flex-col gap-0.5 flex-1 min-w-[140px]">
-                                            <span className="text-[10px] text-alloy-midnight/45">Name</span>
-                                            <input type="text" value={depositName} onChange={(e) => setDepositName(e.target.value)} className={inputCls} autoFocus />
-                                        </label>
-                                        <label className="flex flex-col gap-0.5">
-                                            <span className="text-[10px] text-alloy-midnight/45">Amount ($)</span>
-                                            <input type="number" min="0" step="0.01" value={depositAmount} onChange={(e) => setDepositAmount(e.target.value)} className={`${inputCls} w-24`} />
-                                        </label>
-                                        <label className="flex flex-col gap-0.5">
-                                            <span className="text-[10px] text-alloy-midnight/45">Due timing</span>
-                                            <select value={depositTiming} onChange={(e) => setDepositTiming(e.target.value as DepositTiming)} className={inputCls}>
-                                                {(Object.keys(DEPOSIT_TIMING_LABELS) as DepositTiming[]).map((k) => <option key={k} value={k}>{DEPOSIT_TIMING_LABELS[k]}</option>)}
-                                            </select>
-                                        </label>
-                                        <label className="flex items-center gap-1.5 self-end pb-1">
-                                            <input type="checkbox" checked={depositRefundable} onChange={(e) => setDepositRefundable(e.target.checked)} />
-                                            <span className="text-xs text-alloy-midnight/55">Refundable</span>
-                                        </label>
-                                        <label className="flex items-center gap-1.5 self-end pb-1">
-                                            <input type="checkbox" checked={depositApplyToBalance} onChange={(e) => setDepositApplyToBalance(e.target.checked)} />
-                                            <span className="text-xs text-alloy-midnight/55">Apply to balance</span>
-                                        </label>
-                                    </div>
-                                    <ScopeInputs locationId={depositLocationId} setLocationId={setDepositLocationId} programKey={depositProgramKey} setProgramKey={setDepositProgramKey} />
-                                    <div className="flex items-center gap-2 pt-1">
-                                        <button type="button" disabled={savingDeposit} onClick={() => void handleUpdateDeposit(deposit.id)} className="rounded border border-alloy-pine/30 bg-alloy-pine/8 px-3 py-1 text-xs font-medium text-alloy-pine hover:bg-alloy-pine/12 disabled:opacity-50">
-                                            {savingDeposit ? "Saving…" : "Save"}
-                                        </button>
-                                        <button type="button" onClick={() => setEditingDepositId(null)} className="text-xs text-alloy-midnight/40 hover:text-alloy-midnight">Cancel</button>
-                                    </div>
-                                </div>
-                            ) : (
-                                <div key={deposit.id} className="flex items-center gap-3 border border-alloy-stone/20 rounded-lg px-3 py-2.5 group hover:border-alloy-stone/35 transition-colors">
-                                    <div className="flex-1 min-w-0">
-                                        <div className="flex items-center gap-2 flex-wrap">
-                                            <span className="text-sm font-medium text-alloy-midnight">{deposit.name}</span>
-                                            {deposit.is_refundable && <span className="rounded-full bg-green-50 border border-green-200 px-2 py-0.5 text-[10px] text-green-600">Refundable</span>}
-                                            {deposit.apply_to_balance && <span className="rounded-full bg-alloy-stone/15 px-2 py-0.5 text-[10px] text-alloy-midnight/55">Applied to balance</span>}
-                                        </div>
-                                        <div className="flex items-center gap-3 mt-0.5">
-                                            <span className="text-xs font-semibold text-alloy-midnight">{formatRateCents(deposit.amount_cents)}</span>
-                                            <span className="text-xs text-alloy-midnight/40">{DEPOSIT_TIMING_LABELS[deposit.due_timing]}</span>
-                                            <span className="text-xs text-alloy-midnight/30">{formatScope(deposit.location_id, deposit.program_key, locations)}</span>
-                                        </div>
-                                    </div>
-                                    <div className="flex items-center gap-2 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
-                                        <button type="button" onClick={() => startEditDeposit(deposit)} className="text-xs text-alloy-midnight/35 hover:text-alloy-pine px-1">Edit</button>
-                                        <button type="button" onClick={() => void handleDeleteDeposit(deposit.id)} className="text-alloy-midnight/20 hover:text-red-400 text-xs px-1">×</button>
-                                    </div>
-                                </div>
-                            )
-                        ))}
-                    </div>
-                </div>
+                {/* ── Revenue mapping reference note ───────────────────────────── */}
+                <section className="rounded-lg border border-alloy-stone/15 bg-alloy-stone/3 px-4 py-3">
+                    <p className="text-xs font-medium text-alloy-midnight/50 mb-1">Revenue mapping</p>
+                    <p className="text-xs text-alloy-midnight/35 leading-relaxed">
+                        The <span className="font-medium text-alloy-midnight/50">Revenue category</span> field on each item is a reference label that Accounting will map to GL codes.
+                        Commercial defines what a charge is. Accounting decides where it posts.
+                    </p>
+                </section>
 
             </div>
         </div>
     );
 }
+
 
 // ─── CommercialConfigWorkspace ─────────────────────────────────────────────────
 

@@ -6,8 +6,8 @@ export const ADMINV2_OPPORTUNITY_FOCUS_INQUIRY_CHILDREN = "adminv2:opportunity-f
 
 export type InquiryChildrenFocusField =
     | "program_room_cohort_key"
-    | "desired_schedule_type"
-    | "desired_start_date";
+    | "schedule_type"
+    | "start_date";
 
 export function dispatchOpenEnrollmentPacketReview(opportunityId: string): void {
     if (typeof window === "undefined") return;

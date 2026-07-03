@@ -19,7 +19,7 @@ Organization
 
 **Not the primary mental model:** Organization → Work Unit → Stage → Record.
 
-**Internal/runtime mapping:** Each business process owns one or more **work units** that host **queues** (`queue_definition`). Stages map to queue membership, stage operating plans, and status bindings — not to separate work units per stage (enrollment uses one `enrollment_pipeline` work unit with multiple domain queues).
+**Internal/runtime mapping:** Each business process owns one or more **work units** that host **queues** (`queue_definition`). Stages map to stage membership (`stage_key`) and stage operating plans — not to separate work units per stage (enrollment uses one `enrollment_pipeline` work unit with multiple domain queues). Queue lanes are generated from stage membership; status-binding-driven membership was removed by the Enrollment Alignment sprint (see `stage-membership-and-outcomes.md`).
 
 ---
 
@@ -28,7 +28,7 @@ Organization
 | Decision | Status |
 |----------|--------|
 | Operator label **Business Process** (not Lifecycle) in settings and workspace | **Shipped** — `businessProcessUiLabels.ts` |
-| Enrollment Process V1 — 13 stages (family + child journeys) | **Shipped** — default builder seed |
+| Enrollment Process — 8 stages (family: lead → tour → decision → closed; child: waitlist → enrolling → enrolled → closed_withdrawn) | **Shipped** — Enrollment Alignment sprint (qualification folded into lead: no distinct work lived there) |
 | One execution work unit per enrollment department (`enrollment_pipeline`) | **Frozen** — stages are queues inside WU, not separate WUs |
 | Case vs child lifecycle grain | **Frozen** — `opportunities.status_key` (case) vs `opportunity_customer_members.outcome_status_key` (child). Create Lead leaves child `outcome_status_key` **null** at intake (no enrollment disposition yet; badge suppressed) — see `../modules/actions-and-workflows.md` § Create Lead fresh-data contract |
 | Queue rows are preview-only | **Frozen** — see `queue-system.md` |
@@ -47,8 +47,8 @@ A business process defines:
 - **Name and catalog entry** — appears on `/workspace` landing and sidebar
 - **Stages** — ordered steps in the operator journey
 - **Stage operating plans** — purpose, expected work, success/off-track criteria — see `docs/system/operating-plan-runtime-doctrine.md`
-- **Queue membership** — which records appear in which stage (`queue_membership_v1`)
-- **Status bindings** — platform status keys tied to stage transitions
+- **Stage membership** — subject grain + scope (`membership_criteria_v1`); membership itself is the persisted `stage_key`, written by outcome execution
+- **Outcomes** — work completion outcomes and their rule targets (the only mutation path for durable status)
 - **Required information & actions** — per-stage configuration
 - **Layout assignments** — published layouts per stage slot — see `../operator/business-process-layout-assignments.md`
 
@@ -153,12 +153,11 @@ Panel.
 - **One resolver for count and rows.** A Work View's count is the predicate-filtered count over the
   all-records base — **never** a `queue_definition` lane-membership summary. So process card "records",
   "All Leads", Work View counts, and queue rows agree (All Leads = total; each view's count = its rows).
-- **Stage is a roll-up over status.** Opportunities do not store a stage column; a record's stage = the
-  stage its `status_key` belongs to (`status_definitions.metadata.process_stage_key`, e.g.
-  `new_inquiry → lead`). The projection derives `opportunity_stage` from the status
-  (`enrichRowsWithDerivedStage`) before evaluating, so Stage Work View predicates (New Leads = stage
-  "lead") match. Without this, a Stage predicate evaluates against a null stage and a new lead falls
-  through to whatever view's `needs_attention`/`any` branch catches it.
+- **Stage is persisted process state.** `opportunities.stage_key` / `OCM.stage_key` hold the
+  record's stage, written by outcome execution and intake only (Enrollment Alignment sprint —
+  previously stage was derived from `status_definitions.metadata.process_stage_key` roll-ups,
+  which required `enrichRowsWithDerivedStage` and drifted). The projection reads the column;
+  Stage Work View predicates (New Leads = stage "lead") match directly.
 - **Analytics is not operational truth.** Window/aggregate metrics (e.g. "leads created in 30 days") are
   analytics — they may differ in scope and must be labeled as such. A KPI tile **never** renders a value
   beside a "No data" indicator (`oipDisplayValueIsPresent` guard).

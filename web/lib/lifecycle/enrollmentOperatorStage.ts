@@ -11,7 +11,7 @@ import {
 import { resolveStatusProcessStageAssignment } from "@/lib/businessProcesses/resolveStatusProcessStageAssignment";
 import type { LifecycleOperatorStage } from "@/lib/completion/lifecycleProgressionRequirementsCatalog";
 import { LIFECYCLE_STAGE_ORDER } from "@/lib/completion/lifecycleProgressionRequirementsCatalog";
-import { ENROLLMENT_STAGE_STATUS_KEYS } from "@/lib/lifecycle/enrollmentProcessStageBindings";
+import { ENROLLMENT_LEGACY_STAGE_STATUS_KEYS } from "@/lib/businessProcessTemplates/enrollmentLegacyCompat";
 
 export const ENROLLMENT_OPERATOR_STAGE_METADATA_KEY = "enrollment_operator_stage" as const;
 
@@ -23,7 +23,7 @@ const STAGE_SET = new Set<string>(LIFECYCLE_STAGE_ORDER);
 const CANONICAL_KEY_TO_STAGE: Map<string, LifecycleOperatorStage> = (() => {
     const m = new Map<string, LifecycleOperatorStage>();
     for (const stage of LIFECYCLE_STAGE_ORDER) {
-        for (const key of ENROLLMENT_STAGE_STATUS_KEYS[stage]) {
+        for (const key of ENROLLMENT_LEGACY_STAGE_STATUS_KEYS[stage]) {
             if (!m.has(key)) m.set(key, stage);
         }
     }

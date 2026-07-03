@@ -35,7 +35,7 @@ type LayoutRuntimePlacementDataContextValue = {
     siteOptions: LayoutRuntimeSelectOption[];
     programOptionsForSite: (siteId: string) => LayoutRuntimeSelectOption[];
     roomOptionsForSiteAndProgram: (siteId: string, programKey: string) => LayoutRuntimeSelectOption[];
-    resolveRoomProgramFilterKey: (programCategoryId: string, programType: string) => string;
+    resolveRoomProgramFilterKey: (programCategoryId: string) => string;
     scheduleOptions: LayoutRuntimeSelectOption[];
     enrollmentChildStatusOptions: LayoutRuntimeSelectOption[];
     optionSetOptions: (setKey: string) => LayoutRuntimeSelectOption[];
@@ -112,10 +112,9 @@ export default function LayoutRuntimePlacementDataProvider({ children }: { child
                 resolveProgramsOfferedForSite(hierarchy, siteId, programItems, locationCategories),
             roomOptionsForSiteAndProgram: (siteId: string, programKey: string) =>
                 resolveRoomsForSiteAndProgram(hierarchy, siteId, programKey || undefined),
-            resolveRoomProgramFilterKey: (programCategoryId: string, programType: string) =>
+            resolveRoomProgramFilterKey: (programCategoryId: string) =>
                 resolveProgramKeyForRoomCascade({
-                    desired_program_category_id: programCategoryId,
-                    desired_program_type: programType,
+                    program_category_id: programCategoryId,
                     categories: locationCategories,
                 }) ?? "",
             scheduleOptions,

@@ -1,7 +1,7 @@
 /**
  * Enrollment schedule doctrine — proposal (OCM) vs committed operational schedule.
  *
- * Schedules may be captured early in enrollment (before tour). OCM `desired_schedule_type`
+ * Schedules may be captured early in enrollment (before tour). OCM `schedule_type`
  * is enrollment schedule intent/proposal. `schedule_assignments` are committed operational
  * schedule after approve handoff converts the latest valid proposal.
  */
@@ -46,9 +46,8 @@ export type EnrollmentPlacementIntentRow = {
     desired_program_label?: string | null;
     program_room_cohort_label?: string | null;
     desired_schedule_label?: string | null;
-    desired_schedule_type?: string | null;
-    desired_program_type?: string | null;
-    desired_start_date?: string | null;
+    schedule_type?: string | null;
+    start_date?: string | null;
 };
 
 export function buildEnrollmentPlacementIntentFromRow(
@@ -56,13 +55,13 @@ export function buildEnrollmentPlacementIntentFromRow(
 ): EnrollmentPlacementIntent {
     return {
         site: pickDisplay(row.location_label),
-        program: pickDisplay(row.desired_program_label, row.desired_program_type),
+        program: pickDisplay(row.desired_program_label),
         room: pickDisplay(row.program_room_cohort_label),
         scheduleProposal: pickDisplay(
             row.desired_schedule_label,
-            row.desired_schedule_type
+            row.schedule_type
         ),
-        startDate: pickDisplay(row.desired_start_date),
+        startDate: pickDisplay(row.start_date),
     };
 }
 
@@ -74,9 +73,7 @@ export function resolveEnrollmentPlacementIntentFromRecord(
         program: pickDisplay(
             record["child.program"],
             record["inquiry_child.program"],
-            record["inquiry_child.desired_program_type"],
-            record.desired_program_label,
-            record.desired_program_type
+            record.desired_program_label
         ),
         room: pickDisplay(
             record["child.room"],
@@ -86,13 +83,13 @@ export function resolveEnrollmentPlacementIntentFromRecord(
         scheduleProposal: pickDisplay(
             record["child.schedule"],
             record.desired_schedule_label,
-            record["inquiry_child.desired_schedule_type"],
-            record.desired_schedule_type
+            record["inquiry_child.schedule_type"],
+            record.schedule_type
         ),
         startDate: pickDisplay(
-            record["inquiry_child.desired_start_date"],
-            record["child.desired_start_date"],
-            record.desired_start_date
+            record["inquiry_child.start_date"],
+            record["child.start_date"],
+            record.start_date
         ),
     };
 }

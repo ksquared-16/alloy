@@ -275,7 +275,6 @@ export function buildOpportunityLayoutRuntimeRecordFromVm(
     const programCategory = pickDisplay(
         vmRecord["enrollment.program_category"],
         vmRecord._program_category,
-        vmRecord.desired_program_type,
     );
 
     const placementPriority = pickDisplay(

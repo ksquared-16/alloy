@@ -4,6 +4,7 @@ import {
     isChildcareCanonicalField,
     isChildcareOperatorPickerVisible,
 } from "@/lib/fields/childcareFieldCatalogDoctrine";
+import { ENROLLMENT_PLACEMENT_OPERATOR_LABELS } from "@/lib/fields/enrollmentPlacementDoctrine";
 
 /**
  * Operator-facing field Settings helpers (display filtering + labels).
@@ -163,6 +164,13 @@ const OPERATOR_LABEL_OVERRIDES: Record<string, Record<string, string>> = {
         email: "Email",
         phone: "Phone",
     },
+    // Placement labels follow enrollment placement doctrine (Location / Program / Room / Schedule).
+    inquiry_child: {
+        location_id: ENROLLMENT_PLACEMENT_OPERATOR_LABELS.location,
+        program_category_id: ENROLLMENT_PLACEMENT_OPERATOR_LABELS.program,
+        program_room_cohort_key: ENROLLMENT_PLACEMENT_OPERATOR_LABELS.room,
+        schedule_type: ENROLLMENT_PLACEMENT_OPERATOR_LABELS.schedule,
+    },
 };
 
 export function operatorFieldDisplayLabel(entityType: string, row: OperatorFieldRow): string {
@@ -186,6 +194,7 @@ function deferredFieldHint(entityType: string, fieldKey: string): string | null 
     if (/^status/.test(key) || key === "status_key") return "Changed on the record status control";
     if (/^tour_/.test(key) || key === "tour_date" || key === "tour_time") return "Set through tour scheduling";
     if (/quote|pricing|discount|tuition|fee_/.test(key)) return "Set through quote or pricing flows";
+    // Opportunity-level legacy field keys (desired_start_date unrenamed by the S2 OCM migration).
     if (key === "desired_start_date" || key === "program_type" || key === "schedule_type") {
         return "Set through enrollment or inquiry workflow";
     }

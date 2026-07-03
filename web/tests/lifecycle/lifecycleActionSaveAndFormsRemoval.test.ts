@@ -20,7 +20,9 @@ const EXPECTED_DEFINITION_KEYS: Record<LifecycleBaseActionKey, string> = {
     add_child: "add_child",
     send_form: "send_form",
     schedule_tour: "schedule_tour",
-    change_status: "update_enrollment_status",
+    waitlist_child: "waitlist_child",
+    enroll_child: "enroll_child",
+    close_lead: "close_lead",
     create_task: "create_task",
     quick_message: "quick_message",
 };
@@ -53,11 +55,11 @@ describe("lifecycle action save and forms removal", () => {
         expect(route).toContain("ensureOrgLifecycleActionDefinition");
     });
 
-    it("Save Action succeeds for Create Lead and Update Status base keys", () => {
+    it("Save Action succeeds for Create Lead and domain-verb base keys", () => {
         expect(lifecycleActivationBaseActionByKey("create_record")?.definition_key).toBe("create_lead");
-        expect(lifecycleActivationBaseActionByKey("change_status")?.definition_key).toBe(
-            "update_enrollment_status"
-        );
+        expect(lifecycleActivationBaseActionByKey("waitlist_child")?.definition_key).toBe("waitlist_child");
+        expect(lifecycleActivationBaseActionByKey("enroll_child")?.definition_key).toBe("enroll_child");
+        expect(lifecycleActivationBaseActionByKey("close_lead")?.definition_key).toBe("close_lead");
     });
 
     it("dropdown options are only activation base actions from bootstrap", () => {

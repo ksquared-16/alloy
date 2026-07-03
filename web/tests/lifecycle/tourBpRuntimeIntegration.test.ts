@@ -66,6 +66,14 @@ function granularTourDepartmentMetadata(): Record<string, unknown> {
     };
 }
 
+// S4: move_to_stage now persists stage_key via supabase.update — chainable no-op stub.
+function makeChainableUpdateSupabase() {
+    const chain: Record<string, unknown> = {};
+    chain.update = () => chain;
+    chain.eq = () => chain;
+    return { from: vi.fn(() => chain) };
+}
+
 function makeSupabaseForStageEntry(statusMetadata: Record<string, unknown> | null = null) {
     const statusMaybeSingle = vi.fn(async () => ({ data: statusMetadata ? { metadata: statusMetadata } : null, error: null }));
     const statusEq4 = vi.fn(() => ({ maybeSingle: statusMaybeSingle }));
@@ -97,7 +105,9 @@ describe("tourBpRuntimeIntegration", () => {
         mockResolveDept.mockResolvedValue(departmentId);
     });
 
-    it("binds tour opportunity statuses to granular builder stages in vocabulary metadata", () => {
+    it("no longer emits stage metadata on statuses (S4: stage is a persisted column)", () => {
+        // S4 status collapse: enrollmentStatusVocabularyMetadata must NOT emit process_stage_key /
+        // stage_key — stage is the persisted stage_key column, not status-derived metadata.
         const scheduled = enrollmentStatusVocabularyMetadata({
             status_key: "tour_scheduled",
             status_label: "Tour Scheduled",
@@ -106,17 +116,9 @@ describe("tourBpRuntimeIntegration", () => {
             entity_type: "opportunities",
             track_key: "family_track",
         });
-        expect(scheduled.process_stage_key).toBe("tour_scheduled");
-
-        const noShow = enrollmentStatusVocabularyMetadata({
-            status_key: "tour_no_show",
-            status_label: "Tour No-Show",
-            sort_order: 32,
-            stage_key: "tour_scheduled",
-            entity_type: "opportunities",
-            track_key: "family_track",
-        });
-        expect(noShow.process_stage_key).toBe("tour_scheduled");
+        expect(scheduled.process_stage_key).toBeUndefined();
+        expect(scheduled.stage_key).toBeUndefined();
+        expect(scheduled.seed_source).toBe("enrollment_alignment_status_collapse_v1");
     });
 
     it("resolves granular legacy stage assignment when coarse tour stage is not configured", () => {
@@ -401,7 +403,7 @@ describe("tourBpRuntimeIntegration", () => {
     it("advances to decision_pending after tour_completed outcome", async () => {
         const plan = defaultStageOperatingPlanForEnrollmentStage("tour_completed")!;
         const result = await executeStageOperatingOutcome({
-            supabase: { from: vi.fn() } as never,
+            supabase: makeChainableUpdateSupabase() as never,
             orgId,
             userId,
             departmentId,
@@ -470,7 +472,7 @@ describe("tourBpRuntimeIntegration", () => {
 
         const tourCompletedPlan = defaultStageOperatingPlanForEnrollmentStage("tour_completed")!;
         const outcome = await executeStageOperatingOutcome({
-            supabase: { from: vi.fn() } as never,
+            supabase: makeChainableUpdateSupabase() as never,
             orgId,
             userId,
             departmentId,

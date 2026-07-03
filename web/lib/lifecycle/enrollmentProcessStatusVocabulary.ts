@@ -15,6 +15,12 @@ export type EnrollmentStatusVocabularyRow = {
     status_key: string;
     status_label: string;
     sort_order: number;
+    /**
+     * @deprecated Stage is no longer derived from status — it is the persisted
+     * `stage_key` column (S4 status collapse). Retained as an empty string only
+     * to preserve the type shape for existing consumers; do NOT read it as a
+     * status→stage mapping.
+     */
     stage_key: string;
     entity_type: EnrollmentStatusVocabularyEntity;
     track_key: typeof ENROLLMENT_TRACK_FAMILY_KEY | typeof ENROLLMENT_TRACK_CHILD_KEY;
@@ -29,50 +35,81 @@ export const ENROLLMENT_GENERIC_OPPORTUNITY_CASE_KEYS = new Set([
     "archived",
 ]);
 
-/** Family / lead pipeline statuses on opportunities — stage rollups only. */
+/**
+ * Collapsed family case durable statuses on opportunities (S4).
+ * Durable truth only: open | closed. Operational progress lives on Stage + Work.
+ */
 export const ENROLLMENT_FAMILY_TRACK_STATUS_VOCABULARY: EnrollmentStatusVocabularyRow[] = [
-    { status_key: "new_inquiry", status_label: "New Lead", sort_order: 5, stage_key: "lead", entity_type: "opportunities", track_key: ENROLLMENT_TRACK_FAMILY_KEY },
-    { status_key: "needs_qualification", status_label: "Contacting", sort_order: 10, stage_key: "lead", entity_type: "opportunities", track_key: ENROLLMENT_TRACK_FAMILY_KEY },
-    { status_key: "qualified", status_label: "Qualified", sort_order: 15, stage_key: "qualification", entity_type: "opportunities", track_key: ENROLLMENT_TRACK_FAMILY_KEY },
-    { status_key: "tour_requested", status_label: "Tour Requested", sort_order: 20, stage_key: "tour_scheduled", entity_type: "opportunities", track_key: ENROLLMENT_TRACK_FAMILY_KEY },
-    { status_key: "tour_scheduled", status_label: "Tour Scheduled", sort_order: 25, stage_key: "tour_scheduled", entity_type: "opportunities", track_key: ENROLLMENT_TRACK_FAMILY_KEY },
-    { status_key: "tour_completed", status_label: "Tour Completed", sort_order: 30, stage_key: "tour_completed", entity_type: "opportunities", track_key: ENROLLMENT_TRACK_FAMILY_KEY },
-    { status_key: "tour_no_show", status_label: "Tour No-Show", sort_order: 32, stage_key: "tour_scheduled", entity_type: "opportunities", track_key: ENROLLMENT_TRACK_FAMILY_KEY },
-    { status_key: "decision_pending", status_label: "Decision Pending", sort_order: 35, stage_key: "decision_pending", entity_type: "opportunities", track_key: ENROLLMENT_TRACK_FAMILY_KEY },
-    { status_key: "lost", status_label: "Lost", sort_order: 50, stage_key: "closed", entity_type: "opportunities", track_key: ENROLLMENT_TRACK_FAMILY_KEY, terminal: true },
-    { status_key: "withdrawn", status_label: "Withdrawn", sort_order: 55, stage_key: "closed", entity_type: "opportunities", track_key: ENROLLMENT_TRACK_FAMILY_KEY, terminal: true },
-    { status_key: "not_a_fit", status_label: "Not a Fit", sort_order: 60, stage_key: "closed", entity_type: "opportunities", track_key: ENROLLMENT_TRACK_FAMILY_KEY, terminal: true },
-    { status_key: "aged_out", status_label: "No Longer Eligible", sort_order: 65, stage_key: "closed", entity_type: "opportunities", track_key: ENROLLMENT_TRACK_FAMILY_KEY, terminal: true },
-    { status_key: "not_enrolling", status_label: "Closed", sort_order: 70, stage_key: "closed", entity_type: "opportunities", track_key: ENROLLMENT_TRACK_FAMILY_KEY, terminal: true },
+    { status_key: "open", status_label: "Open", sort_order: 10, stage_key: "", entity_type: "opportunities", track_key: ENROLLMENT_TRACK_FAMILY_KEY },
+    { status_key: "closed", status_label: "Closed", sort_order: 20, stage_key: "", entity_type: "opportunities", track_key: ENROLLMENT_TRACK_FAMILY_KEY, terminal: true },
 ];
 
-/** Child inquiry / enrollment disposition statuses on OCM. */
+/**
+ * Collapsed child enrollment disposition statuses on OCM (S4).
+ * null (in-process) | waitlisted | enrolling | enrolled | withdrawn | not_enrolling.
+ */
 export const ENROLLMENT_CHILD_TRACK_STATUS_VOCABULARY: EnrollmentStatusVocabularyRow[] = [
-    { status_key: "waitlisted", status_label: "Waitlisted", sort_order: 20, stage_key: "waitlist", entity_type: "opportunity_customer_members", track_key: ENROLLMENT_TRACK_CHILD_KEY },
-    { status_key: "offer_pending", status_label: "Offer Pending", sort_order: 22, stage_key: "waitlist", entity_type: "opportunity_customer_members", track_key: ENROLLMENT_TRACK_CHILD_KEY },
-    { status_key: "waitlist_paused", status_label: "Waitlist Paused", sort_order: 24, stage_key: "waitlist", entity_type: "opportunity_customer_members", track_key: ENROLLMENT_TRACK_CHILD_KEY },
-    { status_key: "enrolling", status_label: "Enrolling", sort_order: 30, stage_key: "enrolling", entity_type: "opportunity_customer_members", track_key: ENROLLMENT_TRACK_CHILD_KEY },
-    { status_key: "registration_pending", status_label: "Registration Pending", sort_order: 32, stage_key: "enrolling", entity_type: "opportunity_customer_members", track_key: ENROLLMENT_TRACK_CHILD_KEY },
-    { status_key: "paperwork_pending", status_label: "Documents Pending", sort_order: 34, stage_key: "enrolling", entity_type: "opportunity_customer_members", track_key: ENROLLMENT_TRACK_CHILD_KEY },
-    { status_key: "start_date_scheduled", status_label: "Future Start", sort_order: 36, stage_key: "enrolling", entity_type: "opportunity_customer_members", track_key: ENROLLMENT_TRACK_CHILD_KEY },
-    { status_key: "enrolled", status_label: "Enrolled", sort_order: 40, stage_key: "enrolled", entity_type: "opportunity_customer_members", track_key: ENROLLMENT_TRACK_CHILD_KEY },
-    { status_key: "withdrawn", status_label: "Withdrawn", sort_order: 50, stage_key: "closed_withdrawn", entity_type: "opportunity_customer_members", track_key: ENROLLMENT_TRACK_CHILD_KEY, terminal: true },
-    { status_key: "family_withdrew", status_label: "Family Withdrew", sort_order: 52, stage_key: "closed_withdrawn", entity_type: "opportunity_customer_members", track_key: ENROLLMENT_TRACK_CHILD_KEY, terminal: true },
-    { status_key: "not_moving_forward", status_label: "Not Moving Forward", sort_order: 54, stage_key: "closed_withdrawn", entity_type: "opportunity_customer_members", track_key: ENROLLMENT_TRACK_CHILD_KEY, terminal: true },
-    { status_key: "aged_out", status_label: "No Longer Eligible", sort_order: 56, stage_key: "closed_withdrawn", entity_type: "opportunity_customer_members", track_key: ENROLLMENT_TRACK_CHILD_KEY, terminal: true },
-    { status_key: "not_enrolling", status_label: "Closed", sort_order: 58, stage_key: "closed_withdrawn", entity_type: "opportunity_customer_members", track_key: ENROLLMENT_TRACK_CHILD_KEY, terminal: true },
+    { status_key: "waitlisted", status_label: "Waitlisted", sort_order: 10, stage_key: "", entity_type: "opportunity_customer_members", track_key: ENROLLMENT_TRACK_CHILD_KEY },
+    { status_key: "enrolling", status_label: "Enrolling", sort_order: 20, stage_key: "", entity_type: "opportunity_customer_members", track_key: ENROLLMENT_TRACK_CHILD_KEY },
+    { status_key: "enrolled", status_label: "Enrolled", sort_order: 30, stage_key: "", entity_type: "opportunity_customer_members", track_key: ENROLLMENT_TRACK_CHILD_KEY },
+    { status_key: "withdrawn", status_label: "Withdrawn", sort_order: 40, stage_key: "", entity_type: "opportunity_customer_members", track_key: ENROLLMENT_TRACK_CHILD_KEY, terminal: true },
+    { status_key: "not_enrolling", status_label: "Not Enrolling", sort_order: 50, stage_key: "", entity_type: "opportunity_customer_members", track_key: ENROLLMENT_TRACK_CHILD_KEY, terminal: true },
 ];
 
+/**
+ * @deprecated Status no longer maps to a single stage (S4). Stage is the persisted
+ * `stage_key` column. This returns the full vocabulary for the entity (stage filter
+ * is meaningless now) and exists only for back-compat of callers that expected a list.
+ */
 export function enrollmentStatusVocabularyForStage(
-    stageKey: string,
+    _stageKey: string,
     entityType: EnrollmentStatusVocabularyEntity
 ): EnrollmentStatusVocabularyRow[] {
-    const sk = stageKey.trim();
-    const source =
-        entityType === "opportunities"
+    return entityType === "opportunities"
+        ? [...ENROLLMENT_FAMILY_TRACK_STATUS_VOCABULARY]
+        : [...ENROLLMENT_CHILD_TRACK_STATUS_VOCABULARY];
+}
+
+/**
+ * Which durable states land in each enrollment stage (for Stage Context "membership" display).
+ * Membership itself is the persisted `stage_key`; this maps a stage to the durable status value(s)
+ * a record in that stage carries, so operators can see how a record lands here.
+ */
+export const ENROLLMENT_STAGE_DURABLE_STATES: Record<
+    string,
+    { entity: EnrollmentStatusVocabularyEntity; grain: "family" | "child"; status_keys: string[] }
+> = {
+    // Family / lead grain — case durable status is open until closed; position is the stage.
+    lead: { entity: "opportunities", grain: "family", status_keys: ["open"] },
+    tour: { entity: "opportunities", grain: "family", status_keys: ["open"] },
+    decision: { entity: "opportunities", grain: "family", status_keys: ["open"] },
+    closed: { entity: "opportunities", grain: "family", status_keys: ["closed"] },
+    // Child / enrollment grain — per-child durable enrollment state.
+    waitlist: { entity: "opportunity_customer_members", grain: "child", status_keys: ["waitlisted"] },
+    enrolling: { entity: "opportunity_customer_members", grain: "child", status_keys: ["enrolling"] },
+    enrolled: { entity: "opportunity_customer_members", grain: "child", status_keys: ["enrolled"] },
+    closed_withdrawn: {
+        entity: "opportunity_customer_members",
+        grain: "child",
+        status_keys: ["withdrawn", "not_enrolling"],
+    },
+};
+
+/** Stage membership for display: durable state key+label pairs that belong in a stage, or null if unknown. */
+export function enrollmentStageMembership(
+    stageKey: string
+): { grain: "family" | "child"; states: { key: string; label: string }[] } | null {
+    const entry = ENROLLMENT_STAGE_DURABLE_STATES[stageKey.trim()];
+    if (!entry) return null;
+    const vocab =
+        entry.entity === "opportunities"
             ? ENROLLMENT_FAMILY_TRACK_STATUS_VOCABULARY
             : ENROLLMENT_CHILD_TRACK_STATUS_VOCABULARY;
-    return source.filter((r) => r.stage_key === sk);
+    const states = entry.status_keys.map((key) => {
+        const row = vocab.find((r) => r.status_key === key);
+        return { key, label: row?.status_label ?? key };
+    });
+    return { grain: entry.grain, states };
 }
 
 export function enrollmentStatusVocabularyMetadata(
@@ -85,12 +122,10 @@ export function enrollmentStatusVocabularyMetadata(
         status_settings_category: "enrollment_statuses",
         process_key: ENROLLMENT_PROCESS_KEY,
         track_key: row.track_key,
-        stage_key: row.stage_key,
-        process_stage_key: row.stage_key,
         entity_scope: row.entity_type === "opportunities" ? "family_case" : "enrollment_track",
         active: row.active !== false,
         ...(row.terminal ? { terminal: true } : {}),
-        seed_source: "enrollment_process_status_vocabulary_v1",
+        seed_source: "enrollment_alignment_status_collapse_v1",
     };
 }
 

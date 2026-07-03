@@ -12,6 +12,7 @@ import type {
 } from "@/lib/orchestration/placement/placementCandidateTypes";
 import { filterActivePlacementOverrides } from "@/lib/orchestration/placement/filterActivePlacementOverrides";
 import {
+    firstNestedRecord,
     normalizeCustomerMemberNested,
     normalizePlacementLinkMemberRow,
     type NormalizedPlacementLinkMemberRow,
@@ -79,7 +80,7 @@ export async function bulkLoadPlacementCandidatesByOpportunity(params: {
     let q = params.supabase
         .from("placement_candidates")
         .select(
-            "id, org_id, opportunity_id, customer_id, opportunity_customer_member_id, customer_member_id, person_id, site_id, is_synthetic_fallback, program_room_cohort_key, program_room_group_label, wait_since, desired_start_date, status, seed_key, metadata, customer_members(first_name, last_name, display_name, person_id, metadata, persons(first_name, last_name, full_name, date_of_birth)), opportunity_customer_members(id, location_id, program_room_cohort_key, metadata, desired_program_type, customer_members(first_name, last_name, display_name, person_id, metadata, persons(first_name, last_name, full_name, date_of_birth)))"
+            "id, org_id, opportunity_id, customer_id, opportunity_customer_member_id, customer_member_id, person_id, site_id, is_synthetic_fallback, program_room_cohort_key, program_room_group_label, wait_since, start_date, status, seed_key, metadata, customer_members(first_name, last_name, display_name, person_id, metadata, persons(first_name, last_name, full_name, date_of_birth)), opportunity_customer_members(id, location_id, program_room_cohort_key, metadata, program_category_id, location_program_categories(key), customer_members(first_name, last_name, display_name, person_id, metadata, persons(first_name, last_name, full_name, date_of_birth)))"
         )
         .eq("org_id", params.orgId)
         .in("opportunity_id", ids);
@@ -100,33 +101,30 @@ export async function bulkLoadPlacementCandidatesByOpportunity(params: {
             location_id?: string | null;
             program_room_cohort_key?: string | null;
             metadata: Record<string, unknown> | null;
-            desired_program_type: string | null;
+            program_category_id: string | null;
+            /** Canonical program key (location_program_categories.key). */
+            program_key: string | null;
             customer_members: ReturnType<typeof normalizeCustomerMemberNested>;
         } | null;
     };
 
+    type OcmEmbedRaw = {
+        id: string;
+        location_id?: string | null;
+        program_room_cohort_key?: string | null;
+        metadata: Record<string, unknown> | null;
+        program_category_id?: string | null;
+        location_program_categories?: { key?: string | null } | Array<{ key?: string | null }> | null;
+        customer_members: unknown;
+    };
+
     function normalizeCandidateRow(raw: unknown): Row {
         const c = raw as Record<string, unknown>;
-        const ocmRaw = c.opportunity_customer_members as
-            | {
-                  id: string;
-                  location_id?: string | null;
-                  program_room_cohort_key?: string | null;
-                  metadata: Record<string, unknown> | null;
-                  desired_program_type: string | null;
-                  customer_members: unknown;
-              }
-            | Array<{
-                  id: string;
-                  location_id?: string | null;
-                  program_room_cohort_key?: string | null;
-                  metadata: Record<string, unknown> | null;
-                  desired_program_type: string | null;
-                  customer_members: unknown;
-              }>
-            | null
-            | undefined;
+        const ocmRaw = c.opportunity_customer_members as OcmEmbedRaw | OcmEmbedRaw[] | null | undefined;
         const ocmSingle = Array.isArray(ocmRaw) ? (ocmRaw[0] ?? null) : (ocmRaw ?? null);
+        const categoryKey = ocmSingle
+            ? firstNestedRecord(ocmSingle.location_program_categories)?.key
+            : null;
         return {
             ...(c as PlacementCandidateRow),
             customer_members: normalizeCustomerMemberNested(c.customer_members),
@@ -140,7 +138,8 @@ export async function bulkLoadPlacementCandidatesByOpportunity(params: {
                               ? ocmSingle.program_room_cohort_key
                               : null,
                       metadata: ocmSingle.metadata ?? null,
-                      desired_program_type: ocmSingle.desired_program_type ?? null,
+                      program_category_id: ocmSingle.program_category_id ?? null,
+                      program_key: (typeof categoryKey === "string" ? categoryKey.trim() : "") || null,
                       customer_members: normalizeCustomerMemberNested(ocmSingle.customer_members),
                   }
                 : null,
@@ -241,7 +240,7 @@ export async function bulkLoadPlacementCandidatesByOpportunity(params: {
                 ocm?.metadata != null && typeof ocm.metadata === "object" && !Array.isArray(ocm.metadata)
                     ? ocm.metadata
                     : null,
-            desiredProgramType: ocm?.desired_program_type ?? null,
+            programKey: ocm?.program_key ?? null,
             dateOfBirth: readMemberDob(memberForCohort),
         });
 
@@ -294,7 +293,7 @@ export async function bulkLoadPlacementCandidatesByOpportunity(params: {
                 program_room_cohort_key: cohort.program_room_cohort_key,
                 program_room_group_label: cohort.program_room_group_label,
                 wait_since: c.wait_since,
-                desired_start_date: c.desired_start_date,
+                start_date: c.start_date,
                 status: c.status,
                 seed_key: c.seed_key,
                 metadata: meta,

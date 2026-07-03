@@ -45,10 +45,7 @@ function inquiryChildren(ctx: CompletionEvaluationContext): InquiryChildCompleti
 }
 
 function childHasProgram(child: InquiryChildCompletionSnapshot): boolean {
-    return (
-        !completionValueEmpty(child.desired_program_type) ||
-        !completionValueEmpty(child.program_room_cohort_key)
-    );
+    return !completionValueEmpty(child.program_category_id);
 }
 
 function actionViolation(
@@ -127,13 +124,13 @@ function violationsForOperatorLabel(
                 if (!childHasProgram(child)) {
                     violations.push(
                         actionViolation(ctx, {
-                            field_key: "desired_program_type",
+                            field_key: "program_category_id",
                             label: "Program",
                             missing_reason: "Program or classroom interest is required for each child.",
                             blocking_level,
                             entity_type: "inquiry_child",
                             entity_id: childId,
-                            resolution_field_key: "desired_program_type",
+                            resolution_field_key: "program_category_id",
                         })
                     );
                 }
@@ -186,10 +183,10 @@ function violationsForOperatorLabel(
             const scheduleLabel = label;
             for (const child of children) {
                 const childId = trimOrNull(child.person_id) ?? trimOrNull(child.id) ?? "unknown";
-                if (completionValueEmpty(child.desired_schedule_type)) {
+                if (completionValueEmpty(child.schedule_type)) {
                     violations.push(
                         actionViolation(ctx, {
-                            field_key: "desired_schedule_type",
+                            field_key: "schedule_type",
                             label: scheduleLabel,
                             missing_reason:
                                 scheduleLabel === "Desired Schedule"
@@ -198,7 +195,7 @@ function violationsForOperatorLabel(
                             blocking_level,
                             entity_type: "inquiry_child",
                             entity_id: childId,
-                            resolution_field_key: "desired_schedule_type",
+                            resolution_field_key: "schedule_type",
                         })
                     );
                 }
@@ -212,10 +209,10 @@ function violationsForOperatorLabel(
             const startLabel = label;
             for (const child of children) {
                 const childId = trimOrNull(child.person_id) ?? trimOrNull(child.id) ?? "unknown";
-                if (completionValueEmpty(child.desired_start_date)) {
+                if (completionValueEmpty(child.start_date)) {
                     violations.push(
                         actionViolation(ctx, {
-                            field_key: "desired_start_date",
+                            field_key: "start_date",
                             label: startLabel,
                             missing_reason:
                                 startLabel === "Desired Start Date"
@@ -224,7 +221,7 @@ function violationsForOperatorLabel(
                             blocking_level,
                             entity_type: "inquiry_child",
                             entity_id: childId,
-                            resolution_field_key: "desired_start_date",
+                            resolution_field_key: "start_date",
                         })
                     );
                 }

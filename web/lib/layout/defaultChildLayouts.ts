@@ -146,12 +146,12 @@ export function buildChildDrawerDefaultDoc(): LayoutDoc {
             row(id(peBase, "r0"), [
                 col(id(peBase, "r0"), 0, HALF, [
                     fieldItem(peBase, "inquiry_child.program", "Program", "text", undefined, false),
-                    fieldItem(peBase, "inquiry_child.desired_program_type", "Program type", "text"),
+                    fieldItem(peBase, "inquiry_child.program_category_id", "Program", "text"),
                     fieldItem(peBase, "inquiry_child.program_room_cohort_key", "Classroom / cohort", "text"),
                 ]),
                 col(id(peBase, "r0"), 1, HALF, [
-                    fieldItem(peBase, "inquiry_child.desired_start_date", "Desired start", "date", CALENDAR_ICON),
-                    fieldItem(peBase, "inquiry_child.desired_schedule_type", "Schedule", "text"),
+                    fieldItem(peBase, "inquiry_child.start_date", "Desired start", "date", CALENDAR_ICON),
+                    fieldItem(peBase, "inquiry_child.schedule_type", "Schedule", "text"),
                     fieldItem(peBase, "inquiry_child.outcome_status_key", "Enrollment status", "status"),
                     fieldItem(peBase, "child.status", "Child status", "status", undefined, false),
                 ]),

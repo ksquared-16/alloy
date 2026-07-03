@@ -72,15 +72,15 @@ function fieldValue(row: Record<string, unknown>, fieldKey: string): string | nu
                 readRowString(row, "room") ??
                 readRowString(row, "_room")
             );
-        case "desired_start_date": {
+        case "start_date": {
             const direct =
-                readRowString(row, "desired_start_date") ??
+                readRowString(row, "start_date") ??
                 readRowString(row, "requested_start_date") ??
                 readRowString(row, "desired_start");
             if (direct) return direct;
             const md = row.metadata;
             if (md && typeof md === "object" && !Array.isArray(md)) {
-                const v = (md as Record<string, unknown>).desired_start_date ?? (md as Record<string, unknown>).desired_start;
+                const v = (md as Record<string, unknown>).start_date ?? (md as Record<string, unknown>).desired_start;
                 if (typeof v === "string" && v.trim()) return v.trim();
             }
             return null;
@@ -158,7 +158,7 @@ function utcWeekRange(reference: Date, offsetWeeks: number): { start: Date; end:
     return { start, end };
 }
 
-const DATE_FIELD_KEYS = new Set(["tour_date", "updated_at", "desired_start_date"]);
+const DATE_FIELD_KEYS = new Set(["tour_date", "updated_at", "start_date"]);
 
 function isDateFieldKey(fieldKey: string): boolean {
     return DATE_FIELD_KEYS.has(fieldKey);

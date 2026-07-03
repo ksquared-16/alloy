@@ -94,7 +94,7 @@ describe("Phase 7 — OCM enrollment write/read", () => {
         expect(validateOcmRowGrain({ first_name: "Ava", outcome_status_key: "waitlisted" })).toHaveLength(1);
         expect(
             validateOcmRowGrain({
-                desired_start_date: "2026-09-01",
+                start_date: "2026-09-01",
                 outcome_status_key: "waitlisted",
                 location_id: "loc-1",
             })
@@ -103,7 +103,7 @@ describe("Phase 7 — OCM enrollment write/read", () => {
 
     it("OCM PATCH rejects profile keys at API guard", () => {
         expect(assertNoChildProfileKeysOnOcmPatch({ first_name: "Hack" })).toBeTruthy();
-        expect(assertNoChildProfileKeysOnOcmPatch({ desired_start_date: "2026-09-01" })).toBeNull();
+        expect(assertNoChildProfileKeysOnOcmPatch({ start_date: "2026-09-01" })).toBeNull();
     });
 });
 
@@ -125,10 +125,10 @@ describe("Phase 7 — status transition display", () => {
 describe("Phase 7 — layout alias migration compatibility", () => {
     it("migrates deprecated refKeys in stored layout JSON", () => {
         const issues = validateLayoutAliasMigration({
-            items: [{ refKey: "child_inquiry.desired_start_date" }],
+            items: [{ refKey: "child_inquiry.start_date" }],
         });
         expect(issues.length).toBeGreaterThan(0);
-        expect(issues[0]?.message).toContain("inquiry_child.desired_start_date");
+        expect(issues[0]?.message).toContain("inquiry_child.start_date");
     });
 });
 

@@ -44,8 +44,9 @@ export type PlacementWaitlistCandidateRowProjection = {
     program_room_group_label: string;
     /** Site scope for location-owned program category resolution. */
     site_id?: string | null;
-    desired_program_type?: string | null;
-    desired_program_category_id?: string | null;
+    /** Canonical program key (location_program_categories.key) derived from OCM program_category_id. */
+    program_key?: string | null;
+    program_category_id?: string | null;
     bucket: string;
     wait_since?: string | null;
     is_synthetic_fallback?: boolean;
@@ -146,8 +147,8 @@ function resolveProjectionProgramCategoryScope(args: {
     candidateSiteId: string | null;
 }): {
     site_id: string | null;
-    desired_program_type: string | null;
-    desired_program_category_id: string | null;
+    program_key: string | null;
+    program_category_id: string | null;
 } {
     const pcMatch = args.household?.active_placement_candidates.find(
         (pc) => pc.placement_candidate_id === args.candidateId
@@ -160,8 +161,8 @@ function resolveProjectionProgramCategoryScope(args: {
             : null;
     return {
         site_id,
-        desired_program_type: ocm?.desired_program_type?.trim() || null,
-        desired_program_category_id: ocm?.desired_program_category_id?.trim() || null,
+        program_key: ocm?.program_key?.trim() || null,
+        program_category_id: ocm?.program_category_id?.trim() || null,
     };
 }
 
@@ -282,8 +283,8 @@ export function expandOpportunityRowsToPlacementCandidateRows(
                 program_room_cohort_key: cohortKey,
                 program_room_group_label: cohortLabel,
                 site_id: programCategoryScope.site_id,
-                desired_program_type: programCategoryScope.desired_program_type,
-                desired_program_category_id: programCategoryScope.desired_program_category_id,
+                program_key: programCategoryScope.program_key,
+                program_category_id: programCategoryScope.program_category_id,
                 bucket: cand.bucket,
                 wait_since: cand.wait_since ?? null,
                 is_synthetic_fallback: cand.is_synthetic_fallback === true,

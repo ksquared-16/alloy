@@ -22,9 +22,9 @@ export const LAYOUT_RUNTIME_DISPLAY_PREFERRED_REF_KEYS = new Set([
 
 const ID_TO_LABEL_COMPANION: Readonly<Record<string, string>> = {
     "inquiry_child.location_id": "child.location",
-    "inquiry_child.desired_program_type": "child.program",
+    "inquiry_child.program_category_id": "child.program",
     "inquiry_child.program_room_cohort_key": "child.room",
-    "inquiry_child.desired_schedule_type": "child.schedule",
+    "inquiry_child.schedule_type": "child.schedule",
     "inquiry_child.outcome_status_key": "child.status",
     "opportunity.location_id": "opportunity.location",
 };

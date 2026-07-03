@@ -35,11 +35,11 @@ describe("Card Definition V2 — evidence groups + ownership", () => {
         expect(configFields(config).map((f) => f.id)).toEqual(["a", "b", "c"]);
     });
 
-    it("wraps legacy flat fields into a single Details group (back-compat)", () => {
+    it("wraps legacy flat fields into a single Overview group (back-compat)", () => {
         const legacy: FocusPanelCardConfig = { fields: [field("a", "Name"), field("b", "Email")] };
         const groups = evidenceGroupsFromConfig(legacy);
         expect(groups).toHaveLength(1);
-        expect(groups[0]!.label).toBe("Details");
+        expect(groups[0]!.label).toBe("Overview");
         expect(configFields(legacy).map((f) => f.id)).toEqual(["a", "b"]);
     });
 
@@ -101,7 +101,7 @@ describe("Card Definition V2 — evidence groups + ownership", () => {
         // First edit normalizes legacy → a Details group, then adds Placement.
         let config = addEvidenceGroup(legacy, "Placement");
         expect(config.fields).toBeUndefined();
-        expect(config.evidenceGroups!.map((g) => g.label)).toEqual(["Details", "Placement"]);
+        expect(config.evidenceGroups!.map((g) => g.label)).toEqual(["Overview", "Placement"]);
 
         const placementId = config.evidenceGroups!.find((g) => g.label === "Placement")!.id;
         config = addFieldToGroup(config, placementId, field("prog", "Program"));
@@ -109,13 +109,13 @@ describe("Card Definition V2 — evidence groups + ownership", () => {
         const placement = config.evidenceGroups!.find((g) => g.id === placementId)!;
         expect(placement.fields.map((f) => f.id)).toEqual(["prog", "a"]);
         // Details is now empty (its only field moved out).
-        expect(config.evidenceGroups!.find((g) => g.label === "Details")!.fields).toHaveLength(0);
+        expect(config.evidenceGroups!.find((g) => g.label === "Overview")!.fields).toHaveLength(0);
 
         config = moveEvidenceGroup(config, placementId, -1);
-        expect(config.evidenceGroups!.map((g) => g.label)).toEqual(["Placement", "Details"]);
+        expect(config.evidenceGroups!.map((g) => g.label)).toEqual(["Placement", "Overview"]);
 
         config = removeEvidenceGroup(config, placementId);
-        expect(config.evidenceGroups!.map((g) => g.label)).toEqual(["Details"]);
+        expect(config.evidenceGroups!.map((g) => g.label)).toEqual(["Overview"]);
         expect(configFields(config)).toHaveLength(0); // Placement's fields went with it
     });
 

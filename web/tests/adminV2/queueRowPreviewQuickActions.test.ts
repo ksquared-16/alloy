@@ -28,9 +28,9 @@ describe("buildQueueRowPreviewQuickActionsFromConfig", () => {
         expect(actions.map((a) => a.label)).toEqual(["Open"]);
     });
 
-    it("ignores orchestrator and update_status preview tokens", () => {
+    it("ignores orchestrator and message preview tokens (placements own them)", () => {
         const actions = buildQueueRowPreviewQuickActionsFromConfig({
-            previewActions: ["open", "orchestrator", "message", "update_status"],
+            previewActions: ["open", "orchestrator", "message"],
             opportunityId: "opp-9",
             personId: "person-1",
             rowRecord: { id: "opp-9", name: "Smith" },

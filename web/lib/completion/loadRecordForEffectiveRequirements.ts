@@ -11,7 +11,7 @@ async function loadInquiryChildrenForOpportunity(
     const { data: ocmRows } = await supabase
         .from("opportunity_customer_members")
         .select(
-            "id, customer_member_id, location_id, desired_program_type, program_room_cohort_key, desired_schedule_type, desired_start_date, outcome_status_key"
+            "id, customer_member_id, location_id, program_category_id, program_room_cohort_key, schedule_type, start_date, outcome_status_key"
         )
         .eq("org_id", orgId)
         .eq("opportunity_id", opportunityId);
@@ -20,10 +20,10 @@ async function loadInquiryChildrenForOpportunity(
         id?: string;
         customer_member_id?: string | null;
         location_id?: string | null;
-        desired_program_type?: string | null;
+        program_category_id?: string | null;
         program_room_cohort_key?: string | null;
-        desired_schedule_type?: string | null;
-        desired_start_date?: string | null;
+        schedule_type?: string | null;
+        start_date?: string | null;
         outcome_status_key?: string | null;
     }>;
 
@@ -63,10 +63,10 @@ async function loadInquiryChildrenForOpportunity(
             first_name: member?.first_name ?? null,
             last_name: member?.last_name ?? null,
             location_id: ocm.location_id ?? null,
-            desired_program_type: ocm.desired_program_type ?? null,
+            program_category_id: ocm.program_category_id ?? null,
             program_room_cohort_key: ocm.program_room_cohort_key ?? null,
-            desired_schedule_type: ocm.desired_schedule_type ?? null,
-            desired_start_date: ocm.desired_start_date ?? null,
+            schedule_type: ocm.schedule_type ?? null,
+            start_date: ocm.start_date ?? null,
             outcome_status_key: ocm.outcome_status_key ?? null,
         };
     });

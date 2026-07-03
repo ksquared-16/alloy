@@ -49,7 +49,7 @@ function wantsContactFields(fields: QueueUiRowPreviewField[]): boolean {
 }
 
 function wantsHouseholdFields(fields: QueueUiRowPreviewField[]): boolean {
-    return wantsField(fields, "child_name") || wantsField(fields, "program") || wantsField(fields, "desired_start_date");
+    return wantsField(fields, "child_name") || wantsField(fields, "program") || wantsField(fields, "start_date");
 }
 
 function wantsLocationLabel(_fields: QueueUiRowPreviewField[], layoutRuntimeQueueBody: boolean): boolean {
@@ -91,7 +91,7 @@ export function buildQueueRowEnrichmentPlan(input: BuildQueueRowEnrichmentPlanIn
         // Configured visible fields stay on reveal — skipOptional only drops unconfigured extras.
         tourBookings: wantsField(fields, "tour_date"),
         ocmDesiredStart:
-            wantsField(fields, "desired_start_date") ||
+            wantsField(fields, "start_date") ||
             wantsField(fields, "program") ||
             wantsHousehold ||
             (layoutRuntime && relationFetch.customerMembers),

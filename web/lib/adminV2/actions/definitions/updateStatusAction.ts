@@ -1,6 +1,13 @@
 /**
  * Reference implementation (Phase 3): Update Status.
  *
+ * INTERNAL RUNTIME MECHANISM — NOT operator-selectable. This is the generic executable
+ * status-write handler that domain verbs (Close Lead, Waitlist Child, Enroll Child) and
+ * outcome execution route through. It is intentionally absent from every operator-facing
+ * catalog (ACTION_BUTTON_LIBRARY, CANONICAL_ACTION_REGISTRY, LIFECYCLE_BASE_ACTIONS) —
+ * operators pick domain verbs, never a raw "Update Status". Keep it registered so the
+ * runtime can execute; do NOT add it to any Settings/lifecycle picker.
+ *
  * Generic case-grain status change for opportunities. Enrollment is the first
  * consumer but the contract is not enrollment-specific.
  *

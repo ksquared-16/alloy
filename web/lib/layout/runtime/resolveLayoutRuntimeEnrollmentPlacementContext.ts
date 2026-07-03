@@ -34,7 +34,7 @@ export function resolveLayoutRuntimeEnrollmentPlacementContext(
     getFieldValue: (refKey: string, fallback: string, rowKey?: string) => string,
     rowKey: string,
     categories: ReadonlyArray<LocationProgramCategoryRow> = [],
-): { locationId: string; programCategoryId: string; programType: string; programKey: string } {
+): { locationId: string; programCategoryId: string; programKey: string } {
     const readDraftOrRow = (ocmKey: InquiryChildNativeOcmFieldKey): string => {
         const refKey = layoutRefKeyForInquiryChildOcmField(ocmKey);
         const draft = getFieldValue(refKey, "", rowKey).trim();
@@ -47,16 +47,14 @@ export function resolveLayoutRuntimeEnrollmentPlacementContext(
         locationId = readAnchorLocationId(anchorRecord);
     }
 
-    const programCategoryId = readDraftOrRow("desired_program_category_id");
-    const programType = readDraftOrRow("desired_program_type");
+    const programCategoryId = readDraftOrRow("program_category_id");
     const programKey =
         resolveProgramKeyForRoomCascade({
-            desired_program_category_id: programCategoryId,
-            desired_program_type: programType,
+            program_category_id: programCategoryId,
             categories,
         }) ?? "";
 
-    return { locationId, programCategoryId, programType, programKey };
+    return { locationId, programCategoryId, programKey };
 }
 
 export function layoutRuntimeEnrollmentPlacementDependentValueReader(
@@ -75,8 +73,7 @@ export function layoutRuntimeEnrollmentPlacementDependentValueReader(
     );
     return (dependsOnOcmKey: InquiryChildNativeOcmFieldKey) => {
         if (dependsOnOcmKey === "location_id") return ctx.locationId;
-        if (dependsOnOcmKey === "desired_program_category_id") return ctx.programCategoryId;
-        if (dependsOnOcmKey === "desired_program_type") return ctx.programType;
+        if (dependsOnOcmKey === "program_category_id") return ctx.programCategoryId;
         const refKey = layoutRefKeyForInquiryChildOcmField(dependsOnOcmKey);
         const draft = getFieldValue(refKey, "", rowKey).trim();
         if (draft) return draft;

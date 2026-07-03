@@ -80,7 +80,7 @@ describe("canonical enforcement index — Phase 5", () => {
 
     it("blocks child profile keys on OCM PATCH", () => {
         expect(assertNoChildProfileKeysOnOcmPatch({ first_name: "Ava" })).toBeTruthy();
-        expect(assertNoChildProfileKeysOnOcmPatch({ desired_start_date: "2026-09-01" })).toBeNull();
+        expect(assertNoChildProfileKeysOnOcmPatch({ start_date: "2026-09-01" })).toBeNull();
     });
 
     it("canonical doctrine references enforcement tests", () => {

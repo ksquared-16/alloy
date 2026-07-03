@@ -17,7 +17,7 @@ describe("minimalPacketProofDemo seed shapes", () => {
             "child_first_name",
             "child_last_name",
             "child_date_of_birth",
-            "desired_start_date",
+            "start_date",
         ]);
         const g = validateFormSchema(MINIMAL_PACKET_PROOF_GUARDIAN_SCHEMA);
         expect(g.fields.map((f) => f.id)).toEqual([

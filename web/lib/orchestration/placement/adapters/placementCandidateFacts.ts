@@ -4,7 +4,7 @@
 
 import { buildOpportunityPlacementFacts } from "@/lib/orchestration/placement/adapters/opportunityPlacementFacts";
 import {
-    CHILDCARE_PLACEMENT_FACT_DESIRED_START_DATE,
+    CHILDCARE_PLACEMENT_FACT_START_DATE,
     CHILDCARE_PLACEMENT_FACT_PROGRAM_ROOM_GROUP,
     CHILDCARE_PLACEMENT_FACT_WAIT_SINCE,
 } from "@/lib/orchestration/placement/childcarePlacementFactContractV1";
@@ -49,7 +49,7 @@ export type BuildPlacementCandidateFactsInput = {
         | "program_room_cohort_key"
         | "program_room_group_label"
         | "wait_since"
-        | "desired_start_date"
+        | "start_date"
         | "metadata"
     >;
     opportunity: {
@@ -100,9 +100,9 @@ export function buildPlacementCandidateFacts(input: BuildPlacementCandidateFacts
         ? factIsoOrAbsent(input.candidate.wait_since, "placement_candidates.wait_since")
         : base[CHILDCARE_PLACEMENT_FACT_WAIT_SINCE];
 
-    const desiredStart = input.candidate.desired_start_date?.trim()
-        ? factDateOrAbsent(input.candidate.desired_start_date, "placement_candidates.desired_start_date")
-        : base[CHILDCARE_PLACEMENT_FACT_DESIRED_START_DATE];
+    const desiredStart = input.candidate.start_date?.trim()
+        ? factDateOrAbsent(input.candidate.start_date, "placement_candidates.start_date")
+        : base[CHILDCARE_PLACEMENT_FACT_START_DATE];
 
     const forecast = resolvePlacementCandidateForecast({
         candidateMetadata: input.candidate.metadata ?? null,
@@ -124,7 +124,7 @@ export function buildPlacementCandidateFacts(input: BuildPlacementCandidateFacts
     const coreFacts = {
         ...(householdFacts ? { ...base, ...householdFacts } : base),
         [CHILDCARE_PLACEMENT_FACT_WAIT_SINCE]: waitSince,
-        [CHILDCARE_PLACEMENT_FACT_DESIRED_START_DATE]: desiredStart,
+        [CHILDCARE_PLACEMENT_FACT_START_DATE]: desiredStart,
         [CHILDCARE_PLACEMENT_V2_FACT_PROGRAM_ROOM_COHORT_KEY]: factPresent(
             cohort.program_room_cohort_key,
             "placement_candidates.program_room_cohort_key"

@@ -33,7 +33,7 @@ import type { WorkViewCompatQueueLane } from "@/lib/lifecycle/workViewsRuntimeCo
 import type { WorkViewConfigV1Stored } from "@/lib/lifecycle/workViewsConfigV1";
 import type { EntityLayoutRecord } from "@/lib/layout/layoutV2";
 import { publishedLayoutOptionsForAssignmentSlot } from "@/lib/layout/layoutAssignmentLayoutOptions";
-import { GRAIN_LABELS, validateWorkViewGrainConsistency } from "@/lib/lifecycle/stageGrainV1";
+import { GRAIN_LABELS, resolveWorkViewStageGrains, validateWorkViewGrainConsistency } from "@/lib/lifecycle/stageGrainV1";
 import type { StageGrain } from "@/lib/lifecycle/stageGrainV1";
 
 function WorkViewGrainBanner({ stageGrains }: { stageGrains: (StageGrain | undefined)[] }) {
@@ -130,6 +130,7 @@ export default function WorkViewProcessEditorCard({
     workUnitKey,
     layouts,
     stageGrains = [],
+    stageGrainByKey,
     queueLanes = [],
     onSelect: _onSelect,
     onChange,
@@ -140,6 +141,8 @@ export default function WorkViewProcessEditorCard({
     workUnitKey: string | null;
     layouts: EntityLayoutRecord[];
     stageGrains?: (StageGrain | undefined)[];
+    /** stage key → grain. When provided, the grain banner scopes to the stages THIS view filters to. */
+    stageGrainByKey?: Record<string, StageGrain | undefined>;
     queueLanes?: WorkViewCompatQueueLane[];
     onSelect: () => void;
     onChange: (patch: Partial<WorkViewConfigV1Stored>) => void;
@@ -206,7 +209,11 @@ export default function WorkViewProcessEditorCard({
                 :   null}
             </header>
 
-            <WorkViewGrainBanner stageGrains={stageGrains} />
+            <WorkViewGrainBanner
+                stageGrains={
+                    stageGrainByKey ? resolveWorkViewStageGrains(view.filters_v1, stageGrainByKey) : stageGrains
+                }
+            />
 
             <div className="space-y-0 px-4 pb-4">
                 <WorkViewEditorSection

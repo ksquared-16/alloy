@@ -789,10 +789,9 @@ function inquiryProgramSecondaryFromRow(
 ): string | null {
     const row = raw as Record<string, unknown>;
     const fromOcm = resolveInquiryChildProgramCategoryLabel({
-        desired_program_category_id:
-            typeof row.desired_program_category_id === "string" ? row.desired_program_category_id : null,
-        desired_program_type:
-            typeof row.desired_program_type === "string" ? row.desired_program_type : null,
+        program_category_id:
+            typeof row.program_category_id === "string" ? row.program_category_id : null,
+        program_key: typeof row.program_key === "string" ? row.program_key : null,
         location_id: typeof row.location_id === "string" ? row.location_id : null,
         desired_program_label:
             typeof row.desired_program_label === "string" ? row.desired_program_label : null,
@@ -812,7 +811,7 @@ function inquiryProgramSecondaryFromRow(
 
 /**
  * Legacy metadata.inquiry_children program overlay — only for rows without OCM placement on the member.
- * OCM `desired_program_type` from enrich batch is authoritative for linked customer_members.
+ * OCM `program_category_id` from enrich batch is authoritative for linked customer_members.
  */
 function mergeInquiryChildrenIntoMemberStructuredLines(
     lines: { primary: string; secondary: string | null }[],
@@ -828,7 +827,7 @@ function mergeInquiryChildrenIntoMemberStructuredLines(
         const memberId = String(row.customer_member_id ?? "").trim();
         if (memberId && !memberId.startsWith("metadata_child:")) {
             const ocm = ocmByMemberId.get(memberId);
-            if (String(ocm?.desired_program_type ?? "").trim()) continue;
+            if (String(ocm?.program_category_id ?? "").trim()) continue;
         }
         const disp =
             typeof row.display_name === "string" ? row.display_name.trim().replace(/\s+/g, " ").toLowerCase() : "";
@@ -1332,7 +1331,7 @@ async function enrichOpportunityRows(params: {
                   supabase
                       .from("opportunity_customer_members")
                       .select(
-                          "opportunity_id, customer_member_id, location_id, desired_start_date, desired_program_type, desired_program_category_id, customer_members(id, person_id, display_name, first_name, last_name, dob)",
+                          "opportunity_id, customer_member_id, location_id, start_date, program_category_id, location_program_categories(key, label), customer_members(id, person_id, display_name, first_name, last_name, dob)",
                       )
                       .eq("org_id", orgId)
                       .in("opportunity_id", opportunityIds as any)
@@ -1363,7 +1362,7 @@ async function enrichOpportunityRows(params: {
         if (label) locationLabelById.set(id, label);
     }
 
-    const ocmDesiredStartByOpportunityId = new Map<string, { desired_start_date?: string | null }[]>();
+    const ocmDesiredStartByOpportunityId = new Map<string, { start_date?: string | null }[]>();
     const ocmChildPersonLinesByOpportunityId = new Map<string, QueueRowOcmChildPersonLine[]>();
     const ocmPlacementRows: QueueOcmPlacementRow[] = [];
     for (const raw of (ocmDesiredStartTimed.v as { data?: unknown[] | null }).data ?? []) {
@@ -1371,24 +1370,31 @@ async function enrichOpportunityRows(params: {
             opportunity_id?: string;
             customer_member_id?: string;
             location_id?: string | null;
-            desired_start_date?: string | null;
-            desired_program_type?: string | null;
-            desired_program_category_id?: string | null;
+            start_date?: string | null;
+            program_category_id?: string | null;
+            location_program_categories?:
+                | { key?: string | null; label?: string | null }
+                | Array<{ key?: string | null; label?: string | null }>
+                | null;
             customer_members?: unknown;
         };
         const oid = String(row.opportunity_id ?? "").trim();
         if (!oid) continue;
         const list = ocmDesiredStartByOpportunityId.get(oid) ?? [];
-        list.push({ desired_start_date: row.desired_start_date ?? null });
+        list.push({ start_date: row.start_date ?? null });
         ocmDesiredStartByOpportunityId.set(oid, list);
         const memberId = String(row.customer_member_id ?? "").trim();
         if (memberId) {
+            const embeddedCategory = Array.isArray(row.location_program_categories)
+                ? (row.location_program_categories[0] ?? null)
+                : (row.location_program_categories ?? null);
             ocmPlacementRows.push({
                 opportunity_id: oid,
                 customer_member_id: memberId,
                 location_id: String(row.location_id ?? "").trim() || null,
-                desired_program_type: String(row.desired_program_type ?? "").trim() || null,
-                desired_program_category_id: String(row.desired_program_category_id ?? "").trim() || null,
+                program_key: String(embeddedCategory?.key ?? "").trim() || null,
+                program_label: String(embeddedCategory?.label ?? "").trim() || null,
+                program_category_id: String(row.program_category_id ?? "").trim() || null,
             });
         }
         const childLine = parseOcmChildPersonLinesFromBatchRow(row as Record<string, unknown>);
@@ -1575,6 +1581,7 @@ async function enrichOpportunityRows(params: {
                 .filter(Boolean);
             programsDisplay = [...new Set(secondaryParts)].join(" · ") || null;
             // Household children + OCM are authoritative; do not overlay stale opportunity.metadata.inquiry_children.
+            // `desired_start_date` is the opportunity-level legacy metadata key — not the OCM column.
             desiredStart = typeof md?.desired_start_date === "string" ? md.desired_start_date : null;
         } else if (inquiryChildren.length > 0) {
             const names: string[] = [];
@@ -1607,11 +1614,13 @@ async function enrichOpportunityRows(params: {
                 programsDisplay && ageGroup
                     ? `${programsDisplay} · ${ageGroup}`
                     : programsDisplay ?? opportunityProgramLineFromMetadata(md);
+            // `desired_start_date` is the opportunity-level legacy metadata key — not the OCM column.
             desiredStart = typeof md?.desired_start_date === "string" ? md.desired_start_date : null;
         } else {
             childDisplay = null;
             programsDisplay = typeof md?.program_label === "string" ? md.program_label.trim() : null;
             programCombined = opportunityProgramLineFromMetadata(md);
+            // `desired_start_date` is the opportunity-level legacy metadata key — not the OCM column.
             desiredStart = typeof md?.desired_start_date === "string" ? md.desired_start_date : null;
         }
 
@@ -1778,7 +1787,7 @@ async function enrichOpportunityRows(params: {
                 : {}),
             ...(inquiryChildren.length > 0 ? { _inquiry_children: inquiryChildren } : {}),
             _requested_program: programsDisplay ?? programCombined,
-            _desired_start_date: desiredStart,
+            _start_date: desiredStart,
             _child_desired_start_summary: childDesiredStartSummary,
             ...(childLifecycleSummary
                 ? {
@@ -1967,11 +1976,11 @@ function buildOpportunityNeedsAttentionCandidateOrExpr(
 export const NEEDS_ATTENTION_OPPORTUNITY_FETCH_CAP = 5000;
 
 const NEEDS_ATTENTION_OPPORTUNITY_SELECT_DEFAULT =
-    "id, name, status_key, quote_total, estimated_price_cents, monetary_value_cents, customer_id, primary_person_id, primary_contact_id, work_unit_id, location_id, metadata, created_at, updated_at";
+    "id, name, status_key, stage_key, quote_total, estimated_price_cents, monetary_value_cents, customer_id, primary_person_id, primary_contact_id, work_unit_id, location_id, metadata, created_at, updated_at";
 
 /** Dept bucket / count paths — same resolver fields, smaller row payload. */
 export const NEEDS_ATTENTION_OPPORTUNITY_SELECT_RESOLVER_MINIMAL =
-    "id, status_key, quote_total, estimated_price_cents, monetary_value_cents, customer_id, primary_person_id, primary_contact_id, metadata, created_at, updated_at";
+    "id, status_key, stage_key, quote_total, estimated_price_cents, monetary_value_cents, customer_id, primary_person_id, primary_contact_id, metadata, created_at, updated_at";
 
 /**
  * When queue summaries only need counts (department cards), use a smaller cap so we do not pull 5k rows
@@ -3325,7 +3334,7 @@ export async function getWorkUnitQueueSummaries(params: {
         const countQ = applyOpsToJobQuery(oppScopedCountBase() as never, ops);
         let previewQ0 = supabase
             .from("opportunities")
-            .select("id, name, title, status_key, customer_id, primary_person_id, primary_contact_id, work_unit_id, location_id, metadata, created_at, updated_at")
+            .select("id, name, title, status_key, stage_key, customer_id, primary_person_id, primary_contact_id, work_unit_id, location_id, metadata, created_at, updated_at")
             .eq("org_id", params.orgId);
         if (opportunityScopeBundle) {
             previewQ0 = applyOpportunityQueueWorkUnitScope(
@@ -4412,7 +4421,7 @@ export async function getWorkUnitQueueItems(params: {
 
     let itemsBaseRaw = supabase
         .from("opportunities")
-        .select("id, name, status_key, customer_id, primary_person_id, primary_contact_id, location_id, metadata, created_at, updated_at")
+        .select("id, name, status_key, stage_key, customer_id, primary_person_id, primary_contact_id, location_id, metadata, created_at, updated_at")
         .eq("org_id", params.orgId);
     if (opportunityScopeBundle) {
         itemsBaseRaw = applyOpportunityQueueWorkUnitScope(

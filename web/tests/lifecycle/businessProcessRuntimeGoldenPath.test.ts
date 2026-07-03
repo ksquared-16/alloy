@@ -90,7 +90,7 @@ describe("businessProcessRuntimeGoldenPath", () => {
         mockResolveDept.mockResolvedValue(departmentId);
     });
 
-    it("runs lead → qualification → tour with synchronized Current Work and outcome automation", async () => {
+    it("runs lead → tour → decision with synchronized Current Work and outcome automation", async () => {
         const departmentMetadata = enrollmentDepartmentMetadata();
         const leadToQualTransition = detectBuilderStageTransition({
             previousStatusKey: "new_inquiry",
@@ -107,13 +107,14 @@ describe("businessProcessRuntimeGoldenPath", () => {
         expect(tourTransition.nextBuilderStageKey).toBe("tour_scheduled");
 
         mockInstantiate
-            .mockResolvedValueOnce({ status: "created", work_id: "work-qual" })
             .mockResolvedValueOnce({ status: "created", work_id: "work-record-outcome" })
             .mockResolvedValueOnce({ status: "deduped", work_id: "work-record-outcome", reason: "bp_runtime_fingerprint" })
             .mockResolvedValueOnce({ status: "created", work_id: "work-next" });
 
         const supabase = makeSupabaseForStageEntry();
 
+        // Part 9: qualification folded into Lead — a legacy-configured qualification stage
+        // no longer carries a default operating plan, so entering it spawns no work.
         const qualSpawn = await onStageEntrySpawnWorkIntent({
             supabase: supabase as never,
             orgId,
@@ -122,7 +123,7 @@ describe("businessProcessRuntimeGoldenPath", () => {
             previousStatusKey: "new_inquiry",
             nextStatusKey: "contacted",
         });
-        expect(qualSpawn.action).toBe("spawned");
+        expect(qualSpawn.action).toBe("skipped");
 
         const tourScheduledSpawn = await onStageEntrySpawnWorkIntent({
             supabase: supabase as never,
@@ -156,8 +157,15 @@ describe("businessProcessRuntimeGoldenPath", () => {
 
         const tourPlan = defaultStageOperatingPlanForEnrollmentStage("tour_completed")!;
 
+        // S4: move_to_stage now persists stage_key via supabase.update — provide a chainable stub.
+        const chainableUpdate = () => {
+            const chain: Record<string, unknown> = {};
+            chain.update = () => chain;
+            chain.eq = () => chain;
+            return chain;
+        };
         const outcomeResult = await executeStageOperatingOutcome({
-            supabase: { from: vi.fn() } as never,
+            supabase: { from: vi.fn(() => chainableUpdate()) } as never,
             orgId,
             userId,
             departmentId,

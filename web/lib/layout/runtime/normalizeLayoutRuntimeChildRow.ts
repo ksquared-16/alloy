@@ -76,23 +76,23 @@ export function normalizeInquiryChildBlockToLayoutRuntimeRow(
         pickDisplay(row.display_name, [firstRaw, lastRaw].filter(Boolean).join(" ")) ?? "—";
     const { first, last, name } = ensureChildNameParts(firstRaw, lastRaw, nameRaw);
     const dob = pickDisplay(row.dob) ?? "";
-    const programLabel = pickDisplay(row.desired_program_label, row.desired_program_type);
+    const programLabel = pickDisplay(row.desired_program_label);
     const roomLabel = pickDisplay(row.program_room_cohort_label, row.program_room_cohort_key);
-    const scheduleLabel = pickDisplay(row.desired_schedule_label, row.desired_schedule_type);
+    const scheduleLabel = pickDisplay(row.desired_schedule_label, row.schedule_type);
     const locationLabel = pickDisplay(row.location_label);
     const statusLabel = pickDisplay(row.outcome_status_label, row.outcome_status_key);
     const locationId = row.location_id != null && String(row.location_id).trim() ? String(row.location_id).trim() : "";
-    const programKey =
-        row.desired_program_type != null && String(row.desired_program_type).trim() ?
-            String(row.desired_program_type).trim()
+    const programCategoryId =
+        row.program_category_id != null && String(row.program_category_id).trim() ?
+            String(row.program_category_id).trim()
         :   "";
     const roomKey =
         row.program_room_cohort_key != null && String(row.program_room_cohort_key).trim() ?
             String(row.program_room_cohort_key).trim()
         :   "";
     const scheduleKey =
-        row.desired_schedule_type != null && String(row.desired_schedule_type).trim() ?
-            String(row.desired_schedule_type).trim()
+        row.schedule_type != null && String(row.schedule_type).trim() ?
+            String(row.schedule_type).trim()
         :   "";
     const statusKey =
         row.outcome_status_key != null && String(row.outcome_status_key).trim() ?
@@ -116,7 +116,7 @@ export function normalizeInquiryChildBlockToLayoutRuntimeRow(
         "child.date_of_birth": dob,
         "child.dob_age": [dob, pickDisplay(row.age)].filter(Boolean).join(" · "),
         "child.age": pickDisplay(row.age) ?? "",
-        "child.desired_start_date": row.desired_start_date ?? "",
+        "child.start_date": row.start_date ?? "",
         "child.location": locationLabel ?? "",
         "child.program": programLabel ?? "",
         "child.room": roomLabel ?? "",
@@ -124,16 +124,16 @@ export function normalizeInquiryChildBlockToLayoutRuntimeRow(
         "child.status": statusLabel ?? "",
         "child.age_band": pickDisplay(row.age) ?? "",
         location_id: locationId,
-        desired_program_type: programKey,
+        program_category_id: programCategoryId,
         program_room_cohort_key: roomKey,
-        desired_schedule_type: scheduleKey,
+        schedule_type: scheduleKey,
         outcome_status_key: statusKey,
         "inquiry_child.program": programLabel ?? "",
-        "inquiry_child.desired_program_type": programKey,
-        "inquiry_child.desired_start_date": row.desired_start_date ?? "",
+        "inquiry_child.program_category_id": programCategoryId,
+        "inquiry_child.start_date": row.start_date ?? "",
         "inquiry_child.location_id": locationId,
         "inquiry_child.program_room_cohort_key": roomKey,
-        "inquiry_child.desired_schedule_type": scheduleKey,
+        "inquiry_child.schedule_type": scheduleKey,
         "inquiry_child.outcome_status_key": statusKey,
     };
 }
@@ -176,10 +176,10 @@ export function normalizeLayoutRuntimeChildRow(row: unknown, index: number): Pro
                 "child.age_band": pickDisplay(rec["child.age_band"], nested.age) ?? "",
                 "child.age": pickDisplay(rec["child.age"], nested.age, rec["child.age_band"]) ?? "",
                 "inquiry_child.program": pickDisplay(rec["inquiry_child.program"], rec["child.program"], nested.program) ?? "",
-                "inquiry_child.desired_program_type":
-                    pickDisplay(rec["inquiry_child.desired_program_type"], rec.desired_program_type) ?? "",
-                "inquiry_child.desired_start_date":
-                    pickDisplay(rec["inquiry_child.desired_start_date"], rec.desired_start_date) ?? "",
+                "inquiry_child.program_category_id":
+                    pickEntityId(rec["inquiry_child.program_category_id"], rec.program_category_id) ?? "",
+                "inquiry_child.start_date":
+                    pickDisplay(rec["inquiry_child.start_date"], rec.start_date) ?? "",
                 "inquiry_child.outcome_status_key":
                     pickDisplay(rec["inquiry_child.outcome_status_key"], rec.outcome_status_key) ?? "",
             };
@@ -218,8 +218,8 @@ export function normalizeLayoutRuntimeChildRow(row: unknown, index: number): Pro
             "child.age_band": pickDisplay(rec["child.age_band"]) ?? "",
             "child.age": pickDisplay(rec["child.age"], rec["child.age_band"]) ?? "",
             "inquiry_child.program": pickDisplay(rec["inquiry_child.program"], rec["child.program"]) ?? "",
-            "inquiry_child.desired_program_type": pickDisplay(rec["inquiry_child.desired_program_type"]) ?? "",
-            "inquiry_child.desired_start_date": pickDisplay(rec["inquiry_child.desired_start_date"]) ?? "",
+            "inquiry_child.program_category_id": pickEntityId(rec["inquiry_child.program_category_id"]) ?? "",
+            "inquiry_child.start_date": pickDisplay(rec["inquiry_child.start_date"]) ?? "",
             "inquiry_child.outcome_status_key": pickDisplay(rec["inquiry_child.outcome_status_key"]) ?? "",
             ...(hasEntityId
                 ? {}
@@ -268,10 +268,10 @@ export function normalizeLayoutRuntimeChildRow(row: unknown, index: number): Pro
         "child.age": pickDisplay(rec["child.age"], rec.age, rec["child.age_band"]) ?? "",
         "inquiry_child.program":
             pickDisplay(rec["inquiry_child.program"], rec["child.program"], rec.desired_program_label, rec.program_label) ?? "",
-        "inquiry_child.desired_program_type":
-            pickDisplay(rec["inquiry_child.desired_program_type"], rec.desired_program_type) ?? "",
-        "inquiry_child.desired_start_date":
-            pickDisplay(rec["inquiry_child.desired_start_date"], rec.desired_start_date) ?? "",
+        "inquiry_child.program_category_id":
+            pickEntityId(rec["inquiry_child.program_category_id"], rec.program_category_id) ?? "",
+        "inquiry_child.start_date":
+            pickDisplay(rec["inquiry_child.start_date"], rec.start_date) ?? "",
         "inquiry_child.outcome_status_key":
             pickDisplay(rec["inquiry_child.outcome_status_key"], rec.outcome_status_key) ?? "",
     };
