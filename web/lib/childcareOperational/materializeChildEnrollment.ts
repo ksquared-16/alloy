@@ -1,5 +1,6 @@
 /**
- * Shared child-enrollment materialization core.
+ * Shared child-enrollment materialization core (CHILDCARE domain — reference implementation of the
+ * generic platform pattern "Process Instance → Outcome → Materialize Durable Operational Facts").
  *
  * Given RESOLVED enrollment facts for one child, create/reuse the durable operational trio:
  *   child_enrollment_agreements (relationship) → child_placements (program/room/site)

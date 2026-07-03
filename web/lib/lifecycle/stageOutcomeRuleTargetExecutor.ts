@@ -19,6 +19,10 @@ import {
 } from "@/lib/process/processInstances";
 import { ensurePlacementCandidateForWaitlistedChild } from "@/lib/orchestration/placement/placementCandidateLifecycleHook";
 import { emitChildLifecycleStatusChangedEvent } from "@/lib/opportunities/emitChildLifecycleStatusChangedEvent";
+// BOUNDARY (platform↔childcare): the generic outcome runtime touches the childcare domain only here,
+// inside the enrolled disposition, gated by the childcare feature flag. Target decoupling is a childcare
+// event subscriber on child_lifecycle_status_changed (deferred — see docs/sprints/07_2026/
+// process_instance_enrollment_materialization.md "Boundary: the one platform↔childcare seam").
 import { materializeEnrollmentForChildScope } from "@/lib/childcareOperational/materializeEnrollmentFromProcessInstance";
 import { isChildcareOperationalEnrollmentV1EnabledForOrg } from "@/lib/childcareOperational/featureFlag";
 

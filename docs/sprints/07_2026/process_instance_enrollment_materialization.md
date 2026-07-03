@@ -2,6 +2,31 @@
 
 Status: implemented (PR #72). Migrations: none (all tables already exist).
 
+## Platform pattern vs reference implementation (naming/boundary doctrine)
+
+**The platform pattern is generic:**
+
+```
+Process Instance → Outcome → Materialize Durable Operational Facts
+```
+
+Platform / shared runtime speaks only generic language: *process, process_instance, materialization,
+durable facts, operational facts, outcome, subject, context.* Generic runtime lives in
+`lib/process/*` (the process-instance primitive) and the outcome system in `lib/lifecycle/*`.
+
+**Enrollment is the reference implementation of that pattern — not the pattern itself.** The childcare
+implementation lives entirely under `lib/childcareOperational/*` and may use childcare language. For
+childcare, the durable operational facts materialized by the pattern are:
+
+- `child_enrollment_agreements` (the durable relationship)
+- `child_placements` (program / room / site)
+- `schedule_assignments` (schedule pattern)
+
+Boundary rule: childcare names (`child_enrollment_agreement`, `child_placement`, `schedule_assignment`,
+`attendance`, `room`, `program`) appear **only** inside `lib/childcareOperational/*`, childcare-specific
+tests, and childcare schema docs. The one platform→childcare touch point is the outcome executor calling
+the childcare materializer on the enrolled disposition — see "Boundary: the one platform↔childcare seam".
+
 ## Decision
 
 Process Instances own the **journey**. On enrollment completion the process **materializes** the durable
@@ -53,6 +78,18 @@ The `update_child_enrollment_status` outcome, on disposition `enrolled` and when
 The legacy admin **Approve Enrollment** path (`executeOperationalEnrollmentHandoffFromApprovedOpportunity`)
 remains temporarily but now delegates to the **same** shared core `applyChildEnrollmentMaterialization`
 (sourcing facts from OCM). One materialization implementation, two fact sources.
+
+## Boundary: the one platform↔childcare seam
+
+`lib/lifecycle/stageOutcomeRuleTargetExecutor.ts` (generic outcome runtime) imports the childcare
+materializer + feature flag and calls it inside the already-domain-specific `update_child_enrollment_status`
+case on disposition `enrolled`. This is the single deliberate platform→childcare touch point. It is gated
+(`isChildcareOperationalEnrollmentV1EnabledForOrg`), non-blocking, and isolated to that case.
+
+Target decoupling (deferred — would change behavior, so out of scope for the naming pass): the executor
+already emits `child_lifecycle_status_changed`; a childcare **event subscriber** on
+`next_status_key='enrolled'` should own materialization, removing the direct import. Tracked as the clean
+event-driven split; not done now to preserve behavior and avoid a new abstraction.
 
 ## Billing / funding (Task 5 — not overbuilt)
 

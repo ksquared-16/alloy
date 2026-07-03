@@ -1,5 +1,6 @@
 /**
- * Materialize durable operational truth from a completed Enrollment process instance.
+ * Materialize durable operational truth from a completed Enrollment process instance (CHILDCARE domain —
+ * the reference implementation of the generic platform pattern Process Instance → Outcome → Materialize).
  *
  * The Process Instance owns the JOURNEY. On enrollment completion it CREATES the durable operational
  * facts (child_enrollment_agreements + child_placements + schedule_assignments) and then records
