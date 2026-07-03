@@ -352,7 +352,7 @@ function OfferingRateGrid({ offering, variants, cadences, rateMap, orgOnlyMap, l
             {sorted.length === 0 ? (
                 <p className="px-4 py-3 text-xs text-alloy-midnight/35">No active variants.</p>
             ) : activeCadences.length === 0 ? (
-                <p className="px-4 py-3 text-xs text-alloy-midnight/35">No rate bases yet — use "+ Add rate basis" above to start.</p>
+                <p className="px-4 py-3 text-xs text-alloy-midnight/35">No rate bases yet — use “+ Add rate basis” above to start.</p>
             ) : (
                 <div className="overflow-x-auto overflow-y-visible">
                     <table className="w-auto text-sm">
@@ -862,14 +862,6 @@ function ScopeBadge({ locationId, programKey, locations, programs }: { locationI
     );
 }
 
-function FreqBadge({ cadenceKey }: { cadenceKey: string | null }) {
-    return (
-        <span className="text-[10px] text-alloy-bend-pine/70 bg-alloy-bend-pine/6 rounded px-1.5 py-0.5 whitespace-nowrap font-medium">
-            {frequencyLabel(cadenceKey)}
-        </span>
-    );
-}
-
 function CommercialCard({ children, onClick, editing }: { children: React.ReactNode; onClick?: () => void; editing?: boolean }) {
     return (
         <div
@@ -897,26 +889,6 @@ function CField({ label, value, onChange, placeholder, type = "text", required }
                 placeholder={placeholder}
                 className="mt-0.5 block w-full rounded border border-alloy-stone/25 px-2 py-1 text-sm text-alloy-midnight placeholder:text-alloy-midnight/38 focus:border-alloy-bend-pine focus:outline-none focus:ring-2 focus:ring-alloy-bend-pine/20"
             />
-        </label>
-    );
-}
-
-// Datalist-backed freeform select (suggestions, not enforced)
-function CSuggest({ label, value, onChange, suggestions, placeholder }: { label: string; value: string; onChange: (v: string) => void; suggestions: string[]; placeholder?: string }) {
-    const id = `suggest-${label.replace(/\s/g, "-").toLowerCase()}`;
-    return (
-        <label className="block">
-            <span className="text-[10px] font-medium text-alloy-midnight/45 uppercase tracking-wide">{label}</span>
-            <input
-                list={id}
-                value={value}
-                onChange={e => onChange(e.target.value)}
-                placeholder={placeholder ?? "Type or choose…"}
-                className="mt-0.5 block w-full rounded border border-alloy-stone/25 px-2 py-1 text-sm text-alloy-midnight placeholder:text-alloy-midnight/38 focus:border-alloy-bend-pine focus:outline-none focus:ring-2 focus:ring-alloy-bend-pine/20"
-            />
-            <datalist id={id}>
-                {suggestions.map(s => <option key={s} value={s} />)}
-            </datalist>
         </label>
     );
 }
@@ -973,31 +945,6 @@ function ScopeFields({ locationId, setLocationId, programKey, setProgramKey, loc
                     {programs.map(p => <option key={p.key} value={p.key}>{p.label}</option>)}
                 </select>
             </label>
-        </div>
-    );
-}
-
-function EffectiveDateFields({ start, end, onStart, onEnd }: { start: string; end: string; onStart: (v: string) => void; onEnd: (v: string) => void }) {
-    return (
-        <div className="grid grid-cols-2 gap-3">
-            <CField label="Effective from" value={start} onChange={onStart} type="date" />
-            <CField label="Ends on (optional)" value={end} onChange={onEnd} type="date" />
-        </div>
-    );
-}
-
-function SectionHeader({ title, count, onAdd, adding }: { title: string; count: number; onAdd: () => void; adding: boolean }) {
-    return (
-        <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-                <h3 className="text-sm font-semibold text-alloy-midnight">{title}</h3>
-                {count > 0 && <span className="text-[10px] text-alloy-midnight/35 bg-alloy-stone/10 rounded-full px-1.5 py-0.5">{count}</span>}
-            </div>
-            {!adding && (
-                <button type="button" onClick={onAdd} className="flex items-center gap-1 text-xs text-alloy-bend-pine/75 hover:text-alloy-bend-pine transition-colors font-medium">
-                    <span className="text-sm leading-none">+</span> Add
-                </button>
-            )}
         </div>
     );
 }

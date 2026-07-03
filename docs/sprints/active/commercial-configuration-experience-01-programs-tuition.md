@@ -1,6 +1,6 @@
 # Commercial Configuration — Experience 01: Programs → Tuition
 
-**Status:** Product/UX specification (design only — no implementation)
+**Status:** ✅ **IMPLEMENTED & SHIPPED** in Commercial Platform V1 (2026-07-03) — Programs → Offerings → Variants → Tuition matrix are live. Retained as the UX rationale. Canonical: **[Commercial Platform V1](../../platform/commercial/commercial-platform-v1.md)**.
 **Date:** 2026-06-30
 **Builds on:** [Commercial Operating Model](../../platform/core/commercial-operating-model.md) · [Commercial Language Bible](commercial-language-bible.md) · [Operational ↔ Commercial Integration](../../platform/core/operational-commercial-integration.md)
 **Methodology:** Architecture → **Product Spec → Operator Experience Spec → UX Blueprint → Mockups → Review** → Implementation → QA. *No implementation before mockups.*
