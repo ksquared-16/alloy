@@ -1637,7 +1637,7 @@ html[data-alloy-os-runtime="on"]
   padding: 2px 4px;
   border-radius: 4px;
   cursor: pointer;
-  transition: background 120ms ease;
+  transition: background var(--motion-instant) var(--motion-ease-move);
 }
 .alloy-os-ucard__action:hover {
   background: color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 8%, #fff);
@@ -2063,7 +2063,7 @@ html[data-alloy-os-runtime="on"]
   color: var(--alloy-os-text-secondary, #4b5563);
   cursor: pointer;
   opacity: 0;
-  transition: opacity 120ms ease, border-color 120ms ease, color 120ms ease;
+  transition: opacity var(--motion-instant) var(--motion-ease-move), border-color var(--motion-instant) var(--motion-ease-move), color var(--motion-instant) var(--motion-ease-move);
 }
 .alloy-os-household__row:hover .alloy-os-household__row-edit,
 .alloy-os-household__row:focus-within .alloy-os-household__row-edit,
@@ -2945,7 +2945,7 @@ html[data-alloy-os-runtime-split="true"]
   background: var(--alloy-os-surface, #fff);
   border: 1px solid var(--alloy-os-border, #e5e7eb);
   border-radius: 7px;
-  transition: border-color 120ms ease;
+  transition: border-color var(--motion-instant) var(--motion-ease-move);
 }
 .alloy-os-card-edit__input:focus {
   outline: none;
@@ -2980,7 +2980,7 @@ html[data-alloy-os-runtime-split="true"]
   background: var(--alloy-os-surface, #fff);
   color: var(--alloy-os-text-secondary, #4b5563);
   cursor: pointer;
-  transition: background 120ms ease, border-color 120ms ease, opacity 120ms ease;
+  transition: background var(--motion-instant) var(--motion-ease-move), border-color var(--motion-instant) var(--motion-ease-move), opacity var(--motion-instant) var(--motion-ease-move);
 }
 .alloy-os-card-edit__btn--primary {
   border-color: var(--alloy-os-accent, #2f6f4f);
@@ -3008,7 +3008,7 @@ html[data-alloy-os-runtime-split="true"]
   cursor: pointer;
   padding-inline: 4px;
   margin-inline: -4px;
-  transition: background 120ms ease;
+  transition: background var(--motion-instant) var(--motion-ease-move);
 }
 .alloy-os-household__row--child-link:hover {
   background: color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 7%, transparent);
@@ -3102,7 +3102,7 @@ html[data-alloy-os-runtime-split="true"]
     0 0 0 1px rgba(15, 23, 42, 0.05),
     0 1px 2px rgba(15, 23, 42, 0.04),
     0 4px 12px -8px rgba(15, 23, 42, 0.12);
-  transition: box-shadow 160ms ease;
+  transition: box-shadow var(--motion-micro) var(--motion-ease-move);
 }
 /* Keep the left accent rails legible even without the box border. */
 .alloy-os-focus-panel-grid:not(.alloy-os-focus-panel-grid--work)

@@ -29,6 +29,8 @@ import { InlineOpportunityFocusPanel } from "./InlineOpportunityFocusPanel";
 type FocusPanelOpenContextValue = {
     /** Open the Focus Panel for a queue row — the runtime's `intents.openRecord`. */
     openRecord: (row: QueueRowModel) => void;
+    /** Warm a row's Focus Panel record VM on hover/focus — the runtime's `intents.prefetchRecord`. */
+    prefetchRecord: (row: QueueRowModel) => void;
 };
 
 const FocusPanelOpenContext = createContext<FocusPanelOpenContextValue | null>(null);
@@ -44,10 +46,13 @@ export function useFocusPanelOpen(): FocusPanelOpenContextValue {
 
 export function FocusPanelSurface({
     openRecord,
+    prefetchRecord,
     children,
 }: {
     /** `intents.openRecord` from the Work Unit surface runtime. */
     openRecord: (row: QueueRowModel) => void;
+    /** `intents.prefetchRecord` — hover/focus warm of the row's Focus Panel record VM. */
+    prefetchRecord: (row: QueueRowModel) => void;
     children: ReactNode;
 }) {
     const drawerCtx = useAdminDrawerOptional();
@@ -59,7 +64,10 @@ export function FocusPanelSurface({
         drawerCtx.drawer.type === "opportunities" &&
         drawerCtx.drawer.id != null;
 
-    const value = useMemo<FocusPanelOpenContextValue>(() => ({ openRecord }), [openRecord]);
+    const value = useMemo<FocusPanelOpenContextValue>(
+        () => ({ openRecord, prefetchRecord }),
+        [openRecord, prefetchRecord],
+    );
 
     return (
         <div

@@ -251,7 +251,7 @@ html[data-adminv2-workspace-shell="v2"] .adminv2-ws-command-rail-actions-trigger
   font-weight: 600;
   color: #273f52;
   cursor: pointer;
-  transition: background-color 120ms ease;
+  transition: background-color var(--motion-instant) var(--motion-ease-move);
 }
 
 html[data-adminv2-workspace-shell="v2"] .adminv2-ws-command-rail-actions-section--expanded .adminv2-ws-command-rail-actions-trigger {
@@ -314,9 +314,9 @@ html[data-adminv2-workspace-shell="v2"] .adminv2-command-rail-executable-action 
   cursor: pointer;
   font-family: inherit;
   transition:
-    border-color 120ms ease,
-    background-color 120ms ease,
-    box-shadow 120ms ease;
+    border-color var(--motion-instant) var(--motion-ease-move),
+    background-color var(--motion-instant) var(--motion-ease-move),
+    box-shadow var(--motion-instant) var(--motion-ease-move);
 }
 
 html[data-adminv2-workspace-shell="v2"] .adminv2-command-rail-executable-action:hover:not(:disabled) {
@@ -348,7 +348,7 @@ html[data-adminv2-workspace-shell="v2"] .adminv2-command-rail-executable-action-
 
 html[data-adminv2-workspace-shell="v2"] .adminv2-command-rail-executable-action-chevron {
   opacity: 0.4;
-  transition: opacity 120ms ease;
+  transition: opacity var(--motion-instant) var(--motion-ease-move);
 }
 
 html[data-adminv2-workspace-shell="v2"] .adminv2-command-rail-executable-action:hover:not(:disabled) .adminv2-command-rail-executable-action-chevron {
@@ -465,7 +465,7 @@ html[data-adminv2-workspace-shell="v2"] .adminv2-ws-command-rail-telemetry-actio
   color: #273f52;
   text-decoration: none;
   cursor: pointer;
-  transition: background-color 120ms ease;
+  transition: background-color var(--motion-instant) var(--motion-ease-move);
 }
 
 html[data-adminv2-workspace-shell="v2"] .adminv2-ws-command-rail-telemetry-action:hover {
@@ -1419,7 +1419,7 @@ html[data-adminv2-workspace-shell="v2"] [data-adminv2-bos-rail-overlay="true"] [
 }
 
 .adminv2-dept-focus-ring {
-  transition: box-shadow 220ms ease, border-color 220ms ease;
+  transition: box-shadow var(--motion-standard) var(--motion-ease-move), border-color var(--motion-standard) var(--motion-ease-move);
 }
 
 /* System node: clean rounded rect; no decorative edge or inset */
@@ -1482,10 +1482,10 @@ html[data-adminv2-workspace-shell="v2"] [data-adminv2-bos-rail-overlay="true"] [
   letter-spacing: 0.02em;
   cursor: pointer;
   transition:
-    background-color 0.18s ease,
-    border-color 0.18s ease,
-    transform 0.18s ease,
-    box-shadow 0.18s ease;
+    background-color var(--motion-micro) var(--motion-ease-move),
+    border-color var(--motion-micro) var(--motion-ease-move),
+    transform var(--motion-micro) var(--motion-ease-move),
+    box-shadow var(--motion-micro) var(--motion-ease-move);
 }
 
 .adminv2-dept-quick-action:hover {
@@ -2230,8 +2230,8 @@ html[data-adminv2-workspace-shell="v2"] [data-adminv2-bos-rail-overlay="true"] [
   cursor: pointer;
   opacity: 0.68;
   transition:
-    box-shadow 180ms ease,
-    opacity 180ms ease;
+    box-shadow var(--motion-micro) var(--motion-ease-move),
+    opacity var(--motion-micro) var(--motion-ease-move);
 }
 
 .adminv2-canvas-tools-fab:hover {
@@ -2583,10 +2583,10 @@ html[data-adminv2-workspace-shell="v2"] [data-adminv2-bos-rail-overlay="true"] [
   border-radius: 6px;
   outline-offset: 2px;
   transition:
-    color 120ms ease,
-    background-color 120ms ease,
-    opacity 120ms ease,
-    transform 80ms ease;
+    color var(--motion-instant) var(--motion-ease-move),
+    background-color var(--motion-instant) var(--motion-ease-move),
+    opacity var(--motion-instant) var(--motion-ease-move),
+    transform var(--motion-instant) var(--motion-ease-move);
 }
 
 .adminv2-nav-link:active {
@@ -2641,7 +2641,7 @@ html[data-adminv2-workspace-shell="v2"] [data-adminv2-bos-rail-overlay="true"] [
 
 .adminv2-sidebar-primary-link {
   color: rgba(255, 255, 255, 0.86);
-  transition: background-color 120ms ease, color 120ms ease;
+  transition: background-color var(--motion-instant) var(--motion-ease-move), color var(--motion-instant) var(--motion-ease-move);
 }
 
 .adminv2-sidebar-primary-link:hover {
@@ -2665,9 +2665,9 @@ html[data-adminv2-workspace-shell="v2"] [data-adminv2-bos-rail-overlay="true"] [
   color: rgba(255, 255, 255, 0.82);
   overflow: visible;
   transition:
-    background-color 120ms ease,
-    color 120ms ease,
-    transform 80ms ease;
+    background-color var(--motion-instant) var(--motion-ease-move),
+    color var(--motion-instant) var(--motion-ease-move),
+    transform var(--motion-instant) var(--motion-ease-move);
 }
 
 .adminv2-sidebar-rail-link:hover {
@@ -2775,7 +2775,7 @@ html[data-adminv2-workspace-shell="v2"] [data-adminv2-bos-rail-overlay="true"] [
   line-height: 1.35;
   color: rgba(255, 255, 255, 0.55);
   background-color: transparent;
-  transition: background-color 120ms ease, color 120ms ease;
+  transition: background-color var(--motion-instant) var(--motion-ease-move), color var(--motion-instant) var(--motion-ease-move);
 }
 
 .adminv2-sidebar-queue-link:hover {

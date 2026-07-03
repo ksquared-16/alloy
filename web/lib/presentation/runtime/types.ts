@@ -17,6 +17,7 @@ import type {
     OperatorLifecycleWorkQueuePreview,
 } from "@/lib/admin/buildOperatorLifecycleLanding";
 import type { OpportunityDrawerQueuePreviewSeed } from "@/lib/admin/opportunityDrawerQueuePreviewSeed";
+import type { ResolvedActionForClient } from "@/lib/admin/actions/types";
 import type { QueueRowContext } from "@/lib/workUnits/lifecycleSubjectContracts";
 import type { WorkViewConfigV1Stored } from "@/lib/lifecycle/workViewsConfigV1";
 import type { QueueItemsResult } from "@/lib/queues/types";
@@ -149,6 +150,13 @@ export type WorkUnitSurfaceModel = {
      * use it to render the persistent selected rail.
      */
     selectedRecordId: string | null;
+    /**
+     * Configured Right Rail actions resolved for this work unit (`surface=work_unit,right_rail`),
+     * flattened to the client action shape. Empty until the lane resolves (or when none are
+     * configured) — RR.SURFACE stays a zero-footprint anchor while empty, then reveals. Rendered +
+     * executed through the existing action runtime; the runtime never invents or hardcodes actions.
+     */
+    rightRailActions: ResolvedActionForClient[];
     ready: boolean;
 };
 
@@ -156,8 +164,21 @@ export type WorkUnitSurfaceModel = {
 export type WorkUnitSurfaceIntents = {
     /** In-page Work View selection (doctrine: no query-string routing for view selection). */
     selectWorkView: (workViewId: string) => void;
+    /**
+     * Warm a Work View's target route on hover/focus intent — the same route `selectWorkView`
+     * will push — so switching views lands on a resolved host (no cold shell for cross-host
+     * views). No-op for the active view and unresolvable views. Fire-and-forget, deduped.
+     */
+    prefetchWorkView: (workViewId: string) => void;
     /** Open the Focus Panel for a queue row (in-page `openDrawer`). */
     openRecord: (row: QueueRowModel) => void;
+    /**
+     * Warm a queue row's Focus Panel record VM on hover/focus intent — the same id + context
+     * `openRecord` will use — so the inline Focus Panel resolves instantly on click. Hover-safe
+     * (bootstrap + primary only, no full-hydrate), fire-and-forget, deduped. No-op for non-
+     * opportunity rows and while the work-unit scope is unresolved.
+     */
+    prefetchRecord: (row: QueueRowModel) => void;
 };
 
 /**

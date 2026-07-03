@@ -282,7 +282,7 @@ export function InlineOpportunityFocusPanel() {
                             <button
                                 type="button"
                                 onClick={onRetry}
-                                className="mt-1.5 rounded-md border border-alloy-ember/30 bg-white px-2.5 py-1 text-xs font-semibold text-alloy-ember transition-colors hover:bg-alloy-ember/10"
+                                className="motion-control mt-1.5 rounded-md border border-alloy-ember/30 bg-white px-2.5 py-1 text-xs font-semibold text-alloy-ember hover:bg-alloy-ember/10"
                             >
                                 Retry
                             </button>

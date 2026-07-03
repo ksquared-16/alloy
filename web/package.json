@@ -9,6 +9,7 @@
         "verify:module-imports": "tsx --tsconfig tsconfig.json scripts/verifyWebModuleImports.ts",
         "start": "next start",
         "lint": "eslint",
+        "audit:motion": "node scripts/auditMotionTokens.mjs",
         "test": "vitest run",
         "test:watch": "vitest",
         "test:pricing-smoke": "vitest run tests/pricing/jobPricing.smoke.test.ts",

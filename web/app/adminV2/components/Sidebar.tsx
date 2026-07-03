@@ -436,7 +436,7 @@ function SidebarNav({
                     <button
                         type="button"
                         onClick={onToggle}
-                        className="adminv2-sidebar-toggle flex h-10 w-full flex-shrink-0 items-center justify-center hover:opacity-90 active:scale-[0.98] transition-transform"
+                        className="adminv2-sidebar-toggle flex h-10 w-full flex-shrink-0 items-center justify-center motion-press hover:opacity-90"
                         aria-label="Expand sidebar"
                     >
                         <PanelLeft size={20} />
@@ -456,7 +456,7 @@ function SidebarNav({
                     <button
                         type="button"
                         onClick={onToggle}
-                        className="adminv2-sidebar-toggle flex h-9 w-9 shrink-0 items-center justify-center rounded-md hover:opacity-90 active:scale-[0.98] transition-transform"
+                        className="adminv2-sidebar-toggle flex h-9 w-9 shrink-0 items-center justify-center rounded-md motion-press hover:opacity-90"
                         aria-label="Collapse sidebar"
                     >
                         <PanelLeftClose size={20} />

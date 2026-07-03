@@ -32,7 +32,10 @@ export function RightRailSurface({ children }: { children?: ReactNode }) {
         <aside
             {...runtimeLabelProps(PRESENTATION_RUNTIME_LABELS.rightRailSurface)}
             aria-label="Actions"
-            className="w-full lg:w-72 lg:shrink-0"
+            // motion-reveal: the rail settles in when its actions resolve (progressive reveal,
+            // reduced-motion collapses it to an opacity-only settle). Configured empty → the
+            // hidden anchor branch above renders instead, so this never plays for an empty rail.
+            className="motion-reveal w-full lg:w-72 lg:shrink-0"
         >
             <div className="rounded-lg border border-alloy-stone/18 bg-white px-3 py-3">
                 <span className="block text-[10px] font-medium uppercase tracking-[0.1em] text-alloy-stone">

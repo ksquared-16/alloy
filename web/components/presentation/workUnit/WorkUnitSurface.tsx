@@ -22,6 +22,7 @@ import {
     runtimeLabelProps,
 } from "@/components/presentation/runtimeLabels";
 import { RightRailSurface } from "@/components/presentation/rightRail/RightRailSurface";
+import { WorkUnitRightRailActions } from "@/components/presentation/rightRail/WorkUnitRightRailActions";
 import { WorkUnitHeader } from "./WorkUnitHeader";
 import { WorkUnitHeaderCalculations } from "./WorkUnitHeaderCalculations";
 import { WorkViewPillStrip } from "./WorkViewPillStrip";
@@ -78,12 +79,23 @@ export function WorkUnitSurface() {
                             />
                             <WorkUnitHeaderCalculations cards={model.header.calculations} />
                         </section>
-                        <WorkViewPillStrip workViews={model.workViews} onSelect={intents.selectWorkView} />
-                        <FocusPanelSurface openRecord={intents.openRecord}>
+                        <WorkViewPillStrip
+                            workViews={model.workViews}
+                            onSelect={intents.selectWorkView}
+                            onPrefetch={intents.prefetchWorkView}
+                        />
+                        <FocusPanelSurface
+                            openRecord={intents.openRecord}
+                            prefetchRecord={intents.prefetchRecord}
+                        >
                             <QueueRegion queue={model.queue} selectedRecordId={model.selectedRecordId} />
                         </FocusPanelSurface>
                     </div>
-                    <RightRailSurface />
+                    <RightRailSurface>
+                        {model.rightRailActions.length ? (
+                            <WorkUnitRightRailActions actions={model.rightRailActions} />
+                        ) : null}
+                    </RightRailSurface>
                 </div>
             )}
         </div>

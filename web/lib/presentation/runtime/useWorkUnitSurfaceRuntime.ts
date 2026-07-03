@@ -46,13 +46,16 @@ import {
     type WorkViewCanonicalLocation,
     type WorkViewCanonicalLocationWorkUnitRow,
 } from "@/lib/workspace/resolveWorkViewCanonicalLocation";
-import { operatorWorkUnitHrefFromWorkViewSlug } from "@/lib/admin/canonicalOperatorRoutes";
-import { workViewRouteKeyFromLabel } from "@/lib/admin/workUnitRouteSlug";
-import { appendWorkspaceSiteToPath, appendWorkspaceSiteToUrl } from "@/lib/adminV2/workspaceSiteFilterClient";
+import { appendWorkspaceSiteToUrl } from "@/lib/adminV2/workspaceSiteFilterClient";
 import { resolveWorkUnitQueueRowsFetchLimit } from "@/lib/adminV2/workUnitQueueRowsFetchLimit";
 import { dedupeAdminFetch } from "@/lib/workspace/workspaceAdminFetchDedupe";
 import { workspaceDataFetchInit } from "@/lib/workspace/workspaceDataFetch";
 import { prefetchOpportunityDrawerOnRowIntent } from "@/lib/admin/opportunityDrawerIntentPrefetch";
+import { resolveQueueRowWarmTarget } from "@/lib/presentation/runtime/queueRowWarmTarget";
+import { warmOperatorWorkUnitEntryFromHref } from "@/lib/admin/operatorWorkUnitEntryWarm";
+import { resolveWorkViewTargetHref } from "@/lib/presentation/runtime/workViewTargetHref";
+import type { ResolvedActionForClient } from "@/lib/admin/actions/types";
+import { fetchWorkUnitRightRailResolvedActions } from "@/lib/workspace/fetchWorkUnitRightRailResolvedActions";
 import type { SurfaceDoc } from "@/lib/platform/surfaceBuilder/surfaceDefinition";
 import type { QueueItemsResult, QueueSummary } from "@/lib/queues/types";
 import { useOperationalAnswers } from "./useOperationalAnswers";
@@ -442,19 +445,36 @@ export function useWorkUnitSurfaceRuntime(): WorkUnitSurfaceRuntime {
             // (no `work_view=`/`queue=` queries); the record id is never carried across
             // view switches. The destination renders the view ON its canonical host, so
             // rendered rows = the pill's canonical total by construction.
-            const view = savedViews.find((v) => v.id === id) ?? null;
-            const targetRouteKey =
-                canonicalLocationByViewId.get(id)?.routeKey ??
-                workViewRouteKeyFromLabel(view?.label);
-            if (!targetRouteKey) return; // label-less view (config bug): in-page select only
-            router.push(
-                appendWorkspaceSiteToPath(
-                    operatorWorkUnitHrefFromWorkViewSlug(targetRouteKey),
-                    selectedSiteId,
-                ),
-            );
+            const href = resolveWorkViewTargetHref(id, {
+                views: savedViews,
+                canonicalLocationByViewId,
+                selectedSiteId,
+            });
+            if (!href) return; // label-less view (config edge): in-page select only
+            router.push(href);
         },
         [savedViews, canonicalLocationByViewId, router, selectedSiteId, routeSlug],
+    );
+
+    // Hover/focus warm: prefetch the target route of a Work View pill — the SAME route
+    // selectWorkView will push — so switching views lands on a resolved host without a cold
+    // shell (matters most for views hosted on a different work unit). Skips the active view
+    // (already here) and unresolvable views. Reuses the shared operator-entry warm the left
+    // nav uses for its work-view links; fire-and-forget + deduped, safe per pointer.
+    const prefetchWorkView = useCallback(
+        (workViewId: string) => {
+            const id = workViewId.trim();
+            if (!id || id === runtimeCtx.workViewId) return;
+            const href = resolveWorkViewTargetHref(id, {
+                views: savedViews,
+                canonicalLocationByViewId,
+                selectedSiteId,
+            });
+            if (href) {
+                warmOperatorWorkUnitEntryFromHref(href, selectedSiteId, "work_view_pill_intent");
+            }
+        },
+        [savedViews, canonicalLocationByViewId, selectedSiteId, runtimeCtx.workViewId],
     );
 
     const openRecord = useCallback(
@@ -501,6 +521,24 @@ export function useWorkUnitSurfaceRuntime(): WorkUnitSurfaceRuntime {
         [openDrawer, departmentId, workUnitId, runtimeCtx.workViewId],
     );
 
+    // Hover/focus warm: prefetch a row's Focus Panel record VM before the click so opening is
+    // instant. Mirrors the first-row auto-open warm below and the Workspace-tile hover prewarm;
+    // reuses the hover-safe intent prefetch (bootstrap + primary, never full-hydrate on hover)
+    // so it never competes with the active lane. Fire-and-forget + deduped — safe per pointer.
+    const prefetchRecord = useCallback(
+        (row: QueueRowModel) => {
+            const target = resolveQueueRowWarmTarget(row, {
+                departmentId,
+                workUnitId,
+                workViewId: runtimeCtx.workViewId ?? null,
+            });
+            if (target) {
+                prefetchOpportunityDrawerOnRowIntent(target.id, target.context, target.seed);
+            }
+        },
+        [departmentId, workUnitId, runtimeCtx.workViewId],
+    );
+
     // ── First-row auto-open: once, after the first queue settle (doctrine acceptance) ────
     // WARM step: before the auto-open commits, prefetch the first record's drawer VM so the
     // inline Focus Panel resolves fast + coordinated — `useOpportunityDrawerVmPayload` finds
@@ -521,19 +559,13 @@ export function useWorkUnitSurfaceRuntime(): WorkUnitSurfaceRuntime {
         // Warm the first opportunity record's drawer VM as/just before the auto-open (same
         // resolved id + workspace context openRecord uses), so the payload is in-flight/ready
         // by the time the inline panel mounts.
-        if (first.entityType === "opportunity" && departmentId && workUnitId) {
-            const warmId = first.context?.drawer_open?.entity_id?.trim() || first.entityId;
-            if (warmId) {
-                prefetchOpportunityDrawerOnRowIntent(
-                    warmId,
-                    {
-                        work_unit_id: workUnitId,
-                        department_id: departmentId,
-                        work_view_id: runtimeCtx.workViewId ?? null,
-                    },
-                    opportunityQueuePreviewSeedFromRowContext(first.context),
-                );
-            }
+        const warm = resolveQueueRowWarmTarget(first, {
+            departmentId,
+            workUnitId,
+            workViewId: runtimeCtx.workViewId ?? null,
+        });
+        if (warm) {
+            prefetchOpportunityDrawerOnRowIntent(warm.id, warm.context, warm.seed);
         }
         openRecord(first);
     }, [
@@ -567,6 +599,34 @@ export function useWorkUnitSurfaceRuntime(): WorkUnitSurfaceRuntime {
     const selectedRecordId =
         drawer.type === "opportunities" && drawer.id != null ? String(drawer.id) : null;
 
+    // ── Right Rail actions: the configured action lane for this work unit ────────────────
+    // The runtime is the single owner of surface data fetching. Load the resolved actions
+    // directly from the bundle route (handles the bootstrap defer caveat — see the PR-V2
+    // right-rail handoff §5), expose them on the model; RR.SURFACE renders + the existing
+    // action runtime executes. Deduped + TTL, so no double-fetch. Never invents actions.
+    const [rightRailActions, setRightRailActions] = useState<ResolvedActionForClient[]>([]);
+    useEffect(() => {
+        if (!departmentId || !workUnitId) {
+            setRightRailActions([]);
+            return;
+        }
+        let cancelled = false;
+        void fetchWorkUnitRightRailResolvedActions({
+            departmentId,
+            workUnitId,
+            fetchInit: workspaceDataFetchInit() ?? {},
+        })
+            .then((list) => {
+                if (!cancelled) setRightRailActions(list);
+            })
+            .catch(() => {
+                if (!cancelled) setRightRailActions([]);
+            });
+        return () => {
+            cancelled = true;
+        };
+    }, [departmentId, workUnitId]);
+
     // ── Resolved model ───────────────────────────────────────────────────────────────────
     const model = useMemo<WorkUnitSurfaceModel>(
         () => ({
@@ -585,6 +645,7 @@ export function useWorkUnitSurfaceRuntime(): WorkUnitSurfaceRuntime {
             },
             activeWorkViewId: runtimeCtx.workViewId,
             selectedRecordId,
+            rightRailActions,
             // Above-fold identity + configured views resolved; queue carries its own state.
             ready: slugRoute != null && configSettled,
         }),
@@ -601,13 +662,14 @@ export function useWorkUnitSurfaceRuntime(): WorkUnitSurfaceRuntime {
             queueError,
             runtimeCtx.workViewId,
             selectedRecordId,
+            rightRailActions,
             configSettled,
         ],
     );
 
     const intents = useMemo<WorkUnitSurfaceIntents>(
-        () => ({ selectWorkView, openRecord }),
-        [selectWorkView, openRecord],
+        () => ({ selectWorkView, prefetchWorkView, openRecord, prefetchRecord }),
+        [selectWorkView, prefetchWorkView, openRecord, prefetchRecord],
     );
 
     return { model, intents };

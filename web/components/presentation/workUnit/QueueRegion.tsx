@@ -59,7 +59,7 @@ export function QueueRegion({
     /** Currently open inline Focus Panel record — rows render the selected rail. */
     selectedRecordId?: string | null;
 }) {
-    const { openRecord } = useFocusPanelOpen();
+    const { openRecord, prefetchRecord } = useFocusPanelOpen();
 
     return (
         <section
@@ -99,6 +99,7 @@ export function QueueRegion({
                                     row={row}
                                     rowConfig={queue.rowConfig}
                                     onOpen={openRecord}
+                                    onPrefetch={prefetchRecord}
                                     isFirst={index === 0}
                                     isSelected={rowIsSelected(row, selectedRecordId)}
                                 />

@@ -17,9 +17,12 @@ import {
 export function WorkViewPillStrip({
     workViews,
     onSelect,
+    onPrefetch,
 }: {
     workViews: WorkViewLinkModel[];
     onSelect: (id: string) => void;
+    /** Hover/focus intent — warm the view's target route before the click. */
+    onPrefetch?: (id: string) => void;
 }) {
     if (!workViews.length) return null;
     return (
@@ -37,8 +40,10 @@ export function WorkViewPillStrip({
                     role="tab"
                     aria-selected={view.isActive}
                     data-work-view-id={view.id}
+                    onPointerEnter={onPrefetch ? () => onPrefetch(view.id) : undefined}
+                    onFocus={onPrefetch ? () => onPrefetch(view.id) : undefined}
                     onClick={() => onSelect(view.id)}
-                    className={`inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
+                    className={`motion-control inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border px-3 py-1 text-xs font-medium ${
                         view.isActive
                             ? "border-alloy-juniper bg-alloy-juniper text-white"
                             : "border-alloy-stone/30 bg-white text-alloy-midnight hover:border-alloy-juniper/50"

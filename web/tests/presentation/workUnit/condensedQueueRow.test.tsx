@@ -127,4 +127,15 @@ describe("CondensedQueueRow — published surface config (visibility + labels)",
         act(() => button?.dispatchEvent(new MouseEvent("click", { bubbles: true })));
         expect(onOpen).toHaveBeenCalledWith(model);
     });
+
+    it("accepts an onPrefetch handler and renders unchanged (hover/focus warm is opt-in)", () => {
+        // The row wires the same warm handler to onPointerEnter (mouse) and onFocus (keyboard);
+        // that the prop threads through and the row renders stably is type-checked + asserted
+        // here. The warm-TARGET logic is proven directly in queueRowWarmTarget.test.ts (raw
+        // jsdom can't synthesize React's delegated enter/focus events reliably).
+        const model = row(fullContext());
+        const el = render(<CondensedQueueRow row={model} onOpen={vi.fn()} onPrefetch={vi.fn()} />);
+        expect(el.querySelector("button")).not.toBeNull();
+        expect(el.textContent).toContain("Jordan Lee");
+    });
 });

@@ -101,6 +101,18 @@
 .motion-interactive  { transition: background-color var(--motion-instant) var(--motion-ease-move),
                                    border-color var(--motion-instant) var(--motion-ease-move),
                                    color var(--motion-instant) var(--motion-ease-move); }
+/* Composed interactive control: hover/selection color feedback AND press scale in ONE
+   transition declaration. Two separate `.motion-*` classes on one element would collide
+   (the `transition` shorthand is single-valued — the last rule would win and the press
+   scale would snap). This is the default acknowledgement for buttons, pills, queue rows,
+   tiles, and nav items. Instant speed reads as a physical response, not an animation.
+   Composes existing tokens only — invents no new timing or easing. */
+.motion-control        { transition: transform var(--motion-instant) var(--motion-ease-move),
+                                   background-color var(--motion-instant) var(--motion-ease-move),
+                                   border-color var(--motion-instant) var(--motion-ease-move),
+                                   color var(--motion-instant) var(--motion-ease-move),
+                                   box-shadow var(--motion-instant) var(--motion-ease-move); }
+.motion-control:active { transform: scale(0.98); }
 
 /* Accessibility: reduced motion collapses choreography to opacity-only,
    preserving continuity (the crossfade) while removing translate/scale/spring. */
@@ -115,8 +127,10 @@
   .motion-navigate,
   .motion-swap,
   .motion-press,
-  .motion-interactive { transition-duration: 1ms; }
-  .motion-press:active { transform: none; }
+  .motion-interactive,
+  .motion-control { transition-duration: 1ms; }
+  .motion-press:active,
+  .motion-control:active { transform: none; }
 }
 
 body {

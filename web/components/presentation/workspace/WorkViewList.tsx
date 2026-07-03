@@ -84,7 +84,7 @@ function WorkViewRowBody({ view }: { view: WorkViewLinkModel }) {
             {/* Always faintly present so a row reads as clickable at rest; strengthens + nudges on hover. */}
             <span
                 aria-hidden
-                className="w-3 shrink-0 text-right text-alloy-juniper/40 transition-all group-hover/row:translate-x-0.5 group-hover/row:text-alloy-juniper"
+                className="motion-control w-3 shrink-0 text-right text-alloy-juniper/40 group-hover/row:translate-x-0.5 group-hover/row:text-alloy-juniper"
             >
                 →
             </span>
@@ -110,7 +110,7 @@ export function WorkViewList({ workViews }: { workViews: WorkViewLinkModel[] }) 
                         <Link
                             href={view.href}
                             aria-label={rowAriaLabel(view)}
-                            className={`${ROW_BODY_CLASS} no-underline transition-colors hover:bg-alloy-juniper/[0.1] hover:text-alloy-juniper active:bg-alloy-juniper/[0.18] focus-visible:relative focus-visible:z-10 focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-alloy-juniper`}
+                            className={`${ROW_BODY_CLASS} motion-control no-underline hover:bg-alloy-juniper/[0.1] hover:text-alloy-juniper active:bg-alloy-juniper/[0.18] focus-visible:relative focus-visible:z-10 focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-alloy-juniper`}
                         >
                             <WorkViewRowBody view={view} />
                         </Link>

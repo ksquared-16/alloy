@@ -37,7 +37,7 @@ import {
 type RowContext = NonNullable<QueueRowModel["context"]>;
 
 const CARD_BUTTON_CLASS =
-    "relative block w-full overflow-hidden rounded-lg border bg-white px-3 py-2.5 text-left transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-alloy-juniper";
+    "motion-control relative block w-full overflow-hidden rounded-lg border bg-white px-3 py-2.5 text-left focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-alloy-juniper";
 
 const CARD_IDLE_CLASS =
     " border-alloy-stone/18 hover:bg-alloy-juniper/[0.04] active:bg-alloy-juniper/[0.08]";
@@ -95,6 +95,7 @@ export function CondensedQueueRow({
     row,
     rowConfig,
     onOpen,
+    onPrefetch,
     isFirst,
     isSelected,
 }: {
@@ -105,11 +106,18 @@ export function CondensedQueueRow({
      */
     rowConfig?: CompactRowSlots;
     onOpen: (row: QueueRowModel) => void;
+    /**
+     * Hover/focus intent — warm this row's Focus Panel record VM before the click so opening
+     * is instant. Fires on pointer-enter and keyboard focus; fire-and-forget and deduped.
+     */
+    onPrefetch?: (row: QueueRowModel) => void;
     isFirst?: boolean;
     /** Row's record is the one open in the inline Focus Panel — persistent selected rail. */
     isSelected?: boolean;
 }) {
     const context = row.context;
+    // One warm handler for both pointer-enter (mouse intent) and focus (keyboard intent).
+    const warm = onPrefetch ? () => onPrefetch(row) : undefined;
     const cardClass =
         CARD_BUTTON_CLASS + (isSelected ? CARD_SELECTED_CLASS : CARD_IDLE_CLASS);
 
@@ -122,6 +130,8 @@ export function CondensedQueueRow({
                 data-entity-type={row.entityType}
                 data-queue-row-first={isFirst ? "true" : undefined}
                 data-queue-row-active={isSelected ? "true" : undefined}
+                onPointerEnter={warm}
+                onFocus={warm}
                 onClick={() => onOpen(row)}
                 className={cardClass}
             >
