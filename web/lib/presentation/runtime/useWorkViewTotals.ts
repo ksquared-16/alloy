@@ -66,8 +66,14 @@ export function useWorkViewTotals(args: {
     selectedSiteId: string | null;
     /** Gate (org/config readiness) — while false nothing fetches and all counts stay null. */
     enabled?: boolean;
+    /**
+     * Bump to force a fresh refetch (e.g. after Create Lead adds a New Leads row). Folds into
+     * the scope key so the totals re-resolve from the rows API — the counts are never cached
+     * across this token, so a mutation's new count lands immediately.
+     */
+    refreshToken?: string | number;
 }): Map<string, number | null> {
-    const { targets, selectedSiteId, enabled = true } = args;
+    const { targets, selectedSiteId, enabled = true, refreshToken } = args;
 
     // Content-derived scope key: refetch on real target changes, not array identity churn.
     // The effect reconstructs the targets FROM this key, so the key is its only target
@@ -80,7 +86,7 @@ export function useWorkViewTotals(args: {
                 .join("\n"),
         [targets],
     );
-    const scopeKey = `${enabled ? "1" : "0"}\n${selectedSiteId ?? ""}\n${targetsKey}`;
+    const scopeKey = `${enabled ? "1" : "0"}\n${selectedSiteId ?? ""}\n${refreshToken ?? ""}\n${targetsKey}`;
 
     // Resolved totals are KEYED to the scope they were fetched for: on any scope change the
     // stored map derives away to empty (no badge) with no clear-effect — stale counts can

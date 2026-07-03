@@ -2,12 +2,25 @@
  * Shared helpers for case-grain and child-grain QueueRowContext builders.
  */
 
+import { humanizeSnakeCaseToken } from "@/lib/admin/activityTimelineFormat";
+import { canonicalNewLeadStatusLabel } from "@/lib/lifecycle/enrollmentLeadStageStatusAliases";
 import type {
     LifecycleSubjectType,
     QueueRowContext,
     QueueRowCountUnit,
     QueueRowNextBestAction,
 } from "@/lib/workUnits/lifecycleSubjectContracts";
+
+/**
+ * Single status-label entry point for queue-row-context builders. Canonicalizes legacy New Lead
+ * keys (new_inquiry / new_lead → "New Lead") via the shared resolver, then humanizes any other
+ * status key. Guarantees a raw snake_case status key (e.g. `new_inquiry`) never reaches the UI.
+ */
+export function resolveSubjectStatusLabel(statusKey: string | null | undefined): string {
+    const key = (statusKey ?? "").trim();
+    if (!key) return "—";
+    return canonicalNewLeadStatusLabel(key) ?? humanizeSnakeCaseToken(key);
+}
 
 export type PartialQueueRowContextQueueMeta = {
     key: string;

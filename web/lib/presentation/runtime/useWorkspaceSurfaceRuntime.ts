@@ -23,6 +23,7 @@ import { useWorkspaceSiteFilter } from "@/contexts/WorkspaceSiteFilterContext";
 import { useWorkspaceRouteVm } from "@/lib/adminV2/runtime/surface/workspaceRouteVmContext";
 import type { OperatorLifecycleLandingCard } from "@/lib/admin/buildOperatorLifecycleLanding";
 import {
+    invalidateOperatorLifecycleLandingCache,
     loadOperatorLifecycleLandingCards,
     peekOperatorLifecycleLandingCards,
 } from "@/lib/admin/loadOperatorLifecycleLandingClient";
@@ -44,6 +45,11 @@ import { processTileModelFromLandingCard, type WorkspaceSurfaceModel } from "./t
 import type { ResolvedActionForClient } from "@/lib/admin/actions/types";
 import { fetchWorkspaceRootResolvedActions } from "@/lib/workspace/fetchWorkspaceRootResolvedActions";
 import { workspaceDataFetchInit } from "@/lib/workspace/workspaceDataFetch";
+import {
+    OPPORTUNITY_QUEUE_UPDATED_EVENT,
+    isQueueMembershipMutationActionKey,
+    parseOpportunityQueueUpdatedDetail,
+} from "@/lib/admin/opportunityQueueRefreshEvent";
 
 /** Warmest available first paint: session peek, else the server-composed Route VM seed. */
 function seedLifecycleCards(
@@ -65,7 +71,27 @@ export function useWorkspaceSurfaceRuntime(): WorkspaceSurfaceModel {
     );
     const [cardsSettled, setCardsSettled] = useState(false);
 
-    // Authoritative load (rollups included) refines the seeded tiles in place.
+    // ── Live refresh: a queue-membership mutation (Create Lead, etc.) must update the process
+    // card counts immediately. Bumping this nonce re-runs the authoritative card load AND folds
+    // into useWorkViewTotals' scope key so the per-view totals re-resolve — the workspace no
+    // longer waits for a full page reload to reflect a new lead.
+    const [refreshNonce, setRefreshNonce] = useState(0);
+    useEffect(() => {
+        if (typeof window === "undefined") return;
+        const onQueueUpdated = (ev: Event) => {
+            const detail = parseOpportunityQueueUpdatedDetail(ev);
+            if (isQueueMembershipMutationActionKey(detail?.action_key)) {
+                // Bust the landing cache so the re-load below refetches fresh rollups, then
+                // bump the nonce to re-run the load + re-resolve the per-view totals.
+                invalidateOperatorLifecycleLandingCache();
+                setRefreshNonce((n) => n + 1);
+            }
+        };
+        window.addEventListener(OPPORTUNITY_QUEUE_UPDATED_EVENT, onQueueUpdated);
+        return () => window.removeEventListener(OPPORTUNITY_QUEUE_UPDATED_EVENT, onQueueUpdated);
+    }, []);
+
+    // Authoritative load (rollups included) refines the seeded tiles in place; re-runs on refresh.
     useEffect(() => {
         let cancelled = false;
         void loadOperatorLifecycleLandingCards()
@@ -78,7 +104,7 @@ export function useWorkspaceSurfaceRuntime(): WorkspaceSurfaceModel {
         return () => {
             cancelled = true;
         };
-    }, []);
+    }, [refreshNonce]);
 
     // ── Right Rail actions: the configured Workspace actions for the persistent command rail ─
     // Org-scoped (surface=workspace + shared right_rail); registered into the same shell command
@@ -129,6 +155,7 @@ export function useWorkspaceSurfaceRuntime(): WorkspaceSurfaceModel {
         targets: workViewTotalTargets,
         selectedSiteId,
         enabled: orgId != null,
+        refreshToken: refreshNonce,
     });
 
     // ── Primary Signal: the ONE configured Operational Calculation per process ──────────

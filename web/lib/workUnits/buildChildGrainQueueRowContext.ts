@@ -29,6 +29,7 @@ import {
     buildNextBestAction,
     buildWorkSummary,
     resolveBoringCaseStatusLabel,
+    resolveSubjectStatusLabel,
     type PartialQueueRowContextQueueMeta,
 } from "@/lib/workUnits/buildPartialQueueRowContextHelpers";
 import { filterQueueRelevantInquiryChildren } from "@/lib/workUnits/filterQueueRelevantInquiryChildren";
@@ -193,7 +194,7 @@ function resolveActiveSubjectIds(row: Record<string, unknown>, subjectType: Life
             subjectId: ocmId,
             displayName: trimOrNull(row._child_display_name) ?? "Child",
             statusKey,
-            statusLabel: statusKey ? humanizeSnakeCaseToken(statusKey) : "—",
+            statusLabel: resolveSubjectStatusLabel(statusKey),
             stageKey,
         };
     }
@@ -213,7 +214,7 @@ function resolveActiveSubjectIds(row: Record<string, unknown>, subjectType: Life
             subjectId: ocmId,
             displayName: trimOrNull(g.child_display_name) ?? trimOrNull(row._child_display_name) ?? "Child",
             statusKey,
-            statusLabel: statusKey ? humanizeSnakeCaseToken(statusKey) : "—",
+            statusLabel: resolveSubjectStatusLabel(statusKey),
             stageKey,
         };
     }
@@ -240,7 +241,7 @@ function resolveActiveSubjectIds(row: Record<string, unknown>, subjectType: Life
                     : null) ??
                 "Child",
             statusKey,
-            statusLabel: humanizeSnakeCaseToken(statusKey),
+            statusLabel: resolveSubjectStatusLabel(statusKey),
             stageKey: trimOrNull((row as { _queue_lane_stage_key?: unknown })._queue_lane_stage_key) ?? "waitlist",
         };
     }
@@ -319,8 +320,7 @@ function buildRelatedSubjectsSummary(
             raw && trimOrNull(raw.placement_candidate_id) ? "candidate" : "child";
         const placement = raw ? buildSubjectPlacementFromInquiryChildRaw(raw) : null;
         const subjectLocationId = placement?.location_id ?? (raw ? trimOrNull(raw.location_id) : null);
-        const statusLabel =
-            child.outcome_status_key ? humanizeSnakeCaseToken(child.outcome_status_key) : "—";
+        const statusLabel = resolveSubjectStatusLabel(child.outcome_status_key);
 
         const summary: RelatedSubjectSummary = {
             subject_type: subjectType,

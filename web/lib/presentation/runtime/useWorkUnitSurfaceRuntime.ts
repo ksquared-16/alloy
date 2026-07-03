@@ -50,6 +50,12 @@ import { appendWorkspaceSiteToUrl } from "@/lib/adminV2/workspaceSiteFilterClien
 import { resolveWorkUnitQueueRowsFetchLimit } from "@/lib/adminV2/workUnitQueueRowsFetchLimit";
 import { dedupeAdminFetch } from "@/lib/workspace/workspaceAdminFetchDedupe";
 import { workspaceDataFetchInit } from "@/lib/workspace/workspaceDataFetch";
+import {
+    OPPORTUNITY_QUEUE_UPDATED_EVENT,
+    parseOpportunityQueueUpdatedDetail,
+    shouldRefetchWorkUnitQueueRowsForEvent,
+    shouldRefreshQueueSummariesForEvent,
+} from "@/lib/admin/opportunityQueueRefreshEvent";
 import { prefetchOpportunityDrawerOnRowIntent } from "@/lib/admin/opportunityDrawerIntentPrefetch";
 import { resolveQueueRowWarmTarget } from "@/lib/presentation/runtime/queueRowWarmTarget";
 import { warmOperatorWorkUnitEntryFromHref } from "@/lib/admin/operatorWorkUnitEntryWarm";
@@ -251,6 +257,15 @@ export function useWorkUnitSurfaceRuntime(): WorkUnitSurfaceRuntime {
     const [summaries, setSummaries] = useState<QueueSummary[] | null>(null);
     const summariesRequestSeq = useRef(0);
 
+    // ── Live refresh: re-run the queue + summary + totals fetches when a mutation dispatches
+    // `adminv2:opportunity-updated` (e.g. Create Lead adds a New Leads row). The queue/summary
+    // GETs are not response-cached (dedupeAdminFetch coalesces in-flight only), so bumping this
+    // nonce into their effect deps refetches fresh; it also folds into useWorkViewTotals' scope
+    // key so the pill/badge counts re-resolve. Scoped by the shared decision helpers so an
+    // off-screen person edit never forces a lane refetch.
+    const [queueRefreshNonce, setQueueRefreshNonce] = useState(0);
+    const visibleRowIdsRef = useRef<readonly string[]>([]);
+
     useEffect(() => {
         if (!workUnitId) return;
         const seq = ++summariesRequestSeq.current;
@@ -273,7 +288,7 @@ export function useWorkUnitSurfaceRuntime(): WorkUnitSurfaceRuntime {
             .catch(() => {
                 if (seq === summariesRequestSeq.current) setSummaries(null);
             });
-    }, [workUnitId, selectedSiteId]);
+    }, [workUnitId, selectedSiteId, queueRefreshNonce]);
 
     // ── Queue rows: server applies the active Work View's filters (work_view_id) ────────
     const [queueResult, setQueueResult] = useState<QueueItemsResult | null>(null);
@@ -325,12 +340,41 @@ export function useWorkUnitSurfaceRuntime(): WorkUnitSurfaceRuntime {
             .finally(() => {
                 if (seq === queueRequestSeq.current) setQueueLoading(false);
             });
-    }, [workUnitId, fetchQueueKey, runtimeCtx.workViewId, selectedSiteId, fetchLimit, configSettled]);
+    }, [
+        workUnitId,
+        fetchQueueKey,
+        runtimeCtx.workViewId,
+        selectedSiteId,
+        fetchLimit,
+        configSettled,
+        queueRefreshNonce,
+    ]);
 
     const rows = useMemo(
         () => (queueResult ? queueRowModelsFromQueueItemsResult(queueResult) : []),
         [queueResult],
     );
+
+    // Keep the visible-row id set current for the refresh listener without re-subscribing it.
+    useEffect(() => {
+        visibleRowIdsRef.current = rows.map((r) => r.entityId);
+    }, [rows]);
+
+    // Subscribe once: a queue-mutation broadcast bumps the nonce (see decl above). The shared
+    // helpers decide whether THIS event touches the lane (membership change / visible row), so
+    // an unrelated off-screen edit is ignored.
+    useEffect(() => {
+        if (typeof window === "undefined") return;
+        const onQueueUpdated = (ev: Event) => {
+            const detail = parseOpportunityQueueUpdatedDetail(ev);
+            const visibleOpportunityIds = visibleRowIdsRef.current;
+            const refetchRows = shouldRefetchWorkUnitQueueRowsForEvent({ detail, visibleOpportunityIds });
+            const refreshSummaries = shouldRefreshQueueSummariesForEvent({ detail, visibleOpportunityIds });
+            if (refetchRows || refreshSummaries) setQueueRefreshNonce((n) => n + 1);
+        };
+        window.addEventListener(OPPORTUNITY_QUEUE_UPDATED_EVENT, onQueueUpdated);
+        return () => window.removeEventListener(OPPORTUNITY_QUEUE_UPDATED_EVENT, onQueueUpdated);
+    }, []);
 
     // THE count model: the `total` of the same rows response that renders the queue.
     const totalCount = useMemo(() => queueTotalCountFromQueueItemsResult(queueResult), [queueResult]);
@@ -379,6 +423,7 @@ export function useWorkUnitSurfaceRuntime(): WorkUnitSurfaceRuntime {
         targets: workViewTotalTargets,
         selectedSiteId,
         enabled: configSettled,
+        refreshToken: queueRefreshNonce,
     });
 
     // ── Work View pills: same configured views the Workspace tile lists ─────────────────

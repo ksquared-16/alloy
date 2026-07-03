@@ -235,6 +235,26 @@ describe("buildPartialQueueRowContext", () => {
         expect(row).not.toHaveProperty("_queue_row_context");
     });
 
+    it("renders the New Lead status label for a lead — never the raw new_inquiry key", () => {
+        const ctx = buildPartialQueueRowContext({
+            row: { id: "opp-9", name: "New Lead Household", status_key: "new_inquiry" },
+            queue: { key: "new_leads", label: "New Leads", lifecycle_key: "enrollment", stage_key: "lead" },
+        });
+        expect(ctx.row_status_key).toBe("new_inquiry");
+        // The status pill canonicalizes to "New Lead" (not "New inquiry", never the raw key).
+        expect(ctx.row_status_label).toBe("New Lead");
+        // The case container keeps its durable "boring" label separately.
+        expect(ctx.case_context.case_status_label).toBe("Active");
+    });
+
+    it("canonicalizes a raw new_inquiry _status_display to New Lead", () => {
+        const ctx = buildPartialQueueRowContext({
+            row: { id: "opp-10", name: "H", status_key: "new_inquiry", _status_display: "new_inquiry" },
+            queue: { key: "new_leads", label: "New Leads", lifecycle_key: "enrollment", stage_key: "lead" },
+        });
+        expect(ctx.row_status_label).toBe("New Lead");
+    });
+
     it("builds WorkUnitSurfaceContext from rows", () => {
         const surface = buildWorkUnitSurfaceContextFromRows({
             work_unit_id: "wu-1",

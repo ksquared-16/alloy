@@ -1,6 +1,7 @@
 import { humanizeSnakeCaseToken } from "@/lib/admin/activityTimelineFormat";
 import { normalizeRefKeyOnRead } from "@/lib/layout/layoutRefKeyAliases";
 import { isLayoutRuntimePrimaryContactRefKey } from "@/lib/layout/runtime/layoutRuntimePrimaryContactField";
+import { canonicalNewLeadStatusLabel } from "@/lib/lifecycle/enrollmentLeadStageStatusAliases";
 import {
     ENROLLMENT_CHILD_TRACK_STATUS_VOCABULARY,
     ENROLLMENT_FAMILY_TRACK_STATUS_VOCABULARY,
@@ -75,6 +76,12 @@ export function formatLayoutRuntimeStatusLabel(
     const vocabulary = vocabularyForDomain(domain);
     const fromVocabulary = vocabulary?.get(text);
     if (fromVocabulary) return fromVocabulary;
+
+    // Legacy New Lead status keys (new_inquiry / new_lead) survive the S4 collapse on lingering
+    // rows but are absent from the collapsed vocabulary — canonicalize them to "New Lead" here so
+    // the raw key never reaches the UI. Single source: canonicalNewLeadStatusLabel.
+    const newLeadLabel = canonicalNewLeadStatusLabel(text);
+    if (newLeadLabel) return newLeadLabel;
 
     if (domain === "child_enrollment" && looksLikeStatusKeyToken(text)) {
         const familyLabel = vocabularyForDomain("opportunity")?.get(text);

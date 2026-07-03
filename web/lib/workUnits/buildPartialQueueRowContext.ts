@@ -35,8 +35,10 @@ import {
     buildNextBestAction,
     buildWorkSummary,
     resolveBoringCaseStatusLabel,
+    resolveSubjectStatusLabel,
     type PartialQueueRowContextQueueMeta,
 } from "@/lib/workUnits/buildPartialQueueRowContextHelpers";
+import { canonicalNewLeadStatusLabel } from "@/lib/lifecycle/enrollmentLeadStageStatusAliases";
 import { buildQueueCurrentWorkSummary } from "@/lib/workUnits/buildQueueCurrentWorkSummary";
 
 export type { PartialQueueRowContextQueueMeta };
@@ -87,7 +89,11 @@ function resolveStatusKey(row: Record<string, unknown>): string {
 }
 
 function resolveStatusLabel(row: Record<string, unknown>, statusKey: string): string {
-    return trimOrNull(row._status_display) ?? humanizeSnakeCaseToken(statusKey);
+    // Prefer the hydrated display, but canonicalize a raw New Lead key so `new_inquiry` never
+    // survives as a display string; otherwise resolve through the shared status-label pipeline.
+    const display = trimOrNull(row._status_display);
+    if (display) return canonicalNewLeadStatusLabel(display) ?? display;
+    return resolveSubjectStatusLabel(statusKey);
 }
 
 function buildSubjectPlacementFromInquiryChildRaw(raw: Record<string, unknown>): SubjectPlacementContext | null {
@@ -184,9 +190,7 @@ function buildRelatedSubjectsSummary(
         const statusLabel =
             trimOrNull(raw.outcome_status_label) ??
             trimOrNull(member?.outcome_status_label) ??
-            (member?.outcome_status_key
-                ? humanizeSnakeCaseToken(member.outcome_status_key)
-                : "—");
+            resolveSubjectStatusLabel(member?.outcome_status_key);
 
         const placement = buildSubjectPlacementFromInquiryChildRaw(raw);
 
