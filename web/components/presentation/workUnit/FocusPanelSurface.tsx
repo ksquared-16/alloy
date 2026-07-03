@@ -55,7 +55,7 @@ function FocusPanelPlaceholder() {
         <section
             data-inline-focus-panel="empty"
             aria-label="Focus Panel"
-            className="flex min-h-[16rem] items-center justify-center rounded-lg border border-alloy-stone/18 bg-white px-6 py-10 text-center"
+            className="flex min-h-[24rem] items-center justify-center rounded-lg border border-alloy-stone/25 bg-white px-6 py-10 text-center"
         >
             <p className="text-sm text-alloy-midnight/55">Select a record to begin.</p>
         </section>

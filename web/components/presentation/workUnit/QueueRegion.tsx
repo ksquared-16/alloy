@@ -85,10 +85,8 @@ export function QueueRegion({
                     {queue.error}
                 </p>
             ) : !queue.rows.length ? (
-                <div className="rounded-lg border border-alloy-stone/18 bg-white">
-                    <p className="px-3 py-6 text-center text-sm text-alloy-midnight/60">
-                        No records in this view
-                    </p>
+                <div className="flex min-h-[16rem] items-center justify-center rounded-lg border border-alloy-stone/25 bg-white px-3 py-6">
+                    <p className="text-center text-sm text-alloy-midnight/55">No records in this view</p>
                 </div>
             ) : (
                 <div>
