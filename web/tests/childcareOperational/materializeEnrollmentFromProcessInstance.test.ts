@@ -45,9 +45,10 @@ const pi = (extra: Rec = {}): Rec => ({
 
 /** Mock Supabase over the reads the materializer makes; captures the process_instances update patch. */
 function mockSupabase(cfg: { processInstance?: Rec | null; candidate?: Rec | null; ocm?: Rec | null; opportunity?: Rec | null; scopeId?: string | null }) {
-    const captured: { piUpdate: Rec | null } = { piUpdate: null };
+    const captured: { piUpdate: Rec | null; ocmAccess: number } = { piUpdate: null, ocmAccess: 0 };
     const client = {
         from(table: string) {
+            if (table === "opportunity_customer_members") captured.ocmAccess++;
             let op: "select" | "update" = "select";
             let cols = "*";
             let patch: Rec | null = null;
@@ -113,15 +114,42 @@ describe("materializeEnrollmentFromProcessInstance", () => {
         expect(res.fact_sources?.siteLocationId).toBe("process_instance");
     });
 
-    it("falls back to OCM when the process instance lacks the fact", async () => {
-        const { client } = mockSupabase({
+    it("falls back to OCM ONLY behind the legacy flag (old data)", async () => {
+        process.env.ALLOY_ENROLLMENT_MATERIALIZE_OCM_FALLBACK = "1";
+        try {
+            const { client } = mockSupabase({
+                processInstance: pi({ metadata: {} }),
+                ocm: { id: "ocm-1", program_category_id: "prog-from-ocm", location_id: "site-ocm", schedule_type: "half_day" },
+            });
+            const res = await materializeEnrollmentFromProcessInstance(client, { processInstanceId: "pi-1", orgId: ORG });
+            expect(core.mock.calls[0][1].facts.programCategoryId).toBe("prog-from-ocm");
+            expect(res.fact_sources?.programCategoryId).toBe("ocm");
+            expect(res.fact_sources?.siteLocationId).toBe("ocm");
+        } finally {
+            delete process.env.ALLOY_ENROLLMENT_MATERIALIZE_OCM_FALLBACK;
+        }
+    });
+
+    it("does NOT read OCM by default (new leads); site/facts come from PI metadata + placement candidate", async () => {
+        const { client, captured } = mockSupabase({
             processInstance: pi({ metadata: {} }),
-            ocm: { id: "ocm-1", program_category_id: "prog-from-ocm", location_id: "site-ocm", schedule_type: "half_day" },
+            candidate: { program_room_cohort_key: "room-1", start_date: "2026-09-01", site_id: "site-cand" },
+            // OCM present in fixture but must be ignored without the flag:
+            ocm: { id: "ocm-1", program_category_id: "prog-from-ocm", location_id: "site-ocm" },
         });
         const res = await materializeEnrollmentFromProcessInstance(client, { processInstanceId: "pi-1", orgId: ORG });
-        expect(core.mock.calls[0][1].facts.programCategoryId).toBe("prog-from-ocm");
-        expect(res.fact_sources?.programCategoryId).toBe("ocm");
-        expect(res.fact_sources?.siteLocationId).toBe("ocm");
+        expect(res.ok).toBe(true);
+        expect(captured.ocmAccess).toBe(0); // OCM never queried
+        expect(core.mock.calls[0][1].facts.siteLocationId).toBe("site-cand"); // from placement candidate, not OCM
+        expect(res.fact_sources?.siteLocationId).toBe("placement_candidate");
+    });
+
+    it("skips with a clear reason when required site fact is missing", async () => {
+        const { client } = mockSupabase({ processInstance: pi({ metadata: {} }) });
+        const res = await materializeEnrollmentFromProcessInstance(client, { processInstanceId: "pi-1", orgId: ORG });
+        expect(res.ok).toBe(false);
+        expect(res.skipped).toBe(true);
+        expect(res.reason).toBe("missing_site_location_id");
     });
 
     it("stamps ONLY provenance + journey markers on the instance — no new operational facts", async () => {

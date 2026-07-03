@@ -66,8 +66,12 @@ export async function resolveEnrollmentFactsForProcessInstance(
     const meta = (pi.metadata ?? {}) as Record<string, unknown>;
     const sources: EnrollmentFactSources = {};
 
-    // Load fallbacks (candidate + OCM + opportunity) in parallel; all keyed by (org, opportunity, child).
-    const [candRes, ocmRes, oppRes] = await Promise.all([
+    // OCM is NOT a normal fact source. It is consulted only behind an explicit legacy flag (old data);
+    // new leads never require it. Primary sources: process_instance.metadata → placement_candidates →
+    // opportunity defaults.
+    const useOcmFallback = process.env.ALLOY_ENROLLMENT_MATERIALIZE_OCM_FALLBACK === "1";
+
+    const [candRes, cmRes, oppRes, ocmRes] = await Promise.all([
         opportunityId
             ? supabase
                   .from("placement_candidates")
@@ -77,7 +81,11 @@ export async function resolveEnrollmentFactsForProcessInstance(
                   .eq("customer_member_id", customerMemberId)
                   .maybeSingle()
             : Promise.resolve({ data: null }),
+        supabase.from("customer_members").select("person_id").eq("org_id", orgId).eq("id", customerMemberId).maybeSingle(),
         opportunityId
+            ? supabase.from("opportunities").select("customer_id, location_id").eq("org_id", orgId).eq("id", opportunityId).maybeSingle()
+            : Promise.resolve({ data: null }),
+        useOcmFallback && opportunityId
             ? supabase
                   .from("opportunity_customer_members")
                   .select("id, program_category_id, program_room_cohort_key, location_id, schedule_type, start_date, person_id")
@@ -86,13 +94,11 @@ export async function resolveEnrollmentFactsForProcessInstance(
                   .eq("customer_member_id", customerMemberId)
                   .maybeSingle()
             : Promise.resolve({ data: null }),
-        opportunityId
-            ? supabase.from("opportunities").select("customer_id, location_id").eq("org_id", orgId).eq("id", opportunityId).maybeSingle()
-            : Promise.resolve({ data: null }),
     ]);
     const cand = (candRes.data ?? null) as Record<string, unknown> | null;
-    const ocm = (ocmRes.data ?? null) as Record<string, unknown> | null;
+    const cm = (cmRes.data ?? null) as Record<string, unknown> | null;
     const opp = (oppRes.data ?? null) as Record<string, unknown> | null;
+    const ocm = (ocmRes.data ?? null) as Record<string, unknown> | null; // null unless legacy flag set
 
     /** Pick the first non-empty value across sources, recording provenance. */
     const pick = (field: string, chain: Array<[EnrollmentFactSources[string], unknown]>): string | null => {
@@ -141,7 +147,7 @@ export async function resolveEnrollmentFactsForProcessInstance(
         ]),
         endDate: trimOrNull(meta.end_date),
         opportunityCustomerMemberId: trimOrNull(ocm?.id),
-        personId: trimOrNull(ocm?.person_id),
+        personId: trimOrNull(cm?.person_id) ?? trimOrNull(ocm?.person_id),
         billing: (meta.billing as Record<string, unknown> | undefined) ?? null,
         funding: (meta.funding as Record<string, unknown> | undefined) ?? null,
     };

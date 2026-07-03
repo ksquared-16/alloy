@@ -129,8 +129,8 @@ export function buildCreateLeadOcmInsertRow(args: {
 
 export type ApplyCreateLeadChildParticipationResult = {
     customer_member_id: string;
-    /** OCM bridge row id (temporary compatibility; process_instance_id is the runtime owner). */
-    ocm_id: string;
+    /** Legacy OCM bridge id — no longer written at Create Lead (always null; kept for shape compatibility). */
+    ocm_id: string | null;
     /** Enrollment process instance created for this child (runtime source of truth). */
     process_instance_id: string | null;
 };
@@ -196,24 +196,10 @@ export async function applyCreateLeadChildParticipationFromIdentity(
             programKey: params.ocm.program_key,
         }));
 
-    // OCM bridge write (RESTORED): temporary compatibility so Enrollment functions end-to-end —
-    // waitlist placement candidates + participation-detail editing still resolve the child via OCM.
-    // process_instances remains the runtime owner; participation also lives on PI metadata below. The
-    // OCM row is a bridge to be retired one capability at a time once Enrollment works end-to-end.
-    const ocmRow = buildCreateLeadOcmInsertRow({
-        orgId: params.orgId,
-        opportunityId: params.opportunityId,
-        customerMemberId,
-        ocm: { ...params.ocm, program_category_id: programCategoryId },
-    });
-    const { data: ocmData, error: ocmErr } = await supabase
-        .from("opportunity_customer_members")
-        .insert(ocmRow)
-        .select("id")
-        .single();
-    if (ocmErr || !ocmData) {
-        throw new Error(ocmErr?.message ?? "Could not link child participation to lead.");
-    }
+    // OCM bridge write REMOVED. process_instances is the sole runtime owner of child participation at
+    // Create Lead: participation facts ride the PI metadata below; waitlist placement + participation
+    // editing + Focus Panel display all source from process_instances (OCM is legacy-only, read behind
+    // an explicit flag for old data). No opportunity_customer_members row is created.
 
     // process_instances is the runtime owner of child participation. Create the Enrollment process
     // instance for this child on this lead; participation facts ride the PI metadata (draft inputs).
@@ -238,7 +224,7 @@ export async function applyCreateLeadChildParticipationFromIdentity(
 
     return {
         customer_member_id: customerMemberId,
-        ocm_id: String((ocmData as { id: string }).id),
+        ocm_id: null, // OCM bridge no longer written at Create Lead
         process_instance_id: piResult.id,
     };
 }

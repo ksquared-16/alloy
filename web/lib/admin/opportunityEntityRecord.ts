@@ -29,6 +29,7 @@ import {
 import { attachOpportunityChildLifecycleSummary } from "@/lib/opportunities/buildOpportunityChildLifecycleSummary";
 import { listEnrollmentInstancesForLead } from "@/lib/process/processInstances";
 import { resolveDurableFactsForChildren } from "@/lib/childcareOperational/inquiryChildrenDurableFactsOverlay";
+import { resolveProcessDraftFactsForChildren } from "@/lib/childcareOperational/inquiryChildrenProcessDraftFactsOverlay";
 import {
   attachChildScopedContactLinksToRecord,
   memberRowsFromInquiryChildren,
@@ -318,8 +319,8 @@ type InquiryHydrateChild = {
   stage_key?: string | null;
   /** Provenance of the participation state/stage: "process_instances" (authoritative) or "ocm" (bridge). */
   _participation_source?: "process_instances" | "ocm";
-  /** Provenance of the operational facts (program/room/schedule/start): "durable" or "ocm" (fallback). */
-  _operational_facts_source?: "durable" | "ocm";
+  /** Provenance of operational facts: "durable" (materialized) > "process_instance" (pre-mat draft) > "ocm" (legacy). */
+  _operational_facts_source?: "durable" | "process_instance" | "ocm";
   custom_fields: Record<string, unknown>;
   metadata: Record<string, unknown> | null;
   created_at: string | null;
@@ -530,6 +531,45 @@ export async function overlayDurableOperationalFacts(
       program_category_id: f.programCategoryId ?? c.program_category_id,
       location_id: f.siteLocationId ?? c.location_id,
       _operational_facts_source: "durable" as const,
+    };
+  });
+}
+
+/**
+ * Overlay PRE-materialization participation facts from process_instances.metadata onto child blocks that
+ * are NOT yet materialized (durable overlay left them "ocm"). Priority is durable > process_instance draft
+ * > OCM: this runs AFTER the durable overlay and only touches non-durable children. Lets the Focus Panel
+ * render program/room/schedule/start for new leads without any OCM row.
+ */
+export async function overlayProcessDraftParticipation(
+  supabase: AdminSupabase,
+  orgId: string,
+  opportunityId: string,
+  children: InquiryHydrateChild[],
+): Promise<InquiryHydrateChild[]> {
+  const pending = children.filter((c) => c._operational_facts_source !== "durable" && c.customer_member_id);
+  if (!pending.length) return children;
+  const draft = await resolveProcessDraftFactsForChildren(
+    supabase as never,
+    orgId,
+    opportunityId,
+    pending.map((c) => ({ customerMemberId: c.customer_member_id })),
+  );
+  if (!draft.size) return children;
+  return children.map((c) => {
+    if (c._operational_facts_source === "durable") return c;
+    const f = c.customer_member_id ? draft.get(c.customer_member_id) : undefined;
+    if (!f) return c;
+    return {
+      ...c,
+      // Process-instance draft is the source pre-materialization; keep any existing value as a gap-fill.
+      desired_program_label: f.programLabel ?? c.desired_program_label,
+      program_room_cohort_label: f.roomLabel ?? c.program_room_cohort_label,
+      desired_schedule_label: f.scheduleLabel ?? c.desired_schedule_label,
+      start_date: normalizeIsoDateOnly(f.startDate) ?? c.start_date,
+      program_category_id: f.programCategoryId ?? c.program_category_id,
+      location_id: f.siteLocationId ?? c.location_id,
+      _operational_facts_source: "process_instance" as const,
     };
   });
 }
@@ -775,6 +815,8 @@ export async function attachOpportunityInquiryChildrenShell(
   // Source of truth for operational facts (program/room/schedule/start) is the durable model once
   // materialized (agreement/placement/schedule); OCM is the fallback.
   inquiryChildrenOut = await overlayDurableOperationalFacts(supabase, orgId, inquiryChildrenOut);
+  // Pre-materialization: participation facts come from process_instances.metadata (no OCM).
+  inquiryChildrenOut = await overlayProcessDraftParticipation(supabase, orgId, opportunityId, inquiryChildrenOut);
 
   host._inquiry_children = inquiryChildrenOut;
   host._member_person_graph_pending = memList.some((m) => trimOrNull(m.person_id) != null);
@@ -1158,6 +1200,8 @@ async function respondOpportunityRelationshipMemberOverlay(
   // Source of truth for operational facts (program/room/schedule/start) is the durable model once
   // materialized (agreement/placement/schedule); OCM is the fallback.
   inquiryBlocks = await overlayDurableOperationalFacts(supabase, orgId, inquiryBlocks);
+  // Pre-materialization: participation facts come from process_instances.metadata (no OCM).
+  inquiryBlocks = await overlayProcessDraftParticipation(supabase, orgId, opportunityId, inquiryBlocks);
 
   const overlayRecord: Record<string, unknown> = {
     id: opportunityId,

@@ -354,8 +354,8 @@ export async function executeRelationshipAction(
                 linksWritten += 1;
                 affectedPreview.push({
                     label: "Opportunity enrollment",
-                    table: "opportunity_customer_members",
-                    record_ids: [participation.ocm_id],
+                    table: "process_instances",
+                    record_ids: participation.process_instance_id ? [participation.process_instance_id] : [],
                 });
             } else {
                 const { data: cm, error } = await supabase
