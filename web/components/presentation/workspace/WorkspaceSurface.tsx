@@ -17,6 +17,7 @@ import {
 import { WorkspaceHeader } from "./WorkspaceHeader";
 import { ProcessGrid } from "./ProcessGrid";
 import { WorkspaceRightRailActions } from "@/components/presentation/rightRail/WorkspaceRightRailActions";
+import { CreateLeadEventHost } from "@/components/presentation/rightRail/CreateLeadEventHost";
 
 /** House loading style: neutral blocks, no spinners. */
 function WorkspaceSurfaceSkeleton() {
@@ -65,6 +66,9 @@ export function WorkspaceSurface() {
                         actions={model.rightRailActions}
                         defaultDepartmentId={model.defaultDepartmentId}
                     />
+                    {/* Page-level Create Lead modal host — stable, outside the command-rail
+                        floating menu, so its outside-click dismissal can't unmount the modal. */}
+                    <CreateLeadEventHost />
                 </>
             )}
         </div>

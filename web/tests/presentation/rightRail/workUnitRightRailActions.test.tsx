@@ -104,6 +104,8 @@ describe("WorkUnitRightRailActions → shell command rail", () => {
         expect(passedAction.key).toBe("create_lead");
         expect(host.context).toEqual({ surface: "work_unit", department_id: "dept-1", work_unit_id: "wu-1" });
         expect(host.entityId).toBe("opp-7"); // record-scoped actions target the open Focus Panel record
-        expect(typeof host.openCreateLead).toBe("function"); // reuses the existing runtime path
+        // No local openCreateLead — the runtime dispatches `adminv2:open-create-lead`, handled by the
+        // page-level CreateLeadEventHost (outside the command-rail floating menu that unmounts on click).
+        expect(host.openCreateLead).toBeUndefined();
     });
 });

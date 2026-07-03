@@ -11,14 +11,12 @@
  * baked in. Renders null; empty payload → register nothing → the rail's own default.
  */
 
-import { useCallback, useState } from "react";
+import { useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { CommandRailCollapsibleActionsSection } from "@/app/adminV2/components/workspace/CommandRailCollapsibleActionsSection";
 import { WorkspaceCommandRailRegistrar } from "@/app/adminV2/components/workspace/WorkspaceCommandRailRegistrar";
-import { CreateLeadCommandSurface } from "@/components/platform/commands/createLead/CreateLeadCommandSurface";
 import { useAdminDrawer } from "@/contexts/AdminDrawerContext";
 import { applyRegistryResolvedActionClient } from "@/lib/admin/actions/applyRegistryResolvedActionClient";
-import { resolveCreatedLeadFocusPanelHref } from "@/lib/admin/canonicalOperatorRoutes";
 import type { ResolvedActionForClient } from "@/lib/admin/actions/types";
 
 type Props = {
@@ -46,14 +44,14 @@ export function WorkspaceRightRailActions({ actions, defaultDepartmentId }: Prop
 function WorkspaceCommandRailActionsBody({ actions, defaultDepartmentId }: Props) {
     const router = useRouter();
     const { openDrawer } = useAdminDrawer();
-    const [createLeadOpen, setCreateLeadOpen] = useState(false);
 
     const runAction = useCallback(
         (action: ResolvedActionForClient) => {
+            // No local `openCreateLead` — the runtime dispatches `adminv2:open-create-lead`, handled
+            // by CreateLeadEventHost at the stable surface level (outside this floating menu).
             void applyRegistryResolvedActionClient(action, {
                 router,
                 openDrawer,
-                openCreateLead: () => setCreateLeadOpen(true),
                 departmentId: defaultDepartmentId,
                 workUnitId: null,
                 entityId: null,
@@ -90,25 +88,6 @@ function WorkspaceCommandRailActionsBody({ actions, defaultDepartmentId }: Props
                     </li>
                 ))}
             </ul>
-            {defaultDepartmentId ? (
-                <CreateLeadCommandSurface
-                    open={createLeadOpen}
-                    departmentId={defaultDepartmentId}
-                    workUnitId={null}
-                    surface="workspace"
-                    onClose={() => setCreateLeadOpen(false)}
-                    onOpenCreatedRecord={(opportunityId) => {
-                        setCreateLeadOpen(false);
-                        router.push(
-                            resolveCreatedLeadFocusPanelHref({
-                                recordId: opportunityId,
-                                currentWorkUnitKey: null,
-                            }),
-                        );
-                    }}
-                    onRefresh={() => router.refresh()}
-                />
-            ) : null}
         </section>
     );
 }

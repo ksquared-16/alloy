@@ -12,16 +12,17 @@
  * Because the registered node renders inside the shell (ABOVE the work-unit route context), the
  * execution scope (`departmentId`/`workUnitId`) is BAKED IN as props; router + drawer come from
  * shell-level providers. Execution stays on the existing runtime (`applyRegistryResolvedActionClient`,
- * `work_unit` surface): `create_lead` → CreateLeadCommandSurface; `schedule_tour`/record-scoped →
+ * `work_unit` surface): `create_lead` → dispatches `adminv2:open-create-lead`, handled by the
+ * page-level CreateLeadEventHost (NOT hosted here — the command-rail floating menu unmounts its
+ * children on outside-click, which would kill an inline modal); `schedule_tour`/record-scoped →
  * the currently-open Focus Panel record. Empty payload → register nothing → the rail's own default
  * empty state (`Actions (0)`), so the empty state shows ONLY when the payload is actually empty.
  */
 
-import { useCallback, useState } from "react";
+import { useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { CommandRailCollapsibleActionsSection } from "@/app/adminV2/components/workspace/CommandRailCollapsibleActionsSection";
 import { WorkspaceCommandRailRegistrar } from "@/app/adminV2/components/workspace/WorkspaceCommandRailRegistrar";
-import { CreateLeadCommandSurface } from "@/components/platform/commands/createLead/CreateLeadCommandSurface";
 import { useAdminDrawer } from "@/contexts/AdminDrawerContext";
 import { applyRegistryResolvedActionClient } from "@/lib/admin/actions/applyRegistryResolvedActionClient";
 import type { ResolvedActionForClient } from "@/lib/admin/actions/types";
@@ -62,7 +63,6 @@ export function WorkUnitRightRailActions({ actions, departmentId, workUnitId }: 
 export function WorkUnitCommandRailActionsBody({ actions, departmentId, workUnitId }: Props) {
     const router = useRouter();
     const { drawer, openDrawer } = useAdminDrawer();
-    const [createLeadOpen, setCreateLeadOpen] = useState(false);
 
     // Record currently open in the inline Focus Panel — target for record-scoped actions.
     const selectedRecordId =
@@ -70,10 +70,12 @@ export function WorkUnitCommandRailActionsBody({ actions, departmentId, workUnit
 
     const runAction = useCallback(
         (action: ResolvedActionForClient) => {
+            // No local `openCreateLead` — the runtime dispatches `adminv2:open-create-lead`, which
+            // CreateLeadEventHost (mounted at the stable surface level, OUTSIDE this floating menu)
+            // handles. Hosting the modal here would let the menu's outside-click unmount it.
             void applyRegistryResolvedActionClient(action, {
                 router,
                 openDrawer,
-                openCreateLead: () => setCreateLeadOpen(true),
                 departmentId,
                 workUnitId,
                 entityId: selectedRecordId,
@@ -110,21 +112,6 @@ export function WorkUnitCommandRailActionsBody({ actions, departmentId, workUnit
                     </li>
                 ))}
             </ul>
-            {departmentId ? (
-                <CreateLeadCommandSurface
-                    open={createLeadOpen}
-                    departmentId={departmentId}
-                    workUnitId={workUnitId}
-                    surface="work_unit"
-                    onClose={() => setCreateLeadOpen(false)}
-                    onOpenCreatedRecord={(opportunityId) => {
-                        // Open the new lead inline in this work unit's Focus Panel (in-page).
-                        setCreateLeadOpen(false);
-                        openDrawer({ type: "opportunities", id: opportunityId });
-                    }}
-                    onRefresh={() => router.refresh()}
-                />
-            ) : null}
         </section>
     );
 }

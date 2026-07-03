@@ -23,6 +23,7 @@ import {
 } from "@/components/presentation/runtimeLabels";
 import { RightRailSurface } from "@/components/presentation/rightRail/RightRailSurface";
 import { WorkUnitRightRailActions } from "@/components/presentation/rightRail/WorkUnitRightRailActions";
+import { CreateLeadEventHost } from "@/components/presentation/rightRail/CreateLeadEventHost";
 import { WorkUnitHeader } from "./WorkUnitHeader";
 import { WorkUnitHeaderCalculations } from "./WorkUnitHeaderCalculations";
 import { WorkViewPillStrip } from "./WorkViewPillStrip";
@@ -104,6 +105,9 @@ export function WorkUnitSurface() {
                         departmentId={model.departmentId}
                         workUnitId={model.workUnitId}
                     />
+                    {/* Page-level Create Lead modal host — stable, outside the command-rail
+                        floating menu, so its outside-click dismissal can't unmount the modal. */}
+                    <CreateLeadEventHost />
                 </div>
             )}
         </div>
