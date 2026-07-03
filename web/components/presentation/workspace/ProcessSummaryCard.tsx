@@ -38,80 +38,79 @@ import {
 } from "@/components/presentation/runtimeLabels";
 import { WorkViewList } from "./WorkViewList";
 
-type AnswerState = "healthy" | "caution" | "critical" | "info" | "neutral";
+type AnswerState = "healthy" | "caution" | "critical" | "neutral";
 
-/** Map an OIP status string to a semantic Alloy state (no decorative color). */
-function statusToState(status: string | null | undefined): AnswerState {
-    const s = (status ?? "").toLowerCase();
-    if (!s) return "neutral";
-    if (/(healthy|on track|ahead|good|strong|met|complete)/.test(s)) return "healthy";
-    if (/(attention|warn|behind|due|pending|at risk|watch)/.test(s)) return "caution";
-    if (/(critical|overdue|blocked|fail|risk)/.test(s)) return "critical";
-    if (/(improv|new|info|active)/.test(s)) return "info";
-    return "neutral";
+/**
+ * Localize the CANONICAL operational health state to the card's display state. `health` is
+ * the OIP/Operational Calculation health enum (`MetricHealthState`: healthy | warning |
+ * critical | unknown) already classified upstream and carried on the metric's `status`. This
+ * is display localization ONLY — a fixed enum→enum map, NO value inspection, NO thresholds,
+ * NO classification. The card never decides whether a process is healthy; it only renders the
+ * state the calculation layer determined.
+ */
+function answerStateFromHealth(health: string | null | undefined): AnswerState {
+    switch (health) {
+        case "healthy":
+            return "healthy";
+        case "warning":
+            return "caution";
+        case "critical":
+            return "critical";
+        default:
+            // "unknown" / unset → no operational state (never fabricated).
+            return "neutral";
+    }
 }
+
+/** Display word for each state — localization of the canonical enum, not a classification. */
+const STATE_WORD: Record<AnswerState, string> = {
+    healthy: "On track",
+    caution: "Needs attention",
+    critical: "Action required",
+    neutral: "No signal",
+};
 
 const STATE_DOT: Record<AnswerState, string> = {
     healthy: "bg-alloy-juniper",
     caution: "bg-alloy-ember",
     critical: "bg-alloy-firewood",
-    info: "bg-alloy-blue",
     neutral: "bg-alloy-midnight/35",
 };
 const STATE_TEXT: Record<AnswerState, string> = {
     healthy: "text-alloy-juniper",
     caution: "text-alloy-ember",
     critical: "text-alloy-firewood",
-    info: "text-alloy-blue",
     neutral: "text-alloy-midnight/55",
 };
 const STATE_RAIL: Record<AnswerState, string> = {
     healthy: "border-l-alloy-juniper/70",
     caution: "border-l-alloy-ember/70",
     critical: "border-l-alloy-firewood/70",
-    info: "border-l-alloy-blue/70",
     neutral: "border-l-alloy-midnight/25",
 };
 
-/** Resolve the card's operational answer + evidence from the process's live data. */
+/**
+ * Read the process's operational answer straight from its live calculation data. The state,
+ * value, and label ALL come from the primary Operational Calculation (`performanceMetrics[0]`,
+ * server-resolved); evidence is the calculation's own target. When no calculation is resolved
+ * there is no operational answer — the card renders a neutral no-signal state and never
+ * manufactures one from record counts or any card-side rule.
+ */
 function resolveAnswer(process: ProcessTileModel): {
     state: AnswerState;
     figure: string | null;
-    answerLabel: string;
+    metricLabel: string | null;
     evidence: string | null;
 } {
     const primary = process.performanceMetrics[0] ?? null;
-    const attention = typeof process.needsAttentionCount === "number" && process.needsAttentionCount > 0
-        ? process.needsAttentionCount
-        : null;
-
-    // Operational Answer — prefer the configured primary metric; else an attention/calm answer.
-    if (primary) {
-        const state = statusToState(primary.status);
-        const evidenceParts: string[] = [];
-        if (primary.status) evidenceParts.push(primary.status);
-        if (primary.target) evidenceParts.push(`target ${primary.target}`);
-        return {
-            state,
-            figure: primary.value,
-            answerLabel: primary.label,
-            evidence: evidenceParts.length ? evidenceParts.join(" · ") : null,
-        };
-    }
-
-    if (attention != null) {
-        return {
-            state: "caution",
-            figure: attention.toLocaleString(),
-            answerLabel: "Need attention",
-            evidence: "Records waiting in this process",
-        };
+    if (!primary) {
+        return { state: "neutral", figure: null, metricLabel: null, evidence: null };
     }
     return {
-        state: "healthy",
-        figure: null,
-        answerLabel: "On track",
-        evidence: "No urgent work in this process",
+        state: answerStateFromHealth(primary.status),
+        figure: primary.value,
+        metricLabel: primary.label,
+        evidence: primary.target ? `Target ${primary.target}` : null,
     };
 }
 
@@ -162,18 +161,22 @@ export function ProcessSummaryCard({
                         data-process-status
                     >
                         <span aria-hidden className={`h-1.5 w-1.5 rounded-full ${STATE_DOT[answer.state]}`} />
-                        {answer.answerLabel}
+                        {STATE_WORD[answer.state]}
                     </span>
                 </div>
 
-                {/* Operational Answer + Evidence (text only — never a fabricated trend). */}
+                {/* Operational Answer + Evidence — value + label from the Operational Calculation;
+                    text evidence only, never a fabricated trend. Neutral no-signal when no
+                    calculation is resolved (the card never invents a value or state). */}
                 <div className="flex items-baseline gap-2.5" data-process-answer>
                     {answer.figure ? (
                         <span className={`text-[30px] font-bold leading-none tabular-nums tracking-tight ${STATE_TEXT[answer.state]}`}>
                             {answer.figure}
                         </span>
                     ) : null}
-                    <span className="text-xs font-medium text-alloy-midnight/55">{answer.answerLabel}</span>
+                    <span className="text-xs font-medium text-alloy-midnight/55">
+                        {answer.metricLabel ?? "No operational signal configured yet"}
+                    </span>
                 </div>
                 {answer.evidence ? (
                     <p className="-mt-1 text-xs text-alloy-midnight/55" data-process-evidence>

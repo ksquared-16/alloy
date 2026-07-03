@@ -26,7 +26,12 @@ import {
     publishWorkspaceProcessSurfaceConfig,
 } from "@/lib/adminV2/settings/surfaces/workspaceProcessSurfaceService";
 
-/** A representative process for the edit canvas — the real card renders it with the live config. */
+/**
+ * Sample preview data for the edit canvas ONLY — the real card renders it with the live
+ * config. `status` uses the canonical OIP health enum (healthy | warning | critical), the
+ * same value the runtime's Operational Calculation supplies; the card localizes it. This is
+ * builder-local sample data, never a runtime fallback.
+ */
 const SAMPLE_PROCESS: ProcessTileModel = {
     id: "sample-enrollment",
     label: "Enrollment Pipeline",
@@ -35,7 +40,7 @@ const SAMPLE_PROCESS: ProcessTileModel = {
     activeRecordCount: 142,
     needsAttentionCount: 11,
     performanceMetrics: [
-        { label: "Pipeline health", value: "82%", status: "On track", target: "80%" },
+        { label: "Pipeline health", value: "82%", status: "healthy", target: "80%" },
     ],
     workViews: [
         { id: "new-leads", label: "New Leads", isActive: false, count: 24, href: "#", attentionCount: 6, overdueCount: null },
