@@ -168,7 +168,7 @@ describe("WU.HEADER_CALCULATIONS — refinement key extraction", () => {
     });
 });
 
-describe("WU.HEADER_CALCULATIONS — compact Work Unit Overview strip (Slice A)", () => {
+describe("WU.HEADER_CALCULATIONS — operational signal strip (presentation polish)", () => {
     const src = readFileSync(
         fileURLToPath(new URL("../../../components/presentation/workUnit/WorkUnitHeaderCalculations.tsx", import.meta.url)),
         "utf8",
@@ -180,13 +180,21 @@ describe("WU.HEADER_CALCULATIONS — compact Work Unit Overview strip (Slice A)"
         expect(src).not.toContain("flex-wrap");
     });
 
-    it("tightens the strip's compact cards WU-header-scoped (shared shell + Focus Panel untouched)", () => {
-        // Height override is scoped to the strip via the card-shell data hook, not the shared shell.
-        expect(src).toContain("[&_[data-metric-card-shell]]:min-h-[52px]");
+    it("renders borderless signals (statement + value + state dot), not KPI dashboard cards", () => {
+        // The strip no longer renders the shared MetricKpiCard/MetricTrendCard (KPI-card feel);
+        // it renders a statement-first signal with a state dot, separated by whitespace.
+        expect(src).not.toContain("MetricKpiCard");
+        expect(src).not.toContain("MetricTrendCard");
+        expect(src).toContain("card.label"); // statement is rendered (the hero)
+        expect(src).toContain("card.formattedValue"); // value supports it
+        expect(src).toContain("rounded-full"); // the state dot
+        expect(src).toContain("gap-x-7"); // whitespace separates signals
     });
 
-    it("passes NO sparklinePoints — the header renders no trend wave / decorative chart", () => {
+    it("renders no trend wave / sparkline / chart — ever", () => {
         expect(src).not.toContain("sparklinePoints");
         expect(src).not.toContain("MetricSparkline");
+        expect(src).not.toContain("polyline");
+        expect(src).not.toContain("<svg");
     });
 });

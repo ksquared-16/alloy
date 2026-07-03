@@ -94,9 +94,9 @@ export function ProcessSummaryCard({
             {...runtimeLabelProps(PRESENTATION_RUNTIME_LABELS.processTile)}
             data-alloy-section="WS.PROCESS_SUMMARY_CARD"
             data-process-id={process.id}
-            className={`flex h-full min-h-[13rem] flex-col overflow-hidden rounded-xl border border-alloy-stone/18 border-l-[4px] ${STATE_RAIL[state]} bg-white shadow-[0_1px_4px_rgba(15,23,42,0.05)]`}
+            className={`flex h-full min-h-[13rem] flex-col overflow-hidden rounded-xl border border-alloy-stone/12 border-l-[3px] ${STATE_RAIL[state]} bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04)]`}
         >
-            <div className="flex flex-1 flex-col gap-3 px-5 pb-4 pt-4">
+            <div className="flex flex-1 flex-col gap-3.5 px-5 pb-4 pt-4">
                 {/* Identity */}
                 <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
@@ -123,11 +123,11 @@ export function ProcessSummaryCard({
                     / score / ratio and the card never branches on it. */}
                 {signal ? (
                     <div data-process-answer>
-                        <p className={`text-[19px] font-bold leading-tight tracking-[-0.01em] ${STATE_TEXT[state]}`}>
+                        <p className={`text-[20px] font-bold leading-[1.15] tracking-[-0.015em] ${STATE_TEXT[state]}`}>
                             {signal.answer}
                         </p>
                         {signal.value ? (
-                            <p className="mt-1 text-sm font-semibold tabular-nums text-alloy-midnight/70">
+                            <p className="mt-1.5 text-[13px] font-semibold tabular-nums text-alloy-midnight/60">
                                 {signal.value}
                             </p>
                         ) : null}
