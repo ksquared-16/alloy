@@ -1,4 +1,6 @@
 import { describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 
 import type { SurfaceDoc } from "@/lib/platform/surfaceBuilder/surfaceDefinition";
 import { findOperationalCalculation } from "@/lib/analytics/calculations/registry";
@@ -163,5 +165,28 @@ describe("WU.HEADER_CALCULATIONS — refinement key extraction", () => {
             "ops.needs_attention_count",
             "ops.work_overdue_count",
         ]);
+    });
+});
+
+describe("WU.HEADER_CALCULATIONS — compact Work Unit Overview strip (Slice A)", () => {
+    const src = readFileSync(
+        fileURLToPath(new URL("../../../components/presentation/workUnit/WorkUnitHeaderCalculations.tsx", import.meta.url)),
+        "utf8",
+    );
+
+    it("is a single row (never wraps into extra rows that push the queue down)", () => {
+        expect(src).toContain("flex-nowrap");
+        expect(src).toContain("overflow-x-auto");
+        expect(src).not.toContain("flex-wrap");
+    });
+
+    it("tightens the strip's compact cards WU-header-scoped (shared shell + Focus Panel untouched)", () => {
+        // Height override is scoped to the strip via the card-shell data hook, not the shared shell.
+        expect(src).toContain("[&_[data-metric-card-shell]]:min-h-[52px]");
+    });
+
+    it("passes NO sparklinePoints — the header renders no trend wave / decorative chart", () => {
+        expect(src).not.toContain("sparklinePoints");
+        expect(src).not.toContain("MetricSparkline");
     });
 });

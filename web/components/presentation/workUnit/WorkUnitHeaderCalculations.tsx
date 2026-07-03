@@ -54,11 +54,22 @@ export function WorkUnitHeaderCalculations({
     cards: WorkUnitHeaderCalculationCardVm[];
 }) {
     if (!cards.length) return null;
+    // Compact Work Unit Overview strip: ONE row (horizontal scroll — never wraps into extra
+    // rows that push the queue down), and a WU-header-scoped tightening of the shared compact
+    // card (shorter, narrower, less padding) so the metric area stays well under ~20% of the
+    // viewport. Scoped to this strip via the card-shell data hook — the shared card + Focus
+    // Panel cards are untouched. No sparkline is passed here, so there is no trend wave.
     return (
         <div
             {...runtimeLabelProps(PRESENTATION_RUNTIME_LABELS.workUnitHeaderCalculations)}
             data-alloy-section="WU.HEADER_CALCULATIONS"
-            className="flex flex-wrap items-stretch gap-2"
+            data-wu-header-strip="true"
+            className={[
+                "flex flex-nowrap items-stretch gap-2 overflow-x-auto",
+                "[&_[data-metric-card-shell]]:min-h-[52px]",
+                "[&_[data-metric-card-shell]]:w-[140px]",
+                "[&_[data-metric-card-shell]]:py-1.5",
+            ].join(" ")}
             role="list"
             aria-label="Work unit calculations"
         >

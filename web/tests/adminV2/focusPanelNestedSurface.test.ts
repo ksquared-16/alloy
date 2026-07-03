@@ -169,6 +169,15 @@ describe("Phase 4 — seams: builder renders real presenter, runtime consumes pu
         expect(s).toContain("childDetailFieldKeys");
     });
 
+    it("the Children roster fields follow the published config order (reuses existing config)", () => {
+        const s = src("components/admin/focusPanel/cards/ChildrenCard.tsx");
+        // Roster field→icon map keyed by the same nested-surface field keys as the detail line.
+        expect(s).toContain("ROSTER_FIELD_META");
+        expect(s).toContain('"inquiry_child.program"');
+        // The roster rows receive the published field order.
+        expect(s).toContain("fieldKeys={childDetailFieldKeys}");
+    });
+
     it("nested config persistence still targets metadata.nestedSurfaces (existing service)", () => {
         const s = src("lib/adminV2/settings/surfaces/nestedSurfaceConfigService.ts");
         expect(s).toContain("nestedSurfaces");
