@@ -85,8 +85,24 @@ export function QueueRegion({
                     {queue.error}
                 </p>
             ) : !queue.rows.length ? (
-                <div className="flex min-h-[16rem] items-center justify-center rounded-lg border border-alloy-stone/25 bg-white px-3 py-6">
-                    <p className="text-center text-sm text-alloy-midnight/55">No records in this view</p>
+                // Empty state holds the queue STRUCTURE (not a blank space): dashed ghost row
+                // outlines show where records would sit, with the message below. Distinct from
+                // the loading state (those pulse; these are static dashed placeholders).
+                <div
+                    className="rounded-lg border border-alloy-stone/30 bg-white p-3"
+                    data-queue-empty="true"
+                >
+                    <ul className="flex flex-col gap-2" aria-hidden="true">
+                        {Array.from({ length: QUEUE_SKELETON_ROW_COUNT }, (_, i) => (
+                            <li
+                                key={`queue-empty-ghost-${i}`}
+                                className="h-[3.25rem] rounded-lg border border-dashed border-alloy-stone/35 bg-alloy-stone/[0.03]"
+                            />
+                        ))}
+                    </ul>
+                    <p className="mt-3 text-center text-sm text-alloy-midnight/50">
+                        No records in this view
+                    </p>
                 </div>
             ) : (
                 <div>
