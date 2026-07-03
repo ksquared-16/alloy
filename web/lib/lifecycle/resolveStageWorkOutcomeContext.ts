@@ -135,6 +135,12 @@ export async function resolveStageWorkOutcomeContext(params: {
     };
 
     if (journeySegment === "child") {
+        // Prefer threaded process-instance identity so outcome execution never needs an OCM read.
+        const customerMemberId = trimOrNull(task.metadata?.customer_member_id);
+        if (customerMemberId) subject.customer_member_id = customerMemberId;
+        const processInstanceId = trimOrNull(task.metadata?.process_instance_id);
+        if (processInstanceId) subject.process_instance_id = processInstanceId;
+        // Legacy OCM id kept for the executor's temporary fallback when the above are absent.
         const ocmId = trimOrNull(task.metadata?.opportunity_customer_member_id);
         if (ocmId) subject.opportunity_customer_member_id = ocmId;
     }

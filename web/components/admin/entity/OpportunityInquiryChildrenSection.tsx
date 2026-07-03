@@ -15,11 +15,10 @@ import {
 import { formatDate } from "@/lib/adminFormatters";
 import {
     buildInquiryChildOcmPatchFromEditorLocal,
-    ensureOpportunityCustomerMemberLink,
     inquiryChildEditorRowIsDirty,
     inquiryChildIdentityHasChanges,
+    patchChildParticipation,
     patchInquiryChildIdentityFromDrawer,
-    patchOpportunityCustomerMemberFromInquiryChild,
     resolveInquiryChildOcmId,
     type InquiryChildOcmPatch,
 } from "@/lib/admin/drawer/inquiryChildFieldEdit";
@@ -637,23 +636,6 @@ export default function OpportunityInquiryChildrenSection({
         [statusItems]
     );
 
-    const resolveOcmIdForRow = async (row: InquiryChildRow): Promise<string> => {
-        const cached = ocmIdByRowKey[row.id];
-        if (cached) return cached;
-        const existing = resolveInquiryChildOcmId(row);
-        if (existing) return existing;
-        const oppId = opportunityId?.trim() ?? "";
-        const cmId = row.customer_member_id?.trim() ?? "";
-        if (!oppId || !cmId) throw new Error("Cannot save inquiry fields for this child row");
-        const linked = await ensureOpportunityCustomerMemberLink({
-            opportunityId: oppId,
-            customerMemberId: cmId,
-        });
-        setOcmIdByRowKey((p) => ({ ...p, [row.id]: linked.ocmId }));
-        onChildrenMutated?.();
-        return linked.ocmId;
-    };
-
     const markRowSaveState = (rowKey: string, phase: "saving" | "saved" | "error", message?: string) => {
         if (phase === "saving") {
             setSavingById((p) => ({ ...p, [rowKey]: true }));
@@ -670,8 +652,11 @@ export default function OpportunityInquiryChildrenSection({
     };
 
     const saveOcmPatch = async (row: InquiryChildRow, patch: InquiryChildOcmPatch) => {
-        const ocmId = await resolveOcmIdForRow(row);
-        await patchOpportunityCustomerMemberFromInquiryChild(ocmId, patch);
+        // Participation facts route to the process instance / durable model — never OCM (no OCM row is
+        // created). Legacy OCM linking (resolveOcmIdForRow) is retained read-only for old data only.
+        const cmId = row.customer_member_id?.trim() ?? "";
+        if (!cmId) throw new Error("Cannot save participation for this child row");
+        await patchChildParticipation({ customerMemberId: cmId, opportunityId: opportunityId?.trim() || null, patch });
         const oppId = opportunityId?.trim() ?? "";
         const affectsWaitlist = Object.keys(patch).some((k) =>
             ["location_id", "program_room_cohort_key", "program_category_id", "outcome_status_key"].includes(k)

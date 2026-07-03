@@ -134,15 +134,14 @@ describe("buildCreateLeadOcmInsertRow", () => {
 });
 
 describe("applyCreateLeadChildParticipation", () => {
-    it("creates customer_member and OCM with enrollment fields", async () => {
-        let ocmInsertPayload: Record<string, unknown> | null = null;
+    it("creates customer_member + process_instance with participation metadata, and NO OCM row", async () => {
+        let piUpsertPayload: Record<string, unknown> | null = null;
+        let ocmInsertCalled = false;
         const sb = {
             from: vi.fn((table: string) => {
                 if (table === "customer_members") {
                     return {
-                        select: vi.fn().mockReturnValue({
-                            eq: vi.fn().mockReturnThis(),
-                        }),
+                        select: vi.fn().mockReturnValue({ eq: vi.fn().mockReturnThis() }),
                         insert: vi.fn().mockReturnValue({
                             select: vi.fn().mockReturnValue({
                                 single: vi.fn().mockResolvedValue({ data: { id: "cm-1" }, error: null }),
@@ -164,26 +163,27 @@ describe("applyCreateLeadChildParticipation", () => {
                         }),
                     };
                 }
-                if (table === "opportunity_customer_members") {
+                if (table === "process_instances") {
                     return {
-                        insert: vi.fn((row: Record<string, unknown>) => {
-                            ocmInsertPayload = row;
+                        upsert: vi.fn((row: Record<string, unknown>) => {
+                            piUpsertPayload = row;
                             return {
                                 select: vi.fn().mockReturnValue({
-                                    single: vi.fn().mockResolvedValue({ data: { id: "ocm-1" }, error: null }),
+                                    maybeSingle: vi.fn().mockResolvedValue({ data: { id: "pi-1" }, error: null }),
                                 }),
                             };
                         }),
                     };
                 }
+                if (table === "opportunity_customer_members") {
+                    ocmInsertCalled = true;
+                    return { insert: vi.fn() };
+                }
                 if (table === "location_program_categories") {
                     return {
                         select: vi.fn().mockReturnValue({
                             eq: vi.fn().mockReturnThis(),
-                            maybeSingle: vi.fn().mockResolvedValue({
-                                data: { id: CATEGORY_ID },
-                                error: null,
-                            }),
+                            maybeSingle: vi.fn().mockResolvedValue({ data: { id: CATEGORY_ID }, error: null }),
                         }),
                     };
                 }
@@ -208,18 +208,22 @@ describe("applyCreateLeadChildParticipation", () => {
             merged,
         });
 
-        expect(result).toEqual({ customer_member_id: "cm-1", ocm_id: "ocm-1" });
-        expect(ocmInsertPayload).toMatchObject({
+        // OCM is no longer written at Create Lead.
+        expect(ocmInsertCalled).toBe(false);
+        expect(result).toEqual({ customer_member_id: "cm-1", ocm_id: null, process_instance_id: "pi-1" });
+        // Participation facts ride the process instance metadata (draft inputs).
+        expect(piUpsertPayload).toMatchObject({
             org_id: "org-1",
-            opportunity_id: "opp-1",
-            customer_member_id: "cm-1",
-            location_id: SITE_ID,
+            process_key: "enrollment",
+            subject_id: "cm-1",
+            context_id: "opp-1",
+        });
+        expect((piUpsertPayload as { metadata?: Record<string, unknown> })?.metadata).toMatchObject({
             program_category_id: CATEGORY_ID,
             schedule_type: "full_day",
             program_room_cohort_key: ROOM_ID,
             start_date: "2026-09-01",
-            // A brand-new lead's child has no enrollment disposition yet — never write `new_inquiry`.
-            outcome_status_key: null,
+            location_id: SITE_ID,
         });
     });
 });

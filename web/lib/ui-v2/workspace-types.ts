@@ -309,6 +309,8 @@ export type QueueItemVm = {
     /** Card 9 — grain context for drawer/action intent. */
     rowGrain?: "case" | "child" | "candidate";
     placementCandidateId?: string;
+    /** Child subject = customer_members.id (process_instances.subject_id) — targets movement directly. */
+    customerMemberId?: string;
     opportunityCustomerMemberId?: string;
     childLifecycleStatus?: string | null;
     /**

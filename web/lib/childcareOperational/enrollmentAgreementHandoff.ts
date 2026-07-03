@@ -3,34 +3,22 @@
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
-import {
-    createChildEnrollmentAgreement,
-    getOperationalAgreementForMemberSite,
-} from "@/lib/childcareOperational/enrollmentAgreementService";
-import {
-    createInitialChildPlacement,
-    getOperationalPlacementForAgreement,
-} from "@/lib/childcareOperational/childPlacementService";
-import {
-    createInitialScheduleAssignment,
-    getOperationalScheduleAssignmentForAgreement,
-} from "@/lib/childcareOperational/scheduleAssignmentService";
-import { listSchedulePatterns } from "@/lib/childcareOperational/schedulePatternService";
 import { OperationalEnrollmentServiceError } from "@/lib/childcareOperational/operationalEnrollmentErrors";
+import { emitOperationalEnrollmentHandoffSummaryEvent } from "@/lib/childcareOperational/operationalEnrollmentEvents";
 import {
-    emitEnrollmentAgreementCreatedEvent,
-    emitOperationalEnrollmentHandoffSummaryEvent,
-    emitPlacementCreatedEvent,
-    emitScheduleAssignmentCreatedEvent,
-} from "@/lib/childcareOperational/operationalEnrollmentEvents";
+    applyChildEnrollmentMaterialization,
+    type HandoffStepOutcome,
+    type ResolvedEnrollmentFacts,
+} from "@/lib/childcareOperational/materializeChildEnrollment";
+
+export type { HandoffStepOutcome };
+
 const HANDOFF_SOURCE_KEY = "approve_enrollment_handoff";
 
 function trimOrNull(v: unknown): string | null {
     const s = v != null ? String(v).trim() : "";
     return s || null;
 }
-
-export type HandoffStepOutcome = "created" | "reused" | "skipped" | "warning";
 
 export type ChildOperationalEnrollmentHandoffResult = {
     opportunity_customer_member_id: string;
@@ -85,26 +73,6 @@ export type ExecuteOperationalEnrollmentHandoffInput = {
     emitEvents?: boolean;
     correlationId?: string | null;
 };
-
-async function resolveSchedulePatternForScheduleType(
-    supabase: SupabaseClient,
-    orgId: string,
-    siteLocationId: string,
-    scheduleTypeInput: string | null
-) {
-    const scheduleType = trimOrNull(scheduleTypeInput);
-    if (!scheduleType) return null;
-
-    const patterns = await listSchedulePatterns(supabase, orgId, {
-        siteLocationId,
-        isActive: true,
-    });
-
-    const exact =
-        patterns.find((p) => p.schedule_type_key === scheduleType) ??
-        patterns.find((p) => p.key === scheduleType);
-    return exact ?? null;
-}
 
 async function loadHandoffContext(
     supabase: SupabaseClient,
@@ -196,188 +164,35 @@ async function handoffSingleChild(input: {
         return result;
     }
 
-    let agreement =
-        (await getOperationalAgreementForMemberSite(
-            input.supabase,
-            input.orgId,
-            customerMemberId,
-            siteLocationId
-        )) ?? null;
+    // Legacy path resolves facts from the OCM row, then delegates to the shared materialization core.
+    const facts: ResolvedEnrollmentFacts = {
+        customerMemberId,
+        siteLocationId,
+        startDate: input.startDateYmd,
+        programCategoryId: trimOrNull(input.ocm.program_category_id),
+        roomLocationId: trimOrNull(input.ocm.program_room_cohort_key),
+        scheduleType: trimOrNull(input.ocm.schedule_type),
+        opportunityCustomerMemberId: input.ocm.id,
+        personId: trimOrNull(input.ocm.person_id),
+    };
 
-    if (agreement) {
-        result.agreement = { outcome: "reused", id: agreement.id };
-    } else {
-        try {
-            agreement = await createChildEnrollmentAgreement(input.supabase, {
-                orgId: input.orgId,
-                customerMemberId,
-                siteLocationId,
-                startDate: input.startDateYmd,
-                opportunityId: input.opportunityId,
-                opportunityCustomerMemberId: input.ocm.id,
-                customerId: input.customerId,
-                personId: trimOrNull(input.ocm.person_id),
-                sourceKey: HANDOFF_SOURCE_KEY,
-                metadata: {
-                    handoff: true,
-                    ...(warnings.length ? { handoff_warnings: [...warnings] } : {}),
-                },
-                actorUserId: input.actorUserId,
-                todayYmd: input.todayYmd,
-            });
-            result.agreement = { outcome: "created", id: agreement.id };
-            if (input.emitEvents) {
-                await emitEnrollmentAgreementCreatedEvent({
-                    orgId: input.orgId,
-                    agreementId: agreement.id,
-                    opportunityId: input.opportunityId,
-                    customerMemberId,
-                    siteLocationId,
-                    sourceKey: HANDOFF_SOURCE_KEY,
-                    ctx: {
-                        actorUserId: input.actorUserId,
-                        correlationId: input.correlationId,
-                    },
-                });
-            }
-        } catch (e) {
-            const message =
-                e instanceof OperationalEnrollmentServiceError
-                    ? e.message
-                    : e instanceof Error
-                      ? e.message
-                      : "Agreement creation failed";
-            result.agreement = { outcome: "error", error: message };
-            return result;
-        }
-    }
+    const trio = await applyChildEnrollmentMaterialization(input.supabase, {
+        orgId: input.orgId,
+        opportunityId: input.opportunityId,
+        customerId: input.customerId,
+        facts,
+        todayYmd: input.todayYmd,
+        sourceKey: HANDOFF_SOURCE_KEY,
+        actorUserId: input.actorUserId,
+        emitEvents: input.emitEvents,
+        correlationId: input.correlationId,
+        agreementMetadata: { handoff: true, ...(warnings.length ? { handoff_warnings: [...warnings] } : {}) },
+    });
 
-    // Canonical program FK straight off the OCM row — no key→category resolution.
-    const programCategoryId = trimOrNull(input.ocm.program_category_id);
-    const roomLocationId = trimOrNull(input.ocm.program_room_cohort_key);
-    const hasPlacementFields = Boolean(programCategoryId || roomLocationId);
-
-    if (!hasPlacementFields) {
-        result.placement = {
-            outcome: "skipped",
-            warning: "no_program_or_room_fields",
-        };
-    } else {
-        const existingPlacement = await getOperationalPlacementForAgreement(
-            input.supabase,
-            input.orgId,
-            agreement.id
-        );
-        if (existingPlacement) {
-            result.placement = { outcome: "reused", id: existingPlacement.id };
-        } else {
-            try {
-                const placement = await createInitialChildPlacement(input.supabase, {
-                    orgId: input.orgId,
-                    enrollmentAgreementId: agreement.id,
-                    startDate: input.startDateYmd,
-                    programCategoryId,
-                    roomLocationId,
-                    sourceKey: HANDOFF_SOURCE_KEY,
-                    metadata: { handoff: true },
-                    actorUserId: input.actorUserId,
-                    todayYmd: input.todayYmd,
-                });
-                result.placement = { outcome: "created", id: placement.id };
-                if (input.emitEvents) {
-                    await emitPlacementCreatedEvent({
-                        orgId: input.orgId,
-                        placementId: placement.id,
-                        enrollmentAgreementId: agreement.id,
-                        customerMemberId,
-                        siteLocationId,
-                        ctx: {
-                            actorUserId: input.actorUserId,
-                            correlationId: input.correlationId,
-                        },
-                    });
-                }
-            } catch (e) {
-                const message =
-                    e instanceof OperationalEnrollmentServiceError
-                        ? e.message
-                        : e instanceof Error
-                          ? e.message
-                          : "Placement creation failed";
-                result.placement = { outcome: "warning", warning: message };
-                warnings.push(`placement_warning:${message}`);
-            }
-        }
-    }
-
-    const scheduleType = trimOrNull(input.ocm.schedule_type);
-    if (!scheduleType) {
-        result.schedule_assignment = {
-            outcome: "skipped",
-            warning: "no_schedule_type",
-        };
-    } else {
-        const existingAssignment = await getOperationalScheduleAssignmentForAgreement(
-            input.supabase,
-            input.orgId,
-            agreement.id
-        );
-        if (existingAssignment) {
-            result.schedule_assignment = { outcome: "reused", id: existingAssignment.id };
-        } else {
-            try {
-                const pattern = await resolveSchedulePatternForScheduleType(
-                    input.supabase,
-                    input.orgId,
-                    siteLocationId,
-                    scheduleType
-                );
-                if (!pattern) {
-                    result.schedule_assignment = {
-                        outcome: "warning",
-                        warning: `no_schedule_pattern_for:${scheduleType}`,
-                    };
-                    warnings.push(`schedule_pattern_missing:${scheduleType}`);
-                } else {
-                    const assignment = await createInitialScheduleAssignment(input.supabase, {
-                        orgId: input.orgId,
-                        enrollmentAgreementId: agreement.id,
-                        schedulePatternId: pattern.id,
-                        startDate: input.startDateYmd,
-                        sourceKey: HANDOFF_SOURCE_KEY,
-                        metadata: { handoff: true, schedule_type_key: scheduleType },
-                        actorUserId: input.actorUserId,
-                        todayYmd: input.todayYmd,
-                    });
-                    result.schedule_assignment = { outcome: "created", id: assignment.id };
-                    if (input.emitEvents) {
-                        await emitScheduleAssignmentCreatedEvent({
-                            orgId: input.orgId,
-                            assignmentId: assignment.id,
-                            enrollmentAgreementId: agreement.id,
-                            schedulePatternId: pattern.id,
-                            customerMemberId,
-                            ctx: {
-                                actorUserId: input.actorUserId,
-                                correlationId: input.correlationId,
-                            },
-                        });
-                    }
-                }
-            } catch (e) {
-                const message =
-                    e instanceof OperationalEnrollmentServiceError
-                        ? e.message
-                        : e instanceof Error
-                          ? e.message
-                          : "Schedule assignment failed";
-                result.schedule_assignment = { outcome: "warning", warning: message };
-                warnings.push(`schedule_assignment_warning:${message}`);
-            }
-        }
-    }
-
-    result.warnings = warnings;
+    result.agreement = trio.agreement;
+    result.placement = trio.placement;
+    result.schedule_assignment = trio.schedule_assignment;
+    result.warnings = [...warnings, ...trio.warnings];
     return result;
 }
 

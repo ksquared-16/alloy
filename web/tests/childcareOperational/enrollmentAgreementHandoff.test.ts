@@ -215,7 +215,8 @@ describe("enrollmentAgreementHandoff", () => {
         expect(result.children[0]?.agreement.outcome).toBe("created");
         expect(result.children[0]?.placement.outcome).toBe("created");
         expect(result.children[0]?.schedule_assignment.outcome).toBe("skipped");
-        expect(result.children[0]?.schedule_assignment.warning).toBe("no_schedule_type");
+        // Warning label generalized in the shared materialization core (pattern-id or schedule-type).
+        expect(result.children[0]?.schedule_assignment.warning).toBe("no_schedule");
     });
 
     it("partial when multiple children and one lacks matching schedule pattern", async () => {

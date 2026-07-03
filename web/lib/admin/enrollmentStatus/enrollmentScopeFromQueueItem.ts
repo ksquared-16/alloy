@@ -16,6 +16,7 @@ export function enrollmentScopeFromQueueGrainContext(
         return {
             grain: ctx.rowGrain === "candidate" ? "candidate" : "child",
             opportunityId: oid,
+            customerMemberId: ctx.customerMemberId ?? null,
             opportunityCustomerMemberId: ctx.opportunityCustomerMemberId,
             placementCandidateId: ctx.placementCandidateId ?? null,
         };

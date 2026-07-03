@@ -6,8 +6,111 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { __testing as backfillTesting } from "@/lib/orchestration/placement/backfill/placementCandidateBackfill";
 import { syncPlacementCandidateFromOcm } from "@/lib/orchestration/placement/syncPlacementCandidateFromOcm";
+import { ENROLLMENT_PROCESS_KEY } from "@/lib/lifecycle/lifecycleProcessTypes";
+import { resolvePlacementCandidateSiteId } from "@/lib/orchestration/placement/resolvePlacementCandidateSiteId";
+import { resolvePlacementCandidateCohortFromMember } from "@/lib/orchestration/placement/resolvePlacementCandidateCohortForQueue";
 
 const { buildCandidateRowsForOpportunity, normalizeOcmRow } = backfillTesting;
+
+function metaStr(meta: Record<string, unknown> | null | undefined, key: string): string | null {
+    const v = meta?.[key];
+    return typeof v === "string" && v.trim() ? v.trim() : null;
+}
+
+/**
+ * Create the placement candidate for a newly-waitlisted child from PROCESS-INSTANCE / child-subject
+ * scope — no OCM required. Facts come from the child's enrollment process instance metadata (program /
+ * site / room / start), with the opportunity as fallback for site/customer. Idempotent by seed_key.
+ * The runtime path (outcome executor) uses this; the OCM-reading hook below remains for legacy data.
+ */
+export async function ensurePlacementCandidateForWaitlistedChildBySubject(
+    supabase: SupabaseClient,
+    params: { orgId: string; opportunityId: string; customerMemberId: string },
+): Promise<EnsurePlacementCandidateHookResult> {
+    if (!isPlacementLifecycleCandidateHookEnabled()) {
+        return { attempted: false, created: false, skipped_reason: "hook_disabled" };
+    }
+    const { orgId, opportunityId, customerMemberId } = params;
+
+    const { data: opp } = await supabase
+        .from("opportunities")
+        .select("id, customer_id, location_id, status_key, created_at, metadata")
+        .eq("id", opportunityId)
+        .eq("org_id", orgId)
+        .maybeSingle();
+    if (!opp) return { attempted: true, created: false, skipped_reason: "opportunity_not_found" };
+
+    // Child enrollment process instance (subject = customer_member, context = opportunity) — the fact source.
+    const { data: pi } = await supabase
+        .from("process_instances")
+        .select("id, metadata")
+        .eq("org_id", orgId)
+        .eq("process_key", ENROLLMENT_PROCESS_KEY)
+        .eq("context_id", opportunityId)
+        .eq("subject_id", customerMemberId)
+        .maybeSingle();
+    const piId = (pi as { id?: string } | null)?.id ?? null;
+    const facts = ((pi as { metadata?: Record<string, unknown> } | null)?.metadata ?? {}) as Record<string, unknown>;
+
+    const { data: cm } = await supabase
+        .from("customer_members")
+        .select("id, person_id, dob")
+        .eq("id", customerMemberId)
+        .eq("org_id", orgId)
+        .maybeSingle();
+    const personId = (cm as { person_id?: string | null } | null)?.person_id ?? null;
+    const dob = (cm as { dob?: string | null } | null)?.dob ?? null;
+
+    // Resolve program key (for cohort resolution) from the program category, best-effort.
+    const programCategoryId = metaStr(facts, "program_category_id");
+    let programKey: string | null = null;
+    if (programCategoryId) {
+        const { data: cat } = await supabase.from("location_program_categories").select("key").eq("org_id", orgId).eq("id", programCategoryId).maybeSingle();
+        programKey = (cat as { key?: string | null } | null)?.key ?? null;
+    }
+
+    const site = resolvePlacementCandidateSiteId({
+        ocmLocationId: metaStr(facts, "location_id"),
+        opportunityLocationId: (opp as { location_id?: string | null }).location_id ?? null,
+    });
+    const cohort = resolvePlacementCandidateCohortFromMember({
+        programKey,
+        programRoomCohortKey: metaStr(facts, "program_room_cohort_key"),
+        dateOfBirth: dob,
+    });
+    const seedKey = `pc_v1_pi:${opportunityId}:${customerMemberId}:${cohort.program_room_cohort_key || "unknown_program_room"}`;
+
+    const { data: existing } = await supabase.from("placement_candidates").select("id").eq("org_id", orgId).eq("seed_key", seedKey).maybeSingle();
+    if ((existing as { id?: string } | null)?.id) {
+        return { attempted: true, created: false, skipped_reason: "already_exists" };
+    }
+
+    const row = {
+        org_id: orgId,
+        opportunity_id: opportunityId,
+        customer_id: (opp as { customer_id?: string | null }).customer_id ?? null,
+        opportunity_customer_member_id: null, // no OCM dependency
+        customer_member_id: customerMemberId,
+        person_id: personId,
+        site_id: site.site_id,
+        is_synthetic_fallback: false,
+        program_room_cohort_key: cohort.program_room_cohort_key,
+        program_room_group_label: cohort.program_room_group_label,
+        wait_since: (opp as { created_at?: string | null }).created_at ?? null,
+        start_date: metaStr(facts, "start_date"),
+        status: "active",
+        seed_key: seedKey,
+        metadata: {
+            source: "process_instance_waitlist",
+            process_instance_id: piId,
+            cohort_resolution: cohort,
+            site_resolution: site,
+        },
+    };
+    const { error: insErr } = await supabase.from("placement_candidates").insert(row);
+    if (insErr) return { attempted: true, created: false, skipped_reason: insErr.message };
+    return { attempted: true, created: true };
+}
 
 /** `ALLOY_PLACEMENT_LIFECYCLE_CANDIDATE_HOOK_DISABLED=1` skips candidate ensure on waitlisted transition. */
 export function isPlacementLifecycleCandidateHookEnabled(): boolean {
@@ -70,9 +173,13 @@ export async function ensurePlacementCandidateForWaitlistedChild(
         errors: 0,
     };
 
+    // The child's durable state now lives on process_instances, so OCM.outcome_status_key is no longer
+    // written. This hook is invoked precisely when a child transitions to waitlisted, so assert that
+    // status for candidate eligibility (otherwise the row reads as not-waitlist and no candidate is made).
+    const waitlistedOcmRow = { ...(ocmData as Record<string, unknown>), outcome_status_key: "waitlisted" };
     const planned = buildCandidateRowsForOpportunity(
         opp as Parameters<typeof buildCandidateRowsForOpportunity>[0],
-        [normalizeOcmRow(ocmData)],
+        [normalizeOcmRow(waitlistedOcmRow)],
         params.orgId,
         false,
         {
