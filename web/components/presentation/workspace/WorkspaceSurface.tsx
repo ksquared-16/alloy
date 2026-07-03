@@ -16,6 +16,7 @@ import {
 import { WorkspaceHeader } from "./WorkspaceHeader";
 import { WorkspaceHeaderCalculations } from "./WorkspaceHeaderCalculations";
 import { ProcessGrid } from "./ProcessGrid";
+import { WorkspaceRightRailActions } from "@/components/presentation/rightRail/WorkspaceRightRailActions";
 
 /** House loading style: neutral blocks, no spinners. */
 function WorkspaceSurfaceSkeleton() {
@@ -58,6 +59,12 @@ export function WorkspaceSurface() {
                         <WorkspaceHeaderCalculations cards={model.header.calculations} />
                     </section>
                     <ProcessGrid processes={model.processes} />
+                    {/* Registers the configured Workspace actions into the persistent command
+                        rail's "Actions (N)" section — same path as the Work Unit. Renders null. */}
+                    <WorkspaceRightRailActions
+                        actions={model.rightRailActions}
+                        defaultDepartmentId={model.defaultDepartmentId}
+                    />
                 </>
             )}
         </div>

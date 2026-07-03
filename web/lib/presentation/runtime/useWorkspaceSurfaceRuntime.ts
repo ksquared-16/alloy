@@ -41,6 +41,9 @@ import {
     type WorkViewTotalTarget,
 } from "./useWorkViewTotals";
 import { processTileModelFromLandingCard, type WorkspaceSurfaceModel } from "./types";
+import type { ResolvedActionForClient } from "@/lib/admin/actions/types";
+import { fetchWorkspaceRootResolvedActions } from "@/lib/workspace/fetchWorkspaceRootResolvedActions";
+import { workspaceDataFetchInit } from "@/lib/workspace/workspaceDataFetch";
 
 /** Warmest available first paint: session peek, else the server-composed Route VM seed. */
 function seedLifecycleCards(
@@ -76,6 +79,28 @@ export function useWorkspaceSurfaceRuntime(): WorkspaceSurfaceModel {
             cancelled = true;
         };
     }, []);
+
+    // ── Right Rail actions: the configured Workspace actions for the persistent command rail ─
+    // Org-scoped (surface=workspace + shared right_rail); registered into the same shell command
+    // rail the Work Unit uses. Deduped + TTL. Never invents actions.
+    const [rightRailActions, setRightRailActions] = useState<ResolvedActionForClient[]>([]);
+    useEffect(() => {
+        if (orgId == null) return;
+        let cancelled = false;
+        void fetchWorkspaceRootResolvedActions({ fetchInit: workspaceDataFetchInit() ?? {} })
+            .then((list) => {
+                if (!cancelled) setRightRailActions(list);
+            })
+            .catch(() => {
+                if (!cancelled) setRightRailActions([]);
+            });
+        return () => {
+            cancelled = true;
+        };
+    }, [orgId]);
+
+    // Default department for org-level workspace actions (Create Lead) — the first process's dept.
+    const defaultDepartmentId = cards[0]?.departmentId ?? null;
 
     // ── Header calculations: the published Workspace Header surface ────────────────────
     // Server seed (Route VM, values resolved) or the code-owned fallback strip — the card
@@ -148,9 +173,19 @@ export function useWorkspaceSurfaceRuntime(): WorkspaceSurfaceModel {
         () => ({
             header: { orgName: orgName ?? routeVm.context.orgName, calculations },
             processes,
+            rightRailActions,
+            defaultDepartmentId,
             // Tiles present (warm seed) or the load settled — calculation values patch quietly after.
             ready: processes.length > 0 || cardsSettled,
         }),
-        [orgName, routeVm.context.orgName, calculations, processes, cardsSettled],
+        [
+            orgName,
+            routeVm.context.orgName,
+            calculations,
+            processes,
+            rightRailActions,
+            defaultDepartmentId,
+            cardsSettled,
+        ],
     );
 }

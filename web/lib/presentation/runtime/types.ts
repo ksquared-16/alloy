@@ -106,6 +106,17 @@ export type WorkspaceSurfaceModel = {
         calculations: WorkspaceHeaderCalculationCardVm[];
     };
     processes: ProcessTileModel[];
+    /**
+     * Configured Workspace actions (`surface=workspace` + shared `right_rail`) resolved for the
+     * persistent command rail — registered symmetric to the Work Unit rail. Empty until resolved
+     * (or when none are configured).
+     */
+    rightRailActions: ResolvedActionForClient[];
+    /**
+     * Default department for org-level workspace actions (e.g. Create Lead) — the first
+     * configured process's department. Null when no process is configured.
+     */
+    defaultDepartmentId: string | null;
     ready: boolean;
 };
 
