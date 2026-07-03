@@ -3,6 +3,7 @@
  * Guides operators through configure → distribute → test → operationalize without new schema.
  */
 
+import { operatorWorkUnitHrefFromKey } from "@/lib/admin/canonicalOperatorRoutes";
 import {
     buildFormOutcomeConfigForLink,
     buildFormOutcomeConfigViewModel,
@@ -106,13 +107,16 @@ export function resolveWorkUnitWorkspaceHref(
     workUnitId: string | null | undefined,
     options?: { highlightQueueKey?: string | null }
 ): string | null {
+    // Canonical operator route only — the dept/uuid work-unit page was retired with the legacy
+    // presentation tree (Presentation Runtime V2). Intake routing metadata stores ids, not the
+    // work-unit platform key, so the routable slug comes from the queue lane key (slug resolution
+    // accepts configured queue lane keys, e.g. `new_leads` → `/workspace/work-unit/new-leads`).
     const dept = typeof departmentId === "string" ? departmentId.trim() : "";
     const wu = typeof workUnitId === "string" ? workUnitId.trim() : "";
     if (!dept || !wu) return null;
-    const base = `/adminV2/workspace/dept/${encodeURIComponent(dept)}/work-unit/${encodeURIComponent(wu)}`;
     const queueKey = typeof options?.highlightQueueKey === "string" ? options.highlightQueueKey.trim() : "";
-    if (!queueKey) return base;
-    return `${base}?primary_queue_key=${encodeURIComponent(queueKey)}`;
+    if (!queueKey) return null;
+    return operatorWorkUnitHrefFromKey(queueKey);
 }
 
 function buildRoutingSummary(

@@ -2,7 +2,7 @@ import type { KPIVm } from "@/lib/ui-v2/workspace-types";
 import type { OpportunityLifecycleKpiCounts } from "@/lib/workspace/computeOpportunityLifecycleKpis";
 import { isGrowthSliceDepartmentKey } from "@/lib/workspace/growthSliceDepartments";
 import { isLifecycleStageWorkUnitKey } from "@/lib/lifecycle/lifecycleStageWorkUnit";
-import type { WorkspaceRootDeptTileStats } from "@/components/admin/workspace/WorkspaceRootDepartmentGrid";
+import type { WorkspaceRootDeptTileStats } from "@/lib/workspace/workspaceRootDepartmentTypes";
 
 export type DepartmentLifecycleStatusBreakdownRow = {
     status_key: string;

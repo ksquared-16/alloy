@@ -1,5 +1,6 @@
 "use client";
 
+import { operatorWorkUnitHrefFromKey } from "@/lib/admin/canonicalOperatorRoutes";
 import Link from "next/link";
 import {
     useEffect,
@@ -214,9 +215,7 @@ export default function LifecycleStageWorkspace({
     }, [bootstrap?.status_rollup_v1, stageKey]);
 
     const previewHref =
-        departmentId.trim() && bootstrap?.pipeline?.id ?
-            `/adminV2/workspace/dept/${departmentId}/work-unit/${bootstrap.pipeline.id}`
-        :   null;
+        bootstrap?.pipeline?.key?.trim() ? operatorWorkUnitHrefFromKey(bootstrap.pipeline.key) : null;
 
     if (bootstrapLoading && !bootstrap) {
         return (

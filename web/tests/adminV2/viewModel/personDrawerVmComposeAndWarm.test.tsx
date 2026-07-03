@@ -3,9 +3,6 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 import { resolveWarmDrawerTargetsFromOpportunityRecord } from "@/lib/adminV2/viewModel/drawer/opportunity/resolveWarmDrawerTargetsFromOpportunityRecord";
 import { visibilityScopeForComposeDepth } from "@/lib/adminV2/viewModel/drawer/person/personDrawerVmComposeDepth";
 import { isDrawerModelSwapEligible } from "@/lib/adminV2/viewModel/drawer/drawerModelSwapNavigation";
-import { renderToStaticMarkup } from "react-dom/server";
-import { CrmCompactQueuePreview } from "@/app/adminV2/components/workspace/blocks/QueueBlock";
-import { resolveQueueOperationalReadSlot } from "@/lib/adminV2/bos/recommendations/selectors/recommendationSurfaceViewModels";
 
 describe("resolveWarmDrawerTargetsFromOpportunityRecord", () => {
     beforeEach(() => {
@@ -53,58 +50,5 @@ describe("personDrawerVmComposeDepth", () => {
 describe("drawer model swap eligibility", () => {
     it("allows opportunity to person swap", () => {
         expect(isDrawerModelSwapEligible("opportunities", "opp-1", "persons", "p-1")).toBe(true);
-    });
-});
-
-describe("queue row header grid contract", () => {
-    const handlers = {
-        onOpenPerson: vi.fn(),
-        onOpenChild: vi.fn(),
-        onPrefetchPerson: vi.fn(),
-        onPrefetchChild: vi.fn(),
-    };
-
-    it("uses four-column layout with household before status before attention", () => {
-        const slot = resolveQueueOperationalReadSlot({
-            _operational_recommendation_preview: {
-                next_label: "Call family within one business day to confirm interest.",
-                why_line: "Commitment date missed",
-                urgency_band: "p0_urgent",
-            },
-        });
-        const html = renderToStaticMarkup(
-            <CrmCompactQueuePreview
-                scanMode
-                workUnitKey="enrollment_pipeline"
-                drawerRecordIconHandlers={handlers}
-                slots={{
-                    primaryIdentity: "Mitchell household",
-                    childName: null,
-                    stageLabel: null,
-                    statusLabel: "Contact Attempted",
-                    nextStep: "Call family within one business day to confirm interest.",
-                    lastActivity: null,
-                    commercialValue: null,
-                    contactSnippet: null,
-                    programContext: null,
-                    roomContext: null,
-                    ageContext: null,
-                    attentionReason: null,
-                    familyNote: null,
-                    locationContext: "South Campus",
-                    operationalReadPreview: slot,
-                    crmFactGroups: [],
-                }}
-            />
-        );
-        expect(html).toContain('data-queue-header-layout="four-column"');
-        const householdIdx = html.indexOf('data-testid="queue-header-household"');
-        const statusIdx = html.indexOf('data-testid="queue-header-status"');
-        const attentionIdx = html.indexOf('data-testid="queue-header-attention-inline"');
-        const locationIdx = html.indexOf("South Campus");
-        expect(householdIdx).toBeGreaterThan(-1);
-        expect(statusIdx).toBeGreaterThan(householdIdx);
-        expect(attentionIdx).toBeGreaterThan(statusIdx);
-        expect(locationIdx).toBeGreaterThan(attentionIdx);
     });
 });

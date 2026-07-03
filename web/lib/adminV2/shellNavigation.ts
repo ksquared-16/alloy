@@ -11,7 +11,6 @@ import {
     parseOperatorWorkUnitPath,
 } from "@/lib/admin/canonicalOperatorRoutes";
 import { warmOperatorWorkUnitEntryFromHref } from "@/lib/admin/operatorWorkUnitEntryWarm";
-import { prefetchDeptAboveFoldBundle } from "@/lib/adminV2/prefetchAdminV2AboveFold";
 import {
     appendWorkspaceSiteToPath,
     isWorkspaceAreaPath,
@@ -63,14 +62,6 @@ export function prepareAdminV2SoftNavTarget(href: string): void | Promise<void> 
     if (parseOperatorWorkUnitPath(normalized).workUnitSlug) {
         warmOperatorWorkUnitEntryFromHref(href, null, "soft_nav_prepare");
         return;
-    }
-    const deptMatch = normalized.match(/^\/workspace\/dept\/([^/]+)/);
-    if (deptMatch?.[1]) {
-        return prefetchDeptAboveFoldBundle({
-            departmentId: decodeURIComponent(deptMatch[1]),
-            selectedSiteId: readStickyWorkspaceSiteIdForNavigation({ href }),
-            reason: "click_prepare",
-        });
     }
 }
 

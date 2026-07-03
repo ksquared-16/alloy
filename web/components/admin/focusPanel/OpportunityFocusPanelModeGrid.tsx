@@ -12,14 +12,14 @@ import {
     deriveFocusPanelInstanceMap,
 } from "@/lib/adminV2/runtime/focusPanel/deriveFocusPanelCardsFromLayoutDoc";
 import {
-    buildCompositionOverrides,
     composeEffectiveCardModel,
     type FocusPanelCardConfig,
 } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardConfigModel";
+import { deriveFocusPanelSummaryCompositionInputs } from "@/lib/adminV2/runtime/focusPanel/deriveFocusPanelSummaryCompositionInputs";
 import { FOCUS_PANEL_SUMMARY_DEFAULT_DOC } from "@/lib/adminV2/runtime/focusPanel/buildFocusPanelSummaryDefaultDoc";
 import { buildOpportunityFocusPanelMutation } from "@/lib/adminV2/runtime/focusPanel/focusPanelMutation";
 import type { CompositionCardInput } from "@/lib/adminV2/runtime/focusPanel/composition/composeFocusPanelSurface";
-import { publishedLayoutReadingOrder, readFocusPanelPublishedLayout } from "@/lib/adminV2/runtime/focusPanel/composition/focusPanelPublishedLayout";
+import { publishedLayoutReadingOrder } from "@/lib/adminV2/runtime/focusPanel/composition/focusPanelPublishedLayout";
 import {
     isElevatedLevel,
     type FocusPanelActiveDepth,
@@ -95,12 +95,19 @@ export default function OpportunityFocusPanelModeGrid({
         const derived = deriveFocusPanelGridFromLayoutDoc(activeDoc);
         return derived.rows.length > 0 ? derived : defaultGrid;
     }, [isSummary, activeDoc, defaultGrid]);
+
+    // Record-independent composition inputs for the Summary surface — the SAME derivation
+    // the pending skeleton (`FocusPanelSummarySkeleton`) uses WITHOUT cards, guaranteeing an
+    // identical grid strategy + cell positions pending → resolved (only content transitions).
+    // Here the resolved `cards` map is passed so the visibility filter applies exactly as
+    // before (behavior-preserving extraction). Non-summary modes keep the legacy grid path.
+    const summaryInputs = useMemo(
+        () => (isSummary ? deriveFocusPanelSummaryCompositionInputs(activeDoc, { cards }) : null),
+        [isSummary, activeDoc, cards],
+    );
     // Operator-published explicit layout (source of truth). When present the runtime
     // renders these exact rows/widths; otherwise it falls back to auto-composition.
-    const publishedLayout = useMemo(
-        () => (isSummary ? readFocusPanelPublishedLayout(activeDoc) : null),
-        [isSummary, activeDoc],
-    );
+    const publishedLayout = isSummary ? summaryInputs?.publishedLayout ?? null : null;
 
     // ── Layout SOURCE tracer (the "correct → overwritten" diagnostic) ────────
     // Records, whenever the resolved layout changes, WHERE the runtime layout came from
@@ -255,7 +262,7 @@ export default function OpportunityFocusPanelModeGrid({
     );
 
     /** cellKey (instance) → { typeKey, config } for model + config resolution. */
-    const cellResolution = useMemo(() => {
+    const legacyCellResolution = useMemo(() => {
         const map = new Map<string, { typeKey: FocusPanelCardKey; config: FocusPanelCardConfig | null }>();
         grid.rows.forEach((row) => {
             row.cells.forEach((cell) => {
@@ -268,8 +275,9 @@ export default function OpportunityFocusPanelModeGrid({
         });
         return map;
     }, [grid, instanceMap]);
+    const cellResolution = isSummary ? summaryInputs!.cellResolution : legacyCellResolution;
 
-    const gridRows = useMemo(
+    const legacyGridRows = useMemo(
         () =>
             grid.rows
                 .map((row) => ({
@@ -284,33 +292,18 @@ export default function OpportunityFocusPanelModeGrid({
                 .filter((row) => row.cells.length > 0),
         [grid, cards],
     );
+    const gridRows = isSummary ? summaryInputs!.gridRows : legacyGridRows;
 
     // Composition Engine input — Summary is COMPOSED from card semantics (lanes /
     // stack), not laid out as equal grid cells. Reading order + visibility stay
     // config-driven (gridRows); the engine owns grouping + width. Work and other
     // modes keep the legacy responsive grid.
-    const composeCards = useMemo<CompositionCardInput[] | null>(() => {
-        if (!isSummary) return null;
-        return gridRows.flatMap((row) =>
-            row.cells.map((cell) => ({
-                key: cell.key,
-                typeKey: (cellResolution.get(cell.key)?.typeKey ?? cell.key) as FocusPanelCardKey,
-            })),
-        );
-    }, [isSummary, gridRows, cellResolution]);
+    const composeCards: CompositionCardInput[] | null = isSummary ? summaryInputs!.composeCards : null;
 
     // Composition overrides (Experience Builder): per-card weight / row / depth the
     // published Surface Definition declared, fed to the engine so the operator surface
     // composes per config. Keyed by card type; platform defaults fill the rest.
-    const compositionOverrides = useMemo(
-        () =>
-            isSummary
-                ? buildCompositionOverrides(
-                      Array.from(cellResolution.values()).map((r) => ({ typeKey: r.typeKey, config: r.config })),
-                  )
-                : undefined,
-        [isSummary, cellResolution],
-    );
+    const compositionOverrides = isSummary ? summaryInputs!.compositionOverrides : undefined;
 
     if (mode === "activity") {
         return (

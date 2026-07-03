@@ -32,11 +32,9 @@ function workUnitPreviewHref(
     pipeline: EnrollmentPipelineWorkUnitSnapshot | null,
     queueKey: string,
 ): string | null {
-    const workUnitId = pipeline?.id?.trim();
-    if (!workUnitId) return null;
+    void departmentId;
     return buildOperationalViewPreviewRuntimeHref({
-        departmentId,
-        workUnitId,
+        workUnitKey: pipeline?.key ?? null,
         queueKey,
     });
 }

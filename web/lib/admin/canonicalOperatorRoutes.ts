@@ -18,27 +18,12 @@ export function operatorWorkUnitHrefFromKey(platformKey: string, recordId?: stri
 }
 
 /**
- * Build `/workspace/work-unit/:slug?work_view=:id` — the canonical route for a configured Work View.
- * The `:slug` resolves the host work unit (the process pipeline); `?work_view=` selects which configured
- * Work View is active so the runtime evaluates that view's predicates and shows its own count.
- * (`?work_view=` is read by `readWorkUnitQueueLocationParams`.)
+ * Build `/workspace/work-unit/:viewSlug` — the canonical route for a configured Work View
+ * (path routing only; no `?work_view=` query routing). The view slug is the configured view id
+ * with underscores→dashes; the by-slug resolver maps it to its host work unit and selects the view.
  */
-export function operatorWorkViewHref(platformKey: string, workViewId: string): string {
-    const base = operatorWorkUnitHrefFromKey(platformKey);
-    const id = typeof workViewId === "string" ? workViewId.trim() : "";
-    return id ? `${base}?work_view=${encodeURIComponent(id)}` : base;
-}
-
-/** H1 compatibility — dept/uuid work-unit URL under `/admin/workspace`. */
-export function legacyAdminWorkUnitHref(args: {
-    departmentId: string;
-    workUnitId: string;
-    queueKey?: string | null;
-}): string {
-    const base = `${CANONICAL_ADMIN_WORKSPACE}/dept/${encodeURIComponent(args.departmentId)}/work-unit/${encodeURIComponent(args.workUnitId)}`;
-    const queueKey = typeof args.queueKey === "string" ? args.queueKey.trim() : "";
-    if (!queueKey) return base;
-    return `${base}?queue=${encodeURIComponent(queueKey)}`;
+export function operatorWorkUnitHrefFromWorkViewSlug(workViewId: string): string {
+    return operatorWorkUnitHrefFromKey(workViewId);
 }
 
 /**

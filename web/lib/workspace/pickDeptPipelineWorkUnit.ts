@@ -1,6 +1,7 @@
 import { tryLoadWorkUnitQueueDefinitionBundle } from "@/lib/config/queueDefinitionV2Runtime";
 import { getQueueUiConfig } from "@/lib/ui-v2/queueUiConfig";
 import { extractPipelineExecutionLanes } from "@/lib/workspace/extractPipelineExecutionLanes";
+import { isLifecycleStageWorkUnitKey } from "@/lib/lifecycle/lifecycleStageWorkUnit";
 
 export type DeptPipelineWorkUnitPick = {
     id: string;
@@ -53,4 +54,30 @@ export function pickDeptPipelineWorkUnit(
         };
     }
     return null;
+}
+
+/**
+ * Host work unit for a department's configured Work Views: the pipeline work unit when one
+ * exists, else the first lifecycle-stage work unit. Shared by the workspace nav builder
+ * (`workViewNavEntriesForDepartment`) and the work-view slug resolver so a configured Work
+ * View resolves to the same host everywhere.
+ */
+export function pickDeptWorkViewHostWorkUnit<
+    T extends {
+        id: string;
+        key?: string | null;
+        queue_definition?: unknown;
+        department_id?: string | null;
+        is_active?: boolean | null;
+    },
+>(rows: T[], departmentId: string): T | null {
+    const forDept = rows.filter(
+        (row) => String(row.department_id ?? "").trim() === departmentId && row.is_active !== false,
+    );
+    const pipeline = pickDeptPipelineWorkUnit(forDept, departmentId);
+    if (pipeline) {
+        const pipelineRow = forDept.find((row) => row.id === pipeline.id) ?? null;
+        if (pipelineRow) return pipelineRow;
+    }
+    return forDept.find((row) => isLifecycleStageWorkUnitKey(String(row.key ?? ""))) ?? null;
 }

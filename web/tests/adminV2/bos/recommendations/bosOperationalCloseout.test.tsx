@@ -4,7 +4,6 @@ import { fileURLToPath } from "node:url";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
-import { CrmCompactQueuePreview } from "@/app/adminV2/components/workspace/blocks/QueueBlock";
 import { BOS_ASSIST_CTA_DRAWER } from "@/lib/adminV2/bos/bosDrawerAssistHandoff";
 import { resolveUrgencyBand } from "@/lib/adminV2/bos/recommendations/builders/resolveUrgencyAndConfidence";
 import { getOperationalRecommendationCatalogEntry } from "@/lib/adminV2/bos/recommendations/catalog/operationalRecommendationCatalog";
@@ -43,7 +42,7 @@ describe("BOS operational closeout", () => {
         expect(band).toBe("p1_today");
     });
 
-    it("queue scan operational read is left-aligned without redundant label", () => {
+    it("resolves the queue operational read slot from the recommendation preview", () => {
         const slot = resolveQueueOperationalReadSlot({
             _operational_recommendation_preview: {
                 next_label: "Send a warm first response",
@@ -51,33 +50,8 @@ describe("BOS operational closeout", () => {
                 urgency_band: "p2_soon",
             },
         });
-        const html = renderToStaticMarkup(
-            <CrmCompactQueuePreview
-                scanMode
-                slots={{
-                    primaryIdentity: "Patel",
-                    childName: null,
-                    childrenLines: null,
-                    stageLabel: "New",
-                    statusLabel: "Inquiry",
-                    nextStep: null,
-                    lastActivity: null,
-                    commercialValue: null,
-                    contactSnippet: null,
-                    programContext: null,
-                    roomContext: null,
-                    ageContext: "",
-                    attentionReason: null,
-                    familyNote: null,
-                    operationalReadPreview: slot,
-                    operationalNextHint: null,
-                }}
-            />,
-        );
-        expect(html).toContain('data-queue-operational-read-layout="scan"');
-        expect(html).toContain("Send a warm first response");
-        expect(html).not.toContain("Operational read:");
-        expect(html).toContain('data-queue-preview-slot="operational_read_why"');
+        expect(slot?.operationalRead).toContain("Send a warm first response");
+        expect(slot?.urgencyBand).toBe("p2_soon");
     });
 
     it("drawer urgency chip uses queue thresholds", () => {

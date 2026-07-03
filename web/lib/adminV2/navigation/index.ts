@@ -23,11 +23,6 @@ export {
 export { useAdminV2NavigationTransition } from "@/lib/adminV2/navigation/useAdminV2NavigationTransition";
 
 export {
-    buildDepartmentOperationalBootstrapUrl,
-    prefetchDepartmentOperationalBootstrap,
-} from "@/lib/adminV2/navigation/prefetchDepartmentOperationalBootstrap";
-
-export {
     buildWorkUnitOperationalBootstrapUrl,
     parseWorkUnitNavFromDeptOperHref,
     prefetchWorkUnitOperationalBootstrap,
@@ -45,10 +40,3 @@ export {
     subscribeDeptOperNavClickAck,
 } from "@/lib/adminV2/navigation/deptOperNavClickAck";
 
-export {
-    buildWorkspaceNavDeptChildren,
-    isWorkspaceNavChildActive,
-    workspaceDeptQueueNavHref,
-    workspaceNavChildHref,
-    type WorkspaceNavTreeChild,
-} from "@/lib/adminV2/navigation/buildWorkspaceNavDeptChildren";

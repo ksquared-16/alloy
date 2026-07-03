@@ -14,7 +14,6 @@ import { setLifecycleDebugSelection } from "@/lib/lifecycle/lifecycleDebugSelect
 import {
     hasRuntimeDepartmentId,
     identityHasSyncDrift,
-    workspaceDeptHref,
     type LifecycleRuntimeIdentity,
 } from "@/lib/lifecycle/lifecycleRuntimeIdentity";
 import { evaluateWorkspaceBrowserTileTruth } from "@/lib/workspace/workspaceBrowserTileTruth";
@@ -111,11 +110,7 @@ export default function LifecycleActivationValidation({
                 error?: string;
             };
             if (!res.ok) throw new Error(j.error ?? "Ready check failed");
-            const serverChecks = (j.checks ?? []).map((c) =>
-                c.href?.includes("/workspace/dept/") && runtimeDepartmentId
-                    ? { ...c, href: workspaceDeptHref(runtimeDepartmentId) }
-                    : c
-            );
+            const serverChecks = j.checks ?? [];
             const browserTruth = await evaluateWorkspaceBrowserTileTruth(
                 orgId,
                 userId || null,

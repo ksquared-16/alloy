@@ -98,3 +98,36 @@ export async function fetchWorkUnitsForSlugResolution(params: {
     if (allErr) throw allErr;
     return { rows: dedupeRows(mapRows(allData)), strategy: "org_scan" };
 }
+
+export type SlugResolutionDepartmentRow = {
+    id: string;
+    key: string | null;
+    name: string | null;
+    /** `departments.metadata` — carries `work_views_v1` for `work_view` slug resolution. */
+    metadata: unknown;
+};
+
+/**
+ * Department hints for slug resolution — identity + metadata (configured Work Views) for the
+ * candidate work units' departments ONLY (kept lean: never an org-wide department scan).
+ */
+export async function fetchDepartmentsForSlugResolution(params: {
+    supabase: SupabaseClient;
+    orgId: string;
+    departmentIds: readonly string[];
+}): Promise<SlugResolutionDepartmentRow[]> {
+    const ids = [...new Set(params.departmentIds.filter(Boolean))];
+    if (!ids.length) return [];
+    const { data, error } = await params.supabase
+        .from("departments")
+        .select("id, key, name, metadata")
+        .eq("org_id", params.orgId)
+        .in("id", ids);
+    if (error) throw error;
+    return (data ?? []).map((d) => ({
+        id: d.id as string,
+        key: (d.key as string | null) ?? null,
+        name: (d.name as string | null) ?? null,
+        metadata: (d as { metadata?: unknown }).metadata ?? null,
+    }));
+}

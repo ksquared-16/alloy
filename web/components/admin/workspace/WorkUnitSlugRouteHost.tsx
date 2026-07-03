@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
-import AdminV2OpportunityWorkUnitPage from "@/app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page";
+import { PresentationRuntime } from "@/components/presentation/PresentationRuntime";
 import { WorkUnitWorkspaceColdShell } from "@/components/admin/workspace/WorkUnitWorkspaceColdShell";
 import { WorkUnitSlugRouteProvider, type WorkUnitSlugRouteValue } from "@/contexts/WorkUnitSlugRouteContext";
 import {
@@ -11,10 +11,7 @@ import {
 } from "@/lib/admin/canonicalOperatorRoutes";
 import { syncOperatorWorkUnitUrlInBrowser } from "@/lib/admin/operatorWorkUnitDrawerUrlSync";
 import { isLeavingWorkUnitSurface } from "@/lib/admin/workUnitOutboundHold";
-import {
-    humanizeWorkUnitRouteSlug,
-    warmWorkUnitSlugRoute,
-} from "@/lib/admin/operatorWorkUnitEntryWarm";
+import { warmWorkUnitSlugRoute } from "@/lib/admin/operatorWorkUnitEntryWarm";
 import {
     peekWorkUnitSlugRouteCache,
     putWorkUnitSlugRouteCache,
@@ -131,9 +128,11 @@ export default function WorkUnitSlugRouteHost({
             return null;
         }
         const cached = peekWorkUnitSlugRouteCache(workUnitSlug);
+        // Configured names only — never a label fabricated from the URL slug. Uncached →
+        // neutral empty title (a config-owned surface must not invent operator-facing labels).
         return (
             <WorkUnitWorkspaceColdShell
-                workUnitTitle={cached?.workUnitName ?? humanizeWorkUnitRouteSlug(workUnitSlug)}
+                workUnitTitle={cached?.departmentName ?? cached?.workUnitName ?? ""}
                 departmentId={cached?.departmentId}
                 reserveActionsRail
             />
@@ -155,7 +154,7 @@ export default function WorkUnitSlugRouteHost({
 
     return (
         <WorkUnitSlugRouteProvider value={providerValue}>
-            <AdminV2OpportunityWorkUnitPage />
+            <PresentationRuntime surface="work-unit" />
         </WorkUnitSlugRouteProvider>
     );
 }

@@ -14,13 +14,21 @@ import {
     operatorWorkUnitKeyForPipelineQueueKey,
 } from "@/lib/lifecycle/enrollmentProcessStageQueueKeys";
 import { isLifecycleStageWorkUnitKey } from "@/lib/lifecycle/lifecycleStageWorkUnit";
-import { operatorWorkUnitHrefFromKey, operatorWorkViewHref } from "@/lib/admin/canonicalOperatorRoutes";
+import {
+    operatorWorkUnitHrefFromKey,
+    operatorWorkUnitHrefFromWorkViewSlug,
+} from "@/lib/admin/canonicalOperatorRoutes";
+import { workViewRouteKeyFromLabel } from "@/lib/admin/workUnitRouteSlug";
 import { savedWorkViewsFromDepartmentMetadata } from "@/lib/lifecycle/resolveWorkViewRuntimeContext";
 import {
     extractDrawerLifecycleExecutionLanes,
     extractPipelineExecutionLanes,
 } from "@/lib/workspace/extractPipelineExecutionLanes";
-import { pickDeptPipelineWorkUnit } from "@/lib/workspace/pickDeptPipelineWorkUnit";
+import {
+    pickDeptPipelineWorkUnit,
+    pickDeptWorkViewHostWorkUnit,
+} from "@/lib/workspace/pickDeptPipelineWorkUnit";
+import { resolveWorkViewCanonicalLocation } from "@/lib/workspace/resolveWorkViewCanonicalLocation";
 import { tryLoadWorkUnitQueueDefinitionBundle } from "@/lib/config/queueDefinitionV2Runtime";
 import {
     operatorOperationalPerspectivesEnabled,
@@ -46,6 +54,25 @@ export type OperatorLifecycleWorkQueuePreview = {
     label: string;
     platformKey: string;
     href: string;
+    /**
+     * Configured Work View identity + canonical count/rows location — present on work-view
+     * entries only (`resolveWorkViewCanonicalLocation`). The Workspace tile resolves its
+     * per-view counts from (host_work_unit_id, base_queue_key, work_view_id) — the SAME
+     * source the Work Unit pill counts and rendered rows read, so the numbers agree.
+     */
+    work_view_id?: string | null;
+    host_work_unit_id?: string | null;
+    base_queue_key?: string | null;
+    /** Label-derived route key (platform `_` form) — `href`'s slug; the active-state match key. */
+    route_key?: string | null;
+    /**
+     * Secondary, decision-supporting operational signals for this view — records needing
+     * attention / overdue, from the operational projection's already-fetched base rows
+     * (`computeWorkViewOperationalSignals`). Undefined until the client rollup pass resolves
+     * them (or when base rows are unavailable); null-safe consumers show no indicator then.
+     */
+    attention_count?: number | null;
+    overdue_count?: number | null;
 };
 
 export type OperatorLifecycleLandingCard = {
@@ -159,26 +186,21 @@ function workViewNavEntriesForDepartment(args: {
     departmentMetadata: unknown;
     workUnits: OperatorLifecycleWorkUnitRow[];
 }): OperatorLifecycleWorkQueuePreview[] {
-    const forDept = args.workUnits.filter(
-        (wu) => wu.department_id === args.departmentId && wu.is_active !== false,
-    );
-    const pipelineWu = pickDeptPipelineWorkUnit(forDept, args.departmentId);
-    const stageWu = forDept.find((wu) => isLifecycleStageWorkUnitKey(wu.key)) ?? null;
-    const targetWu = pipelineWu ?? stageWu;
+    // Shared host precedence (pipeline WU, else lifecycle-stage WU) — same helper the
+    // work-view slug resolver uses, so nav hrefs and slug resolution agree on the host.
+    const targetWu = pickDeptWorkViewHostWorkUnit(args.workUnits, args.departmentId);
     if (!targetWu) return [];
     const platformKey = (targetWu.key ?? "").trim();
     if (!platformKey) return [];
 
     // Materialization (Work View runtime materialization): every configured, visible Work View becomes
-    // its own nav item — ordering + visibility come straight from the saved config. This no longer
-    // collapses to the one view that happened to bind a pipeline queue lane.
-    //   - A view that binds a pipeline queue lane (`compat_queue_key`) keeps its canonical lane-slug
-    //     route (`/workspace/work-unit/:laneSlug`) — preserves existing routing + the legacy default.
-    //   - A view without a bound lane routes to the host work unit with `?work_view=<id>`, so it still
-    //     materializes as its own operational view (the runtime selects it, evaluates its predicates,
-    //     and shows its own count) instead of being dropped.
+    // its own nav item — ordering + visibility + label come straight from the saved config, and EVERY
+    // view routes to its own work-view slug (`/workspace/work-unit/:viewSlug`, path routing only —
+    // no lane-slug branch, no `?work_view=` query routing). The by-slug resolver maps the view slug
+    // back to its host work unit and selects the configured view. A view without a configured label
+    // is a config bug — it is omitted rather than surfaced as a raw internal id.
     const savedWorkViews = savedWorkViewsFromDepartmentMetadata(args.departmentMetadata).filter(
-        (view) => view.visible_in_runtime !== false,
+        (view) => view.visible_in_runtime !== false && !!view.label?.trim(),
     );
     if (savedWorkViews.length) {
         return [...savedWorkViews]
@@ -187,21 +209,29 @@ function workViewNavEntriesForDepartment(args: {
                     (a.display_order ?? Number.MAX_SAFE_INTEGER) - (b.display_order ?? Number.MAX_SAFE_INTEGER)
                     || a.label.localeCompare(b.label),
             )
-            .map((view) => {
-                const compat = view.compat_queue_key?.trim();
-                if (compat) {
-                    const laneKey = operatorWorkUnitKeyForPipelineQueueKey(compat) ?? compat;
-                    return {
-                        label: view.label?.trim() || view.id,
-                        platformKey: laneKey,
-                        href: operatorWorkUnitHrefFromKey(laneKey),
-                    };
-                }
-                return {
-                    label: view.label?.trim() || view.id,
-                    platformKey: view.id,
-                    href: operatorWorkViewHref(platformKey, view.id),
-                };
+            .flatMap((view) => {
+                // Slug from the configured LABEL, never the internal id (ids survive renames —
+                // "Active Pipeline" can carry id `new_work_view_2`; see workViewRouteKeyFromLabel).
+                const routeKey = workViewRouteKeyFromLabel(view.label);
+                if (!routeKey) return [];
+                // Canonical location: host unit + base lane the view's count/rows are defined
+                // on — the same host the slug in `href` resolves to (shared precedence).
+                const canonical = resolveWorkViewCanonicalLocation(
+                    view,
+                    args.workUnits,
+                    args.departmentId,
+                );
+                return [
+                    {
+                        label: view.label.trim(),
+                        platformKey: view.id,
+                        href: operatorWorkUnitHrefFromWorkViewSlug(routeKey),
+                        work_view_id: view.id,
+                        host_work_unit_id: canonical?.workUnitId ?? null,
+                        base_queue_key: canonical?.baseQueueKey ?? null,
+                        route_key: routeKey,
+                    },
+                ];
             });
     }
 
@@ -222,12 +252,14 @@ function workViewNavEntriesForDepartment(args: {
                 (a.display_order ?? Number.MAX_SAFE_INTEGER) - (b.display_order ?? Number.MAX_SAFE_INTEGER)
                 || a.queue_key.localeCompare(b.queue_key),
         )
+        // Configured labels only — a lane without a label never surfaces its raw queue key.
+        .filter((row) => !!row.label?.trim())
         .map((row) => {
             // Phase 2 route canonicalization: each work-view lane resolves to its own operator
             // work-unit slug (`/workspace/work-unit/:slug`), matching the builder/pipeline nav path.
             const laneKey = operatorWorkUnitKeyForPipelineQueueKey(row.queue_key) ?? platformKey;
             return {
-                label: row.label?.trim() || row.queue_key,
+                label: row.label?.trim() ?? "",
                 platformKey: laneKey,
                 href: operatorWorkUnitHrefFromKey(laneKey),
             };
@@ -268,10 +300,12 @@ export function resolveOperatorLifecycleWorkQueueNavEntriesForDepartment(args: {
         .filter(
             (wu) =>
                 (wu.key ?? "").trim().toLowerCase() !== "needs_attention" &&
-                !isLifecycleStageWorkUnitKey(wu.key),
+                !isLifecycleStageWorkUnitKey(wu.key) &&
+                // Configured names only — never surface a raw work-unit key as an operator label.
+                !!wu.name?.trim(),
         )
         .map((wu) => ({
-            label: wu.name?.trim() || wu.key,
+            label: wu.name.trim(),
             platformKey: wu.key,
             href: operatorWorkUnitHrefFromKey(wu.key),
         }));

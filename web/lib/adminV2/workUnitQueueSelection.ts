@@ -10,8 +10,6 @@ import {
 } from "@/lib/config/queueDefinitionV2Runtime";
 import { getQueueUiConfig } from "@/lib/ui-v2/queueUiConfig";
 import { findAllRecordsQueueKey } from "@/lib/workspace/workUnitQueueDerived";
-import { appendWorkspaceSiteToPath } from "@/lib/adminV2/workspaceSiteFilterClient";
-import { workspaceDeptQueueNavHref } from "@/lib/adminV2/navigation/buildWorkspaceNavDeptChildren";
 import {
     parseLifecyclePlatformNavChipKey,
     parseLifecycleWorkUnitNavChipKey,
@@ -161,29 +159,6 @@ export function workUnitQueueSelectionToSearchParams(
     return qs;
 }
 
-export function buildWorkUnitQueueSelectionHref(
-    workspaceBase: string,
-    departmentId: string,
-    selection: WorkUnitQueueSelection,
-    selectedSiteId?: string | null
-): string {
-    const basePath = workspaceBase.replace(/\/$/, "");
-    let href = workspaceDeptQueueNavHref(
-        basePath,
-        departmentId,
-        selection.workUnitId,
-        selection.queueKey
-    );
-    const bucket = selection.attentionBucketKey?.trim();
-    const status = selection.statusKey?.trim();
-    if (bucket || status) {
-        const u = new URL(href, "https://alloy.local");
-        if (bucket) u.searchParams.set("attention_bucket", bucket);
-        if (status) u.searchParams.set("status_keys", status);
-        href = `${u.pathname}${u.search}`;
-    }
-    return appendWorkspaceSiteToPath(href, selectedSiteId ?? null);
-}
 
 /** API queue route key (never synthetic pill keys). Resolves v2 aliases to canonical lane keys. */
 export function workUnitQueueSelectionFetchQueueKey(

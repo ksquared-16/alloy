@@ -2798,6 +2798,23 @@ html[data-adminv2-workspace-shell="v2"] [data-adminv2-bos-rail-overlay="true"] [
 }
 
 /*
+ * Canonical Work View count badge — a FIXED-WIDTH slot right-aligned in the queue row so the
+ * number (or its pending placeholder) never shifts the label when it resolves. Muted, tabular.
+ */
+.adminv2-sidebar-queue-count {
+  min-width: 2rem;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.35;
+  color: rgba(255, 255, 255, 0.4);
+  font-variant-numeric: tabular-nums;
+}
+
+.adminv2-sidebar-queue-link.adminv2-nav-link--active .adminv2-sidebar-queue-count {
+  color: rgba(255, 255, 255, 0.7);
+}
+
+/*
  * Dense admin cards (e.g. Settings index) — shared role sizes aligned with workspace record-card doctrine.
  * See docs/architecture/workspace-work-unit-scope-doctrine.md § Cross-surface typography roles.
  */

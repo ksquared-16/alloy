@@ -98,12 +98,11 @@ describe("Configuration Runtime end-to-end vertical slice", () => {
 
     it("preview runtime URL uses work_view without requiring queue param", () => {
         const href = buildOperationalViewPreviewRuntimeHref({
-            departmentId: "dept-1",
-            workUnitId: "wu-1",
+            workUnitKey: "enrollment_pipeline",
             workViewId: "hot_leads",
         });
         expect(href).toContain("work_view=hot_leads");
-        expect(href).toContain("/workspace/dept/dept-1/work-unit/wu-1");
+        expect(href).toContain("/workspace/work-unit/enrollment-pipeline");
     });
 
     it("Lead Summary blueprint editor is linked from layouts gallery", () => {

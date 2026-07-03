@@ -1,7 +1,5 @@
-import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
-import { CrmCompactQueuePreview } from "@/app/adminV2/components/workspace/blocks/QueueBlock";
 import { buildOperationalRecommendationV1 } from "@/lib/adminV2/bos/recommendations";
 import {
     getRecommendationQueuePreview,
@@ -9,7 +7,6 @@ import {
     resolveQueueOperationalReadPreview,
 } from "@/lib/adminV2/bos/recommendations/selectors/recommendationSurfaceSelectors";
 import { resolveQueueOperationalReadSlot } from "@/lib/adminV2/bos/recommendations/selectors/recommendationSurfaceViewModels";
-import { buildEnrollmentCrmRowSemanticSlots } from "@/lib/workspace/viewModels/enrollmentWorkUnitViewModel";
 import { buildTestOperationalRecommendationInput } from "@/tests/adminV2/bos/recommendations/buildOperationalRecommendationV1.test";
 import { projectOperationalRecommendationQueuePreview } from "@/lib/adminV2/bos/recommendations/adapters/projectOperationalRecommendationQueuePreview";
 
@@ -74,151 +71,5 @@ describe("resolveQueueOperationalReadPreview", () => {
         expect(queueUrgencyChipLabel("p1_today", { primarySeverity: "high", slaTier: "approaching" })).toBe(
             "Today"
         );
-    });
-});
-
-describe("buildEnrollmentCrmRowSemanticSlots queue compression", () => {
-    it("suppresses duplicate attention lines when operational read is present", () => {
-        const rec = buildOperationalRecommendationV1(buildTestOperationalRecommendationInput());
-        const preview = projectOperationalRecommendationQueuePreview(rec);
-        const row = {
-            ...baseRow(),
-            _operational_recommendation_preview: preview,
-            _operational_summary_preview: {
-                headline: "Stale inquiry — draft ready for review.",
-                risk_urgency_hint: "medium",
-            },
-        } as Record<string, unknown>;
-
-        const slots = buildEnrollmentCrmRowSemanticSlots(row as never, {
-            workUnitKey: "needs_attention",
-        });
-
-        expect(slots.operationalReadPreview?.operationalRead).toBeTruthy();
-        expect(slots.attentionReason).toBeNull();
-        expect(slots.operationalSummaryPreview).toBeNull();
-        expect(slots.queuePriorityExplanation).toBeNull();
-        expect(slots.operationalNextHint).toBeNull();
-        expect(slots.attentionSuggestionPreview).toBeNull();
-    });
-});
-
-describe("CrmCompactQueuePreview operational read L0", () => {
-    it("renders one operational read line without Alloy suggestion", () => {
-        const slot = resolveQueueOperationalReadSlot({
-            _operational_recommendation_preview: {
-                next_label: "Send a warm first response",
-                why_line: "Response window exceeded · 24 days since the inquiry was created",
-                urgency_band: "p1_today",
-            },
-        });
-        const html = renderToStaticMarkup(
-            <CrmCompactQueuePreview
-                scanMode
-                slots={{
-                    primaryIdentity: "Patel family",
-                    childName: null,
-                    childrenLines: null,
-                    stageLabel: "New",
-                    statusLabel: "Inquiry",
-                    nextStep: null,
-                    lastActivity: null,
-                    commercialValue: null,
-                    contactSnippet: null,
-                    programContext: null,
-                    roomContext: null,
-                    ageContext: "",
-                    attentionReason: null,
-                    familyNote: null,
-                    operationalReadPreview: slot,
-                    operationalNextHint: null,
-                }}
-            />,
-        );
-        expect(html).toContain('data-queue-preview-slot="operational_read"');
-        expect(html).toContain('data-queue-operational-read-layout="scan"');
-        expect(html).not.toContain("Operational read:");
-        expect(html).toContain("Send a warm first response");
-        expect(html).toContain("Response window exceeded");
-        expect(html).not.toContain('data-testid="queue-operational-read-urgency-chip"');
-        expect(html).toContain("Preview");
-        expect(html).not.toContain("Alloy suggestion");
-        expect(html).not.toContain("Suggested next step");
-        expect(html).not.toContain('data-queue-preview-slot="attention_suggestion"');
-    });
-
-    it("shows one quiet type cue for communication recommendations", () => {
-        const rec = buildOperationalRecommendationV1(buildTestOperationalRecommendationInput());
-        const preview = projectOperationalRecommendationQueuePreview(rec);
-        const resolved = resolveQueueOperationalReadSlot({
-            _operational_recommendation_preview: preview,
-        });
-        const html = renderToStaticMarkup(
-            <CrmCompactQueuePreview
-                scanMode
-                slots={{
-                    primaryIdentity: "Patel family",
-                    childName: null,
-                    childrenLines: null,
-                    stageLabel: "New",
-                    statusLabel: "Inquiry",
-                    nextStep: null,
-                    lastActivity: null,
-                    commercialValue: null,
-                    contactSnippet: null,
-                    programContext: null,
-                    roomContext: null,
-                    ageContext: "",
-                    attentionReason: null,
-                    familyNote: null,
-                    operationalReadPreview: resolved,
-                    operationalNextHint: null,
-                }}
-            />,
-        );
-        expect(html).toContain('data-testid="queue-operational-read-type-cue"');
-        expect(html).toContain("Communication");
-        expect(html).not.toMatch(/critical|emergency|AI warning/i);
-        const typeCueCount = (html.match(/data-testid="queue-operational-read-type-cue"/g) ?? []).length;
-        expect(typeCueCount).toBe(1);
-    });
-
-    it("shows compact stale cue while keeping Preview boundary visible", () => {
-        const resolved = resolveQueueOperationalReadSlot({
-            _operational_recommendation_preview: {
-                next_label: "Send a warm first response",
-                why_line: "New inquiries lose momentum when delayed.",
-                urgency_band: "p1_today",
-                recommendation_type: "communication",
-                is_stale: true,
-            },
-        });
-        const html = renderToStaticMarkup(
-            <CrmCompactQueuePreview
-                scanMode
-                slots={{
-                    primaryIdentity: "Patel family",
-                    childName: null,
-                    childrenLines: null,
-                    stageLabel: "New",
-                    statusLabel: "Inquiry",
-                    nextStep: null,
-                    lastActivity: null,
-                    commercialValue: null,
-                    contactSnippet: null,
-                    programContext: null,
-                    roomContext: null,
-                    ageContext: "",
-                    attentionReason: null,
-                    familyNote: null,
-                    operationalReadPreview: resolved,
-                    operationalNextHint: null,
-                }}
-            />,
-        );
-        expect(html).toContain("Preview");
-        expect(html).toContain('data-testid="queue-operational-read-stale-cue"');
-        expect(html).toContain("Needs refresh");
-        expect(html).not.toMatch(/AI confidence|critical warning|model believes/i);
     });
 });

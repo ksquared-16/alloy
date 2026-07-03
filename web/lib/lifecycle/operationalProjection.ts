@@ -24,6 +24,7 @@ import {
     type WorkViewConfigV1Stored,
     type WorkViewFilterMatchV1,
 } from "@/lib/lifecycle/workViewsConfigV1";
+import type { QueueRowContext } from "@/lib/workUnits/lifecycleSubjectContracts";
 
 export type OperationalProjectionRow = Record<string, unknown>;
 
@@ -123,6 +124,49 @@ export function computeOperationalProjection(params: {
     const byViewId: Record<string, OperationalProjectionView> = {};
     for (const v of views) byViewId[v.id] = v;
     return { total, views, byViewId };
+}
+
+/**
+ * Per-Work-View operational signals — attention/overdue records inside each view. Secondary,
+ * decision-supporting context for the process tile ("where should I work?"), NOT the count.
+ *
+ * Derived from the SAME base rows + view predicates as the projection counts, reading only the
+ * GENERIC `_queue_row_context` operational fields (`attention_summary.needs_attention`,
+ * `current_work_summary.due_label === "Overdue"`) that the queue attaches to every opportunity
+ * row — no process-specific logic, no extra fetch. Rows without a context contribute nothing,
+ * so a view yields zero signals rather than a fabricated one.
+ */
+export type WorkViewOperationalSignals = {
+    attentionCount: number;
+    overdueCount: number;
+};
+
+const OVERDUE_DUE_LABEL = "Overdue";
+
+export function computeWorkViewOperationalSignals(params: {
+    baseRows: ReadonlyArray<OperationalProjectionRow>;
+    workViews: ReadonlyArray<WorkViewConfigV1Stored>;
+    statusStageMap?: StatusStageMap | null;
+}): Record<string, WorkViewOperationalSignals> {
+    const projection = computeOperationalProjection({
+        baseRows: params.baseRows,
+        workViews: params.workViews,
+        includeRows: true,
+        statusStageMap: params.statusStageMap,
+    });
+    const out: Record<string, WorkViewOperationalSignals> = {};
+    for (const view of projection.views) {
+        let attentionCount = 0;
+        let overdueCount = 0;
+        for (const row of view.rows) {
+            const ctx = (row as { _queue_row_context?: QueueRowContext })._queue_row_context;
+            if (!ctx) continue;
+            if (ctx.attention_summary?.needs_attention === true) attentionCount += 1;
+            if (ctx.current_work_summary?.due_label === OVERDUE_DUE_LABEL) overdueCount += 1;
+        }
+        out[view.id] = { attentionCount, overdueCount };
+    }
+    return out;
 }
 
 /**

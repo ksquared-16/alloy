@@ -6,14 +6,12 @@ import { resolveWorkViewStageGrains, validateWorkViewGrainConsistency } from "@/
 import type { StageGrain } from "@/lib/lifecycle/stageGrainV1";
 
 export default function BusinessProcessWorkViewsSetupWorkspace({
-    departmentId,
-    workUnitId,
+    workUnitKey,
     stageGrains = [],
     stageGrainByKey,
     queueLanes = [],
 }: {
-    departmentId: string;
-    workUnitId: string | null;
+    workUnitKey: string | null;
     stageGrains?: (StageGrain | undefined)[];
     /** stage key → grain. When provided, mixed-grain is evaluated per-view (its filtered stages), not process-wide. */
     stageGrainByKey?: Record<string, StageGrain | undefined>;
@@ -86,8 +84,7 @@ export default function BusinessProcessWorkViewsSetupWorkspace({
                 <WorkViewProcessEditorCard
                     view={selected}
                     selected
-                    departmentId={departmentId}
-                    workUnitId={workUnitId}
+                    workUnitKey={workUnitKey}
                     layouts={layouts}
                     stageGrains={stageGrains}
                     stageGrainByKey={stageGrainByKey}
