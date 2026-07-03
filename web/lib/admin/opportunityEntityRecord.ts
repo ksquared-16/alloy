@@ -28,6 +28,7 @@ import {
 } from "@/lib/admin/drawer/inquiryChildrenHydration";
 import { attachOpportunityChildLifecycleSummary } from "@/lib/opportunities/buildOpportunityChildLifecycleSummary";
 import { listEnrollmentInstancesForLead } from "@/lib/process/processInstances";
+import { resolveDurableFactsForChildren } from "@/lib/childcareOperational/inquiryChildrenDurableFactsOverlay";
 import {
   attachChildScopedContactLinksToRecord,
   memberRowsFromInquiryChildren,
@@ -317,6 +318,8 @@ type InquiryHydrateChild = {
   stage_key?: string | null;
   /** Provenance of the participation state/stage: "process_instances" (authoritative) or "ocm" (bridge). */
   _participation_source?: "process_instances" | "ocm";
+  /** Provenance of the operational facts (program/room/schedule/start): "durable" or "ocm" (fallback). */
+  _operational_facts_source?: "durable" | "ocm";
   custom_fields: Record<string, unknown>;
   metadata: Record<string, unknown> | null;
   created_at: string | null;
@@ -492,6 +495,41 @@ export async function overlayProcessInstanceParticipation(
       outcome_status_label: stateLabel,
       stage_key: stageKey,
       _participation_source: "process_instances" as const,
+    };
+  });
+}
+
+/**
+ * Overlay DURABLE operational facts (program / room / schedule / start date) onto the child blocks from
+ * the operational enrollment read model (child_enrollment_agreements + child_placements +
+ * schedule_assignments) once enrollment has been materialized. Durable facts win; OCM fills only the gaps
+ * and remains the fallback for children with no operational agreement yet. Matched by customer_member_id.
+ */
+export async function overlayDurableOperationalFacts(
+  supabase: AdminSupabase,
+  orgId: string,
+  children: InquiryHydrateChild[],
+): Promise<InquiryHydrateChild[]> {
+  if (!children.length) return children;
+  const facts = await resolveDurableFactsForChildren(
+    supabase as never,
+    orgId,
+    children.map((c) => ({ customerMemberId: c.customer_member_id, siteLocationId: c.location_id ?? null })),
+  );
+  if (!facts.size) return children.map((c) => ({ ...c, _operational_facts_source: "ocm" as const }));
+  return children.map((c) => {
+    const f = c.customer_member_id ? facts.get(c.customer_member_id) : undefined;
+    if (!f) return { ...c, _operational_facts_source: "ocm" as const };
+    return {
+      ...c,
+      // Durable operational facts are the source once materialized; OCM values fill gaps only.
+      desired_program_label: f.programLabel ?? c.desired_program_label,
+      program_room_cohort_label: f.roomLabel ?? c.program_room_cohort_label,
+      desired_schedule_label: f.scheduleLabel ?? c.desired_schedule_label,
+      start_date: normalizeIsoDateOnly(f.startDate) ?? c.start_date,
+      program_category_id: f.programCategoryId ?? c.program_category_id,
+      location_id: f.siteLocationId ?? c.location_id,
+      _operational_facts_source: "durable" as const,
     };
   });
 }
@@ -734,6 +772,9 @@ export async function attachOpportunityInquiryChildrenShell(
     inquiryChildrenOut,
     ocmStatusLabelByKey,
   );
+  // Source of truth for operational facts (program/room/schedule/start) is the durable model once
+  // materialized (agreement/placement/schedule); OCM is the fallback.
+  inquiryChildrenOut = await overlayDurableOperationalFacts(supabase, orgId, inquiryChildrenOut);
 
   host._inquiry_children = inquiryChildrenOut;
   host._member_person_graph_pending = memList.some((m) => trimOrNull(m.person_id) != null);
@@ -1114,6 +1155,9 @@ async function respondOpportunityRelationshipMemberOverlay(
     inquiryBlocks,
     ocmStatusLabelByKey,
   );
+  // Source of truth for operational facts (program/room/schedule/start) is the durable model once
+  // materialized (agreement/placement/schedule); OCM is the fallback.
+  inquiryBlocks = await overlayDurableOperationalFacts(supabase, orgId, inquiryBlocks);
 
   const overlayRecord: Record<string, unknown> = {
     id: opportunityId,
