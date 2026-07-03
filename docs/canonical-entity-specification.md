@@ -130,9 +130,9 @@ status mutation actions.
 | Entity | Intended ownership | Status |
 |--------|-------------------|--------|
 | **programs** | Location-scoped program categories, room cohorts | Partial via `location_program_categories` |
-| **rooms** | Physical/virtual cohort assignment | Partial via `program_room_cohort_key` on OCM |
-| **schedules** | Requested vs enrolled schedule | OCM `schedule_type` (canonical field; stage determines interpretation); enrolled via `schedule_assignments` |
-| **attendance** | Daily presence records | Not canonical in CRM layer |
+| **rooms** | Physical/virtual cohort assignment | `child_placements.room_location_id` (durable); pre-materialization draft on `process_instances.metadata` |
+| **schedules** | Requested vs enrolled schedule | Draft on `process_instances.metadata.schedule_type`; enrolled (durable) via `schedule_assignments`. OCM `schedule_type` is legacy-only — see [enrollment-process-runtime](platform/runtime/enrollment-process-runtime.md) |
+| **attendance** | Daily presence records | `child_attendance_events` (consumes the enrollment agreement) |
 | **billing** | Invoices, payment methods | `customers` stripe refs; full billing TBD |
 | **tuition** | Rate plans, enrollment billing | Not implemented |
 | **staff / employees** | `persons` + employment relationship | Person grain; employment tables TBD |

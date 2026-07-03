@@ -13,9 +13,10 @@ domains it invokes). Operator surfaces expose domain verbs, never a generic stat
 
 | Action / path | Target entity | Column | Allowed | Forbidden |
 |---------------|---------------|--------|---------|-----------|
-| Stage outcome rule targets | opportunity + OCM | `status_key`, `outcome_status_key`, `close_reason_key`, `stage_key` | Yes (canonical path) | Bypassing outcome execution |
-| Domain actions (`waitlist_child`, `enroll_child`, `close_lead`, …) | opportunity / OCM | via typed domain → outcome | Yes | Generic `update_status` |
-| Enrollment intake / Create Lead | opportunity + OCM | `status_key=open`, `stage_key=lead` | Yes | Ad-hoc text status |
+| Stage outcome rule targets (family) | opportunity | `status_key`, `close_reason_key`, `stage_key` | Yes (canonical path) | Bypassing outcome execution |
+| Stage outcome rule targets (child) | `process_instances` | `state`, `stage_key`, `close_reason_key` | Yes (canonical path) | Writing `OCM.outcome_status_key` (removed) |
+| Domain actions (`waitlist_child`, `enroll_child`, `close_lead`, …) | opportunity / `process_instances` | via typed domain → outcome | Yes | Generic `update_status` |
+| Enrollment intake / Create Lead | opportunity + `process_instances` (one per child) | `status_key=open`, `stage_key=lead`; child participation on `process_instances.metadata` | Yes | Ad-hoc text status; OCM write (removed) |
 | Workflow effects | per effect config | typed domain | Yes | Parallel status copies |
 | Any PATCH | any CRM entity | `status_key` / `outcome_status_key` / `stage_key` | **No** | Direct status PATCH removed |
 | Any PATCH | any CRM entity | `status` (text) | **No** | Blocked Phase 1 |
