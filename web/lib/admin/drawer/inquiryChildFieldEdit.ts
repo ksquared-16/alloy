@@ -195,6 +195,31 @@ export async function patchOpportunityCustomerMemberFromInquiryChild(
     if (!res.ok) throw new Error(json.error ?? "Save failed");
 }
 
+/**
+ * Participation-detail edit routed by lifecycle (process instance pre-materialization, durable model
+ * post-materialization). Keyed by the child subject — never creates or writes OCM. Preferred over
+ * patchOpportunityCustomerMemberFromInquiryChild for participation facts.
+ */
+export async function patchChildParticipation(args: {
+    customerMemberId: string;
+    opportunityId?: string | null;
+    patch: InquiryChildOcmPatch;
+    fetchFn?: typeof fetch;
+}): Promise<void> {
+    const res = await (args.fetchFn ?? fetch)("/api/admin/child-participation", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+            customer_member_id: args.customerMemberId,
+            opportunity_id: args.opportunityId ?? null,
+            patch: args.patch,
+        }),
+    });
+    const json = (await res.json().catch(() => ({}))) as { error?: string };
+    if (!res.ok) throw new Error(json.error ?? "Save failed");
+}
+
 export function resolveInquiryChildOcmId(row: {
     id: string;
     customer_member_id?: string;

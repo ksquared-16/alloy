@@ -17,6 +17,7 @@ vi.mock("@/lib/opportunities/emitChildLifecycleStatusChangedEvent", () => ({
 vi.mock("@/lib/orchestration/placement/placementCandidateLifecycleHook", () => ({
     isPlacementLifecycleCandidateHookEnabled: () => false,
     ensurePlacementCandidateForWaitlistedChild: vi.fn(async () => ({ attempted: false, created: false })),
+    ensurePlacementCandidateForWaitlistedChildBySubject: vi.fn(async () => ({ attempted: false, created: false })),
 }));
 
 import { applyStageOutcomeRuleTarget } from "@/lib/lifecycle/stageOutcomeRuleTargetExecutor";

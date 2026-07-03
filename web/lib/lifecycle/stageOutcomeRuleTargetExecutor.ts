@@ -17,7 +17,7 @@ import {
     readEnrollmentInstanceState,
     type EnrollmentProcessState,
 } from "@/lib/process/processInstances";
-import { ensurePlacementCandidateForWaitlistedChild } from "@/lib/orchestration/placement/placementCandidateLifecycleHook";
+import { ensurePlacementCandidateForWaitlistedChildBySubject } from "@/lib/orchestration/placement/placementCandidateLifecycleHook";
 import { emitChildLifecycleStatusChangedEvent } from "@/lib/opportunities/emitChildLifecycleStatusChangedEvent";
 // BOUNDARY (platform↔childcare): the generic outcome runtime touches the childcare domain only here,
 // inside the enrolled disposition, gated by the childcare feature flag. Target decoupling is a childcare
@@ -150,12 +150,12 @@ export async function applyStageOutcomeRuleTarget(
                     console.error("[stageOutcomeRuleTargetExecutor] child lifecycle event", e);
                 }
             }
-            // Preserve the waitlist placement flow (reads OCM as bridge data only).
-            if (dispositionKey === "waitlisted" && ocmBridgeId) {
-                await ensurePlacementCandidateForWaitlistedChild(supabase, {
+            // Waitlist placement candidate — sourced from the child's process instance (no OCM required).
+            if (dispositionKey === "waitlisted") {
+                await ensurePlacementCandidateForWaitlistedChildBySubject(supabase, {
                     orgId,
                     opportunityId: subject.opportunity_id,
-                    opportunityCustomerMemberId: ocmBridgeId,
+                    customerMemberId: childId,
                 });
             }
             // Enrollment completion → materialize durable operational truth (agreement + placement +
