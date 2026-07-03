@@ -13,7 +13,7 @@ INSERT INTO public.process_instances
      stage_key, state, close_reason_key, metadata, created_at, updated_at)
 SELECT
     ocm.org_id,
-    'enrollment_process',
+    'enrollment',                -- MUST match ENROLLMENT_PROCESS_KEY in lifecycleProcessTypes.ts
     'child',
     ocm.customer_member_id,
     'opportunity',

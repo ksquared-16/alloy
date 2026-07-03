@@ -56,7 +56,7 @@ export const OPERATOR_STATUS_CATEGORY_REGISTRY: readonly StatusCategoryRegistryE
     },
     {
         entity_type: "opportunity_customer_members",
-        operatorLabel: "Enrollment Statuses",
+        operatorLabel: "Enrollment Participation",
         authoritative: {
             table: "opportunity_customer_members",
             column: "outcome_status_key",

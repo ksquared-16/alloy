@@ -3,7 +3,7 @@
 -- =============================================================================
 -- Doctrine: a Process Instance is the running operational journey of a SUBJECT through a
 -- PROCESS, within a CONTEXT. Work attaches to it; outcomes move it; Work Views read it.
---   Enrollment:  process_key='enrollment_process', subject=child (customer_member),
+--   Enrollment:  process_key='enrollment' (ENROLLMENT_PROCESS_KEY), subject=child (customer_member),
 --                context=lead (opportunity), stage_key=position, state=durable enrollment state.
 -- This REPLACES opportunity_customer_members (OCM) as the runtime owner of child participation.
 -- OCM remains only as a temporary migration/data source; see the removal plan doc.

@@ -56,7 +56,7 @@ describe("Configuration Runtime settings pattern rollout", () => {
 
     it("Statuses queue labels match enrollment, lead/case, and people groups", () => {
         const hook = read("components/adminV2/settings/statuses/useStatusDefinitionsSettings.ts");
-        expect(hook).toContain("Enrollment Statuses");
+        expect(hook).toContain("Enrollment Participation");
         expect(hook).toContain("Lead Statuses");
         expect(hook).toContain("People Statuses");
     });

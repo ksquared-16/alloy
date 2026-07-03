@@ -92,7 +92,7 @@ const FALLBACK_LABELS: Record<string, string> = {
     jobs: "Jobs",
     schedules: "Schedules",
     customers: "Customers",
-    opportunity_customer_members: "Enrollment Statuses",
+    opportunity_customer_members: "Enrollment Participation",
     vendors: "Vendors",
     service_plan_templates: "Plan templates",
     persons: "People Statuses",
@@ -119,7 +119,7 @@ const STATUSES_DEFAULT_SUBTITLE =
     "Display names for status keys on schedules, jobs, customers, opportunities, vendors, plan templates, and people. Drawers read options from here. Which status changes are allowed is not configured here — see Status transition rules under Settings diagnostics (read-only) or a future Workflow Status Configuration sprint.";
 
 const STATUSES_ADMINV2_SUBTITLE =
-    "Manage status names and order by category. Enrollment Statuses are child enrollment durable state; Lead Statuses are lead durable state (Open / Closed); People Statuses are profile state. Stage position and work are configured in Business Processes.";
+    "Manage status names and order by category. Enrollment Participation is the child's enrollment participation state; Lead Statuses are lead durable state (Open / Closed); People Statuses are profile state. Stage position and work are configured in Business Processes.";
 
 /** Legacy extended hints — merged with STATUS_SETTINGS_SECTION_DESCRIPTIONS where present. */
 const STATUS_ENTITY_EXTENDED_HINTS: Partial<Record<string, string>> = {};

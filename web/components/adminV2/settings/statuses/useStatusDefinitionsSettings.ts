@@ -40,7 +40,7 @@ export type StatusCategoryGroup = {
 };
 
 export const STATUS_QUEUE_DISPLAY_LABELS: Partial<Record<StatusRollupCategoryKey, string>> = {
-    enrollment_statuses: "Enrollment Statuses",
+    enrollment_statuses: "Enrollment Participation",
     lead_statuses: "Lead Statuses",
     person_statuses: "People Statuses",
 };

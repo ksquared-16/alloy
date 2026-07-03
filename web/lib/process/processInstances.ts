@@ -126,6 +126,51 @@ export async function setProcessInstanceState(
     return error ? { error: error.message } : {};
 }
 
+/**
+ * Move a child's enrollment instance stage by scope (opportunity + child), not by instance id —
+ * the outcome executor knows the lead + child, and this targets exactly that sibling's instance.
+ */
+export async function moveEnrollmentInstanceStageByScope(
+    supabase: SupabaseClient,
+    args: { orgId: string; opportunityId: string; customerMemberId: string; stageKey: string },
+): Promise<{ moved: number; error?: string }> {
+    const { data, error } = await supabase
+        .from(PROCESS_INSTANCES_TABLE)
+        .update({ stage_key: args.stageKey, updated_at: new Date().toISOString() })
+        .eq("org_id", args.orgId)
+        .eq("process_key", ENROLLMENT_PROCESS_KEY)
+        .eq("context_id", args.opportunityId)
+        .eq("subject_id", args.customerMemberId)
+        .select("id");
+    if (error) return { moved: 0, error: error.message };
+    return { moved: (data ?? []).length };
+}
+
+/** Set a child's enrollment instance durable state (+ close reason) by scope (opportunity + child). */
+export async function setEnrollmentInstanceStateByScope(
+    supabase: SupabaseClient,
+    args: {
+        orgId: string;
+        opportunityId: string;
+        customerMemberId: string;
+        state: EnrollmentProcessState;
+        closeReasonKey?: string | null;
+    },
+): Promise<{ moved: number; error?: string }> {
+    const patch: Record<string, unknown> = { state: args.state, updated_at: new Date().toISOString() };
+    if (args.closeReasonKey !== undefined) patch.close_reason_key = args.closeReasonKey;
+    const { data, error } = await supabase
+        .from(PROCESS_INSTANCES_TABLE)
+        .update(patch)
+        .eq("org_id", args.orgId)
+        .eq("process_key", ENROLLMENT_PROCESS_KEY)
+        .eq("context_id", args.opportunityId)
+        .eq("subject_id", args.customerMemberId)
+        .select("id");
+    if (error) return { moved: 0, error: error.message };
+    return { moved: (data ?? []).length };
+}
+
 /** Read enrollment process instances for a lead (Work View / drawer child list). */
 export async function listEnrollmentInstancesForLead(
     supabase: SupabaseClient,

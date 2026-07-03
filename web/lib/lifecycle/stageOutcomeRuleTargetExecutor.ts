@@ -8,10 +8,35 @@ import {
     mergeEnrollmentOperationalIntoMetadata,
     sanitizeEnrollmentOperationalPatch,
 } from "@/lib/opportunities/enrollmentOperationalMetadata";
-import { updateOpportunityCustomerMemberLifecycleStatus } from "@/lib/opportunities/updateOpportunityCustomerMemberLifecycleStatus";
 import { updateOpportunityStatusWithEvent } from "@/lib/opportunities/updateOpportunityStatusWithEvent";
 import type { StageOperatingPlanV1, StageOutcomeRuleTargetV1 } from "@/lib/lifecycle/stageOperatingPlanV1";
 import { reopenStageWorkWithDueDate } from "@/lib/lifecycle/reopenStageWorkWithDueDate";
+import {
+    moveEnrollmentInstanceStageByScope,
+    setEnrollmentInstanceStateByScope,
+    type EnrollmentProcessState,
+} from "@/lib/process/processInstances";
+import { ensurePlacementCandidateForWaitlistedChild } from "@/lib/orchestration/placement/placementCandidateLifecycleHook";
+
+/**
+ * Resolve the child subject (customer_member_id) for a child track from its OCM id. OCM is used here
+ * only as a bridge lookup (not source of truth) so the executor can target the correct sibling's
+ * process instance. Removed once the subject carries customer_member_id / process_instance_id directly.
+ */
+async function resolveChildCustomerMemberId(
+    supabase: SupabaseClient,
+    orgId: string,
+    ocmId: string,
+): Promise<string | null> {
+    const { data } = await supabase
+        .from("opportunity_customer_members")
+        .select("customer_member_id")
+        .eq("id", ocmId)
+        .eq("org_id", orgId)
+        .maybeSingle();
+    const id = (data as { customer_member_id?: string } | null)?.customer_member_id;
+    return typeof id === "string" && id.trim() ? id.trim() : null;
+}
 
 export type StageOutcomeExecutionSubject = {
     journey_segment: "family" | "child";
@@ -66,27 +91,31 @@ export async function applyStageOutcomeRuleTarget(
             if (!dispositionKey || !ocmId) {
                 return { error: "Child enrollment track required for disposition update" };
             }
-            const res = await updateOpportunityCustomerMemberLifecycleStatus({
-                supabase,
+            // Bridge read: resolve the child subject so we can target its process instance.
+            const childId = await resolveChildCustomerMemberId(supabase, orgId, ocmId);
+            if (!childId) return { error: "Could not resolve child for enrollment state update" };
+            // Authoritative writer: the child's process instance owns durable state + close reason.
+            // The OCM durable enrollment-status column is NO LONGER written — process_instances is
+            // the single source of truth for child participation state.
+            const closeReasonKey = target.close_reason_key?.trim() || undefined;
+            const pi = await setEnrollmentInstanceStateByScope(supabase, {
                 orgId,
                 opportunityId: subject.opportunity_id,
-                opportunityCustomerMemberId: ocmId,
-                nextStatusKey: dispositionKey,
-                actorUserId: userId,
-                source: "stage_operating_plan_v1",
-                rowGrain: "child",
+                customerMemberId: childId,
+                state: dispositionKey as EnrollmentProcessState,
+                closeReasonKey,
             });
-            if (res.error) return { error: res.error.message };
-            // Persist close reason alongside the terminal disposition (S4 collapse).
-            const closeReasonKey = target.close_reason_key?.trim();
-            if (closeReasonKey) {
-                const { error: crErr } = await supabase
-                    .from("opportunity_customer_members")
-                    .update({ close_reason_key: closeReasonKey, updated_at: new Date().toISOString() })
-                    .eq("id", ocmId)
-                    .eq("org_id", orgId)
-                    .eq("opportunity_id", subject.opportunity_id);
-                if (crErr) return { error: crErr.message };
+            if (pi.error) return { error: pi.error };
+            // Preserve the waitlist placement flow (reads OCM as bridge data only). This is the one
+            // side effect that previously rode inside the OCM lifecycle-status writer.
+            // NOTE: child lifecycle event emission is intentionally dropped here as a documented
+            // follow-up — the process-instance transition is the authoritative record for Slice B.
+            if (dispositionKey === "waitlisted") {
+                await ensurePlacementCandidateForWaitlistedChild(supabase, {
+                    orgId,
+                    opportunityId: subject.opportunity_id,
+                    opportunityCustomerMemberId: ocmId,
+                });
             }
             return { status_updated: true };
         }
@@ -182,6 +211,19 @@ export async function applyStageOutcomeRuleTarget(
             if (subject.journey_segment === "child") {
                 const ocmId = subject.opportunity_customer_member_id?.trim();
                 if (!ocmId) return { error: "Child enrollment track required for move_to_stage" };
+                // Authoritative writer: the child's process instance owns stage_key.
+                const childId = await resolveChildCustomerMemberId(supabase, orgId, ocmId);
+                if (childId) {
+                    const pi = await moveEnrollmentInstanceStageByScope(supabase, {
+                        orgId,
+                        opportunityId: subject.opportunity_id,
+                        customerMemberId: childId,
+                        stageKey: targetStageKey,
+                    });
+                    if (pi.error) return { error: pi.error };
+                }
+                // OCM stage_key kept as a temporary compatibility bridge for legacy readers (not source
+                // of truth). Removed with OCM. Non-authoritative: the PI write above already succeeded.
                 const { error } = await supabase
                     .from("opportunity_customer_members")
                     .update({ stage_key: targetStageKey, updated_at: nowIso })

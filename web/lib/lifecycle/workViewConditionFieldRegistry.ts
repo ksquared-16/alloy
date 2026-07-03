@@ -119,7 +119,7 @@ export const WORK_VIEW_CONDITION_FIELD_DEFS: readonly WorkViewConditionFieldDef[
         // (`status_definitions` for opportunity_customer_members, org defs unioned with industry
         // defaults) — never a hardcoded subset.
         key: "child_enrollment_status",
-        label: "Enrollment Status",
+        label: "Enrollment Participation",
         group: "child",
         subject: "child",
         valueKind: "status_select",
