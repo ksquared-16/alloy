@@ -2,6 +2,8 @@
 
 **Status:** Canonical (July 2026). Supersedes all prior Workspace / Work Unit presentation cleanup.
 
+**Completion (July 2026):** All surfaces render through one Presentation Runtime — Workspace, Work Unit, Focus Panel, Left Nav, and the **Right Rail** (the last slice: `RightRailSurface` now consumes the resolved `right_rail_actions` lane and executes through the existing action runtime — see [`docs/handoffs/work-unit-right-rail-presentation-v2-handoff.md`](../../handoffs/work-unit-right-rail-presentation-v2-handoff.md)). Motion, warm-loading, and transition continuity are unified on the operational motion tokens. Legacy retirement is underway: the Work Unit shadow-VM path is removed; the remaining orphaned `routeShellPipeline` render adapter is scoped for a follow-up (it shares a symbol with a still-live perf-trace module — see the handoff §6).
+
 **Scope:** Presentation composition only. Backend, APIs, entities, queue model, calculations,
 configuration, surface definitions, runtime state, Focus Panel internals, and the navigation
 doctrine all stay. This replaces the View layer, not the platform.

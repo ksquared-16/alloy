@@ -68,16 +68,6 @@ export function deptUsesBuilderOwnedLifecycleRuntime(
     return workUnits.some((w) => isLifecycleStageWorkUnitRow(w));
 }
 
-/** Enrollment and builder-owned lifecycle departments reserve the operational actions rail shell. */
-export function departmentReservesOperationalActionsRail(params: {
-    departmentKey?: string | null;
-    departmentMetadata?: unknown;
-    workUnits?: readonly { key?: string | null; metadata?: unknown }[];
-}): boolean {
-    if (isEnrollmentLikeDepartmentKey(params.departmentKey)) return true;
-    return deptUsesBuilderOwnedLifecycleRuntime(params.departmentMetadata, params.workUnits ?? []);
-}
-
 export function filterWorkUnitsForBuilderOwnedDeptDisplay(
     workUnits: WorkUnitListRow[]
 ): WorkUnitListRow[] {

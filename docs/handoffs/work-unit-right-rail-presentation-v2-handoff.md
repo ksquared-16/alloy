@@ -51,9 +51,13 @@ The missing consume slice is now implemented. Nothing new was built in the actio
 
 ---
 
-## 6 → deferred cleanup (dead code)
+## 6 → dead-code retirement (status)
 
-The handoff's §6 dead-code list (`buildWorkUnitAboveFoldRenderModel`, `resolvedOperationalActionsRail`, `reserve_actions_rail` gate, `composeWorkUnitViewModel` shadow path, `departmentReservesOperationalActionsRail`, the orphaned `workspace-root-bundle` consumer, etc.) is **deferred to a follow-up**, per this handoff's own gate: *"Do not remove anything until the configured right rail actions render and execute correctly through the new path."* Live render confirmation requires an authenticated environment; once verified in staging, remove the listed paths (re-grep first — several are reachable only through the `routeShellPipeline` barrel). Two stale source-string tests (`rightRailPersistenceDoctrine.test.ts` cases reading the already-deleted `WorkspaceRootActionsRail.tsx` / `WorkUnitWorkspace.tsx`) also retire with that cleanup.
+**Retired (build-verified: `typecheck:build` 0, `next build` exit 0, tests green):**
+- **Work Unit shadow VM cluster** — `lib/adminV2/viewModel/workUnit/composeWorkUnitViewModel.ts` + `viewModel/workUnit/shadow/{runWorkUnitViewModelShadow,assembleLiveWorkUnitShadowSnapshot,diffWorkUnitViewModelShadow}.ts` and its lone test `tests/adminV2/viewModel/workUnitViewModelCompose.test.ts`. Confirmed zero live callers (only the shadow entry, which nothing invoked).
+- **`departmentReservesOperationalActionsRail`** — removed from `lib/lifecycle/builderOwnedLifecycleRuntime.ts` (0 callers; its internal helpers stay, used elsewhere).
+
+**Deferred (NOT dead — required by live code):** the `routeShellPipeline` workUnit adapter cluster (`buildWorkUnitAboveFoldRenderModel`, `buildWorkUnitRouteShellPlaceholder`, `reserve_actions_rail`) is dead in the *render* path but **`buildWorkUnitRouteShellPlaceholder` is still consumed by the live perf module `lib/perf/workUnitCriticalPathTrace.ts`**, and the render builder is exercised by ~10 tests. Retiring it is a larger, cascading change (surgical barrel edits + ~10 test retirements + rehoming or deleting the perf-trace consumer) — best done as its own focused, CI-gated PR, not folded in here. Likewise `workspace-root-bundle` route + `loadWorkspaceRootActionsServer` (referenced by `lib/perf/alloySectionMap.ts` + route-audit/wiring tests) and the two stale `rightRailPersistenceDoctrine.test.ts` cases (read the already-deleted `WorkspaceRootActionsRail.tsx` / `WorkUnitWorkspace.tsx`). Tracked for the follow-up retirement PR.
 
 ## Secondary data-cleanup (separate, does not block)
 
