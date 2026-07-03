@@ -28,6 +28,7 @@ import type { LayoutCondition } from "@/lib/layout/layoutV2";
 import type {
     QueueRecordBlockConfig,
     QueueRecordColumnConfig,
+    QueueRecordFieldConfig,
     QueueRecordLayoutConfigV3,
 } from "@/lib/layout/queueRecordLayoutV3";
 import type { QueueRecordColumnWidth } from "@/lib/layout/queueRecordLayoutConfig";
@@ -134,6 +135,8 @@ type FieldToggleState = {
     fieldKey: string;
     label: string;
     enabled: boolean;
+    /** false = tenant custom field (from the adapter); true = platform predefined. */
+    isSystemField: boolean;
 };
 
 type EvidenceGroupState = {
@@ -257,6 +260,9 @@ export function stateFromConfig(
                     fieldKey,
                     label: registryField?.label ?? fieldKey.replace(/[._]/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()),
                     enabled: activeFieldKeys.has(fieldKey),
+                    // Adapter marks platform-defined vs tenant custom; default predefined
+                    // for a field already in config but not in the registry group.
+                    isSystemField: registryField?.isSystemField ?? true,
                 };
             });
 
@@ -306,9 +312,23 @@ export function buildConfigFromState(
                     const enabledKeys = new Set(
                         groupState.fields.filter((f) => f.enabled).map((f) => f.fieldKey),
                     );
-                    const filteredFields = b.fields.filter((f) => enabledKeys.has(f.fieldKey));
+                    // Base fields the operator kept, in their existing order.
+                    const baseKeys = new Set(b.fields.map((f) => f.fieldKey));
+                    const keptBase = b.fields.filter((f) => enabledKeys.has(f.fieldKey));
+                    // Newly ADDED fields: enabled in the section but not in the base block
+                    // (tenant custom fields, or predefined fields the operator re-added).
+                    // Synthesize a minimal composition item — same persisted model.
+                    const addedFields: QueueRecordFieldConfig[] = groupState.fields
+                        .filter((f) => f.enabled && !baseKeys.has(f.fieldKey))
+                        .map((f) => ({
+                            id: `fld_${f.fieldKey.replace(/[^a-zA-Z0-9]+/g, "_")}`,
+                            fieldKey: f.fieldKey,
+                            label: f.label,
+                            display: "text",
+                        }));
+                    const merged = [...keptBase, ...addedFields];
                     // Safety floor: always keep at least 1 field per block
-                    const finalFields = filteredFields.length > 0 ? filteredFields : b.fields.slice(0, 1);
+                    const finalFields = merged.length > 0 ? merged : b.fields.slice(0, 1);
                     return { ...b, fields: finalFields };
                 });
             const blocks = filteredBlocks.length > 0 ? filteredBlocks : catalogCol.blocks.slice(0, 1);
@@ -337,6 +357,90 @@ export function buildConfigFromState(
     };
 }
 
+// ── AddFieldPicker ──────────────────────────────────────────────────────────────
+
+/**
+ * Section-scoped inline field picker. Lists the fields NOT yet on this section —
+ * predefined (platform) and tenant custom, exactly as the composition adapter offers
+ * them for the section's evidence groups. Picking one enables it through the same
+ * toggle path the inspector uses (no new persistence). UI says Section / Field only.
+ */
+export function AddFieldPicker({
+    zone,
+    onPick,
+    onClose,
+}: {
+    zone: RowZoneState;
+    onPick: (blockId: string, fieldKey: string) => void;
+    onClose: () => void;
+}) {
+    // Only enabled sections can receive a field (a disabled section contributes nothing
+    // to the built config); within them, offer the fields that are not yet added.
+    const sections = zone.evidenceGroups
+        .filter((g) => g.enabled)
+        .map((g) => ({ group: g, addable: g.fields.filter((f) => !f.enabled) }))
+        .filter((s) => s.addable.length > 0);
+
+    return (
+        <span
+            className="pointer-events-auto absolute left-0 top-6 z-20 w-60 rounded-lg border border-alloy-stone/20 bg-white p-1.5 shadow-lg"
+            role="dialog"
+            aria-label={`Add field to ${zone.columnLabel || ZONE_LABELS[zone.key]}`}
+            data-add-field-picker={zone.key}
+            onClick={(e) => e.stopPropagation()}
+        >
+            <span className="flex items-center justify-between px-1.5 pb-1 pt-0.5">
+                <span className="text-[10px] font-semibold uppercase tracking-wide text-alloy-midnight/45">
+                    Add field · {zone.columnLabel || ZONE_LABELS[zone.key]}
+                </span>
+                <button
+                    type="button"
+                    className="text-[11px] leading-none text-alloy-midnight/35 hover:text-alloy-midnight/70"
+                    onClick={onClose}
+                    aria-label="Close add field"
+                >
+                    ✕
+                </button>
+            </span>
+            {sections.length === 0 ? (
+                <p className="px-1.5 py-2 text-[11px] text-alloy-midnight/40">
+                    Every available field is already on this section.
+                </p>
+            ) : (
+                <span className="block max-h-56 overflow-y-auto">
+                    {sections.map(({ group, addable }) => (
+                        <span key={group.blockId} className="block px-0.5 pb-1">
+                            <span className="block px-1.5 py-1 text-[9.5px] font-semibold uppercase tracking-wide text-alloy-midnight/35">
+                                {group.label}
+                            </span>
+                            {addable.map((field) => (
+                                <button
+                                    key={field.fieldKey}
+                                    type="button"
+                                    className="flex w-full items-center gap-2 rounded px-1.5 py-1 text-left hover:bg-alloy-pine/[0.06]"
+                                    onClick={() => onPick(group.blockId, field.fieldKey)}
+                                    data-add-field-option={field.fieldKey}
+                                    data-add-field-custom={field.isSystemField ? undefined : "true"}
+                                >
+                                    <span className="text-[11px] leading-none text-alloy-pine">+</span>
+                                    <span className="flex-1 truncate text-[11px] text-alloy-midnight/80">
+                                        {field.label}
+                                    </span>
+                                    {!field.isSystemField ? (
+                                        <span className="shrink-0 rounded-full bg-alloy-stone/15 px-1.5 py-px text-[8.5px] font-semibold uppercase tracking-wide text-alloy-midnight/55">
+                                            Custom
+                                        </span>
+                                    ) : null}
+                                </button>
+                            ))}
+                        </span>
+                    ))}
+                </span>
+            )}
+        </span>
+    );
+}
+
 // ── QueueRowRuntimeCanvas ───────────────────────────────────────────────────────
 
 /**
@@ -361,6 +465,7 @@ function QueueRowRuntimeCanvas({
     onSelect,
     onRemove,
     onReorder,
+    onAddField,
 }: {
     zones: RowZoneState[];
     liveConfig: QueueRecordLayoutConfigV3;
@@ -369,8 +474,12 @@ function QueueRowRuntimeCanvas({
     onSelect: (key: ZoneKey) => void;
     onRemove: (key: ZoneKey) => void;
     onReorder: (key: ZoneKey, dir: -1 | 1) => void;
+    /** Enable a field on a section (evidence group) — reuses the inspector's toggle path. */
+    onAddField: (key: ZoneKey, blockId: string, fieldKey: string) => void;
 }) {
     const inRow = zones.filter((z) => z.inRow);
+    // Which section's inline "Add field" picker is open (null = none).
+    const [pickerZone, setPickerZone] = useState<ZoneKey | null>(null);
 
     // The exact runtime consumption path: published/edited config → compact slots.
     const slots = mapQueueRowSurfaceToCompactConfig(liveConfig).slots;
@@ -404,6 +513,16 @@ function QueueRowRuntimeCanvas({
                     <span className="absolute -top-2 right-0 flex items-center gap-0.5">
                         <button
                             type="button"
+                            className="rounded bg-white px-1 text-[10px] font-semibold leading-none text-alloy-pine shadow-sm hover:bg-alloy-pine/10"
+                            onClick={(e) => { e.stopPropagation(); setPickerZone((p) => (p === z.key ? null : z.key)); }}
+                            aria-label={`Add field to ${ZONE_LABELS[z.key]}`}
+                            aria-expanded={pickerZone === z.key}
+                            data-canvas-add-field={z.key}
+                        >
+                            + Field
+                        </button>
+                        <button
+                            type="button"
                             className="rounded bg-white px-1 text-[10px] leading-none text-alloy-midnight/50 shadow-sm hover:text-alloy-pine disabled:opacity-30"
                             onClick={(e) => { e.stopPropagation(); onReorder(z.key, -1); }}
                             disabled={idx <= 0}
@@ -432,6 +551,13 @@ function QueueRowRuntimeCanvas({
                             ✕
                         </button>
                     </span>
+                ) : null}
+                {pickerZone === z.key ? (
+                    <AddFieldPicker
+                        zone={z}
+                        onPick={(blockId, fieldKey) => { onAddField(z.key, blockId, fieldKey); setPickerZone(null); }}
+                        onClose={() => setPickerZone(null)}
+                    />
                 ) : null}
             </span>
         );
@@ -1146,6 +1272,7 @@ export default function QueueRowBuilderV2({ surfaceId = "pipeline-queue-row" }: 
                         onSelect={setSelectedKey}
                         onRemove={removeZone}
                         onReorder={moveZone}
+                        onAddField={(key, blockId, fieldKey) => toggleField(key, blockId, fieldKey)}
                     />
 
                     {/* Block library tray */}

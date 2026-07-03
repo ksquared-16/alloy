@@ -772,6 +772,19 @@ describe("runtime parity — field toggle → config → not rendered", () => {
         expect(src).not.toContain("ZONE_FLEX");
     });
 
+    it("Phase 3: canvas has a section-anchored inline Add Field flow (reuses toggle path)", () => {
+        const builderPath = fileURLToPath(
+            new URL("../../components/adminV2/settings/surfaces/QueueRowBuilderV2.tsx", import.meta.url),
+        );
+        const src = readFileSync(builderPath, "utf8");
+        // Section overlay exposes an Add Field trigger + a scoped picker.
+        expect(src).toContain("data-canvas-add-field");
+        expect(src).toContain("AddFieldPicker");
+        expect(src).toContain("data-add-field-picker");
+        // Adding routes through the existing toggleField mutation (no new persistence).
+        expect(src).toContain("onAddField={(key, blockId, fieldKey) => toggleField(key, blockId, fieldKey)}");
+    });
+
     it("canvas min-height contract: 76px (not 72px)", () => {
         // Verify the runtime row dimension constant — builder canvas must match.
         // This test encodes the contract so a future CSS change is noticed.
