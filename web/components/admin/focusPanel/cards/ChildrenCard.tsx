@@ -21,6 +21,11 @@ import {
     buildChildrenCardEvidence,
     type ChildrenEvidenceChild,
 } from "@/lib/adminV2/runtime/focusPanel/children/buildChildrenCardEvidence";
+import { usePublishedFocusPanelSummaryDoc } from "@/lib/adminV2/runtime/focusPanel/usePublishedFocusPanelSummaryDoc";
+import {
+    childrenDetailFieldKeysFromNestedConfig,
+    readChildrenNestedConfigFromDoc,
+} from "@/lib/adminV2/runtime/focusPanel/children/childrenNestedSurfaceConfig";
 import { cardCapabilities, cardRelatedViews } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardLifecycle";
 import type { FocusPanelCardModel } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardModel";
 import {
@@ -62,7 +67,18 @@ const RELATED_VIEWS = cardRelatedViews("children");
  * @see docs/platform/operator/universal-card-lifecycle.md
  */
 export default function ChildrenCard({ model, context, receded = false, coordination }: Props) {
-    const evidence = useMemo(() => buildChildrenCardEvidence(context), [context]);
+    // Published Children Surface config (metadata.nestedSurfaces["children_surface"]),
+    // authored in /settings/surfaces. Null until loaded / when unpublished → default
+    // field order. This is the runtime consuming the nested-surface authoring model.
+    const publishedDoc = usePublishedFocusPanelSummaryDoc(true);
+    const childDetailFieldKeys = useMemo(() => {
+        const config = readChildrenNestedConfigFromDoc(publishedDoc);
+        return childrenDetailFieldKeysFromNestedConfig(config);
+    }, [publishedDoc]);
+    const evidence = useMemo(
+        () => buildChildrenCardEvidence(context, { childDetailFieldKeys }),
+        [context, childDetailFieldKeys],
+    );
 
     const [rosterOpen, setRosterOpen] = useState(false);
     const [focusedId, setFocusedId] = useState<string | null>(null);

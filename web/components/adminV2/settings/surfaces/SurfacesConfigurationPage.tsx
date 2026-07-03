@@ -14,18 +14,17 @@ import { WorkspaceHeaderSurfaceBuilder, WorkUnitHeaderSurfaceBuilder } from "@/c
 import QueueRowBuilderV2 from "@/components/adminV2/settings/surfaces/QueueRowBuilderV2";
 import NestedSurfaceEditor from "@/components/adminV2/settings/surfaces/NestedSurfaceEditor";
 import { buildSurfacesBreadcrumb } from "@/lib/adminV2/settings/surfaces/surfacesBreadcrumbModel";
-import {
-    CHILDREN_SURFACE_ID,
-    FINANCIAL_CONFIG_SURFACE_ID,
-    nestedSurfaceLabel,
-} from "@/lib/adminV2/settings/surfaces/nestedSurfaceEditorModel";
+import { nestedSurfaceLabel } from "@/lib/adminV2/settings/surfaces/nestedSurfaceEditorModel";
 import { useState as useReactState } from "react";
 
-/** Card → nested surface launchers shown in the Focus Panel editor. */
-const FOCUS_PANEL_NESTED_LAUNCHERS: { cardLabel: string; surfaceId: string }[] = [
-    { cardLabel: "Children Card", surfaceId: CHILDREN_SURFACE_ID },
-    { cardLabel: "Financial Configuration Card", surfaceId: FINANCIAL_CONFIG_SURFACE_ID },
-];
+import { focusPanelNestedLaunchers } from "@/lib/platform/surfaceComposition/registerRuntimeSurfaces";
+/**
+ * Card → nested surface launchers, derived from the surface registry via
+ * resolveOpenSurface (Focus Panel components' depth bindings → nested Surfaces) rather
+ * than a hand-maintained list. Registry registration is idempotent.
+ */
+const FOCUS_PANEL_NESTED_LAUNCHERS: { cardLabel: string; surfaceId: string }[] =
+    focusPanelNestedLaunchers().map((l) => ({ cardLabel: l.cardLabel, surfaceId: l.surfaceId }));
 import { SurfaceLibrary } from "@/components/platform/surfaceBuilder/SurfaceLibrary";
 import {
     useSurfacesConfigurationSettings,
