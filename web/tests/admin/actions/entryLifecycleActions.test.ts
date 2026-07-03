@@ -342,7 +342,8 @@ describe("executeCreateLeadAction validation", () => {
     it("persists child OCM fields when enrollment payload present", async () => {
         vi.mocked(applyCreateLeadChildParticipation).mockResolvedValueOnce({
             customer_member_id: "cm-child",
-            ocm_id: "ocm-child",
+            ocm_id: null,
+            process_instance_id: "pi-child",
         });
         const sb = supabaseForCreate("vert-1");
         const merged = {

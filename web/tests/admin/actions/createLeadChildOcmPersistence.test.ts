@@ -218,7 +218,7 @@ describe("applyCreateLeadChildParticipation", () => {
             subject_id: "cm-1",
             context_id: "opp-1",
         });
-        expect((piUpsertPayload as { metadata?: Record<string, unknown> })?.metadata).toMatchObject({
+        expect((piUpsertPayload as unknown as { metadata?: Record<string, unknown> })?.metadata).toMatchObject({
             program_category_id: CATEGORY_ID,
             schedule_type: "full_day",
             program_room_cohort_key: ROOM_ID,
