@@ -1,6 +1,6 @@
 # Commercial Model V2 — Reframing
 
-**Status:** Proposal / doctrine-in-deliberation (not frozen)
+**Status:** ✅ **SHIPPED** — the two-spine structure this proposed is implemented in Commercial Platform V1 (2026-07-03). Retained as design rationale. Canonical: **[Commercial Platform V1](../../platform/commercial/commercial-platform-v1.md)**.
 **Date:** 2026-06-30
 **Trigger:** Implementation of Services exposed a product-model issue, not a UI issue.
 **Mandate:** Determine the canonical commercial model. Do not defend the current model. Challenge it.
