@@ -180,18 +180,24 @@ describe("WU.HEADER_CALCULATIONS — operational signal strip (presentation poli
         expect(src).not.toContain("flex-wrap");
     });
 
-    it("renders borderless signals (statement + value + state dot), not KPI dashboard cards", () => {
-        // The strip no longer renders the shared MetricKpiCard/MetricTrendCard (KPI-card feel);
-        // it renders a statement-first signal with a state dot, separated by whitespace.
+    it("is one ribbon with hairline separators — not boxed KPI cards", () => {
+        // No shared KPI-card renderer; signals share one container, divided by hairlines.
         expect(src).not.toContain("MetricKpiCard");
         expect(src).not.toContain("MetricTrendCard");
-        expect(src).toContain("card.label"); // statement is rendered (the hero)
-        expect(src).toContain("card.formattedValue"); // value supports it
-        expect(src).toContain("rounded-full"); // the state dot
-        expect(src).toContain("gap-x-7"); // whitespace separates signals
+        expect(src).toContain("divide-x"); // hairline separators between signals
+        expect(src).not.toContain("shadow"); // no card shadow / KPI chrome
     });
 
-    it("renders no trend wave / sparkline / chart — ever", () => {
+    it("reads title → value → context: statement is the hero, value supports, dot carries state", () => {
+        expect(src).toContain("card.label"); // signal title (the eye-catcher)
+        expect(src).toContain("card.formattedValue"); // value (secondary)
+        expect(src).toContain("rounded-full"); // small state dot
+        // supporting context renders only when the VM provides it — never fabricated.
+        expect(src).toContain("supportingContextOf");
+        expect(src).toContain("data-signal-context");
+    });
+
+    it("renders no trend wave / sparkline / chart / colored box — ever", () => {
         expect(src).not.toContain("sparklinePoints");
         expect(src).not.toContain("MetricSparkline");
         expect(src).not.toContain("polyline");
