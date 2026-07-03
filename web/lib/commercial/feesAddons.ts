@@ -127,6 +127,43 @@ export function isPackageAddon(addon: CommercialAddon): boolean {
   return addon.package_unit_count !== null && addon.package_unit_count > 0;
 }
 
+/** The three commercial catalog primitives. */
+export type CommercialType = "fee" | "addon" | "deposit";
+
+export const COMMERCIAL_TYPE_OPTIONS: { key: CommercialType; label: string; description: string }[] = [
+  { key: "fee",     label: "Fee",     description: "Required or auto-triggered charge — registration, materials, annual fees" },
+  { key: "addon",   label: "Add-on",  description: "Optional product families enroll in — extended care, enrichment, passes" },
+  { key: "deposit", label: "Deposit", description: "Held amount collected at enrollment with potential refund or credit" },
+];
+
+export const COMMERCIAL_TYPE_LABELS: Record<CommercialType, string> = {
+  fee: "Fee",
+  addon: "Add-on",
+  deposit: "Deposit",
+};
+
+/** Human-friendly due timing options for deposits. Key = stored value. */
+export const DUE_TIMING_OPTIONS: { key: string; label: string }[] = [
+  { key: "At enrollment",       label: "At enrollment" },
+  { key: "Upon acceptance",     label: "Upon acceptance" },
+  { key: "Before first day",    label: "Before first day" },
+  { key: "At contract signing", label: "At contract signing" },
+  { key: "Before tour",         label: "Before tour" },
+];
+
+/** Normalize legacy internal due_timing keys to human labels. */
+const DUE_TIMING_NORMALIZE: Record<string, string> = {
+  at_enrollment:      "At enrollment",
+  before_first_day:   "Before first day",
+  at_acceptance:      "Upon acceptance",
+  upon_acceptance:    "Upon acceptance",
+  at_contract:        "At contract signing",
+};
+
+export function normalizeDueTiming(raw: string): string {
+  return DUE_TIMING_NORMALIZE[raw] ?? raw;
+}
+
 export function describePackage(addon: CommercialAddon): string {
   if (!isPackageAddon(addon)) return "";
   const count = addon.package_unit_count!;

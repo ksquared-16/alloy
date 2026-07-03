@@ -4,12 +4,16 @@ import {
     frequencyLabel,
     isPackageAddon,
     describePackage,
+    normalizeDueTiming,
     FREQUENCY_OPTIONS,
+    COMMERCIAL_TYPE_OPTIONS,
+    DUE_TIMING_OPTIONS,
     FEE_TYPE_SUGGESTIONS,
     ADDON_TYPE_SUGGESTIONS,
     DEPOSIT_TIMING_SUGGESTIONS,
     PACKAGE_UNIT_TYPE_OPTIONS,
     type CommercialAddon,
+    type CommercialType,
 } from "@/lib/commercial/feesAddons";
 
 const LOCATIONS = [
@@ -111,6 +115,53 @@ describe("describePackage", () => {
     it("defaults unit type to 'uses' when null", () => {
         const a = makeAddon({ package_unit_count: 3, package_unit_type: null });
         expect(describePackage(a)).toBe("3 uses");
+    });
+});
+
+describe("normalizeDueTiming", () => {
+    it("passes through human labels unchanged", () => {
+        expect(normalizeDueTiming("At enrollment")).toBe("At enrollment");
+        expect(normalizeDueTiming("Before first day")).toBe("Before first day");
+    });
+    it("normalizes legacy internal keys", () => {
+        expect(normalizeDueTiming("at_enrollment")).toBe("At enrollment");
+        expect(normalizeDueTiming("before_first_day")).toBe("Before first day");
+        expect(normalizeDueTiming("upon_acceptance")).toBe("Upon acceptance");
+    });
+    it("passes through unknown values unchanged", () => {
+        expect(normalizeDueTiming("custom timing")).toBe("custom timing");
+    });
+});
+
+describe("COMMERCIAL_TYPE_OPTIONS", () => {
+    it("has fee, addon, deposit keys", () => {
+        const keys = COMMERCIAL_TYPE_OPTIONS.map(o => o.key) as CommercialType[];
+        expect(keys).toContain("fee");
+        expect(keys).toContain("addon");
+        expect(keys).toContain("deposit");
+    });
+    it("all options have non-empty label and description", () => {
+        COMMERCIAL_TYPE_OPTIONS.forEach(o => {
+            expect(o.label.length).toBeGreaterThan(0);
+            expect(o.description.length).toBeGreaterThan(0);
+        });
+    });
+});
+
+describe("DUE_TIMING_OPTIONS", () => {
+    it("includes At enrollment as first option", () => {
+        expect(DUE_TIMING_OPTIONS[0].key).toBe("At enrollment");
+        expect(DUE_TIMING_OPTIONS[0].label).toBe("At enrollment");
+    });
+    it("all options have matching key and label (human-readable stored value)", () => {
+        DUE_TIMING_OPTIONS.forEach(o => {
+            expect(o.key).toBe(o.label);
+        });
+    });
+    it("includes 'Before first day' and 'Upon acceptance'", () => {
+        const keys = DUE_TIMING_OPTIONS.map(o => o.key);
+        expect(keys).toContain("Before first day");
+        expect(keys).toContain("Upon acceptance");
     });
 });
 
