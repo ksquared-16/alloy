@@ -188,7 +188,7 @@ export function ChildEnrollmentStatusPanel({
             {/* Section 1: Subject context */}
             <div>
                 <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1">
-                    Update Child Enrollment Status
+                    Update Enrollment Participation
                 </div>
                 {childDisplayName && (
                     <div className="text-sm text-foreground font-medium">{childDisplayName}</div>

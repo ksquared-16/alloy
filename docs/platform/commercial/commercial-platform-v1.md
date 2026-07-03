@@ -168,7 +168,39 @@ Each future phase **builds on** the V1 primitives above. Billing is next.
 
 ---
 
-## 9. Related documents
+## 9. Security model (RLS)
+
+Every Commercial V1 table is an **operator-facing, org-scoped configuration table** and uses the platform's standard **org-scoped Row-Level Security** — the identical 5-policy shape shared by `commercial_tuition_rates`, `program_offerings`, `program_offering_variants`, `gl_accounts`, and `location_program_categories`. There is one policy style across the platform; Commercial does not introduce a variant.
+
+**The 5-policy doctrine** (via `has_org_role(org_id, ARRAY[...])`):
+
+| Policy | Command | Roles allowed |
+|---|---|---|
+| `<t>_select_org` | SELECT | owner, admin, ops, manager |
+| `<t>_insert_org` | INSERT (WITH CHECK) | owner, admin, ops |
+| `<t>_update_org` | UPDATE (USING + CHECK) | owner, admin, ops |
+| `<t>_delete_org` | DELETE | owner, admin |
+| `<t>_all_service_role` | ALL | service_role (`true`/`true`) |
+
+**Why this model — table by table:**
+
+| Table | Classification | Security | Rationale |
+|---|---|---|---|
+| commercial_products | Operator-facing config | RLS (5-policy) | Operators configure catalog products; org-scoped, must not leak across orgs |
+| commercial_categories | Operator-facing config | RLS (5-policy) | Operator-managed merchandising groups |
+| commercial_revenue_categories | Operator-facing config | RLS (5-policy) | Operator-managed; maps to GL accounts |
+| commercial_tuition_rates | Operator-facing config | RLS (5-policy) | Already conformant (shipped correct) |
+| program_offerings | Operator-facing config | RLS (5-policy) | Already conformant |
+| program_offering_variants | Operator-facing config | RLS (5-policy) | Already conformant |
+| commercial_fees / addons / deposits | Transitional (legacy) | RLS (5-policy) | No longer UI-written, but hold org data — hardened for defense-in-depth and consistency |
+| gl_accounts / gl_account_mappings | Accounting-owned | RLS (5-policy) | Owned by Financials; already conformant — not modified here |
+| Billing cadences | Platform config infra | RLS (via `option_sets`/`option_set_items`) | Not a Commercial table — cadences are seeded into the shared option-set system, already RLS-secured; out of Commercial's scope |
+
+**Access model:** the admin API always uses the **service-role client** (`createAdminClient` → `SUPABASE_SERVICE_ROLE_KEY`, which has `BYPASSRLS`), so RLS is transparent to admin workflows. RLS is **defense-in-depth**: it guarantees that even if a table were reached with an `authenticated` or `anon` key via PostgREST, rows are gated by `has_org_role`, preventing cross-org access. No table is left "API-only without RLS" — that was the V1 gap this audit closed.
+
+**Audit correction (2026-07-14):** the newer catalog tables (`commercial_products`, `commercial_categories`, `commercial_revenue_categories`, `commercial_fees`, `commercial_addons`, `commercial_deposits`) shipped **without RLS** while their siblings had it. Migration `20260714000001_commercial_catalog_rls_hardening.sql` brought them to the standard 5-policy set. No policy-style divergence introduced.
+
+## 10. Related documents
 - [ownership-model.md](ownership-model.md) — exhaustive per-table / per-API reference + migration ledger record.
 - [commercial-operating-model.md](../core/commercial-operating-model.md) — business-model doctrine (what, not how).
 - [operational-commercial-integration.md](../core/operational-commercial-integration.md) — Operational Consumption ↔ Commercial contract (feeds Billing).

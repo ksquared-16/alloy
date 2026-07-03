@@ -5,8 +5,8 @@
 import { normalizeRefKeyOnRead } from "@/lib/layout/layoutRefKeyAliases";
 import {
     buildInquiryChildOcmPatchFromEditorLocal,
+    patchChildParticipation,
     patchInquiryChildIdentityFromDrawer,
-    patchOpportunityCustomerMemberFromInquiryChild,
     resolveInquiryChildOcmId,
     type InquiryChildIdentityPatch,
     type InquiryChildOcmPatch,
@@ -218,11 +218,9 @@ export async function saveLayoutRuntimeChildRepeaterEdits(input: {
 
         const ocmPatch = ocmPatchFromDraft(row, input.baseline, input.draft, rowKey);
         if (Object.keys(ocmPatch).length > 0) {
-            if (!ctx.ocmId) {
-                return { ok: false, error: "Enrollment participation row is not linked for OCM field save." };
-            }
+            // Participation facts route to process instance / durable model (never OCM).
             try {
-                await patchOpportunityCustomerMemberFromInquiryChild(ctx.ocmId, ocmPatch);
+                await patchChildParticipation({ customerMemberId: ctx.customerMemberId, patch: ocmPatch });
             } catch (err) {
                 return { ok: false, error: err instanceof Error ? err.message : "Enrollment field save failed" };
             }
@@ -385,11 +383,9 @@ export async function saveLayoutRuntimeChildStandaloneEdits(input: {
 
     const ocmPatch = standaloneOcmPatchFromDraft(input.record, input.baseline, input.draft);
     if (Object.keys(ocmPatch).length > 0) {
-        if (!ctx.ocmId) {
-            return { ok: false, error: "Enrollment participation row is not linked for OCM field save." };
-        }
+        // Participation facts route to process instance / durable model (never OCM).
         try {
-            await patchOpportunityCustomerMemberFromInquiryChild(ctx.ocmId, ocmPatch);
+            await patchChildParticipation({ customerMemberId: ctx.customerMemberId, patch: ocmPatch });
         } catch (err) {
             return { ok: false, error: err instanceof Error ? err.message : "Enrollment field save failed" };
         }

@@ -202,6 +202,8 @@ export async function applyEnrollmentStatusTransitionOutcomeEffects(
                 subject: {
                     journey_segment,
                     opportunity_id: opportunityId,
+                    // Threaded child identity → outcome execution targets the process instance directly.
+                    customer_member_id: input.scope.customerMemberId ?? null,
                     opportunity_customer_member_id: ocmId,
                     placement_candidate_id: input.scope.placementCandidateId ?? null,
                 },

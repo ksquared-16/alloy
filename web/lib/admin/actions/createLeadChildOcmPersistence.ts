@@ -6,6 +6,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { findOrCreateChildPersonInOrg } from "@/lib/admin/person/findOrCreateChildPersonInOrg";
 import { resolveProgramCategoryId } from "@/lib/locations/resolveOcmProgramCategoryFields";
+import { createEnrollmentProcessInstance } from "@/lib/process/processInstances";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -128,7 +129,10 @@ export function buildCreateLeadOcmInsertRow(args: {
 
 export type ApplyCreateLeadChildParticipationResult = {
     customer_member_id: string;
-    ocm_id: string;
+    /** Legacy OCM bridge id — no longer written at Create Lead (always null; kept for shape compatibility). */
+    ocm_id: string | null;
+    /** Enrollment process instance created for this child (runtime source of truth). */
+    process_instance_id: string | null;
 };
 
 export async function applyCreateLeadChildParticipationFromIdentity(
@@ -191,28 +195,37 @@ export async function applyCreateLeadChildParticipationFromIdentity(
             locationId: params.ocm.location_id,
             programKey: params.ocm.program_key,
         }));
-    const ocmRow = buildCreateLeadOcmInsertRow({
+
+    // OCM bridge write REMOVED. process_instances is the sole runtime owner of child participation at
+    // Create Lead: participation facts ride the PI metadata below; waitlist placement + participation
+    // editing + Focus Panel display all source from process_instances (OCM is legacy-only, read behind
+    // an explicit flag for old data). No opportunity_customer_members row is created.
+
+    // process_instances is the runtime owner of child participation. Create the Enrollment process
+    // instance for this child on this lead; participation facts ride the PI metadata (draft inputs).
+    const piResult = await createEnrollmentProcessInstance(supabase, {
         orgId: params.orgId,
-        opportunityId: params.opportunityId,
-        customerMemberId,
-        ocm: {
-            ...params.ocm,
+        subjectId: customerMemberId,     // child = customer_member
+        contextId: params.opportunityId, // lead = opportunity (context)
+        stageKey: null,                  // rides the family track until a decision creates the child journey
+        state: null,                     // no enrollment outcome at intake
+        participation: {
+            start_date: params.ocm.start_date,
+            schedule_type: params.ocm.schedule_type,
             program_category_id: programCategoryId,
+            location_id: params.ocm.location_id,
+            program_room_cohort_key: params.ocm.program_room_cohort_key,
+            notes: params.ocm.notes,
         },
     });
-
-    const { data: ocmData, error: ocmErr } = await supabase
-        .from("opportunity_customer_members")
-        .insert(ocmRow)
-        .select("id")
-        .single();
-    if (ocmErr || !ocmData) {
-        throw new Error(ocmErr?.message ?? "Could not link child participation to lead.");
+    if (piResult.error) {
+        throw new Error(`Could not create Enrollment process instance for child: ${piResult.error}`);
     }
 
     return {
         customer_member_id: customerMemberId,
-        ocm_id: String((ocmData as { id: string }).id),
+        ocm_id: null, // OCM bridge no longer written at Create Lead
+        process_instance_id: piResult.id,
     };
 }
 

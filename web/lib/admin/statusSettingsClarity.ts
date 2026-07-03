@@ -31,7 +31,7 @@ export const STATUS_DRAWER_SOURCE_TAG_LABELS: Record<StatusDrawerSourceTag, stri
 /** Operator-facing Settings → Statuses section titles (tenant labels may override via entity labels). */
 export const STATUS_SETTINGS_SECTION_TITLES: Record<string, string> = {
     opportunities: "Lead Statuses",
-    opportunity_customer_members: "Enrollment Statuses",
+    opportunity_customer_members: "Enrollment Participation",
     persons: "People Statuses",
 };
 
@@ -42,7 +42,7 @@ export const STATUS_SETTINGS_SECTION_DESCRIPTIONS: Record<string, string> = {
     persons:
         "Profile and identity statuses on people records. Stage rollups are assigned in Business Processes when needed.",
     opportunity_customer_members:
-        "Child enrollment durable state — Waitlisted, Enrolling, Enrolled, Withdrawn, Not Enrolling. Work and stage movement live in the Business Process.",
+        "Child enrollment participation — Waitlisted, Enrolling, Enrolled, Withdrawn, Not Enrolling. Work and stage movement live in the Business Process.",
 };
 
 /** Default section tags shown at entity-type level. */

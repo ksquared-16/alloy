@@ -21,6 +21,8 @@ export type OpportunityDrawerQueuePreviewSeed = {
     /** Card 9 — child/candidate grain context from queue row (drawer/action follow-up). */
     rowGrain?: "case" | "child" | "candidate";
     placementCandidateId?: string;
+    /** Child subject = customer_members.id (process_instances.subject_id) — targets movement directly. */
+    customerMemberId?: string;
     opportunityCustomerMemberId?: string;
     childLifecycleStatus?: string | null;
     /** Card 11 — read-only child lifecycle rollup headline while entity GET loads. */
@@ -79,6 +81,7 @@ export function opportunityDrawerSeedFromQueueItem(item: QueuePreviewItemVm): Op
         operTrustUrgency,
         rowGrain: grainCtx.rowGrain,
         placementCandidateId: grainCtx.placementCandidateId,
+        customerMemberId: grainCtx.customerMemberId,
         opportunityCustomerMemberId: grainCtx.opportunityCustomerMemberId,
         childLifecycleStatus: grainCtx.childLifecycleStatus,
         childLifecycleSummaryHeadline: item.semanticCrmCompact?.childLifecycleSummary ?? null,
