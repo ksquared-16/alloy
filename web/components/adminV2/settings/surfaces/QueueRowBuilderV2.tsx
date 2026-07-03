@@ -17,13 +17,18 @@
  * @see docs/platform/operator/queue-row-platform.md
  */
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
+import { CondensedQueueRow } from "@/components/presentation/workUnit/CondensedQueueRow";
+import { mapQueueRowSurfaceToCompactConfig } from "@/lib/presentation/runtime/queueRowSurfaceConfig";
+import type { QueueRowModel } from "@/lib/presentation/runtime";
+import type { QueueRowContext } from "@/lib/workUnits/lifecycleSubjectContracts";
 import { defaultLeadQueueLayoutV3, defaultWaitlistQueueLayoutV3 } from "@/lib/layout/queueRecordLayoutV3";
 import type { LayoutCondition } from "@/lib/layout/layoutV2";
 import type {
     QueueRecordBlockConfig,
     QueueRecordColumnConfig,
+    QueueRecordFieldConfig,
     QueueRecordLayoutConfigV3,
 } from "@/lib/layout/queueRecordLayoutV3";
 import type { QueueRecordColumnWidth } from "@/lib/layout/queueRecordLayoutConfig";
@@ -34,7 +39,7 @@ import {
 } from "@/lib/adminV2/settings/surfaces/useQueueRowBuilder";
 import { namedEvidenceGroupsForZone } from "@/lib/adminV2/settings/surfaces/compositionFieldAdapter";
 import { ALLOY_OS_QUEUE_COMPRESSED_WIDTH_PX } from "@/lib/adminV2/runtime/alloyOsRuntimeFlag";
-import { MAX_STACKED_ROWS, clampRowIndex, stackedRows as computeStackedRows, type StackedItem } from "@/lib/adminV2/settings/surfaces/queueRowStackedModel";
+import { MAX_STACKED_ROWS, clampRowIndex } from "@/lib/adminV2/settings/surfaces/queueRowStackedModel";
 import { useTenantFieldDefinitions } from "@/lib/adminV2/settings/surfaces/useTenantFieldDefinitions";
 
 // ── Zone key ─────────────────────────────────────────────────────────────────
@@ -52,25 +57,56 @@ const ZONE_LABELS: Record<ZoneKey, string> = {
     actions: "Actions",
 };
 
-/** Proportional flex weights for the canvas preview strip. */
-const ZONE_FLEX: Record<ZoneKey, number> = {
-    household: 3,
-    children: 3,
-    status: 2,
-    attention: 2,
-    date_event: 1.5,
-    actions: 0.75,
+/**
+ * Anatomy region each builder zone owns in the REAL condensed row. The edit overlay
+ * places one selectable region per in-row zone, aligned to where that zone's fields
+ * render in the live `CondensedQueueRow` presenter (identity, status pill, attention
+ * line, grouped-count chip, work/date footer). `actions` has no compact-row region —
+ * it is configured from the library/inspector only.
+ */
+type AnatomyRegion = "identity" | "status" | "attention" | "groupCount" | "work" | null;
+const ZONE_REGION: Record<ZoneKey, AnatomyRegion> = {
+    household: "identity",
+    status: "status",
+    attention: "attention",
+    children: "groupCount",
+    date_event: "work",
+    actions: null,
 };
 
-/** Sample data lines shown in each canvas tile. */
-const ZONE_SAMPLE: Record<ZoneKey, string[]> = {
-    household: ["Smith Family", "Sarah · (555) 000-1234"],
-    children: ["Emma 4y  Liam 2y", "Active  Enrolled"],
-    status: ["New Lead", "Tour Scheduled"],
-    attention: ["Follow-up needed", "Send welcome packet"],
-    date_event: ["Tour: Thu Jul 3", ""],
-    actions: ["⋮"],
-};
+/**
+ * A representative row context for the builder canvas — populates every compact slot so
+ * the operator sees the real presenter with content. This is preview scaffolding for the
+ * EDIT canvas only; the runtime always renders live `QueueRowContext` from the queue API.
+ */
+function sampleRowModel(isWaitlist: boolean): QueueRowModel {
+    const context: QueueRowContext = {
+        contract_version: "1.1-partial",
+        row_subject: { subject_type: "case", subject_id: "sample-1", display_name: "Smith Family" },
+        row_stage: isWaitlist ? "Waitlist" : "New Leads",
+        lifecycle_key: "enrollment",
+        row_status_key: isWaitlist ? "waitlisted" : "new_lead",
+        row_status_label: isWaitlist ? "Waitlisted" : "New Lead",
+        case_context: {
+            case_id: "sample-1",
+            display_name: "Smith Family",
+            case_type_label: "Enrollment",
+            case_status_key: isWaitlist ? "waitlisted" : "new_lead",
+            case_status_label: isWaitlist ? "Waitlisted" : "New Lead",
+        },
+        primary_contact: { display_name: "Sarah Smith · (555) 000-1234" },
+        related_subjects_summary: [],
+        row_presentation_mode: "grouped_subjects",
+        row_count: 2,
+        row_count_unit: "children",
+        attention_summary: { needs_attention: true, primary_reason_label: "Follow-up needed" },
+        work_summary: { open_count: 1, primary_open_label: "Send welcome packet" },
+        current_work_summary: { label: "Schedule tour", state: "open", due_label: "Thu Jul 3" },
+        next_best_action: null,
+        drawer_open: { entity_type: "opportunities", entity_id: "sample-1" },
+    };
+    return { context, entityType: "opportunity", entityId: "sample-1" };
+}
 
 const ZONE_WIDTH_MAP: Partial<Record<ZoneKey, QueueRecordColumnWidth>> = {
     household: "identity",
@@ -99,6 +135,8 @@ type FieldToggleState = {
     fieldKey: string;
     label: string;
     enabled: boolean;
+    /** false = tenant custom field (from the adapter); true = platform predefined. */
+    isSystemField: boolean;
 };
 
 type EvidenceGroupState = {
@@ -222,6 +260,9 @@ export function stateFromConfig(
                     fieldKey,
                     label: registryField?.label ?? fieldKey.replace(/[._]/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()),
                     enabled: activeFieldKeys.has(fieldKey),
+                    // Adapter marks platform-defined vs tenant custom; default predefined
+                    // for a field already in config but not in the registry group.
+                    isSystemField: registryField?.isSystemField ?? true,
                 };
             });
 
@@ -271,9 +312,23 @@ export function buildConfigFromState(
                     const enabledKeys = new Set(
                         groupState.fields.filter((f) => f.enabled).map((f) => f.fieldKey),
                     );
-                    const filteredFields = b.fields.filter((f) => enabledKeys.has(f.fieldKey));
+                    // Base fields the operator kept, in their existing order.
+                    const baseKeys = new Set(b.fields.map((f) => f.fieldKey));
+                    const keptBase = b.fields.filter((f) => enabledKeys.has(f.fieldKey));
+                    // Newly ADDED fields: enabled in the section but not in the base block
+                    // (tenant custom fields, or predefined fields the operator re-added).
+                    // Synthesize a minimal composition item — same persisted model.
+                    const addedFields: QueueRecordFieldConfig[] = groupState.fields
+                        .filter((f) => f.enabled && !baseKeys.has(f.fieldKey))
+                        .map((f) => ({
+                            id: `fld_${f.fieldKey.replace(/[^a-zA-Z0-9]+/g, "_")}`,
+                            fieldKey: f.fieldKey,
+                            label: f.label,
+                            display: "text",
+                        }));
+                    const merged = [...keptBase, ...addedFields];
                     // Safety floor: always keep at least 1 field per block
-                    const finalFields = filteredFields.length > 0 ? filteredFields : b.fields.slice(0, 1);
+                    const finalFields = merged.length > 0 ? merged : b.fields.slice(0, 1);
                     return { ...b, fields: finalFields };
                 });
             const blocks = filteredBlocks.length > 0 ? filteredBlocks : catalogCol.blocks.slice(0, 1);
@@ -302,92 +357,220 @@ export function buildConfigFromState(
     };
 }
 
-// ── RowCanvas ─────────────────────────────────────────────────────────────────
+// ── AddFieldPicker ──────────────────────────────────────────────────────────────
 
-function RowCanvas({
+/**
+ * Section-scoped inline field picker. Lists the fields NOT yet on this section —
+ * predefined (platform) and tenant custom, exactly as the composition adapter offers
+ * them for the section's evidence groups. Picking one enables it through the same
+ * toggle path the inspector uses (no new persistence). UI says Section / Field only.
+ */
+export function AddFieldPicker({
+    zone,
+    onPick,
+    onClose,
+}: {
+    zone: RowZoneState;
+    onPick: (blockId: string, fieldKey: string) => void;
+    onClose: () => void;
+}) {
+    // Only enabled sections can receive a field (a disabled section contributes nothing
+    // to the built config); within them, offer the fields that are not yet added.
+    const sections = zone.evidenceGroups
+        .filter((g) => g.enabled)
+        .map((g) => ({ group: g, addable: g.fields.filter((f) => !f.enabled) }))
+        .filter((s) => s.addable.length > 0);
+
+    return (
+        <span
+            className="pointer-events-auto absolute left-0 top-6 z-20 w-60 rounded-lg border border-alloy-stone/20 bg-white p-1.5 shadow-lg"
+            role="dialog"
+            aria-label={`Add field to ${zone.columnLabel || ZONE_LABELS[zone.key]}`}
+            data-add-field-picker={zone.key}
+            onClick={(e) => e.stopPropagation()}
+        >
+            <span className="flex items-center justify-between px-1.5 pb-1 pt-0.5">
+                <span className="text-[10px] font-semibold uppercase tracking-wide text-alloy-midnight/45">
+                    Add field · {zone.columnLabel || ZONE_LABELS[zone.key]}
+                </span>
+                <button
+                    type="button"
+                    className="text-[11px] leading-none text-alloy-midnight/35 hover:text-alloy-midnight/70"
+                    onClick={onClose}
+                    aria-label="Close add field"
+                >
+                    ✕
+                </button>
+            </span>
+            {sections.length === 0 ? (
+                <p className="px-1.5 py-2 text-[11px] text-alloy-midnight/40">
+                    Every available field is already on this section.
+                </p>
+            ) : (
+                <span className="block max-h-56 overflow-y-auto">
+                    {sections.map(({ group, addable }) => (
+                        <span key={group.blockId} className="block px-0.5 pb-1">
+                            <span className="block px-1.5 py-1 text-[9.5px] font-semibold uppercase tracking-wide text-alloy-midnight/35">
+                                {group.label}
+                            </span>
+                            {addable.map((field) => (
+                                <button
+                                    key={field.fieldKey}
+                                    type="button"
+                                    className="flex w-full items-center gap-2 rounded px-1.5 py-1 text-left hover:bg-alloy-pine/[0.06]"
+                                    onClick={() => onPick(group.blockId, field.fieldKey)}
+                                    data-add-field-option={field.fieldKey}
+                                    data-add-field-custom={field.isSystemField ? undefined : "true"}
+                                >
+                                    <span className="text-[11px] leading-none text-alloy-pine">+</span>
+                                    <span className="flex-1 truncate text-[11px] text-alloy-midnight/80">
+                                        {field.label}
+                                    </span>
+                                    {!field.isSystemField ? (
+                                        <span className="shrink-0 rounded-full bg-alloy-stone/15 px-1.5 py-px text-[8.5px] font-semibold uppercase tracking-wide text-alloy-midnight/55">
+                                            Custom
+                                        </span>
+                                    ) : null}
+                                </button>
+                            ))}
+                        </span>
+                    ))}
+                </span>
+            )}
+        </span>
+    );
+}
+
+// ── QueueRowRuntimeCanvas ───────────────────────────────────────────────────────
+
+/**
+ * Edit-mode canvas: renders the REAL runtime `CondensedQueueRow` presenter (never a
+ * mock strip) from the operator's in-progress config, with a selection/reorder/remove
+ * overlay layered ON TOP. The presenter stays pure — it receives the same
+ * `CompactRowSlots` the /work-unit runtime feeds it (via `mapQueueRowSurfaceToCompactConfig`),
+ * so what the operator edits here is exactly what the runtime renders.
+ *
+ *   live zones → buildConfigFromState → QueueRecordLayoutConfigV3
+ *              → mapQueueRowSurfaceToCompactConfig → CompactRowSlots
+ *              → <CondensedQueueRow rowConfig={slots} />   (shared runtime component)
+ *
+ * The overlay's clickable regions map anatomy → builder zone (see ZONE_REGION), so
+ * select / remove / reorder operate on the actual row sections the operator sees.
+ */
+function QueueRowRuntimeCanvas({
     zones,
+    liveConfig,
+    sampleRow,
     selectedKey,
-    dragOverKey,
-    dragHalf,
     onSelect,
     onRemove,
-    onDragStart,
-    onDragOver,
-    onDrop,
-    onDragEnd,
+    onReorder,
+    onAddField,
 }: {
     zones: RowZoneState[];
+    liveConfig: QueueRecordLayoutConfigV3;
+    sampleRow: QueueRowModel;
     selectedKey: ZoneKey | null;
-    dragOverKey: ZoneKey | null;
-    dragHalf: "left" | "right" | null;
     onSelect: (key: ZoneKey) => void;
     onRemove: (key: ZoneKey) => void;
-    onDragStart: (e: React.DragEvent, key: ZoneKey) => void;
-    onDragOver: (e: React.DragEvent, key: ZoneKey) => void;
-    onDrop: (e: React.DragEvent, key: ZoneKey) => void;
-    onDragEnd: () => void;
+    onReorder: (key: ZoneKey, dir: -1 | 1) => void;
+    /** Enable a field on a section (evidence group) — reuses the inspector's toggle path. */
+    onAddField: (key: ZoneKey, blockId: string, fieldKey: string) => void;
 }) {
     const inRow = zones.filter((z) => z.inRow);
+    // Which section's inline "Add field" picker is open (null = none).
+    const [pickerZone, setPickerZone] = useState<ZoneKey | null>(null);
 
-    // Group placed zones into stacked sections by rowIndex (Presentation Runtime V3).
-    const rows = computeStackedRows(
-        inRow.map((z): StackedItem => ({ key: z.key, rowIndex: clampRowIndex(z.rowIndex), inRow: true })),
-    );
+    // The exact runtime consumption path: published/edited config → compact slots.
+    const slots = mapQueueRowSurfaceToCompactConfig(liveConfig).slots;
 
-    const renderTile = (z: RowZoneState) => {
+    // Ordered list of overlay-selectable regions (zones that own a compact-row region).
+    const regionZones = inRow.filter((z) => ZONE_REGION[z.key] !== null);
+    const orderIndex = (key: ZoneKey) => regionZones.findIndex((z) => z.key === key);
+
+    const RegionHandle = ({ z }: { z: RowZoneState }) => {
         const isSelected = z.key === selectedKey;
-        const isDragTarget = z.key === dragOverKey;
-        const sample = ZONE_SAMPLE[z.key];
-        const flex = ZONE_FLEX[z.key];
+        const idx = orderIndex(z.key);
         return (
-            <div
-                key={z.key}
-                style={{ flex }}
+            <span
                 className={[
-                    "group relative min-w-0 cursor-pointer select-none",
-                    isSelected ? "bg-alloy-pine/[0.06] ring-1 ring-inset ring-alloy-pine/30" : "hover:bg-alloy-stone/[0.04]",
-                    isDragTarget && dragHalf === "left" ? "border-l-2 border-alloy-pine" : "",
-                    isDragTarget && dragHalf === "right" ? "border-r-2 border-alloy-pine" : "",
+                    "group/region pointer-events-auto absolute inset-0 z-10 flex items-center gap-0.5 rounded",
+                    "cursor-pointer transition-shadow",
+                    isSelected
+                        ? "shadow-[inset_0_0_0_1.5px_var(--alloy-os-bend-pine,#00a283)]"
+                        : "hover:shadow-[inset_0_0_0_1px_rgba(0,162,131,0.35)]",
                 ].join(" ")}
-                draggable
-                onDragStart={(e) => onDragStart(e, z.key)}
-                onDragOver={(e) => onDragOver(e, z.key)}
-                onDrop={(e) => onDrop(e, z.key)}
-                onDragEnd={onDragEnd}
-                onClick={() => onSelect(z.key)}
-                data-canvas-zone={z.key}
-                data-canvas-row={z.rowIndex}
-                data-canvas-selected={isSelected || undefined}
             >
-                <span
-                    className="absolute right-1 top-1 cursor-grab text-[10px] leading-none text-alloy-midnight/20 opacity-0 group-hover:opacity-100 active:cursor-grabbing"
-                    aria-hidden
-                >
-                    ⠿
-                </span>
-                {z.key !== "actions" && (
-                    <button
-                        type="button"
-                        className="absolute left-1 top-1 hidden rounded text-[10px] leading-none text-alloy-midnight/30 hover:text-red-400 group-hover:block"
-                        onClick={(e) => { e.stopPropagation(); onRemove(z.key); }}
-                        aria-label={`Remove ${ZONE_LABELS[z.key]}`}
-                        data-canvas-remove={z.key}
-                    >
-                        ✕
-                    </button>
-                )}
-                <div className="px-3 pb-2 pt-4">
-                    <p className={`truncate text-[10px] font-semibold uppercase tracking-wide ${isSelected ? "text-alloy-pine" : "text-alloy-midnight/40"}`}>
-                        {z.columnLabel || ZONE_LABELS[z.key]}
-                    </p>
-                    {sample.filter(Boolean).map((line, i) => (
-                        <p key={i} className="mt-0.5 truncate text-[11px] text-alloy-midnight/50">
-                            {line}
-                        </p>
-                    ))}
-                </div>
-            </div>
+                <button
+                    type="button"
+                    className="h-full w-full cursor-pointer bg-transparent"
+                    onClick={() => onSelect(z.key)}
+                    aria-label={`Select ${z.columnLabel || ZONE_LABELS[z.key]} section`}
+                    data-canvas-zone={z.key}
+                    data-canvas-selected={isSelected || undefined}
+                />
+                {isSelected ? (
+                    <span className="absolute -top-2 right-0 flex items-center gap-0.5">
+                        <button
+                            type="button"
+                            className="rounded bg-white px-1 text-[10px] font-semibold leading-none text-alloy-pine shadow-sm hover:bg-alloy-pine/10"
+                            onClick={(e) => { e.stopPropagation(); setPickerZone((p) => (p === z.key ? null : z.key)); }}
+                            aria-label={`Add field to ${ZONE_LABELS[z.key]}`}
+                            aria-expanded={pickerZone === z.key}
+                            data-canvas-add-field={z.key}
+                        >
+                            + Field
+                        </button>
+                        <button
+                            type="button"
+                            className="rounded bg-white px-1 text-[10px] leading-none text-alloy-midnight/50 shadow-sm hover:text-alloy-pine disabled:opacity-30"
+                            onClick={(e) => { e.stopPropagation(); onReorder(z.key, -1); }}
+                            disabled={idx <= 0}
+                            aria-label={`Move ${ZONE_LABELS[z.key]} earlier`}
+                            data-canvas-reorder-left={z.key}
+                        >
+                            ←
+                        </button>
+                        <button
+                            type="button"
+                            className="rounded bg-white px-1 text-[10px] leading-none text-alloy-midnight/50 shadow-sm hover:text-alloy-pine disabled:opacity-30"
+                            onClick={(e) => { e.stopPropagation(); onReorder(z.key, 1); }}
+                            disabled={idx < 0 || idx >= regionZones.length - 1}
+                            aria-label={`Move ${ZONE_LABELS[z.key]} later`}
+                            data-canvas-reorder-right={z.key}
+                        >
+                            →
+                        </button>
+                        <button
+                            type="button"
+                            className="rounded bg-white px-1 text-[10px] leading-none text-alloy-midnight/40 shadow-sm hover:text-red-500"
+                            onClick={(e) => { e.stopPropagation(); onRemove(z.key); }}
+                            aria-label={`Remove ${ZONE_LABELS[z.key]}`}
+                            data-canvas-remove={z.key}
+                        >
+                            ✕
+                        </button>
+                    </span>
+                ) : null}
+                {pickerZone === z.key ? (
+                    <AddFieldPicker
+                        zone={z}
+                        onPick={(blockId, fieldKey) => { onAddField(z.key, blockId, fieldKey); setPickerZone(null); }}
+                        onClose={() => setPickerZone(null)}
+                    />
+                ) : null}
+            </span>
         );
+    };
+
+    // Anatomy region → absolute position over the real row (mirrors CondensedQueueRow's
+    // fixed anatomy: identity top-left, status pill top-right, attention line, footer).
+    const REGION_BOX: Record<Exclude<AnatomyRegion, null>, string> = {
+        identity: "left-[42px] right-[7rem] top-[8px] h-[34px]",
+        status: "right-3 top-[8px] h-5 w-[6.5rem]",
+        attention: "left-[42px] right-3 top-[46px] h-4",
+        groupCount: "left-[42px] top-[66px] h-4 w-[5rem]",
+        work: "right-3 top-[66px] h-4 w-[9rem]",
     };
 
     return (
@@ -396,51 +579,46 @@ function RowCanvas({
                 <p className="text-[10px] font-semibold uppercase tracking-wide text-alloy-midnight/40">
                     Row canvas
                     <span className="ml-1.5 font-normal normal-case tracking-normal text-alloy-midnight/30">
-                        · condensed rail {ALLOY_OS_QUEUE_COMPRESSED_WIDTH_PX}px
+                        · live runtime row · condensed rail {ALLOY_OS_QUEUE_COMPRESSED_WIDTH_PX}px
                     </span>
                 </p>
-                <p className="text-[10px] text-alloy-midnight/30">Stacked sections · click to inspect · set Row in inspector</p>
+                <p className="text-[10px] text-alloy-midnight/30">Click a section to inspect · reorder / remove on select</p>
             </div>
             {/*
              * Runtime-width frame: the condensed queue row renders inside a fixed
              * ~440px rail (--alloy-os-queue-compressed-width) whenever the Focus Panel
-             * is docked. The builder area is wider, so we center the row strip inside a
-             * fixed-width frame instead of stretching it full-width — the preview then
-             * matches the true runtime geometry (width + height + gaps).
+             * is docked. We render the ACTUAL CondensedQueueRow presenter here (same
+             * component + same CompactRowSlots the runtime consumes) so the preview is
+             * the real thing, not a mock — with the edit overlay layered on top.
              */}
             <div className="flex justify-center px-4 py-4">
                 <div
-                    className="overflow-hidden rounded-lg border border-alloy-stone/12 bg-white shadow-sm"
+                    className="relative rounded-lg"
                     style={{ width: ALLOY_OS_QUEUE_COMPRESSED_WIDTH_PX, maxWidth: ALLOY_OS_QUEUE_COMPRESSED_WIDTH_PX }}
                     data-canvas-runtime-frame
                     data-canvas-runtime-width={ALLOY_OS_QUEUE_COMPRESSED_WIDTH_PX}
                 >
-            {/*
-             * Stacked sections: each rowIndex renders as its own horizontal strip
-             * (min 40px), stacked vertically inside the fixed 440px rail. One row =
-             * the legacy condensed row. The live /work-unit runtime does not consume
-             * stacking yet — this preview is presentation-runtime-ready.
-             */}
-            {rows.length === 0 ? (
-                <div className="flex min-h-[76px] items-center justify-center py-6 text-[12px] text-alloy-midnight/30">
-                    No blocks in row — add from library below
-                </div>
-            ) : (
-                <div className="divide-y divide-alloy-stone/12" data-canvas-stacked-rows={rows.length}>
-                    {rows.map((row) => (
-                        <div
-                            key={row.rowIndex}
-                            className="flex min-h-[42px] items-stretch divide-x divide-alloy-stone/10"
-                            data-canvas-stacked-row={row.rowIndex}
-                        >
-                            {row.items
-                                .map((it) => inRow.find((z) => z.key === it.key))
-                                .filter((z): z is RowZoneState => Boolean(z))
-                                .map((z) => renderTile(z))}
+                    {/* Real runtime presenter — pointer-events off so the overlay owns interaction. */}
+                    <div className="pointer-events-none" data-canvas-runtime-row>
+                        <CondensedQueueRow row={sampleRow} rowConfig={slots} onOpen={() => {}} isFirst />
+                    </div>
+                    {/* Edit overlay — selectable anatomy regions mapped to builder zones. */}
+                    {regionZones.length === 0 ? (
+                        <div className="pointer-events-none absolute inset-0 flex items-center justify-center text-[12px] text-alloy-midnight/30">
+                            No sections in row — add from library below
                         </div>
-                    ))}
-                </div>
-            )}
+                    ) : (
+                        <div className="pointer-events-none absolute inset-0" data-canvas-overlay>
+                            {regionZones.map((z) => {
+                                const region = ZONE_REGION[z.key] as Exclude<AnatomyRegion, null>;
+                                return (
+                                    <span key={z.key} className={`absolute ${REGION_BOX[region]}`}>
+                                        <RegionHandle z={z} />
+                                    </span>
+                                );
+                            })}
+                        </div>
+                    )}
                 </div>
             </div>
         </div>
@@ -928,11 +1106,6 @@ export default function QueueRowBuilderV2({ surfaceId = "pipeline-queue-row" }: 
     const [dirty, setDirty] = useState(false);
     const [selectedKey, setSelectedKey] = useState<ZoneKey | null>(null);
 
-    // Drag state (HTML5 DnD)
-    const dragKey = useRef<ZoneKey | null>(null);
-    const [dragOverKey, setDragOverKey] = useState<ZoneKey | null>(null);
-    const [dragHalf, setDragHalf] = useState<"left" | "right" | null>(null);
-
     // Init from server data. Re-runs when tenant field definitions load so custom
     // fields appear in each group's Add Field list. (Resets local edits — acceptable:
     // tenant defs resolve once, near-instantly, on mount.)
@@ -962,53 +1135,6 @@ export default function QueueRowBuilderV2({ surfaceId = "pipeline-queue-row" }: 
     const removeZone = useCallback((key: ZoneKey) => {
         mark((prev) => prev.map((z) => (z.key === key ? { ...z, inRow: false } : z)));
         setSelectedKey((prev) => (prev === key ? null : prev));
-    }, []);
-
-    // Drag handlers
-    const handleDragStart = useCallback((e: React.DragEvent, key: ZoneKey) => {
-        dragKey.current = key;
-        e.dataTransfer.effectAllowed = "move";
-    }, []);
-
-    const handleDragOver = useCallback((e: React.DragEvent, key: ZoneKey) => {
-        e.preventDefault();
-        e.dataTransfer.dropEffect = "move";
-        const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-        const half = e.clientX < rect.left + rect.width / 2 ? "left" : "right";
-        setDragOverKey(key);
-        setDragHalf(half);
-    }, []);
-
-    const handleDrop = useCallback((e: React.DragEvent, targetKey: ZoneKey) => {
-        e.preventDefault();
-        const from = dragKey.current;
-        if (!from || from === targetKey) {
-            setDragOverKey(null);
-            setDragHalf(null);
-            return;
-        }
-        const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-        const insertAfter = e.clientX >= rect.left + rect.width / 2;
-
-        mark((prev) => {
-            const next = [...prev];
-            const fromIdx = next.findIndex((z) => z.key === from);
-            const toIdx = next.findIndex((z) => z.key === targetKey);
-            if (fromIdx === -1 || toIdx === -1) return prev;
-            const [item] = next.splice(fromIdx, 1);
-            const insertAt = insertAfter ? toIdx : Math.max(0, toIdx - (fromIdx < toIdx ? 1 : 0));
-            next.splice(insertAt < fromIdx ? insertAt : insertAfter ? insertAt : insertAt, 0, item);
-            return next;
-        });
-        setDragOverKey(null);
-        setDragHalf(null);
-        dragKey.current = null;
-    }, []);
-
-    const handleDragEnd = useCallback(() => {
-        setDragOverKey(null);
-        setDragHalf(null);
-        dragKey.current = null;
     }, []);
 
     // Inspector mutations
@@ -1064,6 +1190,22 @@ export default function QueueRowBuilderV2({ surfaceId = "pipeline-queue-row" }: 
         mark((prev) => prev.map((z) => (z.key === key ? { ...z, visibleWhen: null } : z)));
     }, []);
 
+    // Canvas: reorder an in-row zone one step earlier/later (overlay ← / → controls).
+    const moveZone = useCallback((key: ZoneKey, dir: -1 | 1) => {
+        mark((prev) => {
+            const next = [...prev];
+            const fromIdx = next.findIndex((z) => z.key === key);
+            if (fromIdx === -1) return prev;
+            // Walk to the neighbouring in-row zone in the requested direction.
+            let toIdx = fromIdx + dir;
+            while (toIdx >= 0 && toIdx < next.length && !next[toIdx].inRow) toIdx += dir;
+            if (toIdx < 0 || toIdx >= next.length || !next[toIdx].inRow) return prev;
+            const [item] = next.splice(fromIdx, 1);
+            next.splice(toIdx, 0, item);
+            return next;
+        });
+    }, []);
+
     const togglePlacementOverride = useCallback(() => {
         setPlacementOverrideEnabled((v) => !v);
         setDirty(true);
@@ -1077,6 +1219,15 @@ export default function QueueRowBuilderV2({ surfaceId = "pipeline-queue-row" }: 
     }
 
     const selectedZone = zones.find((z) => z.key === selectedKey) ?? null;
+
+    // The operator's in-progress config, rebuilt from live zones — this is the exact
+    // shape the runtime consumes. Feeding it to the real CondensedQueueRow makes the
+    // canvas the live runtime row, not a mock.
+    const liveConfig = useMemo(
+        () => buildConfigFromState(serverData?.config ?? defaultConfig, zones, catalog.current),
+        [serverData, defaultConfig, zones],
+    );
+    const sampleRow = useMemo(() => sampleRowModel(isWaitlist), [isWaitlist]);
 
     return (
         <div
@@ -1112,18 +1263,16 @@ export default function QueueRowBuilderV2({ surfaceId = "pipeline-queue-row" }: 
                 </div>
             ) : (
                 <>
-                    {/* Row canvas */}
-                    <RowCanvas
+                    {/* Row canvas — the real runtime CondensedQueueRow with edit overlay. */}
+                    <QueueRowRuntimeCanvas
                         zones={zones}
+                        liveConfig={liveConfig}
+                        sampleRow={sampleRow}
                         selectedKey={selectedKey}
-                        dragOverKey={dragOverKey}
-                        dragHalf={dragHalf}
                         onSelect={setSelectedKey}
                         onRemove={removeZone}
-                        onDragStart={handleDragStart}
-                        onDragOver={handleDragOver}
-                        onDrop={handleDrop}
-                        onDragEnd={handleDragEnd}
+                        onReorder={moveZone}
+                        onAddField={(key, blockId, fieldKey) => toggleField(key, blockId, fieldKey)}
                     />
 
                     {/* Block library tray */}

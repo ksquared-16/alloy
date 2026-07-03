@@ -22,7 +22,7 @@ export type SurfaceConfigSection = {
 export type SurfaceEditorKind =
     | "focus-panel-summary"
     | "operational-intelligence"
-    | "workspace-header"
+    | "workspace-processes"
     | "work-unit-header"
     | "queue-row-builder";
 
@@ -83,14 +83,14 @@ export const SURFACE_OBJECTS: Record<SurfaceConfigSectionKey, SurfaceConfigObjec
         },
     ],
     workspaces: [],
-    // Header surfaces — the metric strip atop the workspace and each work unit.
-    // Same SurfaceBuilder, compact density. Preview persistence for now.
+    // Header surfaces. The Workspace Header metric strip is retired — the Workspace
+    // Processes surface (process cards) is the workspace body now.
     headers: [
         {
-            id: "workspace-header",
-            title: "Workspace Header",
-            subtitle: "Metrics atop /workspace",
-            editor: "workspace-header",
+            id: "workspace-processes",
+            title: "Workspace Processes",
+            subtitle: "Process cards on /workspace",
+            editor: "workspace-processes",
             liveHref: "/workspace",
         },
         {

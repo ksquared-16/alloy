@@ -4,11 +4,9 @@
  * Presentation Runtime V2 — WS.SURFACE resolution.
  *
  * Resolves the WorkspaceSurfaceModel from the existing data layer, reused verbatim:
- *   - header / first-paint tiles — server-composed workspace Route VM
- *   - header calculations        — the PUBLISHED "Workspace Header" surface cards, seeded
- *                                  from the Route VM (values server-resolved); code-owned
- *                                  fallback keys when no surface is published; values
- *                                  refined in place from the OIP warm cache (site-aware)
+ *   - header                     — org identity only (title); the retired Workspace Header
+ *                                  metric strip is gone — the Workspace Process Surface
+ *                                  (process cards) is the entire workspace body
  *   - process tiles              — operator lifecycle landing cards (peek → load refine)
  *   - work-view counts           — canonical-location totals (`useWorkViewTotals`): each
  *                                  view's count is the rows-API exact total at its host
@@ -19,7 +17,7 @@
  * (docs/platform/experience/presentation-runtime-v2.md).
  */
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useWorkspaceOrg } from "@/contexts/WorkspaceOrgContext";
 import { useWorkspaceSiteFilter } from "@/contexts/WorkspaceSiteFilterContext";
 import { useWorkspaceRouteVm } from "@/lib/adminV2/runtime/surface/workspaceRouteVmContext";
@@ -28,18 +26,20 @@ import {
     loadOperatorLifecycleLandingCards,
     peekOperatorLifecycleLandingCards,
 } from "@/lib/admin/loadOperatorLifecycleLandingClient";
-import { useOperationalAnswers } from "./useOperationalAnswers";
-import {
-    refineWorkspaceHeaderCardVms,
-    seedWorkspaceHeaderCalculations,
-    workspaceHeaderCalculationKeys,
-    type WorkspaceHeaderCalculationCardVm,
-} from "./workspaceHeaderCards";
 import {
     useWorkViewTotals,
     workViewTotalKey,
     type WorkViewTotalTarget,
 } from "./useWorkViewTotals";
+import { useOperationalAnswers } from "./useOperationalAnswers";
+import { useWorkspaceProcessSurfaceConfig } from "./useWorkspaceProcessSurfaceConfig";
+import {
+    businessProcessForProcessKey,
+    defaultSignalKeyForProcess,
+    resolvePrimarySignal,
+} from "./workspaceProcessSignal";
+import { isKnownCalculationKey } from "@/lib/analytics/calculations/registry";
+import type { OipMetricKey } from "@/lib/metrics/types";
 import { processTileModelFromLandingCard, type WorkspaceSurfaceModel } from "./types";
 import type { ResolvedActionForClient } from "@/lib/admin/actions/types";
 import { fetchWorkspaceRootResolvedActions } from "@/lib/workspace/fetchWorkspaceRootResolvedActions";
@@ -102,29 +102,6 @@ export function useWorkspaceSurfaceRuntime(): WorkspaceSurfaceModel {
     // Default department for org-level workspace actions (Create Lead) — the first process's dept.
     const defaultDepartmentId = cards[0]?.departmentId ?? null;
 
-    // ── Header calculations: the published Workspace Header surface ────────────────────
-    // Server seed (Route VM, values resolved) or the code-owned fallback strip — the card
-    // SET is fixed at first commit; the warm cache only refines value/status in place
-    // (derived, not stateful: seed + latest resolved map → refined cards).
-    const [seededCalculations] = useState<WorkspaceHeaderCalculationCardVm[]>(() =>
-        seedWorkspaceHeaderCalculations(routeVm.firstPaint.headerCalculations),
-    );
-    const calculationKeys = useMemo(
-        () => workspaceHeaderCalculationKeys(seededCalculations),
-        [seededCalculations],
-    );
-    const { resolved: calculationsResolved } = useOperationalAnswers({
-        siteId: selectedSiteId,
-        keys: calculationKeys,
-    });
-    const calculations = useMemo(
-        () =>
-            calculationsResolved ?
-                refineWorkspaceHeaderCardVms(seededCalculations, calculationsResolved)
-            :   seededCalculations,
-        [seededCalculations, calculationsResolved],
-    );
-
     // ── Work View counts: canonical-location totals (ONE count source) ─────────────────
     // Each configured view's nav entry carries its canonical location (host work unit +
     // base lane); the count is the rows-API exact total there — the same number the Work
@@ -154,34 +131,69 @@ export function useWorkspaceSurfaceRuntime(): WorkspaceSurfaceModel {
         enabled: orgId != null,
     });
 
+    // ── Primary Signal: the ONE configured Operational Calculation per process ──────────
+    // Surface Builder chooses WHICH signal (config.primarySignalByProcess, keyed by business
+    // process); the runtime falls back to the registry default for the process. No hardcoded
+    // health metric. The selected calculations are resolved through the canonical answer path.
+    const processConfig = useWorkspaceProcessSurfaceConfig();
+    const signalKeyForCard = useCallback(
+        (card: OperatorLifecycleLandingCard): string | null => {
+            const bp = businessProcessForProcessKey(card.processKey);
+            const configured = bp ? processConfig.primarySignalByProcess[bp] : undefined;
+            return configured ?? defaultSignalKeyForProcess(card.processKey);
+        },
+        [processConfig],
+    );
+    const signalKeys = useMemo<OipMetricKey[]>(() => {
+        const seen = new Set<string>();
+        const out: OipMetricKey[] = [];
+        for (const card of cards) {
+            const key = signalKeyForCard(card);
+            if (key && isKnownCalculationKey(key) && !seen.has(key)) {
+                seen.add(key);
+                out.push(key);
+            }
+        }
+        return out;
+    }, [cards, signalKeyForCard]);
+    const { resolved: signalsResolved } = useOperationalAnswers({
+        siteId: selectedSiteId,
+        keys: signalKeys,
+    });
+
     const processes = useMemo(
         () =>
-            cards.map((card) =>
-                processTileModelFromLandingCard(card, {
+            cards.map((card) => {
+                const signalKey = signalKeyForCard(card);
+                const primarySignal =
+                    signalKey && isKnownCalculationKey(signalKey)
+                        ? resolvePrimarySignal(signalKey, signalsResolved?.[signalKey])
+                        : null;
+                return processTileModelFromLandingCard(card, {
                     countForWorkView: (entry) => {
                         const viewId = entry.work_view_id?.trim();
                         const workUnitId = entry.host_work_unit_id?.trim();
                         if (!viewId || !workUnitId) return null;
                         return workViewTotals.get(workViewTotalKey(workUnitId, viewId)) ?? null;
                     },
-                }),
-            ),
-        [cards, workViewTotals],
+                    primarySignal,
+                });
+            }),
+        [cards, workViewTotals, signalKeyForCard, signalsResolved],
     );
 
     return useMemo<WorkspaceSurfaceModel>(
         () => ({
-            header: { orgName: orgName ?? routeVm.context.orgName, calculations },
+            header: { orgName: orgName ?? routeVm.context.orgName },
             processes,
             rightRailActions,
             defaultDepartmentId,
-            // Tiles present (warm seed) or the load settled — calculation values patch quietly after.
+            // Tiles present (warm seed) or the load settled.
             ready: processes.length > 0 || cardsSettled,
         }),
         [
             orgName,
             routeVm.context.orgName,
-            calculations,
             processes,
             rightRailActions,
             defaultDepartmentId,

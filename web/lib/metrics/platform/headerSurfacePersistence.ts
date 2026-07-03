@@ -21,7 +21,8 @@ export type HeaderSurface = (typeof HEADER_SURFACES)[number];
 
 /**
  * The zone the RUNTIME reads for each header (must match the MetricPlacementRenderer calls):
- * - Workspace header → `primary_metrics` (WorkspaceOperationalPulseStrip primary strip)
+ * - Workspace header → `primary_metrics` (retired: the Workspace Header metric strip was
+ *   replaced by the Workspace Process Surface; these rows are no longer read at runtime)
  * - Work unit header → `header_metrics` (WorkUnitCommandSurface)
  * Writing to the runtime's zone is what makes /workspace + /work-unit reflect Publish.
  */

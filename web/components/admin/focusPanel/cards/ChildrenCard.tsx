@@ -21,6 +21,11 @@ import {
     buildChildrenCardEvidence,
     type ChildrenEvidenceChild,
 } from "@/lib/adminV2/runtime/focusPanel/children/buildChildrenCardEvidence";
+import { usePublishedFocusPanelSummaryDoc } from "@/lib/adminV2/runtime/focusPanel/usePublishedFocusPanelSummaryDoc";
+import {
+    childrenDetailFieldKeysFromNestedConfig,
+    readChildrenNestedConfigFromDoc,
+} from "@/lib/adminV2/runtime/focusPanel/children/childrenNestedSurfaceConfig";
 import { cardCapabilities, cardRelatedViews } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardLifecycle";
 import type { FocusPanelCardModel } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardModel";
 import {
@@ -62,7 +67,18 @@ const RELATED_VIEWS = cardRelatedViews("children");
  * @see docs/platform/operator/universal-card-lifecycle.md
  */
 export default function ChildrenCard({ model, context, receded = false, coordination }: Props) {
-    const evidence = useMemo(() => buildChildrenCardEvidence(context), [context]);
+    // Published Children Surface config (metadata.nestedSurfaces["children_surface"]),
+    // authored in /settings/surfaces. Null until loaded / when unpublished → default
+    // field order. This is the runtime consuming the nested-surface authoring model.
+    const publishedDoc = usePublishedFocusPanelSummaryDoc(true);
+    const childDetailFieldKeys = useMemo(() => {
+        const config = readChildrenNestedConfigFromDoc(publishedDoc);
+        return childrenDetailFieldKeysFromNestedConfig(config);
+    }, [publishedDoc]);
+    const evidence = useMemo(
+        () => buildChildrenCardEvidence(context, { childDetailFieldKeys }),
+        [context, childDetailFieldKeys],
+    );
 
     const [rosterOpen, setRosterOpen] = useState(false);
     const [focusedId, setFocusedId] = useState<string | null>(null);
@@ -224,7 +240,12 @@ export default function ChildrenCard({ model, context, receded = false, coordina
         body = (
             <div className="alloy-os-children__roster" data-children-roster>
                 {evidence.children.map((child) => (
-                    <ChildSummaryRow key={child.id} child={child} onFocus={() => focusChild(child.id)} />
+                    <ChildSummaryRow
+                        key={child.id}
+                        child={child}
+                        onFocus={() => focusChild(child.id)}
+                        fieldKeys={childDetailFieldKeys}
+                    />
                 ))}
             </div>
         );
@@ -278,13 +299,53 @@ function Ico({ icon: Icon }: { icon: LucideIcon }) {
     );
 }
 
-/** Summary: a scannable per-child mini-profile — details stack under the name. */
-function ChildSummaryRow({ child, onFocus }: { child: ChildrenEvidenceChild; onFocus: () => void }) {
+/**
+ * Roster field → icon + accessor. Lets the PUBLISHED Children Surface config choose which
+ * per-child fields render in the summary roster, and their order — reusing the same
+ * `metadata.nestedSurfaces["children_surface"]` config that drives the detail line. Keys not
+ * mapped here (name/status) render elsewhere; a field with no value for a child is skipped.
+ */
+const ROSTER_FIELD_META: Record<string, { icon: LucideIcon; get: (c: ChildrenEvidenceChild) => string | null }> = {
+    "child.date_of_birth": { icon: Cake, get: (c) => c.dobAge },
+    "inquiry_child.program": { icon: GraduationCap, get: (c) => c.program },
+    "child.room": { icon: DoorOpen, get: (c) => c.room },
+    "inquiry_child.schedule_type": { icon: CalendarDays, get: (c) => c.schedule },
+    "child.start_date": { icon: CalendarClock, get: (c) => c.startDate },
+};
+
+/** Roster meta lines: from the published config field order, else the default order (back-compat). */
+function childRosterMeta(
+    child: ChildrenEvidenceChild,
+    fieldKeys: readonly string[],
+): { icon: LucideIcon; value: string }[] {
+    const configured = fieldKeys.filter((k) => k in ROSTER_FIELD_META);
+    if (configured.length) {
+        return configured.flatMap((k) => {
+            const m = ROSTER_FIELD_META[k]!;
+            const value = m.get(child);
+            return value ? [{ icon: m.icon, value }] : [];
+        });
+    }
     const meta: { icon: LucideIcon; value: string }[] = [];
     if (child.dobAge) meta.push({ icon: Cake, value: child.dobAge });
     if (child.program) meta.push({ icon: GraduationCap, value: child.program });
     if (child.room) meta.push({ icon: DoorOpen, value: child.room });
     if (child.schedule) meta.push({ icon: CalendarDays, value: child.schedule });
+    return meta;
+}
+
+/** Summary: a scannable per-child mini-profile — details stack under the name. */
+function ChildSummaryRow({
+    child,
+    onFocus,
+    fieldKeys,
+}: {
+    child: ChildrenEvidenceChild;
+    onFocus: () => void;
+    /** Published Children Surface field order (empty → default order). */
+    fieldKeys: readonly string[];
+}) {
+    const meta = childRosterMeta(child, fieldKeys);
     return (
         <button
             type="button"

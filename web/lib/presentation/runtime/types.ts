@@ -23,7 +23,6 @@ import type { WorkViewConfigV1Stored } from "@/lib/lifecycle/workViewsConfigV1";
 import type { QueueItemsResult } from "@/lib/queues/types";
 import type { OipMetricKey } from "@/lib/metrics/types";
 import type { ResolvedMetricMap } from "@/lib/metrics/fetchResolvedMetrics";
-import type { WorkspaceHeaderCalculationCardVm } from "./workspaceHeaderCards";
 import type { WorkUnitHeaderCalculationCardVm } from "./workUnitHeaderCards";
 import type { CompactRowSlots } from "./queueRowSurfaceConfig";
 import { findOperationalCalculation } from "@/lib/analytics/calculations/registry";
@@ -67,6 +66,8 @@ export type WorkViewLinkModel = {
 /** A process tile — the collapsed state of a process on the Workspace surface. */
 export type ProcessTileModel = {
     id: string;
+    /** The process's business-process key — resolves its configured Primary Signal + signal options. */
+    processKey: string;
     label: string;
     description: string;
     /** Canonical slug entry (`/workspace/work-unit/<slug>`). */
@@ -74,13 +75,32 @@ export type ProcessTileModel = {
     activeRecordCount: number | null;
     needsAttentionCount: number | null;
     workViews: WorkViewLinkModel[];
-    /** Already-formatted OIP preview values (server/warm-cache resolved). */
-    performanceMetrics: readonly {
-        label: string;
-        value: string;
-        target?: string | null;
-        status?: string | null;
-    }[];
+    /**
+     * The one configured Primary Signal for this process — a resolved Operational Calculation
+     * (answer / value / state / supporting context / drill). Null when none is configured/resolved
+     * (the card shows a neutral no-signal state; it never fabricates one).
+     */
+    primarySignal: PrimarySignalModel | null;
+};
+
+/** Canonical display state of a Primary Signal — localized from the calculation's KPI status. */
+export type SignalState = "healthy" | "caution" | "critical" | "neutral";
+
+/** A resolved Primary Signal the ProcessSummaryCard renders (domain-neutral). */
+export type PrimarySignalModel = {
+    key: string;
+    label: string;
+    /** Answer line — the signal framed by its canonical state. */
+    answer: string;
+    state: SignalState;
+    /** Formatted value (percent / currency / count / score / ratio — the card never branches on type). */
+    value: string | null;
+    /** Supporting context (the calculation's target, as text). */
+    supportingContext: string | null;
+    /** Trend text — rendered only when the data layer supplies it; never fabricated. */
+    trend: string | null;
+    /** Drill target from the calculation's drill contract. */
+    drillHref: string | null;
 };
 
 /**
@@ -96,14 +116,10 @@ export type QueueRowModel = {
 
 /** WS.SURFACE — resolved model for the Workspace surface. */
 export type WorkspaceSurfaceModel = {
+    /** Org identity only. The retired Workspace Header metric strip is gone — the
+     *  Workspace Process Surface (process cards) is the entire workspace body. */
     header: {
         orgName: string | null;
-        /**
-         * The published Workspace Header calculation cards (WS.HEADER_CALCULATIONS) —
-         * server-seeded from the Route VM, code-owned fallback when no surface is
-         * published, values refined in place by the warm cache after mount.
-         */
-        calculations: WorkspaceHeaderCalculationCardVm[];
     };
     processes: ProcessTileModel[];
     /**
@@ -312,10 +328,13 @@ export function processTileModelFromLandingCard(
     card: OperatorLifecycleLandingCard,
     args?: {
         countForWorkView?: (entry: OperatorLifecycleWorkQueuePreview) => number | null;
+        /** The resolved Primary Signal for this process (null when unconfigured/unresolved). */
+        primarySignal?: PrimarySignalModel | null;
     },
 ): ProcessTileModel {
     return {
         id: card.id,
+        processKey: card.processKey,
         label: card.label,
         description: card.description,
         entryHref: card.entryHref,
@@ -324,7 +343,7 @@ export function processTileModelFromLandingCard(
         workViews: card.workQueues.map((entry) =>
             workViewLinkFromWorkQueuePreview(entry, args?.countForWorkView?.(entry) ?? null),
         ),
-        performanceMetrics: card.performanceMetrics ?? [],
+        primarySignal: args?.primarySignal ?? null,
     };
 }
 

@@ -80,20 +80,22 @@ describe("processTileModelFromLandingCard", () => {
             activeRecordCount: 12,
             needsAttentionCount: 3,
         });
-        expect(tile.performanceMetrics).toEqual([{ label: "Tour conversion", value: "42%" }]);
+        // PRV2: ProcessTileModel exposes a configurable primarySignal (null when none passed) —
+        // performanceMetrics was retired (no card-side health).
+        expect(tile.primarySignal).toBeNull();
         expect(tile.workViews).toEqual([
             { id: "new_leads", label: "New Leads", isActive: false, count: null, href: "/workspace/work-unit/new-leads", attentionCount: null, overdueCount: null },
             { id: "tours", label: "Tours", isActive: false, count: null, href: "/workspace/work-unit/tours", attentionCount: null, overdueCount: null },
         ]);
     });
 
-    it("defaults absent rollups honestly (null counts, empty metrics)", () => {
+    it("defaults absent rollups honestly (null counts, no signal)", () => {
         const tile = processTileModelFromLandingCard(
-            landingCard({ activeRecordCount: null, needsAttentionCount: null, performanceMetrics: undefined }),
+            landingCard({ activeRecordCount: null, needsAttentionCount: null }),
         );
         expect(tile.activeRecordCount).toBeNull();
         expect(tile.needsAttentionCount).toBeNull();
-        expect(tile.performanceMetrics).toEqual([]);
+        expect(tile.primarySignal).toBeNull();
     });
 });
 

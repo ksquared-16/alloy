@@ -70,9 +70,12 @@ export function WorkUnitSurface() {
             {!model.ready ? (
                 <WorkUnitSurfaceSkeleton />
             ) : (
-                <div className="flex flex-col gap-6 lg:flex-row lg:items-start">
-                    <div className="min-w-0 flex-1 space-y-4">
-                        <section className="space-y-3">
+                <div className="flex flex-col gap-5 lg:flex-row lg:items-start">
+                    <div className="min-w-0 flex-1 space-y-3">
+                        {/* Compact Work Unit Overview header — title + one-row metric strip. Kept
+                            tight so the queue + Focus Panel stay high on screen (metric area
+                            well under ~20% of the viewport). */}
+                        <section className="space-y-2">
                             <WorkUnitHeader
                                 processLabel={model.header.processLabel}
                                 workViewLabel={model.header.workViewLabel}

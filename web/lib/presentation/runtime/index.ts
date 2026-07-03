@@ -15,13 +15,24 @@ export {
     workViewLinkFromWorkQueuePreview,
     workViewLinkModelsFromConfiguredViews,
     type OperationalAnswerModel,
+    type PrimarySignalModel,
     type ProcessTileModel,
     type QueueRowModel,
+    type SignalState,
     type WorkspaceSurfaceModel,
     type WorkUnitSurfaceIntents,
     type WorkUnitSurfaceModel,
     type WorkViewLinkModel,
 } from "./types";
+
+export {
+    availableSignalsForProcess,
+    businessProcessForProcessKey,
+    defaultSignalKeyForProcess,
+    resolvePrimarySignal,
+    signalAnswerText,
+    signalStateFromKpiStatus,
+} from "./workspaceProcessSignal";
 
 export {
     mapQueueRowSurfaceToCompactConfig,
@@ -64,3 +75,13 @@ export {
 export { useWorkspaceSurfaceRuntime } from "./useWorkspaceSurfaceRuntime";
 
 export { useWorkUnitSurfaceRuntime, type WorkUnitSurfaceRuntime } from "./useWorkUnitSurfaceRuntime";
+
+export {
+    applyTodaysWorkConfig,
+    normalizeWorkspaceProcessSurfaceConfig,
+    DEFAULT_WORKSPACE_PROCESS_SURFACE_CONFIG,
+    type WorkspaceProcessSurfaceConfig,
+    type TodaysWorkSort,
+} from "./workspaceProcessSurfaceConfig";
+
+export { useWorkspaceProcessSurfaceConfig } from "./useWorkspaceProcessSurfaceConfig";

@@ -117,7 +117,21 @@ function childName(row: {
     return composed || "Child";
 }
 
-export function buildChildrenCardEvidence(context: OperationalContext): ChildrenCardEvidence {
+/**
+ * Options for the children evidence build. `childDetailFieldKeys` comes from the
+ * PUBLISHED Children Surface config (metadata.nestedSurfaces["children_surface"]) and
+ * controls which operational facts appear in each child's detail line, and their order.
+ * Absent/empty → the card's default field order (back-compat). Keys not mapped to a
+ * detail fact are ignored (e.g. child.name / child.status render elsewhere).
+ */
+export type BuildChildrenCardEvidenceOptions = {
+    childDetailFieldKeys?: readonly string[];
+};
+
+export function buildChildrenCardEvidence(
+    context: OperationalContext,
+    options: BuildChildrenCardEvidenceOptions = {},
+): ChildrenCardEvidence {
     const rows = mapRawInquiryChildrenToDrawerRows(
         (context.truth._inquiry_children as unknown[]) ?? [],
     );
@@ -135,13 +149,25 @@ export function buildChildrenCardEvidence(context: OperationalContext): Children
         // Active children need the enrollment essentials; declined children do not.
         const needsAttention = !declined && (!program || !schedule || !startDate);
 
-        // Answer-first evidence sentence (present facts only, no labels).
-        const detailParts = [
-            program,
-            room,
-            schedule,
-            startDate ? `starts ${startDate}` : null,
-        ].filter(Boolean) as string[];
+        // Answer-first evidence sentence (present facts only, no labels). When the
+        // published Children Surface config names an explicit field order, honor it;
+        // otherwise use the default program · room · schedule · start order.
+        const startsLabel = startDate ? `starts ${startDate}` : null;
+        const detailValueByKey: Record<string, string | null> = {
+            "inquiry_child.program": program,
+            "child.room": room,
+            "inquiry_child.schedule_type": schedule,
+            "child.start_date": startsLabel,
+            "child.date_of_birth": dobAgeLine(row.dob, row.age),
+        };
+        const configuredKeys = (options.childDetailFieldKeys ?? []).filter(
+            (k) => k in detailValueByKey,
+        );
+        const detailParts = (
+            configuredKeys.length > 0
+                ? configuredKeys.map((k) => detailValueByKey[k])
+                : [program, room, schedule, startsLabel]
+        ).filter(Boolean) as string[];
         const detailLine = detailParts.length > 0 ? detailParts.join(" · ") : null;
 
         // "What's still needed" diagnosis for attention children.

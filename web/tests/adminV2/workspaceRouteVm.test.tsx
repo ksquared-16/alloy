@@ -51,30 +51,9 @@ describe("workspace Route VM", () => {
         expect(vm.surface).toBe("workspace");
         expect(vm.context.orgName).toBe("Acme");
         expect(vm.firstPaint.lifecycleCards[0]?.id).toBe("lc-1");
-        // No published Workspace Header surface → honest null (client fallback engages).
-        expect(vm.firstPaint.headerCalculations).toBeNull();
-    });
-
-    it("carries the published Workspace Header cards through first paint", () => {
-        const vm = composeWorkspaceRouteVm({
-            context: { orgId: "org-1", orgName: "Acme", accessScopeFingerprint: "scope-a" },
-            lifecycleCards: [CARD],
-            headerCalculations: [
-                {
-                    sourceKey: "ops.needs_attention_count",
-                    vizType: "kpi",
-                    label: "Needs attention",
-                    accent: "amber",
-                    showHealthChip: false,
-                    sortOrder: 0,
-                    formattedValue: "7",
-                    status: "warning",
-                    drillHref: "/workspace/work-unit/needs-attention",
-                },
-            ],
-        });
-        expect(vm.firstPaint.headerCalculations).toHaveLength(1);
-        expect(vm.firstPaint.headerCalculations?.[0]?.label).toBe("Needs attention");
+        // The retired Workspace Header metric strip is gone — the Route VM no longer carries
+        // header calculations (the Workspace Process Surface owns the workspace body).
+        expect("headerCalculations" in vm.firstPaint).toBe(false);
     });
 
     it("provider hands the Route VM to renderers (SSR)", () => {
@@ -94,7 +73,7 @@ describe("workspace Route VM", () => {
 
     it("defaults to the empty VM when no provider (additive — prior behavior preserved)", () => {
         expect(EMPTY_WORKSPACE_ROUTE_VM.firstPaint.lifecycleCards).toHaveLength(0);
-        expect(EMPTY_WORKSPACE_ROUTE_VM.firstPaint.headerCalculations).toBeNull();
+        expect("headerCalculations" in EMPTY_WORKSPACE_ROUTE_VM.firstPaint).toBe(false);
         const html = renderToStaticMarkup(<Probe />);
         expect(html).toContain('data-cards="0"');
     });
@@ -103,9 +82,8 @@ describe("workspace Route VM", () => {
         const layout = read("app/adminV2/workspace/layout.tsx");
         expect(layout).toContain("composeWorkspaceRouteVm(");
         expect(layout).toContain("workspaceRouteVm={workspaceRouteVm}");
-        // The published Workspace Header cards load in the SAME parallel first-paint bundle.
-        expect(layout).toContain("loadWorkspaceHeaderFirstPaint(");
-        expect(layout).toContain("headerCalculations,");
+        // The retired Workspace Header first-paint loader is gone from the layout bundle.
+        expect(layout).not.toContain("loadWorkspaceHeaderFirstPaint(");
     });
 
     it("providers expose the Route VM via WorkspaceRouteVmProvider", () => {
@@ -116,10 +94,10 @@ describe("workspace Route VM", () => {
 
     it("the workspace runtime hook initializes first paint from the Route VM", () => {
         // PRV2: the landing page mounts the presentation tree; the runtime hook owns the
-        // Route VM seed (tiles + published header calculations).
+        // Route VM seed (lifecycle tiles). The retired header-calculations seed is gone.
         const hook = read("lib/presentation/runtime/useWorkspaceSurfaceRuntime.ts");
         expect(hook).toContain("routeVm.firstPaint.lifecycleCards");
-        expect(hook).toContain("routeVm.firstPaint.headerCalculations");
+        expect(hook).not.toContain("routeVm.firstPaint.headerCalculations");
         // peek (warm module cache) still wins; the Route VM is the cold first-paint source.
         expect(hook).toContain("if (peeked?.length) return peeked;");
     });

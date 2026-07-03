@@ -10,22 +10,22 @@ import {
 } from "@/components/adminV2/settings/configurationRuntime/ConfigurationModeLayout";
 import FocusPanelSummarySurfaceEditor from "@/components/adminV2/settings/surfaces/FocusPanelSummarySurfaceEditor";
 import OperationalIntelligenceSurfaceBuilder from "@/components/adminV2/settings/surfaces/OperationalIntelligenceSurfaceBuilder";
-import { WorkspaceHeaderSurfaceBuilder, WorkUnitHeaderSurfaceBuilder } from "@/components/adminV2/settings/surfaces/HeaderSurfaceBuilders";
+import { WorkUnitHeaderSurfaceBuilder } from "@/components/adminV2/settings/surfaces/HeaderSurfaceBuilders";
+import WorkspaceProcessesSurfaceEditor from "@/components/adminV2/settings/surfaces/WorkspaceProcessesSurfaceEditor";
 import QueueRowBuilderV2 from "@/components/adminV2/settings/surfaces/QueueRowBuilderV2";
 import NestedSurfaceEditor from "@/components/adminV2/settings/surfaces/NestedSurfaceEditor";
 import { buildSurfacesBreadcrumb } from "@/lib/adminV2/settings/surfaces/surfacesBreadcrumbModel";
-import {
-    CHILDREN_SURFACE_ID,
-    FINANCIAL_CONFIG_SURFACE_ID,
-    nestedSurfaceLabel,
-} from "@/lib/adminV2/settings/surfaces/nestedSurfaceEditorModel";
+import { nestedSurfaceLabel } from "@/lib/adminV2/settings/surfaces/nestedSurfaceEditorModel";
 import { useState as useReactState } from "react";
 
-/** Card → nested surface launchers shown in the Focus Panel editor. */
-const FOCUS_PANEL_NESTED_LAUNCHERS: { cardLabel: string; surfaceId: string }[] = [
-    { cardLabel: "Children Card", surfaceId: CHILDREN_SURFACE_ID },
-    { cardLabel: "Financial Configuration Card", surfaceId: FINANCIAL_CONFIG_SURFACE_ID },
-];
+import { focusPanelNestedLaunchers } from "@/lib/platform/surfaceComposition/registerRuntimeSurfaces";
+/**
+ * Card → nested surface launchers, derived from the surface registry via
+ * resolveOpenSurface (Focus Panel components' depth bindings → nested Surfaces) rather
+ * than a hand-maintained list. Registry registration is idempotent.
+ */
+const FOCUS_PANEL_NESTED_LAUNCHERS: { cardLabel: string; surfaceId: string }[] =
+    focusPanelNestedLaunchers().map((l) => ({ cardLabel: l.cardLabel, surfaceId: l.surfaceId }));
 import { SurfaceLibrary } from "@/components/platform/surfaceBuilder/SurfaceLibrary";
 import {
     useSurfacesConfigurationSettings,
@@ -128,8 +128,8 @@ export default function SurfacesConfigurationPage() {
                         <div className="min-h-0 flex-1">
                             {selectedObject.editor === "operational-intelligence" ? (
                                 <OperationalIntelligenceSurfaceBuilder />
-                            ) : selectedObject.editor === "workspace-header" ? (
-                                <WorkspaceHeaderSurfaceBuilder />
+                            ) : selectedObject.editor === "workspace-processes" ? (
+                                <WorkspaceProcessesSurfaceEditor />
                             ) : selectedObject.editor === "work-unit-header" ? (
                                 <WorkUnitHeaderSurfaceBuilder />
                             ) : selectedObject.editor === "queue-row-builder" ? (

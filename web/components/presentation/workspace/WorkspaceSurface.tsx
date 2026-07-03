@@ -9,12 +9,12 @@
  */
 
 import { useWorkspaceSurfaceRuntime } from "@/lib/presentation/runtime";
+import { useWorkspaceProcessSurfaceConfig } from "@/lib/presentation/runtime/useWorkspaceProcessSurfaceConfig";
 import {
     PRESENTATION_RUNTIME_LABELS,
     runtimeLabelProps,
 } from "@/components/presentation/runtimeLabels";
 import { WorkspaceHeader } from "./WorkspaceHeader";
-import { WorkspaceHeaderCalculations } from "./WorkspaceHeaderCalculations";
 import { ProcessGrid } from "./ProcessGrid";
 import { WorkspaceRightRailActions } from "@/components/presentation/rightRail/WorkspaceRightRailActions";
 
@@ -41,6 +41,10 @@ function WorkspaceSurfaceSkeleton() {
 
 export function WorkspaceSurface() {
     const model = useWorkspaceSurfaceRuntime();
+    // The one Workspace Process Surface config (Today's Work behavior), authored in
+    // /settings/surfaces. Defaults until the published config loads. The process cards ARE
+    // the workspace surface — there is no separate header metric strip.
+    const processConfig = useWorkspaceProcessSurfaceConfig();
 
     return (
         <div
@@ -51,14 +55,10 @@ export function WorkspaceSurface() {
                 <WorkspaceSurfaceSkeleton />
             ) : (
                 <>
-                    {/* ONE header section: title + published calculation cards commit together
-                        (the Route VM seed makes the cards data-complete at first commit — no
-                        strip skeleton, no pop-in, no layout shift). */}
-                    <section className="flex flex-col gap-3">
-                        <WorkspaceHeader orgName={model.header.orgName} />
-                        <WorkspaceHeaderCalculations cards={model.header.calculations} />
-                    </section>
-                    <ProcessGrid processes={model.processes} />
+                    {/* Workspace Process Surface: org identity header (no metric strip) + one
+                        ProcessSummaryCard per process. The header metric strip is retired. */}
+                    <WorkspaceHeader orgName={model.header.orgName} />
+                    <ProcessGrid processes={model.processes} config={processConfig} />
                     {/* Registers the configured Workspace actions into the persistent command
                         rail's "Actions (N)" section — same path as the Work Unit. Renders null. */}
                     <WorkspaceRightRailActions

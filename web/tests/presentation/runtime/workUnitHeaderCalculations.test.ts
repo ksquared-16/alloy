@@ -1,4 +1,6 @@
 import { describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 
 import type { SurfaceDoc } from "@/lib/platform/surfaceBuilder/surfaceDefinition";
 import { findOperationalCalculation } from "@/lib/analytics/calculations/registry";
@@ -163,5 +165,42 @@ describe("WU.HEADER_CALCULATIONS — refinement key extraction", () => {
             "ops.needs_attention_count",
             "ops.work_overdue_count",
         ]);
+    });
+});
+
+describe("WU.HEADER_CALCULATIONS — operational signal strip (presentation polish)", () => {
+    const src = readFileSync(
+        fileURLToPath(new URL("../../../components/presentation/workUnit/WorkUnitHeaderCalculations.tsx", import.meta.url)),
+        "utf8",
+    );
+
+    it("is a single row (never wraps into extra rows that push the queue down)", () => {
+        expect(src).toContain("flex-nowrap");
+        expect(src).toContain("overflow-x-auto");
+        expect(src).not.toContain("flex-wrap");
+    });
+
+    it("is one ribbon with hairline separators — not boxed KPI cards", () => {
+        // No shared KPI-card renderer; signals share one container, divided by hairlines.
+        expect(src).not.toContain("MetricKpiCard");
+        expect(src).not.toContain("MetricTrendCard");
+        expect(src).toContain("divide-x"); // hairline separators between signals
+        expect(src).not.toContain("shadow"); // no card shadow / KPI chrome
+    });
+
+    it("reads title → value → context: statement is the hero, value supports, dot carries state", () => {
+        expect(src).toContain("card.label"); // signal title (the eye-catcher)
+        expect(src).toContain("card.formattedValue"); // value (secondary)
+        expect(src).toContain("rounded-full"); // small state dot
+        // supporting context renders only when the VM provides it — never fabricated.
+        expect(src).toContain("supportingContextOf");
+        expect(src).toContain("data-signal-context");
+    });
+
+    it("renders no trend wave / sparkline / chart / colored box — ever", () => {
+        expect(src).not.toContain("sparklinePoints");
+        expect(src).not.toContain("MetricSparkline");
+        expect(src).not.toContain("polyline");
+        expect(src).not.toContain("<svg");
     });
 });
