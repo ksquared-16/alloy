@@ -88,3 +88,35 @@ Create Lead + stop `outcome_status_key`. D. UI text. E. Drop OCM (migration 3). 
 Built + validated: primitive schema + backfill migrations (dry-run clean, rolled back), `lib/process/processInstances.ts`
 (types + create/move/setState + read helpers), Create Lead writes a process instance per child. `typecheck:build`=0.
 Remaining (sequenced cutover B–E above) to be done as focused slices with review before each staging apply.
+
+## PR #72 CLOSEOUT (process_instances primitive + OCM runtime removal)
+
+**Runtime cutover complete for the admin Create Lead → enroll flow.** OCM remains in the schema (NOT
+dropped) and stays a legacy-only read (fallback overlays + flag-gated materialization + form-intake).
+
+Delivered (sequenced slices, each reviewed): process_instances primitive + backfill; read cutover
+(queue/Work Views read process_instances); write cutover (outcomes write process_instances, stopped
+OCM.outcome_status_key); OCM removed as runtime dependency for movement (identity threaded); Focus Panel
+participation state/stage + operational facts read process_instances → durable model; process instance →
+durable materialization (child_enrollment_agreements + child_placements + schedule_assignments) on the
+enrolled outcome; naming/boundary pass; waitlist placement + participation edit moved off OCM; Create Lead
+OCM bridge write REMOVED; pre-materialization Focus Panel + materialization sourced off OCM.
+
+**Migrations applied to staging (session pooler, ON_ERROR_STOP, ledger recorded):**
+- `20260713000000_process_instances` — primitive table + indexes + RLS
+- `20260713000100_process_instances_backfill_from_ocm` — backfill (no-op on empty OCM)
+- `20260714000000_placement_candidate_identity_allow_customer_member` — real candidate valid with
+  customer_member_id OR OCM id (unblocks OCM-free waitlist; synthetic rule + existing OCM rows unchanged)
+
+**Final live verification (verifyBosCreateLeadEnrollment.ts, staging, self-cleaning): ALL CHECKS PASSED.**
+BOS/Action-UI and direct paths share one runtime (runRegisteredAction → executeCreateLeadAction →
+applyCreateLeadChildParticipation[FromIdentity]); opportunity status=open/stage=lead/New Leads WU + count+1;
+one process_instance per child + participation metadata; NO OCM row; Focus Panel pre-mat facts from PI
+metadata; waitlist → placement_candidate created WITHOUT OCM; enroll → agreement+placement+schedule
+materialized; Focus Panel durable facts; sibling independence; staging left clean. typecheck:build=0.
+
+**Remaining OCM (intentional, legacy-only — do NOT drop yet):** form-intake path
+(applyIntakeChildToOpportunity) still writes OCM + creates no process instance (separate capability, next
+migration); legacy fallback reads in the Focus Panel overlays for pre-existing records; flag-gated
+materialization fallback (ALLOY_ENROLLMENT_MATERIALIZE_OCM_FALLBACK). OCM table drop is a later slice after
+form-intake is migrated.
