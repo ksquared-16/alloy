@@ -6,6 +6,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { findOrCreateChildPersonInOrg } from "@/lib/admin/person/findOrCreateChildPersonInOrg";
 import { resolveProgramCategoryId } from "@/lib/locations/resolveOcmProgramCategoryFields";
+import { createEnrollmentProcessInstance } from "@/lib/process/processInstances";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -128,7 +129,10 @@ export function buildCreateLeadOcmInsertRow(args: {
 
 export type ApplyCreateLeadChildParticipationResult = {
     customer_member_id: string;
+    /** @deprecated OCM is legacy; process_instance_id is the runtime owner. Removed after cutover. */
     ocm_id: string;
+    /** Enrollment process instance created for this child (runtime source of truth). */
+    process_instance_id: string | null;
 };
 
 export async function applyCreateLeadChildParticipationFromIdentity(
@@ -210,9 +214,33 @@ export async function applyCreateLeadChildParticipationFromIdentity(
         throw new Error(ocmErr?.message ?? "Could not link child participation to lead.");
     }
 
+    // process_instances is the runtime owner of child participation (OCM is legacy migration
+    // source). Create the Enrollment process instance for this child on this lead. During the
+    // OCM→process_instances migration this runs alongside the OCM write (bridge); once Work Views
+    // + outcomes read/write process_instances, the OCM write above is removed (see OCM removal plan).
+    const piResult = await createEnrollmentProcessInstance(supabase, {
+        orgId: params.orgId,
+        subjectId: customerMemberId,     // child = customer_member
+        contextId: params.opportunityId, // lead = opportunity (context)
+        stageKey: null,                  // rides the family track until a decision creates the child journey
+        state: null,                     // no enrollment outcome at intake
+        participation: {
+            start_date: params.ocm.start_date,
+            schedule_type: params.ocm.schedule_type,
+            program_category_id: programCategoryId,
+            location_id: params.ocm.location_id,
+            program_room_cohort_key: params.ocm.program_room_cohort_key,
+            notes: params.ocm.notes,
+        },
+    });
+    if (piResult.error) {
+        throw new Error(`Could not create Enrollment process instance for child: ${piResult.error}`);
+    }
+
     return {
         customer_member_id: customerMemberId,
         ocm_id: String((ocmData as { id: string }).id),
+        process_instance_id: piResult.id,
     };
 }
 
