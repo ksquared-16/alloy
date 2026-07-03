@@ -98,13 +98,13 @@ export const SURFACE_LIBRARY: readonly SurfaceLibraryEntry[] = [
         appearsIn: ["Finance workspace"],
     },
     {
-        id: "workspace-header",
-        title: "Workspace Header",
-        subtitle: "The metrics atop a workspace",
+        id: "workspace-processes",
+        title: "Workspace Processes",
+        subtitle: "The process cards on a workspace",
         category: "Headers",
         status: "published",
-        appearsIn: ["Workspace header"],
-        editor: "workspace-header",
+        appearsIn: ["Workspace processes"],
+        editor: "workspace-processes",
     },
     {
         id: "work-unit-header",

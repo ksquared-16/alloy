@@ -64,23 +64,26 @@ function RowSignal({ view }: { view: WorkViewLinkModel }) {
     return null;
 }
 
-function WorkViewRowBody({ view }: { view: WorkViewLinkModel }) {
+function WorkViewRowBody({ view, showCounts }: { view: WorkViewLinkModel; showCounts: boolean }) {
     return (
         <>
             <span className="min-w-0 flex-1 truncate">{view.label}</span>
             <RowSignal view={view} />
             {/* Count: readable + right-aligned in a fixed slot so digits line up across rows and
-                the layout never jumps when a pending count resolves. Secondary to the signal. */}
-            <span className="w-7 shrink-0 text-right text-xs font-semibold tabular-nums text-alloy-midnight/55">
-                {view.count != null ? (
-                    view.count.toLocaleString()
-                ) : (
-                    <span
-                        aria-hidden
-                        className="ml-auto inline-block h-3 w-4 animate-pulse rounded bg-alloy-midnight/10 align-middle"
-                    />
-                )}
-            </span>
+                the layout never jumps when a pending count resolves. Secondary to the signal.
+                Hidden when the surface config turns counts off. */}
+            {showCounts ? (
+                <span className="w-7 shrink-0 text-right text-xs font-semibold tabular-nums text-alloy-midnight/55">
+                    {view.count != null ? (
+                        view.count.toLocaleString()
+                    ) : (
+                        <span
+                            aria-hidden
+                            className="ml-auto inline-block h-3 w-4 animate-pulse rounded bg-alloy-midnight/10 align-middle"
+                        />
+                    )}
+                </span>
+            ) : null}
             {/* Always faintly present so a row reads as clickable at rest; strengthens + nudges on hover. */}
             <span
                 aria-hidden
@@ -95,7 +98,14 @@ function WorkViewRowBody({ view }: { view: WorkViewLinkModel }) {
 const ROW_BODY_CLASS =
     "group/row flex w-full items-center gap-2 px-2 py-2 text-xs font-semibold text-alloy-midnight/80";
 
-export function WorkViewList({ workViews }: { workViews: WorkViewLinkModel[] }) {
+export function WorkViewList({
+    workViews,
+    showCounts = true,
+}: {
+    workViews: WorkViewLinkModel[];
+    /** Render the per-view count badge (Workspace Process Surface config). */
+    showCounts?: boolean;
+}) {
     if (!workViews.length) return null;
     return (
         <ul
@@ -112,11 +122,11 @@ export function WorkViewList({ workViews }: { workViews: WorkViewLinkModel[] }) 
                             aria-label={rowAriaLabel(view)}
                             className={`${ROW_BODY_CLASS} no-underline transition-colors hover:bg-alloy-juniper/[0.1] hover:text-alloy-juniper active:bg-alloy-juniper/[0.18] focus-visible:relative focus-visible:z-10 focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-alloy-juniper`}
                         >
-                            <WorkViewRowBody view={view} />
+                            <WorkViewRowBody view={view} showCounts={showCounts} />
                         </Link>
                     ) : (
                         <div className={`${ROW_BODY_CLASS} text-alloy-midnight/55`}>
-                            <WorkViewRowBody view={view} />
+                            <WorkViewRowBody view={view} showCounts={showCounts} />
                         </div>
                     )}
                 </li>

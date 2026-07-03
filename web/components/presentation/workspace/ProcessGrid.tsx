@@ -1,16 +1,26 @@
 /**
- * Presentation Runtime V2 — WS.PROCESS_GRID: responsive grid of process tiles
- * (each tile is the collapsed state of one process).
+ * Presentation Runtime V2 — WS.PROCESS_GRID: the Workspace Process Surface.
+ *
+ * The runtime repeats ONE ProcessSummaryCard template across the configured business
+ * processes (wider cards, two-up on desktop). This is the entire workspace surface body —
+ * there is no separate header metric strip.
  */
 
 import type { ProcessTileModel } from "@/lib/presentation/runtime";
+import type { WorkspaceProcessSurfaceConfig } from "@/lib/presentation/runtime/workspaceProcessSurfaceConfig";
 import {
     PRESENTATION_RUNTIME_LABELS,
     runtimeLabelProps,
 } from "@/components/presentation/runtimeLabels";
-import { ProcessTile } from "./ProcessTile";
+import { ProcessSummaryCard } from "./ProcessSummaryCard";
 
-export function ProcessGrid({ processes }: { processes: ProcessTileModel[] }) {
+export function ProcessGrid({
+    processes,
+    config,
+}: {
+    processes: ProcessTileModel[];
+    config: WorkspaceProcessSurfaceConfig;
+}) {
     if (!processes.length) {
         return (
             <div
@@ -24,10 +34,10 @@ export function ProcessGrid({ processes }: { processes: ProcessTileModel[] }) {
     return (
         <div
             {...runtimeLabelProps(PRESENTATION_RUNTIME_LABELS.processGrid)}
-            className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3"
+            className="grid grid-cols-1 gap-4 lg:grid-cols-2 2xl:grid-cols-3"
         >
             {processes.map((process) => (
-                <ProcessTile key={process.id} process={process} />
+                <ProcessSummaryCard key={process.id} process={process} config={config} />
             ))}
         </div>
     );

@@ -5,7 +5,6 @@
 
 export { WorkspaceSurface } from "./WorkspaceSurface";
 export { WorkspaceHeader } from "./WorkspaceHeader";
-export { WorkspaceHeaderCalculations } from "./WorkspaceHeaderCalculations";
 export { ProcessGrid } from "./ProcessGrid";
-export { ProcessTile } from "./ProcessTile";
+export { ProcessSummaryCard } from "./ProcessSummaryCard";
 export { WorkViewList } from "./WorkViewList";

@@ -10,7 +10,8 @@ import {
 } from "@/components/adminV2/settings/configurationRuntime/ConfigurationModeLayout";
 import FocusPanelSummarySurfaceEditor from "@/components/adminV2/settings/surfaces/FocusPanelSummarySurfaceEditor";
 import OperationalIntelligenceSurfaceBuilder from "@/components/adminV2/settings/surfaces/OperationalIntelligenceSurfaceBuilder";
-import { WorkspaceHeaderSurfaceBuilder, WorkUnitHeaderSurfaceBuilder } from "@/components/adminV2/settings/surfaces/HeaderSurfaceBuilders";
+import { WorkUnitHeaderSurfaceBuilder } from "@/components/adminV2/settings/surfaces/HeaderSurfaceBuilders";
+import WorkspaceProcessesSurfaceEditor from "@/components/adminV2/settings/surfaces/WorkspaceProcessesSurfaceEditor";
 import QueueRowBuilderV2 from "@/components/adminV2/settings/surfaces/QueueRowBuilderV2";
 import NestedSurfaceEditor from "@/components/adminV2/settings/surfaces/NestedSurfaceEditor";
 import { buildSurfacesBreadcrumb } from "@/lib/adminV2/settings/surfaces/surfacesBreadcrumbModel";
@@ -127,8 +128,8 @@ export default function SurfacesConfigurationPage() {
                         <div className="min-h-0 flex-1">
                             {selectedObject.editor === "operational-intelligence" ? (
                                 <OperationalIntelligenceSurfaceBuilder />
-                            ) : selectedObject.editor === "workspace-header" ? (
-                                <WorkspaceHeaderSurfaceBuilder />
+                            ) : selectedObject.editor === "workspace-processes" ? (
+                                <WorkspaceProcessesSurfaceEditor />
                             ) : selectedObject.editor === "work-unit-header" ? (
                                 <WorkUnitHeaderSurfaceBuilder />
                             ) : selectedObject.editor === "queue-row-builder" ? (

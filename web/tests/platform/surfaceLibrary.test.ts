@@ -18,14 +18,19 @@ describe("Surface Library — the command center registry", () => {
         expect(oi?.category).toBe("Dashboards & analytics");
     });
 
-    it("authorable surfaces are exactly those with a builder editor (Focus Panel, OI, both headers)", () => {
-        const editors = authorableSurfaces().map((s) => s.editor).sort();
-        expect(editors).toEqual([
-            "focus-panel-summary",
-            "operational-intelligence",
-            "work-unit-header",
-            "workspace-header",
-        ]);
+    it("authorable surfaces cover the builder editors (Focus Panel, OI, Queue Row, WU header, Workspace Processes)", () => {
+        const editors = new Set(authorableSurfaces().map((s) => s.editor));
+        expect(editors).toEqual(
+            new Set([
+                "focus-panel-summary",
+                "operational-intelligence",
+                "queue-row-builder",
+                "work-unit-header",
+                "workspace-processes",
+            ]),
+        );
+        // The retired Workspace Header is no longer an authorable surface.
+        expect(editors.has("workspace-header")).toBe(false);
     });
 
     it("planned surfaces carry no editor (appear in the library, open later)", () => {

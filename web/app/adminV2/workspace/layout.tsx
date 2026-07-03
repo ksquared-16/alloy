@@ -9,7 +9,6 @@ import { loadAdminViewerTimezoneBootstrap } from "@/lib/admin/viewerTimezoneBoot
 import { loadOperationalOrgTimezoneIana } from "@/lib/admin/loadOperationalOrgTimezoneServer";
 import { loadEntityLabelsMapForUser, type EntityLabelsBootstrapMap } from "@/lib/admin/entityLabelsServer";
 import { loadOperatorLifecycleLandingCardsServer } from "@/lib/admin/loadOperatorLifecycleLandingServer";
-import { loadWorkspaceHeaderFirstPaint } from "@/lib/metrics/platform/workspaceHeaderFirstPaint";
 import { composeWorkspaceRouteVm } from "@/lib/adminV2/runtime/surface/workspaceRouteVm";
 
 export const dynamic = "force-dynamic";
@@ -73,7 +72,7 @@ export default async function AdminV2WorkspaceLayout({
         );
     }
 
-    const [orgName, viewerTimezone, operationalTimezoneIana, access, initialEntityLabels, lifecycleCards, headerCalculations] =
+    const [orgName, viewerTimezone, operationalTimezoneIana, access, initialEntityLabels, lifecycleCards] =
         await Promise.all([
             loadOrgDisplayName(orgId),
             loadViewerTimezoneSafe(auth.user.id),
@@ -83,9 +82,6 @@ export default async function AdminV2WorkspaceLayout({
             // First-paint lifecycle tiles for the workspace Route VM. Loads in parallel with the
             // existing bundle; graceful [] on no-access/error keeps the client refinement path intact.
             loadOperatorLifecycleLandingCardsServer(),
-            // Published Workspace Header cards (values server-resolved) — WS.HEADER_CALCULATIONS
-            // is data-complete at first commit. Graceful null → client fallback strip.
-            loadWorkspaceHeaderFirstPaint(),
         ]);
 
     if (!access.ok) {
@@ -98,7 +94,6 @@ export default async function AdminV2WorkspaceLayout({
     const workspaceRouteVm = composeWorkspaceRouteVm({
         context: { orgId, orgName, accessScopeFingerprint },
         lifecycleCards,
-        headerCalculations,
     });
 
     if (process.env.NODE_ENV === "development") {

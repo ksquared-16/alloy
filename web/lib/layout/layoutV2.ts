@@ -27,11 +27,29 @@
 export const LAYOUT_DOC_FORMAT_VERSION = 1 as const;
 
 /**
- * Surfaces supported in Sprint 1. Workspace / dashboard / record-workspace
- * surfaces are explicitly OUT of scope and intentionally absent here.
+ * Layout surfaces. `drawer` + `queue` are the record layout surfaces; `workspace`
+ * is the Workspace Process Surface — it carries no field/section layout, only a
+ * behavior config in `doc.metadata.workspaceProcessSurface` (the process cards
+ * derive their content from live runtime data, not from a layout doc).
  */
-export const LAYOUT_SURFACES = ["drawer", "queue"] as const;
+export const LAYOUT_SURFACES = ["drawer", "queue", "workspace"] as const;
 export type LayoutSurface = (typeof LAYOUT_SURFACES)[number];
+
+/**
+ * Record layout surfaces — the drawer/queue field-layout surfaces (sections + items +
+ * field picker + business-process assignments). `workspace` is NOT one: it carries no
+ * field layout, only the Workspace Process Surface behavior config in metadata. Record
+ * layout code (field picker, BP assignments, layout-config admin) types on this subtype.
+ */
+export const RECORD_LAYOUT_SURFACES = ["drawer", "queue"] as const;
+export type RecordLayoutSurface = (typeof RECORD_LAYOUT_SURFACES)[number];
+export function isRecordLayoutSurface(s: string): s is RecordLayoutSurface {
+    return s === "drawer" || s === "queue";
+}
+/** Narrow a LayoutSurface to a record surface, defaulting non-record surfaces to `drawer`. */
+export function asRecordLayoutSurface(s: LayoutSurface): RecordLayoutSurface {
+    return s === "queue" ? "queue" : "drawer";
+}
 
 /**
  * Item kinds supported in Sprint 1. The widget contract is a *placeholder*:

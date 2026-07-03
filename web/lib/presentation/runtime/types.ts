@@ -22,7 +22,6 @@ import type { WorkViewConfigV1Stored } from "@/lib/lifecycle/workViewsConfigV1";
 import type { QueueItemsResult } from "@/lib/queues/types";
 import type { OipMetricKey } from "@/lib/metrics/types";
 import type { ResolvedMetricMap } from "@/lib/metrics/fetchResolvedMetrics";
-import type { WorkspaceHeaderCalculationCardVm } from "./workspaceHeaderCards";
 import type { WorkUnitHeaderCalculationCardVm } from "./workUnitHeaderCards";
 import type { CompactRowSlots } from "./queueRowSurfaceConfig";
 import { findOperationalCalculation } from "@/lib/analytics/calculations/registry";
@@ -95,14 +94,10 @@ export type QueueRowModel = {
 
 /** WS.SURFACE — resolved model for the Workspace surface. */
 export type WorkspaceSurfaceModel = {
+    /** Org identity only. The retired Workspace Header metric strip is gone — the
+     *  Workspace Process Surface (process cards) is the entire workspace body. */
     header: {
         orgName: string | null;
-        /**
-         * The published Workspace Header calculation cards (WS.HEADER_CALCULATIONS) —
-         * server-seeded from the Route VM, code-owned fallback when no surface is
-         * published, values refined in place by the warm cache after mount.
-         */
-        calculations: WorkspaceHeaderCalculationCardVm[];
     };
     processes: ProcessTileModel[];
     ready: boolean;

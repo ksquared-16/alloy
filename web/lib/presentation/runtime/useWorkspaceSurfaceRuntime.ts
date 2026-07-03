@@ -4,11 +4,9 @@
  * Presentation Runtime V2 — WS.SURFACE resolution.
  *
  * Resolves the WorkspaceSurfaceModel from the existing data layer, reused verbatim:
- *   - header / first-paint tiles — server-composed workspace Route VM
- *   - header calculations        — the PUBLISHED "Workspace Header" surface cards, seeded
- *                                  from the Route VM (values server-resolved); code-owned
- *                                  fallback keys when no surface is published; values
- *                                  refined in place from the OIP warm cache (site-aware)
+ *   - header                     — org identity only (title); the retired Workspace Header
+ *                                  metric strip is gone — the Workspace Process Surface
+ *                                  (process cards) is the entire workspace body
  *   - process tiles              — operator lifecycle landing cards (peek → load refine)
  *   - work-view counts           — canonical-location totals (`useWorkViewTotals`): each
  *                                  view's count is the rows-API exact total at its host
@@ -28,13 +26,6 @@ import {
     loadOperatorLifecycleLandingCards,
     peekOperatorLifecycleLandingCards,
 } from "@/lib/admin/loadOperatorLifecycleLandingClient";
-import { useOperationalAnswers } from "./useOperationalAnswers";
-import {
-    refineWorkspaceHeaderCardVms,
-    seedWorkspaceHeaderCalculations,
-    workspaceHeaderCalculationKeys,
-    type WorkspaceHeaderCalculationCardVm,
-} from "./workspaceHeaderCards";
 import {
     useWorkViewTotals,
     workViewTotalKey,
@@ -76,29 +67,6 @@ export function useWorkspaceSurfaceRuntime(): WorkspaceSurfaceModel {
             cancelled = true;
         };
     }, []);
-
-    // ── Header calculations: the published Workspace Header surface ────────────────────
-    // Server seed (Route VM, values resolved) or the code-owned fallback strip — the card
-    // SET is fixed at first commit; the warm cache only refines value/status in place
-    // (derived, not stateful: seed + latest resolved map → refined cards).
-    const [seededCalculations] = useState<WorkspaceHeaderCalculationCardVm[]>(() =>
-        seedWorkspaceHeaderCalculations(routeVm.firstPaint.headerCalculations),
-    );
-    const calculationKeys = useMemo(
-        () => workspaceHeaderCalculationKeys(seededCalculations),
-        [seededCalculations],
-    );
-    const { resolved: calculationsResolved } = useOperationalAnswers({
-        siteId: selectedSiteId,
-        keys: calculationKeys,
-    });
-    const calculations = useMemo(
-        () =>
-            calculationsResolved ?
-                refineWorkspaceHeaderCardVms(seededCalculations, calculationsResolved)
-            :   seededCalculations,
-        [seededCalculations, calculationsResolved],
-    );
 
     // ── Work View counts: canonical-location totals (ONE count source) ─────────────────
     // Each configured view's nav entry carries its canonical location (host work unit +
@@ -146,11 +114,11 @@ export function useWorkspaceSurfaceRuntime(): WorkspaceSurfaceModel {
 
     return useMemo<WorkspaceSurfaceModel>(
         () => ({
-            header: { orgName: orgName ?? routeVm.context.orgName, calculations },
+            header: { orgName: orgName ?? routeVm.context.orgName },
             processes,
-            // Tiles present (warm seed) or the load settled — calculation values patch quietly after.
+            // Tiles present (warm seed) or the load settled.
             ready: processes.length > 0 || cardsSettled,
         }),
-        [orgName, routeVm.context.orgName, calculations, processes, cardsSettled],
+        [orgName, routeVm.context.orgName, processes, cardsSettled],
     );
 }
