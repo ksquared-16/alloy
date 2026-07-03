@@ -171,6 +171,23 @@ export async function setEnrollmentInstanceStateByScope(
     return { moved: (data ?? []).length };
 }
 
+/** Resolve a child's enrollment process-instance id by scope (opportunity + child). */
+export async function getEnrollmentInstanceIdByScope(
+    supabase: SupabaseClient,
+    args: { orgId: string; opportunityId: string; customerMemberId: string },
+): Promise<string | null> {
+    const { data } = await supabase
+        .from(PROCESS_INSTANCES_TABLE)
+        .select("id")
+        .eq("org_id", args.orgId)
+        .eq("process_key", ENROLLMENT_PROCESS_KEY)
+        .eq("context_id", args.opportunityId)
+        .eq("subject_id", args.customerMemberId)
+        .maybeSingle();
+    const id = (data as { id?: string } | null)?.id;
+    return typeof id === "string" && id.trim() ? id.trim() : null;
+}
+
 /** Read a child's current enrollment instance state by scope (for transition events). */
 export async function readEnrollmentInstanceState(
     supabase: SupabaseClient,

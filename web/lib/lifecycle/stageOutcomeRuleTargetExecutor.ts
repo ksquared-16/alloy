@@ -19,6 +19,8 @@ import {
 } from "@/lib/process/processInstances";
 import { ensurePlacementCandidateForWaitlistedChild } from "@/lib/orchestration/placement/placementCandidateLifecycleHook";
 import { emitChildLifecycleStatusChangedEvent } from "@/lib/opportunities/emitChildLifecycleStatusChangedEvent";
+import { materializeEnrollmentForChildScope } from "@/lib/childcareOperational/materializeEnrollmentFromProcessInstance";
+import { isChildcareOperationalEnrollmentV1EnabledForOrg } from "@/lib/childcareOperational/featureFlag";
 
 export type StageOutcomeExecutionSubject = {
     journey_segment: "family" | "child";
@@ -151,6 +153,21 @@ export async function applyStageOutcomeRuleTarget(
                     opportunityId: subject.opportunity_id,
                     opportunityCustomerMemberId: ocmBridgeId,
                 });
+            }
+            // Enrollment completion → materialize durable operational truth (agreement + placement +
+            // schedule assignment). The process produces the facts; it does not own them. Non-blocking
+            // and idempotent — a failure here must not roll back the state transition (retryable).
+            if (dispositionKey === "enrolled" && (await isChildcareOperationalEnrollmentV1EnabledForOrg(supabase, orgId))) {
+                try {
+                    await materializeEnrollmentForChildScope(supabase, {
+                        orgId,
+                        opportunityId: subject.opportunity_id,
+                        customerMemberId: childId,
+                        userId,
+                    });
+                } catch (e) {
+                    console.error("[stageOutcomeRuleTargetExecutor] enrollment materialization", e);
+                }
             }
             return { status_updated: true };
         }
