@@ -70,9 +70,13 @@ export async function ensurePlacementCandidateForWaitlistedChild(
         errors: 0,
     };
 
+    // The child's durable state now lives on process_instances, so OCM.outcome_status_key is no longer
+    // written. This hook is invoked precisely when a child transitions to waitlisted, so assert that
+    // status for candidate eligibility (otherwise the row reads as not-waitlist and no candidate is made).
+    const waitlistedOcmRow = { ...(ocmData as Record<string, unknown>), outcome_status_key: "waitlisted" };
     const planned = buildCandidateRowsForOpportunity(
         opp as Parameters<typeof buildCandidateRowsForOpportunity>[0],
-        [normalizeOcmRow(ocmData)],
+        [normalizeOcmRow(waitlistedOcmRow)],
         params.orgId,
         false,
         {
