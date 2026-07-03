@@ -1,40 +1,70 @@
 "use client";
 
 /**
- * Presentation Runtime V2 — the Work Unit Right Rail action content (rendered inside RR.SURFACE).
+ * Presentation Runtime V2 — Work Unit configured actions → the PERSISTENT operator command rail.
  *
- * Consumes the resolved `right_rail_actions` lane from the WU surface model and renders one
- * control per configured action. Execution goes through the EXISTING action runtime
- * (`applyRegistryResolvedActionClient`) with a `work_unit` surface context — no new resolver, no
- * new action runtime, no hardcoded actions. `create_lead` opens the platform Create Lead command
- * surface; `schedule_tour` and record-scoped actions target the currently selected Focus Panel
- * record (the WU auto-opens the first record), degrading to a legible "select a record" message
- * when none is selected. The `display_style: "menu_item"` actions render as secondary controls.
+ * The operator's right rail is the shell-level command rail (`AdminV2PersistentCommandRail`), not
+ * a per-surface column. So the resolved `right_rail_actions` are REGISTERED into that rail via
+ * `WorkspaceCommandRailRegistrar` (placement surface `work_unit`) — they render inside the shell's
+ * "Actions (N)" collapsible, the SINGLE action presentation path. No second rail, no standalone
+ * center buttons, no new renderer/resolver/runtime.
+ *
+ * Because the registered node renders inside the shell (ABOVE the work-unit route context), the
+ * execution scope (`departmentId`/`workUnitId`) is BAKED IN as props; router + drawer come from
+ * shell-level providers. Execution stays on the existing runtime (`applyRegistryResolvedActionClient`,
+ * `work_unit` surface): `create_lead` → CreateLeadCommandSurface; `schedule_tour`/record-scoped →
+ * the currently-open Focus Panel record. Empty payload → register nothing → the rail's own default
+ * empty state (`Actions (0)`), so the empty state shows ONLY when the payload is actually empty.
  */
 
 import { useCallback, useState } from "react";
 import { useRouter } from "next/navigation";
+import { CommandRailCollapsibleActionsSection } from "@/app/adminV2/components/workspace/CommandRailCollapsibleActionsSection";
+import { WorkspaceCommandRailRegistrar } from "@/app/adminV2/components/workspace/WorkspaceCommandRailRegistrar";
 import { CreateLeadCommandSurface } from "@/components/platform/commands/createLead/CreateLeadCommandSurface";
 import { useAdminDrawer } from "@/contexts/AdminDrawerContext";
-import { useWorkUnitSlugRouteOptional } from "@/contexts/WorkUnitSlugRouteContext";
 import { applyRegistryResolvedActionClient } from "@/lib/admin/actions/applyRegistryResolvedActionClient";
 import type { ResolvedActionForClient } from "@/lib/admin/actions/types";
 
-const PRIMARY_CLASS =
-    "motion-control block w-full rounded-md border border-alloy-juniper bg-alloy-juniper px-3 py-2 text-left text-[13px] font-semibold text-white hover:bg-alloy-juniper/90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-alloy-juniper";
-const SECONDARY_CLASS =
-    "motion-control block w-full rounded-md border border-alloy-stone/30 bg-white px-3 py-2 text-left text-[13px] font-semibold text-alloy-midnight hover:border-alloy-juniper/50 hover:bg-alloy-juniper/[0.04] focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-alloy-juniper";
+type Props = {
+    actions: ResolvedActionForClient[];
+    /** Baked scope — the shell command rail cannot read the work-unit route context. */
+    departmentId: string | null;
+    workUnitId: string | null;
+};
 
-export function WorkUnitRightRailActions({ actions }: { actions: ResolvedActionForClient[] }) {
+/**
+ * Renders null; registers the resolved actions into the shell command rail. Non-empty payload →
+ * an "Actions (N)" section body; empty → register null so the rail shows its own default.
+ */
+export function WorkUnitRightRailActions({ actions, departmentId, workUnitId }: Props) {
+    const railContent =
+        actions.length > 0 ? (
+            <CommandRailCollapsibleActionsSection actionCount={actions.length}>
+                <WorkUnitCommandRailActionsBody
+                    actions={actions}
+                    departmentId={departmentId}
+                    workUnitId={workUnitId}
+                />
+            </CommandRailCollapsibleActionsSection>
+        ) : null;
+
+    return (
+        <WorkspaceCommandRailRegistrar actions={railContent} actionsPlacementSurface="work_unit" />
+    );
+}
+
+/**
+ * The action rows + execution, rendered INSIDE the shell command rail (via the registrar). Uses
+ * the command rail's native executable-action styling so the configured actions read as part of
+ * the rail. Scope is prop-baked; router/drawer resolve from shell providers.
+ */
+export function WorkUnitCommandRailActionsBody({ actions, departmentId, workUnitId }: Props) {
     const router = useRouter();
     const { drawer, openDrawer } = useAdminDrawer();
-    const slugRoute = useWorkUnitSlugRouteOptional();
-    const departmentId = slugRoute?.departmentId ?? null;
-    const workUnitId = slugRoute?.workUnitId ?? null;
     const [createLeadOpen, setCreateLeadOpen] = useState(false);
 
-    // The record currently open in the inline Focus Panel — the target for record-scoped
-    // actions (e.g. schedule_tour). Null when nothing is selected.
+    // Record currently open in the inline Focus Panel — target for record-scoped actions.
     const selectedRecordId =
         drawer.type === "opportunities" && drawer.id != null ? String(drawer.id) : null;
 
@@ -57,38 +87,29 @@ export function WorkUnitRightRailActions({ actions }: { actions: ResolvedActionF
         [router, openDrawer, departmentId, workUnitId, selectedRecordId],
     );
 
-    // Stable empty state — the rail is a permanent part of the Work Unit structure, so when no
-    // actions are configured/resolved it holds its place with a calm message (never a gap).
-    if (!actions.length) {
-        return (
-            <p
-                data-right-rail-empty-state="true"
-                className="px-1 py-1 text-[13px] leading-5 text-alloy-midnight/55"
-            >
-                No actions available.
-            </p>
-        );
-    }
-
     return (
-        <>
-            <div className="flex flex-col gap-2">
-                {actions.map((action) => {
-                    const secondary = (action.display_style ?? "").toLowerCase() === "menu_item";
-                    return (
+        <section
+            className="adminv2-ws-actions-rail adminv2-ws-actions-rail--dept-panel adminv2-ws-command-section--primary"
+            data-work-unit-command-rail-actions="true"
+            aria-label="Work unit actions"
+        >
+            <ul className="adminv2-command-rail-executable-actions">
+                {actions.map((action) => (
+                    <li key={action.key}>
                         <button
-                            key={action.key}
                             type="button"
                             data-right-rail-action={action.key}
                             title={action.description ?? undefined}
                             onClick={() => runAction(action)}
-                            className={secondary ? SECONDARY_CLASS : PRIMARY_CLASS}
+                            className="adminv2-command-rail-executable-action"
                         >
-                            {action.label}
+                            <span className="adminv2-command-rail-executable-action-label">
+                                {action.label}
+                            </span>
                         </button>
-                    );
-                })}
-            </div>
+                    </li>
+                ))}
+            </ul>
             {departmentId ? (
                 <CreateLeadCommandSurface
                     open={createLeadOpen}
@@ -104,6 +125,6 @@ export function WorkUnitRightRailActions({ actions }: { actions: ResolvedActionF
                     onRefresh={() => router.refresh()}
                 />
             ) : null}
-        </>
+        </section>
     );
 }

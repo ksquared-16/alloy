@@ -91,9 +91,16 @@ export function WorkUnitSurface() {
                             <QueueRegion queue={model.queue} selectedRecordId={model.selectedRecordId} />
                         </FocusPanelSurface>
                     </div>
-                    <RightRailSurface count={model.rightRailActions.length}>
-                        <WorkUnitRightRailActions actions={model.rightRailActions} />
-                    </RightRailSurface>
+                    {/* RR.SURFACE stays as the label anchor (single-ownership); the operator's
+                        actual right rail is the persistent shell command rail. The resolved actions
+                        register INTO that rail via WorkUnitRightRailActions (renders null) — one
+                        action presentation path, no center duplicate. */}
+                    <RightRailSurface />
+                    <WorkUnitRightRailActions
+                        actions={model.rightRailActions}
+                        departmentId={model.departmentId}
+                        workUnitId={model.workUnitId}
+                    />
                 </div>
             )}
         </div>

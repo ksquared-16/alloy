@@ -157,6 +157,13 @@ export type WorkUnitSurfaceModel = {
      * executed through the existing action runtime; the runtime never invents or hardcodes actions.
      */
     rightRailActions: ResolvedActionForClient[];
+    /**
+     * Work-unit scope for the resolved actions — baked so the action controls execute with the
+     * right context even when registered into the shell-level command rail (which sits ABOVE the
+     * work-unit route context and cannot read it).
+     */
+    departmentId: string | null;
+    workUnitId: string | null;
     ready: boolean;
 };
 

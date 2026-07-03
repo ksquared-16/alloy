@@ -646,6 +646,8 @@ export function useWorkUnitSurfaceRuntime(): WorkUnitSurfaceRuntime {
             activeWorkViewId: runtimeCtx.workViewId,
             selectedRecordId,
             rightRailActions,
+            departmentId,
+            workUnitId,
             // Above-fold identity + configured views resolved; queue carries its own state.
             ready: slugRoute != null && configSettled,
         }),
@@ -663,6 +665,8 @@ export function useWorkUnitSurfaceRuntime(): WorkUnitSurfaceRuntime {
             runtimeCtx.workViewId,
             selectedRecordId,
             rightRailActions,
+            departmentId,
+            workUnitId,
             configSettled,
         ],
     );

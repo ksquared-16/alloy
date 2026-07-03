@@ -14,20 +14,32 @@ vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn(), refresh: 
 vi.mock("@/contexts/AdminDrawerContext", () => ({
     useAdminDrawer: () => ({ drawer: { type: "opportunities", id: "opp-7" }, openDrawer }),
 }));
-vi.mock("@/contexts/WorkUnitSlugRouteContext", () => ({
-    useWorkUnitSlugRouteOptional: () => ({ departmentId: "dept-1", workUnitId: "wu-1" }),
-}));
 vi.mock("@/lib/admin/actions/applyRegistryResolvedActionClient", () => ({
     applyRegistryResolvedActionClient: (...args: unknown[]) => applyMock(...args),
 }));
 vi.mock("@/components/platform/commands/createLead/CreateLeadCommandSurface", () => ({
     CreateLeadCommandSurface: () => null,
 }));
+// Render the registered node inline so we can assert what reaches the shell command rail.
+vi.mock("@/app/adminV2/components/workspace/WorkspaceCommandRailRegistrar", () => ({
+    WorkspaceCommandRailRegistrar: ({ actions }: { actions: ReactNode }) => (
+        <div data-registrar-surface="work_unit">{actions}</div>
+    ),
+}));
+vi.mock("@/app/adminV2/components/workspace/CommandRailCollapsibleActionsSection", () => ({
+    CommandRailCollapsibleActionsSection: ({
+        actionCount,
+        children,
+    }: {
+        actionCount: number | null;
+        children: ReactNode;
+    }) => <div data-actions-section data-action-count={String(actionCount)}>{children}</div>,
+}));
 
 import { WorkUnitRightRailActions } from "@/components/presentation/rightRail/WorkUnitRightRailActions";
 import type { ResolvedActionForClient } from "@/lib/admin/actions/types";
 
-function action(key: string, label: string, display_style = "button"): ResolvedActionForClient {
+function action(key: string, label: string): ResolvedActionForClient {
     return {
         key,
         label,
@@ -35,7 +47,7 @@ function action(key: string, label: string, display_style = "button"): ResolvedA
         action_type: "open_form",
         icon: null,
         style: null,
-        display_style,
+        display_style: "button",
         payload: {},
         workflow_id: null,
     };
@@ -57,56 +69,41 @@ afterEach(() => {
     }
 });
 
-describe("WorkUnitRightRailActions", () => {
-    it("renders one control per configured action, labelled + tagged by key", () => {
+const TWO = [action("create_lead", "Create Lead"), action("schedule_tour", "Schedule Tour")];
+
+describe("WorkUnitRightRailActions → shell command rail", () => {
+    it("registers an 'Actions (N)' section with one row per configured action", () => {
         const el = render(
-            <WorkUnitRightRailActions
-                actions={[action("create_lead", "Create Lead"), action("schedule_tour", "Schedule Tour")]}
-            />,
+            <WorkUnitRightRailActions actions={TWO} departmentId="dept-1" workUnitId="wu-1" />,
         );
-        const buttons = el.querySelectorAll("button[data-right-rail-action]");
-        expect(buttons).toHaveLength(2);
+        // Registered into the command rail (not a center rail), with the count for the header.
+        expect(el.querySelector("[data-registrar-surface='work_unit']")).not.toBeNull();
+        expect(el.querySelector("[data-actions-section]")?.getAttribute("data-action-count")).toBe("2");
+        const rows = el.querySelectorAll("button[data-right-rail-action]");
+        expect(rows).toHaveLength(2);
         expect(el.querySelector('[data-right-rail-action="create_lead"]')?.textContent).toBe("Create Lead");
         expect(el.querySelector('[data-right-rail-action="schedule_tour"]')?.textContent).toBe("Schedule Tour");
     });
 
-    it("executes a click through the EXISTING action runtime with a work_unit surface context", () => {
-        const create = action("create_lead", "Create Lead");
-        const el = render(<WorkUnitRightRailActions actions={[create]} />);
+    it("registers NOTHING when the payload is empty (rail shows its own default, not a fake empty)", () => {
+        const el = render(
+            <WorkUnitRightRailActions actions={[]} departmentId="dept-1" workUnitId="wu-1" />,
+        );
+        expect(el.querySelector("[data-actions-section]")).toBeNull();
+        expect(el.querySelectorAll("button[data-right-rail-action]")).toHaveLength(0);
+    });
+
+    it("executes through the EXISTING runtime with a work_unit context + baked scope", () => {
+        const el = render(
+            <WorkUnitRightRailActions actions={TWO} departmentId="dept-1" workUnitId="wu-1" />,
+        );
         const btn = el.querySelector('[data-right-rail-action="create_lead"]')!;
         act(() => btn.dispatchEvent(new MouseEvent("click", { bubbles: true })));
         expect(applyMock).toHaveBeenCalledTimes(1);
         const [passedAction, host] = applyMock.mock.calls[0];
-        expect(passedAction).toBe(create);
+        expect(passedAction.key).toBe("create_lead");
         expect(host.context).toEqual({ surface: "work_unit", department_id: "dept-1", work_unit_id: "wu-1" });
-        // Record-scoped actions target the open Focus Panel record.
-        expect(host.entityId).toBe("opp-7");
-        // Reuses the existing runtime — no new execution path invented.
-        expect(typeof host.openCreateLead).toBe("function");
-    });
-
-    it("shows a stable empty state (not a gap) when no actions are configured", () => {
-        const el = render(<WorkUnitRightRailActions actions={[]} />);
-        expect(el.querySelector('[data-right-rail-empty-state="true"]')?.textContent).toBe(
-            "No actions available.",
-        );
-        expect(el.querySelectorAll("button[data-right-rail-action]")).toHaveLength(0);
-    });
-
-    it("maps display_style menu_item → secondary control (else primary)", () => {
-        const el = render(
-            <WorkUnitRightRailActions
-                actions={[action("a", "Primary", "button"), action("b", "Menu", "menu_item")]}
-            />,
-        );
-        const primary = el.querySelector('[data-right-rail-action="a"]')!;
-        const secondary = el.querySelector('[data-right-rail-action="b"]')!;
-        // Primary is the filled juniper control; secondary is the white outline control.
-        expect(primary.className).toContain("text-white");
-        expect(secondary.className).toContain("bg-white");
-        expect(secondary.className).not.toContain("text-white");
-        // Both use the shared motion primitive for immediate acknowledgement.
-        expect(primary.className).toContain("motion-control");
-        expect(secondary.className).toContain("motion-control");
+        expect(host.entityId).toBe("opp-7"); // record-scoped actions target the open Focus Panel record
+        expect(typeof host.openCreateLead).toBe("function"); // reuses the existing runtime path
     });
 });
