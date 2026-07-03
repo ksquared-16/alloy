@@ -24,6 +24,7 @@ import {
     filterOcmEnrollmentTrackRowsByLocationScope,
 } from "@/lib/queues/queueMembershipLocationScope";
 import { buildQueueRelevantCrmCompactChildren } from "@/lib/workUnits/filterQueueRelevantInquiryChildren";
+import { queryEnrollmentProcessInstanceTrackRows } from "@/lib/queues/childGrainProcessInstanceQueue";
 
 type OpportunityPreview = {
     id: string;
@@ -103,10 +104,27 @@ async function queryOcmEnrollmentTrackRows(params: {
     recordScopeConstraints: RecordScopeConstraints | null;
     locationScopeSource: QueueMembershipLocationScopeSource;
 }): Promise<OcmEnrollmentTrackQueryRow[]> {
-    // S4: membership is by the persisted `stage_key` column, NOT by matching status against
-    // included_disposition_keys. The disposition keys are retained only as a legacy fallback for
-    // records that have no persisted stage_key yet (un-migrated) or lanes without a stage key.
+    // Read cutover (Slice A): process_instances is the runtime owner of child participation. Read it
+    // FIRST (membership by stage_key). OCM is a TEMPORARY fallback only for records not yet backfilled
+    // into process_instances; it is removed once the write cutover (Slice B) + backfill are complete.
     const stageKey = params.stageKey.trim();
+    if (stageKey) {
+        const piRows = await queryEnrollmentProcessInstanceTrackRows({
+            supabase: params.supabase,
+            orgId: params.orgId,
+            workUnitId: params.workUnitId,
+            stageKey,
+        });
+        if (piRows.length) {
+            return filterOcmEnrollmentTrackRowsByLocationScope(
+                piRows,
+                params.recordScopeConstraints,
+                params.locationScopeSource,
+            );
+        }
+        // No process_instances for this lane → temporary OCM fallback (un-migrated records).
+    }
+
     let q = params.supabase
         .from("opportunity_customer_members")
         .select(
