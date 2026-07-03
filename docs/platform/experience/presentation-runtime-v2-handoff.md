@@ -5,6 +5,31 @@ Status snapshot at the end of the "Navigation Rails" pass.
 
 ---
 
+> ## ⚠️ CORRECTION — final retirement pass (supersedes §3/§4/§8 below)
+>
+> A verification-and-retirement session re-audited this document and found **two errors** in the
+> deletion inventory; the corrected audit is authoritative. See
+> `presentation-runtime-v2.md` → **Architectural boundary** + **Retirement record**.
+>
+> 1. **`OperationalQueueRecordRow` is NOT deletable — it is Settings Runtime.** It is the live
+>    renderer for the `/settings` Queue Row editor/preview (`QueueRecordLayoutPreview`,
+>    `compositionFieldAdapter` → `QueueRowBuilderV2`). It is **retained** and reclassified as
+>    **Settings Runtime**, not Presentation Runtime legacy. The operator product uses only
+>    `CondensedQueueRow`.
+> 2. **`LayoutRuntimeQueueRowView` WAS dead** (§3 wrongly marked it "still LIVE elsewhere"). Its
+>    only reference was a string assertion in a since-deleted regression test. It and its
+>    `…ErrorBoundary` / `…ErrorCard` / `…Hold` companions were removed.
+>
+> **Executed deletions (this pass):** batch 1 `legacyAdminWorkUnitHref`; batch 2
+> `lib/ui-v2/demo/**` + `adapters/context-adapter.ts` (21 files); batch 3 `LayoutRuntimeQueueRowView`
+> family + 2 dead tests; batch 4 `QueueRecordConfigColumn` / `QueueRowLinkedFieldButton` /
+> `QueueRowOpenBackdrop` / `enrollmentQueueRowPreviewPolicy`. Branch then merged current
+> `origin/staging` (no rebase). **Remaining deferred work is ONLY:** Runtime Adoption (PR #64,
+> incl. Settings Runtime → `CondensedQueueRow` migration), Motion Runtime, Performance / Warm Loads
+> / Caching.
+
+---
+
 ## 0. Where things are
 
 | | |
