@@ -26,18 +26,6 @@ export function operatorWorkUnitHrefFromWorkViewSlug(workViewId: string): string
     return operatorWorkUnitHrefFromKey(workViewId);
 }
 
-/** H1 compatibility — dept/uuid work-unit URL under `/admin/workspace`. */
-export function legacyAdminWorkUnitHref(args: {
-    departmentId: string;
-    workUnitId: string;
-    queueKey?: string | null;
-}): string {
-    const base = `${CANONICAL_ADMIN_WORKSPACE}/dept/${encodeURIComponent(args.departmentId)}/work-unit/${encodeURIComponent(args.workUnitId)}`;
-    const queueKey = typeof args.queueKey === "string" ? args.queueKey.trim() : "";
-    if (!queueKey) return base;
-    return `${base}?queue=${encodeURIComponent(queueKey)}`;
-}
-
 /**
  * Resolve where "Open Lead" sends the operator after Create Lead success.
  *
