@@ -15,10 +15,9 @@ collapsed state of a process; the Work Unit is its expanded state.
 PresentationRuntime                       (only layer that touches data)
 ↓
 WorkspaceSurface                WS.SURFACE
- ├─ WorkspaceHeader             WS.HEADER
- │   └─ WorkspaceHeaderCalculations   WS.HEADER_CALCULATIONS
+ ├─ WorkspaceHeader             WS.HEADER   (org identity only)
  ├─ ProcessGrid                 WS.PROCESS_GRID
- │   └─ ProcessTile             WS.PROCESS_TILE
+ │   └─ ProcessSummaryCard      WS.PROCESS_SUMMARY_CARD
  │       └─ WorkViewList        WS.PROCESS_TILE_WORK_VIEWS
 ↓  (soft nav: /workspace/work-unit/<slug>)
 WorkUnitSurface                 WU.SURFACE
@@ -35,10 +34,34 @@ RightRailSurface                RR.SURFACE
 That is the entire runtime. Each component owns exactly one responsibility, carries exactly one
 runtime label (`data-runtime-label`), and has exactly one render site. No duplicate ownership.
 
-> **Retired:** the standalone `OperationalAnswersRow` (`WS.ANSWERS` / `WU.ANSWERS`) is gone — its
-> operational answers were folded into the header calculation cards
-> (`WorkspaceHeaderCalculations` / `WorkUnitHeaderCalculations`). No section carries an `ANSWERS`
-> label anymore.
+> **Retired:** the standalone `OperationalAnswersRow` (`WS.ANSWERS` / `WU.ANSWERS`) is gone. On the
+> Workspace surface, the `WorkspaceHeader` **metric strip** (`WorkspaceHeaderCalculations`) and the
+> old `ProcessTile` are also retired — replaced by the **Workspace Process Surface** (below). The
+> runtime no longer reads `workspace_header` metric placements.
+
+## Workspace Process Surface
+
+`WorkspaceSurface` is the Workspace Process Surface: `ProcessGrid` repeats ONE `ProcessSummaryCard`
+template per configured process. There is no universal "health score" — each process presents one
+configurable **Primary Signal**.
+
+**Grammar (fixed):** Identity → Primary Signal → Supporting Context → Today's Work → Open Process.
+
+- **Primary Signal** — a selected Operational Calculation. The calculation owns meaning
+  (value / state / drill / target); Surface Builder chooses *which* signal per business process
+  (`workspaceProcessSurface.primarySignalByProcess`, internal binding `primaryOperationalAnswerKey`);
+  the runtime resolves it through the canonical answer path (`useOperationalAnswers` +
+  `resolvePrimarySignal`). The card renders the answer as the hero, the value supports it, and it
+  **never branches on value type** (percent / currency / count / score / ratio) or assumes health.
+  Options come from the Operational Calculations registry (`listCalculationsByBusinessProcess`,
+  consumers ⊇ `business_process_tile`).
+- **Supporting Context** — text only (the calculation's target; trend when the data layer supplies
+  it — never fabricated).
+- **Today's Work** — runtime-generated from the configured work views with live counts; behavior
+  (visible / max rows / sort / show counts) is the only other authored setting.
+
+**Persistence:** `entity_layouts`, `surface="workspace"`, `layoutKey="workspace_processes"`, config in
+`doc.metadata.workspaceProcessSurface`. One store, no carrier hack, no new table.
 
 ## Data contract
 

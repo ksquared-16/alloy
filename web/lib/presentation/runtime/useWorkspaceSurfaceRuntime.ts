@@ -17,7 +17,7 @@
  * (docs/platform/experience/presentation-runtime-v2.md).
  */
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useWorkspaceOrg } from "@/contexts/WorkspaceOrgContext";
 import { useWorkspaceSiteFilter } from "@/contexts/WorkspaceSiteFilterContext";
 import { useWorkspaceRouteVm } from "@/lib/adminV2/runtime/surface/workspaceRouteVmContext";
@@ -31,6 +31,15 @@ import {
     workViewTotalKey,
     type WorkViewTotalTarget,
 } from "./useWorkViewTotals";
+import { useOperationalAnswers } from "./useOperationalAnswers";
+import { useWorkspaceProcessSurfaceConfig } from "./useWorkspaceProcessSurfaceConfig";
+import {
+    businessProcessForProcessKey,
+    defaultSignalKeyForProcess,
+    resolvePrimarySignal,
+} from "./workspaceProcessSignal";
+import { isKnownCalculationKey } from "@/lib/analytics/calculations/registry";
+import type { OipMetricKey } from "@/lib/metrics/types";
 import { processTileModelFromLandingCard, type WorkspaceSurfaceModel } from "./types";
 
 /** Warmest available first paint: session peek, else the server-composed Route VM seed. */
@@ -97,19 +106,55 @@ export function useWorkspaceSurfaceRuntime(): WorkspaceSurfaceModel {
         enabled: orgId != null,
     });
 
+    // ── Primary Signal: the ONE configured Operational Calculation per process ──────────
+    // Surface Builder chooses WHICH signal (config.primarySignalByProcess, keyed by business
+    // process); the runtime falls back to the registry default for the process. No hardcoded
+    // health metric. The selected calculations are resolved through the canonical answer path.
+    const processConfig = useWorkspaceProcessSurfaceConfig();
+    const signalKeyForCard = useCallback(
+        (card: OperatorLifecycleLandingCard): string | null => {
+            const bp = businessProcessForProcessKey(card.processKey);
+            const configured = bp ? processConfig.primarySignalByProcess[bp] : undefined;
+            return configured ?? defaultSignalKeyForProcess(card.processKey);
+        },
+        [processConfig],
+    );
+    const signalKeys = useMemo<OipMetricKey[]>(() => {
+        const seen = new Set<string>();
+        const out: OipMetricKey[] = [];
+        for (const card of cards) {
+            const key = signalKeyForCard(card);
+            if (key && isKnownCalculationKey(key) && !seen.has(key)) {
+                seen.add(key);
+                out.push(key);
+            }
+        }
+        return out;
+    }, [cards, signalKeyForCard]);
+    const { resolved: signalsResolved } = useOperationalAnswers({
+        siteId: selectedSiteId,
+        keys: signalKeys,
+    });
+
     const processes = useMemo(
         () =>
-            cards.map((card) =>
-                processTileModelFromLandingCard(card, {
+            cards.map((card) => {
+                const signalKey = signalKeyForCard(card);
+                const primarySignal =
+                    signalKey && isKnownCalculationKey(signalKey)
+                        ? resolvePrimarySignal(signalKey, signalsResolved?.[signalKey])
+                        : null;
+                return processTileModelFromLandingCard(card, {
                     countForWorkView: (entry) => {
                         const viewId = entry.work_view_id?.trim();
                         const workUnitId = entry.host_work_unit_id?.trim();
                         if (!viewId || !workUnitId) return null;
                         return workViewTotals.get(workViewTotalKey(workUnitId, viewId)) ?? null;
                     },
-                }),
-            ),
-        [cards, workViewTotals],
+                    primarySignal,
+                });
+            }),
+        [cards, workViewTotals, signalKeyForCard, signalsResolved],
     );
 
     return useMemo<WorkspaceSurfaceModel>(

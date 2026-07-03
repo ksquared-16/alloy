@@ -82,6 +82,7 @@ describe("WorkViewList — per-view context + showCounts", () => {
 function process(over: Partial<ProcessTileModel>): ProcessTileModel {
     return {
         id: "enrollment",
+        processKey: "enrollment",
         label: "Enrollment Pipeline",
         description: "Leads through tour",
         entryHref: "/workspace/work-unit/new-leads",
@@ -91,92 +92,110 @@ function process(over: Partial<ProcessTileModel>): ProcessTileModel {
             view({ id: "new_leads", label: "New Leads", count: 24, attentionCount: 6 }),
             view({ id: "waitlist", label: "Waitlist", count: 9 }),
         ],
-        // status = canonical OIP health enum (MetricHealthState), as the runtime supplies.
-        performanceMetrics: [{ label: "Pipeline health", value: "82%", status: "healthy", target: "80%" }],
+        // The one configured Primary Signal — a resolved Operational Calculation.
+        primarySignal: {
+            key: "enrollment.tour_conversion_rate",
+            label: "Conversion",
+            answer: "Conversion on track",
+            state: "healthy",
+            value: "31%",
+            supportingContext: "Target 80%",
+            trend: null,
+            drillHref: "/workspace/work-unit/enrollment-tours",
+        },
         ...over,
     };
 }
 
-describe("ProcessSummaryCard — fixed grammar + live data", () => {
+describe("ProcessSummaryCard — fixed grammar + Primary Signal", () => {
     const cfg = DEFAULT_WORKSPACE_PROCESS_SURFACE_CONFIG;
 
-    it("renders Identity, Operational Answer, Evidence, Today's Work (live counts), CTA", () => {
+    it("renders Identity, Primary Signal (answer hero + value), Supporting Context, Today's Work, Open Process", () => {
         const el = render(<ProcessSummaryCard process={process({})} config={cfg} />);
         // Identity
         expect(el.textContent).toContain("Enrollment Pipeline");
-        // State word localized from the CANONICAL health enum ("healthy" → "On track"),
-        // shown in the status pill — the card does not classify.
-        expect(el.querySelector("[data-process-status]")?.textContent).toContain("On track");
-        // Operational Answer — figure + label straight from the primary calculation.
+        // Primary Signal — the answer is the hero (state-framed), value supports it. Domain-neutral.
         const answer = el.querySelector("[data-process-answer]");
-        expect(answer?.textContent).toContain("82%");
-        expect(answer?.textContent).toContain("Pipeline health");
-        // Evidence — the calculation's target, text only, no fabricated <svg> sparkline.
-        expect(el.querySelector("[data-process-evidence]")?.textContent).toContain("Target 80%");
+        expect(answer?.textContent).toContain("Conversion on track"); // answer hero (not "Pipeline Health")
+        expect(answer?.textContent).toContain("31%"); // value supports
+        // State word localized from the signal's canonical state.
+        expect(el.querySelector("[data-process-status]")?.textContent).toContain("On track");
+        // Supporting Context — text only, no fabricated <svg> sparkline.
+        expect(el.querySelector("[data-process-context]")?.textContent).toContain("Target 80%");
         expect(el.querySelectorAll("svg")).toHaveLength(0);
-        // Today's Work — the live work-view rows with counts
+        // Today's Work — live work-view rows with counts
         const tw = el.querySelector("[data-process-todays-work]");
         expect(tw?.textContent).toContain("New Leads");
-        expect(tw?.textContent).toContain("24"); // live count
-        // CTA
-        expect(el.textContent).toContain("Open process");
-        // Card section marker
+        expect(tw?.textContent).toContain("24");
+        // Open Process → drills to the signal's target
+        const open = Array.from(el.querySelectorAll("a")).find((a) => a.textContent?.includes("Open process"));
+        expect(open?.getAttribute("href")).toBe("/workspace/work-unit/enrollment-tours");
         expect(el.querySelectorAll('[data-alloy-section="WS.PROCESS_SUMMARY_CARD"]')).toHaveLength(1);
     });
 
-    it("maps the canonical health enum to state (warning → Needs attention), no card classification", () => {
-        const warn = render(
+    it("is domain-neutral: renders a currency Primary Signal without branching or health assumptions", () => {
+        const el = render(
             <ProcessSummaryCard
-                process={process({ performanceMetrics: [{ label: "Coverage", value: "91%", status: "warning" }] })}
+                process={process({
+                    label: "Revenue Performance",
+                    primarySignal: {
+                        key: "financial.revenue_vs_plan",
+                        label: "Revenue vs plan",
+                        answer: "Revenue vs plan on track",
+                        state: "healthy",
+                        value: "$41.2k",
+                        supportingContext: null,
+                        trend: null,
+                        drillHref: null,
+                    },
+                })}
                 config={cfg}
             />,
+        );
+        const answer = el.querySelector("[data-process-answer]");
+        expect(answer?.textContent).toContain("Revenue vs plan on track");
+        expect(answer?.textContent).toContain("$41.2k");
+        // No hardcoded "Health"/"Pipeline Health" anywhere.
+        expect(el.textContent).not.toContain("Pipeline Health");
+        expect(el.textContent).not.toContain("Operational Health");
+    });
+
+    it("maps the signal's state to the state word (caution → Needs attention, critical → Action required)", () => {
+        const warn = render(
+            <ProcessSummaryCard process={process({ primarySignal: { ...process({}).primarySignal!, state: "caution" } })} config={cfg} />,
         );
         expect(warn.querySelector("[data-process-status]")?.textContent).toContain("Needs attention");
         warn.remove();
         const crit = render(
-            <ProcessSummaryCard
-                process={process({ performanceMetrics: [{ label: "Coverage", value: "40%", status: "critical" }] })}
-                config={cfg}
-            />,
+            <ProcessSummaryCard process={process({ primarySignal: { ...process({}).primarySignal!, state: "critical" } })} config={cfg} />,
         );
         expect(crit.querySelector("[data-process-status]")?.textContent).toContain("Action required");
     });
 
     it("Today's Work visible=false hides the section", () => {
         const el = render(
-            <ProcessSummaryCard
-                process={process({})}
-                config={{ ...cfg, todaysWork: { ...cfg.todaysWork, visible: false } }}
-            />,
+            <ProcessSummaryCard process={process({})} config={{ ...cfg, todaysWork: { ...cfg.todaysWork, visible: false } }} />,
         );
         expect(el.querySelector("[data-process-todays-work]")).toBeNull();
     });
 
     it("maxRows truncates Today's Work to the configured count", () => {
         const el = render(
-            <ProcessSummaryCard
-                process={process({})}
-                config={{ ...cfg, todaysWork: { ...cfg.todaysWork, maxRows: 1 } }}
-            />,
+            <ProcessSummaryCard process={process({})} config={{ ...cfg, todaysWork: { ...cfg.todaysWork, maxRows: 1 } }} />,
         );
         expect(el.querySelectorAll("[data-process-todays-work] [data-work-view-id]")).toHaveLength(1);
     });
 
-    it("no primary calculation → neutral no-signal; never fabricates state/value from counts", () => {
+    it("no primary signal → neutral no-signal; never fabricates a value/state from counts", () => {
         const el = render(
-            // No performanceMetrics, but a non-zero attention count — the card must NOT turn that
-            // into an operational answer/state (that classification is not the card's to make).
-            <ProcessSummaryCard process={process({ performanceMetrics: [], needsAttentionCount: 5 })} config={cfg} />,
+            <ProcessSummaryCard process={process({ primarySignal: null, needsAttentionCount: 5 })} config={cfg} />,
         );
         const answer = el.querySelector("[data-process-answer]");
-        // No figure fabricated from the count; a neutral no-signal label instead.
         expect(answer?.textContent).not.toContain("5");
-        expect(answer?.textContent).toContain("No operational signal");
-        // Neutral state word, not an attention/critical word invented by the card.
+        expect(answer?.textContent).toContain("No signal configured");
         const status = el.querySelector("[data-process-status]")?.textContent ?? "";
         expect(status).toContain("No signal");
         expect(status).not.toContain("Needs attention");
-        expect(status).not.toContain("Action required");
         expect(el.querySelectorAll("svg")).toHaveLength(0);
     });
 });

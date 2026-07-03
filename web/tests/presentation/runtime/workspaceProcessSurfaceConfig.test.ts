@@ -48,6 +48,15 @@ describe("normalizeWorkspaceProcessSurfaceConfig", () => {
         expect(b.todaysWork.sort).toBe("attention");
         expect(b.todaysWork.maxRows).toBe(0);
     });
+
+    it("carries the per-process Primary Signal map (ignoring non-string entries)", () => {
+        const n = normalizeWorkspaceProcessSurfaceConfig({
+            primarySignalByProcess: { enrollment: "enrollment.tour_conversion_rate", forms: 42, financial: "  " },
+        });
+        expect(n.primarySignalByProcess).toEqual({ enrollment: "enrollment.tour_conversion_rate" });
+        // absent map → empty (no hardcoded default signal)
+        expect(normalizeWorkspaceProcessSurfaceConfig({}).primarySignalByProcess).toEqual({});
+    });
 });
 
 describe("applyTodaysWorkConfig", () => {

@@ -15,13 +15,24 @@ export {
     workViewLinkFromWorkQueuePreview,
     workViewLinkModelsFromConfiguredViews,
     type OperationalAnswerModel,
+    type PrimarySignalModel,
     type ProcessTileModel,
     type QueueRowModel,
+    type SignalState,
     type WorkspaceSurfaceModel,
     type WorkUnitSurfaceIntents,
     type WorkUnitSurfaceModel,
     type WorkViewLinkModel,
 } from "./types";
+
+export {
+    availableSignalsForProcess,
+    businessProcessForProcessKey,
+    defaultSignalKeyForProcess,
+    resolvePrimarySignal,
+    signalAnswerText,
+    signalStateFromKpiStatus,
+} from "./workspaceProcessSignal";
 
 export {
     mapQueueRowSurfaceToCompactConfig,

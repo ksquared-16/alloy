@@ -25,6 +25,14 @@ export type TodaysWorkSort =
 
 export type WorkspaceProcessSurfaceConfig = {
     version: 1;
+    /**
+     * The Primary Signal each process presents — a selected Operational Calculation key,
+     * keyed by the process's business process (internal binding: the
+     * `primaryOperationalAnswerKey`). Surface Builder chooses WHICH signal; it does not
+     * configure the calculation. Absent → the runtime uses the registry default for the
+     * process (never a hardcoded health metric).
+     */
+    primarySignalByProcess: Record<string, string>;
     todaysWork: {
         /** Show the Today's Work section on each process card. */
         visible: boolean;
@@ -39,6 +47,7 @@ export type WorkspaceProcessSurfaceConfig = {
 
 export const DEFAULT_WORKSPACE_PROCESS_SURFACE_CONFIG: WorkspaceProcessSurfaceConfig = {
     version: 1,
+    primarySignalByProcess: {},
     todaysWork: {
         visible: true,
         maxRows: 0,
@@ -47,12 +56,26 @@ export const DEFAULT_WORKSPACE_PROCESS_SURFACE_CONFIG: WorkspaceProcessSurfaceCo
     },
 };
 
+/** String→string record of process → calculation key, ignoring non-string entries. */
+function normalizePrimarySignalMap(value: unknown): Record<string, string> {
+    if (!value || typeof value !== "object") return {};
+    const out: Record<string, string> = {};
+    for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+        if (typeof v === "string" && v.trim()) out[k] = v.trim();
+    }
+    return out;
+}
+
 /** Coerce an unknown persisted value into a valid config (defaults fill any gaps). */
 export function normalizeWorkspaceProcessSurfaceConfig(value: unknown): WorkspaceProcessSurfaceConfig {
     const d = DEFAULT_WORKSPACE_PROCESS_SURFACE_CONFIG;
     if (!value || typeof value !== "object") return d;
-    const tw = (value as { todaysWork?: unknown }).todaysWork;
-    if (!tw || typeof tw !== "object") return d;
+    const v = value as Record<string, unknown>;
+    const primarySignalByProcess = normalizePrimarySignalMap(v.primarySignalByProcess);
+    const tw = v.todaysWork;
+    if (!tw || typeof tw !== "object") {
+        return { ...d, primarySignalByProcess };
+    }
     const t = tw as Record<string, unknown>;
     const sort: TodaysWorkSort =
         t.sort === "count" || t.sort === "configured" ? t.sort : "attention";
@@ -62,6 +85,7 @@ export function normalizeWorkspaceProcessSurfaceConfig(value: unknown): Workspac
             : d.todaysWork.maxRows;
     return {
         version: 1,
+        primarySignalByProcess,
         todaysWork: {
             visible: typeof t.visible === "boolean" ? t.visible : d.todaysWork.visible,
             maxRows,
