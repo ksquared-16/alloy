@@ -14,20 +14,41 @@ import { reopenStageWorkWithDueDate } from "@/lib/lifecycle/reopenStageWorkWithD
 import {
     moveEnrollmentInstanceStageByScope,
     setEnrollmentInstanceStateByScope,
+    readEnrollmentInstanceState,
     type EnrollmentProcessState,
 } from "@/lib/process/processInstances";
 import { ensurePlacementCandidateForWaitlistedChild } from "@/lib/orchestration/placement/placementCandidateLifecycleHook";
+import { emitChildLifecycleStatusChangedEvent } from "@/lib/opportunities/emitChildLifecycleStatusChangedEvent";
+
+export type StageOutcomeExecutionSubject = {
+    journey_segment: "family" | "child";
+    opportunity_id: string;
+    /** Child subject = customer_members.id. Threaded so movement targets the process instance directly. */
+    customer_member_id?: string | null;
+    /** Optional direct process-instance id (most specific child identity). */
+    process_instance_id?: string | null;
+    /** Legacy OCM id (temporary bridge; only used to resolve the child when customer_member_id is absent). */
+    opportunity_customer_member_id?: string | null;
+    placement_candidate_id?: string | null;
+    /** Open lifecycle work task for repeat/reopen automations. */
+    work_id?: string | null;
+};
 
 /**
- * Resolve the child subject (customer_member_id) for a child track from its OCM id. OCM is used here
- * only as a bridge lookup (not source of truth) so the executor can target the correct sibling's
- * process instance. Removed once the subject carries customer_member_id / process_instance_id directly.
+ * Resolve the child subject (customer_members.id) that a child movement targets. Prefers the
+ * identity threaded on the subject (customer_member_id) — NO OCM read. Falls back to an OCM lookup
+ * ONLY for legacy callers that still carry just the OCM id; that fallback is removed with OCM.
  */
-async function resolveChildCustomerMemberId(
+async function resolveChildSubjectId(
     supabase: SupabaseClient,
     orgId: string,
-    ocmId: string,
+    subject: StageOutcomeExecutionSubject,
 ): Promise<string | null> {
+    const direct = subject.customer_member_id?.trim();
+    if (direct) return direct;
+    const ocmId = subject.opportunity_customer_member_id?.trim();
+    if (!ocmId) return null;
+    // Legacy bridge read: old task/queue payloads carried only the OCM id. Temporary — removed with OCM.
     const { data } = await supabase
         .from("opportunity_customer_members")
         .select("customer_member_id")
@@ -37,15 +58,6 @@ async function resolveChildCustomerMemberId(
     const id = (data as { customer_member_id?: string } | null)?.customer_member_id;
     return typeof id === "string" && id.trim() ? id.trim() : null;
 }
-
-export type StageOutcomeExecutionSubject = {
-    journey_segment: "family" | "child";
-    opportunity_id: string;
-    opportunity_customer_member_id?: string | null;
-    placement_candidate_id?: string | null;
-    /** Open lifecycle work task for repeat/reopen automations. */
-    work_id?: string | null;
-};
 
 export async function applyStageOutcomeRuleTarget(
     supabase: SupabaseClient,
@@ -87,16 +99,19 @@ export async function applyStageOutcomeRuleTarget(
 
         case "update_child_enrollment_status": {
             const dispositionKey = target.disposition_key?.trim();
-            const ocmId = subject.opportunity_customer_member_id?.trim();
-            if (!dispositionKey || !ocmId) {
-                return { error: "Child enrollment track required for disposition update" };
-            }
-            // Bridge read: resolve the child subject so we can target its process instance.
-            const childId = await resolveChildCustomerMemberId(supabase, orgId, ocmId);
+            if (!dispositionKey) return { error: "Child enrollment disposition required" };
+            // Resolve the child from the threaded identity (no OCM read on the primary path).
+            const childId = await resolveChildSubjectId(supabase, orgId, subject);
             if (!childId) return { error: "Could not resolve child for enrollment state update" };
+            // Prior state (from process_instances, not OCM) for the transition event.
+            const prevState = await readEnrollmentInstanceState(supabase, {
+                orgId,
+                opportunityId: subject.opportunity_id,
+                customerMemberId: childId,
+            });
             // Authoritative writer: the child's process instance owns durable state + close reason.
-            // The OCM durable enrollment-status column is NO LONGER written — process_instances is
-            // the single source of truth for child participation state.
+            // The OCM durable enrollment-status column is NOT written — process_instances is the
+            // single source of truth for child participation state.
             const closeReasonKey = target.close_reason_key?.trim() || undefined;
             const pi = await setEnrollmentInstanceStateByScope(supabase, {
                 orgId,
@@ -106,15 +121,35 @@ export async function applyStageOutcomeRuleTarget(
                 closeReasonKey,
             });
             if (pi.error) return { error: pi.error };
-            // Preserve the waitlist placement flow (reads OCM as bridge data only). This is the one
-            // side effect that previously rode inside the OCM lifecycle-status writer.
-            // NOTE: child lifecycle event emission is intentionally dropped here as a documented
-            // follow-up — the process-instance transition is the authoritative record for Slice B.
-            if (dispositionKey === "waitlisted") {
+
+            const ocmBridgeId = subject.opportunity_customer_member_id?.trim() ?? null;
+            // Child lifecycle event emitted from the process-instance transition (restored). While the
+            // OCM bridge exists the event stays keyed on the OCM id so existing workflow subscriptions
+            // (entity_type=opportunity_customer_members) keep firing; it re-keys to process_instances
+            // when OCM is dropped.
+            if (ocmBridgeId && prevState !== dispositionKey) {
+                try {
+                    await emitChildLifecycleStatusChangedEvent({
+                        supabase,
+                        orgId,
+                        opportunityId: subject.opportunity_id,
+                        opportunityCustomerMemberId: ocmBridgeId,
+                        previousStatusKey: prevState,
+                        nextStatusKey: dispositionKey,
+                        actorUserId: userId,
+                        source: "stage_operating_plan_v1",
+                        rowGrain: "child",
+                    });
+                } catch (e) {
+                    console.error("[stageOutcomeRuleTargetExecutor] child lifecycle event", e);
+                }
+            }
+            // Preserve the waitlist placement flow (reads OCM as bridge data only).
+            if (dispositionKey === "waitlisted" && ocmBridgeId) {
                 await ensurePlacementCandidateForWaitlistedChild(supabase, {
                     orgId,
                     opportunityId: subject.opportunity_id,
-                    opportunityCustomerMemberId: ocmId,
+                    opportunityCustomerMemberId: ocmBridgeId,
                 });
             }
             return { status_updated: true };
@@ -209,28 +244,18 @@ export async function applyStageOutcomeRuleTarget(
             if (!targetStageKey) return { error: "Missing target stage key" };
             const nowIso = new Date().toISOString();
             if (subject.journey_segment === "child") {
-                const ocmId = subject.opportunity_customer_member_id?.trim();
-                if (!ocmId) return { error: "Child enrollment track required for move_to_stage" };
-                // Authoritative writer: the child's process instance owns stage_key.
-                const childId = await resolveChildCustomerMemberId(supabase, orgId, ocmId);
-                if (childId) {
-                    const pi = await moveEnrollmentInstanceStageByScope(supabase, {
-                        orgId,
-                        opportunityId: subject.opportunity_id,
-                        customerMemberId: childId,
-                        stageKey: targetStageKey,
-                    });
-                    if (pi.error) return { error: pi.error };
-                }
-                // OCM stage_key kept as a temporary compatibility bridge for legacy readers (not source
-                // of truth). Removed with OCM. Non-authoritative: the PI write above already succeeded.
-                const { error } = await supabase
-                    .from("opportunity_customer_members")
-                    .update({ stage_key: targetStageKey, updated_at: nowIso })
-                    .eq("id", ocmId)
-                    .eq("org_id", orgId)
-                    .eq("opportunity_id", subject.opportunity_id);
-                if (error) return { error: error.message };
+                // Authoritative + only writer: the child's process instance owns stage_key.
+                // (The OCM stage_key mirror write was removed — OCM is no longer a runtime dependency
+                // for child movement.)
+                const childId = await resolveChildSubjectId(supabase, orgId, subject);
+                if (!childId) return { error: "Child enrollment track required for move_to_stage" };
+                const pi = await moveEnrollmentInstanceStageByScope(supabase, {
+                    orgId,
+                    opportunityId: subject.opportunity_id,
+                    customerMemberId: childId,
+                    stageKey: targetStageKey,
+                });
+                if (pi.error) return { error: pi.error };
                 return {};
             }
             const { error } = await supabase

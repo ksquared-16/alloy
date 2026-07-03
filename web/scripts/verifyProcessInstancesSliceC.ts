@@ -34,6 +34,15 @@ async function nextNumber(supabase: Any, table: string, col: string): Promise<nu
 
 async function cleanup(supabase: any, ids: { oppId?: string; cmIds: string[]; customerId?: string }) {
     // Order respects FKs: PI + OCM reference opportunity/customer_member; delete children first.
+    // Remove any child lifecycle event rows emitted by the disposition transition during this run.
+    if (ids.oppId) {
+        await supabase
+            .from("workflow_events")
+            .delete()
+            .eq("org_id", ORG)
+            .eq("event_type", "child_lifecycle_status_changed")
+            .eq("payload->>opportunity_id", ids.oppId);
+    }
     await supabase.from("process_instances").delete().eq("org_id", ORG).eq("context_id", ids.oppId ?? "");
     if (ids.oppId) await supabase.from("opportunity_customer_members").delete().eq("org_id", ORG).eq("opportunity_id", ids.oppId);
     if (ids.oppId) await supabase.from("opportunities").delete().eq("org_id", ORG).eq("id", ids.oppId);
@@ -131,7 +140,7 @@ async function main() {
             departmentId: "slice-c",
             stageKey: "waitlist",
             plan: {} as any,
-            subject: { journey_segment: "child", opportunity_id: ids.oppId!, opportunity_customer_member_id: childA.ocmId } as any,
+            subject: { journey_segment: "child", opportunity_id: ids.oppId!, customer_member_id: childA.cmId, opportunity_customer_member_id: childA.ocmId } as any,
             target: { kind: "move_to_stage", stage_key: "enrolling" } as any,
         });
         ok("move_to_stage returned no error", !moveRes.error, moveRes.error);
@@ -148,7 +157,7 @@ async function main() {
             departmentId: "slice-c",
             stageKey: "waitlist",
             plan: {} as any,
-            subject: { journey_segment: "child", opportunity_id: ids.oppId!, opportunity_customer_member_id: childB.ocmId } as any,
+            subject: { journey_segment: "child", opportunity_id: ids.oppId!, customer_member_id: childB.cmId, opportunity_customer_member_id: childB.ocmId } as any,
             target: { kind: "update_child_enrollment_status", disposition_key: "waitlisted", close_reason_key: null } as any,
         });
         ok("update_child_enrollment_status returned status_updated", dispRes.status_updated === true, dispRes.error);

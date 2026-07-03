@@ -180,7 +180,5 @@ describe("Slice B — child enrollment movement writes process_instances (not OC
         // Process instance is the authoritative writer.
         expect(src).toContain("setEnrollmentInstanceStateByScope");
         expect(src).toContain("moveEnrollmentInstanceStageByScope");
-        // Remaining OCM write is explicitly labeled a temporary compatibility bridge.
-        expect(src).toContain("compatibility bridge");
     });
 });

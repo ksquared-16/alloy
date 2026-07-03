@@ -171,6 +171,22 @@ export async function setEnrollmentInstanceStateByScope(
     return { moved: (data ?? []).length };
 }
 
+/** Read a child's current enrollment instance state by scope (for transition events). */
+export async function readEnrollmentInstanceState(
+    supabase: SupabaseClient,
+    args: { orgId: string; opportunityId: string; customerMemberId: string },
+): Promise<string | null> {
+    const { data } = await supabase
+        .from(PROCESS_INSTANCES_TABLE)
+        .select("state")
+        .eq("org_id", args.orgId)
+        .eq("process_key", ENROLLMENT_PROCESS_KEY)
+        .eq("context_id", args.opportunityId)
+        .eq("subject_id", args.customerMemberId)
+        .maybeSingle();
+    return (data as { state?: string | null } | null)?.state ?? null;
+}
+
 /** Read enrollment process instances for a lead (Work View / drawer child list). */
 export async function listEnrollmentInstancesForLead(
     supabase: SupabaseClient,
