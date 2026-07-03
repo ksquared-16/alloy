@@ -27,6 +27,7 @@ import {
   type InquiryChildHydrateRow,
 } from "@/lib/admin/drawer/inquiryChildrenHydration";
 import { attachOpportunityChildLifecycleSummary } from "@/lib/opportunities/buildOpportunityChildLifecycleSummary";
+import { listEnrollmentInstancesForLead } from "@/lib/process/processInstances";
 import {
   attachChildScopedContactLinksToRecord,
   memberRowsFromInquiryChildren,
@@ -312,6 +313,10 @@ type InquiryHydrateChild = {
   location_label?: string | null;
   program_room_cohort_key?: string | null;
   program_room_cohort_label?: string | null;
+  /** Enrollment process stage (position) from process_instances — source of truth. */
+  stage_key?: string | null;
+  /** Provenance of the participation state/stage: "process_instances" (authoritative) or "ocm" (bridge). */
+  _participation_source?: "process_instances" | "ocm";
   custom_fields: Record<string, unknown>;
   metadata: Record<string, unknown> | null;
   created_at: string | null;
@@ -443,6 +448,50 @@ function mapOcmJoinRowsToInquiryChildrenBlock(
       metadata: (r.metadata as Record<string, unknown>) ?? null,
       created_at: r.created_at ?? null,
       updated_at: r.updated_at ?? null,
+    };
+  });
+}
+
+/**
+ * Overlay process_instances (source of truth) onto the OCM-derived child blocks. The Focus Panel /
+ * record surface shows child ENROLLMENT PARTICIPATION (state) and PROCESS STAGE from process_instances,
+ * not OCM.outcome_status_key. OCM stays only as the enumerator + bridge for participation-detail fields
+ * (program/schedule/start/fit — still edited via the OCM PATCH path, retired in a later slice).
+ *
+ * Match is by customer_member_id (= process_instances.subject_id). A child with no process instance
+ * (legacy pre-cutover) keeps its OCM-sourced status as a documented fallback.
+ */
+export async function overlayProcessInstanceParticipation(
+  supabase: AdminSupabase,
+  orgId: string,
+  opportunityId: string,
+  children: InquiryHydrateChild[],
+  ocmStatusLabelByKey: Map<string, string>,
+): Promise<InquiryHydrateChild[]> {
+  if (!children.length) return children;
+  const instances = await listEnrollmentInstancesForLead(supabase as never, { orgId, opportunityId });
+  if (!instances.length) {
+    // No process instances yet (legacy lead) → OCM remains the participation source (bridge fallback).
+    return children.map((c) => ({ ...c, _participation_source: "ocm" as const }));
+  }
+  const piBySubject = new Map(instances.map((pi) => [pi.subject_id, pi]));
+  return children.map((c) => {
+    const pi = c.customer_member_id ? piBySubject.get(c.customer_member_id) : undefined;
+    if (!pi) return { ...c, _participation_source: "ocm" as const };
+    const stateKey = trimOrNull(pi.state);
+    const stageKey = trimOrNull(pi.stage_key);
+    const stateLabel = stateKey
+      ? (ocmStatusLabelByKey.get(stateKey) ??
+         canonicalNewLeadStatusLabel(stateKey) ??
+         humanizeStatusKey(stateKey))
+      : null;
+    return {
+      ...c,
+      // Participation state + process stage are authoritative from process_instances.
+      outcome_status_key: stateKey,
+      outcome_status_label: stateLabel,
+      stage_key: stageKey,
+      _participation_source: "process_instances" as const,
     };
   });
 }
@@ -676,6 +725,14 @@ export async function attachOpportunityInquiryChildrenShell(
     supabase,
     orgId,
     inquiryChildrenOut,
+  );
+  // Source of truth for participation state + process stage is process_instances (not OCM).
+  inquiryChildrenOut = await overlayProcessInstanceParticipation(
+    supabase,
+    orgId,
+    opportunityId,
+    inquiryChildrenOut,
+    ocmStatusLabelByKey,
   );
 
   host._inquiry_children = inquiryChildrenOut;
@@ -1049,6 +1106,14 @@ async function respondOpportunityRelationshipMemberOverlay(
   inquiryBlocks = applyInquiryChildrenMetadataFallbacks(inquiryBlocks, oppMeta, opportunityId);
   inquiryBlocks = await enrichInquiryChildrenWithPlacementOptionLabels(supabase, orgId, inquiryBlocks);
   inquiryBlocks = await attachInquiryChildRowCustomFields(supabase, orgId, inquiryBlocks);
+  // Source of truth for participation state + process stage is process_instances (not OCM).
+  inquiryBlocks = await overlayProcessInstanceParticipation(
+    supabase,
+    orgId,
+    opportunityId,
+    inquiryBlocks,
+    ocmStatusLabelByKey,
+  );
 
   const overlayRecord: Record<string, unknown> = {
     id: opportunityId,
