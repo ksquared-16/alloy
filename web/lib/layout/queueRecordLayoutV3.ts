@@ -118,11 +118,67 @@ import type { QueueRecordFixedControls } from "@/lib/layout/queueRecordLayoutCon
 
 export type { QueueRecordFixedControls } from "@/lib/layout/queueRecordLayoutConfig";
 
+/**
+ * Queue Row Surface Variant — a configured presentation of the ONE Queue Row runtime for a
+ * specific operational context (Default / Tour / Waitlist / Enrolling / custom). A variant reuses
+ * the existing column model verbatim (so rowIndex stacking + per-column/field `visibleWhen` come
+ * for free); it adds only an applicability rule, an optional sort intent, and optional per-variant
+ * fixed controls. This is NOT a new persistence model — it extends V3. The top-level `columns` is
+ * the Default variant; `variants` holds the additional context-specific ones.
+ */
+export type QueueRowVariantGrain = "case" | "child" | "candidate";
+
+/**
+ * Applicability rule. Every PRESENT clause must match (AND); an absent clause is unconstrained; an
+ * absent/empty rule is a catch-all. `conditions` is an extensibility escape hatch (path-based
+ * LayoutConditions) evaluated in a later phase — the typed clauses cover the required dimensions.
+ */
+export type QueueRowVariantRule = {
+    stage_key?: string[];
+    status_key?: string[];
+    grain?: QueueRowVariantGrain[];
+    work_view_id?: string[];
+    work_view_key?: string[];
+    process_key?: string[];
+    row_type?: string[];
+    conditions?: LayoutCondition[];
+};
+
+/** Where a variant's sort is enforced. `work_view` = authoritative server sort (whole queue);
+ *  `page_local` = presentation re-sort of the already-fetched page only (bounded). */
+export type QueueRowVariantSortSource = "work_view" | "page_local";
+
+export type QueueRowVariantSort = {
+    key: string;
+    direction: "asc" | "desc";
+    nulls?: "first" | "last";
+    source: QueueRowVariantSortSource;
+};
+
+export type QueueRowVariant = {
+    id: string;
+    label: string;
+    /** Lower priority is evaluated first; the first matching variant wins. */
+    priority: number;
+    /** Omitted/empty → always matches (catch-all). Default variant uses the top-level columns. */
+    appliesWhen?: QueueRowVariantRule;
+    sort?: QueueRowVariantSort;
+    columns: QueueRecordColumnConfig[];
+    fixedControls?: QueueRecordFixedControls;
+};
+
 export type QueueRecordLayoutConfigV3 = {
     variant: "operational-row";
     version: 3;
     columns: QueueRecordColumnConfig[];
     fixedControls: QueueRecordFixedControls;
+    /**
+     * Optional Queue Row Surface Variants. Absent → today's single-layout behavior (the top-level
+     * `columns` render for every row). Present → the runtime resolves the first matching variant
+     * per row (see resolveQueueRowVariant) and renders the SAME CondensedQueueRow with that
+     * variant's columns; no match falls back to the top-level Default.
+     */
+    variants?: QueueRowVariant[];
 };
 
 /** Editor and runtime share the same v3 document shape. */
