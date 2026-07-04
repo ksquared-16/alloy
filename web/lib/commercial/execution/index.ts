@@ -57,3 +57,4 @@ export type AttributeFn = (resolution: CommercialResolution, plan: import("@/lib
 // ── Implementations (Phase 4: evaluate/evaluateSet; Phase 6: attribute; expand()=Phase 7) ──
 export { evaluate, evaluateSet } from "@/lib/commercial/execution/evaluate/evaluate";
 export { attribute, attributeLine } from "@/lib/commercial/execution/fundingAttribute";
+export { expand } from "@/lib/commercial/execution/expand";

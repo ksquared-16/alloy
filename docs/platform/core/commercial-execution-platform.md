@@ -149,7 +149,7 @@ expand(resolution: CommercialResolution, horizon: DateRange): CommercialSchedule
 
 - **`evaluate()`** — one subject / enrollment / quote / projected seat.
 - **`evaluateSet()`** — group evaluation, required for **relational** pricing: sibling discounts, family caps, corporate/volume pricing, scholarships, household pricing, future cohort pricing. Relational evaluation belongs in Commercial Execution, **never** in Billing — because Forecasting and Quoting need it too.
-- **`expand()`** — the shared temporal engine. Turns cadenced lines into dated occurrences with due dates and recognition timing.
+- **`expand()`** — the shared temporal engine (Phase 7, built: [`web/lib/commercial/execution/expand.ts`](../../../web/lib/commercial/execution/expand.ts)). Turns cadenced lines into dated `ScheduledOccurrence`s (calendar cadences step via `date-fns`; one-time/usage lines emit a single occurrence) with due dates and recognition timing, carrying each line's provenance, funding, and accounting onto every occurrence. Produces no Billing records/draft charges/obligations; `materialize()` stays consumer-owned.
 
 `materialize()` is **not** a platform export — each consumer implements its own against the neutral `CommercialSchedule`.
 

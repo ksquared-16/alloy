@@ -17,9 +17,12 @@
 import type {
     CadenceRef,
     CommercialLineKind,
+    CommercialSourceRef,
+    LineAccounting,
     Money,
     RecognitionTreatment,
 } from "@/lib/commercial/execution/executionTypes";
+import type { FundingAttribution } from "@/lib/commercial/execution/funding";
 
 /** An inclusive date window over which to expand a resolution. */
 export type DateRange = { start: string; end: string };
@@ -44,6 +47,11 @@ export type ScheduledOccurrence = {
     /** The occurrence amount (already platform-rounded on the resolution). */
     amount: Money;
     cadence: CadenceRef;
+    /** Preserved from the resolution line so each occurrence is self-describing. */
+    source: CommercialSourceRef;
+    accounting: LineAccounting;
+    /** Funding attribution carried from the line (per-period; null if unattributed). */
+    funding: FundingAttribution | null;
     /** Deterministic key for this occurrence — idempotency for consumer materialization. */
     occurrenceKey: string;
 };
