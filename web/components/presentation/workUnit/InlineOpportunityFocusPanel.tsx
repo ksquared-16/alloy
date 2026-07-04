@@ -42,6 +42,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef } from "react";
+import { MOTION_SETTLE } from "@/lib/motion/motionTokens";
 import FocusPanelCompactHeader from "@/components/admin/focusPanel/FocusPanelCompactHeader";
 import FocusPanelSummarySkeleton from "@/components/admin/focusPanel/FocusPanelSummarySkeleton";
 import OpportunityFocusPanelHeader from "@/components/admin/focusPanel/OpportunityFocusPanelHeader";
@@ -219,6 +220,15 @@ export function InlineOpportunityFocusPanel() {
 
     const seedTitle = drawer.opportunityQueuePreviewSeed?.title?.trim() || opportunitySingular;
 
+    // `swap` softening: key the body by the displayed subject so a record → record switch
+    // remounts the body once (it is prop-driven, so no state is lost) and `settle`s the new
+    // grid in — opacity-only, into the same layout. A same-record re-render (save/patch)
+    // keeps the key, so edits never trigger a fade. Continuity (held-prior grid + the
+    // synchronous seed header) is unchanged; this only softens the final hand-off cut.
+    const bodyRenderKey = String(
+        resolved?.displayVm.entity.id ?? heldPrior?.displayVm.entity.id ?? "pending",
+    );
+
     return (
         <>
             <section
@@ -272,6 +282,11 @@ export function InlineOpportunityFocusPanel() {
                     data-adminv2-record-modal-scroll
                     className="min-h-0 flex-1 overflow-y-auto px-4 py-3 [scrollbar-gutter:stable]"
                 >
+                    {/* Keyed `swap` wrapper — remounts + settles the body on a record switch. */}
+                    <div
+                        key={bodyRenderKey}
+                        className={bodyRenderKey === "pending" ? undefined : MOTION_SETTLE.className}
+                    >
                     {error && !resolved && !holdPriorPayload ?
                         <div
                             role="alert"
@@ -317,6 +332,7 @@ export function InlineOpportunityFocusPanel() {
                         // strategy + cell positions as resolved) — never a centered spinner.
                         <FocusPanelSummarySkeleton mode={focusPanelMode} />
                         : null}
+                    </div>
                 </div>
                 {resolved ?
                     <div className="shrink-0 overflow-visible">

@@ -50,7 +50,10 @@ export function WorkspaceSurface() {
     return (
         <div
             {...runtimeLabelProps(PRESENTATION_RUNTIME_LABELS.workspaceSurface)}
-            className="flex flex-col gap-5"
+            // `reveal` choreography: when `model.ready` clears the gate the class is added to
+            // this (already-mounted) container, playing the one-frame fade+lift over the
+            // resolved surface. The skeleton state carries no reveal.
+            className={`flex flex-col gap-5${model.ready ? " motion-reveal" : ""}`}
         >
             {!model.ready ? (
                 <WorkspaceSurfaceSkeleton />
