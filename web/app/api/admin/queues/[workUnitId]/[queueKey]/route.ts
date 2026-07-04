@@ -105,6 +105,9 @@ export async function GET(
             .select("id")
             .eq("id", workUnitId)
             .eq("org_id", gate.orgId)
+            // Operator runtime: an inactive/archived work unit must not serve queue rows (a stale
+            // bookmark/URL 404s instead of rendering legacy data). Admin/settings use other reads.
+            .eq("is_active", true)
             .maybeSingle(),
         resolveQueueRecordScopeConstraints(supabase, gate.orgId, dim, workspaceSiteId),
         fetchEffectiveUserDisplayTimezoneCached(supabase, {

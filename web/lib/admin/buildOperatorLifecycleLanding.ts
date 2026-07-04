@@ -115,10 +115,21 @@ export type OperatorLifecycleDepartmentRow = {
     metadata: unknown;
 };
 
+/**
+ * Legacy/migration artifact process names must never reach an operator surface (e.g.
+ * "Enrollment (legacy)"). DEFENSE-IN-DEPTH only — the primary fix is data cleanup
+ * (cleanupEnrollmentLifecycleProcesses removes the stray process from department metadata). Does
+ * NOT gate on runtime_status=name_mismatch, which can be a legitimately renamed live process.
+ */
+export function isLegacyArtifactProcessName(name: string | null | undefined): boolean {
+    return /\(legacy\)/i.test((name ?? "").trim());
+}
+
 function isOperatorVisibleLifecycle(entry: LifecycleCatalogEntry): boolean {
     if (!entry.workspace.user_has_access) return false;
     if (!entry.workspace.department_is_active) return false;
     if (!entry.workspace.visible_in_workspace_api) return false;
+    if (isLegacyArtifactProcessName(entry.lifecycle_name)) return false;
     return entry.workspace.runtime_status === "visible" || entry.workspace.runtime_status === "name_mismatch";
 }
 

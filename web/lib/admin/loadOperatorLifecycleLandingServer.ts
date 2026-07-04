@@ -59,7 +59,13 @@ export async function loadOperatorLifecycleLandingCardsServer(): Promise<Operato
                 return applyDepartmentAccessScope(active, dim) as OperatorLifecycleDepartmentRow[];
             })().catch(() => [] as OperatorLifecycleDepartmentRow[]),
             (async (): Promise<OperatorLifecycleWorkUnitRow[]> => {
-                let q = supabase.from("work_units").select(WORK_UNIT_COLUMNS).eq("org_id", gate.orgId);
+                // Defense-in-depth: only ACTIVE work units feed the operator landing, so an
+                // inactive/archived unit can never surface a process card / work-view count.
+                let q = supabase
+                    .from("work_units")
+                    .select(WORK_UNIT_COLUMNS)
+                    .eq("org_id", gate.orgId)
+                    .eq("is_active", true);
                 if (restrictedAllowed) q = q.in("department_id", restrictedAllowed);
                 const { data } = await q;
                 return (data ?? []) as OperatorLifecycleWorkUnitRow[];

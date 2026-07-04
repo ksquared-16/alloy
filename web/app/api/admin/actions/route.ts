@@ -23,6 +23,8 @@ async function resolveLifecycleViewStageKeyForActions(
         .select("metadata")
         .eq("org_id", orgId)
         .eq("id", wuId)
+        // Operator runtime: don't resolve a stage / action placement from an inactive work unit.
+        .eq("is_active", true)
         .maybeSingle();
     return stageKeyFromLifecycleWorkUnitMetadata((data as { metadata?: unknown } | null)?.metadata ?? null);
 }
