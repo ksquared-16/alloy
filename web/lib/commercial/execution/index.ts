@@ -50,3 +50,6 @@ export type EvaluateSetFn = (
 
 /** expand(): a Resolution → a dated timeline over a horizon. Pure, platform-owned. */
 export type ExpandFn = (resolution: CommercialResolution, horizon: DateRange) => CommercialSchedule;
+
+// ── Implementations (Phase 4: evaluate/evaluateSet; expand() arrives in Phase 7) ──
+export { evaluate, evaluateSet } from "@/lib/commercial/execution/evaluate/evaluate";

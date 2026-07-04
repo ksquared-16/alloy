@@ -183,6 +183,23 @@ export type ResolvedCommercialLine = {
     explanation: LineExplanation;
 };
 
+/** Structured, non-blocking warnings raised during evaluation (e.g. unmapped accounting). */
+export const RESOLUTION_WARNING_CODES = [
+    "accounting_unmapped_revenue_category",
+    "accounting_unmapped_gl_account",
+    "tuition_unpriced",
+    "no_tuition_context",
+] as const;
+export type ResolutionWarningCode = (typeof RESOLUTION_WARNING_CODES)[number];
+
+/** A surfaced-but-non-blocking condition. Consumers may display or ignore; never an error. */
+export type ResolutionWarning = {
+    code: ResolutionWarningCode;
+    message: string;
+    /** The line this warning is about, when line-scoped. */
+    lineKey?: string;
+};
+
 /** Which config snapshot a resolution was computed against (reproducibility/audit). */
 export type ConfigSnapshotRef = {
     /** Opaque version identifier for the org's Commercial config at `asOf`. */
@@ -205,6 +222,8 @@ export type CommercialResolution = {
     /** Rollup status; `partial` when some lines resolved and others did not. */
     status: ResolutionStatus;
     lines: ResolvedCommercialLine[];
+    /** Structured, non-blocking warnings (e.g. tuition priced but accounting unmapped). */
+    warnings: ResolutionWarning[];
     /** Platform-owned precision; consumers must not re-round. */
     precision: Precision;
     effective: { asOf: string; window?: { start: string; end?: string } };
