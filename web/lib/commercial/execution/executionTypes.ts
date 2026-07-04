@@ -155,7 +155,8 @@ export type PolicyAdjustment = {
 
 /** Accounting metadata: WHERE this line would post. Metadata only — never a posting. */
 export type LineAccounting = {
-    revenueCategoryId: string;
+    /** null when the line has no revenue category (e.g. tuition until Accounting V2 wiring). */
+    revenueCategoryId: string | null;
     /** Resolved GL account when the revenue category is mapped; null when unmapped. */
     glAccountId: string | null;
     recognition: RecognitionTreatment;
