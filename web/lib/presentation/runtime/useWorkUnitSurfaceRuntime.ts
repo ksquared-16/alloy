@@ -87,6 +87,10 @@ import {
     type WorkUnitSurfaceModel,
 } from "./types";
 import { mapQueueRowSurfaceToCompactConfig } from "./queueRowSurfaceConfig";
+import {
+    queueRowVariantMatchInputFromContext,
+    resolveQueueRowCompactSlots,
+} from "./queueRowVariantResolve";
 import type { QueueRecordLayoutConfigV3 } from "@/lib/layout/queueRecordLayoutV3";
 
 /** Drawer open provenance for Focus Panel opens from the presentation runtime queue. */
@@ -350,10 +354,19 @@ export function useWorkUnitSurfaceRuntime(): WorkUnitSurfaceRuntime {
         queueRefreshNonce,
     ]);
 
-    const rows = useMemo(
-        () => (queueResult ? queueRowModelsFromQueueItemsResult(queueResult) : []),
-        [queueResult],
-    );
+    const rows = useMemo(() => {
+        const base = queueResult ? queueRowModelsFromQueueItemsResult(queueResult) : [];
+        // Per-row Queue Row Variant resolution: only when the published surface defines variants.
+        // Absent variants → base rows unchanged (each uses the surface Default via queue.rowConfig).
+        if (!queueRowLayoutConfig?.variants?.length) return base;
+        return base.map((row) => {
+            if (!row.context) return row;
+            const input = queueRowVariantMatchInputFromContext(row.context, {
+                workViewId: runtimeCtx.workViewId,
+            });
+            return { ...row, rowConfig: resolveQueueRowCompactSlots(queueRowLayoutConfig, input) };
+        });
+    }, [queueResult, queueRowLayoutConfig, runtimeCtx.workViewId]);
 
     // Keep the visible-row id set current for the refresh listener without re-subscribing it.
     useEffect(() => {

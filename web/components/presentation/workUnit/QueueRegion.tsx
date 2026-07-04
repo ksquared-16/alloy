@@ -111,7 +111,7 @@ export function QueueRegion({
                             <li key={`${row.entityType}:${row.entityId}`}>
                                 <CondensedQueueRow
                                     row={row}
-                                    rowConfig={queue.rowConfig}
+                                    rowConfig={row.rowConfig ?? queue.rowConfig}
                                     onOpen={openRecord}
                                     onPrefetch={prefetchRecord}
                                     isFirst={index === 0}

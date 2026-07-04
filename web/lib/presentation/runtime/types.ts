@@ -112,6 +112,12 @@ export type QueueRowModel = {
     context: QueueRowContext | null;
     entityType: "opportunity" | "job" | "schedule";
     entityId: string;
+    /**
+     * Per-row compact slots resolved from the row's matching Queue Row Variant. Present only when
+     * the published surface defines variants AND this row matched one; absent → the row uses the
+     * surface's Default (`queue.rowConfig`). Same slot shape either way — no alternate renderer.
+     */
+    rowConfig?: CompactRowSlots;
 };
 
 /** WS.SURFACE — resolved model for the Workspace surface. */
