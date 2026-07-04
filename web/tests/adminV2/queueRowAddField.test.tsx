@@ -114,6 +114,14 @@ describe("Phase 3 — AddFieldPicker (section overlay)", () => {
             .find((f) => f.fieldKey === "person.preferred_language");
         expect(flagged?.isSystemField).toBe(false);
     });
+
+    it("flags a non-runtime-effective field so it never silently no-ops in the compact row", () => {
+        render(<AddFieldPicker zone={householdWithCustom()} anchor={null} onPick={vi.fn()} onClose={vi.fn()} />);
+        const opt = document.querySelector('[data-add-field-option="person.preferred_language"]');
+        expect(opt).not.toBeNull();
+        // person.preferred_language is not in the compact-row vocabulary (SLOT_FIELD_KEYS).
+        expect(opt!.getAttribute("data-compact-effective")).toBe("false");
+    });
 });
 
 describe("Phase 3 — add field persists + runtime reflects it", () => {

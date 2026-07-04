@@ -21,7 +21,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
 import { CondensedQueueRow } from "@/components/presentation/workUnit/CondensedQueueRow";
-import { mapQueueRowSurfaceToCompactConfig } from "@/lib/presentation/runtime/queueRowSurfaceConfig";
+import {
+    isCompactRowEffectiveFieldKey,
+    mapQueueRowSurfaceToCompactConfig,
+} from "@/lib/presentation/runtime/queueRowSurfaceConfig";
 import type { QueueRowModel } from "@/lib/presentation/runtime";
 import type { QueueRowContext } from "@/lib/workUnits/lifecycleSubjectContracts";
 import { defaultLeadQueueLayoutV3, defaultWaitlistQueueLayoutV3 } from "@/lib/layout/queueRecordLayoutV3";
@@ -419,26 +422,41 @@ export function AddFieldPicker({
                             <span className="block px-1.5 py-1 text-[9.5px] font-semibold uppercase tracking-wide text-alloy-midnight/35">
                                 {group.label}
                             </span>
-                            {addable.map((field) => (
-                                <button
-                                    key={field.fieldKey}
-                                    type="button"
-                                    className="flex w-full items-center gap-2 rounded px-1.5 py-1 text-left hover:bg-alloy-pine/[0.06]"
-                                    onClick={() => onPick(group.blockId, field.fieldKey)}
-                                    data-add-field-option={field.fieldKey}
-                                    data-add-field-custom={field.isSystemField ? undefined : "true"}
-                                >
-                                    <span className="text-[11px] leading-none text-alloy-pine">+</span>
-                                    <span className="flex-1 truncate text-[11px] text-alloy-midnight/80">
-                                        {field.label}
-                                    </span>
-                                    {!field.isSystemField ? (
-                                        <span className="shrink-0 rounded-full bg-alloy-stone/15 px-1.5 py-px text-[8.5px] font-semibold uppercase tracking-wide text-alloy-midnight/55">
-                                            Custom
+                            {addable.map((field) => {
+                                // One vocabulary: a field renders in the compact row ONLY if its key
+                                // maps to a slot. Non-effective fields are flagged (no silent no-op).
+                                const compactEffective = isCompactRowEffectiveFieldKey(field.fieldKey);
+                                return (
+                                    <button
+                                        key={field.fieldKey}
+                                        type="button"
+                                        className="flex w-full items-center gap-2 rounded px-1.5 py-1 text-left hover:bg-alloy-pine/[0.06]"
+                                        onClick={() => onPick(group.blockId, field.fieldKey)}
+                                        data-add-field-option={field.fieldKey}
+                                        data-add-field-custom={field.isSystemField ? undefined : "true"}
+                                        data-compact-effective={compactEffective ? "true" : "false"}
+                                    >
+                                        <span className="text-[11px] leading-none text-alloy-pine">+</span>
+                                        <span
+                                            className={`flex-1 truncate text-[11px] ${compactEffective ? "text-alloy-midnight/80" : "text-alloy-midnight/45"}`}
+                                        >
+                                            {field.label}
                                         </span>
-                                    ) : null}
-                                </button>
-                            ))}
+                                        {!compactEffective ? (
+                                            <span
+                                                className="shrink-0 rounded-full bg-alloy-stone/15 px-1.5 py-px text-[8.5px] font-semibold uppercase tracking-wide text-alloy-midnight/45"
+                                                title="This field does not render in the compact queue row."
+                                            >
+                                                Not in row
+                                            </span>
+                                        ) : !field.isSystemField ? (
+                                            <span className="shrink-0 rounded-full bg-alloy-stone/15 px-1.5 py-px text-[8.5px] font-semibold uppercase tracking-wide text-alloy-midnight/55">
+                                                Custom
+                                            </span>
+                                        ) : null}
+                                    </button>
+                                );
+                            })}
                         </span>
                     ))}
                 </span>

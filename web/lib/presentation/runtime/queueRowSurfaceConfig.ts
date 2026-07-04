@@ -91,6 +91,35 @@ const SLOT_FIELD_KEYS: Record<keyof CompactRowSlots, readonly string[]> = {
 
 const SLOT_KEYS = Object.keys(SLOT_FIELD_KEYS) as (keyof CompactRowSlots)[];
 
+/**
+ * THE vocabulary of published field keys the compact CondensedQueueRow can actually render
+ * (flattened from SLOT_FIELD_KEYS). A published field whose key is not in this set is NOT
+ * runtime-effective in the compact row — the Queue Row Builder marks it so operators aren't misled
+ * into publishing a silent no-op. Single source of truth for both the runtime mapper and the builder.
+ */
+export const COMPACT_ROW_EFFECTIVE_FIELD_KEYS: ReadonlySet<string> = new Set(
+    Object.values(SLOT_FIELD_KEYS).flat(),
+);
+
+/**
+ * The compact slot a published field key feeds, or null when the key does NOT render in the compact
+ * CondensedQueueRow. Deterministic + total (never throws). Used by the runtime mapper AND the
+ * builder's effective/disabled annotation so both share one vocabulary — no silent fallback.
+ */
+export function compactSlotForFieldKey(fieldKey: string): keyof CompactRowSlots | null {
+    const key = (fieldKey ?? "").trim();
+    if (!key) return null;
+    for (const slot of SLOT_KEYS) {
+        if (SLOT_FIELD_KEYS[slot].includes(key)) return slot;
+    }
+    return null;
+}
+
+/** True when a published field key renders in the compact row (i.e. maps to a slot). */
+export function isCompactRowEffectiveFieldKey(fieldKey: string): boolean {
+    return compactSlotForFieldKey(fieldKey) != null;
+}
+
 /** Flatten every field-group / repeated-record field in the v3 config to a keyed lookup. */
 function fieldsByKey(config: QueueRecordLayoutConfigV3): Map<string, QueueRecordFieldConfig> {
     const map = new Map<string, QueueRecordFieldConfig>();
