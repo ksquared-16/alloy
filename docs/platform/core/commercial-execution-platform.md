@@ -185,6 +185,8 @@ Single-payer default: a plan with only `primary` → `residual = full net → pr
 
 ## 8. Consumer model
 
+**Simulator = first consumer (Phase 8, built).** A read-only preview path — `POST /api/admin/commercial/execution/preview` + the pure builder [`web/lib/commercial/execution/preview/`](../../../web/lib/commercial/execution/preview/) — composes the real Commercial Export and runs `evaluate() → attribute()? → expand()`, returning a `CommercialResolution` preview. It creates **no financial truth** and is **additive**: the Substrate-A consumption simulator (`/api/admin/financial/consumption/simulate`) is untouched. Expected deltas between the two (null-accounting warnings, policy/funding differences, pricing-source divergence) are documented in [commercial-execution-simulator-deltas.md](commercial-execution-simulator-deltas.md) and surfaced per-preview in `notes[]`. Golden/snapshot equivalence is tested over the pure builder.
+
 Commercial Execution never knows who consumes it. Each consumer reads the same resolution and (optionally) the same `expand()` timeline, then runs its own `materialize()`:
 
 | Consumer | Reads | Materializes into |
