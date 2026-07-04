@@ -51,5 +51,9 @@ export type EvaluateSetFn = (
 /** expand(): a Resolution → a dated timeline over a horizon. Pure, platform-owned. */
 export type ExpandFn = (resolution: CommercialResolution, horizon: DateRange) => CommercialSchedule;
 
-// ── Implementations (Phase 4: evaluate/evaluateSet; expand() arrives in Phase 7) ──
+/** attribute(): decorate a Resolution's lines with per-payer funding. Pure; never changes net. */
+export type AttributeFn = (resolution: CommercialResolution, plan: import("@/lib/commercial/execution/funding").FundingPlan) => CommercialResolution;
+
+// ── Implementations (Phase 4: evaluate/evaluateSet; Phase 6: attribute; expand()=Phase 7) ──
 export { evaluate, evaluateSet } from "@/lib/commercial/execution/evaluate/evaluate";
+export { attribute, attributeLine } from "@/lib/commercial/execution/fundingAttribute";

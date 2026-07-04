@@ -73,15 +73,34 @@ export type FundingAttribution = {
     residual: { payer: PayerRef; amountCents: number };
 };
 
+/** Which line kinds a payer covers. */
+export const FUNDING_TARGETS = ["tuition", "fees", "all"] as const;
+export type FundingTarget = (typeof FUNDING_TARGETS)[number];
+
 /**
- * The plan handed to the Funding stage. Phase 2 shape only; the resolver arrives
- * in Phase 6. A `null`/empty plan yields the single-payer default.
+ * One participant's allocation instruction: WHO covers HOW MUCH of WHICH lines.
+ * `fixed_amount` → `value` cents; `percentage` → `value` percent of the line net;
+ * `coverage_rule` → resolved from an external coverage rule (deferred).
+ */
+export type PayerAllocationInstruction = {
+    payer: PayerRef;
+    basis: Extract<AllocationBasis, "fixed_amount" | "percentage" | "coverage_rule">;
+    /** Cents for fixed_amount; percent (0–100) for percentage; ignored for coverage_rule. */
+    value?: number;
+    /** Line kinds this payer covers (default "all"). */
+    target?: FundingTarget;
+    /** Coverage rules backing a coverage_rule allocation (provenance). */
+    coverage?: CoverageRef[];
+};
+
+/**
+ * The plan handed to the Funding stage — a consumer/Processing INPUT (Commercial
+ * Execution never stores payer data). A plan with only `primary` yields the
+ * single-payer default (residual = full net → primary).
  */
 export type FundingPlan = {
-    /** The primary responsible party (residual owner when nothing else covers). */
+    /** The primary responsible party — owns the residual after allocations. */
     primary: PayerRef;
-    /** Additional funding participants (subsidy, employer, scholarship, …). */
-    participants?: PayerRef[];
-    /** Eligibility/coverage rule ids to consider, in precedence order. */
-    coverageRuleIds?: string[];
+    /** Additional payers and how much each covers (subsidy, employer, scholarship, …). */
+    allocations?: PayerAllocationInstruction[];
 };

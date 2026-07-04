@@ -174,8 +174,12 @@ Policy **definitions** are Commercial config (a new **Commercial-owned `commerci
 
 **Policies modify a resolution; they never create a charge.** The engine *selects* the winning policy (`resolvePolicy`); evaluation *applies* it as a `PolicyAdjustment` moving `gross → net` (`applyPolicies`) — waiver wins over discount, net never below zero. `sibling_discount` is **relational**, applied across a group in `evaluateSet()` (this is the primitive's reason to exist). `approval` is a non-mutating review signal recorded in `explanation.policiesConsidered` for the consumer's gate; `proration`/`eligibility` are recorded as considered-but-not-applied pending runtime inputs (day counts / subject data). Code: [`web/lib/commercial/execution/policy/`](../../../web/lib/commercial/execution/policy/).
 
-### Funding stage
-Funding **decorates** a resolution — it allocates `net` across payers (private pay, government subsidy, employer sponsorship, scholarship, corporate, split responsibility) and records a **residual**. It never changes evaluated value. Layer order: **Execution (priced) → Funding (attributed) → Billing (obligated).** This phase ships the single-payer default (residual = full `net` → primary) and the multi-payer *architecture*.
+### Funding stage (Phase 6, built)
+Funding **decorates** a resolution — a pure, standalone `attribute(resolution, plan) → resolution` (mirrors the `expand()`/`materialize()` split; **not** part of `evaluate()`). It allocates each resolved line's `net` across payers (private pay, government subsidy, employer sponsorship, scholarship, corporate) and records a **residual** to the primary. It **never changes `net`** and never creates a charge. Layer order: **Execution (priced) → Funding (attributed) → Billing (obligated).**
+
+**Ownership boundary (audit finding):** Commercial Execution owns the funding **engine**, *not* payer data. There is no Commercial funding table — subsidy authorization is **Processing/operational-owned** per the financial domain doctrine. The `FundingPlan` is a **consumer/Processing INPUT** (like `CommercialContext`), so the platform stays consumer-neutral and ownership stays correct.
+
+Single-payer default: a plan with only `primary` → `residual = full net → primary`, no allocations. Multi-payer: per-payer instructions (`percentage` / `fixed_amount`; `coverage_rule` deferred to external rule data) with `target` (tuition/fees/all), clamped so allocations never exceed net. **Invariant: Σ allocations + residual === net** (residual absorbs rounding). Code: [`web/lib/commercial/execution/fundingAttribute.ts`](../../../web/lib/commercial/execution/fundingAttribute.ts). Deferred: stored funding/coverage config, the subsidy-authorization store, claims/settlement, Billing wiring.
 
 ---
 
