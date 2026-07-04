@@ -1,6 +1,10 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { emitStatusChangedEvent } from "@/lib/admin/emitStatusChangedEvent";
-import { assertAllowedStatusKey } from "@/lib/admin/statusDefinitionsResolve";
+import {
+    assertAllowedStatusKey,
+    fetchEffectiveStatusDefinitions,
+    resolveConfiguredDefaultCreateStatusKey,
+} from "@/lib/admin/statusDefinitionsResolve";
 import { validateStatusTransition } from "@/lib/admin/statusTransitionRules";
 import { ensureCustomerForPersonNative } from "@/lib/bookingPersonCustomerResolve";
 import { ensureCustomerPersonsPrimaryLink } from "@/lib/bookingCustomerPersonLink";
@@ -94,15 +98,43 @@ export async function executeCreateLeadAction(
         trim(input.context?.work_unit_id) ||
         trim(input.merged.work_unit_id) ||
         null;
-    let statusKeyForLead = DEFAULT_LEAD_CASE_STATUS_KEY;
+
+    // The default create status is OWNED by the opportunity status configuration (a status_definitions
+    // row flagged `metadata.default_on_create`) — Create Lead reads it rather than hardcoding a
+    // pipeline key. Falls back to the canonical durable default (`open`); never mints legacy
+    // `new_inquiry`. Defensive: a status-config read failure must not block a valid create.
+    let configuredDefaultStatus: string | null = null;
+    try {
+        const oppStatusDefs = await fetchEffectiveStatusDefinitions(supabase, ctx.orgId, "opportunities", {
+            activeOnly: true,
+        });
+        configuredDefaultStatus = resolveConfiguredDefaultCreateStatusKey(oppStatusDefs);
+    } catch {
+        configuredDefaultStatus = null;
+    }
+    let statusKeyForLead = (configuredDefaultStatus || DEFAULT_LEAD_CASE_STATUS_KEY).trim();
+
     if (departmentId) {
         const binding = await resolveLifecycleCreateLeadBinding(supabase, ctx.orgId, departmentId);
         if (!workUnitId && binding.work_unit_id) {
             workUnitId = binding.work_unit_id;
         }
+        // Operator-configured entry-stage status wins when present (department-level ownership).
         if (binding.status_key?.trim()) {
             statusKeyForLead = binding.status_key.trim();
         }
+    }
+
+    // Fail closed: Create Lead must resolve BOTH a create status and an owning work unit from
+    // configuration. Never persist an orphaned lead (work_unit_id = NULL) or an empty status — a
+    // department/location with no configured process/work unit is a configuration error, not a
+    // silent orphan (an orphaned lead is invisible in every work-unit-scoped queue).
+    if (!statusKeyForLead || !workUnitId) {
+        return {
+            ok: false,
+            error: "Create Lead is not configured for this process/location.",
+            status: 422,
+        };
     }
     const locationId = trim(input.merged.location_id) || null;
 

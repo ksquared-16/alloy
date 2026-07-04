@@ -152,14 +152,12 @@ export async function resolveLifecycleCreateLeadBinding(
         if (pipeline) workUnitId = pipeline.id;
     }
 
-    let statusKey = NEW_LEAD_STATUS_KEY;
+    // Operator-configured entry-stage status (Lifecycle Activation). Empty when the department has
+    // not configured one — Create Lead then resolves the configured default-on-create status or the
+    // canonical durable default. This must never mint the legacy `new_inquiry` key.
+    let statusKey = "";
     if (activation?.status_keys?.length) {
-        statusKey = activation.status_keys[0]!.toLowerCase();
-    } else if (activation?.stage_key) {
-        const operator = asOperatorStageKey(activation.stage_key);
-        if (operator === "lead") {
-            statusKey = NEW_LEAD_STATUS_KEY;
-        }
+        statusKey = activation.status_keys[0]!.trim().toLowerCase();
     }
 
     return { work_unit_id: workUnitId, status_key: statusKey, activation };

@@ -428,6 +428,30 @@ export function displayLabelsFromDefinitions(defs: StatusDefinitionRow[]): Map<s
     return new Map(defs.map((d) => [d.status_key, (d.status_label?.trim() || d.status_key) as string]));
 }
 
+/**
+ * The configured default-on-create status for an entity, if the status configuration designates
+ * one. Config point: a `status_definitions` row whose `metadata.default_on_create === true`. This
+ * is how the opportunity status configuration OWNS the Create Lead status — Create Lead reads this
+ * rather than hardcoding a status key. Returns null when no status is flagged (caller falls back to
+ * the canonical durable default, never to a hardcoded pipeline key). When multiple rows are flagged
+ * (misconfiguration) the lowest sort_order wins, matching the configured display order.
+ */
+export function resolveConfiguredDefaultCreateStatusKey(defs: StatusDefinitionRow[]): string | null {
+    const flagged = defs.filter((d) => {
+        const md = d.metadata;
+        return (
+            md != null &&
+            typeof md === "object" &&
+            (md as { default_on_create?: unknown }).default_on_create === true &&
+            typeof d.status_key === "string" &&
+            d.status_key.trim() !== ""
+        );
+    });
+    if (!flagged.length) return null;
+    const winner = sortDefs(flagged)[0];
+    return winner ? winner.status_key.trim() : null;
+}
+
 export function resolveDisplayFromLabelMap(
     labelByKey: Map<string, string>,
     statusKey: string | null | undefined,

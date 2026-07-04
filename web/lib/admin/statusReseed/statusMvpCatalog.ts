@@ -12,7 +12,11 @@ export type StatusReseedRow = {
 };
 
 export const STATUS_RESEED_OPPORTUNITY_CASE_STATUSES: StatusReseedRow[] = [
-    { status_key: "open", status_label: "Open", sort_order: 10 },
+    // `open` is the canonical durable create status for a new case/lead (stage = "lead" carries
+    // the pipeline position). Flagged as the default-on-create so Create Lead reads it from
+    // status configuration instead of hardcoding a pipeline key. Existing orgs seeded before this
+    // flag fall back to the canonical DEFAULT_LEAD_CASE_STATUS_KEY ("open") — same value.
+    { status_key: "open", status_label: "Open", sort_order: 10, metadata: { default_on_create: true } },
     { status_key: "closed", status_label: "Closed", sort_order: 20 },
     { status_key: "inactive", status_label: "Inactive", sort_order: 30 },
     { status_key: "archived", status_label: "Archived", sort_order: 40 },

@@ -100,8 +100,10 @@ export function stageOwnsCreateLeadStatus(statusKeys: readonly string[]): boolea
 }
 
 /**
- * First active stage (by sort_order) whose configured statuses include `new_inquiry`;
- * otherwise first active stage.
+ * The active stage that owns Create Lead entry. Post-collapse the entry stage is the LEAD operator
+ * stage (position is the stage, not a status), so that is the primary signal. Falls back to the
+ * legacy heuristic (a stage whose configured statuses include `new_inquiry`) for configs that
+ * predate operator-stage keys, then to the first active stage by sort order.
  */
 export function resolveCreateLeadEntryStageKey(params: {
     stages: readonly LifecycleBuilderStageRecord[];
@@ -112,6 +114,12 @@ export function resolveCreateLeadEntryStageKey(params: {
         .filter((s) => s.is_active)
         .sort((a, b) => a.sort_order - b.sort_order || a.key.localeCompare(b.key));
 
+    // Primary: the LEAD operator stage owns Create Lead entry.
+    for (const stage of active) {
+        if (asOperatorStageKey(stage.key) === "lead") return stage.key;
+    }
+
+    // Legacy fallback: a stage whose configured statuses include the legacy new_inquiry key.
     for (const stage of active) {
         const keys = collectStatusKeysForCreateLeadStage(
             stage.key,
@@ -198,9 +206,17 @@ export async function resolveBuilderOwnedLifecycleCreateLeadBinding(
         workUnitId = stageWu?.id ?? null;
     }
 
+    // Operator-configured status for the entry stage (excluding the legacy new_inquiry sentinel);
+    // empty when none configured — Create Lead resolves the configured default / canonical status.
+    const entryStatusKey = entryStageKey
+        ? stageSavedStatusKeys(statusPayload, entryStageKey)
+              .map((k) => normalizeStatusKey(k))
+              .find((k) => k && k !== normalizeStatusKey(NEW_LEAD_STATUS_KEY)) ?? ""
+        : "";
+
     return {
         work_unit_id: workUnitId,
-        status_key: NEW_LEAD_STATUS_KEY,
+        status_key: entryStatusKey,
         entry_stage_key: entryStageKey,
         activation,
     };

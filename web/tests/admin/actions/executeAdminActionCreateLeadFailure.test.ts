@@ -26,6 +26,16 @@ vi.mock("@/lib/admin/emitStatusChangedEvent", () => ({
     emitStatusChangedEvent: vi.fn().mockResolvedValue(undefined),
 }));
 
+// Keep the status-config read hermetic: `open` is the configured default-on-create.
+vi.mock("@/lib/admin/statusDefinitionsResolve", () => ({
+    assertAllowedStatusKey: vi.fn().mockResolvedValue({ ok: true }),
+    fetchEffectiveStatusDefinitions: vi.fn().mockResolvedValue([
+        { status_key: "open", status_label: "Open", sort_order: 10, metadata: { default_on_create: true } },
+    ]),
+    resolveConfiguredDefaultCreateStatusKey: (defs: { status_key: string; metadata?: Record<string, unknown> | null }[]) =>
+        defs.find((d) => d.metadata?.default_on_create === true)?.status_key ?? null,
+}));
+
 const CREATE_LEAD_DEF = {
     id: "def-create-lead",
     key: "create_lead",
@@ -63,7 +73,9 @@ function createLeadInput() {
         actionKey: "create_lead",
         entityType: "opportunity",
         entityId: "",
-        context: {},
+        // A resolvable owning work unit so the create proceeds to the customer insert (the failure
+        // under test); without one, Create Lead now correctly fails closed before that step.
+        context: { work_unit_id: "wu-1" },
         // vertical_id present so executeCreateLeadAction skips the verticals lookup.
         payload: { first_name: "Ada", last_name: "Lovelace", email: "ada@example.com", vertical_id: "vert-1" },
     };

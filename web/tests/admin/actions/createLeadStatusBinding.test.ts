@@ -1,9 +1,13 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { executeCreateLeadAction } from "@/lib/admin/actions/entryLifecycleActions";
-import { NEW_LEAD_STATUS_KEY } from "@/lib/admin/actions/createLeadActionConstants";
 
 vi.mock("@/lib/admin/statusDefinitionsResolve", () => ({
     assertAllowedStatusKey: vi.fn().mockResolvedValue({ ok: true }),
+    fetchEffectiveStatusDefinitions: vi.fn().mockResolvedValue([
+        { status_key: "open", status_label: "Open", sort_order: 10, metadata: { default_on_create: true } },
+    ]),
+    resolveConfiguredDefaultCreateStatusKey: (defs: { status_key: string; metadata?: Record<string, unknown> | null }[]) =>
+        defs.find((d) => d.metadata?.default_on_create === true)?.status_key ?? null,
 }));
 
 vi.mock("@/lib/admin/emitStatusChangedEvent", () => ({
@@ -29,9 +33,11 @@ vi.mock("@/lib/bookingCustomerPersonLink", () => ({
 }));
 
 vi.mock("@/lib/lifecycle/lifecycleRuntimeBinding", () => ({
+    // The binding resolves the owning work unit + the operator-configured entry-stage status
+    // (canonical `open` here) — never the legacy hardcoded new_inquiry key.
     resolveLifecycleCreateLeadBinding: vi.fn().mockResolvedValue({
         work_unit_id: "wu-enrollment",
-        status_key: "new_inquiry",
+        status_key: "open",
     }),
 }));
 
@@ -55,7 +61,7 @@ describe("create lead lifecycle binding status_key", () => {
         vi.clearAllMocks();
     });
 
-    it("applies binding.status_key new_inquiry on opportunity insert", async () => {
+    it("applies the binding's configured entry status on opportunity insert", async () => {
         const insertPayloads: Record<string, unknown>[] = [];
         const supabase = {
             from(table: string) {
@@ -103,7 +109,7 @@ describe("create lead lifecycle binding status_key", () => {
 
         expect(result.ok).toBe(true);
         const oppInsert = insertPayloads.find((row) => row.table === "opportunities");
-        expect(oppInsert?.status_key).toBe(NEW_LEAD_STATUS_KEY);
+        expect(oppInsert?.status_key).toBe("open");
         expect(oppInsert?.work_unit_id).toBe("wu-enrollment");
         expect(oppInsert).not.toHaveProperty("status");
     });

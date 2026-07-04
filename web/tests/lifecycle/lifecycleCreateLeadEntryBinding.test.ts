@@ -149,10 +149,11 @@ describe("lifecycleCreateLeadEntryBinding", () => {
         );
     });
 
-    it("entry binding always uses new_inquiry status", () => {
-        expect(read("lib/lifecycle/lifecycleCreateLeadEntryBinding.ts")).toContain(
-            `status_key: NEW_LEAD_STATUS_KEY`
-        );
+    it("entry binding resolves the configured entry-stage status, not a hardcoded new_inquiry", () => {
+        const src = read("lib/lifecycle/lifecycleCreateLeadEntryBinding.ts");
+        expect(src).toContain("status_key: entryStatusKey");
+        expect(src).not.toContain("status_key: NEW_LEAD_STATUS_KEY");
+        // Create Lead still applies the binding's resolved status when present.
         expect(read("lib/admin/actions/entryLifecycleActions.ts")).toContain("binding.status_key");
     });
 
