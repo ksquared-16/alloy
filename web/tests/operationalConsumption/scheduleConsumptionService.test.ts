@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { draftConsumption, previewConsumption } from "@/lib/operationalConsumption/consumptionService";
 import type { OperationalFactDto } from "@/lib/operationalConsumption/consumptionTypes";
 import {
+    commercialTuitionSeed,
     createOperationalEnrollmentMockStore,
     createOperationalEnrollmentMockSupabase,
     ORG_ID,
@@ -67,6 +68,16 @@ function policies(extra: Record<string, unknown>[] = []) {
 }
 
 function setup(over?: Partial<OperationalEnrollmentMockStore>) {
+    // Phase 9 — Commercial config reproduces the same amounts (three_day=82000, drop_in=9000),
+    // so consumption now prices tuition from Commercial Execution, not Substrate A.
+    const commercial = commercialTuitionSeed({
+        orgId: ORG_ID,
+        agreementId: AGREEMENT,
+        rates: [
+            { basis: "three_day", cadenceKey: "monthly", rateCents: 82000 },
+            { basis: "drop_in", cadenceKey: "daily", rateCents: 9000 },
+        ],
+    });
     const store = createOperationalEnrollmentMockStore({
         financial_charge_templates: [tuitionTemplate(), dropInTemplate()],
         childcare_rate_plans: [ratePlan()],
@@ -74,6 +85,7 @@ function setup(over?: Partial<OperationalEnrollmentMockStore>) {
         consumption_event_types: eventTypes(),
         child_enrollment_agreements: [agreement()],
         financial_policies: policies(),
+        ...commercial,
         ...over,
     });
     return { store, supabase: createOperationalEnrollmentMockSupabase(store) };
@@ -99,10 +111,9 @@ describe("schedule consumption — milestone: active agreement + MWF → recurri
         expect(r.resolution.event.status).toBe("resolved");
         expect(r.resolution.obligations).toHaveLength(1);
         expect(r.resolution.obligations[0]).toMatchObject({ obligationKind: "recurring_tuition", amountCents: 82000, occursOn: PERIOD, billableOn: "2026-07-01", draftable: true });
-        // Commercial objects consulted (rate plan + rate rule + charge template)
+        // Phase 9 — tuition is priced by Commercial Execution (commercial_rate), then the charge template.
         const kinds = (r.commercialObjectsUsed ?? []).map((c) => c.kind);
-        expect(kinds).toContain("rate_plan");
-        expect(kinds).toContain("rate_rule");
+        expect(kinds).toContain("commercial_rate");
         expect(kinds).toContain("charge_template");
         // Policies surfaced
         expect((r.policiesApplied ?? []).map((p) => p.policyType)).toEqual(expect.arrayContaining(["proration", "billing_cadence", "posting_review"]));

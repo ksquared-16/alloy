@@ -30,8 +30,11 @@ import {
 import { resolveConsumption, type ConsumptionResolution } from "@/lib/operationalConsumption/resolveConsumption";
 import { listFinancialPolicies } from "@/lib/financials/policies/financialPolicyService";
 import { resolveFinancialPolicy } from "@/lib/financials/policies/resolveFinancialPolicy";
-import { resolveRate, type RateResolution } from "@/lib/financials/rates/resolveRate";
-import type { ChildcareRatePlanRow, ChildcareRateRuleRow, ScheduleBasis } from "@/lib/financials/rates/rateTypes";
+import type { ChildcareRatePlanRow, ChildcareRateRuleRow } from "@/lib/financials/rates/rateTypes";
+// Phase 9 — Billing prices tuition from Commercial Execution (frozen V1), not Substrate A.
+import { composeCommercialExport } from "@/lib/commercial/execution/export";
+import { getCommercialTuitionValuation } from "@/lib/commercial/execution/billing";
+import type { CommercialExport } from "@/lib/commercial/execution/commercialExport";
 import {
     getOperationalScheduleAssignmentForAgreement,
 } from "@/lib/childcareOperational/scheduleAssignmentService";
@@ -100,7 +103,7 @@ export type ConsumptionPreviewResult = {
 
 /** A Commercial Model object surfaced in the explanation (labels, not raw UUIDs). */
 export type CommercialObjectRef = {
-    kind: "rate_plan" | "rate_rule" | "charge_template" | "service";
+    kind: "rate_plan" | "rate_rule" | "charge_template" | "service" | "commercial_rate";
     label: string;
     detail: string;
     matched: boolean;
@@ -300,6 +303,11 @@ export async function previewConsumption(
 const RATE_PLANS_TABLE = "childcare_rate_plans";
 const RATE_RULES_TABLE = "childcare_rate_rules";
 const AGREEMENTS_TABLE = "child_enrollment_agreements";
+const PLACEMENTS_TABLE = "child_placements";
+const PROGRAM_CATEGORIES_TABLE = "location_program_categories";
+
+/** Cadence keys Commercial tuition rates are keyed by. */
+const COMMERCIAL_CADENCE_KEYS = new Set(["monthly", "weekly", "biweekly", "annual", "daily", "hourly", "per_session"]);
 const PATTERNS_TABLE = "schedule_patterns";
 
 function firstOfMonth(ymd: string): string {
@@ -332,6 +340,54 @@ async function resolveAgreementScope(supabase: SupabaseClient, orgId: string, fa
         }
     }
     return { siteLocationId, ageGroupKey: fact.ageGroupKey ?? null, agreementStatus };
+}
+
+/**
+ * Phase 9 — resolve the enrollment's Commercial program_key from existing data:
+ * agreement → child_placements.program_category_id → location_program_categories.key.
+ * No schema change. Returns null when there is no placement/program (Commercial then
+ * surfaces `no_offering_for_program`, never a Substrate-A fallback).
+ */
+async function resolveProgramKey(supabase: SupabaseClient, orgId: string, agreementId: string | null): Promise<string | null> {
+    if (!agreementId) return null;
+    const { data: placements, error: pErr } = await supabase
+        .from(PLACEMENTS_TABLE)
+        .select("program_category_id, start_date")
+        .eq("org_id", orgId)
+        .eq("enrollment_agreement_id", agreementId)
+        .order("start_date", { ascending: false })
+        .limit(1);
+    if (pErr) fail("db_error", pErr.message);
+    const programCategoryId = ((placements ?? []) as { program_category_id?: string | null }[])[0]?.program_category_id ?? null;
+    if (!programCategoryId) return null;
+    const { data: cat, error: cErr } = await supabase
+        .from(PROGRAM_CATEGORIES_TABLE)
+        .select("key")
+        .eq("org_id", orgId)
+        .eq("id", programCategoryId)
+        .maybeSingle();
+    if (cErr) fail("db_error", cErr.message);
+    return (cat as { key?: string } | null)?.key ?? null;
+}
+
+/**
+ * Phase 9 — load the Commercial Execution pricing inputs once per preview: the
+ * Commercial Export (frozen V1) + the enrollment's program_key + the recurring
+ * cadence. Shared by schedule + attendance previews.
+ */
+async function loadCommercialPricingInputs(
+    supabase: SupabaseClient,
+    orgId: string,
+    agreementId: string | null,
+    asOf: string,
+    billingCadence: string | null,
+): Promise<{ commercialExport: CommercialExport; programKey: string | null; cadenceKey: string }> {
+    const [{ export: commercialExport }, programKey] = await Promise.all([
+        composeCommercialExport({ supabase, orgId, asOf }),
+        resolveProgramKey(supabase, orgId, agreementId),
+    ]);
+    const cadenceKey = billingCadence && COMMERCIAL_CADENCE_KEYS.has(billingCadence) ? billingCadence : "monthly";
+    return { commercialExport, programKey, cadenceKey };
 }
 
 /** Derive the schedule basis: explicit fact value, else weekdays, else the agreement's active pattern. */
@@ -392,6 +448,8 @@ async function previewScheduleConsumption(
         { policyType: "posting_review", scope: reviewPolicy.resolved ? reviewPolicy.sourceScope : null, value: reviewPolicy.resolved ? reviewPolicy.policy.value : null, applied: reviewByPolicy, effect: reviewByPolicy ? "obligations flagged review_required" : "no review required" },
     ];
 
+    const billingCadence = cadence.resolved ? String((cadence.policy.value as { cadence?: string }).cadence ?? "") : null;
+    const pricing = await loadCommercialPricingInputs(supabase, orgId, agreementId, periodStart, billingCadence);
     const eventTypeCache = new Map<string, ConsumptionEventTypeRow | null>();
     const ctx: DirectiveCtx = {
         scope,
@@ -405,6 +463,9 @@ async function previewScheduleConsumption(
         prorationMethod: proration.resolved ? (proration.policy.value as { method?: string }).method ?? "none" : "none",
         fact,
         eventTypeCache,
+        commercialExport: pricing.commercialExport,
+        programKey: pricing.programKey,
+        cadenceKey: pricing.cadenceKey,
     };
     const obligations: ResolvedObligationIntent[] = [];
     const commercialObjectsUsed: CommercialObjectRef[] = [];
@@ -512,6 +573,7 @@ async function previewAttendanceConsumption(
         { policyType: "proration", scope: proration.resolved ? proration.sourceScope : null, value: proration.resolved ? proration.policy.value : null, applied: hasVacationCredit, effect: proration.resolved ? `method=${(proration.policy.value as { method?: string }).method ?? "?"}` : "no proration policy (default none)" },
     ];
 
+    const pricing = await loadCommercialPricingInputs(supabase, orgId, agreementId, anchorDate, null);
     const eventTypeCache = new Map<string, ConsumptionEventTypeRow | null>();
     const ctx: DirectiveCtx = {
         scope,
@@ -525,6 +587,9 @@ async function previewAttendanceConsumption(
         prorationMethod: proration.resolved ? (proration.policy.value as { method?: string }).method ?? "none" : "none",
         fact,
         eventTypeCache,
+        commercialExport: pricing.commercialExport,
+        programKey: pricing.programKey,
+        cadenceKey: pricing.cadenceKey,
     };
 
     const obligations: ResolvedObligationIntent[] = [];
@@ -613,6 +678,11 @@ type DirectiveCtx = {
     prorationMethod: string;
     fact: OperationalFactDto;
     eventTypeCache: Map<string, ConsumptionEventTypeRow | null>;
+    // Phase 9 — Commercial Execution pricing inputs.
+    commercialExport: CommercialExport | null;
+    programKey: string | null;
+    /** Recurring billing cadence for tuition rate selection (mapped from policy; default monthly). */
+    cadenceKey: string;
 };
 
 type DirectiveResolution = {
@@ -658,17 +728,34 @@ async function resolveDirective(
 ): Promise<DirectiveResolution> {
     const { fact } = ctx;
     const commercialRefs: CommercialObjectRef[] = [];
-    const rate: RateResolution | null = directive.scheduleBasis
-        ? resolveRate({ plans: ctx.plans, rules: ctx.rules, context: { siteLocationId: ctx.scope.siteLocationId, ageGroupKey: ctx.scope.ageGroupKey, scheduleBasis: directive.scheduleBasis as ScheduleBasis, planKey: fact.ratePlanKey }, dateYmd: ctx.periodStart })
-        : null;
-    if (rate?.resolved) {
-        commercialRefs.push({ kind: "rate_plan", label: rate.plan.label ?? rate.plan.plan_key, detail: `${rate.plan.scope_type} · ${rate.calculationStrategy}`, matched: true });
-        commercialRefs.push({ kind: "rate_rule", label: `${rate.scheduleBasis} @ ${rate.rateBasis}`, detail: `${rate.amountCents}¢ ${rate.currencyCode}`, matched: true });
-    } else if (directive.scheduleBasis) {
-        commercialRefs.push({ kind: "rate_rule", label: directive.scheduleBasis, detail: rate ? `unresolved: ${(rate as { reason: string }).reason}` : "no rate", matched: false });
+    // Phase 9 — price tuition from Commercial Execution (frozen V1), not Substrate A.
+    // No fallback: when Commercial can't resolve, rateAmount stays null and the
+    // obligation surfaces the reason (config gap) instead of a legacy price.
+    let rateAmount: number | null = null;
+    let currency = "USD";
+    let commercialUnresolvedReason: string | null = null;
+    if (directive.scheduleBasis) {
+        const cadenceKey =
+            directive.obligationKind === "drop_in" || directive.obligationKind === "extra_day"
+                ? "daily"
+                : directive.obligationKind === "hourly_care"
+                  ? "hourly"
+                  : ctx.cadenceKey;
+        if (ctx.commercialExport && ctx.programKey) {
+            const val = getCommercialTuitionValuation(ctx.commercialExport, { programKey: ctx.programKey, scheduleBasis: directive.scheduleBasis, locationId: ctx.scope.siteLocationId, asOf: ctx.anchorDate, cadenceKey, payerType: "private_pay" });
+            if (val.resolved) {
+                rateAmount = val.amountCents;
+                currency = val.currencyCode;
+                commercialRefs.push({ kind: "commercial_rate", label: `${directive.scheduleBasis} → variant ${val.variantId}`, detail: `${val.amountCents}¢ ${val.currencyCode}${val.policyAdjusted ? " · policy-adjusted" : ""} · cadence ${val.cadenceKey}`, matched: true });
+            } else {
+                commercialUnresolvedReason = val.reason;
+                commercialRefs.push({ kind: "commercial_rate", label: directive.scheduleBasis, detail: `commercial unresolved: ${val.reason}`, matched: false });
+            }
+        } else {
+            commercialUnresolvedReason = ctx.programKey ? "no_commercial_export" : "no_program_key";
+            commercialRefs.push({ kind: "commercial_rate", label: directive.scheduleBasis, detail: `commercial unresolved: ${commercialUnresolvedReason}`, matched: false });
+        }
     }
-    const rateAmount = rate?.resolved ? rate.amountCents : null;
-    const currency = rate?.resolved ? rate.currencyCode : "USD";
     const periodStart = PERIOD_KINDS.has(directive.obligationKind) ? ctx.periodStart : null;
 
     if (directive.draftable) {
@@ -706,7 +793,11 @@ async function resolveDirective(
                 commercialRefs,
             };
         }
-        const reason = cp.intent.eligible ? "amount not resolvable (no rate / fixed amount)" : cp.intent.reason ?? "template ineligible";
+        const reason = commercialUnresolvedReason
+            ? `commercial pricing unresolved: ${commercialUnresolvedReason}`
+            : cp.intent.eligible
+              ? "amount not resolvable (no rate / fixed amount)"
+              : cp.intent.reason ?? "template ineligible";
         return { obligation: noChargeObligation(directive, reason, ctx, currency), chargePreview: cp, template, commercialRefs };
     }
 
