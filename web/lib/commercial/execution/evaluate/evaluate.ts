@@ -34,6 +34,8 @@ import { money, resolutionKeyFor, isEffective } from "@/lib/commercial/execution
 import { resolveAccounting } from "@/lib/commercial/execution/evaluate/resolveAccounting";
 import { resolvePricing } from "@/lib/commercial/execution/evaluate/resolvePricing";
 import { resolveProducts } from "@/lib/commercial/execution/evaluate/resolveProducts";
+import { applyLinePolicies, applySiblingDiscountToSet, type PolicyConsidered } from "@/lib/commercial/execution/policy/applyPolicies";
+import type { PolicyScopeContext } from "@/lib/commercial/execution/policy/resolvePolicy";
 import type { RelationalScope } from "@/lib/commercial/execution/index";
 
 const DEFAULT_PRECISION: Precision = { currency: "USD", roundingRule: "half_up" };
@@ -285,6 +287,7 @@ export function evaluate(context: CommercialContext, cfg: CommercialExport): Com
     const lines: ResolvedCommercialLine[] = [];
     const warnings: ResolutionWarning[] = [];
     const configUsed: ProvenanceRef[] = [];
+    const policiesConsidered: PolicyConsidered[] = [];
 
     const program = cfg.programs.find((p) => p.programKey === context.scope.programKey);
 
@@ -302,12 +305,32 @@ export function evaluate(context: CommercialContext, cfg: CommercialExport): Com
             warnings.push(...part.warnings);
             configUsed.push(...part.used);
         }
+
+        // ── Policy stage: policies MODIFY lines (adjustments → net); never a charge. ──
+        const policyCtx: PolicyScopeContext = {
+            locationId: context.scope.locationId ?? null,
+            programKey: context.scope.programKey,
+            offeringId: context.scope.offeringId ?? null,
+            variantId: context.scope.variantId ?? null,
+        };
+        for (const line of lines) {
+            policiesConsidered.push(...applyLinePolicies(line, cfg, policyCtx, context.asOf, precision));
+            if (line.adjustments.length > 0) {
+                line.explanation.steps.push(
+                    step(
+                        "policy",
+                        `applied ${line.adjustments.map((a) => a.kind).join(", ")}`,
+                        line.adjustments.map((a) => ({ entity: a.source.entity, id: a.source.id })),
+                    ),
+                );
+            }
+        }
     }
 
     const status = rollUp(!!program, lines);
     const explanation: ResolutionExplanationGraph = {
         configUsed: dedupProvenance(configUsed),
-        policiesConsidered: [], // Phase 5
+        policiesConsidered,
         fundingConsidered: [], // Phase 6
         notes: program ? undefined : [`No Program matches program_key "${context.scope.programKey}".`],
     };
@@ -326,13 +349,22 @@ export function evaluate(context: CommercialContext, cfg: CommercialExport): Com
 }
 
 /**
- * evaluateSet(): group evaluation. Phase-4 SCAFFOLD — evaluates each context
- * independently (no relational/cross-subject policy yet; that arrives with the
- * Policy stage in Phase 5). The `group` is accepted and echoed so callers can
- * adopt the API now without a later signature change.
+ * evaluateSet(): group evaluation. Each context is evaluated independently, then
+ * RELATIONAL policies are applied across the group — Phase 5 activates the sibling
+ * discount (cross-subject), the reason this primitive exists. Rank order is the
+ * input order of `contexts` (first child pays full when `applies_to_rank` is
+ * "subsequent").
  */
 export function evaluateSet(contexts: CommercialContext[], _group: RelationalScope, cfg: CommercialExport): CommercialResolution[] {
-    return contexts.map((c) => evaluate(c, cfg));
+    const results = contexts.map((c) => evaluate(c, cfg));
+    if (results.length > 0) {
+        const asOf = results[0].context.asOf;
+        const { considered } = applySiblingDiscountToSet(results, cfg, asOf, DEFAULT_PRECISION);
+        if (considered) {
+            for (const r of results) r.explanation.policiesConsidered.push(considered);
+        }
+    }
+    return results;
 }
 
 function rollUp(hasProgram: boolean, lines: ResolvedCommercialLine[]): ResolutionStatus {

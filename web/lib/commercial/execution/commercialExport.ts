@@ -15,6 +15,7 @@
 
 import type { CommercialType } from "@/lib/commercial/commercialProducts";
 import type { ConfigSnapshotRef, PayerType } from "@/lib/commercial/execution/executionTypes";
+import type { CommercialPolicyType } from "@/lib/commercial/execution/policy/policyTypes";
 
 /** An effective-dated window on any config entity (null start = day one; null end = open). */
 export type EffectiveWindow = { start: string | null; end: string | null };
@@ -99,19 +100,22 @@ export type RevenueCategoryDef = {
     isActive: boolean;
 };
 
+/** The scope dimension a Commercial policy is defined at (most-specific wins). */
+export type CommercialPolicyScopeType = "org" | "location" | "program" | "offering" | "variant";
+
 /**
  * A Commercial policy DEFINITION (owned by Commercial; evaluated inside Execution).
- * The Phase-5 policy stage lifts the existing financial_policies engine and
- * re-sources it to these Commercial scope keys.
+ * Scoped to Commercial keys (org → location → program → offering → variant) — not
+ * to Substrate-A service/rate_plan. Read from `commercial_policies` (Phase 5).
  */
 export type CommercialPolicyDef = {
     id: string;
-    /** e.g. "sibling_discount" | "waiver" | "proration" | "grace_period" | "late_fee". */
-    kind: string;
-    /** Definition scope (org → location → program → variant); most-specific wins. */
-    scope: { locationId?: string | null; programKey?: string | null; variantId?: string | null };
+    kind: CommercialPolicyType;
+    scopeType: CommercialPolicyScopeType;
+    /** The scope references; only the one matching `scopeType` is meaningful. */
+    scope: { locationId: string | null; programKey: string | null; offeringId: string | null; variantId: string | null };
     effective: EffectiveWindow;
-    /** Opaque, kind-specific parameters (percentage, method, threshold…). Validated in Phase 5. */
+    /** Typed value fields (validated at authoring against the policy registry). */
     params: Record<string, unknown>;
     isActive: boolean;
 };

@@ -167,8 +167,12 @@ expand(resolution: CommercialResolution, horizon: DateRange): CommercialSchedule
 | **Simulator** | Preview | Persists |
 | **Forecasting / Analytics / AI** | Projection, recommendations over resolutions | Mutate config or truth |
 
-### Policy stage
-Policy **definitions** are Commercial config; policy **evaluation** happens inside Commercial Execution, so `net` is already policy-adjusted for every consumer. The existing `financial_policies` engine is **lifted and re-sourced** to Commercial scope keys — converge, don't rebuild. Policies modify a resolution; they never create a charge. Fact-dependent policies (late fee, vacation credit) receive their triggering condition via `context.signals`; the *logic* stays in the platform.
+### Policy stage (Phase 5, built)
+Policy **definitions** are Commercial config (a new **Commercial-owned `commercial_policies`** table, scoped to org/location/program/offering/variant — *not* Substrate-A service/rate_plan). Policy **evaluation** happens inside Commercial Execution, so `net` is already policy-adjusted for every consumer. The pure `financial_policies` engine (typed-value registry shape + most-specific-wins selection) is **lifted as shared code and re-scoped** to Commercial keys — converge, don't rebuild; `financial_policies` is left intact for the legacy consumer and retired with Substrate A.
+
+**Resolution-time types only:** `proration`, `discount`, `sibling_discount`, `waiver`, `eligibility`, `approval`. Payment-time policies (`late_fee`, `nsf_fee`, `grace_period`, `posting_review`, `refund`, `billing_cadence`) stay in the Billing/Money domain and never touch the commercial valuation.
+
+**Policies modify a resolution; they never create a charge.** The engine *selects* the winning policy (`resolvePolicy`); evaluation *applies* it as a `PolicyAdjustment` moving `gross → net` (`applyPolicies`) — waiver wins over discount, net never below zero. `sibling_discount` is **relational**, applied across a group in `evaluateSet()` (this is the primitive's reason to exist). `approval` is a non-mutating review signal recorded in `explanation.policiesConsidered` for the consumer's gate; `proration`/`eligibility` are recorded as considered-but-not-applied pending runtime inputs (day counts / subject data). Code: [`web/lib/commercial/execution/policy/`](../../../web/lib/commercial/execution/policy/).
 
 ### Funding stage
 Funding **decorates** a resolution — it allocates `net` across payers (private pay, government subsidy, employer sponsorship, scholarship, corporate, split responsibility) and records a **residual**. It never changes evaluated value. Layer order: **Execution (priced) → Funding (attributed) → Billing (obligated).** This phase ships the single-payer default (residual = full `net` → primary) and the multi-payer *architecture*.

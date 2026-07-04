@@ -12,12 +12,13 @@
  * Doctrine: docs/platform/core/commercial-execution-platform.md §2, §4, §7.
  */
 
-import type { CommercialExport, CommercialPolicyDef } from "@/lib/commercial/execution/commercialExport";
+import type { CommercialExport } from "@/lib/commercial/execution/commercialExport";
 import type { ConfigSnapshotRef } from "@/lib/commercial/execution/executionTypes";
 import {
     readCadences,
     readGlAccountIds,
     readOfferings,
+    readPolicies,
     readPricing,
     readProducts,
     readPrograms,
@@ -26,17 +27,6 @@ import {
 } from "@/lib/commercial/execution/export/readCommercialConfig";
 import type { ExportReadContext, ExportValidation } from "@/lib/commercial/execution/export/readerTypes";
 import { validateCommercialExport } from "@/lib/commercial/execution/export/validateCommercialExport";
-
-/**
- * Commercial Policy placeholder. Commercial owns policy definitions; the Phase-5
- * policy stage lifts the existing financial_policies engine and re-sources it to
- * Commercial scope keys. Until then the export carries an empty policy set so
- * `CommercialExport.policies` is the obvious, typed attach-point — with no
- * evaluation happening here.
- */
-async function readPolicies(_ctx: ExportReadContext): Promise<CommercialPolicyDef[]> {
-    return [];
-}
 
 /** Deterministic, content-sensitive fingerprint (djb2 over sorted entity ids). No clock/random. */
 function fingerprint(ids: string[]): string {
@@ -79,6 +69,7 @@ export async function composeCommercialExport(ctx: ExportReadContext): Promise<C
         ...products.map((p) => `pr:${p.id}`),
         ...cadences.map((c) => `cd:${c.cadenceKey}`),
         ...revenueCategories.map((rc) => `rc:${rc.id}`),
+        ...policies.map((p) => `po:${p.id}`),
     ];
     const version: ConfigSnapshotRef = { version: fingerprint(versionIds), effectiveOn: ctx.asOf };
 

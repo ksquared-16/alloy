@@ -21,6 +21,8 @@
 
 import type {
     BillingCadenceDef,
+    CommercialPolicyDef,
+    CommercialPolicyScopeType,
     CommercialProductDef,
     OfferingDef,
     ProgramDef,
@@ -30,7 +32,10 @@ import type {
 } from "@/lib/commercial/execution/commercialExport";
 import type { CommercialType } from "@/lib/commercial/commercialProducts";
 import type { PayerType } from "@/lib/commercial/execution/executionTypes";
+import { isCommercialPolicyType } from "@/lib/commercial/execution/policy/policyTypes";
 import { type ExportReadContext, nstr, obj, str } from "@/lib/commercial/execution/export/readerTypes";
+
+const VALID_POLICY_SCOPES: CommercialPolicyScopeType[] = ["org", "location", "program", "offering", "variant"];
 
 const VALID_PAYER_TYPES: PayerType[] = ["private_pay", "subsidy", "corporate"];
 const VALID_COMMERCIAL_TYPES: CommercialType[] = ["fee", "addon", "deposit"];
@@ -227,6 +232,43 @@ export async function readRevenueCategories(ctx: ExportReadContext): Promise<Rev
             isActive: r.is_active !== false,
         } satisfies RevenueCategoryDef;
     });
+}
+
+/**
+ * Commercial Policies (Commercial-owned) → resolution-time policy definitions.
+ * Rows with an unrecognized policy_type or scope_type are skipped (forward-compat).
+ */
+export async function readPolicies(ctx: ExportReadContext): Promise<CommercialPolicyDef[]> {
+    const { data, error } = await ctx.supabase
+        .from("commercial_policies")
+        .select("id, scope_type, location_id, program_key, offering_id, variant_id, policy_type, value, effective_start, effective_end, is_active")
+        .eq("org_id", ctx.orgId);
+    // Table may not exist yet (migration pending) — treat as no policies, not a hard failure.
+    if (error) return [];
+
+    const out: CommercialPolicyDef[] = [];
+    for (const raw of data ?? []) {
+        const r = raw as Record<string, unknown>;
+        const kind = str(r.policy_type);
+        const scopeType = str(r.scope_type);
+        if (!isCommercialPolicyType(kind)) continue;
+        if (!(VALID_POLICY_SCOPES as string[]).includes(scopeType)) continue;
+        out.push({
+            id: str(r.id),
+            kind,
+            scopeType: scopeType as CommercialPolicyScopeType,
+            scope: {
+                locationId: nstr(r.location_id),
+                programKey: nstr(r.program_key),
+                offeringId: nstr(r.offering_id),
+                variantId: nstr(r.variant_id),
+            },
+            effective: { start: nstr(r.effective_start), end: nstr(r.effective_end) },
+            params: obj(r.value),
+            isActive: r.is_active !== false,
+        });
+    }
+    return out;
 }
 
 /** Validation-only: the set of GL account ids for the org (to check mapped references resolve). */
