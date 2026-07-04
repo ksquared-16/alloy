@@ -38,6 +38,7 @@ import {
     activeLifecycleProcess,
     lifecycleBuilderFromDepartmentMetadata,
 } from "@/lib/lifecycle/lifecycleBuilderConfig";
+import { isLegacyArtifactProcessName } from "@/lib/admin/buildOperatorLifecycleLanding";
 import { tryLoadWorkUnitQueueDefinitionBundle } from "@/lib/config/queueDefinitionV2Runtime";
 import { getQueueUiConfig } from "@/lib/ui-v2/queueUiConfig";
 import { findAllRecordsQueueKey } from "@/lib/workspace/workUnitQueueDerived";
@@ -654,7 +655,12 @@ export function useWorkUnitSurfaceRuntime(): WorkUnitSurfaceRuntime {
         const configured = activeLifecycleProcess(
             lifecycleBuilderFromDepartmentMetadata(deptMetadata),
         )?.name?.trim();
-        return configured || slugRoute?.departmentName || null;
+        // Operator-runtime defense: never render a legacy/migration artifact process name (e.g.
+        // "Enrollment (legacy)") in the Work Unit header. Fall back to the department name. Primary
+        // fix is data cleanup (cleanupEnrollmentLifecycleProcesses) — this is belt-and-suspenders.
+        const cleanConfigured =
+            configured && !isLegacyArtifactProcessName(configured) ? configured : null;
+        return cleanConfigured || slugRoute?.departmentName || null;
     }, [deptMetadata, slugRoute?.departmentName]);
     const workViewLabel = runtimeCtx.workView?.label?.trim() || null;
 

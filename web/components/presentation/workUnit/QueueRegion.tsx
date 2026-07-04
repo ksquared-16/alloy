@@ -53,9 +53,12 @@ function rowIsSelected(row: QueueRowModel, selectedRecordId: string | null): boo
 
 export function QueueRegion({
     queue,
+    title = null,
     selectedRecordId = null,
 }: {
     queue: WorkUnitSurfaceModel["queue"];
+    /** Active Work View label — the queue's title / work-view context header. */
+    title?: string | null;
     /** Currently open inline Focus Panel record — rows render the selected rail. */
     selectedRecordId?: string | null;
 }) {
@@ -65,47 +68,65 @@ export function QueueRegion({
         <section
             {...runtimeLabelProps(PRESENTATION_RUNTIME_LABELS.queueRegion)}
             aria-label="Queue"
+            data-queue-region
         >
-            {queue.loading ? (
-                <ul
-                    role="list"
-                    aria-busy="true"
-                    aria-label="Loading queue rows"
-                    className="flex flex-col gap-2"
+            {/* Queue shell header — title (active Work View / work-view context) + record count. */}
+            <div className="mb-2 flex items-baseline justify-between gap-3">
+                <h2
+                    data-queue-region-title
+                    className="min-w-0 truncate text-[13px] font-semibold leading-5 text-alloy-midnight"
                 >
-                    {Array.from({ length: QUEUE_SKELETON_ROW_COUNT }, (_, i) => (
-                        <QueueRowSkeleton key={`queue-row-skeleton-${i}`} />
-                    ))}
-                </ul>
-            ) : queue.error ? (
-                <p
-                    role="alert"
-                    className="rounded-lg border border-alloy-ember/30 bg-alloy-ember/5 px-3 py-2 text-sm text-alloy-ember"
-                >
-                    {queue.error}
-                </p>
-            ) : !queue.rows.length ? (
-                // Empty state holds the queue STRUCTURE (not a blank space): dashed ghost row
-                // outlines show where records would sit, with the message below. Distinct from
-                // the loading state (those pulse; these are static dashed placeholders).
-                <div
-                    className="rounded-lg border border-alloy-stone/30 bg-white p-3"
-                    data-queue-empty="true"
-                >
-                    <ul className="flex flex-col gap-2" aria-hidden="true">
+                    {title?.trim() || "Queue"}
+                </h2>
+                {queue.totalCount != null ? (
+                    <span
+                        data-queue-region-count
+                        className="shrink-0 text-[11px] tabular-nums text-alloy-midnight/55"
+                    >
+                        {queue.totalCount} {queue.totalCount === 1 ? "record" : "records"}
+                    </span>
+                ) : null}
+            </div>
+
+            {/* Bordered queue panel — a visible outline in EVERY state (Alloy stone hairline). */}
+            <div
+                className="rounded-xl border border-alloy-stone/20 bg-white p-3"
+                data-queue-panel
+            >
+                {queue.loading ? (
+                    <ul
+                        role="list"
+                        aria-busy="true"
+                        aria-label="Loading queue rows"
+                        className="flex flex-col gap-2"
+                    >
                         {Array.from({ length: QUEUE_SKELETON_ROW_COUNT }, (_, i) => (
-                            <li
-                                key={`queue-empty-ghost-${i}`}
-                                className="h-[3.25rem] rounded-lg border border-dashed border-alloy-stone/35 bg-alloy-stone/[0.03]"
-                            />
+                            <QueueRowSkeleton key={`queue-row-skeleton-${i}`} />
                         ))}
                     </ul>
-                    <p className="mt-3 text-center text-sm text-alloy-midnight/50">
-                        No records in this view
+                ) : queue.error ? (
+                    <p
+                        role="alert"
+                        className="rounded-lg border border-alloy-ember/30 bg-alloy-ember/5 px-3 py-2 text-sm text-alloy-ember"
+                    >
+                        {queue.error}
                     </p>
-                </div>
-            ) : (
-                <div>
+                ) : !queue.rows.length ? (
+                    // Empty state holds the queue STRUCTURE: dashed ghost rows inside the panel.
+                    <div data-queue-empty="true">
+                        <ul className="flex flex-col gap-2" aria-hidden="true">
+                            {Array.from({ length: QUEUE_SKELETON_ROW_COUNT }, (_, i) => (
+                                <li
+                                    key={`queue-empty-ghost-${i}`}
+                                    className="h-[3.25rem] rounded-lg border border-dashed border-alloy-stone/35 bg-alloy-stone/[0.03]"
+                                />
+                            ))}
+                        </ul>
+                        <p className="mt-3 text-center text-sm text-alloy-midnight/50">
+                            No records in this view
+                        </p>
+                    </div>
+                ) : (
                     <ul role="list" className="flex flex-col gap-2">
                         {queue.rows.map((row, index) => (
                             <li key={`${row.entityType}:${row.entityId}`}>
@@ -121,13 +142,8 @@ export function QueueRegion({
                             </li>
                         ))}
                     </ul>
-                    {queue.totalCount != null ? (
-                        <p className="px-1 pt-1.5 text-[11px] tabular-nums text-alloy-midnight/60">
-                            {queue.totalCount} {queue.totalCount === 1 ? "record" : "records"}
-                        </p>
-                    ) : null}
-                </div>
-            )}
+                )}
+            </div>
         </section>
     );
 }

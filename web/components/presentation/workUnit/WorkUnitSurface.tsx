@@ -92,7 +92,11 @@ export function WorkUnitSurface() {
                             openRecord={intents.openRecord}
                             prefetchRecord={intents.prefetchRecord}
                         >
-                            <QueueRegion queue={model.queue} selectedRecordId={model.selectedRecordId} />
+                            <QueueRegion
+                                queue={model.queue}
+                                title={model.header.workViewLabel}
+                                selectedRecordId={model.selectedRecordId}
+                            />
                         </FocusPanelSurface>
                     </div>
                     {/* RR.SURFACE stays as the label anchor (single-ownership); the operator's
