@@ -144,15 +144,27 @@ export type QueueRowVariantRule = {
     conditions?: LayoutCondition[];
 };
 
-/** Where a variant's sort is enforced. `work_view` = authoritative server sort (whole queue);
- *  `page_local` = presentation re-sort of the already-fetched page only (bounded). */
-export type QueueRowVariantSortSource = "work_view" | "page_local";
+/**
+ * Which subject a variant anchors the row on (decoupled from grain). Drives the primary subject +
+ * supporting context the runtime feeds into the compact slots (see resolveQueueRowSubjectFocus).
+ * `household` = family/case; `active_child` = highlighted child; `placement_candidate_child` =
+ * waitlist candidate; `opportunity` = the case shell. Open string for custom/future foci.
+ */
+export type QueueRowSubjectFocus =
+    | "household"
+    | "active_child"
+    | "placement_candidate_child"
+    | "opportunity"
+    | (string & {});
 
+/**
+ * Server-owned sort intent — drives the Work View `sort_v1` query for the WHOLE queue (decision:
+ * server-driven sorting, never a page-local re-sort). Supplied by the queue-active variant.
+ */
 export type QueueRowVariantSort = {
     key: string;
     direction: "asc" | "desc";
     nulls?: "first" | "last";
-    source: QueueRowVariantSortSource;
 };
 
 export type QueueRowVariant = {
@@ -162,6 +174,9 @@ export type QueueRowVariant = {
     priority: number;
     /** Omitted/empty → always matches (catch-all). Default variant uses the top-level columns. */
     appliesWhen?: QueueRowVariantRule;
+    /** Which subject the row anchors on. Omitted → resolves to "household". */
+    subjectFocus?: QueueRowSubjectFocus;
+    /** Server-owned sort intent for the queue (drives sort_v1). */
     sort?: QueueRowVariantSort;
     columns: QueueRecordColumnConfig[];
     fixedControls?: QueueRecordFixedControls;
