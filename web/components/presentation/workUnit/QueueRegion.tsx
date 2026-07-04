@@ -112,6 +112,7 @@ export function QueueRegion({
                                 <CondensedQueueRow
                                     row={row}
                                     rowConfig={row.rowConfig ?? queue.rowConfig}
+                                    focus={row.focus}
                                     onOpen={openRecord}
                                     onPrefetch={prefetchRecord}
                                     isFirst={index === 0}

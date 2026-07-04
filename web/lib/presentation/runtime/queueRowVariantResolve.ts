@@ -11,6 +11,7 @@ import type { QueueRowContext } from "@/lib/workUnits/lifecycleSubjectContracts"
 import type { QueueRecordLayoutConfigV3 } from "@/lib/layout/queueRecordLayoutV3";
 import { resolveQueueRowVariant, type QueueRowVariantMatchInput } from "./resolveQueueRowVariant";
 import { mapQueueRowSurfaceToCompactConfig, type CompactRowSlots } from "./queueRowSurfaceConfig";
+import { resolveQueueRowSubjectFocus, type FocusedSubjectContext } from "./resolveQueueRowSubjectFocus";
 
 /** Build the variant match input from a row's frozen context + the active runtime scope. */
 export function queueRowVariantMatchInputFromContext(
@@ -46,4 +47,26 @@ export function resolveQueueRowCompactSlots(
     const variant = resolveQueueRowVariant(config.variants, input);
     const effective = variant ? { ...config, columns: variant.columns } : config;
     return mapQueueRowSurfaceToCompactConfig(effective).slots;
+}
+
+/**
+ * Resolve the full per-row presentation in ONE variant pass: the compact slots (columns) AND the
+ * Subject Focus. Focus applies ONLY when the matched variant explicitly declares subjectFocus —
+ * otherwise `focus` is null and the row keeps its frozen-context rendering (graceful fallback).
+ * Pure; never throws.
+ */
+export function resolveQueueRowPresentation(
+    config: QueueRecordLayoutConfigV3 | null,
+    context: QueueRowContext,
+    input: QueueRowVariantMatchInput,
+): { rowConfig: CompactRowSlots; focus: FocusedSubjectContext | null } {
+    if (!config) {
+        return { rowConfig: mapQueueRowSurfaceToCompactConfig(null).slots, focus: null };
+    }
+    const variant = resolveQueueRowVariant(config.variants, input);
+    const effective = variant ? { ...config, columns: variant.columns } : config;
+    const rowConfig = mapQueueRowSurfaceToCompactConfig(effective).slots;
+    const focus =
+        variant?.subjectFocus != null ? resolveQueueRowSubjectFocus(context, variant.subjectFocus) : null;
+    return { rowConfig, focus };
 }

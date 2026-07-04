@@ -25,6 +25,7 @@ import type { OipMetricKey } from "@/lib/metrics/types";
 import type { ResolvedMetricMap } from "@/lib/metrics/fetchResolvedMetrics";
 import type { WorkUnitHeaderCalculationCardVm } from "./workUnitHeaderCards";
 import type { CompactRowSlots } from "./queueRowSurfaceConfig";
+import type { FocusedSubjectContext } from "./resolveQueueRowSubjectFocus";
 import { findOperationalCalculation } from "@/lib/analytics/calculations/registry";
 import { getDrillContract } from "@/lib/analytics/runtime/drillResolver";
 import { operatorWorkUnitHrefFromKey } from "@/lib/admin/canonicalOperatorRoutes";
@@ -118,6 +119,11 @@ export type QueueRowModel = {
      * surface's Default (`queue.rowConfig`). Same slot shape either way — no alternate renderer.
      */
     rowConfig?: CompactRowSlots;
+    /**
+     * Resolved Subject Focus (Phase 3) — which subject the compact row emphasizes. Present only when
+     * the matched variant declares `subjectFocus`; absent → frozen-context rendering (fallback).
+     */
+    focus?: FocusedSubjectContext;
 };
 
 /** WS.SURFACE — resolved model for the Workspace surface. */

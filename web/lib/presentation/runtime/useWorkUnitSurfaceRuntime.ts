@@ -89,7 +89,7 @@ import {
 import { mapQueueRowSurfaceToCompactConfig } from "./queueRowSurfaceConfig";
 import {
     queueRowVariantMatchInputFromContext,
-    resolveQueueRowCompactSlots,
+    resolveQueueRowPresentation,
 } from "./queueRowVariantResolve";
 import type { QueueRecordLayoutConfigV3 } from "@/lib/layout/queueRecordLayoutV3";
 
@@ -364,7 +364,12 @@ export function useWorkUnitSurfaceRuntime(): WorkUnitSurfaceRuntime {
             const input = queueRowVariantMatchInputFromContext(row.context, {
                 workViewId: runtimeCtx.workViewId,
             });
-            return { ...row, rowConfig: resolveQueueRowCompactSlots(queueRowLayoutConfig, input) };
+            const { rowConfig, focus } = resolveQueueRowPresentation(
+                queueRowLayoutConfig,
+                row.context,
+                input,
+            );
+            return { ...row, rowConfig, focus: focus ?? undefined };
         });
     }, [queueResult, queueRowLayoutConfig, runtimeCtx.workViewId]);
 

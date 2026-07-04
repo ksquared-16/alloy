@@ -29,6 +29,7 @@ import {
     type CompactRowSlots,
     type QueueRowModel,
 } from "@/lib/presentation/runtime";
+import type { FocusedSubjectContext } from "@/lib/presentation/runtime/resolveQueueRowSubjectFocus";
 import {
     PRESENTATION_RUNTIME_LABELS,
     runtimeLabelProps,
@@ -91,6 +92,12 @@ function slotVisible(slot: CompactRowSlots[keyof CompactRowSlots] | undefined): 
     return slot?.visible !== false;
 }
 
+/** Sibling rollup chip from a resolved Subject Focus (count-only; prefers a name summary). */
+function focusSiblingChip(siblings: { count: number; summary: string | null }): string | null {
+    if (siblings.count <= 0) return null;
+    return siblings.summary?.trim() || `${siblings.count} ${siblings.count === 1 ? "child" : "children"}`;
+}
+
 export function CondensedQueueRow({
     row,
     rowConfig,
@@ -98,6 +105,7 @@ export function CondensedQueueRow({
     onPrefetch,
     isFirst,
     isSelected,
+    focus,
 }: {
     row: QueueRowModel;
     /**
@@ -114,6 +122,12 @@ export function CondensedQueueRow({
     isFirst?: boolean;
     /** Row's record is the one open in the inline Focus Panel — persistent selected rail. */
     isSelected?: boolean;
+    /**
+     * Resolved Subject Focus for this row's variant (Phase 3). When present, it decides WHICH
+     * subject fills the identity/supporting/sibling slots — same slots, no new renderer. Absent →
+     * pure frozen-context rendering (current behavior). Never invents data.
+     */
+    focus?: FocusedSubjectContext;
 }) {
     const context = row.context;
     // One warm handler for both pointer-enter (mouse intent) and focus (keyboard intent).
@@ -152,7 +166,10 @@ export function CondensedQueueRow({
     const showWork = slotVisible(rowConfig?.work);
     const showGroupCount = slotVisible(rowConfig?.groupCount);
 
-    const displayName = queueRowSubjectDisplayName(context);
+    // Subject Focus (Phase 3): the focused primary subject anchors the identity slot; its supporting
+    // lines + sibling rollup feed the contact + group slots. All fall back to frozen-context values
+    // when focus is absent or empty — never invents data, same slots, one renderer.
+    const displayName = focus?.primary.display_name?.trim() || queueRowSubjectDisplayName(context);
     // Status pill: config label override where present, else the generic context value.
     const stageLabel = showStatus
         ? rowConfig?.status?.label ?? (context.row_status_label || context.row_stage)
@@ -161,8 +178,12 @@ export function CondensedQueueRow({
     const attentionReason = needsAttention
         ? context.attention_summary?.primary_reason_label ?? null
         : null;
-    const line2 = showContact ? contactLine(context) : null;
-    const countChip = showGroupCount ? groupedCountLabel(context) : null;
+    const line2 = showContact
+        ? (focus ? focus.supportingLines.join(" · ") || contactLine(context) : contactLine(context))
+        : null;
+    const countChip = showGroupCount
+        ? (focus?.siblings ? focusSiblingChip(focus.siblings) : groupedCountLabel(context))
+        : null;
     const workLabel = showWork
         ? context.current_work_summary?.label ??
           context.next_best_action?.label ??
@@ -189,7 +210,10 @@ export function CondensedQueueRow({
                 <AvatarChip name={displayName} />
                 <span className="min-w-0 flex-1">
                     <span className="flex items-start justify-between gap-2">
-                        <span className="min-w-0 truncate text-[13px] font-semibold leading-4 text-alloy-midnight">
+                        <span
+                            data-queue-row-subject
+                            className="min-w-0 truncate text-[13px] font-semibold leading-4 text-alloy-midnight"
+                        >
                             {displayName}
                         </span>
                         {stageLabel ? (
@@ -199,7 +223,10 @@ export function CondensedQueueRow({
                         ) : null}
                     </span>
                     {line2 ? (
-                        <span className="mt-0.5 block min-w-0 truncate text-[11px] leading-4 text-alloy-midnight/60">
+                        <span
+                            data-queue-row-supporting
+                            className="mt-0.5 block min-w-0 truncate text-[11px] leading-4 text-alloy-midnight/60"
+                        >
                             {line2}
                         </span>
                     ) : null}
@@ -224,7 +251,10 @@ export function CondensedQueueRow({
                     {hasFooterLine ? (
                         <span className="mt-1 flex items-baseline gap-2">
                             {countChip ? (
-                                <span className="shrink-0 rounded-full border border-alloy-stone/25 bg-white px-2 py-0.5 text-[11px] leading-4 text-alloy-midnight/60">
+                                <span
+                                    data-queue-row-count
+                                    className="shrink-0 rounded-full border border-alloy-stone/25 bg-white px-2 py-0.5 text-[11px] leading-4 text-alloy-midnight/60"
+                                >
                                     {countChip}
                                 </span>
                             ) : null}
