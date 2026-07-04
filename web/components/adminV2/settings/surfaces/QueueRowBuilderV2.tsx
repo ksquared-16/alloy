@@ -18,6 +18,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 
 import { CondensedQueueRow } from "@/components/presentation/workUnit/CondensedQueueRow";
 import { mapQueueRowSurfaceToCompactConfig } from "@/lib/presentation/runtime/queueRowSurfaceConfig";
@@ -367,10 +368,14 @@ export function buildConfigFromState(
  */
 export function AddFieldPicker({
     zone,
+    anchor,
     onPick,
     onClose,
 }: {
     zone: RowZoneState;
+    /** Viewport-fixed anchor (below-left of the trigger). The picker portals to <body> so the
+     *  canvas's `overflow-hidden` stacking context can't trap it behind the row. */
+    anchor: { top: number; left: number } | null;
     onPick: (blockId: string, fieldKey: string) => void;
     onClose: () => void;
 }) {
@@ -381,9 +386,10 @@ export function AddFieldPicker({
         .map((g) => ({ group: g, addable: g.fields.filter((f) => !f.enabled) }))
         .filter((s) => s.addable.length > 0);
 
-    return (
+    const picker = (
         <span
-            className="pointer-events-auto absolute left-0 top-6 z-20 w-60 rounded-lg border border-alloy-stone/20 bg-white p-1.5 shadow-lg"
+            className="pointer-events-auto fixed z-[60] w-60 rounded-lg border border-alloy-stone/20 bg-white p-1.5 shadow-lg"
+            style={anchor ? { top: anchor.top, left: anchor.left } : undefined}
             role="dialog"
             aria-label={`Add field to ${zone.columnLabel || ZONE_LABELS[zone.key]}`}
             data-add-field-picker={zone.key}
@@ -439,6 +445,9 @@ export function AddFieldPicker({
             )}
         </span>
     );
+    // Portal to <body> so the picker escapes the canvas's `overflow-hidden` stacking context /
+    // clip (the root cause of it rendering behind the row). SSR guard falls back to inline.
+    return typeof document === "undefined" ? picker : createPortal(picker, document.body);
 }
 
 // ── QueueRowRuntimeCanvas ───────────────────────────────────────────────────────
@@ -480,6 +489,7 @@ function QueueRowRuntimeCanvas({
     const inRow = zones.filter((z) => z.inRow);
     // Which section's inline "Add field" picker is open (null = none).
     const [pickerZone, setPickerZone] = useState<ZoneKey | null>(null);
+    const [pickerAnchor, setPickerAnchor] = useState<{ top: number; left: number } | null>(null);
 
     // The exact runtime consumption path: published/edited config → compact slots.
     const slots = mapQueueRowSurfaceToCompactConfig(liveConfig).slots;
@@ -514,7 +524,12 @@ function QueueRowRuntimeCanvas({
                         <button
                             type="button"
                             className="rounded bg-white px-1 text-[10px] font-semibold leading-none text-alloy-pine shadow-sm hover:bg-alloy-pine/10"
-                            onClick={(e) => { e.stopPropagation(); setPickerZone((p) => (p === z.key ? null : z.key)); }}
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                const r = e.currentTarget.getBoundingClientRect();
+                                setPickerAnchor({ top: r.bottom + 4, left: r.left });
+                                setPickerZone((p) => (p === z.key ? null : z.key));
+                            }}
                             aria-label={`Add field to ${ZONE_LABELS[z.key]}`}
                             aria-expanded={pickerZone === z.key}
                             data-canvas-add-field={z.key}
@@ -555,6 +570,7 @@ function QueueRowRuntimeCanvas({
                 {pickerZone === z.key ? (
                     <AddFieldPicker
                         zone={z}
+                        anchor={pickerAnchor}
                         onPick={(blockId, fieldKey) => { onAddField(z.key, blockId, fieldKey); setPickerZone(null); }}
                         onClose={() => setPickerZone(null)}
                     />

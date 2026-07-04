@@ -32,14 +32,20 @@ import type { TenantFieldDefinitionRow } from "@/lib/layout/tenantLayoutFieldPic
 const catalog = buildCatalog(false);
 
 let container: HTMLElement | null = null;
+let activeRoot: ReturnType<typeof createRoot> | null = null;
 function render(node: ReactNode): HTMLElement {
     container = document.createElement("div");
     document.body.appendChild(container);
-    const root = createRoot(container);
-    act(() => root.render(node));
+    activeRoot = createRoot(container);
+    act(() => activeRoot!.render(node));
     return container;
 }
 afterEach(() => {
+    // AddFieldPicker portals to <body>; unmount the root so the portal is cleaned between tests.
+    if (activeRoot) {
+        act(() => activeRoot!.unmount());
+        activeRoot = null;
+    }
     if (container) {
         container.remove();
         container = null;
@@ -73,8 +79,8 @@ describe("Phase 3 — AddFieldPicker (section overlay)", () => {
         )!;
         const enabled = group.fields.find((f) => f.enabled);
 
-        const el = render(<AddFieldPicker zone={zone} onPick={vi.fn()} onClose={vi.fn()} />);
-        const options = Array.from(el.querySelectorAll("[data-add-field-option]")).map(
+        render(<AddFieldPicker zone={zone} anchor={null} onPick={vi.fn()} onClose={vi.fn()} />);
+        const options = Array.from(document.querySelectorAll("[data-add-field-option]")).map(
             (n) => n.getAttribute("data-add-field-option"),
         );
         expect(options).toContain("person.preferred_language"); // addable
@@ -88,8 +94,8 @@ describe("Phase 3 — AddFieldPicker (section overlay)", () => {
         )!;
         const onPick = vi.fn();
 
-        const el = render(<AddFieldPicker zone={zone} onPick={onPick} onClose={vi.fn()} />);
-        const btn = el.querySelector<HTMLButtonElement>(
+        render(<AddFieldPicker zone={zone} anchor={null} onPick={onPick} onClose={vi.fn()} />);
+        const btn = document.querySelector<HTMLButtonElement>(
             '[data-add-field-option="person.preferred_language"]',
         )!;
         act(() => btn.dispatchEvent(new MouseEvent("click", { bubbles: true })));
@@ -98,8 +104,8 @@ describe("Phase 3 — AddFieldPicker (section overlay)", () => {
 
     it("marks a tenant custom field with data-add-field-custom", () => {
         const household = householdWithCustom();
-        const el = render(<AddFieldPicker zone={household} onPick={vi.fn()} onClose={vi.fn()} />);
-        const custom = el.querySelector('[data-add-field-option="person.preferred_language"]');
+        render(<AddFieldPicker zone={household} anchor={null} onPick={vi.fn()} onClose={vi.fn()} />);
+        const custom = document.querySelector('[data-add-field-option="person.preferred_language"]');
         expect(custom).not.toBeNull();
         expect(custom!.getAttribute("data-add-field-custom")).toBe("true");
         // sanity: the zone actually flags it as a non-system field
