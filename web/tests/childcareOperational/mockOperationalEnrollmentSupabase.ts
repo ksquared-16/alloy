@@ -41,6 +41,16 @@ export type OperationalEnrollmentMockStore = {
     opportunities: Row[];
     opportunity_customer_members: Row[];
     org_settings: Row[];
+    // Commercial V1 (Phase 9 — consumption prices tuition from Commercial Execution).
+    program_offerings: Row[];
+    program_offering_variants: Row[];
+    commercial_tuition_rates: Row[];
+    commercial_products: Row[];
+    commercial_revenue_categories: Row[];
+    commercial_policies: Row[];
+    option_sets: Row[];
+    option_set_items: Row[];
+    gl_accounts: Row[];
 };
 
 export function createOperationalEnrollmentMockStore(
@@ -72,6 +82,73 @@ export function createOperationalEnrollmentMockStore(
         opportunities: seed?.opportunities ?? [],
         opportunity_customer_members: seed?.opportunity_customer_members ?? [],
         org_settings: seed?.org_settings ?? [],
+        program_offerings: seed?.program_offerings ?? [],
+        program_offering_variants: seed?.program_offering_variants ?? [],
+        commercial_tuition_rates: seed?.commercial_tuition_rates ?? [],
+        commercial_products: seed?.commercial_products ?? [],
+        commercial_revenue_categories: seed?.commercial_revenue_categories ?? [],
+        commercial_policies: seed?.commercial_policies ?? [],
+        option_sets: seed?.option_sets ?? [],
+        option_set_items: seed?.option_set_items ?? [],
+        gl_accounts: seed?.gl_accounts ?? [],
+    };
+}
+
+/**
+ * Phase 9 test helper — Commercial V1 config that reproduces a set of
+ * scheduleBasis → amount mappings, so consumption prices tuition from Commercial
+ * Execution (frozen V1). Wires the enrollment → program via a placement, and maps
+ * each basis to an offering/variant/rate. Returns a Partial<Store> to spread into
+ * createOperationalEnrollmentMockStore.
+ *
+ * `rates`: one entry per basis, e.g. { basis: "three_day", cadenceKey: "monthly", rateCents: 82000 }.
+ */
+export function commercialTuitionSeed(opts: {
+    orgId: string;
+    agreementId: string;
+    programKey?: string;
+    rates: { basis: string; cadenceKey: string; rateCents: number }[];
+}): Partial<OperationalEnrollmentMockStore> {
+    const programKey = opts.programKey ?? "prog-1";
+    const catId = "cat-1";
+    const offerings: Row[] = [];
+    const variants: Row[] = [];
+    const tuitionRates: Row[] = [];
+    const offeringByAttendance = new Map<string, string>();
+
+    const ensureOffering = (attendanceType: string): string => {
+        const existing = offeringByAttendance.get(attendanceType);
+        if (existing) return existing;
+        const id = `off-${attendanceType}`;
+        offerings.push({ id, org_id: opts.orgId, program_key: programKey, label: attendanceType, attendance_type: attendanceType, status: "active", is_active: true, effective_start: "2026-01-01", effective_end: null, sort_order: offerings.length, metadata: {} });
+        offeringByAttendance.set(attendanceType, id);
+        return id;
+    };
+    const BASIS_DAYS: Record<string, number> = { three_day: 3, four_day: 4, five_day: 5 };
+    const BASIS_ATTENDANCE: Record<string, string> = { full_day: "full_day", half_day: "part_day", drop_in: "drop_in", hourly: "hourly" };
+
+    for (const r of opts.rates) {
+        const days = BASIS_DAYS[r.basis];
+        let variantId: string;
+        if (days != null) {
+            const offeringId = ensureOffering("full_day");
+            variantId = `var-${days}d`;
+            if (!variants.find((v) => v.id === variantId)) variants.push({ id: variantId, org_id: opts.orgId, offering_id: offeringId, label: `${days} days/week`, quantity_type: "days", quantity_value: days, status: "active", is_active: true, sort_order: days, metadata: {} });
+        } else {
+            const attendance = BASIS_ATTENDANCE[r.basis] ?? r.basis;
+            const offeringId = ensureOffering(attendance);
+            variantId = `var-${attendance}-def`;
+            if (!variants.find((v) => v.id === variantId)) variants.push({ id: variantId, org_id: opts.orgId, offering_id: offeringId, label: "Default", quantity_type: null, quantity_value: null, status: "active", is_active: true, sort_order: 0, metadata: {} });
+        }
+        tuitionRates.push({ id: `rate-${r.basis}-${r.cadenceKey}`, org_id: opts.orgId, location_id: null, variant_id: variantId, cadence_key: r.cadenceKey, payer_type: "private_pay", rate_cents: r.rateCents, not_offered: false, is_active: true, effective_start: "2026-01-01", effective_end: null, revenue_category_id: null, metadata: {} });
+    }
+
+    return {
+        child_placements: [{ id: "plc-1", org_id: opts.orgId, enrollment_agreement_id: opts.agreementId, program_category_id: catId, start_date: "2026-01-01", end_date: null, status: "active", metadata: {} }],
+        location_program_categories: [{ id: catId, org_id: opts.orgId, key: programKey, label: "Program", is_active: true, sort_order: 0, metadata: {} }],
+        program_offerings: offerings,
+        program_offering_variants: variants,
+        commercial_tuition_rates: tuitionRates,
     };
 }
 

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { draftConsumption, previewConsumption } from "@/lib/operationalConsumption/consumptionService";
 import type { OperationalFactDto } from "@/lib/operationalConsumption/consumptionTypes";
 import {
+    commercialTuitionSeed,
     createOperationalEnrollmentMockStore,
     createOperationalEnrollmentMockSupabase,
     ORG_ID,
@@ -48,6 +49,15 @@ function eventTypes() {
     ];
 }
 function setup(over?: Partial<OperationalEnrollmentMockStore>) {
+    // Phase 9 — Commercial config reproduces the attendance rates (drop_in=9000/day, hourly=1500/hr).
+    const commercial = commercialTuitionSeed({
+        orgId: ORG_ID,
+        agreementId: AGREEMENT,
+        rates: [
+            { basis: "drop_in", cadenceKey: "daily", rateCents: 9000 },
+            { basis: "hourly", cadenceKey: "hourly", rateCents: 1500 },
+        ],
+    });
     const store = createOperationalEnrollmentMockStore({
         financial_charge_templates: charkeTemplates(),
         childcare_rate_plans: [ratePlan()],
@@ -55,6 +65,7 @@ function setup(over?: Partial<OperationalEnrollmentMockStore>) {
         consumption_event_types: eventTypes(),
         child_enrollment_agreements: [{ id: AGREEMENT, org_id: ORG_ID, site_location_id: SITE, status: "active", start_date: "2026-01-01", customer_member_id: "mem-1" }],
         financial_policies: [{ id: "pol-rev", org_id: ORG_ID, scope_type: "org", policy_type: "posting_review", value: { required: false }, is_active: true, effective_start: "2026-01-01", effective_end: null, metadata: {} }],
+        ...commercial,
         ...over,
     });
     return { store, supabase: createOperationalEnrollmentMockSupabase(store) };
