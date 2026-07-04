@@ -34,6 +34,7 @@ import {
     PRESENTATION_RUNTIME_LABELS,
     runtimeLabelProps,
 } from "@/components/presentation/runtimeLabels";
+import { useAcknowledgeOnActive } from "@/lib/motion/useMotionAcknowledge";
 
 type RowContext = NonNullable<QueueRowModel["context"]>;
 
@@ -132,8 +133,14 @@ export function CondensedQueueRow({
     const context = row.context;
     // One warm handler for both pointer-enter (mouse intent) and focus (keyboard intent).
     const warm = onPrefetch ? () => onPrefetch(row) : undefined;
+    // `acknowledge` choreography: a spring pulse the instant this row becomes the selected
+    // record (false → true), confirming the open registered. Composes with `motion-control`
+    // (transition) — the animation and the transition touch different CSS properties.
+    const ack = useAcknowledgeOnActive(Boolean(isSelected));
     const cardClass =
-        CARD_BUTTON_CLASS + (isSelected ? CARD_SELECTED_CLASS : CARD_IDLE_CLASS);
+        CARD_BUTTON_CLASS +
+        (isSelected ? CARD_SELECTED_CLASS : CARD_IDLE_CLASS) +
+        (ack.className ? ` ${ack.className}` : "");
 
     if (!context) {
         return (

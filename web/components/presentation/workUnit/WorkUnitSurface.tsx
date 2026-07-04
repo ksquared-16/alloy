@@ -71,7 +71,10 @@ export function WorkUnitSurface() {
             {!model.ready ? (
                 <WorkUnitSurfaceSkeleton />
             ) : (
-                <div className="flex flex-col gap-5 lg:flex-row lg:items-start">
+                // `reveal` choreography: the whole above-fold surface (header, cards, pills,
+                // queue, Focus Panel) fades+lifts in as one frame when `model.ready` clears the
+                // gate — no per-region stagger. This root mounts only on ready, so it plays once.
+                <div className="motion-reveal flex flex-col gap-5 lg:flex-row lg:items-start">
                     <div className="min-w-0 flex-1 space-y-3">
                         {/* Compact Work Unit Overview header — title + one-row metric strip. Kept
                             tight so the queue + Focus Panel stay high on screen (metric area

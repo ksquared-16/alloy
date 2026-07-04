@@ -147,7 +147,12 @@ export function CommandRailFloatingMenu({
             ref={setMenuEl}
             role="menu"
             aria-label={ariaLabel}
-            className={["adminv2-ws-command-rail-floating-menu", className].filter(Boolean).join(" ")}
+            // `reveal` choreography on open — the menu fades+lifts in as it mounts (one frame,
+            // reduced-motion-safe at token level). Close is still an instant unmount: a `recede`
+            // exit needs an engineered portal exit-window (the gated drawer/menu recede work).
+            className={["adminv2-ws-command-rail-floating-menu motion-reveal", className]
+                .filter(Boolean)
+                .join(" ")}
             style={{
                 position: style.position,
                 top: style.top,

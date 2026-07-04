@@ -22,6 +22,7 @@ import {
     PRESENTATION_RUNTIME_LABELS,
     runtimeLabelProps,
 } from "@/components/presentation/runtimeLabels";
+import { MOTION_SETTLE } from "@/lib/motion/motionTokens";
 
 type SignalState = "healthy" | "caution" | "critical" | "neutral";
 
@@ -65,7 +66,13 @@ function Signal({ card }: { card: WorkUnitHeaderCalculationCardVm }) {
                     {card.label}
                 </span>
             </span>
-            <span className={`truncate text-[18px] font-bold leading-none tabular-nums ${VALUE[state]}`}>
+            <span
+                // `settle` sub-variant of `reveal`: a genuinely-deferred value (KPI settles
+                // after the gate per WS-1) ramps opacity into already-reserved geometry.
+                // Keyed by value so an arrival/refresh replays the ramp; opacity-only, no flash.
+                key={card.formattedValue}
+                className={`${MOTION_SETTLE.className} truncate text-[18px] font-bold leading-none tabular-nums ${VALUE[state]}`}
+            >
                 {card.formattedValue}
             </span>
             {context ? (
