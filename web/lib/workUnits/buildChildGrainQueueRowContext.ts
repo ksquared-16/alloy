@@ -354,6 +354,22 @@ function resolveStageKey(queue: PartialQueueRowContextQueueMeta, activeStageKey:
     return trimOrNull(queue.stage_key) ?? queue.key;
 }
 
+/**
+ * Waitlist ranking context for a candidate-grain row, from the placement waitlist projection.
+ * Presentation-only; undefined when the row carries no projection / no rank. (Variants Phase 5.)
+ */
+function resolveWaitlistContext(
+    row: Record<string, unknown>,
+): { position_label?: string | null; wait_since?: string | null } | undefined {
+    const proj = row._placement_waitlist_row;
+    if (proj == null || typeof proj !== "object" || Array.isArray(proj)) return undefined;
+    const p = proj as Record<string, unknown>;
+    const positionLabel = trimOrNull(p.runtime_position_label);
+    const waitSince = trimOrNull(p.wait_since);
+    if (!positionLabel && !waitSince) return undefined;
+    return { position_label: positionLabel, wait_since: waitSince };
+}
+
 /** Whether this row should receive honest child/candidate QueueRowContext. */
 export function isHonestChildCandidateGrainRow(row: Record<string, unknown>): boolean {
     return resolveRowGrain(row) != null;
@@ -403,6 +419,7 @@ export function buildChildGrainQueueRowContext(input: BuildChildGrainQueueRowCon
             : null;
 
     const placement_context = resolvePlacementContext(row, subjectType === "child" ? active.subjectId : null);
+    const waitlist_context = subjectType === "candidate" ? resolveWaitlistContext(row) : undefined;
 
     return {
         contract_version: QUEUE_ROW_CONTEXT_CONTRACT_VERSION,
@@ -446,6 +463,7 @@ export function buildChildGrainQueueRowContext(input: BuildChildGrainQueueRowCon
             stage_focus_key: stageKey,
         },
         ...(placement_context ? { placement_context } : {}),
+        ...(waitlist_context ? { waitlist_context } : {}),
     };
 }
 

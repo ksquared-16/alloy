@@ -209,6 +209,17 @@ export type QueueRowContext = {
      * TODO(phase-1): populate from OCM columns in partial adapter.
      */
     placement_context?: SubjectPlacementContext | null;
+
+    /**
+     * Waitlist ranking context for candidate-grain rows (Variants Phase 5). Populated from the
+     * placement waitlist projection; absent for non-candidate rows. Presentation-only — the compact
+     * row's Subject Focus (`placement_candidate_child`) surfaces the position as supporting context.
+     * Optional + additive → the frozen contract version does not change.
+     */
+    waitlist_context?: {
+        position_label?: string | null;
+        wait_since?: string | null;
+    } | null;
 };
 
 export type DrawerSubjectFocusMode =
