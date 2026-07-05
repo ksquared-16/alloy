@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createAdminClient } from "@/lib/supabaseAdmin";
+import { applyWorkUnitScopeToOpportunityQuery } from "@/lib/queues/workUnitLeadMembership";
 import { attachStageWorkRuntimeToOpportunityQueueRows } from "@/lib/lifecycle/attachStageWorkRuntimeToQueueRows";
 import { isLayoutRuntimeOpportunityQueueBodyEnabledServer } from "@/lib/layout/featureFlag";
 import type { QueueConfig, QueueDefinitionV1, QueueFilter } from "@/lib/config/queueDefinitionSchema";
@@ -3343,7 +3344,7 @@ export async function getWorkUnitQueueSummaries(params: {
                 opportunityScopeBundle.departmentWorkUnitIds
             );
         } else {
-            previewQ0 = previewQ0.eq("work_unit_id", params.workUnitId);
+            previewQ0 = applyWorkUnitScopeToOpportunityQuery(previewQ0, params.workUnitId);
         }
         const previewQ0Scoped = scopeFilter ? applyRecordScopeConstraintsToQuery(previewQ0 as never, scopeFilter) : (previewQ0 as never);
         const previewQ1 = applySortToJobQuery(applyOpsToJobQuery(previewQ0Scoped as never, ops) as never, sort);

@@ -220,14 +220,9 @@ export const CONFIGURATION_WORKSPACE_DOMAINS: readonly ConfigurationWorkspaceDom
         description: "Programs, tuition, and business rates.",
         items: [
             {
-                href: "/admin/commercial/programs",
-                label: "Programs",
-                description: "Programs offered at each location.",
-            },
-            {
-                href: "/admin/commercial/tuition",
-                label: "Tuition",
-                description: "Rate grid by program and schedule type.",
+                href: "/settings/commercial",
+                label: "Programs & tuition",
+                description: "Programs, offerings, tuition rates, catalog, policies, and the simulator.",
             },
         ],
     },

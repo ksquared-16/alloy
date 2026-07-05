@@ -25,6 +25,7 @@ import {
     PRESENTATION_RUNTIME_LABELS,
     runtimeLabelProps,
 } from "@/components/presentation/runtimeLabels";
+import { BUILD_SHA } from "@/lib/runtime/buildInfo";
 import { InlineOpportunityFocusPanel } from "./InlineOpportunityFocusPanel";
 
 type FocusPanelOpenContextValue = {
@@ -55,7 +56,8 @@ function FocusPanelPlaceholder() {
         <section
             data-inline-focus-panel="empty"
             aria-label="Focus Panel"
-            className="flex min-h-[24rem] flex-col items-center justify-center gap-1.5 rounded-lg border border-dashed border-alloy-stone/40 bg-white px-6 py-10 text-center"
+            // Borderless: the FocusPanelSurface boundary owns the outer panel border in every state.
+            className="flex min-h-[24rem] flex-col items-center justify-center gap-1.5 px-6 py-10 text-center"
         >
             <p className="text-sm font-medium text-alloy-midnight/55">Select a record to begin</p>
             <p className="text-xs text-alloy-midnight/40">The record you open appears here.</p>
@@ -102,7 +104,16 @@ export function FocusPanelSurface({
                     placeholder — the structure itself never disappears. */}
                 <div className="flex flex-col gap-4 xl:flex-row xl:items-start">
                     <div className="min-w-0 xl:w-[24rem] xl:shrink-0">{children}</div>
-                    <div className="min-w-0 flex-1">
+                    {/* The active Focus Panel render boundary OWNS the outer panel border — a single
+                        unmistakable container in both the selected and empty states, never dependent
+                        on a nested card's border. */}
+                    <div
+                        className="min-w-0 flex-1 overflow-hidden rounded-xl border border-alloy-stone/45 bg-white shadow-[0_1px_2px_rgba(15,23,42,0.05)]"
+                        data-focus-panel-boundary
+                        data-component="FocusPanelSurface.boundary"
+                        data-build-sha={BUILD_SHA}
+                        data-focus-panel-state={inlineRecordSelected ? "record" : "empty"}
+                    >
                         {inlineRecordSelected ? (
                             <InlineOpportunityFocusPanel />
                         ) : (

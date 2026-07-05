@@ -14,6 +14,7 @@ import {
     applyTourBookingLocationScope,
     resolveMetricScopeFilter,
 } from "@/lib/metrics/scopeFilter";
+import { countWorkUnitLeadMembership } from "@/lib/queues/workUnitLeadMembership";
 
 /** Status keys indicating a tour was scheduled (denominator-eligible). */
 export const TOUR_SCHEDULED_STATUS_KEYS = ["confirmed", "completed", "no_show"] as const;
@@ -125,6 +126,23 @@ export async function resolveEnrollmentLeadCount(
 
     if (filter.impossible) {
         return { ...base, value: 0, formattedValue: formatMetricValue(def.format, 0), meta: { count: 0 } };
+    }
+
+    // WORK-UNIT context → the canonical membership count (= queue rows / work-view count). Scoped to
+    // THIS work unit only: no department scope, no `work_unit_id IS NULL` orphans, no time window.
+    // Department/workspace scope keeps the windowed department-wide rollup below.
+    const workUnitId = ctx.workUnitId?.trim() || null;
+    if (workUnitId) {
+        const wuCount = await countWorkUnitLeadMembership(ctx.supabase, {
+            orgId: ctx.orgId,
+            workUnitId,
+        });
+        return {
+            ...base,
+            value: wuCount,
+            formattedValue: formatMetricValue(def.format, wuCount),
+            meta: { count: wuCount },
+        };
     }
 
     let oppQ = ctx.supabase

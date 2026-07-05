@@ -25,6 +25,9 @@ import {
 } from "@/lib/presentation/runtime/workspaceProcessSignal";
 import {
     DEFAULT_WORKSPACE_PROCESS_SURFACE_CONFIG,
+    PROCESS_CARD_ACCENTS,
+    PROCESS_CARD_ICONS,
+    type ProcessCardConfig,
     type TodaysWorkSort,
     type WorkspaceProcessSurfaceConfig,
 } from "@/lib/presentation/runtime/workspaceProcessSurfaceConfig";
@@ -45,14 +48,34 @@ const SIGNAL_PROCESSES = WORKSPACE_SIGNAL_BUSINESS_PROCESSES.map((p) => ({
     signals: signalsForBusinessProcess(p.businessProcess),
 })).filter((p) => p.signals.length > 0);
 
-/** Sample preview data (builder-local ONLY) — the real card renders the selected signal. */
-function previewProcess(label: string, signalKey: string): ProcessTileModel {
-    const calc = SIGNAL_PROCESSES.flatMap((p) => p.signals).find((c) => c.key === signalKey);
+const ACCENT_OPTIONS: { value: ProcessCardConfig["accent"] | ""; label: string }[] = [
+    { value: "", label: "None" },
+    ...PROCESS_CARD_ACCENTS.map((a) => ({ value: a, label: a[0].toUpperCase() + a.slice(1) })),
+];
+const ICON_OPTIONS = PROCESS_CARD_ICONS.map((i) => ({ value: i, label: i[0].toUpperCase() + i.slice(1) }));
+
+/**
+ * Sample preview data (builder-local ONLY) — the real card renders the selected signal + identity.
+ * `processKey` is set so the card's `businessProcessForProcessKey` resolves back to `bp`, letting the
+ * live canvas reflect this process's configured title/subtitle/accent/icon/CTA.
+ */
+function previewProcess(
+    bp: string,
+    processKey: string,
+    label: string,
+    signalKey: string,
+    card: ProcessCardConfig | undefined,
+): ProcessTileModel {
+    const allSignals = SIGNAL_PROCESSES.flatMap((p) => p.signals);
+    const calc = allSignals.find((c) => c.key === signalKey);
     const signalLabel = calc?.label ?? "Signal";
     const state = signalStateFromKpiStatus("healthy"); // representative preview state
+    const supportingCalc = card?.supportingSignalKey
+        ? allSignals.find((c) => c.key === card.supportingSignalKey)
+        : undefined;
     return {
-        id: `preview-${signalKey}`,
-        processKey: label.toLowerCase(),
+        id: `preview-${bp}`,
+        processKey,
         label,
         description: "Preview",
         entryHref: "#",
@@ -72,6 +95,18 @@ function previewProcess(label: string, signalKey: string): ProcessTileModel {
             trend: null,
             drillHref: null,
         },
+        supportingSignal: supportingCalc
+            ? {
+                  key: supportingCalc.key,
+                  label: supportingCalc.label,
+                  answer: supportingCalc.label,
+                  state: "neutral",
+                  value: "—",
+                  supportingContext: null,
+                  trend: null,
+                  drillHref: null,
+              }
+            : null,
     };
 }
 
@@ -104,6 +139,22 @@ export default function WorkspaceProcessesSurfaceEditor() {
         setDirty(true);
         setPublishedAt(false);
     }
+    /** Merge a card-identity patch for a process; empty-string fields clear back to the default. */
+    function patchCard(bp: string, patch: Partial<ProcessCardConfig>) {
+        setConfig((prev) => {
+            const next: ProcessCardConfig = { ...prev.cardByProcess[bp], ...patch };
+            for (const k of Object.keys(next) as (keyof ProcessCardConfig)[]) {
+                const val = next[k];
+                if (val === "" || val === undefined || (k === "accent" && val === "none")) delete next[k];
+            }
+            const cardByProcess = { ...prev.cardByProcess };
+            if (Object.keys(next).length) cardByProcess[bp] = next;
+            else delete cardByProcess[bp];
+            return { ...prev, cardByProcess };
+        });
+        setDirty(true);
+        setPublishedAt(false);
+    }
 
     async function handlePublish() {
         setPublishing(true);
@@ -124,9 +175,19 @@ export default function WorkspaceProcessesSurfaceEditor() {
     const previewSignalKey = previewProc
         ? config.primarySignalByProcess[previewProc.businessProcess] ?? previewProc.signals[0]?.key ?? ""
         : "";
+    const previewCard = previewProc ? config.cardByProcess[previewProc.businessProcess] : undefined;
     const preview = useMemo(
-        () => (previewProc ? previewProcess(previewProc.label, previewSignalKey) : null),
-        [previewProc, previewSignalKey],
+        () =>
+            previewProc
+                ? previewProcess(
+                      previewProc.businessProcess,
+                      previewProc.businessProcess,
+                      previewCard?.title || previewProc.label,
+                      previewSignalKey,
+                      previewCard,
+                  )
+                : null,
+        [previewProc, previewSignalKey, previewCard],
     );
 
     return (
@@ -184,6 +245,88 @@ export default function WorkspaceProcessesSurfaceEditor() {
                                 Choosing WHICH Operational Calculation the process presents — not configuring the calculation.
                             </p>
                         </div>
+
+                        {/* Card identity — per-process title / subtitle / accent / icon / supporting / CTA.
+                            Scoped to the previewed process; the live canvas reflects each change. */}
+                        {previewProc ? (
+                            <div data-workspace-card-identity={previewProc.businessProcess}>
+                                <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-alloy-midnight/40">
+                                    Card · {previewProc.label}
+                                </p>
+                                <label className="flex flex-col gap-1 text-[13px] text-alloy-midnight/80">
+                                    Title
+                                    <input
+                                        type="text"
+                                        value={previewCard?.title ?? ""}
+                                        placeholder={previewProc.label}
+                                        onChange={(e) => patchCard(previewProc.businessProcess, { title: e.target.value })}
+                                        data-card-title
+                                        className="rounded-md border border-alloy-stone/25 px-2 py-1.5 text-sm"
+                                    />
+                                </label>
+                                <label className="mt-2 flex flex-col gap-1 text-[13px] text-alloy-midnight/80">
+                                    Subtitle
+                                    <input
+                                        type="text"
+                                        value={previewCard?.subtitle ?? ""}
+                                        placeholder="Optional one-liner"
+                                        onChange={(e) => patchCard(previewProc.businessProcess, { subtitle: e.target.value })}
+                                        data-card-subtitle
+                                        className="rounded-md border border-alloy-stone/25 px-2 py-1.5 text-sm"
+                                    />
+                                </label>
+                                <div className="mt-2 grid grid-cols-2 gap-2">
+                                    <label className="flex flex-col gap-1 text-[13px] text-alloy-midnight/80">
+                                        Accent
+                                        <select
+                                            value={previewCard?.accent ?? ""}
+                                            onChange={(e) => patchCard(previewProc.businessProcess, { accent: (e.target.value || undefined) as ProcessCardConfig["accent"] })}
+                                            data-card-accent
+                                            className="rounded-md border border-alloy-stone/25 px-2 py-1.5 text-sm"
+                                        >
+                                            {ACCENT_OPTIONS.map((o) => (<option key={o.value} value={o.value ?? ""}>{o.label}</option>))}
+                                        </select>
+                                    </label>
+                                    <label className="flex flex-col gap-1 text-[13px] text-alloy-midnight/80">
+                                        Icon
+                                        <select
+                                            value={previewCard?.icon ?? "generic"}
+                                            onChange={(e) => patchCard(previewProc.businessProcess, { icon: e.target.value as ProcessCardConfig["icon"] })}
+                                            data-card-icon
+                                            className="rounded-md border border-alloy-stone/25 px-2 py-1.5 text-sm"
+                                        >
+                                            {ICON_OPTIONS.map((o) => (<option key={o.value} value={o.value}>{o.label}</option>))}
+                                        </select>
+                                    </label>
+                                </div>
+                                <label className="mt-2 flex flex-col gap-1 text-[13px] text-alloy-midnight/80">
+                                    Supporting signal
+                                    <select
+                                        value={previewCard?.supportingSignalKey ?? ""}
+                                        onChange={(e) => patchCard(previewProc.businessProcess, { supportingSignalKey: e.target.value })}
+                                        data-card-supporting-signal
+                                        className="rounded-md border border-alloy-stone/25 px-2 py-1.5 text-sm"
+                                    >
+                                        <option value="">None</option>
+                                        {previewProc.signals.map((s) => (<option key={s.key} value={s.key}>{s.label}</option>))}
+                                    </select>
+                                </label>
+                                <label className="mt-2 flex flex-col gap-1 text-[13px] text-alloy-midnight/80">
+                                    CTA label
+                                    <input
+                                        type="text"
+                                        value={previewCard?.ctaLabel ?? ""}
+                                        placeholder="Open process"
+                                        onChange={(e) => patchCard(previewProc.businessProcess, { ctaLabel: e.target.value })}
+                                        data-card-cta-label
+                                        className="rounded-md border border-alloy-stone/25 px-2 py-1.5 text-sm"
+                                    />
+                                </label>
+                                <p className="mt-2 text-[11px] text-alloy-midnight/45">
+                                    The CTA target stays canonical — only the label changes.
+                                </p>
+                            </div>
+                        ) : null}
 
                         <div>
                             <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-alloy-midnight/40">Today's Work</p>

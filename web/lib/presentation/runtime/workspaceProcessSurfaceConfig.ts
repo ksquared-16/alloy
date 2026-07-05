@@ -23,6 +23,38 @@ export type TodaysWorkSort =
     /** Keep the configured work_views_v1 order. */
     | "configured";
 
+/**
+ * Identity accents an operator may assign to a process card. A CLOSED set mapped to existing
+ * Alloy tokens only (no new colors). Applied to the card's IDENTITY chip — never the semantic
+ * state rail, which stays owned by the operational signal.
+ */
+export const PROCESS_CARD_ACCENTS = ["pine", "juniper", "ember", "firewood", "midnight", "stone"] as const;
+export type ProcessCardAccent = (typeof PROCESS_CARD_ACCENTS)[number];
+
+/** Identity glyph vocabulary — CLOSED set (no arbitrary strings; the card maps each to an inline icon). */
+export const PROCESS_CARD_ICONS = ["leads", "enrollment", "billing", "roster", "tour", "waitlist", "generic"] as const;
+export type ProcessCardIcon = (typeof PROCESS_CARD_ICONS)[number];
+
+/**
+ * Per-process card identity + presentation an operator owns in the Surface Builder. Every field is
+ * optional; absent → the runtime default (process label / description / neutral identity / canonical
+ * CTA). The card GRAMMAR stays fixed and domain-neutral — this configures content, not layout.
+ */
+export type ProcessCardConfig = {
+    /** Title override; blank → the runtime process label. */
+    title?: string;
+    /** One-line subtitle; blank → the runtime process description. */
+    subtitle?: string;
+    /** Identity accent (Alloy token). Absent → neutral identity (no accent). */
+    accent?: ProcessCardAccent;
+    /** Identity glyph (closed vocabulary). Absent → "generic". */
+    icon?: ProcessCardIcon;
+    /** A SECOND Operational Calculation key, rendered as a text-only supporting line. Blank → none. */
+    supportingSignalKey?: string;
+    /** CTA label override; the TARGET stays canonical (the signal drill / process entry). Blank → default. */
+    ctaLabel?: string;
+};
+
 export type WorkspaceProcessSurfaceConfig = {
     version: 1;
     /**
@@ -33,6 +65,11 @@ export type WorkspaceProcessSurfaceConfig = {
      * process (never a hardcoded health metric).
      */
     primarySignalByProcess: Record<string, string>;
+    /**
+     * Per-process card identity + presentation overrides, keyed by business process (the SAME key
+     * as `primarySignalByProcess` — one keying scheme). Absent entry → all runtime defaults.
+     */
+    cardByProcess: Record<string, ProcessCardConfig>;
     todaysWork: {
         /** Show the Today's Work section on each process card. */
         visible: boolean;
@@ -48,6 +85,7 @@ export type WorkspaceProcessSurfaceConfig = {
 export const DEFAULT_WORKSPACE_PROCESS_SURFACE_CONFIG: WorkspaceProcessSurfaceConfig = {
     version: 1,
     primarySignalByProcess: {},
+    cardByProcess: {},
     todaysWork: {
         visible: true,
         maxRows: 0,
@@ -66,15 +104,55 @@ function normalizePrimarySignalMap(value: unknown): Record<string, string> {
     return out;
 }
 
+function trimmedOrUndefined(value: unknown): string | undefined {
+    return typeof value === "string" && value.trim() ? value.trim() : undefined;
+}
+
+/** Coerce one persisted card override, dropping empties and clamping enums to their closed sets. */
+function normalizeProcessCardConfig(value: unknown): ProcessCardConfig | null {
+    if (!value || typeof value !== "object") return null;
+    const v = value as Record<string, unknown>;
+    const out: ProcessCardConfig = {};
+    const title = trimmedOrUndefined(v.title);
+    if (title) out.title = title;
+    const subtitle = trimmedOrUndefined(v.subtitle);
+    if (subtitle) out.subtitle = subtitle;
+    if (typeof v.accent === "string" && (PROCESS_CARD_ACCENTS as readonly string[]).includes(v.accent)) {
+        out.accent = v.accent as ProcessCardAccent;
+    }
+    if (typeof v.icon === "string" && (PROCESS_CARD_ICONS as readonly string[]).includes(v.icon)) {
+        out.icon = v.icon as ProcessCardIcon;
+    }
+    const supportingSignalKey = trimmedOrUndefined(v.supportingSignalKey);
+    if (supportingSignalKey) out.supportingSignalKey = supportingSignalKey;
+    const ctaLabel = trimmedOrUndefined(v.ctaLabel);
+    if (ctaLabel) out.ctaLabel = ctaLabel;
+    // Drop an override that carries nothing (all fields empty/invalid).
+    return Object.keys(out).length ? out : null;
+}
+
+/** Record<businessProcess, ProcessCardConfig>, ignoring empty/invalid entries. */
+function normalizeCardByProcessMap(value: unknown): Record<string, ProcessCardConfig> {
+    if (!value || typeof value !== "object") return {};
+    const out: Record<string, ProcessCardConfig> = {};
+    for (const [k, raw] of Object.entries(value as Record<string, unknown>)) {
+        if (!k.trim()) continue;
+        const card = normalizeProcessCardConfig(raw);
+        if (card) out[k] = card;
+    }
+    return out;
+}
+
 /** Coerce an unknown persisted value into a valid config (defaults fill any gaps). */
 export function normalizeWorkspaceProcessSurfaceConfig(value: unknown): WorkspaceProcessSurfaceConfig {
     const d = DEFAULT_WORKSPACE_PROCESS_SURFACE_CONFIG;
     if (!value || typeof value !== "object") return d;
     const v = value as Record<string, unknown>;
     const primarySignalByProcess = normalizePrimarySignalMap(v.primarySignalByProcess);
+    const cardByProcess = normalizeCardByProcessMap(v.cardByProcess);
     const tw = v.todaysWork;
     if (!tw || typeof tw !== "object") {
-        return { ...d, primarySignalByProcess };
+        return { ...d, primarySignalByProcess, cardByProcess };
     }
     const t = tw as Record<string, unknown>;
     const sort: TodaysWorkSort =
@@ -86,12 +164,49 @@ export function normalizeWorkspaceProcessSurfaceConfig(value: unknown): Workspac
     return {
         version: 1,
         primarySignalByProcess,
+        cardByProcess,
         todaysWork: {
             visible: typeof t.visible === "boolean" ? t.visible : d.todaysWork.visible,
             maxRows,
             sort,
             showCounts: typeof t.showCounts === "boolean" ? t.showCounts : d.todaysWork.showCounts,
         },
+    };
+}
+
+/** The card's identity/presentation after overrides — every field resolved to a safe default. */
+export type ResolvedProcessCardIdentity = {
+    /** Title override, or null → the card falls back to the runtime process label. */
+    title: string | null;
+    /** Subtitle override, or null → the card falls back to the runtime description. */
+    subtitle: string | null;
+    /** Identity accent (Alloy token) or null (neutral identity). */
+    accent: ProcessCardAccent | null;
+    /** Identity glyph — always resolved ("generic" default). */
+    icon: ProcessCardIcon;
+    /** A second Operational Calculation key to resolve as a supporting line, or null. */
+    supportingSignalKey: string | null;
+    /** CTA label override, or null → the card's default CTA label. */
+    ctaLabel: string | null;
+};
+
+/**
+ * Resolve the card identity for a process (keyed by its business process). Pure — the runtime and
+ * the card both read overrides through this so their notion of "what the operator configured" agrees.
+ */
+export function resolveProcessCardConfig(
+    config: WorkspaceProcessSurfaceConfig,
+    processConfigKey: string | null | undefined,
+): ResolvedProcessCardIdentity {
+    const map = config.cardByProcess ?? {};
+    const card = processConfigKey ? map[processConfigKey] : undefined;
+    return {
+        title: card?.title?.trim() || null,
+        subtitle: card?.subtitle?.trim() || null,
+        accent: card?.accent ?? null,
+        icon: card?.icon ?? "generic",
+        supportingSignalKey: card?.supportingSignalKey?.trim() || null,
+        ctaLabel: card?.ctaLabel?.trim() || null,
     };
 }
 

@@ -74,6 +74,25 @@ describe("resolveQueueRowSubjectFocus", () => {
         expect(f.siblings).toEqual({ count: 1, summary: null }); // count only, no names
     });
 
+    it("placement_candidate_child surfaces the waitlist rank + household as supporting (Phase 5)", () => {
+        const f = resolveQueueRowSubjectFocus(
+            ctx({
+                row_subject: { subject_type: "candidate", subject_id: "pc1", display_name: "Ava" },
+                waitlist_context: { position_label: "#3 of 12", wait_since: "2026-05-01" },
+            }),
+            "placement_candidate_child",
+        );
+        expect(f.supportingLines).toEqual(["#3 of 12", "Smith Household"]);
+    });
+
+    it("placement_candidate_child falls back to household only when no waitlist rank", () => {
+        const f = resolveQueueRowSubjectFocus(
+            ctx({ row_subject: { subject_type: "candidate", subject_id: "pc1", display_name: "Ava" } }),
+            "placement_candidate_child",
+        );
+        expect(f.supportingLines).toEqual(["Smith Household"]);
+    });
+
     it("opportunity anchors on the case with no sibling rollup", () => {
         const f = resolveQueueRowSubjectFocus(ctx({ related_subjects_summary: [sibling("c1", "Ava")] }), "opportunity");
         expect(f.focus).toBe("opportunity");

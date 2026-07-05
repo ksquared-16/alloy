@@ -82,6 +82,11 @@ export type ProcessTileModel = {
      * (the card shows a neutral no-signal state; it never fabricates one).
      */
     primarySignal: PrimarySignalModel | null;
+    /**
+     * An optional SECOND configured Operational Calculation, resolved the same way as the primary
+     * signal, rendered by the card as a text-only supporting line. Null when none is configured.
+     */
+    supportingSignal: PrimarySignalModel | null;
 };
 
 /** Canonical display state of a Primary Signal — localized from the calculation's KPI status. */
@@ -342,6 +347,8 @@ export function processTileModelFromLandingCard(
         countForWorkView?: (entry: OperatorLifecycleWorkQueuePreview) => number | null;
         /** The resolved Primary Signal for this process (null when unconfigured/unresolved). */
         primarySignal?: PrimarySignalModel | null;
+        /** The resolved supporting signal (second calculation), null when unconfigured. */
+        supportingSignal?: PrimarySignalModel | null;
     },
 ): ProcessTileModel {
     return {
@@ -356,6 +363,7 @@ export function processTileModelFromLandingCard(
             workViewLinkFromWorkQueuePreview(entry, args?.countForWorkView?.(entry) ?? null),
         ),
         primarySignal: args?.primarySignal ?? null,
+        supportingSignal: args?.supportingSignal ?? null,
     };
 }
 

@@ -74,12 +74,16 @@ export function resolveQueueRowSubjectFocus(
         };
     }
 
-    // placement_candidate_child — the candidate is the row subject; siblings as COUNT only.
+    // placement_candidate_child — the candidate is the row subject; waitlist rank + household are
+    // supporting; siblings as COUNT only. Rank is shown WHERE AVAILABLE (Phase 5 context).
     if (resolved === "placement_candidate_child" && rowSubject.subject_type === "candidate") {
         return {
             focus: "placement_candidate_child",
             primary: rowSubject,
-            supportingLines: [context.case_context.display_name].filter(Boolean),
+            supportingLines: [
+                context.waitlist_context?.position_label,
+                context.case_context.display_name,
+            ].filter((v): v is string => Boolean(v && v.trim())),
             siblings: siblingsExcluding(context, rowSubject.subject_id, false),
         };
     }
