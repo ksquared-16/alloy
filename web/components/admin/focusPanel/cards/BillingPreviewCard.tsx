@@ -7,6 +7,8 @@ import {
     buildBillingPreviewCardEvidence,
     type BillingPlacementFact,
 } from "@/lib/adminV2/runtime/focusPanel/billingPreview/buildBillingPreviewCardEvidence";
+import { readFinancialNestedSurfaceGroupsFromDoc } from "@/lib/adminV2/runtime/focusPanel/billingPreview/financialNestedSurfaceRuntime";
+import { usePublishedFocusPanelSummaryDoc } from "@/lib/adminV2/runtime/focusPanel/usePublishedFocusPanelSummaryDoc";
 import { useFinancialConfig } from "@/lib/adminV2/runtime/focusPanel/financialConfig/useFinancialConfig";
 import type { FinancialConfigEnrollment } from "@/lib/adminV2/runtime/focusPanel/financialConfig/financialConfigTypes";
 import type { FocusPanelCardModel } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardModel";
@@ -40,10 +42,23 @@ export default function BillingPreviewCard({ model, context, receded = false, co
 
     const opportunityId = context.subject.type === "opportunity" ? context.subject.id : null;
     const { data: financialConfig, loading: configLoading } = useFinancialConfig(opportunityId, expanded);
+    const publishedDoc = usePublishedFocusPanelSummaryDoc(true);
 
     const evidence = useMemo(
         () => buildBillingPreviewCardEvidence(context, financialConfig?.enrollments ?? null),
         [context, financialConfig],
+    );
+
+    const nestedSurfaceGroups = useMemo(
+        () =>
+            expanded
+                ? readFinancialNestedSurfaceGroupsFromDoc(
+                      publishedDoc,
+                      context,
+                      financialConfig?.enrollments ?? null,
+                  )
+                : null,
+        [expanded, publishedDoc, context, financialConfig],
     );
 
     useReportPerspective(coordination, "billing_preview", expanded ? "focused" : "base");
@@ -98,6 +113,25 @@ export default function BillingPreviewCard({ model, context, receded = false, co
                     <p className="alloy-os-ucard__balance-line">{evidence.balanceLabel}</p>
                 )}
             </section>
+
+            {/* Published nested-surface groups (metadata.nestedSurfaces["financial_configuration_surface"]) */}
+            {nestedSurfaceGroups?.map((group) => (
+                <section
+                    key={group.key}
+                    className="alloy-os-financial-config__section"
+                    data-financial-nested-group={group.key}
+                >
+                    <h4 className="alloy-os-financial-config__section-heading">{group.label}</h4>
+                    <ul className="alloy-os-financial-config__nested-fields" data-financial-nested-fields={group.key}>
+                        {group.fields.map((field) => (
+                            <li key={field.key} className="alloy-os-financial-config__nested-field" data-financial-nested-field={field.key}>
+                                <span className="alloy-os-financial-config__nested-field-label">{field.label}</span>
+                                <span className="alloy-os-financial-config__nested-field-value">{field.value}</span>
+                            </li>
+                        ))}
+                    </ul>
+                </section>
+            ))}
 
             {/* Placement & tuition — placement from truth, rates from financial-config API */}
             {evidence.placementFacts.length > 0 && (

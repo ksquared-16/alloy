@@ -243,13 +243,13 @@ That is the architectural destination: Alloy stops inventing framework and start
 | Children Surface — recursive proof (Record → Record Surface, self-referential) | ✅ landed + tested (model/registry) — **editable in /surfaces (PR #68)** |
 | Financial Configuration Surface — recursive proof (Operational → Operational) | ✅ landed + tested (model/registry) — **editable in /surfaces (PR #68)** |
 | Evidence Group terminology (retire abstract "Details" → "Overview") | ✅ landed (runtime-visible: default group label) |
-| Nested surface **editing** in /surfaces (open card → nested surface → configure fields → persist) | ✅ **landed (PR #68)** — `NestedSurfaceEditor`, persists `metadata.nestedSurfaces[surfaceId]` |
+| Nested surface **editing** in /surfaces (canvas drill-in → nested surface → configure fields → persist) | ✅ **landed** — `NestedSurfaceEditor`; `groupDefsFor` reads `SurfaceSpec`; canvas **Configure expansion →** affordance; persists `metadata.nestedSurfaces[surfaceId]` |
 | Stacked condensed queue row + grain/conditions | ✅ **landed (PR #68)** — `column.rowIndex` + `queueRowGrainModel`; authored + persisted |
 | Runtime overlay render swap (live render of nested Surface + stacked rows + `visibleWhen`) | **deferred → Runtime Adoption** — see [`presentation-runtime-carry-forward.md`](./presentation-runtime-carry-forward.md) |
 | Surface Library single-registry cutover / queue surface-entry collapse | **deferred → Runtime Adoption** |
 
 ### 9a. Authoring vs live runtime (be precise)
 
-**Authored + persisted today (PR #68):** stacked queue rows (`rowIndex`), grain + waitlist-as-condition (`visibleWhen`), custom fields by namespace in the builders, and **nested surface editing** for Children Surface + Financial Configuration Surface (persisted to the Focus Panel summary doc metadata).
+**Authored + persisted today:** stacked queue rows (`rowIndex`), grain + waitlist-as-condition (`visibleWhen`), custom fields by namespace in the builders, and **nested surface editing** (registry-derived groups; canvas drill-in). See [`universal-nested-surface-drill-in.md`](./universal-nested-surface-drill-in.md).
 
-**Not yet consumed by the live operator runtime:** stacked-row render, `visibleWhen` evaluation, and nested-surface render. These are the Runtime Adoption seams — the single source of truth for what to build next is [`presentation-runtime-carry-forward.md`](./presentation-runtime-carry-forward.md). Nothing was silently dropped.
+**Partially consumed by live runtime:** Children + Billing Preview cards read `metadata.nestedSurfaces[surfaceId]` for configured field order/sections (shared `nestedSurfaceConfigReader`). Full Expanded/Workspace nested-surface overlay render remains deferred — [`presentation-runtime-carry-forward.md`](./presentation-runtime-carry-forward.md).

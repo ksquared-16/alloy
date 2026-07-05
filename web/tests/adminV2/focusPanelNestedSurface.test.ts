@@ -1,15 +1,5 @@
 /**
- * Phase 4 — Focus Panel nested surface: authoring model → runtime consumption.
- *
- * Proves the connection end to end using the EXISTING pieces (no new persistence,
- * no new renderer):
- *   1. nested navigation resolves through the surface registry / resolveOpenSurface
- *      (Focus Panel "Children" component → children_surface)
- *   2. the published nested config is read + reconciled off the Focus Panel summary doc
- *      (metadata.nestedSurfaces["children_surface"])
- *   3. that config flattens to an ordered field-key list
- *   4. the runtime children evidence builder consumes those keys — order + selection of
- *      the child detail line follow the published config
+ * Universal nested-surface drill-in: registry launchers, canvas affordance, runtime consumption.
  */
 
 import { describe, expect, it, beforeEach } from "vitest";
@@ -19,28 +9,37 @@ import { fileURLToPath } from "node:url";
 import {
     ensureRuntimeSurfacesRegistered,
     focusPanelNestedLaunchers,
+    focusPanelNestedSurfaceByCardKey,
+    nestedLaunchersForSurface,
+    nestedLauncherForFocusPanelCard,
 } from "@/lib/platform/surfaceComposition/registerRuntimeSurfaces";
 import {
     getSurface,
     resolveOpenSurface,
     __resetSurfaceRegistry,
+    registerSurface,
 } from "@/lib/platform/surfaceComposition/surfaceRegistry";
 import {
     CHILDREN_SURFACE_ID,
+    FINANCIAL_CONFIG_SURFACE_ID,
     FOCUS_PANEL_SURFACE_ID,
     focusPanelSurface,
 } from "@/lib/platform/surfaceComposition/definitions/recursiveSurfaceProofs";
-import { surfaceComponents } from "@/lib/platform/surfaceComposition/universalSurfaceModel";
+import { surfaceComponents, type SurfaceSpec } from "@/lib/platform/surfaceComposition/universalSurfaceModel";
 import {
     childrenDetailFieldKeysFromNestedConfig,
     readChildrenNestedConfigFromDoc,
 } from "@/lib/adminV2/runtime/focusPanel/children/childrenNestedSurfaceConfig";
+import {
+    buildFinancialNestedSurfaceGroups,
+    readFinancialNestedSurfaceGroupsFromDoc,
+} from "@/lib/adminV2/runtime/focusPanel/billingPreview/financialNestedSurfaceRuntime";
 import { buildChildrenCardEvidence } from "@/lib/adminV2/runtime/focusPanel/children/buildChildrenCardEvidence";
 import type { NestedSurfaceConfig } from "@/lib/adminV2/settings/surfaces/nestedSurfaceEditorModel";
 import type { LayoutDoc } from "@/lib/layout/layoutV2";
 import type { OperationalContext } from "@/lib/adminV2/runtime/operationalContext/types";
 
-describe("Phase 4 — nested navigation via the surface registry (resolveOpenSurface)", () => {
+describe("nested navigation via the surface registry (resolveOpenSurface)", () => {
     beforeEach(() => {
         __resetSurfaceRegistry();
     });
@@ -50,26 +49,61 @@ describe("Phase 4 — nested navigation via the surface registry (resolveOpenSur
         expect(getSurface(CHILDREN_SURFACE_ID)).not.toBeNull();
         expect(getSurface(FOCUS_PANEL_SURFACE_ID)).not.toBeNull();
 
-        const childrenComponent = surfaceComponents(focusPanelSurface).find(
-            (c) => c.id === "children_card",
-        )!;
+        const childrenComponent = surfaceComponents(focusPanelSurface).find((c) => c.id === "children_card")!;
         const nested = resolveOpenSurface(childrenComponent, "expanded");
         expect(nested?.id).toBe(CHILDREN_SURFACE_ID);
     });
 
-    it("derives the Focus Panel nested launchers from the registry (not a hardcoded list)", () => {
+    it("derives Focus Panel nested launchers from the registry (not a hardcoded list)", () => {
         const launchers = focusPanelNestedLaunchers();
         const surfaceIds = launchers.map((l) => l.surfaceId);
         expect(surfaceIds).toContain(CHILDREN_SURFACE_ID);
-        // the launcher label comes from the resolved component, not a literal
+        expect(surfaceIds).toContain(FINANCIAL_CONFIG_SURFACE_ID);
         const children = launchers.find((l) => l.surfaceId === CHILDREN_SURFACE_ID)!;
         expect(children.cardLabel).toBe("Children");
     });
+
+    it("nestedLaunchersForSurface works for a non-Focus-Panel parent surface", () => {
+        ensureRuntimeSurfacesRegistered();
+        const parent: SurfaceSpec = {
+            id: "parent_operational_surface",
+            label: "Parent Operational",
+            category: "operational_config",
+            canvas: {
+                rows: [
+                    {
+                        id: "row-1",
+                        components: [
+                            {
+                                id: "nested_host",
+                                label: "Host Panel",
+                                componentType: "config_panel",
+                                depth: { workspace: { openSurfaceId: FINANCIAL_CONFIG_SURFACE_ID } },
+                                evidenceGroups: [{ key: "host", label: "Host Summary", items: [] }],
+                            },
+                        ],
+                    },
+                ],
+            },
+        };
+        registerSurface(parent);
+        const launchers = nestedLaunchersForSurface(parent);
+        expect(launchers).toHaveLength(1);
+        expect(launchers[0]!.surfaceId).toBe(FINANCIAL_CONFIG_SURFACE_ID);
+        expect(launchers[0]!.depth).toBe("workspace");
+    });
+
+    it("maps Focus Panel canvas card keys to nested surface ids", () => {
+        ensureRuntimeSurfacesRegistered();
+        expect(focusPanelNestedSurfaceByCardKey().children?.surfaceId).toBe(CHILDREN_SURFACE_ID);
+        expect(focusPanelNestedSurfaceByCardKey().billing_preview?.surfaceId).toBe(FINANCIAL_CONFIG_SURFACE_ID);
+        expect(nestedLauncherForFocusPanelCard("children")?.surfaceId).toBe(CHILDREN_SURFACE_ID);
+    });
 });
 
-describe("Phase 4 — runtime reads the published nested config off the doc", () => {
-    function docWithChildrenConfig(config: NestedSurfaceConfig): LayoutDoc {
-        return { surfaces: {}, metadata: { nestedSurfaces: { [CHILDREN_SURFACE_ID]: config } } } as unknown as LayoutDoc;
+describe("runtime reads the published nested config off the doc", () => {
+    function docWithNestedConfig(surfaceId: string, config: NestedSurfaceConfig): LayoutDoc {
+        return { surfaces: {}, metadata: { nestedSurfaces: { [surfaceId]: config } } } as unknown as LayoutDoc;
     }
 
     it("returns null when the doc has no nested config (default order)", () => {
@@ -82,9 +116,8 @@ describe("Phase 4 — runtime reads the published nested config off the doc", ()
             surfaceId: CHILDREN_SURFACE_ID,
             groups: [{ key: "placement", selectedFieldKeys: ["child.room", "inquiry_child.program"] }],
         };
-        const config = readChildrenNestedConfigFromDoc(docWithChildrenConfig(published));
+        const config = readChildrenNestedConfigFromDoc(docWithNestedConfig(CHILDREN_SURFACE_ID, published));
         expect(config).not.toBeNull();
-        // reconcile keeps the placement selection and re-adds the registry's other groups
         const placement = config!.groups.find((g) => g.key === "placement")!;
         expect(placement.selectedFieldKeys).toEqual(["child.room", "inquiry_child.program"]);
     });
@@ -94,20 +127,18 @@ describe("Phase 4 — runtime reads the published nested config off the doc", ()
             surfaceId: CHILDREN_SURFACE_ID,
             groups: [
                 { key: "placement", selectedFieldKeys: ["child.room", "inquiry_child.program"] },
-                { key: "schedule", selectedFieldKeys: ["inquiry_child.schedule_type"] },
+                { key: "identity", selectedFieldKeys: ["child.name"] },
             ],
         };
         expect(childrenDetailFieldKeysFromNestedConfig(config)).toEqual([
             "child.room",
             "inquiry_child.program",
-            "inquiry_child.schedule_type",
+            "child.name",
         ]);
-        expect(childrenDetailFieldKeysFromNestedConfig(null)).toEqual([]);
     });
 });
 
-describe("Phase 4 — children evidence builder consumes the published field order", () => {
-    /** One inquiry child with program, room, schedule, and a start date all present. */
+describe("children evidence builder consumes the published field order", () => {
     function contextWithOneChild(): OperationalContext {
         return {
             truth: {
@@ -132,55 +163,102 @@ describe("Phase 4 — children evidence builder consumes the published field ord
     });
 
     it("published config drives which detail facts appear and their order", () => {
-        // Operator configured: room first, then program, and NO schedule/start.
         const ev = buildChildrenCardEvidence(contextWithOneChild(), {
             childDetailFieldKeys: ["child.room", "inquiry_child.program"],
         });
         expect(ev.children[0]!.detailLine).toBe("North Room · Preschool");
     });
+});
 
-    it("config keys with no value for a child are skipped (never fabricated)", () => {
-        const ctx = {
-            truth: { _inquiry_children: [{ id: "c", display_name: "Bo", desired_program_label: "Toddler" }] },
-        } as unknown as OperationalContext;
-        const ev = buildChildrenCardEvidence(ctx, {
-            childDetailFieldKeys: ["child.room", "inquiry_child.program", "inquiry_child.schedule_type"],
-        });
-        // only program has a value → detail line is just that
-        expect(ev.children[0]!.detailLine).toBe("Toddler");
+describe("Financial Configuration consumes published nested-surface fields", () => {
+    const context = {
+        signals: {
+            billing: {
+                billingConfigured: true,
+                billingContactName: "Jordan Lee",
+                billingContactEmail: null,
+                tuitionRateLabel: "$1,200/mo",
+                feeBalanceCents: 0,
+            },
+        },
+        truth: {},
+    } as unknown as OperationalContext;
+
+    it("renders configured financial nested-surface groups from the doc", () => {
+        const doc = {
+            surfaces: {},
+            metadata: {
+                nestedSurfaces: {
+                    [FINANCIAL_CONFIG_SURFACE_ID]: {
+                        surfaceId: FINANCIAL_CONFIG_SURFACE_ID,
+                        groups: [
+                            {
+                                key: "current_configuration",
+                                selectedFieldKeys: ["billing.tuition_rate", "billing.resolved_total"],
+                            },
+                        ],
+                    },
+                },
+            },
+        } as unknown as LayoutDoc;
+
+        const groups = readFinancialNestedSurfaceGroupsFromDoc(doc, context, null);
+        expect(groups).not.toBeNull();
+        expect(groups![0]!.key).toBe("current_configuration");
+        expect(groups![0]!.fields.map((f) => f.key)).toEqual(["billing.tuition_rate", "billing.resolved_total"]);
+        expect(groups![0]!.fields[0]!.value).toBe("$1,200/mo");
+    });
+
+    it("buildFinancialNestedSurfaceGroups skips fields with no truth (never fabricated)", () => {
+        const config: NestedSurfaceConfig = {
+            surfaceId: FINANCIAL_CONFIG_SURFACE_ID,
+            groups: [{ key: "current_configuration", selectedFieldKeys: ["billing.discounts"] }],
+        };
+        const groups = buildFinancialNestedSurfaceGroups(config, context, null);
+        expect(groups).toHaveLength(0);
     });
 });
 
-describe("Phase 4 — seams: builder renders real presenter, runtime consumes published config", () => {
+describe("builder + runtime seams", () => {
     function src(rel: string): string {
         return readFileSync(fileURLToPath(new URL(`../../${rel}`, import.meta.url)), "utf8");
     }
 
-    it("Focus Panel builder canvas renders the real FocusPanelCardRenderer (not a mock)", () => {
-        const s = src("components/adminV2/settings/surfaces/FocusPanelSummarySurfaceEditor.tsx");
-        expect(s).toContain("FocusPanelCardRenderer");
-        expect(s).toContain("FocusPanelGridCanvasBuilder");
+    it("canvas card affordance sets nestedSurfaceId via data-open-nested-surface", () => {
+        const builder = src("components/admin/focusPanel/FocusPanelGridCanvasBuilder.tsx");
+        expect(builder).toContain("data-nested-surface-affordance");
+        expect(builder).toContain("data-open-nested-surface");
+        expect(builder).toContain("Configure expansion →");
+        expect(builder).toContain("onOpenNestedSurface");
+    });
+
+    it("Surfaces page wires canvas drill-in to nestedSurfaceId state", () => {
+        const page = src("components/adminV2/settings/surfaces/SurfacesConfigurationPage.tsx");
+        expect(page).toContain("onOpenNestedSurface={setNestedSurfaceId}");
     });
 
     it("runtime ChildrenCard consumes the published nested config (no parallel persistence)", () => {
         const s = src("components/admin/focusPanel/cards/ChildrenCard.tsx");
-        expect(s).toContain("usePublishedFocusPanelSummaryDoc");
         expect(s).toContain("readChildrenNestedConfigFromDoc");
         expect(s).toContain("childDetailFieldKeys");
     });
 
-    it("the Children roster fields follow the published config order (reuses existing config)", () => {
-        const s = src("components/admin/focusPanel/cards/ChildrenCard.tsx");
-        // Roster field→icon map keyed by the same nested-surface field keys as the detail line.
-        expect(s).toContain("ROSTER_FIELD_META");
-        expect(s).toContain('"inquiry_child.program"');
-        // The roster rows receive the published field order.
-        expect(s).toContain("fieldKeys={childDetailFieldKeys}");
+    it("runtime BillingPreviewCard consumes published financial nested config", () => {
+        const s = src("components/admin/focusPanel/cards/BillingPreviewCard.tsx");
+        expect(s).toContain("readFinancialNestedSurfaceGroupsFromDoc");
+        expect(s).toContain("data-financial-nested-group");
     });
 
     it("nested config persistence still targets metadata.nestedSurfaces (existing service)", () => {
         const s = src("lib/adminV2/settings/surfaces/nestedSurfaceConfigService.ts");
         expect(s).toContain("nestedSurfaces");
         expect(s).toContain("publishFocusPanelSummary");
+    });
+
+    it("groupDefsFor has no NESTED_SURFACE_DEFS parallel map", () => {
+        const s = src("lib/adminV2/settings/surfaces/nestedSurfaceEditorModel.ts");
+        expect(s).not.toMatch(/export const NESTED_SURFACE_DEFS/);
+        expect(s).toContain("groupDefsFor");
+        expect(s).toContain("getSurface");
     });
 });

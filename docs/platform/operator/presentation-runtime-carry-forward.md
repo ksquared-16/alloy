@@ -27,7 +27,7 @@ Frozen model doctrine: [`experience-builder-v3-universal-surface-composition.md`
 | **Stacked condensed queue row** (Row 1/2/3 inside the 440px rail) | Queue Row Builder canvas + inspector Row selector | `QueueRecordColumnConfig.rowIndex` on the queue layout doc |
 | **Grain + conditions** (family/child; waitlist as a `placement_status = waitlisted` condition) | Queue Row Builder + `queueRowGrainModel` | column/field `visibleWhen` |
 | **Custom fields in queue builder** (by namespace) | Queue Row Builder (`useTenantFieldDefinitions` → adapter) | queue field config |
-| **Nested surface editing** (Children Surface, Financial Configuration Surface) | `/surfaces → Focus Panel → Expansion surfaces` → `NestedSurfaceEditor` | `metadata.nestedSurfaces[surfaceId]` on the Focus Panel summary `entity_layouts` doc |
+| **Nested surface editing** (any registered nested surface) | `/surfaces → Focus Panel` canvas **Configure expansion →** (or chip launcher) → `NestedSurfaceEditor` | `metadata.nestedSurfaces[surfaceId]` on the Focus Panel summary `entity_layouts` doc |
 | **Add Field in nested surfaces** (predefined + tenant custom, badged) | `NestedSurfaceEditor` | same doc metadata |
 | **Nested-ready breadcrumb** (`Surfaces / Focus Panel / Children Card / Children Surface`) | `SurfacesConfigurationPage` + `surfacesBreadcrumbModel` | — (UI state) |
 | **Recursion engine** (`openSurfaceId`, cycle-safe) | `surfaceRegistry` + `universalSurfaceModel` | in-code registry |
@@ -36,7 +36,8 @@ Key modules:
 - Model: `web/lib/platform/surfaceComposition/{universalSurfaceModel,surfaceRegistry}.ts`
 - Queue: `web/lib/adminV2/settings/surfaces/{queueRowStackedModel,queueRowGrainModel}.ts`, `web/lib/layout/queueRecordLayoutV3.ts` (`rowIndex`)
 - Fields: `web/lib/adminV2/settings/surfaces/compositionFieldAdapter.ts` (`acceptedNamespaces`, `availableFieldsForNamespaces`), `compositionEvidenceGroupRegistry.ts`
-- Nested: `web/lib/adminV2/settings/surfaces/{nestedSurfaceEditorModel,nestedSurfaceConfigService}.ts`, `web/components/adminV2/settings/surfaces/NestedSurfaceEditor.tsx`
+- Nested: `web/lib/adminV2/settings/surfaces/{nestedSurfaceEditorModel,nestedSurfaceConfigService}.ts`, `web/lib/adminV2/runtime/focusPanel/nestedSurfaceConfigReader.ts`, `web/components/adminV2/settings/surfaces/NestedSurfaceEditor.tsx`
+- Drill-in: `web/components/admin/focusPanel/FocusPanelGridCanvasBuilder.tsx`, `web/lib/platform/surfaceComposition/registerRuntimeSurfaces.ts` (`nestedLaunchersForSurface`)
 
 ---
 
@@ -46,7 +47,7 @@ These are the exact seams Runtime Adoption must wire. Each is labeled *presentat
 
 1. **Stacked queue rows** — `column.rowIndex` persists; the live `/work-unit` `OperationalQueueRecordRow` still renders a single flat strip. Runtime must group columns by `rowIndex` into stacked sections inside the 440px rail.
 2. **`visibleWhen` evaluation** — column-level and field-level conditions (incl. the waitlist condition) are authored + persisted; the queue row runtime does not yet evaluate them. Runtime must hide columns/fields when their condition fails.
-3. **Nested surface render** — `metadata.nestedSurfaces[surfaceId]` persists selected fields per group; no runtime component reads it. Runtime must render a card's Expanded/Workspace as the composed nested Surface (Children Surface, Financial Configuration Surface) via the `surfaceRegistry` + `openSurfaceId` path, honoring the persisted field selection.
+3. **Nested surface render (overlay)** — Children + Billing Preview now consume `metadata.nestedSurfaces[surfaceId]` for configured fields (shared reader). Remaining work: resolve `openSurfaceId` in Expanded/Workspace overlay and render the full composed nested Surface (not just field-order projection). See [`universal-nested-surface-drill-in.md`](./universal-nested-surface-drill-in.md).
 4. **Column label suppression** — the condensed row hardcodes `hideColumnLabel`; renamed labels persist but don't show in the condensed grain (by design).
 5. **Queue surface-entry collapse** — the catalog still lists `pipeline-queue-row` + `waitlist-queue-row` as two entries. Model supports one grain-selectable surface; collapsing the catalog + API is deferred.
 

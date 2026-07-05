@@ -250,13 +250,16 @@ and the card re-renders from refreshed truth.
 
 ---
 
-## Presentation Runtime V3 — nested surface editing (July 2026, PR #68)
+## Presentation Runtime V3 — nested surface editing (July 2026)
 
-`/settings/surfaces → Focus Panel` now supports **nested surface editing**: an *Expansion surfaces* launcher opens **Children Surface** and **Financial Configuration Surface** (`Surfaces / Focus Panel / Children Card / Children Surface` breadcrumb, clickable back). Inside, `NestedSurfaceEditor` lets operators view fields, **+ Add Field** (compatible predefined + tenant custom, badged), remove, reorder, and **Save & Publish**.
+`/settings/surfaces → Focus Panel` supports **universal nested-surface drill-in editing**:
 
-- Children Surface groups: Child Summary · Placement · Schedule · Medical · Documents.
-- Financial Configuration groups: Placement & Tuition · Billing Configuration · Billing Responsibility · History / Activity. Seeds empty; **no fake payers/invoices/estimates** — only real compatible fields, else an honest empty state.
+- **Primary UX:** click **Configure expansion →** on a canvas card with a depth-bound nested surface (same navigation path as chip launchers).
+- **Editor:** `NestedSurfaceEditor` — evidence groups derive from the registered `SurfaceSpec` (`groupDefsFor`); no parallel `NESTED_SURFACE_DEFS`.
+- **Groups:** registry evidence group keys (e.g. Children → Identity · Placement · Readiness; Financial Configuration → Current Configuration · Configuration History · Actions).
 - **Persistence:** `metadata.nestedSurfaces[surfaceId]` on the Focus Panel summary `entity_layouts` doc, via the existing draft/publish loop.
-- **Runtime deferral:** live runtime does not render nested surface configs yet — presentation-runtime-ready. See [`presentation-runtime-carry-forward.md`](./presentation-runtime-carry-forward.md).
+- **Runtime:** Children + Billing Preview consume published config via `nestedSurfaceConfigReader` (field order / expanded sections). Full nested-surface overlay render remains deferred.
+
+Canonical doc: [`universal-nested-surface-drill-in.md`](./universal-nested-surface-drill-in.md).
 
 This supersedes the earlier "Expansion never creates a new surface" invariant: **Expanded = Open Surface** (a nested Surface via `openSurfaceId`), per [`experience-builder-v3-universal-surface-composition.md`](./experience-builder-v3-universal-surface-composition.md) §3.
