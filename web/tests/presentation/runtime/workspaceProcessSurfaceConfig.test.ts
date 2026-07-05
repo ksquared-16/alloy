@@ -16,6 +16,7 @@ import {
     DEFAULT_WORKSPACE_PROCESS_SURFACE_CONFIG,
     applyTodaysWorkConfig,
     normalizeWorkspaceProcessSurfaceConfig,
+    resolveProcessCardConfig,
     type WorkspaceProcessSurfaceConfig,
 } from "@/lib/presentation/runtime/workspaceProcessSurfaceConfig";
 import type { WorkViewLinkModel } from "@/lib/presentation/runtime";
@@ -56,6 +57,57 @@ describe("normalizeWorkspaceProcessSurfaceConfig", () => {
         expect(n.primarySignalByProcess).toEqual({ enrollment: "enrollment.tour_conversion_rate" });
         // absent map → empty (no hardcoded default signal)
         expect(normalizeWorkspaceProcessSurfaceConfig({}).primarySignalByProcess).toEqual({});
+    });
+
+    it("carries per-process card overrides; clamps enums, drops empties, drops all-empty cards", () => {
+        const n = normalizeWorkspaceProcessSurfaceConfig({
+            cardByProcess: {
+                enrollment: {
+                    title: "  Family Enrollment  ",
+                    subtitle: "",
+                    accent: "pine",
+                    icon: "leads",
+                    supportingSignalKey: "enrollment.tours_scheduled",
+                    ctaLabel: "Work leads",
+                },
+                financial: { accent: "not-a-token", icon: "bogus" }, // invalid enums → dropped → empty card dropped
+                forms: "nope", // non-object → dropped
+            },
+        });
+        expect(n.cardByProcess.enrollment).toEqual({
+            title: "Family Enrollment", // trimmed
+            accent: "pine",
+            icon: "leads",
+            supportingSignalKey: "enrollment.tours_scheduled",
+            ctaLabel: "Work leads",
+        });
+        expect(n.cardByProcess.enrollment.subtitle).toBeUndefined(); // empty dropped
+        expect(n.cardByProcess.financial).toBeUndefined(); // no valid field → whole card dropped
+        expect(n.cardByProcess.forms).toBeUndefined();
+        // absent map → empty
+        expect(normalizeWorkspaceProcessSurfaceConfig({}).cardByProcess).toEqual({});
+    });
+});
+
+describe("resolveProcessCardConfig", () => {
+    it("resolves overrides to safe defaults; unknown/absent process → all defaults", () => {
+        const config = normalizeWorkspaceProcessSurfaceConfig({
+            cardByProcess: { enrollment: { title: "Family Enrollment", accent: "ember", supportingSignalKey: "x" } },
+        });
+        expect(resolveProcessCardConfig(config, "enrollment")).toEqual({
+            title: "Family Enrollment",
+            subtitle: null,
+            accent: "ember",
+            icon: "generic", // default
+            supportingSignalKey: "x",
+            ctaLabel: null,
+        });
+        // unknown process → neutral identity, no overrides
+        expect(resolveProcessCardConfig(config, "capacity")).toEqual({
+            title: null, subtitle: null, accent: null, icon: "generic", supportingSignalKey: null, ctaLabel: null,
+        });
+        // null key + missing map → still safe (no throw)
+        expect(resolveProcessCardConfig({ ...config, cardByProcess: undefined as never }, null).icon).toBe("generic");
     });
 });
 

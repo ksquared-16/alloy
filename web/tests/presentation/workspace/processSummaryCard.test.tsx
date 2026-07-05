@@ -103,6 +103,7 @@ function process(over: Partial<ProcessTileModel>): ProcessTileModel {
             trend: null,
             drillHref: "/workspace/work-unit/enrollment-tours",
         },
+        supportingSignal: null,
         ...over,
     };
 }
@@ -197,5 +198,69 @@ describe("ProcessSummaryCard — fixed grammar + Primary Signal", () => {
         expect(status).toContain("No signal");
         expect(status).not.toContain("Needs attention");
         expect(el.querySelectorAll("svg")).toHaveLength(0);
+    });
+});
+
+describe("ProcessSummaryCard — operator-owned card identity (Surface Builder)", () => {
+    // cardByProcess is keyed by business process; "enrollment" resolves from processKey "enrollment".
+    function cfgWithCard(card: Record<string, unknown>) {
+        return {
+            ...DEFAULT_WORKSPACE_PROCESS_SURFACE_CONFIG,
+            cardByProcess: { enrollment: card },
+        } as typeof DEFAULT_WORKSPACE_PROCESS_SURFACE_CONFIG;
+    }
+
+    it("title + subtitle overrides replace the runtime label/description", () => {
+        const el = render(
+            <ProcessSummaryCard process={process({})} config={cfgWithCard({ title: "Family Enrollment", subtitle: "Inquiry → enrolled" })} />,
+        );
+        expect(el.querySelector("[data-process-title]")?.textContent).toBe("Family Enrollment");
+        expect(el.querySelector("[data-process-subtitle]")?.textContent).toBe("Inquiry → enrolled");
+        expect(el.textContent).not.toContain("Enrollment Pipeline");
+    });
+
+    it("no override → falls back to the runtime label/description (no identity chip)", () => {
+        const el = render(<ProcessSummaryCard process={process({})} config={DEFAULT_WORKSPACE_PROCESS_SURFACE_CONFIG} />);
+        expect(el.querySelector("[data-process-title]")?.textContent).toBe("Enrollment Pipeline");
+        expect(el.querySelector("[data-process-identity-chip]")).toBeNull();
+    });
+
+    it("accent + icon render an identity chip (Alloy token) WITHOUT touching the semantic state rail", () => {
+        const el = render(<ProcessSummaryCard process={process({})} config={cfgWithCard({ accent: "pine", icon: "leads" })} />);
+        const chip = el.querySelector("[data-process-identity-chip]");
+        expect(chip).not.toBeNull();
+        expect(chip?.getAttribute("data-process-accent")).toBe("pine");
+        expect(chip?.getAttribute("data-process-icon")).toBe("leads");
+        expect(chip?.className).toContain("text-alloy-pine"); // Alloy token, not a new color
+        // The state rail stays the operational signal (healthy), not the accent.
+        expect(el.querySelector('[data-alloy-section="WS.PROCESS_SUMMARY_CARD"]')?.className).toContain("border-l-alloy-juniper/70");
+    });
+
+    it("supporting signal renders a text-only second line (label: value)", () => {
+        const el = render(
+            <ProcessSummaryCard
+                process={process({
+                    supportingSignal: {
+                        key: "enrollment.tours_scheduled",
+                        label: "Tours scheduled",
+                        answer: "Tours scheduled",
+                        state: "neutral",
+                        value: "12",
+                        supportingContext: null,
+                        trend: null,
+                        drillHref: null,
+                    },
+                })}
+                config={DEFAULT_WORKSPACE_PROCESS_SURFACE_CONFIG}
+            />,
+        );
+        expect(el.querySelector("[data-process-supporting-signal]")?.textContent).toBe("Tours scheduled: 12");
+    });
+
+    it("CTA label override changes the label; the target (href) stays canonical", () => {
+        const el = render(<ProcessSummaryCard process={process({})} config={cfgWithCard({ ctaLabel: "Work leads" })} />);
+        const cta = el.querySelector("[data-process-cta]");
+        expect(cta?.textContent).toContain("Work leads");
+        expect(cta?.getAttribute("href")).toBe("/workspace/work-unit/enrollment-tours"); // unchanged canonical drill
     });
 });

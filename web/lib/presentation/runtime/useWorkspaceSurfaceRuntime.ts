@@ -34,6 +34,7 @@ import {
 } from "./useWorkViewTotals";
 import { useOperationalAnswers } from "./useOperationalAnswers";
 import { useWorkspaceProcessSurfaceConfig } from "./useWorkspaceProcessSurfaceConfig";
+import { resolveProcessCardConfig } from "./workspaceProcessSurfaceConfig";
 import {
     businessProcessForProcessKey,
     defaultSignalKeyForProcess,
@@ -171,18 +172,27 @@ export function useWorkspaceSurfaceRuntime(): WorkspaceSurfaceModel {
         },
         [processConfig],
     );
+    // The optional SECOND signal an operator configured for this process's card (text-only line).
+    const supportingSignalKeyForCard = useCallback(
+        (card: OperatorLifecycleLandingCard): string | null => {
+            const bp = businessProcessForProcessKey(card.processKey);
+            return bp ? resolveProcessCardConfig(processConfig, bp).supportingSignalKey : null;
+        },
+        [processConfig],
+    );
     const signalKeys = useMemo<OipMetricKey[]>(() => {
         const seen = new Set<string>();
         const out: OipMetricKey[] = [];
         for (const card of cards) {
-            const key = signalKeyForCard(card);
-            if (key && isKnownCalculationKey(key) && !seen.has(key)) {
-                seen.add(key);
-                out.push(key);
+            for (const key of [signalKeyForCard(card), supportingSignalKeyForCard(card)]) {
+                if (key && isKnownCalculationKey(key) && !seen.has(key)) {
+                    seen.add(key);
+                    out.push(key);
+                }
             }
         }
         return out;
-    }, [cards, signalKeyForCard]);
+    }, [cards, signalKeyForCard, supportingSignalKeyForCard]);
     const { resolved: signalsResolved } = useOperationalAnswers({
         siteId: selectedSiteId,
         keys: signalKeys,
@@ -196,6 +206,11 @@ export function useWorkspaceSurfaceRuntime(): WorkspaceSurfaceModel {
                     signalKey && isKnownCalculationKey(signalKey)
                         ? resolvePrimarySignal(signalKey, signalsResolved?.[signalKey])
                         : null;
+                const supportingKey = supportingSignalKeyForCard(card);
+                const supportingSignal =
+                    supportingKey && isKnownCalculationKey(supportingKey)
+                        ? resolvePrimarySignal(supportingKey, signalsResolved?.[supportingKey])
+                        : null;
                 return processTileModelFromLandingCard(card, {
                     countForWorkView: (entry) => {
                         const viewId = entry.work_view_id?.trim();
@@ -204,9 +219,10 @@ export function useWorkspaceSurfaceRuntime(): WorkspaceSurfaceModel {
                         return workViewTotals.get(workViewTotalKey(workUnitId, viewId)) ?? null;
                     },
                     primarySignal,
+                    supportingSignal,
                 });
             }),
-        [cards, workViewTotals, signalKeyForCard, signalsResolved],
+        [cards, workViewTotals, signalKeyForCard, supportingSignalKeyForCard, signalsResolved],
     );
 
     return useMemo<WorkspaceSurfaceModel>(
