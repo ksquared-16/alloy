@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import CommercialPoliciesPanel from "@/components/adminV2/commercial/CommercialPoliciesPanel";
+import CommercialSimulatorPanel from "@/components/adminV2/commercial/CommercialSimulatorPanel";
 import {
     ConfigurationShell,
     ConfigurationQueue,
@@ -73,7 +75,7 @@ type SiteLocation = { id: string; name: string };
 type ProgramEntry = { key: string; label: string; siteCount: number };
 type SecondaryTab = "programs" | "tuition";
 type PayerTab = "private" | "subsidy" | "corporate";
-type SectionTab = "programs_tuition" | "fees" | "accounting";
+type SectionTab = "programs_tuition" | "fees" | "accounting" | "policies" | "simulator" | "funding";
 
 type RatePayload = {
     rate_cents?: number;
@@ -87,11 +89,11 @@ type OnSave = (variantId: string, cadenceKey: string, payload: RatePayload) => P
 
 const SECTION_TABS = [
     { key: "programs_tuition" as const, label: "Programs & tuition", available: true },
-    { key: "funding" as const, label: "Funding", available: false },
     { key: "fees" as const, label: "Catalog", available: true },
-    { key: "policies" as const, label: "Policies", available: false },
+    { key: "policies" as const, label: "Policies", available: true },
     { key: "accounting" as const, label: "Accounting", available: true },
-    { key: "simulator" as const, label: "Simulator", available: false },
+    { key: "simulator" as const, label: "Simulator", available: true },
+    { key: "funding" as const, label: "Funding", available: true },
 ];
 
 const PAYER_TABS: { key: PayerTab; label: string; available: boolean }[] = [
@@ -2130,7 +2132,7 @@ export function CommercialConfigWorkspace() {
                         key={tab.key}
                         type="button"
                         disabled={!tab.available}
-                        onClick={() => { if (tab.available && (tab.key === "programs_tuition" || tab.key === "fees" || tab.key === "accounting")) setActiveSection(tab.key); }}
+                        onClick={() => { if (tab.available) setActiveSection(tab.key); }}
                         className={`px-4 py-3 text-sm -mb-px border-b-2 transition-colors whitespace-nowrap focus:outline-none focus-visible:ring-2 focus-visible:ring-alloy-bend-pine/40 rounded-sm ${activeSection === tab.key ? "border-alloy-bend-pine text-alloy-bend-pine font-medium" : tab.available ? "border-transparent text-alloy-midnight/60 hover:text-alloy-midnight" : "border-transparent text-alloy-midnight/45 cursor-not-allowed"}`}
                     >
                         {tab.label}
@@ -2145,7 +2147,24 @@ export function CommercialConfigWorkspace() {
                 </div>
             )}
 
-            {activeSection === "accounting" ? (
+            {activeSection === "policies" ? (
+                <CommercialPoliciesPanel programs={programs.map((p) => ({ key: p.key, label: p.label }))} locations={locations} />
+            ) : activeSection === "simulator" ? (
+                <CommercialSimulatorPanel programs={programs.map((p) => ({ key: p.key, label: p.label }))} cadences={cadences} />
+            ) : activeSection === "funding" ? (
+                <div className="flex min-h-0 flex-1 items-center justify-center p-6">
+                    <div className="max-w-md rounded-xl border border-alloy-stone/25 bg-white/80 px-6 py-8 text-center">
+                        <div className="mx-auto mb-3 flex h-10 w-10 items-center justify-center rounded-full bg-alloy-stone/25 text-alloy-midnight/45">
+                            <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}><path strokeLinecap="round" strokeLinejoin="round" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8V6m0 12v-2m0-8c1.11 0 2.08.402 2.599 1M12 8V6" /></svg>
+                        </div>
+                        <h2 className="text-base font-semibold text-alloy-midnight">Funding is managed in Processing</h2>
+                        <p className="mt-1.5 text-sm text-alloy-midnight/55">
+                            Who pays — private pay, subsidies, employer sponsorship, and splits — will be configured through the Processing Platform.
+                            Commercial sets the price; Processing decides responsibility. Funding configuration will become available here as part of Processing.
+                        </p>
+                    </div>
+                </div>
+            ) : activeSection === "accounting" ? (
                 <AccountingReferencePanel products={products} loading={feesLoading} />
             ) : activeSection === "fees" ? (
                 <CommercialCatalogPanel
