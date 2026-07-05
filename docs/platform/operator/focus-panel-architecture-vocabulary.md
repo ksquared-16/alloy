@@ -20,7 +20,7 @@ This document defines the **product vocabulary** new engineers should learn firs
 | **Operational Subject** | What the operator is working on right now — the queue row selection, default subject on Work Unit entry, or linked navigation target. Not a separate UI product. |
 | **Subject Composition** | Derived card grid + mode layout for one operational subject (`SubjectComposition`: mode, cards, grid spec). |
 | **Activity Cockpit** | The **canonical Activity mode**: a one-viewport operational workspace that **composes existing runtimes** (not rebuilt) — a **Recent Activity ribbon**, a **Communications hero**, a **Work panel** with **Work Items / Notes** tabs, and a **persistent Documents utility**. Surfaces scroll **internally**; the workspace itself does not page-scroll. Component: `OpportunityFocusPanelEmbeddedWorkspace`. |
-| **Embedded Workspace** | The set of full operational surfaces (timeline, communications, documents, notes, workflow, audit) reachable from the Activity Cockpit's secondary **"open full surface"** nav (`embeddedWorkspaceTabs.ts`). Formerly the primary Activity-mode tab strip; now **composed into the cockpit**, retained as secondary navigation. |
+| **Embedded Workspace** | The set of full operational surfaces (timeline, communications, documents, notes, workflow, audit) defined in `embeddedWorkspaceTabs.ts`. Formerly the primary Activity-mode tab strip; now **composed into the Activity Cockpit**. The full surfaces remain reachable via the cockpit's *View all* affordances (ribbon → Timeline, Documents → files) and the top-level **Work** tab — not a separate nav row. |
 
 Supporting primitives (unchanged): **Mode**, **Universal Card**, **Context Frame**, **Perspective**, **Queue** (preview only).
 
@@ -39,7 +39,7 @@ Activity mode is a **one-viewport operational cockpit**, not a tab strip. It **c
 - **Reuse, don't rebuild** — the cockpit wires existing runtimes together; it owns no messaging, timeline, or document logic of its own.
 - **Internal scrolling over page scrolling** — the workspace fits the viewport; the conversation, work list, and documents scroll **inside** their surfaces. The page holds still (an OS cockpit, not a webpage).
 - **No raw keys** — every status/stage/enum renders through the presentation label resolver (`formatLayoutRuntimeStatusLabel`).
-- **Embedded Workspace as secondary nav** — the full surfaces (timeline, communications, documents, notes, workflow, audit) remain reachable via the cockpit's "open full surface" links; they are no longer the primary Activity experience.
+- **Embedded Workspace surfaces reachable, not primary** — the full surfaces (timeline, communications, documents, notes, workflow, audit) remain reachable via the cockpit's *View all* affordances and the top-level Work tab; they are no longer the primary Activity experience and the cockpit renders no separate nav row.
 
 ### Subject identity ownership (Runtime V1)
 
@@ -71,7 +71,7 @@ Infrastructure (legacy)    AdminDrawerContext · composedDrawerPayload · AdminE
 | **Operational Subject** | What record/context is selected? | Canonical |
 | **Subject Composition** | How are cards arranged for this subject/mode? | Canonical type in `subjectComposition.ts` |
 | **Activity Cockpit** | What is Activity mode? | Canonical — the composed one-viewport workspace in `OpportunityFocusPanelEmbeddedWorkspace` |
-| **Embedded Workspace** | Where do the full Activity surfaces live? | Canonical surface set — `embeddedWorkspaceTabs.ts`, secondary "open full surface" nav within the Activity Cockpit |
+| **Embedded Workspace** | Where do the full Activity surfaces live? | Canonical surface set — `embeddedWorkspaceTabs.ts`; reachable from the Activity Cockpit via *View all* affordances |
 | **Drawer (infra)** | How is payload fetched, cached, revealed? | Keep until migration phase D — changing breaks reveal gates |
 
 **Rule:** New feature work speaks Focus Panel. Infrastructure renames require the runtime-sensitive test suite (see `adminv2-runtime-performance.mdc`).

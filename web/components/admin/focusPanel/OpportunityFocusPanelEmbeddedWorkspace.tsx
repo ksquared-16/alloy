@@ -8,11 +8,6 @@ import LayoutRuntimeActivityTimelineWidget from "@/components/layout/LayoutRunti
 import LayoutRuntimeTasksWidget from "@/components/layout/LayoutRuntimeTasksWidget";
 import { resolveLayoutRuntimeActivityTimeline } from "@/lib/layout/runtime/resolveLayoutRuntimeActivityTimeline";
 import type { ProofRuntimeRecord } from "@/lib/layout/runtime/proofRecordContext";
-import {
-    DEFAULT_EMBEDDED_WORKSPACE_TAB,
-    EMBEDDED_WORKSPACE_TABS,
-    type EmbeddedWorkspaceTabKey,
-} from "@/lib/adminV2/runtime/focusPanel/embeddedWorkspaceTabs";
 import type { OpportunityDrawerViewModel } from "@/lib/adminV2/viewModel/drawer/types";
 import type { DrawerTabKey } from "@/lib/entityPresentation";
 import { alloySectionDomAttrs } from "@/lib/perf/alloySectionMap";
@@ -22,7 +17,6 @@ type Props = {
     record: Record<string, unknown>;
     displayVm: OpportunityDrawerViewModel;
     onSelectTab: (tab: DrawerTabKey) => void;
-    initialTab?: EmbeddedWorkspaceTabKey;
 };
 
 type WorkTab = "items" | "notes";
@@ -32,21 +26,8 @@ const WORK_TABS: { key: WorkTab; label: string }[] = [
     { key: "notes", label: "Notes" },
 ];
 
-/** Number of events surfaced in the compact Recent Activity ribbon (one denser than the prior strip). */
-const RIBBON_EVENT_COUNT = 6;
-
-function drawerTabForEmbeddedWorkspaceTab(key: EmbeddedWorkspaceTabKey): DrawerTabKey {
-    switch (key) {
-        case "documents":
-            return "documents";
-        case "notes":
-            return "notes";
-        case "communications":
-            return "communications";
-        default:
-            return "activity";
-    }
-}
+/** Events surfaced in the compact Recent Activity ribbon (dense strip). */
+const RIBBON_EVENT_COUNT = 7;
 
 /**
  * Focus Panel Activity mode — one-viewport operational cockpit.
@@ -65,9 +46,7 @@ export default function OpportunityFocusPanelEmbeddedWorkspace({
     record,
     displayVm: _displayVm,
     onSelectTab,
-    initialTab = DEFAULT_EMBEDDED_WORKSPACE_TAB,
 }: Props) {
-    void initialTab;
     void _displayVm;
     const [workTab, setWorkTab] = useState<WorkTab>("items");
     const proofRecord = record as ProofRuntimeRecord;
@@ -107,6 +86,19 @@ export default function OpportunityFocusPanelEmbeddedWorkspace({
                     data-activity-cockpit-comms="true"
                     aria-label="Communications"
                 >
+                    <header className="alloy-os-activity-cockpit__comms-head">
+                        <svg
+                            className="alloy-os-activity-cockpit__hdr-ico"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="1.9"
+                            aria-hidden
+                        >
+                            <path d="M21 11.5a8 8 0 0 1-11.6 7.1L4 20l1.4-5.4A8 8 0 1 1 21 11.5Z" strokeLinejoin="round" />
+                        </svg>
+                        <span className="alloy-os-activity-cockpit__panel-title">Communications</span>
+                    </header>
                     <div className="alloy-os-activity-workspace__embed" data-embedded-workspace="communications">
                         <CommunicationsDrawerSection
                             apiEntityType="opportunities"
@@ -124,8 +116,18 @@ export default function OpportunityFocusPanelEmbeddedWorkspace({
                         data-activity-cockpit-work="true"
                         aria-label="Work"
                     >
-                        <header className="alloy-os-activity-cockpit__panel-head">
-                            <span className="alloy-os-activity-cockpit__panel-title">Work</span>
+                        <header className="alloy-os-activity-cockpit__work-head">
+                            <svg
+                                className="alloy-os-activity-cockpit__hdr-ico"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth="1.8"
+                                aria-hidden
+                            >
+                                <path d="M4 6h11M4 12h11M4 18h7" strokeLinecap="round" />
+                                <path d="m17 5 2 2 3-3.5" strokeLinecap="round" strokeLinejoin="round" />
+                            </svg>
                             <div
                                 className="alloy-os-activity-cockpit__work-tabs"
                                 role="tablist"
@@ -175,6 +177,17 @@ export default function OpportunityFocusPanelEmbeddedWorkspace({
                         aria-label="Documents"
                     >
                         <header className="alloy-os-activity-cockpit__panel-head">
+                            <svg
+                                className="alloy-os-activity-cockpit__hdr-ico"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth="1.8"
+                                aria-hidden
+                            >
+                                <path d="M6 3h8l4 4v14H6V3Z" strokeLinejoin="round" />
+                                <path d="M14 3v4h4" strokeLinejoin="round" />
+                            </svg>
                             <span className="alloy-os-activity-cockpit__panel-title">Documents</span>
                             <button
                                 type="button"
@@ -197,26 +210,6 @@ export default function OpportunityFocusPanelEmbeddedWorkspace({
                 </div>
             </div>
 
-            {/* Secondary — open a full embedded surface (EmbeddedWorkspace surface set) */}
-            <nav
-                className="alloy-os-activity-cockpit__surfaces"
-                aria-label="Open full surface"
-                data-embedded-workspace-nav="true"
-                data-activity-workspace-nav="true"
-            >
-                {EMBEDDED_WORKSPACE_TABS.map((tab) => (
-                    <button
-                        key={tab.key}
-                        type="button"
-                        className="alloy-os-activity-cockpit__surface-link"
-                        data-embedded-workspace-tab={tab.key}
-                        data-activity-workspace-tab={tab.key}
-                        onClick={() => onSelectTab(drawerTabForEmbeddedWorkspaceTab(tab.key))}
-                    >
-                        {tab.label}
-                    </button>
-                ))}
-            </nav>
         </div>
     );
 }

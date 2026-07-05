@@ -148,8 +148,5 @@ describe("deriveOpportunityFocusPanelPresentation", () => {
         expect(workspace).toContain("CommunicationsDrawerSection"); // Communications hero
         expect(workspace).toContain("Work Items"); // Work panel tab
         expect(workspace).toContain('drawerTab="documents"'); // persistent Documents utility
-        // Embedded Workspace surface set retained as secondary "open full surface" nav.
-        expect(workspace).toContain('data-embedded-workspace-tab={tab.key}');
-        expect(workspace).toContain("DEFAULT_EMBEDDED_WORKSPACE_TAB");
     });
 });
