@@ -16,7 +16,12 @@
  * (display:none flex items reserve no column and no gap).
  */
 
-import { useWorkUnitSurfaceRuntime } from "@/lib/presentation/runtime";
+import { useRef } from "react";
+import {
+    useWorkUnitSurfaceRuntime,
+    type WorkUnitSurfaceIntents,
+    type WorkUnitSurfaceModel,
+} from "@/lib/presentation/runtime";
 import {
     PRESENTATION_RUNTIME_LABELS,
     runtimeLabelProps,
@@ -29,6 +34,28 @@ import { WorkUnitHeaderCalculations } from "./WorkUnitHeaderCalculations";
 import { WorkViewPillStrip } from "./WorkViewPillStrip";
 import { QueueRegion } from "./QueueRegion";
 import { FocusPanelSurface } from "./FocusPanelSurface";
+
+export type WorkUnitSurfaceRenderMode = "cold" | "held" | "live";
+
+/**
+ * Surface Hold decision (the surface-level twin of the queue-lane hold). A Work View switch
+ * that changes the host work unit re-settles config, so `model.ready` briefly drops to false.
+ * Rather than replace the whole surface with a skeleton ("a skeleton replaces existing
+ * layouts"), we HOLD the previously-established surface until the destination establishes:
+ *  - `"cold"`  — first arrival, nothing to hold → the establish skeleton is correct;
+ *  - `"held"`  — re-establishing after a prior surface → keep the prior surface visible;
+ *  - `"live"`  — destination is ready → it is primary.
+ * Same-host switches never drop `ready`, so they stay `"live"` (the queue-lane hold swaps rows
+ * in place). This keeps loading INSIDE a surface, never a blank canvas between surfaces.
+ */
+export function resolveWorkUnitSurfaceRenderMode(input: {
+    ready: boolean;
+    hasPriorEstablished: boolean;
+}): WorkUnitSurfaceRenderMode {
+    if (input.ready) return "live";
+    if (input.hasPriorEstablished) return "held";
+    return "cold";
+}
 
 /** Minimal neutral skeleton while surface identity/config resolves (above-fold only). */
 function WorkUnitSurfaceSkeleton() {
@@ -60,61 +87,101 @@ function WorkUnitSurfaceSkeleton() {
     );
 }
 
+/**
+ * The established Work Unit surface, rendered from ONE resolved model + intents. Pure
+ * presentation — extracted so the surface can render either the live model or a held prior
+ * model (Surface Hold) through the same body.
+ */
+function WorkUnitSurfaceBody({
+    model,
+    intents,
+}: {
+    model: WorkUnitSurfaceModel;
+    intents: WorkUnitSurfaceIntents;
+}) {
+    return (
+        <>
+            <div className="min-w-0 flex-1 space-y-3">
+                {/* Compact Work Unit Overview header — title + one-row metric strip. Kept
+                    tight so the queue + Focus Panel stay high on screen (metric area
+                    well under ~20% of the viewport). */}
+                <section className="space-y-2">
+                    <WorkUnitHeader
+                        processLabel={model.header.processLabel}
+                        workViewLabel={model.header.workViewLabel}
+                    />
+                    <WorkUnitHeaderCalculations cards={model.header.calculations} />
+                </section>
+                <WorkViewPillStrip
+                    workViews={model.workViews}
+                    onSelect={intents.selectWorkView}
+                    onPrefetch={intents.prefetchWorkView}
+                />
+                <FocusPanelSurface
+                    openRecord={intents.openRecord}
+                    prefetchRecord={intents.prefetchRecord}
+                >
+                    <QueueRegion
+                        queue={model.queue}
+                        title={model.header.workViewLabel}
+                        selectedRecordId={model.selectedRecordId}
+                    />
+                </FocusPanelSurface>
+            </div>
+            {/* RR.SURFACE stays as the label anchor (single-ownership); the operator's
+                actual right rail is the persistent shell command rail. The resolved actions
+                register INTO that rail via WorkUnitRightRailActions (renders null) — one
+                action presentation path, no center duplicate. */}
+            <RightRailSurface />
+            <WorkUnitRightRailActions
+                actions={model.rightRailActions}
+                departmentId={model.departmentId}
+                workUnitId={model.workUnitId}
+            />
+            {/* Page-level Create Lead modal host — stable, outside the command-rail
+                floating menu, so its outside-click dismissal can't unmount the modal. */}
+            <CreateLeadEventHost />
+        </>
+    );
+}
+
 export function WorkUnitSurface() {
     const { model, intents } = useWorkUnitSurfaceRuntime();
+
+    // Surface Hold: remember the last-established model so a Work Unit re-establish (config
+    // re-settle on a host change) can keep the prior surface visible instead of a full skeleton.
+    const lastEstablishedRef = useRef<WorkUnitSurfaceModel | null>(null);
+    if (model.ready) lastEstablishedRef.current = model;
+
+    const mode = resolveWorkUnitSurfaceRenderMode({
+        ready: model.ready,
+        hasPriorEstablished: lastEstablishedRef.current != null,
+    });
+    const shownModel = mode === "live" ? model : lastEstablishedRef.current;
 
     return (
         <div
             {...runtimeLabelProps(PRESENTATION_RUNTIME_LABELS.workUnitSurface)}
             data-surface-ready={model.ready ? "true" : "false"}
+            data-surface-mode={mode}
         >
-            {!model.ready ? (
+            {mode === "cold" || !shownModel ? (
                 <WorkUnitSurfaceSkeleton />
             ) : (
-                // `reveal` choreography: the whole above-fold surface (header, cards, pills,
-                // queue, Focus Panel) fades+lifts in as one frame when `model.ready` clears the
-                // gate — no per-region stagger. This root mounts only on ready, so it plays once.
-                <div className="motion-reveal flex flex-col gap-5 lg:flex-row lg:items-start">
-                    <div className="min-w-0 flex-1 space-y-3">
-                        {/* Compact Work Unit Overview header — title + one-row metric strip. Kept
-                            tight so the queue + Focus Panel stay high on screen (metric area
-                            well under ~20% of the viewport). */}
-                        <section className="space-y-2">
-                            <WorkUnitHeader
-                                processLabel={model.header.processLabel}
-                                workViewLabel={model.header.workViewLabel}
-                            />
-                            <WorkUnitHeaderCalculations cards={model.header.calculations} />
-                        </section>
-                        <WorkViewPillStrip
-                            workViews={model.workViews}
-                            onSelect={intents.selectWorkView}
-                            onPrefetch={intents.prefetchWorkView}
-                        />
-                        <FocusPanelSurface
-                            openRecord={intents.openRecord}
-                            prefetchRecord={intents.prefetchRecord}
-                        >
-                            <QueueRegion
-                                queue={model.queue}
-                                title={model.header.workViewLabel}
-                                selectedRecordId={model.selectedRecordId}
-                            />
-                        </FocusPanelSurface>
-                    </div>
-                    {/* RR.SURFACE stays as the label anchor (single-ownership); the operator's
-                        actual right rail is the persistent shell command rail. The resolved actions
-                        register INTO that rail via WorkUnitRightRailActions (renders null) — one
-                        action presentation path, no center duplicate. */}
-                    <RightRailSurface />
-                    <WorkUnitRightRailActions
-                        actions={model.rightRailActions}
-                        departmentId={model.departmentId}
-                        workUnitId={model.workUnitId}
-                    />
-                    {/* Page-level Create Lead modal host — stable, outside the command-rail
-                        floating menu, so its outside-click dismissal can't unmount the modal. */}
-                    <CreateLeadEventHost />
+                // Keyed by the host work unit so a work-unit CHANGE remounts + establishes with
+                // the `reveal` choreography (context change), while a same-host view switch keeps
+                // the key stable (no remount — the queue-lane hold swaps rows in place). While
+                // `"held"`, the prior surface stays visible but yields focus: non-interactive +
+                // aria-busy until the destination establishes. Loading stays inside the surface.
+                <div
+                    key={shownModel.workUnitId ?? "wu-surface"}
+                    className={`motion-reveal flex flex-col gap-5 lg:flex-row lg:items-start${
+                        mode === "held" ? " pointer-events-none" : ""
+                    }`}
+                    aria-busy={mode === "held" ? true : undefined}
+                    data-surface-held={mode === "held" ? "true" : undefined}
+                >
+                    <WorkUnitSurfaceBody model={shownModel} intents={intents} />
                 </div>
             )}
         </div>
