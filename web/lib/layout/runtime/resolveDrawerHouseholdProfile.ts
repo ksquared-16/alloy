@@ -4,6 +4,7 @@
 
 import { resolveTemplate } from "@/lib/layout/resolveItemValue";
 import { resolveLeadSummaryPrimaryPersonId } from "@/lib/admin/drawer/opportunityFamilyContactsOrdering";
+import { formatLayoutRuntimeStatusLabel } from "@/lib/layout/runtime/formatLayoutRuntimeStatusLabel";
 import type { ProofRuntimeRecord } from "@/lib/layout/runtime/proofRecordContext";
 
 function pickLine(...values: unknown[]): string | null {
@@ -40,7 +41,10 @@ export function resolveLeadDrawerHouseholdProfile(record: ProofRuntimeRecord): D
     return {
         householdName,
         location: pickLine(record["opportunity.location"], record.location_name, record.location),
-        status: pickLine(record["opportunity.status_key"], record.status_key, record.status),
+        status: formatLayoutRuntimeStatusLabel(
+            pickLine(record["opportunity.status_key"], record.status_key, record.status),
+            { refKey: "opportunity.status_key", renderHint: "status" },
+        ),
         primaryPersonId:
             resolveLeadSummaryPrimaryPersonId(record)
             || pickLine(
