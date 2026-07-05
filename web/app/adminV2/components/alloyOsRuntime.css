@@ -1458,8 +1458,8 @@ html[data-alloy-os-runtime="on"]
 .alloy-os-focus-panel-grid {
   display: grid;
   grid-template-columns: repeat(var(--alloy-os-fp-cols, 2), minmax(0, 1fr));
-  gap: 14px;
-  padding: 14px;
+  gap: 10px;
+  padding: 10px;
   align-items: start;
   /* The ResizeObserver measures THIS element. It must fill its container (not size to its
    * content) so the measured width is the real surface width — otherwise a narrow/stacked
@@ -1492,8 +1492,8 @@ html[data-alloy-os-runtime="on"]
   display: flex;
   flex-direction: column;
   min-width: 0;
-  /* Card border prominence (+~10%) — matches the Activity cockpit cards for one cohesive definition */
-  border: 1px solid color-mix(in srgb, var(--alloy-os-midnight, #273f52) 12%, var(--alloy-os-border, #e5e9ef));
+  /* Card border prominence — matches the Activity cockpit cards for one cohesive definition */
+  border: 1px solid color-mix(in srgb, var(--alloy-os-midnight, #273f52) 20%, var(--alloy-os-border, #e5e9ef));
   border-radius: 10px;
   background: var(--alloy-os-surface, #fff);
   overflow: hidden;
@@ -1717,14 +1717,14 @@ html[data-alloy-os-runtime="on"]
   height: 100%;
   gap: 10px;
   padding: 10px;
-  background: var(--alloy-os-canvas, #f7f9fa);
+  background: var(--alloy-os-surface, #fff); /* white, matching Work mode */
 }
 
 /* Card border prominence (+~10%) — applied to every cockpit card for section definition */
 .alloy-os-activity-cockpit__ribbon,
 .alloy-os-activity-cockpit__comms,
 .alloy-os-activity-cockpit__panel {
-  border-color: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 12%, var(--alloy-os-border, #e5e9ef));
+  border-color: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 20%, var(--alloy-os-border, #e5e9ef));
 }
 
 .alloy-os-activity-cockpit__ribbon {
@@ -1895,6 +1895,8 @@ html[data-alloy-os-runtime="on"]
 
 /* Recent Activity ribbon — reuses the horizontal timeline widget; icons inline, dense */
 .alloy-os-activity-cockpit__ribbon [data-layout-runtime-activity-timeline-mode="horizontal_timeline"] {
+  display: flex;
+  flex-direction: column;
   overflow-x: auto;
 }
 .alloy-os-activity-cockpit__ribbon [data-layout-runtime-activity-timeline-mode="horizontal_timeline"] > ol {
@@ -1918,10 +1920,10 @@ html[data-alloy-os-runtime="on"]
   margin-bottom: 0; /* inline icon */
   color: var(--alloy-os-bend-pine, #00a283);
 }
-/* "View all activity" — bottom-left, Bend Pine link (no blue) */
+/* "View all activity" — bottom-right, Bend Pine link (no blue) */
 .alloy-os-activity-cockpit__ribbon [data-layout-runtime-activity-timeline-view-all] {
   margin: 4px 0 0;
-  align-self: flex-start;
+  align-self: flex-end;
   white-space: nowrap;
   color: var(--alloy-os-bend-pine, #00a283) !important;
 }
@@ -1977,6 +1979,13 @@ html[data-alloy-os-runtime="on"]
   padding-right: 9px !important;
   font-size: 12px !important;
 }
+/* footer actions aligned right; drop the "Review-first manual send only" note */
+.alloy-os-activity-cockpit__comms [data-cc-ws-column="composer"] > div:last-child {
+  justify-content: flex-end;
+}
+.alloy-os-activity-cockpit__comms [data-cc-ws-column="composer"] > div:last-child > span {
+  display: none;
+}
 
 /* Activity color audit — any legacy blue inside the cockpit resolves to Bend Pine */
 .alloy-os-activity-cockpit .text-alloy-blue {
@@ -2021,7 +2030,7 @@ html[data-alloy-os-runtime="on"]
   margin-top: 1px;
   color: var(--alloy-os-text-secondary, #4b5563);
 }
-.alloy-os-ucard--tier-attention .alloy-os-ucard__icon { color: #d97706; }
+.alloy-os-ucard--tier-attention .alloy-os-ucard__icon { color: var(--alloy-os-bend-pine, #00a283); }
 .alloy-os-ucard--tier-work .alloy-os-ucard__icon { color: var(--alloy-os-bend-pine, #00a283); }
 .alloy-os-ucard--tier-metric .alloy-os-ucard__icon { color: var(--alloy-os-bend-pine, #00a283); }
 /* Uniform Bend Pine section icons across all neutral tiers (one cohesive language, no gray/pine mix) */
@@ -2920,8 +2929,8 @@ html[data-alloy-os-runtime-split="true"]
    * Explicit tokens so gutters, padding, radius, and elevation are locked and
    * consistent — no random margins, no disconnected islands. */
   --alloy-os-fp-pad: 16px;          /* panel inner padding */
-  --alloy-os-fp-gap-x: 12px;        /* card gap — horizontal */
-  --alloy-os-fp-gap-y: 12px;        /* card gap — vertical */
+  --alloy-os-fp-gap-x: 10px;        /* card gap — horizontal (matches Activity cockpit) */
+  --alloy-os-fp-gap-y: 10px;        /* card gap — vertical (matches Activity cockpit) */
   --alloy-os-fp-card-radius: 14px;  /* card + overlay corner radius */
   --alloy-os-fp-overlay-offset: 6px;/* gap between a card and its inline overlay */
   --alloy-os-fp-overlay-shadow:

@@ -41,6 +41,11 @@ type Props = {
      */
     publishedLayout?: FocusPanelPublishedLayout | null;
     /**
+     * Focus Panel Work mode: present an authored grid as column-major lanes (no dead
+     * vertical gaps). Runtime presentation only — the authored grid stays the source of truth.
+     */
+    preferLanesFromGrid?: boolean;
+    /**
      * Composition Engine input. When provided (and no `publishedLayout`), the surface
      * is COMPOSED from card semantics (interlocking lanes / composed stack) — the
      * smart DEFAULT. The legacy `rows` path is kept for Work + other modes.
@@ -73,6 +78,7 @@ export default function FocusPanelCardGrid({
     className,
     dataFocusPanelSplitLayout,
     publishedLayout,
+    preferLanesFromGrid,
     composeCards,
     compositionOverrides,
     elevatedCellKey,
@@ -184,8 +190,8 @@ export default function FocusPanelCardGrid({
     // wins over auto-composition; the engine only fills in the default.
     const publishedPlan = useMemo(() => {
         if (!publishedLayout) return null;
-        return planPublishedLayout(publishedLayout, measuredWidth);
-    }, [publishedLayout, measuredWidth]);
+        return planPublishedLayout(publishedLayout, measuredWidth, { preferLanesFromGrid });
+    }, [publishedLayout, measuredWidth, preferLanesFromGrid]);
 
     const composition = useMemo(() => {
         if (publishedLayout || !composed) return null;
