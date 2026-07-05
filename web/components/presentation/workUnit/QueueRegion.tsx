@@ -51,6 +51,29 @@ function rowIsSelected(row: QueueRowModel, selectedRecordId: string | null): boo
     );
 }
 
+export type QueueRegionRenderState = "error" | "cold-loading" | "empty" | "rows";
+
+/**
+ * Queue-lane hold decision (adminv2-runtime-performance-doctrine §Queue). The runtime never
+ * clears the prior rows before the next fetch settles, so on a Work View switch (same host
+ * work unit) or a live refresh the rows are still present and we HOLD them — swapping in place
+ * when the new rows arrive, never a skeleton flash. Contract:
+ *  - a real error always surfaces (never hidden behind stale rows);
+ *  - the row skeleton is reserved for the COLD first load (loading with nothing to hold);
+ *  - `"rows"` covers both the settled state and the held-during-refetch state.
+ */
+export function queueRegionRenderState(queue: {
+    rows: readonly unknown[];
+    loading: boolean;
+    error: string | null;
+}): QueueRegionRenderState {
+    if (queue.error) return "error";
+    const hasRows = queue.rows.length > 0;
+    if (queue.loading && !hasRows) return "cold-loading";
+    if (!hasRows) return "empty";
+    return "rows";
+}
+
 export function QueueRegion({
     queue,
     title = null,
@@ -63,6 +86,7 @@ export function QueueRegion({
     selectedRecordId?: string | null;
 }) {
     const { openRecord, prefetchRecord } = useFocusPanelOpen();
+    const renderState = queueRegionRenderState(queue);
 
     return (
         <section
@@ -93,7 +117,14 @@ export function QueueRegion({
                 className="rounded-xl border border-alloy-stone/20 bg-white p-3"
                 data-queue-panel
             >
-                {queue.loading ? (
+                {renderState === "error" ? (
+                    <p
+                        role="alert"
+                        className="rounded-lg border border-alloy-ember/30 bg-alloy-ember/5 px-3 py-2 text-sm text-alloy-ember"
+                    >
+                        {queue.error}
+                    </p>
+                ) : renderState === "cold-loading" ? (
                     <ul
                         role="list"
                         aria-busy="true"
@@ -104,14 +135,7 @@ export function QueueRegion({
                             <QueueRowSkeleton key={`queue-row-skeleton-${i}`} />
                         ))}
                     </ul>
-                ) : queue.error ? (
-                    <p
-                        role="alert"
-                        className="rounded-lg border border-alloy-ember/30 bg-alloy-ember/5 px-3 py-2 text-sm text-alloy-ember"
-                    >
-                        {queue.error}
-                    </p>
-                ) : !queue.rows.length ? (
+                ) : renderState === "empty" ? (
                     // Empty state holds the queue STRUCTURE: dashed ghost rows inside the panel.
                     <div data-queue-empty="true">
                         <ul className="flex flex-col gap-2" aria-hidden="true">
@@ -127,7 +151,9 @@ export function QueueRegion({
                         </p>
                     </div>
                 ) : (
-                    <ul role="list" className="flex flex-col gap-2">
+                    // Queue-lane hold: prior rows stay in place during a refetch (aria-busy),
+                    // swapping when the new rows arrive — no skeleton flash on a view switch.
+                    <ul role="list" aria-busy={queue.loading || undefined} className="flex flex-col gap-2">
                         {queue.rows.map((row, index) => (
                             <li key={`${row.entityType}:${row.entityId}`}>
                                 <CondensedQueueRow
