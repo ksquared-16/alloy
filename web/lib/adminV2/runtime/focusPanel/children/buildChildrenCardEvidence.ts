@@ -15,6 +15,7 @@
 import { mapRawInquiryChildrenToDrawerRows } from "@/lib/admin/drawer/inquiryChildrenDrawerRows";
 import { humanizeStatusKey } from "@/lib/admin/status/humanizeStatusKey";
 import { canonicalNewLeadStatusLabel } from "@/lib/lifecycle/enrollmentLeadStageStatusAliases";
+import { resolveChildProcessStageLabel } from "@/lib/lifecycle/childEnrollmentProcessStageLabel";
 import type { OperationalContext } from "@/lib/adminV2/runtime/operationalContext/types";
 
 export type ChildStatusTone = "positive" | "work" | "risk" | "neutral";
@@ -143,8 +144,14 @@ export function buildChildrenCardEvidence(
         const schedule = trimOrNull(row.desired_schedule_label);
         const teacher = trimOrNull((row as { teacher_label?: unknown }).teacher_label);
         const startDate = trimOrNull(row.start_date);
-        const statusLabel = trimOrNull(row.outcome_status_label);
+        // Operator-facing value is the child's PROCESS STAGE (the retired "Participation Status" is
+        // gone). Sourced from stage_key where present, else mapped from the stage-equivalent
+        // disposition. `statusKey` is retained ONLY to drive tone + the declined attention gate.
         const statusKey = trimOrNull(row.outcome_status_key);
+        const processStageLabel = resolveChildProcessStageLabel({
+            stageKey: trimOrNull((row as { stage_key?: unknown }).stage_key),
+            dispositionKey: statusKey,
+        });
         const declined = statusKey?.toLowerCase().includes("declin") ?? false;
         // Active children need the enrollment essentials; declined children do not.
         const needsAttention = !declined && (!program || !schedule || !startDate);
@@ -198,10 +205,9 @@ export function buildChildrenCardEvidence(
             schedule,
             teacher,
             startDate,
-            // Prefer the projection's resolved label; else the canonical New Lead label (legacy
-            // new_inquiry renders "New Lead", never "New Inquiry"); else humanize. A null key yields a
-            // null status, so the badge is suppressed for brand-new leads (no enrollment outcome yet).
-            status: statusLabel ?? canonicalNewLeadStatusLabel(statusKey) ?? humanizeStatusKey(statusKey),
+            // The child's PROCESS STAGE (replaces the retired Participation Status). Falls back to
+            // the canonical New Lead label, then humanize; null key → null → badge suppressed.
+            status: processStageLabel ?? canonicalNewLeadStatusLabel(statusKey) ?? humanizeStatusKey(statusKey),
             statusTone: statusTone(statusKey),
             needsAttention,
             detailLine,

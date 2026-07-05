@@ -33,6 +33,7 @@ import {
     type PartialQueueRowContextQueueMeta,
 } from "@/lib/workUnits/buildPartialQueueRowContextHelpers";
 import { filterQueueRelevantInquiryChildren } from "@/lib/workUnits/filterQueueRelevantInquiryChildren";
+import { resolveChildProcessStageLabel } from "@/lib/lifecycle/childEnrollmentProcessStageLabel";
 
 export type BuildChildGrainQueueRowContextInput = {
     row: Record<string, unknown>;
@@ -194,7 +195,9 @@ function resolveActiveSubjectIds(row: Record<string, unknown>, subjectType: Life
             subjectId: ocmId,
             displayName: trimOrNull(row._child_display_name) ?? "Child",
             statusKey,
-            statusLabel: resolveSubjectStatusLabel(statusKey),
+            // Operator-facing label is the child's PROCESS STAGE (retired participation status).
+            // Prefer the true stage_key; fall back to the humanized key only if stage is unknown.
+            statusLabel: resolveChildProcessStageLabel({ stageKey, dispositionKey: statusKey }) ?? resolveSubjectStatusLabel(statusKey),
             stageKey,
         };
     }
@@ -214,7 +217,9 @@ function resolveActiveSubjectIds(row: Record<string, unknown>, subjectType: Life
             subjectId: ocmId,
             displayName: trimOrNull(g.child_display_name) ?? trimOrNull(row._child_display_name) ?? "Child",
             statusKey,
-            statusLabel: resolveSubjectStatusLabel(statusKey),
+            // Operator-facing label is the child's PROCESS STAGE (retired participation status).
+            // Prefer the true stage_key; fall back to the humanized key only if stage is unknown.
+            statusLabel: resolveChildProcessStageLabel({ stageKey, dispositionKey: statusKey }) ?? resolveSubjectStatusLabel(statusKey),
             stageKey,
         };
     }
@@ -231,7 +236,10 @@ function resolveActiveSubjectIds(row: Record<string, unknown>, subjectType: Life
             if (parts.length >= 3) candidateId = parts[2]!;
         }
         if (!candidateId) return null;
+        // `candidate_status` (active/paused/…) stays INTERNAL — the operator sees the Process Stage
+        // (Waitlist); placement rank/adjustment is supporting context (waitlist_context), not status.
         const statusKey = trimOrNull(row.candidate_status) ?? trimOrNull(row.status) ?? "active";
+        const stageKey = trimOrNull((row as { _queue_lane_stage_key?: unknown })._queue_lane_stage_key) ?? "waitlist";
         return {
             subjectId: candidateId,
             displayName:
@@ -241,8 +249,8 @@ function resolveActiveSubjectIds(row: Record<string, unknown>, subjectType: Life
                     : null) ??
                 "Child",
             statusKey,
-            statusLabel: resolveSubjectStatusLabel(statusKey),
-            stageKey: trimOrNull((row as { _queue_lane_stage_key?: unknown })._queue_lane_stage_key) ?? "waitlist",
+            statusLabel: resolveChildProcessStageLabel({ stageKey }) ?? resolveSubjectStatusLabel(statusKey),
+            stageKey,
         };
     }
 
@@ -320,7 +328,11 @@ function buildRelatedSubjectsSummary(
             raw && trimOrNull(raw.placement_candidate_id) ? "candidate" : "child";
         const placement = raw ? buildSubjectPlacementFromInquiryChildRaw(raw) : null;
         const subjectLocationId = placement?.location_id ?? (raw ? trimOrNull(raw.location_id) : null);
-        const statusLabel = resolveSubjectStatusLabel(child.outcome_status_key);
+        // Sibling summary also shows Process Stage, not the retired participation status.
+        const siblingStageKey = raw ? trimOrNull(raw.stage_key) ?? trimOrNull(raw.enrollment_track_stage_key) : null;
+        const statusLabel =
+            resolveChildProcessStageLabel({ stageKey: siblingStageKey, dispositionKey: child.outcome_status_key }) ??
+            resolveSubjectStatusLabel(child.outcome_status_key);
 
         const summary: RelatedSubjectSummary = {
             subject_type: subjectType,

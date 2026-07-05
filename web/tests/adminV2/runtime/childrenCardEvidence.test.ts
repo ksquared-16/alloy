@@ -139,7 +139,7 @@ describe("buildChildrenCardEvidence", () => {
         expect(evidence.children[0]!.status).not.toBe("New Inquiry");
     });
 
-    it("prefers the configured label over the key when both are present", () => {
+    it("shows the child's PROCESS STAGE, not the retired participation status label", () => {
         const evidence = buildChildrenCardEvidence(
             ctx({
                 id: "opp-1",
@@ -147,13 +147,18 @@ describe("buildChildrenCardEvidence", () => {
                     {
                         id: "c1",
                         display_name: "Ada Lovelace",
+                        // Even with a configured disposition label, the operator sees the Process Stage.
                         outcome_status_key: "new_inquiry",
                         outcome_status_label: "Inquiry Received",
                     },
+                    { id: "c2", display_name: "Grace Hopper", outcome_status_key: "waitlisted" },
+                    { id: "c3", display_name: "Kay Antonelli", outcome_status_key: "enrolled" },
                 ],
             }),
         );
-        expect(evidence.children[0]!.status).toBe("Inquiry Received");
+        expect(evidence.children[0]!.status).toBe("New Lead"); // new_inquiry → Lead stage, not "Inquiry Received"
+        expect(evidence.children[1]!.status).toBe("Waitlist"); // disposition → Process Stage
+        expect(evidence.children[2]!.status).toBe("Enrolled");
     });
 
     it("never surfaces a UUID-like status id as operator copy", () => {
