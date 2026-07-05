@@ -31,8 +31,12 @@ describe("Focus Panel architecture cutover vocabulary", () => {
         expect(modeGrid).not.toContain("OpportunityFocusPanelActivityWorkspace");
     });
 
-    it("EmbeddedWorkspace component is canonical implementation", () => {
+    it("Activity mode is the composed cockpit (canonical); Embedded Workspace is secondary nav", () => {
         const workspace = readSrc("components/admin/focusPanel/OpportunityFocusPanelEmbeddedWorkspace.tsx");
+        // Canonical Activity mode: one-viewport operational cockpit.
+        expect(workspace).toContain('data-focus-panel-cockpit="true"');
+        expect(workspace).toContain("alloy-os-activity-cockpit");
+        // Focus Panel identity + Embedded Workspace surface set retained (secondary "open full surface" nav).
         expect(workspace).toContain("data-focus-panel-embedded-workspace");
         expect(workspace).toContain("EMBEDDED_WORKSPACE_TABS");
     });
@@ -72,6 +76,7 @@ describe("Focus Panel architecture cutover vocabulary", () => {
         expect(doc).toContain("Focus Panel");
         expect(doc).toContain("Operational Subject");
         expect(doc).toContain("Subject Composition");
+        expect(doc).toContain("Activity Cockpit");
         expect(doc).toContain("Embedded Workspace");
     });
 });
