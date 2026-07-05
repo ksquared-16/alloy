@@ -108,7 +108,7 @@ export function FocusPanelSurface({
                         unmistakable container in both the selected and empty states, never dependent
                         on a nested card's border. */}
                     <div
-                        className="min-w-0 flex-1 overflow-hidden rounded-xl border border-alloy-stone/55 bg-white shadow-[0_1px_2px_rgba(15,23,42,0.05)]"
+                        className="min-w-0 flex-1 overflow-hidden rounded-xl border border-alloy-stone/80 bg-white shadow-[0_1px_2px_rgba(15,23,42,0.05)]"
                         data-focus-panel-boundary
                         data-component="FocusPanelSurface.boundary"
                         data-build-sha={BUILD_SHA}
