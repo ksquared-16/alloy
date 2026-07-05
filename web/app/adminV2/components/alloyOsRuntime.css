@@ -1753,7 +1753,7 @@ html[data-alloy-os-runtime="on"]
 }
 
 .alloy-os-activity-cockpit__comms {
-  flex: 0 0 56%;
+  flex: 0 0 64%;
   min-width: 0;
   min-height: 0;
   display: flex;
@@ -1762,6 +1762,24 @@ html[data-alloy-os-runtime="on"]
   border: 1px solid var(--alloy-os-border, #e5e9ef);
   border-radius: 10px;
   background: var(--alloy-os-surface, #fff);
+}
+
+/* shared card-title leading icon */
+.alloy-os-activity-cockpit__hdr-ico {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  color: var(--alloy-os-bend-pine, #00a283);
+}
+
+/* Communications card title header (cockpit-owned; identity stays in the record header) */
+.alloy-os-activity-cockpit__comms-head {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 9px 12px;
+  border-bottom: 1px solid var(--alloy-os-border-soft, #eef0f2);
 }
 
 .alloy-os-activity-cockpit__comms .alloy-os-activity-workspace__embed {
@@ -1814,25 +1832,44 @@ html[data-alloy-os-runtime="on"]
   color: var(--alloy-os-midnight, #273f52);
 }
 
+/* Work: no heading — tabs are the title (underline active in Bend Pine) */
+.alloy-os-activity-cockpit__work-head {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px 0;
+  border-bottom: 1px solid var(--alloy-os-border-soft, #eef0f2);
+}
+
 .alloy-os-activity-cockpit__work-tabs {
   display: flex;
-  gap: 4px;
-  margin-left: auto;
+  gap: 2px;
 }
 
 .alloy-os-activity-cockpit__work-tab {
-  padding: 3px 9px;
-  font-size: 11.5px;
-  font-weight: 600;
+  position: relative;
+  padding: 4px 8px 9px;
+  font-size: 13px;
+  font-weight: 700;
   color: var(--alloy-os-text-secondary, #6b7280);
-  border-radius: 6px;
   background: transparent;
   white-space: nowrap;
 }
 
 .alloy-os-activity-cockpit__work-tab--active {
   color: var(--alloy-os-bend-pine, #00a283);
-  background: color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 10%, transparent);
+}
+
+.alloy-os-activity-cockpit__work-tab--active::after {
+  content: "";
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  bottom: -1px;
+  height: 2.5px;
+  border-radius: 3px;
+  background: var(--alloy-os-bend-pine, #00a283);
 }
 
 .alloy-os-activity-cockpit__panel-viewall {
@@ -1851,28 +1888,73 @@ html[data-alloy-os-runtime="on"]
   padding: 10px 12px;
 }
 
-.alloy-os-activity-cockpit__surfaces {
-  flex: 0 0 auto;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-  padding: 2px 2px 0;
+/* Recent Activity ribbon — shorter + denser; reuses the horizontal timeline widget */
+.alloy-os-activity-cockpit__ribbon {
+  padding: 5px 10px;
 }
-
-.alloy-os-activity-cockpit__surface-link {
+.alloy-os-activity-cockpit__ribbon [data-layout-runtime-activity-timeline-mode="horizontal_timeline"] {
+  overflow-x: auto;
+}
+.alloy-os-activity-cockpit__ribbon [data-layout-runtime-activity-timeline-mode="horizontal_timeline"] > ol {
+  gap: 6px;
+  padding-bottom: 0;
+}
+.alloy-os-activity-cockpit__ribbon [data-layout-runtime-activity-timeline-entry] {
+  width: auto;
+  min-width: 0;
+  max-width: 190px;
   padding: 4px 9px;
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--alloy-os-text-secondary, #6b7280);
-  border: 1px solid var(--alloy-os-border, #e5e9ef);
-  border-radius: 6px;
-  background: var(--alloy-os-surface, #fff);
+}
+/* one glanceable line per chip: drop the multi-line detail/actor rows */
+.alloy-os-activity-cockpit__ribbon [data-layout-runtime-activity-timeline-entry] p {
+  display: none;
+}
+.alloy-os-activity-cockpit__ribbon [data-layout-runtime-activity-timeline-entry] > span:first-child {
+  margin-bottom: 2px;
+}
+.alloy-os-activity-cockpit__ribbon [data-layout-runtime-activity-timeline-view-all] {
+  margin: 0 0 0 8px;
+  align-self: center;
   white-space: nowrap;
 }
 
-.alloy-os-activity-cockpit__surface-link:hover {
-  color: var(--alloy-os-midnight, #273f52);
-  border-color: color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 40%, var(--alloy-os-border, #e5e9ef));
+/* Communications hero — reduce the embedded view to messaging only.
+   Scoped to the cockpit instance; the standalone Communications modal is untouched. */
+.alloy-os-activity-cockpit__comms [data-cc-workspace-mode="note"],
+.alloy-os-activity-cockpit__comms [data-cc-workspace-mode="tasks"] {
+  display: none; /* identity + tasks/notes live elsewhere in the workspace */
+}
+.alloy-os-activity-cockpit__comms [data-cc-ws-section="snapshot"] {
+  display: none; /* record identity is already in the Focus Panel header */
+}
+/* Stack: conversation scrolls above, composer pinned below (was a side-by-side split) */
+.alloy-os-activity-cockpit__comms :has(> [data-cc-ws-column="timeline"]) {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.alloy-os-activity-cockpit__comms [data-cc-ws-column="timeline"] {
+  flex: 1 1 auto;
+  min-height: 0;
+  border-right: 0;
+  border-bottom: 1px solid var(--alloy-os-border-soft, #eef0f2);
+}
+.alloy-os-activity-cockpit__comms [data-cc-ws-column="composer"] {
+  flex: 0 0 auto;
+}
+.alloy-os-activity-cockpit__comms textarea[aria-label="Message body"] {
+  min-height: 168px; /* larger message body */
+}
+.alloy-os-activity-cockpit__comms .text-alloy-blue {
+  color: var(--alloy-os-bend-pine, #00a283) !important;
+}
+
+/* Documents — flat operational utility: Bend Pine, not blue */
+.alloy-os-activity-cockpit__docs .bg-alloy-blue {
+  background: var(--alloy-os-bend-pine, #00a283) !important;
+}
+.alloy-os-activity-cockpit__docs .text-alloy-blue {
+  color: var(--alloy-os-bend-pine, #00a283) !important;
 }
 
 @media (max-width: 900px) {

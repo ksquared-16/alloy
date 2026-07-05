@@ -108,7 +108,6 @@ describe("System 5 Visual QA correction guards", () => {
         const workspace = readSrc("components/admin/focusPanel/OpportunityFocusPanelEmbeddedWorkspace.tsx");
         expect(workspace).toContain('data-focus-panel-embedded-workspace="true"');
         expect(workspace).toContain('data-focus-panel-activity-workspace="true"');
-        expect(workspace).toContain('data-embedded-workspace-nav="true"');
         expect(workspace).toContain("CommunicationsDrawerSection");
         expect(ACTIVITY_WORKSPACE_TABS.map((t) => t.key)).toEqual([
             "timeline",
