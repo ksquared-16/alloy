@@ -4,18 +4,23 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import type { StatusDef } from "@/app/api/admin/status-definitions/route";
 import type { StatusDefinitionRow } from "@/lib/admin/statusDefinitionsResolve";
 import { buildStatusCategoryCatalog } from "@/lib/lifecycle/statusCategoryCatalog";
-import {
-    BP_PICKER_VISIBLE_CATEGORY_KEYS,
-    STATUS_SETTINGS_CATEGORY_DESCRIPTIONS,
-} from "@/lib/lifecycle/statusSettingsCategoryDoctrine";
+import { STATUS_SETTINGS_CATEGORY_DESCRIPTIONS } from "@/lib/lifecycle/statusSettingsCategoryDoctrine";
 import type { StatusRollupCategoryKey } from "@/lib/lifecycle/statusRollupV1";
 import { STATUS_CATEGORY_LABELS } from "@/lib/lifecycle/statusRollupV1";
 
+// The per-child OCM disposition status model (formerly the Enrollment Participation category) is
+// retired as an operator-facing status — the Process Instance owns execution (stage + state). We
+// stop loading OCM child disposition rows into /statuses; the rows remain in the DB (internal
+// compatibility) and the Business-Process stages picker + drawer still read them directly, untouched.
 const STATUS_SETTINGS_ENTITY_TYPES = new Set([
     "opportunities",
-    "opportunity_customer_members",
     "persons",
 ]);
+
+// Categories the /statuses page shows — a PAGE-LOCAL list (not the shared BP-picker constant) so
+// removing the retired participation category here cannot affect the Business-Process stages picker.
+// Operator-facing status models: Opportunity Status (case container) + People Statuses.
+const STATUSES_PAGE_CATEGORY_KEYS: readonly StatusRollupCategoryKey[] = ["lead_statuses", "person_statuses"];
 
 function statusDefToRow(row: StatusDef): StatusDefinitionRow {
     return {
@@ -40,8 +45,8 @@ export type StatusCategoryGroup = {
 };
 
 export const STATUS_QUEUE_DISPLAY_LABELS: Partial<Record<StatusRollupCategoryKey, string>> = {
-    enrollment_statuses: "Enrollment Participation",
-    lead_statuses: "Lead Statuses",
+    // Enrollment Participation retired — Process Instance owns execution (stage + state).
+    lead_statuses: "Opportunity Status",
     person_statuses: "People Statuses",
 };
 
@@ -84,7 +89,7 @@ export function useStatusDefinitionsSettings() {
             .map(statusDefToRow);
         const catalog = buildStatusCategoryCatalog(rows, {
             includeSystemCategories: false,
-            categoryKeys: BP_PICKER_VISIBLE_CATEGORY_KEYS,
+            categoryKeys: STATUSES_PAGE_CATEGORY_KEYS,
         });
         const byKey = new Map(statuses.map((s) => [`${s.entity_type}:${s.status_key}`, s] as const));
         return catalog.map((group) => ({

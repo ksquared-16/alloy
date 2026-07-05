@@ -54,11 +54,16 @@ describe("Configuration Runtime settings pattern rollout", () => {
         expect(detail).toContain("status-detail-open-processes");
     });
 
-    it("Statuses queue labels match enrollment, lead/case, and people groups", () => {
+    it("Statuses queue shows Opportunity Status + People — 'Enrollment Participation' is retired", () => {
         const hook = read("components/adminV2/settings/statuses/useStatusDefinitionsSettings.ts");
-        expect(hook).toContain("Enrollment Participation");
-        expect(hook).toContain("Lead Statuses");
+        // The per-child OCM disposition status model ("Enrollment Participation") is no longer a
+        // configurable category — the Process Instance owns execution (stage + state).
+        expect(hook).toContain("Opportunity Status");
         expect(hook).toContain("People Statuses");
+        // No configurable "Enrollment Participation" LABEL entry (only the retirement comment mentions it).
+        expect(hook).not.toContain('"Enrollment Participation"');
+        // OCM child disposition rows no longer load into /statuses.
+        expect(hook).not.toContain("opportunity_customer_members");
     });
 
     it("Fields documents next pattern without full implementation", () => {
