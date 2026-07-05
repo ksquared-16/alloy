@@ -69,7 +69,20 @@ export default function OpportunityFocusPanelEmbeddedWorkspace({
         >
             {/* 1 — Recent Activity ribbon (compact, horizontal, awareness) */}
             <div className="alloy-os-activity-cockpit__ribbon" data-activity-cockpit-ribbon="true">
-                <span className="alloy-os-activity-cockpit__ribbon-label">Recent Activity</span>
+                <header className="alloy-os-activity-cockpit__ribbon-head">
+                    <svg
+                        className="alloy-os-activity-cockpit__hdr-ico"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="1.8"
+                        aria-hidden
+                    >
+                        <circle cx="12" cy="12" r="9" />
+                        <path d="M12 7v5l3.5 2" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                    <span className="alloy-os-activity-cockpit__panel-title">Recent Activity</span>
+                </header>
                 <div className="alloy-os-activity-cockpit__ribbon-feed">
                     <LayoutRuntimeActivityTimelineWidget
                         entries={ribbonEntries}
