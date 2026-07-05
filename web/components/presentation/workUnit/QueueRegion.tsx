@@ -10,13 +10,22 @@
  * loading skeletons (card-shaped), quiet inline error, empty, rows.
  */
 
+import { useMemo, useState } from "react";
 import type { QueueRowModel, WorkUnitSurfaceModel } from "@/lib/presentation/runtime";
 import {
     PRESENTATION_RUNTIME_LABELS,
     runtimeLabelProps,
 } from "@/components/presentation/runtimeLabels";
 import { BUILD_SHA } from "@/lib/runtime/buildInfo";
+import {
+    applyQueueRowFilters,
+    deriveQueueRowFilterFacets,
+    queueRowFilterIsActive,
+    EMPTY_QUEUE_ROW_FILTER,
+    type QueueRowFilterState,
+} from "@/lib/presentation/runtime/queueRowFilter";
 import { CondensedQueueRow } from "./CondensedQueueRow";
+import { QueueFilterControls } from "./QueueFilterControls";
 import { useFocusPanelOpen } from "./FocusPanelSurface";
 
 const QUEUE_SKELETON_ROW_COUNT = 3;
@@ -96,6 +105,15 @@ export function QueueRegion({
     const renderState = queueRegionRenderState(queue);
     const workView = title?.trim() || null;
 
+    // Interactive filter/control row (re-homed from the pre-PRV2 WorkUnitQueueRecordFilterBar):
+    // client-side narrowing over the loaded rows, facets derived from what's loaded. Server order
+    // is preserved until the operator picks a sort.
+    const [filters, setFilters] = useState<QueueRowFilterState>(EMPTY_QUEUE_ROW_FILTER);
+    const facets = useMemo(() => deriveQueueRowFilterFacets(queue.rows), [queue.rows]);
+    const visibleRows = useMemo(() => applyQueueRowFilters(queue.rows, filters), [queue.rows, filters]);
+    const filterActive = queueRowFilterIsActive(filters);
+    const showFilterControls = queue.rows.length > 0;
+
     return (
         <section
             {...runtimeLabelProps(PRESENTATION_RUNTIME_LABELS.queueRegion)}
@@ -138,6 +156,19 @@ export function QueueRegion({
                 ) : null}
             </div>
 
+            {/* Interactive filter/control row — between the header and the bordered board. */}
+            {showFilterControls ? (
+                <QueueFilterControls
+                    facets={facets}
+                    filters={filters}
+                    onChange={setFilters}
+                    onClear={() => setFilters(EMPTY_QUEUE_ROW_FILTER)}
+                    matchedCount={visibleRows.length}
+                    loadedCount={queue.rows.length}
+                    disabled={queue.loading}
+                />
+            ) : null}
+
             {/* Bordered queue panel — an UNMISTAKABLE outline in EVERY state (defined Alloy stone
                 border + soft elevation), so the queue always reads as a contained panel. */}
             <div
@@ -177,11 +208,23 @@ export function QueueRegion({
                             No records in this view
                         </p>
                     </div>
+                ) : filterActive && visibleRows.length === 0 ? (
+                    // Rows exist but the operator's filter matched none — hold the board, offer a reset.
+                    <div data-queue-no-matches="true" className="py-6 text-center">
+                        <p className="text-sm text-alloy-midnight/55">No records match your filters</p>
+                        <button
+                            type="button"
+                            onClick={() => setFilters(EMPTY_QUEUE_ROW_FILTER)}
+                            className="mt-2 rounded-md px-2.5 py-1 text-[12px] font-semibold text-alloy-pine hover:bg-alloy-pine/10"
+                        >
+                            Clear filters
+                        </button>
+                    </div>
                 ) : (
                     // Queue-lane hold: prior rows stay in place during a refetch (aria-busy),
                     // swapping when the new rows arrive — no skeleton flash on a view switch.
                     <ul role="list" aria-busy={queue.loading || undefined} className="flex flex-col gap-2">
-                        {queue.rows.map((row, index) => (
+                        {visibleRows.map((row, index) => (
                             <li key={`${row.entityType}:${row.entityId}`}>
                                 <CondensedQueueRow
                                     row={row}
