@@ -26,6 +26,7 @@ import type { EnrollmentManualTransitionPolicyV1 } from "@/lib/admin/enrollmentS
 import { parseEnrollmentManualTransitionPolicy } from "@/lib/admin/enrollmentStatus/enrollmentStatusTransitionPolicy";
 import { parseStatusRollupV1, type StatusRollupV1 } from "@/lib/lifecycle/statusRollupV1";
 import { parseStageActionCatalogV1, type StageActionCatalogV1 } from "@/lib/lifecycle/stageActionCatalogV1";
+import { parseParticipationConfigV1, type ParticipationConfigV1 } from "@/lib/process/participationConfig";
 import {
     parseStageGrain,
     parseSubjectResolutionStrategy,
@@ -84,6 +85,8 @@ export type LifecycleBuilderProcessRecord = {
     manual_status_transition_policy_v1?: EnrollmentManualTransitionPolicyV1;
     /** Process-level operational Work Views (Configuration Runtime). */
     work_views_v1?: WorkViewConfigV1Stored[];
+    /** Operator-authored Participation definition — the engine reads its contract (Process Builder). */
+    participation_v1?: ParticipationConfigV1;
     stages: LifecycleBuilderStageRecord[];
 };
 
@@ -184,6 +187,7 @@ export function parseLifecycleBuilderV1(raw: unknown): LifecycleBuilderV1 | null
         const tracks_v1 = parseProcessTracksV1(row.tracks_v1) ?? undefined;
         const manualPolicy = parseEnrollmentManualTransitionPolicy(row.manual_status_transition_policy_v1);
         const workViews = parseWorkViewsV1(row.work_views_v1);
+        const participation = parseParticipationConfigV1(row.participation_v1) ?? undefined;
         processes.push({
             id,
             key,
@@ -194,6 +198,7 @@ export function parseLifecycleBuilderV1(raw: unknown): LifecycleBuilderV1 | null
             ...(tracks_v1 ? { tracks_v1 } : {}),
             ...(manualPolicy ? { manual_status_transition_policy_v1: manualPolicy } : {}),
             ...(workViews ? { work_views_v1: workViews } : {}),
+            ...(participation ? { participation_v1: participation } : {}),
             stages,
         });
     }

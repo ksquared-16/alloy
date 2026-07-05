@@ -28,6 +28,7 @@ import BusinessProcessConfigurationShell from "@/components/adminV2/settings/bus
 import BusinessProcessStagesListColumn from "@/components/adminV2/settings/businessProcess/BusinessProcessStagesListColumn";
 import BusinessProcessWorkViewsListColumn from "@/components/adminV2/settings/businessProcess/BusinessProcessWorkViewsListColumn";
 import BusinessProcessWorkViewsSetupWorkspace from "@/components/adminV2/settings/businessProcess/BusinessProcessWorkViewsSetupWorkspace";
+import BusinessProcessParticipationWorkspace from "@/components/adminV2/settings/businessProcess/BusinessProcessParticipationWorkspace";
 import { WorkViewsConfigurationProvider } from "@/components/adminV2/settings/businessProcess/WorkViewsConfigurationContext";
 import type { BusinessProcessWorkspaceSection } from "@/lib/lifecycle/businessProcessUiLabels";
 import type { LifecycleBaseActionKey } from "@/lib/lifecycle/lifecycleStageBaseActions";
@@ -1789,6 +1790,13 @@ export default function LifecycleActivationBoard({
                             stageGrains={builderStages.map((s) => s.grain)}
                             stageGrainByKey={Object.fromEntries(builderStages.map((s) => [s.key, s.grain]))}
                             queueLanes={workViewQueueLanes}
+                        />
+                    :   null}
+
+                    {processSection === "participation" && processId ?
+                        <BusinessProcessParticipationWorkspace
+                            departmentId={runtimeDepartmentId}
+                            processId={processId}
                         />
                     :   null}
 

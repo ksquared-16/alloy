@@ -7,8 +7,13 @@
 
 export {
     ENROLLMENT_PARTICIPATION_CONTRACT,
+    DEFAULT_ENROLLMENT_PARTICIPATION_CONFIG,
     type EnrollmentAttributes,
 } from "./enrollmentContract";
+export {
+    resolveEnrollmentParticipationConfig,
+    resolveEnrollmentParticipationContract,
+} from "./resolveEnrollmentParticipation";
 export {
     enrollmentProjection,
     buildEnrollmentParticipants,

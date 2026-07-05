@@ -18,12 +18,14 @@ export const BUSINESS_PROCESS_CATALOG_BACK = "All processes";
 /** Process-level workspace navigation sections. */
 export type BusinessProcessWorkspaceSection =
     | "stages"
+    | "participation"
     | "work-views"
     | "presentation"
     | "actions"
     | "automation"
     | "health";
 
+export const BUSINESS_PROCESS_NAV_PARTICIPATION = "Participation";
 export const BUSINESS_PROCESS_NAV_STAGES = "Stages";
 export const BUSINESS_PROCESS_NAV_WORK_VIEWS = "Work Views";
 export const BUSINESS_PROCESS_NAV_PRESENTATION = "Presentation";
