@@ -372,9 +372,51 @@ function planPublishedRows(layout: FocusPanelPublishedLayout): PublishedLayoutRo
  * wide for SSR) it collapses to a single column in reading order — the only sanctioned
  * override of a published layout.
  */
+/**
+ * Column-major lanes derived from an authored V5 grid — a RUNTIME-ONLY presentation flow
+ * (the authored grid coordinates remain the source of truth). Buckets areas into vertical
+ * columns by `colStart` and flows each column as one continuous lane, so short cards in one
+ * column never inherit a tall neighbour's row height (no dead vertical gaps). Returns null
+ * when the grid is not cleanly column-partitionable (a full-width spanner or overlapping
+ * columns) — the caller then keeps the exact CSS-Grid placement.
+ */
+function planLanesFromGrid(grid: FocusPanelGridLayout): PublishedLayoutLanePlan[] | null {
+    if (grid.areas.length === 0) return null;
+    // A card spanning the full width can't live inside a single side-by-side lane.
+    if (grid.areas.some((a) => a.colSpan >= grid.columns)) return null;
+
+    const byColStart = new Map<number, FocusPanelGridArea[]>();
+    for (const a of grid.areas) {
+        const list = byColStart.get(a.colStart);
+        if (list) list.push(a);
+        else byColStart.set(a.colStart, [a]);
+    }
+    const colStarts = [...byColStart.keys()].sort((x, y) => x - y);
+    if (colStarts.length < 2) return null; // single column — nothing to transpose
+
+    // Columns must not overlap: a column's widest card must not cross into the next column.
+    for (let i = 0; i < colStarts.length - 1; i += 1) {
+        const areas = byColStart.get(colStarts[i]!)!;
+        const maxEnd = Math.max(...areas.map((a) => a.colStart + a.colSpan));
+        if (maxEnd > colStarts[i + 1]!) return null;
+    }
+
+    return colStarts.map((cs) => {
+        const areas = byColStart.get(cs)!.slice().sort((a, b) => a.rowStart - b.rowStart);
+        return {
+            widthUnits: Math.max(...areas.map((a) => a.colSpan)),
+            cards: areas.map((a) => ({
+                key: a.card,
+                minHeightPx: a.height ? CELL_HEIGHT_PX[a.height] : undefined,
+            })),
+        };
+    });
+}
+
 export function planPublishedLayout(
     layout: FocusPanelPublishedLayout,
     availableWidthPx: number,
+    opts?: { preferLanesFromGrid?: boolean },
 ): PublishedLayoutPlan {
     const collapsed = availableWidthPx > 0 && availableWidthPx < PUBLISHED_LAYOUT_MIN_PX;
     if (collapsed) {
@@ -393,6 +435,24 @@ export function planPublishedLayout(
 
     // The literal row plan is always available (back-compat + the row-major fallback).
     const rows = planPublishedRows(layout);
+
+    // Focus Panel Work mode opts into column-major lanes derived from the authored grid so
+    // short cards never inherit a tall neighbour's row height (no dead vertical gaps). This
+    // is a runtime presentation choice only — the authored grid coordinates are unchanged.
+    if (opts?.preferLanesFromGrid && layout.grid) {
+        const lanes = planLanesFromGrid(layout.grid);
+        if (lanes) {
+            return {
+                columnBase: PUBLISHED_LAYOUT_COLUMN_BASE,
+                collapsed: false,
+                strategy: "lanes",
+                gridColumns: PUBLISHED_LAYOUT_COLUMN_BASE,
+                areas: [],
+                lanes,
+                rows,
+            };
+        }
+    }
 
     // V5 responsive grid is the richest model (vertical/horizontal spans, independent
     // regions). When present it wins — the runtime paints each area with CSS Grid.
