@@ -37,6 +37,7 @@ import {
     type FocusPanelSummaryLayoutState,
 } from "@/lib/adminV2/runtime/focusPanel/focusPanelSummaryLayoutService";
 import type { FocusPanelCardKey } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardModel";
+import { focusPanelNestedSurfaceByCardKey } from "@/lib/platform/surfaceComposition/registerRuntimeSurfaces";
 
 /**
  * Surfaces editor for the Enrollment Focus Panel (Experience Builder Alpha).
@@ -48,7 +49,11 @@ import type { FocusPanelCardKey } from "@/lib/adminV2/runtime/focusPanel/focusPa
  * controls and "+ line" insertion edit the working LayoutDoc, and the publish loop
  * carries config live.
  */
-export default function FocusPanelSummarySurfaceEditor() {
+type Props = {
+    onOpenNestedSurface?: (surfaceId: string) => void;
+};
+
+export default function FocusPanelSummarySurfaceEditor({ onOpenNestedSurface }: Props) {
     const { vm, record } = useMemo(() => buildDemoFocusPanelSummaryViewModel(), []);
 
     const cards = useMemo(
@@ -260,6 +265,8 @@ export default function FocusPanelSummarySurfaceEditor() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
         [loaded],
     );
+    const nestedSurfaceByCard = useMemo(() => focusPanelNestedSurfaceByCardKey(), []);
+
     const renderBuilderCard = useCallback(
         (key: FocusPanelCardKey) => {
             const model = cards.get(key);
@@ -336,6 +343,8 @@ export default function FocusPanelSummarySurfaceEditor() {
                             catalog={builderCatalog}
                             renderCard={renderBuilderCard}
                             selectedCard={selectedEntry?.key ?? null}
+                            nestedSurfaceByCard={nestedSurfaceByCard}
+                            onOpenNestedSurface={onOpenNestedSurface}
                             onSelectCard={(key) => {
                                 const entry = order.find((o) => o.key === key);
                                 if (entry) setSelectedInstanceId(entry.instanceId);
