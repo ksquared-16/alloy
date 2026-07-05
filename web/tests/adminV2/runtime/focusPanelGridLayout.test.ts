@@ -88,6 +88,44 @@ describe("focusPanelGridLayout — V5 responsive grid", () => {
         expect(planPublishedLayout(buildPublishedLayoutFromGrid(C), 1040).areas.find((a) => a.card === "readiness_kpi")!.rowSpan).toBe(3);
     });
 
+    it("Work mode: presents an authored grid as column-major lanes (no dead vertical gaps)", () => {
+        const twoCol: FocusPanelGridLayout = {
+            columns: 12,
+            areas: [
+                { card: "household", colStart: 1, colSpan: 6, rowStart: 1, rowSpan: 2 },
+                { card: "children", colStart: 1, colSpan: 6, rowStart: 3, rowSpan: 2 },
+                { card: "readiness_kpi", colStart: 7, colSpan: 6, rowStart: 1, rowSpan: 1 },
+                { card: "health", colStart: 7, colSpan: 6, rowStart: 2, rowSpan: 1 },
+            ],
+        };
+        const layout = buildPublishedLayoutFromGrid(twoCol);
+
+        // Default (no opt) keeps the exact CSS-Grid placement — unchanged behavior.
+        expect(planPublishedLayout(layout, 1040).strategy).toBe("grid");
+
+        // Work mode transposes the SAME authored columns into continuous lanes.
+        const lanes = planPublishedLayout(layout, 1040, { preferLanesFromGrid: true });
+        expect(lanes.strategy).toBe("lanes");
+        expect(lanes.lanes).toHaveLength(2);
+        expect(lanes.lanes[0]!.cards.map((c) => c.key)).toEqual(["household", "children"]);
+        expect(lanes.lanes[1]!.cards.map((c) => c.key)).toEqual(["readiness_kpi", "health"]);
+    });
+
+    it("Work-mode lanes fall back to the exact grid when a card spans full width", () => {
+        const withFullWidth: FocusPanelGridLayout = {
+            columns: 12,
+            areas: [
+                { card: "attention", colStart: 1, colSpan: 12, rowStart: 1, rowSpan: 1 },
+                { card: "household", colStart: 1, colSpan: 6, rowStart: 2, rowSpan: 1 },
+                { card: "readiness_kpi", colStart: 7, colSpan: 6, rowStart: 2, rowSpan: 1 },
+            ],
+        };
+        const plan = planPublishedLayout(buildPublishedLayoutFromGrid(withFullWidth), 1040, {
+            preferLanesFromGrid: true,
+        });
+        expect(plan.strategy).toBe("grid");
+    });
+
     it("PRESERVES the grid through the publish round-trip — never persists a rows-only stack", () => {
         // The reported bug: the builder holds the grid correctly, but publishing pruned the
         // `grid` away, persisting only the reading-order full-width `rows` fallback → the

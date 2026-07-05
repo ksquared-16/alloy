@@ -329,6 +329,7 @@ export default function OpportunityFocusPanelModeGrid({
             <FocusPanelCardGrid
                 rows={gridRows}
                 publishedLayout={publishedLayout}
+                preferLanesFromGrid={mode === "work"}
                 composeCards={composeCards}
                 compositionOverrides={compositionOverrides}
                 className={mode === "work" ? "alloy-os-focus-panel-grid--work" : undefined}
