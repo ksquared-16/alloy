@@ -14,7 +14,6 @@ import {
     applyTourBookingLocationScope,
     resolveMetricScopeFilter,
 } from "@/lib/metrics/scopeFilter";
-import { countWorkUnitLeadMembership } from "@/lib/queues/workUnitLeadMembership";
 
 /** Status keys indicating a tour was scheduled (denominator-eligible). */
 export const TOUR_SCHEDULED_STATUS_KEYS = ["confirmed", "completed", "no_show"] as const;
@@ -104,66 +103,10 @@ export function computeLeadCount(opportunities: OpportunityCreatedRow[]): number
     return opportunities.length;
 }
 
-export async function resolveEnrollmentLeadCount(
-    ctx: MetricResolveContext
-): Promise<ResolvedMetricValue> {
-    const def = getMetricDefinition("enrollment.lead_count");
-    const now = ctx.now ?? new Date();
-    const { windowStart, windowEnd } = resolveMetricTimeWindowBounds(ctx.window, now);
-    const filter = await resolveMetricScopeFilter(ctx.supabase, ctx.orgId, ctx.scope, ctx.siteLocationId);
-
-    const base: Omit<ResolvedMetricValue, "value" | "formattedValue" | "meta"> = {
-        key: def.key,
-        label: def.label,
-        format: def.format,
-        window: ctx.window,
-        windowStartIso: windowStart.toISOString(),
-        windowEndIso: windowEnd.toISOString(),
-        computedAtIso: now.toISOString(),
-        sources: def.sources,
-        resolveMode: ctx.mode ?? "live",
-    };
-
-    if (filter.impossible) {
-        return { ...base, value: 0, formattedValue: formatMetricValue(def.format, 0), meta: { count: 0 } };
-    }
-
-    // WORK-UNIT context → the canonical membership count (= queue rows / work-view count). Scoped to
-    // THIS work unit only: no department scope, no `work_unit_id IS NULL` orphans, no time window.
-    // Department/workspace scope keeps the windowed department-wide rollup below.
-    const workUnitId = ctx.workUnitId?.trim() || null;
-    if (workUnitId) {
-        const wuCount = await countWorkUnitLeadMembership(ctx.supabase, {
-            orgId: ctx.orgId,
-            workUnitId,
-        });
-        return {
-            ...base,
-            value: wuCount,
-            formattedValue: formatMetricValue(def.format, wuCount),
-            meta: { count: wuCount },
-        };
-    }
-
-    let oppQ = ctx.supabase
-        .from("opportunities")
-        .select("id, created_at")
-        .eq("org_id", ctx.orgId)
-        .gte("created_at", windowStart.toISOString())
-        .lte("created_at", windowEnd.toISOString());
-    oppQ = applyOpportunityScopeToQuery(oppQ, filter);
-
-    const { data: opps, error } = await oppQ;
-    if (error) throw new Error(error.message);
-
-    const count = computeLeadCount((opps ?? []) as OpportunityCreatedRow[]);
-    return {
-        ...base,
-        value: count,
-        formattedValue: formatMetricValue(def.format, count),
-        meta: { count },
-    };
-}
+// enrollment.lead_count is now resolved by the PARTICIPANT path (resolveEnrollmentLeadCountCompat →
+// active_leads) — it counts process participants via the engine projection, not opportunities by
+// status_key. The old opportunity/status_key resolver was removed here; `computeLeadCount` is kept
+// (exported) for any legacy caller.
 
 export async function resolveEnrollmentTimeToScheduleTour(
     ctx: MetricResolveContext

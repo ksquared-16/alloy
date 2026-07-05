@@ -12,9 +12,14 @@ import { formatMetricValue } from "@/lib/metrics/formatMetricValue";
 import {
     resolveEnrollmentTimeToScheduleTour,
     resolveEnrollmentTourConversionRate,
-    resolveEnrollmentLeadCount,
     resolveEnrollmentTourCompletedCount,
 } from "@/lib/metrics/resolvers/eventWindowMetrics";
+import {
+    resolveEnrollmentActiveLeads,
+    resolveEnrollmentNewLeads,
+    resolveEnrollmentWaitlisted,
+    resolveEnrollmentLeadCountCompat,
+} from "@/lib/metrics/resolvers/enrollmentParticipantMetrics";
 import {
     resolveOpsWorkOverdueCount,
 } from "@/lib/metrics/resolvers/entitySnapshotMetrics";
@@ -40,7 +45,13 @@ async function resolveLiveMetric(ctx: MetricResolveContext, key: OipMetricKey): 
         case "enrollment.tour_conversion_rate":
             return resolveEnrollmentTourConversionRate(ctx);
         case "enrollment.lead_count":
-            return resolveEnrollmentLeadCount(ctx);
+            return resolveEnrollmentLeadCountCompat(ctx);
+        case "enrollment.active_leads":
+            return resolveEnrollmentActiveLeads(ctx);
+        case "enrollment.new_leads":
+            return resolveEnrollmentNewLeads(ctx);
+        case "enrollment.waitlisted":
+            return resolveEnrollmentWaitlisted(ctx);
         case "enrollment.tour_completed_count":
             return resolveEnrollmentTourCompletedCount(ctx);
         case "comms.delivery_rate":

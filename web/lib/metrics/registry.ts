@@ -29,13 +29,52 @@ const DEFINITIONS: Record<OipMetricKey, MetricDefinition> = {
     "enrollment.lead_count": {
         key: "enrollment.lead_count",
         label: "Lead count",
-        description: "Count of enrollment opportunities created in the rolling window.",
+        description:
+            "DEPRECATED alias of enrollment.active_leads (participant count). Prefer enrollment.active_leads.",
         pack: "enrollment",
-        computationKind: "event_window",
+        computationKind: "entity_snapshot",
         format: "count",
         defaultWindow: "rolling_30d",
-        sources: ["opportunities"],
-        supportsDimensions: ["lifecycle_stage", "status_key"],
+        sources: ["process_instances", "opportunities", "customer_members"],
+        snapshotSemantics: true,
+    },
+    "enrollment.active_leads": {
+        key: "enrollment.active_leads",
+        label: "Active leads",
+        description:
+            "ACTIVE enrollment participants (children): live, not enrolled/withdrawn/not_enrolling. " +
+            "Counts participants, not households; scoped to the work unit in work-unit context.",
+        pack: "enrollment",
+        computationKind: "entity_snapshot",
+        format: "count",
+        defaultWindow: "rolling_30d",
+        sources: ["process_instances", "opportunities", "customer_members"],
+        snapshotSemantics: true,
+    },
+    "enrollment.new_leads": {
+        key: "enrollment.new_leads",
+        label: "New leads",
+        description:
+            "Enrollment participants in the Lead stage and undispositioned. Effective stage = " +
+            "process_instances.stage_key ?? opportunities.stage_key. Participants, not households.",
+        pack: "enrollment",
+        computationKind: "entity_snapshot",
+        format: "count",
+        defaultWindow: "rolling_30d",
+        sources: ["process_instances", "opportunities", "customer_members"],
+        snapshotSemantics: true,
+    },
+    "enrollment.waitlisted": {
+        key: "enrollment.waitlisted",
+        label: "Waitlisted",
+        description:
+            "Enrollment participants in the Waitlist stage or the waitlisted state. Participants, not households.",
+        pack: "enrollment",
+        computationKind: "entity_snapshot",
+        format: "count",
+        defaultWindow: "rolling_30d",
+        sources: ["process_instances", "opportunities", "customer_members"],
+        snapshotSemantics: true,
     },
     "enrollment.tour_completed_count": {
         key: "enrollment.tour_completed_count",
