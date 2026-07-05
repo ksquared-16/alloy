@@ -31,6 +31,7 @@ import {
     type WorkspaceProcessSurfaceConfig,
 } from "@/lib/presentation/runtime/workspaceProcessSurfaceConfig";
 import { businessProcessForProcessKey } from "@/lib/presentation/runtime/workspaceProcessSignal";
+import { stripLegacyArtifactMarker } from "@/lib/admin/buildOperatorLifecycleLanding";
 import {
     parseOperatorWorkUnitEntryHref,
     warmWorkUnitSlugRoute,
@@ -128,7 +129,8 @@ export function ProcessSummaryCard({
         () => resolveProcessCardConfig(config, businessProcessForProcessKey(process.processKey)),
         [config, process.processKey],
     );
-    const title = identity.title ?? process.label;
+    // Render-boundary guard: a dirty "(legacy)" process name never prints on the workspace card.
+    const title = stripLegacyArtifactMarker(identity.title ?? process.label) ?? "";
     const subtitle = identity.subtitle ?? process.description;
     const showChip = identity.accent != null || identity.icon !== "generic";
     const ctaLabel = identity.ctaLabel ?? "Open process";

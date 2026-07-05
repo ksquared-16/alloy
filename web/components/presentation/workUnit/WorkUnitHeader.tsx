@@ -13,6 +13,7 @@ import {
     PRESENTATION_RUNTIME_LABELS,
     runtimeLabelProps,
 } from "@/components/presentation/runtimeLabels";
+import { stripLegacyArtifactMarker } from "@/lib/admin/buildOperatorLifecycleLanding";
 
 export function WorkUnitHeader({
     processLabel,
@@ -21,6 +22,8 @@ export function WorkUnitHeader({
     processLabel: string | null;
     workViewLabel: string | null;
 }) {
+    // Render-boundary guard: even if a dirty "(legacy)" name reaches the model, it never prints.
+    const cleanProcessLabel = stripLegacyArtifactMarker(processLabel);
     return (
         <header
             {...runtimeLabelProps(PRESENTATION_RUNTIME_LABELS.workUnitHeader)}
@@ -28,7 +31,7 @@ export function WorkUnitHeader({
             className="flex flex-col gap-0.5"
         >
             <h1 className="text-xl font-semibold leading-tight text-alloy-midnight">
-                {processLabel ?? ""}
+                {cleanProcessLabel ?? ""}
             </h1>
             {workViewLabel ? (
                 <span className="text-sm font-medium leading-snug text-alloy-midnight/65">{workViewLabel}</span>

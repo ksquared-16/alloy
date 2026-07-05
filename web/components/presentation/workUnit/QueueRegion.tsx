@@ -15,6 +15,7 @@ import {
     PRESENTATION_RUNTIME_LABELS,
     runtimeLabelProps,
 } from "@/components/presentation/runtimeLabels";
+import { BUILD_SHA } from "@/lib/runtime/buildInfo";
 import { CondensedQueueRow } from "./CondensedQueueRow";
 import { useFocusPanelOpen } from "./FocusPanelSurface";
 
@@ -78,43 +79,69 @@ export function QueueRegion({
     queue,
     title = null,
     selectedRecordId = null,
+    workViewId = null,
+    workUnitId = null,
 }: {
     queue: WorkUnitSurfaceModel["queue"];
     /** Active Work View label — the queue's title / work-view context header. */
     title?: string | null;
     /** Currently open inline Focus Panel record — rows render the selected rail. */
     selectedRecordId?: string | null;
+    /** Active Work View id — surfaced as a debug marker so the render path is provable. */
+    workViewId?: string | null;
+    /** Host Work Unit id — debug marker. */
+    workUnitId?: string | null;
 }) {
     const { openRecord, prefetchRecord } = useFocusPanelOpen();
     const renderState = queueRegionRenderState(queue);
+    const workView = title?.trim() || null;
 
     return (
         <section
             {...runtimeLabelProps(PRESENTATION_RUNTIME_LABELS.queueRegion)}
             aria-label="Queue"
             data-queue-region
+            data-component="QueueRegion"
+            data-build-sha={BUILD_SHA}
+            data-work-view-id={workViewId ?? undefined}
+            data-work-view-name={workView ?? undefined}
+            data-work-unit-id={workUnitId ?? undefined}
+            data-queue-total={queue.totalCount ?? undefined}
         >
-            {/* Queue shell header — title (active Work View / work-view context) + record count. */}
-            <div className="mb-2 flex items-baseline justify-between gap-3">
-                <h2
-                    data-queue-region-title
-                    className="min-w-0 truncate text-[13px] font-semibold leading-5 text-alloy-midnight"
-                >
-                    {title?.trim() || "Queue"}
-                </h2>
+            {/* Queue shell header — a "Queue" eyebrow, the ACTIVE Work View as a filter chip, and the
+                record count. Never anonymous: the operator always sees which view + how many. */}
+            <div
+                data-queue-region-header
+                className="mb-2 flex items-center justify-between gap-3"
+            >
+                <div className="flex min-w-0 items-center gap-2">
+                    <span className="shrink-0 text-[10px] font-semibold uppercase tracking-[0.13em] text-alloy-midnight/45">
+                        Queue
+                    </span>
+                    <span
+                        data-queue-region-title
+                        data-queue-filter-chip
+                        className="inline-flex min-w-0 items-center gap-1.5 rounded-full border border-alloy-stone/45 bg-alloy-stone/[0.06] px-2.5 py-0.5 text-[12px] font-semibold text-alloy-midnight/80"
+                        title={workView ? `Active Work View: ${workView}` : "Queue"}
+                    >
+                        <span aria-hidden className="h-1.5 w-1.5 shrink-0 rounded-full bg-alloy-pine" />
+                        <span className="truncate">{workView ?? "Queue"}</span>
+                    </span>
+                </div>
                 {queue.totalCount != null ? (
                     <span
                         data-queue-region-count
-                        className="shrink-0 text-[11px] tabular-nums text-alloy-midnight/55"
+                        className="shrink-0 rounded-full bg-alloy-midnight/[0.05] px-2 py-0.5 text-[11px] font-semibold tabular-nums text-alloy-midnight/60"
                     >
                         {queue.totalCount} {queue.totalCount === 1 ? "record" : "records"}
                     </span>
                 ) : null}
             </div>
 
-            {/* Bordered queue panel — a visible outline in EVERY state (Alloy stone hairline). */}
+            {/* Bordered queue panel — an UNMISTAKABLE outline in EVERY state (defined Alloy stone
+                border + soft elevation), so the queue always reads as a contained panel. */}
             <div
-                className="rounded-xl border border-alloy-stone/20 bg-white p-3"
+                className="rounded-xl border border-alloy-stone/45 bg-white p-3 shadow-[0_1px_2px_rgba(15,23,42,0.05)]"
                 data-queue-panel
             >
                 {renderState === "error" ? (

@@ -1,3 +1,4 @@
+import { execSync } from "node:child_process";
 import path from "path";
 import { fileURLToPath } from "url";
 
@@ -6,7 +7,32 @@ import type { NextConfig } from "next";
 /** App lives in `web/` while Alloy repo root also has package-lock.json; Turbopack must use this dir as root so chunks/runtime resolve correctly. */
 const webRoot = path.dirname(fileURLToPath(import.meta.url));
 
+/**
+ * The commit this bundle was built from — inlined at build time so the RUNNING deploy can prove its
+ * own SHA (data-build-sha in the DOM, GET /api/runtime-info, a console line). Prefers the host's git
+ * env (Vercel/CI), falls back to `git rev-parse`. This is the single answer to "is staging actually
+ * running the committed fix?" — no more guessing between code and deploy.
+ */
+function resolveBuildSha(): string {
+  const fromEnv =
+    process.env.VERCEL_GIT_COMMIT_SHA ||
+    process.env.GIT_COMMIT_SHA ||
+    process.env.NEXT_PUBLIC_BUILD_SHA;
+  if (fromEnv && fromEnv.trim()) return fromEnv.trim().slice(0, 12);
+  try {
+    return execSync("git rev-parse --short=12 HEAD", { cwd: webRoot }).toString().trim();
+  } catch {
+    return "unknown";
+  }
+}
+
+const BUILD_SHA = resolveBuildSha();
+
 const nextConfig: NextConfig = {
+  /** Build SHA inlined for client + server (see resolveBuildSha) — proves the deployed commit. */
+  env: {
+    NEXT_PUBLIC_BUILD_SHA: BUILD_SHA,
+  },
   /** Align with turbopack.root — avoids monorepo parent lockfile overriding trace root. */
   outputFileTracingRoot: webRoot,
   /** Load `unpdf` (server-only, text-only PDF extraction) from node_modules at runtime

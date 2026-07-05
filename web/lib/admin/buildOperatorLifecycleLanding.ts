@@ -125,6 +125,20 @@ export function isLegacyArtifactProcessName(name: string | null | undefined): bo
     return /\(legacy\)/i.test((name ?? "").trim());
 }
 
+/**
+ * Render-boundary sanitizer: strip a trailing "(legacy)"/"(legacy copy)" artifact marker from a
+ * process name so a dirty data row can NEVER print "Enrollment (legacy)" to an operator, even if it
+ * slips past the upstream visibility filter. Returns the cleaned name (e.g. "Enrollment") or null
+ * when nothing meaningful remains. Belt-and-suspenders — data cleanup is still the primary fix.
+ */
+export function stripLegacyArtifactMarker(name: string | null | undefined): string | null {
+    const cleaned = (name ?? "")
+        .replace(/\s*\((?:legacy|legacy\s+copy|migrated)\)\s*/gi, " ")
+        .replace(/\s{2,}/g, " ")
+        .trim();
+    return cleaned || null;
+}
+
 function isOperatorVisibleLifecycle(entry: LifecycleCatalogEntry): boolean {
     if (!entry.workspace.user_has_access) return false;
     if (!entry.workspace.department_is_active) return false;

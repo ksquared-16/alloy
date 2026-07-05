@@ -16,12 +16,13 @@
  * (display:none flex items reserve no column and no gap).
  */
 
-import { useRef } from "react";
+import { useEffect, useRef } from "react";
 import {
     useWorkUnitSurfaceRuntime,
     type WorkUnitSurfaceIntents,
     type WorkUnitSurfaceModel,
 } from "@/lib/presentation/runtime";
+import { BUILD_SHA } from "@/lib/runtime/buildInfo";
 import {
     PRESENTATION_RUNTIME_LABELS,
     runtimeLabelProps,
@@ -125,6 +126,8 @@ function WorkUnitSurfaceBody({
                         queue={model.queue}
                         title={model.header.workViewLabel}
                         selectedRecordId={model.selectedRecordId}
+                        workViewId={model.activeWorkViewId}
+                        workUnitId={model.workUnitId}
                     />
                 </FocusPanelSurface>
             </div>
@@ -148,6 +151,12 @@ function WorkUnitSurfaceBody({
 export function WorkUnitSurface() {
     const { model, intents } = useWorkUnitSurfaceRuntime();
 
+    // One-line deploy marker so the running build's SHA is visible in the console (staleness proof).
+    useEffect(() => {
+        // eslint-disable-next-line no-console
+        console.info(`[alloy] WorkUnitSurface · build ${BUILD_SHA}`);
+    }, []);
+
     // Surface Hold: remember the last-established model so a Work Unit re-establish (config
     // re-settle on a host change) can keep the prior surface visible instead of a full skeleton.
     const lastEstablishedRef = useRef<WorkUnitSurfaceModel | null>(null);
@@ -162,6 +171,8 @@ export function WorkUnitSurface() {
     return (
         <div
             {...runtimeLabelProps(PRESENTATION_RUNTIME_LABELS.workUnitSurface)}
+            data-component="WorkUnitSurface"
+            data-build-sha={BUILD_SHA}
             data-surface-ready={model.ready ? "true" : "false"}
             data-surface-mode={mode}
         >

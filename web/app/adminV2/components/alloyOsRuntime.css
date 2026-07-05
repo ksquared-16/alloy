@@ -1647,7 +1647,8 @@ html[data-alloy-os-runtime="on"]
 }
 
 .alloy-os-focus-panel-grid--work {
-  gap: 10px;
+  /* Tightened from 10px — Work-mode cards were too spread out; pull them into a denser stack. */
+  gap: 6px;
 }
 
 .alloy-os-focus-panel-grid--work .alloy-os-ucard[data-universal-card-key="work_launcher"] {
