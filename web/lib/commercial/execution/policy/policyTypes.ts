@@ -72,3 +72,159 @@ export function appliesToKind(appliesTo: PolicyAppliesTo, kind: string): boolean
     if (appliesTo === "fees") return kind === "fee" || kind === "addon" || kind === "deposit";
     return false;
 }
+
+// ── Form-driving registry ────────────────────────────────────────────────────
+// The operator Policies UI is GENERATED from this registry (no hand-coded forms).
+// Each type declares its typed value fields; the UI renders a control per field
+// and validateCommercialPolicyValue normalizes + validates the submitted value.
+
+export type PolicyFieldControl = "select" | "number" | "money" | "percent" | "yesno";
+
+export type PolicyField = {
+    key: string;
+    label: string;
+    control: PolicyFieldControl;
+    options?: { value: string; label: string }[];
+    suffix?: string;
+    help?: string;
+    /** Only render this field when another field has one of these values (e.g. discount value ⇐ basis). */
+    showWhen?: { field: string; in: string[] };
+};
+
+export type CommercialPolicyTypeDef = {
+    key: CommercialPolicyType;
+    label: string;
+    description: string;
+    /** A plain-language example for the operator (no jargon, no IDs). */
+    example: string;
+    fields: PolicyField[];
+};
+
+const APPLIES_TO_OPTIONS = [
+    { value: "tuition", label: "Tuition only" },
+    { value: "fees", label: "Fees & add-ons" },
+    { value: "all", label: "Everything" },
+];
+const DISCOUNT_BASIS_OPTIONS = [
+    { value: "percentage", label: "Percentage off" },
+    { value: "amount", label: "Fixed amount off" },
+];
+
+export const COMMERCIAL_POLICY_REGISTRY: Record<CommercialPolicyType, CommercialPolicyTypeDef> = {
+    discount: {
+        key: "discount",
+        label: "Discount",
+        description: "Reduce the price of tuition, fees, or everything by a percentage or a fixed amount.",
+        example: "10% off tuition for staff families.",
+        fields: [
+            { key: "basis", label: "Discount type", control: "select", options: DISCOUNT_BASIS_OPTIONS },
+            { key: "value", label: "Percentage", control: "percent", suffix: "%", showWhen: { field: "basis", in: ["percentage"] } },
+            { key: "value", label: "Amount", control: "money", showWhen: { field: "basis", in: ["amount"] } },
+            { key: "applies_to", label: "Applies to", control: "select", options: APPLIES_TO_OPTIONS },
+        ],
+    },
+    sibling_discount: {
+        key: "sibling_discount",
+        label: "Sibling discount",
+        description: "Reduce tuition for additional children in the same household.",
+        example: "15% off the second and later children's tuition.",
+        fields: [
+            { key: "basis", label: "Discount type", control: "select", options: DISCOUNT_BASIS_OPTIONS },
+            { key: "value", label: "Percentage", control: "percent", suffix: "%", showWhen: { field: "basis", in: ["percentage"] } },
+            { key: "value", label: "Amount", control: "money", showWhen: { field: "basis", in: ["amount"] } },
+            { key: "min_siblings", label: "Applies from child #", control: "number", suffix: "children", help: "The minimum number of enrolled children before the discount applies." },
+            { key: "applies_to_rank", label: "Applies to", control: "select", options: [{ value: "subsequent", label: "Second child onward" }, { value: "all", label: "All children" }] },
+        ],
+    },
+    waiver: {
+        key: "waiver",
+        label: "Waiver",
+        description: "Waive a charge entirely (reduces the amount to $0).",
+        example: "Waive registration fees during a promotion.",
+        fields: [{ key: "applies_to", label: "Waive", control: "select", options: APPLIES_TO_OPTIONS }],
+    },
+    proration: {
+        key: "proration",
+        label: "Proration",
+        description: "How a partial-period charge is calculated when a child joins or leaves mid-period.",
+        example: "Charge by the day when a child starts mid-month.",
+        fields: [
+            { key: "method", label: "Method", control: "select", options: [
+                { value: "none", label: "No proration (full period)" },
+                { value: "daily", label: "By calendar day" },
+                { value: "calendar_day", label: "By calendar day (month length)" },
+                { value: "business_day", label: "By business day" },
+            ] },
+        ],
+    },
+    eligibility: {
+        key: "eligibility",
+        label: "Eligibility",
+        description: "Restrict who a price or product applies to. Recorded for review; enforced with attendance/enrollment data.",
+        example: "Restrict a subsidized rate to eligible families.",
+        fields: [],
+    },
+    approval: {
+        key: "approval",
+        label: "Approval required",
+        description: "Flag matching charges so they must be reviewed before they can be finalized.",
+        example: "Require review for any waived tuition.",
+        fields: [{ key: "required", label: "Require review", control: "yesno" }],
+    },
+};
+
+export type PolicyValueError = { field?: string; message: string };
+
+/** Validate + normalize a raw value against a policy type's field schema (pure). */
+export function validateCommercialPolicyValue(
+    type: CommercialPolicyType,
+    raw: Record<string, unknown>,
+): { ok: true; value: Record<string, unknown> } | { ok: false; error: PolicyValueError } {
+    const def = COMMERCIAL_POLICY_REGISTRY[type];
+    const out: Record<string, unknown> = {};
+    const isVisible = (f: PolicyField) => !f.showWhen || f.showWhen.in.includes(String(raw[f.showWhen.field] ?? ""));
+    for (const f of def.fields) {
+        if (!isVisible(f)) continue;
+        const v = raw[f.key];
+        if (f.control === "select") {
+            const opt = (f.options ?? []).find((o) => o.value === v);
+            if (!opt) return { ok: false, error: { field: f.key, message: `${f.label} is required` } };
+            out[f.key] = opt.value;
+        } else if (f.control === "yesno") {
+            out[f.key] = v === true || v === "true" || v === "yes";
+        } else {
+            // number | money | percent — non-negative integer (money/percent already in cents/percent)
+            const n = typeof v === "number" ? v : Number(v);
+            if (v == null || v === "" || !Number.isFinite(n) || n < 0) {
+                return { ok: false, error: { field: f.key, message: `${f.label} must be a non-negative number` } };
+            }
+            if (f.control === "percent" && n > 100) return { ok: false, error: { field: f.key, message: `${f.label} cannot exceed 100%` } };
+            out[f.key] = f.control === "number" || f.control === "percent" ? Math.round(n) : Math.round(n);
+        }
+    }
+    return { ok: true, value: out };
+}
+
+/** One-line human summary of a policy's value (display; no IDs, no jargon). */
+export function commercialPolicyValueSummary(type: CommercialPolicyType, value: Record<string, unknown>): string {
+    switch (type) {
+        case "discount":
+        case "sibling_discount": {
+            const basis = String(value.basis ?? "");
+            const amt = basis === "percentage" ? `${Number(value.value ?? 0)}%` : `$${((Number(value.value ?? 0)) / 100).toFixed(2)}`;
+            const to = APPLIES_TO_OPTIONS.find((o) => o.value === value.applies_to)?.label ?? "everything";
+            const sib = type === "sibling_discount" ? ` (from child #${Number(value.min_siblings ?? 2)})` : "";
+            return `${amt} off ${to.toLowerCase()}${sib}`;
+        }
+        case "waiver":
+            return `Waive ${(APPLIES_TO_OPTIONS.find((o) => o.value === value.applies_to)?.label ?? "everything").toLowerCase()}`;
+        case "proration":
+            return `Proration: ${String(value.method ?? "none").replace(/_/g, " ")}`;
+        case "approval":
+            return value.required ? "Review required" : "No review required";
+        case "eligibility":
+            return "Eligibility restriction";
+        default:
+            return "";
+    }
+}
