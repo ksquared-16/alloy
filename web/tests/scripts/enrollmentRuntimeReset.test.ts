@@ -227,6 +227,7 @@ describe("enrollment_runtime_reset — FK-safe delete order", () => {
         before("opportunity_customer_members", "opportunities");
         before("quotes", "opportunities");
         before("placement_candidates", "opportunities");
+        before("process_instances", "opportunities");
     });
 
     it("orders job children before jobs", () => {

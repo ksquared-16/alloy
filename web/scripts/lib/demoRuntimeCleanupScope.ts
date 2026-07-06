@@ -129,6 +129,7 @@ export const DEMO_CLEANUP_TABLE_ORDER = [
     "document_versions",
     "documents",
     "field_values",
+    "process_instances",
     "opportunities",
     "customer_member_contacts",
     "customer_tags",

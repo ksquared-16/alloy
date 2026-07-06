@@ -7,7 +7,8 @@
  * templates, Document templates, Programs, Locations, Rooms, Tuition config, Staff.
  * Deletes operational instances: leads/opportunities, families/parents/children/persons,
  * enrollment participation (OCM), tasks/work, notes, communications, timeline/activity,
- * attention rows, queue/runtime projections, generated documents, draft/demo artifacts.
+ * attention rows, queue/runtime projections, process runtime instances, generated documents,
+ * draft/demo artifacts.
  *
  * SAFETY: dry-run by default. Delegates deletion to the vetted, config-preserving
  * `enrollment_runtime_reset` cleanup (scripts/demoRuntimeCleanupExecute.ts): it preserves
@@ -63,6 +64,7 @@ const OPERATIONAL_MUST_BE_EMPTY = [
     "opportunities",
     "opportunity_customer_members",
     "operational_tasks",
+    "process_instances",
 ] as const;
 
 async function countOrg(client: Client, table: string, orgId: string): Promise<number> {

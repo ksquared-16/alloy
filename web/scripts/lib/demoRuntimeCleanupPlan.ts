@@ -66,6 +66,87 @@ async function countByIn(
     return total;
 }
 
+async function countOrgScopedAll(supabase: SupabaseAdmin, table: string, orgId: string): Promise<number> {
+    const { count, error } = await supabase.from(table).select("*", { count: "exact", head: true }).eq("org_id", orgId);
+    if (error) throw new Error(`[${table} count org] ${error.message}`);
+    return count ?? 0;
+}
+
+/** Process runtime instances linked to selected opportunities (context) or customer members (subject). */
+async function collectProcessInstanceIdsForTargets(
+    supabase: SupabaseAdmin,
+    orgId: string,
+    opportunityIds: string[],
+    customerMemberIds: string[]
+): Promise<string[]> {
+    const piIds = new Set<string>();
+    for (const part of chunk(opportunityIds, 200)) {
+        const { data, error } = await supabase
+            .from("process_instances")
+            .select("id")
+            .eq("org_id", orgId)
+            .in("context_id", part);
+        if (error) throw new Error(`[process_instances select context_id] ${error.message}`);
+        for (const r of data ?? []) {
+            const id = (r as { id?: string }).id;
+            if (id) piIds.add(id);
+        }
+    }
+    for (const part of chunk(customerMemberIds, 200)) {
+        const { data, error } = await supabase
+            .from("process_instances")
+            .select("id")
+            .eq("org_id", orgId)
+            .in("subject_id", part);
+        if (error) throw new Error(`[process_instances select subject_id] ${error.message}`);
+        for (const r of data ?? []) {
+            const id = (r as { id?: string }).id;
+            if (id) piIds.add(id);
+        }
+    }
+    return [...piIds];
+}
+
+export async function countProcessInstancesForCleanup(
+    supabase: SupabaseAdmin,
+    orgId: string,
+    opportunityIds: string[],
+    customerMemberIds: string[],
+    idsOnly: boolean
+): Promise<number> {
+    if (idsOnly) return countOrgScopedAll(supabase, "process_instances", orgId);
+    const piIds = await collectProcessInstanceIdsForTargets(supabase, orgId, opportunityIds, customerMemberIds);
+    return piIds.length;
+}
+
+export async function deleteProcessInstancesForCleanup(
+    supabase: SupabaseAdmin,
+    orgId: string,
+    opportunityIds: string[],
+    customerMemberIds: string[],
+    idsOnly: boolean
+): Promise<number> {
+    if (idsOnly) {
+        const { data, error } = await supabase.from("process_instances").delete().eq("org_id", orgId).select("id");
+        if (error) throw new Error(`[process_instances delete org] ${error.message}`);
+        return (data ?? []).length;
+    }
+    const piIds = await collectProcessInstanceIdsForTargets(supabase, orgId, opportunityIds, customerMemberIds);
+    if (!piIds.length) return 0;
+    let total = 0;
+    for (const part of chunk(piIds, 200)) {
+        const { data, error } = await supabase
+            .from("process_instances")
+            .delete()
+            .eq("org_id", orgId)
+            .in("id", part)
+            .select("id");
+        if (error) throw new Error(`[process_instances delete id] ${error.message}`);
+        total += (data ?? []).length;
+    }
+    return total;
+}
+
 async function countByInNoOrg(supabase: SupabaseAdmin, table: string, column: string, ids: string[]): Promise<number> {
     if (!ids.length) return 0;
     let total = 0;
@@ -488,6 +569,7 @@ export async function buildDemoCleanupCounts(
             ? await countFieldValuesForEntities(supabase, orgId, "location", locationIdsForFv)
             : 0);
 
+    counts.process_instances = await countProcessInstancesForCleanup(supabase, orgId, opp, members, idsOnly);
     counts.opportunities = opp.length;
     counts.customer_member_contacts =
         (await countByIn(supabase, "customer_member_contacts", "customer_member_id", members, orgId)) +

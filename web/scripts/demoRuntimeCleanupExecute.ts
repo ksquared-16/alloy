@@ -42,6 +42,7 @@ import {
 import {
     buildDemoCleanupCounts,
     buildEnrollmentResetSelection,
+    deleteProcessInstancesForCleanup,
     resolveDemoIds,
 } from "./lib/demoRuntimeCleanupPlan";
 import type { EnrollmentResetOpportunityRow } from "./lib/demoRuntimeCleanupPlan";
@@ -311,6 +312,7 @@ async function executeDeletes(
         }
     }
 
+    deleted.process_instances = await deleteProcessInstancesForCleanup(supabase, orgId, opp, members, idsOnly);
     deleted.opportunities = await deleteByIn(supabase, "opportunities", "id", opp, orgId);
 
     deleted.customer_member_contacts =
