@@ -14,6 +14,7 @@ import WorkspaceSiteFilterPersistenceScopeBridge from "@/app/adminV2/workspace/W
 import { OperationalModeEntryProvider } from "@/lib/adminV2/runtime/operationalSubject/OperationalModeEntryContext";
 import { WorkspaceRouteVmProvider } from "@/lib/adminV2/runtime/surface/workspaceRouteVmContext";
 import { EMPTY_WORKSPACE_ROUTE_VM, type WorkspaceRouteVm } from "@/lib/adminV2/runtime/surface/workspaceRouteVm";
+import { SurfaceHostProvider } from "@/lib/experience/surfaceHost/SurfaceHostContext";
 import type { CSSProperties, ReactNode } from "react";
 
 interface AdminV2WorkspaceClientProvidersProps {
@@ -107,7 +108,11 @@ export default function AdminV2WorkspaceClientProviders({
                     style={workspaceScrollStyle}
                   >
                     <WorkspaceRouteVmProvider value={workspaceRouteVm}>
-                      {children}
+                      {/* Surface Host (NAV-1 (A)) — the canonical client-context owner of
+                          operational-surface focus. Always mounted; no flag, no parallel mode.
+                          Phase 1 is inert by implementation: a passive observer of surface state
+                          (renders children unchanged, no render takeover, no nav interception). */}
+                      <SurfaceHostProvider>{children}</SurfaceHostProvider>
                     </WorkspaceRouteVmProvider>
                   </div>
                   <AdminEntityDrawer />
