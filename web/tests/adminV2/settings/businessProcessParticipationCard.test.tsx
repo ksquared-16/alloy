@@ -9,7 +9,7 @@ import type { ReactNode } from "react";
 
 vi.mock("@/lib/workspace/workspaceDataFetch", () => ({ workspaceDataFetchInit: () => ({}) }));
 
-import BusinessProcessParticipationWorkspace from "@/components/adminV2/settings/businessProcess/BusinessProcessParticipationWorkspace";
+import BusinessProcessParticipationCard from "@/components/adminV2/settings/businessProcess/BusinessProcessParticipationCard";
 
 const CONFIG = {
     version: 1,
@@ -53,25 +53,34 @@ beforeEach(() => {
     );
 });
 
-describe("BusinessProcessParticipationWorkspace — operator concepts only", () => {
-    it("renders Identity (locked), Stage Behavior (editable), Creation (locked), Views, Runtime", async () => {
-        const el = await render(<BusinessProcessParticipationWorkspace departmentId="dept-1" processId="p1" />);
-        // Identity — documents, locked
-        expect(el.querySelector('[data-testid="participation-subject"]')?.textContent).toBe("Child");
-        expect(el.querySelector('[data-testid="participation-context"]')?.textContent).toBe("Household");
-        // Stage behavior — the editable inherit toggle, on
+describe("BusinessProcessParticipationCard — compact process-definition card", () => {
+    it("renders read-only Tracks/Context/Creates facts, the inherit toggle (on), and one runtime note", async () => {
+        const el = await render(<BusinessProcessParticipationCard departmentId="dept-1" processId="p1" />);
+        // read-only facts
+        expect(el.textContent).toContain("Child");
+        expect(el.textContent).toContain("Household");
+        expect(el.querySelector('[data-testid="participation-creation"]')?.textContent).toContain("One participant per child");
+        // the ONE editable control — the inherit toggle, on
         const toggle = el.querySelector('[data-testid="participation-inherit-stage"]') as HTMLInputElement | null;
         expect(toggle?.checked).toBe(true);
-        // Participant creation — locked statement, not a control
-        expect(el.querySelector('[data-testid="participation-creation"]')?.textContent).toContain("One participant is created for each child");
-        // Available views chips present
-        expect(el.querySelector('[data-testid="participation-view-family"]')).not.toBeNull();
-        expect(el.querySelector('[data-testid="participation-view-candidate"]')).not.toBeNull();
-        // Runtime — plain English, no engine terms
+        // one runtime note, plain English
         const runtime = el.querySelector('[data-testid="participation-runtime"]')?.textContent ?? "";
-        expect(runtime).toContain("automatically creates one participant for each child");
-        expect(runtime).not.toContain("process_instances");
-        // NEVER expose engine internals anywhere in the DOM
+        expect(runtime).toContain("keeps each child");
+    });
+
+    it("drops the removed surface: no Operational States editor, no editable Available Views", async () => {
+        const el = await render(<BusinessProcessParticipationCard departmentId="dept-1" processId="p1" />);
+        // Operational States editor is gone
+        expect(el.querySelector('[data-testid="participation-state-labels"]')).toBeNull();
+        expect(el.textContent).not.toContain("Stage labels");
+        // Available Views is no longer an editable control
+        expect(el.querySelector('[data-testid="participation-available-views"]')).toBeNull();
+        expect(el.querySelector('[data-testid="participation-view-family"]')).toBeNull();
+        expect(el.querySelector('[data-testid="participation-view-candidate"]')).toBeNull();
+    });
+
+    it("never exposes engine internals in the DOM", async () => {
+        const el = await render(<BusinessProcessParticipationCard departmentId="dept-1" processId="p1" />);
         expect(el.textContent).not.toContain("process_instances");
         expect(el.textContent).not.toContain("ProcessParticipant");
         expect(el.textContent).not.toContain("opportunity_customer_members");

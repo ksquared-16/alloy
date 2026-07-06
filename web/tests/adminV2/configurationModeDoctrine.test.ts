@@ -43,21 +43,23 @@ describe("Configuration Mode doctrine", () => {
         expect(CONFIGURATION_MODE_BRAND_TOKENS).toContain("rgba(0, 162, 131, 0.08)");
     });
 
-    it("process queue includes Participation, excludes Presentation as a top-level nav item", () => {
+    it("process queue excludes Presentation and Participation as top-level nav items", () => {
         expect(CONFIGURATION_PROCESS_QUEUE_SECTIONS).toEqual([
             "stages",
-            "participation",
             "work-views",
             "actions",
             "automation",
             "health",
         ]);
         expect(CONFIGURATION_PROCESS_QUEUE_SECTIONS).not.toContain("presentation");
+        // Participation is a compact card at the top of Stages, not a nav section.
+        expect(CONFIGURATION_PROCESS_QUEUE_SECTIONS).not.toContain("participation");
 
         const nav = read("components/adminV2/settings/businessProcess/BusinessProcessConfigurationNav.tsx");
         expect(nav).toContain("CONFIGURATION_PROCESS_QUEUE_GROUPS");
         expect(nav).not.toContain("business-process-nav-presentation");
         expect(nav).not.toContain('id: "presentation"');
+        expect(nav).not.toContain("business-process-nav-participation");
     });
 
     it("uses Processes title and Work Views label", () => {
