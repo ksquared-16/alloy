@@ -1,18 +1,31 @@
 # Enrollment Process Runtime — canonical architecture
 
-Status: **implemented + verified on staging (PR #72).** This is the authoritative reference for how
-Enrollment runs at runtime. Where any other doc disagrees about ownership, this doc wins.
+Status: **implemented + verified on staging (PR #72 + Enrollment Process V1).** This is the authoritative
+reference for how Enrollment runs at runtime. Where any other doc disagrees about ownership, this doc wins.
+For the V1 implementation record, subsystem status, and freeze gate, see the
+**[Enrollment Process V1 Implementation Handoff](./enrollment-process-v1-handoff.md)**.
 
 Enrollment is the **reference implementation** of the generic platform pattern
 **Business Process → Process Instance → Stage → Work → Outcome → Materialization → Durable Operational
 Facts → Attendance / Billing / Scheduling.** Nothing here is enrollment-specific except the durable-fact
 tables.
 
+As of Enrollment Process V1, Enrollment is the **first *configured* Business Process** on a generic
+Process Engine (`lib/process/engine/*`) that knows only `subject / context / stage / state`. All
+Enrollment specifics live in a **Definition** (`lib/process/definitions/enrollment/*`) and in
+operator-authored config (`participation_v1`) the Process Builder writes. Adding another process
+(Billing / Staffing / Compliance) is a new Definition + config with **zero engine edits** — proven by
+`tests/process/engine/processParticipant.test.ts`.
+
 ---
 
 ## Canonical ownership chain
 
 ```
+Process Builder         (/settings/processes → Enrollment → Stages)
+      ↓                 operator authors the participation definition (participation_v1)
+Participation Definition (config layer on lifecycle_builder_v1; resolveEnrollmentParticipationContract)
+      ↓                 → engine reads a 4-field ProcessParticipationContract, nothing more
 Business Process        (config: stages, work templates, outcome rules)
       ↓
 Process Instance        (the running journey — process_instances)
@@ -71,6 +84,10 @@ Three axes never collapse into one status model:
 | **Operational Read Model** | `operationalEnrollmentReadModel` (`buildOperationalEnrollmentReadModelFor{Agreement,MemberSite}`) | The durable-fact reader for surfaces once materialized. |
 | **Participation edit** | `applyChildParticipationEdit` (`POST /api/admin/child-participation`) | Pre-materialization → `process_instances.metadata`; post → durable model. **Never creates/writes OCM.** |
 | **Work Views (child-grain)** | `childGrainProcessInstanceQueue` / `ocmEnrollmentTrackQueueBuilder` | Read `process_instances` first; OCM fallback for legacy rows only. |
+| **Participation contract** | `resolveEnrollmentParticipationContract` (Definition) ← `participation_v1` config | Process Builder is the source of truth; engine reads the derived 4-field contract. `inherits_context_stage` is **locked ON** (disabling it null-stages new children out of the Lead lane). |
+| **Effective-stage membership** | `enrollmentEffectiveStageMembership` / engine `effectiveStage()` | `stage_key ?? context stage`; the ONE rule shared by queues + metrics. OCM canonical only if `ALLOY_ENROLLMENT_QUEUE_OCM_FALLBACK=1` (default OFF). |
+| **Participant metrics** | `enrollmentParticipantMetrics` | `active_leads` / `new_leads` / `waitlisted`; `lead_count` = **deprecated alias** → `active_leads`. Same membership rule as queues. |
+| **Work-View count semantics** | `workViewParticipantProjection` | `participantCount` (metric truth) vs `rowCount` (operator-visible) + `countUnit` / `countUnitLabel` per grain. |
 
 The **Process Instance never becomes the source of operational truth.** It owns the journey and, on the
 enrolled outcome, *creates or updates* the durable facts; the **Agreement** is the source of truth
