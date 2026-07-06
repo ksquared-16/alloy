@@ -13,8 +13,10 @@ import {
     PRESENTATION_RUNTIME_LABELS,
     runtimeLabelProps,
 } from "@/components/presentation/runtimeLabels";
+import { useEffect, useRef } from "react";
 import { MOTION_SETTLE } from "@/lib/motion/motionTokens";
 import { useAcknowledgeOnActive } from "@/lib/motion/useMotionAcknowledge";
+import { markPerceived } from "@/lib/perf/perceivedPerf";
 
 /**
  * One work-view pill. Its own component so `acknowledge` fires per-pill on the rising edge
@@ -32,14 +34,30 @@ function WorkViewPill({
     onPrefetch?: (id: string) => void;
 }) {
     const ack = useAcknowledgeOnActive(view.isActive);
+
+    const wasActiveRef = useRef(view.isActive);
+    useEffect(() => {
+        if (view.isActive && !wasActiveRef.current) {
+            markPerceived("pill_switch", "acknowledge", { view_id: view.id });
+        }
+        wasActiveRef.current = view.isActive;
+    }, [view.isActive, view.id]);
+
+    const warm = onPrefetch
+        ? () => {
+              markPerceived("pill_switch", "warm", { view_id: view.id, warm_seam: "pill_hover" });
+              onPrefetch(view.id);
+          }
+        : undefined;
+
     return (
         <button
             type="button"
             role="tab"
             aria-selected={view.isActive}
             data-work-view-id={view.id}
-            onPointerEnter={onPrefetch ? () => onPrefetch(view.id) : undefined}
-            onFocus={onPrefetch ? () => onPrefetch(view.id) : undefined}
+            onPointerEnter={warm}
+            onFocus={warm}
             onClick={() => onSelect(view.id)}
             className={`motion-control inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border px-3 py-1 text-xs font-semibold ${
                 view.isActive
