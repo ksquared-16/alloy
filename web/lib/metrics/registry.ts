@@ -51,6 +51,19 @@ const DEFINITIONS: Record<OipMetricKey, MetricDefinition> = {
         sources: ["process_instances", "opportunities", "customer_members"],
         snapshotSemantics: true,
     },
+    "enrollment.active_families": {
+        key: "enrollment.active_families",
+        label: "Active families",
+        description:
+            "Distinct live enrollment opportunities (cases/households) with at least one active-lead participant. " +
+            "Same live predicate as enrollment.active_leads, counted at opportunity grain.",
+        pack: "enrollment",
+        computationKind: "entity_snapshot",
+        format: "count",
+        defaultWindow: "rolling_30d",
+        sources: ["process_instances", "opportunities", "customer_members"],
+        snapshotSemantics: true,
+    },
     "enrollment.new_leads": {
         key: "enrollment.new_leads",
         label: "New leads",

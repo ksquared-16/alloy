@@ -7,6 +7,7 @@ export type OipMetricKey =
     | "enrollment.tour_conversion_rate"
     | "enrollment.lead_count"
     | "enrollment.active_leads"
+    | "enrollment.active_families"
     | "enrollment.new_leads"
     | "enrollment.waitlisted"
     | "enrollment.tour_completed_count"

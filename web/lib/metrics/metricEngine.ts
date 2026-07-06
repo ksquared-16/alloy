@@ -16,6 +16,7 @@ import {
 } from "@/lib/metrics/resolvers/eventWindowMetrics";
 import {
     resolveEnrollmentActiveLeads,
+    resolveEnrollmentActiveFamilies,
     resolveEnrollmentNewLeads,
     resolveEnrollmentWaitlisted,
     resolveEnrollmentLeadCountCompat,
@@ -48,6 +49,8 @@ async function resolveLiveMetric(ctx: MetricResolveContext, key: OipMetricKey): 
             return resolveEnrollmentLeadCountCompat(ctx);
         case "enrollment.active_leads":
             return resolveEnrollmentActiveLeads(ctx);
+        case "enrollment.active_families":
+            return resolveEnrollmentActiveFamilies(ctx);
         case "enrollment.new_leads":
             return resolveEnrollmentNewLeads(ctx);
         case "enrollment.waitlisted":

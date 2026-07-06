@@ -18,6 +18,7 @@ vi.mock("@/lib/process/definitions/enrollment", async (importOriginal) => {
 
 import {
     resolveEnrollmentActiveLeads,
+    resolveEnrollmentActiveFamilies,
     resolveEnrollmentNewLeads,
     resolveEnrollmentWaitlisted,
     resolveEnrollmentLeadCountCompat,
@@ -53,10 +54,12 @@ async function counts() {
 describe("Lyons scenario — metrics count participants", () => {
     beforeEach(() => loadMock.mockReset());
 
-    it("two children both at Lead → Active 2 / New 2 / Waitlisted 0", async () => {
+    it("two children both at Lead → Active 2 / New 2 / Waitlisted 0 / Families 1", async () => {
         // Both children ride the family track (stage null → effective 'lead' from the household).
         loadMock.mockResolvedValue([child({ id: "a" }), child({ id: "b" })]);
         expect(await counts()).toEqual({ active: 2, newLeads: 2, waitlisted: 0 });
+        expect((await resolveEnrollmentActiveFamilies(ctx)).value).toBe(1);
+        expect((await resolveEnrollmentActiveFamilies(ctx)).meta).toMatchObject({ grain: "case" });
     });
 
     it("move one child to Waitlist → Active 2 / New 1 / Waitlisted 1", async () => {

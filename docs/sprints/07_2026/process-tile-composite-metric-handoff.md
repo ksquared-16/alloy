@@ -37,3 +37,16 @@ Add **`enrollment.active_families`** (or rename/registry-align an opportunity-gr
 - **Pairing:** configure as Primary Signal with label override `Families`; set Supporting Signal to `enrollment.active_leads` with label override `Children` for composite display
 
 Until that calculation ships, composite display works in the renderer but both sides resolve participant counts if operators pick only existing enrollment participant metrics.
+
+## Update (landed on staging)
+
+**`enrollment.active_families`** is now registered:
+
+- **Grain:** opportunity/case (`distinct context_id` among `isActiveLeadParticipant`)
+- **Resolver:** `resolveEnrollmentActiveFamilies` — same enrollment projection + semantics as `enrollment.active_leads`
+- **Consumer:** `business_process_tile`
+
+**Surface Builder config for `25 Families • 42 Children`:**
+
+1. Primary metric: `enrollment.active_families` — title override `Families`
+2. Supporting metric: `enrollment.active_leads` — title override `Children`

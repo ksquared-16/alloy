@@ -28,6 +28,7 @@ export {
     isNewLeadParticipant,
     isWaitlistedParticipant,
     countActiveLeadParticipants,
+    countActiveLeadFamilies,
     countNewLeadParticipants,
     countWaitlistedParticipants,
 } from "./enrollmentSemantics";

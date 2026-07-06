@@ -102,3 +102,23 @@ export const countNewLeadParticipants = (ps: readonly EnrollmentParticipant[], s
     countBy(ps, isNewLeadParticipant, scope);
 export const countWaitlistedParticipants = (ps: readonly EnrollmentParticipant[], scope?: EnrollmentCountScope) =>
     countBy(ps, isWaitlistedParticipant, scope);
+
+/** Active Lead at opportunity/case grain — distinct live contexts with ≥1 active-lead participant. */
+function countDistinctContextsBy(
+    participants: readonly EnrollmentParticipant[],
+    predicate: (p: EnrollmentParticipant) => boolean,
+    scope?: EnrollmentCountScope,
+): number {
+    const seen = new Set<string>();
+    for (const p of participants) {
+        if (scope && !participantInScope(p, scope)) continue;
+        if (!predicate(p)) continue;
+        const contextId = p.contextId?.trim();
+        if (!contextId) continue;
+        seen.add(contextId);
+    }
+    return seen.size;
+}
+
+export const countActiveLeadFamilies = (ps: readonly EnrollmentParticipant[], scope?: EnrollmentCountScope) =>
+    countDistinctContextsBy(ps, isActiveLeadParticipant, scope);

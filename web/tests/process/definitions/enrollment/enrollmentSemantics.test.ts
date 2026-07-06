@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import { buildProcessParticipant } from "@/lib/process/engine";
 import {
     countActiveLeadParticipants,
+    countActiveLeadFamilies,
     countNewLeadParticipants,
     countWaitlistedParticipants,
     isActiveLeadParticipant,
@@ -17,6 +18,7 @@ import {
 function participant(over: {
     id?: string;
     subjectId?: string;
+    contextId?: string;
     stageKey?: string | null;
     contextStageKey?: string | null;
     state?: string | null;
@@ -38,7 +40,7 @@ function participant(over: {
             process_key: over.processKey ?? "enrollment",
             subject_type: "child",
             subject_id: over.subjectId ?? "cm",
-            context_id: "opp-lyons",
+            context_id: over.contextId ?? "opp-lyons",
             stage_key: over.stageKey ?? null,
             state: over.state ?? null,
             close_reason_key: over.closeReasonKey ?? null,
@@ -88,14 +90,15 @@ describe("Enrollment semantics — Active / New / Waitlisted (composed from engi
 describe("the Lyons oracle — one household, two children", () => {
     const childA = participant({ id: "a", subjectId: "cm-a", stageKey: null, contextStageKey: "lead" }); // Lead
     const childB = participant({ id: "b", subjectId: "cm-b", stageKey: "waitlist" }); //                    Waitlist
-    const siblingOtherWu = participant({ id: "x", subjectId: "cm-x", stageKey: "lead", scopeId: "wu-2" });
-    const orphan = participant({ id: "o", subjectId: "cm-o", stageKey: "lead", scopeId: null });
+    const siblingOtherWu = participant({ id: "x", subjectId: "cm-x", stageKey: "lead", scopeId: "wu-2", contextId: "opp-other-wu" });
+    const orphan = participant({ id: "o", subjectId: "cm-o", stageKey: "lead", scopeId: null, contextId: "opp-orphan" });
     const enrolled = participant({ id: "e", subjectId: "cm-e", stageKey: "enrolled", state: "enrolled" });
     const all = [childA, childB, siblingOtherWu, orphan, enrolled];
     const scope = { orgId: "org-1", scopeId: "wu-1" };
 
     it("Active 2 / New 1 / Waitlisted 1, scoped to the household's work unit (participants, not households)", () => {
         expect(countActiveLeadParticipants(all, scope)).toBe(2);
+        expect(countActiveLeadFamilies(all, scope)).toBe(1);
         expect(countNewLeadParticipants(all, scope)).toBe(1);
         expect(countWaitlistedParticipants(all, scope)).toBe(1);
         expect(childA.contextId).toBe(childB.contextId); // same household, still counts 2
@@ -103,6 +106,7 @@ describe("the Lyons oracle — one household, two children", () => {
 
     it("unscoped, sibling-WU + orphan leads join the org rollup", () => {
         expect(countActiveLeadParticipants(all, { orgId: "org-1" })).toBe(4);
+        expect(countActiveLeadFamilies(all, { orgId: "org-1" })).toBe(3);
         expect(countNewLeadParticipants(all, { orgId: "org-1" })).toBe(3);
     });
 });

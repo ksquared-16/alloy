@@ -5,6 +5,7 @@
  * from queue membership.
  *
  *   enrollment.active_leads — live participant, not enrolled/withdrawn/not_enrolling (stage-agnostic)
+ *   enrollment.active_families — same live predicate, distinct opportunity/case contexts
  *   enrollment.new_leads    — live, undispositioned, effective stage 'lead'
  *   enrollment.waitlisted   — live, waitlist stage or waitlisted state
  *
@@ -21,6 +22,7 @@ import { resolveMetricTimeWindowBounds } from "@/lib/metrics/timeWindow";
 import {
     enrollmentProjection,
     countActiveLeadParticipants,
+    countActiveLeadFamilies,
     countNewLeadParticipants,
     countWaitlistedParticipants,
     type EnrollmentParticipant,
@@ -35,6 +37,7 @@ async function resolveParticipantMetric(
     ctx: MetricResolveContext,
     key: OipMetricKey,
     counter: EnrollmentCounter,
+    grain: "participant" | "case" = "participant",
 ): Promise<ResolvedMetricValue> {
     const def = getMetricDefinition(key);
     const now = ctx.now ?? new Date();
@@ -58,12 +61,15 @@ async function resolveParticipantMetric(
         computedAtIso: now.toISOString(),
         sources: def.sources,
         resolveMode: ctx.mode ?? "live",
-        meta: { count: value, grain: "participant", scope: scopeId ? "work_unit" : "org" },
+        meta: { count: value, grain, scope: scopeId ? "work_unit" : "org" },
     };
 }
 
 export function resolveEnrollmentActiveLeads(ctx: MetricResolveContext): Promise<ResolvedMetricValue> {
     return resolveParticipantMetric(ctx, "enrollment.active_leads", countActiveLeadParticipants);
+}
+export function resolveEnrollmentActiveFamilies(ctx: MetricResolveContext): Promise<ResolvedMetricValue> {
+    return resolveParticipantMetric(ctx, "enrollment.active_families", countActiveLeadFamilies, "case");
 }
 export function resolveEnrollmentNewLeads(ctx: MetricResolveContext): Promise<ResolvedMetricValue> {
     return resolveParticipantMetric(ctx, "enrollment.new_leads", countNewLeadParticipants);
