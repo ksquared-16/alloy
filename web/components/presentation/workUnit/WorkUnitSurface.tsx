@@ -106,6 +106,13 @@ function WorkUnitSurfaceBody({
     model: WorkUnitSurfaceModel;
     intents: WorkUnitSurfaceIntents;
 }) {
+    // Queue Region title tracks the SELECTED work-view pill (Excel-tab semantics) — not the Work
+    // Unit header subtitle. Match by `isActive` first, then by the active id, so the title swaps
+    // in step with the pill the operator is on.
+    const activeWorkView =
+        model.workViews.find((view) => view.isActive) ??
+        model.workViews.find((view) => view.id === model.activeWorkViewId) ??
+        null;
     return (
         <>
             <div className="min-w-0 flex-1 space-y-3">
@@ -121,7 +128,7 @@ function WorkUnitSurfaceBody({
                 >
                     <QueueRegion
                         queue={model.queue}
-                        title={model.header.subtitle}
+                        title={activeWorkView?.label ?? null}
                         selectedRecordId={model.selectedRecordId}
                         workViewId={model.activeWorkViewId}
                         workUnitId={model.workUnitId}
