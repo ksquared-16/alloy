@@ -50,10 +50,11 @@ export function WorkspaceSurface() {
     return (
         <div
             {...runtimeLabelProps(PRESENTATION_RUNTIME_LABELS.workspaceSurface)}
-            // `reveal` choreography: when `model.ready` clears the gate the class is added to
-            // this (already-mounted) container, playing the one-frame fade+lift over the
-            // resolved surface. The skeleton state carries no reveal.
-            className={`flex flex-col gap-5${model.ready ? " motion-reveal" : ""}`}
+            // `surface-enter` choreography: when `model.ready` clears the gate the class is added
+            // to this container, sliding the Workspace surface in FROM THE LEFT — returning to the
+            // process overview (spatially opposite the Work Unit's drill-in from the right). The
+            // skeleton state carries no enter.
+            className={`flex flex-col gap-5${model.ready ? " motion-surface-enter-back" : ""}`}
         >
             {!model.ready ? (
                 <WorkspaceSurfaceSkeleton />
