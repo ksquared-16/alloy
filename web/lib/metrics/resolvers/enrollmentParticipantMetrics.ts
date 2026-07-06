@@ -10,6 +10,8 @@
  *
  * enrollment.lead_count is a DEPRECATED alias → active_leads (one definition at every scope).
  * Effective stage = process_instances.stage_key ?? opportunities.stage_key (engine coalesce).
+ *
+ * Grain: participant/child (process_instances). Work View queue totals use opportunity/case grain.
  */
 
 import type { MetricResolveContext, OipMetricKey, ResolvedMetricValue } from "@/lib/metrics/types";

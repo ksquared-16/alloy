@@ -53,10 +53,12 @@ import { dedupeAdminFetch } from "@/lib/workspace/workspaceAdminFetchDedupe";
 import { workspaceDataFetchInit } from "@/lib/workspace/workspaceDataFetch";
 import {
     OPPORTUNITY_QUEUE_UPDATED_EVENT,
+    isQueueMembershipMutationActionKey,
     parseOpportunityQueueUpdatedDetail,
     shouldRefetchWorkUnitQueueRowsForEvent,
     shouldRefreshQueueSummariesForEvent,
 } from "@/lib/admin/opportunityQueueRefreshEvent";
+import { bustOperatorRuntimeReadCaches } from "@/lib/admin/operatorRuntimeReadCacheBust";
 import { prefetchOpportunityDrawerOnRowIntent } from "@/lib/admin/opportunityDrawerIntentPrefetch";
 import { resolveQueueRowWarmTarget } from "@/lib/presentation/runtime/queueRowWarmTarget";
 import { warmOperatorWorkUnitEntryFromHref } from "@/lib/admin/operatorWorkUnitEntryWarm";
@@ -387,6 +389,9 @@ export function useWorkUnitSurfaceRuntime(): WorkUnitSurfaceRuntime {
         const onQueueUpdated = (ev: Event) => {
             const detail = parseOpportunityQueueUpdatedDetail(ev);
             const visibleOpportunityIds = visibleRowIdsRef.current;
+            if (isQueueMembershipMutationActionKey(detail?.action_key)) {
+                bustOperatorRuntimeReadCaches();
+            }
             const refetchRows = shouldRefetchWorkUnitQueueRowsForEvent({ detail, visibleOpportunityIds });
             const refreshSummaries = shouldRefreshQueueSummariesForEvent({ detail, visibleOpportunityIds });
             if (refetchRows || refreshSummaries) setQueueRefreshNonce((n) => n + 1);

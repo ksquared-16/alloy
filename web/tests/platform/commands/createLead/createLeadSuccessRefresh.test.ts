@@ -39,6 +39,21 @@ describe("buildCreateLeadSuccess — refresh contract", () => {
         );
     });
 
+    it("includes process-context routing fields from action detail", () => {
+        const success = buildCreateLeadSuccess({
+            result: okResult({
+                opportunity_id: "opp-1",
+                work_unit_id: "wu-1",
+                work_unit_key: "pipeline",
+                work_view_id: "fresh_prospects",
+                status_key: "open",
+            }),
+        });
+        expect(success.focusPanelHref).toBe("/workspace/work-unit/fresh-prospects/opp-1");
+        expect(success.workUnitKey).toBe("pipeline");
+        expect(success.workViewId).toBe("fresh_prospects");
+    });
+
     it("omits the work-unit target when the lead has no resolved work unit (safe degrade)", () => {
         const success = buildCreateLeadSuccess({
             result: okResult({ opportunity_id: "opp-1", work_unit_id: null, status_key: "new_inquiry" }),

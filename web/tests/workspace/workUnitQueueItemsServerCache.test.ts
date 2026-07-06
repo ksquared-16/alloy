@@ -3,6 +3,7 @@ import { describe, expect, it, beforeEach } from "vitest";
 import {
     buildWorkUnitQueueItemsServerCacheKey,
     clearWorkUnitQueueItemsServerCacheForTests,
+    invalidateWorkUnitQueueItemsServerCacheForWorkUnit,
     readWorkUnitQueueItemsServerCache,
     writeWorkUnitQueueItemsServerCache,
     WORK_UNIT_QUEUE_ITEMS_SERVER_CACHE_TTL_MS,
@@ -66,5 +67,36 @@ describe("workUnitQueueItemsServerCache", () => {
         });
         const expiredAt = Date.now() + WORK_UNIT_QUEUE_ITEMS_SERVER_CACHE_TTL_MS + 1;
         expect(readWorkUnitQueueItemsServerCache(key, expiredAt)).toBeNull();
+    });
+
+    it("invalidateWorkUnitQueueItemsServerCacheForWorkUnit clears only matching org/work unit keys", () => {
+        const payload = {
+            result: { total: 1, items: [{ id: "a" }] } as never,
+            rowsPerf: { enrichment_ms: 0 } as never,
+        };
+        const keyWu1 = buildWorkUnitQueueItemsServerCacheKey({
+            orgId: "org-1",
+            workUnitId: "wu-1",
+            queueKey: "lifecycle_lead",
+            queueScopeKey: "fp|view:_all|ok",
+            attentionBucketKey: null,
+            rowEnrichment: "queue_list",
+            omitTotalCount: false,
+            workViewId: "scoped_view",
+        });
+        const keyWu2 = buildWorkUnitQueueItemsServerCacheKey({
+            orgId: "org-1",
+            workUnitId: "wu-2",
+            queueKey: "lifecycle_lead",
+            queueScopeKey: "fp|view:_all|ok",
+            attentionBucketKey: null,
+            rowEnrichment: "queue_list",
+            omitTotalCount: false,
+        });
+        writeWorkUnitQueueItemsServerCache(keyWu1, payload);
+        writeWorkUnitQueueItemsServerCache(keyWu2, payload);
+        invalidateWorkUnitQueueItemsServerCacheForWorkUnit("org-1", "wu-1");
+        expect(readWorkUnitQueueItemsServerCache(keyWu1)).toBeNull();
+        expect(readWorkUnitQueueItemsServerCache(keyWu2)).not.toBeNull();
     });
 });

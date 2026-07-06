@@ -5,6 +5,8 @@ import {
     diagnoseRecordWorkViewPlacement,
     enrichRowsWithDerivedStage,
     filterQueueRowsForWorkView,
+    applyWorkViewFilterToQueueItemsResult,
+    firstMatchingVisibleWorkView,
     recordMatchesWorkView,
     resolveFocusPanelScope,
 } from "@/lib/lifecycle/operationalProjection";
@@ -156,6 +158,45 @@ describe("New Leads vs Registration placement (stage derived from status)", () =
         ];
         const stageFilters = [{ field_key: "opportunity_stage" as const, operator: "equals" as const, value: "lead" }];
         expect(filterQueueRowsForWorkView(rows, stageFilters, "all").map((r) => r.id)).toEqual(["a"]);
+    });
+
+    it("applyWorkViewFilterToQueueItemsResult returns true filtered total with paginated items", () => {
+        const stageFilters = [{ field_key: "opportunity_stage" as const, operator: "equals" as const, value: "lead" }];
+        const page = applyWorkViewFilterToQueueItemsResult({
+            result: {
+                queue: { key: "lifecycle_lead" },
+                items: [
+                    { id: "a", stage_key: "lead" },
+                    { id: "b", stage_key: "lead" },
+                    { id: "c", stage_key: "waitlist" },
+                ],
+                total: 3,
+                limit: 500,
+                offset: 0,
+                total_omitted: true,
+            },
+            filters: stageFilters,
+            pageLimit: 1,
+            pageOffset: 0,
+        });
+        expect(page.total).toBe(2);
+        expect(page.items.map((r) => r.id)).toEqual(["a"]);
+        expect(page.total_omitted).toBeUndefined();
+    });
+
+    it("firstMatchingVisibleWorkView prefers predicate-scoped views over include-all", () => {
+        const views: WorkViewConfigV1Stored[] = [
+            { id: "all", label: "All", display_order: 1, visible_in_runtime: true, filters_v1: [] },
+            {
+                id: "scoped",
+                label: "Scoped",
+                display_order: 2,
+                visible_in_runtime: true,
+                filters_v1: [{ field_key: "opportunity_stage", operator: "equals", value: "lead" }],
+            },
+        ];
+        const match = firstMatchingVisibleWorkView({ id: "r1", stage_key: "lead" }, views);
+        expect(match?.id).toBe("scoped");
     });
 
     it("projection with statusStageMap: New Leads = 1, All Leads = 1 (counts agree)", () => {

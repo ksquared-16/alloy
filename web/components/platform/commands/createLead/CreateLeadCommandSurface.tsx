@@ -23,6 +23,7 @@
  * @see web/lib/platform/commands/createLead/createLeadSuccess.ts
  */
 
+import { useRef } from "react";
 import {
     CreateLeadModal,
     type CreateLeadFormPayload,
@@ -44,8 +45,8 @@ export type CreateLeadCommandSurfaceProps = {
     surface?: string;
     title?: string;
     onClose: () => void;
-    /** Open the created record (focus panel / drawer). Receives the authoritative created id. */
-    onOpenCreatedRecord: (opportunityId: string) => void;
+    /** Open the created record in Work Unit Focus Panel (Work mode). */
+    onOpenCreatedRecord: (opportunityId: string, focusPanelHref?: string) => void;
     /**
      * Standardized refresh hook. Called with the success descriptor so the host can invalidate
      * focus-panel/queue caches per `refreshTargets` instead of a full reload. Optional: when a
@@ -70,6 +71,8 @@ export function CreateLeadCommandSurface(props: CreateLeadCommandSurfaceProps) {
         onRefresh,
     } = props;
 
+    const lastSuccessRef = useRef<CreateLeadSuccess | null>(null);
+
     return (
         <CreateLeadModal
             open={open}
@@ -93,6 +96,7 @@ export function CreateLeadCommandSurface(props: CreateLeadCommandSurfaceProps) {
                 if (!success.createdRecordId) {
                     throw new Error("Lead was created but no opportunity id was returned.");
                 }
+                lastSuccessRef.current = success;
                 // Canonical cross-surface queue/count refresh seam: every mounted work-unit listener
                 // refetches its lane rows + pill counts so the new lead appears in New Leads without a
                 // full reload. `create_lead` is registered as a queue-membership mutation so the row
@@ -106,7 +110,9 @@ export function CreateLeadCommandSurface(props: CreateLeadCommandSurfaceProps) {
                 onRefresh?.(success);
                 return { opportunity_id: success.createdRecordId };
             }}
-            onCreated={(opportunityId) => onOpenCreatedRecord(opportunityId)}
+            onCreated={(opportunityId) =>
+                onOpenCreatedRecord(opportunityId, lastSuccessRef.current?.focusPanelHref)
+            }
         />
     );
 }

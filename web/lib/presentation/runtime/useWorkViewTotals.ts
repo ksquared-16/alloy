@@ -10,6 +10,8 @@
  * to the view renders it on that same location — so tile count, pill count, and rendered
  * row count agree by construction. Lane summaries are NEVER a displayed count (they
  * evaluate lanes, not view predicates).
+ *
+ * Grain: opportunity/case (queue row). Process participant metrics may use a different grain.
  */
 
 import { useEffect, useMemo, useState } from "react";

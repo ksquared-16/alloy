@@ -8,7 +8,6 @@ import type { ReactNode } from "react";
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }) }));
-vi.mock("@/contexts/AdminDrawerContext", () => ({ useAdminDrawer: () => ({ openDrawer: vi.fn() }) }));
 // Mock the platform modal so we can assert it mounts with the right scope.
 vi.mock("@/components/platform/commands/createLead/CreateLeadCommandSurface", () => ({
     CreateLeadCommandSurface: ({

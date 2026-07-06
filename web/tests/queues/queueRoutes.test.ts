@@ -383,6 +383,124 @@ describe("Queue API routes (thin wrappers)", () => {
         expect(filteredJson.total).toBe(1);
     });
 
+    it("GET queue items with work_view_id returns true filtered total when limit=1", async () => {
+        vi.resetModules();
+        const baseRows = [
+            { id: "opp-lead-1", name: "Lead One", stage_key: "lead", status_key: "open" },
+            { id: "opp-lead-2", name: "Lead Two", stage_key: "lead", status_key: "open" },
+        ];
+        const getItems = vi.fn(async (params: { limit?: number; offset?: number; omitTotalCount?: boolean }) => ({
+            result: {
+                queue: { key: "lifecycle_lead", label: "Lead", entity_type: "opportunity", priority: "standard", display: "list" },
+                items: baseRows,
+                total: 2,
+                limit: params.limit ?? 50,
+                offset: params.offset ?? 0,
+                total_omitted: params.omitTotalCount ? true : undefined,
+            },
+            rowsPerf: {
+                load_def_ms: 0,
+                operational_day_ms: 0,
+                base_query_ms: 0,
+                count_ms: 0,
+                status_defs_ms: 0,
+                enrichment_ms: 0,
+                service_total_ms: 0,
+                status_defs_cache_hit: null,
+                status_defs_resolve: null,
+                queue_def_cache_hit: false,
+                operational_day_cache_hit: false,
+                enrichment_subtimings_ms: null,
+            },
+        }));
+        vi.doMock("@/lib/queues/QueueService", () => ({
+            QueueServiceError: class QueueServiceError extends Error {
+                status: number;
+                code: string;
+                constructor(m: string, s: number, c: string) {
+                    super(m);
+                    this.status = s;
+                    this.code = c;
+                }
+            },
+            getWorkUnitQueueItems: getItems,
+        }));
+
+        const deptMetadata = {
+            lifecycle_builder_v1: {
+                version: 1,
+                active_process_id: "proc-enrollment",
+                processes: [
+                    {
+                        id: "proc-enrollment",
+                        key: "enrollment",
+                        name: "Enrollment",
+                        primary_entity: "opportunity",
+                        sort_order: 0,
+                        is_active: true,
+                        work_views_v1: [
+                            {
+                                id: "new_leads",
+                                label: "New Leads",
+                                display_order: 1,
+                                visible_in_runtime: true,
+                                compat_queue_key: "lifecycle_lead",
+                                filters_v1: [
+                                    { field_key: "opportunity_stage", operator: "equals", value: "lead" },
+                                ],
+                            },
+                        ],
+                        stages: [],
+                    },
+                ],
+            },
+        };
+
+        mockCreateAdminClient.mockReturnValue({
+            from: vi.fn((table: string) => {
+                if (table === "work_units") {
+                    return {
+                        select: vi.fn(() =>
+                            supabaseChain({ data: { id: "wu1", department_id: "dept1" }, error: null }),
+                        ),
+                    };
+                }
+                if (table === "departments") {
+                    return {
+                        select: vi.fn(() =>
+                            supabaseChain({ data: { metadata: deptMetadata }, error: null }),
+                        ),
+                    };
+                }
+                return {
+                    select: vi.fn(() =>
+                        supabaseChain({
+                            data:
+                                table === "user_profiles"
+                                    ? { timezone: "America/Los_Angeles" }
+                                    : { metadata: { timezone: "America/Los_Angeles" } },
+                            error: null,
+                        }),
+                    ),
+                };
+            }),
+        });
+
+        const { GET } = await import("@/app/api/admin/queues/[workUnitId]/[queueKey]/route");
+        const res = await GET(
+            new NextRequest(
+                "http://localhost/api/admin/queues/wu1/lifecycle_lead?limit=1&count_mode=exact&work_view_id=new_leads",
+            ),
+            { params: Promise.resolve({ workUnitId: "wu1", queueKey: "lifecycle_lead" }) },
+        );
+        expect(res.status).toBe(200);
+        const json = (await res.json()) as { items?: Array<{ id?: string }>; total?: number; total_omitted?: boolean };
+        expect(getItems).toHaveBeenCalledWith(expect.objectContaining({ limit: 500, offset: 0, omitTotalCount: true }));
+        expect(json.total).toBe(2);
+        expect(json.items?.map((r) => r.id)).toEqual(["opp-lead-1"]);
+        expect(json.total_omitted).toBeUndefined();
+    });
+
     it("GET /api/admin/departments/[id]/work-unit-queue-summaries passes scope constraints when restricted", async () => {
         mockGetAdminAccessContext.mockResolvedValue({
             ok: true,

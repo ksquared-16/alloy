@@ -27,6 +27,12 @@ import {
     validateMarkLostPayload,
     validateOpportunityStatusTransitionForAction,
 } from "@/lib/admin/actions/entryLifecycleActions";
+import { firstMatchingVisibleWorkView } from "@/lib/lifecycle/operationalProjection";
+import {
+    fetchDepartmentMetadataForWorkUnit,
+    savedWorkViewsFromDepartmentMetadata,
+} from "@/lib/lifecycle/resolveWorkViewRuntimeContext";
+import { invalidateWorkUnitQueueItemsServerCacheForWorkUnit } from "@/lib/workspace/workUnitQueueItemsServerCache";
 import {
     executeConfirmTourAction,
     executeRecordTourOutcomeAction,
@@ -324,6 +330,35 @@ export async function executeAdminAction(
         if (!created.ok) {
             return { ok: false, correlation_id: correlationId, error: created.error, status: created.status };
         }
+
+        let workUnitKey: string | null = null;
+        let workViewId: string | null = null;
+        if (created.work_unit_id) {
+            invalidateWorkUnitQueueItemsServerCacheForWorkUnit(ctx.orgId, created.work_unit_id);
+            const { data: wuRow } = await supabase
+                .from("work_units")
+                .select("key, department_id")
+                .eq("id", created.work_unit_id)
+                .eq("org_id", ctx.orgId)
+                .maybeSingle();
+            workUnitKey = ((wuRow as { key?: string | null } | null)?.key ?? "").trim() || null;
+            const departmentMetadata = await fetchDepartmentMetadataForWorkUnit(
+                supabase,
+                ctx.orgId,
+                created.work_unit_id,
+            );
+            const views = savedWorkViewsFromDepartmentMetadata(departmentMetadata);
+            const matchedView = firstMatchingVisibleWorkView(
+                {
+                    id: created.opportunity_id,
+                    stage_key: created.stage_key,
+                    status_key: created.status_key,
+                },
+                views,
+            );
+            workViewId = matchedView?.id?.trim() || null;
+        }
+
         return await withActionExecutedEmit(
             supabase,
             ctx,
@@ -336,10 +371,11 @@ export async function executeAdminAction(
                 opportunity_id: created.opportunity_id,
                 person_id: created.person_id,
                 customer_id: created.customer_id,
-                // Surface the lead's assigned work unit + written status so the client success contract
-                // can invalidate the right work-unit queue/counts and prove New Leads membership.
                 work_unit_id: created.work_unit_id,
+                work_unit_key: workUnitKey,
+                work_view_id: workViewId,
                 status_key: created.status_key,
+                stage_key: created.stage_key,
             }
         );
     }

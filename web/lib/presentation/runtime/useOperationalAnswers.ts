@@ -18,6 +18,11 @@ import {
     prefetchOipMetricsWarm,
     subscribeOipWarmCache,
 } from "@/lib/metrics/oipWorkspaceWarmCache";
+import {
+    OPPORTUNITY_QUEUE_UPDATED_EVENT,
+    isQueueMembershipMutationActionKey,
+    parseOpportunityQueueUpdatedDetail,
+} from "@/lib/admin/opportunityQueueRefreshEvent";
 import { operationalAnswerModelsFromResolvedMetrics, type OperationalAnswerModel } from "./types";
 
 export type OperationalAnswersScope = {
@@ -86,6 +91,23 @@ export function useOperationalAnswers(scope: OperationalAnswersScope): Operation
         // scopeKey is derived from siteId/workUnitId/keys — the one effective dependency.
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [scopeKey]);
+
+    useEffect(() => {
+        if (typeof window === "undefined" || !keys.length) return;
+        let cancelled = false;
+        const onQueueUpdated = (ev: Event) => {
+            const detail = parseOpportunityQueueUpdatedDetail(ev);
+            if (!isQueueMembershipMutationActionKey(detail?.action_key)) return;
+            void prefetchOipMetricsWarm({ siteId, workUnitId, keys }, { force: true }).then((data) => {
+                if (!cancelled) setResolved(data);
+            });
+        };
+        window.addEventListener(OPPORTUNITY_QUEUE_UPDATED_EVENT, onQueueUpdated);
+        return () => {
+            cancelled = true;
+            window.removeEventListener(OPPORTUNITY_QUEUE_UPDATED_EVENT, onQueueUpdated);
+        };
+    }, [scopeKey, siteId, workUnitId, keys]);
 
     const answers = useMemo(
         () => (resolved ? operationalAnswerModelsFromResolvedMetrics(keys, resolved) : []),

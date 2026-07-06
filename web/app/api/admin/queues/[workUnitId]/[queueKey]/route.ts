@@ -12,7 +12,10 @@ import {
 } from "@/lib/admin/resolveQueueRecordScopeConstraints";
 import { fetchEffectiveUserDisplayTimezoneCached } from "@/lib/admin/timezoneContract";
 import { getWorkUnitQueueItems, QueueServiceError } from "@/lib/queues/QueueService";
-import { filterQueueRowsForWorkView } from "@/lib/lifecycle/operationalProjection";
+import {
+    applyWorkViewFilterToQueueItemsResult,
+    WORK_VIEW_QUEUE_FILTER_FETCH_CAP,
+} from "@/lib/lifecycle/operationalProjection";
 import {
     fetchDepartmentMetadataForWorkUnit,
     resolveActiveWorkViewRuntimeContext,
@@ -187,14 +190,25 @@ export async function GET(
             });
         }
 
+        let workViewFilterCtx: ReturnType<typeof resolveActiveWorkViewRuntimeContext> | null = null;
+        if (workViewIdParam) {
+            const departmentMetadata = await fetchDepartmentMetadataForWorkUnit(supabase, gate.orgId, workUnitId);
+            workViewFilterCtx = resolveActiveWorkViewRuntimeContext({
+                departmentMetadata,
+                workViewId: workViewIdParam,
+                queueKey,
+            });
+        }
+        const needsWorkViewFilter = Boolean(workViewFilterCtx?.filters?.length);
+
         const { result, rowsPerf } = await getWorkUnitQueueItems({
             orgId: gate.orgId,
             workUnitId,
             queueKey,
-            limit,
-            offset,
+            limit: needsWorkViewFilter ? WORK_VIEW_QUEUE_FILTER_FETCH_CAP : limit,
+            offset: needsWorkViewFilter ? 0 : offset,
             countAccuracy,
-            omitTotalCount,
+            omitTotalCount: needsWorkViewFilter ? true : omitTotalCount,
             recordScopeImpossible,
             recordScopeConstraints,
             viewerDisplayTimeZone,
@@ -203,28 +217,15 @@ export async function GET(
         });
 
         let responseResult = result;
-        if (workViewIdParam && Array.isArray(result.items) && result.items.length) {
-            const departmentMetadata = await fetchDepartmentMetadataForWorkUnit(supabase, gate.orgId, workUnitId);
-            const ctx = resolveActiveWorkViewRuntimeContext({
-                departmentMetadata,
-                workViewId: workViewIdParam,
-                queueKey,
+        if (needsWorkViewFilter && workViewFilterCtx?.filters?.length) {
+            responseResult = applyWorkViewFilterToQueueItemsResult({
+                result,
+                filters: workViewFilterCtx.filters,
+                match: workViewFilterCtx.match,
+                pageLimit: limit,
+                pageOffset: offset,
+                omitTotalCount,
             });
-            if (ctx.filters?.length) {
-                const filtered = filterQueueRowsForWorkView(
-                    result.items as Array<Record<string, unknown>>,
-                    ctx.filters,
-                    ctx.match,
-                );
-                responseResult = {
-                    ...result,
-                    items: filtered,
-                    total:
-                        typeof result.total === "number" ?
-                            filtered.length
-                        :   result.total,
-                };
-            }
         }
 
         writeWorkUnitQueueItemsServerCache(cacheKey, { result: responseResult, rowsPerf });

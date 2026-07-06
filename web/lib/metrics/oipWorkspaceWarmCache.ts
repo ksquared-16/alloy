@@ -159,3 +159,10 @@ export function resetOipWarmCacheForTests(): void {
     warmScheduled = false;
     listeners.clear();
 }
+
+/** Drop warm metric snapshots so queue-membership mutations refetch live values. */
+export function invalidateOipWarmCache(): void {
+    entries.clear();
+    inflight.clear();
+    notify();
+}

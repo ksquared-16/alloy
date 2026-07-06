@@ -25,6 +25,22 @@ export function bustWorkspaceDepartmentsFetchDedupe(): void {
     shortCache.delete(WORKSPACE_DEPARTMENTS_URL);
 }
 
+/** Bust lifecycle summary/queue TTL fetches after queue-membership mutations. */
+export function bustLifecycleSiblingFetchDedupe(): void {
+    for (const key of shortCache.keys()) {
+        if (
+            key.includes("/work-unit-queue-summaries") ||
+            key.includes("/api/admin/queues/") ||
+            key.includes("/api/admin/lifecycle-catalog") ||
+            key.includes("/api/admin/work-units") ||
+            key.includes("/api/admin/departments") ||
+            key.includes("/api/admin/status-options")
+        ) {
+            shortCache.delete(key);
+        }
+    }
+}
+
 /** Test-only — clears in-flight and TTL caches between vitest cases. */
 export function resetWorkspaceAdminFetchDedupeForTests(): void {
     inflight.clear();

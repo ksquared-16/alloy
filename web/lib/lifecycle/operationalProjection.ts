@@ -87,6 +87,45 @@ export function filterQueueRowsForWorkView<T extends OperationalProjectionRow>(
     );
 }
 
+/** Max base rows fetched before Work View predicates on the queue API path. */
+export const WORK_VIEW_QUEUE_FILTER_FETCH_CAP = 500;
+
+/**
+ * Apply Work View predicates to a fetched lane page, returning the requested page slice and the
+ * **true** filtered total (full filtered set length, not the current page length).
+ */
+export function applyWorkViewFilterToQueueItemsResult<
+    T extends OperationalProjectionRow,
+    R extends { items: T[]; total?: number; limit?: number; offset?: number; total_omitted?: boolean },
+>(args: {
+    result: R;
+    filters: readonly WorkViewFilterV1[];
+    match?: WorkViewFilterMatch;
+    pageLimit?: number;
+    pageOffset?: number;
+    omitTotalCount?: boolean;
+    statusStageMap?: StatusStageMap | null;
+}): R {
+    const filtered = filterQueueRowsForWorkView(
+        args.result.items,
+        args.filters,
+        args.match ?? "all",
+        args.statusStageMap,
+    );
+    const pageOffset = args.pageOffset ?? 0;
+    const pageLimit = args.pageLimit ?? filtered.length;
+    const includeTotal = !args.omitTotalCount;
+    const page = {
+        ...args.result,
+        items: filtered.slice(pageOffset, pageOffset + pageLimit),
+        total: includeTotal ? filtered.length : args.result.total,
+        limit: args.pageLimit ?? args.result.limit,
+        offset: args.pageOffset ?? args.result.offset,
+    };
+    if (includeTotal) delete page.total_omitted;
+    return page;
+}
+
 export type OperationalProjectionView = {
     id: string;
     label: string;
@@ -198,9 +237,31 @@ export function computeWorkViewOperationalSignals(params: {
 export function recordMatchesWorkView(
     record: OperationalProjectionRow,
     view: Pick<WorkViewConfigV1Stored, "filters_v1" | "match"> | null | undefined,
+    statusStageMap?: StatusStageMap | null,
 ): boolean {
-    if (!view) return true; // no active view constraint → not out-of-scope
-    return evaluateWorkViewFiltersForRow(record, view.filters_v1, resolveWorkViewMatchV1(view.match)).pass;
+    if (!view) return true;
+    const [enriched] = enrichRowsWithDerivedStage([record], statusStageMap);
+    return evaluateWorkViewFiltersForRow(
+        enriched ?? record,
+        view.filters_v1,
+        resolveWorkViewMatchV1(view.match),
+    ).pass;
+}
+
+/**
+ * First configured Work View whose predicates match the record — prefers predicate-scoped views
+ * over include-all views so Open Record routes into the narrowest matching process context.
+ */
+export function firstMatchingVisibleWorkView(
+    record: OperationalProjectionRow,
+    workViews: readonly WorkViewConfigV1Stored[],
+): WorkViewConfigV1Stored | null {
+    const visible = workViews.filter((view) => view.visible_in_runtime !== false);
+    const withPredicates = visible.filter((view) => (view.filters_v1?.length ?? 0) > 0);
+    for (const view of withPredicates) {
+        if (recordMatchesWorkView(record, view)) return view;
+    }
+    return visible.find((view) => !(view.filters_v1?.length ?? 0)) ?? null;
 }
 
 export type FocusPanelScopeState =

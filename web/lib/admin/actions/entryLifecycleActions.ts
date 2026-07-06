@@ -67,8 +67,10 @@ export async function executeCreateLeadAction(
           customer_id: string;
           /** Work unit the lead was assigned to (lifecycle binding / context). Drives post-create queue/count refresh + focus-panel routing. */
           work_unit_id: string | null;
-          /** Case status written to the opportunity (e.g. `new_inquiry`). Used to prove New Leads membership. */
+          /** Case status written to the opportunity. */
           status_key: string;
+          /** Process stage written to the opportunity. */
+          stage_key: string;
       }
     | EntryLifecycleActionError
 > {
@@ -318,6 +320,7 @@ export async function executeCreateLeadAction(
         customer_id: customerId,
         work_unit_id: workUnitId,
         status_key: statusKeyForLead,
+        stage_key: "lead",
     };
 }
 

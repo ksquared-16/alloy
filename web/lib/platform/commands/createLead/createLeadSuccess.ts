@@ -15,6 +15,7 @@
 
 import type { ActionResultOk } from "@/lib/adminV2/actions/actionTypes";
 import { createLeadDisplayName } from "@/lib/platform/commands/createLead/createLeadRequiredInputs";
+import { resolveCreatedRecordProcessContextHref } from "@/lib/platform/commands/createLead/resolveCreatedRecordProcessContextHref";
 
 export type CommandRefreshTarget = {
     /** `opportunity` → invalidate the created record; `work_unit` → invalidate that work unit's queue + pill counts. */
@@ -34,9 +35,15 @@ export type CreateLeadSuccess = {
      * the lead's assigned work unit so the New Leads queue/pill counts refetch (not just the record).
      */
     refreshTargets: CommandRefreshTarget[];
-    /** Work unit the lead was assigned to — drives queue/count invalidation and focus-panel routing. */
+    /** Work unit the record was assigned to — drives queue/count invalidation and routing. */
     workUnitId: string | null;
-    /** Case status written to the lead (e.g. `new_inquiry`). Proves New Leads membership; diagnostics. */
+    /** Platform work unit key when returned by the action (routing). */
+    workUnitKey: string | null;
+    /** Config-resolved Work View id for process-context routing, when matched. */
+    workViewId: string | null;
+    /** Canonical Work Unit Focus Panel href — Work mode, not legacy drawer. */
+    focusPanelHref: string;
+    /** Case status written to the record. */
     statusKey: string | null;
     /** Short operator confirmation copy. */
     successCopy: string;
@@ -70,9 +77,16 @@ export function buildCreateLeadSuccess(input: {
     const createdRecordId = createdLeadOpportunityId(input.result);
     const detail = (input.result.result.detail ?? {}) as Record<string, unknown>;
     const workUnitId = trimmed(detail.work_unit_id) || null;
+    const workUnitKey = trimmed(detail.work_unit_key) || null;
+    const workViewId = trimmed(detail.work_view_id) || null;
     const statusKey = trimmed(detail.status_key) || null;
     const name = input.knownInputs ? createLeadDisplayName(input.knownInputs) : "";
     const title = name ? `Lead for ${name}` : null;
+    const focusPanelHref = resolveCreatedRecordProcessContextHref({
+        recordId: createdRecordId,
+        workUnitKey,
+        workViewId,
+    });
     return {
         createdRecordId,
         entityType: "opportunity",
@@ -82,15 +96,16 @@ export function buildCreateLeadSuccess(input: {
             ...(createdRecordId
                 ? [{ entityType: "opportunity", entityId: createdRecordId } as CommandRefreshTarget]
                 : []),
-            // Invalidate the lead's work-unit queue + pill counts so New Leads reflects the new record
-            // without a full page reload (the record is a valid member; only the projection was stale).
             ...(workUnitId
                 ? [{ entityType: "work_unit", entityId: workUnitId } as CommandRefreshTarget]
                 : []),
         ],
         workUnitId,
+        workUnitKey,
+        workViewId,
+        focusPanelHref,
         statusKey,
         successCopy: name ? `Created lead for ${name}.` : "Lead created.",
-        nextCopy: "Opening lead.",
+        nextCopy: "Opening record.",
     };
 }

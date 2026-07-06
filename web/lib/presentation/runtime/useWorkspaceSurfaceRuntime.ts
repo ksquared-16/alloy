@@ -51,6 +51,7 @@ import {
     isQueueMembershipMutationActionKey,
     parseOpportunityQueueUpdatedDetail,
 } from "@/lib/admin/opportunityQueueRefreshEvent";
+import { bustOperatorRuntimeReadCaches } from "@/lib/admin/operatorRuntimeReadCacheBust";
 
 /** Warmest available first paint: session peek, else the server-composed Route VM seed. */
 function seedLifecycleCards(
@@ -82,8 +83,7 @@ export function useWorkspaceSurfaceRuntime(): WorkspaceSurfaceModel {
         const onQueueUpdated = (ev: Event) => {
             const detail = parseOpportunityQueueUpdatedDetail(ev);
             if (isQueueMembershipMutationActionKey(detail?.action_key)) {
-                // Bust the landing cache so the re-load below refetches fresh rollups, then
-                // bump the nonce to re-run the load + re-resolve the per-view totals.
+                bustOperatorRuntimeReadCaches();
                 invalidateOperatorLifecycleLandingCache();
                 setRefreshNonce((n) => n + 1);
             }
