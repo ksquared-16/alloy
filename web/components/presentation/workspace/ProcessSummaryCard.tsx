@@ -234,6 +234,7 @@ export function ProcessSummaryCard({
         : null;
     const shouldShowPrimaryMetricLabel =
         primaryFormatted != null &&
+        signal != null &&
         (primaryFormatted.kind === "empty" ||
             (!sameMetricPhrase(primaryFormatted.title, primaryFormatted.displayValue) &&
                 !sameMetricPhrase(primaryFormatted.title, signal.answer)));
