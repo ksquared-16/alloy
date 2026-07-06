@@ -5,6 +5,8 @@ import { useMemo, useState } from "react";
 import QueueRowBuilderV2 from "@/components/adminV2/settings/surfaces/QueueRowBuilderV2";
 import type { ProcessStageOption } from "@/components/adminV2/settings/surfaces/QueueRowVariantStagePicker";
 import { buildDefaultQueueRowSurfaceEnvelope, createQueueRowVariant, type QueueRowSurfaceEnvelope } from "@/lib/presentation/runtime/queueRowSurfaceMetadata";
+import { resolveQueueRowLibraryIsWaitlist } from "@/lib/adminV2/settings/surfaces/queueRowBuilderPreview";
+import { subjectFocusToUi } from "@/lib/adminV2/settings/surfaces/queueRowSubjectFocus";
 import { defaultQueueRowSurfaceName } from "@/lib/adminV2/settings/surfaces/queueRowProcessCatalog";
 import type { QueueRowVariant } from "@/lib/layout/queueRecordLayoutV3";
 
@@ -28,6 +30,8 @@ export default function QueueRowSurfaceEditorDevClient() {
         const variant = envelope.layout.variants?.find((v) => v.id === activeVariantId);
         return variant ? { ...envelope.layout, columns: variant.columns, fixedControls: variant.fixedControls ?? envelope.layout.fixedControls } : envelope.layout;
     }, [envelope.layout, activeVariantId]);
+    const libraryIsWaitlist = resolveQueueRowLibraryIsWaitlist({ activeVariant, processStages: STAGES });
+    const rowFocus = activeVariant ? subjectFocusToUi(activeVariant.subjectFocus) : null;
 
     return (
         <div style={{ background: "#f4f6f9", minHeight: "100vh", padding: 24 }}>
@@ -41,7 +45,7 @@ export default function QueueRowSurfaceEditorDevClient() {
                         <button key={v.id} type="button" onClick={() => setActiveVariantId(v.id)} className={`rounded-full px-3 py-1 text-xs font-semibold ${activeVariantId === v.id ? "bg-alloy-pine text-white" : "bg-alloy-stone/10"}`}>{v.label}</button>
                     ))}
                     <button type="button" onClick={() => {
-                        const v = createQueueRowVariant({ label: `Variant ${(envelope.layout.variants?.length ?? 0) + 2}`, priority: 10, seedFrom: envelope.layout });
+                        const v = createQueueRowVariant({ label: `Variant ${(envelope.layout.variants?.length ?? 0) + 2}`, priority: 10 });
                         setEnvelope((p) => ({ ...p, layout: { ...p.layout, variants: [...(p.layout.variants ?? []), v] } }));
                         setActiveVariantId(v.id);
                     }} className="rounded-full border border-dashed px-3 py-1 text-xs">+ Add variant</button>
@@ -60,6 +64,8 @@ export default function QueueRowSurfaceEditorDevClient() {
                             setDirty(true);
                         }}
                         onDirtyChange={setDirty}
+                        libraryIsWaitlist={libraryIsWaitlist}
+                        rowFocus={rowFocus}
                         embeddedVariantEditor={activeVariant ? { variant: activeVariant, processStages: STAGES, stagesLoading: false, onPatch: (patch) => setEnvelope((p) => ({ ...p, layout: { ...p.layout, variants: (p.layout.variants ?? []).map((v) => v.id === activeVariant.id ? { ...v, ...patch } : v) } })), onClose: () => setActiveVariantId(null) } : undefined}
                     />
                 </div>

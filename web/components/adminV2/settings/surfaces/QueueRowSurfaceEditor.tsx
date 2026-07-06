@@ -11,12 +11,14 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import type { LifecycleCatalogEntry } from "@/lib/lifecycle/lifecycleCatalogTypes";
 import type { QueueRowVariant } from "@/lib/layout/queueRecordLayoutV3";
 import {
+    applyEnrollmentStarterTemplate,
     createQueueRowVariant,
     queueRowSurfaceHasConfiguredColumns,
     QUEUE_ROW_PUBLISH_EMPTY_COLUMNS_MESSAGE,
     type QueueRowSurfaceEnvelope,
 } from "@/lib/presentation/runtime/queueRowSurfaceMetadata";
 import { resolveQueueRowLibraryIsWaitlist } from "@/lib/adminV2/settings/surfaces/queueRowBuilderPreview";
+import { subjectFocusToUi } from "@/lib/adminV2/settings/surfaces/queueRowSubjectFocus";
 import {
     defaultQueueRowSurfaceName,
     queueRowProcessConfigKey,
@@ -213,12 +215,18 @@ export default function QueueRowSurfaceEditor({
         }
     }
 
+    function applyStarterTemplate() {
+        if (!envelope) return;
+        patchEnvelope({ layout: applyEnrollmentStarterTemplate(envelope.layout) });
+    }
+
     const activeVariant =
         activeVariantId && activeVariantId !== "__default__"
             ? envelope?.layout.variants?.find((v) => v.id === activeVariantId)
             : null;
 
-    const libraryIsWaitlist = resolveQueueRowLibraryIsWaitlist({ activeVariant });
+    const libraryIsWaitlist = resolveQueueRowLibraryIsWaitlist({ activeVariant, processStages });
+    const rowFocus = activeVariant ? subjectFocusToUi(activeVariant.subjectFocus) : null;
 
     return (
         <div className="flex min-h-0 flex-1 flex-col" data-testid="queue-row-surface-editor">
@@ -294,6 +302,14 @@ export default function QueueRowSurfaceEditor({
                     >
                         + Add variant
                     </button>
+                    <button
+                        type="button"
+                        onClick={applyStarterTemplate}
+                        className="rounded-full border border-alloy-stone/20 px-3 py-1 text-xs font-medium text-alloy-midnight/55 hover:border-alloy-pine/40 hover:text-alloy-pine"
+                        data-testid="queue-row-apply-starter-template"
+                    >
+                        Use suggested template
+                    </button>
                 </div>
 
                 {loading || !envelope || !activeLayout ? (
@@ -307,6 +323,7 @@ export default function QueueRowSurfaceEditor({
                         onControlledLayoutChange={patchActiveLayoutColumns}
                         onDirtyChange={setDirty}
                         libraryIsWaitlist={libraryIsWaitlist}
+                        rowFocus={rowFocus}
                         embeddedVariantEditor={
                             activeVariant
                                 ? {

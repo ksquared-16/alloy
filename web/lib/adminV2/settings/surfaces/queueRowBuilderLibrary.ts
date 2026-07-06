@@ -12,7 +12,9 @@ import {
     availableFieldsForZone,
     type AvailableField,
 } from "@/lib/adminV2/settings/surfaces/compositionFieldAdapter";
+import { WAITLIST_PLACEMENT_FIELD_KEYS } from "@/lib/layout/runtime/queueWaitlistPlacementField";
 import type { TenantFieldDefinitionRow } from "@/lib/layout/tenantLayoutFieldPickerCatalog";
+import type { QueueRowSubjectFocusUi } from "@/lib/adminV2/settings/surfaces/queueRowSubjectFocus";
 
 export type QueueRowLibraryZoneKey = (typeof QUEUE_RECORD_LAYOUT_ZONES)[number];
 
@@ -180,11 +182,14 @@ function fieldCategory(fieldKey: string, zoneKey: QueueRowLibraryZoneKey): Queue
 
 export function buildQueueRowLibraryCatalog(args: {
     isWaitlist: boolean;
+    includeWaitlistFields?: boolean;
     inRowZoneKeys: readonly QueueRowLibraryZoneKey[];
     tenantFieldDefinitions?: readonly TenantFieldDefinitionRow[];
 }): QueueRowLibraryItem[] {
+    const includeWaitlist = args.isWaitlist || args.includeWaitlistFields === true;
     const inRow = new Set(args.inRowZoneKeys);
     const items: QueueRowLibraryItem[] = [];
+    const seenFieldKeys = new Set<string>();
 
     for (const zoneKey of QUEUE_RECORD_LAYOUT_ZONES) {
         if (zoneKey === "actions") continue;
@@ -192,7 +197,16 @@ export function buildQueueRowLibraryCatalog(args: {
             items.push({ kind: "zone", zoneKey, label: queueRowZoneLabel(zoneKey) });
         }
         for (const field of availableFieldsForZone(zoneKey, args.isWaitlist, args.tenantFieldDefinitions)) {
+            if (seenFieldKeys.has(field.key)) continue;
+            seenFieldKeys.add(field.key);
             items.push(fieldItem(zoneKey, field));
+        }
+        if (includeWaitlist && !args.isWaitlist) {
+            for (const field of supplementalWaitlistFields(zoneKey, args.tenantFieldDefinitions)) {
+                if (seenFieldKeys.has(field.key)) continue;
+                seenFieldKeys.add(field.key);
+                items.push(fieldItem(zoneKey, field));
+            }
         }
     }
 
@@ -211,6 +225,19 @@ export function buildQueueRowLibraryCatalog(args: {
     return items;
 }
 
+function supplementalWaitlistFields(
+    zoneKey: QueueRowLibraryZoneKey,
+    tenantFieldDefinitions?: readonly TenantFieldDefinitionRow[],
+): AvailableField[] {
+    const waitlistFields = availableFieldsForZone(zoneKey, true, tenantFieldDefinitions);
+    const pipelineKeys = new Set(availableFieldsForZone(zoneKey, false, tenantFieldDefinitions).map((f) => f.key));
+    return waitlistFields.filter(
+        (f) =>
+            WAITLIST_PLACEMENT_FIELD_KEYS.includes(f.key as (typeof WAITLIST_PLACEMENT_FIELD_KEYS)[number]) ||
+            !pipelineKeys.has(f.key),
+    );
+}
+
 function fieldItem(zoneKey: QueueRowLibraryZoneKey, field: AvailableField): QueueRowLibraryFieldItem {
     return {
         kind: "field",
@@ -222,12 +249,42 @@ function fieldItem(zoneKey: QueueRowLibraryZoneKey, field: AvailableField): Queu
     };
 }
 
+/** Library is slot-driven — no zone filtering. */
 export function filterLibraryForTargetZone(
     items: readonly QueueRowLibraryItem[],
-    targetZone: QueueRowLibraryZoneKey | null,
+    _targetZone: QueueRowLibraryZoneKey | null,
 ): QueueRowLibraryItem[] {
-    if (!targetZone) return [...items];
-    return items.filter((item) => item.zoneKey === targetZone || item.kind === "zone");
+    return [...items];
+}
+
+const ROW_FOCUS_CATEGORY_PRIORITY: Record<QueueRowSubjectFocusUi, QueueRowLibraryCategoryKey[]> = {
+    family: ["family_parents", "child", "status", "tour", "waitlist_placement", "operational"],
+    child: ["child", "family_parents", "waitlist_placement", "status", "tour", "operational"],
+};
+
+export function prioritizeLibraryForRowFocus(
+    categories: readonly QueueRowLibraryCategory[],
+    rowFocus: QueueRowSubjectFocusUi,
+): QueueRowLibraryCategory[] {
+    const order = ROW_FOCUS_CATEGORY_PRIORITY[rowFocus];
+    const rank = (key: QueueRowLibraryCategoryKey) => {
+        const idx = order.indexOf(key);
+        return idx === -1 ? order.length : idx;
+    };
+    return [...categories].sort((a, b) => rank(a.key) - rank(b.key));
+}
+
+export function filterLibraryBySearch(
+    items: readonly QueueRowLibraryItem[],
+    query: string,
+): QueueRowLibraryItem[] {
+    const q = query.trim().toLowerCase();
+    if (!q) return [...items];
+    return items.filter((item) => {
+        if (item.kind === "zone") return item.label.toLowerCase().includes(q);
+        const key = item.kind === "field" ? item.fieldKey : item.widgetKey;
+        return item.label.toLowerCase().includes(q) || key.toLowerCase().includes(q);
+    });
 }
 
 export function libraryItemsByCategory(items: readonly QueueRowLibraryItem[]): QueueRowLibraryCategory[] {

@@ -47,11 +47,18 @@ export default function QueueRowVariantInspector({
                 </label>
                 <div className="flex flex-col gap-1">
                     <span className="text-[12px] font-medium text-alloy-midnight/75">Match stages</span>
-                    <QueueRowVariantStagePicker stages={processStages} loading={stagesLoading} selectedStageKeys={stageKeys} onChange={(keys) => onPatch({ appliesWhen: { ...variant.appliesWhen, stage_key: keys }, subjectFocus: subjectFocusFromUi(subjectUi, keys) })} />
+                    <QueueRowVariantStagePicker
+                        stages={processStages}
+                        loading={stagesLoading}
+                        selectedStageKeys={stageKeys}
+                        onChange={(keys) => onPatch({ appliesWhen: { ...variant.appliesWhen, stage_key: keys } })}
+                    />
                 </div>
                 <label className="flex flex-col gap-1">
                     <span className="text-[12px] font-medium text-alloy-midnight/75">Row focus</span>
-                    <p className="text-[11px] text-alloy-midnight/50">Choose whether this row is organized around the family or an individual child.</p>
+                    <p className="text-[11px] text-alloy-midnight/50">
+                        Prioritizes library suggestions. Does not control which slot fields appear in.
+                    </p>
                     <select value={subjectUi} onChange={(e) => onPatch({ subjectFocus: subjectFocusFromUi(e.target.value as QueueRowSubjectFocusUi, stageKeys) })} className="rounded-md border border-alloy-stone/20 px-2.5 py-1.5 text-sm" data-testid="queue-row-variant-row-focus">
                         <option value="family">Family</option>
                         <option value="child">Child</option>

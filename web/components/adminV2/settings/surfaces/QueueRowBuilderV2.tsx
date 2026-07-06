@@ -52,6 +52,15 @@ import {
     type QueueRowLibraryItem,
 } from "@/lib/adminV2/settings/surfaces/queueRowBuilderLibrary";
 import {
+    CANVAS_PLACEMENT_REGIONS,
+    canvasAffordanceLabel,
+    canvasRegionLabel,
+    occupiedCanvasRegions,
+    regionForZoneState,
+    type CanvasAnatomyRegion,
+} from "@/lib/adminV2/settings/surfaces/queueRowCanvasRegions";
+import type { QueueRowSubjectFocusUi } from "@/lib/adminV2/settings/surfaces/queueRowSubjectFocus";
+import {
     QUEUE_ROW_BUILDER_SHELL_DATA_ATTR,
     QUEUE_ROW_CARD_IDLE_BORDER_CLASS,
     QUEUE_ROW_CARD_SHELL_CLASS,
@@ -78,31 +87,14 @@ const ZONE_LABELS: Record<ZoneKey, string> = {
     actions: queueRowZoneLabel("actions"),
 };
 
-/**
- * Anatomy region each builder zone owns in the REAL condensed row. The edit overlay
- * places one selectable region per in-row zone, aligned to where that zone's fields
- * render in the live `CondensedQueueRow` presenter (identity, status pill, attention
- * line, grouped-count chip, work/date footer). `actions` has no compact-row region —
- * it is configured from the library/inspector only.
- */
-type AnatomyRegion = "identity" | "status" | "attention" | "groupCount" | "work" | null;
-const ZONE_REGION: Record<ZoneKey, AnatomyRegion> = {
-    household: "identity",
-    status: "status",
-    attention: "attention",
-    children: "groupCount",
-    date_event: "work",
-    actions: null,
+/** Absolute overlay boxes for each canvas placement slot on the condensed row shell. */
+const REGION_BOX: Record<CanvasAnatomyRegion, string> = {
+    identity: "left-[42px] right-[7rem] top-[8px] h-[34px]",
+    status: "right-3 top-[8px] h-5 w-[6.5rem]",
+    attention: "left-[42px] right-3 top-[46px] h-4",
+    groupCount: "left-[42px] top-[66px] h-4 w-[5rem]",
+    work: "right-3 top-[66px] h-4 w-[9rem]",
 };
-
-/** Blank-canvas affordances — one per anatomy region when the zone is not yet on the row. */
-const ANATOMY_AFFORDANCES: { region: Exclude<AnatomyRegion, null>; zone: ZoneKey; label: string }[] = [
-    { region: "identity", zone: "household", label: "+ Add family identity" },
-    { region: "groupCount", zone: "children", label: "+ Add child" },
-    { region: "status", zone: "status", label: "+ Add status" },
-    { region: "attention", zone: "attention", label: "+ Add attention or tasks" },
-    { region: "work", zone: "date_event", label: "+ Add dates or tasks" },
-];
 
 const ZONE_WIDTH_MAP: Partial<Record<ZoneKey, QueueRecordColumnWidth>> = {
     household: "identity",
@@ -148,6 +140,8 @@ type EvidenceGroupState = {
 type RowZoneState = {
     key: ZoneKey;
     inRow: boolean;
+    /** Operator-assigned canvas slot (Primary / Secondary / …). Persisted to column.builderSlot. */
+    canvasSlot: CanvasAnatomyRegion | null;
     width: QueueRecordColumnWidth;
     /** Operator-supplied display label for this column. Persisted to QueueRecordColumnConfig.label. */
     columnLabel: string;
@@ -274,6 +268,7 @@ export function stateFromConfig(
         return {
             key,
             inRow,
+            canvasSlot: (col?.builderSlot as CanvasAnatomyRegion | undefined) ?? null,
             width: col?.width ?? catalogCol?.width ?? width,
             columnLabel: col?.label || ZONE_LABELS[key] || key,
             rowIndex: clampRowIndex(col?.rowIndex ?? 0),
@@ -342,6 +337,8 @@ export function buildConfigFromState(
             };
             if (z.visibleWhen) col.visibleWhen = z.visibleWhen;
             else delete col.visibleWhen;
+            if (z.canvasSlot) col.builderSlot = z.canvasSlot;
+            else delete col.builderSlot;
             return [col];
         });
 
@@ -477,7 +474,7 @@ export function AddFieldPicker({
  *              → mapQueueRowSurfaceToCompactConfig → CompactRowSlots
  *              → <CondensedQueueRow rowConfig={slots} />   (shared runtime component)
  *
- * The overlay's clickable regions map anatomy → builder zone (see ZONE_REGION), so
+ * The overlay's clickable regions map canvas slots → builder zones (see regionForZoneState), so
  * select / remove / reorder operate on the actual row sections the operator sees.
  */
 function QueueRowRuntimeCanvas({
@@ -485,7 +482,7 @@ function QueueRowRuntimeCanvas({
     liveConfig,
     previewRow,
     selectedKey,
-    libraryTargetZone = null,
+    libraryTargetRegion = null,
     embedded = false,
     onSelect,
     onRemove,
@@ -497,17 +494,16 @@ function QueueRowRuntimeCanvas({
     liveConfig: QueueRecordLayoutConfigV3;
     previewRow: QueueRowModel;
     selectedKey: ZoneKey | null;
-    libraryTargetZone?: ZoneKey | null;
+    libraryTargetRegion?: CanvasAnatomyRegion | null;
     embedded?: boolean;
     onSelect: (key: ZoneKey) => void;
     onRemove: (key: ZoneKey) => void;
     onReorder: (key: ZoneKey, dir: -1 | 1) => void;
     /** Enable a field on a section (evidence group) — reuses the inspector's toggle path. */
     onAddField: (key: ZoneKey, blockId: string, fieldKey: string) => void;
-    onOpenLibrary: (targetZone: ZoneKey | null) => void;
+    onOpenLibrary: (targetRegion: CanvasAnatomyRegion | null) => void;
 }) {
     const inRow = zones.filter((z) => z.inRow);
-    const inRowKeys = new Set(inRow.map((z) => z.key));
     // Which section's inline "Add field" picker is open (null = none).
     const [pickerZone, setPickerZone] = useState<ZoneKey | null>(null);
     const [pickerAnchor, setPickerAnchor] = useState<{ top: number; left: number } | null>(null);
@@ -515,14 +511,17 @@ function QueueRowRuntimeCanvas({
     // The exact runtime consumption path: published/edited config → compact slots.
     const slots = mapQueueRowSurfaceToCompactConfig(liveConfig).slots;
 
-    // Ordered list of overlay-selectable regions (zones that own a compact-row region).
-    const regionZones = inRow.filter((z) => ZONE_REGION[z.key] !== null);
+    // Ordered list of overlay-selectable regions (in-row zones with a resolved canvas slot).
+    const regionZones = inRow.filter((z) => regionForZoneState(z) !== null);
     const orderIndex = (key: ZoneKey) => regionZones.findIndex((z) => z.key === key);
+    const occupiedRegions = occupiedCanvasRegions(zones);
 
     const RegionHandle = ({ z }: { z: RowZoneState }) => {
         const isSelected = z.key === selectedKey;
-        const isDropTarget = z.key === libraryTargetZone;
+        const zoneRegion = regionForZoneState(z);
+        const isDropTarget = zoneRegion !== null && zoneRegion === libraryTargetRegion;
         const idx = orderIndex(z.key);
+        const regionLabel = zoneRegion ? canvasRegionLabel(zoneRegion) : z.columnLabel;
         return (
             <span
                 className={[
@@ -538,7 +537,7 @@ function QueueRowRuntimeCanvas({
                     type="button"
                     className="h-full w-full cursor-pointer bg-transparent"
                     onClick={() => onSelect(z.key)}
-                    aria-label={`Select ${z.columnLabel || ZONE_LABELS[z.key]} section`}
+                    aria-label={`Select ${regionLabel} section`}
                     data-canvas-zone={z.key}
                     data-canvas-selected={isSelected || undefined}
                 />
@@ -553,7 +552,7 @@ function QueueRowRuntimeCanvas({
                                 setPickerAnchor({ top: r.bottom + 4, left: r.left });
                                 setPickerZone((p) => (p === z.key ? null : z.key));
                             }}
-                            aria-label={`Add field to ${ZONE_LABELS[z.key]}`}
+                            aria-label={`Add field to ${regionLabel}`}
                             aria-expanded={pickerZone === z.key}
                             data-canvas-add-field={z.key}
                         >
@@ -564,7 +563,7 @@ function QueueRowRuntimeCanvas({
                             className="rounded bg-white px-1 text-[10px] leading-none text-alloy-midnight/50 shadow-sm hover:text-alloy-pine disabled:opacity-30"
                             onClick={(e) => { e.stopPropagation(); onReorder(z.key, -1); }}
                             disabled={idx <= 0}
-                            aria-label={`Move ${ZONE_LABELS[z.key]} earlier`}
+                            aria-label={`Move ${regionLabel} earlier`}
                             data-canvas-reorder-left={z.key}
                         >
                             ←
@@ -574,7 +573,7 @@ function QueueRowRuntimeCanvas({
                             className="rounded bg-white px-1 text-[10px] leading-none text-alloy-midnight/50 shadow-sm hover:text-alloy-pine disabled:opacity-30"
                             onClick={(e) => { e.stopPropagation(); onReorder(z.key, 1); }}
                             disabled={idx < 0 || idx >= regionZones.length - 1}
-                            aria-label={`Move ${ZONE_LABELS[z.key]} later`}
+                            aria-label={`Move ${regionLabel} later`}
                             data-canvas-reorder-right={z.key}
                         >
                             →
@@ -583,7 +582,7 @@ function QueueRowRuntimeCanvas({
                             type="button"
                             className="rounded bg-white px-1 text-[10px] leading-none text-alloy-midnight/40 shadow-sm hover:text-red-500"
                             onClick={(e) => { e.stopPropagation(); onRemove(z.key); }}
-                            aria-label={`Remove ${ZONE_LABELS[z.key]}`}
+                            aria-label={`Remove ${regionLabel}`}
                             data-canvas-remove={z.key}
                         >
                             ✕
@@ -600,16 +599,6 @@ function QueueRowRuntimeCanvas({
                 ) : null}
             </span>
         );
-    };
-
-    // Anatomy region → absolute position over the real row (mirrors CondensedQueueRow's
-    // fixed anatomy: identity top-left, status pill top-right, attention line, footer).
-    const REGION_BOX: Record<Exclude<AnatomyRegion, null>, string> = {
-        identity: "left-[42px] right-[7rem] top-[8px] h-[34px]",
-        status: "right-3 top-[8px] h-5 w-[6.5rem]",
-        attention: "left-[42px] right-3 top-[46px] h-4",
-        groupCount: "left-[42px] top-[66px] h-4 w-[5rem]",
-        work: "right-3 top-[66px] h-4 w-[9rem]",
     };
 
     return (
@@ -639,7 +628,7 @@ function QueueRowRuntimeCanvas({
                 <div
                     className={[
                         QUEUE_ROW_CARD_SHELL_CLASS,
-                        selectedKey || libraryTargetZone ? QUEUE_ROW_CARD_SELECTED_BORDER_CLASS : QUEUE_ROW_CARD_IDLE_BORDER_CLASS,
+                        selectedKey || libraryTargetRegion ? QUEUE_ROW_CARD_SELECTED_BORDER_CLASS : QUEUE_ROW_CARD_IDLE_BORDER_CLASS,
                         "min-h-[5.5rem]",
                     ].join(" ")}
                     style={{ width: ALLOY_OS_QUEUE_COMPRESSED_WIDTH_PX, maxWidth: ALLOY_OS_QUEUE_COMPRESSED_WIDTH_PX }}
@@ -647,7 +636,7 @@ function QueueRowRuntimeCanvas({
                     data-canvas-runtime-frame
                     data-canvas-runtime-width={ALLOY_OS_QUEUE_COMPRESSED_WIDTH_PX}
                 >
-                    {selectedKey || libraryTargetZone ? (
+                    {selectedKey || libraryTargetRegion ? (
                         <span className={QUEUE_ROW_SELECTED_RAIL_CLASS} aria-hidden />
                     ) : null}
                     <button
@@ -661,13 +650,13 @@ function QueueRowRuntimeCanvas({
                     <div className="pointer-events-none relative z-[1]" data-canvas-runtime-row>
                         <CondensedQueueRow row={previewRow} rowConfig={slots} onOpen={() => {}} isFirst />
                     </div>
-                    {/* Anatomy-region affordances for zones not yet on the row */}
-                    {ANATOMY_AFFORDANCES.map(({ region, zone, label }) => {
-                        if (inRowKeys.has(zone)) return null;
-                        const isTarget = libraryTargetZone === zone;
+                    {/* Canvas slot affordances for unoccupied placement regions */}
+                    {CANVAS_PLACEMENT_REGIONS.map(({ region, hint }) => {
+                        if (occupiedRegions.has(region)) return null;
+                        const isTarget = libraryTargetRegion === region;
                         return (
                             <span
-                                key={zone}
+                                key={region}
                                 className={`pointer-events-none absolute ${REGION_BOX[region]} z-[2]`}
                             >
                                 <button
@@ -678,24 +667,26 @@ function QueueRowRuntimeCanvas({
                                             ? "border-2 border-alloy-juniper/60 bg-alloy-juniper/[0.08] text-alloy-juniper"
                                             : "border border-dashed border-alloy-stone/25 bg-alloy-stone/[0.03] text-alloy-midnight/45 hover:border-alloy-juniper/40 hover:bg-alloy-juniper/[0.04] hover:text-alloy-juniper/80",
                                     ].join(" ")}
-                                    data-canvas-zone-affordance={zone}
-                                    data-canvas-drop-zone={zone}
-                                    data-canvas-zone-target={isTarget || undefined}
+                                    title={hint}
+                                    data-canvas-region-affordance={region}
+                                    data-canvas-drop-region={region}
+                                    data-canvas-region-target={isTarget || undefined}
+                                    aria-label={`Add item to ${canvasRegionLabel(region)} slot`}
                                     onClick={(e) => {
                                         e.stopPropagation();
-                                        onOpenLibrary(zone);
+                                        onOpenLibrary(region);
                                     }}
                                 >
-                                    {label}
+                                    {canvasAffordanceLabel(region)}
                                 </button>
                             </span>
                         );
                     })}
-                    {/* Edit overlay — selectable anatomy regions mapped to builder zones. */}
+                    {/* Edit overlay — selectable canvas slots mapped to builder zones. */}
                     {regionZones.length === 0 ? null : (
                         <div className="pointer-events-none absolute inset-0" data-canvas-overlay>
                             {regionZones.map((z) => {
-                                const region = ZONE_REGION[z.key] as Exclude<AnatomyRegion, null>;
+                                const region = regionForZoneState(z) as CanvasAnatomyRegion;
                                 return (
                                     <span key={z.key} className={`absolute ${REGION_BOX[region]}`}>
                                         <RegionHandle z={z} />
@@ -835,6 +826,7 @@ function BlockInspector({
     onSetWidth,
     onSetRow,
     onSetLabel,
+    onSetCanvasSlot,
     onToggleGroup,
     onToggleField,
     onSetCondition,
@@ -848,6 +840,7 @@ function BlockInspector({
     onSetWidth: (w: QueueRecordColumnWidth) => void;
     onSetRow: (rowIndex: number) => void;
     onSetLabel: (label: string) => void;
+    onSetCanvasSlot: (slot: CanvasAnatomyRegion) => void;
     onToggleGroup: (blockId: string) => void;
     onToggleField: (blockId: string, fieldKey: string) => void;
     onSetCondition: (c: LayoutCondition) => void;
@@ -855,6 +848,7 @@ function BlockInspector({
     onTogglePlacementOverride: () => void;
 }) {
     const isActions = zone.key === "actions";
+    const resolvedSlot = regionForZoneState(zone);
     const widthOptions: QueueRecordColumnWidth[] = isActions
         ? []
         : (ZONE_WIDTH_MAP[zone.key]
@@ -935,6 +929,36 @@ function BlockInspector({
                         </div>
                         <p className="mt-1 text-[10px] text-alloy-midnight/30">
                             Stacked rows render inside the 440px condensed rail. Runtime consumption is presentation-runtime-ready (deferred).
+                        </p>
+                    </div>
+                )}
+
+                {/* Row slot — operator-assigned canvas placement */}
+                {!isActions && (
+                    <div>
+                        <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-alloy-midnight/35">
+                            Row slot
+                        </p>
+                        <div className="flex flex-wrap gap-1.5">
+                            {CANVAS_PLACEMENT_REGIONS.map(({ region, label, hint }) => (
+                                <button
+                                    key={region}
+                                    type="button"
+                                    title={hint}
+                                    onClick={() => onSetCanvasSlot(region)}
+                                    className={`rounded-full px-2.5 py-1 text-[11px] font-medium transition-colors ${
+                                        resolvedSlot === region
+                                            ? "bg-alloy-pine text-white"
+                                            : "border border-alloy-stone/20 bg-white text-alloy-midnight/60 hover:border-alloy-pine/40 hover:text-alloy-pine"
+                                    }`}
+                                    data-inspector-canvas-slot={region}
+                                >
+                                    {label}
+                                </button>
+                            ))}
+                        </div>
+                        <p className="mt-1 text-[10px] text-alloy-midnight/30">
+                            Assigns this block to a canvas slot (Primary, Secondary, Supporting, Right, Bottom).
                         </p>
                     </div>
                 )}
@@ -1151,6 +1175,8 @@ type Props = {
     onDirtyChange?: (dirty: boolean) => void;
     /** Candidate-grain library (waitlist fields/widgets) for the active variant. */
     libraryIsWaitlist?: boolean;
+    /** Row focus filters library context (family vs child) — does not control slot layout. */
+    rowFocus?: QueueRowSubjectFocusUi | null;
     /** When embedded inside QueueRowSurfaceEditor — variant tab inspector context. */
     embeddedVariantEditor?: {
         variant: QueueRowVariant;
@@ -1168,6 +1194,7 @@ export default function QueueRowBuilderV2({
     onControlledLayoutChange,
     onDirtyChange,
     libraryIsWaitlist,
+    rowFocus = null,
     embeddedVariantEditor,
 }: Props) {
     const isControlled = controlledLayout != null;
@@ -1194,7 +1221,7 @@ export default function QueueRowBuilderV2({
     const [dirty, setDirty] = useState(false);
     const [selectedKey, setSelectedKey] = useState<ZoneKey | null>(null);
     const [libraryOpen, setLibraryOpen] = useState(false);
-    const [libraryTargetZone, setLibraryTargetZone] = useState<ZoneKey | null>(null);
+    const [libraryTargetRegion, setLibraryTargetRegion] = useState<CanvasAnatomyRegion | null>(null);
 
     // Init from server data. Re-runs when tenant field definitions load so custom
     // fields appear in each group's Add Field list. (Resets local edits — acceptable:
@@ -1269,8 +1296,23 @@ export default function QueueRowBuilderV2({
         [catalog],
     );
 
-    const openLibrary = useCallback((targetZone: ZoneKey | null) => {
-        setLibraryTargetZone(targetZone);
+    const assignCanvasSlot = useCallback((zoneKey: ZoneKey, slot: CanvasAnatomyRegion) => {
+        mark((prev) =>
+            prev.map((z) => {
+                if (z.key === zoneKey) {
+                    return { ...z, canvasSlot: slot, inRow: true };
+                }
+                if (z.canvasSlot === slot) {
+                    return { ...z, canvasSlot: null };
+                }
+                return z;
+            }),
+        );
+        setSelectedKey(zoneKey);
+    }, []);
+
+    const openLibrary = useCallback((targetRegion: CanvasAnatomyRegion | null) => {
+        setLibraryTargetRegion(targetRegion);
         setLibraryOpen(true);
     }, []);
 
@@ -1278,15 +1320,16 @@ export default function QueueRowBuilderV2({
         () =>
             buildQueueRowLibraryCatalog({
                 isWaitlist: catalogIsWaitlist,
+                includeWaitlistFields: libraryIsWaitlist ?? catalogIsWaitlist,
                 inRowZoneKeys: zones.filter((z) => z.inRow).map((z) => z.key),
                 tenantFieldDefinitions,
             }),
-        [catalogIsWaitlist, zones, tenantFieldDefinitions],
+        [libraryIsWaitlist, catalogIsWaitlist, zones, tenantFieldDefinitions],
     );
 
     // Canvas: remove zone back to library
     const removeZone = useCallback((key: ZoneKey) => {
-        mark((prev) => prev.map((z) => (z.key === key ? { ...z, inRow: false } : z)));
+        mark((prev) => prev.map((z) => (z.key === key ? { ...z, inRow: false, canvasSlot: null } : z)));
         setSelectedKey((prev) => (prev === key ? null : prev));
     }, []);
 
@@ -1337,20 +1380,28 @@ export default function QueueRowBuilderV2({
 
     const handleLibraryPick = useCallback(
         (item: QueueRowLibraryItem) => {
-            const placementZone = libraryTargetZone ?? selectedKey;
             if (item.kind === "zone") {
                 addZone(item.zoneKey);
-                setLibraryTargetZone(item.zoneKey);
+                if (libraryTargetRegion) {
+                    assignCanvasSlot(item.zoneKey, libraryTargetRegion);
+                }
                 return;
             }
-            const zoneKey = placementZone ?? item.zoneKey;
+            const zoneKey = item.zoneKey;
             if (item.kind === "field") addFieldFromLibrary(zoneKey, item.fieldKey);
             else addWidgetFromLibrary(zoneKey, item.widgetKey);
+            if (libraryTargetRegion) {
+                assignCanvasSlot(zoneKey, libraryTargetRegion);
+            }
             setLibraryOpen(false);
-            setLibraryTargetZone(null);
+            setLibraryTargetRegion(null);
         },
-        [addZone, addFieldFromLibrary, addWidgetFromLibrary, libraryTargetZone, selectedKey],
+        [addZone, addFieldFromLibrary, addWidgetFromLibrary, libraryTargetRegion, assignCanvasSlot],
     );
+
+    const setCanvasSlot = useCallback((key: ZoneKey, slot: CanvasAnatomyRegion) => {
+        assignCanvasSlot(key, slot);
+    }, [assignCanvasSlot]);
 
     const setCondition = useCallback((key: ZoneKey, condition: LayoutCondition) => {
         mark((prev) => prev.map((z) => (z.key === key ? { ...z, visibleWhen: condition } : z)));
@@ -1441,7 +1492,7 @@ export default function QueueRowBuilderV2({
                             liveConfig={liveConfig}
                             previewRow={previewRow}
                             selectedKey={selectedKey}
-                            libraryTargetZone={libraryTargetZone}
+                            libraryTargetRegion={libraryTargetRegion}
                             embedded
                             onSelect={setSelectedKey}
                             onRemove={removeZone}
@@ -1451,12 +1502,13 @@ export default function QueueRowBuilderV2({
                         />
                         <QueueRowItemLibraryPanel
                             open={libraryOpen}
-                            targetZone={libraryTargetZone}
+                            targetRegion={libraryTargetRegion}
+                            rowFocus={rowFocus}
                             items={libraryItems}
                             onPick={handleLibraryPick}
                             onClose={() => {
                                 setLibraryOpen(false);
-                                setLibraryTargetZone(null);
+                                setLibraryTargetRegion(null);
                             }}
                         />
                     </div>
@@ -1470,6 +1522,7 @@ export default function QueueRowBuilderV2({
                                 onSetWidth={(w) => setWidth(selectedZone.key, w)}
                                 onSetRow={(rowIndex) => setRow(selectedZone.key, rowIndex)}
                                 onSetLabel={(label) => setLabel(selectedZone.key, label)}
+                                onSetCanvasSlot={(slot) => setCanvasSlot(selectedZone.key, slot)}
                                 onToggleGroup={(blockId) => toggleGroup(selectedZone.key, blockId)}
                                 onToggleField={(blockId, fieldKey) => toggleField(selectedZone.key, blockId, fieldKey)}
                                 onSetCondition={(c) => setCondition(selectedZone.key, c)}
@@ -1496,7 +1549,7 @@ export default function QueueRowBuilderV2({
                         liveConfig={liveConfig}
                         previewRow={previewRow}
                         selectedKey={selectedKey}
-                        libraryTargetZone={libraryTargetZone}
+                        libraryTargetRegion={libraryTargetRegion}
                         onSelect={setSelectedKey}
                         onRemove={removeZone}
                         onReorder={moveZone}
@@ -1513,17 +1566,18 @@ export default function QueueRowBuilderV2({
                         >
                             + Add item
                         </button>
-                        <span className="text-[10px] text-alloy-midnight/35">Click the row canvas or a zone to open the library</span>
+                        <span className="text-[10px] text-alloy-midnight/35">Click the row canvas or a slot to open the library</span>
                     </div>
 
                     <QueueRowItemLibraryPanel
                         open={libraryOpen}
-                        targetZone={libraryTargetZone}
+                        targetRegion={libraryTargetRegion}
+                        rowFocus={rowFocus}
                         items={libraryItems}
                         onPick={handleLibraryPick}
                         onClose={() => {
                             setLibraryOpen(false);
-                            setLibraryTargetZone(null);
+                            setLibraryTargetRegion(null);
                         }}
                     />
 
@@ -1536,6 +1590,7 @@ export default function QueueRowBuilderV2({
                             onSetWidth={(w) => setWidth(selectedZone.key, w)}
                             onSetRow={(rowIndex) => setRow(selectedZone.key, rowIndex)}
                             onSetLabel={(label) => setLabel(selectedZone.key, label)}
+                            onSetCanvasSlot={(slot) => setCanvasSlot(selectedZone.key, slot)}
                             onToggleGroup={(blockId) => toggleGroup(selectedZone.key, blockId)}
                             onToggleField={(blockId, fieldKey) => toggleField(selectedZone.key, blockId, fieldKey)}
                             onSetCondition={(c) => setCondition(selectedZone.key, c)}

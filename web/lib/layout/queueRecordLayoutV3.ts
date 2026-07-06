@@ -112,6 +112,11 @@ export type QueueRecordColumnConfig = {
      * queue row platform doc), so the builder preview labels it accordingly.
      */
     rowIndex?: number;
+    /**
+     * Operator-assigned canvas slot (Primary / Secondary / Supporting / Right / Bottom).
+     * Runtime maps this onto the compact row anatomy; absent = legacy zone-default placement.
+     */
+    builderSlot?: "identity" | "groupCount" | "attention" | "status" | "work";
 };
 
 import type { QueueRecordFixedControls } from "@/lib/layout/queueRecordLayoutConfig";

@@ -53,6 +53,7 @@ import type {
     QueueRecordFieldConfig,
     QueueRecordLayoutConfigV3,
 } from "@/lib/layout/queueRecordLayoutV3";
+import { compactSlotForCanvasRegion, type CanvasAnatomyRegion } from "@/lib/adminV2/settings/surfaces/queueRowCanvasRegions";
 
 /** One compact-anatomy slot's resolved config: whether to render it + an optional label override. */
 export type CompactRowSlotConfig = {
@@ -137,6 +138,35 @@ function fieldsByKey(config: QueueRecordLayoutConfigV3): Map<string, QueueRecord
     return map;
 }
 
+/** First published field in a column — operator slot assignment drives label override. */
+function firstFieldInColumn(column: QueueRecordLayoutConfigV3["columns"][number]): QueueRecordFieldConfig | null {
+    for (const block of column.blocks) {
+        if (block.type !== "field_group" && block.type !== "repeated_record_block") continue;
+        for (const field of block.fields) {
+            const key = field.fieldKey.trim();
+            if (key) return field;
+        }
+    }
+    return null;
+}
+
+function slotsFromBuilderAssignment(
+    config: QueueRecordLayoutConfigV3,
+): Partial<Record<keyof CompactRowSlots, CompactRowSlotConfig>> {
+    const assigned: Partial<Record<keyof CompactRowSlots, CompactRowSlotConfig>> = {};
+    for (const column of config.columns) {
+        const builderSlot = column.builderSlot as CanvasAnatomyRegion | undefined;
+        if (!builderSlot) continue;
+        const field = firstFieldInColumn(column);
+        if (!field) continue;
+        const compactSlot = compactSlotForCanvasRegion(builderSlot);
+        if (assigned[compactSlot]) continue;
+        const label = typeof field.label === "string" ? field.label.trim() || null : null;
+        assigned[compactSlot] = { visible: true, label };
+    }
+    return assigned;
+}
+
 /** A generic-context slot: visible, no label override (the row uses its frozen context). */
 function genericSlot(): CompactRowSlotConfig {
     return { visible: true, label: null };
@@ -168,10 +198,17 @@ export function mapQueueRowSurfaceToCompactConfig(
     }
 
     const byKey = fieldsByKey(config);
+    const operatorAssigned = slotsFromBuilderAssignment(config);
     const slots = {} as CompactRowSlots;
     const fallbackSlots: (keyof CompactRowSlots)[] = [];
 
     for (const slot of SLOT_KEYS) {
+        const operatorSlot = operatorAssigned[slot];
+        if (operatorSlot) {
+            slots[slot] = operatorSlot;
+            continue;
+        }
+
         const field = SLOT_FIELD_KEYS[slot]
             .map((key) => byKey.get(key))
             .find((f): f is QueueRecordFieldConfig => f != null);

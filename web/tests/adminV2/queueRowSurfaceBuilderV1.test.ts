@@ -76,7 +76,9 @@ describe("queueRowSurfaceMetadata + runtime matching", () => {
         });
         expect(envelope.layout.columns).toEqual([]);
         const starter = defaultEnrollmentQueueRowLayoutWithVariantsV1();
+        expect(starter.columns).toEqual([]);
         expect(starter.variants?.map((v) => v.label)).toEqual(["Tour", "Waitlist", "Enrolling"]);
+        expect(starter.variants?.every((v) => v.columns.length === 0)).toBe(true);
     });
 
     it("empty layout has no columns until operator configures", () => {
@@ -99,7 +101,7 @@ describe("queueRowSurfaceMetadata + runtime matching", () => {
     it("falls back to Default when no variant matches", () => {
         const layout = defaultEnrollmentQueueRowLayoutWithVariantsV1();
         expect(resolveQueueRowVariant(layout.variants, { stageKey: "unknown_stage" })).toBeNull();
-        expect(layout.columns.length).toBeGreaterThan(0);
+        expect(layout.columns).toEqual([]);
     });
 
     it("publish envelope normalizes and preserves variants", () => {
