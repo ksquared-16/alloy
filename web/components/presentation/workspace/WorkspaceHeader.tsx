@@ -11,6 +11,7 @@ import Link from "next/link";
 import {
     PRESENTATION_RUNTIME_LABELS,
     runtimeLabelProps,
+    type PresentationRuntimeLabel,
 } from "@/components/presentation/runtimeLabels";
 import { workspaceHeaderKpiIconClass } from "@/lib/presentation/runtime/processCardAccentStyles";
 import type { ProcessCardAccent, ProcessCardIcon } from "@/lib/presentation/runtime/workspaceProcessSurfaceConfig";
@@ -40,8 +41,8 @@ const VARIANT_META: Record<
         dataAttr: string;
         kpiIconAttr: string;
         kpiAria: string;
-        headerLabel: (typeof PRESENTATION_RUNTIME_LABELS)["workspaceHeader"];
-        calculationsLabel: (typeof PRESENTATION_RUNTIME_LABELS)["workspaceHeaderCalculations"];
+        headerLabel: PresentationRuntimeLabel;
+        calculationsLabel: PresentationRuntimeLabel;
     }
 > = {
     workspace: {
