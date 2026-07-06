@@ -31,6 +31,7 @@ import {
 } from "@/lib/presentation/runtime/workspaceProcessSurfaceConfig";
 import { PROCESS_CARD_ACCENT_STYLES } from "@/lib/presentation/runtime/processCardAccentStyles";
 import {
+    formatCompositeProcessSummaryMetrics,
     formatProcessSummaryMetric,
     PROCESS_SUMMARY_METRIC_EMPTY,
     sameMetricPhrase,
@@ -245,6 +246,10 @@ export function ProcessSummaryCard({
               value: supporting.value,
           })
         : null;
+    const compositeMetricDisplay =
+        primaryFormatted?.kind === "value" && supportingFormatted?.kind === "value"
+            ? formatCompositeProcessSummaryMetrics(primaryFormatted, supportingFormatted)
+            : null;
 
     return (
         <article
@@ -304,51 +309,64 @@ export function ProcessSummaryCard({
                     </span>
                 </div>
 
-                {/* Primary Signal — metric label + value/title, suppressing repeated phrases. */}
+                {/* Primary Signal — configured value + label; when supporting also resolves, both
+                    compose one line (`25 Families • 42 Children`). */}
                 {signal && primaryFormatted ? (
                     <div className={`rounded-lg px-3 py-2.5 ${metricTint}`} data-process-answer>
-                        {shouldShowPrimaryMetricLabel ? (
-                            <BuilderHit field="primaryMetricTitle" builder={builder} className="mb-1 block w-full">
-                                <p
-                                    className="text-[11px] font-bold uppercase tracking-[0.08em] text-alloy-midnight/55"
-                                    data-process-metric-title
-                                >
-                                    {primaryFormatted.title}
-                                </p>
-                            </BuilderHit>
-                        ) : builder ? (
-                            <BuilderHit field="primaryMetricTitle" builder={builder} className="mb-1 block w-full">
-                                <p
-                                    className="text-[11px] font-bold uppercase tracking-[0.08em] text-alloy-midnight/45"
-                                    data-process-metric-title
-                                >
-                                    {primaryFormatted.title || "Primary metric title"}
-                                </p>
-                            </BuilderHit>
-                        ) : null}
-                        {primaryFormatted.kind === "value" ? (
+                        {compositeMetricDisplay ? (
                             <p
                                 className={`text-[27px] font-bold leading-none tracking-[-0.035em] tabular-nums ${metricText}`}
                                 data-process-metric-value
+                                data-process-composite-metric
                             >
-                                {primaryFormatted.displayValue}
+                                {compositeMetricDisplay}
                             </p>
                         ) : (
-                            <p
-                                className={`text-[27px] font-bold leading-none tracking-[-0.035em] tabular-nums ${metricText}`}
-                                data-process-metric-value
-                            >
-                                {PROCESS_SUMMARY_METRIC_EMPTY}
-                            </p>
+                            <>
+                                {shouldShowPrimaryMetricLabel ? (
+                                    <BuilderHit field="primaryMetricTitle" builder={builder} className="mb-1 block w-full">
+                                        <p
+                                            className="text-[11px] font-bold uppercase tracking-[0.08em] text-alloy-midnight/55"
+                                            data-process-metric-title
+                                        >
+                                            {primaryFormatted.title}
+                                        </p>
+                                    </BuilderHit>
+                                ) : builder ? (
+                                    <BuilderHit field="primaryMetricTitle" builder={builder} className="mb-1 block w-full">
+                                        <p
+                                            className="text-[11px] font-bold uppercase tracking-[0.08em] text-alloy-midnight/45"
+                                            data-process-metric-title
+                                        >
+                                            {primaryFormatted.title || "Primary metric title"}
+                                        </p>
+                                    </BuilderHit>
+                                ) : null}
+                                {primaryFormatted.kind === "value" ? (
+                                    <p
+                                        className={`text-[27px] font-bold leading-none tracking-[-0.035em] tabular-nums ${metricText}`}
+                                        data-process-metric-value
+                                    >
+                                        {primaryFormatted.displayValue}
+                                    </p>
+                                ) : (
+                                    <p
+                                        className={`text-[27px] font-bold leading-none tracking-[-0.035em] tabular-nums ${metricText}`}
+                                        data-process-metric-value
+                                    >
+                                        {PROCESS_SUMMARY_METRIC_EMPTY}
+                                    </p>
+                                )}
+                                {primaryFormatted.kind === "value" && signal.answer ? (
+                                    <p
+                                        className="mt-1 text-[14px] font-semibold leading-snug text-alloy-midnight/75"
+                                        data-process-metric-answer
+                                    >
+                                        {signal.answer}
+                                    </p>
+                                ) : null}
+                            </>
                         )}
-                        {primaryFormatted.kind === "value" && signal.answer ? (
-                            <p
-                                className="mt-1 text-[14px] font-semibold leading-snug text-alloy-midnight/75"
-                                data-process-metric-answer
-                            >
-                                {signal.answer}
-                            </p>
-                        ) : null}
                     </div>
                 ) : (
                     <div data-process-answer>
@@ -365,8 +383,8 @@ export function ProcessSummaryCard({
                     </p>
                 ) : null}
 
-                {/* Supporting Signal — the optional SECOND configured calculation, text only. */}
-                {supportingFormatted ? (
+                {/* Supporting Signal — second line when only the supporting metric resolves alone. */}
+                {supportingFormatted && !compositeMetricDisplay ? (
                     <BuilderHit field="supportingMetricTitle" builder={builder} className="-mt-1 block w-full">
                         {supportingFormatted.kind === "value" ? (
                             <p className="text-[13px] font-semibold text-alloy-midnight/65" data-process-supporting-signal>

@@ -54,3 +54,17 @@ export function formatSupportingMetricInline(
     }
     return `${formatted.title}\n${PROCESS_SUMMARY_METRIC_EMPTY}`;
 }
+
+/** One configured metric unit: value beside its label (`25 Families`). */
+export function formatMetricValueLabelUnit(formatted: FormattedProcessSummaryMetric): string {
+    const value = formatted.kind === "value" ? formatted.displayValue : PROCESS_SUMMARY_METRIC_EMPTY;
+    return `${value} ${formatted.title}`.trim();
+}
+
+/** Join configured primary + supporting units when both resolve (`25 Families • 42 Children`). */
+export function formatCompositeProcessSummaryMetrics(
+    primary: FormattedProcessSummaryMetric,
+    supporting: FormattedProcessSummaryMetric,
+): string {
+    return `${formatMetricValueLabelUnit(primary)} • ${formatMetricValueLabelUnit(supporting)}`;
+}

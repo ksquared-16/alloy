@@ -29,8 +29,14 @@ import {
     type WorkViewOperationalSignals,
 } from "@/lib/lifecycle/operationalProjection";
 
-/** Cap on all-records base rows fetched for the operational projection (per department pipeline). */
-const PROJECTION_BASE_ROWS_LIMIT = 500;
+/** Cap matches the queue rows API head limit (`parseLimitOffset` max 100). */
+const PROJECTION_BASE_ROWS_LIMIT = 100;
+
+export function landingCardsNeedWorkViewOperationalSignals(
+    cards: readonly OperatorLifecycleLandingCard[],
+): boolean {
+    return cards.some((card) => card.workQueues.some((entry) => Boolean(entry.work_view_id?.trim())));
+}
 
 /**
  * Fetch the all-records base rows (`pipeline_total`) for a department's enrollment pipeline work unit.
@@ -250,13 +256,18 @@ export async function loadOperatorLifecycleLandingCards(options?: {
                     new Promise<null>((resolve) => setTimeout(() => resolve(null), BUDGET_MS)),
                 ]).catch(() => null);
 
+            let operationalSignalsResolved = !landingCardsNeedWorkViewOperationalSignals(cards);
+
             // Per-view operational signals ride only the base-rows queue fetch — resolved FIRST
             // and independently so the tiles' attention/overdue context survives even when the
             // summaries endpoint below is slow or hung.
             const withSignals = await withBudget(
                 fetchWorkViewOperationalSignalsForCards(cards, workUnits, departments, init),
             );
-            if (withSignals) cards = withSignals;
+            if (withSignals) {
+                cards = withSignals;
+                operationalSignalsResolved = true;
+            }
 
             // Summary rollups (active/needs-attention counts + enrollment surface) are enrichment,
             // never a gate: sidebar/workspace NAV renders from the base cards, so a slow/hung
@@ -266,6 +277,13 @@ export async function loadOperatorLifecycleLandingCards(options?: {
                 fetchLifecycleRollupsForCards(cards, workUnits, departments, init),
             );
             if (enriched) cards = enriched;
+
+            // Never cache a partial signal pass — a timed-out enrichment left tiles without
+            // attention/overdue badges until a full reload. Retry on the next load instead.
+            if (operationalSignalsResolved) {
+                cachedCards = cards;
+            }
+            return cards;
         }
 
         cachedCards = cards;

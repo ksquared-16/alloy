@@ -92,7 +92,7 @@ function previewProcess(
 ): ProcessTileModel {
     const calc = signals.find((c) => c.key === signalKey);
     const signalLabel = calc?.label ?? "Signal";
-    const state = signalStateFromKpiStatus("healthy");
+    const state = signalStateFromKpiStatus(null);
     const supportingCalc = card?.supportingSignalKey
         ? signals.find((c) => c.key === card.supportingSignalKey)
         : undefined;
@@ -100,20 +100,17 @@ function previewProcess(
         id: `preview-${catalogEntry.id}`,
         processKey: catalogEntry.process_key,
         label,
-        description: "Preview",
+        description: "",
         entryHref: "#",
-        activeRecordCount: 142,
-        needsAttentionCount: 11,
-        workViews: [
-            { id: "a", label: "New Leads", isActive: false, count: 24, href: "#", attentionCount: 6, overdueCount: null },
-            { id: "b", label: "Active Pipeline", isActive: false, count: 58, href: "#", attentionCount: null, overdueCount: 3 },
-        ],
+        activeRecordCount: null,
+        needsAttentionCount: null,
+        workViews: [],
         primarySignal: {
             key: signalKey,
             label: signalLabel,
             answer: signalAnswerText(signalLabel, state),
             state,
-            value: "—",
+            value: null,
             supportingContext: null,
             trend: null,
             drillHref: null,
@@ -124,7 +121,7 @@ function previewProcess(
                   label: supportingCalc.label,
                   answer: supportingCalc.label,
                   state: "neutral",
-                  value: "—",
+                  value: null,
                   supportingContext: null,
                   trend: null,
                   drillHref: null,

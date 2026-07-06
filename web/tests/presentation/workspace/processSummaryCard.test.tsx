@@ -282,14 +282,62 @@ describe("ProcessSummaryCard — operator-owned card identity (Surface Builder)"
                 })}
             />,
         );
-        expect(el.querySelector("[data-process-metric-title]")?.textContent).toBe("Pipeline health");
-        expect(el.querySelector("[data-process-supporting-signal]")?.textContent).toBe("Tour volume: 12");
+        expect(el.querySelector("[data-process-composite-metric]")?.textContent).toBe(
+            "31% Pipeline health • 12 Tour volume",
+        );
+        expect(el.querySelector("[data-process-supporting-signal]")).toBeNull();
     });
 
-    it("supporting signal renders a text-only second line (label: value)", () => {
+    it("composes configured primary + supporting values with labels inline", () => {
         const el = render(
             <ProcessSummaryCard
                 process={process({
+                    primarySignal: {
+                        key: "enrollment.lead_count",
+                        label: "Active families",
+                        answer: "Active families",
+                        state: "neutral",
+                        value: "25",
+                        supportingContext: null,
+                        trend: null,
+                        drillHref: null,
+                    },
+                    supportingSignal: {
+                        key: "enrollment.active_leads",
+                        label: "Active children",
+                        answer: "Active children",
+                        state: "neutral",
+                        value: "42",
+                        supportingContext: null,
+                        trend: null,
+                        drillHref: null,
+                    },
+                })}
+                config={cfgWithCard({
+                    primarySignalLabel: "Families",
+                    supportingSignalLabel: "Children",
+                })}
+            />,
+        );
+        expect(el.querySelector("[data-process-composite-metric]")?.textContent).toBe(
+            "25 Families • 42 Children",
+        );
+    });
+
+    it("supporting signal renders a text-only second line when primary is unresolved", () => {
+        const el = render(
+            <ProcessSummaryCard
+                process={process({
+                    primarySignal: {
+                        key: "enrollment.tour_conversion_rate",
+                        label: "Conversion",
+                        answer: "Conversion",
+                        state: "neutral",
+                        value: null,
+                        supportingContext: null,
+                        trend: null,
+                        drillHref: null,
+                    },
                     supportingSignal: {
                         key: "enrollment.tours_scheduled",
                         label: "Tours scheduled",

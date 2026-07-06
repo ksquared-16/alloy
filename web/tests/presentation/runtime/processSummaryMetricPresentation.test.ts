@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
+    formatCompositeProcessSummaryMetrics,
+    formatMetricValueLabelUnit,
     formatProcessSummaryMetric,
     formatSupportingMetricInline,
     metricHasDisplayValue,
@@ -50,5 +52,28 @@ describe("processSummaryMetricPresentation", () => {
     it("sameMetricPhrase compares normalized phrases", () => {
         expect(sameMetricPhrase("Enrollment", " enrollment ")).toBe(true);
         expect(sameMetricPhrase("Tour Conversion", "Tour conversion rate")).toBe(false);
+    });
+
+    it("formatMetricValueLabelUnit places value beside configured label", () => {
+        const unit = formatProcessSummaryMetric({
+            configuredTitle: "Families",
+            definitionLabel: "Active families",
+            value: "25",
+        });
+        expect(formatMetricValueLabelUnit(unit)).toBe("25 Families");
+    });
+
+    it("formatCompositeProcessSummaryMetrics joins two configured units", () => {
+        const primary = formatProcessSummaryMetric({
+            configuredTitle: "Families",
+            definitionLabel: "Active families",
+            value: "25",
+        });
+        const supporting = formatProcessSummaryMetric({
+            configuredTitle: "Children",
+            definitionLabel: "Active children",
+            value: "42",
+        });
+        expect(formatCompositeProcessSummaryMetrics(primary, supporting)).toBe("25 Families • 42 Children");
     });
 });
