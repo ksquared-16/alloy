@@ -37,6 +37,7 @@ import {
     LEGACY_WAITLIST_QUEUE_ROW_SURFACE_ID,
     catalogIdFromQueueRowSurfaceId,
     queueRowLayoutKeyForProcessKey,
+    queueRowSurfaceId,
 } from "@/lib/adminV2/settings/surfaces/queueRowProcessCatalog";
 import {
     buildDefaultQueueRowSurfaceEnvelope,
