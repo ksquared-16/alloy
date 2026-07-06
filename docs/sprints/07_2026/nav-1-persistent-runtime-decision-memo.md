@@ -1,7 +1,7 @@
 # NAV-1 (Persistent Runtime) — Decision Memo
 
 **Path:** `docs/sprints/07_2026/nav-1-persistent-runtime-decision-memo.md`
-**Status:** Decision memo (July 2026). Requests one ratification + authorization to start **Phase 0 only**.
+**Status:** ✅ **RESOLVED (2026-07) — decision (A) ratified and built as the Surface Host.** This memo requested ratification + Phase 0; both were granted, and the work then advanced well past Phase 0. As of the Alloy OS sprint closeout: Phase 0 (Surface Hold / Queue Hold / outbound guard), the persistent context model (Phase 1), soft nav + reload floor, and canonical Host rendering of the work-unit surface are **shipped**. The remaining exchange choreography is tracked in [`surface-host-architecture.md`](../../platform/experience/surface-host-architecture.md) §7 and the [Alloy OS engineering handoff](./alloy-os/engineering-handoff.md). This document is retained as the decision record; for current state read those two.
 **Grounds:** [`navigation-runtime-doctrine.md`](../../platform/experience/navigation-runtime-doctrine.md) (full design), [`experience-audit.md`](../../platform/premium-operational-experience/experience-audit.md) (NAV-1 sev 5), [`sprint-roadmap.md`](../../platform/premium-operational-experience/sprint-roadmap.md) (Phase 4 keystone).
 **Companion:** Motion-adoption slice shipped this pass (queue/pill `acknowledge`, surface `reveal`, value `settle`, record `swap`, rail-menu open `reveal`) — the interaction responsiveness that makes NAV-1's payoff maximal when it lands.
 

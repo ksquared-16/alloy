@@ -22,11 +22,12 @@ Browser URL  ( /workspace , /workspace/work-unit/:slug )
   ▼
 [L2] app/adminV2/workspace/layout.tsx .. force-dynamic; Promise.all(server bundle: org/tz/access/labels)  [server data]
   ▼
-[L3] AdminV2WorkspaceClientProviders ... Auth/Vertical/Labels/Timezone/Org/OperationalMode + <AdminEntityDrawer/>  [client providers]
+[L3] AdminV2WorkspaceClientProviders ... Auth/Vertical/Labels/Timezone/Org/OperationalMode + SurfaceHostProvider + <AdminEntityDrawer/>  [client providers]
   ▼
-[L4] route surface:
-     /workspace        → page.tsx (client, 746 LOC) → composeWorkspaceSurfaceViewModel → WorkspaceRootShell
-     /work-unit/:slug  → [slug]/layout.tsx → WorkUnitSlugRouteHost (135 LOC) → AdminV2OpportunityWorkUnitPage (compat, 7,780 LOC)
+[L4] operational surface (owned by the Surface Host, not the route — see surface-host-architecture.md):
+     /workspace        → page.tsx (client) → composeWorkspaceSurfaceViewModel → WorkspaceRootShell (via PresentationRuntime surface="workspace")
+     /work-unit/:slug  → [slug]/layout.tsx → WorkUnitSlugRouteHost (SEED-ONLY: writes server identity to workUnitSlugRouteCache, renders null)
+                         The Surface Host mounts the surface: SurfaceHostWorkUnitMount → useWorkUnitSurfaceController → WorkUnitSurfaceView → PresentationRuntime surface="work-unit" → WorkUnitSurface
   ▼
 [L5] Surface ViewModel + Reveal Gate ... reveal.canCommit = single commit decision        [reveal owner]
   ▼
@@ -71,10 +72,10 @@ URL /workspace → rewrite → server: layout.tsx Promise.all(org name, viewer t
 ### 2.3 Click `/workspace` → work-unit (warm, lifecycle tile prewarmed)
 ```
 hover/idle on tile → warmWorkUnitSlugRoute(slug) [GET /api/admin/work-units/by-slug/:slug] + warmWorkUnitBootstrapFromSlugEntry (operational bootstrap)
-→ click → adminV2NavigationTransition (commitFirst) → router push /workspace/work-unit/:slug
-→ server [slug]/layout.tsx (param extract only) → WorkUnitSlugRouteHost mount
-→ peekWorkUnitSlugRouteCache hit → slug metadata present → mount compat page in WorkUnitSlugRouteProvider
-→ compat page: readWorkUnitPageCache hit → seededFromCache → coordinated reveal
+→ click → soft nav (commitAdminV2NavLinkNavigation → router.push /workspace/work-unit/:slug) + armSoftNavReloadFloor (watchdog)
+→ server [slug]/layout.tsx (loadWorkUnitSlugRouteMetaServer) → WorkUnitSlugRouteHost SEEDS workUnitSlugRouteCache (useMemo), renders null
+→ Surface Host: usePathname → surfaceHostShouldRenderWorkUnit → SurfaceHostWorkUnitMount → useWorkUnitSurfaceController
+→ peekWorkUnitSlugRouteCache hit → controller phase="ready" → WorkUnitSurfaceView → PresentationRuntime surface="work-unit" → coordinated reveal
 → PAINT 1: work-unit surface (context + KPI snapshot + pills + condensed queue + Focus Panel shell) committed together
 → background: OIP live KPIs, right-rail workflow KPIs, queue row VM prewarm
 → Ready
@@ -82,10 +83,11 @@ hover/idle on tile → warmWorkUnitSlugRoute(slug) [GET /api/admin/work-units/by
 
 ### 2.4 Work-unit cold entry (deep-link, no warm slug/bootstrap)
 ```
-→ WorkUnitSlugRouteHost: state.phase="loading"
-→ PAINT 1: WorkUnitWorkspaceColdShell (title + KPI quiet reserve + WorkUnitOperationalLaneLoader)   ← COLD SHELL
-→ useEffect warmWorkUnitSlugRoute(slug) [GET /api/admin/work-units/by-slug/:slug] (CLIENT waterfall)
-→ slug resolves → mount compat page → queue summaries + primary-lane rows + bootstrap + KPI snapshot
+→ [slug]/layout.tsx loadWorkUnitSlugRouteMetaServer → if server identity resolves, WorkUnitSlugRouteHost seeds the cache (no client waterfall)
+→ Surface Host mounts useWorkUnitSurfaceController; if cache miss → controller phase="loading"
+→ PAINT 1: WorkUnitSurfaceView renders WorkUnitWorkspaceColdShell (title + KPI quiet reserve)   ← COLD SHELL (skipped when isLeaving)
+→ controller effect warmWorkUnitSlugRoute(slug) [GET /api/admin/work-units/by-slug/:slug] (client resolve on cache miss only)
+→ slug resolves → controller phase="ready" → PresentationRuntime work-unit → queue summaries + primary-lane rows + bootstrap + KPI snapshot
 → reveal gate resolveWorkUnitPageContentReady (shell + critical bundle + coordinated + operational surface)
 → PAINT 2: coordinated work-unit reveal
 → background: OIP, right-rail
@@ -138,7 +140,7 @@ Roles: **Render** (paints it), **Fetch** (loads its data), **Cache** (stores it)
 | Workspace surface | `WorkspaceRootShell` (C) | `page.tsx` client effects | `adminV2WorkspaceSessionCache` + module `cachedCards` | client effects (growth/OIP) | route unmount | — |
 | Workspace tiles | `WorkspaceRootLifecycleGrid` (C) | `loadOperatorLifecycleLandingClient` | module cache + session `lifecycleCards` | rollup merge (stable order) | route unmount | dept grid (passed, unused) |
 | Workspace KPI band | `WorkspaceCommandHeader`/`MetricPlacementRenderer` (C) | placements + growth rollup + OIP | `metricRenderBundleCache` + OIP warm cache | value patch (snapshot slot) | route unmount | OIP inline strip (flag-off) |
-| Work-unit shell | `WorkUnitSlugRouteHost` → compat page (C+T) | slug resolve + bootstrap | `workUnitSlugRouteCache` + `CachedWorkUnitPage` | reveal coordinator | route unmount | compat page is the body |
+| Work-unit shell | Surface Host `SurfaceHostWorkUnitMount` → `useWorkUnitSurfaceController` → `WorkUnitSurfaceView` → `PresentationRuntime` (`WorkUnitSurface`); `WorkUnitSlugRouteHost` is seed-only | slug resolve (server seed → `workUnitSlugRouteCache`) + bootstrap | `workUnitSlugRouteCache` + `CachedWorkUnitPage` | reveal coordinator + Surface Hold | held through soft nav; route unmount on reload floor | Host owns the mount, not the route |
 | Work-unit context/banner | `WorkUnitSlugRouteProvider` (C) | slug resolve | slug route cache | — | route unmount | — |
 | Work-unit KPI | snapshot `buildDefaultWorkUnitKpis` → OIP (C) | OIP warm | OIP warm cache | value patch | route unmount | — |
 | Queue frame | `QueueBlock` (C) | bootstrap summaries | session cache | reveal | route unmount | — |
@@ -158,7 +160,7 @@ Distinct `/api/admin/*` endpoints in the workspace tree: **10** (measured). Key 
 | `/api/admin/work-units` | workspace + work-unit + drawer + settings | scattered (6 sites) | work-unit rows | Yes | with departments | yes, dedupe |
 | `/api/admin/lifecycle-catalog` | lifecycle landing client loader | `loadOperatorLifecycleLandingClient` | catalog entries | **Yes** (server-build tiles) | with the 3-fetch tile build | yes, server-seed |
 | `/api/admin/workspace-kpi-placements` | workspace page | page | KPI placements | Yes (or prewarm) | with rollup | yes, gate on hasPlacements |
-| `/api/admin/work-units/by-slug/:slug` | `WorkUnitSlugRouteHost` client useEffect | host | slug→metadata | **Yes** (resolve in `[slug]/layout.tsx`) | — | yes, but server-side |
+| `/api/admin/work-units/by-slug/:slug` | `useWorkUnitSurfaceController` warm effect (cache miss only) | Surface Host controller | slug→metadata | ✅ **Done** — `[slug]/layout.tsx` `loadWorkUnitSlugRouteMetaServer` seeds the cache server-side; client fetch is the cache-miss fallback | — | server-seed shipped |
 | `/api/admin/work-units/:id/queues` | compat page | page | summaries | partially | with rows | yes |
 | `/api/admin/queues/:wu/:queue` | compat page | page | queue rows | no (interactive) | — | yes |
 | `/api/admin/layout-runtime/opportunity-queue-layout` | `useOpportunityQueueLayoutRuntime` | hook | layout doc | — | — | **only for crm-less rows** (Sprint 01 gated) |

@@ -1,10 +1,11 @@
 # Surface Host Architecture
 
 **Path:** `docs/platform/experience/surface-host-architecture.md`
-**Status:** **Ratified — decision (A). Phase 1 shipped (2026-07).** The Surface Host is the canonical architecture: **always mounted, no feature flag, no parallel runtime mode.** Phase 1 is **inert by implementation** (a passive observer of surface state) — behavior is identical to today; the only new thing is that Host state exists internally. Phase 0 (interim snapshot) was **rejected** — no temporary bridges.
+**Status:** **Canonical & permanent architectural component. Ratified — decision (A). Phases 1 → 2B shipped (2026-07).** The Surface Host is the canonical architecture: **always mounted, no feature flag, no parallel runtime mode.** It is now the **one renderer of the work-unit operational surface** — on a work-unit URL the Host mounts the surface via the extracted controller; the route (`WorkUnitSlugRouteHost`) is **seed-only**. What has *not* yet shipped is the **exchange choreography** — outgoing-surface retention, tile yield, and settle (the reducer's `navigate`/`settle`/`cancel` actions are defined and tested but not yet dispatched). See §7 for the landed-state map. Phase 0 (interim snapshot) was **rejected** — no temporary bridges.
 **Objective:** *Make navigation disappear.* The operator perceives operational surfaces exchanging focus inside one persistent operating system — never page navigation.
-**Realizes:** [`navigation-runtime-doctrine.md`](./navigation-runtime-doctrine.md) (NAV‑1). **The Surface Host IS NAV‑1 decision (A)** — see §4.
+**Realizes:** [`navigation-runtime-doctrine.md`](./navigation-runtime-doctrine.md) (NAV‑1). **The Surface Host IS NAV‑1 decision (A)** — see §4. NAV‑1 is therefore no longer a *future navigation rewrite*; it is *this component, being implemented incrementally.*
 **Builds on:** Presentation Runtime V2, Motion Runtime + tokens, Surface Hold, Queue Hold, the drawer's client‑URL swap. Reuses; does not replace.
+**Implementation:** `web/lib/experience/surfaceHost/` (context, state reducer, render decision, work-unit controller) · `web/components/admin/workspace/WorkUnitSlugRouteHost.tsx` (seed-only route + `WorkUnitSurfaceView`) · `web/lib/admin/workUnitSlugRouteCache.ts` (identity seed cache) · soft nav + reload floor in `web/lib/adminV2/navigation/`.
 
 ---
 
@@ -87,6 +88,8 @@ adminV2/layout.tsx ─ AdminV2Shell (ALWAYS persists)
 Owner of swap: SurfaceHost.  Outgoing: HELD then released.  URL: a PROJECTION of context (replaceState).
 ```
 
+**Landed vs target (2026-07):** the Host now *owns rendering* of the work-unit surface — the `current` slot is live (Host mounts `WorkUnitSurface` via the controller; the route is seed-only). The `outgoing`/`incoming` overlap and the `replaceState` context-projection commit remain the **target**: today WS↔WU still commits via soft nav (`router.push`) with the reload floor, and URL sync inside a surface still runs through the controller's `syncOperatorWorkUnitUrlInBrowser`. See §7 for the phase map.
+
 ### Ownership
 | Concern | Owner |
 |---|---|
@@ -136,11 +139,24 @@ Collapses the exit/enter to opacity‑only at the **token** level (already true 
 
 **One architecture, one execution path** — the Host is always mounted; there is no flag toggling it on/off and no parallel mode. Behavior‑changing phases roll out gated on the **reload floor as recovery** (never a parallel toggle). Nothing is a big‑bang rewrite.
 
-- **Phase 0 — REJECTED.** An interim snapshot/presence wrapper would be another temporary bridge. Skipped deliberately — we build the actual architecture.
-- **Phase 1 — Host home (decision A) — SHIPPED.** `SurfaceHostProvider` (always mounted at the outlet) owns `{ current, outgoing, incoming, phase }` as **client context**, hydrated from the URL via the frozen operator‑route parser; back/forward mirrored via `usePathname` + `popstate`. **Inert by implementation** — a passive observer: renders children unchanged, no render takeover, no nav interception, no URL/history writes, reload floor untouched. Files: `web/lib/experience/surfaceHost/`. `navigate/settle/cancel` are defined + tested as the Phase‑2 home but not dispatched.
-- **Phase 2 — Exchange orchestration.** Wire the transition loop (§6): hold outgoing → prepare incoming (Surface Hold/Reveal) → exit+enter (Motion) → commit URL → settle. This is where WS↔WU *feels* like focus exchange.
-- **Phase 3 — Continuity.** Instant back/forward over retained context; warm‑on‑intent; scroll/focus restoration; drawer stack folded into the Host's context model.
-- **Extension (no redesign).** Because surfaces are now client contexts under one host, **Focus Panel · Person · Child · Configuration** are added as new surface kinds in the same `{ current, outgoing, incoming }` model — the drawer's record‑level swap and the surface‑level swap become **one** mechanism.
+### Landed state (2026-07)
+
+| Phase / step | State | What it delivered | Files |
+|---|---|---|---|
+| **Phase 0 — interim snapshot** | **REJECTED** | No temporary bridge; build the real architecture. | — |
+| **Surface Hold** | ✅ SHIPPED | `WorkUnitSurface` holds the last-established model (`cold`/`held`/`live`) — no skeleton flash on same-host view switch or refresh. | `web/components/presentation/workUnit/WorkUnitSurface.tsx` (`resolveWorkUnitSurfaceRenderMode`) |
+| **Queue Hold** | ✅ SHIPPED | Queue lane never clears prior rows before the next fetch settles; new rows swap in place. | `web/components/presentation/workUnit/QueueRegion.tsx` (`queueRegionRenderState`) |
+| **Motion adoption** | ✅ SHIPPED | `.motion-*` classes + `--motion-*` tokens on live operational surfaces; one motion source. | `web/lib/motion/motionTokens.ts`, `web/app/globals.css` |
+| **Surface-enter choreography** | ✅ SHIPPED | Directional `motion-surface-enter-forward` / `-back` on the keyed surface. | `WorkUnitSurface.tsx`, `globals.css` |
+| **Phase 1 — Host home (decision A)** | ✅ SHIPPED | `SurfaceHostProvider` (always mounted) owns `{ current, outgoing, incoming, phase }` as client context; hydrated from the URL via the frozen operator-route parser; back/forward mirrored via `usePathname` + `popstate`. | `web/lib/experience/surfaceHost/{SurfaceHostContext,surfaceRef,surfaceHostState}.tsx/ts` |
+| **Soft navigation + reload floor** | ✅ SHIPPED | WS↔WU soft-nav (`router.push`) for eligible hrefs; watchdog reload floor (`window.location.assign`) with monotonic supersession bounds worst case to a delayed hard reload. | `web/lib/adminV2/navigation/adminV2SoftNavLinkCommit.ts`, `adminV2SoftNavReloadFloor.ts` |
+| **Work-unit controller extraction** | ✅ SHIPPED | `WorkUnitSlugRouteHost` behavior (identity resolution, record deep-link open, URL sync) lifted verbatim into a reusable hook with pure, unit-tested helpers. | `web/lib/experience/surfaceHost/workUnitSurfaceController.ts` |
+| **Phase 2B — canonical Host rendering (render takeover)** | ✅ SHIPPED | On a work-unit URL the Host mounts the surface via the controller; the route is **seed-only** (writes server identity to the module cache, renders `null`). **Exactly one controller runs** — no duplicate `openDrawer`, no duplicate URL sync. `PresentationRuntime` remains the renderer. | `SurfaceHostContext.tsx` (`surfaceHostShouldRenderWorkUnit` + `SurfaceHostWorkUnitMount`), `surfaceHostRender.ts`, `WorkUnitSlugRouteHost.tsx` (seed-only) |
+| **Phase 2 — Exchange choreography** | ⬜ REMAINING | Dispatch the reducer's `navigate/settle/cancel`: hold **outgoing** → prepare incoming (Surface Hold/Reveal) → exit+enter (Motion) → commit URL → settle. This is where WS↔WU *feels* like focus exchange. Actions are defined + tested (`surfaceHostState.ts`) but not yet dispatched. | `surfaceHostState.ts` (ready), `SurfaceHostContext.tsx` (wiring TBD) |
+| **Phase 3 — Continuity** | ⬜ REMAINING | Instant back/forward over retained context; warm-on-intent; scroll/focus restoration; drawer stack folded into the Host's context model. | — |
+| **Extension — new surface kinds** | ⬜ REMAINING | **Focus Panel · Person · Child · Configuration** added as new surface kinds in the same `{ current, outgoing, incoming }` model — record-level and surface-level swap become one mechanism. No redesign. | — |
+
+**Read the split precisely:** the Host *renders* the work-unit surface canonically today (the route no longer renders it), but it does not yet *retain the outgoing surface through an exchange*. Rendering ownership moved; the choreography that makes the move *feel* like a focus exchange is the next work (Phase 2). Until then the transition still relies on soft nav + the reload floor, exactly as designed.
 
 ---
 

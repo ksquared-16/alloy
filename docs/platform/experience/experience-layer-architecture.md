@@ -48,10 +48,12 @@ Six capabilities, in **three tiers** by dependency depth. Lower tiers are leaves
 | 3 — **Reveal System** | 2 | Runtime | `*RevealGate.ts` family + `workUnitPageRevealPolicy` | `web/lib/experience/reveal/` |
 | 4 — **Interaction System** | 2 | Focus System | Ad-hoc hover/press/focus/saving CSS + states | `web/lib/experience/interaction/` |
 | 5 — **Editable Card Runtime** | 2 | Card Runtime | `drawerOperatingSaveCoordinator` + the two editing patterns | `web/lib/experience/editing/` |
-| 2 — **Continuity System** | 3 | Navigation | hold-prior-payload + drawer phase machine + reveal | `web/lib/experience/continuity/` |
-| 6 — **Navigation Continuity** | 3 | Navigation | `shellNavigation` (`window.location.assign`) + slug host | `web/lib/experience/navigation/` |
+| 2 — **Continuity System** | 3 | Navigation | hold-prior-payload + drawer phase machine + reveal | `web/lib/experience/surfaceHost/` (realized) |
+| 6 — **Navigation Continuity** | 3 | Navigation | `shellNavigation` (`window.location.assign`) + slug host | `web/lib/experience/surfaceHost/` (realized) |
 
 Each capability is a **module with one public API, one owner, one doctrine section, and a migration path** (the four required per-capability artifacts). APIs sketched below; full signatures land with each module's implementation.
+
+> **Capabilities 2 + 6 are being realized by the Surface Host** ([`surface-host-architecture.md`](./surface-host-architecture.md)), the ratified NAV-1 (decision A). As of 2026-07 the persistent context model, soft nav + reload floor, and canonical Host rendering of the work-unit surface are shipped in `web/lib/experience/surfaceHost/`; the outgoing-surface exchange choreography is the remaining work. The originally-planned `web/lib/experience/continuity/` and `.../navigation/` roots are the generalized target; the shipped work-unit-first realization lives under `surfaceHost/`.
 
 ### Capability 1 — Motion System (Tier 1, foundation)
 
@@ -88,6 +90,8 @@ The "operator never leaves" engine: freeze-current → hold-prior-payload → pr
 ### Capability 6 — Navigation Continuity (Tier 3)
 
 Turns route navigation into **operational transition**: soft navigation behind a resilience contract, a navigation-surviving cache tier, the persistent shell. Replaces `window.location.assign()` once the work-unit surface is resilient to soft nav; full reload remains an instrumented fallback.
+
+> **Shipped (2026-07):** soft navigation for WS↔WU (`router.push`) is live with a watchdog **reload floor** (`window.location.assign`) as automatic recovery, and the Surface Host now renders the work-unit surface canonically. The remaining exchange choreography (outgoing retention + atomic swap) is tracked in [`surface-host-architecture.md`](./surface-host-architecture.md) §7. The reload floor is retained by design — demoted from default, never removed.
 
 **Public API (sketch).** `operationalTransition(targetHref, { warm })` replacing `adminV2CommitNavigation`; `navigationSurvivingCache` (sessionStorage-backed) for VM/bootstrap snapshots.
 
@@ -127,8 +131,8 @@ The Experience Layer is partly a **consolidation**. These are absorbed or delete
 | Per-page KPI deferral wiring (`scheduleAdminV2BackgroundWork` for KPI; `kpi_ready: true` / `suppress_kpi_strip` at call sites) | **Remove the opt-out** | Reveal System owns region readiness (Cap 3) | Phase 1 |
 | `workspaceRevealGate` / `workUnitRevealGate` / `deptRevealGate` (three near-duplicate gates) | **Merge** | One `createRevealContract` engine; gates become instances | Phase 3 (after motion) |
 | Ad-hoc hover/press/focus transition CSS on buttons/rows/tiles | **Merge → tokens + Interaction** | Interaction System (Cap 4) | Phase 2 |
-| `adminV2CommitNavigation` (`window.location.assign`) | **Replace (with fallback retained)** | `operationalTransition` (Cap 6) | Phase 5 (keystone, flagged) |
-| `WorkUnitWorkspaceColdShell` on the *outbound* path | **Remove (outbound only)** | Continuity hold-prior-payload (Cap 2) | Phase 1 (interim suppress), Phase 5 (structural) |
+| `adminV2CommitNavigation` (`window.location.assign`) | **Demoted to reload floor (fallback retained)** — soft nav is now default for WS↔WU; `assign` is armed only by the watchdog | Surface Host soft nav + reload floor | 🟡 **Partial (2026-07)** — demotion done for WS↔WU; full retirement is Phase 5 |
+| `WorkUnitWorkspaceColdShell` on the *outbound* path | **Remove (outbound only)** — `isLeavingWorkUnitSurface` guard holds instead of flashing | Continuity hold-prior-payload (Cap 2) | ✅ **Interim suppress shipped**; structural removal is Phase 5 |
 | Scattered skeleton stagger delays (55/70/90/110/120/165ms) | **Remove** | One coherent reveal; no above-fold stagger | Phase 2 |
 
 **Merge, never fork:** the rule is that a capability and the thing it replaces never ship as two live options. The new module lands, consumers migrate, the old path is deleted in the same track.
@@ -176,7 +180,7 @@ Shipped `web/lib/motion/motionTokens.ts` + `:root` motion vars and the 5 choreog
 ### Step 1 — Phase 0 quick-wins *(Small, low risk, stops active harm — pull forward)*
 - **Universal dirty-guard** (`dirtyGuard.ts`): lift the Person-drawer guard into the save coordinator as a platform invariant. *Stops silent edit loss.* Uses the existing `drawerOperatingIsDirty()`.
 - **KPI reveal enforcement** ✅ **DONE**: removed the workspace hardcoded `kpi_region_ready` bypass and routed real KPI structural readiness into `computeWorkspaceRevealGate`; verified + test-locked the work-unit gate (already correct). Slow per-dept growth values settle post-reveal (Motion `settle`), not blocked. Tests in `web/tests/adminV2/kpiRevealGating.test.ts`. *Stops the half-built workspace.*
-- **Suppress outbound skeleton** ⚠️ **PARTIAL**: `WorkUnitSlugRouteHost` holds instead of flashing its cold shell once the URL has left this work unit (`isLeavingWorkUnitSurface` guard). Closes the soft-transition window; the dominant full-reload document-swap flash remains Track 1's. Tests in `web/tests/admin/workUnitOutboundHold.test.ts`. *Stops the leaving-skeleton on the soft path.*
+- **Suppress outbound skeleton** ⚠️ **PARTIAL**: `WorkUnitSurfaceView` (the pure render, now driven by the Surface Host's controller — `WorkUnitSlugRouteHost` is seed-only since the Phase 2B render takeover) holds instead of flashing the cold shell once the URL has left this work unit (`isLeavingWorkUnitSurface` guard). Closes the soft-transition window; the dominant full-reload document-swap flash remains Track 1's. Tests in `web/tests/admin/workUnitOutboundHold.test.ts`. *Stops the leaving-skeleton on the soft path.*
 
 These need only Motion's `settle` for the KPI case; otherwise they are wiring corrections. Lowest risk, highest immediate perception.
 

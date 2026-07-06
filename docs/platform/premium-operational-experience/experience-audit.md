@@ -1,8 +1,10 @@
 # Experience Audit — Premium Operational Experience Sprint
 
 **Path:** `docs/sprints/06_2026/premium-operational-experience/experience-audit.md`
-**Status:** Audit (June 2026). Evidence base for the Operational Experience Doctrine and Operational Motion Doctrine.
+**Status:** Audit (June 2026). Evidence base for the Operational Experience Doctrine and Operational Motion Doctrine. **The "Current behavior" descriptions are point-in-time (June 2026); several navigation findings have since progressed — see the update note below.**
 **Method:** Six parallel subsystem investigations grounded in code (workspace, work-unit/queue, drawers, cards, navigation/runtime, motion), cross-read against the locked performance/reveal doctrines.
+
+> **Update (2026-07, Alloy OS sprint).** The navigation findings have advanced via the **Surface Host** (ratified NAV-1, decision A): **NAV-1** — soft nav + reload floor shipped and the work-unit surface is now Host-rendered (the outbound exchange choreography remains); **WU-1** — the outbound cold-shell flash is suppressed by the `isLeavingWorkUnitSurface` hold (note: the cited `WorkUnitSlugRouteHost` render path moved — that component is now *seed-only*, and the hold lives in `WorkUnitSurfaceView` driven by `useWorkUnitSurfaceController`); **WU-3** — render ownership unified under the Host, though both nav paths still coexist until the exchange lands. Current state: [`surface-host-architecture.md`](../experience/surface-host-architecture.md) §7 and the [Alloy OS engineering handoff](../../sprints/07_2026/alloy-os/engineering-handoff.md). Findings below are preserved as the original audit record.
 
 ---
 

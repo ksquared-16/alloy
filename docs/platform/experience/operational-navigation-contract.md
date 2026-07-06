@@ -30,6 +30,8 @@ navigation within the Alloy OS operational surface.
 | **Work Unit → Workspace (browser back)** | Browser back / `router.back()` | ✅ workspace was never unmounted (soft nav session) | ✅ bfcache or layout context preserved | Workspace fades in from previous scroll position |
 | **Settings routes** | Hard nav (`window.location.assign`) | ❌ intentional page feel | N/A | Full page reload — Settings is excluded from the OS contract |
 
+> **Surface Host + reload floor (2026-07).** The Workspace tile → Work Unit soft nav is guarded by a watchdog **reload floor**: `commitAdminV2NavLinkNavigation` arms `armSoftNavReloadFloor`, which fires `window.location.assign` (a guaranteed cold rebuild) only if the soft nav has not reached the target within the budget and has not been superseded by a newer navigation. Separately, the **work-unit surface is now rendered by the Surface Host**, not the route: `WorkUnitSlugRouteHost` is seed-only and the Host mounts the surface via `useWorkUnitSurfaceController`. Neither change alters this contract's timing/visual columns — they are the resilience and ownership substrate beneath it. See [`surface-host-architecture.md`](./surface-host-architecture.md).
+
 ---
 
 ## Workspace → Work Unit transition contract

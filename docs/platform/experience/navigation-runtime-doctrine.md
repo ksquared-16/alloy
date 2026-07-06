@@ -1,10 +1,12 @@
 # Navigation Runtime Doctrine
 
 **Path:** `docs/platform/experience/navigation-runtime-doctrine.md`
-**Status:** **Architecture (proposed)** — June 2026. Awaiting approval. No implementation until approved.
-**Realizes:** The Experience Layer's deferred keystone — Capability 2 (Continuity System) + Capability 6 (Navigation Continuity) of [`experience-layer-architecture.md`](./experience-layer-architecture.md), unified into one runtime.
-**Closes:** NAV-1 (full-reload navigation), NAV-2 (cold caches), WU-1 (outbound skeleton), WU-3 (dual navigation paradigm), DRW-4 (drawer stack lost on refresh) from the [Experience Audit](../../sprints/06_2026/premium-operational-experience/experience-audit.md).
+**Status:** **Ratified (decision A) and in implementation — this is the Surface Host.** Decision (A) — one route, client-driven surfaces — has been ratified and built. The realized form of this doctrine is the **Surface Host** ([`surface-host-architecture.md`](./surface-host-architecture.md)), not a separate future "navigation rewrite." As of 2026-07 the following are **shipped**: the persistent client context model (§2), URL hydration on cold load, the held-prior guards (Phase 0), soft navigation for WS↔WU with the reload floor as recovery, and canonical Host rendering of the work-unit surface. **Remaining:** the soft *surface exchange* (Phase 3 here) — outgoing-surface retention + atomic swap + settle. This document is the **design spec / doctrine**; the Surface Host doc is the **implementation record**. Read them together.
+**Realizes:** The Experience Layer's keystone — Capability 2 (Continuity System) + Capability 6 (Navigation Continuity) of [`experience-layer-architecture.md`](./experience-layer-architecture.md), unified into one runtime. **Realized by** [`surface-host-architecture.md`](./surface-host-architecture.md).
+**Closes:** NAV-1 (full-reload navigation) — *substrate shipped, exchange remaining*; NAV-2 (cold caches); WU-1 (outbound skeleton) — *held-prior guard shipped*; WU-3 (dual navigation paradigm); DRW-4 (drawer stack lost on refresh) from the [Experience Audit](../premium-operational-experience/experience-audit.md).
 **Companion law:** [`operational-experience-doctrine.md`](./operational-experience-doctrine.md) Law 2 (Continuity) and Law 3 (Memory). This doctrine is their navigation-level implementation.
+
+> **NAV-1 is not a future rewrite.** It is the Surface Host, being implemented incrementally. Where this doctrine below says "will," "proposed," or "Phase N," consult the landed-state table in [`surface-host-architecture.md`](./surface-host-architecture.md) §7 for what is actually shipped. The module sketch in §4 (`web/lib/experience/navigation/`) is the *generalized target*; the shipped implementation currently lives in `web/lib/experience/surfaceHost/` and is the work-unit-first realization of the same design.
 
 ---
 
@@ -177,16 +179,16 @@ Build the runtime *alongside* the reload; prove resilience; flip the default per
 
 # 8 — Implementation phases (Deliverable 5)
 
-| Phase | Goal | Behavior change | Risk |
-|-------|------|-----------------|------|
-| **0 — Instrument & contain** | Know the real cancelled-nav rate that justified the reload. Add transition + fallback instrumentation to *current* paths. Land held-prior-surface guards (started: outbound skeleton). | None | None |
-| **1 — Context model + URL authority** | Introduce `navigationContext` as the single URL-projection authority; unify the drawer `replaceState` path and surface path **without changing the surface commit mechanism yet**. | None visible (drawers already work this way) | Low |
-| **2 — Persistence boundary** | `navigationPersistence` tier; soft nav *and* reload rehydrate warm (NAV-2). | Re-entry is warm; still reloads on surface nav | Low–Med |
-| **3 — Soft surface transitions (flagged)** | Decision (A): surface change = client context-swap, not route unmount. Wire freeze → prepare → hold → commit, invoking Reveal (gate) + Motion (`navigate`). **Reload retained as automatic Tier-3 fallback**, gated on the resilience contract. Roll out **one surface at a time**, watching `fallback_to_reload_rate`. | The OS feel begins, per surface | **High** |
-| **4 — Instant back + history + predictive preload** | Map back/forward to retained context; `pushState` semantics; warm destinations on intent. | Instant back; many transitions become instant | Med |
-| **5 — Collapse the dual paradigm + retire modules** | Retire `adminV2CommitNavigation` as default; fold `runAdminV2NavigationTransition` + `syncOperatorWorkUnitUrlInBrowser` into NavRuntime; remove the outbound cold-shell interim. | One navigation physics everywhere | Med |
+| Phase | Goal | Behavior change | Risk | State (2026-07) |
+|-------|------|-----------------|------|-----------------|
+| **0 — Instrument & contain** | Know the real cancelled-nav rate that justified the reload. Add transition + fallback instrumentation to *current* paths. Land held-prior-surface guards (started: outbound skeleton). | None | None | ✅ **Shipped** — Surface Hold, Queue Hold, `isLeavingWorkUnitSurface` outbound guard. |
+| **1 — Context model + URL authority** | Introduce the context model as the single URL-projection authority; unify the drawer `replaceState` path and surface path **without changing the surface commit mechanism yet**. | None visible (drawers already work this way) | Low | ✅ **Shipped as the Surface Host** — `SurfaceHostProvider` owns `{ current, outgoing, incoming, phase }`; `surfaceRef` hydration on cold load; canonical Host rendering of the work-unit surface (route is seed-only). URL sync inside a surface still runs via the controller (full projection authority = Phase 3/5). |
+| **2 — Persistence boundary** | Navigation-surviving store; soft nav *and* reload rehydrate warm (NAV-2). | Re-entry is warm; still reloads on surface nav | Low–Med | ⬜ **Remaining** — the work-unit identity module cache (`workUnitSlugRouteCache`) is an in-memory seed only; the sessionStorage-backed persistence tier is not built. |
+| **3 — Soft surface transitions (flagged)** | Decision (A): surface change = client context-swap, not route unmount. Wire freeze → prepare → hold → commit, invoking Reveal (gate) + Motion (`navigate`). **Reload retained as automatic Tier-3 fallback**, gated on the resilience contract. Roll out **one surface at a time**, watching `fallback_to_reload_rate`. | The OS feel begins, per surface | **High** | 🟡 **Partial** — soft nav (`router.push`) for WS↔WU with the watchdog **reload floor** shipped; render ownership moved to the Host. The **exchange choreography** (hold outgoing → exit+enter → settle; the reducer's `navigate/settle/cancel`) is the primary remaining Surface Host work. |
+| **4 — Instant back + history + predictive preload** | Map back/forward to retained context; `pushState` semantics; warm destinations on intent. | Instant back; many transitions become instant | Med | ⬜ **Remaining** — back/forward currently re-hydrate via `popstate` (not retained-context restore). |
+| **5 — Collapse the dual paradigm + retire modules** | Retire `adminV2CommitNavigation` as default; fold `runAdminV2NavigationTransition` + `syncOperatorWorkUnitUrlInBrowser` into the runtime; remove the outbound cold-shell interim. | One navigation physics everywhere | Med | ⬜ **Remaining** — both paths still coexist; the reload floor is retained by design and is *never* removed, only demoted. |
 
-This *is* the detailed design of the roadmap's deferred **Track 1 (Persistent Runtime)** keystone.
+This *is* the detailed design of the roadmap's deferred **Track 1 (Persistent Runtime)** keystone — now realized as the Surface Host.
 
 ---
 
