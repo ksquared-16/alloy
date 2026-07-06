@@ -25,6 +25,7 @@ import {
 } from "@/lib/queues/queueMembershipLocationScope";
 import { buildQueueRelevantCrmCompactChildren } from "@/lib/workUnits/filterQueueRelevantInquiryChildren";
 import { queryEnrollmentProcessInstanceTrackRows } from "@/lib/queues/childGrainProcessInstanceQueue";
+import { enrollmentQueueOcmFallbackEnabled } from "@/lib/queues/enrollmentQueueMembershipFlags";
 
 type OpportunityPreview = {
     id: string;
@@ -122,7 +123,10 @@ async function queryOcmEnrollmentTrackRows(params: {
                 params.locationScopeSource,
             );
         }
-        // No process_instances for this lane → temporary OCM fallback (un-migrated records).
+        // No process_instances for this lane. process_instances is CANONICAL; OCM-only rows are used
+        // ONLY when the legacy fallback flag is explicitly enabled (for un-backfilled orgs).
+        if (!enrollmentQueueOcmFallbackEnabled()) return [];
+        // Fallback flag on → temporary OCM read for un-migrated records.
     }
 
     let q = params.supabase

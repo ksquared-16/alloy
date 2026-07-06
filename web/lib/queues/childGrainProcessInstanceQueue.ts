@@ -10,6 +10,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { ENROLLMENT_PROCESS_KEY } from "@/lib/lifecycle/lifecycleProcessTypes";
 import type { OcmEnrollmentTrackQueryRow } from "@/lib/queues/ocmEnrollmentTrackQueueBuilder";
+import { processInstanceBelongsToLane } from "@/lib/queues/enrollmentEffectiveStageMembership";
 
 type PiRow = {
     id: string;
@@ -78,12 +79,16 @@ export async function queryEnrollmentProcessInstanceTrackRows(params: {
     const stageKey = params.stageKey.trim();
     if (!stageKey) return [];
 
+    // Membership is by EFFECTIVE stage (PI.stage_key ?? opportunity.stage_key), the same rule the
+    // engine/metrics use. Fetch instances at this stage OR with no own stage (riding the family
+    // track); the in-code filter below keeps only those whose effective stage matches this lane, so
+    // a freshly-created child (null stage) surfaces in its household's stage lane (e.g. Lead).
     const { data: piData, error: piErr } = await params.supabase
         .from("process_instances")
         .select("id, org_id, subject_id, context_id, stage_key, state, metadata, updated_at, created_at")
         .eq("org_id", params.orgId)
         .eq("process_key", ENROLLMENT_PROCESS_KEY)
-        .eq("stage_key", stageKey);
+        .or(`stage_key.eq.${stageKey},stage_key.is.null`);
     if (piErr) throw new Error(`process_instances enrollment-track query failed: ${piErr.message}`);
     const piRows = (piData ?? []) as PiRow[];
     if (!piRows.length) return [];
@@ -136,6 +141,11 @@ export async function queryEnrollmentProcessInstanceTrackRows(params: {
         // Only include instances whose context opportunity is in this work unit.
         const opp = pi.context_id ? oppById.get(pi.context_id) : null;
         if (!opp) continue;
+        // Effective-stage membership: keep only children whose PI.stage_key ?? opp.stage_key == lane.
+        const oppStageKey = typeof opp.stage_key === "string" ? opp.stage_key : null;
+        if (!processInstanceBelongsToLane({ piStageKey: pi.stage_key, contextStageKey: oppStageKey, laneStageKey: stageKey })) {
+            continue;
+        }
         const cm = cmById.get(pi.subject_id) ?? null;
         const catId = metaStr(pi.metadata, "program_category_id");
         const cat = catId ? catById.get(catId) ?? null : null;

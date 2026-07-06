@@ -28,13 +28,23 @@ function mockSupabase(data: {
                     filters[col] = val;
                     return builder;
                 },
+                or(expr: string) {
+                    // Effective-stage query: "stage_key.eq.<X>,stage_key.is.null".
+                    filters.__or_stage = /stage_key\.eq\.([^,]+)/.exec(expr)?.[1] ?? null;
+                    return builder;
+                },
                 in() {
                     return builder;
                 },
                 then(resolve: (r: { data: Rec[]; error: null }) => void) {
                     let rows = (data as Record<string, Rec[]>)[table] ?? [];
-                    if (table === "process_instances" && filters.stage_key !== undefined) {
-                        rows = rows.filter((r) => r.stage_key === filters.stage_key);
+                    if (table === "process_instances") {
+                        if (filters.stage_key !== undefined) {
+                            rows = rows.filter((r) => r.stage_key === filters.stage_key);
+                        } else if (filters.__or_stage !== undefined) {
+                            // stage_key == X OR stage_key IS NULL (family-track riders)
+                            rows = rows.filter((r) => r.stage_key === filters.__or_stage || r.stage_key == null);
+                        }
                     }
                     resolve({ data: rows, error: null });
                 },
