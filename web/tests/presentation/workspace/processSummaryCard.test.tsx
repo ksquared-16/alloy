@@ -226,15 +226,64 @@ describe("ProcessSummaryCard — operator-owned card identity (Surface Builder)"
         expect(el.querySelector("[data-process-identity-chip]")).toBeNull();
     });
 
-    it("accent + icon render an identity chip (Alloy token) WITHOUT touching the semantic state rail", () => {
-        const el = render(<ProcessSummaryCard process={process({})} config={cfgWithCard({ accent: "pine", icon: "leads" })} />);
+    it("accent drives left rail, identity chip, and CTA — pine uses Bend Pine brand token", () => {
+        const el = render(<ProcessSummaryCard process={process({})} config={cfgWithCard({ accent: "pine", icon: "users" })} />);
         const chip = el.querySelector("[data-process-identity-chip]");
         expect(chip).not.toBeNull();
-        expect(chip?.getAttribute("data-process-accent")).toBe("pine");
-        expect(chip?.getAttribute("data-process-icon")).toBe("leads");
-        expect(chip?.className).toContain("text-alloy-pine"); // Alloy token, not a new color
-        // The state rail stays the operational signal (healthy), not the accent.
-        expect(el.querySelector('[data-alloy-section="WS.PROCESS_SUMMARY_CARD"]')?.className).toContain("border-l-alloy-juniper/70");
+        expect(el.querySelector('[data-alloy-section="WS.PROCESS_SUMMARY_CARD"]')?.getAttribute("data-process-accent")).toBe("pine");
+        expect(chip?.className).toContain("text-alloy-bend-pine");
+        const card = el.querySelector('[data-alloy-section="WS.PROCESS_SUMMARY_CARD"]');
+        expect(card?.className).toContain("border-l-alloy-bend-pine/80");
+        expect(el.querySelector("[data-process-cta]")?.className).toContain("text-alloy-bend-pine");
+        expect(el.querySelector("[data-process-metric-value]")?.className).toContain("text-alloy-bend-pine");
+    });
+
+    it("does not duplicate primary metric label/title when they are identical", () => {
+        const el = render(
+            <ProcessSummaryCard
+                process={process({
+                    primarySignal: {
+                        key: "enrollment.active_leads",
+                        label: "Active leads",
+                        answer: "Active leads",
+                        state: "healthy",
+                        value: "24",
+                        supportingContext: null,
+                        trend: null,
+                        drillHref: null,
+                    },
+                })}
+                config={cfgWithCard({ primarySignalLabel: "Active leads", accent: "pine" })}
+            />,
+        );
+        expect(el.querySelector("[data-process-metric-title]")).toBeNull();
+        expect(el.querySelector("[data-process-metric-value]")?.textContent).toBe("24");
+        expect(el.querySelector("[data-process-metric-answer]")?.textContent).toBe("Active leads");
+    });
+
+    it("primary + supporting metric title overrides render on the card", () => {
+        const el = render(
+            <ProcessSummaryCard
+                process={process({
+                    supportingSignal: {
+                        key: "enrollment.tours_scheduled",
+                        label: "Tours scheduled",
+                        answer: "Tours scheduled",
+                        state: "neutral",
+                        value: "12",
+                        supportingContext: null,
+                        trend: null,
+                        drillHref: null,
+                    },
+                })}
+                config={cfgWithCard({
+                    primarySignalLabel: "Pipeline health",
+                    supportingSignalLabel: "Tour volume",
+                })}
+            />,
+        );
+        expect(el.querySelector("[data-process-metric-title]")?.textContent).toBe("Pipeline health");
+        expect(el.querySelector("[data-process-supporting-signal]")?.textContent).toBe("Tour volume: 12");
     });
 
     it("supporting signal renders a text-only second line (label: value)", () => {
@@ -258,10 +307,88 @@ describe("ProcessSummaryCard — operator-owned card identity (Surface Builder)"
         expect(el.querySelector("[data-process-supporting-signal]")?.textContent).toBe("Tours scheduled: 12");
     });
 
+    it("supporting metric no-data shows configured title once with em dash — not definition label", () => {
+        const el = render(
+            <ProcessSummaryCard
+                process={process({
+                    supportingSignal: {
+                        key: "enrollment.tour_conversion_rate",
+                        label: "Tour conversion rate",
+                        answer: "Tour conversion rate",
+                        state: "neutral",
+                        value: null,
+                        supportingContext: null,
+                        trend: null,
+                        drillHref: null,
+                    },
+                })}
+                config={cfgWithCard({ supportingSignalLabel: "Tour Conversion" })}
+            />,
+        );
+        expect(el.querySelector("[data-process-supporting-metric-title]")?.textContent).toBe("Tour Conversion");
+        expect(el.querySelector("[data-process-supporting-metric-value]")?.textContent).toBe("—");
+        expect(el.querySelector("[data-process-supporting-signal]")?.textContent).not.toContain("Tour conversion rate");
+    });
+
+    it("primary metric no-data shows configured title and em dash — not repeated definition label", () => {
+        const el = render(
+            <ProcessSummaryCard
+                process={process({
+                    primarySignal: {
+                        key: "enrollment.active_leads",
+                        label: "Active leads",
+                        answer: "Active leads",
+                        state: "neutral",
+                        value: null,
+                        supportingContext: null,
+                        trend: null,
+                        drillHref: null,
+                    },
+                })}
+                config={cfgWithCard({ primarySignalLabel: "Active leads", accent: "pine" })}
+            />,
+        );
+        expect(el.querySelector("[data-process-metric-title]")?.textContent).toBe("Active leads");
+        expect(el.querySelector("[data-process-metric-value]")?.textContent).toBe("—");
+        expect(el.querySelector("[data-process-metric-answer]")).toBeNull();
+    });
+
+    it("does not repeat card title as subtitle when description matches title", () => {
+        const el = render(
+            <ProcessSummaryCard
+                process={process({
+                    label: "Enrollment",
+                    description: "Enrollment",
+                })}
+                config={cfgWithCard({ title: "Enrollment" })}
+            />,
+        );
+        expect(el.querySelector("[data-process-title]")?.textContent).toBe("Enrollment");
+        expect(el.querySelector("[data-process-subtitle]")).toBeNull();
+    });
+
     it("CTA label override changes the label; the target (href) stays canonical", () => {
         const el = render(<ProcessSummaryCard process={process({})} config={cfgWithCard({ ctaLabel: "Work leads" })} />);
         const cta = el.querySelector("[data-process-cta]");
         expect(cta?.textContent).toContain("Work leads");
         expect(cta?.getAttribute("href")).toBe("/workspace/work-unit/new-leads"); // canonical process entry (Work Unit runtime)
+    });
+
+    it("builder mode wires clickable regions for direct manipulation", () => {
+        const onFieldClick = vi.fn();
+        const el = render(
+            <ProcessSummaryCard
+                process={process({})}
+                config={cfgWithCard({ title: "Custom", accent: "pine" })}
+                builder={{ activeField: "title", onFieldClick }}
+            />,
+        );
+        const titleBtn = el.querySelector('[data-builder-field="title"]');
+        expect(titleBtn).not.toBeNull();
+        act(() => {
+            titleBtn?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+        });
+        expect(onFieldClick).toHaveBeenCalledWith("title");
+        expect(titleBtn?.className).toContain("ring-2");
     });
 });

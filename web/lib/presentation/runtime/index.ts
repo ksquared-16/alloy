@@ -85,3 +85,17 @@ export {
 } from "./workspaceProcessSurfaceConfig";
 
 export { useWorkspaceProcessSurfaceConfig } from "./useWorkspaceProcessSurfaceConfig";
+
+export {
+    DEFAULT_WORKSPACE_HEADER_SURFACE_CONFIG,
+    WORKSPACE_HEADER_LAYOUT_KEY,
+    buildWorkspaceHeaderPresentation,
+    enabledWorkspaceHeaderKpis,
+    normalizeWorkspaceHeaderSurfaceConfig,
+    workspaceHeaderKpiSourceKeys,
+    type WorkspaceHeaderKpiVm,
+    type WorkspaceHeaderPresentationModel,
+    type WorkspaceHeaderSurfaceConfig,
+} from "./workspaceHeaderSurfaceConfig";
+
+export { useWorkspaceHeaderSurfaceConfigState } from "./useWorkspaceHeaderSurfaceConfig";

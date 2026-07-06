@@ -87,6 +87,47 @@ These belong to the Configuration Runtime eventually but are only Commercial-spe
 
 ---
 
+## Platform Configuration UX — Settings Home
+
+The Settings index (`/settings`) is a **compact configuration table of contents** — divider-separated sections with a left identity column and right list of ~52px clickable rows, not dashboard tiles.
+
+**Information architecture:**
+
+| Chapter | Primary entries |
+|---------|-----------------|
+| Organization | Locations, Access, Communications |
+| Data Model | Entities, Fields, Statuses, Operational Calculations |
+| Operations | Processes, Surfaces, Automation |
+| Business | Commercial |
+
+**Presentation primitives:** `ConfigurationSection`, `ConfigurationSectionItem`, `config-platform-*` CSS in `configurationRuntime.css`. IA source: `lib/adminV2/configurationModeNav.ts`.
+
+**Hidden from primary nav:** Financials (route may still exist).
+
+**Entities:** `/settings/entities` (entity label configuration).
+
+---
+
+## Surfaces — Workspace (`/settings/surfaces → Workspaces`)
+
+Two independent workspace surfaces share the `entity_layouts` **`surface="workspace"`** carrier (distinct `layout_key` values — no duplicate published rows per key):
+
+| Surface | `layout_key` | Controls on `/workspace` |
+| --- | --- | --- |
+| **Workspace Header** | `workspace_header` | Title, subtitle, 3–5 org-level KPI cards (Operational Calculations) |
+| **Workspace Process Summary** (per process) | `workspace_processes` | One `ProcessSummaryCard` per configured business process (identity, primary/supporting metrics, Today's Work behavior) |
+
+**Rules:**
+
+- Workspace Header KPIs use the **Operational Calculations / metric-card** infrastructure — not a bespoke KPI store.
+- Builder preview and Presentation Runtime share the same components and formatters (`WorkspaceHeader`, `ProcessSummaryCard`).
+- Runtime loads published config atomically where possible (no flash of built-in defaults when a published layout exists).
+- Process summaries appear only for **real** configured business processes from the lifecycle catalog — no fake process list.
+
+API: `GET/PUT /api/admin/surfaces/workspace-header`, `GET/PUT /api/admin/surfaces/workspace-processes`.
+
+---
+
 ## Related
 
 - `../../system/configuration-system.md` (transitional expanded reference)

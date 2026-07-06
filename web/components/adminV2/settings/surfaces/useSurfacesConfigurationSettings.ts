@@ -2,16 +2,21 @@
 
 import { useCallback, useMemo, useState } from "react";
 
+import { sectionLabel } from "@/lib/adminV2/settings/surfaces/surfacesNavigationModel";
+
 /**
- * Surfaces configuration state (Context → Queue → Workspace).
+ * Surfaces configuration state (Context → left nav → workspace).
  *
- * Mirrors the frozen Configuration Runtime V1 page/hook split (see Locations).
- * Sections are Design Surface categories; objects are the surfaces within a
- * category. Only the Enrollment Focus Panel Summary has a live editor today;
- * other categories are catalogued but not yet authorable.
+ * Left navigation is the primary organizational model — no Surface Library landing.
+ * Workspaces list configured business processes directly; each opens the Process Summary builder.
  */
 
-export type SurfaceConfigSectionKey = "focus-panels" | "queue-rows" | "workspaces" | "headers" | "dashboards";
+export type SurfaceConfigSectionKey =
+    | "focus-panels"
+    | "queue-rows"
+    | "workspaces"
+    | "work-units"
+    | "operational-intelligence";
 
 export type SurfaceConfigSection = {
     key: SurfaceConfigSectionKey;
@@ -22,6 +27,7 @@ export type SurfaceConfigSection = {
 export type SurfaceEditorKind =
     | "focus-panel-summary"
     | "operational-intelligence"
+    | "workspace-header"
     | "workspace-processes"
     | "work-unit-header"
     | "queue-row-builder";
@@ -38,10 +44,26 @@ export type SurfaceConfigObject = {
     liveHref?: string;
     /** Primary configuration target (the real metric/placement builder) when one exists. */
     configureHref?: string;
-    /** Operational grain — displayed as a label on queue row items in the Surface Library. */
+    /** Operational grain — displayed as a label on queue row items. */
     grain?: "case" | "child" | "candidate";
     /** Entity type stored in entity_layouts — displayed alongside grain for queue rows. */
     entityType?: string;
+    /** Business process key when this surface is a Workspace Process Summary. */
+    businessProcess?: string;
+    /** Lifecycle catalog id (`departmentId:processId`) — authoritative process binding. */
+    catalogId?: string;
+    processKey?: string;
+    departmentId?: string;
+    processId?: string;
+};
+
+/** Fixed Workspace Header entry — always first under Workspaces. */
+export const WORKSPACE_HEADER_SURFACE_OBJECT: SurfaceConfigObject = {
+    id: "workspace-header",
+    title: "Workspace Header",
+    subtitle: "Title, subtitle, and org-level KPIs",
+    editor: "workspace-header",
+    liveHref: "/workspace",
 };
 
 /** Dev-only preview of the Analytics / Dashboard surface composition + Metric Card language. */
@@ -51,11 +73,11 @@ export const SURFACE_CONFIG_SECTIONS: readonly SurfaceConfigSection[] = [
     { key: "focus-panels", label: "Focus Panels" },
     { key: "queue-rows", label: "Queue Rows" },
     { key: "workspaces", label: "Workspaces" },
-    { key: "headers", label: "Headers" },
-    { key: "dashboards", label: "Dashboards & Analytics" },
+    { key: "work-units", label: "Work Units" },
+    { key: "operational-intelligence", label: "Operational Intelligence" },
 ];
 
-export const SURFACE_OBJECTS: Record<SurfaceConfigSectionKey, SurfaceConfigObject[]> = {
+export const SURFACE_OBJECTS: Record<Exclude<SurfaceConfigSectionKey, "workspaces">, SurfaceConfigObject[]> = {
     "focus-panels": [
         {
             id: "enrollment-focus-panel-summary",
@@ -82,17 +104,7 @@ export const SURFACE_OBJECTS: Record<SurfaceConfigSectionKey, SurfaceConfigObjec
             entityType: "placement_candidate",
         },
     ],
-    workspaces: [],
-    // Header surfaces. The Workspace Header metric strip is retired — the Workspace
-    // Processes surface (process cards) is the workspace body now.
-    headers: [
-        {
-            id: "workspace-processes",
-            title: "Workspace Processes",
-            subtitle: "Process cards on /workspace",
-            editor: "workspace-processes",
-            liveHref: "/workspace",
-        },
+    "work-units": [
         {
             id: "work-unit-header",
             title: "Work Unit Header",
@@ -101,30 +113,20 @@ export const SURFACE_OBJECTS: Record<SurfaceConfigSectionKey, SurfaceConfigObjec
             liveHref: "/workspace",
         },
     ],
-    // Dashboard / Analytics Design Surfaces. Catalogued from the Analytics OIP
-    // surface inventory; composition is previewable (dev) ahead of an in-place
-    // editor. Each reuses the Metric archetype + shared Renderer catalog — there
-    // is no separate dashboard configuration model.
-    dashboards: [
-        {
-            id: "executive-performance",
-            title: "Executive Performance",
-            subtitle: "Org health, growth, financial, forecast",
-            previewHref: ANALYTICS_SURFACE_PREVIEW_HREF,
-        },
+    "operational-intelligence": [
         {
             id: "operational-intelligence",
             title: "Operational Intelligence",
             subtitle: "Today: pulse, attention, bottlenecks",
             previewHref: ANALYTICS_SURFACE_PREVIEW_HREF,
-            // Runtime lives in the Workspace → Operational Intelligence modal. This
-            // deep-link lands on the canonical operator workspace (`/workspace`) where
-            // TopNavBar reads the param and opens the modal.
             liveHref: "/workspace?workspaceModal=analytics",
-            // Configure opens the platform SurfaceBuilder inline (the one builder), not a
-            // standalone Analytics config page. Operational Intelligence is just a
-            // Surface Definition handed to SurfaceBuilder.
             editor: "operational-intelligence",
+        },
+        {
+            id: "executive-performance",
+            title: "Executive Performance",
+            subtitle: "Org health, growth, financial, forecast",
+            previewHref: ANALYTICS_SURFACE_PREVIEW_HREF,
         },
         {
             id: "enrollment-intelligence",
@@ -141,44 +143,57 @@ export const SURFACE_OBJECTS: Record<SurfaceConfigSectionKey, SurfaceConfigObjec
     ],
 };
 
-/** Section that owns a given surface id (for global resolution from the Surface Library). */
-const SECTION_BY_OBJECT_ID: Record<string, SurfaceConfigSectionKey> = Object.fromEntries(
-    (Object.entries(SURFACE_OBJECTS) as [SurfaceConfigSectionKey, SurfaceConfigObject[]][]).flatMap(([key, objs]) =>
-        objs.map((o) => [o.id, key] as const),
-    ),
-);
-
-export function useSurfacesConfigurationSettings() {
+export function useSurfacesConfigurationSettings(workspaceSurfaces: SurfaceConfigObject[] = []) {
     const [section, setSectionState] = useState<SurfaceConfigSectionKey>("focus-panels");
-    // Start unselected so the Configuration shell (Context → Section → Workspace)
-    // is visible; selecting a surface collapses navigation and opens the editor.
     const [selectedId, setSelectedId] = useState<string | null>(null);
 
-    const listItems = useMemo(() => SURFACE_OBJECTS[section] ?? [], [section]);
+    const listItems = useMemo((): SurfaceConfigObject[] => {
+        if (section === "workspaces") {
+            return [WORKSPACE_HEADER_SURFACE_OBJECT, ...workspaceSurfaces];
+        }
+        return SURFACE_OBJECTS[section] ?? [];
+    }, [section, workspaceSurfaces]);
 
     const setSection = useCallback((next: SurfaceConfigSectionKey) => {
         setSectionState(next);
-        // Changing category returns to browsing (collapse editor, show the shell).
         setSelectedId(null);
     }, []);
 
-    /** Open a surface by id from anywhere (e.g. the Surface Library) — switches section too. */
-    const openSurface = useCallback((id: string) => {
-        const owner = SECTION_BY_OBJECT_ID[id];
-        if (owner) setSectionState(owner);
-        setSelectedId(id);
-    }, []);
+    const openSurface = useCallback(
+        (id: string) => {
+            if (id === WORKSPACE_HEADER_SURFACE_OBJECT.id || workspaceSurfaces.some((o) => o.id === id)) {
+                setSectionState("workspaces");
+            } else {
+                for (const [key, objs] of Object.entries(SURFACE_OBJECTS) as [
+                    Exclude<SurfaceConfigSectionKey, "workspaces">,
+                    SurfaceConfigObject[],
+                ][]) {
+                    if (objs.some((item) => item.id === id)) {
+                        setSectionState(key);
+                        break;
+                    }
+                }
+            }
+            setSelectedId(id);
+        },
+        [workspaceSurfaces],
+    );
 
-    // Resolve the selected object GLOBALLY (not just within the active section), so a
-    // surface opened from the Library always mounts its editor.
     const selectedObject = useMemo(() => {
         if (!selectedId) return null;
+        if (selectedId === WORKSPACE_HEADER_SURFACE_OBJECT.id) return WORKSPACE_HEADER_SURFACE_OBJECT;
+        const workspace = workspaceSurfaces.find((item) => item.id === selectedId);
+        if (workspace) return workspace;
         for (const objs of Object.values(SURFACE_OBJECTS)) {
             const found = objs.find((item) => item.id === selectedId);
             if (found) return found;
         }
         return null;
-    }, [selectedId]);
+    }, [selectedId, workspaceSurfaces]);
+
+    const goHome = useCallback(() => {
+        setSelectedId(null);
+    }, []);
 
     return {
         section,
@@ -186,6 +201,7 @@ export function useSurfacesConfigurationSettings() {
         selectedId,
         setSelectedId,
         openSurface,
+        goHome,
         sections: SURFACE_CONFIG_SECTIONS,
         listItems,
         selectedObject,

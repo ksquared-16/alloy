@@ -4,9 +4,8 @@
  * Presentation Runtime V2 — WS.SURFACE resolution.
  *
  * Resolves the WorkspaceSurfaceModel from the existing data layer, reused verbatim:
- *   - header                     — org identity only (title); the retired Workspace Header
- *                                  metric strip is gone — the Workspace Process Surface
- *                                  (process cards) is the entire workspace body
+ *   - header                     — published Workspace Header (title/subtitle/KPIs) via
+ *                                  entity_layouts `workspace_header` + Operational Calculations
  *   - process tiles              — operator lifecycle landing cards (peek → load refine)
  *   - work-view counts           — canonical-location totals (`useWorkViewTotals`): each
  *                                  view's count is the rows-API exact total at its host
@@ -17,7 +16,7 @@
  * (docs/platform/experience/presentation-runtime-v2.md).
  */
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useWorkspaceOrg } from "@/contexts/WorkspaceOrgContext";
 import { useWorkspaceSiteFilter } from "@/contexts/WorkspaceSiteFilterContext";
 import { useWorkspaceRouteVm } from "@/lib/adminV2/runtime/surface/workspaceRouteVmContext";
@@ -28,13 +27,23 @@ import {
     peekOperatorLifecycleLandingCards,
 } from "@/lib/admin/loadOperatorLifecycleLandingClient";
 import {
-    useWorkViewTotals,
+    useWorkViewTotalsState,
     workViewTotalKey,
     type WorkViewTotalTarget,
 } from "./useWorkViewTotals";
 import { useOperationalAnswers } from "./useOperationalAnswers";
-import { useWorkspaceProcessSurfaceConfig } from "./useWorkspaceProcessSurfaceConfig";
+import { useWorkspaceProcessSurfaceConfigState } from "./useWorkspaceProcessSurfaceConfig";
+import { useWorkspaceHeaderSurfaceConfigState } from "./useWorkspaceHeaderSurfaceConfig";
 import { resolveProcessCardConfig } from "./workspaceProcessSurfaceConfig";
+import {
+    buildWorkspaceHeaderPresentation,
+    workspaceHeaderKpiSourceKeys,
+    type WorkspaceHeaderPresentationModel,
+} from "./workspaceHeaderSurfaceConfig";
+import {
+    selectWorkspaceProcessTileSnapshot,
+    type WorkspaceProcessTileSnapshot,
+} from "./workspaceProcessSurfaceAssembly";
 import {
     businessProcessForProcessKey,
     defaultSignalKeyForProcess,
@@ -152,7 +161,7 @@ export function useWorkspaceSurfaceRuntime(): WorkspaceSurfaceModel {
     }, [cards]);
 
     // Gate on org readiness — a totals request racing org-context bootstrap 404s transiently.
-    const workViewTotals = useWorkViewTotals({
+    const workViewTotalsState = useWorkViewTotalsState({
         targets: workViewTotalTargets,
         selectedSiteId,
         enabled: orgId != null,
@@ -163,7 +172,8 @@ export function useWorkspaceSurfaceRuntime(): WorkspaceSurfaceModel {
     // Surface Builder chooses WHICH signal (config.primarySignalByProcess, keyed by business
     // process); the runtime falls back to the registry default for the process. No hardcoded
     // health metric. The selected calculations are resolved through the canonical answer path.
-    const processConfig = useWorkspaceProcessSurfaceConfig();
+    const { config: processConfig, loaded: processConfigLoaded } = useWorkspaceProcessSurfaceConfigState();
+    const { config: headerConfig, loaded: headerConfigLoaded } = useWorkspaceHeaderSurfaceConfigState();
     const signalKeyForCard = useCallback(
         (card: OperatorLifecycleLandingCard): string | null => {
             const bp = businessProcessForProcessKey(card.processKey);
@@ -180,9 +190,16 @@ export function useWorkspaceSurfaceRuntime(): WorkspaceSurfaceModel {
         },
         [processConfig],
     );
+    const headerKpiKeys = useMemo(() => workspaceHeaderKpiSourceKeys(headerConfig), [headerConfig]);
     const signalKeys = useMemo<OipMetricKey[]>(() => {
         const seen = new Set<string>();
         const out: OipMetricKey[] = [];
+        for (const key of headerKpiKeys) {
+            if (!seen.has(key)) {
+                seen.add(key);
+                out.push(key);
+            }
+        }
         for (const card of cards) {
             for (const key of [signalKeyForCard(card), supportingSignalKeyForCard(card)]) {
                 if (key && isKnownCalculationKey(key) && !seen.has(key)) {
@@ -192,11 +209,25 @@ export function useWorkspaceSurfaceRuntime(): WorkspaceSurfaceModel {
             }
         }
         return out;
-    }, [cards, signalKeyForCard, supportingSignalKeyForCard]);
-    const { resolved: signalsResolved } = useOperationalAnswers({
+    }, [cards, headerKpiKeys, signalKeyForCard, supportingSignalKeyForCard]);
+    const { resolved: signalsResolved, settled: signalsSettled } = useOperationalAnswers({
         siteId: selectedSiteId,
         keys: signalKeys,
     });
+
+    const headerFallbackTitle = orgName ?? routeVm.context.orgName;
+    const lastCompleteHeader = useRef<WorkspaceHeaderPresentationModel | null>(null);
+    const headerPresentation = useMemo(() => {
+        if (!headerConfigLoaded || !signalsSettled) {
+            return lastCompleteHeader.current;
+        }
+        const next = buildWorkspaceHeaderPresentation(headerConfig, {
+            fallbackTitle: headerFallbackTitle,
+            resolved: signalsResolved,
+        });
+        lastCompleteHeader.current = next;
+        return next;
+    }, [headerConfig, headerConfigLoaded, headerFallbackTitle, signalsResolved, signalsSettled]);
 
     const processes = useMemo(
         () =>
@@ -216,31 +247,71 @@ export function useWorkspaceSurfaceRuntime(): WorkspaceSurfaceModel {
                         const viewId = entry.work_view_id?.trim();
                         const workUnitId = entry.host_work_unit_id?.trim();
                         if (!viewId || !workUnitId) return null;
-                        return workViewTotals.get(workViewTotalKey(workUnitId, viewId)) ?? null;
+                        return workViewTotalsState.totals.get(workViewTotalKey(workUnitId, viewId)) ?? null;
                     },
                     primarySignal,
                     supportingSignal,
                 });
             }),
-        [cards, workViewTotals, signalKeyForCard, supportingSignalKeyForCard, signalsResolved],
+        [cards, workViewTotalsState.totals, signalKeyForCard, supportingSignalKeyForCard, signalsResolved],
     );
+
+    const lastCompleteProcessSnapshot = useRef<WorkspaceProcessTileSnapshot | null>(null);
+    const processSnapshotSelection = useMemo(
+        () =>
+            selectWorkspaceProcessTileSnapshot({
+                previous: lastCompleteProcessSnapshot.current,
+                next: { processes, config: processConfig },
+                readiness: {
+                    cardsSettled,
+                    configLoaded: processConfigLoaded,
+                    signalsSettled,
+                    totalsSettled: workViewTotalsState.settled,
+                },
+            }),
+        [
+            cardsSettled,
+            processConfig,
+            processConfigLoaded,
+            processes,
+            signalsSettled,
+            workViewTotalsState.settled,
+        ],
+    );
+    if (processSnapshotSelection.ready && processSnapshotSelection.snapshot) {
+        lastCompleteProcessSnapshot.current = processSnapshotSelection.snapshot;
+    }
+    const visibleProcessSnapshot = processSnapshotSelection.snapshot;
 
     return useMemo<WorkspaceSurfaceModel>(
         () => ({
-            header: { orgName: orgName ?? routeVm.context.orgName },
-            processes,
+            header: headerPresentation ?? buildWorkspaceHeaderPresentation(headerConfig, {
+                fallbackTitle: headerFallbackTitle,
+                resolved: null,
+            }),
+            processes: visibleProcessSnapshot?.processes ?? [],
+            processConfig: visibleProcessSnapshot?.config ?? processConfig,
             rightRailActions,
             defaultDepartmentId,
-            // Tiles present (warm seed) or the load settled.
-            ready: processes.length > 0 || cardsSettled,
+            // Header + process tiles commit only when config + metrics + counts have settled,
+            // or from the previous complete snapshot during refresh. Prevents default-header
+            // flash and partial KPI morphs.
+            ready:
+                processSnapshotSelection.ready &&
+                Boolean(visibleProcessSnapshot) &&
+                headerConfigLoaded &&
+                Boolean(headerPresentation),
         }),
         [
-            orgName,
-            routeVm.context.orgName,
-            processes,
+            headerPresentation,
+            headerConfig,
+            headerFallbackTitle,
+            headerConfigLoaded,
+            visibleProcessSnapshot,
+            processConfig,
             rightRailActions,
             defaultDepartmentId,
-            cardsSettled,
+            processSnapshotSelection.ready,
         ],
     );
 }
