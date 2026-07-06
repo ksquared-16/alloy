@@ -29,6 +29,22 @@ export function adminV2SoftSidebarNavEnabled(): boolean {
     return process.env.NEXT_PUBLIC_ADMIN_V2_SOFT_SIDEBAR_NAV === "1";
 }
 
+/**
+ * Operator Workspace <-> Work Unit soft navigation (NAV-1 (A) / Surface Host, Phase 2A). Eligible
+ * operator paths (workspace / work-unit / dept — see `isAdminV2SoftNavEligibleHref`) soft-navigate
+ * BY DEFAULT so the shell (left nav / header / right rail / BOS) stays mounted instead of the hard
+ * `window.location.assign` reload that clears it. `NEXT_PUBLIC_ADMIN_V2_SOFT_SIDEBAR_NAV=0` is the
+ * kill switch (forces the hard reload everywhere — instant rollback, no deploy). Non-eligible paths
+ * (settings / workflows / forms) are unchanged; the hard reload is retained as the recovery floor
+ * via the soft-nav reload-floor watchdog.
+ */
+export function adminV2OperatorSoftNavEnabled(): boolean {
+    return !(
+        typeof process !== "undefined" &&
+        process.env.NEXT_PUBLIC_ADMIN_V2_SOFT_SIDEBAR_NAV === "0"
+    );
+}
+
 function normalizeShellNavPath(href: string): string {
     const pathOnly = href.split(/[?#]/)[0] ?? href;
     const withSlash = pathOnly.startsWith("/") ? pathOnly : `/${pathOnly}`;

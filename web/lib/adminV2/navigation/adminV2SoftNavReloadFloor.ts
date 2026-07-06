@@ -1,0 +1,74 @@
+/**
+ * Soft-nav reload floor (NAV-1 (A) / Surface Host, Phase 2A).
+ *
+ * Eligible Workspace <-> Work Unit navigations commit via `router.push` (soft) so the shell stays
+ * mounted. `runAdminV2NavigationTransition` has no post-commit recovery, so this is the reload
+ * floor: after a soft commit we arm a watchdog — if the navigation has NOT reached the target path
+ * by the timeout (and has not been superseded by a newer navigation), recover via the guaranteed
+ * hard reload (`window.location.assign`, injected). Bounds the worst case to a delayed reload —
+ * never a stuck / dead soft-nav frame. `window.location.assign` is retained, never removed.
+ */
+
+import { normalizeOperatorPathname } from "@/lib/admin/canonicalOperatorRoutes";
+
+export const DEFAULT_SOFT_NAV_RELOAD_FLOOR_MS = 3000;
+
+/** Monotonic generation — a newer soft nav supersedes older watchdogs so they never fire late. */
+let softNavGeneration = 0;
+
+/**
+ * Pure decision: at watchdog time, does the soft nav look stalled (→ fire the reload floor)?
+ * - superseded by a newer navigation → never fire (that navigation owns the floor now);
+ * - otherwise fire iff the current path has not reached the target (canonicalized comparison).
+ */
+export function shouldFireReloadFloor(args: {
+    currentPathname: string;
+    targetPathname: string;
+    superseded: boolean;
+}): boolean {
+    if (args.superseded) return false;
+    return (
+        normalizeOperatorPathname(args.currentPathname) !==
+        normalizeOperatorPathname(args.targetPathname)
+    );
+}
+
+export type SoftNavReloadFloorDeps = {
+    /** Current URL path (e.g. `window.location.pathname`). */
+    getPathname: () => string;
+    /** Guaranteed hard recovery (e.g. `adminV2CommitNavigation` → `window.location.assign`). */
+    reload: () => void;
+    setTimeoutFn?: (cb: () => void, ms: number) => ReturnType<typeof setTimeout>;
+    clearTimeoutFn?: (handle: ReturnType<typeof setTimeout>) => void;
+    timeoutMs?: number;
+};
+
+/**
+ * Arm the reload floor after a soft commit. Returns a disarm function (not required — the
+ * generation check makes a late fire a no-op on success or supersession).
+ */
+export function armSoftNavReloadFloor(
+    targetPathname: string,
+    deps: SoftNavReloadFloorDeps,
+): () => void {
+    const myGeneration = ++softNavGeneration;
+    const setT = deps.setTimeoutFn ?? ((cb, ms) => setTimeout(cb, ms));
+    const clearT = deps.clearTimeoutFn ?? ((h) => clearTimeout(h));
+    const handle = setT(() => {
+        if (
+            shouldFireReloadFloor({
+                currentPathname: deps.getPathname(),
+                targetPathname,
+                superseded: myGeneration !== softNavGeneration,
+            })
+        ) {
+            deps.reload();
+        }
+    }, deps.timeoutMs ?? DEFAULT_SOFT_NAV_RELOAD_FLOOR_MS);
+    return () => clearT(handle);
+}
+
+/** Test-only reset. */
+export function resetSoftNavGenerationForTests(): void {
+    softNavGeneration = 0;
+}
