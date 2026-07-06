@@ -9,7 +9,6 @@
  */
 
 import { useWorkspaceSurfaceRuntime } from "@/lib/presentation/runtime";
-import { useWorkspaceProcessSurfaceConfig } from "@/lib/presentation/runtime/useWorkspaceProcessSurfaceConfig";
 import {
     PRESENTATION_RUNTIME_LABELS,
     runtimeLabelProps,
@@ -23,9 +22,20 @@ import { CreateLeadEventHost } from "@/components/presentation/rightRail/CreateL
 function WorkspaceSurfaceSkeleton() {
     return (
         <div className="flex flex-col gap-5" aria-busy="true" aria-label="Loading workspace">
-            <div className="space-y-1.5">
-                <span className="block h-3 w-20 animate-pulse rounded bg-alloy-stone/12" aria-hidden />
-                <span className="block h-6 w-56 animate-pulse rounded bg-alloy-stone/16" aria-hidden />
+            <div className="flex flex-wrap items-start justify-between gap-6">
+                <div className="space-y-1.5">
+                    <span className="block h-7 w-56 animate-pulse rounded bg-alloy-stone/16" aria-hidden />
+                    <span className="block h-4 w-36 animate-pulse rounded bg-alloy-stone/12" aria-hidden />
+                </div>
+                <div className="flex gap-8">
+                    {Array.from({ length: 3 }, (_, i) => (
+                        <span
+                            key={`ws-kpi-skel-${i}`}
+                            className="block h-12 w-20 animate-pulse rounded bg-alloy-stone/12"
+                            aria-hidden
+                        />
+                    ))}
+                </div>
             </div>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
                 {Array.from({ length: 3 }, (_, i) => (
@@ -42,10 +52,6 @@ function WorkspaceSurfaceSkeleton() {
 
 export function WorkspaceSurface() {
     const model = useWorkspaceSurfaceRuntime();
-    // The one Workspace Process Surface config (Today's Work behavior), authored in
-    // /settings/surfaces. Defaults until the published config loads. The process cards ARE
-    // the workspace surface — there is no separate header metric strip.
-    const processConfig = useWorkspaceProcessSurfaceConfig();
 
     return (
         <div
@@ -60,10 +66,10 @@ export function WorkspaceSurface() {
                 <WorkspaceSurfaceSkeleton />
             ) : (
                 <>
-                    {/* Workspace Process Surface: org identity header (no metric strip) + one
-                        ProcessSummaryCard per process. The header metric strip is retired. */}
-                    <WorkspaceHeader orgName={model.header.orgName} />
-                    <ProcessGrid processes={model.processes} config={processConfig} />
+                    {/* Workspace Header (title / subtitle / org KPIs) + one ProcessSummaryCard
+                        per configured business process. */}
+                    <WorkspaceHeader model={model.header} />
+                    <ProcessGrid processes={model.processes} config={model.processConfig} />
                     {/* Registers the configured Workspace actions into the persistent command
                         rail's "Actions (N)" section — same path as the Work Unit. Renders null. */}
                     <WorkspaceRightRailActions

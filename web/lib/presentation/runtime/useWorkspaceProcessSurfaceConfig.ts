@@ -3,10 +3,10 @@
 /**
  * Resolve the org's published Workspace Process Surface config for the runtime.
  *
- * Returns the built-in default until the published config loads, so first paint is never
- * blocked and the common case (no customization) renders the same cards. Module-cached
- * (one fetch per session), refreshed on the publish event so the builder's "see it live"
- * loop works. This is the runtime consuming the authored surface config.
+ * The runtime must not first render defaults and then swap to the published card grammar.
+ * This hook exposes readiness so WS.SURFACE can commit the process-card surface atomically.
+ * Module-cached (one fetch per session), refreshed on the publish event so the builder's
+ * "see it live" loop works.
  */
 
 import { useEffect, useState } from "react";
@@ -46,19 +46,32 @@ function invalidate(): Promise<WorkspaceProcessSurfaceConfig> {
     return ensureLoad();
 }
 
-export function useWorkspaceProcessSurfaceConfig(): WorkspaceProcessSurfaceConfig {
+export type WorkspaceProcessSurfaceConfigState = {
+    config: WorkspaceProcessSurfaceConfig;
+    loaded: boolean;
+};
+
+export function useWorkspaceProcessSurfaceConfigState(): WorkspaceProcessSurfaceConfigState {
     const [config, setConfig] = useState<WorkspaceProcessSurfaceConfig>(
         cache.config ?? DEFAULT_WORKSPACE_PROCESS_SURFACE_CONFIG,
     );
+    const [loaded, setLoaded] = useState(cache.loaded);
 
     useEffect(() => {
         let active = true;
         void ensureLoad().then((c) => {
-            if (active) setConfig(c);
+            if (active) {
+                setConfig(c);
+                setLoaded(true);
+            }
         });
         const onPublished = () => {
+            setLoaded(false);
             void invalidate().then((c) => {
-                if (active) setConfig(c);
+                if (active) {
+                    setConfig(c);
+                    setLoaded(true);
+                }
             });
         };
         window.addEventListener(WORKSPACE_PROCESS_SURFACE_PUBLISHED_EVENT, onPublished);
@@ -68,5 +81,9 @@ export function useWorkspaceProcessSurfaceConfig(): WorkspaceProcessSurfaceConfi
         };
     }, []);
 
-    return config;
+    return { config, loaded };
+}
+
+export function useWorkspaceProcessSurfaceConfig(): WorkspaceProcessSurfaceConfig {
+    return useWorkspaceProcessSurfaceConfigState().config;
 }

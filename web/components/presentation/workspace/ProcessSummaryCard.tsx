@@ -26,10 +26,15 @@ import type { ProcessTileModel, SignalState } from "@/lib/presentation/runtime";
 import {
     applyTodaysWorkConfig,
     resolveProcessCardConfig,
-    type ProcessCardAccent,
     type ProcessCardIcon,
     type WorkspaceProcessSurfaceConfig,
 } from "@/lib/presentation/runtime/workspaceProcessSurfaceConfig";
+import { PROCESS_CARD_ACCENT_STYLES } from "@/lib/presentation/runtime/processCardAccentStyles";
+import {
+    formatProcessSummaryMetric,
+    PROCESS_SUMMARY_METRIC_EMPTY,
+    sameMetricPhrase,
+} from "@/lib/presentation/runtime/processSummaryMetricPresentation";
 import { businessProcessForProcessKey } from "@/lib/presentation/runtime/workspaceProcessSignal";
 import { stripLegacyArtifactMarker } from "@/lib/admin/buildOperatorLifecycleLanding";
 import {
@@ -70,29 +75,75 @@ const STATE_RAIL: Record<SignalState, string> = {
 };
 
 /**
- * Identity-chip classes per operator-chosen accent — Alloy tokens ONLY (static literals for the
- * Tailwind JIT). This colors the IDENTITY glyph; the semantic state rail above stays owned by the
- * operational signal, so an accent never masquerades as a health color.
+ * Identity-chip classes per operator-chosen accent — uses brand-correct Alloy tokens
+ * (Bend Pine for `pine`, not the legacy alloy-pine alias).
  */
-const ACCENT_CHIP: Record<ProcessCardAccent, string> = {
-    pine: "bg-alloy-pine/10 text-alloy-pine",
-    juniper: "bg-alloy-juniper/10 text-alloy-juniper",
-    ember: "bg-alloy-ember/10 text-alloy-ember",
-    firewood: "bg-alloy-firewood/10 text-alloy-firewood",
-    midnight: "bg-alloy-midnight/[0.06] text-alloy-midnight",
-    stone: "bg-alloy-stone/15 text-alloy-midnight/70",
-};
 const NEUTRAL_CHIP = "bg-alloy-midnight/[0.04] text-alloy-midnight/55";
+const DEFAULT_CTA =
+    "border-alloy-juniper/35 bg-alloy-juniper/10 text-alloy-juniper hover:border-alloy-juniper hover:bg-alloy-juniper hover:text-white focus-visible:outline-alloy-juniper";
+const DEFAULT_METRIC_TEXT = "text-alloy-juniper";
+const DEFAULT_METRIC_TINT = "bg-alloy-juniper/[0.06]";
+
+export type ProcessSummaryBuilderField =
+    | "title"
+    | "subtitle"
+    | "identity"
+    | "primaryMetricTitle"
+    | "supportingMetricTitle"
+    | "cta";
+
+export type ProcessSummaryCardBuilderProps = {
+    activeField: ProcessSummaryBuilderField | null;
+    onFieldClick: (field: ProcessSummaryBuilderField) => void;
+};
+
+function builderRing(active: boolean): string {
+    return active ? "ring-2 ring-alloy-bend-pine/45 ring-offset-1 rounded-md" : "";
+}
+
+function BuilderHit({
+    field,
+    builder,
+    className,
+    children,
+}: {
+    field: ProcessSummaryBuilderField;
+    builder?: ProcessSummaryCardBuilderProps;
+    className?: string;
+    children: ReactNode;
+}) {
+    if (!builder) return <>{children}</>;
+    const active = builder.activeField === field;
+    return (
+        <button
+            type="button"
+            className={`cursor-pointer text-left transition-shadow ${builderRing(active)} ${className ?? ""}`}
+            data-builder-field={field}
+            onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                builder.onFieldClick(field);
+            }}
+        >
+            {children}
+        </button>
+    );
+}
 
 /** Closed identity-glyph vocabulary → a single-color inline icon (currentColor; no decorative fill). */
 const ICON_GLYPH: Record<ProcessCardIcon, ReactNode> = {
-    leads: <path d="M7 8a2.5 2.5 0 100-5 2.5 2.5 0 000 5zM3 15a4 4 0 018 0M13 6v4M11 8h4" />,
-    enrollment: <path d="M4 10l3 3 6-7" />,
-    billing: <path d="M10 3v14M13 6a3 3 0 00-3-2c-1.7 0-3 1-3 2.3 0 3 6 1.7 6 4.7C13 12.5 11.6 14 10 14a3 3 0 01-3-2" />,
-    roster: <path d="M4 5h9M4 10h9M4 15h6M16 5h.01M16 10h.01M16 15h.01" />,
-    tour: <path d="M4 6h12v10H4zM4 6l0-2M16 6l0-2M4 9h12" />,
-    waitlist: <path d="M10 5v5l3 2M10 17a7 7 0 100-14 7 7 0 000 14z" />,
-    generic: <path d="M5 5h4v4H5zM11 5h4v4h-4zM5 11h4v4H5zM11 11h4v4h-4z" />,
+    grid: <path d="M5 5h4v4H5zM11 5h4v4h-4zM5 11h4v4H5zM11 11h4v4h-4z" />,
+    spark: <path d="M10 3l1.2 4.2L15 8l-3.8 1.2L10 14l-1.2-4.8L5 8l3.8-0.8L10 3z" />,
+    route: <path d="M4 6c0-1.1 1-2 2.2-2 1.5 0 2.5 1.2 2.8 2.6M16 14c0 1.1-1 2-2.2 2-1.5 0-2.5-1.2-2.8-2.6M6.5 8.5l7 3M6.5 11.5l7-3" />,
+    users: <path d="M7 8a2.5 2.5 0 100-5 2.5 2.5 0 000 5zM3 15a4 4 0 018 0M13 6v4M11 8h4" />,
+    calendar: <path d="M4 6h12v10H4zM4 6l0-2M16 6l0-2M4 9h12" />,
+    clipboard: <path d="M7 4h6v2H7zM5 6h10v10H5z" />,
+    chart: <path d="M5 14V8M10 14V5M15 14v-4" />,
+    message: <path d="M4 5h12v8H8l-4 3V5z" />,
+    shield: <path d="M10 3l6 2v5c0 3.5-2.5 5.8-6 7-3.5-1.2-6-3.5-6-7V5l6-2z" />,
+    book: <path d="M6 4h8v12H6zM6 4c0 0 2-1 4-1s4 1 4 1" />,
+    bolt: <path d="M11 3L6 11h4l-1 6 6-9h-4l0-5z" />,
+    layers: <path d="M10 4l7 3.5L10 11 3 7.5 10 4zM3 12.5L10 16l7-3.5M3 16.5L10 20l7-3.5" />,
 };
 
 function IdentityGlyph({ icon }: { icon: ProcessCardIcon }) {
@@ -115,9 +166,12 @@ function IdentityGlyph({ icon }: { icon: ProcessCardIcon }) {
 export function ProcessSummaryCard({
     process,
     config,
+    builder,
 }: {
     process: ProcessTileModel;
     config: WorkspaceProcessSurfaceConfig;
+    /** When set, the card is the builder canvas — regions are clickable for direct manipulation. */
+    builder?: ProcessSummaryCardBuilderProps;
 }) {
     const signal = process.primarySignal;
     const state: SignalState = signal?.state ?? "neutral";
@@ -136,10 +190,27 @@ export function ProcessSummaryCard({
     );
     // Render-boundary guard: a dirty legacy-suffixed process name never prints on the workspace card.
     const title = stripLegacyArtifactMarker(identity.title ?? process.label) ?? "";
-    const subtitle = identity.subtitle ?? process.description;
-    const showChip = identity.accent != null || identity.icon !== "generic";
+    const configuredSubtitle = identity.subtitle?.trim() || null;
+    const descriptionFallback = process.description?.trim() || null;
+    const subtitle =
+        configuredSubtitle ??
+        (descriptionFallback && !sameMetricPhrase(title, descriptionFallback) ? descriptionFallback : null);
+    const showChip = identity.accent != null || identity.icon !== "grid";
     const ctaLabel = identity.ctaLabel ?? "Open process";
     const supporting = process.supportingSignal;
+    const primaryMetricLabel = identity.primarySignalLabel ?? signal?.label ?? null;
+    const supportingMetricLabel = identity.supportingSignalLabel ?? supporting?.label ?? null;
+
+    const accentStyle = identity.accent ? PROCESS_CARD_ACCENT_STYLES[identity.accent] : null;
+    const leftRail = accentStyle?.rail ?? STATE_RAIL[state];
+    const hoverAccent = accentStyle?.hover ?? "hover:shadow-[0_3px_10px_rgba(15,23,42,0.08)]";
+    const ctaClasses = accentStyle?.cta ?? DEFAULT_CTA;
+    const chipClasses = accentStyle?.chip ?? NEUTRAL_CHIP;
+    const metricText = accentStyle?.metricText ?? DEFAULT_METRIC_TEXT;
+    const metricTint = accentStyle?.metricTint ?? DEFAULT_METRIC_TINT;
+    const statusChipClasses = accentStyle?.statusChip
+        ? `${accentStyle.statusChip} font-semibold`
+        : `${STATE_TEXT[state]} bg-alloy-midnight/[0.04] font-semibold`;
 
     const slug = useMemo(
         () => parseOperatorWorkUnitEntryHref(drillHref).workUnitSlug,
@@ -154,49 +225,78 @@ export function ProcessSummaryCard({
         [process.workViews, config],
     );
     const showTodaysWork = config.todaysWork.visible && todaysWork.length > 0;
+    const primaryFormatted = signal
+        ? formatProcessSummaryMetric({
+              configuredTitle: primaryMetricLabel,
+              definitionLabel: signal.label,
+              value: signal.value,
+          })
+        : null;
+    const shouldShowPrimaryMetricLabel =
+        primaryFormatted != null &&
+        signal != null &&
+        (primaryFormatted.kind === "empty" ||
+            (!sameMetricPhrase(primaryFormatted.title, primaryFormatted.displayValue) &&
+                !sameMetricPhrase(primaryFormatted.title, signal.answer)));
+    const supportingFormatted = supporting
+        ? formatProcessSummaryMetric({
+              configuredTitle: supportingMetricLabel,
+              definitionLabel: supporting.label,
+              value: supporting.value,
+          })
+        : null;
 
     return (
         <article
             {...runtimeLabelProps(PRESENTATION_RUNTIME_LABELS.processTile)}
             data-alloy-section="WS.PROCESS_SUMMARY_CARD"
             data-process-id={process.id}
-            className={`flex h-full min-h-[13rem] flex-col overflow-hidden rounded-xl border border-alloy-stone/12 border-l-[3px] ${STATE_RAIL[state]} bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04)]`}
+            data-process-accent={identity.accent ?? "none"}
+            className={`flex h-full min-h-[13rem] flex-col overflow-hidden rounded-xl border border-alloy-stone/12 border-l-[3px] ${leftRail} bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition-shadow ${hoverAccent}`}
         >
             <div className="flex flex-1 flex-col gap-3.5 px-5 pb-4 pt-4">
-                {/* Identity — configured title/subtitle + optional accent glyph chip (identity only). */}
                 <div className="flex items-start justify-between gap-3">
                     <div className="flex min-w-0 items-start gap-2.5">
-                        {showChip ? (
-                            <span
-                                data-process-identity-chip
-                                data-process-accent={identity.accent ?? "none"}
-                                data-process-icon={identity.icon}
-                                className={`mt-0.5 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg ${
-                                    identity.accent ? ACCENT_CHIP[identity.accent] : NEUTRAL_CHIP
-                                }`}
-                            >
-                                <IdentityGlyph icon={identity.icon} />
-                            </span>
+                        {(showChip || builder) ? (
+                            <BuilderHit field="identity" builder={builder} className="mt-0.5 shrink-0 rounded-lg">
+                                <span
+                                    data-process-identity-chip={showChip ? true : undefined}
+                                    data-process-icon={identity.icon}
+                                    className={`inline-flex h-7 w-7 items-center justify-center rounded-lg ${
+                                        showChip ? chipClasses : NEUTRAL_CHIP
+                                    }`}
+                                >
+                                    <IdentityGlyph icon={identity.icon} />
+                                </span>
+                            </BuilderHit>
                         ) : null}
                         <div className="min-w-0">
-                            <h3
-                                data-process-title
-                                className="min-w-0 truncate text-[17px] font-semibold leading-snug text-alloy-midnight"
-                            >
-                                {title}
-                            </h3>
-                            {subtitle ? (
-                                <p
-                                    data-process-subtitle
-                                    className="mt-0.5 line-clamp-1 text-xs leading-relaxed text-alloy-midnight/55"
+                            <BuilderHit field="title" builder={builder} className="block w-full">
+                                <h3
+                                    data-process-title
+                                    className="min-w-0 truncate text-[17px] font-semibold leading-snug text-alloy-midnight"
                                 >
-                                    {subtitle}
-                                </p>
+                                    {title}
+                                </h3>
+                            </BuilderHit>
+                            {subtitle ? (
+                                <BuilderHit field="subtitle" builder={builder} className="mt-0.5 block w-full">
+                                    <p
+                                        data-process-subtitle
+                                        className="line-clamp-1 text-xs leading-relaxed text-alloy-midnight/55"
+                                    >
+                                        {subtitle}
+                                    </p>
+                                </BuilderHit>
+                            ) : builder ? (
+                                <BuilderHit field="subtitle" builder={builder} className="mt-0.5 block w-full">
+                                    <p className="text-xs italic text-alloy-midnight/35">Add subtitle…</p>
+                                </BuilderHit>
                             ) : null}
                         </div>
                     </div>
                     <span
-                        className={`inline-flex shrink-0 items-center gap-1.5 rounded-full bg-alloy-midnight/[0.04] px-2.5 py-1 text-[11px] font-semibold ${STATE_TEXT[state]}`}
+                        className={`inline-flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] ${statusChipClasses}`}
                         data-process-status
                     >
                         <span aria-hidden className={`h-1.5 w-1.5 rounded-full ${STATE_DOT[state]}`} />
@@ -204,17 +304,49 @@ export function ProcessSummaryCard({
                     </span>
                 </div>
 
-                {/* Primary Signal — the configured Operational Answer. Answer is the hero; the
-                    value supports it. Domain-neutral: the value may be percent / currency / count
-                    / score / ratio and the card never branches on it. */}
-                {signal ? (
-                    <div data-process-answer>
-                        <p className={`text-[20px] font-bold leading-[1.15] tracking-[-0.015em] ${STATE_TEXT[state]}`}>
-                            {signal.answer}
-                        </p>
-                        {signal.value ? (
-                            <p className="mt-1.5 text-[13px] font-semibold tabular-nums text-alloy-midnight/60">
-                                {signal.value}
+                {/* Primary Signal — metric label + value/title, suppressing repeated phrases. */}
+                {signal && primaryFormatted ? (
+                    <div className={`rounded-lg px-3 py-2.5 ${metricTint}`} data-process-answer>
+                        {shouldShowPrimaryMetricLabel ? (
+                            <BuilderHit field="primaryMetricTitle" builder={builder} className="mb-1 block w-full">
+                                <p
+                                    className="text-[11px] font-bold uppercase tracking-[0.08em] text-alloy-midnight/55"
+                                    data-process-metric-title
+                                >
+                                    {primaryFormatted.title}
+                                </p>
+                            </BuilderHit>
+                        ) : builder ? (
+                            <BuilderHit field="primaryMetricTitle" builder={builder} className="mb-1 block w-full">
+                                <p
+                                    className="text-[11px] font-bold uppercase tracking-[0.08em] text-alloy-midnight/45"
+                                    data-process-metric-title
+                                >
+                                    {primaryFormatted.title || "Primary metric title"}
+                                </p>
+                            </BuilderHit>
+                        ) : null}
+                        {primaryFormatted.kind === "value" ? (
+                            <p
+                                className={`text-[27px] font-bold leading-none tracking-[-0.035em] tabular-nums ${metricText}`}
+                                data-process-metric-value
+                            >
+                                {primaryFormatted.displayValue}
+                            </p>
+                        ) : (
+                            <p
+                                className={`text-[27px] font-bold leading-none tracking-[-0.035em] tabular-nums ${metricText}`}
+                                data-process-metric-value
+                            >
+                                {PROCESS_SUMMARY_METRIC_EMPTY}
+                            </p>
+                        )}
+                        {primaryFormatted.kind === "value" && signal.answer ? (
+                            <p
+                                className="mt-1 text-[14px] font-semibold leading-snug text-alloy-midnight/75"
+                                data-process-metric-answer
+                            >
+                                {signal.answer}
                             </p>
                         ) : null}
                     </div>
@@ -234,12 +366,27 @@ export function ProcessSummaryCard({
                 ) : null}
 
                 {/* Supporting Signal — the optional SECOND configured calculation, text only. */}
-                {supporting ? (
-                    <p className="-mt-1 text-xs text-alloy-midnight/55" data-process-supporting-signal>
-                        {supporting.value
-                            ? `${supporting.label}: ${supporting.value}`
-                            : supporting.answer}
-                    </p>
+                {supportingFormatted ? (
+                    <BuilderHit field="supportingMetricTitle" builder={builder} className="-mt-1 block w-full">
+                        {supportingFormatted.kind === "value" ? (
+                            <p className="text-[13px] font-semibold text-alloy-midnight/65" data-process-supporting-signal>
+                                <span className={metricText}>
+                                    {supportingFormatted.title}: {supportingFormatted.displayValue}
+                                </span>
+                            </p>
+                        ) : (
+                            <div className="text-[13px] font-semibold text-alloy-midnight/65" data-process-supporting-signal>
+                                <p data-process-supporting-metric-title>{supportingFormatted.title}</p>
+                                <p className={`tabular-nums ${metricText}`} data-process-supporting-metric-value>
+                                    {PROCESS_SUMMARY_METRIC_EMPTY}
+                                </p>
+                            </div>
+                        )}
+                    </BuilderHit>
+                ) : builder ? (
+                    <BuilderHit field="supportingMetricTitle" builder={builder} className="-mt-1 block w-full">
+                        <p className="text-xs italic text-alloy-midnight/35">Supporting metric…</p>
+                    </BuilderHit>
                 ) : null}
 
                 {/* Today's Work — live work views (behavior configured; content is runtime data). */}
@@ -264,17 +411,28 @@ export function ProcessSummaryCard({
                     ) : (
                         <span aria-hidden />
                     )}
-                    <Link
-                        href={drillHref}
-                        aria-label={`Open ${process.label}`}
-                        data-process-cta
-                        onPointerEnter={warm}
-                        onPointerDown={warm}
-                        onFocus={warm}
-                        className="shrink-0 rounded-md border border-alloy-juniper/35 bg-alloy-juniper/10 px-3 py-1.5 text-xs font-bold tracking-wide text-alloy-juniper no-underline transition-colors hover:border-alloy-juniper hover:bg-alloy-juniper hover:text-white active:bg-alloy-juniper/80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-alloy-juniper"
-                    >
-                        {ctaLabel} →
-                    </Link>
+                    {builder ? (
+                        <BuilderHit field="cta" builder={builder}>
+                            <span
+                                className={`inline-block shrink-0 rounded-md border px-3 py-1.5 text-xs font-bold tracking-wide ${ctaClasses}`}
+                                data-process-cta
+                            >
+                                {ctaLabel} →
+                            </span>
+                        </BuilderHit>
+                    ) : (
+                        <Link
+                            href={drillHref}
+                            aria-label={`Open ${process.label}`}
+                            data-process-cta
+                            onPointerEnter={warm}
+                            onPointerDown={warm}
+                            onFocus={warm}
+                            className={`shrink-0 rounded-md border px-3 py-1.5 text-xs font-bold tracking-wide no-underline transition-colors active:opacity-80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 ${ctaClasses}`}
+                        >
+                            {ctaLabel} →
+                        </Link>
+                    )}
                 </div>
             </div>
         </article>
