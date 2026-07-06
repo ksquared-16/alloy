@@ -310,7 +310,9 @@ const ROSTER_FIELD_META: Record<string, { icon: LucideIcon; get: (c: ChildrenEvi
     "inquiry_child.program": { icon: GraduationCap, get: (c) => c.program },
     "child.room": { icon: DoorOpen, get: (c) => c.room },
     "inquiry_child.schedule_type": { icon: CalendarDays, get: (c) => c.schedule },
+    "inquiry_child.desired_schedule_type": { icon: CalendarDays, get: (c) => c.schedule },
     "child.start_date": { icon: CalendarClock, get: (c) => c.startDate },
+    "child.desired_start_date": { icon: CalendarClock, get: (c) => c.startDate },
 };
 
 /** Roster meta lines: from the published config field order, else the default order (back-compat). */

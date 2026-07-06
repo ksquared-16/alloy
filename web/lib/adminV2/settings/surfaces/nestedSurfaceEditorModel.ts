@@ -1,20 +1,15 @@
 /**
  * Nested Surface editor model (Experience Builder V3 — /surfaces FP slice).
  *
- * A card's Expanded/Workspace depth opens a nested Surface (Children Surface,
- * Financial Configuration Surface). This model owns the EDITABLE composition of
- * those nested surfaces: named evidence groups, each with a selected set of
- * Composition Items (fields), configured by the operator.
+ * Editable nested-surface groups are derived from the registered `SurfaceSpec` —
+ * one registry, one editor. `groupDefsFor(surfaceId)` reads evidence groups from
+ * `getSurface(surfaceId)` via `surfaceComponents`; no parallel `NESTED_SURFACE_DEFS`.
  *
  * Availability is namespace-driven (V3 §5): a group offers real platform fields
- * plus real tenant custom fields whose namespace it accepts — never fabricated
- * fields (no fake payers / invoices / estimates). Groups with no compatible real
- * fields render an honest empty state.
+ * plus real tenant custom fields whose namespace it accepts — never fabricated fields.
  *
- * Pure + framework-free (unit-testable). Persisted into the Focus Panel summary
- * layout doc metadata (`metadata.nestedSurfaces[surfaceId]`) — see
- * nestedSurfaceConfigService.ts. Live runtime consumption is deferred
- * (presentation-runtime-ready).
+ * Persisted into the Focus Panel summary layout doc metadata
+ * (`metadata.nestedSurfaces[surfaceId]`) — see nestedSurfaceConfigService.ts.
  *
  * @see lib/platform/surfaceComposition/definitions/recursiveSurfaceProofs.ts
  * @see lib/adminV2/settings/surfaces/compositionFieldAdapter.ts (availableFieldsForNamespaces)
@@ -25,14 +20,17 @@ import {
     type AvailableField,
     type AvailableFieldEntityNamespace,
 } from "@/lib/adminV2/settings/surfaces/compositionFieldAdapter";
+import { ensureRuntimeSurfacesRegistered } from "@/lib/platform/surfaceComposition/registerRuntimeSurfaces";
+import { getSurface } from "@/lib/platform/surfaceComposition/surfaceRegistry";
+import { surfaceComponents } from "@/lib/platform/surfaceComposition/universalSurfaceModel";
 import type { TenantFieldDefinitionRow } from "@/lib/layout/tenantLayoutFieldPickerCatalog";
 
 export const CHILDREN_SURFACE_ID = "children_surface";
 export const FINANCIAL_CONFIG_SURFACE_ID = "financial_configuration_surface";
-export const NESTED_SURFACE_IDS = [CHILDREN_SURFACE_ID, FINANCIAL_CONFIG_SURFACE_ID] as const;
 
 export function isNestedSurfaceId(id: string): boolean {
-    return (NESTED_SURFACE_IDS as readonly string[]).includes(id);
+    ensureRuntimeSurfacesRegistered();
+    return groupDefsFor(id).length > 0;
 }
 
 /** One editable evidence group inside a nested surface. */
@@ -45,83 +43,6 @@ export type NestedSurfaceGroupDef = {
     defaultFieldKeys: readonly string[];
 };
 
-/** Registry of nested surfaces → their named evidence groups. */
-export const NESTED_SURFACE_DEFS: Record<string, { label: string; groups: NestedSurfaceGroupDef[] }> = {
-    [CHILDREN_SURFACE_ID]: {
-        label: "Children Surface",
-        groups: [
-            {
-                key: "child_summary",
-                label: "Child Summary",
-                purpose: "Who is this child and what is their status?",
-                acceptedNamespaces: ["child", "inquiry_child"],
-                defaultFieldKeys: ["child.name", "child.date_of_birth", "child.status"],
-            },
-            {
-                key: "placement",
-                label: "Placement",
-                purpose: "Where is this child placed?",
-                acceptedNamespaces: ["child", "inquiry_child"],
-                defaultFieldKeys: ["inquiry_child.program", "child.room", "child.start_date"],
-            },
-            {
-                key: "schedule",
-                label: "Schedule",
-                purpose: "What schedule is requested / assigned?",
-                acceptedNamespaces: ["inquiry_child", "child"],
-                defaultFieldKeys: ["inquiry_child.schedule_type"],
-            },
-            {
-                key: "medical",
-                label: "Medical",
-                purpose: "What should we know medically?",
-                acceptedNamespaces: ["child", "inquiry_child"],
-                defaultFieldKeys: [],
-            },
-            {
-                key: "documents",
-                label: "Documents",
-                purpose: "What documents are required / received?",
-                acceptedNamespaces: ["child", "inquiry_child"],
-                defaultFieldKeys: [],
-            },
-        ],
-    },
-    [FINANCIAL_CONFIG_SURFACE_ID]: {
-        label: "Financial Configuration Surface",
-        groups: [
-            {
-                key: "placement_tuition",
-                label: "Placement & Tuition",
-                purpose: "What placement drives the tuition?",
-                acceptedNamespaces: ["opportunity", "inquiry_child"],
-                defaultFieldKeys: [],
-            },
-            {
-                key: "billing_configuration",
-                label: "Billing Configuration",
-                purpose: "What is the resolved billing configuration?",
-                acceptedNamespaces: ["opportunity"],
-                defaultFieldKeys: [],
-            },
-            {
-                key: "billing_responsibility",
-                label: "Billing Responsibility",
-                purpose: "Who is responsible for billing?",
-                acceptedNamespaces: ["customer", "person"],
-                defaultFieldKeys: [],
-            },
-            {
-                key: "history_activity",
-                label: "History / Activity",
-                purpose: "How has the configuration changed? (real records only)",
-                acceptedNamespaces: ["opportunity"],
-                defaultFieldKeys: [],
-            },
-        ],
-    },
-};
-
 export type NestedSurfaceGroupConfig = {
     key: string;
     selectedFieldKeys: string[];
@@ -132,12 +53,42 @@ export type NestedSurfaceConfig = {
     groups: NestedSurfaceGroupConfig[];
 };
 
-export function nestedSurfaceLabel(surfaceId: string): string {
-    return NESTED_SURFACE_DEFS[surfaceId]?.label ?? surfaceId;
+function namespacesForEvidenceGroup(
+    items: readonly { kind: string; namespace?: string }[],
+): AvailableFieldEntityNamespace[] {
+    const ns = new Set<AvailableFieldEntityNamespace>();
+    for (const item of items) {
+        if (item.namespace) {
+            ns.add(item.namespace as AvailableFieldEntityNamespace);
+        }
+    }
+    return [...ns];
 }
 
+/** Derive editable group defs from a registered surface spec (registry source of truth). */
 export function groupDefsFor(surfaceId: string): NestedSurfaceGroupDef[] {
-    return NESTED_SURFACE_DEFS[surfaceId]?.groups ?? [];
+    ensureRuntimeSurfacesRegistered();
+    const surface = getSurface(surfaceId);
+    if (!surface) return [];
+
+    const groups: NestedSurfaceGroupDef[] = [];
+    for (const component of surfaceComponents(surface)) {
+        for (const group of component.evidenceGroups) {
+            groups.push({
+                key: group.key,
+                label: group.label,
+                purpose: group.purpose,
+                acceptedNamespaces: namespacesForEvidenceGroup(group.items),
+                defaultFieldKeys: group.items.filter((item) => item.kind === "field").map((item) => item.key),
+            });
+        }
+    }
+    return groups;
+}
+
+export function nestedSurfaceLabel(surfaceId: string): string {
+    ensureRuntimeSurfacesRegistered();
+    return getSurface(surfaceId)?.label ?? surfaceId;
 }
 
 /** Seed a default config (each group selects its default real fields). */

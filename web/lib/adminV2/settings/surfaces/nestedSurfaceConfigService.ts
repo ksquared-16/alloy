@@ -6,9 +6,8 @@
  * no parallel storage. Reuses the existing FP summary draft/publish loop, so
  * saving a nested surface goes through the same publish path as the panel itself.
  *
- * Live runtime does not consume nested surface configs yet — this is
- * presentation-runtime-ready; the config is authored + persisted now, consumed
- * by the Runtime Adoption sprint.
+ * Live runtime: Children + Billing Preview consume published config via
+ * nestedSurfaceConfigReader. Full nested-surface overlay render remains deferred.
  *
  * @see nestedSurfaceEditorModel.ts
  * @see focusPanelSummaryLayoutService.ts

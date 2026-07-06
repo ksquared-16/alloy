@@ -100,7 +100,7 @@ export default function NestedSurfaceEditor({
                 </h2>
                 <p className="mt-0.5 text-xs text-alloy-midnight/55">
                     Configure the evidence groups and fields inside this expansion surface.
-                    <span className="ml-1 text-alloy-midnight/35">Presentation-runtime-ready · live render deferred.</span>
+                    Groups derive from the registered SurfaceSpec.
                 </p>
             </header>
 

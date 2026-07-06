@@ -164,7 +164,9 @@ export function buildChildrenCardEvidence(
             "inquiry_child.program": program,
             "child.room": room,
             "inquiry_child.schedule_type": schedule,
+            "inquiry_child.desired_schedule_type": schedule,
             "child.start_date": startsLabel,
+            "child.desired_start_date": startsLabel,
             "child.date_of_birth": dobAgeLine(row.dob, row.age),
         };
         const configuredKeys = (options.childDetailFieldKeys ?? []).filter(

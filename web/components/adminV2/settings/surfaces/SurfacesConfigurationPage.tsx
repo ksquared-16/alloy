@@ -19,13 +19,12 @@ import { nestedSurfaceLabel } from "@/lib/adminV2/settings/surfaces/nestedSurfac
 import { useState as useReactState } from "react";
 
 import { focusPanelNestedLaunchers } from "@/lib/platform/surfaceComposition/registerRuntimeSurfaces";
-/**
- * Card → nested surface launchers, derived from the surface registry via
- * resolveOpenSurface (Focus Panel components' depth bindings → nested Surfaces) rather
- * than a hand-maintained list. Registry registration is idempotent.
- */
-const FOCUS_PANEL_NESTED_LAUNCHERS: { cardLabel: string; surfaceId: string }[] =
-    focusPanelNestedLaunchers().map((l) => ({ cardLabel: l.cardLabel, surfaceId: l.surfaceId }));
+
+/** Card → nested surface launchers, derived from the surface registry via resolveOpenSurface. */
+const FOCUS_PANEL_NESTED_LAUNCHERS = focusPanelNestedLaunchers().map((l) => ({
+    cardLabel: l.cardLabel,
+    surfaceId: l.surfaceId,
+}));
 import { SurfaceLibrary } from "@/components/platform/surfaceBuilder/SurfaceLibrary";
 import {
     useSurfacesConfigurationSettings,
@@ -158,7 +157,7 @@ export default function SurfacesConfigurationPage() {
                                         ))}
                                     </div>
                                     <div className="min-h-0 flex-1">
-                                        <FocusPanelSummarySurfaceEditor />
+                                        <FocusPanelSummarySurfaceEditor onOpenNestedSurface={setNestedSurfaceId} />
                                     </div>
                                 </div>
                             )}
