@@ -123,7 +123,7 @@ export function applyWorkViewFilterToQueueItemsResult<
         offset: args.pageOffset ?? args.result.offset,
     };
     if (includeTotal) delete page.total_omitted;
-    return page;
+    return page as R;
 }
 
 export type OperationalProjectionView = {
