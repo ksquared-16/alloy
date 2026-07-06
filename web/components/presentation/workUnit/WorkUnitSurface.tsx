@@ -180,13 +180,14 @@ export function WorkUnitSurface() {
                 <WorkUnitSurfaceSkeleton />
             ) : (
                 // Keyed by the host work unit so a work-unit CHANGE remounts + establishes with
-                // the `reveal` choreography (context change), while a same-host view switch keeps
-                // the key stable (no remount — the queue-lane hold swaps rows in place). While
-                // `"held"`, the prior surface stays visible but yields focus: non-interactive +
-                // aria-busy until the destination establishes. Loading stays inside the surface.
+                // the `surface-enter` choreography (the Work Unit surface slides in FROM THE RIGHT
+                // — drilling into detail), while a same-host view switch keeps the key stable (no
+                // remount — the queue-lane hold swaps rows in place). While `"held"`, the prior
+                // surface stays visible but yields focus: non-interactive + aria-busy until the
+                // destination establishes. Loading stays inside the surface.
                 <div
                     key={shownModel.workUnitId ?? "wu-surface"}
-                    className={`motion-reveal flex flex-col gap-5 lg:flex-row lg:items-start${
+                    className={`motion-surface-enter-forward flex flex-col gap-5 lg:flex-row lg:items-start${
                         mode === "held" ? " pointer-events-none" : ""
                     }`}
                     aria-busy={mode === "held" ? true : undefined}

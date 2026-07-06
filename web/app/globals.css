@@ -84,12 +84,28 @@
   40%  { transform: scale(1.015); }
   100% { transform: scale(1); }
 }
+/* Surface transition (the `navigate` choreography, enter side): a directional slide the
+   operator reads as one operational surface ENTERING — not a page appearing. Larger, directional
+   offset than `motion-reveal`'s 4px (which is subliminal and reads as a plain fade). Forward =
+   drilling into detail (from the right); back = returning to overview (from the left). */
+@keyframes motion-surface-enter-forward {
+  from { opacity: 0; transform: translateX(24px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+@keyframes motion-surface-enter-back {
+  from { opacity: 0; transform: translateX(-24px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
 
 /* Choreography utilities — apply one; never a raw duration/easing. */
 .motion-reveal      { animation: motion-reveal-in var(--motion-standard) var(--motion-ease-enter) both; }
 .motion-settle      { animation: motion-settle-in var(--motion-micro) var(--motion-ease-enter) both; }
 .motion-recede      { animation: motion-recede-out var(--motion-standard) var(--motion-ease-exit) both; }
 .motion-acknowledge { animation: motion-acknowledge-pulse var(--motion-micro) var(--motion-ease-spring); }
+/* Surface enter — applied at the center-surface establish root (WorkspaceSurface / WorkUnitSurface),
+   soft paths only. Standard duration, decelerating (arrivals decelerate). Same token vocabulary. */
+.motion-surface-enter-forward { animation: motion-surface-enter-forward var(--motion-standard) var(--motion-ease-enter) both; }
+.motion-surface-enter-back    { animation: motion-surface-enter-back var(--motion-standard) var(--motion-ease-enter) both; }
 /* navigate + swap are crossfades the Continuity/Drawer systems orchestrate; expose the transition tokens */
 .motion-navigate    { transition: opacity var(--motion-standard) var(--motion-ease-move),
                                    transform var(--motion-standard) var(--motion-ease-move); }
@@ -119,7 +135,10 @@
 @media (prefers-reduced-motion: reduce) {
   .motion-reveal,
   .motion-settle,
-  .motion-recede {
+  .motion-recede,
+  .motion-surface-enter-forward,
+  .motion-surface-enter-back {
+    /* Collapse the directional slide to an opacity-only settle — continuity without motion. */
     animation-name: motion-settle-in;
     animation-duration: 1ms;
   }
