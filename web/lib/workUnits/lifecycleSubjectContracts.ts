@@ -240,8 +240,10 @@ export type DrawerSubjectContext = {
 };
 
 /**
- * Count unit for queue lane totals — mirrors queue_definition v2 `count_unit` when present.
- * TODO(phase-6): wire count_unit from normalized queue entry in summaries API.
+ * Count unit for queue lane totals — labels what a row/count represents so N is never ambiguous
+ * (households vs children vs candidates). Wired from the lane's queue_membership_v1.count_unit via
+ * laneRouting.countUnit (see queueMembershipRuntimeResolver / QueueService / attachQueueRowContextToItems).
+ * The workspace work-view TOTAL label is the one remaining surface not yet carrying it.
  */
 export type WorkUnitQueueCountUnit = "cases" | "children" | "candidates";
 
@@ -267,7 +269,7 @@ export type WorkUnitSurfaceContext = {
     queue_key: string;
     queue_grain: LifecycleSubjectType;
     lifecycle_key: string;
-  /** TODO(phase-6): populate from NormalizedQueueEntry.count_unit. */
+  /** Populated from the lane's count_unit (laneRouting.countUnit) — households/children/candidates. */
     count_unit?: WorkUnitQueueCountUnit;
     rows: WorkUnitSurfaceContextRow[];
     drawer?: WorkUnitSurfaceDrawerContext;
