@@ -63,15 +63,14 @@ import { warmOperatorWorkUnitEntryFromHref } from "@/lib/admin/operatorWorkUnitE
 import { resolveWorkViewTargetHref } from "@/lib/presentation/runtime/workViewTargetHref";
 import type { ResolvedActionForClient } from "@/lib/admin/actions/types";
 import { fetchWorkUnitRightRailResolvedActions } from "@/lib/workspace/fetchWorkUnitRightRailResolvedActions";
-import type { SurfaceDoc } from "@/lib/platform/surfaceBuilder/surfaceDefinition";
 import type { QueueItemsResult, QueueSummary } from "@/lib/queues/types";
 import { useOperationalAnswers } from "./useOperationalAnswers";
-import { refineWorkspaceHeaderCardVms } from "./workspaceHeaderCards";
+import { useWorkUnitHeaderSurfaceConfigState } from "./useWorkUnitHeaderSurfaceConfig";
 import {
-    seedWorkUnitHeaderCards,
-    workUnitHeaderCalculationKeys,
-    type WorkUnitHeaderCalculationCardVm,
-} from "./workUnitHeaderCards";
+    buildWorkUnitHeaderPresentationForRuntime,
+    workUnitHeaderKpiSourceKeys,
+    type WorkUnitHeaderPresentationModel,
+} from "./workUnitHeaderSurfaceConfig";
 import {
     queueRowsRouteForView,
     useWorkViewTotals,
@@ -147,15 +146,6 @@ export function useWorkUnitSurfaceRuntime(): WorkUnitSurfaceRuntime {
     const [deptWorkUnits, setDeptWorkUnits] = useState<
         WorkViewCanonicalLocationWorkUnitRow[] | null
     >(null);
-    // The published "Work Unit Header" surface doc — fetched in the SAME config Promise.all
-    // so the header card SET is known at configSettled (reveals with title + pills, no late
-    // pop-in). null on error / no publish → the seed uses the code-owned fallback.
-    const [headerDoc, setHeaderDoc] = useState<SurfaceDoc | null>(null);
-    // The published Queue Row surface config (`QueueRecordLayoutConfigV3`) — fetched in the
-    // SAME config Promise.all so the compact row's slot visibility/labels are known at
-    // configSettled. Pure enrichment: catch → null (generic-context fallback), never blocks
-    // reveal, never changes row ordering/counts. PRV2's work-unit queue is the OPPORTUNITY
-    // queue, so the surfaceId is the pipeline queue-row surface (see WORK_UNIT_QUEUE_ROW_SURFACE_ID).
     const [queueRowLayoutConfig, setQueueRowLayoutConfig] = useState<QueueRecordLayoutConfigV3 | null>(null);
     const [configSettled, setConfigSettled] = useState(false);
 
@@ -174,15 +164,6 @@ export function useWorkUnitSurfaceRuntime(): WorkUnitSurfaceRuntime {
             dedupeAdminFetch(`/api/admin/work-units?department_id=${encodeURIComponent(departmentId)}`, init)
                 .then((res) => (res.ok ? res.json() : null))
                 .catch(() => null),
-            // Published "Work Unit Header" surface doc — org-scoped, rides configSettled so
-            // the header card SET reveals with the title + pills. Never rejects the batch.
-            dedupeAdminFetch(`/api/admin/analytics/surfaces/work_unit_header/doc`, init)
-                .then((res) => (res.ok ? res.json() : null))
-                .catch(() => null),
-            // Published Queue Row surface config — the compact condensed row consumes its
-            // field visibility / labels. Enrichment only: never rejects the batch, config
-            // null → generic-context fallback. Server falls back to the built-in default
-            // when unpublished, so a 200 here already carries a usable config.
             WORK_UNIT_QUEUE_ROW_SURFACE_ID
                 ? dedupeAdminFetch(
                       `/api/admin/queue-row-layout/${encodeURIComponent(WORK_UNIT_QUEUE_ROW_SURFACE_ID)}`,
@@ -192,19 +173,13 @@ export function useWorkUnitSurfaceRuntime(): WorkUnitSurfaceRuntime {
                       .catch(() => null)
                 : Promise.resolve(null),
         ])
-            .then(([dept, wu, deptUnits, headerDocRes, queueRowLayoutRes]) => {
+            .then(([dept, wu, deptUnits, queueRowLayoutRes]) => {
                 if (cancelled) return;
                 setDeptMetadata((dept as { metadata?: unknown } | null)?.metadata ?? null);
                 setQueueDefinition((wu as { queue_definition?: unknown } | null)?.queue_definition ?? null);
                 const items = (deptUnits as { items?: unknown } | null)?.items;
                 setDeptWorkUnits(
                     Array.isArray(items) ? (items as WorkViewCanonicalLocationWorkUnitRow[]) : null,
-                );
-                const doc = (headerDocRes as { doc?: unknown } | null)?.doc ?? null;
-                setHeaderDoc(
-                    doc && typeof doc === "object" && Array.isArray((doc as { sections?: unknown }).sections)
-                        ? (doc as SurfaceDoc)
-                        : null,
                 );
                 const rowLayout = (queueRowLayoutRes as { config?: unknown } | null)?.config ?? null;
                 setQueueRowLayoutConfig(
@@ -465,35 +440,47 @@ export function useWorkUnitSurfaceRuntime(): WorkUnitSurfaceRuntime {
         [savedViews, runtimeCtx.workViewId, totalCount, canonicalLocationByViewId, canonicalTotals],
     );
 
-    // ── Header calculations: the published Work Unit Header surface ─────────────────────
-    // The card SET is fixed once the surface doc settles (it rides `configSettled`, so the
-    // strip reveals with the title + pills — no separate late fetch, no pop-in). Seed from
-    // the doc when it has cards, else the code-owned fallback. The warm cache only refines
-    // value/status in place afterward (set/order/labels/chrome never change).
-    const [seededHeaderCards, setSeededHeaderCards] = useState<WorkUnitHeaderCalculationCardVm[]>([]);
-    const headerSeededRef = useRef(false);
-    useEffect(() => {
-        if (headerSeededRef.current || !configSettled) return;
-        headerSeededRef.current = true;
-        setSeededHeaderCards(seedWorkUnitHeaderCards(headerDoc));
-    }, [configSettled, headerDoc]);
+    // ── Work Unit Header: published entity_layouts config + OIP warm cache ─────────────
+    const { config: headerConfig, loaded: headerConfigLoaded } = useWorkUnitHeaderSurfaceConfigState();
 
-    const headerCalculationKeys = useMemo(
-        () => workUnitHeaderCalculationKeys(seededHeaderCards),
-        [seededHeaderCards],
-    );
-    const { resolved: headerCalculationsResolved } = useOperationalAnswers({
+    // ── Header identity fallbacks (when title/subtitle unset in published config) ───────
+    const processLabel = useMemo(() => {
+        const configured = activeLifecycleProcess(
+            lifecycleBuilderFromDepartmentMetadata(deptMetadata),
+        )?.name?.trim();
+        const cleanConfigured =
+            configured && !isLegacyArtifactProcessName(configured) ? configured : null;
+        return cleanConfigured || slugRoute?.departmentName || null;
+    }, [deptMetadata, slugRoute?.departmentName]);
+    const workViewLabel = runtimeCtx.workView?.label?.trim() || null;
+
+    const headerKpiKeys = useMemo(() => workUnitHeaderKpiSourceKeys(headerConfig), [headerConfig]);
+    const { resolved: headerMetricsResolved, settled: headerMetricsSettled } = useOperationalAnswers({
         siteId: selectedSiteId,
         workUnitId,
-        keys: headerCalculationKeys,
+        keys: headerKpiKeys,
     });
-    const headerCalculations = useMemo(
-        () =>
-            headerCalculationsResolved
-                ? refineWorkspaceHeaderCardVms(seededHeaderCards, headerCalculationsResolved)
-                : seededHeaderCards,
-        [seededHeaderCards, headerCalculationsResolved],
-    );
+
+    const lastCompleteHeader = useRef<WorkUnitHeaderPresentationModel | null>(null);
+    const headerPresentation = useMemo(() => {
+        if (!headerConfigLoaded || !headerMetricsSettled) {
+            return lastCompleteHeader.current;
+        }
+        const next = buildWorkUnitHeaderPresentationForRuntime(headerConfig, {
+            fallbackTitle: processLabel,
+            fallbackSubtitle: workViewLabel,
+            resolved: headerMetricsResolved,
+        });
+        lastCompleteHeader.current = next;
+        return next;
+    }, [
+        headerConfig,
+        headerConfigLoaded,
+        headerMetricsResolved,
+        headerMetricsSettled,
+        processLabel,
+        workViewLabel,
+    ]);
 
     // ── Intents ──────────────────────────────────────────────────────────────────────────
     const router = useRouter();
@@ -646,24 +633,6 @@ export function useWorkUnitSurfaceRuntime(): WorkUnitSurfaceRuntime {
         runtimeCtx.workViewId,
     ]);
 
-    // ── Header identity: configured labels ONLY (no internal keys, no humanized slugs) ──
-    // Title = the configured lifecycle process label from department metadata; department
-    // name is the fallback while metadata loads / when no process is configured. Subtitle =
-    // the ACTIVE configured Work View's label. Work-unit `name` never surfaces (internal
-    // structure name, e.g. "Enrollment Pipeline").
-    const processLabel = useMemo(() => {
-        const configured = activeLifecycleProcess(
-            lifecycleBuilderFromDepartmentMetadata(deptMetadata),
-        )?.name?.trim();
-        // Operator-runtime defense: never render a legacy/migration artifact process name (e.g.
-        // "Enrollment (legacy)") in the Work Unit header. Fall back to the department name. Primary
-        // fix is data cleanup (cleanupEnrollmentLifecycleProcesses) — this is belt-and-suspenders.
-        const cleanConfigured =
-            configured && !isLegacyArtifactProcessName(configured) ? configured : null;
-        return cleanConfigured || slugRoute?.departmentName || null;
-    }, [deptMetadata, slugRoute?.departmentName]);
-    const workViewLabel = runtimeCtx.workView?.label?.trim() || null;
-
     // ── Selected record: the drawer store is THE selection state (no parallel store) ────
     const selectedRecordId =
         drawer.type === "opportunities" && drawer.id != null ? String(drawer.id) : null;
@@ -699,11 +668,11 @@ export function useWorkUnitSurfaceRuntime(): WorkUnitSurfaceRuntime {
     // ── Resolved model ───────────────────────────────────────────────────────────────────
     const model = useMemo<WorkUnitSurfaceModel>(
         () => ({
-            header: {
-                processLabel,
-                workViewLabel,
-                calculations: headerCalculations,
-            },
+            header: headerPresentation ?? buildWorkUnitHeaderPresentationForRuntime(headerConfig, {
+                fallbackTitle: processLabel,
+                fallbackSubtitle: workViewLabel,
+                resolved: null,
+            }),
             workViews,
             queue: {
                 rows,
@@ -718,13 +687,19 @@ export function useWorkUnitSurfaceRuntime(): WorkUnitSurfaceRuntime {
             departmentId,
             workUnitId,
             // Above-fold identity + configured views resolved; queue carries its own state.
-            ready: slugRoute != null && configSettled,
+            ready:
+                slugRoute != null &&
+                configSettled &&
+                headerConfigLoaded &&
+                Boolean(headerPresentation),
         }),
         [
             slugRoute,
+            headerPresentation,
+            headerConfig,
             processLabel,
             workViewLabel,
-            headerCalculations,
+            headerConfigLoaded,
             workViews,
             rows,
             totalCount,

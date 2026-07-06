@@ -99,3 +99,17 @@ export {
 } from "./workspaceHeaderSurfaceConfig";
 
 export { useWorkspaceHeaderSurfaceConfigState } from "./useWorkspaceHeaderSurfaceConfig";
+
+export {
+    DEFAULT_WORK_UNIT_HEADER_SURFACE_CONFIG,
+    WORK_UNIT_HEADER_LAYOUT_KEY,
+    buildWorkUnitHeaderPresentation,
+    buildWorkUnitHeaderPresentationForRuntime,
+    normalizeWorkUnitHeaderSurfaceConfig,
+    workUnitHeaderKpiSourceKeys,
+    type WorkUnitHeaderKpiVm,
+    type WorkUnitHeaderPresentationModel,
+    type WorkUnitHeaderSurfaceConfig,
+} from "./workUnitHeaderSurfaceConfig";
+
+export { useWorkUnitHeaderSurfaceConfigState } from "./useWorkUnitHeaderSurfaceConfig";

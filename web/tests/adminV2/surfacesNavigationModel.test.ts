@@ -32,6 +32,15 @@ describe("Surfaces — navigation model", () => {
         expect(WORKSPACE_HEADER_SURFACE_OBJECT.title).toBe("Workspace Header");
     });
 
+    it("exposes Work Unit Header under Work Units with full builder editor", async () => {
+        const { WORK_UNIT_HEADER_SURFACE_OBJECT } = await import(
+            "@/components/adminV2/settings/surfaces/useSurfacesConfigurationSettings"
+        );
+        expect(WORK_UNIT_HEADER_SURFACE_OBJECT.editor).toBe("work-unit-header");
+        expect(WORK_UNIT_HEADER_SURFACE_OBJECT.title).toBe("Work Unit Header");
+        expect(SURFACE_OBJECTS["work-units"][0]?.id).toBe("work-unit-header");
+    });
+
     it("catalogs Operational Intelligence with a live editor", () => {
         const oi = SURFACE_OBJECTS["operational-intelligence"].find((o) => o.id === "operational-intelligence");
         expect(oi?.editor).toBe("operational-intelligence");

@@ -10,7 +10,7 @@ import {
 } from "@/components/adminV2/settings/configurationRuntime/ConfigurationModeLayout";
 import FocusPanelSummarySurfaceEditor from "@/components/adminV2/settings/surfaces/FocusPanelSummarySurfaceEditor";
 import OperationalIntelligenceSurfaceBuilder from "@/components/adminV2/settings/surfaces/OperationalIntelligenceSurfaceBuilder";
-import { WorkUnitHeaderSurfaceBuilder } from "@/components/adminV2/settings/surfaces/HeaderSurfaceBuilders";
+import WorkUnitHeaderSurfaceEditor from "@/components/adminV2/settings/surfaces/WorkUnitHeaderSurfaceEditor";
 import WorkspaceHeaderSurfaceEditor from "@/components/adminV2/settings/surfaces/WorkspaceHeaderSurfaceEditor";
 import WorkspaceProcessesSurfaceEditor from "@/components/adminV2/settings/surfaces/WorkspaceProcessesSurfaceEditor";
 import QueueRowBuilderV2 from "@/components/adminV2/settings/surfaces/QueueRowBuilderV2";
@@ -109,7 +109,9 @@ export default function SurfacesConfigurationPage() {
 
     const isWorkspaceProcessEditor = selectedObject?.editor === "workspace-processes";
     const isWorkspaceHeaderEditor = selectedObject?.editor === "workspace-header";
-    const isFullBleedWorkspaceEditor = isWorkspaceProcessEditor || isWorkspaceHeaderEditor;
+    const isWorkUnitHeaderEditor = selectedObject?.editor === "work-unit-header";
+    const isFullBleedWorkspaceEditor =
+        isWorkspaceProcessEditor || isWorkspaceHeaderEditor || isWorkUnitHeaderEditor;
     const selectedCatalogEntry =
         selectedObject?.catalogId
             ? catalog.find((e) => e.id === selectedObject.catalogId) ??
@@ -226,9 +228,6 @@ export default function SurfacesConfigurationPage() {
         if (selectedObject.editor === "operational-intelligence") {
             return <OperationalIntelligenceSurfaceBuilder />;
         }
-        if (selectedObject.editor === "work-unit-header") {
-            return <WorkUnitHeaderSurfaceBuilder />;
-        }
         if (selectedObject.editor === "queue-row-builder") {
             return <QueueRowBuilderV2 surfaceId={selectedObject.id} />;
         }
@@ -276,6 +275,14 @@ export default function SurfacesConfigurationPage() {
         return (
             <div className="process-config-page flex min-h-0 flex-1 flex-col" data-testid="surfaces-configuration-page">
                 <WorkspaceHeaderSurfaceEditor onBack={goHome} />
+            </div>
+        );
+    }
+
+    if (isWorkUnitHeaderEditor) {
+        return (
+            <div className="process-config-page flex min-h-0 flex-1 flex-col" data-testid="surfaces-configuration-page">
+                <WorkUnitHeaderSurfaceEditor onBack={goHome} />
             </div>
         );
     }

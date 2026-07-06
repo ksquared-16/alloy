@@ -115,16 +115,18 @@ Two independent workspace surfaces share the `entity_layouts` **`surface="worksp
 | Surface | `layout_key` | Controls on `/workspace` |
 | --- | --- | --- |
 | **Workspace Header** | `workspace_header` | Title, subtitle, 3–5 org-level KPI cards (Operational Calculations) |
+| **Work Unit Header** | `work_unit_header` | Title, subtitle, 3–5 work-unit KPI cards on `/workspace/work-unit/:slug` |
 | **Workspace Process Summary** (per process) | `workspace_processes` | One `ProcessSummaryCard` per configured business process (identity, primary/supporting metrics, Today's Work behavior) |
 
 **Rules:**
 
 - Workspace Header KPIs use the **Operational Calculations / metric-card** infrastructure — not a bespoke KPI store.
-- Builder preview and Presentation Runtime share the same components and formatters (`WorkspaceHeader`, `ProcessSummaryCard`).
+- Work Unit Header uses the same KPI grammar and shared presenter; KPIs resolve with `workUnitId` scope where applicable.
+- Builder preview and Presentation Runtime share the same components and formatters (`WorkspaceHeader` / `WorkUnitHeader`, `ProcessSummaryCard`).
 - Runtime loads published config atomically where possible (no flash of built-in defaults when a published layout exists).
 - Process summaries appear only for **real** configured business processes from the lifecycle catalog — no fake process list.
 
-API: `GET/PUT /api/admin/surfaces/workspace-header`, `GET/PUT /api/admin/surfaces/workspace-processes`.
+API: `GET/PUT /api/admin/surfaces/workspace-header`, `GET/PUT /api/admin/surfaces/work-unit-header`, `GET/PUT /api/admin/surfaces/workspace-processes`.
 
 ---
 

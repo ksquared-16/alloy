@@ -24,8 +24,8 @@ WorkspaceSurface                WS.SURFACE
  │       └─ WorkViewList        WS.PROCESS_TILE_WORK_VIEWS
 ↓  (soft nav: /workspace/work-unit/<slug>)
 WorkUnitSurface                 WU.SURFACE
- ├─ WorkUnitHeader              WU.HEADER
- │   └─ WorkUnitHeaderCalculations    WU.HEADER_CALCULATIONS
+ ├─ WorkUnitHeader              WU.HEADER   (title + subtitle + KPI strip)
+ │   └─ (KPI cards)             WU.HEADER_CALCULATIONS
  ├─ WorkViewPillStrip           WU.WORK_VIEW_PILLS
  ├─ QueueRegion                 WU.QUEUE
  │   └─ CondensedQueueRow       WU.QUEUE_ROW
@@ -38,9 +38,10 @@ That is the entire runtime. Each component owns exactly one responsibility, carr
 runtime label (`data-runtime-label`), and has exactly one render site. No duplicate ownership.
 
 > **Retired:** the standalone `OperationalAnswersRow` (`WS.ANSWERS` / `WU.ANSWERS`) is gone. The
-> legacy `ProcessTile` and the old `metric_placements`-only header path are retired. Workspace now
-> uses two **Surfaces-configurable** workspace layouts on `entity_layouts` (`surface="workspace"`):
-> **Workspace Header** (identity + org KPIs) and **Workspace Process Summary** (per-process cards).
+> legacy `ProcessTile`, old `metric_placements`-only header strips, and `WorkUnitHeaderCalculations`
+> signal ribbon are retired. Workspace and Work Unit headers are **Surfaces-configurable** on
+> `entity_layouts` (`surface="workspace"`) via `workspace_header`, `work_unit_header`, and
+> `workspace_processes` layout keys.
 
 ## Workspace Header Surface
 
@@ -58,6 +59,22 @@ runtime label (`data-runtime-label`), and has exactly one render site. No duplic
 
 Default KPI slots (when unpublished): Needs attention, Overdue work, Active leads — org-grain
 calculations with `—` until resolved.
+
+## Work Unit Header Surface
+
+`WorkUnitHeader` (`WU.HEADER` + `WU.HEADER_CALCULATIONS`) is the configurable top band on
+`/workspace/work-unit/:slug`: **title**, **subtitle**, and **3–5 KPI cards** aligned top/right.
+Work-view pills render **below** the header — never above or competing with KPIs.
+
+| Concern | Rule |
+| --- | --- |
+| **Authoring** | **Settings → Surfaces → Work Units → Work Unit Header** (full-bleed builder — same shell as Workspace Header) |
+| **Persistence** | `entity_layouts`, `surface="workspace"`, `layoutKey="work_unit_header"`, config in `doc.metadata.workUnitHeaderSurface` |
+| **KPI source** | Operational Calculations — `useOperationalAnswers` scoped with `workUnitId`. Same metric-card grammar as Workspace Header. |
+| **Presentation** | Shared `WorkspaceHeader` presenter with `variant="work-unit"` — builder preview and runtime match (icon/accent, no-data `—`) |
+| **Identity fallback** | Unset title/subtitle fall back to configured process label and active work-view label at runtime |
+| **Reveal** | `useWorkUnitSurfaceRuntime` gates `model.ready` on header config + metric settle — no default-template flash; holds last complete header during refresh |
+| **API** | `GET/PUT /api/admin/surfaces/work-unit-header` |
 
 ## Workspace Process Surface
 
@@ -195,7 +212,7 @@ owners live in **`presentation-runtime-v2-handoff.md` §2**. Summary:
 | `WS.HEADER` / `WS.HEADER_CALCULATIONS` | `components/presentation/workspace/WorkspaceHeader.tsx` | published **Workspace Header** config (`workspace_header` layout) + OIP warm cache |
 | `WS.PROCESS_SUMMARY_CARD` / `WS.PROCESS_GRID` | `components/presentation/workspace/ProcessSummaryCard.tsx` / `ProcessGrid.tsx` | landing cards + published **Workspace Process Summary** config |
 | `WS.PROCESS_TILE_WORK_VIEWS` | `components/presentation/workspace/WorkViewList.tsx` | landing `workQueues` + `useWorkViewTotals` |
-| `WU.HEADER` / `WU.HEADER_CALCULATIONS` | `components/presentation/workUnit/WorkUnitHeader.tsx` / `WorkUnitHeaderCalculations.tsx` | published `work_unit_header` surface doc + OIP warm cache |
+| `WU.HEADER` / `WU.HEADER_CALCULATIONS` | `components/presentation/workUnit/WorkUnitHeader.tsx` (shared KPI grammar via `WorkspaceHeader`) | published **Work Unit Header** config (`work_unit_header` layout) + OIP warm cache scoped to work unit |
 | `WU.WORK_VIEW_PILLS` | `components/presentation/workUnit/WorkViewPillStrip.tsx` | configured views + `useWorkViewTotals` (active = live rows total) |
 | `WU.QUEUE` | `components/presentation/workUnit/QueueRegion.tsx` | rows API (`work_view_id`); order = Work View `sort_v1` (server) |
 | `WU.QUEUE_ROW` | `components/presentation/workUnit/CondensedQueueRow.tsx` | frozen `QueueRowContext` + published Queue Row surface (`pipeline-queue-row`) for slot visibility/labels |
