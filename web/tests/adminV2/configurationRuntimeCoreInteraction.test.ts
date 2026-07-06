@@ -44,6 +44,7 @@ describe("Configuration Runtime core interaction", () => {
     it("registers configuration mode nav surfaces", () => {
         expect(CONFIGURATION_MODE_DEFAULT_SURFACE).toBe("/settings/processes");
         const labels = CONFIGURATION_MODE_NAV_ITEMS.map((item) => item.label);
+        expect(labels).toContain("Entities");
         expect(labels).toContain("Processes");
         expect(labels).toContain("Surfaces");
         expect(labels).toContain("Access");

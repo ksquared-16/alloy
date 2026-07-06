@@ -58,7 +58,7 @@ test.describe("configuration-runtime-v1-final", () => {
 
         await page.goto("/settings", { waitUntil: "networkidle", timeout: 120_000 });
         await expect(page.getByTestId("settings-configuration-context")).toContainText("Settings");
-        await expect(page.getByTestId("settings-configuration-context")).toContainText("Configure Alloy by area.");
+        await expect(page.getByTestId("settings-configuration-context")).toContainText("Platform Configuration");
         await expect(page.getByTestId("settings-configuration-hero")).toHaveCount(0);
     });
 });

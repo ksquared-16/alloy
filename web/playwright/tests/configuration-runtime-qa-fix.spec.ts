@@ -30,7 +30,7 @@ test.describe("Configuration Runtime QA fix", () => {
 
         await page.goto("/settings", { waitUntil: "networkidle", timeout: 120_000 });
         await expect(page.getByTestId("settings-configuration-hub")).toBeVisible({ timeout: 60_000 });
-        await expect(page.getByTestId("settings-configuration-tiles")).toBeVisible({ timeout: 60_000 });
+        await expect(page.getByTestId("settings-configuration-sections")).toBeVisible({ timeout: 60_000 });
         await page.screenshot({
             path: path.join(screenshotDir, "01-settings-hub-tiles.png"),
             fullPage: true,

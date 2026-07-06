@@ -11,7 +11,6 @@ import {
     CANONICAL_ADMIN_CONFIG_LANDING,
     normalizeToCanonicalAdminPath,
 } from "@/lib/admin/canonicalAdminRoutes";
-import { OPERATOR_WORKSPACE_HREF } from "@/lib/admin/canonicalOperatorRoutes";
 
 const SETTINGS_ROOT = ADMIN_SETTINGS_SUBPATH_PREFIX;
 
@@ -33,10 +32,10 @@ function crumbsForPath(path: string): Crumb[] {
 
     const tail = settingsPath.slice(SETTINGS_ROOT.length);
     if (tail === "" || tail === "/") {
-        return [{ label: "Settings", href: null }];
+        return [{ label: "Platform Configuration", href: null }];
     }
 
-    const base: Crumb[] = [{ label: "Settings", href: CANONICAL_ADMIN_CONFIG_LANDING }];
+    const base: Crumb[] = [{ label: "Platform Configuration", href: CANONICAL_ADMIN_CONFIG_LANDING }];
 
     if (tail.startsWith("/documents/document-fields")) {
         base.push({ label: "Document field definitions", href: null });
@@ -122,7 +121,17 @@ function crumbsForPath(path: string): Crumb[] {
     }
 
     if (tail === "/entity-labels" || tail.startsWith("/entity-labels")) {
-        base.push({ label: "Entity labels", href: null });
+        base.push({ label: "Entities", href: `${SETTINGS_ROOT}/entities` });
+        return base;
+    }
+
+    if (tail === "/entities" || tail.startsWith("/entities")) {
+        base.push({ label: "Entities", href: null });
+        return base;
+    }
+
+    if (tail === "/label-entities" || tail.startsWith("/label-entities")) {
+        base.push({ label: "Entities", href: `${SETTINGS_ROOT}/entities` });
         return base;
     }
 

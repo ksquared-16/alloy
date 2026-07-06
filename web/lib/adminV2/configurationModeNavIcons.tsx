@@ -3,6 +3,7 @@ import {
     BarChart3,
     Banknote,
     BookOpen,
+    Boxes,
     GitBranch,
     LayoutGrid,
     Mail,
@@ -28,6 +29,7 @@ const ICONS: Record<ConfigurationModeNavIcon, LucideIcon> = {
     communications: Mail,
     financials: Banknote,
     commercial: BookOpen,
+    entities: Boxes,
 };
 
 export function configurationModeNavLucideIcon(icon: ConfigurationModeNavIcon): LucideIcon {

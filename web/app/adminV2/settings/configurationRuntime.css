@@ -211,7 +211,148 @@
 }
 
 .settings-configuration-tiles {
-    margin-top: 1.5rem; /* 24px — compact index gap below context row */
+    margin-top: 1.5rem; /* legacy alias — compact index uses .config-platform-index */
+}
+
+/* ── Configuration Platform — Settings Home index (frozen visual) ── */
+
+.config-platform-hub-eyebrow {
+    margin-bottom: 0.2rem;
+    font-size: 0.6875rem;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: color-mix(in srgb, var(--color-alloy-forge, #59678b) 68%, transparent);
+}
+
+.config-platform-index {
+    --config-platform-identity-width: 15.5rem;
+    --config-platform-identity-icon: 1.75rem;
+    --config-platform-identity-gap: 0.75rem;
+    --config-platform-section-gap: 1.75rem;
+    display: flex;
+    flex-direction: column;
+    margin-top: 1rem;
+    border-top: 1px solid color-mix(in srgb, var(--cr-stone-border) 88%, transparent);
+}
+
+.config-platform-section {
+    display: grid;
+    gap: 0.75rem;
+    padding: 1rem 0;
+    border-bottom: 1px solid color-mix(in srgb, var(--cr-stone-border) 88%, transparent);
+}
+
+@media (min-width: 900px) {
+    .config-platform-section {
+        grid-template-columns: var(--config-platform-identity-width) minmax(0, 1fr);
+        align-items: start;
+        column-gap: var(--config-platform-section-gap);
+        padding: 1.05rem 0;
+    }
+}
+
+.config-platform-section__identity {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--config-platform-identity-gap);
+    width: 100%;
+    max-width: var(--config-platform-identity-width);
+    padding-top: 0.15rem;
+}
+
+.config-platform-section__identity-icon {
+    display: flex;
+    width: var(--config-platform-identity-icon);
+    height: var(--config-platform-identity-icon);
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+    color: var(--cr-pine);
+}
+
+.config-platform-section__title {
+    font-size: 1.0625rem;
+    font-weight: 700;
+    letter-spacing: -0.015em;
+    line-height: 1.25;
+    color: var(--color-alloy-midnight, #18273a);
+}
+
+.config-platform-section__description {
+    margin-top: 0.2rem;
+    font-size: 0.8125rem;
+    line-height: 1.35;
+    color: color-mix(in srgb, var(--color-alloy-forge, #59678b) 58%, transparent);
+}
+
+.config-platform-section__items {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
+.config-platform-row {
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
+    min-height: 2.85rem;
+    padding: 0.35rem 0.45rem 0.35rem 0.2rem;
+    border-radius: 0.4rem;
+    transition: background 0.12s ease;
+}
+
+.config-platform-row:hover {
+    background: color-mix(in srgb, var(--cr-pine) 5%, white);
+}
+
+.config-platform-row__icon {
+    display: flex;
+    height: 1.5rem;
+    width: 1.5rem;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+    color: color-mix(in srgb, var(--cr-pine) 78%, var(--cr-midnight));
+    transition: color 0.12s ease;
+}
+
+.group:hover .config-platform-row__icon {
+    color: var(--cr-pine);
+}
+
+.config-platform-row__title {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.875rem;
+    font-weight: 600;
+    line-height: 1.25;
+    color: color-mix(in srgb, var(--cr-midnight) 88%, transparent);
+    transition: color 0.12s ease;
+}
+
+.group:hover .config-platform-row__title {
+    color: var(--cr-midnight);
+}
+
+.config-platform-row__description {
+    margin-top: 0.05rem;
+    font-size: 0.75rem;
+    line-height: 1.3;
+    color: color-mix(in srgb, var(--color-alloy-forge, #59678b) 56%, transparent);
+}
+
+.config-platform-row__chevron {
+    color: color-mix(in srgb, var(--color-alloy-forge, #59678b) 36%, transparent);
+    transition:
+        color 0.12s ease,
+        transform 0.12s ease;
+}
+
+.group:hover .config-platform-row__chevron {
+    color: var(--cr-pine);
+    transform: translateX(2px);
 }
 
 .process-config-context-title {

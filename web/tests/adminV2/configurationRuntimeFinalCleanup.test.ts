@@ -37,10 +37,12 @@ describe("Configuration Runtime final ownership cleanup", () => {
         expect(CONFIGURATION_MODE_INTERNAL_NAV_ITEMS.some((i) => i.href.includes("/actions"))).toBe(true);
     });
 
-    it("sidebar renders grouped Configuration nav without Actions", () => {
+    it("sidebar renders grouped Configuration nav without Actions or Financials", () => {
         const sidebar = read("app/adminV2/components/SidebarConfigurationModeNav.tsx");
         expect(sidebar).toContain("CONFIGURATION_MODE_NAV_GROUPS");
         expect(sidebar).not.toContain("config-mode-nav-actions");
+        expect(sidebar).not.toContain("config-mode-nav-financials");
+        expect(sidebar).toContain("config-mode-nav-settings-home");
     });
 
     it("Access page shows people-first queue rows", () => {

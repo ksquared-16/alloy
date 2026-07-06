@@ -87,6 +87,27 @@ These belong to the Configuration Runtime eventually but are only Commercial-spe
 
 ---
 
+## Platform Configuration UX — Settings Home
+
+The Settings index (`/settings`) is a **compact configuration table of contents** — divider-separated sections with a left identity column and right list of ~52px clickable rows, not dashboard tiles.
+
+**Information architecture:**
+
+| Chapter | Primary entries |
+|---------|-----------------|
+| Organization | Locations, Access, Communications |
+| Data Model | Entities, Fields, Statuses, Operational Calculations |
+| Operations | Processes, Surfaces, Automation |
+| Business | Commercial |
+
+**Presentation primitives:** `ConfigurationSection`, `ConfigurationSectionItem`, `config-platform-*` CSS in `configurationRuntime.css`. IA source: `lib/adminV2/configurationModeNav.ts`.
+
+**Hidden from primary nav:** Financials (route may still exist).
+
+**Entities:** `/settings/entities` (entity label configuration).
+
+---
+
 ## Related
 
 - `../../system/configuration-system.md` (transitional expanded reference)
