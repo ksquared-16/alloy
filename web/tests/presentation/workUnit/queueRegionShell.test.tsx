@@ -1,9 +1,8 @@
 /** @vitest-environment jsdom */
 
 /**
- * WU shell restore — the Queue region has a visible title/count header and a bordered panel in
- * EVERY state (loading / empty / populated), not a bare list. Restores the Presentation Runtime
- * shell structure (Alloy stone hairline), no redesign.
+ * WU shell — the Queue Region is one bordered pane (title, filters, rows) aligned as a sibling
+ * to the Focus Panel; rows are not nested in a second bordered container.
  */
 
 import { createRoot } from "react-dom/client";
@@ -48,15 +47,17 @@ afterEach(() => {
 });
 const q = (sel: string) => container!.querySelector(sel);
 
-describe("QueueRegion — shell (title + bordered panel)", () => {
-    it("empty state has the title, count header, and a bordered panel", () => {
+describe("QueueRegion — pane shell (title + filters + rows in one border)", () => {
+    it("empty state has title, count, and a single outer bordered pane", () => {
         render(<QueueRegion queue={queue({ rows: [], totalCount: 3 })} title="Active Pipeline" />);
         expect(q("[data-queue-region-title]")?.textContent).toBe("Active Pipeline");
         expect(q("[data-queue-region-count]")?.textContent).toContain("3 records");
-        const panel = q("[data-queue-panel]");
-        expect(panel).not.toBeNull();
-        expect(panel?.className).toMatch(/\bborder\b/);
-        expect(q("[data-queue-empty]")).not.toBeNull(); // ghost structure inside the panel
+        const pane = q("[data-queue-region-boundary]");
+        expect(pane).not.toBeNull();
+        expect(pane?.className).toMatch(/\bborder\b/);
+        expect(q("[data-queue-panel-body]")).not.toBeNull();
+        expect(q("[data-queue-empty]")).not.toBeNull();
+        expect(pane?.contains(q("[data-queue-region-title]")!)).toBe(true);
     });
 
     it("falls back to 'Queue' when no work-view title is given", () => {
@@ -64,13 +65,14 @@ describe("QueueRegion — shell (title + bordered panel)", () => {
         expect(q("[data-queue-region-title]")?.textContent).toBe("Queue");
     });
 
-    it("populated state also renders inside the bordered panel", () => {
+    it("populated state renders rows inside the pane body without a nested border", () => {
         const row: QueueRowModel = { context: null, entityType: "opportunity", entityId: "opp-1" };
         render(<QueueRegion queue={queue({ rows: [row], totalCount: 1 })} title="Tours" />);
-        const panel = q("[data-queue-panel]");
-        expect(panel).not.toBeNull();
-        expect(panel?.className).toMatch(/\bborder\b/);
-        expect(panel?.querySelector('[data-entity-id="opp-1"]')).not.toBeNull();
+        const pane = q("[data-queue-region-boundary]");
+        expect(pane).not.toBeNull();
+        expect(pane?.className).toMatch(/\bborder\b/);
+        expect(pane?.querySelector('[data-entity-id="opp-1"]')).not.toBeNull();
         expect(q("[data-queue-region-count]")?.textContent).toContain("1 record");
+        expect(q("[data-queue-panel-body]")?.className).not.toMatch(/\bborder\b/);
     });
 });
