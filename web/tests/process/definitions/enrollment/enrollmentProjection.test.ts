@@ -2,6 +2,8 @@
 
 import { describe, expect, it } from "vitest";
 import { buildEnrollmentParticipants } from "@/lib/process/definitions/enrollment";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 
 describe("enrollment projection stitch — PI ⋈ opportunity ⋈ customer_member → participants", () => {
     const piRows = [
@@ -34,5 +36,15 @@ describe("enrollment projection stitch — PI ⋈ opportunity ⋈ customer_membe
         expect(p.scopeId).toBeNull();
         expect(p.attributes.subjectActive).toBe(true); // absent member ⇒ treated active
         expect(p.participantStageKey).toBe("tour");
+    });
+});
+
+describe("enrollment projection I/O columns", () => {
+    it("does not select stage_entered_at (column not yet on process_instances)", () => {
+        const source = readFileSync(
+            resolve(process.cwd(), "lib/process/definitions/enrollment/enrollmentProjection.ts"),
+            "utf8",
+        );
+        expect(source).not.toMatch(/stage_entered_at/);
     });
 });

@@ -96,6 +96,15 @@ describe("evaluateWorkViewFiltersV1 — typed V2 condition keys", () => {
         ).toBe(false);
     });
 
+    it("opportunity_stage does not read persisted stage_key without lifecycle_stage_key enrichment", () => {
+        const queueRow = { id: "o1", stage_key: "lead", status_key: "open" };
+        expect(
+            evaluateWorkViewFiltersForRow(queueRow, [
+                { field_key: "opportunity_stage", operator: "equals", value: "lead" },
+            ]).pass,
+        ).toBe(false);
+    });
+
     it("opportunity_status resolves the opportunity status key", () => {
         const r = { id: "o1", status_key: "open", lifecycle_stage_key: "tour_scheduled" };
         expect(

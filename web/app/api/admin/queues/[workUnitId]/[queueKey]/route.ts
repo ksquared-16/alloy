@@ -12,7 +12,7 @@ import {
 } from "@/lib/admin/resolveQueueRecordScopeConstraints";
 import { fetchEffectiveUserDisplayTimezoneCached } from "@/lib/admin/timezoneContract";
 import { getWorkUnitQueueItems, QueueServiceError } from "@/lib/queues/QueueService";
-import { filterQueueRowsByWorkViewFilters } from "@/lib/lifecycle/evaluateWorkViewFiltersV1";
+import { filterQueueRowsForWorkView } from "@/lib/lifecycle/operationalProjection";
 import {
     fetchDepartmentMetadataForWorkUnit,
     resolveActiveWorkViewRuntimeContext,
@@ -211,7 +211,7 @@ export async function GET(
                 queueKey,
             });
             if (ctx.filters?.length) {
-                const filtered = filterQueueRowsByWorkViewFilters(
+                const filtered = filterQueueRowsForWorkView(
                     result.items as Array<Record<string, unknown>>,
                     ctx.filters,
                     ctx.match,

@@ -4,6 +4,7 @@ import {
     computeWorkViewOperationalSignals,
     diagnoseRecordWorkViewPlacement,
     enrichRowsWithDerivedStage,
+    filterQueueRowsForWorkView,
     recordMatchesWorkView,
     resolveFocusPanelScope,
 } from "@/lib/lifecycle/operationalProjection";
@@ -138,6 +139,23 @@ describe("New Leads vs Registration placement (stage derived from status)", () =
         const [enriched] = enrichRowsWithDerivedStage([lyons], STATUS_STAGE);
         expect(enriched.lifecycle_stage_key).toBe("lead");
         expect(recordMatchesWorkView(enriched, ENROLLMENT_VIEWS[0])).toBe(true); // New Leads now matches
+    });
+
+    it("filterQueueRowsForWorkView passes opportunity_stage=lead when row only has stage_key=lead", () => {
+        const queueRow = { id: "opp-1", status_key: "open", stage_key: "lead" };
+        const stageFilters = [{ field_key: "opportunity_stage" as const, operator: "equals" as const, value: "lead" }];
+        const matched = filterQueueRowsForWorkView([queueRow], stageFilters, "all");
+        expect(matched).toHaveLength(1);
+        expect(matched[0]!.lifecycle_stage_key).toBe("lead");
+    });
+
+    it("filterQueueRowsForWorkView excludes non-matching stage after enrichment", () => {
+        const rows = [
+            { id: "a", stage_key: "lead" },
+            { id: "b", stage_key: "waitlist" },
+        ];
+        const stageFilters = [{ field_key: "opportunity_stage" as const, operator: "equals" as const, value: "lead" }];
+        expect(filterQueueRowsForWorkView(rows, stageFilters, "all").map((r) => r.id)).toEqual(["a"]);
     });
 
     it("projection with statusStageMap: New Leads = 1, All Leads = 1 (counts agree)", () => {

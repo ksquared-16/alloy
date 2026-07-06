@@ -18,11 +18,13 @@
 import {
     evaluateWorkViewFiltersForRow,
     filterQueueRowsByWorkViewFilters,
+    type WorkViewFilterMatch,
 } from "@/lib/lifecycle/evaluateWorkViewFiltersV1";
 import {
     resolveWorkViewMatchV1,
     type WorkViewConfigV1Stored,
     type WorkViewFilterMatchV1,
+    type WorkViewFilterV1,
 } from "@/lib/lifecycle/workViewsConfigV1";
 import type { QueueRowContext } from "@/lib/workUnits/lifecycleSubjectContracts";
 
@@ -65,6 +67,24 @@ export function enrichRowsWithDerivedStage<T extends OperationalProjectionRow>(
         const stage = status ? statusStageMap[status] : undefined;
         return stage ? ({ ...row, lifecycle_stage_key: stage } as T) : row;
     });
+}
+
+/**
+ * Apply Work View predicates to queue rows on the canonical operational projection path:
+ * materialize `lifecycle_stage_key` from persisted `stage_key`, then evaluate filters.
+ * Queue API and operational projection must both call this — never filter raw rows directly.
+ */
+export function filterQueueRowsForWorkView<T extends OperationalProjectionRow>(
+    rows: readonly T[],
+    filters: readonly WorkViewFilterV1[] | null | undefined,
+    match: WorkViewFilterMatch = "all",
+    statusStageMap?: StatusStageMap | null,
+): T[] {
+    return filterQueueRowsByWorkViewFilters(
+        enrichRowsWithDerivedStage(rows, statusStageMap),
+        filters,
+        match,
+    );
 }
 
 export type OperationalProjectionView = {

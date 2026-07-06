@@ -20,11 +20,33 @@ vi.mock("@/lib/admin/getAdminContext", async () => {
 
 vi.mock("@/lib/admin/getAdminAccessContext", () => ({
     getAdminAccessContextCached: mockGetAdminAccessContext,
+    loadAdminAccessBundleCached: vi.fn(async () => ({
+        ok: true,
+        portalEligible: true,
+        userId: "u1",
+        orgId: "org1",
+        roleKeys: ["admin"],
+        permissionKeys: [],
+        departmentScope: "all",
+        allowedDepartmentIds: null,
+        siteScope: "all",
+        allowedSiteLocationIds: null,
+    })),
 }));
 
 vi.mock("@/lib/supabaseAdmin", () => ({
     createAdminClient: mockCreateAdminClient,
 }));
+
+function supabaseChain(result: { data: unknown; error: unknown } = { data: null, error: null }) {
+    const chain: Record<string, unknown> = {};
+    chain.eq = vi.fn(() => chain);
+    chain.in = vi.fn(() => Promise.resolve({ data: [], error: null }));
+    chain.order = vi.fn(() => Promise.resolve({ data: [], error: null }));
+    chain.limit = vi.fn(() => Promise.resolve({ data: [], error: null }));
+    chain.maybeSingle = vi.fn().mockResolvedValue(result);
+    return chain;
+}
 
 describe("Queue API routes (thin wrappers)", () => {
     beforeEach(() => {
@@ -49,27 +71,21 @@ describe("Queue API routes (thin wrappers)", () => {
             from: vi.fn((table: string) => {
                 if (table === "work_units") {
                     return {
-                        select: vi.fn(() => ({
-                            eq: vi.fn(() => ({
-                                eq: vi.fn(() => ({
-                                    maybeSingle: vi.fn().mockResolvedValue({ data: { id: "wu1" }, error: null }),
-                                })),
-                            })),
-                        })),
+                        select: vi.fn(() =>
+                            supabaseChain({ data: { id: "wu1", department_id: "dept1" }, error: null }),
+                        ),
                     };
                 }
                 return {
-                    select: vi.fn(() => ({
-                        eq: vi.fn(() => ({
-                            maybeSingle: vi.fn().mockResolvedValue({
-                                data:
-                                    table === "user_profiles"
-                                        ? { timezone: "America/Los_Angeles" }
-                                        : { metadata: { timezone: "America/Los_Angeles" } },
-                                error: null,
-                            }),
-                        })),
-                    })),
+                    select: vi.fn(() =>
+                        supabaseChain({
+                            data:
+                                table === "user_profiles"
+                                    ? { timezone: "America/Los_Angeles" }
+                                    : { metadata: { timezone: "America/Los_Angeles" } },
+                            error: null,
+                        }),
+                    ),
                 };
             }),
         });
@@ -239,6 +255,132 @@ describe("Queue API routes (thin wrappers)", () => {
                 recordScopeConstraints: null,
             })
         );
+    });
+
+    it("GET queue items applies stage enrichment before work_view_id filters (stage_key rows match opportunity_stage)", async () => {
+        vi.resetModules();
+        const baseRows = [
+            { id: "opp-lead", name: "Lead Family", stage_key: "lead", status_key: "open" },
+            { id: "opp-wait", name: "Wait Family", stage_key: "waitlist", status_key: "waitlist" },
+        ];
+        const getItems = vi.fn(async () => ({
+            result: {
+                queue: { key: "lifecycle_lead", label: "Lead", entity_type: "opportunity", priority: "standard", display: "list" },
+                items: baseRows,
+                total: 2,
+                limit: 50,
+                offset: 0,
+            },
+            rowsPerf: {
+                load_def_ms: 0,
+                operational_day_ms: 0,
+                base_query_ms: 0,
+                count_ms: 0,
+                status_defs_ms: 0,
+                enrichment_ms: 0,
+                service_total_ms: 0,
+                status_defs_cache_hit: null,
+                status_defs_resolve: null,
+                queue_def_cache_hit: false,
+                operational_day_cache_hit: false,
+                enrichment_subtimings_ms: null,
+            },
+        }));
+        vi.doMock("@/lib/queues/QueueService", () => ({
+            QueueServiceError: class QueueServiceError extends Error {
+                status: number;
+                code: string;
+                constructor(m: string, s: number, c: string) {
+                    super(m);
+                    this.status = s;
+                    this.code = c;
+                }
+            },
+            getWorkUnitQueueItems: getItems,
+        }));
+
+        const deptMetadata = {
+            lifecycle_builder_v1: {
+                version: 1,
+                active_process_id: "proc-enrollment",
+                processes: [
+                    {
+                        id: "proc-enrollment",
+                        key: "enrollment",
+                        name: "Enrollment",
+                        primary_entity: "opportunity",
+                        sort_order: 0,
+                        is_active: true,
+                        work_views_v1: [
+                            {
+                                id: "new_leads",
+                                label: "New Leads",
+                                display_order: 1,
+                                visible_in_runtime: true,
+                                compat_queue_key: "lifecycle_lead",
+                                filters_v1: [
+                                    { field_key: "opportunity_stage", operator: "equals", value: "lead" },
+                                ],
+                            },
+                        ],
+                        stages: [],
+                    },
+                ],
+            },
+        };
+
+        mockCreateAdminClient.mockReturnValue({
+            from: vi.fn((table: string) => {
+                if (table === "work_units") {
+                    return {
+                        select: vi.fn(() =>
+                            supabaseChain({ data: { id: "wu1", department_id: "dept1" }, error: null }),
+                        ),
+                    };
+                }
+                if (table === "departments") {
+                    return {
+                        select: vi.fn(() =>
+                            supabaseChain({ data: { metadata: deptMetadata }, error: null }),
+                        ),
+                    };
+                }
+                return {
+                    select: vi.fn(() =>
+                        supabaseChain({
+                            data:
+                                table === "user_profiles"
+                                    ? { timezone: "America/Los_Angeles" }
+                                    : { metadata: { timezone: "America/Los_Angeles" } },
+                            error: null,
+                        }),
+                    ),
+                };
+            }),
+        });
+
+        const { GET } = await import("@/app/api/admin/queues/[workUnitId]/[queueKey]/route");
+
+        const rawRes = await GET(
+            new NextRequest("http://localhost/api/admin/queues/wu1/lifecycle_lead?limit=50&count_mode=exact"),
+            { params: Promise.resolve({ workUnitId: "wu1", queueKey: "lifecycle_lead" }) },
+        );
+        expect(rawRes.status).toBe(200);
+        const rawJson = (await rawRes.json()) as { items?: Array<{ id?: string }>; total?: number };
+        expect(rawJson.total).toBe(2);
+        expect(rawJson.items?.map((r) => r.id)).toEqual(["opp-lead", "opp-wait"]);
+
+        const filteredRes = await GET(
+            new NextRequest(
+                "http://localhost/api/admin/queues/wu1/lifecycle_lead?limit=50&count_mode=exact&work_view_id=new_leads",
+            ),
+            { params: Promise.resolve({ workUnitId: "wu1", queueKey: "lifecycle_lead" }) },
+        );
+        expect(filteredRes.status).toBe(200);
+        const filteredJson = (await filteredRes.json()) as { items?: Array<{ id?: string; lifecycle_stage_key?: string }>; total?: number };
+        expect(filteredJson.items?.map((r) => r.id)).toEqual(["opp-lead"]);
+        expect(filteredJson.items?.[0]?.lifecycle_stage_key).toBe("lead");
+        expect(filteredJson.total).toBe(1);
     });
 
     it("GET /api/admin/departments/[id]/work-unit-queue-summaries passes scope constraints when restricted", async () => {

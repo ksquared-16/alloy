@@ -33,7 +33,6 @@ type PiRow = {
     stage_key: string | null;
     state: string | null;
     close_reason_key: string | null;
-    stage_entered_at?: string | null;
 };
 type OppRow = { id: string; stage_key: string | null; status_key: string | null; work_unit_id: string | null };
 type MemberRow = { id: string; is_active: boolean | null };
@@ -87,7 +86,7 @@ async function fetchIn<T>(
 }
 
 const PI_COLUMNS =
-    "id, org_id, process_key, subject_type, subject_id, context_id, stage_key, state, close_reason_key, stage_entered_at";
+    "id, org_id, process_key, subject_type, subject_id, context_id, stage_key, state, close_reason_key";
 
 async function loadEnrollmentParticipants(
     supabase: SupabaseClient,
