@@ -36,7 +36,8 @@ export function buildSurfacesBreadcrumb(opts: {
     const { sectionLabel, surfaceTitle, nestedTrail = [] } = opts;
     const crumbs: BreadcrumbCrumb[] = [
         { label: "Surfaces", target: "root" },
-        { label: sectionLabel, target: "root" },
+        // Section crumb returns to the surface canvas when drilled in — not the library.
+        { label: sectionLabel, target: nestedTrail.length > 0 ? "surface" : "root" },
     ];
     // The surface itself: clickable only when we're deeper than it.
     crumbs.push({ label: surfaceTitle, target: nestedTrail.length > 0 ? "surface" : null });

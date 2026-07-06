@@ -3757,6 +3757,14 @@ html[data-alloy-os-runtime-split="true"]
 .alloy-os-grid-builder__remove { border: 0; background: transparent; cursor: pointer; color: var(--alloy-os-text-tertiary, #9ca3af); font-size: 11px; padding: 0 2px; }
 .alloy-os-grid-builder__remove:hover { color: var(--alloy-os-danger, #b91c1c); }
 .alloy-os-grid-builder__body { flex: 1 1 auto; padding: 8px; overflow: hidden; pointer-events: none; }
+.alloy-os-grid-builder__area[data-grid-has-nested-surface="true"] .alloy-os-grid-builder__body {
+  pointer-events: auto;
+  cursor: pointer;
+}
+.alloy-os-grid-builder__area[data-grid-has-nested-surface="true"] .alloy-os-grid-builder__body > :not([data-nested-surface-affordance]) {
+  pointer-events: none;
+}
+.alloy-os-grid-builder__body [data-nested-surface-affordance] { pointer-events: auto; }
 .alloy-os-grid-builder__handle { position: absolute; background: transparent; transition: background 100ms; touch-action: none; z-index: 3; }
 .alloy-os-grid-builder__handle--w { top: 0; right: 0; width: 9px; height: 100%; cursor: col-resize; }
 .alloy-os-grid-builder__handle--h { left: 0; bottom: 0; height: 9px; width: 100%; cursor: row-resize; }

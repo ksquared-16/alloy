@@ -15,10 +15,16 @@ describe("buildSurfacesBreadcrumb — flat surface", () => {
         expect(crumbs[2]!.target).toBeNull(); // current view, not a link
     });
 
-    it("the first crumb navigates back to the Surfaces library", () => {
-        const crumbs = buildSurfacesBreadcrumb({ sectionLabel: "Focus Panels", surfaceTitle: "Enrollment Focus Panel" });
-        expect(crumbs[0]!.label).toBe("Surfaces");
-        expect(crumbs[0]!.target).toBe("root");
+    it("the section crumb navigates to the library when flat, or back to canvas when nested", () => {
+        const flat = buildSurfacesBreadcrumb({ sectionLabel: "Focus Panels", surfaceTitle: "Enrollment Focus Panel" });
+        expect(flat[1]!.target).toBe("root");
+
+        const nested = buildSurfacesBreadcrumb({
+            sectionLabel: "Focus Panels",
+            surfaceTitle: "Enrollment Focus Panel",
+            nestedTrail: ["Children card", "Children"],
+        });
+        expect(nested[1]!.target).toBe("surface");
     });
 });
 
