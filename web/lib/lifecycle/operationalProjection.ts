@@ -90,14 +90,20 @@ export function filterQueueRowsForWorkView<T extends OperationalProjectionRow>(
 /** Max base rows fetched before Work View predicates on the queue API path. */
 export const WORK_VIEW_QUEUE_FILTER_FETCH_CAP = 500;
 
+/** Minimal queue page shape — generic `R` preserves extra fields such as `queue` on {@link QueueItemsResult}. */
+type WorkViewFilterableQueuePage = {
+    items: unknown[];
+    total?: number;
+    limit?: number;
+    offset?: number;
+    total_omitted?: boolean;
+};
+
 /**
  * Apply Work View predicates to a fetched lane page, returning the requested page slice and the
  * **true** filtered total (full filtered set length, not the current page length).
  */
-export function applyWorkViewFilterToQueueItemsResult<
-    T extends OperationalProjectionRow,
-    R extends { items: T[]; total?: number; limit?: number; offset?: number; total_omitted?: boolean },
->(args: {
+export function applyWorkViewFilterToQueueItemsResult<R extends WorkViewFilterableQueuePage>(args: {
     result: R;
     filters: readonly WorkViewFilterV1[];
     match?: WorkViewFilterMatch;
@@ -107,7 +113,7 @@ export function applyWorkViewFilterToQueueItemsResult<
     statusStageMap?: StatusStageMap | null;
 }): R {
     const filtered = filterQueueRowsForWorkView(
-        args.result.items,
+        args.result.items as OperationalProjectionRow[],
         args.filters,
         args.match ?? "all",
         args.statusStageMap,
@@ -115,7 +121,7 @@ export function applyWorkViewFilterToQueueItemsResult<
     const pageOffset = args.pageOffset ?? 0;
     const pageLimit = args.pageLimit ?? filtered.length;
     const includeTotal = !args.omitTotalCount;
-    const page = {
+    const page: WorkViewFilterableQueuePage = {
         ...args.result,
         items: filtered.slice(pageOffset, pageOffset + pageLimit),
         total: includeTotal ? filtered.length : args.result.total,
