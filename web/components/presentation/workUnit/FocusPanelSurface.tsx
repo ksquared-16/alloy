@@ -57,7 +57,9 @@ function FocusPanelPlaceholder() {
             data-inline-focus-panel="empty"
             aria-label="Focus Panel"
             // Borderless: the FocusPanelSurface boundary owns the outer panel border in every state.
-            className="flex min-h-[24rem] flex-col items-center justify-center gap-1.5 px-6 py-10 text-center"
+            // Extends to the same operational bottom as an open record so the empty shell reads as a
+            // full panel awaiting a selection — never a short card.
+            className="flex min-h-[calc(100vh-15rem)] flex-col items-center justify-center gap-1.5 px-6 py-10 text-center"
         >
             <p className="text-sm font-medium text-alloy-midnight/55">Select a record to begin</p>
             <p className="text-xs text-alloy-midnight/40">The record you open appears here.</p>

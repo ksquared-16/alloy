@@ -112,7 +112,10 @@ export function QueueRegion({
     const facets = useMemo(() => deriveQueueRowFilterFacets(queue.rows), [queue.rows]);
     const visibleRows = useMemo(() => applyQueueRowFilters(queue.rows, filters), [queue.rows, filters]);
     const filterActive = queueRowFilterIsActive(filters);
-    const showFilterControls = queue.rows.length > 0;
+    // Canonical queue controls appear whenever the view has resolved (rows OR a settled empty
+    // view) — never disappearing on an empty queue or a specific Work View. Hidden only during
+    // the cold first load and hard errors.
+    const showFilterControls = renderState === "rows" || renderState === "empty";
 
     return (
         <section
@@ -126,16 +129,14 @@ export function QueueRegion({
             data-work-unit-id={workUnitId ?? undefined}
             data-queue-total={queue.totalCount ?? undefined}
         >
-            {/* Queue shell header — a "Queue" eyebrow, the ACTIVE Work View as a filter chip, and the
-                record count. Never anonymous: the operator always sees which view + how many. */}
+            {/* Queue shell header — the surrounding layout already communicates this is the queue
+                pane, so no redundant "Queue" eyebrow. The ACTIVE Work View shows as a filter chip
+                and the record count sits opposite: the operator always sees which view + how many. */}
             <div
                 data-queue-region-header
                 className="mb-2 flex items-center justify-between gap-3"
             >
                 <div className="flex min-w-0 items-center gap-2">
-                    <span className="shrink-0 text-[10px] font-semibold uppercase tracking-[0.13em] text-alloy-midnight/45">
-                        Queue
-                    </span>
                     <span
                         data-queue-region-title
                         data-queue-filter-chip
@@ -169,10 +170,10 @@ export function QueueRegion({
                 />
             ) : null}
 
-            {/* Bordered queue panel — an UNMISTAKABLE outline in EVERY state (defined Alloy stone
-                border + soft elevation), so the queue always reads as a contained panel. */}
+            {/* Bordered queue panel — an UNMISTAKABLE outline in EVERY state, matching the Focus
+                Panel border system (midnight/20) so the queue reads as an equally-weighted panel. */}
             <div
-                className="rounded-xl border border-alloy-stone/45 bg-white p-3 shadow-[0_1px_2px_rgba(15,23,42,0.05)]"
+                className="rounded-xl border border-alloy-midnight/20 bg-white p-3 shadow-[0_1px_2px_rgba(15,23,42,0.05)]"
                 data-queue-panel
             >
                 {renderState === "error" ? (

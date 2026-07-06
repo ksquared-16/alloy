@@ -128,9 +128,10 @@ describe("ProcessSummaryCard — fixed grammar + Primary Signal", () => {
         const tw = el.querySelector("[data-process-todays-work]");
         expect(tw?.textContent).toContain("New Leads");
         expect(tw?.textContent).toContain("24");
-        // Open Process → drills to the signal's target
+        // Open Process → opens the process's Work Unit runtime (entryHref = its default configured
+        // Work View), the SAME runtime the pills use — NOT the primary signal's metric drill.
         const open = Array.from(el.querySelectorAll("a")).find((a) => a.textContent?.includes("Open process"));
-        expect(open?.getAttribute("href")).toBe("/workspace/work-unit/enrollment-tours");
+        expect(open?.getAttribute("href")).toBe("/workspace/work-unit/new-leads");
         expect(el.querySelectorAll('[data-alloy-section="WS.PROCESS_SUMMARY_CARD"]')).toHaveLength(1);
     });
 
@@ -261,6 +262,6 @@ describe("ProcessSummaryCard — operator-owned card identity (Surface Builder)"
         const el = render(<ProcessSummaryCard process={process({})} config={cfgWithCard({ ctaLabel: "Work leads" })} />);
         const cta = el.querySelector("[data-process-cta]");
         expect(cta?.textContent).toContain("Work leads");
-        expect(cta?.getAttribute("href")).toBe("/workspace/work-unit/enrollment-tours"); // unchanged canonical drill
+        expect(cta?.getAttribute("href")).toBe("/workspace/work-unit/new-leads"); // canonical process entry (Work Unit runtime)
     });
 });
