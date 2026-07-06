@@ -43,6 +43,7 @@
 
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import { MOTION_SETTLE } from "@/lib/motion/motionTokens";
+import { markPerceived } from "@/lib/perf/perceivedPerf";
 import FocusPanelCompactHeader from "@/components/admin/focusPanel/FocusPanelCompactHeader";
 import FocusPanelSummarySkeleton from "@/components/admin/focusPanel/FocusPanelSummarySkeleton";
 import OpportunityFocusPanelHeader from "@/components/admin/focusPanel/OpportunityFocusPanelHeader";
@@ -107,6 +108,23 @@ export function InlineOpportunityFocusPanel() {
         selectedSubjectId,
         displayedSubjectId,
     });
+
+    const lastMarkedFocusRef = useRef<string | null>(null);
+    useEffect(() => {
+        if (selectedSubjectId == null) {
+            lastMarkedFocusRef.current = null;
+            return;
+        }
+        const state = subjectResolved ? "resolved" : subjectPending ? "seed" : "idle";
+        const key = `${selectedSubjectId}:${state}`;
+        if (lastMarkedFocusRef.current === key) return;
+        lastMarkedFocusRef.current = key;
+        if (state === "seed") {
+            markPerceived("focus_panel_seed", "acknowledge", { opportunity_id: selectedSubjectId });
+        } else if (state === "resolved") {
+            markPerceived("focus_panel_resolved", "reveal", { opportunity_id: selectedSubjectId });
+        }
+    }, [selectedSubjectId, subjectResolved, subjectPending]);
 
     const committedVisible = useMemo(
         () =>

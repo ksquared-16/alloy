@@ -35,6 +35,7 @@ import {
     runtimeLabelProps,
 } from "@/components/presentation/runtimeLabels";
 import { useAcknowledgeOnActive } from "@/lib/motion/useMotionAcknowledge";
+import { markPerceived } from "@/lib/perf/perceivedPerf";
 import {
     QUEUE_ROW_CARD_IDLE_BORDER_CLASS,
     QUEUE_ROW_CARD_SELECTED_BORDER_CLASS,
@@ -133,8 +134,18 @@ export function CondensedQueueRow({
     focus?: FocusedSubjectContext;
 }) {
     const context = row.context;
-    // One warm handler for both pointer-enter (mouse intent) and focus (keyboard intent).
-    const warm = onPrefetch ? () => onPrefetch(row) : undefined;
+    // One warm handler for pointer-enter, pointer-down (earliest pre-click), and focus.
+    // All route to the same existing `onPrefetch` (`intents.prefetchRecord`).
+    const warm = onPrefetch
+        ? () => {
+              markPerceived("queue_row_open", "warm", {
+                  entity_id: row.entityId,
+                  entity_type: row.entityType,
+                  warm_seam: "row_intent",
+              });
+              onPrefetch(row);
+          }
+        : undefined;
     // `acknowledge` choreography: a spring pulse the instant this row becomes the selected
     // record (false → true), confirming the open registered. Composes with `motion-control`
     // (transition) — the animation and the transition touch different CSS properties.
@@ -153,6 +164,7 @@ export function CondensedQueueRow({
                 data-entity-type={row.entityType}
                 data-queue-row-first={isFirst ? "true" : undefined}
                 data-queue-row-active={isSelected ? "true" : undefined}
+                onPointerDown={warm}
                 onPointerEnter={warm}
                 onFocus={warm}
                 onClick={() => onOpen(row)}
@@ -211,6 +223,9 @@ export function CondensedQueueRow({
             data-queue-row-first={isFirst ? "true" : undefined}
             data-queue-row-active={isSelected ? "true" : undefined}
             data-needs-attention={needsAttention ? "true" : undefined}
+            onPointerDown={warm}
+            onPointerEnter={warm}
+            onFocus={warm}
             onClick={() => onOpen(row)}
             className={cardClass}
         >
