@@ -14,6 +14,7 @@
  */
 
 import type { WorkViewLinkModel } from "@/lib/presentation/runtime/types";
+import { normalizeProcessCardAccent } from "@/lib/presentation/runtime/processCardAccentStyles";
 
 export type TodaysWorkSort =
     /** Records needing attention first (then overdue, then count) — the operational default. */
@@ -28,12 +29,57 @@ export type TodaysWorkSort =
  * Alloy tokens only (no new colors). Applied to the card's IDENTITY chip — never the semantic
  * state rail, which stays owned by the operational signal.
  */
-export const PROCESS_CARD_ACCENTS = ["pine", "juniper", "ember", "firewood", "midnight", "stone"] as const;
+export const PROCESS_CARD_ACCENTS = ["pine", "blue", "ember", "midnight", "stone", "gold"] as const;
 export type ProcessCardAccent = (typeof PROCESS_CARD_ACCENTS)[number];
 
-/** Identity glyph vocabulary — CLOSED set (no arbitrary strings; the card maps each to an inline icon). */
-export const PROCESS_CARD_ICONS = ["leads", "enrollment", "billing", "roster", "tour", "waitlist", "generic"] as const;
+/** Generic identity glyphs — domain-neutral labels in the builder. */
+export const PROCESS_CARD_ICONS = [
+    "grid",
+    "spark",
+    "route",
+    "users",
+    "calendar",
+    "clipboard",
+    "chart",
+    "message",
+    "shield",
+    "book",
+    "bolt",
+    "layers",
+] as const;
 export type ProcessCardIcon = (typeof PROCESS_CARD_ICONS)[number];
+
+export const PROCESS_CARD_ICON_LABELS: Record<ProcessCardIcon, string> = {
+    grid: "Grid",
+    spark: "Spark",
+    route: "Route",
+    users: "Users",
+    calendar: "Calendar",
+    clipboard: "Clipboard",
+    chart: "Chart",
+    message: "Message",
+    shield: "Shield",
+    book: "Book",
+    bolt: "Bolt",
+    layers: "Layers",
+};
+
+const LEGACY_PROCESS_CARD_ICONS: Record<string, ProcessCardIcon> = {
+    generic: "grid",
+    leads: "users",
+    enrollment: "route",
+    billing: "chart",
+    roster: "users",
+    tour: "calendar",
+    waitlist: "clipboard",
+};
+
+export function normalizeProcessCardIcon(raw: unknown): ProcessCardIcon | undefined {
+    if (typeof raw !== "string" || !raw.trim()) return undefined;
+    const key = raw.trim();
+    if ((PROCESS_CARD_ICONS as readonly string[]).includes(key)) return key as ProcessCardIcon;
+    return LEGACY_PROCESS_CARD_ICONS[key];
+}
 
 /**
  * Per-process card identity + presentation an operator owns in the Surface Builder. Every field is
@@ -53,6 +99,10 @@ export type ProcessCardConfig = {
     supportingSignalKey?: string;
     /** CTA label override; the TARGET stays canonical (the signal drill / process entry). Blank → default. */
     ctaLabel?: string;
+    /** Presentation label for the primary signal metric; blank → calculation registry label. */
+    primarySignalLabel?: string;
+    /** Presentation label for the supporting signal metric; blank → calculation registry label. */
+    supportingSignalLabel?: string;
 };
 
 export type WorkspaceProcessSurfaceConfig = {
@@ -70,6 +120,11 @@ export type WorkspaceProcessSurfaceConfig = {
      * as `primarySignalByProcess` — one keying scheme). Absent entry → all runtime defaults.
      */
     cardByProcess: Record<string, ProcessCardConfig>;
+    /**
+     * Lifecycle catalog ids (`departmentId:processId`) with an authored Workspace Process Summary.
+     * When absent, the Surfaces UI bootstraps a single visible catalog process (Enrollment-only orgs).
+     */
+    summaryCatalogIds?: string[];
     todaysWork: {
         /** Show the Today's Work section on each process card. */
         visible: boolean;
@@ -117,16 +172,20 @@ function normalizeProcessCardConfig(value: unknown): ProcessCardConfig | null {
     if (title) out.title = title;
     const subtitle = trimmedOrUndefined(v.subtitle);
     if (subtitle) out.subtitle = subtitle;
-    if (typeof v.accent === "string" && (PROCESS_CARD_ACCENTS as readonly string[]).includes(v.accent)) {
-        out.accent = v.accent as ProcessCardAccent;
+    if (typeof v.accent === "string") {
+        const accent = normalizeProcessCardAccent(v.accent);
+        if (accent) out.accent = accent;
     }
-    if (typeof v.icon === "string" && (PROCESS_CARD_ICONS as readonly string[]).includes(v.icon)) {
-        out.icon = v.icon as ProcessCardIcon;
-    }
+    const icon = normalizeProcessCardIcon(v.icon);
+    if (icon) out.icon = icon;
     const supportingSignalKey = trimmedOrUndefined(v.supportingSignalKey);
     if (supportingSignalKey) out.supportingSignalKey = supportingSignalKey;
     const ctaLabel = trimmedOrUndefined(v.ctaLabel);
     if (ctaLabel) out.ctaLabel = ctaLabel;
+    const primarySignalLabel = trimmedOrUndefined(v.primarySignalLabel);
+    if (primarySignalLabel) out.primarySignalLabel = primarySignalLabel;
+    const supportingSignalLabel = trimmedOrUndefined(v.supportingSignalLabel);
+    if (supportingSignalLabel) out.supportingSignalLabel = supportingSignalLabel;
     // Drop an override that carries nothing (all fields empty/invalid).
     return Object.keys(out).length ? out : null;
 }
@@ -150,9 +209,17 @@ export function normalizeWorkspaceProcessSurfaceConfig(value: unknown): Workspac
     const v = value as Record<string, unknown>;
     const primarySignalByProcess = normalizePrimarySignalMap(v.primarySignalByProcess);
     const cardByProcess = normalizeCardByProcessMap(v.cardByProcess);
+    const summaryCatalogIds = Array.isArray(v.summaryCatalogIds)
+        ? v.summaryCatalogIds.filter((id): id is string => typeof id === "string" && id.includes(":"))
+        : undefined;
     const tw = v.todaysWork;
     if (!tw || typeof tw !== "object") {
-        return { ...d, primarySignalByProcess, cardByProcess };
+        return {
+            ...d,
+            primarySignalByProcess,
+            cardByProcess,
+            ...(summaryCatalogIds?.length ? { summaryCatalogIds } : {}),
+        };
     }
     const t = tw as Record<string, unknown>;
     const sort: TodaysWorkSort =
@@ -165,6 +232,7 @@ export function normalizeWorkspaceProcessSurfaceConfig(value: unknown): Workspac
         version: 1,
         primarySignalByProcess,
         cardByProcess,
+        ...(summaryCatalogIds?.length ? { summaryCatalogIds } : {}),
         todaysWork: {
             visible: typeof t.visible === "boolean" ? t.visible : d.todaysWork.visible,
             maxRows,
@@ -188,6 +256,10 @@ export type ResolvedProcessCardIdentity = {
     supportingSignalKey: string | null;
     /** CTA label override, or null → the card's default CTA label. */
     ctaLabel: string | null;
+    /** Primary signal metric title override, or null → registry label. */
+    primarySignalLabel: string | null;
+    /** Supporting signal metric title override, or null → registry label. */
+    supportingSignalLabel: string | null;
 };
 
 /**
@@ -204,9 +276,11 @@ export function resolveProcessCardConfig(
         title: card?.title?.trim() || null,
         subtitle: card?.subtitle?.trim() || null,
         accent: card?.accent ?? null,
-        icon: card?.icon ?? "generic",
+        icon: card?.icon ?? "grid",
         supportingSignalKey: card?.supportingSignalKey?.trim() || null,
         ctaLabel: card?.ctaLabel?.trim() || null,
+        primarySignalLabel: card?.primarySignalLabel?.trim() || null,
+        supportingSignalLabel: card?.supportingSignalLabel?.trim() || null,
     };
 }
 

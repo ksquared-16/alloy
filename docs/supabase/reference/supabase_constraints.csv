@@ -441,7 +441,7 @@ public,entity_layouts_org_entity_surface_key_version,UNIQUE,public,entity_layout
 public,entity_layouts_org_id_fkey,FOREIGN KEY,public,entity_layouts,FOREIGN KEY (org_id) REFERENCES orgs(id) ON DELETE CASCADE,false,false
 public,entity_layouts_pkey,PRIMARY KEY,public,entity_layouts,PRIMARY KEY (id),false,false
 public,entity_layouts_status_check,CHECK,public,entity_layouts,"CHECK (status = ANY (ARRAY['draft'::text, 'published'::text]))",false,false
-public,entity_layouts_surface_check,CHECK,public,entity_layouts,"CHECK (surface = ANY (ARRAY['drawer'::text, 'queue'::text]))",false,false
+public,entity_layouts_surface_check,CHECK,public,entity_layouts,"CHECK (surface = ANY (ARRAY['drawer'::text, 'queue'::text, 'workspace'::text]))",false,false
 public,entity_layouts_version_check,CHECK,public,entity_layouts,CHECK (version >= 1),false,false
 public,external_mappings_pkey,PRIMARY KEY,public,external_mappings,PRIMARY KEY (id),false,false
 public,external_mappings_source_entity_type_external_id_key,UNIQUE,public,external_mappings,"UNIQUE (source, entity_type, external_id)",false,false
