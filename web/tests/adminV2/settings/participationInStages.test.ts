@@ -39,9 +39,10 @@ describe("Participation lives in the Stages pane, not the nav", () => {
         expect(board).toContain("BusinessProcessParticipationCard");
         expect(board).not.toContain("BusinessProcessParticipationWorkspace");
         expect(board).not.toContain('processSection === "participation"');
-        // the card component exists
+        // the card component exists, is read-only, and locks stage inheritance as platform-managed
         const card = src("components/adminV2/settings/businessProcess/BusinessProcessParticipationCard.tsx");
-        expect(card).toContain("participation-inherit-stage");
-        expect(card).toContain("process-participation");
+        expect(card).toContain("participation-stage-behavior");
+        expect(card).toContain("Platform managed");
+        expect(card).not.toContain("participation-inherit-stage");
     });
 });

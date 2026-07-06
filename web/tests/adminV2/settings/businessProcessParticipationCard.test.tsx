@@ -54,18 +54,28 @@ beforeEach(() => {
 });
 
 describe("BusinessProcessParticipationCard — compact process-definition card", () => {
-    it("renders read-only Tracks/Context/Creates facts, the inherit toggle (on), and one runtime note", async () => {
+    it("renders read-only Tracks/Context/Creates facts and one runtime note", async () => {
         const el = await render(<BusinessProcessParticipationCard departmentId="dept-1" processId="p1" />);
         // read-only facts
         expect(el.textContent).toContain("Child");
         expect(el.textContent).toContain("Household");
         expect(el.querySelector('[data-testid="participation-creation"]')?.textContent).toContain("One participant per child");
-        // the ONE editable control — the inherit toggle, on
-        const toggle = el.querySelector('[data-testid="participation-inherit-stage"]') as HTMLInputElement | null;
-        expect(toggle?.checked).toBe(true);
         // one runtime note, plain English
         const runtime = el.querySelector('[data-testid="participation-runtime"]')?.textContent ?? "";
         expect(runtime).toContain("keeps each child");
+    });
+
+    it("stage inheritance is Platform managed, NOT an editable toggle (locked ON in V1)", async () => {
+        const el = await render(<BusinessProcessParticipationCard departmentId="dept-1" processId="p1" />);
+        const row = el.querySelector('[data-testid="participation-stage-behavior"]');
+        expect(row).not.toBeNull();
+        expect(row?.textContent).toContain("Inherits household stage until a child branches");
+        expect(row?.textContent).toContain("Platform managed");
+        // no toggle input anywhere — disabling inheritance would break Create Lead / New Leads
+        expect(el.querySelector('[data-testid="participation-inherit-stage"]')).toBeNull();
+        expect(el.querySelector('input[type="checkbox"]')).toBeNull();
+        // and no Save/publish control — the card is read-only
+        expect(el.querySelector('[data-testid="participation-publish"]')).toBeNull();
     });
 
     it("drops the removed surface: no Operational States editor, no editable Available Views", async () => {
