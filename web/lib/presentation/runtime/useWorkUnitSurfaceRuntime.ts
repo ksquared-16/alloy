@@ -36,6 +36,10 @@ import {
     activeLifecycleProcess,
     lifecycleBuilderFromDepartmentMetadata,
 } from "@/lib/lifecycle/lifecycleBuilderConfig";
+import {
+    queueRowSurfaceId,
+} from "@/lib/adminV2/settings/surfaces/queueRowProcessCatalog";
+import { QUEUE_ROW_SURFACE_PUBLISHED_EVENT } from "@/lib/adminV2/settings/surfaces/queueRowSurfaceService";
 import { isLegacyArtifactProcessName } from "@/lib/admin/buildOperatorLifecycleLanding";
 import { tryLoadWorkUnitQueueDefinitionBundle } from "@/lib/config/queueDefinitionV2Runtime";
 import { getQueueUiConfig } from "@/lib/ui-v2/queueUiConfig";
@@ -101,15 +105,17 @@ import type { QueueRecordLayoutConfigV3 } from "@/lib/layout/queueRecordLayoutV3
 const PRESENTATION_RUNTIME_QUEUE_ROW_OPEN_SOURCE = "presentation_runtime_queue_row";
 
 /**
- * Published Queue Row surface id for the Work Unit queue. PRV2's work-unit queue is the
- * OPPORTUNITY queue (`entity_type: "opportunity"`), whose published compact-row surface is
- * "pipeline-queue-row" (GET /api/admin/queue-row-layout/{surfaceId}). Job/schedule lanes
- * have no published queue-row surface → null (skip fetch, generic-context fallback). The
- * queue's entity_type comes from the rows RESULT, not config; to avoid coupling the config
- * batch to the rows fetch we assume the opportunity surface here (documented). If a future
- * work unit exposes a non-opportunity primary queue, derive this from the queue definition.
+ * Resolve published Queue Row surface id from department lifecycle process.
+ * Falls back to legacy pipeline id when catalog id cannot be derived.
  */
-const WORK_UNIT_QUEUE_ROW_SURFACE_ID = "pipeline-queue-row";
+function queueRowSurfaceIdForDepartment(departmentId: string | null, deptMetadata: unknown): string {
+    const lifecycle = lifecycleBuilderFromDepartmentMetadata(deptMetadata);
+    const process = lifecycle ? activeLifecycleProcess(lifecycle) : null;
+    if (process && departmentId) {
+        return queueRowSurfaceId(`${departmentId}:${process.id}`);
+    }
+    return "pipeline-queue-row";
+}
 
 /**
  * Validate a Work View's base lane against THIS work unit's queue definition. A department's
@@ -151,12 +157,15 @@ export function useWorkUnitSurfaceRuntime(): WorkUnitSurfaceRuntime {
         WorkViewCanonicalLocationWorkUnitRow[] | null
     >(null);
     const [queueRowLayoutConfig, setQueueRowLayoutConfig] = useState<QueueRecordLayoutConfigV3 | null>(null);
+    const [queueRowSurfaceIdState, setQueueRowSurfaceIdState] = useState<string>("pipeline-queue-row");
     const [configSettled, setConfigSettled] = useState(false);
 
     useEffect(() => {
         if (!departmentId || !workUnitId) return;
         let cancelled = false;
         setConfigSettled(false);
+        const surfaceId = queueRowSurfaceIdForDepartment(departmentId, null);
+        setQueueRowSurfaceIdState(surfaceId);
         const init = workspaceDataFetchInit();
         void Promise.all([
             dedupeAdminFetch(`/api/admin/departments/${encodeURIComponent(departmentId)}`, init)
@@ -168,29 +177,42 @@ export function useWorkUnitSurfaceRuntime(): WorkUnitSurfaceRuntime {
             dedupeAdminFetch(`/api/admin/work-units?department_id=${encodeURIComponent(departmentId)}`, init)
                 .then((res) => (res.ok ? res.json() : null))
                 .catch(() => null),
-            WORK_UNIT_QUEUE_ROW_SURFACE_ID
-                ? dedupeAdminFetch(
-                      `/api/admin/queue-row-layout/${encodeURIComponent(WORK_UNIT_QUEUE_ROW_SURFACE_ID)}`,
-                      init,
-                  )
-                      .then((res) => (res.ok ? res.json() : null))
-                      .catch(() => null)
-                : Promise.resolve(null),
         ])
-            .then(([dept, wu, deptUnits, queueRowLayoutRes]) => {
+            .then(([dept, wu, deptUnits]) => {
                 if (cancelled) return;
-                setDeptMetadata((dept as { metadata?: unknown } | null)?.metadata ?? null);
+                const deptMeta = (dept as { metadata?: unknown } | null)?.metadata ?? null;
+                setDeptMetadata(deptMeta);
+                const resolvedSurfaceId = queueRowSurfaceIdForDepartment(departmentId, deptMeta);
+                setQueueRowSurfaceIdState(resolvedSurfaceId);
+                const lifecycle = lifecycleBuilderFromDepartmentMetadata(deptMeta);
+                const process = lifecycle ? activeLifecycleProcess(lifecycle) : null;
+                const processKey = process?.key ?? "enrollment";
+                const qs = processKey ? `?processKey=${encodeURIComponent(processKey)}` : "";
+                return dedupeAdminFetch(
+                    `/api/admin/queue-row-layout/${encodeURIComponent(resolvedSurfaceId)}${qs}`,
+                    init,
+                )
+                    .then((res) => (res.ok ? res.json() : null))
+                    .catch(() => null)
+                    .then((queueRowLayoutRes) => ({ wu, deptUnits, queueRowLayoutRes }));
+            })
+            .then((payload) => {
+                if (cancelled || !payload) return;
+                const { wu, deptUnits, queueRowLayoutRes } = payload;
                 setQueueDefinition((wu as { queue_definition?: unknown } | null)?.queue_definition ?? null);
                 const items = (deptUnits as { items?: unknown } | null)?.items;
                 setDeptWorkUnits(
                     Array.isArray(items) ? (items as WorkViewCanonicalLocationWorkUnitRow[]) : null,
                 );
-                const rowLayout = (queueRowLayoutRes as { config?: unknown } | null)?.config ?? null;
+                const envelopeLayout =
+                    (queueRowLayoutRes as { envelope?: { layout?: unknown } } | null)?.envelope?.layout ??
+                    (queueRowLayoutRes as { config?: unknown } | null)?.config ??
+                    null;
                 setQueueRowLayoutConfig(
-                    rowLayout
-                        && typeof rowLayout === "object"
-                        && Array.isArray((rowLayout as { columns?: unknown }).columns)
-                        ? (rowLayout as QueueRecordLayoutConfigV3)
+                    envelopeLayout
+                        && typeof envelopeLayout === "object"
+                        && Array.isArray((envelopeLayout as { columns?: unknown }).columns)
+                        ? (envelopeLayout as QueueRecordLayoutConfigV3)
                         : null,
                 );
             })
