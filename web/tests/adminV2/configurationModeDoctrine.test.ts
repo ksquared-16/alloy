@@ -43,9 +43,10 @@ describe("Configuration Mode doctrine", () => {
         expect(CONFIGURATION_MODE_BRAND_TOKENS).toContain("rgba(0, 162, 131, 0.08)");
     });
 
-    it("process queue excludes Presentation as a top-level nav item", () => {
+    it("process queue includes Participation, excludes Presentation as a top-level nav item", () => {
         expect(CONFIGURATION_PROCESS_QUEUE_SECTIONS).toEqual([
             "stages",
+            "participation",
             "work-views",
             "actions",
             "automation",

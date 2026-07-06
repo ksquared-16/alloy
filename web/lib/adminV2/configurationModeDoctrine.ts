@@ -20,6 +20,7 @@ export const CONFIGURATION_MODE_FORBIDDEN_STYLING_PATTERNS = [
 /** Configuration queue sections for `/settings/processes` (Presentation lives in Work View setup). */
 export const CONFIGURATION_PROCESS_QUEUE_SECTIONS = [
     "stages",
+    "participation",
     "work-views",
     "actions",
     "automation",
@@ -30,7 +31,7 @@ export type ConfigurationProcessQueueSection = (typeof CONFIGURATION_PROCESS_QUE
 
 /** Grouped process configuration queue (left rail inside Processes). */
 export const CONFIGURATION_PROCESS_QUEUE_GROUPS = [
-    { label: "Configure", sections: ["stages", "work-views"] as const },
+    { label: "Configure", sections: ["stages", "participation", "work-views"] as const },
     { label: "Process", sections: ["actions", "automation"] as const },
     { label: "Health", sections: ["health"] as const },
 ] as const;

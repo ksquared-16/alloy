@@ -5,12 +5,14 @@ import {
     HeartPulse,
     Layers,
     LayoutGrid,
+    Users,
     Zap,
 } from "lucide-react";
 import {
     BUSINESS_PROCESS_NAV_ACTIONS,
     BUSINESS_PROCESS_NAV_AUTOMATION,
     BUSINESS_PROCESS_NAV_HEALTH,
+    BUSINESS_PROCESS_NAV_PARTICIPATION,
     BUSINESS_PROCESS_NAV_STAGES,
     BUSINESS_PROCESS_NAV_WORK_VIEWS,
     type BusinessProcessWorkspaceSection,
@@ -22,6 +24,7 @@ import {
 
 const SECTION_ICONS: Record<ConfigurationProcessQueueSection, typeof Layers> = {
     stages: Layers,
+    participation: Users,
     "work-views": LayoutGrid,
     actions: Zap,
     automation: GitBranch,
@@ -30,6 +33,7 @@ const SECTION_ICONS: Record<ConfigurationProcessQueueSection, typeof Layers> = {
 
 const SECTION_META: Record<ConfigurationProcessQueueSection, { label: string }> = {
     stages: { label: BUSINESS_PROCESS_NAV_STAGES },
+    participation: { label: BUSINESS_PROCESS_NAV_PARTICIPATION },
     "work-views": { label: BUSINESS_PROCESS_NAV_WORK_VIEWS },
     actions: { label: BUSINESS_PROCESS_NAV_ACTIONS },
     automation: { label: BUSINESS_PROCESS_NAV_AUTOMATION },
