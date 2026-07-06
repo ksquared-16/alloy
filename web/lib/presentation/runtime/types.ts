@@ -241,7 +241,19 @@ export function drillHrefForMetricKey(key: string): string | null {
     const calc = findOperationalCalculation(key);
     const contract = getDrillContract(calc?.drillContractId);
     if (!contract) return null;
-    return operatorWorkUnitHrefFromKey(contract.workUnitKey);
+    // Route to the canonical Work Unit runtime (Work View pills / search / filter / queue + Focus
+    // Panel shells all render there) and carry the drill's semantic filter through QUERY STATE —
+    // never a slug that silently drops it. The runtime reads status_keys / attention_reason_code.
+    const base = operatorWorkUnitHrefFromKey(contract.workUnitKey);
+    const query = new URLSearchParams();
+    if (contract.statusKeys && contract.statusKeys.length > 0) {
+        query.set("status_keys", contract.statusKeys.join(","));
+    }
+    if (contract.attentionReasonCode) {
+        query.set("attention_reason_code", contract.attentionReasonCode);
+    }
+    const qs = query.toString();
+    return qs ? `${base}?${qs}` : base;
 }
 
 /**

@@ -10,7 +10,8 @@
  * loading skeletons (card-shaped), quiet inline error, empty, rows.
  */
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import type { QueueRowModel, WorkUnitSurfaceModel } from "@/lib/presentation/runtime";
 import {
     PRESENTATION_RUNTIME_LABELS,
@@ -20,6 +21,7 @@ import { BUILD_SHA } from "@/lib/runtime/buildInfo";
 import {
     applyQueueRowFilters,
     deriveQueueRowFilterFacets,
+    queueRowFilterFromDrillParams,
     queueRowFilterIsActive,
     EMPTY_QUEUE_ROW_FILTER,
     type QueueRowFilterState,
@@ -108,7 +110,20 @@ export function QueueRegion({
     // Interactive filter/control row (re-homed from the pre-PRV2 WorkUnitQueueRecordFilterBar):
     // client-side narrowing over the loaded rows, facets derived from what's loaded. Server order
     // is preserved until the operator picks a sort.
-    const [filters, setFilters] = useState<QueueRowFilterState>(EMPTY_QUEUE_ROW_FILTER);
+    // A metric/KPI drill lands here carrying its semantic filter in query state (status_keys /
+    // attention_reason_code). Seed the queue filter from it on arrival, and re-apply when the drill
+    // query changes (navigation) — a plain view/pill/direct link (no drill query) resets to none.
+    // Manual filter edits (which never touch the URL) are preserved between navigations.
+    const searchParams = useSearchParams();
+    const drillQueryString = searchParams?.toString() ?? "";
+    const drillFilterKey = `${searchParams?.get("status_keys") ?? ""}|${searchParams?.get("attention_reason_code") ?? ""}`;
+    const [filters, setFilters] = useState<QueueRowFilterState>(() =>
+        queueRowFilterFromDrillParams(new URLSearchParams(drillQueryString)),
+    );
+    useEffect(() => {
+        setFilters(queueRowFilterFromDrillParams(new URLSearchParams(drillQueryString)));
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [drillFilterKey]);
     const facets = useMemo(() => deriveQueueRowFilterFacets(queue.rows), [queue.rows]);
     const visibleRows = useMemo(() => applyQueueRowFilters(queue.rows, filters), [queue.rows, filters]);
     const filterActive = queueRowFilterIsActive(filters);
