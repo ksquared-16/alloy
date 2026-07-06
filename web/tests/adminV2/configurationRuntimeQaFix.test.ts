@@ -31,8 +31,8 @@ describe("Configuration Runtime QA fix", () => {
         expect(page).not.toContain("SettingsIndexRedirect");
         const hub = read("app/adminV2/settings/SettingsConfigurationHub.tsx");
         expect(hub).toContain('data-testid="settings-configuration-hub"');
-        expect(hub).toContain('data-testid="settings-configuration-tiles"');
-        expect(CONFIGURATION_MODE_NAV_ITEMS.length).toBe(9);
+        expect(hub).toContain('data-testid="settings-configuration-sections"');
+        expect(CONFIGURATION_MODE_NAV_ITEMS.length).toBe(11);
     });
 
     it("settings mode rail uses Lucide icons, not letter placeholders", () => {

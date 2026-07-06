@@ -19,8 +19,8 @@ describe("Configuration Runtime QA Fix 2", () => {
         expect(page).toContain("SettingsConfigurationHub");
         const hub = read("app/adminV2/settings/SettingsConfigurationHub.tsx");
         expect(hub).toContain('data-testid="settings-index-page"');
-        expect(hub).toContain("CONFIGURATION_MODE_NAV_ITEMS");
-        expect(CONFIGURATION_MODE_NAV_ITEMS.length).toBeGreaterThanOrEqual(9);
+        expect(hub).toContain("CONFIGURATION_MODE_NAV_GROUPS");
+        expect(CONFIGURATION_MODE_NAV_ITEMS.length).toBeGreaterThanOrEqual(11);
     });
 
     it("settings rail uses Lucide icons and Home entry", () => {

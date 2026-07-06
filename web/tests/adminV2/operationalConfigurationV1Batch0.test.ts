@@ -22,27 +22,24 @@ function read(rel: string): string {
 }
 
 describe("Batch 0 — Financials navigation domain", () => {
-    it("adds Financials as a first-class nav item with a generic testId", () => {
+    it("hides Financials from primary configuration navigation while route remains available", () => {
         const financials = CONFIGURATION_MODE_NAV_ITEMS.find((i) => i.label === "Financials");
-        expect(financials).toBeDefined();
-        expect(financials?.href).toBe("/settings/financials");
-        expect(financials?.testId).toBe("config-mode-nav-financials");
+        expect(financials).toBeUndefined();
+        expect(read("app/adminV2/settings/financials/page.tsx")).toContain("FinancialsConfigurationPage");
     });
 
-    it("groups Financials under its own labeled domain (sibling to other domains)", () => {
+    it("does not group Financials in the primary configuration IA", () => {
         const group = CONFIGURATION_MODE_NAV_GROUPS.find((g) => g.label === "Financials");
-        expect(group).toBeDefined();
-        expect(group?.items.some((i) => i.label === "Financials")).toBe(true);
+        expect(group).toBeUndefined();
     });
 
-    it("registers a Banknote icon for the financials nav icon", () => {
+    it("retains Banknote icon mapping for legacy/internal references", () => {
         const icons = read("lib/adminV2/configurationModeNavIcons.tsx");
         expect(icons).toContain("financials: Banknote");
     });
 
     it("uses generic financial naming (no childcare-specific route naming)", () => {
         const nav = read("lib/adminV2/configurationModeNav.ts");
-        expect(nav).toContain('settings("financials")');
         expect(nav).not.toMatch(/childcare/i);
     });
 });

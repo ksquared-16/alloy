@@ -27,10 +27,12 @@ test.describe("configuration-runtime-settings-landing", () => {
 
         await page.goto("/settings", { waitUntil: "networkidle", timeout: 120_000 });
         await expect(page.getByTestId("settings-configuration-context")).toBeVisible({ timeout: 60_000 });
-        await expect(page.getByTestId("settings-configuration-context")).toContainText("Settings");
-        await expect(page.getByTestId("settings-configuration-context")).toContainText("Configure Alloy by area.");
+        await expect(page.getByTestId("settings-configuration-context")).toContainText("Platform Configuration");
+        await expect(page.getByTestId("settings-configuration-context")).toContainText(
+            "Configure Alloy across your organization, data model, operational workflows, and business modules.",
+        );
         await expect(page.getByTestId("settings-configuration-hero")).toHaveCount(0);
-        await expect(page.getByTestId("settings-configuration-tiles")).toBeVisible();
+        await expect(page.getByTestId("settings-configuration-sections")).toBeVisible();
         await page.screenshot({
             path: path.join(screenshotDir, "06-settings-index-compact.png"),
             fullPage: true,

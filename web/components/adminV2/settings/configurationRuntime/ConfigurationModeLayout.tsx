@@ -8,12 +8,14 @@ export const CONFIGURATION_SHELL_OBJECT_QUEUE_WIDTH_PX = 320;
 
 /** Context bar — title, subtitle, and actions above the configuration shell. */
 export function ConfigurationContext({
+    eyebrow,
     title,
     subtitle,
     actions,
     testId = "configuration-context",
     children,
 }: {
+    eyebrow?: string;
     title: string;
     subtitle?: string;
     actions?: ReactNode;
@@ -24,6 +26,11 @@ export function ConfigurationContext({
         <header className="process-config-context-bar space-y-2" data-testid={testId}>
             <div className="flex flex-wrap items-start justify-between gap-3">
                 <div className="min-w-0">
+                    {eyebrow ?
+                        <p className="config-platform-hub-eyebrow" data-testid={`${testId}-eyebrow`}>
+                            {eyebrow}
+                        </p>
+                    :   null}
                     <h1 className="config-typo-page-title process-config-context-title">{title}</h1>
                     {subtitle ?
                         <p className="config-typo-sublabel process-config-context-summary mt-1 max-w-3xl">{subtitle}</p>
