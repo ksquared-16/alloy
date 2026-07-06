@@ -121,7 +121,12 @@ export function ProcessSummaryCard({
 }) {
     const signal = process.primarySignal;
     const state: SignalState = signal?.state ?? "neutral";
-    const drillHref = signal?.drillHref ?? process.entryHref;
+    // Opening a process always lands in the process's Work Unit runtime (its default configured
+    // Work View when perspectives are enabled) — the SAME runtime the Work View pills navigate to,
+    // so the pills/filter/queue chrome render regardless of arrival path. We deliberately do NOT
+    // route "Open process" through the primary signal's metric drill href, which resolved to a
+    // bare queue-key slug with no configured Work Views (no pills).
+    const drillHref = process.entryHref;
 
     // Operator-owned card identity (title / subtitle / accent / icon / CTA label). Keyed by the
     // process's business process — the SAME key the Primary Signal picker uses.
@@ -129,7 +134,7 @@ export function ProcessSummaryCard({
         () => resolveProcessCardConfig(config, businessProcessForProcessKey(process.processKey)),
         [config, process.processKey],
     );
-    // Render-boundary guard: a dirty "(legacy)" process name never prints on the workspace card.
+    // Render-boundary guard: a dirty legacy-suffixed process name never prints on the workspace card.
     const title = stripLegacyArtifactMarker(identity.title ?? process.label) ?? "";
     const subtitle = identity.subtitle ?? process.description;
     const showChip = identity.accent != null || identity.icon !== "generic";

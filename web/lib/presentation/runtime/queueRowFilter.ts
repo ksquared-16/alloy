@@ -31,6 +31,30 @@ export const EMPTY_QUEUE_ROW_FILTER: QueueRowFilterState = {
     sort: "default", // server order preserved until the operator chooses a sort
 };
 
+/**
+ * Seed the queue filter from a metric/KPI drill's QUERY STATE (`status_keys`,
+ * `attention_reason_code`) so a drill lands in the configured Work Unit runtime with its semantic
+ * filter already applied — instead of a separate queue-key slug that loses the configured Work
+ * Views. Returns EMPTY when no drill filter is present (a plain view/pill/direct link).
+ */
+export function queueRowFilterFromDrillParams(params: URLSearchParams): QueueRowFilterState {
+    const statusKeysRaw = (params.get("status_keys") ?? "").trim();
+    const attentionReasonCode = (params.get("attention_reason_code") ?? "").trim();
+    if (!statusKeysRaw && !attentionReasonCode) return EMPTY_QUEUE_ROW_FILTER;
+    const firstStatus =
+        statusKeysRaw
+            .split(",")
+            .map((s) => s.trim())
+            .filter(Boolean)[0] ?? "";
+    return {
+        ...EMPTY_QUEUE_ROW_FILTER,
+        statusKey: firstStatus,
+        // Any attention drill narrows to needs-attention rows; a specific reason refines client-side
+        // where a matching facet label exists.
+        attentionReason: attentionReasonCode ? "__needs__" : "",
+    };
+}
+
 export type QueueRowFilterOption = { value: string; label: string };
 export type QueueRowFilterFacets = {
     statusOptions: QueueRowFilterOption[];

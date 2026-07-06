@@ -237,7 +237,9 @@ export function InlineOpportunityFocusPanel() {
                 data-inline-focus-panel-resolved={resolved ? "true" : "false"}
                 aria-label="Focus Panel"
                 // Borderless: the FocusPanelSurface boundary owns the outer panel border (single container).
-                className="flex max-h-[calc(100vh-6rem)] min-h-0 flex-col overflow-hidden bg-white"
+                // Fills the stretched boundary (flex-1) so an open record occupies the SAME shell height
+                // as the empty state; the body scrolls internally. Height comes from the parent row.
+                className="flex min-h-0 flex-1 flex-col overflow-hidden bg-white"
             >
                 <div
                     className="sticky top-0 z-10 shrink-0 border-b border-alloy-stone/12 bg-white"
