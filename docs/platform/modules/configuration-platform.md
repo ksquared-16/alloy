@@ -110,21 +110,25 @@ The Settings index (`/settings`) is a **compact configuration table of contents*
 
 ## Surfaces — Workspace (`/settings/surfaces → Workspaces`)
 
-Two independent workspace surfaces share the `entity_layouts` **`surface="workspace"`** carrier (distinct `layout_key` values — no duplicate published rows per key):
+Two workspace surfaces share the `entity_layouts` **`surface="workspace"`** carrier on `/workspace`:
 
 | Surface | `layout_key` | Controls on `/workspace` |
 | --- | --- | --- |
 | **Workspace Header** | `workspace_header` | Title, subtitle, 3–5 org-level KPI cards (Operational Calculations) |
-| **Work Unit Header** | `work_unit_header` | Title, subtitle, 3–5 work-unit KPI cards on `/workspace/work-unit/:slug` |
 | **Workspace Process Summary** (per process) | `workspace_processes` | One `ProcessSummaryCard` per configured business process (identity, primary/supporting metrics, Today's Work behavior) |
 
-**Rules:**
+## Surfaces — Work Units (`/settings/surfaces → Work Units`)
 
-- Workspace Header KPIs use the **Operational Calculations / metric-card** infrastructure — not a bespoke KPI store.
-- Work Unit Header uses the same KPI grammar and shared presenter; KPIs resolve with `workUnitId` scope where applicable.
-- Builder preview and Presentation Runtime share the same components and formatters (`WorkspaceHeader` / `WorkUnitHeader`, `ProcessSummaryCard`).
-- Runtime loads published config atomically where possible (no flash of built-in defaults when a published layout exists).
-- Process summaries appear only for **real** configured business processes from the lifecycle catalog — no fake process list.
+| Surface | `layout_key` | Controls on `/workspace/work-unit/:slug` |
+| --- | --- | --- |
+| **Work Unit Header** | `work_unit_header` | Title, subtitle, 3–5 work-unit KPI cards (top/right). Work-view pills render **below** the header. |
+
+## Surfaces — shared rules
+
+- Workspace Header, Workspace Process Summary, and Work Unit Header use **Operational Calculations / metric-card** infrastructure — not bespoke KPI stores.
+- **Builder/runtime parity** — builder preview and Presentation Runtime share the same components (`WorkspaceHeader`, `WorkUnitHeader`, `ProcessSummaryCard`).
+- Runtime loads published config atomically where possible (**no default-template flash** when a published layout exists).
+- Process summaries appear only for **real** configured business processes from the lifecycle catalog.
 
 API: `GET/PUT /api/admin/surfaces/workspace-header`, `GET/PUT /api/admin/surfaces/work-unit-header`, `GET/PUT /api/admin/surfaces/workspace-processes`.
 
