@@ -17,7 +17,8 @@ collapsed state of a process; the Work Unit is its expanded state.
 PresentationRuntime                       (only layer that touches data)
 ↓
 WorkspaceSurface                WS.SURFACE
- ├─ WorkspaceHeader             WS.HEADER   (org identity only)
+ ├─ WorkspaceHeader             WS.HEADER   (title + subtitle + org KPI strip)
+ │   └─ (KPI cards)             WS.HEADER_CALCULATIONS
  ├─ ProcessGrid                 WS.PROCESS_GRID
  │   └─ ProcessSummaryCard      WS.PROCESS_SUMMARY_CARD
  │       └─ WorkViewList        WS.PROCESS_TILE_WORK_VIEWS
@@ -36,10 +37,27 @@ RightRailSurface                RR.SURFACE
 That is the entire runtime. Each component owns exactly one responsibility, carries exactly one
 runtime label (`data-runtime-label`), and has exactly one render site. No duplicate ownership.
 
-> **Retired:** the standalone `OperationalAnswersRow` (`WS.ANSWERS` / `WU.ANSWERS`) is gone. On the
-> Workspace surface, the `WorkspaceHeader` **metric strip** (`WorkspaceHeaderCalculations`) and the
-> old `ProcessTile` are also retired — replaced by the **Workspace Process Surface** (below). The
-> runtime no longer reads `workspace_header` metric placements.
+> **Retired:** the standalone `OperationalAnswersRow` (`WS.ANSWERS` / `WU.ANSWERS`) is gone. The
+> legacy `ProcessTile` and the old `metric_placements`-only header path are retired. Workspace now
+> uses two **Surfaces-configurable** workspace layouts on `entity_layouts` (`surface="workspace"`):
+> **Workspace Header** (identity + org KPIs) and **Workspace Process Summary** (per-process cards).
+
+## Workspace Header Surface
+
+`WorkspaceHeader` (`WS.HEADER` + `WS.HEADER_CALCULATIONS`) is the configurable top band on
+`/workspace`: **title**, **subtitle**, and **3–5 org-level KPI cards** (top/right on wide layouts).
+
+| Concern | Rule |
+| --- | --- |
+| **Authoring** | **Settings → Surfaces → Workspaces → Workspace Header** (first item; process summaries follow) |
+| **Persistence** | `entity_layouts`, `surface="workspace"`, `layoutKey="workspace_header"`, config in `doc.metadata.workspaceHeaderSurface` |
+| **KPI source** | Operational Calculations registry — same resolve path as Work Unit header metrics (`useOperationalAnswers` + OIP warm cache). No parallel KPI system. |
+| **Presentation** | `buildWorkspaceHeaderPresentation` + shared `WorkspaceHeader` component — **builder preview and runtime must match** (typography, KPI layout, icon/accent color, no-data `—`) |
+| **Reveal** | `useWorkspaceSurfaceRuntime` gates `model.ready` on header config load + metric settle + process tile snapshot — **no default-template flash**; refresh keeps last complete header until the next atomic commit |
+| **API** | `GET/PUT /api/admin/surfaces/workspace-header` |
+
+Default KPI slots (when unpublished): Needs attention, Overdue work, Active leads — org-grain
+calculations with `—` until resolved.
 
 ## Workspace Process Surface
 
@@ -174,8 +192,8 @@ owners live in **`presentation-runtime-v2-handoff.md` §2**. Summary:
 
 | Label | Owner (`web/`) | Config/data source |
 | --- | --- | --- |
-| `WS.HEADER` / `WS.HEADER_CALCULATIONS` | `components/presentation/workspace/WorkspaceHeader.tsx` / `WorkspaceHeaderCalculations.tsx` | published `workspace_header` surface (metric_placements) + OIP warm cache |
-| `WS.PROCESS_TILE` / `WS.PROCESS_GRID` | `components/presentation/workspace/ProcessTile.tsx` / `ProcessGrid.tsx` | `OperatorLifecycleLandingCard` |
+| `WS.HEADER` / `WS.HEADER_CALCULATIONS` | `components/presentation/workspace/WorkspaceHeader.tsx` | published **Workspace Header** config (`workspace_header` layout) + OIP warm cache |
+| `WS.PROCESS_SUMMARY_CARD` / `WS.PROCESS_GRID` | `components/presentation/workspace/ProcessSummaryCard.tsx` / `ProcessGrid.tsx` | landing cards + published **Workspace Process Summary** config |
 | `WS.PROCESS_TILE_WORK_VIEWS` | `components/presentation/workspace/WorkViewList.tsx` | landing `workQueues` + `useWorkViewTotals` |
 | `WU.HEADER` / `WU.HEADER_CALCULATIONS` | `components/presentation/workUnit/WorkUnitHeader.tsx` / `WorkUnitHeaderCalculations.tsx` | published `work_unit_header` surface doc + OIP warm cache |
 | `WU.WORK_VIEW_PILLS` | `components/presentation/workUnit/WorkViewPillStrip.tsx` | configured views + `useWorkViewTotals` (active = live rows total) |
