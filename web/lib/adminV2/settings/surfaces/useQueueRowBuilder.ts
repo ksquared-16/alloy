@@ -35,6 +35,10 @@ export function useQueueRowLayoutConfig(surfaceId: string): UseQueueRowLayoutCon
     });
 
     useEffect(() => {
+        if (!surfaceId || surfaceId === "__controlled__") {
+            setState({ data: null, loading: false, error: null });
+            return;
+        }
         let cancelled = false;
         setState({ data: null, loading: true, error: null });
 

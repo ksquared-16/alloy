@@ -83,14 +83,16 @@ const ZONE_REGION: Record<ZoneKey, AnatomyRegion> = {
  * the operator sees the real presenter with content. This is preview scaffolding for the
  * EDIT canvas only; the runtime always renders live `QueueRowContext` from the queue API.
  */
-function sampleRowModel(isWaitlist: boolean): QueueRowModel {
+function sampleRowModel(isWaitlist: boolean, stageKey?: string): QueueRowModel {
+    const stage = stageKey?.trim() || (isWaitlist ? "waitlist" : "new_lead");
+    const isWaitlistStage = /wait/i.test(stage);
     const context: QueueRowContext = {
         contract_version: "1.1-partial",
-        row_subject: { subject_type: "case", subject_id: "sample-1", display_name: "Smith Family" },
-        row_stage: isWaitlist ? "Waitlist" : "New Leads",
+        row_subject: { subject_type: isWaitlistStage ? "candidate" : "case", subject_id: "sample-1", display_name: "Smith Family" },
+        row_stage: isWaitlistStage ? "Waitlist" : "New Leads",
         lifecycle_key: "enrollment",
-        row_status_key: isWaitlist ? "waitlisted" : "new_lead",
-        row_status_label: isWaitlist ? "Waitlisted" : "New Lead",
+        row_status_key: isWaitlistStage ? "waitlisted" : "new_lead",
+        row_status_label: isWaitlistStage ? "Waitlisted" : "New Lead",
         case_context: {
             case_id: "sample-1",
             display_name: "Smith Family",
@@ -1117,21 +1119,39 @@ function PublishToolbar({
 
 type Props = {
     surfaceId?: string;
+    embedded?: boolean;
+    canvasPresentation?: "overlay" | "preview-only";
+    controlledLayout?: QueueRecordLayoutConfigV3;
+    onControlledLayoutChange?: (layout: QueueRecordLayoutConfigV3) => void;
+    onDirtyChange?: (dirty: boolean) => void;
+    previewStageKey?: string;
 };
 
-export default function QueueRowBuilderV2({ surfaceId = "pipeline-queue-row" }: Props) {
+export default function QueueRowBuilderV2({
+    surfaceId = "pipeline-queue-row",
+    embedded = false,
+    canvasPresentation = "overlay",
+    controlledLayout,
+    onControlledLayoutChange,
+    onDirtyChange,
+    previewStageKey,
+}: Props) {
+    const isControlled = controlledLayout != null;
     const isWaitlist = surfaceId === "waitlist-queue-row";
     const surfaceLabel = isWaitlist ? "Waitlist Queue Row" : "Pipeline Queue Row";
     const grainLabel = isWaitlist ? "Candidate grain" : "Case grain";
 
     const catalog = useRef(buildCatalog(isWaitlist));
 
-    const { data: serverData, loading, error: loadError } = useQueueRowLayoutConfig(surfaceId);
+    const { data: serverData, loading: serverLoading, error: loadError } = useQueueRowLayoutConfig(
+        isControlled ? "__controlled__" : surfaceId,
+    );
     const { publish, publishing, error: publishError, publishedAt } = useQueueRowPublish(surfaceId);
     // Operator-created custom fields — merged into compatible groups' Add Field lists.
     const { tenantFieldDefinitions } = useTenantFieldDefinitions(isWaitlist ? "placement_candidate" : "opportunities");
 
-    const defaultConfig = isWaitlist ? defaultWaitlistQueueLayoutV3() : defaultLeadQueueLayoutV3();
+    const defaultConfig = controlledLayout ?? (isWaitlist ? defaultWaitlistQueueLayoutV3() : defaultLeadQueueLayoutV3());
+    const loading = isControlled ? false : serverLoading;
 
     const [zones, setZones] = useState<RowZoneState[]>(() =>
         stateFromConfig(defaultConfig, catalog.current, isWaitlist),
@@ -1144,15 +1164,26 @@ export default function QueueRowBuilderV2({ surfaceId = "pipeline-queue-row" }: 
     // fields appear in each group's Add Field list. (Resets local edits — acceptable:
     // tenant defs resolve once, near-instantly, on mount.)
     useEffect(() => {
-        if (!serverData) return;
-        setZones(stateFromConfig(serverData.config, catalog.current, isWaitlist, tenantFieldDefinitions));
-        setPlacementOverrideEnabled(serverData.placementOverrideEnabled);
-        setDirty(false);
-    }, [serverData, tenantFieldDefinitions, isWaitlist]);
+        const source = controlledLayout ?? serverData?.config;
+        if (!source) return;
+        setZones(stateFromConfig(source, catalog.current, isWaitlist, tenantFieldDefinitions));
+        if (!isControlled) {
+            setPlacementOverrideEnabled(serverData?.placementOverrideEnabled ?? false);
+        }
+        if (!isControlled) setDirty(false);
+    }, [controlledLayout, serverData, tenantFieldDefinitions, isWaitlist, isControlled]);
 
     function mark(updater: (prev: RowZoneState[]) => RowZoneState[]) {
-        setZones(updater);
+        setZones((prev) => {
+            const next = updater(prev);
+            if (onControlledLayoutChange) {
+                const base = controlledLayout ?? serverData?.config ?? defaultConfig;
+                onControlledLayoutChange(buildConfigFromState(base, next, catalog.current));
+            }
+            return next;
+        });
         setDirty(true);
+        onDirtyChange?.(true);
     }
 
     // Canvas: add zone from library
@@ -1258,17 +1289,18 @@ export default function QueueRowBuilderV2({ surfaceId = "pipeline-queue-row" }: 
     // shape the runtime consumes. Feeding it to the real CondensedQueueRow makes the
     // canvas the live runtime row, not a mock.
     const liveConfig = useMemo(
-        () => buildConfigFromState(serverData?.config ?? defaultConfig, zones, catalog.current),
-        [serverData, defaultConfig, zones],
+        () => buildConfigFromState(controlledLayout ?? serverData?.config ?? defaultConfig, zones, catalog.current),
+        [controlledLayout, serverData, defaultConfig, zones],
     );
-    const sampleRow = useMemo(() => sampleRowModel(isWaitlist), [isWaitlist]);
+    const sampleRow = useMemo(() => sampleRowModel(isWaitlist, previewStageKey), [isWaitlist, previewStageKey]);
 
     return (
         <div
-            className="queue-row-builder flex h-full min-h-0 flex-col gap-4 overflow-auto"
+            className={`queue-row-builder flex h-full min-h-0 flex-col gap-4 overflow-auto ${embedded ? "" : ""}`}
             data-queue-row-builder={surfaceId}
+            data-canvas-presentation={canvasPresentation}
         >
-            {/* Header */}
+            {!embedded ? (
             <header className="border-b border-alloy-stone/10 pb-3">
                 <div className="flex items-center gap-2">
                     <p className="text-[11px] font-semibold uppercase tracking-wide text-alloy-pine">
@@ -1283,8 +1315,9 @@ export default function QueueRowBuilderV2({ surfaceId = "pipeline-queue-row" }: 
                     Drag zones to reorder, click to inspect evidence groups and conditions.
                 </p>
             </header>
+            ) : null}
 
-            {loadError && (
+            {loadError && !isControlled && (
                 <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
                     Failed to load: {loadError}
                 </div>
@@ -1297,17 +1330,44 @@ export default function QueueRowBuilderV2({ surfaceId = "pipeline-queue-row" }: 
                 </div>
             ) : (
                 <>
-                    {/* Row canvas — the real runtime CondensedQueueRow with edit overlay. */}
-                    <QueueRowRuntimeCanvas
-                        zones={zones}
-                        liveConfig={liveConfig}
-                        sampleRow={sampleRow}
-                        selectedKey={selectedKey}
-                        onSelect={setSelectedKey}
-                        onRemove={removeZone}
-                        onReorder={moveZone}
-                        onAddField={(key, blockId, fieldKey) => toggleField(key, blockId, fieldKey)}
-                    />
+                    {canvasPresentation === "preview-only" ? (
+                        <div className="space-y-3 rounded-xl border border-alloy-stone/12 bg-white p-3" data-queue-row-preview-canvas>
+                            <CondensedQueueRow
+                                row={sampleRow}
+                                rowConfig={mapQueueRowSurfaceToCompactConfig(liveConfig).slots}
+                                isSelected={false}
+                                onOpen={() => {}}
+                            />
+                            <div className="flex flex-wrap gap-2" data-queue-row-zone-selectors>
+                                {zones.filter((z) => z.inRow && z.key !== "actions").map((z) => (
+                                    <button
+                                        key={z.key}
+                                        type="button"
+                                        onClick={() => setSelectedKey(z.key)}
+                                        className={`rounded-full px-2.5 py-1 text-[11px] font-medium ${
+                                            selectedKey === z.key
+                                                ? "bg-alloy-pine text-white"
+                                                : "bg-alloy-stone/10 text-alloy-midnight/65 hover:bg-alloy-stone/20"
+                                        }`}
+                                        data-canvas-zone={z.key}
+                                    >
+                                        {ZONE_LABELS[z.key]}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+                    ) : (
+                        <QueueRowRuntimeCanvas
+                            zones={zones}
+                            liveConfig={liveConfig}
+                            sampleRow={sampleRow}
+                            selectedKey={selectedKey}
+                            onSelect={setSelectedKey}
+                            onRemove={removeZone}
+                            onReorder={moveZone}
+                            onAddField={(key, blockId, fieldKey) => toggleField(key, blockId, fieldKey)}
+                        />
+                    )}
 
                     {/* Block library tray */}
                     <BlockLibraryTray zones={zones} onAdd={addZone} />
@@ -1332,7 +1392,7 @@ export default function QueueRowBuilderV2({ surfaceId = "pipeline-queue-row" }: 
                 </>
             )}
 
-            {/* Publish toolbar */}
+            {!embedded ? (
             <div className="mt-auto">
                 <PublishToolbar
                     dirty={dirty}
@@ -1342,6 +1402,7 @@ export default function QueueRowBuilderV2({ surfaceId = "pipeline-queue-row" }: 
                     onPublish={handlePublish}
                 />
             </div>
+            ) : null}
         </div>
     );
 }

@@ -95,24 +95,8 @@ export const SURFACE_OBJECTS: Record<Exclude<SurfaceConfigSectionKey, "workspace
             editor: "focus-panel-summary",
         },
     ],
-    "queue-rows": [
-        {
-            id: "pipeline-queue-row",
-            title: "Pipeline Queue Row",
-            subtitle: "Opportunity pipeline work-unit row",
-            editor: "queue-row-builder",
-            grain: "case",
-            entityType: "opportunities",
-        },
-        {
-            id: "waitlist-queue-row",
-            title: "Waitlist Queue Row",
-            subtitle: "Placement candidate waitlist row",
-            editor: "queue-row-builder",
-            grain: "candidate",
-            entityType: "placement_candidate",
-        },
-    ],
+    /** @deprecated Queue rows are catalog-backed — pass `queueRowSurfaces` from useQueueRowProcessCatalog. */
+    "queue-rows": [],
     "work-units": [WORK_UNIT_HEADER_SURFACE_OBJECT],
     "operational-intelligence": [
         {
@@ -144,7 +128,10 @@ export const SURFACE_OBJECTS: Record<Exclude<SurfaceConfigSectionKey, "workspace
     ],
 };
 
-export function useSurfacesConfigurationSettings(workspaceSurfaces: SurfaceConfigObject[] = []) {
+export function useSurfacesConfigurationSettings(
+    workspaceSurfaces: SurfaceConfigObject[] = [],
+    queueRowSurfaces: SurfaceConfigObject[] = [],
+) {
     const [section, setSectionState] = useState<SurfaceConfigSectionKey>("focus-panels");
     const [selectedId, setSelectedId] = useState<string | null>(null);
 
@@ -152,8 +139,11 @@ export function useSurfacesConfigurationSettings(workspaceSurfaces: SurfaceConfi
         if (section === "workspaces") {
             return [WORKSPACE_HEADER_SURFACE_OBJECT, ...workspaceSurfaces];
         }
+        if (section === "queue-rows") {
+            return queueRowSurfaces;
+        }
         return SURFACE_OBJECTS[section] ?? [];
-    }, [section, workspaceSurfaces]);
+    }, [section, workspaceSurfaces, queueRowSurfaces]);
 
     const setSection = useCallback((next: SurfaceConfigSectionKey) => {
         setSectionState(next);
@@ -164,9 +154,11 @@ export function useSurfacesConfigurationSettings(workspaceSurfaces: SurfaceConfi
         (id: string) => {
             if (id === WORKSPACE_HEADER_SURFACE_OBJECT.id || workspaceSurfaces.some((o) => o.id === id)) {
                 setSectionState("workspaces");
+            } else if (queueRowSurfaces.some((o) => o.id === id)) {
+                setSectionState("queue-rows");
             } else {
                 for (const [key, objs] of Object.entries(SURFACE_OBJECTS) as [
-                    Exclude<SurfaceConfigSectionKey, "workspaces">,
+                    Exclude<SurfaceConfigSectionKey, "workspaces" | "queue-rows">,
                     SurfaceConfigObject[],
                 ][]) {
                     if (objs.some((item) => item.id === id)) {
@@ -177,7 +169,7 @@ export function useSurfacesConfigurationSettings(workspaceSurfaces: SurfaceConfi
             }
             setSelectedId(id);
         },
-        [workspaceSurfaces],
+        [workspaceSurfaces, queueRowSurfaces],
     );
 
     const selectedObject = useMemo(() => {
@@ -185,12 +177,14 @@ export function useSurfacesConfigurationSettings(workspaceSurfaces: SurfaceConfi
         if (selectedId === WORKSPACE_HEADER_SURFACE_OBJECT.id) return WORKSPACE_HEADER_SURFACE_OBJECT;
         const workspace = workspaceSurfaces.find((item) => item.id === selectedId);
         if (workspace) return workspace;
+        const queueRow = queueRowSurfaces.find((item) => item.id === selectedId);
+        if (queueRow) return queueRow;
         for (const objs of Object.values(SURFACE_OBJECTS)) {
             const found = objs.find((item) => item.id === selectedId);
             if (found) return found;
         }
         return null;
-    }, [selectedId, workspaceSurfaces]);
+    }, [selectedId, workspaceSurfaces, queueRowSurfaces]);
 
     const goHome = useCallback(() => {
         setSelectedId(null);

@@ -13,10 +13,14 @@ import OperationalIntelligenceSurfaceBuilder from "@/components/adminV2/settings
 import WorkUnitHeaderSurfaceEditor from "@/components/adminV2/settings/surfaces/WorkUnitHeaderSurfaceEditor";
 import WorkspaceHeaderSurfaceEditor from "@/components/adminV2/settings/surfaces/WorkspaceHeaderSurfaceEditor";
 import WorkspaceProcessesSurfaceEditor from "@/components/adminV2/settings/surfaces/WorkspaceProcessesSurfaceEditor";
-import QueueRowBuilderV2 from "@/components/adminV2/settings/surfaces/QueueRowBuilderV2";
+import QueueRowSurfaceEditor from "@/components/adminV2/settings/surfaces/QueueRowSurfaceEditor";
+import { useQueueRowProcessCatalog } from "@/components/adminV2/settings/surfaces/useQueueRowProcessCatalog";
+import {
+    catalogIdFromQueueRowSurfaceId,
+} from "@/lib/adminV2/settings/surfaces/queueRowProcessCatalog";
 import NestedSurfaceEditor from "@/components/adminV2/settings/surfaces/NestedSurfaceEditor";
 import { nestedSurfaceLabel } from "@/lib/adminV2/settings/surfaces/nestedSurfaceEditorModel";
-import { useState as useReactState } from "react";
+import { useMemo, useState as useReactState } from "react";
 
 import { focusPanelNestedLaunchers } from "@/lib/platform/surfaceComposition/registerRuntimeSurfaces";
 import { sectionLabel } from "@/lib/adminV2/settings/surfaces/surfacesNavigationModel";
@@ -94,6 +98,13 @@ export default function SurfacesConfigurationPage() {
     } = useWorkspaceProcessCatalog(pendingCatalogIds);
 
     const {
+        loading: queueRowCatalogLoading,
+        configuredSurfaces: queueRowSurfaces,
+        catalog: queueRowCatalog,
+        reload: reloadQueueRowCatalog,
+    } = useQueueRowProcessCatalog();
+
+    const {
         section,
         setSection,
         selectedId,
@@ -102,7 +113,7 @@ export default function SurfacesConfigurationPage() {
         sections,
         listItems,
         selectedObject,
-    } = useSurfacesConfigurationSettings(configuredSurfaces);
+    } = useSurfacesConfigurationSettings(configuredSurfaces, queueRowSurfaces);
 
     const activeSectionLabel = sectionLabel(section);
     const [nestedSurfaceId, setNestedSurfaceId] = useReactState<string | null>(null);
@@ -110,8 +121,9 @@ export default function SurfacesConfigurationPage() {
     const isWorkspaceProcessEditor = selectedObject?.editor === "workspace-processes";
     const isWorkspaceHeaderEditor = selectedObject?.editor === "workspace-header";
     const isWorkUnitHeaderEditor = selectedObject?.editor === "work-unit-header";
+    const isQueueRowEditor = selectedObject?.editor === "queue-row-builder";
     const isFullBleedWorkspaceEditor =
-        isWorkspaceProcessEditor || isWorkspaceHeaderEditor || isWorkUnitHeaderEditor;
+        isWorkspaceProcessEditor || isWorkspaceHeaderEditor || isWorkUnitHeaderEditor || isQueueRowEditor;
     const selectedCatalogEntry =
         selectedObject?.catalogId
             ? catalog.find((e) => e.id === selectedObject.catalogId) ??
@@ -123,6 +135,15 @@ export default function SurfacesConfigurationPage() {
     const configuredCatalogEntries = configuredSurfaces
         .map((s) => catalog.find((e) => e.id === s.catalogId) ?? findCatalogEntryBySurfaceId(catalog, s.id))
         .filter((e): e is NonNullable<typeof e> => Boolean(e));
+
+    const selectedQueueRowCatalogEntry = useMemo(() => {
+        if (selectedObject?.catalogId) {
+            return queueRowCatalog.find((e) => e.id === selectedObject.catalogId) ?? null;
+        }
+        const fromId = selectedId ? catalogIdFromQueueRowSurfaceId(selectedId) : null;
+        if (!fromId) return null;
+        return queueRowCatalog.find((e) => e.id === fromId) ?? null;
+    }, [selectedObject, selectedId, queueRowCatalog]);
 
     const previewObject = selectedObject && !selectedObject.editor && (selectedObject.previewHref || selectedObject.liveHref)
         ? selectedObject
@@ -228,9 +249,6 @@ export default function SurfacesConfigurationPage() {
         if (selectedObject.editor === "operational-intelligence") {
             return <OperationalIntelligenceSurfaceBuilder />;
         }
-        if (selectedObject.editor === "queue-row-builder") {
-            return <QueueRowBuilderV2 surfaceId={selectedObject.id} />;
-        }
         if (nestedSurfaceId) {
             return <NestedSurfaceEditor surfaceId={nestedSurfaceId} />;
         }
@@ -268,6 +286,18 @@ export default function SurfacesConfigurationPage() {
                 title={selectedObject.title}
                 description="This surface does not have an editor wired yet."
             />
+        );
+    }
+
+    if (isQueueRowEditor && selectedQueueRowCatalogEntry) {
+        return (
+            <div className="process-config-page flex min-h-0 flex-1 flex-col" data-testid="surfaces-configuration-page">
+                <QueueRowSurfaceEditor
+                    catalogEntry={selectedQueueRowCatalogEntry}
+                    onBack={goHome}
+                    onPublished={() => void reloadQueueRowCatalog()}
+                />
+            </div>
         );
     }
 
@@ -326,6 +356,8 @@ export default function SurfacesConfigurationPage() {
                     <ConfigurationQueue title={activeSectionLabel} testId="surfaces-object-queue">
                         {section === "workspaces" && workspaceCatalogLoading ? (
                             <p className="config-typo-sublabel px-1 py-2">Loading business processes…</p>
+                        ) : section === "queue-rows" && queueRowCatalogLoading ? (
+                            <p className="config-typo-sublabel px-1 py-2">Loading queue row surfaces…</p>
                         ) : listItems.length === 0 ? (
                             <p className="config-typo-sublabel px-1 py-2" data-testid="surfaces-empty-list">
                                 {sectionEmptyListCopy(section)}
