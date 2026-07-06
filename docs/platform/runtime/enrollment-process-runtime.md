@@ -126,3 +126,68 @@ remove fallback reads → drop `opportunity_customer_members`.
 Verified end-to-end on staging via `web/scripts/verifyBosCreateLeadEnrollment.ts` (self-cleaning): BOS/direct
 share one runtime; opportunity/PI/no-OCM; Focus Panel pre-mat + durable reads; waitlist candidate without
 OCM; enroll → agreement + placement + schedule assignment; sibling independence.
+
+---
+
+## Process Runtime V1 — operator surface convergence (complete)
+
+Status: **closed on staging @ `3c7dd4a91` (`origin/staging`).** This section records the stabilization
+sprint only — not new architecture. Enrollment remains the first **configured** process proving the
+generic runtime; the guarantees below are process-agnostic where noted.
+
+### Operator truth chain (implemented)
+
+Every visible operator surface after record create follows one chain:
+
+```
+Create Record (create_lead)
+      ↓
+Process Instance (process_instances — one per configured subject)
+      ↓
+Queue Membership (effective stage / lane loaders — same membership rule as projection)
+      ↓
+Work Views (predicate filters on the operational projection)
+      ↓
+Queue Rows (QueueItemsResult — preview grain for the lane)
+      ↓
+Metrics (participant / process metrics — may use a different configured grain)
+      ↓
+Workspace (process tile + Work View pills consume the same totals path)
+      ↓
+Focus Panel (Work mode — subject focus for the selected queue row)
+      ↓
+Open Record (config-resolved Work Unit route — not legacy drawer)
+```
+
+**Load-bearing rules (do not re-derive elsewhere):**
+
+| Guarantee | Implementation |
+|---|---|
+| **Work View totals = filtered queue truth** | Queue API applies Work View predicates via `applyWorkViewFilterToQueueItemsResult` (`operationalProjection.ts`). Requests with `limit=1` return the **true filtered total** (not a capped page length). Base fetch cap: `WORK_VIEW_QUEUE_FILTER_FETCH_CAP` (500) before in-memory predicate pass. |
+| **Metrics vs queue counts may differ by grain** | Queue rows and Work View totals use the **case/opportunity row grain** returned by the queue API. Process participant metrics (`enrollmentParticipantMetrics`, OIP warm cache) use **participant/child grain** via `process_instances`. This is intentional — do not force numeric equality across grains. |
+| **Operator read caches bust on queue-membership mutations** | `create_lead` invalidates server queue cache (`invalidateWorkUnitQueueItemsServerCacheForWorkUnit`), client dedupe (`bustLifecycleSiblingFetchDedupe`), and metric warm cache (`invalidateOipWarmCache` / `bustOperatorRuntimeReadCaches`). Workspace / Work Unit hooks refetch after mutations. |
+| **Open Record routes into Work Unit Focus Panel** | `resolveCreatedRecordProcessContextHref` resolves `/workspace/work-unit/<workViewOrWorkUnitKey>/<recordId>` from create payload context — config-driven, not hardcoded drawer. |
+| **Operational reset clears runtime instances** | `npm run dev:reset:operational-state` delegates to `enrollment_runtime_reset` and verifies empty: `opportunities`, `opportunity_customer_members`, `operational_tasks`, **`process_instances`**. Preserves all configuration (`departments`, `work_units`, status/fields/layouts/actions, locations, …). |
+
+### V1 freeze — in scope (complete)
+
+| Subsystem | Status |
+|---|---|
+| Projection / schema convergence (`operationalProjection`, `enrichRowsWithDerivedStage`) | ✅ |
+| Queue membership (effective stage, child-grain PI reads) | ✅ |
+| Work Views (predicate evaluator shared with projection) | ✅ |
+| Queue runtime (Work View filter on queue route, exact totals) | ✅ |
+| Metrics convergence (same membership rule; distinct grain documented) | ✅ |
+| Workspace convergence (tile / pill totals from queue path) | ✅ |
+| Open Record routing (Focus Panel Work mode entry) | ✅ |
+| Runtime reset (`process_instances` included) | ✅ |
+
+### Known limitations (future work — not blockers)
+
+- **Form-intake** still writes OCM and does not create `process_instances` (admin Create Lead path does).
+- **OCM fallback reads** remain for legacy rows without process instances (flag-gated where noted above).
+- **Work View filter fetch cap** (500 base rows) — extremely large lanes may need server-side predicate pushdown later.
+- **Legacy pipeline queue definitions** that filter on collapsed `status_key` rather than `stage_key` are documented in `docs/sprints/07_2026/platform_reset_runbook.md` Part 5/6; stage-based doctrine path is correct.
+- **Stage movement, Work Unit Header, Actions/Comms/Waitlist operator flows** — next sprint; not part of this stabilization closeout.
+
+Handoff record: [`docs/handoffs/process-runtime-stabilization.md`](../../handoffs/process-runtime-stabilization.md).
