@@ -1,8 +1,8 @@
 import { describe, it, expect } from "vitest";
 import {
-    describeOffering,
     isOfferingVisible,
     sortOfferings,
+    ATTENDANCE_TYPE_LABELS,
     type ProgramOffering,
 } from "@/lib/programs/programOfferings";
 
@@ -13,8 +13,6 @@ function makeOffering(overrides: Partial<ProgramOffering> = {}): ProgramOffering
         program_key: "infant",
         label: "Full Time – 5 days",
         attendance_type: "full_time",
-        quantity_type: "days",
-        quantity_value: 5,
         status: "active",
         effective_start: null,
         effective_end: null,
@@ -27,23 +25,11 @@ function makeOffering(overrides: Partial<ProgramOffering> = {}): ProgramOffering
     };
 }
 
-describe("describeOffering", () => {
-    it("includes attendance type and quantity when both present", () => {
-        const o = makeOffering({ attendance_type: "full_time", quantity_type: "days", quantity_value: 5 });
-        expect(describeOffering(o)).toContain("Full Time");
-        expect(describeOffering(o)).toContain("5");
-        expect(describeOffering(o)).toContain("days");
-    });
-
-    it("returns just attendance type when no quantity", () => {
-        const o = makeOffering({ attendance_type: "drop_in", quantity_type: null, quantity_value: null });
-        expect(describeOffering(o)).toBe("Drop-in");
-    });
-
-    it("handles hourly type", () => {
-        const o = makeOffering({ attendance_type: "hourly", quantity_type: "hours", quantity_value: 20 });
-        expect(describeOffering(o)).toContain("Hourly");
-        expect(describeOffering(o)).toContain("20");
+describe("program offering labels", () => {
+    it("maps attendance types to operator-facing labels", () => {
+        expect(ATTENDANCE_TYPE_LABELS.full_time).toBe("Full Time");
+        expect(ATTENDANCE_TYPE_LABELS.drop_in).toBe("Drop-in");
+        expect(ATTENDANCE_TYPE_LABELS.hourly).toBe("Hourly");
     });
 });
 
@@ -102,3 +88,5 @@ describe("sortOfferings", () => {
         expect(original[0].id).toBe("a");
     });
 });
+
+// describeOffering removed — quantity variants now live on program_offering_variants, not offerings.

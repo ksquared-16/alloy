@@ -14,10 +14,6 @@ function readSrc(rel: string): string {
 
 describe("System 5 Visual QA correction guards", () => {
     const baseVm = minimalSettledOpportunityDrawerViewModel({
-        actions: {
-            header_menu: [{ action_key: "schedule_tour", label: "Schedule tour" } as never],
-            drawer_tabs: [],
-        },
         summaries: {
             attention: {
                 visible: true,
@@ -29,9 +25,17 @@ describe("System 5 Visual QA correction guards", () => {
                 state: "loaded",
                 open_count: 1,
                 open_tasks: [
-                    { id: "t1", title: "Follow up", due_at: null, status: "open", source: "task_assist" },
+                    { id: "t1", title: "Follow up", due_at: "", status: "open", source: "task_assist" },
                 ],
             },
+            active_tour_bookings: [],
+            reminders: {
+                state: "empty",
+                next_follow_up_iso: null,
+                scheduled_send_count: 0,
+                scheduled_sends: [],
+            },
+            bos: null,
         },
     });
 
@@ -58,7 +62,18 @@ describe("System 5 Visual QA correction guards", () => {
                 ],
             },
             title: "Wright Family",
-            perspective: { key: "lead", label: "Lead", workUnitId: "wu", grain: "case", groupBy: null, sort: [], defaultMission: null, emptyState: { title: "Empty" }, source: "pill" },
+            perspective: {
+                key: "lead",
+                label: "Lead",
+                workUnitId: "wu",
+                grain: "case",
+                groupBy: null,
+                sort: [],
+                defaultMission: null,
+                defaultFilters: null,
+                emptyState: { title: "Empty" },
+                source: "pill",
+            },
             statusLabel: "Lead",
         });
 

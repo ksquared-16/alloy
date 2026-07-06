@@ -26,7 +26,7 @@ function context(overrides: Partial<QueueRowContext> = {}): QueueRowContext {
         },
         primary_contact: { display_name: "Alex Rivera" },
         related_subjects_summary: [],
-        attention_summary: { needs_attention: false },
+        attention_summary: { needs_attention: false, primary_reason_label: null },
         work_summary: { open_count: 0, primary_open_label: null },
         current_work_summary: null,
         next_best_action: null,

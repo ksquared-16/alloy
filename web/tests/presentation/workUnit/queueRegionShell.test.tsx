@@ -1,8 +1,8 @@
 /** @vitest-environment jsdom */
 
 /**
- * WU shell — the Queue Region is one bordered pane (title, filters, rows) aligned as a sibling
- * to the Focus Panel; rows are not nested in a second bordered container.
+ * WU shell — Queue Region is one bordered pane: compact Search/Filters utility bar, then
+ * rows. No redundant title or record-count (the selected Work View pill names the queue).
  */
 
 import { createRoot } from "react-dom/client";
@@ -47,32 +47,44 @@ afterEach(() => {
 });
 const q = (sel: string) => container!.querySelector(sel);
 
-describe("QueueRegion — pane shell (title + filters + rows in one border)", () => {
-    it("empty state has title, count, and a single outer bordered pane", () => {
+describe("QueueRegion — compact utility bar + rows (no title/count)", () => {
+    it("empty state has Search/Filters utility bar and a single outer bordered pane", () => {
         render(<QueueRegion queue={queue({ rows: [], totalCount: 3 })} title="Active Pipeline" />);
-        expect(q("[data-queue-region-title]")?.textContent).toBe("Active Pipeline");
-        expect(q("[data-queue-region-count]")?.textContent).toContain("3 records");
+        expect(q("[data-queue-region-title]")).toBeNull();
+        expect(q("[data-queue-region-count]")).toBeNull();
+        expect(q("[data-queue-region-controls]")).not.toBeNull();
+        expect(q("[data-testid=\"work-unit-queue-record-filter-bar\"]")).not.toBeNull();
         const pane = q("[data-queue-region-boundary]");
         expect(pane).not.toBeNull();
         expect(pane?.className).toMatch(/\bborder\b/);
         expect(q("[data-queue-panel-body]")).not.toBeNull();
         expect(q("[data-queue-empty]")).not.toBeNull();
-        expect(pane?.contains(q("[data-queue-region-title]")!)).toBe(true);
+        expect(pane?.getAttribute("data-work-view-name")).toBe("Active Pipeline");
+        expect(pane?.getAttribute("aria-label")).toBe("Queue: Active Pipeline");
     });
 
-    it("falls back to 'Queue' when no work-view title is given", () => {
+    it("uses neutral aria-label when no work-view title is given", () => {
         render(<QueueRegion queue={queue({})} />);
-        expect(q("[data-queue-region-title]")?.textContent).toBe("Queue");
+        expect(q("[data-queue-region-boundary]")?.getAttribute("aria-label")).toBe("Queue");
+        expect(q("[data-queue-region-title]")).toBeNull();
     });
 
-    it("populated state renders rows inside the pane body without a nested border", () => {
+    it("populated state renders rows immediately under the utility bar without a nested border", () => {
         const row: QueueRowModel = { context: null, entityType: "opportunity", entityId: "opp-1" };
         render(<QueueRegion queue={queue({ rows: [row], totalCount: 1 })} title="Tours" />);
         const pane = q("[data-queue-region-boundary]");
         expect(pane).not.toBeNull();
         expect(pane?.className).toMatch(/\bborder\b/);
         expect(pane?.querySelector('[data-entity-id="opp-1"]')).not.toBeNull();
-        expect(q("[data-queue-region-count]")?.textContent).toContain("1 record");
+        expect(q("[data-queue-region-count]")).toBeNull();
         expect(q("[data-queue-panel-body]")?.className).not.toMatch(/\bborder\b/);
+        // Utility bar precedes the row list inside the pane.
+        const controls = q("[data-queue-region-controls]");
+        const body = q("[data-queue-panel-body]");
+        expect(controls).not.toBeNull();
+        expect(body).not.toBeNull();
+        expect(
+            Boolean(controls && body && controls.compareDocumentPosition(body) & Node.DOCUMENT_POSITION_FOLLOWING),
+        ).toBe(true);
     });
 });

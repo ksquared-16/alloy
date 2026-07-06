@@ -65,6 +65,7 @@ describe("layoutBuilderFieldAuthoring", () => {
         expect(field).toBeTruthy();
         const added = addSectionFieldItem(created.doc, created.sectionKey, 0, 0, field!);
         expect(added.ok).toBe(true);
+        if (!added.ok) return;
         const next = patchLayoutEditorFieldDisplay(
             added.doc,
             { kind: "field", sectionKey: created.sectionKey, itemId: added.itemId },
@@ -80,7 +81,7 @@ describe("layoutBuilderFieldAuthoring", () => {
     });
 
     it("includes representative child preview sample values for related lists", () => {
-        const child = LAYOUT_DRAWER_PREVIEW_RECORD.children?.[0] as Record<string, string>;
+        const child = (LAYOUT_DRAWER_PREVIEW_RECORD.children as Record<string, string>[])[0]!;
         expect(child["child.name"]).toBe("Avery Johnson");
         expect(child["child.age"]).toBe("4");
         expect(child["child.program"]).toBe("Preschool");

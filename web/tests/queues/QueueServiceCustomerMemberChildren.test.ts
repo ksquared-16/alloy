@@ -65,6 +65,7 @@ describe("QueueService — customer_members → CRM compact children (pure helpe
                         program_key: "toddler",
                         location_id: null,
                         program_category_id: null,
+                        program_label: null,
                     },
                 ],
             ]),

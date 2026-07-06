@@ -41,10 +41,10 @@ function WorkViewPill({
             onPointerEnter={onPrefetch ? () => onPrefetch(view.id) : undefined}
             onFocus={onPrefetch ? () => onPrefetch(view.id) : undefined}
             onClick={() => onSelect(view.id)}
-            className={`motion-control inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border px-3 py-1 text-xs font-medium ${
+            className={`motion-control inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border px-3 py-1 text-xs font-semibold ${
                 view.isActive
-                    ? "border-alloy-juniper bg-alloy-juniper text-white"
-                    : "border-alloy-stone/30 bg-white text-alloy-midnight hover:border-alloy-juniper/50"
+                    ? "border-alloy-juniper bg-alloy-juniper text-white shadow-sm"
+                    : "border-alloy-midnight/20 bg-white text-alloy-midnight/80 hover:border-alloy-juniper/45 hover:bg-alloy-juniper/[0.03]"
             }${ack.className ? ` ${ack.className}` : ""}`}
         >
             <span>{view.label}</span>
@@ -80,7 +80,7 @@ export function WorkViewPillStrip({
             data-alloy-section="WU.WORK_VIEW_PILLS"
             role="tablist"
             aria-label="Work views"
-            className="flex items-center gap-2 overflow-x-auto pb-0.5"
+            className="flex items-center gap-2 overflow-x-auto pb-0"
         >
             {workViews.map((view) => (
                 <WorkViewPill key={view.id} view={view} onSelect={onSelect} onPrefetch={onPrefetch} />

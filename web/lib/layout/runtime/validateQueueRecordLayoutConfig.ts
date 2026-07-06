@@ -22,6 +22,10 @@ export type QueueRecordLayoutValidationResult = {
     warnings: QueueRecordLayoutValidationIssue[];
 };
 
+/** Operator-facing message when publishing a queue row with no configured columns. */
+export const QUEUE_ROW_PUBLISH_EMPTY_COLUMNS_MESSAGE =
+    "Add at least one item to the queue row before publishing.";
+
 
 function isValidQueueRecordFieldInBlock(
     fieldKey: string,
@@ -58,7 +62,7 @@ export function validateQueueRecordLayoutConfig(
         errors.push({ path: "version", message: "version must be 3" });
     }
     if (!Array.isArray(config.columns) || config.columns.length === 0) {
-        errors.push({ path: "columns", message: "at least one column is required" });
+        errors.push({ path: "columns", message: QUEUE_ROW_PUBLISH_EMPTY_COLUMNS_MESSAGE });
         return { ok: false, errors, warnings };
     }
 

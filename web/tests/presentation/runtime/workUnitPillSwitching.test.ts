@@ -17,7 +17,6 @@ function location(workUnitId: string, routeKey = "active-pipeline"): WorkViewCan
         workUnitId,
         baseQueueKey: "all",
         routeKey,
-        departmentId: "dept-1",
     };
 }
 

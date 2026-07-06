@@ -173,8 +173,15 @@ function HeaderKpiCard({
     const valueAttr = variant === "work-unit" ? "data-work-unit-header-kpi-value" : "data-workspace-header-kpi-value";
     const labelAttr = variant === "work-unit" ? "data-work-unit-header-kpi-label" : "data-workspace-header-kpi-label";
     const statusAttr = variant === "work-unit" ? "data-work-unit-header-kpi-status" : "data-workspace-header-kpi-status";
+    // Work Unit KPIs are compact bordered metadata tiles with equal rhythm.
+    // Workspace identity KPIs stay open (no tile chrome) so this shared header
+    // only applies the work-unit structure when used on the process surface.
+    const tileClass =
+        variant === "work-unit"
+            ? "flex h-full w-full min-w-0 flex-col justify-center rounded-lg border border-alloy-stone/20 bg-alloy-stone/[0.02] px-3 py-2 shadow-[0_1px_1px_rgba(15,23,42,0.03)]"
+            : "min-w-[6.5rem]";
     const body = (
-        <div className="min-w-[6.5rem]" {...{ [kpiAttr]: kpi.slot }} data-calculation-key={kpi.sourceKey ?? undefined}>
+        <div className={tileClass} {...{ [kpiAttr]: kpi.slot }} data-calculation-key={kpi.sourceKey ?? undefined}>
             <div className="flex items-center gap-2">
                 <KpiGlyph
                     icon={kpi.icon}
@@ -182,13 +189,15 @@ function HeaderKpiCard({
                     iconAttr={meta.kpiIconAttr}
                 />
                 <span
-                    className="text-[26px] font-bold leading-none tracking-[-0.03em] tabular-nums text-alloy-midnight"
+                    className={`font-bold leading-none tracking-[-0.03em] tabular-nums text-alloy-midnight ${
+                        variant === "work-unit" ? "text-[22px]" : "text-[26px]"
+                    }`}
                     {...{ [valueAttr]: true }}
                 >
                     {kpi.formattedValue || WORKSPACE_HEADER_NO_DATA_VALUE}
                 </span>
             </div>
-            <div className="mt-2 flex items-center gap-1.5">
+            <div className={`flex items-center gap-1.5 ${variant === "work-unit" ? "mt-1.5" : "mt-2"}`}>
                 <span
                     aria-hidden
                     className={`h-2 w-2 shrink-0 rotate-45 ${gemClass(kpi)}`}
@@ -209,7 +218,7 @@ function HeaderKpiCard({
         return (
             <Link
                 href={kpi.drillHref}
-                className="block no-underline transition-opacity hover:opacity-80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-alloy-bend-pine/50"
+                className="block h-full no-underline transition-opacity hover:opacity-80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-alloy-bend-pine/50"
             >
                 {body}
             </Link>
@@ -237,29 +246,37 @@ export function WorkspaceHeader({
             {...runtimeLabelProps(meta.headerLabel)}
             data-alloy-section={meta.section}
             {...{ [meta.dataAttr]: true }}
-            className="flex flex-wrap items-start justify-between gap-x-8 gap-y-4"
+            className={
+                variant === "work-unit"
+                    ? "flex flex-wrap items-start justify-between gap-x-6 gap-y-2"
+                    : "flex flex-wrap items-start justify-between gap-x-8 gap-y-4"
+            }
         >
             <div className="min-w-0 max-w-xl">
                 <BuilderHit field="title" builder={builder} className="block w-full">
                     <h1
                         {...{ [titleAttr]: true }}
-                        className="text-[26px] font-bold leading-tight tracking-[-0.02em] text-alloy-midnight"
+                        className={`font-bold leading-tight tracking-[-0.02em] text-alloy-midnight ${
+                            variant === "work-unit" ? "text-[24px]" : "text-[26px]"
+                        }`}
                     >
                         {model.title}
                     </h1>
                 </BuilderHit>
                 {model.subtitle ? (
-                    <BuilderHit field="subtitle" builder={builder} className="mt-1 block w-full">
+                    <BuilderHit field="subtitle" builder={builder} className="mt-0.5 block w-full">
                         <p
                             {...{ [subtitleAttr]: true }}
-                            className="text-[15px] font-semibold leading-snug text-alloy-bend-pine"
+                            className={`font-semibold leading-snug text-alloy-bend-pine ${
+                                variant === "work-unit" ? "text-[14px]" : "text-[15px]"
+                            }`}
                         >
                             {model.subtitle}
                         </p>
                     </BuilderHit>
                 ) : builder ? (
-                    <BuilderHit field="subtitle" builder={builder} className="mt-1 block w-full">
-                        <p className="text-[15px] italic text-alloy-midnight/35">Add subtitle…</p>
+                    <BuilderHit field="subtitle" builder={builder} className="mt-0.5 block w-full">
+                        <p className="text-[14px] italic text-alloy-midnight/35">Add subtitle…</p>
                     </BuilderHit>
                 ) : null}
             </div>
@@ -269,7 +286,11 @@ export function WorkspaceHeader({
                     {...runtimeLabelProps(meta.calculationsLabel)}
                     data-alloy-section={meta.calculationsSection}
                     {...{ [kpisAttr]: true }}
-                    className="flex flex-wrap items-start gap-x-8 gap-y-4"
+                    className={
+                        variant === "work-unit"
+                            ? "grid w-full max-w-xl flex-1 auto-cols-fr grid-flow-col gap-2 sm:max-w-none"
+                            : "flex flex-wrap items-start gap-x-8 gap-y-4"
+                    }
                     role="list"
                     aria-label={meta.kpiAria}
                 >
@@ -278,9 +299,9 @@ export function WorkspaceHeader({
                             key={kpi.slot}
                             field={`kpi-${kpi.slot as 1 | 2 | 3 | 4 | 5}`}
                             builder={builder}
-                            className="block"
+                            className="block h-full min-w-0"
                         >
-                            <div role="listitem">
+                            <div role="listitem" className="h-full min-w-0">
                                 <HeaderKpiCard kpi={kpi} interactive={!builder} variant={variant} />
                             </div>
                         </BuilderHit>

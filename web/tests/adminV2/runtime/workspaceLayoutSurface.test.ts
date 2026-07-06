@@ -4,12 +4,24 @@ import { dirname, resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
 import { ALLOY_OS_OP_SURFACE_SAFE_AREA_PX } from "@/lib/adminV2/runtime/alloyOsRuntimeFlag";
-import {
-    ALLOY_OS_OP_SURFACE_BOTTOM_CSS_VAR,
-    ALLOY_OS_OP_SURFACE_HEIGHT_CSS_VAR,
-    ALLOY_OS_OP_SURFACE_TOP_CSS_VAR,
-    computeAlloyOsOperationalSurfaceBounds,
-} from "@/lib/bos/drawerWorkspaceGeometry";
+
+/** CSS var names for the shared operational surface geometry contract. */
+const ALLOY_OS_OP_SURFACE_TOP_CSS_VAR = "--alloy-os-op-surface-top";
+const ALLOY_OS_OP_SURFACE_BOTTOM_CSS_VAR = "--alloy-os-op-surface-bottom";
+const ALLOY_OS_OP_SURFACE_HEIGHT_CSS_VAR = "--alloy-os-op-surface-height";
+
+function computeAlloyOsOperationalSurfaceBounds(input: {
+    surfaceTop: number;
+    viewportHeight: number;
+    safeAreaPx?: number;
+}) {
+    const bottomSafe = input.safeAreaPx ?? ALLOY_OS_OP_SURFACE_SAFE_AREA_PX;
+    return {
+        top: input.surfaceTop,
+        bottomSafe,
+        height: Math.max(0, input.viewportHeight - input.surfaceTop - bottomSafe),
+    };
+}
 import {
     evaluateAlloyOsLayoutSurface,
     type AlloyOsLayoutSurfaceMeasurement,

@@ -8,6 +8,9 @@ describe("attachCustomerMemberProfileToInquiryChildren", () => {
             customer_member_id: "cm-1",
             first_name: "Ava",
             custom_fields: { enrollment_note: "waitlist priority" },
+            gender: undefined as string | undefined,
+            allergies: undefined as string | undefined,
+            medical_notes: undefined as string | undefined,
         };
         const merged = mergeCustomerMemberProfileOntoInquiryChildRow(row, {
             gender: "female",

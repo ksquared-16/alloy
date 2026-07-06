@@ -55,11 +55,27 @@ export function starterEnrollmentQueueRowVariants(
     ];
 }
 
-/** Default Enrollment queue row: Default columns + starter Tour/Waitlist/Enrolling variants. */
+/** Blank queue row layout — configuration-first builder default (no pre-seeded columns). */
+export function emptyQueueRowLayoutV3(): QueueRecordLayoutConfigV3 {
+    return {
+        variant: "operational-row",
+        version: 3,
+        columns: [],
+        variants: [],
+        fixedControls: { actionsMenu: true, workWithBos: true, actionRailStyle: "stacked" },
+    };
+}
+
+/** Optional starter template — Tour / Waitlist / Enrolling variants with stage rules (not the builder default). */
 export function defaultEnrollmentQueueRowLayoutWithVariantsV1(): QueueRecordLayoutConfigV3 {
     const base = defaultLeadQueueLayoutV3();
     return {
         ...base,
         variants: starterEnrollmentQueueRowVariants(base),
     };
+}
+
+/** Enrollment starter template envelope (explicit opt-in — not used for new surfaces). */
+export function enrollmentQueueRowStarterTemplateLayout(): QueueRecordLayoutConfigV3 {
+    return defaultEnrollmentQueueRowLayoutWithVariantsV1();
 }

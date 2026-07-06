@@ -115,13 +115,15 @@ function WorkUnitSurfaceBody({
         null;
     return (
         <>
-            <div className="min-w-0 flex-1 space-y-3">
-                <WorkUnitHeader model={model.header} />
-                <WorkViewPillStrip
-                    workViews={model.workViews}
-                    onSelect={intents.selectWorkView}
-                    onPrefetch={intents.prefetchWorkView}
-                />
+            <div className="min-w-0 flex-1 space-y-1">
+                <div className="space-y-1">
+                    <WorkUnitHeader model={model.header} />
+                    <WorkViewPillStrip
+                        workViews={model.workViews}
+                        onSelect={intents.selectWorkView}
+                        onPrefetch={intents.prefetchWorkView}
+                    />
+                </div>
                 <FocusPanelSurface
                     openRecord={intents.openRecord}
                     prefetchRecord={intents.prefetchRecord}

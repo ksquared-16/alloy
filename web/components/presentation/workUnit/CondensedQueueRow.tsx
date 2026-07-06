@@ -35,22 +35,24 @@ import {
     runtimeLabelProps,
 } from "@/components/presentation/runtimeLabels";
 import { useAcknowledgeOnActive } from "@/lib/motion/useMotionAcknowledge";
+import {
+    QUEUE_ROW_CARD_IDLE_BORDER_CLASS,
+    QUEUE_ROW_CARD_SELECTED_BORDER_CLASS,
+    QUEUE_ROW_CARD_SHELL_CLASS,
+    QUEUE_ROW_SELECTED_RAIL_CLASS,
+} from "@/lib/presentation/runtime/queueRowCardShell";
 
 type RowContext = NonNullable<QueueRowModel["context"]>;
 
 const CARD_BUTTON_CLASS =
-    "motion-control relative block w-full overflow-hidden rounded-lg border bg-white px-3 py-2.5 text-left focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-alloy-juniper";
+    `${QUEUE_ROW_CARD_SHELL_CLASS} focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-alloy-juniper`;
 
-const CARD_IDLE_CLASS =
-    " border-alloy-stone/18 hover:bg-alloy-juniper/[0.04] active:bg-alloy-juniper/[0.08]";
+const CARD_IDLE_CLASS = ` ${QUEUE_ROW_CARD_IDLE_BORDER_CLASS}`;
 
-/** Persistent selected-record wash — juniper-tinted border + wash, same language as hover. */
-const CARD_SELECTED_CLASS =
-    " border-alloy-juniper/40 bg-alloy-juniper/[0.06] hover:bg-alloy-juniper/[0.08]";
+const CARD_SELECTED_CLASS = ` ${QUEUE_ROW_CARD_SELECTED_BORDER_CLASS}`;
 
-/** Persistent selected rail — marks the record currently open in the inline Focus Panel. */
 function SelectedRail() {
-    return <span aria-hidden className="absolute inset-y-0 left-0 w-[3px] bg-alloy-juniper" />;
+    return <span aria-hidden className={QUEUE_ROW_SELECTED_RAIL_CLASS} />;
 }
 
 /** 32px circular subject chip — tinted background, subject initial. */

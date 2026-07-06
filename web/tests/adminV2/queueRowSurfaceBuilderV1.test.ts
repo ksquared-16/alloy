@@ -17,7 +17,7 @@ import {
     createQueueRowVariant,
     normalizeQueueRowSurfaceEnvelope,
 } from "@/lib/presentation/runtime/queueRowSurfaceMetadata";
-import { defaultEnrollmentQueueRowLayoutWithVariantsV1 } from "@/lib/layout/queueRecordLayoutDefaults";
+import { defaultEnrollmentQueueRowLayoutWithVariantsV1, emptyQueueRowLayoutV3 } from "@/lib/layout/queueRecordLayoutDefaults";
 import { resolveQueueRowVariant } from "@/lib/presentation/runtime/resolveQueueRowVariant";
 import { SURFACE_OBJECTS } from "@/components/adminV2/settings/surfaces/useSurfacesConfigurationSettings";
 
@@ -68,7 +68,22 @@ describe("queueRowProcessCatalog", () => {
 });
 
 describe("queueRowSurfaceMetadata + runtime matching", () => {
-    it("default enrollment layout includes starter variants", () => {
+    it("new default envelope is blank — starter template is opt-in", () => {
+        const envelope = buildDefaultQueueRowSurfaceEnvelope({
+            catalogId: "dept-1:proc-1",
+            processKey: "enrollment",
+            processName: "Enrollment",
+        });
+        expect(envelope.layout.columns).toEqual([]);
+        const starter = defaultEnrollmentQueueRowLayoutWithVariantsV1();
+        expect(starter.variants?.map((v) => v.label)).toEqual(["Tour", "Waitlist", "Enrolling"]);
+    });
+
+    it("empty layout has no columns until operator configures", () => {
+        expect(emptyQueueRowLayoutV3().columns).toEqual([]);
+    });
+
+    it("starter enrollment layout includes optional template variants", () => {
         const layout = defaultEnrollmentQueueRowLayoutWithVariantsV1();
         expect(layout.variants?.map((v) => v.label)).toEqual(["Tour", "Waitlist", "Enrolling"]);
     });

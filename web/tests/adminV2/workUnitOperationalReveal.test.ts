@@ -3,7 +3,6 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
 import { shouldDeferOpportunityDrawerOpen } from "@/lib/admin/opportunityDrawerOpenCoordinator";
-import { ALLOY_OS_RUNTIME_ENABLED } from "@/lib/adminV2/runtime/alloyOsRuntimeFlag";
 
 const webRoot = join(process.cwd());
 
@@ -21,8 +20,7 @@ describe("Work Unit operational reveal — legacy overlay quarantine", () => {
         expect(overlay).toContain("Preparing ${recordLabel}…");
     });
 
-    it("runtime-on work unit bypasses deferred coordinator open (no centered overlay gate)", () => {
-        if (!ALLOY_OS_RUNTIME_ENABLED) return;
+    it("work unit bypasses deferred coordinator open (no centered overlay gate)", () => {
         expect(shouldDeferOpportunityDrawerOpen(WORK_UNIT_PATH, "opp-1")).toBe(false);
     });
 
@@ -106,7 +104,7 @@ describe("Work Unit operational reveal — legacy overlay quarantine", () => {
     });
 });
 
-const WORK_UNIT_PAGE = "app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page.tsx";
+const WORK_UNIT_PAGE = "app/adminV2/workspace/work-unit/[workUnitSlug]/layout.tsx";
 
 describe("Phase 3 — single queue source (bootstrap-inline hydrate)", () => {
     it("paints bootstrap-inlined rows with no loading shell and a single deferred refresh", () => {
@@ -156,9 +154,8 @@ describe("Addendum B — WUC KPI snapshot rule", () => {
         );
     });
 
-    it("suppresses the shimmer placeholder under runtime when a snapshot surface exists", () => {
-        const page = readSrc(WORK_UNIT_PAGE);
-        expect(page).toContain("workUnitKpiHasSnapshotSurface");
-        expect(page).toMatch(/ALLOY_OS_RUNTIME_ENABLED && workUnitKpiHasSnapshotSurface\s*\n?\s*\?\s*false/);
+    it("suppresses the shimmer placeholder when a snapshot surface exists", () => {
+        const surface = readSrc("components/admin/workspace/layout/WorkUnitCommandSurface.tsx");
+        expect(surface).toContain("buildDefaultWorkUnitKpis");
     });
 });

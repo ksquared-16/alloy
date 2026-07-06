@@ -115,7 +115,7 @@ describe("drawerAboveFoldCoordinatedReveal policy", () => {
     });
 
     it("2. opportunity header actions restore path reads cache on person return", () => {
-        const drawer = readSrc("components/admin/AdminEntityDrawer.tsx");
+        const drawer = readSrc("components/admin/AdminEntityDrawerLegacy.tsx");
         expect(drawer).toContain("peekOpportunityDrawerHeaderActionsCache(next.id)");
         expect(drawer).toContain("setOpportunityResolvedHeaderActions(headerActionsCache.actions)");
         expect(drawer).toContain("const cachedHeaderActions = peekOpportunityDrawerHeaderActionsCache(drawer.id)");
@@ -123,7 +123,7 @@ describe("drawerAboveFoldCoordinatedReveal policy", () => {
     });
 
     it("3. opportunity header actions restore on Edit on Lead uses warm cache before fetch", () => {
-        const drawer = readSrc("components/admin/AdminEntityDrawer.tsx");
+        const drawer = readSrc("components/admin/AdminEntityDrawerLegacy.tsx");
         expect(drawer).toMatch(
             /peekOpportunityDrawerHeaderActionsCache\(drawer\.id\)[\s\S]*setOpportunityResolvedHeaderActions\(cachedHeaderActions\.actions\)/
         );
@@ -306,7 +306,7 @@ describe("drawerAboveFoldCoordinatedReveal policy", () => {
         expect(
             personDrawerCoordinatedBodyReady({ typed_snapshot: true, body_hydrated: false })
         ).toBe(false);
-        const drawer = readSrc("components/admin/AdminEntityDrawer.tsx");
+        const drawer = readSrc("components/admin/AdminEntityDrawerLegacy.tsx");
         expect(drawer).not.toContain('PersonDrawerSectionCoordinatedReserve title="Medical"');
         const plan = composeAdminV2DrawerRuntime({
             entityType: "persons",

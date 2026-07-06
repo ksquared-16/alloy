@@ -42,7 +42,9 @@ import {
 import {
     buildDefaultQueueRowSurfaceEnvelope,
     normalizeQueueRowSurfaceEnvelope,
+    queueRowSurfaceHasConfiguredColumns,
     readQueueRowSurfaceFromDocMetadata,
+    QUEUE_ROW_PUBLISH_EMPTY_COLUMNS_MESSAGE,
     type QueueRowSurfaceEnvelope,
 } from "@/lib/presentation/runtime/queueRowSurfaceMetadata";
 
@@ -259,6 +261,10 @@ export async function POST(
     }
     if (!envelope) {
         return NextResponse.json({ error: "envelope or config is required" }, { status: 400 });
+    }
+
+    if (!queueRowSurfaceHasConfiguredColumns(envelope.layout)) {
+        return NextResponse.json({ error: QUEUE_ROW_PUBLISH_EMPTY_COLUMNS_MESSAGE }, { status: 400 });
     }
 
     const placementOverrideEnabled = body.placementOverrideEnabled === true;

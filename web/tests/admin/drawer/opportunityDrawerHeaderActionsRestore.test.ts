@@ -44,7 +44,7 @@ describe("opportunity drawer header actions cache", () => {
 
 describe("opportunity header actions restore wiring", () => {
     it("caches header actions when leaving opportunity for person", () => {
-        const drawer = readSrc("components/admin/AdminEntityDrawer.tsx");
+        const drawer = readSrc("components/admin/AdminEntityDrawerLegacy.tsx");
         expect(drawer).toContain("putOpportunityDrawerHeaderActionsCache");
         expect(drawer).toContain("peekOpportunityDrawerHeaderActionsCache");
         expect(drawer).toMatch(
@@ -53,7 +53,7 @@ describe("opportunity header actions restore wiring", () => {
     });
 
     it("restores cached header actions when returning from person to opportunity", () => {
-        const drawer = readSrc("components/admin/AdminEntityDrawer.tsx");
+        const drawer = readSrc("components/admin/AdminEntityDrawerLegacy.tsx");
         expect(drawer).toMatch(
             /next\.type === "opportunities"[\s\S]*?prev\.type === "persons"[\s\S]*?peekOpportunityDrawerHeaderActionsCache/
         );
@@ -61,7 +61,7 @@ describe("opportunity header actions restore wiring", () => {
     });
 
     it("title rail can stabilize from resolved header actions without waiting for overview reveal", () => {
-        const drawer = readSrc("components/admin/AdminEntityDrawer.tsx");
+        const drawer = readSrc("components/admin/AdminEntityDrawerLegacy.tsx");
         expect(drawer).toContain("opportunityRegistryHeaderReady");
         expect(drawer).toMatch(
             /opportunityHeaderTitleRailStable[\s\S]*opportunityRegistryHeaderReady/
@@ -141,20 +141,15 @@ describe("opportunity header actions restore wiring", () => {
 });
 
 describe("communications tab split layout", () => {
-    it("renders thread on the left and composer on the right", () => {
+    it("renders thread on the left and composer on the right (legacy drawer path)", () => {
         const comms = readSrc("components/admin/communications/CommunicationsDrawerSection.tsx");
-        expect(comms).toContain('data-comms-split-layout="thread-left-composer-right"');
-        expect(comms).toContain("lg:grid-cols-[minmax(22rem,0.4fr)_minmax(32rem,0.6fr)]");
+        expect(comms).toContain('data-comms-drawer-layout="split-workspace"');
         expect(comms).toContain('data-comms-thread-pane="true"');
-        expect(comms).toContain('data-comms-compose-workspace="true"');
-        expect(comms).toContain('data-comms-compose-controls="true"');
-        expect(comms).toContain("lg:grid-cols-[minmax(22rem,0.4fr)_minmax(32rem,0.6fr)]");
+        expect(comms).toContain('data-comms-drawer-composer-column="true"');
+        expect(comms).toContain("COMMS_DRAWER_SPLIT_LAYOUT_CLASS");
         expect(comms).toContain("COMMS_DRAWER_BODY_HEIGHT_CLASS");
-        expect(comms).toContain("{threadPaneOnly}");
-        expect(comms).toContain("{composerSplitWorkspaceRight}");
         expect(comms).toContain("{channelFilterTabs}");
-        expect(comms).toContain("{composerRecipientsBlock}");
-        expect(comms).toContain("{composerSendBlock}");
-        expect(comms).not.toContain("composerSplitLeft");
+        expect(comms).toContain("{drawerComposerNode");
+        expect(comms).toContain("CommunicationsDrawerSectionLegacy");
     });
 });
