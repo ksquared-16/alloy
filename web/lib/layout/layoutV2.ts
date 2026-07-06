@@ -38,7 +38,7 @@ export type LayoutSurface = (typeof LAYOUT_SURFACES)[number];
 /**
  * Record layout surfaces — the drawer/queue field-layout surfaces (sections + items +
  * field picker + business-process assignments). `workspace` is NOT one: it carries no
- * field layout, only the Workspace Process Surface behavior config in metadata. Record
+ * field layout — only Workspace Header / Process Surface behavior config in metadata. Record
  * layout code (field picker, BP assignments, layout-config admin) types on this subtype.
  */
 export const RECORD_LAYOUT_SURFACES = ["drawer", "queue"] as const;

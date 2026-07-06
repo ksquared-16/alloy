@@ -61,7 +61,13 @@ export function queueRowsRouteForView(args: {
  */
 const EMPTY_TOTALS: Map<string, number | null> = new Map();
 
-export function useWorkViewTotals(args: {
+export type WorkViewTotalsState = {
+    totals: Map<string, number | null>;
+    /** True when this scope has no targets, is disabled, or the exact-total fetch has settled. */
+    settled: boolean;
+};
+
+export function useWorkViewTotalsState(args: {
     targets: readonly WorkViewTotalTarget[];
     selectedSiteId: string | null;
     /** Gate (org/config readiness) — while false nothing fetches and all counts stay null. */
@@ -72,7 +78,7 @@ export function useWorkViewTotals(args: {
      * across this token, so a mutation's new count lands immediately.
      */
     refreshToken?: string | number;
-}): Map<string, number | null> {
+}): WorkViewTotalsState {
     const { targets, selectedSiteId, enabled = true, refreshToken } = args;
 
     // Content-derived scope key: refetch on real target changes, not array identity churn.
@@ -143,5 +149,13 @@ export function useWorkViewTotals(args: {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [scopeKey]);
 
-    return resolved && resolved.scopeKey === scopeKey ? resolved.totals : EMPTY_TOTALS;
+    const current = resolved && resolved.scopeKey === scopeKey ? resolved.totals : EMPTY_TOTALS;
+    return {
+        totals: current,
+        settled: !enabled || !targetsKey || (resolved?.scopeKey === scopeKey),
+    };
+}
+
+export function useWorkViewTotals(args: Parameters<typeof useWorkViewTotalsState>[0]): Map<string, number | null> {
+    return useWorkViewTotalsState(args).totals;
 }

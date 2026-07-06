@@ -10,269 +10,378 @@ import {
 } from "@/components/adminV2/settings/configurationRuntime/ConfigurationModeLayout";
 import FocusPanelSummarySurfaceEditor from "@/components/adminV2/settings/surfaces/FocusPanelSummarySurfaceEditor";
 import OperationalIntelligenceSurfaceBuilder from "@/components/adminV2/settings/surfaces/OperationalIntelligenceSurfaceBuilder";
-import { WorkUnitHeaderSurfaceBuilder } from "@/components/adminV2/settings/surfaces/HeaderSurfaceBuilders";
+import WorkUnitHeaderSurfaceEditor from "@/components/adminV2/settings/surfaces/WorkUnitHeaderSurfaceEditor";
+import WorkspaceHeaderSurfaceEditor from "@/components/adminV2/settings/surfaces/WorkspaceHeaderSurfaceEditor";
 import WorkspaceProcessesSurfaceEditor from "@/components/adminV2/settings/surfaces/WorkspaceProcessesSurfaceEditor";
 import QueueRowBuilderV2 from "@/components/adminV2/settings/surfaces/QueueRowBuilderV2";
 import NestedSurfaceEditor from "@/components/adminV2/settings/surfaces/NestedSurfaceEditor";
-import { buildSurfacesBreadcrumb } from "@/lib/adminV2/settings/surfaces/surfacesBreadcrumbModel";
 import { nestedSurfaceLabel } from "@/lib/adminV2/settings/surfaces/nestedSurfaceEditorModel";
 import { useState as useReactState } from "react";
 
 import { focusPanelNestedLaunchers } from "@/lib/platform/surfaceComposition/registerRuntimeSurfaces";
-
-/** Card → nested surface launchers, derived from the surface registry via resolveOpenSurface. */
-const FOCUS_PANEL_NESTED_LAUNCHERS = focusPanelNestedLaunchers().map((l) => ({
-    cardLabel: l.cardLabel,
-    surfaceId: l.surfaceId,
-}));
-import { SurfaceLibrary } from "@/components/platform/surfaceBuilder/SurfaceLibrary";
+import { sectionLabel } from "@/lib/adminV2/settings/surfaces/surfacesNavigationModel";
 import {
     useSurfacesConfigurationSettings,
     type SurfaceConfigSectionKey,
 } from "@/components/adminV2/settings/surfaces/useSurfacesConfigurationSettings";
+import { useWorkspaceProcessCatalog } from "@/components/adminV2/settings/surfaces/useWorkspaceProcessCatalog";
+import {
+    findCatalogEntryBySurfaceId,
+    surfaceObjectForCatalogEntry,
+} from "@/lib/adminV2/settings/surfaces/workspaceProcessCatalog";
+
+const FOCUS_PANEL_NESTED_LAUNCHERS = focusPanelNestedLaunchers().map((l) => ({
+    cardLabel: l.cardLabel,
+    surfaceId: l.surfaceId,
+}));
 
 const SURFACES_SUBTITLE =
-    "Where operators see actions — Design Surfaces for queue rows, the Focus Panel, and cards.";
+    "Where operators see actions — configure queue rows, focus panels, workspaces, and operational intelligence.";
 
 function sectionEmptyListCopy(section: SurfaceConfigSectionKey): string {
     if (section === "queue-rows") return "No queue row surfaces found.";
-    if (section === "workspaces") return "Workspace surfaces aren’t authorable here yet.";
-    if (section === "dashboards") return "Dashboard & analytics surfaces aren’t authorable here yet.";
-    return "No Focus Panel surfaces yet.";
+    if (section === "work-units") return "No work unit surfaces yet.";
+    if (section === "operational-intelligence") return "No operational intelligence surfaces yet.";
+    if (section === "workspaces") return "No workspace processes configured.";
+    return "No focus panel surfaces yet.";
+}
+
+function SurfacesCategoryNav({
+    sections,
+    activeSection,
+    onSelect,
+}: {
+    sections: readonly { key: SurfaceConfigSectionKey; label: string }[];
+    activeSection: SurfaceConfigSectionKey;
+    onSelect: (key: SurfaceConfigSectionKey) => void;
+}) {
+    return (
+        <nav className="configuration-section-queue process-config-nav" aria-label="Surface categories" data-testid="surfaces-section-queue">
+            <p className="px-2 pb-2 text-[11px] font-semibold uppercase tracking-wide text-alloy-forge/55">
+                Surfaces
+            </p>
+            <div className="space-y-0.5">
+                {sections.map((s) => {
+                    const active = s.key === activeSection;
+                    return (
+                        <button
+                            key={s.key}
+                            type="button"
+                            onClick={() => onSelect(s.key)}
+                            className={`process-config-nav-item w-full ${active ? "process-config-nav-item--active" : "text-alloy-midnight/75"}`}
+                            data-testid={`surfaces-category-item-${s.key}`}
+                            aria-current={active ? "page" : undefined}
+                        >
+                            <span className={`text-sm font-semibold ${active ? "text-alloy-pine" : ""}`}>
+                                {s.label}
+                            </span>
+                        </button>
+                    );
+                })}
+            </div>
+        </nav>
+    );
 }
 
 export default function SurfacesConfigurationPage() {
-    const { section, setSection, selectedId, setSelectedId, openSurface, sections, listItems, selectedObject } =
-        useSurfacesConfigurationSettings();
+    const [pendingCatalogIds, setPendingCatalogIds] = useReactState<string[]>([]);
+    const {
+        loading: workspaceCatalogLoading,
+        configuredSurfaces,
+        availableToCreate,
+        catalog,
+        reload: reloadWorkspaceCatalog,
+    } = useWorkspaceProcessCatalog(pendingCatalogIds);
 
-    const editing = Boolean(selectedObject?.editor);
-    const activeSectionLabel = sections.find((s) => s.key === section)?.label ?? "";
-    // Nested-surface drill (Focus Panel → Children Card → Children Surface).
+    const {
+        section,
+        setSection,
+        selectedId,
+        setSelectedId,
+        goHome,
+        sections,
+        listItems,
+        selectedObject,
+    } = useSurfacesConfigurationSettings(configuredSurfaces);
+
+    const activeSectionLabel = sectionLabel(section);
     const [nestedSurfaceId, setNestedSurfaceId] = useReactState<string | null>(null);
-    const nestedLauncher = nestedSurfaceId
-        ? FOCUS_PANEL_NESTED_LAUNCHERS.find((l) => l.surfaceId === nestedSurfaceId) ?? null
+
+    const isWorkspaceProcessEditor = selectedObject?.editor === "workspace-processes";
+    const isWorkspaceHeaderEditor = selectedObject?.editor === "workspace-header";
+    const isWorkUnitHeaderEditor = selectedObject?.editor === "work-unit-header";
+    const isFullBleedWorkspaceEditor =
+        isWorkspaceProcessEditor || isWorkspaceHeaderEditor || isWorkUnitHeaderEditor;
+    const selectedCatalogEntry =
+        selectedObject?.catalogId
+            ? catalog.find((e) => e.id === selectedObject.catalogId) ??
+              findCatalogEntryBySurfaceId(catalog, selectedObject.id)
+            : selectedId
+              ? findCatalogEntryBySurfaceId(catalog, selectedId)
+              : null;
+
+    const configuredCatalogEntries = configuredSurfaces
+        .map((s) => catalog.find((e) => e.id === s.catalogId) ?? findCatalogEntryBySurfaceId(catalog, s.id))
+        .filter((e): e is NonNullable<typeof e> => Boolean(e));
+
+    const previewObject = selectedObject && !selectedObject.editor && (selectedObject.previewHref || selectedObject.liveHref)
+        ? selectedObject
         : null;
-    const nestedTrail = nestedLauncher
-        ? [nestedLauncher.cardLabel, nestedSurfaceLabel(nestedLauncher.surfaceId)]
-        : undefined;
-    // Catalogued (non-editor) surface with a composition preview — e.g. Dashboard / Analytics.
-    const previewObject = selectedObject && !selectedObject.editor && selectedObject.previewHref ? selectedObject : null;
+    const catalogOnly = selectedObject && !selectedObject.editor && !previewObject ? selectedObject : null;
+
+    const contextActions =
+        selectedId && !isFullBleedWorkspaceEditor ? (
+            <button
+                type="button"
+                data-testid="surfaces-back-home"
+                onClick={() => {
+                    setNestedSurfaceId(null);
+                    goHome();
+                }}
+                className="rounded-lg border border-alloy-forge/20 bg-white px-3 py-1.5 text-xs font-semibold text-alloy-midnight/70 hover:border-alloy-pine/35 hover:text-alloy-pine"
+            >
+                Surfaces
+            </button>
+        ) : null;
+
+    function renderWorkspace() {
+        if (!selectedObject) {
+            return (
+                <ConfigurationEmptyState
+                    testId="surfaces-workspace-empty"
+                    title={activeSectionLabel}
+                    description={`Select a surface from the left to configure ${activeSectionLabel.toLowerCase()}.`}
+                />
+            );
+        }
+
+        if (previewObject) {
+            return (
+                <ConfigurationDetailCard testId="surfaces-dashboard-preview" title={previewObject.title}>
+                    <div className="space-y-3">
+                        <p className="config-typo-sublabel">
+                            {previewObject.subtitle ? `${previewObject.subtitle}. ` : ""}
+                            Analytics surfaces compose from the Metric archetype and shared Renderer catalog.
+                        </p>
+                        <div className="flex flex-wrap items-center gap-2">
+                            {previewObject.configureHref ? (
+                                <a
+                                    href={previewObject.configureHref}
+                                    data-testid="surfaces-dashboard-configure-link"
+                                    className="inline-flex items-center gap-1.5 rounded-lg bg-alloy-pine px-3 py-1.5 text-xs font-semibold text-white hover:bg-alloy-pine/90"
+                                >
+                                    Configure
+                                    <span aria-hidden="true">→</span>
+                                </a>
+                            ) : null}
+                            {previewObject.liveHref ? (
+                                <a
+                                    href={previewObject.liveHref}
+                                    data-testid="surfaces-dashboard-live-link"
+                                    className="inline-flex items-center gap-1.5 rounded-lg border border-alloy-pine/40 px-3 py-1.5 text-xs font-semibold text-alloy-pine hover:bg-alloy-pine/[0.06]"
+                                >
+                                    Open in Workspace
+                                    <span aria-hidden="true">→</span>
+                                </a>
+                            ) : null}
+                            {previewObject.previewHref ? (
+                                <a
+                                    href={previewObject.previewHref}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    data-testid="surfaces-dashboard-preview-link"
+                                    className="inline-flex gap-1 text-[11px] font-medium text-alloy-midnight/45 underline-offset-2 hover:underline"
+                                >
+                                    Preview (mock surface, dev)
+                                    <span aria-hidden="true">↗</span>
+                                </a>
+                            ) : null}
+                        </div>
+                    </div>
+                </ConfigurationDetailCard>
+            );
+        }
+
+        if (catalogOnly) {
+            return (
+                <ConfigurationDetailCard testId="surfaces-catalog-detail" title={catalogOnly.title}>
+                    <div className="space-y-3">
+                        <p className="config-typo-sublabel">
+                            {catalogOnly.subtitle ?? "This surface is catalogued for the workspace hierarchy."}
+                        </p>
+                        {catalogOnly.liveHref ? (
+                            <a
+                                href={catalogOnly.liveHref}
+                                className="inline-flex items-center gap-1.5 rounded-lg border border-alloy-pine/40 px-3 py-1.5 text-xs font-semibold text-alloy-pine hover:bg-alloy-pine/[0.06]"
+                            >
+                                Open in Workspace
+                                <span aria-hidden="true">→</span>
+                            </a>
+                        ) : (
+                            <p className="text-xs text-alloy-midnight/45">Authoring for this surface is coming soon.</p>
+                        )}
+                    </div>
+                </ConfigurationDetailCard>
+            );
+        }
+
+        if (selectedObject.editor === "operational-intelligence") {
+            return <OperationalIntelligenceSurfaceBuilder />;
+        }
+        if (selectedObject.editor === "queue-row-builder") {
+            return <QueueRowBuilderV2 surfaceId={selectedObject.id} />;
+        }
+        if (nestedSurfaceId) {
+            return <NestedSurfaceEditor surfaceId={nestedSurfaceId} />;
+        }
+        if (selectedObject.editor === "focus-panel-summary") {
+            return (
+                <div className="flex h-full min-h-0 flex-col gap-3">
+                    <div className="flex flex-wrap items-center gap-2" data-focus-panel-nested-launchers>
+                        <span className="text-[10px] font-semibold uppercase tracking-wide text-alloy-midnight/35">
+                            Expansion surfaces
+                        </span>
+                        {FOCUS_PANEL_NESTED_LAUNCHERS.map((l) => (
+                            <button
+                                key={l.surfaceId}
+                                type="button"
+                                onClick={() => setNestedSurfaceId(l.surfaceId)}
+                                className="flex items-center gap-1 rounded-full border border-alloy-stone/20 bg-white px-2.5 py-1 text-[11px] font-medium text-alloy-midnight/65 hover:border-alloy-pine/40 hover:text-alloy-pine"
+                                data-open-nested-surface={l.surfaceId}
+                            >
+                                {l.cardLabel}
+                                <span className="text-alloy-midnight/30">›</span>
+                                {nestedSurfaceLabel(l.surfaceId)}
+                            </button>
+                        ))}
+                    </div>
+                    <div className="min-h-0 flex-1">
+                        <FocusPanelSummarySurfaceEditor onOpenNestedSurface={setNestedSurfaceId} />
+                    </div>
+                </div>
+            );
+        }
+
+        return (
+            <ConfigurationEmptyState
+                testId="surfaces-workspace-unconfigured"
+                title={selectedObject.title}
+                description="This surface does not have an editor wired yet."
+            />
+        );
+    }
+
+    if (isWorkspaceHeaderEditor) {
+        return (
+            <div className="process-config-page flex min-h-0 flex-1 flex-col" data-testid="surfaces-configuration-page">
+                <WorkspaceHeaderSurfaceEditor onBack={goHome} />
+            </div>
+        );
+    }
+
+    if (isWorkUnitHeaderEditor) {
+        return (
+            <div className="process-config-page flex min-h-0 flex-1 flex-col" data-testid="surfaces-configuration-page">
+                <WorkUnitHeaderSurfaceEditor onBack={goHome} />
+            </div>
+        );
+    }
+
+    if (isWorkspaceProcessEditor && selectedCatalogEntry) {
+        return (
+            <div className="process-config-page flex min-h-0 flex-1 flex-col" data-testid="surfaces-configuration-page">
+                <WorkspaceProcessesSurfaceEditor
+                    catalogEntry={selectedCatalogEntry}
+                    configuredEntries={configuredCatalogEntries}
+                    onBack={goHome}
+                    onSelectProcess={setSelectedId}
+                    onPublished={() => {
+                        setPendingCatalogIds([]);
+                        void reloadWorkspaceCatalog();
+                    }}
+                />
+            </div>
+        );
+    }
 
     return (
         <div className="process-config-page min-h-0 flex-1" data-testid="surfaces-configuration-page">
             <ConfigurationContext
                 title="Surfaces"
                 subtitle={SURFACES_SUBTITLE}
+                actions={contextActions}
                 testId="surfaces-configuration-context"
             />
 
-            {/* Editing collapses the browsing columns so the canvas wins, but the
-                Configuration Runtime shell (Context → Section → Workspace) is
-                preserved — the editor lives inside the workspace. */}
-            {editing && selectedObject ? (
-                <ConfigurationShell testId="surfaces-configuration-shell">
-                    <div className="flex h-full min-h-0 flex-col gap-3">
-                        {/* Slim breadcrumb replaces the section + object queues while editing. */}
-                        <div
-                            className="flex items-center justify-between gap-2"
-                            data-testid="surfaces-breadcrumb"
-                        >
-                            <p className="text-xs text-alloy-midnight/55">
-                                {buildSurfacesBreadcrumb({
-                                    sectionLabel: activeSectionLabel,
-                                    surfaceTitle: selectedObject.title,
-                                    nestedTrail,
-                                }).map((crumb, i, all) => {
-                                    const isLast = i === all.length - 1;
-                                    const handleClick =
-                                        crumb.target === "root" ? () => { setNestedSurfaceId(null); setSelectedId(null); }
-                                        : crumb.target === "surface" ? () => setNestedSurfaceId(null)
-                                        : typeof crumb.target === "number" ? () => setNestedSurfaceId(null)
-                                        : null;
-                                    return (
-                                        <span key={`${crumb.label}-${i}`}>
-                                            {i > 0 && <span className="mx-1 text-alloy-midnight/30">›</span>}
-                                            {handleClick ? (
-                                                <button
-                                                    type="button"
-                                                    data-testid={i === 0 ? "surfaces-breadcrumb-home" : undefined}
-                                                    data-breadcrumb-crumb={i}
-                                                    onClick={handleClick}
-                                                    className="font-medium text-alloy-midnight/70 hover:text-alloy-pine"
-                                                >
-                                                    {crumb.label}
-                                                </button>
-                                            ) : (
-                                                <span
-                                                    data-breadcrumb-crumb={i}
-                                                    className={isLast ? "font-medium text-alloy-midnight/80" : undefined}
-                                                >
-                                                    {crumb.label}
-                                                </span>
-                                            )}
-                                        </span>
-                                    );
-                                })}
+            <ConfigurationShell
+                testId="surfaces-configuration-shell"
+                queueColumn={
+                    <SurfacesCategoryNav
+                        sections={sections}
+                        activeSection={section}
+                        onSelect={setSection}
+                    />
+                }
+                listColumn={
+                    <ConfigurationQueue title={activeSectionLabel} testId="surfaces-object-queue">
+                        {section === "workspaces" && workspaceCatalogLoading ? (
+                            <p className="config-typo-sublabel px-1 py-2">Loading business processes…</p>
+                        ) : listItems.length === 0 ? (
+                            <p className="config-typo-sublabel px-1 py-2" data-testid="surfaces-empty-list">
+                                {sectionEmptyListCopy(section)}
                             </p>
-                            <button
-                                type="button"
-                                data-testid="surfaces-change-surface"
-                                onClick={() => setSelectedId(null)}
-                                className="rounded-lg border border-alloy-forge/20 bg-white px-2.5 py-1 text-xs font-medium text-alloy-midnight/65 hover:bg-alloy-stone/[0.06]"
-                            >
-                                Change surface
-                            </button>
-                        </div>
-
-                        <div className="min-h-0 flex-1">
-                            {selectedObject.editor === "operational-intelligence" ? (
-                                <OperationalIntelligenceSurfaceBuilder />
-                            ) : selectedObject.editor === "workspace-processes" ? (
-                                <WorkspaceProcessesSurfaceEditor />
-                            ) : selectedObject.editor === "work-unit-header" ? (
-                                <WorkUnitHeaderSurfaceBuilder />
-                            ) : selectedObject.editor === "queue-row-builder" ? (
-                                <QueueRowBuilderV2 surfaceId={selectedObject.id} />
-                            ) : nestedSurfaceId ? (
-                                <NestedSurfaceEditor surfaceId={nestedSurfaceId} />
-                            ) : (
-                                <div className="flex h-full min-h-0 flex-col gap-3">
-                                    {/* Nested surface launchers: click a card to configure its expansion surface. */}
-                                    <div className="flex flex-wrap items-center gap-2" data-focus-panel-nested-launchers>
-                                        <span className="text-[10px] font-semibold uppercase tracking-wide text-alloy-midnight/35">
-                                            Expansion surfaces
-                                        </span>
-                                        {FOCUS_PANEL_NESTED_LAUNCHERS.map((l) => (
-                                            <button
-                                                key={l.surfaceId}
-                                                type="button"
-                                                onClick={() => setNestedSurfaceId(l.surfaceId)}
-                                                className="flex items-center gap-1 rounded-full border border-alloy-stone/20 bg-white px-2.5 py-1 text-[11px] font-medium text-alloy-midnight/65 hover:border-alloy-pine/40 hover:text-alloy-pine"
-                                                data-open-nested-surface={l.surfaceId}
-                                            >
-                                                {l.cardLabel}
-                                                <span className="text-alloy-midnight/30">›</span>
-                                                {nestedSurfaceLabel(l.surfaceId)}
-                                            </button>
-                                        ))}
-                                    </div>
-                                    <div className="min-h-0 flex-1">
-                                        <FocusPanelSummarySurfaceEditor onOpenNestedSurface={setNestedSurfaceId} />
-                                    </div>
-                                </div>
-                            )}
-                        </div>
-                    </div>
-                </ConfigurationShell>
-            ) : (
-                <ConfigurationShell
-                    testId="surfaces-configuration-shell"
-                    queueColumn={
-                        <ConfigurationQueue title="Surface categories" testId="surfaces-section-queue">
-                            {sections.map((s) => (
+                        ) : (
+                            listItems.map((item) => (
                                 <ConfigurationQueueItem
-                                    key={s.key}
-                                    active={s.key === section}
-                                    title={s.label}
-                                    onClick={() => setSection(s.key)}
-                                    testId={`surfaces-category-item-${s.key}`}
+                                    key={item.id}
+                                    active={item.id === selectedId}
+                                    title={item.title}
+                                    subtitle={item.subtitle}
+                                    onClick={() => setSelectedId(item.id)}
+                                    testId={`surfaces-object-item-${item.id}`}
+                                    trailing={
+                                        item.grain ? (
+                                            <span
+                                                className="flex-shrink-0 rounded bg-alloy-stone/10 px-1.5 py-0.5 text-[10px] font-medium text-alloy-midnight/50"
+                                                title={item.entityType}
+                                                data-queue-row-grain={item.grain}
+                                            >
+                                                {item.grain}
+                                            </span>
+                                        ) : undefined
+                                    }
                                 />
-                            ))}
-                        </ConfigurationQueue>
-                    }
-                    listColumn={
-                        <ConfigurationQueue title={activeSectionLabel} testId="surfaces-object-queue-list">
-                            {listItems.length === 0 ? (
-                                <p className="config-typo-sublabel px-1 py-2" data-testid="surfaces-empty-list">
-                                    {sectionEmptyListCopy(section)}
+                            ))
+                        )}
+                        {section === "workspaces" && availableToCreate.length > 0 ? (
+                            <div className="mt-3 space-y-2 border-t border-alloy-stone/10 pt-3" data-workspace-summary-create>
+                                <p className="px-2 text-[11px] font-medium text-alloy-midnight/50">
+                                    Add summary for another process
                                 </p>
-                            ) : (
-                                listItems.map((item) => (
-                                    <ConfigurationQueueItem
-                                        key={item.id}
-                                        active={item.id === selectedId}
-                                        title={item.title}
-                                        subtitle={item.subtitle}
-                                        onClick={() => setSelectedId(item.id)}
-                                        testId={`surfaces-object-item-${item.id}`}
-                                        trailing={
-                                            item.grain ? (
-                                                <span
-                                                    className="flex-shrink-0 rounded bg-alloy-stone/10 px-1.5 py-0.5 text-[10px] font-medium text-alloy-midnight/50"
-                                                    title={item.entityType}
-                                                    data-queue-row-grain={item.grain}
-                                                >
-                                                    {item.grain}
-                                                </span>
-                                            ) : undefined
-                                        }
-                                    />
-                                ))
-                            )}
-                        </ConfigurationQueue>
-                    }
-                >
-                    {previewObject ? (
-                        <ConfigurationDetailCard testId="surfaces-dashboard-preview" title={previewObject.title}>
-                            <div className="space-y-3">
-                                <p className="config-typo-sublabel">
-                                    {previewObject.subtitle ? `${previewObject.subtitle}. ` : ""}
-                                    Analytics is a Dashboard Design Surface composed from the Metric archetype and the
-                                    shared Renderer catalog. <strong>Configure</strong> which metrics appear (the placement
-                                    builder — placements drive the runtime modal); <strong>Open in Workspace</strong> for the
-                                    live Operational Intelligence modal. The mock surface is a dev/design preview only.
-                                </p>
-                                <div className="flex flex-wrap items-center gap-2">
-                                    {previewObject.configureHref ? (
-                                        <a
-                                            href={previewObject.configureHref}
-                                            data-testid="surfaces-dashboard-configure-link"
-                                            className="inline-flex items-center gap-1.5 rounded-lg bg-alloy-pine px-3 py-1.5 text-xs font-semibold text-white hover:bg-alloy-pine/90"
-                                        >
-                                            Configure
-                                            <span aria-hidden="true">→</span>
-                                        </a>
-                                    ) : null}
-                                    {previewObject.liveHref ? (
-                                        <a
-                                            href={previewObject.liveHref}
-                                            data-testid="surfaces-dashboard-live-link"
-                                            className="inline-flex items-center gap-1.5 rounded-lg border border-alloy-pine/40 px-3 py-1.5 text-xs font-semibold text-alloy-pine hover:bg-alloy-pine/[0.06]"
-                                        >
-                                            Open in Workspace
-                                            <span aria-hidden="true">→</span>
-                                        </a>
-                                    ) : null}
-                                    <a
-                                        href={previewObject.previewHref}
-                                        target="_blank"
-                                        rel="noreferrer"
-                                        data-testid="surfaces-dashboard-preview-link"
-                                        className="inline-flex items-center gap-1 text-[11px] font-medium text-alloy-midnight/45 underline-offset-2 hover:underline"
+                                {availableToCreate.map((entry) => (
+                                    <button
+                                        key={entry.id}
+                                        type="button"
+                                        onClick={() => {
+                                            setPendingCatalogIds((prev) =>
+                                                prev.includes(entry.id) ? prev : [...prev, entry.id],
+                                            );
+                                            setSection("workspaces");
+                                            setSelectedId(surfaceObjectForCatalogEntry(entry).id);
+                                        }}
+                                        className="w-full rounded-lg border border-dashed border-alloy-stone/25 px-3 py-2 text-left text-sm font-medium text-alloy-bend-pine hover:border-alloy-bend-pine/40 hover:bg-alloy-bend-pine/[0.04]"
+                                        data-create-workspace-summary={entry.id}
                                     >
-                                        Preview (mock surface, dev)
-                                        <span aria-hidden="true">↗</span>
-                                    </a>
-                                </div>
+                                        Create workspace summary · {entry.lifecycle_name}
+                                    </button>
+                                ))}
                             </div>
-                        </ConfigurationDetailCard>
-                    ) : !selectedObject ? (
-                        // Surface Library — the command center. Choosing a surface opens the
-                        // one platform SurfaceBuilder (a new surface type just appears here).
-                        <SurfaceLibrary onOpen={openSurface} />
-                    ) : (
-                        <ConfigurationEmptyState
-                            testId="surfaces-workspace-empty"
-                            title={`${activeSectionLabel} surfaces`}
-                            description={
-                                listItems.length === 0
-                                    ? sectionEmptyListCopy(section)
-                                    : "Select a Design Surface to open the editor. The canvas renders the live runtime with editing layered on top."
-                            }
-                        />
-                    )}
-                </ConfigurationShell>
-            )}
+                        ) : null}
+                    </ConfigurationQueue>
+                }
+            >
+                {renderWorkspace()}
+            </ConfigurationShell>
         </div>
     );
 }

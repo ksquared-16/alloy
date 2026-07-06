@@ -17,14 +17,15 @@ collapsed state of a process; the Work Unit is its expanded state.
 PresentationRuntime                       (only layer that touches data)
 ↓
 WorkspaceSurface                WS.SURFACE
- ├─ WorkspaceHeader             WS.HEADER   (org identity only)
+ ├─ WorkspaceHeader             WS.HEADER   (title + subtitle + org KPI strip)
+ │   └─ (KPI cards)             WS.HEADER_CALCULATIONS
  ├─ ProcessGrid                 WS.PROCESS_GRID
  │   └─ ProcessSummaryCard      WS.PROCESS_SUMMARY_CARD
  │       └─ WorkViewList        WS.PROCESS_TILE_WORK_VIEWS
 ↓  (soft nav: /workspace/work-unit/<slug>)
 WorkUnitSurface                 WU.SURFACE
- ├─ WorkUnitHeader              WU.HEADER
- │   └─ WorkUnitHeaderCalculations    WU.HEADER_CALCULATIONS
+ ├─ WorkUnitHeader              WU.HEADER   (title + subtitle + KPI strip)
+ │   └─ (KPI cards)             WU.HEADER_CALCULATIONS
  ├─ WorkViewPillStrip           WU.WORK_VIEW_PILLS
  ├─ QueueRegion                 WU.QUEUE
  │   └─ CondensedQueueRow       WU.QUEUE_ROW
@@ -36,18 +37,78 @@ RightRailSurface                RR.SURFACE
 That is the entire runtime. Each component owns exactly one responsibility, carries exactly one
 runtime label (`data-runtime-label`), and has exactly one render site. No duplicate ownership.
 
-> **Retired:** the standalone `OperationalAnswersRow` (`WS.ANSWERS` / `WU.ANSWERS`) is gone. On the
-> Workspace surface, the `WorkspaceHeader` **metric strip** (`WorkspaceHeaderCalculations`) and the
-> old `ProcessTile` are also retired — replaced by the **Workspace Process Surface** (below). The
-> runtime no longer reads `workspace_header` metric placements.
+> **Retired:** the standalone `OperationalAnswersRow` (`WS.ANSWERS` / `WU.ANSWERS`) is gone. The
+> legacy `ProcessTile`, old `metric_placements`-only header strips, and `WorkUnitHeaderCalculations`
+> signal ribbon are retired. Workspace and Work Unit headers are **Surfaces-configurable** on
+> `entity_layouts` (`surface="workspace"`) via `workspace_header`, `work_unit_header`, and
+> `workspace_processes` layout keys.
 
-## Workspace Process Surface
+## Workspace Header Surface
 
-`WorkspaceSurface` is the Workspace Process Surface: `ProcessGrid` repeats ONE `ProcessSummaryCard`
-template per configured process. There is no universal "health score" — each process presents one
-configurable **Primary Signal**.
+`WorkspaceHeader` (`WS.HEADER` + `WS.HEADER_CALCULATIONS`) is the configurable top band on
+`/workspace`: **title**, **subtitle**, and **3–5 org-level KPI cards** (top/right on wide layouts).
 
-**Grammar (fixed):** Identity → Primary Signal → Supporting Context → Today's Work → Open Process.
+| Concern | Rule |
+| --- | --- |
+| **Authoring** | **Settings → Surfaces → Workspaces → Workspace Header** (first item; process summaries follow) |
+| **Persistence** | `entity_layouts`, `surface="workspace"`, `layoutKey="workspace_header"`, config in `doc.metadata.workspaceHeaderSurface` |
+| **KPI source** | Operational Calculations registry — same resolve path as Work Unit header metrics (`useOperationalAnswers` + OIP warm cache). No parallel KPI system. |
+| **Presentation** | `buildWorkspaceHeaderPresentation` + shared `WorkspaceHeader` component — **builder preview and runtime must match** (typography, KPI layout, icon/accent color, no-data `—`) |
+| **Reveal** | `useWorkspaceSurfaceRuntime` gates `model.ready` on header config load + metric settle + process tile snapshot — **no default-template flash**; refresh keeps last complete header until the next atomic commit |
+| **API** | `GET/PUT /api/admin/surfaces/workspace-header` |
+
+Default KPI slots (when unpublished): Needs attention, Overdue work, Active leads — org-grain
+calculations with `—` until resolved.
+
+## Work Unit Header Surface
+
+`WorkUnitHeader` (`WU.HEADER` + `WU.HEADER_CALCULATIONS`) is the configurable top band on
+`/workspace/work-unit/:slug`: **title**, **subtitle**, and **3–5 KPI cards** aligned top/right.
+Work-view pills render **below** the header — never above or competing with KPIs.
+
+| Concern | Rule |
+| --- | --- |
+| **Authoring** | **Settings → Surfaces → Work Units → Work Unit Header** (full-bleed builder — same shell as Workspace Header) |
+| **Persistence** | `entity_layouts`, `surface="workspace"`, `layoutKey="work_unit_header"`, config in `doc.metadata.workUnitHeaderSurface` |
+| **KPI source** | Operational Calculations — `useOperationalAnswers` scoped with `workUnitId`. Same metric-card grammar as Workspace Header. |
+| **Presentation** | Shared `WorkspaceHeader` presenter with `variant="work-unit"` — builder preview and runtime match (icon/accent, no-data `—`) |
+| **Identity fallback** | Unset title/subtitle fall back to configured process label and active work-view label at runtime |
+| **Reveal** | `useWorkUnitSurfaceRuntime` gates `model.ready` on header config + metric settle — no default-template flash; holds last complete header during refresh |
+| **API** | `GET/PUT /api/admin/surfaces/work-unit-header` |
+
+## Workspace Process Summary Surface
+
+`ProcessSummaryCard` (`WS.PROCESS_SUMMARY_CARD` inside `WS.PROCESS_GRID`) is the configurable
+per-process card on `/workspace`: **identity**, **primary/supporting metrics**, and **Today's Work**
+behavior — one card per real configured business process.
+
+| Concern | Rule |
+| --- | --- |
+| **Authoring** | **Settings → Surfaces → Workspaces → {Process} Summary** (one editor per lifecycle process) |
+| **Persistence** | `entity_layouts`, `surface="workspace"`, `layoutKey="workspace_processes"`, config in `doc.metadata.workspaceProcessSurface` |
+| **Metrics** | Primary + supporting signals from Operational Calculations registry (`useOperationalAnswers` + `resolvePrimarySignal`) |
+| **Presentation** | `ProcessSummaryCard` in builder preview and runtime — **builder/runtime parity required** (labels, no-data `—`, accent rails) |
+| **Reveal** | `useWorkspaceSurfaceRuntime` commits process tiles atomically with header — **no default-template flash**; holds last complete process snapshot during refresh |
+| **API** | `GET/PUT /api/admin/surfaces/workspace-processes` |
+
+## Configurable surfaces — shared rules
+
+Three Surfaces-configurable workspace layouts on `entity_layouts` (`surface="workspace"`):
+
+| Surface | `layout_key` | Runtime target |
+| --- | --- | --- |
+| **Workspace Header** | `workspace_header` | `/workspace` title, subtitle, org KPIs (top/right) |
+| **Workspace Process Summary** | `workspace_processes` | `/workspace` process cards (one per configured process) |
+| **Work Unit Header** | `work_unit_header` | `/workspace/work-unit/:slug` title, subtitle, KPIs (top/right); **work-view pills render below** |
+
+**Shared invariants:**
+
+- **Builder/runtime parity** — builder preview and operator runtime share the same presentation components and formatters; no divergent chrome or typography.
+- **No default-template flash** — runtime gates reveal on published config + metric settle; refresh keeps the last complete snapshot until the next atomic commit.
+- **Operational Calculations only** — KPIs and process signals resolve through the canonical OIP path (`useOperationalAnswers`); no parallel metric stores.
+- **Publish-twice safe** — at most one published row per org per `layout_key`; re-publish updates in place.
+
+## Workspace Process Surface (card grammar)
 
 - **Primary Signal** — a selected Operational Calculation. The calculation owns meaning
   (value / state / drill / target); Surface Builder chooses *which* signal per business process
@@ -174,10 +235,10 @@ owners live in **`presentation-runtime-v2-handoff.md` §2**. Summary:
 
 | Label | Owner (`web/`) | Config/data source |
 | --- | --- | --- |
-| `WS.HEADER` / `WS.HEADER_CALCULATIONS` | `components/presentation/workspace/WorkspaceHeader.tsx` / `WorkspaceHeaderCalculations.tsx` | published `workspace_header` surface (metric_placements) + OIP warm cache |
-| `WS.PROCESS_TILE` / `WS.PROCESS_GRID` | `components/presentation/workspace/ProcessTile.tsx` / `ProcessGrid.tsx` | `OperatorLifecycleLandingCard` |
+| `WS.HEADER` / `WS.HEADER_CALCULATIONS` | `components/presentation/workspace/WorkspaceHeader.tsx` | published **Workspace Header** config (`workspace_header` layout) + OIP warm cache |
+| `WS.PROCESS_SUMMARY_CARD` / `WS.PROCESS_GRID` | `components/presentation/workspace/ProcessSummaryCard.tsx` / `ProcessGrid.tsx` | landing cards + published **Workspace Process Summary** config |
 | `WS.PROCESS_TILE_WORK_VIEWS` | `components/presentation/workspace/WorkViewList.tsx` | landing `workQueues` + `useWorkViewTotals` |
-| `WU.HEADER` / `WU.HEADER_CALCULATIONS` | `components/presentation/workUnit/WorkUnitHeader.tsx` / `WorkUnitHeaderCalculations.tsx` | published `work_unit_header` surface doc + OIP warm cache |
+| `WU.HEADER` / `WU.HEADER_CALCULATIONS` | `components/presentation/workUnit/WorkUnitHeader.tsx` (shared KPI grammar via `WorkspaceHeader`) | published **Work Unit Header** config (`work_unit_header` layout) + OIP warm cache scoped to work unit |
 | `WU.WORK_VIEW_PILLS` | `components/presentation/workUnit/WorkViewPillStrip.tsx` | configured views + `useWorkViewTotals` (active = live rows total) |
 | `WU.QUEUE` | `components/presentation/workUnit/QueueRegion.tsx` | rows API (`work_view_id`); order = Work View `sort_v1` (server) |
 | `WU.QUEUE_ROW` | `components/presentation/workUnit/CondensedQueueRow.tsx` | frozen `QueueRowContext` + published Queue Row surface (`pipeline-queue-row`) for slot visibility/labels |
@@ -192,12 +253,15 @@ persistent (never remounted) across `/workspace ↔ /workspace/work-unit/*` and 
 ## Loading & reveal contract (as built)
 
 Shell first, content fills in. No rail-level spinner or skeleton-collapse. WS/WU surfaces reveal
-atomically under `model.ready` (WS = Route-VM seed; WU = `configSettled`, which includes the
-published header doc + queue-row config). Metric cards, work-view count badges, and the left-nav
-count use FIXED slots with stable placeholders — values fill in place, no layout jump. FP.SURFACE
-pending renders the SAME published card grid with card-shaped placeholders (gated on the published
-doc settling, so pending strategy == resolved strategy) — no "Preparing…" spinner, no modal, no
-arrangement reflow. Full detail in `presentation-runtime-v2-handoff.md` §5–§6.
+atomically under `model.ready` (WS = header config + process tile snapshot + metric settle; WU =
+header config + metric settle + queue-row surface config). **No default-template flash** for
+Workspace Header, Workspace Process Summary, or Work Unit Header when a published layout exists —
+runtime holds the last complete header/process snapshot until the next atomic commit. Metric cards,
+work-view count badges, and the left-nav count use FIXED slots with stable placeholders — values
+fill in place, no layout jump. FP.SURFACE pending renders the SAME published card grid with
+card-shaped placeholders (gated on the published doc settling, so pending strategy == resolved
+strategy) — no "Preparing…" spinner, no modal, no arrangement reflow. Full detail in
+`presentation-runtime-v2-handoff.md` §5–§6.
 
 ## Handoff
 

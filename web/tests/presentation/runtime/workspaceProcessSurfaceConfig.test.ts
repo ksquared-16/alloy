@@ -25,7 +25,10 @@ function view(over: Partial<WorkViewLinkModel>): WorkViewLinkModel {
     return { id: "v", label: "V", isActive: false, count: null, href: "#", attentionCount: null, overdueCount: null, ...over };
 }
 function cfg(over: Partial<WorkspaceProcessSurfaceConfig["todaysWork"]>): WorkspaceProcessSurfaceConfig {
-    return { version: 1, todaysWork: { ...DEFAULT_WORKSPACE_PROCESS_SURFACE_CONFIG.todaysWork, ...over } };
+    return {
+        ...DEFAULT_WORKSPACE_PROCESS_SURFACE_CONFIG,
+        todaysWork: { ...DEFAULT_WORKSPACE_PROCESS_SURFACE_CONFIG.todaysWork, ...over },
+    };
 }
 
 describe("workspace is a first-class LayoutSurface", () => {
@@ -66,7 +69,7 @@ describe("normalizeWorkspaceProcessSurfaceConfig", () => {
                     title: "  Family Enrollment  ",
                     subtitle: "",
                     accent: "pine",
-                    icon: "leads",
+                    icon: "users",
                     supportingSignalKey: "enrollment.tours_scheduled",
                     ctaLabel: "Work leads",
                 },
@@ -77,7 +80,7 @@ describe("normalizeWorkspaceProcessSurfaceConfig", () => {
         expect(n.cardByProcess.enrollment).toEqual({
             title: "Family Enrollment", // trimmed
             accent: "pine",
-            icon: "leads",
+            icon: "users",
             supportingSignalKey: "enrollment.tours_scheduled",
             ctaLabel: "Work leads",
         });
@@ -98,16 +101,19 @@ describe("resolveProcessCardConfig", () => {
             title: "Family Enrollment",
             subtitle: null,
             accent: "ember",
-            icon: "generic", // default
+            icon: "grid", // default
             supportingSignalKey: "x",
             ctaLabel: null,
+            primarySignalLabel: null,
+            supportingSignalLabel: null,
         });
         // unknown process → neutral identity, no overrides
         expect(resolveProcessCardConfig(config, "capacity")).toEqual({
-            title: null, subtitle: null, accent: null, icon: "generic", supportingSignalKey: null, ctaLabel: null,
+            title: null, subtitle: null, accent: null, icon: "grid", supportingSignalKey: null, ctaLabel: null,
+            primarySignalLabel: null, supportingSignalLabel: null,
         });
         // null key + missing map → still safe (no throw)
-        expect(resolveProcessCardConfig({ ...config, cardByProcess: undefined as never }, null).icon).toBe("generic");
+        expect(resolveProcessCardConfig({ ...config, cardByProcess: undefined as never }, null).icon).toBe("grid");
     });
 });
 
@@ -147,25 +153,27 @@ describe("applyTodaysWorkConfig", () => {
     });
 });
 
-describe("Surface Builder registry: Workspace Processes replaces Workspace Header", () => {
+describe("Surface Builder registry: Workspaces section (header + process summaries)", () => {
     function src(rel: string): string {
         return readFileSync(fileURLToPath(new URL(`../../../${rel}`, import.meta.url)), "utf8");
     }
-    it("surfaceLibrary lists workspace-processes and not workspace-header", () => {
-        const s = src("lib/platform/surfaceBuilder/surfaceLibrary.ts");
-        expect(s).toContain('id: "workspace-processes"');
-        expect(s).not.toContain('id: "workspace-header"');
+    it("loads workspace summaries from lifecycle catalog (not hardcoded domains)", () => {
+        const catalog = src("lib/adminV2/settings/surfaces/workspaceProcessCatalog.ts");
+        expect(catalog).toContain("LifecycleCatalogEntry");
+        expect(catalog).not.toContain("WORKSPACE_SIGNAL_BUSINESS_PROCESSES");
+        const hook = src("components/adminV2/settings/surfaces/useWorkspaceProcessCatalog.ts");
+        expect(hook).toContain("/api/admin/lifecycle-catalog");
     });
-    it("config settings expose the workspace-processes editor, not workspace-header", () => {
-        const s = src("components/adminV2/settings/surfaces/useSurfacesConfigurationSettings.ts");
-        expect(s).toContain('editor: "workspace-processes"');
-        expect(s).not.toContain('editor: "workspace-header"');
-    });
-    it("the runtime no longer reads workspace_header placements on the workspace surface", () => {
-        // WorkspaceSurface renders no header calculations strip; the hook drops the seed.
+    it("runtime header consumes entity_layouts workspace_header config (not metric_placements)", () => {
         const surface = src("components/presentation/workspace/WorkspaceSurface.tsx");
-        expect(surface).not.toContain("WorkspaceHeaderCalculations");
+        expect(surface).toContain("model.processConfig");
+        expect(surface).toContain("model.header");
+        expect(surface).not.toContain("useWorkspaceProcessSurfaceConfig()");
         const hook = src("lib/presentation/runtime/useWorkspaceSurfaceRuntime.ts");
         expect(hook).not.toContain("seedWorkspaceHeaderCalculations");
+        expect(hook).toContain("useWorkspaceProcessSurfaceConfigState");
+        expect(hook).toContain("useWorkspaceHeaderSurfaceConfigState");
+        expect(hook).toContain("buildWorkspaceHeaderPresentation");
+        expect(hook).toContain("selectWorkspaceProcessTileSnapshot");
     });
 });

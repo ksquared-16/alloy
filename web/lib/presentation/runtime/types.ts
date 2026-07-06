@@ -26,6 +26,8 @@ import type { ResolvedMetricMap } from "@/lib/metrics/fetchResolvedMetrics";
 import type { WorkUnitHeaderCalculationCardVm } from "./workUnitHeaderCards";
 import type { CompactRowSlots } from "./queueRowSurfaceConfig";
 import type { FocusedSubjectContext } from "./resolveQueueRowSubjectFocus";
+import type { WorkspaceProcessSurfaceConfig } from "./workspaceProcessSurfaceConfig";
+import type { WorkspaceHeaderPresentationModel } from "./workspaceHeaderSurfaceConfig";
 import { findOperationalCalculation } from "@/lib/analytics/calculations/registry";
 import { getDrillContract } from "@/lib/analytics/runtime/drillResolver";
 import { operatorWorkUnitHrefFromKey } from "@/lib/admin/canonicalOperatorRoutes";
@@ -133,12 +135,14 @@ export type QueueRowModel = {
 
 /** WS.SURFACE — resolved model for the Workspace surface. */
 export type WorkspaceSurfaceModel = {
-    /** Org identity only. The retired Workspace Header metric strip is gone — the
-     *  Workspace Process Surface (process cards) is the entire workspace body. */
-    header: {
-        orgName: string | null;
-    };
+    /**
+     * Published Workspace Header (title, subtitle, org-level KPIs). Commit atomically with
+     * process tiles — do not flash a default header when a published config exists.
+     */
+    header: WorkspaceHeaderPresentationModel;
     processes: ProcessTileModel[];
+    /** The published Workspace Process Summary config used to assemble `processes`. */
+    processConfig: WorkspaceProcessSurfaceConfig;
     /**
      * Configured Workspace actions (`surface=workspace` + shared `right_rail`) resolved for the
      * persistent command rail — registered symmetric to the Work Unit rail. Empty until resolved
@@ -155,24 +159,8 @@ export type WorkspaceSurfaceModel = {
 
 /** WU.SURFACE — resolved model for the Work Unit surface. */
 export type WorkUnitSurfaceModel = {
-    /**
-     * Operator-facing identity — configured labels only. `processLabel` is the configured
-     * lifecycle process label (department name fallback); `workViewLabel` is the ACTIVE
-     * configured Work View's label. Internal structure names (work-unit `name`/`key`) and
-     * humanized slugs never surface here.
-     */
-    header: {
-        processLabel: string | null;
-        workViewLabel: string | null;
-        /**
-         * The published Work Unit Header calculation cards (WU.HEADER_CALCULATIONS) —
-         * seeded from the client-fetched surface doc (values no-data), code-owned fallback
-         * when no surface is published, values refined in place by the warm cache after
-         * mount. The card SET is part of `ready` (rides `configSettled`) so title + cards +
-         * pills commit together.
-         */
-        calculations: WorkUnitHeaderCalculationCardVm[];
-    };
+    /** Configurable header (title, subtitle, KPIs) from published Work Unit Header surface. */
+    header: WorkspaceHeaderPresentationModel;
     workViews: WorkViewLinkModel[];
     queue: {
         rows: QueueRowModel[];

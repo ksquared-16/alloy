@@ -16,12 +16,10 @@
  *   - operational answers — OIP warm cache scoped to the work unit
  *   - Focus Panel open    — `useAdminDrawer().openDrawer` (in-page; queue stays mounted)
  *
- * Work View selection NAVIGATES: a pill click soft-pushes the view's label-derived slug
- * (`/workspace/work-unit/active-pipeline` — path routing only, no query strings, record id
- * not carried). The destination route re-seeds `initialWorkViewId`; an optimistic local
- * selection highlights the pill instantly while the push resolves. Presentation components
- * receive the resolved model + intents and never fetch
- * (docs/platform/experience/presentation-runtime-v2.md).
+ * Work View selection: same-host pill clicks swap queue rows + focus panel IN PLACE
+ * (Excel tabs — no `router.push`). Cross-host views still soft-navigate to the
+ * canonical host work unit. An optimistic/local selection highlights the active pill
+ * instantly; the URL owns the view only after cross-host navigation or external entry.
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -63,15 +61,18 @@ import { warmOperatorWorkUnitEntryFromHref } from "@/lib/admin/operatorWorkUnitE
 import { resolveWorkViewTargetHref } from "@/lib/presentation/runtime/workViewTargetHref";
 import type { ResolvedActionForClient } from "@/lib/admin/actions/types";
 import { fetchWorkUnitRightRailResolvedActions } from "@/lib/workspace/fetchWorkUnitRightRailResolvedActions";
-import type { SurfaceDoc } from "@/lib/platform/surfaceBuilder/surfaceDefinition";
 import type { QueueItemsResult, QueueSummary } from "@/lib/queues/types";
 import { useOperationalAnswers } from "./useOperationalAnswers";
-import { refineWorkspaceHeaderCardVms } from "./workspaceHeaderCards";
+import { useWorkUnitHeaderSurfaceConfigState } from "./useWorkUnitHeaderSurfaceConfig";
 import {
-    seedWorkUnitHeaderCards,
-    workUnitHeaderCalculationKeys,
-    type WorkUnitHeaderCalculationCardVm,
-} from "./workUnitHeaderCards";
+    buildWorkUnitHeaderPresentationForRuntime,
+    workUnitHeaderKpiSourceKeys,
+    type WorkUnitHeaderPresentationModel,
+} from "./workUnitHeaderSurfaceConfig";
+import {
+    resolveSelectWorkViewAction,
+    shouldAutoOpenFirstRowForView,
+} from "./workUnitPillSwitching";
 import {
     queueRowsRouteForView,
     useWorkViewTotals,
@@ -130,7 +131,7 @@ export function useWorkUnitSurfaceRuntime(): WorkUnitSurfaceRuntime {
     const slugRoute = useWorkUnitSlugRouteOptional();
     const siteFilter = useWorkspaceSiteFilter();
     const selectedSiteId = siteFilter?.selectedSiteId ?? null;
-    const { drawer, isOpportunityDrawerOpening, openDrawer } = useAdminDrawer();
+    const { drawer, openDrawer, closeDrawer } = useAdminDrawer();
 
     // Fetches gate on org readiness: the queue route resolves visibility under the org/auth
     // gate, and a request racing org-context bootstrap 404s transiently.
@@ -147,15 +148,6 @@ export function useWorkUnitSurfaceRuntime(): WorkUnitSurfaceRuntime {
     const [deptWorkUnits, setDeptWorkUnits] = useState<
         WorkViewCanonicalLocationWorkUnitRow[] | null
     >(null);
-    // The published "Work Unit Header" surface doc — fetched in the SAME config Promise.all
-    // so the header card SET is known at configSettled (reveals with title + pills, no late
-    // pop-in). null on error / no publish → the seed uses the code-owned fallback.
-    const [headerDoc, setHeaderDoc] = useState<SurfaceDoc | null>(null);
-    // The published Queue Row surface config (`QueueRecordLayoutConfigV3`) — fetched in the
-    // SAME config Promise.all so the compact row's slot visibility/labels are known at
-    // configSettled. Pure enrichment: catch → null (generic-context fallback), never blocks
-    // reveal, never changes row ordering/counts. PRV2's work-unit queue is the OPPORTUNITY
-    // queue, so the surfaceId is the pipeline queue-row surface (see WORK_UNIT_QUEUE_ROW_SURFACE_ID).
     const [queueRowLayoutConfig, setQueueRowLayoutConfig] = useState<QueueRecordLayoutConfigV3 | null>(null);
     const [configSettled, setConfigSettled] = useState(false);
 
@@ -174,15 +166,6 @@ export function useWorkUnitSurfaceRuntime(): WorkUnitSurfaceRuntime {
             dedupeAdminFetch(`/api/admin/work-units?department_id=${encodeURIComponent(departmentId)}`, init)
                 .then((res) => (res.ok ? res.json() : null))
                 .catch(() => null),
-            // Published "Work Unit Header" surface doc — org-scoped, rides configSettled so
-            // the header card SET reveals with the title + pills. Never rejects the batch.
-            dedupeAdminFetch(`/api/admin/analytics/surfaces/work_unit_header/doc`, init)
-                .then((res) => (res.ok ? res.json() : null))
-                .catch(() => null),
-            // Published Queue Row surface config — the compact condensed row consumes its
-            // field visibility / labels. Enrichment only: never rejects the batch, config
-            // null → generic-context fallback. Server falls back to the built-in default
-            // when unpublished, so a 200 here already carries a usable config.
             WORK_UNIT_QUEUE_ROW_SURFACE_ID
                 ? dedupeAdminFetch(
                       `/api/admin/queue-row-layout/${encodeURIComponent(WORK_UNIT_QUEUE_ROW_SURFACE_ID)}`,
@@ -192,19 +175,13 @@ export function useWorkUnitSurfaceRuntime(): WorkUnitSurfaceRuntime {
                       .catch(() => null)
                 : Promise.resolve(null),
         ])
-            .then(([dept, wu, deptUnits, headerDocRes, queueRowLayoutRes]) => {
+            .then(([dept, wu, deptUnits, queueRowLayoutRes]) => {
                 if (cancelled) return;
                 setDeptMetadata((dept as { metadata?: unknown } | null)?.metadata ?? null);
                 setQueueDefinition((wu as { queue_definition?: unknown } | null)?.queue_definition ?? null);
                 const items = (deptUnits as { items?: unknown } | null)?.items;
                 setDeptWorkUnits(
                     Array.isArray(items) ? (items as WorkViewCanonicalLocationWorkUnitRow[]) : null,
-                );
-                const doc = (headerDocRes as { doc?: unknown } | null)?.doc ?? null;
-                setHeaderDoc(
-                    doc && typeof doc === "object" && Array.isArray((doc as { sections?: unknown }).sections)
-                        ? (doc as SurfaceDoc)
-                        : null,
                 );
                 const rowLayout = (queueRowLayoutRes as { config?: unknown } | null)?.config ?? null;
                 setQueueRowLayoutConfig(
@@ -223,23 +200,26 @@ export function useWorkUnitSurfaceRuntime(): WorkUnitSurfaceRuntime {
         };
     }, [departmentId, workUnitId]);
 
-    // Active Work View: the ROUTE decides — a work-view slug (`/workspace/work-unit/
-    // active-pipeline`) seeds `initialWorkViewId`, a lane slug seeds `initialQueueKey`.
-    // The local selection is only the OPTIMISTIC pill highlight between a pill click and
-    // the pushed route re-seeding: it is KEYED to the route slug it was made on, so the
-    // moment the route commits (pill push, tile/nav click, back/forward) it derives away
-    // and the URL owns the view — no reset effect, no stale in-page selection.
+    // Active Work View: route seeds the landing view; same-host pill clicks override via
+    // `localWorkViewId` (Excel-tab swap — no navigation). Cross-host clicks use optimistic
+    // highlight until `router.push` commits the destination slug.
     const routeSlug = slugRoute?.routeSlug ?? null;
+    const [localWorkViewId, setLocalWorkViewId] = useState<string | null>(null);
     const [optimisticSelection, setOptimisticSelection] = useState<{
         routeSlug: string | null;
         workViewId: string;
     } | null>(null);
+
+    useEffect(() => {
+        setLocalWorkViewId(null);
+    }, [workUnitId, routeSlug]);
+
     const selectedWorkViewId =
         optimisticSelection && optimisticSelection.routeSlug === routeSlug
             ? optimisticSelection.workViewId
             : null;
     const routeWorkViewId = slugRoute?.initialWorkViewId ?? null;
-    const activeWorkViewIdInput = selectedWorkViewId ?? routeWorkViewId;
+    const activeWorkViewIdInput = localWorkViewId ?? selectedWorkViewId ?? routeWorkViewId;
 
     const runtimeCtx = useMemo(
         () =>
@@ -465,59 +445,96 @@ export function useWorkUnitSurfaceRuntime(): WorkUnitSurfaceRuntime {
         [savedViews, runtimeCtx.workViewId, totalCount, canonicalLocationByViewId, canonicalTotals],
     );
 
-    // ── Header calculations: the published Work Unit Header surface ─────────────────────
-    // The card SET is fixed once the surface doc settles (it rides `configSettled`, so the
-    // strip reveals with the title + pills — no separate late fetch, no pop-in). Seed from
-    // the doc when it has cards, else the code-owned fallback. The warm cache only refines
-    // value/status in place afterward (set/order/labels/chrome never change).
-    const [seededHeaderCards, setSeededHeaderCards] = useState<WorkUnitHeaderCalculationCardVm[]>([]);
-    const headerSeededRef = useRef(false);
-    useEffect(() => {
-        if (headerSeededRef.current || !configSettled) return;
-        headerSeededRef.current = true;
-        setSeededHeaderCards(seedWorkUnitHeaderCards(headerDoc));
-    }, [configSettled, headerDoc]);
+    // ── Work Unit Header: published entity_layouts config + OIP warm cache ─────────────
+    const { config: headerConfig, loaded: headerConfigLoaded } = useWorkUnitHeaderSurfaceConfigState();
 
-    const headerCalculationKeys = useMemo(
-        () => workUnitHeaderCalculationKeys(seededHeaderCards),
-        [seededHeaderCards],
-    );
-    const { resolved: headerCalculationsResolved } = useOperationalAnswers({
+    // ── Header identity fallbacks (when title/subtitle unset in published config) ───────
+    const processLabel = useMemo(() => {
+        const configured = activeLifecycleProcess(
+            lifecycleBuilderFromDepartmentMetadata(deptMetadata),
+        )?.name?.trim();
+        const cleanConfigured =
+            configured && !isLegacyArtifactProcessName(configured) ? configured : null;
+        return cleanConfigured || slugRoute?.departmentName || null;
+    }, [deptMetadata, slugRoute?.departmentName]);
+    const workViewLabel = runtimeCtx.workView?.label?.trim() || null;
+
+    const headerKpiKeys = useMemo(() => workUnitHeaderKpiSourceKeys(headerConfig), [headerConfig]);
+    const { resolved: headerMetricsResolved, settled: headerMetricsSettled } = useOperationalAnswers({
         siteId: selectedSiteId,
         workUnitId,
-        keys: headerCalculationKeys,
+        keys: headerKpiKeys,
     });
-    const headerCalculations = useMemo(
-        () =>
-            headerCalculationsResolved
-                ? refineWorkspaceHeaderCardVms(seededHeaderCards, headerCalculationsResolved)
-                : seededHeaderCards,
-        [seededHeaderCards, headerCalculationsResolved],
-    );
+
+    const lastCompleteHeader = useRef<WorkUnitHeaderPresentationModel | null>(null);
+    const headerPresentation = useMemo(() => {
+        if (!headerConfigLoaded || !headerMetricsSettled) {
+            return lastCompleteHeader.current;
+        }
+        const next = buildWorkUnitHeaderPresentationForRuntime(headerConfig, {
+            fallbackTitle: processLabel,
+            fallbackSubtitle: workViewLabel,
+            resolved: headerMetricsResolved,
+        });
+        lastCompleteHeader.current = next;
+        return next;
+    }, [
+        headerConfig,
+        headerConfigLoaded,
+        headerMetricsResolved,
+        headerMetricsSettled,
+        processLabel,
+        workViewLabel,
+    ]);
+
+    // ── First-row auto-open: re-arm on every work-view change after rows settle ─────────
+    const autoOpenedForViewRef = useRef<string | null>(null);
+    const forceAutoOpenViewRef = useRef<string | null>(null);
 
     // ── Intents ──────────────────────────────────────────────────────────────────────────
     const router = useRouter();
     const selectWorkView = useCallback(
         (workViewId: string) => {
-            const id = workViewId.trim();
-            if (!id) return;
-            // Optimistic highlight — the pill flips instantly; once the pushed route
-            // commits, the slug-keyed selection derives away and the URL owns the view.
-            setOptimisticSelection({ routeSlug, workViewId: id });
-            // Soft navigation to the view's LABEL-derived slug (never the internal id) —
-            // the SAME URL a Workspace tile or left-nav click produces. Path routing only
-            // (no `work_view=`/`queue=` queries); the record id is never carried across
-            // view switches. The destination renders the view ON its canonical host, so
-            // rendered rows = the pill's canonical total by construction.
-            const href = resolveWorkViewTargetHref(id, {
+            const targetInputs = {
                 views: savedViews,
                 canonicalLocationByViewId,
                 selectedSiteId,
+            };
+            const action = resolveSelectWorkViewAction({
+                workViewId,
+                currentWorkViewId: runtimeCtx.workViewId,
+                currentWorkUnitId: workUnitId,
+                canonicalLocationByViewId,
+                targetInputs,
             });
-            if (!href) return; // label-less view (config edge): in-page select only
-            router.push(href);
+            if (action.kind === "noop") return;
+
+            // Clear stale focus panel immediately — URL record segment strips via drawer sync.
+            closeDrawer();
+
+            forceAutoOpenViewRef.current = action.workViewId;
+            autoOpenedForViewRef.current = null;
+
+            if (action.kind === "in-page") {
+                setLocalWorkViewId(action.workViewId);
+                setOptimisticSelection(null);
+                return;
+            }
+
+            setLocalWorkViewId(null);
+            setOptimisticSelection({ routeSlug, workViewId: action.workViewId });
+            router.push(action.href);
         },
-        [savedViews, canonicalLocationByViewId, router, selectedSiteId, routeSlug],
+        [
+            savedViews,
+            canonicalLocationByViewId,
+            router,
+            selectedSiteId,
+            routeSlug,
+            runtimeCtx.workViewId,
+            workUnitId,
+            closeDrawer,
+        ],
     );
 
     // Hover/focus warm: prefetch the target route of a Work View pill — the SAME route
@@ -603,30 +620,34 @@ export function useWorkUnitSurfaceRuntime(): WorkUnitSurfaceRuntime {
         [departmentId, workUnitId, runtimeCtx.workViewId],
     );
 
-    // ── First-row auto-open: once, after the first queue settle (doctrine acceptance) ────
-    // WARM step: before the auto-open commits, prefetch the first record's drawer VM so the
-    // inline Focus Panel resolves fast + coordinated — `useOpportunityDrawerVmPayload` finds
-    // the payload warm and swaps skeleton → published grid with minimal pending time. This
-    // reuses the existing hover/focus intent prefetch (no bespoke fetch); the published Focus
-    // Panel summary doc is already module-cached (the skeleton mounting triggers it early).
-    // Queue behavior is NOT serialized behind FP: the warm call is fire-and-forget and the
-    // same auto-open guards (deep-link / drawer-open / zero-rows) are unchanged.
-    const autoOpenDoneRef = useRef(false);
     useEffect(() => {
-        if (autoOpenDoneRef.current) return;
-        if (queueLoading || !queueResult) return; // not settled yet (errors keep waiting)
-        autoOpenDoneRef.current = true; // one shot — never re-trigger on view switch/refetch
-        if (slugRoute?.routeRecordId) return; // deep link owns the Focus Panel subject
-        if ((drawer.type != null && drawer.id != null) || isOpportunityDrawerOpening) return;
+        const viewId = runtimeCtx.workViewId?.trim() || null;
+        if (!viewId) return;
+        if (autoOpenedForViewRef.current === viewId) return;
+        if (queueLoading || !queueResult) return;
+
+        const forceAutoOpen = forceAutoOpenViewRef.current === viewId;
+        const shouldOpen = shouldAutoOpenFirstRowForView({
+            viewId,
+            autoOpenedViewId: autoOpenedForViewRef.current,
+            queueLoading,
+            queueSettled: true,
+            rowCount: rows.length,
+            routeRecordId: slugRoute?.routeRecordId ?? null,
+            forceAutoOpenViewId: forceAutoOpen ? viewId : null,
+        });
+
+        autoOpenedForViewRef.current = viewId;
+        if (forceAutoOpen) forceAutoOpenViewRef.current = null;
+
+        if (!shouldOpen) return;
+
         const first = rows[0];
         if (!first) return;
-        // Warm the first opportunity record's drawer VM as/just before the auto-open (same
-        // resolved id + workspace context openRecord uses), so the payload is in-flight/ready
-        // by the time the inline panel mounts.
         const warm = resolveQueueRowWarmTarget(first, {
             departmentId,
             workUnitId,
-            workViewId: runtimeCtx.workViewId ?? null,
+            workViewId: viewId,
         });
         if (warm) {
             prefetchOpportunityDrawerOnRowIntent(warm.id, warm.context, warm.seed);
@@ -637,32 +658,11 @@ export function useWorkUnitSurfaceRuntime(): WorkUnitSurfaceRuntime {
         queueResult,
         rows,
         slugRoute?.routeRecordId,
-        drawer.type,
-        drawer.id,
-        isOpportunityDrawerOpening,
         openRecord,
         departmentId,
         workUnitId,
         runtimeCtx.workViewId,
     ]);
-
-    // ── Header identity: configured labels ONLY (no internal keys, no humanized slugs) ──
-    // Title = the configured lifecycle process label from department metadata; department
-    // name is the fallback while metadata loads / when no process is configured. Subtitle =
-    // the ACTIVE configured Work View's label. Work-unit `name` never surfaces (internal
-    // structure name, e.g. "Enrollment Pipeline").
-    const processLabel = useMemo(() => {
-        const configured = activeLifecycleProcess(
-            lifecycleBuilderFromDepartmentMetadata(deptMetadata),
-        )?.name?.trim();
-        // Operator-runtime defense: never render a legacy/migration artifact process name (e.g.
-        // "Enrollment (legacy)") in the Work Unit header. Fall back to the department name. Primary
-        // fix is data cleanup (cleanupEnrollmentLifecycleProcesses) — this is belt-and-suspenders.
-        const cleanConfigured =
-            configured && !isLegacyArtifactProcessName(configured) ? configured : null;
-        return cleanConfigured || slugRoute?.departmentName || null;
-    }, [deptMetadata, slugRoute?.departmentName]);
-    const workViewLabel = runtimeCtx.workView?.label?.trim() || null;
 
     // ── Selected record: the drawer store is THE selection state (no parallel store) ────
     const selectedRecordId =
@@ -699,11 +699,11 @@ export function useWorkUnitSurfaceRuntime(): WorkUnitSurfaceRuntime {
     // ── Resolved model ───────────────────────────────────────────────────────────────────
     const model = useMemo<WorkUnitSurfaceModel>(
         () => ({
-            header: {
-                processLabel,
-                workViewLabel,
-                calculations: headerCalculations,
-            },
+            header: headerPresentation ?? buildWorkUnitHeaderPresentationForRuntime(headerConfig, {
+                fallbackTitle: processLabel,
+                fallbackSubtitle: workViewLabel,
+                resolved: null,
+            }),
             workViews,
             queue: {
                 rows,
@@ -718,13 +718,19 @@ export function useWorkUnitSurfaceRuntime(): WorkUnitSurfaceRuntime {
             departmentId,
             workUnitId,
             // Above-fold identity + configured views resolved; queue carries its own state.
-            ready: slugRoute != null && configSettled,
+            ready:
+                slugRoute != null &&
+                configSettled &&
+                headerConfigLoaded &&
+                Boolean(headerPresentation),
         }),
         [
             slugRoute,
+            headerPresentation,
+            headerConfig,
             processLabel,
             workViewLabel,
-            headerCalculations,
+            headerConfigLoaded,
             workViews,
             rows,
             totalCount,
