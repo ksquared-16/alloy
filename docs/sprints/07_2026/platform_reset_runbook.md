@@ -28,8 +28,8 @@ path (preserves `departments`/`work_units` = BP/Work View/stage config, persons/
 non-target records, and locations; scopes `field_values` deletes to operational entity types), then
 **verifies**: config tables (`departments`, `work_units`, `status_definitions`, `field_definitions`,
 `locations`, `action_definitions`, `entity_layouts`, …) still populated AND enrollment-core operational
-tables (`opportunities`, `opportunity_customer_members`, `operational_tasks`) empty — failing the run if
-configuration was lost or operational rows remain.
+tables (`opportunities`, `opportunity_customer_members`, `operational_tasks`, **`process_instances`**) empty
+— failing the run if configuration was lost or operational rows remain.
 - **You run (dev/staging):** `npm run dev:reset:operational-state` (dry-run, review the plan), then
   `CONFIRM_RESET_OPERATIONAL_STATE=true RESET_ORG_ID=<org> npm run dev:reset:operational-state -- --execute`.
 - Deletion logic validated by reuse (the underlying execute path is production tooling); SQL of the
