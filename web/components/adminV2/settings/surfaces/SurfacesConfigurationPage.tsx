@@ -53,7 +53,7 @@ export default function SurfacesConfigurationPage() {
         ? FOCUS_PANEL_NESTED_LAUNCHERS.find((l) => l.surfaceId === nestedSurfaceId) ?? null
         : null;
     const nestedTrail = nestedLauncher
-        ? [nestedLauncher.cardLabel, nestedSurfaceLabel(nestedLauncher.surfaceId)]
+        ? [`${nestedLauncher.cardLabel} card`, nestedSurfaceLabel(nestedLauncher.surfaceId)]
         : undefined;
     // Catalogued (non-editor) surface with a composition preview — e.g. Dashboard / Analytics.
     const previewObject = selectedObject && !selectedObject.editor && selectedObject.previewHref ? selectedObject : null;

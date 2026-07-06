@@ -52,7 +52,7 @@ export default function NestedSurfaceEditor({
 }) {
     const { tenantFieldDefinitions } = useTenantFieldDefinitions(grainEntityType);
     const [config, setConfig] = useState<NestedSurfaceConfig>(() => defaultNestedSurfaceConfig(surfaceId));
-    const [loading, setLoading] = useState(true);
+    const [hydrating, setHydrating] = useState(true);
     const [dirty, setDirty] = useState(false);
     const [saving, setSaving] = useState(false);
     const [savedAt, setSavedAt] = useState<boolean>(false);
@@ -61,11 +61,13 @@ export default function NestedSurfaceEditor({
 
     useEffect(() => {
         let cancelled = false;
-        setLoading(true);
+        setHydrating(true);
+        setConfig(defaultNestedSurfaceConfig(surfaceId));
+        setDirty(false);
         loadNestedSurfaceConfig(surfaceId)
             .then((c) => { if (!cancelled) { setConfig(c); setDirty(false); } })
             .catch(() => { if (!cancelled) setConfig(defaultNestedSurfaceConfig(surfaceId)); })
-            .finally(() => { if (!cancelled) setLoading(false); });
+            .finally(() => { if (!cancelled) setHydrating(false); });
         return () => { cancelled = true; };
     }, [surfaceId]);
 
@@ -104,10 +106,7 @@ export default function NestedSurfaceEditor({
                 </p>
             </header>
 
-            {loading ? (
-                <div className="h-24 animate-pulse rounded-xl border border-alloy-stone/12 bg-alloy-stone/5" />
-            ) : (
-                <div className="min-h-0 flex-1 space-y-3 overflow-auto">
+            <div className="min-h-0 flex-1 space-y-3 overflow-auto" data-nested-surface-groups={surfaceId}>
                     {groups.map((def) => {
                         const selected = selectedFieldKeys(config, def.key);
                         const available: AvailableField[] = availableFieldsForNestedGroup(surfaceId, def.key, config, tenantFieldDefinitions);
@@ -194,8 +193,7 @@ export default function NestedSurfaceEditor({
                             </section>
                         );
                     })}
-                </div>
-            )}
+            </div>
 
             <div className="flex items-center gap-3 border-t border-alloy-stone/10 pt-3">
                 <button
@@ -207,9 +205,10 @@ export default function NestedSurfaceEditor({
                 >
                     {saving ? "Publishing…" : "Save & Publish"}
                 </button>
-                <span className="text-[11px] font-medium text-alloy-midnight/50">
+                <span className="text-[11px] font-medium text-alloy-midnight/50" data-nested-surface-status>
                     {error ? <span className="text-red-500">{error}</span>
                         : saving ? "Saving…"
+                        : hydrating ? "Loading saved config…"
                         : savedAt && !dirty ? <span className="text-alloy-juniper">Published</span>
                         : dirty ? "Unsaved changes"
                         : "No changes"}

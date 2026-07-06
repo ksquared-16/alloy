@@ -190,19 +190,22 @@ export default function FocusPanelGridCanvasBuilder({
                     />
                 ) : null}
 
-                {grid.areas.map((area) => (
+                {grid.areas.map((area) => {
+                    const nestedTarget = nestedSurfaceByCard?.[area.card];
+                    return (
                     <div
                         key={area.card}
                         className={["alloy-os-grid-builder__area", selectedCard === area.card ? "is-selected" : ""].join(" ")}
                         data-grid-area={area.card}
                         data-grid-col={`${area.colStart}/${area.colSpan}`}
                         data-grid-row={`${area.rowStart}/${area.rowSpan}`}
+                        data-grid-has-nested-surface={nestedTarget ? "true" : undefined}
                         style={{ gridColumn: `${area.colStart} / span ${area.colSpan}`, gridRow: `${area.rowStart} / span ${area.rowSpan}` }}
-                        onClick={() => onSelectCard?.(area.card)}
                     >
                         <div
                             className="alloy-os-grid-builder__bar"
                             data-grid-move={area.card}
+                            onClick={() => onSelectCard?.(area.card)}
                             onPointerDown={(e) => startMove(e, area)}
                         >
                             <span className="alloy-os-grid-builder__grip" aria-hidden>⠿</span>
@@ -217,21 +220,31 @@ export default function FocusPanelGridCanvasBuilder({
                                 ✕
                             </button>
                         </div>
-                        <div className="alloy-os-grid-builder__body">
+                        <div
+                            className="alloy-os-grid-builder__body"
+                            data-grid-card-body={area.card}
+                            onClick={() => {
+                                if (nestedTarget && onOpenNestedSurface) {
+                                    onOpenNestedSurface(nestedTarget.surfaceId);
+                                    return;
+                                }
+                                onSelectCard?.(area.card);
+                            }}
+                        >
                             {renderCard(area.card)}
-                            {nestedSurfaceByCard?.[area.card] && onOpenNestedSurface ? (
+                            {nestedTarget && onOpenNestedSurface ? (
                                 <button
                                     type="button"
                                     className="mt-2 flex w-full items-center justify-end gap-1 rounded-md border border-dashed border-alloy-pine/30 bg-alloy-pine/[0.04] px-2 py-1.5 text-[11px] font-medium text-alloy-pine hover:border-alloy-pine/50 hover:bg-alloy-pine/[0.08]"
                                     data-nested-surface-affordance={area.card}
-                                    data-open-nested-surface={nestedSurfaceByCard[area.card]!.surfaceId}
+                                    data-open-nested-surface={nestedTarget.surfaceId}
                                     onClick={(e) => {
                                         e.stopPropagation();
-                                        onOpenNestedSurface(nestedSurfaceByCard[area.card]!.surfaceId);
+                                        onOpenNestedSurface(nestedTarget.surfaceId);
                                     }}
                                 >
                                     Configure expansion →
-                                    <span className="text-alloy-midnight/35">{nestedSurfaceByCard[area.card]!.surfaceLabel}</span>
+                                    <span className="text-alloy-midnight/35">{nestedTarget.surfaceLabel}</span>
                                 </button>
                             ) : null}
                         </div>
@@ -239,7 +252,8 @@ export default function FocusPanelGridCanvasBuilder({
                         <div className="alloy-os-grid-builder__handle alloy-os-grid-builder__handle--h" data-grid-resize-h={area.card} role="separator" aria-label="Span rows" onPointerDown={(e) => startResize(e, area, "h")} />
                         <div className="alloy-os-grid-builder__handle alloy-os-grid-builder__handle--corner" data-grid-resize-corner={area.card} role="separator" aria-label="Span columns and rows" onPointerDown={(e) => startResize(e, area, "wh")} />
                     </div>
-                ))}
+                    );
+                })}
 
                 {grid.areas.length === 0 ? <p className="alloy-os-grid-builder__empty">Drag a card from the tray onto the grid.</p> : null}
             </div>
