@@ -30,6 +30,40 @@ export type WorkspaceHeaderBuilderProps = {
     onFieldClick: (field: WorkspaceHeaderBuilderField) => void;
 };
 
+export type SurfaceHeaderVariant = "workspace" | "work-unit";
+
+const VARIANT_META: Record<
+    SurfaceHeaderVariant,
+    {
+        section: string;
+        calculationsSection: string;
+        dataAttr: string;
+        kpiIconAttr: string;
+        kpiAria: string;
+        headerLabel: (typeof PRESENTATION_RUNTIME_LABELS)["workspaceHeader"];
+        calculationsLabel: (typeof PRESENTATION_RUNTIME_LABELS)["workspaceHeaderCalculations"];
+    }
+> = {
+    workspace: {
+        section: "WS.HEADER",
+        calculationsSection: "WS.HEADER_CALCULATIONS",
+        dataAttr: "data-workspace-header",
+        kpiIconAttr: "data-workspace-header-kpi-icon",
+        kpiAria: "Workspace KPIs",
+        headerLabel: PRESENTATION_RUNTIME_LABELS.workspaceHeader,
+        calculationsLabel: PRESENTATION_RUNTIME_LABELS.workspaceHeaderCalculations,
+    },
+    "work-unit": {
+        section: "WU.HEADER",
+        calculationsSection: "WU.HEADER_CALCULATIONS",
+        dataAttr: "data-work-unit-header",
+        kpiIconAttr: "data-work-unit-header-kpi-icon",
+        kpiAria: "Work unit KPIs",
+        headerLabel: PRESENTATION_RUNTIME_LABELS.workUnitHeader,
+        calculationsLabel: PRESENTATION_RUNTIME_LABELS.workUnitHeaderCalculations,
+    },
+};
+
 const STATUS_GEM: Record<string, string> = {
     healthy: "bg-alloy-bend-pine",
     warning: "bg-alloy-gold",
@@ -61,12 +95,20 @@ const ICON_GLYPH: Record<ProcessCardIcon, ReactNode> = {
     layers: <path d="M10 4l7 3.5L10 11 3 7.5 10 4zM3 12.5L10 16l7-3.5M3 16.5L10 20l7-3.5" />,
 };
 
-function KpiGlyph({ icon, className }: { icon: ProcessCardIcon; className: string }) {
+function KpiGlyph({
+    icon,
+    className,
+    iconAttr,
+}: {
+    icon: ProcessCardIcon;
+    className: string;
+    iconAttr: string;
+}) {
     return (
         <svg
             viewBox="0 0 20 20"
             className={`h-4 w-4 shrink-0 ${className}`}
-            data-workspace-header-kpi-icon
+            {...{ [iconAttr]: true }}
             fill="none"
             stroke="currentColor"
             strokeWidth={1.6}
@@ -118,21 +160,29 @@ function gemClass(kpi: WorkspaceHeaderKpiVm): string {
 function HeaderKpiCard({
     kpi,
     interactive,
+    variant,
 }: {
     kpi: WorkspaceHeaderKpiVm;
     /** False in the builder (parent owns clicks). */
     interactive: boolean;
+    variant: SurfaceHeaderVariant;
 }) {
+    const meta = VARIANT_META[variant];
+    const kpiAttr = variant === "work-unit" ? "data-work-unit-header-kpi" : "data-workspace-header-kpi";
+    const valueAttr = variant === "work-unit" ? "data-work-unit-header-kpi-value" : "data-workspace-header-kpi-value";
+    const labelAttr = variant === "work-unit" ? "data-work-unit-header-kpi-label" : "data-workspace-header-kpi-label";
+    const statusAttr = variant === "work-unit" ? "data-work-unit-header-kpi-status" : "data-workspace-header-kpi-status";
     const body = (
-        <div className="min-w-[6.5rem]" data-workspace-header-kpi={kpi.slot} data-calculation-key={kpi.sourceKey ?? undefined}>
+        <div className="min-w-[6.5rem]" {...{ [kpiAttr]: kpi.slot }} data-calculation-key={kpi.sourceKey ?? undefined}>
             <div className="flex items-center gap-2">
                 <KpiGlyph
                     icon={kpi.icon}
                     className={workspaceHeaderKpiIconClass({ accent: kpi.accent, status: kpi.status })}
+                    iconAttr={meta.kpiIconAttr}
                 />
                 <span
                     className="text-[26px] font-bold leading-none tracking-[-0.03em] tabular-nums text-alloy-midnight"
-                    data-workspace-header-kpi-value
+                    {...{ [valueAttr]: true }}
                 >
                     {kpi.formattedValue || WORKSPACE_HEADER_NO_DATA_VALUE}
                 </span>
@@ -141,11 +191,11 @@ function HeaderKpiCard({
                 <span
                     aria-hidden
                     className={`h-2 w-2 shrink-0 rotate-45 ${gemClass(kpi)}`}
-                    data-workspace-header-kpi-status={kpi.status}
+                    {...{ [statusAttr]: kpi.status }}
                 />
                 <span
                     className="truncate text-[12px] font-medium leading-none text-alloy-midnight/50"
-                    data-workspace-header-kpi-label
+                    {...{ [labelAttr]: true }}
                     title={kpi.label}
                 >
                     {kpi.label}
@@ -170,21 +220,28 @@ function HeaderKpiCard({
 export function WorkspaceHeader({
     model,
     builder,
+    variant = "workspace",
 }: {
     model: WorkspaceHeaderPresentationModel;
     builder?: WorkspaceHeaderBuilderProps;
+    variant?: SurfaceHeaderVariant;
 }) {
+    const meta = VARIANT_META[variant];
+    const titleAttr = variant === "work-unit" ? "data-work-unit-header-title" : "data-workspace-header-title";
+    const subtitleAttr = variant === "work-unit" ? "data-work-unit-header-subtitle" : "data-workspace-header-subtitle";
+    const kpisAttr = variant === "work-unit" ? "data-work-unit-header-kpis" : "data-workspace-header-kpis";
+
     return (
         <header
-            {...runtimeLabelProps(PRESENTATION_RUNTIME_LABELS.workspaceHeader)}
-            data-alloy-section="WS.HEADER"
-            data-workspace-header="true"
+            {...runtimeLabelProps(meta.headerLabel)}
+            data-alloy-section={meta.section}
+            {...{ [meta.dataAttr]: true }}
             className="flex flex-wrap items-start justify-between gap-x-8 gap-y-4"
         >
             <div className="min-w-0 max-w-xl">
                 <BuilderHit field="title" builder={builder} className="block w-full">
                     <h1
-                        data-workspace-header-title
+                        {...{ [titleAttr]: true }}
                         className="text-[26px] font-bold leading-tight tracking-[-0.02em] text-alloy-midnight"
                     >
                         {model.title}
@@ -193,7 +250,7 @@ export function WorkspaceHeader({
                 {model.subtitle ? (
                     <BuilderHit field="subtitle" builder={builder} className="mt-1 block w-full">
                         <p
-                            data-workspace-header-subtitle
+                            {...{ [subtitleAttr]: true }}
                             className="text-[15px] font-semibold leading-snug text-alloy-bend-pine"
                         >
                             {model.subtitle}
@@ -208,12 +265,12 @@ export function WorkspaceHeader({
 
             {model.kpis.length > 0 ? (
                 <div
-                    {...runtimeLabelProps(PRESENTATION_RUNTIME_LABELS.workspaceHeaderCalculations)}
-                    data-alloy-section="WS.HEADER_CALCULATIONS"
-                    data-workspace-header-kpis
+                    {...runtimeLabelProps(meta.calculationsLabel)}
+                    data-alloy-section={meta.calculationsSection}
+                    {...{ [kpisAttr]: true }}
                     className="flex flex-wrap items-start gap-x-8 gap-y-4"
                     role="list"
-                    aria-label="Workspace KPIs"
+                    aria-label={meta.kpiAria}
                 >
                     {model.kpis.map((kpi) => (
                         <BuilderHit
@@ -223,7 +280,7 @@ export function WorkspaceHeader({
                             className="block"
                         >
                             <div role="listitem">
-                                <HeaderKpiCard kpi={kpi} interactive={!builder} />
+                                <HeaderKpiCard kpi={kpi} interactive={!builder} variant={variant} />
                             </div>
                         </BuilderHit>
                     ))}

@@ -1,41 +1,30 @@
 "use client";
 
 /**
- * Presentation Runtime V2 — WU.HEADER.
+ * Presentation Runtime V2 — WU.HEADER (+ WU.HEADER_CALCULATIONS).
  *
- * Work Unit identity: the CONFIGURED parent process label as the title, with the active
- * configured Work View's label as a quiet subtitle line. Configured labels only — internal
- * work-unit names/keys and humanized slugs never render here.
- * Pure presenter — receives resolved header fields, never fetches.
+ * Configurable work unit identity and KPI strip. Builder and runtime share
+ * `WorkspaceHeader` with variant="work-unit" for grammar parity.
  */
 
 import {
-    PRESENTATION_RUNTIME_LABELS,
-    runtimeLabelProps,
-} from "@/components/presentation/runtimeLabels";
-import { stripLegacyArtifactMarker } from "@/lib/admin/buildOperatorLifecycleLanding";
+    WorkspaceHeader,
+    type WorkspaceHeaderBuilderProps,
+} from "@/components/presentation/workspace/WorkspaceHeader";
+import type { WorkUnitHeaderPresentationModel } from "@/lib/presentation/runtime/workUnitHeaderSurfaceConfig";
+
+export type WorkUnitHeaderBuilderField = WorkspaceHeaderBuilderProps["activeField"] extends infer F
+    ? F
+    : never;
+
+export type WorkUnitHeaderBuilderProps = WorkspaceHeaderBuilderProps;
 
 export function WorkUnitHeader({
-    processLabel,
-    workViewLabel,
+    model,
+    builder,
 }: {
-    processLabel: string | null;
-    workViewLabel: string | null;
+    model: WorkUnitHeaderPresentationModel;
+    builder?: WorkUnitHeaderBuilderProps;
 }) {
-    // Render-boundary guard: even if a dirty "(legacy)" name reaches the model, it never prints.
-    const cleanProcessLabel = stripLegacyArtifactMarker(processLabel);
-    return (
-        <header
-            {...runtimeLabelProps(PRESENTATION_RUNTIME_LABELS.workUnitHeader)}
-            data-alloy-section="WU.HEADER"
-            className="flex flex-col gap-0.5"
-        >
-            <h1 className="text-xl font-semibold leading-tight text-alloy-midnight">
-                {cleanProcessLabel ?? ""}
-            </h1>
-            {workViewLabel ? (
-                <span className="text-sm font-medium leading-snug text-alloy-midnight/65">{workViewLabel}</span>
-            ) : null}
-        </header>
-    );
+    return <WorkspaceHeader model={model} builder={builder} variant="work-unit" />;
 }

@@ -57,6 +57,15 @@ export type SurfaceConfigObject = {
     processId?: string;
 };
 
+/** Fixed Work Unit Header entry under Work Units. */
+export const WORK_UNIT_HEADER_SURFACE_OBJECT: SurfaceConfigObject = {
+    id: "work-unit-header",
+    title: "Work Unit Header",
+    subtitle: "Title, subtitle, and work unit KPIs",
+    editor: "work-unit-header",
+    liveHref: "/workspace",
+};
+
 /** Fixed Workspace Header entry — always first under Workspaces. */
 export const WORKSPACE_HEADER_SURFACE_OBJECT: SurfaceConfigObject = {
     id: "workspace-header",
@@ -104,15 +113,7 @@ export const SURFACE_OBJECTS: Record<Exclude<SurfaceConfigSectionKey, "workspace
             entityType: "placement_candidate",
         },
     ],
-    "work-units": [
-        {
-            id: "work-unit-header",
-            title: "Work Unit Header",
-            subtitle: "Metrics atop a work unit",
-            editor: "work-unit-header",
-            liveHref: "/workspace",
-        },
-    ],
+    "work-units": [WORK_UNIT_HEADER_SURFACE_OBJECT],
     "operational-intelligence": [
         {
             id: "operational-intelligence",
