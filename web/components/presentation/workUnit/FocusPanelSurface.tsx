@@ -108,7 +108,7 @@ export function FocusPanelSurface({
                     row height, so both panels share one structural shell regardless of content —
                     the empty state fills the same height as an open record with NO viewport math. */}
                 <div className="flex flex-col gap-4 xl:flex-row xl:items-stretch">
-                    <div className="flex min-w-0 flex-col xl:w-[24rem] xl:shrink-0">{children}</div>
+                    <div className="flex min-h-0 min-w-0 flex-1 flex-col xl:w-[24rem] xl:shrink-0">{children}</div>
                     {/* The active Focus Panel render boundary OWNS the outer panel border — a single
                         unmistakable container in both the selected and empty states, never dependent
                         on a nested card's border. It is a flex column so its child (record or empty

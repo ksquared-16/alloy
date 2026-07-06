@@ -5,9 +5,9 @@
  *
  * The one render site for queue rows. Receives the resolved queue slice from the
  * Work Unit surface model and opens records through the FocusPanelSurface seam
- * (`useFocusPanelOpen`). Rows are self-chromed split-view CARDS stacked with small
- * gaps (staging parity) — the region supplies the stack, not row chrome. States:
- * loading skeletons (card-shaped), quiet inline error, empty, rows.
+ * (`useFocusPanelOpen`). The entire Queue Region is ONE bordered pane (title, search,
+ * filters, rows, empty states) — a sibling to the Focus Panel with aligned top/bottom
+ * edges. Rows stack inside the pane without a nested bordered container.
  */
 
 import { useEffect, useMemo, useState } from "react";
@@ -136,7 +136,10 @@ export function QueueRegion({
         <section
             {...runtimeLabelProps(PRESENTATION_RUNTIME_LABELS.queueRegion)}
             aria-label="Queue"
+            className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-alloy-midnight/20 bg-white shadow-[0_1px_2px_rgba(15,23,42,0.05)]"
             data-queue-region
+            data-queue-region-boundary
+            data-queue-panel
             data-component="QueueRegion"
             data-build-sha={BUILD_SHA}
             data-work-view-id={workViewId ?? undefined}
@@ -144,12 +147,9 @@ export function QueueRegion({
             data-work-unit-id={workUnitId ?? undefined}
             data-queue-total={queue.totalCount ?? undefined}
         >
-            {/* Queue shell header — the surrounding layout already communicates this is the queue
-                pane, so no redundant "Queue" eyebrow. The ACTIVE Work View shows as a filter chip
-                and the record count sits opposite: the operator always sees which view + how many. */}
             <div
                 data-queue-region-header
-                className="mb-2 flex items-center justify-between gap-3"
+                className="flex shrink-0 items-center justify-between gap-3 border-b border-alloy-stone/12 px-3 py-2.5"
             >
                 <div className="flex min-w-0 items-center gap-2">
                     <span
@@ -172,25 +172,21 @@ export function QueueRegion({
                 ) : null}
             </div>
 
-            {/* Interactive filter/control row — between the header and the bordered board. */}
             {showFilterControls ? (
-                <QueueFilterControls
-                    facets={facets}
-                    filters={filters}
-                    onChange={setFilters}
-                    onClear={() => setFilters(EMPTY_QUEUE_ROW_FILTER)}
-                    matchedCount={visibleRows.length}
-                    loadedCount={queue.rows.length}
-                    disabled={queue.loading}
-                />
+                <div className="shrink-0 border-b border-alloy-stone/12 px-3 py-2" data-queue-region-controls>
+                    <QueueFilterControls
+                        facets={facets}
+                        filters={filters}
+                        onChange={setFilters}
+                        onClear={() => setFilters(EMPTY_QUEUE_ROW_FILTER)}
+                        matchedCount={visibleRows.length}
+                        loadedCount={queue.rows.length}
+                        disabled={queue.loading}
+                    />
+                </div>
             ) : null}
 
-            {/* Bordered queue panel — an UNMISTAKABLE outline in EVERY state, matching the Focus
-                Panel border system (midnight/20) so the queue reads as an equally-weighted panel. */}
-            <div
-                className="rounded-xl border border-alloy-midnight/20 bg-white p-3 shadow-[0_1px_2px_rgba(15,23,42,0.05)]"
-                data-queue-panel
-            >
+            <div className="min-h-0 flex-1 overflow-y-auto px-3 py-3" data-queue-panel-body>
                 {renderState === "error" ? (
                     <p
                         role="alert"
