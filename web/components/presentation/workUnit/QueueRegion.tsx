@@ -10,7 +10,8 @@
  * loading skeletons (card-shaped), quiet inline error, empty, rows.
  */
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import type { QueueRowModel, WorkUnitSurfaceModel } from "@/lib/presentation/runtime";
 import {
     PRESENTATION_RUNTIME_LABELS,
@@ -20,6 +21,7 @@ import { BUILD_SHA } from "@/lib/runtime/buildInfo";
 import {
     applyQueueRowFilters,
     deriveQueueRowFilterFacets,
+    queueRowFilterFromDrillParams,
     queueRowFilterIsActive,
     EMPTY_QUEUE_ROW_FILTER,
     type QueueRowFilterState,
@@ -108,11 +110,27 @@ export function QueueRegion({
     // Interactive filter/control row (re-homed from the pre-PRV2 WorkUnitQueueRecordFilterBar):
     // client-side narrowing over the loaded rows, facets derived from what's loaded. Server order
     // is preserved until the operator picks a sort.
-    const [filters, setFilters] = useState<QueueRowFilterState>(EMPTY_QUEUE_ROW_FILTER);
+    // A metric/KPI drill lands here carrying its semantic filter in query state (status_keys /
+    // attention_reason_code). Seed the queue filter from it on arrival, and re-apply when the drill
+    // query changes (navigation) — a plain view/pill/direct link (no drill query) resets to none.
+    // Manual filter edits (which never touch the URL) are preserved between navigations.
+    const searchParams = useSearchParams();
+    const drillQueryString = searchParams?.toString() ?? "";
+    const drillFilterKey = `${searchParams?.get("status_keys") ?? ""}|${searchParams?.get("attention_reason_code") ?? ""}`;
+    const [filters, setFilters] = useState<QueueRowFilterState>(() =>
+        queueRowFilterFromDrillParams(new URLSearchParams(drillQueryString)),
+    );
+    useEffect(() => {
+        setFilters(queueRowFilterFromDrillParams(new URLSearchParams(drillQueryString)));
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [drillFilterKey]);
     const facets = useMemo(() => deriveQueueRowFilterFacets(queue.rows), [queue.rows]);
     const visibleRows = useMemo(() => applyQueueRowFilters(queue.rows, filters), [queue.rows, filters]);
     const filterActive = queueRowFilterIsActive(filters);
-    const showFilterControls = queue.rows.length > 0;
+    // Canonical queue controls appear whenever the view has resolved (rows OR a settled empty
+    // view) — never disappearing on an empty queue or a specific Work View. Hidden only during
+    // the cold first load and hard errors.
+    const showFilterControls = renderState === "rows" || renderState === "empty";
 
     return (
         <section
@@ -126,16 +144,14 @@ export function QueueRegion({
             data-work-unit-id={workUnitId ?? undefined}
             data-queue-total={queue.totalCount ?? undefined}
         >
-            {/* Queue shell header — a "Queue" eyebrow, the ACTIVE Work View as a filter chip, and the
-                record count. Never anonymous: the operator always sees which view + how many. */}
+            {/* Queue shell header — the surrounding layout already communicates this is the queue
+                pane, so no redundant "Queue" eyebrow. The ACTIVE Work View shows as a filter chip
+                and the record count sits opposite: the operator always sees which view + how many. */}
             <div
                 data-queue-region-header
                 className="mb-2 flex items-center justify-between gap-3"
             >
                 <div className="flex min-w-0 items-center gap-2">
-                    <span className="shrink-0 text-[10px] font-semibold uppercase tracking-[0.13em] text-alloy-midnight/45">
-                        Queue
-                    </span>
                     <span
                         data-queue-region-title
                         data-queue-filter-chip
@@ -169,10 +185,10 @@ export function QueueRegion({
                 />
             ) : null}
 
-            {/* Bordered queue panel — an UNMISTAKABLE outline in EVERY state (defined Alloy stone
-                border + soft elevation), so the queue always reads as a contained panel. */}
+            {/* Bordered queue panel — an UNMISTAKABLE outline in EVERY state, matching the Focus
+                Panel border system (midnight/20) so the queue reads as an equally-weighted panel. */}
             <div
-                className="rounded-xl border border-alloy-stone/45 bg-white p-3 shadow-[0_1px_2px_rgba(15,23,42,0.05)]"
+                className="rounded-xl border border-alloy-midnight/20 bg-white p-3 shadow-[0_1px_2px_rgba(15,23,42,0.05)]"
                 data-queue-panel
             >
                 {renderState === "error" ? (
