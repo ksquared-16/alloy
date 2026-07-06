@@ -57,9 +57,9 @@ function FocusPanelPlaceholder() {
             data-inline-focus-panel="empty"
             aria-label="Focus Panel"
             // Borderless: the FocusPanelSurface boundary owns the outer panel border in every state.
-            // Extends to the same operational bottom as an open record so the empty shell reads as a
-            // full panel awaiting a selection — never a short card.
-            className="flex min-h-[calc(100vh-15rem)] flex-col items-center justify-center gap-1.5 px-6 py-10 text-center"
+            // Fills the boundary (flex-1) so the empty shell occupies the SAME height as an open
+            // record — height comes from the stretched parent row, never a viewport calc.
+            className="flex min-h-0 flex-1 flex-col items-center justify-center gap-1.5 px-6 py-10 text-center"
         >
             <p className="text-sm font-medium text-alloy-midnight/55">Select a record to begin</p>
             <p className="text-xs text-alloy-midnight/40">The record you open appears here.</p>
@@ -104,13 +104,17 @@ export function FocusPanelSurface({
                     stacks above the panel so the composition never renders in a squeezed column.
                     The right column shows the inline record when selected, else the stable
                     placeholder — the structure itself never disappears. */}
-                <div className="flex flex-col gap-4 xl:flex-row xl:items-start">
-                    <div className="min-w-0 xl:w-[24rem] xl:shrink-0">{children}</div>
+                {/* items-stretch: the queue column and the Focus Panel boundary stretch to the SAME
+                    row height, so both panels share one structural shell regardless of content —
+                    the empty state fills the same height as an open record with NO viewport math. */}
+                <div className="flex flex-col gap-4 xl:flex-row xl:items-stretch">
+                    <div className="flex min-w-0 flex-col xl:w-[24rem] xl:shrink-0">{children}</div>
                     {/* The active Focus Panel render boundary OWNS the outer panel border — a single
                         unmistakable container in both the selected and empty states, never dependent
-                        on a nested card's border. */}
+                        on a nested card's border. It is a flex column so its child (record or empty
+                        placeholder) fills the stretched height. */}
                     <div
-                        className="min-w-0 flex-1 overflow-hidden rounded-xl border border-alloy-midnight/20 bg-white shadow-[0_1px_2px_rgba(15,23,42,0.05)]"
+                        className="flex min-w-0 flex-1 flex-col overflow-hidden rounded-xl border border-alloy-midnight/20 bg-white shadow-[0_1px_2px_rgba(15,23,42,0.05)]"
                         data-focus-panel-boundary
                         data-component="FocusPanelSurface.boundary"
                         data-build-sha={BUILD_SHA}
