@@ -37,6 +37,7 @@ describe("queue CRM compact program — OCM authoritative", () => {
                     location_id: SITE_ID,
                     program_key: "toddler",
                     program_category_id: "cat-toddler",
+                    program_label: "Toddler Care",
                 },
             ],
         ]);
@@ -72,6 +73,7 @@ describe("queue CRM compact program — OCM authoritative", () => {
                     location_id: SITE_ID,
                     program_key: "toddler",
                     program_category_id: "cat-toddler",
+                    program_label: "Toddler Care",
                 },
             ],
         ]);
@@ -128,6 +130,7 @@ describe("queue CRM compact program — OCM authoritative", () => {
                     location_id: SITE_ID,
                     program_key: "toddler",
                     program_category_id: "cat-toddler",
+                    program_label: "Toddler Care",
                 },
                 optionLabelLookup: new Map([["childcare_program_type\0toddler", "Toddler"]]),
                 locationProgramCategories: LOCATION_CATEGORIES,

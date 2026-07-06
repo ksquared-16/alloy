@@ -3,11 +3,10 @@
 /**
  * Presentation Runtime V2 — WU.QUEUE filter/control row.
  *
- * The interactive queue filter controls, re-homed from the pre-PRV2 WorkUnitQueueRecordFilterBar
- * (commit 6ac8d3a) onto the canonical model + Alloy language. Sits inside QueueRegion between the
- * header and the bordered board: search + a collapsible advanced panel (status / site / program /
- * needs-attention / sort) + clear + a "matched of loaded" caption. Presentation only — the pure
- * filter/sort lives in `queueRowFilter.ts`; this owns state display + emits changes.
+ * The interactive queue utility bar — Search + Filters only. Sits as the sole QueueRegion
+ * header: no title, no record-count badge (the active Work View pill already names the queue).
+ * Advanced filters open an inline panel (status / site / program / needs-attention / sort).
+ * Presentation only — the pure filter/sort lives in `queueRowFilter.ts`.
  */
 
 import { useState } from "react";
@@ -59,7 +58,7 @@ export function QueueFilterControls({
 
     return (
         <div
-            className="mb-2 flex flex-col gap-2"
+            className="flex flex-col gap-1.5"
             data-testid="work-unit-queue-record-filter-bar"
             data-queue-filter-controls
             aria-label="Queue record filters"
@@ -73,7 +72,7 @@ export function QueueFilterControls({
                     placeholder="Search this view…"
                     data-testid="wu-record-filter-search"
                     aria-label="Search records"
-                    className="min-w-0 flex-1 rounded-md border border-alloy-stone/40 bg-white px-2.5 py-1.5 text-[12.5px] text-alloy-midnight placeholder:text-alloy-midnight/40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-alloy-pine"
+                    className="min-w-0 flex-1 rounded-md border border-alloy-stone/35 bg-white px-2.5 py-1 text-[12px] text-alloy-midnight placeholder:text-alloy-midnight/40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-alloy-pine"
                 />
                 {hasAdvanced ? (
                     <button
@@ -82,7 +81,7 @@ export function QueueFilterControls({
                         disabled={disabled}
                         aria-expanded={advancedOpen}
                         data-testid="wu-record-filter-more-toggle"
-                        className={`inline-flex shrink-0 items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-[12px] font-semibold transition-colors ${
+                        className={`inline-flex shrink-0 items-center gap-1.5 rounded-md border px-2.5 py-1 text-[12px] font-semibold transition-colors ${
                             advancedOpen || advancedActiveCount > 0
                                 ? "border-alloy-pine/40 bg-alloy-pine/10 text-alloy-pine"
                                 : "border-alloy-stone/40 bg-white text-alloy-midnight/70 hover:border-alloy-pine/40 hover:text-alloy-pine"

@@ -12,6 +12,7 @@ function person(opts: Partial<IntakePersonCandidate>): IntakePersonCandidate {
         phones: opts.phones ?? [],
         dob: opts.dob ?? null,
         age_years: opts.age_years ?? null,
+        calculated_age: opts.calculated_age ?? null,
         program_interest: opts.program_interest ?? null,
         source_fact_ids: opts.source_fact_ids ?? [],
         confidence: opts.confidence ?? "high",
@@ -22,13 +23,19 @@ function person(opts: Partial<IntakePersonCandidate>): IntakePersonCandidate {
 function household(parents: IntakePersonCandidate[], children: IntakePersonCandidate[]): IntakeHouseholdCandidate {
     return {
         household_id: "h1",
+        parents_guardians: parents,
         parents,
         children,
+        household_contacts: [],
         address: null,
         location: null,
         source: null,
         notes: null,
+        program_interest: null,
+        start_date: null,
+        relationships: [],
         unassigned_fact_ids: [],
+        unmapped_facts: [],
         review_warnings: [],
     };
 }

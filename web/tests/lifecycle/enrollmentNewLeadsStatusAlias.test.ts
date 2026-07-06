@@ -60,8 +60,9 @@ describe("New Leads queue execution filters", () => {
     it("coerces v2 new_leads compat filters to include legacy open", () => {
         const def = coerceQueueDefinitionForExecution(RAW_ENROLLMENT_PIPELINE_QUEUE_DEFINITION_V2);
         const filters = def.queues.find((q) => q.key === "new_leads")?.filters;
-        expect(filters?.[0]?.values).toEqual(expect.arrayContaining(["new_inquiry", "open", "new"]));
-        expect(filters?.[0]?.values).toHaveLength(3);
+        const statusValues = filters?.[0] && "values" in filters[0] ? filters[0].values : undefined;
+        expect(statusValues).toEqual(expect.arrayContaining(["new_inquiry", "open", "new"]));
+        expect(statusValues).toHaveLength(3);
     });
 
     it("coerces lifecycle stage queue with only new_inquiry to include open", () => {
@@ -84,7 +85,8 @@ describe("New Leads queue execution filters", () => {
         };
         const def = coerceQueueDefinitionForExecution(doc);
         const filters = def.queues.find((q) => q.key === "lifecycle_new_lead")?.filters;
-        expect(filters?.[0]?.values).toEqual(expect.arrayContaining(["new_inquiry", "open", "new"]));
+        const statusValues = filters?.[0] && "values" in filters[0] ? filters[0].values : undefined;
+        expect(statusValues).toEqual(expect.arrayContaining(["new_inquiry", "open", "new"]));
     });
 });
 
@@ -132,7 +134,6 @@ describe("New Leads routing stays case-grain", () => {
                 isV2: true,
                 version: 2,
                 entity_type: "opportunity",
-                def: { version: 1, entity_type: "opportunity", queues: [] },
                 queues: [
                     {
                         key: "new_leads",
@@ -146,6 +147,7 @@ describe("New Leads routing stays case-grain", () => {
                         raw: {},
                     },
                 ],
+                raw: {},
             },
             executableQueueKey: "new_leads",
             workUnitMetadata: {

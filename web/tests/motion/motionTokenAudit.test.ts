@@ -1,5 +1,4 @@
 import { describe, expect, it } from "vitest";
-// @ts-expect-error — plain-JS audit module (shared by the `audit:motion` CLI).
 import { findRawTransitionTimings, findRawComponentTimings, runAudit } from "@/scripts/auditMotionTokens.mjs";
 
 /**

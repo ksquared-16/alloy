@@ -18,11 +18,16 @@ function readSrc(rel: string): string {
 
 describe("Focus Panel Universal Card presentation", () => {
     const baseVm = minimalSettledOpportunityDrawerViewModel({
-        actions: {
-            header_menu: [{ action_key: "schedule_tour", label: "Schedule tour" } as never],
-            drawer_tabs: [],
-        },
         summaries: {
+            tasks: { state: "loaded", open_count: 0, open_tasks: [] },
+            active_tour_bookings: [],
+            reminders: {
+                state: "empty",
+                next_follow_up_iso: null,
+                scheduled_send_count: 0,
+                scheduled_sends: [],
+            },
+            bos: null,
             attention: {
                 visible: true,
                 needs_attention: true,
@@ -135,10 +140,11 @@ describe("Focus Panel Universal Card presentation", () => {
 });
 
 describe("Work View perspectives convergence", () => {
-    it("operatorOperationalPerspectivesEnabled follows Alloy OS runtime flag wiring", () => {
+    it("operatorOperationalPerspectivesEnabled is always on (runtime flag retired)", () => {
         const flagSrc = readSrc("lib/adminV2/runtime/configurationRuntimeConvergenceFlag.ts");
-        expect(flagSrc).toContain("ALLOY_OS_RUNTIME_ENABLED");
-        expect(typeof operatorOperationalPerspectivesEnabled()).toBe("boolean");
+        expect(flagSrc).toContain("operatorOperationalPerspectivesEnabled");
+        expect(flagSrc).not.toContain("ALLOY_OS_RUNTIME_ENABLED");
+        expect(operatorOperationalPerspectivesEnabled()).toBe(true);
     });
 
     it("deriveOperationalViewsFromQueueDefinition skips internal lanes", () => {

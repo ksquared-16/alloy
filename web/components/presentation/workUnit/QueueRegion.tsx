@@ -5,9 +5,10 @@
  *
  * The one render site for queue rows. Receives the resolved queue slice from the
  * Work Unit surface model and opens records through the FocusPanelSurface seam
- * (`useFocusPanelOpen`). The entire Queue Region is ONE bordered pane (title, search,
- * filters, rows, empty states) — a sibling to the Focus Panel with aligned top/bottom
- * edges. Rows stack inside the pane without a nested bordered container.
+ * (`useFocusPanelOpen`). The entire Queue Region is ONE bordered pane (search, filters,
+ * rows, empty/loading states) — a sibling to the Focus Panel with aligned top/bottom
+ * edges. The active Work View pill already names the queue, so the pane has no redundant
+ * title/count header — only a compact Search/Filters utility bar, then rows.
  */
 
 import { useEffect, useMemo, useState } from "react";
@@ -35,8 +36,8 @@ const QUEUE_SKELETON_ROW_COUNT = 3;
 /** Card-shaped skeleton — mirrors the split-view card anatomy (avatar + two lines + pill). */
 function QueueRowSkeleton() {
     return (
-        <li className="rounded-lg border border-alloy-stone/18 bg-white px-3 py-2.5" aria-hidden>
-            <span className="flex items-start gap-2.5">
+        <li className="rounded-lg border border-alloy-stone/16 bg-white px-2.5 py-2" aria-hidden>
+            <span className="flex items-start gap-2">
                 <span className="block h-8 w-8 shrink-0 animate-pulse rounded-full bg-alloy-stone/30" />
                 <span className="min-w-0 flex-1 space-y-1.5">
                     <span className="flex items-center justify-between gap-2">
@@ -94,7 +95,7 @@ export function QueueRegion({
     workUnitId = null,
 }: {
     queue: WorkUnitSurfaceModel["queue"];
-    /** Active Work View label — the queue's title / work-view context header. */
+    /** Active Work View label — diagnostic/aria context only (not rendered as a title). */
     title?: string | null;
     /** Currently open inline Focus Panel record — rows render the selected rail. */
     selectedRecordId?: string | null;
@@ -135,8 +136,8 @@ export function QueueRegion({
     return (
         <section
             {...runtimeLabelProps(PRESENTATION_RUNTIME_LABELS.queueRegion)}
-            aria-label="Queue"
-            className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-alloy-midnight/20 bg-white shadow-[0_1px_2px_rgba(15,23,42,0.05)]"
+            aria-label={workView ? `Queue: ${workView}` : "Queue"}
+            className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-alloy-midnight/25 bg-white shadow-[0_1px_3px_rgba(15,23,42,0.06)]"
             data-queue-region
             data-queue-region-boundary
             data-queue-panel
@@ -147,33 +148,12 @@ export function QueueRegion({
             data-work-unit-id={workUnitId ?? undefined}
             data-queue-total={queue.totalCount ?? undefined}
         >
-            <div
-                data-queue-region-header
-                className="flex shrink-0 items-center justify-between gap-3 border-b border-alloy-stone/12 px-3 py-2.5"
-            >
-                <div className="flex min-w-0 items-center gap-2">
-                    <span
-                        data-queue-region-title
-                        data-queue-filter-chip
-                        className="inline-flex min-w-0 items-center gap-1.5 rounded-full border border-alloy-stone/45 bg-alloy-stone/[0.06] px-2.5 py-0.5 text-[12px] font-semibold text-alloy-midnight/80"
-                        title={workView ? `Active Work View: ${workView}` : "Queue"}
-                    >
-                        <span aria-hidden className="h-1.5 w-1.5 shrink-0 rounded-full bg-alloy-pine" />
-                        <span className="truncate">{workView ?? "Queue"}</span>
-                    </span>
-                </div>
-                {queue.totalCount != null ? (
-                    <span
-                        data-queue-region-count
-                        className="shrink-0 rounded-full bg-alloy-midnight/[0.05] px-2 py-0.5 text-[11px] font-semibold tabular-nums text-alloy-midnight/60"
-                    >
-                        {queue.totalCount} {queue.totalCount === 1 ? "record" : "records"}
-                    </span>
-                ) : null}
-            </div>
-
             {showFilterControls ? (
-                <div className="shrink-0 border-b border-alloy-stone/12 px-3 py-2" data-queue-region-controls>
+                <div
+                    className="shrink-0 border-b border-alloy-stone/12 px-3 py-1.5"
+                    data-queue-region-header
+                    data-queue-region-controls
+                >
                     <QueueFilterControls
                         facets={facets}
                         filters={filters}
@@ -186,7 +166,7 @@ export function QueueRegion({
                 </div>
             ) : null}
 
-            <div className="min-h-0 flex-1 overflow-y-auto px-3 py-3" data-queue-panel-body>
+            <div className="min-h-0 flex-1 overflow-y-auto px-3 pt-2 pb-2.5" data-queue-panel-body>
                 {renderState === "error" ? (
                     <p
                         role="alert"
@@ -199,7 +179,7 @@ export function QueueRegion({
                         role="list"
                         aria-busy="true"
                         aria-label="Loading queue rows"
-                        className="flex flex-col gap-2"
+                        className="flex flex-col gap-1.5"
                     >
                         {Array.from({ length: QUEUE_SKELETON_ROW_COUNT }, (_, i) => (
                             <QueueRowSkeleton key={`queue-row-skeleton-${i}`} />
@@ -208,7 +188,7 @@ export function QueueRegion({
                 ) : renderState === "empty" ? (
                     // Empty state holds the queue STRUCTURE: dashed ghost rows inside the panel.
                     <div data-queue-empty="true">
-                        <ul className="flex flex-col gap-2" aria-hidden="true">
+                        <ul className="flex flex-col gap-1.5" aria-hidden="true">
                             {Array.from({ length: QUEUE_SKELETON_ROW_COUNT }, (_, i) => (
                                 <li
                                     key={`queue-empty-ghost-${i}`}
@@ -235,7 +215,7 @@ export function QueueRegion({
                 ) : (
                     // Queue-lane hold: prior rows stay in place during a refetch (aria-busy),
                     // swapping when the new rows arrive — no skeleton flash on a view switch.
-                    <ul role="list" aria-busy={queue.loading || undefined} className="flex flex-col gap-2">
+                    <ul role="list" aria-busy={queue.loading || undefined} className="flex flex-col gap-1.5">
                         {visibleRows.map((row, index) => (
                             <li key={`${row.entityType}:${row.entityId}`}>
                                 <CondensedQueueRow

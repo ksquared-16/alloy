@@ -1,7 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 
 import {
-    ALLOY_OS_RUNTIME_ENABLED,
     alloyOsRuntimeSplitActive,
     isWorkUnitQueueSurfacePath,
 } from "@/lib/adminV2/runtime/alloyOsRuntimeFlag";
@@ -205,7 +204,9 @@ describe("alloyOsRuntimeSplitActive (State 2 trigger)", () => {
         expect(isWorkUnitQueueSurfacePath(null)).toBe(false);
     });
 
-    it("defaults the runtime flag OFF so existing behavior is preserved", () => {
-        expect(ALLOY_OS_RUNTIME_ENABLED).toBe(false);
+    it("runtime split is driven by perspective + drawer + surface (no kill switch)", () => {
+        expect(
+            alloyOsRuntimeSplitActive({ perspectiveActive: true, drawerOpen: true, onWorkUnitSurface: true }),
+        ).toBe(true);
     });
 });

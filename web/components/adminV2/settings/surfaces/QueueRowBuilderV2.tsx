@@ -17,7 +17,7 @@
  * @see docs/platform/operator/queue-row-platform.md
  */
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 
 import { CondensedQueueRow } from "@/components/presentation/workUnit/CondensedQueueRow";
@@ -26,7 +26,6 @@ import {
     mapQueueRowSurfaceToCompactConfig,
 } from "@/lib/presentation/runtime/queueRowSurfaceConfig";
 import type { QueueRowModel } from "@/lib/presentation/runtime";
-import type { QueueRowContext } from "@/lib/workUnits/lifecycleSubjectContracts";
 import { defaultLeadQueueLayoutV3, defaultWaitlistQueueLayoutV3 } from "@/lib/layout/queueRecordLayoutV3";
 import type { LayoutCondition } from "@/lib/layout/layoutV2";
 import type {
@@ -34,6 +33,7 @@ import type {
     QueueRecordColumnConfig,
     QueueRecordFieldConfig,
     QueueRecordLayoutConfigV3,
+    QueueRowVariant,
 } from "@/lib/layout/queueRecordLayoutV3";
 import type { QueueRecordColumnWidth } from "@/lib/layout/queueRecordLayoutConfig";
 import { QUEUE_RECORD_LAYOUT_ZONES } from "@/lib/layout/surfaceLayoutRegistry";
@@ -45,6 +45,23 @@ import { namedEvidenceGroupsForZone } from "@/lib/adminV2/settings/surfaces/comp
 import { ALLOY_OS_QUEUE_COMPRESSED_WIDTH_PX } from "@/lib/adminV2/runtime/alloyOsRuntimeFlag";
 import { MAX_STACKED_ROWS, clampRowIndex } from "@/lib/adminV2/settings/surfaces/queueRowStackedModel";
 import { useTenantFieldDefinitions } from "@/lib/adminV2/settings/surfaces/useTenantFieldDefinitions";
+import { blankPreviewRowModel } from "@/lib/adminV2/settings/surfaces/queueRowBuilderPreview";
+import {
+    buildQueueRowLibraryCatalog,
+    queueRowZoneLabel,
+    type QueueRowLibraryItem,
+} from "@/lib/adminV2/settings/surfaces/queueRowBuilderLibrary";
+import {
+    QUEUE_ROW_BUILDER_SHELL_DATA_ATTR,
+    QUEUE_ROW_CARD_IDLE_BORDER_CLASS,
+    QUEUE_ROW_CARD_SHELL_CLASS,
+    QUEUE_ROW_CARD_SELECTED_BORDER_CLASS,
+    QUEUE_ROW_SELECTED_RAIL_CLASS,
+} from "@/lib/presentation/runtime/queueRowCardShell";
+import QueueRowItemLibraryPanel from "@/components/adminV2/settings/surfaces/QueueRowItemLibraryPanel";
+import QueueRowVariantInspector from "@/components/adminV2/settings/surfaces/QueueRowVariantInspector";
+import QueueRowCanvasHint from "@/components/adminV2/settings/surfaces/QueueRowCanvasHint";
+import type { ProcessStageOption } from "@/components/adminV2/settings/surfaces/QueueRowVariantStagePicker";
 
 // ── Zone key ─────────────────────────────────────────────────────────────────
 
@@ -53,12 +70,12 @@ type ZoneKey = (typeof QUEUE_RECORD_LAYOUT_ZONES)[number];
 // ── Constants ─────────────────────────────────────────────────────────────────
 
 const ZONE_LABELS: Record<ZoneKey, string> = {
-    household: "Household",
-    children: "Children",
-    status: "Status",
-    attention: "Attention",
-    date_event: "Date",
-    actions: "Actions",
+    household: queueRowZoneLabel("household"),
+    children: queueRowZoneLabel("children"),
+    status: queueRowZoneLabel("status"),
+    attention: queueRowZoneLabel("attention"),
+    date_event: queueRowZoneLabel("date_event"),
+    actions: queueRowZoneLabel("actions"),
 };
 
 /**
@@ -78,41 +95,14 @@ const ZONE_REGION: Record<ZoneKey, AnatomyRegion> = {
     actions: null,
 };
 
-/**
- * A representative row context for the builder canvas — populates every compact slot so
- * the operator sees the real presenter with content. This is preview scaffolding for the
- * EDIT canvas only; the runtime always renders live `QueueRowContext` from the queue API.
- */
-function sampleRowModel(isWaitlist: boolean, stageKey?: string): QueueRowModel {
-    const stage = stageKey?.trim() || (isWaitlist ? "waitlist" : "new_lead");
-    const isWaitlistStage = /wait/i.test(stage);
-    const context: QueueRowContext = {
-        contract_version: "1.1-partial",
-        row_subject: { subject_type: isWaitlistStage ? "candidate" : "case", subject_id: "sample-1", display_name: "Smith Family" },
-        row_stage: isWaitlistStage ? "Waitlist" : "New Leads",
-        lifecycle_key: "enrollment",
-        row_status_key: isWaitlistStage ? "waitlisted" : "new_lead",
-        row_status_label: isWaitlistStage ? "Waitlisted" : "New Lead",
-        case_context: {
-            case_id: "sample-1",
-            display_name: "Smith Family",
-            case_type_label: "Enrollment",
-            case_status_key: isWaitlist ? "waitlisted" : "new_lead",
-            case_status_label: isWaitlist ? "Waitlisted" : "New Lead",
-        },
-        primary_contact: { display_name: "Sarah Smith · (555) 000-1234" },
-        related_subjects_summary: [],
-        row_presentation_mode: "grouped_subjects",
-        row_count: 2,
-        row_count_unit: "children",
-        attention_summary: { needs_attention: true, primary_reason_label: "Follow-up needed" },
-        work_summary: { open_count: 1, primary_open_label: "Send welcome packet" },
-        current_work_summary: { label: "Schedule tour", state: "open", due_label: "Thu Jul 3" },
-        next_best_action: null,
-        drawer_open: { entity_type: "opportunities", entity_id: "sample-1" },
-    };
-    return { context, entityType: "opportunity", entityId: "sample-1" };
-}
+/** Blank-canvas affordances — one per anatomy region when the zone is not yet on the row. */
+const ANATOMY_AFFORDANCES: { region: Exclude<AnatomyRegion, null>; zone: ZoneKey; label: string }[] = [
+    { region: "identity", zone: "household", label: "+ Add family identity" },
+    { region: "groupCount", zone: "children", label: "+ Add child" },
+    { region: "status", zone: "status", label: "+ Add status" },
+    { region: "attention", zone: "attention", label: "+ Add attention or tasks" },
+    { region: "work", zone: "date_event", label: "+ Add dates or tasks" },
+];
 
 const ZONE_WIDTH_MAP: Partial<Record<ZoneKey, QueueRecordColumnWidth>> = {
     household: "identity",
@@ -307,6 +297,8 @@ export function buildConfigFromState(
             if (!catalogCol) return [];
 
             const enabledIds = new Set(z.evidenceGroups.filter((g) => g.enabled).map((g) => g.blockId));
+            if (enabledIds.size === 0) return [];
+
             const groupStateById = new Map(z.evidenceGroups.map((g) => [g.blockId, g]));
             const filteredBlocks = catalogCol.blocks
                 .filter((b) => enabledIds.has(b.id))
@@ -337,7 +329,9 @@ export function buildConfigFromState(
                     const finalFields = merged.length > 0 ? merged : b.fields.slice(0, 1);
                     return { ...b, fields: finalFields };
                 });
-            const blocks = filteredBlocks.length > 0 ? filteredBlocks : catalogCol.blocks.slice(0, 1);
+            if (filteredBlocks.length === 0) return [];
+
+            const blocks = filteredBlocks;
 
             const col: QueueRecordColumnConfig = {
                 ...catalogCol,
@@ -489,24 +483,31 @@ export function AddFieldPicker({
 function QueueRowRuntimeCanvas({
     zones,
     liveConfig,
-    sampleRow,
+    previewRow,
     selectedKey,
+    libraryTargetZone = null,
+    embedded = false,
     onSelect,
     onRemove,
     onReorder,
     onAddField,
+    onOpenLibrary,
 }: {
     zones: RowZoneState[];
     liveConfig: QueueRecordLayoutConfigV3;
-    sampleRow: QueueRowModel;
+    previewRow: QueueRowModel;
     selectedKey: ZoneKey | null;
+    libraryTargetZone?: ZoneKey | null;
+    embedded?: boolean;
     onSelect: (key: ZoneKey) => void;
     onRemove: (key: ZoneKey) => void;
     onReorder: (key: ZoneKey, dir: -1 | 1) => void;
     /** Enable a field on a section (evidence group) — reuses the inspector's toggle path. */
     onAddField: (key: ZoneKey, blockId: string, fieldKey: string) => void;
+    onOpenLibrary: (targetZone: ZoneKey | null) => void;
 }) {
     const inRow = zones.filter((z) => z.inRow);
+    const inRowKeys = new Set(inRow.map((z) => z.key));
     // Which section's inline "Add field" picker is open (null = none).
     const [pickerZone, setPickerZone] = useState<ZoneKey | null>(null);
     const [pickerAnchor, setPickerAnchor] = useState<{ top: number; left: number } | null>(null);
@@ -520,16 +521,18 @@ function QueueRowRuntimeCanvas({
 
     const RegionHandle = ({ z }: { z: RowZoneState }) => {
         const isSelected = z.key === selectedKey;
+        const isDropTarget = z.key === libraryTargetZone;
         const idx = orderIndex(z.key);
         return (
             <span
                 className={[
                     "group/region pointer-events-auto absolute inset-0 z-10 flex items-center gap-0.5 rounded",
                     "cursor-pointer transition-shadow",
-                    isSelected
-                        ? "shadow-[inset_0_0_0_1.5px_var(--alloy-os-bend-pine,#00a283)]"
+                    isSelected || isDropTarget
+                        ? "shadow-[inset_0_0_0_2px_var(--alloy-os-bend-pine,#00a283)] bg-alloy-juniper/[0.06]"
                         : "hover:shadow-[inset_0_0_0_1px_rgba(0,162,131,0.35)]",
                 ].join(" ")}
+                data-canvas-zone-active={isSelected || isDropTarget || undefined}
             >
                 <button
                     type="button"
@@ -610,16 +613,21 @@ function QueueRowRuntimeCanvas({
     };
 
     return (
-        <div className="overflow-hidden rounded-xl border border-alloy-stone/14 bg-alloy-stone/[0.03] shadow-sm" data-canvas>
-            <div className="flex items-center justify-between border-b border-alloy-stone/10 px-4 py-2">
-                <p className="text-[10px] font-semibold uppercase tracking-wide text-alloy-midnight/40">
-                    Row canvas
-                    <span className="ml-1.5 font-normal normal-case tracking-normal text-alloy-midnight/30">
-                        · live runtime row · condensed rail {ALLOY_OS_QUEUE_COMPRESSED_WIDTH_PX}px
-                    </span>
-                </p>
-                <p className="text-[10px] text-alloy-midnight/30">Click a section to inspect · reorder / remove on select</p>
-            </div>
+        <div
+            className={`overflow-hidden rounded-xl border border-alloy-stone/14 bg-alloy-stone/[0.03] shadow-sm ${embedded ? "border-0 bg-transparent shadow-none" : ""}`}
+            data-canvas
+        >
+            {!embedded ? (
+                <div className="flex items-center justify-between border-b border-alloy-stone/10 px-4 py-2">
+                    <p className="text-[10px] font-semibold uppercase tracking-wide text-alloy-midnight/40">
+                        Row canvas
+                        <span className="ml-1.5 font-normal normal-case tracking-normal text-alloy-midnight/30">
+                            · live runtime row · condensed rail {ALLOY_OS_QUEUE_COMPRESSED_WIDTH_PX}px
+                        </span>
+                    </p>
+                    <p className="text-[10px] text-alloy-midnight/30">Click the row or a zone to add items · select a section to inspect</p>
+                </div>
+            ) : null}
             {/*
              * Runtime-width frame: the condensed queue row renders inside a fixed
              * ~440px rail (--alloy-os-queue-compressed-width) whenever the Focus Panel
@@ -629,21 +637,62 @@ function QueueRowRuntimeCanvas({
              */}
             <div className="flex justify-center px-4 py-4">
                 <div
-                    className="relative rounded-lg"
+                    className={[
+                        QUEUE_ROW_CARD_SHELL_CLASS,
+                        selectedKey || libraryTargetZone ? QUEUE_ROW_CARD_SELECTED_BORDER_CLASS : QUEUE_ROW_CARD_IDLE_BORDER_CLASS,
+                        "min-h-[5.5rem]",
+                    ].join(" ")}
                     style={{ width: ALLOY_OS_QUEUE_COMPRESSED_WIDTH_PX, maxWidth: ALLOY_OS_QUEUE_COMPRESSED_WIDTH_PX }}
+                    {...{ [QUEUE_ROW_BUILDER_SHELL_DATA_ATTR]: true }}
                     data-canvas-runtime-frame
                     data-canvas-runtime-width={ALLOY_OS_QUEUE_COMPRESSED_WIDTH_PX}
                 >
+                    {selectedKey || libraryTargetZone ? (
+                        <span className={QUEUE_ROW_SELECTED_RAIL_CLASS} aria-hidden />
+                    ) : null}
+                    <button
+                        type="button"
+                        className="absolute inset-0 z-0 cursor-pointer rounded-lg bg-transparent"
+                        aria-label="Open item library"
+                        data-canvas-open-library
+                        onClick={() => onOpenLibrary(null)}
+                    />
                     {/* Real runtime presenter — pointer-events off so the overlay owns interaction. */}
-                    <div className="pointer-events-none" data-canvas-runtime-row>
-                        <CondensedQueueRow row={sampleRow} rowConfig={slots} onOpen={() => {}} isFirst />
+                    <div className="pointer-events-none relative z-[1]" data-canvas-runtime-row>
+                        <CondensedQueueRow row={previewRow} rowConfig={slots} onOpen={() => {}} isFirst />
                     </div>
+                    {/* Anatomy-region affordances for zones not yet on the row */}
+                    {ANATOMY_AFFORDANCES.map(({ region, zone, label }) => {
+                        if (inRowKeys.has(zone)) return null;
+                        const isTarget = libraryTargetZone === zone;
+                        return (
+                            <span
+                                key={zone}
+                                className={`pointer-events-none absolute ${REGION_BOX[region]} z-[2]`}
+                            >
+                                <button
+                                    type="button"
+                                    className={[
+                                        "pointer-events-auto flex h-full w-full items-center justify-center rounded px-1 text-[9px] font-medium leading-tight",
+                                        isTarget
+                                            ? "border-2 border-alloy-juniper/60 bg-alloy-juniper/[0.08] text-alloy-juniper"
+                                            : "border border-dashed border-alloy-stone/25 bg-alloy-stone/[0.03] text-alloy-midnight/45 hover:border-alloy-juniper/40 hover:bg-alloy-juniper/[0.04] hover:text-alloy-juniper/80",
+                                    ].join(" ")}
+                                    data-canvas-zone-affordance={zone}
+                                    data-canvas-drop-zone={zone}
+                                    data-canvas-zone-target={isTarget || undefined}
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        onOpenLibrary(zone);
+                                    }}
+                                >
+                                    {label}
+                                </button>
+                            </span>
+                        );
+                    })}
                     {/* Edit overlay — selectable anatomy regions mapped to builder zones. */}
-                    {regionZones.length === 0 ? (
-                        <div className="pointer-events-none absolute inset-0 flex items-center justify-center text-[12px] text-alloy-midnight/30">
-                            No sections in row — add from library below
-                        </div>
-                    ) : (
+                    {regionZones.length === 0 ? null : (
                         <div className="pointer-events-none absolute inset-0" data-canvas-overlay>
                             {regionZones.map((z) => {
                                 const region = ZONE_REGION[z.key] as Exclude<AnatomyRegion, null>;
@@ -661,37 +710,14 @@ function QueueRowRuntimeCanvas({
     );
 }
 
-// ── BlockLibraryTray ──────────────────────────────────────────────────────────
-
-function BlockLibraryTray({
-    zones,
-    onAdd,
-}: {
-    zones: RowZoneState[];
-    onAdd: (key: ZoneKey) => void;
-}) {
-    const unused = zones.filter((z) => z.key !== "actions" && !z.inRow);
-    if (unused.length === 0) return null;
-
-    return (
-        <div className="flex flex-wrap items-center gap-2" data-block-library>
-            <span className="text-[10px] font-semibold uppercase tracking-wide text-alloy-midnight/35">
-                Library
-            </span>
-            {unused.map((z) => (
-                <button
-                    key={z.key}
-                    type="button"
-                    onClick={() => onAdd(z.key)}
-                    className="flex items-center gap-1 rounded-full border border-alloy-stone/20 bg-white px-2.5 py-1 text-[11px] font-medium text-alloy-midnight/60 hover:border-alloy-pine/40 hover:bg-alloy-pine/[0.04] hover:text-alloy-pine"
-                    data-library-zone={z.key}
-                >
-                    <span className="text-[10px]">+</span>
-                    {ZONE_LABELS[z.key]}
-                </button>
-            ))}
-        </div>
-    );
+function findWidgetBlockId(
+    catalog: Map<ZoneKey, QueueRecordColumnConfig>,
+    zoneKey: ZoneKey,
+    widgetKey: string,
+): string | null {
+    const col = catalog.get(zoneKey);
+    const block = col?.blocks.find((b) => b.type === "widget" && b.widgetKey === widgetKey);
+    return block?.id ?? null;
 }
 
 // ── ConditionForm ─────────────────────────────────────────────────────────────
@@ -928,7 +954,7 @@ function BlockInspector({
                             data-inspector-label-input
                         />
                         <p className="mt-1 text-[10px] text-alloy-midnight/30">
-                            Renames this column (e.g. Household → Family). Saved to layout.
+                            Renames this column (e.g. Family / Parents → Family name). Saved to layout.
                         </p>
                     </div>
                 )}
@@ -1120,45 +1146,55 @@ function PublishToolbar({
 type Props = {
     surfaceId?: string;
     embedded?: boolean;
-    canvasPresentation?: "overlay" | "preview-only";
     controlledLayout?: QueueRecordLayoutConfigV3;
     onControlledLayoutChange?: (layout: QueueRecordLayoutConfigV3) => void;
     onDirtyChange?: (dirty: boolean) => void;
-    previewStageKey?: string;
+    /** Candidate-grain library (waitlist fields/widgets) for the active variant. */
+    libraryIsWaitlist?: boolean;
+    /** When embedded inside QueueRowSurfaceEditor — variant tab inspector context. */
+    embeddedVariantEditor?: {
+        variant: QueueRowVariant;
+        processStages: readonly ProcessStageOption[];
+        stagesLoading?: boolean;
+        onPatch: (patch: Partial<QueueRowVariant>) => void;
+        onClose?: () => void;
+    };
 };
 
 export default function QueueRowBuilderV2({
     surfaceId = "pipeline-queue-row",
     embedded = false,
-    canvasPresentation = "overlay",
     controlledLayout,
     onControlledLayoutChange,
     onDirtyChange,
-    previewStageKey,
+    libraryIsWaitlist,
+    embeddedVariantEditor,
 }: Props) {
     const isControlled = controlledLayout != null;
-    const isWaitlist = surfaceId === "waitlist-queue-row";
-    const surfaceLabel = isWaitlist ? "Waitlist Queue Row" : "Pipeline Queue Row";
-    const grainLabel = isWaitlist ? "Candidate grain" : "Case grain";
+    const catalogIsWaitlist = libraryIsWaitlist ?? surfaceId === "waitlist-queue-row";
+    const surfaceLabel = catalogIsWaitlist ? "Waitlist Queue Row" : "Pipeline Queue Row";
+    const grainLabel = catalogIsWaitlist ? "Candidate grain" : "Case grain";
 
-    const catalog = useRef(buildCatalog(isWaitlist));
+    const catalog = useMemo(() => buildCatalog(catalogIsWaitlist), [catalogIsWaitlist]);
 
     const { data: serverData, loading: serverLoading, error: loadError } = useQueueRowLayoutConfig(
         isControlled ? "__controlled__" : surfaceId,
     );
     const { publish, publishing, error: publishError, publishedAt } = useQueueRowPublish(surfaceId);
     // Operator-created custom fields — merged into compatible groups' Add Field lists.
-    const { tenantFieldDefinitions } = useTenantFieldDefinitions(isWaitlist ? "placement_candidate" : "opportunities");
+    const { tenantFieldDefinitions } = useTenantFieldDefinitions(catalogIsWaitlist ? "placement_candidate" : "opportunities");
 
-    const defaultConfig = controlledLayout ?? (isWaitlist ? defaultWaitlistQueueLayoutV3() : defaultLeadQueueLayoutV3());
+    const defaultConfig = controlledLayout ?? (catalogIsWaitlist ? defaultWaitlistQueueLayoutV3() : defaultLeadQueueLayoutV3());
     const loading = isControlled ? false : serverLoading;
 
     const [zones, setZones] = useState<RowZoneState[]>(() =>
-        stateFromConfig(defaultConfig, catalog.current, isWaitlist),
+        stateFromConfig(defaultConfig, catalog, catalogIsWaitlist),
     );
     const [placementOverrideEnabled, setPlacementOverrideEnabled] = useState(false);
     const [dirty, setDirty] = useState(false);
     const [selectedKey, setSelectedKey] = useState<ZoneKey | null>(null);
+    const [libraryOpen, setLibraryOpen] = useState(false);
+    const [libraryTargetZone, setLibraryTargetZone] = useState<ZoneKey | null>(null);
 
     // Init from server data. Re-runs when tenant field definitions load so custom
     // fields appear in each group's Add Field list. (Resets local edits — acceptable:
@@ -1166,19 +1202,19 @@ export default function QueueRowBuilderV2({
     useEffect(() => {
         const source = controlledLayout ?? serverData?.config;
         if (!source) return;
-        setZones(stateFromConfig(source, catalog.current, isWaitlist, tenantFieldDefinitions));
+        setZones(stateFromConfig(source, catalog, catalogIsWaitlist, tenantFieldDefinitions));
         if (!isControlled) {
             setPlacementOverrideEnabled(serverData?.placementOverrideEnabled ?? false);
         }
         if (!isControlled) setDirty(false);
-    }, [controlledLayout, serverData, tenantFieldDefinitions, isWaitlist, isControlled]);
+    }, [controlledLayout, serverData, tenantFieldDefinitions, catalogIsWaitlist, isControlled, catalog]);
 
     function mark(updater: (prev: RowZoneState[]) => RowZoneState[]) {
         setZones((prev) => {
             const next = updater(prev);
             if (onControlledLayoutChange) {
                 const base = controlledLayout ?? serverData?.config ?? defaultConfig;
-                onControlledLayoutChange(buildConfigFromState(base, next, catalog.current));
+                onControlledLayoutChange(buildConfigFromState(base, next, catalog));
             }
             return next;
         });
@@ -1186,15 +1222,67 @@ export default function QueueRowBuilderV2({
         onDirtyChange?.(true);
     }
 
-    // Canvas: add zone from library
+    // Canvas: add zone from library (section shell only — fields/widgets added separately)
     const addZone = useCallback((key: ZoneKey) => {
-        mark((prev) => prev.map((z) =>
-            z.key === key
-                ? { ...z, inRow: true, evidenceGroups: z.evidenceGroups.map((g) => ({ ...g, enabled: true })) }
-                : z,
-        ));
+        mark((prev) => prev.map((z) => (z.key === key ? { ...z, inRow: true } : z)));
         setSelectedKey(key);
     }, []);
+
+    const addFieldFromLibrary = useCallback((zoneKey: ZoneKey, fieldKey: string) => {
+        mark((prev) =>
+            prev.map((z) => {
+                if (z.key !== zoneKey) return z;
+                return {
+                    ...z,
+                    inRow: true,
+                    evidenceGroups: z.evidenceGroups.map((g) => ({
+                        ...g,
+                        enabled: g.fields.some((f) => f.fieldKey === fieldKey) ? true : g.enabled,
+                        fields: g.fields.map((f) =>
+                            f.fieldKey === fieldKey ? { ...f, enabled: true } : f,
+                        ),
+                    })),
+                };
+            }),
+        );
+        setSelectedKey(zoneKey);
+    }, []);
+
+    const addWidgetFromLibrary = useCallback(
+        (zoneKey: ZoneKey, widgetKey: string) => {
+            const blockId = findWidgetBlockId(catalog, zoneKey, widgetKey);
+            if (!blockId) return;
+            mark((prev) =>
+                prev.map((z) => {
+                    if (z.key !== zoneKey) return z;
+                    return {
+                        ...z,
+                        inRow: true,
+                        evidenceGroups: z.evidenceGroups.map((g) =>
+                            g.blockId === blockId ? { ...g, enabled: true } : g,
+                        ),
+                    };
+                }),
+            );
+            setSelectedKey(zoneKey);
+        },
+        [catalog],
+    );
+
+    const openLibrary = useCallback((targetZone: ZoneKey | null) => {
+        setLibraryTargetZone(targetZone);
+        setLibraryOpen(true);
+    }, []);
+
+    const libraryItems = useMemo(
+        () =>
+            buildQueueRowLibraryCatalog({
+                isWaitlist: catalogIsWaitlist,
+                inRowZoneKeys: zones.filter((z) => z.inRow).map((z) => z.key),
+                tenantFieldDefinitions,
+            }),
+        [catalogIsWaitlist, zones, tenantFieldDefinitions],
+    );
 
     // Canvas: remove zone back to library
     const removeZone = useCallback((key: ZoneKey) => {
@@ -1247,6 +1335,23 @@ export default function QueueRowBuilderV2({
         );
     }, []);
 
+    const handleLibraryPick = useCallback(
+        (item: QueueRowLibraryItem) => {
+            const placementZone = libraryTargetZone ?? selectedKey;
+            if (item.kind === "zone") {
+                addZone(item.zoneKey);
+                setLibraryTargetZone(item.zoneKey);
+                return;
+            }
+            const zoneKey = placementZone ?? item.zoneKey;
+            if (item.kind === "field") addFieldFromLibrary(zoneKey, item.fieldKey);
+            else addWidgetFromLibrary(zoneKey, item.widgetKey);
+            setLibraryOpen(false);
+            setLibraryTargetZone(null);
+        },
+        [addZone, addFieldFromLibrary, addWidgetFromLibrary, libraryTargetZone, selectedKey],
+    );
+
     const setCondition = useCallback((key: ZoneKey, condition: LayoutCondition) => {
         mark((prev) => prev.map((z) => (z.key === key ? { ...z, visibleWhen: condition } : z)));
     }, []);
@@ -1278,7 +1383,7 @@ export default function QueueRowBuilderV2({
 
     async function handlePublish() {
         const base = serverData?.config ?? defaultConfig;
-        const config = buildConfigFromState(base, zones, catalog.current);
+        const config = buildConfigFromState(base, zones, catalog);
         await publish(config, placementOverrideEnabled);
         setDirty(false);
     }
@@ -1289,16 +1394,16 @@ export default function QueueRowBuilderV2({
     // shape the runtime consumes. Feeding it to the real CondensedQueueRow makes the
     // canvas the live runtime row, not a mock.
     const liveConfig = useMemo(
-        () => buildConfigFromState(controlledLayout ?? serverData?.config ?? defaultConfig, zones, catalog.current),
-        [controlledLayout, serverData, defaultConfig, zones],
+        () => buildConfigFromState(controlledLayout ?? serverData?.config ?? defaultConfig, zones, catalog),
+        [controlledLayout, serverData, defaultConfig, zones, catalog],
     );
-    const sampleRow = useMemo(() => sampleRowModel(isWaitlist, previewStageKey), [isWaitlist, previewStageKey]);
+    const previewRow = useMemo(() => blankPreviewRowModel(), []);
 
     return (
         <div
             className={`queue-row-builder flex h-full min-h-0 flex-col gap-4 overflow-auto ${embedded ? "" : ""}`}
             data-queue-row-builder={surfaceId}
-            data-canvas-presentation={canvasPresentation}
+            data-canvas-presentation="overlay"
         >
             {!embedded ? (
             <header className="border-b border-alloy-stone/10 pb-3">
@@ -1328,55 +1433,104 @@ export default function QueueRowBuilderV2({
                     <div className="h-24 animate-pulse rounded-xl border border-alloy-stone/12 bg-alloy-stone/5" />
                     <div className="h-8 w-48 animate-pulse rounded-full bg-alloy-stone/5" />
                 </div>
-            ) : (
-                <>
-                    {canvasPresentation === "preview-only" ? (
-                        <div className="space-y-3 rounded-xl border border-alloy-stone/12 bg-white p-3" data-queue-row-preview-canvas>
-                            <CondensedQueueRow
-                                row={sampleRow}
-                                rowConfig={mapQueueRowSurfaceToCompactConfig(liveConfig).slots}
-                                isSelected={false}
-                                onOpen={() => {}}
-                            />
-                            <div className="flex flex-wrap gap-2" data-queue-row-zone-selectors>
-                                {zones.filter((z) => z.inRow && z.key !== "actions").map((z) => (
-                                    <button
-                                        key={z.key}
-                                        type="button"
-                                        onClick={() => setSelectedKey(z.key)}
-                                        className={`rounded-full px-2.5 py-1 text-[11px] font-medium ${
-                                            selectedKey === z.key
-                                                ? "bg-alloy-pine text-white"
-                                                : "bg-alloy-stone/10 text-alloy-midnight/65 hover:bg-alloy-stone/20"
-                                        }`}
-                                        data-canvas-zone={z.key}
-                                    >
-                                        {ZONE_LABELS[z.key]}
-                                    </button>
-                                ))}
-                            </div>
-                        </div>
-                    ) : (
+            ) : embedded ? (
+                <div className="flex min-h-0 flex-1 flex-col gap-4 lg:flex-row lg:items-start" data-queue-row-embedded-layout>
+                    <div className="min-w-0 flex-1">
                         <QueueRowRuntimeCanvas
                             zones={zones}
                             liveConfig={liveConfig}
-                            sampleRow={sampleRow}
+                            previewRow={previewRow}
                             selectedKey={selectedKey}
+                            libraryTargetZone={libraryTargetZone}
+                            embedded
                             onSelect={setSelectedKey}
                             onRemove={removeZone}
                             onReorder={moveZone}
                             onAddField={(key, blockId, fieldKey) => toggleField(key, blockId, fieldKey)}
+                            onOpenLibrary={openLibrary}
                         />
-                    )}
+                        <QueueRowItemLibraryPanel
+                            open={libraryOpen}
+                            targetZone={libraryTargetZone}
+                            items={libraryItems}
+                            onPick={handleLibraryPick}
+                            onClose={() => {
+                                setLibraryOpen(false);
+                                setLibraryTargetZone(null);
+                            }}
+                        />
+                    </div>
+                    <aside className="w-full shrink-0 lg:w-80" data-queue-row-contextual-inspector>
+                        {selectedZone ? (
+                            <BlockInspector
+                                zone={selectedZone}
+                                isWaitlist={catalogIsWaitlist}
+                                placementOverrideEnabled={placementOverrideEnabled}
+                                onClose={() => setSelectedKey(null)}
+                                onSetWidth={(w) => setWidth(selectedZone.key, w)}
+                                onSetRow={(rowIndex) => setRow(selectedZone.key, rowIndex)}
+                                onSetLabel={(label) => setLabel(selectedZone.key, label)}
+                                onToggleGroup={(blockId) => toggleGroup(selectedZone.key, blockId)}
+                                onToggleField={(blockId, fieldKey) => toggleField(selectedZone.key, blockId, fieldKey)}
+                                onSetCondition={(c) => setCondition(selectedZone.key, c)}
+                                onClearCondition={() => clearCondition(selectedZone.key)}
+                                onTogglePlacementOverride={togglePlacementOverride}
+                            />
+                        ) : embeddedVariantEditor ? (
+                            <QueueRowVariantInspector
+                                variant={embeddedVariantEditor.variant}
+                                processStages={embeddedVariantEditor.processStages}
+                                stagesLoading={embeddedVariantEditor.stagesLoading}
+                                onPatch={embeddedVariantEditor.onPatch}
+                                onClose={embeddedVariantEditor.onClose}
+                            />
+                        ) : (
+                            <QueueRowCanvasHint />
+                        )}
+                    </aside>
+                </div>
+            ) : (
+                <>
+                    <QueueRowRuntimeCanvas
+                        zones={zones}
+                        liveConfig={liveConfig}
+                        previewRow={previewRow}
+                        selectedKey={selectedKey}
+                        libraryTargetZone={libraryTargetZone}
+                        onSelect={setSelectedKey}
+                        onRemove={removeZone}
+                        onReorder={moveZone}
+                        onAddField={(key, blockId, fieldKey) => toggleField(key, blockId, fieldKey)}
+                        onOpenLibrary={openLibrary}
+                    />
 
-                    {/* Block library tray */}
-                    <BlockLibraryTray zones={zones} onAdd={addZone} />
+                    <div className="flex items-center gap-2">
+                        <button
+                            type="button"
+                            onClick={() => openLibrary(null)}
+                            className="rounded-lg border border-alloy-stone/20 bg-white px-3 py-1.5 text-[12px] font-medium text-alloy-pine hover:border-alloy-pine/40 hover:bg-alloy-pine/[0.04]"
+                            data-open-item-library
+                        >
+                            + Add item
+                        </button>
+                        <span className="text-[10px] text-alloy-midnight/35">Click the row canvas or a zone to open the library</span>
+                    </div>
 
-                    {/* Block inspector */}
-                    {selectedZone && (
+                    <QueueRowItemLibraryPanel
+                        open={libraryOpen}
+                        targetZone={libraryTargetZone}
+                        items={libraryItems}
+                        onPick={handleLibraryPick}
+                        onClose={() => {
+                            setLibraryOpen(false);
+                            setLibraryTargetZone(null);
+                        }}
+                    />
+
+                    {selectedZone ? (
                         <BlockInspector
                             zone={selectedZone}
-                            isWaitlist={isWaitlist}
+                            isWaitlist={catalogIsWaitlist}
                             placementOverrideEnabled={placementOverrideEnabled}
                             onClose={() => setSelectedKey(null)}
                             onSetWidth={(w) => setWidth(selectedZone.key, w)}
@@ -1388,7 +1542,7 @@ export default function QueueRowBuilderV2({
                             onClearCondition={() => clearCondition(selectedZone.key)}
                             onTogglePlacementOverride={togglePlacementOverride}
                         />
-                    )}
+                    ) : null}
                 </>
             )}
 

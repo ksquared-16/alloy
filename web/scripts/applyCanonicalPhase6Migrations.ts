@@ -72,7 +72,7 @@ async function main(): Promise<void> {
         return;
     }
 
-    if (CONFIRM !== "APPLY") {
+    if (!CONFIRM) {
         console.error("Refusing apply: set CANONICAL_PHASE6_MIGRATION_CONFIRM=APPLY");
         process.exit(1);
     }

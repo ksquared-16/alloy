@@ -4,7 +4,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import HouseholdContactEdit from "@/components/admin/focusPanel/cards/HouseholdContactEdit";
-import type { PersonContactValues } from "@/lib/adminV2/runtime/focusPanel/focusPanelMutation";
+import type { FocusPanelSaveResult, PersonContactValues } from "@/lib/adminV2/runtime/focusPanel/focusPanelMutation";
 
 const INITIAL: PersonContactValues = {
     first_name: "Jordan",
@@ -56,7 +56,7 @@ afterEach(() => {
 });
 
 function mount(opts: {
-    save: () => Promise<{ ok: boolean; error?: string }>;
+    save: () => Promise<FocusPanelSaveResult>;
     onClose?: () => void;
     onSaved?: () => void;
 }) {
@@ -76,17 +76,17 @@ function mount(opts: {
 
 describe("HouseholdContactEdit — canonical runtime behavior", () => {
     it("titles the form with the person name", () => {
-        mount({ save: vi.fn().mockResolvedValue({ ok: true }) });
+        mount({ save: vi.fn().mockResolvedValue({ ok: true as const }) });
         expect(q('data-household-edit-title="true"')?.textContent).toBe("Edit Jordan Johnson");
     });
 
     it("save button is disabled when form is clean", () => {
-        mount({ save: vi.fn().mockResolvedValue({ ok: true }) });
+        mount({ save: vi.fn().mockResolvedValue({ ok: true as const }) });
         expect(saveBtn().disabled).toBe(true);
     });
 
     it("save button enables after a field is changed", () => {
-        mount({ save: vi.fn().mockResolvedValue({ ok: true }) });
+        mount({ save: vi.fn().mockResolvedValue({ ok: true as const }) });
         act(() => setInput("first_name", "Alex"));
         expect(saveBtn().disabled).toBe(false);
     });
@@ -94,7 +94,7 @@ describe("HouseholdContactEdit — canonical runtime behavior", () => {
     it("successful save: shows Saved, locks inputs, then calls onSaved after ack beat", async () => {
         const onSaved = vi.fn();
         const onClose = vi.fn();
-        const saveFn = vi.fn().mockResolvedValue({ ok: true });
+        const saveFn = vi.fn().mockResolvedValue({ ok: true as const });
         mount({ save: saveFn, onSaved, onClose });
 
         act(() => setInput("first_name", "Alex"));
@@ -113,7 +113,7 @@ describe("HouseholdContactEdit — canonical runtime behavior", () => {
 
     it("failed save: retains operator draft, shows error, re-enables save", async () => {
         const onSaved = vi.fn();
-        const saveFn = vi.fn().mockResolvedValue({ ok: false, error: "Network error" });
+        const saveFn = vi.fn().mockResolvedValue({ ok: false as const, status: 500, error: "Network error" });
         mount({ save: saveFn, onSaved });
 
         act(() => setInput("email", "new@example.com"));
@@ -156,12 +156,12 @@ describe("HouseholdContactEdit — canonical runtime behavior", () => {
     });
 
     it("no status shown when clean", () => {
-        mount({ save: vi.fn().mockResolvedValue({ ok: true }) });
+        mount({ save: vi.fn().mockResolvedValue({ ok: true as const }) });
         expect(statusEl()).toBeNull();
     });
 
     it("shows unsaved-changes status while dirty", () => {
-        mount({ save: vi.fn().mockResolvedValue({ ok: true }) });
+        mount({ save: vi.fn().mockResolvedValue({ ok: true as const }) });
         act(() => setInput("last_name", "Smith"));
         expect(statusEl()?.getAttribute("data-editable-card-status")).toBe("unsaved");
     });
@@ -169,7 +169,7 @@ describe("HouseholdContactEdit — canonical runtime behavior", () => {
     it("cancel during ack window clears the timer and calls onClose immediately", async () => {
         const onSaved = vi.fn();
         const onClose = vi.fn();
-        const saveFn = vi.fn().mockResolvedValue({ ok: true });
+        const saveFn = vi.fn().mockResolvedValue({ ok: true as const });
         mount({ save: saveFn, onSaved, onClose });
 
         act(() => setInput("first_name", "Alex"));
@@ -186,7 +186,7 @@ describe("HouseholdContactEdit — canonical runtime behavior", () => {
 
     it("falls back to onClose when onSaved is not provided", async () => {
         const onClose = vi.fn();
-        const saveFn = vi.fn().mockResolvedValue({ ok: true });
+        const saveFn = vi.fn().mockResolvedValue({ ok: true as const });
         mount({ save: saveFn, onClose });
 
         act(() => setInput("first_name", "Alex"));

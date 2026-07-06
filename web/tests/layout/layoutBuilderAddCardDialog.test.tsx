@@ -104,7 +104,7 @@ describe("LayoutBuilderAddCardDialog card type selection", () => {
                 .querySelector('[data-testid="layout-builder-add-card-submit"]')
                 ?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
         });
-        expect(submitted?.cardType).toBe("related_list");
+        expect(submitted).toMatchObject({ cardType: "related_list" });
     });
 });
 

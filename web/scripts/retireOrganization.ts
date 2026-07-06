@@ -177,6 +177,8 @@ async function resolveAllOrgOperationalIds(supabase: SupabaseAdmin, orgId: strin
         threadIds: [...threadIds],
         formSubmissionIds: [...formSubmissionIds],
         documentIds: [...documentIds],
+        sharedPersonIds: [],
+        sharedCustomerIds: [],
     };
 }
 

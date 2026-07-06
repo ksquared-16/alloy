@@ -10,7 +10,7 @@ import type { MetricResolveContext } from "@/lib/metrics/types";
 import { buildProcessParticipant } from "@/lib/process/engine";
 import type { EnrollmentParticipant, EnrollmentAttributes } from "@/lib/process/definitions/enrollment";
 
-const loadMock = vi.fn<[], Promise<EnrollmentParticipant[]>>();
+const loadMock = vi.fn(async (): Promise<EnrollmentParticipant[]> => []);
 vi.mock("@/lib/process/definitions/enrollment", async (importOriginal) => {
     const actual = await importOriginal<typeof import("@/lib/process/definitions/enrollment")>();
     return { ...actual, enrollmentProjection: { ...actual.enrollmentProjection, load: () => loadMock() } };

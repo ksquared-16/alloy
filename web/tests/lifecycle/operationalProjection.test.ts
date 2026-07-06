@@ -148,7 +148,7 @@ describe("New Leads vs Registration placement (stage derived from status)", () =
         const stageFilters = [{ field_key: "opportunity_stage" as const, operator: "equals" as const, value: "lead" }];
         const matched = filterQueueRowsForWorkView([queueRow], stageFilters, "all");
         expect(matched).toHaveLength(1);
-        expect(matched[0]!.lifecycle_stage_key).toBe("lead");
+        expect((matched[0] as { lifecycle_stage_key?: string }).lifecycle_stage_key).toBe("lead");
     });
 
     it("filterQueueRowsForWorkView excludes non-matching stage after enrichment", () => {

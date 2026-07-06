@@ -6,8 +6,11 @@
  */
 
 import type { QueueRecordLayoutConfigV3, QueueRowVariant } from "@/lib/layout/queueRecordLayoutV3";
-import { defaultEnrollmentQueueRowLayoutWithVariantsV1 } from "@/lib/layout/queueRecordLayoutDefaults";
+import { emptyQueueRowLayoutV3 } from "@/lib/layout/queueRecordLayoutDefaults";
 import { nextQueueRecordBlockId } from "@/lib/layout/queueRecordLayoutIds";
+import { QUEUE_ROW_PUBLISH_EMPTY_COLUMNS_MESSAGE } from "@/lib/layout/runtime/validateQueueRecordLayoutConfig";
+
+export { QUEUE_ROW_PUBLISH_EMPTY_COLUMNS_MESSAGE };
 
 export type QueueRowSubjectFocusOption = "household" | "active_child" | "placement_candidate_child" | "opportunity";
 
@@ -51,7 +54,7 @@ export function buildDefaultQueueRowSurfaceEnvelope(args: {
         name: `${args.processName.trim() || "Process"} Queue Row`,
         catalogId: args.catalogId,
         processKey: args.processKey,
-        layout: defaultEnrollmentQueueRowLayoutWithVariantsV1(),
+        layout: emptyQueueRowLayoutV3(),
     };
 }
 
@@ -69,15 +72,15 @@ export function createQueueRowVariant(args: {
     columns?: QueueRowVariant["columns"];
     seedFrom?: QueueRecordLayoutConfigV3;
 }): QueueRowVariant {
-    const seed = args.seedFrom ?? defaultEnrollmentQueueRowLayoutWithVariantsV1();
+    const seed = args.seedFrom;
     return {
         id: nextQueueRecordBlockId("variant"),
         label: args.label.trim() || "Variant",
         priority: args.priority,
         appliesWhen: args.appliesWhen,
         subjectFocus: args.subjectFocus,
-        columns: args.columns ?? structuredClone(seed.columns),
-        fixedControls: structuredClone(seed.fixedControls),
+        columns: args.columns ?? (seed ? structuredClone(seed.columns) : []),
+        fixedControls: seed ? structuredClone(seed.fixedControls) : { actionsMenu: true, workWithBos: true, actionRailStyle: "stacked" },
     };
 }
 
@@ -96,4 +99,10 @@ export function readQueueRowSurfaceFromDocMetadata(
         processKey: "",
         layout: legacyLayout,
     };
+}
+
+/** True when Default or at least one variant has configured row columns. */
+export function queueRowSurfaceHasConfiguredColumns(layout: QueueRecordLayoutConfigV3): boolean {
+    if (layout.columns.length > 0) return true;
+    return (layout.variants ?? []).some((v) => v.columns.length > 0);
 }

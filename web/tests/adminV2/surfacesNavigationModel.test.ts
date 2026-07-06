@@ -21,7 +21,7 @@ describe("Surfaces — navigation model", () => {
     it("does not hardcode workspace process surfaces in the navigation model", () => {
         const src = sectionLabel("workspaces");
         expect(src).toBe("Workspaces");
-        expect(SURFACE_OBJECTS.workspaces).toBeUndefined();
+        expect("workspaces" in SURFACE_OBJECTS).toBe(false);
     });
 
     it("exposes Workspace Header as a Workspaces entry via the fixed surface object", async () => {

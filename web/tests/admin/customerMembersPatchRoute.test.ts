@@ -179,7 +179,7 @@ describe("customer-members PATCH route", () => {
             chainableSupabase({
                 customerMembersSelect: { data: { id: memberId }, error: null },
                 customerMembersUpdate: { data: memberRow, error: null },
-            }) as ReturnType<typeof createAdminClient>
+            }) as unknown as ReturnType<typeof createAdminClient>
         );
 
         const req = new NextRequest(`http://localhost/api/admin/customer-members/${memberId}`, {
@@ -206,7 +206,7 @@ describe("customer-members PATCH route", () => {
                     ],
                     error: null,
                 },
-            }) as ReturnType<typeof createAdminClient>
+            }) as unknown as ReturnType<typeof createAdminClient>
         );
 
         const req = new NextRequest(`http://localhost/api/admin/customer-members/${memberId}`, {
@@ -234,7 +234,7 @@ describe("customer-members PATCH route", () => {
         vi.mocked(createAdminClient).mockReturnValue(
             chainableSupabase({
                 customerMembersSelect: { data: null, error: null },
-            }) as ReturnType<typeof createAdminClient>
+            }) as unknown as ReturnType<typeof createAdminClient>
         );
 
         const req = new NextRequest(`http://localhost/api/admin/customer-members/${memberId}`, {
@@ -293,7 +293,7 @@ describe("customer-members GET route", () => {
                     },
                     error: null,
                 },
-            }) as ReturnType<typeof createAdminClient>
+            }) as unknown as ReturnType<typeof createAdminClient>
         );
 
         const res = await GET(new NextRequest(`http://localhost/api/admin/customer-members/${memberId}`), {
@@ -319,7 +319,7 @@ describe("customer-members GET route", () => {
         vi.mocked(createAdminClient).mockReturnValue(
             chainableSupabase({
                 customerMembersSelect: { data: null, error: null },
-            }) as ReturnType<typeof createAdminClient>
+            }) as unknown as ReturnType<typeof createAdminClient>
         );
 
         const res = await GET(new NextRequest(`http://localhost/api/admin/customer-members/${memberId}`), {
@@ -345,7 +345,7 @@ describe("OCM route isolation — profile config fields stay off inquiry_child",
                     data: [{ field_key: "medical_notes", entity_type: "customer_member" }],
                     error: null,
                 },
-            }) as ReturnType<typeof createAdminClient>
+            }) as unknown as ReturnType<typeof createAdminClient>
         );
 
         const req = new NextRequest(`http://localhost/api/admin/customer-members/${memberId}`, {

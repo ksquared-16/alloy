@@ -170,6 +170,7 @@ describe("tenant layout field picker catalog", () => {
                 ...section,
                 rows: [
                     {
+                        id: "row-tenant-custom",
                         columns: [
                             {
                                 id: "col-tenant-opp-field",

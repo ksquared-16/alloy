@@ -17,8 +17,8 @@ describe("deriveOpportunityFocusPanelPresentation", () => {
                 state: "loaded",
                 open_count: 2,
                 open_tasks: [
-                    { id: "t1", title: "Follow up", due_at: null, status: "open", source: "task_assist" },
-                    { id: "t2", title: "Send form", due_at: null, status: "open", source: "task_assist" },
+                    { id: "t1", title: "Follow up", due_at: "", status: "open", source: "task_assist" },
+                    { id: "t2", title: "Send form", due_at: "", status: "open", source: "task_assist" },
                 ],
             },
             active_tour_bookings: [],

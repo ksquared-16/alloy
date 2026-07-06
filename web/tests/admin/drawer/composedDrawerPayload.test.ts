@@ -466,6 +466,6 @@ describe("composedDrawerPayload wiring", () => {
         const controls = readSrc("components/admin/opportunity/OpportunityDrawerHeaderControls.tsx");
         expect(controls).toContain('data-opportunity-header-controls-row="composed"');
         expect(controls).toContain("DrawerHeaderAttentionBlock");
-        expect(controls).toMatch(/flex w-full min-w-0 items-start gap-3[\s\S]*DrawerHeaderAttentionBlock/);
+        expect(controls).toMatch(/flex w-full min-w-0 items-start gap-2\.5[\s\S]*data-opportunity-header-controls-row="attention"/);
     });
 });

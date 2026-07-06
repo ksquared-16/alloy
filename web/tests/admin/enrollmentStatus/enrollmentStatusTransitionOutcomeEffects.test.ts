@@ -231,6 +231,7 @@ describe("executeEnrollmentStatusTransition outcome wiring", () => {
             validation: { ok: true, blocking: [], warnings: [], recommendations: [] },
             requiresBypassReason: true,
             destinationSource: "bp",
+            skippedStageLabels: [],
         });
     });
 

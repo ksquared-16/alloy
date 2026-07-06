@@ -17,10 +17,6 @@ function readSrc(rel: string): string {
 
 describe("System 5A Universal Card Archetypes", () => {
     const baseVm = minimalSettledOpportunityDrawerViewModel({
-        actions: {
-            header_menu: [{ action_key: "schedule_tour", label: "Schedule tour" } as never],
-            drawer_tabs: [],
-        },
         summaries: {
             attention: {
                 visible: true,
@@ -32,9 +28,17 @@ describe("System 5A Universal Card Archetypes", () => {
                 state: "loaded",
                 open_count: 1,
                 open_tasks: [
-                    { id: "t1", title: "Tour follow-up overdue", due_at: null, status: "open", source: "task_assist" },
+                    { id: "t1", title: "Tour follow-up overdue", due_at: "", status: "open", source: "task_assist" },
                 ],
             },
+            active_tour_bookings: [],
+            reminders: {
+                state: "empty",
+                next_follow_up_iso: null,
+                scheduled_send_count: 0,
+                scheduled_sends: [],
+            },
+            bos: null,
         },
     });
 

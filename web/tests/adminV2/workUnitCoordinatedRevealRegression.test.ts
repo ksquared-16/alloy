@@ -9,18 +9,18 @@ function readSrc(rel: string): string {
 }
 
 describe("workUnitCoordinatedRevealRegression", () => {
-    it("page does not expose row skeleton as visible lane state", () => {
-        const page = readSrc(
-            "app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page.tsx"
-        );
-        expect(page).toContain("resolveWorkUnitQueueLaneRevealState");
-        expect(page).toContain("rowsHeld:");
-        expect(page).not.toContain("page_seeded_from_cache: workUnitPageSeededWarm");
+    it("WorkUnitSurface does not seed warm page reveal from cache", () => {
+        const surface = readSrc("components/presentation/workUnit/WorkUnitSurface.tsx");
+        expect(surface).toContain("resolveWorkUnitSurfaceRenderMode");
+        expect(surface).toContain("useWorkUnitSurfaceRuntime");
+        expect(surface).not.toContain("page_seeded_from_cache: workUnitPageSeededWarm");
     });
 
-    it("QueueBlock skips skeleton when lane is held", () => {
-        const block = readSrc("app/adminV2/components/workspace/blocks/QueueBlock.tsx");
-        expect(block).toContain("!queue.rowsHeld");
+    it("QueueRegion skips skeleton when prior rows are held during refetch", () => {
+        const region = readSrc("components/presentation/workUnit/QueueRegion.tsx");
+        expect(region).toContain("queueRegionRenderState");
+        expect(region).toContain('renderState === "cold-loading"');
+        expect(region).toContain("aria-busy={queue.loading || undefined}");
     });
 
     it("warm page reveal policy requires critical bundle before first paint", () => {

@@ -158,7 +158,7 @@ async function main() {
         .eq("entity_id", opportunityId);
     const scheduledNew = (afterScheduledTasks ?? []).filter((r) => !beforeScheduledIds.has((r as { id: string }).id));
     const scheduledBp = scheduledNew.filter((r) =>
-        isOperatingPlanWorkIntentTask(taskPreviewFromRow(r as { id: string; metadata?: Record<string, unknown> })),
+        isOperatingPlanWorkIntentTask(taskPreviewFromRow(r as { id: string; metadata?: Record<string, unknown> }), "tour_scheduled"),
     );
     if (scheduledBp.length !== 0) fail("tour_scheduled should not spawn BP work", { scheduledNew, scheduledBp });
     pass("tour_scheduled creates no BP work");
@@ -202,7 +202,11 @@ async function main() {
     pass("no workflow-provenance record_tour_outcome task created");
 
     const bpTasks = completedNew.filter((r) =>
-        isOperatingPlanWorkIntentTask(taskPreviewFromRow(r as { id: string; title?: string; metadata?: Record<string, unknown> })),
+        isOperatingPlanWorkIntentTask(
+            taskPreviewFromRow(r as { id: string; title?: string; metadata?: Record<string, unknown> }),
+            "tour_completed",
+            ["record_tour_outcome_work"],
+        ),
     );
     if (bpTasks.length !== 1) fail("expected exactly one BP-spawned task on tour_completed", { completedNew, bpTasks });
     const bpMd = (bpTasks[0] as { metadata: Record<string, unknown> }).metadata;
@@ -232,10 +236,19 @@ async function main() {
 
     const allOpen = (afterCompletedTasks ?? []).filter((r) => (r as { status?: string }).status === "open");
     const currentWork = allOpen.filter((r) =>
-        isOperatingPlanWorkIntentTask(taskPreviewFromRow(r as { id: string; title?: string; metadata?: Record<string, unknown> })),
+        isOperatingPlanWorkIntentTask(
+            taskPreviewFromRow(r as { id: string; title?: string; metadata?: Record<string, unknown> }),
+            "tour_completed",
+            ["record_tour_outcome_work"],
+        ),
     );
     const followUps = allOpen.filter(
-        (r) => !isOperatingPlanWorkIntentTask(taskPreviewFromRow(r as { id: string; title?: string; metadata?: Record<string, unknown> })),
+        (r) =>
+            !isOperatingPlanWorkIntentTask(
+                taskPreviewFromRow(r as { id: string; title?: string; metadata?: Record<string, unknown> }),
+                "tour_completed",
+                ["record_tour_outcome_work"],
+            ),
     );
     if (currentWork.length !== 1) fail("Current Work projection count", { currentWork });
     pass("Current Work has BP task; Follow-ups excludes BP stamp");
@@ -258,7 +271,11 @@ async function main() {
     if (manualErr || !manual) fail("insert manual task", manualErr);
     if (!followUps.some((t) => (t as { title?: string }).title === manualTitle)) {
         // manual is new; verify it would not be classified as BP work
-        if (isOperatingPlanWorkIntentTask(taskPreviewFromRow(manual as { id: string; title?: string; metadata?: Record<string, unknown> }))) {
+        if (isOperatingPlanWorkIntentTask(
+            taskPreviewFromRow(manual as { id: string; title?: string; metadata?: Record<string, unknown> }),
+            "tour_completed",
+            ["record_tour_outcome_work"],
+        )) {
             fail("manual task incorrectly classified as BP work", manual);
         }
     }
