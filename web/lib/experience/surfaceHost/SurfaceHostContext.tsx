@@ -32,6 +32,9 @@ import {
     surfaceHostReducer,
     type SurfaceHostState,
 } from "@/lib/experience/surfaceHost/surfaceHostState";
+import { surfaceHostShouldRenderWorkUnit } from "@/lib/experience/surfaceHost/surfaceHostRender";
+import { useWorkUnitSurfaceController } from "@/lib/experience/surfaceHost/workUnitSurfaceController";
+import { WorkUnitSurfaceView } from "@/components/admin/workspace/WorkUnitSlugRouteHost";
 
 export type SurfaceHostValue = {
     state: SurfaceHostState;
@@ -84,5 +87,32 @@ export function SurfaceHostProvider({ children }: { children: ReactNode }) {
 
     const value = useMemo<SurfaceHostValue>(() => ({ state }), [state]);
 
-    return <SurfaceHostContext.Provider value={value}>{children}</SurfaceHostContext.Provider>;
+    // Canonical render takeover (Step 3). Decided from the LIVE pathname (in sync with `children`,
+    // not the reducer state which lags one effect). On a work-unit URL the Host mounts the work-unit
+    // surface via the shared controller, while the route (`children`) is the seed-only component
+    // (renders null after writing the server identity to the module cache). Exactly one controller
+    // runs the identity / deep-link / URL-sync effects — no parallel route-render mode.
+    const liveRef = surfaceRefFromPath(pathname);
+    const hostWorkUnitSlug = surfaceHostShouldRenderWorkUnit(liveRef) ? liveRef.workUnitSlug : null;
+
+    return (
+        <SurfaceHostContext.Provider value={value}>
+            {children}
+            {hostWorkUnitSlug != null ? (
+                <SurfaceHostWorkUnitMount workUnitSlug={hostWorkUnitSlug} />
+            ) : null}
+        </SurfaceHostContext.Provider>
+    );
+}
+
+/**
+ * Host-mounted work-unit surface. Drives the SAME `useWorkUnitSurfaceController` as the route host,
+ * so identity, record deep-link opening, and URL sync are byte-identical — the surface is simply
+ * owned by the Host (which will let it be held during the exchange in Step 4). Seeded synchronously:
+ * the seed-only route (rendered just before this in `children`) writes the server identity to the
+ * module cache in render, so this controller reads it with no cold-shell waterfall.
+ */
+function SurfaceHostWorkUnitMount({ workUnitSlug }: { workUnitSlug: string }) {
+    const controller = useWorkUnitSurfaceController({ workUnitSlug, initialRouteMeta: null });
+    return <WorkUnitSurfaceView controller={controller} />;
 }

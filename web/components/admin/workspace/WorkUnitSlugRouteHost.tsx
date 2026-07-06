@@ -1,30 +1,36 @@
 "use client";
 
+import { useMemo } from "react";
 import { PresentationRuntime } from "@/components/presentation/PresentationRuntime";
 import { WorkUnitWorkspaceColdShell } from "@/components/admin/workspace/WorkUnitWorkspaceColdShell";
 import { WorkUnitSlugRouteProvider } from "@/contexts/WorkUnitSlugRouteContext";
+import type { WorkUnitSurfaceControllerState } from "@/lib/experience/surfaceHost/workUnitSurfaceController";
 import {
-    useWorkUnitSurfaceController,
-    type WorkUnitSurfaceControllerState,
-} from "@/lib/experience/surfaceHost/workUnitSurfaceController";
-import type { WorkUnitSlugRouteCacheEntry } from "@/lib/admin/workUnitSlugRouteCache";
+    putWorkUnitSlugRouteCache,
+    type WorkUnitSlugRouteCacheEntry,
+} from "@/lib/admin/workUnitSlugRouteCache";
 
 /**
- * Route host for `/workspace/work-unit/:slug` (+ optional `:recordId`). Identity resolution, record
- * deep-link opening, and URL sync now live in the reusable `useWorkUnitSurfaceController` (Surface
- * Host, Phase 2B Step 1) — this component only renders from its state, so behavior is unchanged. The
- * Surface Host drives the SAME controller when it mounts the work-unit surface (Step 3).
+ * Route host for `/workspace/work-unit/:slug` (+ optional `:recordId`) — canonically SEED-ONLY.
+ *
+ * The Surface Host is the one renderer of the work-unit surface (Step 3). This route only writes the
+ * server-resolved identity into the module cache — synchronously (via useMemo, so it is written
+ * before the Host's sibling mount reads it), removing the cold-shell / slug-resolution waterfall.
+ * It runs NO controller effects, so exactly one controller (the Host's) owns identity / record
+ * deep-link opening / URL sync — never doubled. Renders nothing itself; the Host renders the surface.
  */
 export default function WorkUnitSlugRouteHost({
     workUnitSlug,
     initialRouteMeta = null,
 }: {
     workUnitSlug: string;
-    /** Server-resolved route identity (Doctrine §1/5) — present → no cold shell; null → client resolves. */
+    /** Server-resolved route identity (Doctrine §1/5) — seeded into the module cache for the Host. */
     initialRouteMeta?: WorkUnitSlugRouteCacheEntry | null;
 }) {
-    const controller = useWorkUnitSurfaceController({ workUnitSlug, initialRouteMeta });
-    return <WorkUnitSurfaceView controller={controller} />;
+    useMemo(() => {
+        if (initialRouteMeta) putWorkUnitSlugRouteCache(workUnitSlug, initialRouteMeta);
+    }, [workUnitSlug, initialRouteMeta]);
+    return null;
 }
 
 /** Pure render of a controller state — reused by the Surface Host (Step 3). */
