@@ -32,7 +32,7 @@ AdminV2 should feel like **one continuous operating surface**. Loading, reveal, 
 | **Prefetch is allowed; partial reveal is not** | Background prefetch and idle hydrate are fine; above-fold partial paint is not. |
 | **Loading/performance is infrastructure** | Reveal gates, cache keys, and readiness predicates are protected — not incidental UI details. |
 
-Code anchors: `web/lib/adminV2/*RevealGate.ts`, `web/lib/admin/drawer/composedDrawerPayload/`, `web/lib/adminV2/runtime/contract/`, `web/lib/workspace/workUnitQueueRowFetchApply.ts`.
+Code anchors: `web/lib/adminV2/*RevealGate.ts`, `web/lib/admin/drawer/composedDrawerPayload/`, `web/lib/adminV2/runtime/contract/`, `web/lib/presentation/runtime/useWorkUnitSurfaceRuntime.ts`, `web/components/presentation/workUnit/QueueRegion.tsx`.
 
 ---
 
@@ -42,7 +42,7 @@ Code anchors: `web/lib/adminV2/*RevealGate.ts`, `web/lib/admin/drawer/composedDr
 
 **Internal filesystem:** `app/adminV2/workspace/**` (rewrites serve canonical URLs).
 
-**Compat (not product nav):** `/adminV2/workspace/dept/[departmentId]`, `…/work-unit/[workUnitId]`.
+**Compat (removed in PRV2):** former `/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]` page and `QueueBlock` — replaced by Presentation Runtime V2 (`WorkUnitSurface`, `QueueRegion`). See **`docs/platform/governance/runtime-ownership-migration-map.md`**.
 
 ### Allowed
 
@@ -72,25 +72,25 @@ Preserve cache keys by **org / department / work-unit / queue / view scope**. Ch
 
 ## Queue doctrine
 
-Work-unit queue lanes (`QueueBlock`, work-unit page row state).
+Work-unit queue lanes (**Presentation Runtime V2:** `QueueRegion` + `useWorkUnitSurfaceRuntime`).
 
 | Rule | Contract |
 |------|----------|
-| `queueItems === null` never means empty | `null` = not loaded; only a settled empty array/object means zero rows. |
-| “No records” timing | Shown only after the **current** lane request completes with zero rows. |
-| `rowsHeld` | Suppresses empty state while held rows remain authoritative. |
-| `rowsLoading` | Suppresses empty state while the active lane fetch is in flight. |
-| Stale lane responses | Ignored via request signature / apply guards (`shouldApplyWorkUnitQueueRowsResponse`). |
-| Active lane beats prefetch | User-selected lane wins over background pill prefetch. |
-| Pill switch under loaded pill | Must not show row skeleton grid when cached rows exist for that pill. |
+| Unloaded queue rows never mean empty | No rows + loading = cold load or hold; only settled zero rows mean empty. |
+| “No records” timing | Shown only after `queueRegionRenderState` resolves to `"empty"` (settled zero-row lane). |
+| Queue-lane hold | Prior rows stay visible during refetch (`queueRegionRenderState` → `"rows"` while `loading && hasRows`). |
+| Cold first load | Row skeleton only when `loading && !hasRows` (`"cold-loading"`). |
+| Stale lane responses | Ignored via `queueRequestSeq` apply guard in `useWorkUnitSurfaceRuntime`. |
+| Active lane beats prefetch | User-selected Work View / queue key wins over background refresh. |
+| Work View switch under loaded lane | Must not flash row skeleton when prior rows exist (queue-lane hold). |
 
-Selection authority: `web/lib/adminV2/workUnitQueueSelection.ts` — URL `?queue=` (+ bucket aliases) → API `focus_queue` → bootstrap ownership → active pill.
+Selection authority: Work View pill strip + `useWorkUnitSurfaceRuntime` queue key resolution — URL `?queue=` (+ bucket aliases) → API `focus_queue` → bootstrap ownership → active pill. Legacy: `web/lib/adminV2/workUnitQueueSelection.ts`.
 
 ---
 
 ## Drawer doctrine
 
-Surfaces: opportunity (parent/lead), person (parent), child person, job, and registered drawer entities via `AdminEntityDrawer`.
+Surfaces: opportunity (parent/lead), person (parent), child person, job, and registered drawer entities via **`AdminEntityDrawerLegacy`** (shell router: `AdminEntityDrawer.tsx` → dynamic legacy import). Focus Panel / Presentation Runtime V2 owns inline record surfaces on work-unit hosts.
 
 ### Composed reveal
 
@@ -184,11 +184,13 @@ Changes to these files require doctrine review and the runtime test suite:
 
 | Area | Paths |
 |------|--------|
-| Drawer shell | `web/components/admin/AdminEntityDrawer.tsx` |
+| Drawer shell router | `web/components/admin/AdminEntityDrawer.tsx` |
+| Drawer runtime owner | `web/components/admin/AdminEntityDrawerLegacy.tsx` |
 | Entity drawers | `web/components/admin/entity/*Drawer*` |
 | Opportunity drawer UI | `web/components/admin/opportunity/*` |
-| Work-unit page | `web/app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page.tsx` |
-| Queue block | `web/app/adminV2/components/workspace/blocks/QueueBlock.tsx` |
+| Work-unit surface (PRV2) | `web/components/presentation/workUnit/WorkUnitSurface.tsx` |
+| Queue region (PRV2) | `web/components/presentation/workUnit/QueueRegion.tsx` |
+| Work-unit runtime hook | `web/lib/presentation/runtime/useWorkUnitSurfaceRuntime.ts` |
 | Composed payload | `web/lib/admin/drawer/composedDrawerPayload/*` |
 | Drawer reveal | `web/lib/admin/drawer/*Reveal*` |
 | Runtime contract | `web/lib/adminV2/runtime/contract/*` |

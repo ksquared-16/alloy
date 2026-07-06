@@ -7,10 +7,16 @@
 ## Required checks (TypeScript changes)
 
 ```bash
-cd web && npx tsc --noEmit
+cd web && npm run typecheck
 ```
 
-Required before merge on any `web/` TypeScript change.
+Platform CI gate (`npm run typecheck` includes tests and scripts). Required before merge on any `web/` TypeScript change.
+
+Build-only subset (does not replace the platform gate):
+
+```bash
+cd web && npm run typecheck:build
+```
 
 ---
 
@@ -58,7 +64,8 @@ cd web && npm run test -- \
   tests/lib/workspace/routeSessionCacheAndReveal.test.ts
 ```
 
-Locked baseline: `../../system/adminv2-runtime-performance-doctrine.md`
+Locked baseline: `../../system/adminv2-runtime-performance-doctrine.md`  
+Ownership map: `./runtime-ownership-migration-map.md`
 
 ---
 

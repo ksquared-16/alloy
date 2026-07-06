@@ -7,6 +7,8 @@ alwaysApply: true
 
 AdminV2 loading and reveal behavior is **protected infrastructure**. The locked baseline is **`docs/system/adminv2-runtime-performance-doctrine.md`**.
 
+Ownership migrations (QueueBlock → QueueRegion, compat work-unit page → WorkUnitSurface, drawer shell → AdminEntityDrawerLegacy): **`docs/platform/governance/runtime-ownership-migration-map.md`**.
+
 ## Before editing AdminV2 UI that touches drawers, queues, routes, tabs, layouts, or actions
 
 1. Read `docs/system/adminv2-runtime-performance-doctrine.md`.
@@ -16,12 +18,12 @@ AdminV2 loading and reveal behavior is **protected infrastructure**. The locked 
 ## Hard rules
 
 - Do **not** introduce section-owned above-fold skeletons.
-- Do **not** treat `null` as empty (`queueItems === null` is not “no records”).
+- Do **not** treat unloaded queue state as empty (`queueRegionRenderState` must not show `"empty"` during cold load or refetch hold).
 - Do **not** weaken composed payload readiness (`evaluateComposedDrawerPayload`, composed person payload).
-- Do **not** remove request signature / stale-response apply guards.
+- Do **not** remove request signature / stale-response apply guards (`queueRequestSeq` on work-unit queue fetch).
 - Do **not** change cache keys without updating determinism tests.
 - Do **not** clear valid displayed data before replacement is ready on warm navigation.
-- Do **not** show false empty queue states while `rowsLoading` or `rowsHeld`.
+- Do **not** show false empty queue states while lane is cold-loading or holding prior rows.
 - Prefetch is allowed; **partial above-fold reveal is not**.
 
 ## UI-only changes may alter
@@ -34,11 +36,13 @@ Payload readiness, request ownership, cache keys, stale guards, route/drawer rev
 
 ## Runtime-sensitive files (require test suite)
 
-- `web/components/admin/AdminEntityDrawer.tsx`
+- `web/components/admin/AdminEntityDrawer.tsx` (shell router)
+- `web/components/admin/AdminEntityDrawerLegacy.tsx`
 - `web/components/admin/entity/*Drawer*`
 - `web/components/admin/opportunity/*`
-- `web/app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page.tsx`
-- `web/app/adminV2/components/workspace/blocks/QueueBlock.tsx`
+- `web/components/presentation/workUnit/WorkUnitSurface.tsx`
+- `web/components/presentation/workUnit/QueueRegion.tsx`
+- `web/lib/presentation/runtime/useWorkUnitSurfaceRuntime.ts`
 - `web/lib/admin/drawer/composedDrawerPayload/*`
 - `web/lib/admin/drawer/*Reveal*`
 - `web/lib/adminV2/runtime/contract/*`
@@ -60,4 +64,4 @@ cd web && npm run test -- \
   tests/lib/workspace/routeSessionCacheAndReveal.test.ts
 ```
 
-Also run `cd web && npx tsc --noEmit` before merge on TypeScript changes.
+Also run `cd web && npm run typecheck` before merge on TypeScript changes.
