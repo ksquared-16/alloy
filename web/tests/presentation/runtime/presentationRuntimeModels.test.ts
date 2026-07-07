@@ -84,8 +84,8 @@ describe("processTileModelFromLandingCard", () => {
         // performanceMetrics was retired (no card-side health).
         expect(tile.primarySignal).toBeNull();
         expect(tile.workViews).toEqual([
-            { id: "new_leads", label: "New Leads", isActive: false, count: null, href: "/workspace/work-unit/new-leads", attentionCount: null, overdueCount: null },
-            { id: "tours", label: "Tours", isActive: false, count: null, href: "/workspace/work-unit/tours", attentionCount: null, overdueCount: null },
+            { id: "new_leads", label: "New Leads", description: null, isActive: false, count: null, href: "/workspace/work-unit/new-leads", icon: null, attentionCount: null, overdueCount: null },
+            { id: "tours", label: "Tours", description: null, isActive: false, count: null, href: "/workspace/work-unit/tours", icon: null, attentionCount: null, overdueCount: null },
         ]);
     });
 

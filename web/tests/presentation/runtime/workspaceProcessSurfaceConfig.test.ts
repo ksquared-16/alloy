@@ -17,6 +17,7 @@ import {
     applyTodaysWorkConfig,
     normalizeWorkspaceProcessSurfaceConfig,
     resolveProcessCardConfig,
+    resolveWorkViewIcon,
     type WorkspaceProcessSurfaceConfig,
 } from "@/lib/presentation/runtime/workspaceProcessSurfaceConfig";
 import type { WorkViewLinkModel } from "@/lib/presentation/runtime";
@@ -106,14 +107,56 @@ describe("resolveProcessCardConfig", () => {
             ctaLabel: null,
             primarySignalLabel: null,
             supportingSignalLabel: null,
+            metricPresentation: "inline", // default
         });
         // unknown process → neutral identity, no overrides
         expect(resolveProcessCardConfig(config, "capacity")).toEqual({
             title: null, subtitle: null, accent: null, icon: "grid", supportingSignalKey: null, ctaLabel: null,
-            primarySignalLabel: null, supportingSignalLabel: null,
+            primarySignalLabel: null, supportingSignalLabel: null, metricPresentation: "inline",
         });
         // null key + missing map → still safe (no throw)
         expect(resolveProcessCardConfig({ ...config, cardByProcess: undefined as never }, null).icon).toBe("grid");
+    });
+});
+
+describe("metric presentation (inline | stacked) — presentation-only config", () => {
+    it("carries a valid metricPresentation and drops invalid values", () => {
+        const stacked = normalizeWorkspaceProcessSurfaceConfig({
+            cardByProcess: { enrollment: { metricPresentation: "stacked" } },
+        });
+        expect(stacked.cardByProcess.enrollment.metricPresentation).toBe("stacked");
+        const bad = normalizeWorkspaceProcessSurfaceConfig({
+            cardByProcess: { enrollment: { metricPresentation: "diagonal" } },
+        });
+        // invalid enum → dropped → whole card is empty → dropped
+        expect(bad.cardByProcess.enrollment).toBeUndefined();
+    });
+
+    it("resolves to inline by default", () => {
+        expect(resolveProcessCardConfig(DEFAULT_WORKSPACE_PROCESS_SURFACE_CONFIG, "enrollment").metricPresentation).toBe(
+            "inline",
+        );
+    });
+});
+
+describe("workViewIconById — Work-View-owned row glyph (config-driven)", () => {
+    it("normalizes the map, dropping empty keys and non-vocabulary icons", () => {
+        const n = normalizeWorkspaceProcessSurfaceConfig({
+            workViewIconById: { new_leads: "users", waitlist: "clipboard", bogus: "not-an-icon", "  ": "grid" },
+        });
+        expect(n.workViewIconById).toEqual({ new_leads: "users", waitlist: "clipboard" });
+        expect(normalizeWorkspaceProcessSurfaceConfig({}).workViewIconById).toEqual({});
+    });
+
+    it("resolveWorkViewIcon prefers work_view_id, falls back to platformKey, else null", () => {
+        const config = normalizeWorkspaceProcessSurfaceConfig({
+            workViewIconById: { new_leads: "users", "stage:tour": "calendar" },
+        });
+        expect(resolveWorkViewIcon(config, { workViewId: "new_leads", platformKey: "x" })).toBe("users");
+        expect(resolveWorkViewIcon(config, { workViewId: null, platformKey: "stage:tour" })).toBe("calendar");
+        expect(resolveWorkViewIcon(config, { workViewId: "unknown", platformKey: "also_unknown" })).toBeNull();
+        // never name-derived: an unmapped view is fallback (null), not guessed from label
+        expect(resolveWorkViewIcon(config, { workViewId: "waitlist", platformKey: "waitlist" })).toBeNull();
     });
 });
 

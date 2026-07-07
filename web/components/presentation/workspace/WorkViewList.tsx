@@ -2,16 +2,8 @@
  * Presentation Runtime V2 — WS.PROCESS_TILE_WORK_VIEWS: the ONE Workspace render site for
  * the configured Work View rows inside a process tile.
  *
- * These rows ARE the launchpad — each one is "open this work," not a dashboard line. The
- * list is whatever `work_views_v1` configured for the process (no hardcoded view names, no
- * process-specific branches). Each row leads with its configured label, carries ONE
- * secondary operational signal when available (records needing attention, else overdue),
- * and keeps the raw count aligned but secondary. Rows are individually clickable (real
- * links with obvious hover / press feedback) while the tile itself stays inert; a
- * label-less/href-less view is a config edge case and renders as plain, non-interactive text.
- *
- * Pure presenter of `WorkViewLinkModel[]` — a future universal SurfaceRenderer can map the
- * same model to Surface Components without touching this markup (PR #64 drop-in).
+ * Each row is a scannable launchpad: configured icon → name → optional mission → count →
+ * attention/overdue signal → affordance. Pure presenter of `WorkViewLinkModel[]`.
  */
 
 import Link from "next/link";
@@ -20,6 +12,7 @@ import {
     PRESENTATION_RUNTIME_LABELS,
     runtimeLabelProps,
 } from "@/components/presentation/runtimeLabels";
+import { ProcessCardGlyph } from "./ProcessCardGlyph";
 
 function positive(n: number | null | undefined): number | null {
     return typeof n === "number" && n > 0 ? n : null;
@@ -27,6 +20,7 @@ function positive(n: number | null | undefined): number | null {
 
 function rowAriaLabel(view: WorkViewLinkModel): string {
     const parts = [`Open ${view.label}`];
+    if (view.description) parts.push(view.description);
     if (typeof view.count === "number") parts.push(`${view.count} in view`);
     const attention = positive(view.attentionCount);
     const overdue = positive(view.overdueCount);
@@ -35,16 +29,29 @@ function rowAriaLabel(view: WorkViewLinkModel): string {
     return parts.join(", ");
 }
 
-/** ONE secondary signal per row: attention (filled ember) takes priority over overdue (outlined). */
+/** Configured glyph in a soft neutral well — the row's scan anchor. */
+function RowGlyph({ view }: { view: WorkViewLinkModel }) {
+    return (
+        <span
+            aria-hidden
+            data-work-view-icon={view.icon ?? "fallback"}
+            className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-alloy-midnight/[0.04] text-alloy-midnight/45 group-hover/row:text-alloy-midnight/70"
+        >
+            <ProcessCardGlyph icon={view.icon ?? "grid"} className="h-[17px] w-[17px]" />
+        </span>
+    );
+}
+
+/** Work View operational signal — attention first, else overdue. Never a stage metric. */
 function RowSignal({ view }: { view: WorkViewLinkModel }) {
     const attention = positive(view.attentionCount);
     if (attention) {
         return (
             <span
-                className="inline-flex items-center gap-1 rounded-full bg-alloy-ember/12 px-1.5 py-0.5 text-[10px] font-bold tabular-nums leading-none text-alloy-ember"
+                className="inline-flex h-5 min-w-[1.25rem] shrink-0 items-center justify-center rounded-full bg-alloy-ember px-1.5 text-[10px] font-bold tabular-nums leading-none text-white"
                 title={`${attention} need attention`}
+                data-work-view-attention
             >
-                <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-alloy-ember" />
                 {attention.toLocaleString()}
             </span>
         );
@@ -53,10 +60,10 @@ function RowSignal({ view }: { view: WorkViewLinkModel }) {
     if (overdue) {
         return (
             <span
-                className="inline-flex items-center gap-1 rounded-full border border-alloy-ember/35 px-1.5 py-0.5 text-[10px] font-bold tabular-nums leading-none text-alloy-ember/90"
+                className="inline-flex h-5 min-w-[1.25rem] shrink-0 items-center justify-center rounded-full border border-alloy-ember/40 px-1.5 text-[10px] font-bold tabular-nums leading-none text-alloy-ember"
                 title={`${overdue} overdue`}
+                data-work-view-overdue
             >
-                <span aria-hidden className="text-[9px] leading-none">◷</span>
                 {overdue.toLocaleString()}
             </span>
         );
@@ -67,43 +74,56 @@ function RowSignal({ view }: { view: WorkViewLinkModel }) {
 function WorkViewRowBody({ view, showCounts }: { view: WorkViewLinkModel; showCounts: boolean }) {
     return (
         <>
-            <span className="min-w-0 flex-1 truncate">{view.label}</span>
-            <RowSignal view={view} />
-            {/* Count: readable + right-aligned in a fixed slot so digits line up across rows and
-                the layout never jumps when a pending count resolves. Secondary to the signal.
-                Hidden when the surface config turns counts off. */}
-            {showCounts ? (
-                <span className="w-7 shrink-0 text-right text-xs font-semibold tabular-nums text-alloy-midnight/55">
-                    {view.count != null ? (
-                        view.count.toLocaleString()
-                    ) : (
-                        <span
-                            aria-hidden
-                            className="ml-auto inline-block h-3 w-4 animate-pulse rounded bg-alloy-midnight/10 align-middle"
-                        />
-                    )}
+            <RowGlyph view={view} />
+            <span className="min-w-0 flex-1">
+                <span className="block truncate text-[13px] font-semibold leading-snug text-alloy-midnight">
+                    {view.label}
                 </span>
-            ) : null}
-            {/* Always faintly present so a row reads as clickable at rest; strengthens + nudges on hover. */}
-            <span
-                aria-hidden
-                className="motion-control w-3 shrink-0 text-right text-alloy-juniper/40 group-hover/row:translate-x-0.5 group-hover/row:text-alloy-juniper"
-            >
-                →
+                {view.description ? (
+                    <span
+                        className="mt-0.5 block line-clamp-1 text-[11px] leading-relaxed text-alloy-midnight/45"
+                        data-work-view-description
+                    >
+                        {view.description}
+                    </span>
+                ) : null}
             </span>
+            <div className="flex shrink-0 items-center gap-2.5">
+                <RowSignal view={view} />
+                {showCounts ? (
+                    <span
+                        className="min-w-[1.75rem] text-right text-[15px] font-bold tabular-nums leading-none text-alloy-midnight"
+                        data-work-view-count
+                    >
+                        {view.count != null ? (
+                            view.count.toLocaleString()
+                        ) : (
+                            <span
+                                aria-hidden
+                                className="ml-auto inline-block h-3.5 w-5 animate-pulse rounded bg-alloy-midnight/10 align-middle"
+                            />
+                        )}
+                    </span>
+                ) : null}
+                <span
+                    aria-hidden
+                    className="motion-control w-4 shrink-0 text-center text-[13px] text-alloy-midnight/30 group-hover/row:text-alloy-midnight/55"
+                >
+                    ›
+                </span>
+            </div>
         </>
     );
 }
 
 const ROW_BODY_CLASS =
-    "group/row flex w-full items-center gap-2 px-2 py-2 text-xs font-semibold text-alloy-midnight/80";
+    "group/row flex w-full items-center gap-3 rounded-lg px-1 py-2.5 text-left";
 
 export function WorkViewList({
     workViews,
     showCounts = true,
 }: {
     workViews: WorkViewLinkModel[];
-    /** Render the per-view count badge (Workspace Process Surface config). */
     showCounts?: boolean;
 }) {
     if (!workViews.length) return null;
@@ -111,7 +131,7 @@ export function WorkViewList({
         <ul
             {...runtimeLabelProps(PRESENTATION_RUNTIME_LABELS.processTileWorkViews)}
             data-alloy-section="WS.PROCESS_TILE_WORK_VIEWS"
-            className="-mx-2 flex flex-col divide-y divide-alloy-midnight/[0.06]"
+            className="flex flex-col gap-0.5"
             aria-label="Work views"
         >
             {workViews.map((view) => (
@@ -120,7 +140,7 @@ export function WorkViewList({
                         <Link
                             href={view.href}
                             aria-label={rowAriaLabel(view)}
-                            className={`${ROW_BODY_CLASS} motion-control no-underline hover:bg-alloy-juniper/[0.1] hover:text-alloy-juniper active:bg-alloy-juniper/[0.18] focus-visible:relative focus-visible:z-10 focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-alloy-juniper`}
+                            className={`${ROW_BODY_CLASS} motion-control no-underline hover:bg-alloy-midnight/[0.03] focus-visible:relative focus-visible:z-10 focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-alloy-midnight/25`}
                         >
                             <WorkViewRowBody view={view} showCounts={showCounts} />
                         </Link>

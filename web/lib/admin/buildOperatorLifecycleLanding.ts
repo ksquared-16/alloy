@@ -52,6 +52,8 @@ export const OPERATOR_DEFAULT_ENTRY_QUEUE_KEY = "new_leads" as const;
 
 export type OperatorLifecycleWorkQueuePreview = {
     label: string;
+    /** Optional Work View mission line from `work_views_v1` — presentation only, not a metric. */
+    description?: string | null;
     platformKey: string;
     href: string;
     /**
@@ -246,9 +248,11 @@ function workViewNavEntriesForDepartment(args: {
                     args.workUnits,
                     args.departmentId,
                 );
+                const mission = view.mission?.trim() || null;
                 return [
                     {
                         label: view.label.trim(),
+                        ...(mission ? { description: mission } : {}),
                         platformKey: view.id,
                         href: operatorWorkUnitHrefFromWorkViewSlug(routeKey),
                         work_view_id: view.id,

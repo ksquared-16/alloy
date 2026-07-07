@@ -53,7 +53,9 @@ runtime label (`data-runtime-label`), and has exactly one render site. No duplic
 | **Authoring** | **Settings → Surfaces → Workspaces → Workspace Header** (first item; process summaries follow) |
 | **Persistence** | `entity_layouts`, `surface="workspace"`, `layoutKey="workspace_header"`, config in `doc.metadata.workspaceHeaderSurface` |
 | **KPI source** | Operational Calculations registry — same resolve path as Work Unit header metrics (`useOperationalAnswers` + OIP warm cache). No parallel KPI system. |
-| **Presentation** | `buildWorkspaceHeaderPresentation` + shared `WorkspaceHeader` component — **builder preview and runtime must match** (typography, KPI layout, icon/accent color, no-data `—`) |
+| **KPI = operational signals** | The org-level signals the mockup calls "Work View Signals" (Needs attention, Overdue work, SLA/at-risk) ARE these KPI slots — configured Operational Calculations, not a separate rail. There is no standalone signals right rail; the shell command rail is actions-only. |
+| **Presentation** | `buildWorkspaceHeaderPresentation` + shared `WorkspaceHeader` component — **builder preview and runtime must match** (typography, KPI layout, icon well, icon/accent color, no-data `—`) |
+| **Layout (workspace variant)** | KPI region anchors at the ~50% center point and flows right (left-aligned from the anchor, wrapping — never stretched full-width). Each KPI is a calm premium card: larger glyph in a soft Alloy-token icon well, bold value as hero, status gem + muted label below. No heavy shadows or colored blocks — whitespace and typography create hierarchy. The **work-unit variant is unchanged** (compact bordered tiles, no well). |
 | **Reveal** | `useWorkspaceSurfaceRuntime` gates `model.ready` on header config load + metric settle + process tile snapshot — **no default-template flash**; refresh keeps last complete header until the next atomic commit |
 | **API** | `GET/PUT /api/admin/surfaces/workspace-header` |
 
@@ -86,8 +88,10 @@ behavior — one card per real configured business process.
 | --- | --- |
 | **Authoring** | **Settings → Surfaces → Workspaces → {Process} Summary** (one editor per lifecycle process) |
 | **Persistence** | `entity_layouts`, `surface="workspace"`, `layoutKey="workspace_processes"`, config in `doc.metadata.workspaceProcessSurface` |
-| **Metrics** | Primary + supporting signals from Operational Calculations registry (`useOperationalAnswers` + `resolvePrimarySignal`) |
-| **Presentation** | `ProcessSummaryCard` in builder preview and runtime — **builder/runtime parity required** (labels, no-data `—`, accent rails) |
+| **Metrics** | Primary + supporting signals from Operational Calculations registry (`useOperationalAnswers` + `resolvePrimarySignal`). Metric **layout** (inline vs stacked) is presentation-only config (`ProcessCardConfig.metricPresentation`, default `inline`) — same calculations + labels either way; no calculation logic in presentation. |
+| **Health state** | Real, not fabricated: the Primary Signal's KPI `status` → `signalStateFromKpiStatus` → `SignalState` → the status pill word (`STATE_WORD`) + Alloy semantic token. A process has **no universal health score**; the pill reflects the selected calculation. Builder preview and runtime derive it the same way. |
+| **Work View row icons** | Each Work View owns its row glyph, assigned in the Surface Builder (`workspaceProcessSurface.workViewIconById`, keyed by `work_view_id`, falling back to the lane `platformKey`). Resolved by `resolveWorkViewIcon`; unmapped views render the neutral fallback glyph. **Never name-derived** — no hardcoded Enrollment/stage icons. |
+| **Presentation** | `ProcessSummaryCard` in builder preview and runtime — **builder/runtime parity required** (labels, no-data `—`, calm neutral card body, accent reserved for identity glyph + CTA link only, metric layout, work-view glyphs + optional mission descriptions) |
 | **Reveal** | `useWorkspaceSurfaceRuntime` commits process tiles atomically with header — **no default-template flash**; holds last complete process snapshot during refresh |
 | **API** | `GET/PUT /api/admin/surfaces/workspace-processes` |
 
@@ -114,14 +118,25 @@ Three Surfaces-configurable workspace layouts on `entity_layouts` (`surface="wor
   (value / state / drill / target); Surface Builder chooses *which* signal per business process
   (`workspaceProcessSurface.primarySignalByProcess`, internal binding `primaryOperationalAnswerKey`);
   the runtime resolves it through the canonical answer path (`useOperationalAnswers` +
-  `resolvePrimarySignal`). The card renders the answer as the hero, the value supports it, and it
-  **never branches on value type** (percent / currency / count / score / ratio) or assumes health.
-  Options come from the Operational Calculations registry (`listCalculationsByBusinessProcess`,
-  consumers ⊇ `business_process_tile`).
+  `resolvePrimarySignal`). The card renders the **formatted value as the hero** with the label
+  supporting below; it never branches on value type (percent / currency / count / score / ratio)
+  or assumes health. Options come from the Operational Calculations registry
+  (`listCalculationsByBusinessProcess`, consumers ⊇ `business_process_tile`).
 - **Supporting Context** — text only (the calculation's target; trend when the data layer supplies
   it — never fabricated).
+- **Metric layout** — `metricPresentation` (`inline` | `stacked`) is presentation only. `inline`
+  renders primary + supporting as a two-column grid of metric units (number hero + label each);
+  `stacked` keeps the primary unit dominant with supporting below. Both render the SAME configured
+  calculations + labels — the renderer adds no math and no new metric type. No colored metric banner.
+- **Health/status** — subtle dot + word (`healthy` → "On track", `caution`, `critical`, `neutral`),
+  derived from the calculation's KPI `status` (`signalStateFromKpiStatus`). Semantic Alloy tokens
+  only; no filled pill background. If a process configures no primary signal, the status reads
+  "No signal" — it is never fabricated from counts.
 - **Today's Work** — runtime-generated from the configured work views with live counts; behavior
-  (visible / max rows / sort / show counts) is the only other authored setting.
+  (visible / max rows / sort / show counts) is the only other authored setting. Each row leads with
+  the Work View's configured glyph (fallback glyph when unassigned), optional mission description,
+  bold count on the right, and at most one operational signal badge (attention, else overdue)
+  sourced from the operational projection.
 
 **Persistence:** `entity_layouts`, `surface="workspace"`, `layoutKey="workspace_processes"`, config in
 `doc.metadata.workspaceProcessSurface`. One store, no carrier hack, no new table.
@@ -146,6 +161,23 @@ One operational answer model. One queue count model (`QueueSummary.count`). One 
 
 Both surfaces render the configured Work Views for the process — the same list, from
 `work_views_v1`. No hardcoded arrays. No Enrollment-specific UI. No Pipeline-specific UI.
+
+**Row icon ownership.** The Work View owns its row glyph. It is assigned per view in the Surface
+Builder (**Settings → Surfaces → Workspaces → {Process} Summary → Work View icons**) and persisted
+on the Workspace Process Surface config as `workViewIconById` (keyed by `work_view_id`, falling back
+to the lane `platformKey` for stage-backed lanes). The runtime resolves it via `resolveWorkViewIcon`
+in `useWorkspaceSurfaceRuntime`; a view with no assignment renders the shared neutral fallback glyph
+(`ProcessCardGlyph` `grid`). The glyph vocabulary is the same closed `ProcessCardIcon` set used by the
+process identity chip and header KPIs (`ProcessCardGlyph`). Icons are **never derived from a stage or
+view name** — no hardcoded Enrollment icons.
+
+**Row description.** When a Work View has a configured `mission` in `work_views_v1`, the runtime
+surfaces it as the row's optional description line (configured copy, not a calculated metric).
+
+**Operational signals ownership.** Per-row Needs Attention / Overdue badges come from the operational
+projection (`WorkViewLinkModel.attentionCount` / `overdueCount`), not from stage definitions. Org-level
+signals (Needs attention, Overdue work, SLA/at-risk) are Workspace Header KPI slots — configured
+Operational Calculations. Neither is fabricated; builder preview and runtime read the same data.
 
 ## Navigation
 
@@ -237,7 +269,7 @@ owners live in **`presentation-runtime-v2-handoff.md` §2**. Summary:
 | --- | --- | --- |
 | `WS.HEADER` / `WS.HEADER_CALCULATIONS` | `components/presentation/workspace/WorkspaceHeader.tsx` | published **Workspace Header** config (`workspace_header` layout) + OIP warm cache |
 | `WS.PROCESS_SUMMARY_CARD` / `WS.PROCESS_GRID` | `components/presentation/workspace/ProcessSummaryCard.tsx` / `ProcessGrid.tsx` | landing cards + published **Workspace Process Summary** config |
-| `WS.PROCESS_TILE_WORK_VIEWS` | `components/presentation/workspace/WorkViewList.tsx` | landing `workQueues` + `useWorkViewTotals` |
+| `WS.PROCESS_TILE_WORK_VIEWS` | `components/presentation/workspace/WorkViewList.tsx` | landing `workQueues` + `useWorkViewTotals`; row glyph from `workspaceProcessSurface.workViewIconById` (`resolveWorkViewIcon`, fallback glyph) |
 | `WU.HEADER` / `WU.HEADER_CALCULATIONS` | `components/presentation/workUnit/WorkUnitHeader.tsx` (shared KPI grammar via `WorkspaceHeader`) | published **Work Unit Header** config (`work_unit_header` layout) + OIP warm cache scoped to work unit |
 | `WU.WORK_VIEW_PILLS` | `components/presentation/workUnit/WorkViewPillStrip.tsx` | configured views + `useWorkViewTotals` (active = live rows total) |
 | `WU.QUEUE` | `components/presentation/workUnit/QueueRegion.tsx` | rows API (`work_view_id`); order = Work View `sort_v1` (server) |

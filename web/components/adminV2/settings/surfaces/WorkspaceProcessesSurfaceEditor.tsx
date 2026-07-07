@@ -21,10 +21,15 @@ import {
     PROCESS_CARD_ACCENTS,
     PROCESS_CARD_ICON_LABELS,
     PROCESS_CARD_ICONS,
+    PROCESS_METRIC_PRESENTATIONS,
     type ProcessCardConfig,
+    type ProcessCardIcon,
+    type ProcessMetricPresentation,
     type TodaysWorkSort,
     type WorkspaceProcessSurfaceConfig,
 } from "@/lib/presentation/runtime/workspaceProcessSurfaceConfig";
+import { lifecycleCatalogFetchInit } from "@/lib/workspace/workspaceDataFetch";
+import type { WorkViewLinkModel } from "@/lib/presentation/runtime";
 import {
     PROCESS_CARD_ACCENT_LABELS,
 } from "@/lib/presentation/runtime/processCardAccentStyles";
@@ -50,6 +55,23 @@ const ACCENT_OPTIONS: { value: ProcessCardConfig["accent"] | ""; label: string }
 ];
 
 const ICON_OPTIONS = PROCESS_CARD_ICONS.map((i) => ({ value: i, label: PROCESS_CARD_ICON_LABELS[i] }));
+
+const METRIC_PRESENTATION_LABELS: Record<ProcessMetricPresentation, string> = {
+    inline: "Inline (side by side)",
+    stacked: "Stacked (primary above)",
+};
+const METRIC_PRESENTATION_OPTIONS = PROCESS_METRIC_PRESENTATIONS.map((p) => ({
+    value: p,
+    label: METRIC_PRESENTATION_LABELS[p],
+}));
+
+/** Icon dropdown options with a "fallback" (no configured icon) sentinel. */
+const WORK_VIEW_ICON_OPTIONS: { value: string; label: string }[] = [
+    { value: "", label: "Default (fallback)" },
+    ...ICON_OPTIONS,
+];
+
+type ProcessWorkViewOption = { id: string; label: string };
 
 const INSPECTOR_FIELD_ATTR: Record<ProcessSummaryBuilderField, string> = {
     title: "data-inspector-title",
@@ -89,6 +111,8 @@ function previewProcess(
     signalKey: string,
     card: ProcessCardConfig | undefined,
     signals: ReturnType<typeof signalsForBusinessProcess>,
+    workViews: ProcessWorkViewOption[],
+    workViewIconById: Record<string, ProcessCardIcon>,
 ): ProcessTileModel {
     const calc = signals.find((c) => c.key === signalKey);
     const signalLabel = calc?.label ?? "Signal";
@@ -96,6 +120,16 @@ function previewProcess(
     const supportingCalc = card?.supportingSignalKey
         ? signals.find((c) => c.key === card.supportingSignalKey)
         : undefined;
+    const previewWorkViews: WorkViewLinkModel[] = workViews.map((wv) => ({
+        id: wv.id,
+        label: wv.label,
+        isActive: false,
+        count: null,
+        href: "#",
+        icon: workViewIconById[wv.id] ?? null,
+        attentionCount: null,
+        overdueCount: null,
+    }));
     return {
         id: `preview-${catalogEntry.id}`,
         processKey: catalogEntry.process_key,
@@ -104,7 +138,7 @@ function previewProcess(
         entryHref: "#",
         activeRecordCount: null,
         needsAttentionCount: null,
-        workViews: [],
+        workViews: previewWorkViews,
         primarySignal: {
             key: signalKey,
             label: signalLabel,
@@ -154,6 +188,7 @@ export default function WorkspaceProcessesSurfaceEditor({
     const [publishedAt, setPublishedAt] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [activeField, setActiveField] = useState<ProcessSummaryBuilderField | null>(null);
+    const [workViewOptions, setWorkViewOptions] = useState<ProcessWorkViewOption[]>([]);
     const inspectorRef = useRef<HTMLDivElement>(null);
 
     const configKey = workspaceProcessConfigKey(catalogEntry);
@@ -177,10 +212,49 @@ export default function WorkspaceProcessesSurfaceEditor({
         };
     }, []);
 
+    // Load the process's configured Work Views so the operator can assign a per-view icon.
+    // Reuses the existing lifecycle-builder process-work-views GET route (no new API).
+    useEffect(() => {
+        let active = true;
+        setWorkViewOptions([]);
+        const params = new URLSearchParams({
+            department_id: catalogEntry.department_id,
+            process_id: catalogEntry.process_id,
+        });
+        fetch(`/api/admin/lifecycle-builder/process-work-views?${params.toString()}`, lifecycleCatalogFetchInit())
+            .then((res) => (res.ok ? res.json() : Promise.reject(new Error("work views load failed"))))
+            .then((json: { work_views_v1?: { id?: unknown; label?: unknown }[] }) => {
+                if (!active) return;
+                const opts: ProcessWorkViewOption[] = (json.work_views_v1 ?? [])
+                    .map((v) => ({
+                        id: typeof v.id === "string" ? v.id.trim() : "",
+                        label: typeof v.label === "string" ? v.label.trim() : "",
+                    }))
+                    .filter((v) => v.id && v.label);
+                setWorkViewOptions(opts);
+            })
+            .catch(() => {
+                if (active) setWorkViewOptions([]);
+            });
+        return () => {
+            active = false;
+        };
+    }, [catalogEntry.department_id, catalogEntry.process_id]);
+
     const markDirty = useCallback(() => {
         setDirty(true);
         setPublishedAt(false);
     }, []);
+
+    function patchWorkViewIcon(workViewId: string, icon: ProcessCardIcon | "") {
+        setConfig((prev) => {
+            const map = { ...prev.workViewIconById };
+            if (icon) map[workViewId] = icon;
+            else delete map[workViewId];
+            return { ...prev, workViewIconById: map };
+        });
+        markDirty();
+    }
 
     function patchConfigKey(patch: Partial<ProcessCardConfig>) {
         if (!configKey) return;
@@ -242,9 +316,11 @@ export default function WorkspaceProcessesSurfaceEditor({
                       previewSignalKey,
                       previewCard,
                       signals,
+                      workViewOptions,
+                      config.workViewIconById,
                   )
                 : null,
-        [catalogEntry, previewCard, previewSignalKey, signals],
+        [catalogEntry, previewCard, previewSignalKey, signals, workViewOptions, config.workViewIconById],
     );
 
     const focusInspectorField = useCallback((field: ProcessSummaryBuilderField) => {
@@ -456,7 +532,53 @@ export default function WorkspaceProcessesSurfaceEditor({
                                     className="rounded-md border border-alloy-stone/25 px-2 py-1.5 text-sm"
                                 />
                             </label>
+                            <label className="flex flex-col gap-1" data-inspector-metric-presentation>
+                                <FieldLabel>Metric layout</FieldLabel>
+                                <select
+                                    value={previewCard?.metricPresentation ?? "inline"}
+                                    onChange={(e) =>
+                                        patchConfigKey({
+                                            metricPresentation: e.target.value as ProcessMetricPresentation,
+                                        })
+                                    }
+                                    data-card-metric-presentation
+                                    className="rounded-md border border-alloy-stone/25 px-2 py-1.5 text-sm"
+                                >
+                                    {METRIC_PRESENTATION_OPTIONS.map((o) => (
+                                        <option key={o.value} value={o.value}>
+                                            {o.label}
+                                        </option>
+                                    ))}
+                                </select>
+                            </label>
                         </InspectorSection>
+
+                        {workViewOptions.length ? (
+                            <InspectorSection title="Work View icons" testId="work-view-icons">
+                                <p className="text-[11px] leading-relaxed text-alloy-midnight/45">
+                                    Each Work View owns its row icon. Default falls back to the neutral glyph.
+                                </p>
+                                {workViewOptions.map((wv) => (
+                                    <label key={wv.id} className="flex flex-col gap-1" data-work-view-icon-row={wv.id}>
+                                        <FieldLabel>{wv.label}</FieldLabel>
+                                        <select
+                                            value={config.workViewIconById[wv.id] ?? ""}
+                                            onChange={(e) =>
+                                                patchWorkViewIcon(wv.id, e.target.value as ProcessCardIcon | "")
+                                            }
+                                            data-work-view-icon-select={wv.id}
+                                            className="rounded-md border border-alloy-stone/25 px-2 py-1.5 text-sm"
+                                        >
+                                            {WORK_VIEW_ICON_OPTIONS.map((o) => (
+                                                <option key={o.value || "fallback"} value={o.value}>
+                                                    {o.label}
+                                                </option>
+                                            ))}
+                                        </select>
+                                    </label>
+                                ))}
+                            </InspectorSection>
+                        ) : null}
 
                         <InspectorSection title="Behavior" testId="behavior">
                             {configuredEntries.length > 1 ? (

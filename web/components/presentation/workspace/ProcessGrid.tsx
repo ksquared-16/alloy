@@ -34,7 +34,7 @@ export function ProcessGrid({
     return (
         <div
             {...runtimeLabelProps(PRESENTATION_RUNTIME_LABELS.processGrid)}
-            className="grid grid-cols-1 gap-4 lg:grid-cols-2 2xl:grid-cols-3"
+            className="grid grid-cols-1 gap-5 lg:grid-cols-2 2xl:grid-cols-3"
         >
             {processes.map((process) => (
                 <ProcessSummaryCard key={process.id} process={process} config={config} />

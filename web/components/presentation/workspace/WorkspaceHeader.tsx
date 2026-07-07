@@ -13,13 +13,17 @@ import {
     runtimeLabelProps,
     type PresentationRuntimeLabel,
 } from "@/components/presentation/runtimeLabels";
-import { workspaceHeaderKpiIconClass } from "@/lib/presentation/runtime/processCardAccentStyles";
+import {
+    workspaceHeaderKpiIconClass,
+    workspaceHeaderKpiIconWellClass,
+} from "@/lib/presentation/runtime/processCardAccentStyles";
 import type { ProcessCardAccent, ProcessCardIcon } from "@/lib/presentation/runtime/workspaceProcessSurfaceConfig";
 import type {
     WorkspaceHeaderKpiVm,
     WorkspaceHeaderPresentationModel,
 } from "@/lib/presentation/runtime/workspaceHeaderSurfaceConfig";
 import { WORKSPACE_HEADER_NO_DATA_VALUE } from "@/lib/presentation/runtime/workspaceHeaderCards";
+import { ProcessCardGlyph } from "./ProcessCardGlyph";
 
 export type WorkspaceHeaderBuilderField =
     | "title"
@@ -81,44 +85,24 @@ const ACCENT_GEM: Record<ProcessCardAccent, string> = {
     gold: "bg-alloy-gold",
 };
 
-const ICON_GLYPH: Record<ProcessCardIcon, ReactNode> = {
-    grid: <path d="M5 5h4v4H5zM11 5h4v4h-4zM5 11h4v4H5zM11 11h4v4h-4z" />,
-    spark: <path d="M10 3l1.2 4.2L15 8l-3.8 1.2L10 14l-1.2-4.8L5 8l3.8-0.8L10 3z" />,
-    route: <path d="M4 6c0-1.1 1-2 2.2-2 1.5 0 2.5 1.2 2.8 2.6M16 14c0 1.1-1 2-2.2 2-1.5 0-2.5-1.2-2.8-2.6M6.5 8.5l7 3M6.5 11.5l7-3" />,
-    users: <path d="M7 8a2.5 2.5 0 100-5 2.5 2.5 0 000 5zM3 15a4 4 0 018 0M13 6v4M11 8h4" />,
-    calendar: <path d="M4 6h12v10H4zM4 6l0-2M16 6l0-2M4 9h12" />,
-    clipboard: <path d="M7 4h6v2H7zM5 6h10v10H5z" />,
-    chart: <path d="M5 14V8M10 14V5M15 14v-4" />,
-    message: <path d="M4 5h12v8H8l-4 3V5z" />,
-    shield: <path d="M10 3l6 2v5c0 3.5-2.5 5.8-6 7-3.5-1.2-6-3.5-6-7V5l6-2z" />,
-    book: <path d="M6 4h8v12H6zM6 4c0 0 2-1 4-1s4 1 4 1" />,
-    bolt: <path d="M11 3L6 11h4l-1 6 6-9h-4l0-5z" />,
-    layers: <path d="M10 4l7 3.5L10 11 3 7.5 10 4zM3 12.5L10 16l7-3.5M3 16.5L10 20l7-3.5" />,
-};
-
 function KpiGlyph({
     icon,
     className,
     iconAttr,
+    size = "sm",
 }: {
     icon: ProcessCardIcon;
     className: string;
     iconAttr: string;
+    /** `sm` (work-unit compact tile) or `md` (workspace identity KPI, sits in a soft well). */
+    size?: "sm" | "md";
 }) {
     return (
-        <svg
-            viewBox="0 0 20 20"
-            className={`h-4 w-4 shrink-0 ${className}`}
+        <ProcessCardGlyph
+            icon={icon}
+            className={`shrink-0 ${size === "md" ? "h-5 w-5" : "h-4 w-4"} ${className}`}
             {...{ [iconAttr]: true }}
-            fill="none"
-            stroke="currentColor"
-            strokeWidth={1.6}
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            aria-hidden
-        >
-            {ICON_GLYPH[icon]}
-        </svg>
+        />
     );
 }
 
@@ -176,43 +160,83 @@ function HeaderKpiCard({
     // Work Unit KPIs are compact bordered metadata tiles with equal rhythm.
     // Workspace identity KPIs stay open (no tile chrome) so this shared header
     // only applies the work-unit structure when used on the process surface.
+    // Work Unit KPIs are compact bordered metadata tiles; Workspace identity KPIs get a premium
+    // card treatment (soft border/shadow + a larger glyph in an Alloy-token icon well).
     const tileClass =
         variant === "work-unit"
             ? "flex h-full w-full min-w-0 flex-col justify-center rounded-lg border border-alloy-stone/20 bg-alloy-stone/[0.02] px-3 py-2 shadow-[0_1px_1px_rgba(15,23,42,0.03)]"
-            : "min-w-[6.5rem]";
-    const body = (
-        <div className={tileClass} {...{ [kpiAttr]: kpi.slot }} data-calculation-key={kpi.sourceKey ?? undefined}>
-            <div className="flex items-center gap-2">
-                <KpiGlyph
-                    icon={kpi.icon}
-                    className={workspaceHeaderKpiIconClass({ accent: kpi.accent, status: kpi.status })}
-                    iconAttr={meta.kpiIconAttr}
-                />
-                <span
-                    className={`font-bold leading-none tracking-[-0.03em] tabular-nums text-alloy-midnight ${
-                        variant === "work-unit" ? "text-[22px]" : "text-[26px]"
-                    }`}
-                    {...{ [valueAttr]: true }}
-                >
-                    {kpi.formattedValue || WORKSPACE_HEADER_NO_DATA_VALUE}
-                </span>
+            : "flex h-full min-w-[9.5rem] items-center gap-3.5 rounded-xl border border-alloy-stone/12 bg-white px-4 py-3.5";
+    const body =
+        variant === "work-unit" ? (
+            <div className={tileClass} {...{ [kpiAttr]: kpi.slot }} data-calculation-key={kpi.sourceKey ?? undefined}>
+                <div className="flex items-center gap-2">
+                    <KpiGlyph
+                        icon={kpi.icon}
+                        className={workspaceHeaderKpiIconClass({ accent: kpi.accent, status: kpi.status })}
+                        iconAttr={meta.kpiIconAttr}
+                    />
+                    <span
+                        className="text-[22px] font-bold leading-none tracking-[-0.03em] tabular-nums text-alloy-midnight"
+                        {...{ [valueAttr]: true }}
+                    >
+                        {kpi.formattedValue || WORKSPACE_HEADER_NO_DATA_VALUE}
+                    </span>
+                </div>
+                <div className="mt-1.5 flex items-center gap-1.5">
+                    <span
+                        aria-hidden
+                        className={`h-2 w-2 shrink-0 rotate-45 ${gemClass(kpi)}`}
+                        {...{ [statusAttr]: kpi.status }}
+                    />
+                    <span
+                        className="truncate text-[12px] font-medium leading-none text-alloy-midnight/50"
+                        {...{ [labelAttr]: true }}
+                        title={kpi.label}
+                    >
+                        {kpi.label}
+                    </span>
+                </div>
             </div>
-            <div className={`flex items-center gap-1.5 ${variant === "work-unit" ? "mt-1.5" : "mt-2"}`}>
+        ) : (
+            <div className={tileClass} {...{ [kpiAttr]: kpi.slot }} data-calculation-key={kpi.sourceKey ?? undefined}>
                 <span
                     aria-hidden
-                    className={`h-2 w-2 shrink-0 rotate-45 ${gemClass(kpi)}`}
-                    {...{ [statusAttr]: kpi.status }}
-                />
-                <span
-                    className="truncate text-[12px] font-medium leading-none text-alloy-midnight/50"
-                    {...{ [labelAttr]: true }}
-                    title={kpi.label}
+                    data-workspace-header-kpi-icon-well
+                    className={`inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-xl ${workspaceHeaderKpiIconWellClass(
+                        { accent: kpi.accent, status: kpi.status },
+                    )}`}
                 >
-                    {kpi.label}
+                    <KpiGlyph
+                        icon={kpi.icon}
+                        className={workspaceHeaderKpiIconClass({ accent: kpi.accent, status: kpi.status })}
+                        iconAttr={meta.kpiIconAttr}
+                        size="md"
+                    />
                 </span>
+                <div className="min-w-0">
+                    <span
+                        className="block text-[26px] font-bold leading-none tracking-[-0.03em] tabular-nums text-alloy-midnight"
+                        {...{ [valueAttr]: true }}
+                    >
+                        {kpi.formattedValue || WORKSPACE_HEADER_NO_DATA_VALUE}
+                    </span>
+                    <span className="mt-2 flex items-center gap-1.5">
+                        <span
+                            aria-hidden
+                            className={`h-2 w-2 shrink-0 rotate-45 ${gemClass(kpi)}`}
+                            {...{ [statusAttr]: kpi.status }}
+                        />
+                        <span
+                            className="truncate text-[12px] font-medium leading-none text-alloy-midnight/50"
+                            {...{ [labelAttr]: true }}
+                            title={kpi.label}
+                        >
+                            {kpi.label}
+                        </span>
+                    </span>
+                </div>
             </div>
-        </div>
-    );
+        );
 
     if (interactive && kpi.drillHref) {
         return (
@@ -249,7 +273,9 @@ export function WorkspaceHeader({
             className={
                 variant === "work-unit"
                     ? "flex flex-wrap items-start justify-between gap-x-6 gap-y-2"
-                    : "flex flex-wrap items-start justify-between gap-x-8 gap-y-4"
+                    : // Workspace: title owns the left half; the KPI region anchors at the ~50%
+                      // center point and flows RIGHT (left-aligned from that anchor, never stretched).
+                      "flex flex-col gap-y-5 lg:grid lg:grid-cols-2 lg:items-center lg:gap-x-8"
             }
         >
             <div className="min-w-0 max-w-xl">
@@ -289,7 +315,9 @@ export function WorkspaceHeader({
                     className={
                         variant === "work-unit"
                             ? "grid w-full max-w-xl flex-1 auto-cols-fr grid-flow-col gap-2 sm:max-w-none"
-                            : "flex flex-wrap items-start gap-x-8 gap-y-4"
+                            : // Cards flow from the center anchor rightward, left-aligned, wrapping
+                              // as needed — never stretched across the full row.
+                              "flex flex-wrap items-stretch justify-start gap-4"
                     }
                     role="list"
                     aria-label={meta.kpiAria}

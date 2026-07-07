@@ -111,6 +111,31 @@ export function workspaceHeaderKpiIconClass(args: {
     return STATUS_KPI_ICON[args.status] ?? STATUS_KPI_ICON.unknown;
 }
 
+/**
+ * Soft icon-well background per accent — the tint that sits BEHIND a KPI glyph. Reuses each
+ * accent's existing `metricTint` (Alloy token at low alpha) so no new colors enter the palette.
+ */
+const STATUS_KPI_ICON_WELL: Record<string, string> = {
+    healthy: "bg-alloy-bend-pine/[0.08]",
+    warning: "bg-alloy-gold/20",
+    critical: "bg-alloy-ember/[0.08]",
+    unknown: "bg-alloy-midnight/[0.05]",
+};
+
+/**
+ * Workspace Header KPI icon-well tint — matches accent when configured, else status color.
+ * Pure Alloy tokens (accent `metricTint` / status low-alpha). Shared by builder + runtime.
+ */
+export function workspaceHeaderKpiIconWellClass(args: {
+    accent: ProcessCardAccent | null;
+    status: string;
+}): string {
+    if (args.accent && args.accent in PROCESS_CARD_ACCENT_STYLES) {
+        return PROCESS_CARD_ACCENT_STYLES[args.accent].metricTint;
+    }
+    return STATUS_KPI_ICON_WELL[args.status] ?? STATUS_KPI_ICON_WELL.unknown;
+}
+
 /** Legacy persisted accent keys → current closed palette. */
 export function normalizeProcessCardAccent(raw: unknown): ProcessCardAccent | undefined {
     if (typeof raw !== "string" || !raw.trim()) return undefined;

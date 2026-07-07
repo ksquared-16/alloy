@@ -34,7 +34,7 @@ import {
 import { useOperationalAnswers } from "./useOperationalAnswers";
 import { useWorkspaceProcessSurfaceConfigState } from "./useWorkspaceProcessSurfaceConfig";
 import { useWorkspaceHeaderSurfaceConfigState } from "./useWorkspaceHeaderSurfaceConfig";
-import { resolveProcessCardConfig } from "./workspaceProcessSurfaceConfig";
+import { resolveProcessCardConfig, resolveWorkViewIcon } from "./workspaceProcessSurfaceConfig";
 import {
     buildWorkspaceHeaderPresentation,
     workspaceHeaderKpiSourceKeys,
@@ -249,11 +249,23 @@ export function useWorkspaceSurfaceRuntime(): WorkspaceSurfaceModel {
                         if (!viewId || !workUnitId) return null;
                         return workViewTotalsState.totals.get(workViewTotalKey(workUnitId, viewId)) ?? null;
                     },
+                    iconForWorkView: (entry) =>
+                        resolveWorkViewIcon(processConfig, {
+                            workViewId: entry.work_view_id,
+                            platformKey: entry.platformKey,
+                        }),
                     primarySignal,
                     supportingSignal,
                 });
             }),
-        [cards, workViewTotalsState.totals, signalKeyForCard, supportingSignalKeyForCard, signalsResolved],
+        [
+            cards,
+            workViewTotalsState.totals,
+            signalKeyForCard,
+            supportingSignalKeyForCard,
+            signalsResolved,
+            processConfig,
+        ],
     );
 
     const lastCompleteProcessSnapshot = useRef<WorkspaceProcessTileSnapshot | null>(null);
