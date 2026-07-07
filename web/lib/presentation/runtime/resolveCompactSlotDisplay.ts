@@ -6,6 +6,7 @@
  */
 
 import { formatQueueRowNameDisplay } from "@/lib/presentation/formatQueueRowNameDisplay";
+import { formatQueueRowPhoneDisplay } from "@/lib/presentation/runtime/formatQueueRowContactDisplay";
 import { isCollectionFieldKey } from "@/lib/presentation/collectionFieldPresentation";
 import { resolveQueueRowChildrenFieldFromContext } from "@/lib/layout/runtime/queueRowChildrenFieldRegistry";
 import {
@@ -21,7 +22,8 @@ function contactLine(context: QueueRowContext): string | null {
     const parts: string[] = [];
     const contact = context.primary_contact;
     if (contact?.display_name?.trim()) parts.push(contact.display_name.trim());
-    if (contact?.phone?.trim()) parts.push(contact.phone.trim());
+    const phone = formatQueueRowPhoneDisplay(contact?.phone);
+    if (phone) parts.push(phone);
     if (contact?.email?.trim()) parts.push(contact.email.trim());
     const related = context.related_subjects_summary
         .filter((subject) => subject.visibility !== "hidden")
@@ -137,6 +139,9 @@ export function resolveCompactSlotDisplay(
                 }
                 const raw = resolveQueueRowFieldValueFromContext(key, context);
                 if (!raw?.trim()) return null;
+                if (key === "person.phone") {
+                    return formatQueueRowPhoneDisplay(raw);
+                }
                 return formatQueueRowNameDisplay(raw, config.nameDisplayByFieldKey?.[key], key);
             })
             .filter((value): value is string => Boolean(value?.trim()));

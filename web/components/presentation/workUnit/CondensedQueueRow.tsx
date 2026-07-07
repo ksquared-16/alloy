@@ -221,7 +221,8 @@ export function CondensedQueueRow({
                     {line2 ? (
                         <span
                             data-queue-row-supporting
-                            className="mt-0.5 block min-w-0 truncate text-[11px] leading-4 text-alloy-midnight/60"
+                            className="mt-0.5 block min-w-0 whitespace-normal break-words text-[11px] leading-4 text-alloy-midnight/60"
+                            title={line2}
                         >
                             {line2}
                         </span>

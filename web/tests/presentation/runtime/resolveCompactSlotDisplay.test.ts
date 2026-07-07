@@ -92,6 +92,48 @@ describe("resolveCompactSlotDisplay", () => {
         );
     });
 
+    it("formats raw 10-digit phone on the contact line", () => {
+        const slots = {
+            visible: true,
+            label: null,
+            fieldKeys: ["person.primary_contact_name", "person.phone", "person.email"],
+        } as const;
+        const display = resolveCompactSlotDisplay(
+            "contact",
+            familyContext({
+                primary_contact: {
+                    display_name: "Rob Digan",
+                    phone: "4804844844",
+                    email: "rob@digan.com",
+                },
+            }),
+            slots,
+            null,
+        );
+        expect(display).toBe("Rob Digan · (480) 484-4844 · rob@digan.com");
+    });
+
+    it("omits invalid phone without leaving blank placeholders", () => {
+        const slots = {
+            visible: true,
+            label: null,
+            fieldKeys: ["person.primary_contact_name", "person.phone", "person.email"],
+        } as const;
+        const display = resolveCompactSlotDisplay(
+            "contact",
+            familyContext({
+                primary_contact: {
+                    display_name: "Rob Digan",
+                    phone: "12345",
+                    email: "rob@digan.com",
+                },
+            }),
+            slots,
+            null,
+        );
+        expect(display).toBe("Rob Digan · rob@digan.com");
+    });
+
     it("omits missing phone and email without blank placeholders", () => {
         const slots = {
             visible: true,

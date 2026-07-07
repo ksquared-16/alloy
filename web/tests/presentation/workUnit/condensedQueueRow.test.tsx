@@ -186,4 +186,30 @@ describe("CondensedQueueRow — published surface config (visibility + labels)",
         expect(el.querySelector("button")).not.toBeNull();
         expect(el.textContent).toContain("Jordan Lee");
     });
+
+    it("contact line wraps instead of truncating and exposes full text via title", () => {
+        const longEmail = "rob.digan.with.a.very.long.email.address@example-childcare.org";
+        const contactLine = `Rob Digan · (480) 484-4844 · ${longEmail}`;
+        const ctx = fullContext();
+        ctx.primary_contact = {
+            display_name: "Rob Digan",
+            phone: "4804844844",
+            email: longEmail,
+        };
+        const rowConfig: CompactRowSlots = {
+            ...GENERIC,
+            contact: {
+                visible: true,
+                label: null,
+                fieldKeys: ["person.primary_contact_name", "person.phone", "person.email"],
+            },
+        };
+        const el = render(<CondensedQueueRow row={row(ctx)} rowConfig={rowConfig} onOpen={vi.fn()} />);
+        const supporting = el.querySelector("[data-queue-row-supporting]");
+        expect(supporting).not.toBeNull();
+        expect(supporting?.textContent).toContain(longEmail);
+        expect(supporting?.getAttribute("title")).toBe(contactLine);
+        expect(supporting?.className).toContain("break-words");
+        expect(supporting?.className).not.toContain("truncate");
+    });
 });
