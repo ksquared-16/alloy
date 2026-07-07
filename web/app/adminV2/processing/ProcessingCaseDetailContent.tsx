@@ -22,6 +22,7 @@ import { isExtractionStale } from "@/lib/pos/processingCase/extraction/processin
 import type { StoredDocumentFormPreview } from "@/lib/pos/processingCase/structure/types";
 import { describeTextUnavailableReason } from "@/lib/pos/processingCase/structure/extractDocumentTextSafe";
 import type { StoredFormDraftPreview } from "@/lib/pos/processingCase/formDraft/types";
+import { formAuthoringWorkspacePath, openFormAuthoringWorkspace } from "@/lib/admin/forms/formAuthoringWorkspacePath";
 
 /** Operator decision vocabulary shown on every case (recommended one is highlighted; others are prototype). */
 const OPERATOR_ACTIONS: Array<{ key: string; label: string }> = [
@@ -154,8 +155,10 @@ function FormDraftSection({
             });
             const body = (await res.json().catch(() => ({}))) as { data?: { form_id?: string; builder_path?: string }; error?: string };
             if (!res.ok) throw new Error(body.error || `Couldn’t create form (${res.status})`);
-            const path = body.data?.builder_path ?? (body.data?.form_id ? `/admin/forms/${body.data.form_id}` : null);
-            if (path) window.location.href = path; // open the unpublished form in the builder
+            const path =
+                body.data?.builder_path ??
+                (body.data?.form_id ? formAuthoringWorkspacePath(body.data.form_id) : null);
+            if (path) openFormAuthoringWorkspace(body.data!.form_id!);
         } catch (e) {
             setError(e instanceof Error ? e.message : "Couldn’t create form");
         } finally {
@@ -164,7 +167,7 @@ function FormDraftSection({
     };
 
     const fieldById = (id: string) => draft?.fields.find((f) => f.id === id);
-    const builderPath = created ? `/admin/forms/${created.form_id}` : null;
+    const builderPath = created ? formAuthoringWorkspacePath(created.form_id) : null;
 
     return (
         <section className="mb-5 rounded-lg border border-emerald-200 bg-white p-3.5 shadow-sm">
@@ -180,12 +183,13 @@ function FormDraftSection({
             <div className="mb-2 flex flex-wrap items-center gap-2">
                 {created ? (
                     <>
-                        <a
-                            href={builderPath ?? "#"}
+                        <button
+                            type="button"
+                            onClick={() => openFormAuthoringWorkspace(created.form_id)}
                             className="rounded-md bg-[#00A283] px-3 py-1.5 text-[12.5px] font-medium text-white hover:bg-[#009276]"
                         >
-                            Open in Forms builder
-                        </a>
+                            Open form composer
+                        </button>
                         <span className="text-[11px] text-emerald-700">Reusable template created (draft) — tweak &amp; publish in the builder.</span>
                     </>
                 ) : (

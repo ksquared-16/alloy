@@ -16,6 +16,7 @@ import WorkspaceSectionHeader from "@/components/workspace/WorkspaceSectionHeade
 import { WS_ACTION_PRIMARY } from "@/components/workspace/workspaceTokens";
 import PosPanel from "./PosPanel";
 import type { PosSection } from "./posSections";
+import { warmProcessingQueueCache } from "@/lib/pos/processingQueueWarmCache";
 
 interface PosDocListItem {
     documentId: string;
@@ -27,7 +28,7 @@ interface PosDocListItem {
     classificationKey: string | null;
 }
 
-const SETUP_STEPS = ["Add document", "Alloy recognizes the fields", "Review record sync", "Create form"];
+const SETUP_STEPS = ["Import form", "Alloy detects questions", "Resolve meaning", "Generate native form"];
 
 function formatWhen(iso: string | null): string {
     if (!iso) return "—";
@@ -142,6 +143,7 @@ export default function PosDocumentsPanel({ onNavigate }: { onNavigate: (section
                     : "Uploaded.",
             });
             void loadDocs();
+            void warmProcessingQueueCache({ force: true });
         } catch (e) {
             setStatus({ kind: "error", message: e instanceof Error ? e.message : "Upload failed" });
         } finally {
@@ -151,14 +153,17 @@ export default function PosDocumentsPanel({ onNavigate }: { onNavigate: (section
 
     return (
         <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-            <WorkspaceSectionHeader title="Documents" subtitle="Upload a document and Alloy turns it into a reusable form." />
+            <WorkspaceSectionHeader
+                title="Documents"
+                subtitle="Give Alloy your existing form — it reads the document and you confirm what each question means."
+            />
 
             <div className="min-h-0 flex-1 overflow-y-auto p-3">
-                {/* Upload */}
                 <div className="mb-4 flex flex-wrap items-center gap-3">
                     <input
                         ref={fileInputRef}
                         type="file"
+                        accept=".pdf,application/pdf"
                         className="hidden"
                         onChange={(e) => {
                             const f = e.target.files?.[0];
@@ -173,7 +178,7 @@ export default function PosDocumentsPanel({ onNavigate }: { onNavigate: (section
                         className={`${WS_ACTION_PRIMARY} inline-flex items-center gap-1.5`}
                     >
                         <FileUp className="h-3.5 w-3.5" aria-hidden />
-                        {uploading ? "Uploading…" : "Add document"}
+                        {uploading ? "Uploading…" : "Import existing form"}
                     </button>
                     {status ? (
                         <span className={`text-[11.5px] ${status.kind === "ok" ? "text-emerald-700" : "text-amber-700"}`}>
@@ -196,7 +201,8 @@ export default function PosDocumentsPanel({ onNavigate }: { onNavigate: (section
                         ))}
                     </ol>
                     <p className="mt-2 text-[11px] text-alloy-midnight/45">
-                        Open a document below in Incoming to review what Alloy recognized and create the form.
+                        Open the intake in Incoming to resolve detected questions and generate a native Alloy form. The uploaded
+                        document is evidence — the generated form becomes the source of truth.
                     </p>
                 </PosPanel>
 

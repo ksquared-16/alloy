@@ -229,6 +229,7 @@ export default function ProcessingQueueList({
                             <li key={row.id}>
                                 <button
                                     type="button"
+                                    data-processing-case-id={row.id}
                                     onClick={() => onSelectCase(row.id)}
                                     aria-current={selected}
                                     className={`flex w-full items-start gap-2.5 border-l-2 px-3 py-2 text-left transition-colors ${

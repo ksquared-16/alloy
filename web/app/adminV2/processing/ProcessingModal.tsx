@@ -33,11 +33,11 @@ import PosPacketsPanel from "@/app/adminV2/pos/PosPacketsPanel";
 import PosDocumentsPanel from "@/app/adminV2/pos/PosDocumentsPanel";
 import PosSettingsPanel from "@/app/adminV2/pos/PosSettingsPanel";
 import type { PosSection } from "@/app/adminV2/pos/posSections";
+import { openFormAuthoringWorkspace } from "@/lib/admin/forms/formAuthoringWorkspacePath";
 
 export default function ProcessingModal({ open, onClose }: { open: boolean; onClose: () => void }) {
     const [selectedCaseId, setSelectedCaseId] = useState<string | null>(null);
     const [section, setSection] = useState<PosSection>("processing");
-    const [focusFormId, setFocusFormId] = useState<string | null>(null);
 
     // Warm the shared Incoming queue cache the moment the modal opens (mirrors Inbox-on-open), so
     // the queue + KPI strip paint from cache instead of each firing the heavy endpoint on mount.
@@ -48,15 +48,12 @@ export default function ProcessingModal({ open, onClose }: { open: boolean; onCl
     const handleClose = useCallback(() => {
         setSelectedCaseId(null);
         setSection("processing");
-        setFocusFormId(null);
         onClose();
     }, [onClose]);
 
-    // Stay INSIDE Processing: jump to Studio → Forms with the just-created form selected
-    // (never route away to /admin/forms, never close the modal).
+    // After generation: open canonical form workspace in a new tab.
     const openForm = useCallback((formId: string) => {
-        setFocusFormId(formId);
-        setSection("forms");
+        openFormAuthoringWorkspace(formId);
     }, []);
 
     let body: ReactNode;
@@ -72,7 +69,7 @@ export default function ProcessingModal({ open, onClose }: { open: boolean; onCl
             );
             break;
         case "forms":
-            body = <PosFormsWorkspace focusFormId={focusFormId} />;
+            body = <PosFormsWorkspace focusFormId={null} />;
             break;
         case "packets":
             body = <PosPacketsPanel />;

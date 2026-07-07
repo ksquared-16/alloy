@@ -6,6 +6,7 @@ import {
     createFormFromCaseDraft,
     makeCreateFormDepsFromSupabase,
 } from "@/lib/pos/processingCase/formDraft/createFormFromCaseDraft";
+import { formAuthoringWorkspacePath } from "@/lib/admin/forms/formAuthoringWorkspacePath";
 
 export const dynamic = "force-dynamic";
 
@@ -46,7 +47,7 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
                 form_version_id: result.formVersionId,
                 created_at: result.createdAt,
                 already_created: result.alreadyCreated,
-                builder_path: `/admin/forms/${result.formId}`,
+                builder_path: formAuthoringWorkspacePath(result.formId),
             },
             { status: result.alreadyCreated ? 200 : 201 }
         );
