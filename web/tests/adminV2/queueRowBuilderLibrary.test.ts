@@ -26,6 +26,21 @@ const libraryPanelSrc = readFileSync(
 );
 
 describe("queue row builder library", () => {
+    it("includes children vocabulary fields in the child category", () => {
+        const items = buildQueueRowLibraryCatalog({
+            isWaitlist: false,
+            inRowZoneKeys: ["children", "status", "household"],
+        });
+        const childCategory = libraryItemsByCategory(items).find((c) => c.key === "child");
+        const fieldKeys = childCategory?.items
+            .filter((item) => item.kind === "field")
+            .map((item) => item.fieldKey) ?? [];
+        expect(fieldKeys).toContain("child.name");
+        expect(fieldKeys).toContain("children.count");
+        expect(fieldKeys).toContain("children.names");
+        expect(fieldKeys).toContain("children.summary");
+    });
+
     it("child category includes registry child fields and sibling vocabulary when available", () => {
         const items = buildQueueRowLibraryCatalog({
             isWaitlist: true,
@@ -93,6 +108,8 @@ describe("surface field composer interaction", () => {
         expect(builderSrc).toContain("SURFACE_FIELD_PLACEMENT_HELP");
         expect(builderSrc).toContain("data-row-focus-help");
         expect(libraryPanelSrc).toContain("SURFACE_FIELD_ROW_FOCUS_HELP");
+        expect(libraryPanelSrc).toContain("data-library-scroll");
+        expect(libraryPanelSrc).toContain("min-h-0 flex-1 overflow-y-auto");
     });
 
     it("row focus persists as library context only and does not remap layout", () => {

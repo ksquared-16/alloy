@@ -38,7 +38,7 @@ describe("mapQueueRowSurfaceToCompactConfig", () => {
         );
     });
 
-    it("present mapped field → visible with label override from field.label", () => {
+    it("present mapped field → visible with builder label metadata and fieldKeys", () => {
         const config = configWith([
             field("customer.display_name", "Household"),
             field("opportunity.status_label", "Disposition"),
@@ -48,20 +48,20 @@ describe("mapQueueRowSurfaceToCompactConfig", () => {
             field("queue_row.group_count_label", "Tracks"),
         ]);
         const { slots, fallbackSlots } = mapQueueRowSurfaceToCompactConfig(config);
-        expect(slots.subject).toEqual({ visible: true, label: "Household" });
-        expect(slots.status).toEqual({ visible: true, label: "Disposition" });
-        expect(slots.contact).toEqual({ visible: true, label: "Primary contact" });
-        expect(slots.attention).toEqual({ visible: true, label: "Attention" });
-        expect(slots.work).toEqual({ visible: true, label: "Open work" });
-        expect(slots.groupCount).toEqual({ visible: true, label: "Tracks" });
+        expect(slots.subject).toEqual({ visible: true, label: "Household", fieldKeys: ["customer.display_name"] });
+        expect(slots.status).toEqual({ visible: true, label: "Disposition", fieldKeys: ["opportunity.status_label"] });
+        expect(slots.contact).toEqual({ visible: true, label: "Primary contact", fieldKeys: ["person.primary_contact_name"] });
+        expect(slots.attention).toEqual({ visible: true, label: "Attention", fieldKeys: ["opportunity.attention_reason"] });
+        expect(slots.work).toEqual({ visible: true, label: "Open work", fieldKeys: ["queue_row.work_summary"] });
+        expect(slots.groupCount).toEqual({ visible: true, label: "Tracks", fieldKeys: ["queue_row.group_count_label"] });
         // Every slot mapped → nothing fell back.
         expect(fallbackSlots).toEqual([]);
     });
 
-    it("present field with no label → visible, label null (not an override)", () => {
+    it("present field with no label → visible, label null, fieldKeys preserved", () => {
         const config = configWith([field("customer.display_name")]);
         const { slots, fallbackSlots } = mapQueueRowSurfaceToCompactConfig(config);
-        expect(slots.subject).toEqual({ visible: true, label: null });
+        expect(slots.subject).toEqual({ visible: true, label: null, fieldKeys: ["customer.display_name"] });
         // subject mapped (present), the rest fell back.
         expect(fallbackSlots).not.toContain("subject");
         expect(fallbackSlots).toContain("status");
@@ -71,7 +71,7 @@ describe("mapQueueRowSurfaceToCompactConfig", () => {
         // Only the status field is published; every other slot has no mapped field.
         const config = configWith([field("opportunity.status_label", "Disposition")]);
         const { slots, fallbackSlots } = mapQueueRowSurfaceToCompactConfig(config);
-        expect(slots.status).toEqual({ visible: true, label: "Disposition" });
+        expect(slots.status).toEqual({ visible: true, label: "Disposition", fieldKeys: ["opportunity.status_label"] });
         // Absent slots never HIDE — they stay generic-visible with no override.
         expect(slots.subject).toEqual({ visible: true, label: null });
         expect(slots.contact).toEqual({ visible: true, label: null });
@@ -90,9 +90,9 @@ describe("mapQueueRowSurfaceToCompactConfig", () => {
             field("queue_row.stage_label", "Stage"),
         ]);
         const { slots, fallbackSlots } = mapQueueRowSurfaceToCompactConfig(config);
-        expect(slots.subject).toEqual({ visible: true, label: "Subject" });
-        expect(slots.status).toEqual({ visible: true, label: "Stage" });
-        expect(slots.work).toEqual({ visible: true, label: "Suggested action" });
+        expect(slots.subject).toEqual({ visible: true, label: "Subject", fieldKeys: ["queue_row.subject_label"] });
+        expect(slots.status).toEqual({ visible: true, label: "Stage", fieldKeys: ["queue_row.stage_label"] });
+        expect(slots.work).toEqual({ visible: true, label: "Suggested action", fieldKeys: ["queue_row.next_best_action_label"] });
         expect(fallbackSlots.sort()).toEqual(["attention", "contact", "groupCount"].sort());
     });
 
@@ -104,5 +104,6 @@ describe("mapQueueRowSurfaceToCompactConfig", () => {
         const { slots } = mapQueueRowSurfaceToCompactConfig(config);
         // status maps [opportunity.status_label, queue_row.stage_label] — primary wins.
         expect(slots.status.label).toBe("Disposition");
+        expect(slots.status.fieldKeys).toEqual(["opportunity.status_label"]);
     });
 });

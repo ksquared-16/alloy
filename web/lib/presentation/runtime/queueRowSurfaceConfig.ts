@@ -55,12 +55,17 @@ import type {
 } from "@/lib/layout/queueRecordLayoutV3";
 import { compactSlotForCanvasRegion, type CanvasAnatomyRegion } from "@/lib/adminV2/settings/surfaces/queueRowCanvasRegions";
 
-/** One compact-anatomy slot's resolved config: whether to render it + an optional label override. */
+/** One compact-anatomy slot's resolved config: whether to render it + configured field keys. */
 export type CompactRowSlotConfig = {
     /** Render this slot. Absent/null config → true. Only an explicit config hide sets false. */
     visible: boolean;
-    /** Label override from the published field (`field.label`); null = use generic context. */
+    /**
+     * Builder metadata — operator field labels for preview/debug. NOT rendered as slot values;
+     * runtime display comes from {@link fieldKeys} via `resolveCompactSlotDisplay`.
+     */
     label: string | null;
+    /** Published field refKeys assigned to this slot (builder canvas order). */
+    fieldKeys?: readonly string[];
 };
 
 /** The fixed compact-row slots the `CondensedQueueRow` renders (see anatomy in that file). */
@@ -80,14 +85,22 @@ export type CompactRowConfig = {
     fallbackSlots: (keyof CompactRowSlots)[];
 };
 
-/** Compact slot → published fieldKey(s), first present wins for the label override. */
+/** Compact slot → published fieldKey(s), first present wins for legacy label metadata. */
 const SLOT_FIELD_KEYS: Record<keyof CompactRowSlots, readonly string[]> = {
     subject: ["customer.display_name", "queue_row.subject_label"],
     status: ["opportunity.status_label", "queue_row.stage_label"],
     contact: ["person.primary_contact_name"],
     attention: ["opportunity.attention_reason"],
     work: ["queue_row.work_summary", "queue_row.next_best_action_label"],
-    groupCount: ["queue_row.group_count_label"],
+    groupCount: [
+        "queue_row.group_count_label",
+        "child.name",
+        "children.count",
+        "children.names",
+        "children.summary",
+        "inquiry_child.program",
+        "inquiry_child.schedule_type",
+    ],
 } as const;
 
 const SLOT_KEYS = Object.keys(SLOT_FIELD_KEYS) as (keyof CompactRowSlots)[];
@@ -144,6 +157,7 @@ function slotsFromBuilderAssignment(
 ): Partial<Record<keyof CompactRowSlots, CompactRowSlotConfig>> {
     const assigned: Partial<Record<keyof CompactRowSlots, CompactRowSlotConfig>> = {};
     const labelsBySlot = new Map<keyof CompactRowSlots, string[]>();
+    const keysBySlot = new Map<keyof CompactRowSlots, string[]>();
 
     const sortedColumns = [...config.columns].sort(
         (a, b) => (a.rowIndex ?? 0) - (b.rowIndex ?? 0),
@@ -157,6 +171,12 @@ function slotsFromBuilderAssignment(
         for (const block of column.blocks) {
             if (block.type !== "field_group" && block.type !== "repeated_record_block") continue;
             for (const field of block.fields) {
+                const fieldKey = field.fieldKey.trim();
+                if (!fieldKey) continue;
+                const keys = keysBySlot.get(compactSlot) ?? [];
+                if (!keys.includes(fieldKey)) keys.push(fieldKey);
+                keysBySlot.set(compactSlot, keys);
+
                 const label = typeof field.label === "string" ? field.label.trim() : "";
                 if (!label) continue;
                 const existing = labelsBySlot.get(compactSlot) ?? [];
@@ -170,8 +190,12 @@ function slotsFromBuilderAssignment(
         }
     }
 
-    for (const [slot, labels] of labelsBySlot) {
-        assigned[slot] = { visible: true, label: labels.join(" · ") || null };
+    for (const [slot, fieldKeys] of keysBySlot) {
+        assigned[slot] = {
+            visible: true,
+            label: labelsBySlot.get(slot)?.join(" · ") || null,
+            fieldKeys,
+        };
     }
     return assigned;
 }
@@ -227,10 +251,9 @@ export function mapQueueRowSurfaceToCompactConfig(
             fallbackSlots.push(slot);
             continue;
         }
-        // Present field: visible (record-conditional `visibleWhen` is deferred to the row's
-        // own context, not evaluated here), label from the published field when set.
+        // Present field: visible; fieldKeys drive runtime values (labels are builder metadata only).
         const label = typeof field.label === "string" ? field.label.trim() || null : null;
-        slots[slot] = { visible: true, label };
+        slots[slot] = { visible: true, label, fieldKeys: [field.fieldKey.trim()] };
     }
 
     return { slots, fallbackSlots };

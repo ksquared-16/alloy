@@ -97,15 +97,48 @@ describe("CondensedQueueRow — published surface config (visibility + labels)",
         expect(el.querySelector("[data-needs-attention]")).toBeNull();
     });
 
-    it("label override → status pill shows the configured label instead of the context value", () => {
+    it("configured Stage field renders runtime status value, not the static field label", () => {
         const cfg: CompactRowSlots = {
             ...GENERIC,
-            status: { visible: true, label: "Disposition" },
+            status: { visible: true, label: "Stage", fieldKeys: ["queue_row.stage_label"] },
         };
         const el = render(<CondensedQueueRow row={row(fullContext())} rowConfig={cfg} onOpen={vi.fn()} />);
         const text = el.textContent ?? "";
-        expect(text).toContain("Disposition");
-        expect(text).not.toContain("New Lead");
+        expect(text).toContain("New Lead");
+        expect(text).not.toContain("Stage");
+    });
+
+    it("configured child name renders on child-grain rows", () => {
+        const childCtx: QueueRowContext = {
+            ...fullContext(),
+            row_subject: { subject_type: "child", subject_id: "child-1", display_name: "Avery Lee" },
+        };
+        const cfg: CompactRowSlots = {
+            ...GENERIC,
+            groupCount: { visible: true, label: "Child name", fieldKeys: ["child.name"] },
+        };
+        const el = render(<CondensedQueueRow row={row(childCtx)} rowConfig={cfg} onOpen={vi.fn()} />);
+        expect(el.textContent).toContain("Avery Lee");
+    });
+
+    it("family-grain child name shows children summary instead of blank", () => {
+        const familyCtx: QueueRowContext = {
+            ...fullContext(),
+            related_subjects_summary: [
+                {
+                    subject_type: "child",
+                    subject_id: "child-1",
+                    display_name: "Avery Lee",
+                    status_label: "Lead",
+                },
+            ],
+        };
+        const cfg: CompactRowSlots = {
+            ...GENERIC,
+            groupCount: { visible: true, label: "Child name", fieldKeys: ["child.name"] },
+        };
+        const el = render(<CondensedQueueRow row={row(familyCtx)} rowConfig={cfg} onOpen={vi.fn()} />);
+        expect(el.textContent).toContain("Avery Lee");
     });
 
     it("selected rail present when isSelected", () => {

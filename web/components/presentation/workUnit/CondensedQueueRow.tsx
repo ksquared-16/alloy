@@ -30,6 +30,7 @@ import {
     type QueueRowModel,
 } from "@/lib/presentation/runtime";
 import type { FocusedSubjectContext } from "@/lib/presentation/runtime/resolveQueueRowSubjectFocus";
+import { resolveCompactSlotDisplay } from "@/lib/presentation/runtime/resolveCompactSlotDisplay";
 import {
     PRESENTATION_RUNTIME_LABELS,
     runtimeLabelProps,
@@ -69,37 +70,9 @@ function AvatarChip({ name }: { name: string }) {
     );
 }
 
-/** Line 2: primary contact and/or related subjects (e.g. children) from the frozen contract. */
-function contactLine(context: RowContext): string | null {
-    const parts: string[] = [];
-    const contact = context.primary_contact?.display_name?.trim();
-    if (contact) parts.push(contact);
-    const related = context.related_subjects_summary
-        .filter((subject) => subject.visibility !== "hidden")
-        .map((subject) => subject.display_name.trim())
-        .filter(Boolean);
-    if (related.length) parts.push(related.join(", "));
-    return parts.length ? parts.join(" · ") : null;
-}
-
-/** Grouped-row count chip label (e.g. "2 children") — only when the row is grouped. */
-function groupedCountLabel(context: RowContext): string | null {
-    if (context.row_presentation_mode !== "grouped_subjects") return null;
-    const count = context.row_count ?? context.row_subjects?.length ?? null;
-    if (count == null) return null;
-    const unit = (context.row_count_unit ?? "records").replace(/_/g, " ");
-    return `${count} ${unit}`;
-}
-
 /** A slot renders when config is absent or the config marks it visible. */
 function slotVisible(slot: CompactRowSlots[keyof CompactRowSlots] | undefined): boolean {
     return slot?.visible !== false;
-}
-
-/** Sibling rollup chip from a resolved Subject Focus (count-only; prefers a name summary). */
-function focusSiblingChip(siblings: { count: number; summary: string | null }): string | null {
-    if (siblings.count <= 0) return null;
-    return siblings.summary?.trim() || `${siblings.count} ${siblings.count === 1 ? "child" : "children"}`;
 }
 
 export function CondensedQueueRow({
@@ -190,26 +163,25 @@ export function CondensedQueueRow({
     // Subject Focus (Phase 3): the focused primary subject anchors the identity slot; its supporting
     // lines + sibling rollup feed the contact + group slots. All fall back to frozen-context values
     // when focus is absent or empty — never invents data, same slots, one renderer.
-    const displayName = focus?.primary.display_name?.trim() || queueRowSubjectDisplayName(context);
-    // Status pill: config label override where present, else the generic context value.
+    const displayName =
+        resolveCompactSlotDisplay("subject", context, rowConfig?.subject, focus)
+        ?? focus?.primary.display_name?.trim()
+        ?? queueRowSubjectDisplayName(context);
     const stageLabel = showStatus
-        ? rowConfig?.status?.label ?? (context.row_status_label || context.row_stage)
+        ? resolveCompactSlotDisplay("status", context, rowConfig?.status, focus)
         : null;
     const needsAttention = showAttention && context.attention_summary?.needs_attention === true;
     const attentionReason = needsAttention
-        ? context.attention_summary?.primary_reason_label ?? null
+        ? resolveCompactSlotDisplay("attention", context, rowConfig?.attention, focus)
         : null;
     const line2 = showContact
-        ? (focus ? focus.supportingLines.join(" · ") || contactLine(context) : contactLine(context))
+        ? resolveCompactSlotDisplay("contact", context, rowConfig?.contact, focus)
         : null;
     const countChip = showGroupCount
-        ? (focus?.siblings ? focusSiblingChip(focus.siblings) : groupedCountLabel(context))
+        ? resolveCompactSlotDisplay("groupCount", context, rowConfig?.groupCount, focus)
         : null;
     const workLabel = showWork
-        ? context.current_work_summary?.label ??
-          context.next_best_action?.label ??
-          context.work_summary?.primary_open_label ??
-          null
+        ? resolveCompactSlotDisplay("work", context, rowConfig?.work, focus)
         : null;
     const dueLabel = showWork ? context.current_work_summary?.due_label ?? null : null;
     const hasFooterLine = countChip != null || workLabel != null || dueLabel != null;

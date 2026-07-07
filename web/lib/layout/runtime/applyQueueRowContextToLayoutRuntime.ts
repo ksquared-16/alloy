@@ -19,6 +19,7 @@ import {
     shouldSuppressDuplicateCaseSubjectLabel,
     suppressDuplicateQueueRowSubjectOnRecord,
 } from "@/lib/layout/runtime/queueRowSubjectPresentation";
+import { resolveQueueRowChildrenFieldFromContext } from "@/lib/layout/runtime/queueRowChildrenFieldRegistry";
 
 function trimOrNull(value: unknown): string | null {
     if (typeof value !== "string") return null;
@@ -103,6 +104,11 @@ export function applyQueueRowContextToLayoutRecord(
 
     if (presentation.stageLabel) {
         mutable["queue_row.stage_label"] = presentation.stageLabel;
+    }
+
+    for (const key of ["children.count", "children.names", "children.summary", "child.name"] as const) {
+        const resolved = resolveQueueRowChildrenFieldFromContext(key, ctx);
+        if (resolved) mutable[key] = resolved;
     }
 
     const subjectLabel = trimOrNull(ctx.row_subject?.display_name);

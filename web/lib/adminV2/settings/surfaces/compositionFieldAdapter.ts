@@ -112,6 +112,9 @@ const QUEUE_FIELD_CATALOG: Record<string, { label: string; namespace: AvailableF
     "opportunity.tour_date": { label: "Tour Date", namespace: "opportunity", hint: "date" },
     // child
     "child.name": { label: "Child Name", namespace: "child" },
+    "children.count": { label: "Children count", namespace: "child", hint: "compact_list" },
+    "children.names": { label: "Children names", namespace: "child", hint: "compact_list" },
+    "children.summary": { label: "Children summary", namespace: "child", hint: "compact_list" },
     "child.date_of_birth": { label: "Date of Birth", namespace: "child", hint: "date" },
     "child.dob_age": { label: "Age", namespace: "child" },
     "child.age": { label: "Age", namespace: "child" },

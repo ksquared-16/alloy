@@ -39,17 +39,17 @@ export default function QueueRowItemLibraryPanel({
 
     const panel = (
         <div
-            className="pointer-events-auto fixed inset-0 z-[70] flex items-start justify-center bg-alloy-midnight/20 p-4 pt-16"
+            className="pointer-events-auto fixed inset-0 z-[70] flex items-end justify-center bg-alloy-midnight/20 p-4 pb-6 sm:items-center sm:pb-4"
             role="dialog"
             aria-label="Add to queue row"
             data-queue-row-item-library
             onClick={onClose}
         >
             <div
-                className="max-h-[min(70vh,560px)] w-full max-w-lg overflow-hidden rounded-xl border border-alloy-stone/20 bg-white shadow-xl"
+                className="flex max-h-[min(85vh,640px)] w-full max-w-lg flex-col overflow-hidden rounded-xl border border-alloy-stone/20 bg-white shadow-xl"
                 onClick={(e) => e.stopPropagation()}
             >
-                <header className="flex items-center justify-between border-b border-alloy-stone/10 px-4 py-3">
+                <header className="shrink-0 flex items-center justify-between border-b border-alloy-stone/10 px-4 py-3">
                     <div>
                         <p className="text-sm font-semibold text-alloy-midnight">{sectionLabel ?? "Add to row"}</p>
                         <p className="mt-0.5 text-[11px] text-alloy-midnight/50">Choose a field or widget to place on the row.</p>
@@ -59,7 +59,7 @@ export default function QueueRowItemLibraryPanel({
                     </div>
                     <button type="button" onClick={onClose} className="rounded p-1 text-alloy-midnight/40 hover:bg-alloy-stone/10" aria-label="Close library" data-library-close>✕</button>
                 </header>
-                <div className="border-b border-alloy-stone/10 px-4 py-2">
+                <div className="shrink-0 border-b border-alloy-stone/10 px-4 py-2">
                     <input
                         type="search"
                         value={search}
@@ -69,7 +69,7 @@ export default function QueueRowItemLibraryPanel({
                         data-library-search
                     />
                 </div>
-                <div className="max-h-[calc(min(70vh,560px)-6.5rem)] overflow-y-auto p-3">
+                <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-3" data-library-scroll>
                     {categories.length === 0 ? (
                         <p className="px-2 py-4 text-[12px] text-alloy-midnight/45">No items match your search.</p>
                     ) : (

@@ -45,6 +45,9 @@ const PIPELINE_QUEUE_ROW_ANCHOR_FIELD_REFS = [
     "queue_row.group_count_label",
     "queue_row.work_summary",
     "queue_row.next_best_action_label",
+    "children.count",
+    "children.names",
+    "children.summary",
 ] as const;
 
 /** Contact role display refs overlayable on queue row records when present. */
