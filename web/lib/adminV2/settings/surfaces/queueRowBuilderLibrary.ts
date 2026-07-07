@@ -13,6 +13,7 @@ import {
     type AvailableField,
 } from "@/lib/adminV2/settings/surfaces/compositionFieldAdapter";
 import { WAITLIST_PLACEMENT_FIELD_KEYS } from "@/lib/layout/runtime/queueWaitlistPlacementField";
+import { buildUnavailableSiblingLibraryEntries } from "@/lib/layout/runtime/queueRowSiblingFieldRegistry";
 import type { TenantFieldDefinitionRow } from "@/lib/layout/tenantLayoutFieldPickerCatalog";
 import type { QueueRowSubjectFocusUi } from "@/lib/adminV2/settings/surfaces/queueRowSubjectFocus";
 
@@ -138,8 +139,9 @@ const FIELD_LIBRARY_LABELS: Record<string, string> = {
     "overrides.flags": "Placement adjustment",
 };
 
-/** Registry gaps — none for sibling vocabulary after runtime promotion sprint. */
-export const QUEUE_ROW_UNAVAILABLE_SIBLING_LIBRARY: readonly QueueRowLibraryUnavailableItem[] = [];
+/** Unavailable sibling placeholders — derived from placeholder catalog minus resolver-backed keys. */
+export const QUEUE_ROW_UNAVAILABLE_SIBLING_LIBRARY: readonly QueueRowLibraryUnavailableItem[] =
+    buildUnavailableSiblingLibraryEntries();
 
 const WIDGET_LIBRARY_LABELS: Record<string, string> = {
     attention: "Attention",

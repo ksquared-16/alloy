@@ -105,3 +105,45 @@ export function isQueueRowSiblingSignalPath(path: string): boolean {
         key === QUEUE_ROW_SIBLING_SIGNAL_PATHS.hasMultipleChildren
     );
 }
+
+/** Composite sibling context field — resolver-backed via waitlist candidate VM. */
+export const QUEUE_ROW_SIBLING_COMPOSITE_FIELD_KEY = "waitlist.siblingContext" as const;
+
+/**
+ * Granular sibling refKeys catalogued before resolver work lands.
+ * Promote to `QUEUE_ROW_SIBLING_FIELD_KEYS` once `resolveQueueRowSiblingFields` maps them.
+ */
+export const QUEUE_ROW_SIBLING_PLACEHOLDER_FIELD_CATALOG: readonly {
+    fieldKey: string;
+    label: string;
+    reason?: string;
+}[] = [];
+
+/** All sibling vocabulary fields with active runtime resolvers (composite + granular). */
+export const QUEUE_ROW_RESOLVER_BACKED_SIBLING_FIELD_KEYS = [
+    QUEUE_ROW_SIBLING_COMPOSITE_FIELD_KEY,
+    ...QUEUE_ROW_SIBLING_FIELD_KEYS,
+] as const;
+
+export function isQueueRowSiblingFieldResolverBacked(fieldKey: string): boolean {
+    const key = fieldKey.trim();
+    return (QUEUE_ROW_RESOLVER_BACKED_SIBLING_FIELD_KEYS as readonly string[]).includes(key);
+}
+
+export function buildUnavailableSiblingLibraryEntries(): Array<{
+    kind: "unavailable";
+    fieldKey: string;
+    label: string;
+    reason: string;
+    category: "child";
+}> {
+    return QUEUE_ROW_SIBLING_PLACEHOLDER_FIELD_CATALOG.filter(
+        (entry) => !isQueueRowSiblingFieldResolverBacked(entry.fieldKey),
+    ).map((entry) => ({
+        kind: "unavailable" as const,
+        fieldKey: entry.fieldKey,
+        label: entry.label,
+        reason: entry.reason ?? "Not available yet — missing registry field",
+        category: "child" as const,
+    }));
+}
