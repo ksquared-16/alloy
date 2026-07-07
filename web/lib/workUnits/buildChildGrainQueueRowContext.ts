@@ -9,6 +9,10 @@
 
 import { humanizeSnakeCaseToken } from "@/lib/admin/activityTimelineFormat";
 import { inquiryChildProfileFieldsFromRaw } from "@/lib/admin/drawer/inquiryChildrenHydration";
+import {
+    buildHouseholdChildrenLookup,
+    mergeInquiryChildProfileFromHousehold,
+} from "@/lib/workUnits/queueRowChildProfileMerge";
 import { placementCandidateQueueRowId } from "@/lib/orchestration/placement/placementWaitlistCandidateRowProjection";
 import { enrollmentOffersChildQueueRowId } from "@/lib/queues/childGrainEnrollmentQueue";
 import {
@@ -330,7 +334,9 @@ function buildRelatedSubjectsSummary(
             program_label: placement?.program_label ?? null,
             room_label: placement?.room_label ?? (raw ? trimOrNull(raw.program_room_cohort_label) : null),
             schedule_label: placement?.schedule_label ?? (raw ? trimOrNull(raw.desired_schedule_label) : null),
-            ...(raw ? inquiryChildProfileFieldsFromRaw(raw) : {}),
+            ...(raw
+                ? mergeInquiryChildProfileFromHousehold(raw, buildHouseholdChildrenLookup(row))
+                : {}),
         };
         const visibility = relatedSubjectVisibilityForLocation(subjectLocationId, allowedLocationIds);
         out.push(applyRelatedSubjectLocationVisibility(summary, visibility));
@@ -427,7 +433,10 @@ export function buildChildGrainQueueRowContext(input: BuildChildGrainQueueRowCon
             trimOrNull(raw.ocm_id) ?? trimOrNull(raw.id) ?? trimOrNull(raw.customer_member_id);
         return subjectId === active.subjectId;
     }) as Record<string, unknown> | undefined;
-    const activeProfile = activeInquiryRaw ? inquiryChildProfileFieldsFromRaw(activeInquiryRaw) : null;
+    const householdLookup = buildHouseholdChildrenLookup(row);
+    const activeProfile = activeInquiryRaw
+        ? mergeInquiryChildProfileFromHousehold(activeInquiryRaw, householdLookup)
+        : null;
 
     return {
         contract_version: QUEUE_ROW_CONTEXT_CONTRACT_VERSION,

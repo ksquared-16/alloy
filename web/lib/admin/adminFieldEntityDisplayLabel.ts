@@ -1,5 +1,6 @@
 import type { EntityLabelsMap } from "@/lib/admin/entityLabelDisplay";
 import { getEntityLabel } from "@/lib/admin/entityLabelDisplay";
+import { CHILDCARE_FIELD_ENTITY_SINGULAR_LABELS } from "@/lib/fields/childcareFieldCatalogDoctrine";
 
 /**
  * field_definitions / field_section_definitions use singular API entity_type
@@ -17,19 +18,20 @@ export const ADMIN_FIELD_ENTITY_TYPE_TO_LABELS_KEY: Record<string, string> = {
     inquiry_child: "customer_members",
 };
 
-const STATIC_FIELD_ENTITY_SINGULAR_LABELS: Record<string, string> = {
-    inquiry_child: "Inquiry child",
-};
+const STATIC_FIELD_ENTITY_SINGULAR_LABELS: Record<string, string> = {};
 
 export function adminFieldEntitySingularLabel(labels: EntityLabelsMap, entityTypeSingular: string): string {
-    const staticLabel = STATIC_FIELD_ENTITY_SINGULAR_LABELS[entityTypeSingular];
+    const et = entityTypeSingular.trim().toLowerCase();
+    const doctrineLabel = CHILDCARE_FIELD_ENTITY_SINGULAR_LABELS[et];
+    if (doctrineLabel) return doctrineLabel;
+    const staticLabel = STATIC_FIELD_ENTITY_SINGULAR_LABELS[et];
     if (staticLabel) return staticLabel;
     const pluralKey = ADMIN_FIELD_ENTITY_TYPE_TO_LABELS_KEY[entityTypeSingular] ?? entityTypeSingular;
     return getEntityLabel(labels, pluralKey, "singular");
 }
 
 export function adminFieldEntityPluralLabel(labels: EntityLabelsMap, entityTypeSingular: string): string {
-    if (entityTypeSingular === "inquiry_child") return "Inquiry children";
+    if (entityTypeSingular === "inquiry_child") return "Children";
     const pluralKey = ADMIN_FIELD_ENTITY_TYPE_TO_LABELS_KEY[entityTypeSingular] ?? entityTypeSingular;
     return getEntityLabel(labels, pluralKey, "plural");
 }

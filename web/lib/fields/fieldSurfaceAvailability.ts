@@ -1,8 +1,10 @@
 /**
  * Operator-facing surface availability for Fields settings.
  *
- * Explains where a registry field can be edited vs where runtime resolvers expose it.
- * Adding a custom field updates the registry — each surface still requires resolver/placement work.
+ * Source-of-truth doctrine:
+ * - Child fields are operator-facing; runtime hydrates from customer_member / inquiry child / person sources.
+ * - Queue Rows expose child fields only when resolver-backed (see collectionFieldPresentation catalog).
+ * - Fields registry visibility ≠ automatic surface availability.
  */
 
 import type { FieldDef } from "@/app/api/admin/field-definitions/route";

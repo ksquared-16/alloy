@@ -26,8 +26,8 @@ export type ChildcareFieldsHubEntityTier = "primary" | "advanced" | "hidden";
 export const CHILDCARE_FIELDS_HUB_PRIMARY_ENTITIES = [
     "person",
     "customer",
-    "opportunity",
     "inquiry_child",
+    "opportunity",
     "location",
 ] as const;
 
@@ -62,7 +62,7 @@ export function isChildcareFieldsHubVisibleEntity(entityType: string): boolean {
 export const CHILDCARE_FIELD_ENTITY_SINGULAR_LABELS: Readonly<Record<string, string>> = {
     person: "Person",
     customer: "Family",
-    opportunity: "Lead",
+    opportunity: "Lead / Enrollment Record",
     inquiry_child: "Child",
     location: "Location / Site",
     vendor: "Provider",

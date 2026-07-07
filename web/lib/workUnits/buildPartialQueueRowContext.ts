@@ -11,6 +11,11 @@
 import { humanizeSnakeCaseToken } from "@/lib/admin/activityTimelineFormat";
 import { inquiryChildProfileFieldsFromRaw } from "@/lib/admin/drawer/inquiryChildrenHydration";
 import {
+    buildHouseholdChildrenLookup,
+    mergeCrmCompactLineProfile,
+    mergeInquiryChildProfileFromHousehold,
+} from "@/lib/workUnits/queueRowChildProfileMerge";
+import {
     childLifecycleMembersFromInquiryChildren,
     type OpportunityChildLifecycleSummary,
 } from "@/lib/opportunities/buildOpportunityChildLifecycleSummary";
@@ -165,6 +170,7 @@ function relatedSubjectFromInquiryChildRaw(
     raw: Record<string, unknown>,
     member: ReturnType<typeof childLifecycleMembersFromInquiryChildren>[number] | undefined,
     allowedLocationIds?: readonly string[] | null,
+    householdLookup?: Map<string, Record<string, unknown>>,
 ): RelatedSubjectSummary | null {
     const subjectId =
         trimOrNull(raw.ocm_id) ??
@@ -186,7 +192,9 @@ function relatedSubjectFromInquiryChildRaw(
 
     const placement = buildSubjectPlacementFromInquiryChildRaw(raw);
     const subjectLocationId = placement?.location_id ?? trimOrNull(raw.location_id);
-    const profile = inquiryChildProfileFieldsFromRaw(raw);
+    const profile = householdLookup
+        ? mergeInquiryChildProfileFromHousehold(raw, householdLookup)
+        : inquiryChildProfileFieldsFromRaw(raw);
     const summary: RelatedSubjectSummary = {
         subject_type: trimOrNull(raw.placement_candidate_id) ? "candidate" : "child",
         subject_id: subjectId,
@@ -239,26 +247,34 @@ function buildRelatedSubjectsSummaryFromHouseholdChildren(
 
 function buildRelatedSubjectsSummaryFromCrmCompactChildren(
     row: Record<string, unknown>,
+    householdLookup: Map<string, Record<string, unknown>>,
 ): RelatedSubjectSummary[] {
     const parsed = parseQueueRowCrmChildrenStructured(row._crm_compact_children);
     if (!parsed.length) return [];
 
-    return parsed.map((line, index) => ({
-        subject_type: "child" as const,
-        subject_id:
-            line.ocmId?.trim()
-            || line.customerMemberId?.trim()
-            || line.personId?.trim()
-            || `crm-child-${index}`,
-        display_name: line.primary.trim(),
-        status_label: line.secondary?.trim() || "—",
-    }));
+    return parsed.map((line, index) => {
+        const merged = mergeCrmCompactLineProfile(line, householdLookup);
+        return {
+            subject_type: "child" as const,
+            subject_id:
+                line.ocmId?.trim()
+                || line.customerMemberId?.trim()
+                || line.personId?.trim()
+                || `crm-child-${index}`,
+            display_name: merged.displayName,
+            status_label: line.secondary?.trim() || "—",
+            date_of_birth: merged.date_of_birth,
+            age_label: merged.age_label,
+            gender_label: merged.gender_label,
+        };
+    });
 }
 
 function buildRelatedSubjectsSummary(
     row: Record<string, unknown>,
     allowedLocationIds?: readonly string[] | null,
 ): RelatedSubjectSummary[] {
+    const householdLookup = buildHouseholdChildrenLookup(row);
     const inquiryChildren = readInquiryChildrenFromRow(row);
     if (inquiryChildren.length) {
         const members = childLifecycleMembersFromInquiryChildren(inquiryChildren);
@@ -268,13 +284,14 @@ function buildRelatedSubjectsSummary(
                 inquiryChildren[i] as Record<string, unknown>,
                 members[i],
                 allowedLocationIds,
+                householdLookup,
             );
             if (summary) out.push(summary);
         }
         if (out.length) return out;
     }
 
-    const fromCrm = buildRelatedSubjectsSummaryFromCrmCompactChildren(row);
+    const fromCrm = buildRelatedSubjectsSummaryFromCrmCompactChildren(row, householdLookup);
     if (fromCrm.length) return fromCrm;
 
     const fromHousehold = buildRelatedSubjectsSummaryFromHouseholdChildren(row);
@@ -282,12 +299,16 @@ function buildRelatedSubjectsSummary(
 
     const singleChild = trimOrNull(row._child_display_name);
     if (singleChild) {
+        const personId = trimOrNull(row._primary_child_person_id);
+        const householdRaw = personId ? householdLookup.get(personId) : undefined;
+        const profile = householdRaw ? inquiryChildProfileFieldsFromRaw(householdRaw) : {};
         return [
             {
                 subject_type: "child",
-                subject_id: trimOrNull(row._primary_child_person_id) ?? "primary-child",
+                subject_id: personId ?? "primary-child",
                 display_name: singleChild,
                 status_label: "—",
+                ...profile,
             },
         ];
     }

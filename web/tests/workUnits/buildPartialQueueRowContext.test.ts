@@ -223,14 +223,45 @@ describe("buildPartialQueueRowContext", () => {
                 name: "Smith Household",
                 status_key: "open",
                 _crm_compact_children: [
-                    { primary: "Avery Lee", secondary: "Infant" },
-                    { primary: "Rowan Lee", secondary: "Toddler" },
+                    { primary: "Avery Lee", secondary: "Infant", personId: "person-a" },
+                    { primary: "Rowan Lee", secondary: "Toddler", personId: "person-b" },
+                ],
+                _household_children: [
+                    { person_id: "person-a", display_name: "Avery Lee", dob: "2024-01-15" },
+                    { person_id: "person-b", display_name: "Rowan Lee", dob: "2025-10-01" },
                 ],
             },
             queue,
         });
 
         expect(ctx.related_subjects_summary.map((s) => s.display_name)).toEqual(["Avery Lee", "Rowan Lee"]);
+        expect(ctx.related_subjects_summary[0]?.age_label).toMatch(/\d+[ym]/i);
+        expect(ctx.related_subjects_summary[1]?.age_label).toMatch(/\d+[ym]/i);
+    });
+
+    it("renders age through collection presentation when CRM compact rows carry household DOB", async () => {
+        const { renderCollectionFieldPresentation, DEFAULT_CHILDREN_COLLECTION_PRESENTATION } = await import(
+            "@/lib/presentation/collectionFieldPresentation"
+        );
+        const ctx = buildPartialQueueRowContext({
+            row: {
+                id: "opp-1",
+                name: "Smith Household",
+                status_key: "open",
+                _crm_compact_children: [{ primary: "Lennon Kurzman", personId: "person-1" }],
+                _household_children: [
+                    { person_id: "person-1", display_name: "Lennon Kurzman", dob: "2024-01-15", gender: "female" },
+                ],
+            },
+            queue,
+        });
+
+        const display = renderCollectionFieldPresentation("children", ctx, {
+            ...DEFAULT_CHILDREN_COLLECTION_PRESENTATION,
+            includedFields: ["first_name", "age", "gender"],
+        });
+        expect(display).toMatch(/Lennon \(\d+[ym]\)/i);
+        expect(display).toMatch(/female/i);
     });
 
     it("builds related_subjects_summary from _child_display_name when only one child is known", () => {

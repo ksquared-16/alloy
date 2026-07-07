@@ -40,9 +40,13 @@ import {
 } from "@/lib/fields/fieldPolicySettingsUi";
 import FieldDefinitionEditModal from "@/components/admin/fields/FieldDefinitionEditModal";
 import FieldRequiredInlineCell from "@/components/admin/fields/FieldRequiredInlineCell";
-import ChildProfileFieldsPanel from "@/components/adminV2/settings/fields/ChildProfileFieldsPanel";
-import FieldSurfaceAvailabilityBadges from "@/components/adminV2/settings/fields/FieldSurfaceAvailabilityBadges";
-import { resolveFieldSurfaceAvailability } from "@/lib/fields/fieldSurfaceAvailability";
+import FieldsGroupedEntityPanel from "@/components/adminV2/settings/fields/FieldsGroupedEntityPanel";
+import { CUSTOMER_MEMBER_ENTITY_TYPE } from "@/lib/fields/customerMemberFieldRegistry";
+import {
+    buildFieldsSectionGroups,
+    fieldsEntityDescription,
+} from "@/lib/fields/fieldsConfigurationModel";
+import { syntheticChildProfileFieldRows } from "@/lib/fields/fieldSurfaceAvailability";
 import {
     canOperatorEditRequirementInline,
     fieldBehaviorConfiguredOnRecordLayouts,
@@ -121,6 +125,7 @@ export default function EntityFieldsClient({
 }: EntityFieldsClientProps) {
     const { canMutate } = useAdminAuth();
     const [items, setItems] = useState<FieldDef[]>([]);
+    const [profileItems, setProfileItems] = useState<FieldDef[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
 
@@ -169,6 +174,7 @@ export default function EntityFieldsClient({
     const [deleteError, setDeleteError] = useState<string | null>(null);
 
     const [sectionRegistry, setSectionRegistry] = useState<FieldSectionRegistryRow[]>([]);
+    const [profileSectionRegistry, setProfileSectionRegistry] = useState<FieldSectionRegistryRow[]>([]);
     const [showSystemFields, setShowSystemFields] = useState(false);
     const [inlineSavingKey, setInlineSavingKey] = useState<string | null>(null);
     const [inlineSavedKey, setInlineSavedKey] = useState<string | null>(null);
@@ -202,7 +208,47 @@ export default function EntityFieldsClient({
         );
     }, [entityType, showSystemFields, sortedItems]);
 
-    const hiddenFieldCount = sortedItems.length - visibleItems.length;
+    const visibleProfileItems = useMemo(() => {
+        if (entityType !== "inquiry_child") return [];
+        const sorted = sortFieldDefinitionsForAdminList(profileItems);
+        if (showSystemFields) return sorted;
+        return sorted.filter(
+            (row) =>
+                !isOperatorHiddenField(CUSTOMER_MEMBER_ENTITY_TYPE, {
+                    field_key: row.field_key,
+                    is_system: row.is_system,
+                    label: row.label,
+                    config: row.config,
+                }),
+        );
+    }, [entityType, profileItems, showSystemFields]);
+
+    const fieldsSectionGroups = useMemo(() => {
+        if (!adminV2Chrome) return [];
+        return buildFieldsSectionGroups({
+            enrollmentFields: visibleItems,
+            profileFields: visibleProfileItems,
+            sectionRegistry,
+            profileSectionRegistry,
+            enrollmentEntityType: entityType,
+            showSystemFields,
+        });
+    }, [
+        adminV2Chrome,
+        visibleItems,
+        visibleProfileItems,
+        sectionRegistry,
+        profileSectionRegistry,
+        entityType,
+        showSystemFields,
+    ]);
+
+    const groupedFieldCount = fieldsSectionGroups.reduce((count, section) => count + section.rows.length, 0);
+    const hiddenFieldCount =
+        sortedItems.length -
+        visibleItems.length +
+        (entityType === "inquiry_child" ? profileItems.length - visibleProfileItems.length : 0);
+    const displayFieldCount = adminV2Chrome ? groupedFieldCount : visibleItems.length;
 
     const policySettingsSupported = entityTypeSupportsFieldPolicySettings(entityType);
     const layoutBehaviorOnRecordLayouts = fieldBehaviorConfiguredOnRecordLayouts(entityType);
@@ -245,14 +291,70 @@ export default function EntityFieldsClient({
         setLoading(true);
         setError(null);
         try {
-            const res = await fetch(`/api/admin/field-definitions?entity_type=${encodeURIComponent(entityType)}`);
-            const json = await res.json().catch(() => ({}));
-            if (!res.ok) throw new Error((json as { error?: string }).error ?? "Failed to load field definitions");
-            const raw = (json as { field_definitions?: Record<string, unknown>[] }).field_definitions ?? [];
+            const requests: Promise<Response>[] = [
+                fetch(`/api/admin/field-definitions?entity_type=${encodeURIComponent(entityType)}`),
+            ];
+            if (entityType === "inquiry_child") {
+                requests.push(
+                    fetch(
+                        `/api/admin/field-definitions?entity_type=${encodeURIComponent(CUSTOMER_MEMBER_ENTITY_TYPE)}`,
+                    ),
+                );
+            }
+            const responses = await Promise.all(requests);
+            const primaryJson = await responses[0]!.json().catch(() => ({}));
+            if (!responses[0]!.ok) {
+                throw new Error((primaryJson as { error?: string }).error ?? "Failed to load field definitions");
+            }
+            const raw =
+                (primaryJson as { field_definitions?: Record<string, unknown>[] }).field_definitions ?? [];
             setItems(raw.map(toFieldDef));
+
+            if (entityType === "inquiry_child" && responses[1]) {
+                const profileJson = await responses[1].json().catch(() => ({}));
+                const profileRaw = responses[1].ok
+                    ? ((profileJson as { field_definitions?: Record<string, unknown>[] }).field_definitions ?? [])
+                    : [];
+                const profileDefs = profileRaw.map(toFieldDef);
+                if (profileDefs.length > 0) {
+                    setProfileItems(profileDefs);
+                } else {
+                    setProfileItems(
+                        syntheticChildProfileFieldRows().map(
+                            (manifest) =>
+                                ({
+                                    ...manifest,
+                                    id: manifest.field_key,
+                                    org_id: "",
+                                    field_type: manifest.field_key === "gender" ? "select" : "text",
+                                    is_system: true,
+                                    is_required: false,
+                                    is_active: true,
+                                    is_visible_in_public_booking: false,
+                                    is_filterable: false,
+                                    is_sortable: false,
+                                    section_key: manifest.field_key === "gender" || manifest.field_key === "preferred_name"
+                                        ? "child_profile"
+                                        : "medical",
+                                    sort_order: 100,
+                                    placeholder: null,
+                                    help_text: null,
+                                    config: null,
+                                    requirement_policy: null,
+                                    interaction_policy: null,
+                                    created_at: "",
+                                    updated_at: "",
+                                }) as FieldDef,
+                        ),
+                    );
+                }
+            } else {
+                setProfileItems([]);
+            }
         } catch (e) {
             setError((e as Error).message);
             setItems([]);
+            setProfileItems([]);
         } finally {
             setLoading(false);
         }
@@ -265,9 +367,14 @@ export default function EntityFieldsClient({
     useEffect(() => {
         let cancelled = false;
         setSectionRegistry([]);
+        setProfileSectionRegistry([]);
         (async () => {
             const reg = await fetchFieldSectionRegistry(entityType);
             if (!cancelled) setSectionRegistry(reg);
+            if (entityType === "inquiry_child") {
+                const profileReg = await fetchFieldSectionRegistry(CUSTOMER_MEMBER_ENTITY_TYPE);
+                if (!cancelled) setProfileSectionRegistry(profileReg);
+            }
         })();
         return () => {
             cancelled = true;
@@ -598,12 +705,8 @@ export default function EntityFieldsClient({
                 </div>
             )}
 
-            {!loading && !error && (
-                <SectionCard
-                    title={adminV2Chrome ? "Fields" : `${title} definitions`}
-                    surfaceTone={adminV2Chrome ? "settingsPanel" : "default"}
-                >
-                    {adminV2Chrome && entityType === "inquiry_child" ? <ChildProfileFieldsPanel /> : null}
+            {!loading && !error && adminV2Chrome ? (
+                <div className="min-w-0 space-y-4" data-testid="fields-entity-workspace">
                     {ensureError && (
                         <div className="mb-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
                             {ensureError}
@@ -649,7 +752,7 @@ export default function EntityFieldsClient({
                     )}
                     <div className="mb-3 flex flex-wrap items-center justify-between gap-2 text-xs text-alloy-midnight/55">
                         <span>
-                            {visibleItems.length} field{visibleItems.length === 1 ? "" : "s"}
+                            {displayFieldCount} field{displayFieldCount === 1 ? "" : "s"}
                             {hiddenFieldCount > 0 && !showSystemFields
                                 ? ` (${hiddenFieldCount} workflow or relationship field${hiddenFieldCount === 1 ? "" : "s"} hidden)`
                                 : ""}
@@ -664,23 +767,45 @@ export default function EntityFieldsClient({
                             Show workflow and relationship fields
                         </label>
                     </div>
-                    {adminV2Chrome && layoutBehaviorOnRecordLayouts && (
-                        <p className="mb-2 text-[11px] text-alloy-midnight/50">
-                            Drawer required and read-only:{" "}
-                            <Link
-                                href={recordLayoutsSettingsHref(entityType)}
-                                className="font-medium text-alloy-pine hover:underline"
-                            >
-                                Record layouts
-                            </Link>
-                        </p>
-                    )}
-                    {adminV2Chrome && showPolicyColumnsInTable && (
-                        <p className="mb-3 text-xs leading-relaxed text-alloy-midnight/50">
-                            Required and editability apply when staff save the record drawer for supported fields. Status, tour, and
-                            pricing fields are managed elsewhere.
-                        </p>
-                    )}
+                    <FieldsGroupedEntityPanel
+                        entityLabel={title.replace(/\s+fields$/i, "")}
+                        entityDescription={fieldsEntityDescription(entityType)}
+                        sections={fieldsSectionGroups}
+                        canMutate={canMutate}
+                        onEdit={openEdit}
+                        onDelete={deleteRow}
+                        deleteSavingId={deleteSavingId}
+                    />
+                    <p className="text-xs text-alloy-midnight/45">
+                        {layoutBehaviorOnRecordLayouts ? (
+                            <>
+                                Drawer required and read-only behavior are on{" "}
+                                <Link
+                                    href={recordLayoutsSettingsHref(entityType)}
+                                    className="font-medium text-alloy-pine hover:underline"
+                                >
+                                    Record layouts
+                                </Link>
+                                . Section order and field placement are there too.
+                            </>
+                        ) : (
+                            <>
+                                Drawer section order and visibility are on{" "}
+                                <Link href={adminSettingsSubpathHref("layouts")} className="font-medium text-alloy-pine hover:underline">
+                                    Record layouts
+                                </Link>
+                                .
+                            </>
+                        )}{" "}
+                        Catalog group labels are on{" "}
+                        <Link href={adminSettingsSubpathHref("field-sections")} className="font-medium text-alloy-pine hover:underline">
+                            Field grouping
+                        </Link>
+                        .
+                    </p>
+                </div>
+            ) : !loading && !error ? (
+                <SectionCard title={`${title} definitions`} surfaceTone="default">
                     <div className="overflow-x-auto">
                         <table className="w-full min-w-[720px] text-left text-sm">
                             <thead>
@@ -692,9 +817,7 @@ export default function EntityFieldsClient({
                                     {showPolicyColumnsInTable ? (
                                         <th className="pb-2 pr-4 font-semibold">Editability</th>
                                     ) : null}
-                                    <th className="pb-2 pr-4 font-semibold">
-                                        {adminV2Chrome ? "Surface availability" : "Shows in"}
-                                    </th>
+                                    <th className="pb-2 pr-4 font-semibold">Shows in</th>
                                     {canMutate && <th className="pb-2 font-semibold"> </th>}
                                 </tr>
                             </thead>
@@ -731,16 +854,10 @@ export default function EntityFieldsClient({
                                         ]
                                             .filter(Boolean)
                                             .join(", ");
-                                        const surfaceBadges = resolveFieldSurfaceAvailability(entityType, row);
                                         return (
                                         <tr key={row.id} className="border-b border-[#e6e8ec] align-middle">
                                             <td className="py-2.5 pr-4">
                                                 <div className="font-medium text-[#31394d]">{displayLabel}</div>
-                                                {adminV2Chrome ? (
-                                                    <p className="mt-0.5 font-mono text-[10px] text-alloy-midnight/40">
-                                                        {entityType}.{row.field_key}
-                                                    </p>
-                                                ) : null}
                                             </td>
                                             {showRequiredColumn ? (
                                                 <td className="py-2.5 pr-4">
@@ -767,16 +884,7 @@ export default function EntityFieldsClient({
                                                           : "Managed elsewhere"}
                                                 </td>
                                             ) : null}
-                                            <td className="py-2.5 pr-4 text-[#59678b]">
-                                                {adminV2Chrome ? (
-                                                    <FieldSurfaceAvailabilityBadges
-                                                        badges={surfaceBadges}
-                                                        testId={`field-surface-badges-${row.field_key}`}
-                                                    />
-                                                ) : (
-                                                    showsIn || "Hidden"
-                                                )}
-                                            </td>
+                                            <td className="py-2.5 pr-4 text-[#59678b]">{showsIn || "Hidden"}</td>
                                             {canMutate && (
                                                 <td className="py-2.5 text-right">
                                                     <div className="flex flex-wrap justify-end gap-1">
@@ -807,43 +915,14 @@ export default function EntityFieldsClient({
                             </tbody>
                         </table>
                     </div>
-                    {adminV2Chrome && (
-                        <p className="mt-3 text-xs text-alloy-midnight/45">
-                            {layoutBehaviorOnRecordLayouts ? (
-                                <>
-                                    Drawer required and read-only behavior are on{" "}
-                                    <Link
-                                        href={recordLayoutsSettingsHref(entityType)}
-                                        className="font-medium text-alloy-pine hover:underline"
-                                    >
-                                        Record layouts
-                                    </Link>
-                                    . Section order and field placement are there too.
-                                </>
-                            ) : (
-                                <>
-                                    Drawer section order and visibility are on{" "}
-                                    <Link href={adminSettingsSubpathHref("layouts")} className="font-medium text-alloy-pine hover:underline">
-                                        Record layouts
-                                    </Link>
-                                    .
-                                </>
-                            )}{" "}
-                            Catalog group labels are on{" "}
-                            <Link href={adminSettingsSubpathHref("field-sections")} className="font-medium text-alloy-pine hover:underline">
-                                Field grouping
-                            </Link>
-                            .
-                        </p>
-                    )}
                 </SectionCard>
-            )}
+            ) : null}
 
             <FieldDefinitionEditModal
                 open={editOpen && editRow != null}
                 saving={editSaving}
                 canMutate={canMutate}
-                entityType={entityType}
+                entityType={editRow?.entity_type ?? entityType}
                 entityTitle={title}
                 row={editRow!}
                 policySettingsSupported={policySettingsSupported}
