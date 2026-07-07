@@ -36,7 +36,7 @@ export type FieldDefinitionPickerRow = {
 };
 
 /** Entity types loaded for Forms system-field picker. */
-export const FORM_PICKER_ENTITY_TYPES = ["person", "inquiry_child", "opportunity", "customer"] as const;
+export const FORM_PICKER_ENTITY_TYPES = ["person", "inquiry_child", "customer_member", "opportunity", "customer"] as const;
 
 function fieldTypeToSuggestedKind(fieldType: string): SystemFieldValueKind {
     const t = fieldType.trim().toLowerCase();

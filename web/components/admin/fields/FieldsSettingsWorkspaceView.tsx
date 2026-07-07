@@ -1,0 +1,129 @@
+"use client";
+
+import FieldCatalogCard from "@/components/admin/fields/FieldCatalogCard";
+import FieldOwnershipFilterTabs, { type FieldOwnershipFilter } from "@/components/admin/fields/FieldOwnershipFilterTabs";
+import FieldSettingsEntityHeader from "@/components/admin/fields/FieldSettingsEntityHeader";
+import {
+    countFieldsByOwnership,
+    filterCatalogByOwnership,
+    groupCatalogEntriesBySection,
+    orderedSectionKeys,
+    sectionDisplayLabel,
+    type SettingsFieldCatalogEntry,
+    type SettingsHubEntityKey,
+} from "@/lib/fields/fieldCatalogForSettings";
+import {
+    SETTINGS_ENTITY_FIELD_EXPLANATIONS,
+    SETTINGS_ENTITY_SURFACES,
+} from "@/lib/fields/computedFieldCatalog";
+
+type Props = {
+    hubEntity: SettingsHubEntityKey;
+    entityLabel: string;
+    entries: readonly SettingsFieldCatalogEntry[];
+    ownershipFilter: FieldOwnershipFilter;
+    onOwnershipFilterChange: (next: FieldOwnershipFilter) => void;
+    selectedRefKey?: string | null;
+    onSelectEntry: (entry: SettingsFieldCatalogEntry) => void;
+    onConfigure?: (entry: SettingsFieldCatalogEntry) => void;
+    onDelete?: (entry: SettingsFieldCatalogEntry) => void;
+    deleteSavingId?: string | null;
+    canMutate?: boolean;
+    headerActions?: React.ReactNode;
+};
+
+export default function FieldsSettingsWorkspaceView({
+    hubEntity,
+    entityLabel,
+    entries,
+    ownershipFilter,
+    onOwnershipFilterChange,
+    selectedRefKey,
+    onSelectEntry,
+    onConfigure,
+    onDelete,
+    deleteSavingId,
+    canMutate,
+    headerActions,
+}: Props) {
+    const allCounts = countFieldsByOwnership(entries);
+    const filtered = filterCatalogByOwnership(entries, ownershipFilter);
+    const filteredCounts = countFieldsByOwnership(filtered);
+    const groups = groupCatalogEntriesBySection(filtered);
+    const sectionKeys = orderedSectionKeys(groups);
+
+    const tabCounts = {
+        all: allCounts.total,
+        platform: allCounts.platform,
+        custom: allCounts.custom,
+        computed: allCounts.computed,
+    };
+
+    return (
+        <div className="min-w-0 flex-1 space-y-4" data-testid="fields-settings-workspace-view">
+            <FieldSettingsEntityHeader
+                entityType={hubEntity}
+                entityLabel={entityLabel}
+                fieldCount={filteredCounts.total}
+                platformCount={allCounts.platform}
+                customCount={allCounts.custom}
+                computedCount={allCounts.computed}
+                explanation={SETTINGS_ENTITY_FIELD_EXPLANATIONS[hubEntity]}
+                surfacesNote={SETTINGS_ENTITY_SURFACES[hubEntity]}
+                actions={headerActions}
+            />
+
+            <FieldOwnershipFilterTabs
+                value={ownershipFilter}
+                onChange={onOwnershipFilterChange}
+                counts={tabCounts}
+            />
+
+            {filtered.length === 0 ? (
+                <p className="text-sm text-alloy-midnight/55">No fields match this filter.</p>
+            ) : (
+                <div className="space-y-6">
+                    {sectionKeys.map((sectionKey) => {
+                        const sectionEntries = groups.get(sectionKey) ?? [];
+                        if (sectionEntries.length === 0) return null;
+                        const label = sectionDisplayLabel(sectionKey);
+                        return (
+                            <section key={sectionKey} data-testid={`field-section-group-${sectionKey}`}>
+                                <h2 className="mb-3 text-xs font-semibold uppercase tracking-wide text-alloy-midnight/55">
+                                    {label}
+                                </h2>
+                                <div className="grid gap-3">
+                                    {sectionEntries.map((entry) => (
+                                        <FieldCatalogCard
+                                            key={entry.id}
+                                            entry={entry}
+                                            hubEntity={hubEntity}
+                                            sectionLabel={label}
+                                            selected={selectedRefKey === entry.refKey}
+                                            onSelect={() => onSelectEntry(entry)}
+                                            onConfigure={
+                                                onConfigure && entry.ownership === "custom"
+                                                    ? () => onConfigure(entry)
+                                                    : undefined
+                                            }
+                                            onDelete={
+                                                onDelete && entry.ownership === "custom" && entry.fieldDef
+                                                    ? () => onDelete(entry)
+                                                    : undefined
+                                            }
+                                            deleteSaving={deleteSavingId === entry.fieldDef?.id}
+                                            deleteDisabled={Boolean(
+                                                deleteSavingId && deleteSavingId !== entry.fieldDef?.id,
+                                            )}
+                                            canMutate={canMutate}
+                                        />
+                                    ))}
+                                </div>
+                            </section>
+                        );
+                    })}
+                </div>
+            )}
+        </div>
+    );
+}

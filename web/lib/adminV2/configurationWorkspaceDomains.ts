@@ -26,7 +26,7 @@ export const CONFIGURATION_RUNTIME_OWNERSHIP_COPY = {
     layoutsPresentation:
         "Queue rows, Focus Panel presentation, and where actions appear on each surface.",
     fieldsCanonical:
-        "Canonical field catalog and formats — owned by the Fields & Field Formats sprint.",
+        "Canonical data model — entities, fields, relationships, and computed signals.",
     statusesCanonical:
         "Status vocabulary and transitions — owned by the Statuses sprint; stage assignment lives in Business Processes.",
     perspectivesMetadata:
@@ -120,12 +120,13 @@ export const CONFIGURATION_WORKSPACE_DOMAINS: readonly ConfigurationWorkspaceDom
     {
         id: "data_model",
         label: "Data Model",
-        description: "Canonical field catalog and formats (Fields sprint).",
+        description: "Entities, fields, relationships, and runtime signals.",
         items: [
             {
                 href: settings("fields"),
-                label: "Fields",
+                label: "Data Model",
                 description: CONFIGURATION_RUNTIME_OWNERSHIP_COPY.fieldsCanonical,
+                emphasis: true,
             },
             {
                 href: settings("statuses"),

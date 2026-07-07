@@ -159,6 +159,8 @@ const CHILD_MANIFEST: PlatformFieldManifestEntry[] = [
     entry("child.date_of_birth", "Date of birth", "date", "native_entity", "customer_members.date_of_birth", "fc5", ["repeater"], ["child"], false),
     entry("child.age", "Age", "text", "computed", "customer_members.dob", "fc5", ["repeater"], ["child"], false),
     entry("child.age_band", "Age band", "text", "computed", "customer_member.age_band", "fc5", ["repeater"], ["child"], false),
+    entry("child.gender", "Gender", "select", "metadata", "customer_members.field_values.gender", "now", ["repeater"], ["child"]),
+    entry("child.preferred_name", "Preferred name", "text", "metadata", "customer_members.field_values.preferred_name", "now", ["repeater"], ["child"]),
 ];
 
 const INQUIRY_CHILD_MANIFEST: PlatformFieldManifestEntry[] = INQUIRY_CHILD_NATIVE_FIELD_MANIFEST.map((row) =>

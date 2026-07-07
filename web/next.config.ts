@@ -72,6 +72,9 @@ const nextConfig: NextConfig = {
        */
       { source: "/settings/analytics", destination: "/settings/calculations", permanent: false },
       { source: "/settings/analytics/:path*", destination: "/settings/calculations/:path*", permanent: false },
+      /** Data Model workspace — canonical route is `/settings/fields`. */
+      { source: "/settings/data-model", destination: "/settings/fields", permanent: false },
+      { source: "/settings/data-model/:path*", destination: "/settings/fields/:path*", permanent: false },
       /** Legacy Settings aliases → canonical Platform Configuration routes. */
       { source: "/settings/entity-labels", destination: "/settings/entities", permanent: false },
       { source: "/settings/entity-labels/:path*", destination: "/settings/entities", permanent: false },

@@ -148,7 +148,7 @@ describe("Configuration Workspace V2 — workflow QA readiness", () => {
     });
 
     it("settings surfaces use hero headers and left nav", () => {
-        expect(read("app/adminV2/settings/fields/page.tsx")).toContain('variant="hero"');
+        expect(read("app/adminV2/settings/fields/page.tsx")).toContain("data-model-workspace-page");
         expect(read("app/adminV2/settings/business-processes/page.tsx")).toContain('variant="hero"');
         expect(read("components/adminV2/settings/SettingsWorkspaceNav.tsx")).toContain(
             "configuration-workspace-nav"

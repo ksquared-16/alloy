@@ -1,10 +1,10 @@
 /**
- * Operator-facing surface availability for Fields settings.
+ * Canonical field surface availability — Settings → Fields and consumer guardrails.
  *
- * Source-of-truth doctrine:
- * - Child fields are operator-facing; runtime hydrates from customer_member / inquiry child / person sources.
- * - Queue Rows expose child fields only when resolver-backed (see collectionFieldPresentation catalog).
- * - Fields registry visibility ≠ automatic surface availability.
+ * Delegates to fieldCapabilityEngine (derived from resolver registry).
+ * Legacy badge exports preserved for FieldsGroupedEntityPanel closeout components.
+ *
+ * @see docs/sprints/07_2026/field-runtime-unification.md
  */
 
 import type { FieldDef } from "@/app/api/admin/field-definitions/route";
@@ -12,19 +12,71 @@ import {
     CUSTOMER_MEMBER_CONFIG_FIELD_KEYS,
     CUSTOMER_MEMBER_CONFIG_FIELD_MANIFEST,
 } from "@/lib/fields/customerMemberFieldRegistry";
-import { isQueueRowChildProfileFieldResolverBacked } from "@/lib/layout/runtime/queueRowChildProfileFieldRegistry";
-import { COMPACT_ROW_EFFECTIVE_FIELD_KEYS } from "@/lib/presentation/runtime/queueRowSurfaceConfig";
-import { collectionItemFieldIsAvailable } from "@/lib/presentation/collectionFieldPresentation";
+import { layoutRefKeyToCanonicalRef } from "@/lib/fields/fieldRegistryReferenceMatrix";
+import {
+    deriveRegistryFieldAvailability,
+    derivePlatformFieldAvailability,
+    deriveComputedFieldAvailability,
+} from "@/lib/fields/fieldCapabilityEngine";
+import {
+    canSurfaceResolveField,
+    supportedSurfacesForField,
+    type FieldResolverInput,
+    resolverInputFromComputedField,
+} from "@/lib/fields/fieldResolverRegistry";
+import { applyChildcareCatalogLabel } from "@/lib/layout/childcareLayoutFieldCatalog";
+import { isValidatorAllowedQueueRecordFieldRefKey } from "@/lib/layout/queueRecordValidatorAllowList";
+import type { PlatformFieldDefinition } from "@/lib/fields/platformFieldCatalog";
+import type { ComputedFieldDefinition } from "@/lib/fields/computedFieldCatalog";
+import type { SettingsHubEntityKey } from "@/lib/fields/fieldCatalogForSettings";
 
-export type FieldSurfaceKey = "forms" | "drawers" | "tables" | "queue_rows" | "focus_panel";
+export type FieldConsumerSurface =
+    | "forms"
+    | "drawer"
+    | "table"
+    | "queue_row"
+    | "focus_panel"
+    | "business_process"
+    | "documents";
 
 export type FieldSurfaceAvailabilityStatus = "available" | "unavailable";
+
+export type FieldSurfaceAvailabilityRow = {
+    surface: FieldConsumerSurface;
+    status: FieldSurfaceAvailabilityStatus;
+    reason: string;
+};
+
+export type FieldRegistryAvailabilityInput = {
+    entity_type: string;
+    field_key: string;
+    field_type?: string;
+    label?: string | null;
+    is_system?: boolean;
+    is_active?: boolean;
+    is_visible_in_form?: boolean;
+    is_visible_in_drawer?: boolean;
+    is_visible_in_table?: boolean;
+    config?: Record<string, unknown> | null;
+};
+
+export const FIELD_CONSUMER_SURFACE_LABELS: Readonly<Record<FieldConsumerSurface, string>> = {
+    forms: "Forms",
+    drawer: "Drawers",
+    table: "Tables",
+    queue_row: "Queue rows",
+    focus_panel: "Focus panel",
+    business_process: "Business processes",
+    documents: "Documents",
+};
+
+/** Legacy five-surface badge model used by configuration-runtime Fields cards. */
+export type FieldSurfaceKey = "forms" | "drawers" | "tables" | "queue_rows" | "focus_panel";
 
 export type FieldSurfaceAvailabilityBadge = {
     surface: FieldSurfaceKey;
     label: string;
     status: FieldSurfaceAvailabilityStatus;
-    /** Plain-language tooltip when unavailable or nuance is needed. */
     reason?: string;
 };
 
@@ -36,10 +88,150 @@ export const FIELD_SURFACE_LABELS: Record<FieldSurfaceKey, string> = {
     focus_panel: "Focus Panel",
 };
 
-export {
-    FIELDS_CUSTOM_FIELD_SURFACE_NOTE,
-    FIELDS_SURFACE_AVAILABILITY_INTRO,
-} from "@/lib/fields/fieldSettingsOperatorUi";
+const LEGACY_SURFACE_ORDER: readonly FieldSurfaceKey[] = [
+    "forms",
+    "drawers",
+    "tables",
+    "queue_rows",
+    "focus_panel",
+];
+
+const CONSUMER_TO_LEGACY_SURFACE: Partial<Record<FieldConsumerSurface, FieldSurfaceKey>> = {
+    forms: "forms",
+    drawer: "drawers",
+    table: "tables",
+    queue_row: "queue_rows",
+    focus_panel: "focus_panel",
+};
+
+function registryInputFromFieldDef(
+    entityType: string,
+    row: Pick<
+        FieldDef,
+        "field_key" | "is_visible_in_form" | "is_visible_in_drawer" | "is_visible_in_table" | "field_type" | "label" | "is_system" | "is_active" | "config"
+    >,
+): FieldRegistryAvailabilityInput {
+    return {
+        entity_type: entityType,
+        field_key: row.field_key,
+        field_type: row.field_type,
+        label: row.label,
+        is_system: row.is_system,
+        is_active: row.is_active,
+        is_visible_in_form: row.is_visible_in_form,
+        is_visible_in_drawer: row.is_visible_in_drawer,
+        is_visible_in_table: row.is_visible_in_table,
+        config: row.config,
+    };
+}
+
+function legacyBadgesFromRegistryInput(input: FieldRegistryAvailabilityInput): FieldSurfaceAvailabilityBadge[] {
+    const rows = deriveRegistryFieldAvailability(input);
+    const byLegacy = new Map<FieldSurfaceKey, FieldSurfaceAvailabilityBadge>();
+    for (const row of rows) {
+        const legacySurface = CONSUMER_TO_LEGACY_SURFACE[row.surface];
+        if (!legacySurface) continue;
+        byLegacy.set(legacySurface, {
+            surface: legacySurface,
+            label: FIELD_SURFACE_LABELS[legacySurface],
+            status: row.status,
+            reason: row.reason || undefined,
+        });
+    }
+    return LEGACY_SURFACE_ORDER.map(
+        (surface) =>
+            byLegacy.get(surface) ?? {
+                surface,
+                label: FIELD_SURFACE_LABELS[surface],
+                status: "unavailable" as const,
+            },
+    );
+}
+
+/** Resolve surface availability for a field_definitions row (Settings → Fields). */
+export function resolveFieldSurfaceAvailability(
+    input: FieldRegistryAvailabilityInput,
+): FieldSurfaceAvailabilityRow[];
+export function resolveFieldSurfaceAvailability(
+    entityType: string,
+    row: Pick<
+        FieldDef,
+        "field_key" | "is_visible_in_form" | "is_visible_in_drawer" | "is_visible_in_table" | "field_type" | "label" | "is_system" | "is_active" | "config"
+    >,
+): FieldSurfaceAvailabilityBadge[];
+export function resolveFieldSurfaceAvailability(
+    entityTypeOrInput: string | FieldRegistryAvailabilityInput,
+    row?: Pick<
+        FieldDef,
+        "field_key" | "is_visible_in_form" | "is_visible_in_drawer" | "is_visible_in_table" | "field_type" | "label" | "is_system" | "is_active" | "config"
+    >,
+): FieldSurfaceAvailabilityRow[] | FieldSurfaceAvailabilityBadge[] {
+    if (typeof entityTypeOrInput === "object") {
+        return deriveRegistryFieldAvailability(entityTypeOrInput);
+    }
+    return legacyBadgesFromRegistryInput(registryInputFromFieldDef(entityTypeOrInput, row!));
+}
+
+/** Resolve surface availability for a platform native field. */
+export function resolvePlatformFieldSurfaceAvailability(row: PlatformFieldDefinition): FieldSurfaceAvailabilityRow[] {
+    return derivePlatformFieldAvailability(row);
+}
+
+/** Resolve surface availability for a computed catalog field. */
+export function resolveComputedFieldSurfaceAvailability(row: ComputedFieldDefinition): FieldSurfaceAvailabilityRow[] {
+    return deriveComputedFieldAvailability(row);
+}
+
+/** Resolve surface availability for a unified Settings catalog entry. */
+export function resolveSettingsCatalogEntryAvailability(input: {
+    ownership: "platform" | "custom" | "computed";
+    platformField?: PlatformFieldDefinition;
+    computedField?: ComputedFieldDefinition;
+    registry?: FieldRegistryAvailabilityInput;
+    hub_entity?: SettingsHubEntityKey;
+}): FieldSurfaceAvailabilityRow[] {
+    const options = input.hub_entity ? { hub_entity: input.hub_entity } : undefined;
+    if (input.ownership === "computed" && input.computedField) {
+        return deriveComputedFieldAvailability(input.computedField, options);
+    }
+    if (input.ownership === "platform" && input.platformField) {
+        return derivePlatformFieldAvailability(input.platformField, options);
+    }
+    if (input.registry) {
+        return deriveRegistryFieldAvailability(input.registry, options);
+    }
+    return [];
+}
+
+export function availableSurfacesForField(input: FieldRegistryAvailabilityInput): FieldConsumerSurface[] {
+    return resolveFieldSurfaceAvailability(input)
+        .filter((r) => r.status === "available")
+        .map((r) => r.surface);
+}
+
+export function unavailableSurfacesForField(input: FieldRegistryAvailabilityInput): FieldSurfaceAvailabilityRow[] {
+    return resolveFieldSurfaceAvailability(input).filter((r) => r.status === "unavailable");
+}
+
+export function operatorLayoutRefKeyLabel(refKey: string): string {
+    const labeled = applyChildcareCatalogLabel({ refKey, fieldLabel: refKey });
+    return labeled.fieldLabel;
+}
+
+export function registryRefFromLayoutRefKey(refKey: string): { entity_type: string; field_key: string } | null {
+    return layoutRefKeyToCanonicalRef(refKey);
+}
+
+export function isQueueCompositionFieldResolverBacked(refKey: string, isWaitlist = false): boolean {
+    return isValidatorAllowedQueueRecordFieldRefKey(refKey.trim(), isWaitlist);
+}
+
+export function filterResolverBackedCompositionFieldKeys(
+    keys: readonly string[],
+    isWaitlist = false,
+): string[] {
+    return keys.filter((k) => isQueueCompositionFieldResolverBacked(k, isWaitlist));
+}
 
 /** Map field_definitions row → layout refKey used by queue row / layout pickers. */
 export function layoutRefKeyForFieldDefinition(entityType: string, fieldKey: string): string | null {
@@ -58,114 +250,6 @@ export function layoutRefKeyForFieldDefinition(entityType: string, fieldKey: str
         return `${et}.${fk}`;
     }
     return null;
-}
-
-function queueRowAvailabilityForRefKey(layoutRefKey: string | null): Pick<FieldSurfaceAvailabilityBadge, "status" | "reason"> {
-    if (!layoutRefKey) {
-        return {
-            status: "unavailable",
-            reason: "No queue row resolver is registered for this field yet.",
-        };
-    }
-
-    if (layoutRefKey === "child.gender") {
-        if (collectionItemFieldIsAvailable("gender")) {
-            return {
-                status: "available",
-                reason: "Renders inside the Children collection when configured on a queue row.",
-            };
-        }
-        return {
-            status: "unavailable",
-            reason: "Gender exists as a child profile field, but queue row runtime does not hydrate it yet.",
-        };
-    }
-
-    if (COMPACT_ROW_EFFECTIVE_FIELD_KEYS.has(layoutRefKey)) {
-        return { status: "available" };
-    }
-
-    if (isQueueRowChildProfileFieldResolverBacked(layoutRefKey)) {
-        return { status: "available" };
-    }
-
-    return {
-        status: "unavailable",
-        reason: "Not configured for compact queue row rendering yet.",
-    };
-}
-
-function focusPanelAvailability(entityType: string, row: Pick<FieldDef, "is_visible_in_drawer">): Pick<FieldSurfaceAvailabilityBadge, "status" | "reason"> {
-    const et = entityType.trim().toLowerCase();
-    if (et === "inquiry_child" || et === "customer_member") {
-        return row.is_visible_in_drawer
-            ? { status: "available", reason: "Available when placed on a Focus Panel Children card." }
-            : {
-                  status: "unavailable",
-                  reason: "Enable drawer visibility, then add the field on a Focus Panel surface.",
-              };
-    }
-    if (et === "person" || et === "customer" || et === "opportunity") {
-        return row.is_visible_in_drawer
-            ? { status: "available", reason: "Available when placed on a matching Focus Panel card." }
-            : {
-                  status: "unavailable",
-                  reason: "Enable drawer visibility, then add the field on a Focus Panel surface.",
-              };
-    }
-    return {
-        status: "unavailable",
-        reason: "Focus Panel placement is configured per surface in Settings → Surfaces.",
-    };
-}
-
-export function resolveFieldSurfaceAvailability(
-    entityType: string,
-    row: Pick<
-        FieldDef,
-        "field_key" | "is_visible_in_form" | "is_visible_in_drawer" | "is_visible_in_table"
-    >,
-): FieldSurfaceAvailabilityBadge[] {
-    const layoutRefKey = layoutRefKeyForFieldDefinition(entityType, row.field_key);
-    const queueRow = queueRowAvailabilityForRefKey(layoutRefKey);
-    const focusPanel = focusPanelAvailability(entityType, row);
-
-    return [
-        {
-            surface: "forms",
-            label: FIELD_SURFACE_LABELS.forms,
-            status: row.is_visible_in_form ? "available" : "unavailable",
-            reason: row.is_visible_in_form
-                ? undefined
-                : "Hidden from Forms — enable “Visible in form” when editing this field.",
-        },
-        {
-            surface: "drawers",
-            label: FIELD_SURFACE_LABELS.drawers,
-            status: row.is_visible_in_drawer ? "available" : "unavailable",
-            reason: row.is_visible_in_drawer
-                ? undefined
-                : "Hidden from record drawers — enable “Visible in drawer” when editing this field.",
-        },
-        {
-            surface: "tables",
-            label: FIELD_SURFACE_LABELS.tables,
-            status: row.is_visible_in_table ? "available" : "unavailable",
-            reason: row.is_visible_in_table
-                ? undefined
-                : "Hidden from list/table views — enable “Visible in table” when editing this field.",
-        },
-        {
-            surface: "queue_rows",
-            label: FIELD_SURFACE_LABELS.queue_rows,
-            ...queueRow,
-        },
-        {
-            surface: "focus_panel",
-            label: FIELD_SURFACE_LABELS.focus_panel,
-            ...focusPanel,
-        },
-    ];
 }
 
 /** Synthetic FieldDef-shaped rows for customer_member child profile fields shown under Child entity. */
@@ -191,3 +275,22 @@ export function isGenderFieldDefinition(entityType: string, fieldKey: string): b
     const fk = fieldKey.trim().toLowerCase();
     return (et === "customer_member" || et === "inquiry_child") && fk === "gender";
 }
+
+/** Re-export resolver input helpers for tests and builders. */
+export function resolverInputFromRegistryRow(input: FieldRegistryAvailabilityInput): FieldResolverInput {
+    return {
+        entity_type: input.entity_type,
+        field_key: input.field_key,
+        field_type: input.field_type,
+        label: input.label,
+        is_system: input.is_system,
+        is_active: input.is_active,
+        is_visible_in_form: input.is_visible_in_form,
+        is_visible_in_drawer: input.is_visible_in_drawer,
+        is_visible_in_table: input.is_visible_in_table,
+        config: input.config,
+        is_platform_native: false,
+    };
+}
+
+export { canSurfaceResolveField, supportedSurfacesForField, resolverInputFromComputedField };
