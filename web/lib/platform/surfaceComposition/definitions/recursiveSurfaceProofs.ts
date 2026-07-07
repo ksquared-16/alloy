@@ -17,10 +17,16 @@
  */
 
 import type { SurfaceSpec } from "@/lib/platform/surfaceComposition/universalSurfaceModel";
+import {
+    CHILD_SURFACE_ID,
+    HOUSEHOLD_CONTACT_SURFACE_ID,
+    HOUSEHOLD_SURFACE_ID,
+} from "@/lib/adminV2/settings/surfaces/nestedSurfaceDefinitionModel";
 
 export const CHILDREN_SURFACE_ID = "children_surface";
 export const FINANCIAL_CONFIG_SURFACE_ID = "financial_configuration_surface";
 export const FOCUS_PANEL_SURFACE_ID = "focus_panel_surface";
+export { CHILD_SURFACE_ID, HOUSEHOLD_CONTACT_SURFACE_ID, HOUSEHOLD_SURFACE_ID };
 
 // ── 1. Children Surface (Record → Record Surface, recursive) ───────────────────
 
@@ -58,7 +64,7 @@ export const childrenSurface: SurfaceSpec = {
                                             {
                                                 kind: "handoff",
                                                 label: "View child",
-                                                openSurfaceId: CHILDREN_SURFACE_ID,
+                                                openSurfaceId: CHILD_SURFACE_ID,
                                             },
                                         ],
                                     },
@@ -73,8 +79,8 @@ export const childrenSurface: SurfaceSpec = {
                                 items: [
                                     { key: "inquiry_child.program", label: "Program", kind: "field", namespace: "inquiry_child" },
                                     { key: "child.room", label: "Room", kind: "field", namespace: "child" },
-                                    { key: "inquiry_child.desired_schedule_type", label: "Schedule", kind: "field", namespace: "inquiry_child" },
-                                    { key: "child.desired_start_date", label: "Desired Start", kind: "field", namespace: "child" },
+                                    { key: "inquiry_child.schedule_type", label: "Schedule", kind: "field", namespace: "inquiry_child" },
+                                    { key: "child.start_date", label: "Start date", kind: "field", namespace: "child" },
                                 ],
                             },
                             {
@@ -84,6 +90,142 @@ export const childrenSurface: SurfaceSpec = {
                                 owner: "child_component",
                                 items: [
                                     { key: "child.readiness_summary", label: "Readiness", kind: "calculation", namespace: "child" },
+                                ],
+                            },
+                        ],
+                    },
+                ],
+            },
+        ],
+    },
+};
+
+// ── Child drill-in surface (per-child focus/edit) ─────────────────────────────
+
+export const childSurface: SurfaceSpec = {
+    id: CHILD_SURFACE_ID,
+    label: "Child Detail",
+    category: "focus_panel",
+    grain: "child",
+    version: 1,
+    canvas: {
+        rows: [
+            {
+                id: "row-child-focus",
+                components: [
+                    {
+                        id: "child_focus_component",
+                        label: "Child",
+                        componentType: "card",
+                        width: "full",
+                        evidenceGroups: [
+                            {
+                                key: "identity",
+                                label: "Identity",
+                                purpose: "Child identity header",
+                                owner: "child_focus_component",
+                                items: [
+                                    { key: "child.display_name", label: "Name", kind: "field", namespace: "child" },
+                                    { key: "child.date_of_birth", label: "Date of birth", kind: "field", namespace: "child" },
+                                    { key: "child.age", label: "Age", kind: "field", namespace: "child" },
+                                ],
+                            },
+                            {
+                                key: "placement",
+                                label: "Placement",
+                                purpose: "Program, schedule, and start",
+                                owner: "child_focus_component",
+                                items: [
+                                    { key: "inquiry_child.program", label: "Program", kind: "field", namespace: "inquiry_child" },
+                                    { key: "child.room", label: "Room", kind: "field", namespace: "child" },
+                                    { key: "inquiry_child.schedule_type", label: "Schedule", kind: "field", namespace: "inquiry_child" },
+                                    { key: "child.start_date", label: "Start date", kind: "field", namespace: "child" },
+                                ],
+                            },
+                            {
+                                key: "readiness",
+                                label: "Readiness",
+                                purpose: "Enrollment readiness summary",
+                                owner: "child_focus_component",
+                                items: [
+                                    { key: "child.readiness_summary", label: "Readiness", kind: "calculation", namespace: "child" },
+                                ],
+                            },
+                        ],
+                    },
+                ],
+            },
+        ],
+    },
+};
+
+// ── Household detail surface ───────────────────────────────────────────────────
+
+export const householdSurface: SurfaceSpec = {
+    id: HOUSEHOLD_SURFACE_ID,
+    label: "Household Detail",
+    category: "focus_panel",
+    grain: "case",
+    version: 1,
+    canvas: {
+        rows: [
+            {
+                id: "row-household",
+                components: [
+                    {
+                        id: "household_component",
+                        label: "Household",
+                        componentType: "card",
+                        width: "full",
+                        depth: { expanded: { openSurfaceId: HOUSEHOLD_CONTACT_SURFACE_ID } },
+                        evidenceGroups: [
+                            { key: "primary_contact", label: "Primary contact", purpose: "Primary household contact", items: [] },
+                            { key: "other_parent_guardian", label: "Other parent / guardian", purpose: "Secondary guardians", items: [] },
+                            { key: "household_members", label: "Household members", purpose: "Other household members", items: [] },
+                            { key: "emergency_contacts", label: "Emergency contacts", purpose: "Emergency contacts", items: [] },
+                            { key: "authorized_pickups", label: "Authorized pickups", purpose: "Pickup authorization", items: [] },
+                            { key: "children", label: "Children", purpose: "Children belonging to household", items: [] },
+                            { key: "address", label: "Address", purpose: "Household address", items: [] },
+                            { key: "billing_contact", label: "Billing contact", purpose: "Billing contact", items: [] },
+                        ],
+                    },
+                ],
+            },
+        ],
+    },
+};
+
+// ── Household contact edit surface ─────────────────────────────────────────────
+
+export const householdContactSurface: SurfaceSpec = {
+    id: HOUSEHOLD_CONTACT_SURFACE_ID,
+    label: "Contact Detail",
+    category: "focus_panel",
+    grain: "case",
+    version: 1,
+    canvas: {
+        rows: [
+            {
+                id: "row-contact",
+                components: [
+                    {
+                        id: "household_contact_component",
+                        label: "Contact",
+                        componentType: "card",
+                        width: "full",
+                        evidenceGroups: [
+                            {
+                                key: "contact_fields",
+                                label: "Contact fields",
+                                purpose: "Editable contact fields",
+                                owner: "household_contact_component",
+                                items: [
+                                    { key: "person.first_name", label: "First name", kind: "field", namespace: "person" },
+                                    { key: "person.last_name", label: "Last name", kind: "field", namespace: "person" },
+                                    { key: "person.email", label: "Email", kind: "field", namespace: "person" },
+                                    { key: "person.phone", label: "Phone", kind: "field", namespace: "person" },
+                                    { key: "person.date_of_birth", label: "Date of birth", kind: "field", namespace: "person" },
+                                    { key: "person.address", label: "Address", kind: "field", namespace: "person" },
                                 ],
                             },
                         ],
@@ -167,6 +309,23 @@ export const focusPanelSurface: SurfaceSpec = {
                 id: "row-primary",
                 components: [
                     {
+                        id: "household_card",
+                        label: "Household",
+                        componentType: "card",
+                        width: "half",
+                        depth: { expanded: { openSurfaceId: HOUSEHOLD_SURFACE_ID } },
+                        evidenceGroups: [
+                            {
+                                key: "household_summary",
+                                label: "Household Summary",
+                                purpose: "Who belongs to this household?",
+                                items: [
+                                    { key: "household.summary", label: "Household", kind: "field", namespace: "person" },
+                                ],
+                            },
+                        ],
+                    },
+                    {
                         id: "children_card",
                         label: "Children",
                         componentType: "card",
@@ -211,6 +370,9 @@ export const focusPanelSurface: SurfaceSpec = {
 /** All V3 proof surfaces, registered together at bootstrap. */
 export const V3_PROOF_SURFACES: readonly SurfaceSpec[] = [
     focusPanelSurface,
+    householdSurface,
+    householdContactSurface,
     childrenSurface,
+    childSurface,
     financialConfigurationSurface,
 ];

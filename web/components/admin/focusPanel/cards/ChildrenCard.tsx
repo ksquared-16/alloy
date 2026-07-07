@@ -17,10 +17,19 @@ import {
 
 import UniversalCard from "@/components/admin/focusPanel/UniversalCard";
 import CardAvatar from "@/components/admin/focusPanel/CardAvatar";
+import ChildFocusEdit from "@/components/admin/focusPanel/cards/ChildFocusEdit";
 import {
     buildChildrenCardEvidence,
     type ChildrenEvidenceChild,
 } from "@/lib/adminV2/runtime/focusPanel/children/buildChildrenCardEvidence";
+import {
+    CHILD_DOMAIN_LOCKED_EVIDENCE_SECTIONS,
+    childFocusViewFromConfig,
+    readChildNestedConfigFromDoc,
+    type ChildFocusFieldKey,
+    type ChildFocusView,
+} from "@/lib/adminV2/runtime/focusPanel/children/childNestedSurfaceRuntime";
+import { seedChildFocusEditValues } from "@/lib/adminV2/runtime/focusPanel/children/childFocusEditState";
 import { usePublishedFocusPanelSummaryDoc } from "@/lib/adminV2/runtime/focusPanel/usePublishedFocusPanelSummaryDoc";
 import {
     childrenDetailFieldKeysFromNestedConfig,
@@ -28,6 +37,7 @@ import {
 } from "@/lib/adminV2/runtime/focusPanel/children/childrenNestedSurfaceConfig";
 import { cardCapabilities, cardRelatedViews } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardLifecycle";
 import type { FocusPanelCardModel } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardModel";
+import type { FocusPanelMutation } from "@/lib/adminV2/runtime/focusPanel/focusPanelMutation";
 import {
     focusPanelCardBackLabel,
     type FocusPanelCoordination,
@@ -39,6 +49,13 @@ import {
 } from "@/lib/adminV2/runtime/focusPanel/useFocusPanelCoordination";
 import type { OperationalContext } from "@/lib/adminV2/runtime/operationalContext/types";
 
+type ChildrenComposerPreview = {
+    perspective: "roster" | "child_focus" | "child_edit";
+    focusedChildId?: string;
+    childFocusView?: ChildFocusView;
+    onSelectChild?: () => void;
+};
+
 type Props = {
     model: FocusPanelCardModel;
     /** Forward-facing card boundary — Children observes this, never the drawer VM. */
@@ -46,6 +63,10 @@ type Props = {
     receded?: boolean;
     /** Owner card: receives cross-card handoffs (e.g. from Readiness). */
     coordination?: FocusPanelCoordination;
+    /** Injected save seam (Edit depth). Absent → editable fields stay read-only. */
+    mutation?: FocusPanelMutation;
+    /** Surface composer runtime canvas — forces perspective without live save. */
+    composerPreview?: ChildrenComposerPreview;
 };
 
 const CAPS = cardCapabilities("children");
@@ -59,18 +80,27 @@ const RELATED_VIEWS = cardRelatedViews("children");
  *
  *   - Summary   — roster: each child as a scannable mini-profile.
  *   - Focus     — current truth (identity + placement) in a strong schedule structure.
- *   - Edit      — that structure as a READ-ONLY PREVIEW (no save adapter → no fake save).
+ *   - Edit      — config-driven child drill-in with live save when fields are editable.
  *   - Expanded  — the SAME question with ADDITIONAL configured evidence groups
  *                 (placement / medical / documents / pickup / notes / readiness). Not history.
  *   - Related Views — optional report drill-downs (Schedule History, Placement History).
  *
  * @see docs/platform/operator/universal-card-lifecycle.md
  */
-export default function ChildrenCard({ model, context, receded = false, coordination }: Props) {
-    // Published Children Surface config (metadata.nestedSurfaces["children_surface"]),
-    // authored in /settings/surfaces. Null until loaded / when unpublished → default
-    // field order. This is the runtime consuming the nested-surface authoring model.
+export default function ChildrenCard({
+    model,
+    context,
+    receded = false,
+    coordination,
+    mutation,
+    composerPreview,
+}: Props) {
     const publishedDoc = usePublishedFocusPanelSummaryDoc(true);
+    const childSurfaceConfig = useMemo(() => readChildNestedConfigFromDoc(publishedDoc), [publishedDoc]);
+    const childFocusView = useMemo(
+        () => composerPreview?.childFocusView ?? childFocusViewFromConfig(childSurfaceConfig),
+        [composerPreview?.childFocusView, childSurfaceConfig],
+    );
     const childDetailFieldKeys = useMemo(() => {
         const config = readChildrenNestedConfigFromDoc(publishedDoc);
         return childrenDetailFieldKeysFromNestedConfig(config);
@@ -79,6 +109,11 @@ export default function ChildrenCard({ model, context, receded = false, coordina
         () => buildChildrenCardEvidence(context, { childDetailFieldKeys }),
         [context, childDetailFieldKeys],
     );
+
+    const hasEditableChildFields = childFocusView.focusFields.some((field) => field.editable);
+    const canEditChild = Boolean(mutation?.canEdit && hasEditableChildFields && !composerPreview);
+    const opportunityStartDate =
+        context.truth.start_date != null ? String(context.truth.start_date).slice(0, 10) : null;
 
     const [rosterOpen, setRosterOpen] = useState(false);
     const [focusedId, setFocusedId] = useState<string | null>(null);
@@ -98,11 +133,34 @@ export default function ChildrenCard({ model, context, receded = false, coordina
         // eslint-disable-next-line react-hooks/exhaustive-deps -- nonce gates re-apply
     }, [requestNonce]);
 
+    useEffect(() => {
+        if (!composerPreview) return;
+        if (composerPreview.perspective === "roster") {
+            setRosterOpen(true);
+            setFocusedId(null);
+            setEditing(false);
+            return;
+        }
+        const previewChildId =
+            composerPreview.focusedChildId ?? evidence.children[0]?.id ?? null;
+        setRosterOpen(true);
+        setFocusedId(previewChildId);
+        setEditing(composerPreview.perspective === "child_edit");
+    }, [composerPreview, evidence.children]);
+
     const isEmpty = evidence.count === 0;
     const focused =
         !isEmpty && focusedId ? evidence.children.find((c) => c.id === focusedId) ?? null : null;
+    const editSeed = useMemo(
+        () => (editing && focused ? seedChildFocusEditValues(context.truth, focused.id) : null),
+        [editing, focused, context.truth],
+    );
 
     const focusChild = (id: string) => {
+        if (composerPreview?.onSelectChild) {
+            composerPreview.onSelectChild();
+            return;
+        }
         setFocusedId(id);
         setEditing(false);
         setExpandedOpen(false);
@@ -177,7 +235,7 @@ export default function ChildrenCard({ model, context, receded = false, coordina
                         ← All children
                     </button>
                 )}
-                {CAPS.supportsInlineEdit ? (
+                {canEditChild ? (
                     <button
                         type="button"
                         className="alloy-os-ucard__action alloy-os-ucard__action--system5"
@@ -229,10 +287,17 @@ export default function ChildrenCard({ model, context, receded = false, coordina
             <FocusedChild
                 child={focused}
                 editing={editing}
+                editSeed={editSeed}
                 expandedOpen={expandedOpen}
                 relatedViewId={relatedViewId}
+                childFocusView={childFocusView}
+                childSurfaceConfig={childSurfaceConfig}
+                opportunityStartDate={opportunityStartDate}
+                mutation={mutation}
+                composerPreview={composerPreview}
                 onExpand={CAPS.supportsExpanded ? () => setExpandedOpen(true) : undefined}
                 onOpenRelated={(id) => setRelatedViewId(id)}
+                onEditClose={() => setEditing(false)}
             />
         );
     } else {
@@ -457,18 +522,47 @@ function ChildScheduleBlock({ child }: { child: ChildrenEvidenceChild }) {
     );
 }
 
-/** Placement truth — schedule block + program/room/teacher/start (Focus + Edit). */
-function ChildEnrollmentBody({ child }: { child: ChildrenEvidenceChild }) {
+/** Placement truth — config-driven fields for Focus + read-only Edit preview. */
+function ConfiguredChildEnrollmentBody({
+    child,
+    focusView,
+}: {
+    child: ChildrenEvidenceChild;
+    focusView: ChildFocusView;
+}) {
     return (
         <div className="alloy-os-child-edit" data-children-enrollment={child.id}>
-            <ChildScheduleBlock child={child} />
-            <TruthRow icon={GraduationCap} label="Program" value={child.program} />
-            <TruthRow icon={DoorOpen} label="Room" value={child.room} />
-            <TruthRow icon={User} label="Teacher" value={child.teacher} />
-            <TruthRow icon={CalendarClock} label="Start date" value={child.startDate} />
+            {focusView.focusFields.map((field) => {
+                if (field.fieldKey === "inquiry_child.schedule_type") {
+                    return <ChildScheduleBlock key={field.fieldKey} child={child} />;
+                }
+                const meta = FOCUS_FIELD_TRUTH_META[field.fieldKey];
+                if (!meta) return null;
+                return (
+                    <TruthRow
+                        key={field.fieldKey}
+                        icon={meta.icon}
+                        label={field.label}
+                        value={meta.get(child)}
+                    />
+                );
+            })}
         </div>
     );
 }
+
+const FOCUS_FIELD_TRUTH_META: Partial<
+    Record<ChildFocusFieldKey, { icon: LucideIcon; get: (c: ChildrenEvidenceChild) => string | null }>
+> = {
+    "inquiry_child.program": { icon: GraduationCap, get: (c) => c.program },
+    "child.room": { icon: DoorOpen, get: (c) => c.room },
+    "child.start_date": { icon: CalendarClock, get: (c) => c.startDate },
+    "child.date_of_birth": { icon: Cake, get: (c) => c.dobAge },
+    "child.readiness_summary": {
+        icon: BadgeCheck,
+        get: (c) => (c.needsAttention ? c.missingLine : "Ready"),
+    },
+};
 
 /** One evidence group in the Expanded overlay. */
 function EvidenceGroup({ title, children }: { title: string; children: React.ReactNode }) {
@@ -500,26 +594,29 @@ function ChildExpandedEvidence({ child }: { child: ChildrenEvidenceChild }) {
                 <TruthRow icon={User} label="Teacher" value={child.teacher} />
                 <TruthRow icon={CalendarClock} label="Desired start" value={child.startDate} />
             </EvidenceGroup>
-            <EvidenceGroup title="Medical">
-                <EmptyEvidence text="No medical information on file" />
-            </EvidenceGroup>
-            <EvidenceGroup title="Documents">
-                <EmptyEvidence text="No documents on file" />
-            </EvidenceGroup>
-            <EvidenceGroup title="Pickup instructions">
-                <EmptyEvidence text="No pickup instructions on file" />
-            </EvidenceGroup>
+            {CHILD_DOMAIN_LOCKED_EVIDENCE_SECTIONS.map((section) => (
+                <EvidenceGroup key={section.key} title={section.label}>
+                    <div data-domain-locked={section.key}>
+                        <EmptyEvidence text={`No ${section.label.toLowerCase()} on file`} />
+                    </div>
+                </EvidenceGroup>
+            ))}
             <EvidenceGroup title="Notes">
                 <EmptyEvidence text="No notes" />
             </EvidenceGroup>
             <EvidenceGroup title="Readiness">
-                <div className="alloy-os-child-readiness">
-                    {readiness.map((r) => (
-                        <span key={r.label} className={clsx("alloy-os-child-readiness__row", r.ok && "alloy-os-child-readiness__row--ok")}>
-                            <BadgeCheck size={13} strokeWidth={1.75} /> {r.label}
-                            <span className="alloy-os-child-readiness__state">{r.ok ? "Ready" : "Needed"}</span>
-                        </span>
-                    ))}
+                <div data-domain-locked="readiness">
+                    <div className="alloy-os-child-readiness">
+                        {readiness.map((r) => (
+                            <span
+                                key={r.label}
+                                className={clsx("alloy-os-child-readiness__row", r.ok && "alloy-os-child-readiness__row--ok")}
+                            >
+                                <BadgeCheck size={13} strokeWidth={1.75} /> {r.label}
+                                <span className="alloy-os-child-readiness__state">{r.ok ? "Ready" : "Needed"}</span>
+                            </span>
+                        ))}
+                    </div>
                 </div>
             </EvidenceGroup>
         </div>
@@ -574,18 +671,34 @@ function RelatedViewsRow({ onOpen }: { onOpen: (id: string) => void }) {
 function FocusedChild({
     child,
     editing,
+    editSeed,
     expandedOpen,
     relatedViewId,
+    childFocusView,
+    childSurfaceConfig,
+    opportunityStartDate,
+    mutation,
+    composerPreview,
     onExpand,
     onOpenRelated,
+    onEditClose,
 }: {
     child: ChildrenEvidenceChild;
     editing: boolean;
+    editSeed: ReturnType<typeof seedChildFocusEditValues>;
     expandedOpen: boolean;
     relatedViewId: string | null;
+    childFocusView: ChildFocusView;
+    childSurfaceConfig: ReturnType<typeof readChildNestedConfigFromDoc>;
+    opportunityStartDate: string | null;
+    mutation?: FocusPanelMutation;
+    composerPreview?: ChildrenComposerPreview;
     onExpand?: () => void;
     onOpenRelated: (id: string) => void;
+    onEditClose: () => void;
 }) {
+    const headerDob = childFocusView.headerShowDob || childFocusView.headerShowAge ? child.dobAge : null;
+
     return (
         <div
             className="alloy-os-household__focused"
@@ -596,9 +709,9 @@ function FocusedChild({
                 <CardAvatar name={child.name} imageUrl={child.imageUrl} size={40} />
                 <div className="alloy-os-child-focus__id min-w-0">
                     <span className="alloy-os-household__group-title">{child.name}</span>
-                    {child.dobAge ? (
+                    {headerDob ? (
                         <span className="alloy-os-child-focus__sub">
-                            <Cake size={13} strokeWidth={1.75} /> {child.dobAge}
+                            <Cake size={13} strokeWidth={1.75} /> {headerDob}
                         </span>
                     ) : null}
                 </div>
@@ -609,16 +722,68 @@ function FocusedChild({
                 <ChildRelatedReport child={child} viewId={relatedViewId} />
             ) : expandedOpen ? (
                 <ChildExpandedEvidence child={child} />
-            ) : editing ? (
-                <div data-children-edit-preview={child.id} data-children-edit-readonly="true">
-                    <ChildEnrollmentBody child={child} />
-                    <p className="alloy-os-card-edit__notice" data-card-edit-notice="true">
-                        Preview — schedule/program editing isn’t saveable yet
-                    </p>
-                </div>
+            ) : editing && editSeed ? (
+                <ChildFocusEdit
+                    seed={editSeed}
+                    childName={child.name}
+                    childSurfaceConfig={childSurfaceConfig}
+                    opportunityStartDate={opportunityStartDate}
+                    previewOnly={Boolean(composerPreview)}
+                    save={mutation!.saveInquiryChild}
+                    onClose={onEditClose}
+                    onSaved={onEditClose}
+                />
+            ) : editing && composerPreview ? (
+                <ChildFocusEdit
+                    seed={
+                        editSeed ?? {
+                            childId: child.id,
+                            row: {
+                                id: child.id,
+                                customer_member_id: "preview",
+                                person_id: null,
+                                display_name: child.name,
+                                dob: null,
+                                age: null,
+                                program_category_id: null,
+                                program_key: null,
+                                desired_program_label: child.program,
+                                schedule_type: null,
+                                desired_schedule_label: child.schedule,
+                                outcome_status_key: null,
+                                outcome_status_label: child.status,
+                                notes: null,
+                                start_date: child.startDate,
+                                location_id: null,
+                                location_label: child.room,
+                                program_room_cohort_key: null,
+                                program_room_cohort_label: child.room,
+                                custom_fields: {},
+                                first_name: null,
+                                last_name: null,
+                                linked_on_inquiry: true,
+                                ocm_id: null,
+                            },
+                            values: {
+                                program_category_id: "",
+                                program_room_cohort_key: "",
+                                schedule_type: "",
+                                start_date: child.startDate ?? "",
+                                dob: "",
+                            },
+                            identityBaseline: { first_name: "", last_name: "", dob: "" },
+                        }
+                    }
+                    childName={child.name}
+                    childSurfaceConfig={childSurfaceConfig}
+                    opportunityStartDate={opportunityStartDate}
+                    previewOnly
+                    save={async () => ({ ok: true })}
+                    onClose={onEditClose}
+                />
             ) : (
                 <>
-                    <ChildEnrollmentBody child={child} />
+                    <ConfiguredChildEnrollmentBody child={child} focusView={childFocusView} />
                     <ChildFlags child={child} />
                     {onExpand ? (
                         <button

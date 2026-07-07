@@ -13,6 +13,7 @@ import {
     resolveOpenSurface,
 } from "@/lib/platform/surfaceComposition/surfaceRegistry";
 import {
+    CHILD_SURFACE_ID,
     FOCUS_PANEL_SURFACE_ID,
     V3_PROOF_SURFACES,
     focusPanelSurface,
@@ -27,7 +28,7 @@ import {
  * keyed on the registry's own state (not a private flag) so a registry reset re-registers.
  */
 export function ensureRuntimeSurfacesRegistered(): void {
-    if (getSurface(FOCUS_PANEL_SURFACE_ID)) return;
+    if (getSurface(FOCUS_PANEL_SURFACE_ID) && getSurface(CHILD_SURFACE_ID)) return;
     registerSurfaces(V3_PROOF_SURFACES);
 }
 
@@ -50,6 +51,7 @@ export type NestedSurfaceLauncher = {
  * This is the seam between the canvas card catalog and registry depth bindings.
  */
 export const FOCUS_PANEL_CARD_COMPONENT_IDS: Partial<Record<FocusPanelCardKey, string>> = {
+    household: "household_card",
     children: "children_card",
     billing_preview: "financial_configuration_card",
 };

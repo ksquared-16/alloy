@@ -4,8 +4,25 @@ import { afterEach, describe, expect, it } from "vitest";
 import { ADMINV2_OPPORTUNITY_DRAWER_RECORD_PATCH } from "@/lib/admin/opportunityDrawerTargetedRefresh";
 import {
     buildOpportunityFocusPanelMutation,
+    mergeInquiryChildIntoFocusPanelTruth,
     mergePersonContactIntoFocusPanelTruth,
 } from "@/lib/adminV2/runtime/focusPanel/focusPanelMutation";
+
+const CHILD_TRUTH: Record<string, unknown> = {
+    id: "opp-1",
+    _inquiry_children: [
+        {
+            id: "child-1",
+            customer_member_id: "cm-1",
+            person_id: "p-child",
+            display_name: "Alex",
+            program_category_id: "prog-a",
+            schedule_type: "full_time",
+            start_date: "2026-08-01",
+            dob: "2020-01-01",
+        },
+    ],
+};
 
 const BASE_TRUTH: Record<string, unknown> = {
     id: "opp-1",
@@ -106,6 +123,58 @@ describe("buildOpportunityFocusPanelmutation.savePersonContact", () => {
         expect(res.ok).toBe(false);
         expect(called).toBe(false);
         expect(cap.events).toHaveLength(0);
+        cap.stop();
+    });
+});
+
+describe("mergeInquiryChildIntoFocusPanelTruth", () => {
+    it("updates the matching inquiry child row immutably", () => {
+        const merged = mergeInquiryChildIntoFocusPanelTruth(CHILD_TRUTH, {
+            childId: "child-1",
+            row: { person_id: "p-child" },
+            patch: {
+                identityPatch: {},
+                ocmPatch: { program_category_id: "prog-b", schedule_type: "part_time" },
+            },
+        });
+        const rows = merged._inquiry_children as Record<string, unknown>[];
+        expect(rows[0]!.program_category_id).toBe("prog-b");
+        expect(rows[0]!.schedule_type).toBe("part_time");
+        expect((CHILD_TRUTH._inquiry_children as Record<string, unknown>[])[0]!.program_category_id).toBe("prog-a");
+    });
+});
+
+describe("buildOpportunityFocusPanelMutation.saveInquiryChild", () => {
+    it("persists OCM patch via child-participation and dispatches merged truth", async () => {
+        const cap = captureRecordPatch();
+        const calls: string[] = [];
+        const fetchFn = (async (input: RequestInfo) => {
+            const url = String(input);
+            calls.push(url);
+            if (url.includes("/api/admin/child-participation")) {
+                return { ok: true, status: 200, json: async () => ({}) } as Response;
+            }
+            return { ok: false, status: 404, json: async () => ({}) } as Response;
+        }) as unknown as typeof fetch;
+
+        const mutation = buildOpportunityFocusPanelMutation({
+            canMutate: true,
+            opportunityId: "opp-1",
+            truth: CHILD_TRUTH,
+            fetchFn,
+        });
+        const res = await mutation.saveInquiryChild({
+            childId: "child-1",
+            row: { id: "child-1", customer_member_id: "cm-1", person_id: "p-child" },
+            identityBaseline: { first_name: "Alex", last_name: "", dob: "2020-01-01" },
+            patch: { identityPatch: {}, ocmPatch: { program_category_id: "prog-b" } },
+        });
+        expect(res).toEqual({ ok: true });
+        expect(calls.some((u) => u.includes("/api/admin/child-participation"))).toBe(true);
+        expect(cap.events).toHaveLength(1);
+        const detail = cap.events[0]!.detail as { record: Record<string, unknown> };
+        const rows = detail.record._inquiry_children as Record<string, unknown>[];
+        expect(rows[0]!.program_category_id).toBe("prog-b");
         cap.stop();
     });
 });

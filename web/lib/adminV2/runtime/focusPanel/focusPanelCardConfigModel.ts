@@ -229,6 +229,16 @@ export type FocusPanelCardConfig = {
     expansion?: FocusPanelCardExpansion;
     conditions?: FocusPanelCardCondition[];
     composition?: FocusPanelCardComposition;
+    /** Surface Composer placement overrides keyed by field id. */
+    fieldPlacements?: Record<
+        string,
+        {
+            builderSlot?: import("@/lib/adminV2/settings/surfaces/surfaceFieldComposer").SurfaceFieldSectionKey;
+            stackLine?: number;
+            inlineWithPrevious?: boolean;
+            visibleWhen?: import("@/lib/layout/layoutV2").LayoutCondition | null;
+        }
+    >;
 };
 
 function evField(id: string, label: string, concept: string): FocusPanelCardField {

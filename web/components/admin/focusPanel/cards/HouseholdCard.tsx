@@ -24,6 +24,19 @@ import {
 } from "@/lib/adminV2/runtime/focusPanel/useFocusPanelCoordination";
 import type { FocusPanelMutation } from "@/lib/adminV2/runtime/focusPanel/focusPanelMutation";
 import type { OperationalContext } from "@/lib/adminV2/runtime/operationalContext/types";
+import {
+    applyHouseholdDisplayView,
+    type HouseholdNestedDisplayView,
+} from "@/lib/adminV2/runtime/focusPanel/household/householdNestedSurfaceRuntime";
+
+type HouseholdComposerPreview = {
+    perspective: "expanded" | "focused";
+    focusedGroup?: HouseholdEvidenceGroupKey | null;
+    displayView?: HouseholdNestedDisplayView;
+    onSelectGroup?: (key: HouseholdEvidenceGroupKey) => void;
+    onSelectContact?: (personId: string) => void;
+    onSelectChild?: () => void;
+};
 
 type Props = {
     model: FocusPanelCardModel;
@@ -34,6 +47,8 @@ type Props = {
     coordination?: FocusPanelCoordination;
     /** Injected save seam (Edit depth). Absent → card stays read-only. */
     mutation?: FocusPanelMutation;
+    /** Surface composer runtime canvas — forces perspective without live save. */
+    composerPreview?: HouseholdComposerPreview;
 };
 
 const COLLAPSED_PREVIEW_GROUPS = 4;
@@ -49,10 +64,24 @@ const COLLAPSED_PREVIEW_GROUPS = 4;
  * @see docs/platform/operator/card-archetypes.md (Identity)
  * @see docs/platform/operator/card-interaction-expansion-doctrine.md (System 5B — Expand)
  */
-export default function HouseholdCard({ model, context, receded = false, coordination, mutation }: Props) {
-    const evidence = useMemo(
+export default function HouseholdCard({
+    model,
+    context,
+    receded = false,
+    coordination,
+    mutation,
+    composerPreview,
+}: Props) {
+    const baseEvidence = useMemo(
         () => buildHouseholdCardEvidence(context),
         [context],
+    );
+    const evidence = useMemo(
+        () =>
+            composerPreview?.displayView
+                ? applyHouseholdDisplayView(baseEvidence, composerPreview.displayView)
+                : baseEvidence,
+        [baseEvidence, composerPreview?.displayView],
     );
 
     // Permission outcome is resolved upstream and observed here — the card never
@@ -100,6 +129,12 @@ export default function HouseholdCard({ model, context, receded = false, coordin
         setFocusedGroup((request.focus as HouseholdEvidenceGroupKey | null) ?? null);
         // eslint-disable-next-line react-hooks/exhaustive-deps -- nonce gates re-apply
     }, [requestNonce]);
+
+    useEffect(() => {
+        if (!composerPreview) return;
+        setExpanded(true);
+        setFocusedGroup(composerPreview.focusedGroup ?? null);
+    }, [composerPreview]);
 
     const focused = !isEmpty && focusedGroup
         ? evidence.groups.find((g) => g.key === focusedGroup) ?? null

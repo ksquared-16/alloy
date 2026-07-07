@@ -7,6 +7,8 @@ import type { FocusPanelContextChip } from "@/lib/adminV2/runtime/focusPanel/foc
 export type FocusPanelSubjectIdentityBlockProps = {
     subjectTitle: string;
     contextChips: FocusPanelContextChip[];
+    /** Optional identity summary line (header surface composer). */
+    identitySummaryLine?: string | null;
 };
 
 /**
@@ -18,6 +20,7 @@ export type FocusPanelSubjectIdentityBlockProps = {
 export default function FocusPanelSubjectIdentityBlock({
     subjectTitle,
     contextChips,
+    identitySummaryLine,
 }: FocusPanelSubjectIdentityBlockProps) {
     return (
         <div
@@ -35,6 +38,11 @@ export default function FocusPanelSubjectIdentityBlock({
                 <h2 id="admin-focus-panel-title" className="alloy-os-fp-header-compact__title">
                     {subjectTitle}
                 </h2>
+                {identitySummaryLine ?
+                    <p className="alloy-os-fp-header-compact__summary-line text-sm text-alloy-midnight/65">
+                        {identitySummaryLine}
+                    </p>
+                :   null}
                 {contextChips.length > 0 ?
                     <div
                         className="alloy-os-fp-header-compact__context-row"

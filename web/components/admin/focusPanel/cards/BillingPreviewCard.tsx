@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 
 import UniversalCard from "@/components/admin/focusPanel/UniversalCard";
 import {
@@ -24,6 +24,7 @@ type Props = {
     context: OperationalContext;
     receded?: boolean;
     coordination?: FocusPanelCoordination;
+    composerPreview?: { perspective?: "expanded" };
 };
 
 /**
@@ -37,8 +38,18 @@ type Props = {
  * @see docs/platform/operator/card-archetypes.md (Truth/Detail — System 5B)
  * @see docs/sprints/06_2026/focus-panel-card-expansion-doctrine
  */
-export default function BillingPreviewCard({ model, context, receded = false, coordination }: Props) {
+export default function BillingPreviewCard({
+    model,
+    context,
+    receded = false,
+    coordination,
+    composerPreview,
+}: Props) {
     const [expanded, setExpanded] = useState(false);
+
+    useEffect(() => {
+        if (composerPreview?.perspective === "expanded") setExpanded(true);
+    }, [composerPreview]);
 
     const opportunityId = context.subject.type === "opportunity" ? context.subject.id : null;
     const { data: financialConfig, loading: configLoading } = useFinancialConfig(opportunityId, expanded);

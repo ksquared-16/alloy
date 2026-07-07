@@ -23,6 +23,15 @@ import {
     applyPersonPatchToOpportunityHydration,
     patchLinkedPersonFromOpportunityDrawer,
 } from "@/lib/admin/drawer/linkedRecordFieldEditing";
+import { applyPersonPatchToOpportunityInquiryChildren } from "@/lib/admin/person/applyPersonPatchToOpportunityInquiryChildren";
+import {
+    patchChildParticipation,
+    patchInquiryChildIdentityFromDrawer,
+    type InquiryChildIdentityPatch,
+    type InquiryChildOcmPatch,
+} from "@/lib/admin/drawer/inquiryChildFieldEdit";
+import type { ChildFocusSavePatch } from "@/lib/adminV2/runtime/focusPanel/children/childFocusEditState";
+import type { InquiryChildRow } from "@/components/admin/entity/OpportunityInquiryChildrenSection";
 import { dispatchOpportunityDrawerRecordPatch } from "@/lib/admin/opportunityDrawerTargetedRefresh";
 import { dispatchDrawerLayoutRuntimeBodyRecordPatch } from "@/lib/layout/runtime/drawerLayoutRuntimeBodyRecordPatch";
 import { resolveLeadSummaryPrimaryPersonId } from "@/lib/admin/drawer/opportunityFamilyContactsOrdering";
@@ -66,6 +75,13 @@ export type FocusPanelMutation = {
     canEdit: boolean;
     /** Persist primary-contact field edits via the existing person PATCH route + refresh. */
     savePersonContact: (personId: string, patch: PersonContactPatch) => Promise<FocusPanelSaveResult>;
+    /** Persist inquiry-child placement/identity edits via existing inquiry-child save paths. */
+    saveInquiryChild: (args: {
+        childId: string;
+        row: Pick<InquiryChildRow, "id" | "customer_member_id" | "person_id">;
+        patch: ChildFocusSavePatch;
+        identityBaseline: InquiryChildIdentityPatch;
+    }) => Promise<FocusPanelSaveResult>;
     /** Tour status actions — present whenever a tour booking row exists and can be acted on. */
     tour: FocusPanelTourMutation;
     /** Communications actions — present for all opportunities. */
@@ -148,6 +164,61 @@ export function mergePersonContactIntoFocusPanelTruth(
     return merged;
 }
 
+function trimId(value: unknown): string | null {
+    if (value == null) return null;
+    const text = String(value).trim();
+    return text.length > 0 ? text : null;
+}
+
+/**
+ * Merge saved inquiry-child edits back into Focus Panel subject truth. Pure.
+ * Updates the matching `_inquiry_children` row by child id / person id.
+ */
+export function mergeInquiryChildIntoFocusPanelTruth(
+    truth: Record<string, unknown>,
+    args: {
+        childId: string;
+        row: Pick<InquiryChildRow, "person_id">;
+        patch: ChildFocusSavePatch;
+        savedPerson?: Record<string, unknown> | null;
+    },
+): Record<string, unknown> {
+    const targetId = args.childId.trim();
+    const rows = truth._inquiry_children;
+    if (!Array.isArray(rows) || !targetId) return truth;
+
+    const identity = args.patch.identityPatch;
+    const ocm = args.patch.ocmPatch;
+    const personId = trimId(args.row.person_id);
+
+    const nextRows = rows.map((raw) => {
+        if (!raw || typeof raw !== "object") return raw;
+        const r = raw as Record<string, unknown>;
+        const rowId = trimId(r.id);
+        const rowPersonId = trimId(r.person_id);
+        if (rowId !== targetId && rowPersonId !== targetId) return raw;
+
+        const next: Record<string, unknown> = { ...r };
+        if (identity.dob !== undefined) {
+            next.dob = identity.dob ? String(identity.dob).slice(0, 10) : null;
+        }
+        if (ocm.program_category_id !== undefined) next.program_category_id = ocm.program_category_id;
+        if (ocm.schedule_type !== undefined) next.schedule_type = ocm.schedule_type;
+        if (ocm.program_room_cohort_key !== undefined) {
+            next.program_room_cohort_key = ocm.program_room_cohort_key;
+        }
+        if (ocm.start_date !== undefined) next.start_date = ocm.start_date;
+        return next;
+    });
+
+    let merged: Record<string, unknown> = { ...truth, _inquiry_children: nextRows };
+    if (personId && identity.dob !== undefined) {
+        const personPatch = { date_of_birth: identity.dob ? String(identity.dob).slice(0, 10) : null };
+        merged = applyPersonPatchToOpportunityInquiryChildren(merged, personId, personPatch, args.savedPerson ?? null);
+    }
+    return merged;
+}
+
 export type BuildFocusPanelMutationInput = {
     canMutate: boolean;
     /** The opportunity (subject) id — keys the record-patch refresh events. */
@@ -177,6 +248,68 @@ export function buildOpportunityFocusPanelMutation(input: BuildFocusPanelMutatio
             if (!res.ok) return { ok: false, status: res.status, error: res.error };
 
             const merged = mergePersonContactIntoFocusPanelTruth(truth, id, res.json as SavedPerson);
+            dispatchOpportunityDrawerRecordPatch(opportunityId, merged);
+            dispatchDrawerLayoutRuntimeBodyRecordPatch({
+                entityType: "opportunities",
+                entityId: opportunityId,
+                record: merged,
+            });
+            return { ok: true };
+        },
+        saveInquiryChild: async ({ childId, row, patch, identityBaseline }) => {
+            const cmId = trimId(row.customer_member_id);
+            if (!cmId) return { ok: false, status: 400, error: "No child record to edit" };
+
+            let savedPerson: Record<string, unknown> | undefined;
+            try {
+                if (Object.keys(patch.identityPatch).length > 0) {
+                    const identityDraft = { ...identityBaseline, ...patch.identityPatch };
+                    const identityWrite = await patchInquiryChildIdentityFromDrawer({
+                        row: { customer_member_id: cmId, person_id: row.person_id },
+                        draft: identityDraft,
+                        baseline: identityBaseline,
+                        fetchFn: f,
+                    });
+                    savedPerson = identityWrite.person;
+                }
+                if (Object.keys(patch.ocmPatch).length > 0) {
+                    await patchChildParticipation({
+                        customerMemberId: cmId,
+                        opportunityId,
+                        patch: patch.ocmPatch,
+                        fetchFn: f,
+                    });
+                    const affectsWaitlist = Object.keys(patch.ocmPatch).some((k) =>
+                        ["location_id", "program_room_cohort_key", "program_category_id", "outcome_status_key"].includes(
+                            k,
+                        ),
+                    );
+                    if (affectsWaitlist && typeof window !== "undefined") {
+                        window.dispatchEvent(
+                            new CustomEvent("adminv2:opportunity-updated", {
+                                detail: {
+                                    id: opportunityId,
+                                    action_key: "inquiry_child_placement_scope",
+                                    affects_waitlist: true,
+                                },
+                            }),
+                        );
+                    }
+                }
+            } catch (e) {
+                return {
+                    ok: false,
+                    status: 500,
+                    error: e instanceof Error ? e.message : "Save failed",
+                };
+            }
+
+            const merged = mergeInquiryChildIntoFocusPanelTruth(truth, {
+                childId,
+                row,
+                patch,
+                savedPerson,
+            });
             dispatchOpportunityDrawerRecordPatch(opportunityId, merged);
             dispatchDrawerLayoutRuntimeBodyRecordPatch({
                 entityType: "opportunities",

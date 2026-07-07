@@ -20,6 +20,15 @@ import {
     type AvailableField,
     type AvailableFieldEntityNamespace,
 } from "@/lib/adminV2/settings/surfaces/compositionFieldAdapter";
+import { defaultChildFieldModes } from "@/lib/adminV2/runtime/focusPanel/children/childNestedSurfaceRuntime";
+import {
+    defaultContactFieldModes,
+    defaultHouseholdGroupDisplayOptions,
+} from "@/lib/adminV2/runtime/focusPanel/household/householdNestedSurfaceRuntime";
+import type {
+    NestedSurfaceFieldMode,
+    NestedSurfaceGroupDisplayOptions,
+} from "@/lib/adminV2/settings/surfaces/nestedSurfaceDefinitionModel";
 import { ensureRuntimeSurfacesRegistered } from "@/lib/platform/surfaceComposition/registerRuntimeSurfaces";
 import { getSurface } from "@/lib/platform/surfaceComposition/surfaceRegistry";
 import { surfaceComponents } from "@/lib/platform/surfaceComposition/universalSurfaceModel";
@@ -46,6 +55,8 @@ export type NestedSurfaceGroupDef = {
 export type NestedSurfaceGroupConfig = {
     key: string;
     selectedFieldKeys: string[];
+    displayOptions?: NestedSurfaceGroupDisplayOptions;
+    fieldModes?: Record<string, NestedSurfaceFieldMode>;
 };
 
 export type NestedSurfaceConfig = {
@@ -91,15 +102,49 @@ export function nestedSurfaceLabel(surfaceId: string): string {
     return getSurface(surfaceId)?.label ?? surfaceId;
 }
 
-/** Seed a default config (each group selects its default real fields). */
+/** Seed a default config (each group selects its default real fields + display/mode seeds). */
 export function defaultNestedSurfaceConfig(surfaceId: string): NestedSurfaceConfig {
     return {
         surfaceId,
         groups: groupDefsFor(surfaceId).map((g) => ({
             key: g.key,
             selectedFieldKeys: [...g.defaultFieldKeys],
+            displayOptions: defaultGroupDisplayOptionsForSurface(surfaceId, g.key),
+            fieldModes: defaultFieldModesForSurfaceGroup(surfaceId, g.key, g.defaultFieldKeys),
         })),
     };
+}
+
+function defaultGroupDisplayOptionsForSurface(
+    surfaceId: string,
+    groupKey: string,
+): NestedSurfaceGroupDisplayOptions | undefined {
+    if (surfaceId === "household_surface") {
+        return defaultHouseholdGroupDisplayOptions(groupKey);
+    }
+    if (surfaceId === "child_surface" && groupKey === "identity") {
+        return { showDob: false, showAge: true };
+    }
+    return undefined;
+}
+
+function defaultFieldModesForSurfaceGroup(
+    surfaceId: string,
+    groupKey: string,
+    defaultFieldKeys: readonly string[],
+): Record<string, NestedSurfaceFieldMode> | undefined {
+    if (surfaceId === "household_contact_surface" && groupKey === "contact_fields") {
+        return defaultContactFieldModes();
+    }
+    if (surfaceId === "child_surface") {
+        const all = defaultChildFieldModes();
+        const scoped: Record<string, NestedSurfaceFieldMode> = {};
+        for (const key of defaultFieldKeys) {
+            if (all[key]) scoped[key] = all[key]!;
+        }
+        return scoped;
+    }
+    return undefined;
 }
 
 /** Selected field keys for a group (empty if group not present). */
@@ -166,7 +211,14 @@ export function reconcileNestedSurfaceConfig(surfaceId: string, loaded: NestedSu
         surfaceId,
         groups: base.groups.map((g) => {
             const found = loaded.groups.find((lg) => lg.key === g.key);
-            return found ? { key: g.key, selectedFieldKeys: [...found.selectedFieldKeys] } : g;
+            return found
+                ? {
+                      key: g.key,
+                      selectedFieldKeys: [...found.selectedFieldKeys],
+                      displayOptions: found.displayOptions ?? g.displayOptions,
+                      fieldModes: found.fieldModes ?? g.fieldModes,
+                  }
+                : g;
         }),
     };
 }

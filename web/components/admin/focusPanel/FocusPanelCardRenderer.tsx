@@ -118,7 +118,15 @@ export default function FocusPanelCardRenderer({
     // its answer from `context` (truth + projected signals). No fetch on expand.
     // `coordination` lets a referencing card hand off focus here (Perspective Change).
     if (model.key === "children") {
-        return <ChildrenCard model={model} context={context} receded={receded} coordination={coordination} />;
+        return (
+            <ChildrenCard
+                model={model}
+                context={context}
+                receded={receded}
+                coordination={coordination}
+                mutation={mutation}
+            />
+        );
     }
     if (model.key === "current_work") {
         return <CurrentWorkCard model={model} context={context} receded={receded} coordination={coordination} />;

@@ -32,9 +32,10 @@ function statusEl(): HTMLElement | null {
 
 function setInput(field: string, value: string): void {
     const el = input(field);
-    el.value = value;
+    const proto = el.tagName === "TEXTAREA" ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
+    const setter = Object.getOwnPropertyDescriptor(proto, "value")?.set;
+    setter?.call(el, value);
     el.dispatchEvent(new Event("input", { bubbles: true }));
-    // Simulate React onChange
     el.dispatchEvent(new Event("change", { bubbles: true }));
 }
 

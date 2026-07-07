@@ -243,6 +243,7 @@ function OverviewComposition({ context }: { context: OperationalContext }) {
                 });
                 return { ok: true };
             },
+            saveInquiryChild: async () => ({ ok: true }),
             tour: {
                 cancelTour: async () => ({ ok: true }),
                 confirmTour: async () => ({ ok: true }),
