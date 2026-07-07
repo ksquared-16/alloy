@@ -36,6 +36,9 @@ export type QueueRecordScope =
 
 export type QueueRecordFieldEmphasis = "default" | "title";
 
+/** Name presentation for person / child / family name fields on queue rows. */
+export type QueueRecordNameDisplay = "full_name" | "first_name";
+
 export type QueueRecordFieldConfig = {
     id: string;
     fieldKey: string;
@@ -44,6 +47,8 @@ export type QueueRecordFieldConfig = {
     showLabel?: boolean;
     /** Title emphasis for household/primary identity fields in the row. */
     emphasis?: QueueRecordFieldEmphasis;
+    /** How to render resolved name values (full name vs first name only). */
+    nameDisplay?: QueueRecordNameDisplay;
     icon?: LayoutAdornmentIcon;
     display: QueueRecordFieldDisplay;
     inlineWithPrevious?: boolean;

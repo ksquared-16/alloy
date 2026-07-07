@@ -157,4 +157,24 @@ describe("resolveCompactSlotDisplay", () => {
         );
         expect(summary).toBe("2 children: Avery Lee, Rowan Lee");
     });
+
+    it("renders child.name as first name when nameDisplay is first_name", () => {
+        const slots = {
+            visible: true,
+            label: "Child name",
+            fieldKeys: ["child.name"],
+            nameDisplayByFieldKey: { "child.name": "first_name" as const },
+        };
+        expect(resolveCompactSlotDisplay("groupCount", childContext(), slots, null)).toBe("Avery");
+    });
+
+    it("renders children.names as first names when nameDisplay is first_name", () => {
+        const slots = {
+            visible: true,
+            label: "Children",
+            fieldKeys: ["children.names"],
+            nameDisplayByFieldKey: { "children.names": "first_name" as const },
+        };
+        expect(resolveCompactSlotDisplay("groupCount", familyContext(), slots, null)).toBe("Avery, Rowan");
+    });
 });

@@ -14,6 +14,7 @@ import type {
     QueueRecordFieldLinkTarget,
     QueueRecordScope,
 } from "@/lib/layout/queueRecordLayoutV3";
+import { formatQueueRowNameDisplay, isQueueRowNameFieldKey } from "@/lib/presentation/formatQueueRowNameDisplay";
 import { formatQueueRecordStatusDisplay } from "@/lib/layout/runtime/queueRecordFieldDisplayBridge";
 import { isQueueRowSubjectFieldVisible } from "@/lib/layout/runtime/queueRowSubjectPresentation";
 
@@ -64,7 +65,11 @@ function shouldFormatQueueRecordDateField(field: QueueRecordFieldConfig): boolea
 }
 
 function formatQueueRecordFieldValue(rawDisplay: string, field: QueueRecordFieldConfig): string {
-    if (!shouldFormatQueueRecordDateField(field)) return rawDisplay;
+    let display = rawDisplay;
+    if (field.nameDisplay && isQueueRowNameFieldKey(field.fieldKey)) {
+        display = formatQueueRowNameDisplay(display, field.nameDisplay, field.fieldKey);
+    }
+    if (!shouldFormatQueueRecordDateField(field)) return display;
     if (isQueueRecordDobFieldKey(field.fieldKey)) {
         return formatDisplayDate(rawDisplay) || rawDisplay;
     }

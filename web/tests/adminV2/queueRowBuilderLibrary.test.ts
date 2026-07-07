@@ -7,6 +7,7 @@ import { availableFieldsForZone } from "@/lib/adminV2/settings/surfaces/composit
 import {
     buildQueueRowLibraryCatalog,
     libraryItemsByCategory,
+    QUEUE_ROW_UNAVAILABLE_CHILD_PROFILE_LIBRARY,
     QUEUE_ROW_UNAVAILABLE_SIBLING_LIBRARY,
 } from "@/lib/adminV2/settings/surfaces/queueRowBuilderLibrary";
 import { subjectFocusFromUi } from "@/lib/adminV2/settings/surfaces/queueRowSubjectFocus";
@@ -69,6 +70,30 @@ describe("queue row builder library", () => {
         expect(QUEUE_ROW_UNAVAILABLE_SIBLING_LIBRARY).toEqual([]);
     });
 
+    it("shows gender as unavailable when queue row resolver is missing", () => {
+        const genderEntry = QUEUE_ROW_UNAVAILABLE_CHILD_PROFILE_LIBRARY.find(
+            (item) => item.fieldKey === "child.gender",
+        );
+        expect(genderEntry).toBeDefined();
+        expect(genderEntry?.label).toBe("Gender");
+        expect(genderEntry?.reason).toMatch(/queue row resolver/i);
+
+        const items = buildQueueRowLibraryCatalog({
+            isWaitlist: false,
+            inRowZoneKeys: ["children"],
+        });
+        const childCategory = libraryItemsByCategory(items).find((c) => c.key === "child");
+        const activeFieldKeys = childCategory?.items
+            .filter((item) => item.kind === "field")
+            .map((item) => item.fieldKey) ?? [];
+        expect(activeFieldKeys).not.toContain("child.gender");
+
+        const unavailableGender = childCategory?.items.find(
+            (item) => item.kind === "unavailable" && item.fieldKey === "child.gender",
+        );
+        expect(unavailableGender).toBeDefined();
+    });
+
     it("scopes sibling fields to waitlist surfaces in the library", () => {
         const pipelineOnly = buildQueueRowLibraryCatalog({
             isWaitlist: false,
@@ -82,7 +107,8 @@ describe("queue row builder library", () => {
 
         const unavailable = pipelineOnly.filter((item) => item.kind === "unavailable");
         expect(unavailable.length).toBeGreaterThan(0);
-        expect(unavailable.every((item) => item.reason.includes("Waitlist candidate rows only"))).toBe(true);
+        const siblingUnavailable = unavailable.filter((item) => item.fieldKey.startsWith("sibling."));
+        expect(siblingUnavailable.every((item) => item.reason.includes("Waitlist candidate rows only"))).toBe(true);
         expect(unavailable.some((item) => item.fieldKey === "sibling.names")).toBe(true);
     });
 

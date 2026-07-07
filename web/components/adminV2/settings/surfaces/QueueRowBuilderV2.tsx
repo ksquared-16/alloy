@@ -36,6 +36,7 @@ import type {
     QueueRecordColumnConfig,
     QueueRecordFieldConfig,
     QueueRecordLayoutConfigV3,
+    QueueRecordNameDisplay,
 } from "@/lib/layout/queueRecordLayoutV3";
 import type { QueueRecordColumnWidth } from "@/lib/layout/queueRecordLayoutConfig";
 import { QUEUE_RECORD_LAYOUT_ZONES } from "@/lib/layout/surfaceLayoutRegistry";
@@ -60,6 +61,7 @@ import {
     buildQueueRowLibraryCatalog,
     type QueueRowLibraryItem,
 } from "@/lib/adminV2/settings/surfaces/queueRowBuilderLibrary";
+import { isQueueRowNameFieldKey } from "@/lib/presentation/formatQueueRowNameDisplay";
 import {
     CANVAS_PLACEMENT_REGIONS,
     canvasRegionForCompactSlot,
@@ -858,6 +860,7 @@ function FieldInspector({
     onClose,
     onRemove,
     onSetLabel,
+    onSetNameDisplay,
     onMove,
     onSetInline,
     onReorder,
@@ -868,11 +871,13 @@ function FieldInspector({
     onClose: () => void;
     onRemove: () => void;
     onSetLabel: (label: string) => void;
+    onSetNameDisplay: (nameDisplay: QueueRecordNameDisplay) => void;
     onMove: (slot: CanvasAnatomyRegion, stackLine: number) => void;
     onSetInline: (inline: boolean) => void;
     onReorder: (dir: -1 | 1) => void;
     onSelectField: (fieldId: string) => void;
 }) {
+    const supportsNameDisplay = field.kind === "field" && isQueueRowNameFieldKey(field.fieldKey);
     return (
         <div className="rounded-xl border border-alloy-stone/14 bg-white shadow-sm" data-field-inspector={field.id}>
             <div className="flex items-center justify-between border-b border-alloy-stone/10 px-4 py-2.5">
@@ -881,7 +886,7 @@ function FieldInspector({
             </div>
             <div className="space-y-4 p-4">
                 <label className="flex flex-col gap-1">
-                    <span className="text-[12px] font-medium text-alloy-midnight/75">Display as</span>
+                    <span className="text-[12px] font-medium text-alloy-midnight/75">Label</span>
                     <input
                         type="text"
                         value={field.label}
@@ -890,6 +895,20 @@ function FieldInspector({
                         data-inspector-label-input
                     />
                 </label>
+                {supportsNameDisplay ? (
+                    <label className="flex flex-col gap-1">
+                        <span className="text-[12px] font-medium text-alloy-midnight/75">Display as</span>
+                        <select
+                            value={field.nameDisplay ?? "full_name"}
+                            onChange={(e) => onSetNameDisplay(e.target.value as QueueRecordNameDisplay)}
+                            className="w-full rounded border border-alloy-stone/20 bg-white px-2.5 py-1.5 text-[12px] focus:border-alloy-pine focus:outline-none"
+                            data-inspector-name-display
+                        >
+                            <option value="full_name">Full name</option>
+                            <option value="first_name">First name</option>
+                        </select>
+                    </label>
+                ) : null}
                 <div>
                     <p className="mb-1 text-[12px] font-medium text-alloy-midnight/75">Section</p>
                     <p className="mb-2 text-[10px] leading-snug text-alloy-midnight/45">{SURFACE_FIELD_PLACEMENT_HELP}</p>
@@ -1207,6 +1226,26 @@ export default function QueueRowBuilderV2({
         [selectedField],
     );
 
+    const updateFieldNameDisplay = useCallback(
+        (nameDisplay: QueueRecordNameDisplay) => {
+            if (!selectedField) return;
+            mark((prev) =>
+                prev.map((z) => {
+                    if (z.key !== selectedField.zoneKey) return z;
+                    const prevPlacement = z.fieldPlacements[selectedField.fieldKey] ?? {};
+                    return {
+                        ...z,
+                        fieldPlacements: {
+                            ...z.fieldPlacements,
+                            [selectedField.fieldKey]: { ...prevPlacement, nameDisplay },
+                        },
+                    };
+                }),
+            );
+        },
+        [selectedField],
+    );
+
     const moveSelectedField = useCallback(
         (slot: CanvasAnatomyRegion, stackLine: number) => {
             if (!selectedFieldId) return;
@@ -1306,6 +1345,7 @@ export default function QueueRowBuilderV2({
                     onClose={() => setSelectedFieldId(null)}
                     onRemove={removeSelectedField}
                     onSetLabel={updateFieldLabel}
+                    onSetNameDisplay={updateFieldNameDisplay}
                     onMove={moveSelectedField}
                     onSetInline={setSelectedFieldInline}
                     onReorder={reorderSelectedField}

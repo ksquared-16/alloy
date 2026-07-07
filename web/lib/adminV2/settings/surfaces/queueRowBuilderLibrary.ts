@@ -14,6 +14,7 @@ import {
 } from "@/lib/adminV2/settings/surfaces/compositionFieldAdapter";
 import { WAITLIST_PLACEMENT_FIELD_KEYS } from "@/lib/layout/runtime/queueWaitlistPlacementField";
 import { buildUnavailableSiblingLibraryEntries, isWaitlistCandidateGrainSiblingFieldKey, QUEUE_ROW_RESOLVER_BACKED_SIBLING_FIELD_KEYS, WAITLIST_CANDIDATE_SIBLING_FIELD_SCOPE_NOTE } from "@/lib/layout/runtime/queueRowSiblingFieldRegistry";
+import { buildUnavailableChildProfileLibraryEntries } from "@/lib/layout/runtime/queueRowChildProfileFieldRegistry";
 import type { TenantFieldDefinitionRow } from "@/lib/layout/tenantLayoutFieldPickerCatalog";
 import type { QueueRowSubjectFocusUi } from "@/lib/adminV2/settings/surfaces/queueRowSubjectFocus";
 
@@ -146,6 +147,10 @@ const FIELD_LIBRARY_LABELS: Record<string, string> = {
 export const QUEUE_ROW_UNAVAILABLE_SIBLING_LIBRARY: readonly QueueRowLibraryUnavailableItem[] =
     buildUnavailableSiblingLibraryEntries();
 
+/** Unavailable child profile placeholders — registered fields without queue row resolvers. */
+export const QUEUE_ROW_UNAVAILABLE_CHILD_PROFILE_LIBRARY: readonly QueueRowLibraryUnavailableItem[] =
+    buildUnavailableChildProfileLibraryEntries();
+
 const WIDGET_LIBRARY_LABELS: Record<string, string> = {
     attention: "Attention",
     current_work: "Tasks",
@@ -276,6 +281,11 @@ export function buildQueueRowLibraryCatalog(args: {
         ),
     );
     for (const unavailable of QUEUE_ROW_UNAVAILABLE_SIBLING_LIBRARY) {
+        if (!registeredKeys.has(unavailable.fieldKey)) {
+            items.push(unavailable);
+        }
+    }
+    for (const unavailable of QUEUE_ROW_UNAVAILABLE_CHILD_PROFILE_LIBRARY) {
         if (!registeredKeys.has(unavailable.fieldKey)) {
             items.push(unavailable);
         }

@@ -10,6 +10,7 @@ import type {
     QueueRecordColumnConfig,
     QueueRecordFieldConfig,
     QueueRecordLayoutConfigV3,
+    QueueRecordNameDisplay,
 } from "@/lib/layout/queueRecordLayoutV3";
 import { nextQueueRecordColumnId, nextQueueRecordFieldId } from "@/lib/layout/queueRecordLayoutIds";
 import { QUEUE_RECORD_LAYOUT_ZONES } from "@/lib/layout/surfaceLayoutRegistry";
@@ -33,12 +34,14 @@ export type PlacedFieldRef = {
     builderSlot: CanvasAnatomyRegion;
     stackLine: number;
     inlineWithPrevious: boolean;
+    nameDisplay?: QueueRecordNameDisplay;
 };
 
 export type FieldPlacementOverride = {
     builderSlot?: CanvasAnatomyRegion;
     stackLine?: number;
     inlineWithPrevious?: boolean;
+    nameDisplay?: QueueRecordNameDisplay;
 };
 
 export function placedFieldId(zoneKey: ComposerZoneKey, blockId: string, fieldKey: string): string {
@@ -122,6 +125,7 @@ export function listPlacedFields(zones: readonly ZoneComposerState[]): PlacedFie
                 builderSlot: override.builderSlot ?? defaultSlot,
                 stackLine: override.stackLine ?? zone.rowIndex ?? 0,
                 inlineWithPrevious: override.inlineWithPrevious ?? false,
+                nameDisplay: override.nameDisplay,
             });
         }
     }
@@ -165,6 +169,7 @@ function synthesizeFieldConfig(field: PlacedFieldRef, template?: QueueRecordFiel
         label: template?.label ?? field.label,
         display: template?.display ?? "text",
         inlineWithPrevious: field.inlineWithPrevious,
+        nameDisplay: field.nameDisplay ?? template?.nameDisplay,
     };
 }
 
@@ -241,6 +246,7 @@ export function ingestConfigIntoZoneState(
                         builderSlot: (col.builderSlot as CanvasAnatomyRegion | undefined) ?? zone.fieldPlacements[key]?.builderSlot,
                         stackLine: col.rowIndex ?? 0,
                         inlineWithPrevious: field.inlineWithPrevious ?? false,
+                        nameDisplay: field.nameDisplay ?? zone.fieldPlacements[key]?.nameDisplay,
                     };
                     let matched = false;
                     for (const group of zone.evidenceGroups) {

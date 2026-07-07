@@ -52,6 +52,7 @@
 import type {
     QueueRecordFieldConfig,
     QueueRecordLayoutConfigV3,
+    QueueRecordNameDisplay,
 } from "@/lib/layout/queueRecordLayoutV3";
 import { compactSlotForCanvasRegion, type CanvasAnatomyRegion } from "@/lib/adminV2/settings/surfaces/queueRowCanvasRegions";
 
@@ -66,6 +67,8 @@ export type CompactRowSlotConfig = {
     label: string | null;
     /** Published field refKeys assigned to this slot (builder canvas order). */
     fieldKeys?: readonly string[];
+    /** Per-field name display overrides keyed by field refKey. */
+    nameDisplayByFieldKey?: Readonly<Partial<Record<string, QueueRecordNameDisplay>>>;
 };
 
 /** The fixed compact-row slots the `CondensedQueueRow` renders (see anatomy in that file). */
@@ -158,6 +161,7 @@ function slotsFromBuilderAssignment(
     const assigned: Partial<Record<keyof CompactRowSlots, CompactRowSlotConfig>> = {};
     const labelsBySlot = new Map<keyof CompactRowSlots, string[]>();
     const keysBySlot = new Map<keyof CompactRowSlots, string[]>();
+    const nameDisplayBySlot = new Map<keyof CompactRowSlots, Record<string, QueueRecordNameDisplay>>();
 
     const sortedColumns = [...config.columns].sort(
         (a, b) => (a.rowIndex ?? 0) - (b.rowIndex ?? 0),
@@ -177,6 +181,12 @@ function slotsFromBuilderAssignment(
                 if (!keys.includes(fieldKey)) keys.push(fieldKey);
                 keysBySlot.set(compactSlot, keys);
 
+                if (field.nameDisplay) {
+                    const nameDisplay = nameDisplayBySlot.get(compactSlot) ?? {};
+                    nameDisplay[fieldKey] = field.nameDisplay;
+                    nameDisplayBySlot.set(compactSlot, nameDisplay);
+                }
+
                 const label = typeof field.label === "string" ? field.label.trim() : "";
                 if (!label) continue;
                 const existing = labelsBySlot.get(compactSlot) ?? [];
@@ -191,10 +201,14 @@ function slotsFromBuilderAssignment(
     }
 
     for (const [slot, fieldKeys] of keysBySlot) {
+        const nameDisplayByFieldKey = nameDisplayBySlot.get(slot);
         assigned[slot] = {
             visible: true,
             label: labelsBySlot.get(slot)?.join(" · ") || null,
             fieldKeys,
+            ...(nameDisplayByFieldKey && Object.keys(nameDisplayByFieldKey).length > 0
+                ? { nameDisplayByFieldKey }
+                : {}),
         };
     }
     return assigned;
@@ -253,7 +267,12 @@ export function mapQueueRowSurfaceToCompactConfig(
         }
         // Present field: visible; fieldKeys drive runtime values (labels are builder metadata only).
         const label = typeof field.label === "string" ? field.label.trim() || null : null;
-        slots[slot] = { visible: true, label, fieldKeys: [field.fieldKey.trim()] };
+        slots[slot] = {
+            visible: true,
+            label,
+            fieldKeys: [field.fieldKey.trim()],
+            ...(field.nameDisplay ? { nameDisplayByFieldKey: { [field.fieldKey.trim()]: field.nameDisplay } } : {}),
+        };
     }
 
     return { slots, fallbackSlots };

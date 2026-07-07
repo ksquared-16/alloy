@@ -5,6 +5,7 @@
  * configured `fieldKeys`, each key resolves to live row data; absent values omit the slot.
  */
 
+import { formatQueueRowNameDisplay } from "@/lib/presentation/formatQueueRowNameDisplay";
 import type { QueueRowContext } from "@/lib/workUnits/lifecycleSubjectContracts";
 import { resolveQueueRowChildrenFieldFromContext } from "@/lib/layout/runtime/queueRowChildrenFieldRegistry";
 import {
@@ -120,7 +121,11 @@ export function resolveCompactSlotDisplay(
     const resolvedFocus = focus ?? null;
     if (config?.fieldKeys?.length) {
         const parts = config.fieldKeys
-            .map((key) => resolveQueueRowFieldValueFromContext(key, context))
+            .map((key) => {
+                const raw = resolveQueueRowFieldValueFromContext(key, context);
+                if (!raw?.trim()) return null;
+                return formatQueueRowNameDisplay(raw, config.nameDisplayByFieldKey?.[key], key);
+            })
             .filter((value): value is string => Boolean(value?.trim()));
         return parts.length ? parts.join(" · ") : null;
     }
