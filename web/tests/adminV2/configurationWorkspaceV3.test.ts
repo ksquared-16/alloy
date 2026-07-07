@@ -106,7 +106,7 @@ describe("Configuration Workspace V3 — enrollment workflow readiness", () => {
     });
 
     it("configuration pages share workspace shell patterns", () => {
-        expect(read("app/adminV2/settings/fields/page.tsx")).toContain('variant="hero"');
+        expect(read("app/adminV2/settings/fields/page.tsx")).toContain("data-model-workspace-page");
         expect(read("app/adminV2/settings/business-processes/page.tsx")).toContain('variant="hero"');
         expect(read("components/adminV2/settings/LayoutsSettingsPageShell.tsx")).toContain('variant="hero"');
         expect(read("components/adminV2/settings/LocationsHierarchySettingsClient.tsx")).toContain('variant="hero"');

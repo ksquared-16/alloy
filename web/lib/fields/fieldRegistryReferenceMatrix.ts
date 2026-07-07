@@ -53,7 +53,7 @@ function canonicalEntityTypeForLifecycleBinding(binding: {
 export function lifecycleEntityFromFieldDefinitionEntityType(entityType: string): LifecycleRequirementEntityKey | null {
     const t = entityType.trim().toLowerCase();
     if (t === "person" || t === "persons") return "person";
-    if (t === "inquiry_child") return "child";
+    if (t === "inquiry_child" || t === "customer_member") return "child";
     if (t === "opportunity" || t === "opportunities") return "opportunity";
     if (t === "customer" || t === "customers") return "customer";
     return null;
@@ -78,6 +78,7 @@ export function formsEntityTypeFromFieldDefinitionEntity(entityType: string): st
     const t = entityType.trim().toLowerCase();
     if (t === "person") return "guardian";
     if (t === "inquiry_child") return "child";
+    if (t === "customer_member") return "child";
     if (t === "opportunity") return "opportunity";
     if (t === "customer") return "customer";
     return "custom";
