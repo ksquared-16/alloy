@@ -76,13 +76,24 @@ describe("Configuration Mode doctrine cleanup", () => {
         expect(page).not.toContain("LifecycleSettingsCrossLinkBanner");
     });
 
-    it("pattern placeholders declare queue/workspace targets for next surfaces", () => {
-        const placeholder = read("components/adminV2/settings/configurationRuntime/ConfigurationPatternPlaceholder.tsx");
-        expect(placeholder).toContain("Context → Queue → Workspace → BOS");
-        expect(read("app/adminV2/settings/fields/page.tsx")).toContain('surface="fields"');
-        expect(read("app/adminV2/settings/actions/page.tsx")).toContain('surface="actions"');
-        expect(read("app/adminV2/settings/users-roles/page.tsx")).toContain('surface="user-roles"');
-        expect(read("app/adminV2/settings/communications/page.tsx")).toContain('surface="communications"');
+    it("hybrid settings surfaces use configuration shell instead of rollout placeholders", () => {
+        const shell = read("components/adminV2/settings/configurationRuntime/SettingsConfigurationSurfaceShell.tsx");
+        expect(shell).toContain("ConfigurationContext");
+        expect(shell).toContain("ConfigurationShell");
+        expect(read("app/adminV2/settings/fields/page.tsx")).toContain("FieldsConfigurationPage");
+        expect(read("app/adminV2/settings/users-roles/page.tsx")).toContain("UsersRolesConfigurationPage");
+        expect(read("app/adminV2/settings/communications/page.tsx")).toContain("CommunicationsConfigurationPage");
+        expect(read("app/adminV2/settings/entities/page.tsx")).toContain("EntitiesConfigurationPage");
+        expect(read("app/adminV2/settings/actions/page.tsx")).toContain("SettingsConfigurationSurfaceShell");
+        for (const path of [
+            "app/adminV2/settings/fields/page.tsx",
+            "app/adminV2/settings/users-roles/page.tsx",
+            "app/adminV2/settings/communications/page.tsx",
+            "app/adminV2/settings/entities/page.tsx",
+            "app/adminV2/settings/actions/page.tsx",
+        ]) {
+            expect(read(path)).not.toContain("ConfigurationPatternPlaceholder");
+        }
     });
 
     it("workflows documented as diagnostic/future automation surface", () => {

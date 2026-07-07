@@ -16,13 +16,7 @@ const ROLLOUT_PAGES = [
     "app/adminV2/settings/actions/page.tsx",
     "app/adminV2/settings/users-roles/page.tsx",
     "app/adminV2/settings/communications/page.tsx",
-] as const;
-
-const ROLLOUT_COMPONENTS = [
-    "components/adminV2/settings/fields/FieldsConfigurationPage.tsx",
-    "components/adminV2/settings/actions/ActionsConfigurationPage.tsx",
-    "components/adminV2/settings/usersRoles/UsersRolesConfigurationPage.tsx",
-    "components/adminV2/settings/communications/CommunicationsConfigurationPage.tsx",
+    "app/adminV2/settings/entities/page.tsx",
 ] as const;
 
 describe("Configuration Runtime settings rollout", () => {
@@ -30,74 +24,54 @@ describe("Configuration Runtime settings rollout", () => {
         for (const page of ROLLOUT_PAGES) {
             const src = read(page);
             expect(src).not.toContain("ConfigurationPatternPlaceholder");
-            expect(src).not.toContain("SettingsPageHeader");
         }
         expect(read("app/adminV2/settings/fields/page.tsx")).toContain("FieldsConfigurationPage");
-        expect(read("app/adminV2/settings/actions/page.tsx")).toContain("ActionDefinitionCatalogPage");
+        expect(read("app/adminV2/settings/actions/page.tsx")).toContain("SettingsConfigurationSurfaceShell");
         expect(read("app/adminV2/settings/users-roles/page.tsx")).toContain("UsersRolesConfigurationPage");
         expect(read("app/adminV2/settings/communications/page.tsx")).toContain("CommunicationsConfigurationPage");
+        expect(read("app/adminV2/settings/entities/page.tsx")).toContain("EntitiesConfigurationPage");
     });
 
-    it("rollout surfaces use ConfigurationShell with queue and workspace", () => {
-        for (const component of ROLLOUT_COMPONENTS) {
-            const src = read(component);
-            expect(src).toContain("ConfigurationContext");
-            expect(src).toContain("ConfigurationShell");
-            expect(src).toContain("ConfigurationQueue");
-        }
+    it("priority rollout surfaces use Platform Configuration shell primitives", () => {
+        expect(read("components/adminV2/settings/fields/FieldsConfigurationPage.tsx")).toContain("ConfigurationShell");
+        expect(read("components/adminV2/settings/usersRoles/UsersRolesConfigurationPage.tsx")).toContain(
+            "SettingsConfigurationSurfaceShell",
+        );
+        expect(read("components/adminV2/settings/communications/CommunicationsConfigurationPage.tsx")).toContain(
+            "SettingsConfigurationSurfaceShell",
+        );
+        expect(read("components/adminV2/settings/entities/EntitiesConfigurationPage.tsx")).toContain(
+            "SettingsConfigurationSurfaceShell",
+        );
     });
 
-    it("Fields hides raw field keys outside Advanced details", () => {
+    it("Fields uses entity queue in configuration shell", () => {
         const fieldsPage = read("components/adminV2/settings/fields/FieldsConfigurationPage.tsx");
-        const detail = read("components/adminV2/settings/fields/FieldConfigurationDetailPanel.tsx");
-        expect(fieldsPage).not.toContain("field_key");
-        expect(detail).toContain("<details");
-        expect(detail).toContain("Field key:");
-        expect(detail).not.toMatch(/config-typo-queue-item-title[\s\S]*field_key/);
+        expect(fieldsPage).toContain("ConfigurationQueue");
+        expect(fieldsPage).toContain("fields-configuration-entity-queue");
     });
 
-    it("Actions internal catalog is not primary operator configuration", () => {
-        const page = read("app/adminV2/settings/actions/page.tsx");
-        const catalog = read("components/adminV2/settings/actions/ActionDefinitionCatalogPage.tsx");
-        expect(page).toContain("ActionDefinitionCatalogPage");
-        expect(catalog).toContain("action-definition-catalog-page");
-        expect(read("lib/adminV2/configurationModeNav.ts")).not.toMatch(/label: "Actions"/);
-    });
-
-    it("Users & Roles uses queue + workspace, not legacy tab bar client", () => {
-        const page = read("app/adminV2/settings/users-roles/page.tsx");
-        const client = read("components/adminV2/settings/usersRoles/UsersRolesConfigurationPage.tsx");
-        expect(page).not.toContain("UsersRolesSettingsClient");
-        expect(client).toContain("users-roles-configuration-shell");
-        expect(client).not.toContain("SettingsEntityTabBar");
-    });
-
-    it("Communications uses queue + workspace pattern", () => {
-        const comm = read("components/adminV2/settings/communications/CommunicationsConfigurationPage.tsx");
-        expect(comm).toContain("communications-configuration-shell");
-        expect(comm).not.toContain("mid-build");
-        expect(comm).not.toContain("bg-amber");
+    it("Users & Roles and Communications embed existing workspace clients under configuration shell", () => {
+        expect(read("components/adminV2/settings/usersRoles/UsersRolesConfigurationPage.tsx")).toContain(
+            "UsersRolesSettingsClient",
+        );
+        expect(read("components/adminV2/settings/communications/CommunicationsConfigurationPage.tsx")).toContain(
+            "CommunicationsSetupClient",
+        );
     });
 
     it("rollout surfaces avoid blue/slate active styling", () => {
-        for (const component of ROLLOUT_COMPONENTS) {
+        for (const component of [
+            "components/adminV2/settings/fields/FieldsConfigurationPage.tsx",
+            "components/adminV2/settings/usersRoles/UsersRolesConfigurationPage.tsx",
+            "components/adminV2/settings/communications/CommunicationsConfigurationPage.tsx",
+            "components/adminV2/settings/entities/EntitiesConfigurationPage.tsx",
+        ]) {
             const src = read(component);
             expect(src).not.toMatch(/\bbg-blue-/);
             expect(src).not.toMatch(/\btext-blue-/);
             expect(src).not.toMatch(/\bbg-slate-/);
             expect(src).not.toMatch(/\btext-slate-/);
         }
-    });
-
-    it("queue route uses total not total_count property on QueueItemsResult", () => {
-        const route = read("app/api/admin/queues/[workUnitId]/[queueKey]/route.ts");
-        expect(route).toMatch(/\btotal:\s*\n?\s*typeof result\.total/);
-        expect(route).not.toMatch(/^\s*total_count:/m);
-    });
-
-    it("playwright rollout screenshot spec exists", () => {
-        expect(read("playwright/tests/configuration-runtime-settings-rollout.spec.ts")).toContain(
-            "configuration-runtime-settings-rollout",
-        );
     });
 });

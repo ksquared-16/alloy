@@ -1,7 +1,8 @@
 import { redirect } from "next/navigation";
 
-export const dynamic = 'force-dynamic';
+export const dynamic = "force-dynamic";
 
-export default function AdminSystemRolesPage() {
-    redirect("/legacy-admin/system/access-control");
+/** Legacy route — roles live under Platform Configuration → Users & Roles. */
+export default function AdminSystemRolesRedirectPage() {
+    redirect("/settings/users-roles");
 }

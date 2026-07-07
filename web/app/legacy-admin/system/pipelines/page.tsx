@@ -1,8 +1,8 @@
-import SettingsClient from "@/app/legacy-admin/settings/SettingsClient";
+import { redirect } from "next/navigation";
 
 export const dynamic = "force-dynamic";
 
-/** Pipelines & stages (moved from legacy /admin/settings for IA clarity). */
-export default function AdminSystemPipelinesPage() {
-    return <SettingsClient />;
+/** Legacy route — pipelines and stages live under Platform Configuration → Processes. */
+export default function AdminSystemPipelinesRedirectPage() {
+    redirect("/settings/processes");
 }

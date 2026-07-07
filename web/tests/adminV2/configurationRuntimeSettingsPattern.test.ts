@@ -66,11 +66,11 @@ describe("Configuration Runtime settings pattern rollout", () => {
         expect(hook).not.toContain("opportunity_customer_members");
     });
 
-    it("Fields documents next pattern without full implementation", () => {
-        expect(read("app/adminV2/settings/fields/page.tsx")).toContain("ConfigurationPatternPlaceholder");
-        expect(read("components/adminV2/settings/configurationRuntime/ConfigurationPatternPlaceholder.tsx")).toContain(
-            "fields-configuration-pattern-placeholder",
-        );
+    it("Fields uses Platform Configuration shell", () => {
+        expect(read("app/adminV2/settings/fields/page.tsx")).toContain("FieldsConfigurationPage");
+        const fieldsPage = read("components/adminV2/settings/fields/FieldsConfigurationPage.tsx");
+        expect(fieldsPage).toContain("ConfigurationContext");
+        expect(fieldsPage).toContain("ConfigurationShell");
     });
 
     it("configuration CSS avoids blue/slate accordion styling for statuses surface", () => {

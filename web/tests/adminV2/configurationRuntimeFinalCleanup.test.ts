@@ -29,12 +29,9 @@ describe("Configuration Runtime final ownership cleanup", () => {
         expect(labels).toContain("Automation");
     });
 
-    it("Actions route uses internal definition catalog page", () => {
-        expect(read("app/adminV2/settings/actions/page.tsx")).toContain("ActionDefinitionCatalogPage");
-        expect(read("components/adminV2/settings/actions/ActionDefinitionCatalogPage.tsx")).toContain(
-            "action-definition-catalog-page",
-        );
-        expect(CONFIGURATION_MODE_INTERNAL_NAV_ITEMS.some((i) => i.href.includes("/actions"))).toBe(true);
+    it("Actions route uses configuration shell wrapper", () => {
+        expect(read("app/adminV2/settings/actions/page.tsx")).toContain("SettingsConfigurationSurfaceShell");
+        expect(read("app/adminV2/settings/actions/page.tsx")).not.toContain("ConfigurationPatternPlaceholder");
     });
 
     it("sidebar renders grouped Configuration nav without Actions or Financials", () => {
@@ -45,11 +42,11 @@ describe("Configuration Runtime final ownership cleanup", () => {
         expect(sidebar).toContain("config-mode-nav-settings-home");
     });
 
-    it("Access page shows people-first queue rows", () => {
+    it("Access page uses Platform Configuration shell with Users & Roles workspace", () => {
         const access = read("components/adminV2/settings/usersRoles/UsersRolesConfigurationPage.tsx");
-        expect(access).toContain('title="Access"');
-        expect(access).toContain("wrapTitle");
-        expect(access).toContain("memberSubtitle");
+        expect(access).toContain("SettingsConfigurationSurfaceShell");
+        expect(access).toContain('title="Users & Roles"');
+        expect(access).toContain("UsersRolesSettingsClient");
     });
 
     it("login page has password visibility toggle", () => {

@@ -1,4 +1,5 @@
 import EffectiveLayoutInspectorClient from "@/components/adminV2/settings/EffectiveLayoutInspectorClient";
+import SettingsDiagnosticSurfaceBanner from "@/components/adminV2/settings/configurationRuntime/SettingsDiagnosticSurfaceBanner";
 import Link from "next/link";
 
 export const dynamic = "force-dynamic";
@@ -17,7 +18,12 @@ export default async function EffectiveLayoutInspectorPage({ searchParams }: Pag
     const surface = sp.surface === "queue" ? "queue" : "drawer";
 
     return (
-        <div className="mx-auto max-w-4xl space-y-4 px-4 py-6">
+        <div className="mx-auto max-w-4xl space-y-4 px-4 py-6" data-testid="settings-layouts-effective-page">
+            <SettingsDiagnosticSurfaceBanner
+                note="Read-only cutover validation for drawer and queue layout resolution. Operator-facing surface authoring lives under Surfaces."
+                destinationHref="/settings/surfaces"
+                destinationLabel="Surfaces"
+            />
             <header className="space-y-1">
                 <Link href="/settings/surfaces" className="text-xs text-alloy-pine underline">
                     ← Settings → Surfaces

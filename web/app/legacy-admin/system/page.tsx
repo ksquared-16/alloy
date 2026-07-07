@@ -1,7 +1,8 @@
-import SystemHubPage from "./SystemHubPage";
+import { redirect } from "next/navigation";
 
 export const dynamic = "force-dynamic";
 
-export default function AdminSystemHubRoute() {
-    return <SystemHubPage />;
+/** Legacy system hub — superseded by Platform Configuration at /settings. */
+export default function AdminSystemHubRedirectPage() {
+    redirect("/settings");
 }

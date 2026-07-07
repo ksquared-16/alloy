@@ -36,7 +36,14 @@ const LEGACY_ENTITY_TYPES = new Set(["contacts", "customer_members"]);
 const ENTITY_LABELS_SUBTITLE =
     "Industry drives default labels for People, Customers, Vendors, Person Roles, Relationship Types, and other entities. Override per type below.";
 
-export default function EntityLabelsClient({ adminV2Chrome = false }: { adminV2Chrome?: boolean } = {}) {
+export default function EntityLabelsClient({
+    adminV2Chrome = false,
+    omitOuterHeader = false,
+}: {
+    adminV2Chrome?: boolean;
+    /** When true with adminV2Chrome, skip page header (parent Configuration shell provides it). */
+    omitOuterHeader?: boolean;
+} = {}) {
     const { canMutate } = useAdminAuth();
     const { refreshEntityLabels } = useEntityLabels();
     const [data, setData] = useState<ApiResponse | null>(null);
@@ -222,11 +229,11 @@ export default function EntityLabelsClient({ adminV2Chrome = false }: { adminV2C
     if (loading) {
         return (
             <>
-                {adminV2Chrome ? (
+                {adminV2Chrome && !omitOuterHeader ? (
                     <SettingsPageHeader title="Entity Labels" subtitle={ENTITY_LABELS_SUBTITLE} />
-                ) : (
+                ) : !adminV2Chrome ? (
                     <AdminPageHeader title="Entity Labels" subtitle={ENTITY_LABELS_SUBTITLE} />
-                )}
+                ) : null}
                 <p className="text-sm text-[#59678b]">Loading…</p>
             </>
         );
@@ -235,11 +242,11 @@ export default function EntityLabelsClient({ adminV2Chrome = false }: { adminV2C
     if (error || !data) {
         return (
             <>
-                {adminV2Chrome ? (
+                {adminV2Chrome && !omitOuterHeader ? (
                     <SettingsPageHeader title="Entity Labels" subtitle={ENTITY_LABELS_SUBTITLE} />
-                ) : (
+                ) : !adminV2Chrome ? (
                     <AdminPageHeader title="Entity Labels" subtitle={ENTITY_LABELS_SUBTITLE} />
-                )}
+                ) : null}
                 <div className="rounded-md border border-red-200 bg-red-50 p-4 text-sm text-red-800">{error ?? "Failed to load"}</div>
             </>
         );
@@ -251,11 +258,11 @@ export default function EntityLabelsClient({ adminV2Chrome = false }: { adminV2C
 
     return (
         <>
-            {adminV2Chrome ? (
+            {adminV2Chrome && !omitOuterHeader ? (
                 <SettingsPageHeader title="Entity Labels" subtitle={ENTITY_LABELS_SUBTITLE} />
-            ) : (
+            ) : !adminV2Chrome ? (
                 <AdminPageHeader title="Entity Labels" subtitle={ENTITY_LABELS_SUBTITLE} />
-            )}
+            ) : null}
             {locked && <ConfigLockBanner />}
             {!canMutate && (
                 <p className="mb-4 text-sm text-[#59678b]">You can view entity labels. Only admins can edit.</p>

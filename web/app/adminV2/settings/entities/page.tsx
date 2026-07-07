@@ -1,8 +1,8 @@
-import EntityLabelsClient from "@/app/legacy-admin/system/entity-labels/EntityLabelsClient";
+import EntitiesConfigurationPage from "@/components/adminV2/settings/entities/EntitiesConfigurationPage";
 
 export const dynamic = "force-dynamic";
 
 /** Operator-facing Entities settings at /settings/entities. */
 export default function AdminV2SettingsEntitiesPage() {
-    return <EntityLabelsClient adminV2Chrome />;
+    return <EntitiesConfigurationPage />;
 }

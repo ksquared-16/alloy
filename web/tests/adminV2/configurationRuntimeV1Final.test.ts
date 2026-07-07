@@ -49,11 +49,16 @@ describe("Configuration Runtime V1 final", () => {
     it("V1 configuration pages use ConfigurationShell without per-page width hacks", () => {
         for (const page of V1_CONFIGURATION_PAGES) {
             const src = read(page);
-            expect(src).toContain("ConfigurationShell");
+            const usesShell =
+                src.includes("ConfigurationShell") || src.includes("SettingsConfigurationSurfaceShell");
+            expect(usesShell).toBe(true);
             expect(src).not.toMatch(/width:\s*\d+px/);
             expect(src).not.toContain("17.5rem");
             expect(src).not.toContain("15.5rem");
         }
+        expect(read("components/adminV2/settings/configurationRuntime/SettingsConfigurationSurfaceShell.tsx")).toContain(
+            "ConfigurationShell",
+        );
     });
 
     it("Locations uses Configuration Mode with updated subtitle and Sections queue", () => {
