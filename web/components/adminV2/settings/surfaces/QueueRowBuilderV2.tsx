@@ -63,6 +63,14 @@ import {
 } from "@/lib/adminV2/settings/surfaces/queueRowBuilderLibrary";
 import { isQueueRowNameFieldKey } from "@/lib/presentation/formatQueueRowNameDisplay";
 import {
+    COLLECTION_ITEM_FIELD_CATALOG,
+    DEFAULT_CHILDREN_COLLECTION_PRESENTATION,
+    isCollectionFieldKey,
+    normalizeCollectionFieldPresentation,
+    type CollectionFieldPresentationConfig,
+    type CollectionItemFieldKey,
+} from "@/lib/presentation/collectionFieldPresentation";
+import {
     CANVAS_PLACEMENT_REGIONS,
     canvasRegionForCompactSlot,
     defaultCanvasSlotForZone,
@@ -854,6 +862,142 @@ function FieldsOnRowList({
     );
 }
 
+function CollectionFieldInspector({
+    presentation,
+    onChange,
+}: {
+    presentation: CollectionFieldPresentationConfig;
+    onChange: (next: CollectionFieldPresentationConfig) => void;
+}) {
+    const config = normalizeCollectionFieldPresentation(presentation);
+    const toggleIncludedField = (fieldKey: CollectionItemFieldKey) => {
+        const included = new Set(config.includedFields);
+        if (included.has(fieldKey)) included.delete(fieldKey);
+        else included.add(fieldKey);
+        onChange({ ...config, includedFields: [...included] });
+    };
+
+    return (
+        <div className="space-y-4 border-t border-alloy-stone/10 pt-4" data-inspector-collection-field>
+            <label className="flex flex-col gap-1">
+                <span className="text-[12px] font-medium text-alloy-midnight/75">Display mode</span>
+                <select
+                    value={config.displayMode}
+                    onChange={(e) =>
+                        onChange({
+                            ...config,
+                            displayMode: e.target.value as CollectionFieldPresentationConfig["displayMode"],
+                        })
+                    }
+                    className="w-full rounded border border-alloy-stone/20 bg-white px-2.5 py-1.5 text-[12px] focus:border-alloy-pine focus:outline-none"
+                    data-inspector-collection-display-mode
+                >
+                    <option value="list">List</option>
+                    <option value="count">Count</option>
+                    <option value="summary">Summary</option>
+                </select>
+            </label>
+
+            {config.displayMode !== "count" ? (
+                <>
+                    <div>
+                        <p className="mb-2 text-[12px] font-medium text-alloy-midnight/75">Fields to include</p>
+                        <div className="flex flex-wrap gap-1.5">
+                            {(Object.keys(COLLECTION_ITEM_FIELD_CATALOG) as CollectionItemFieldKey[]).map((fieldKey) => {
+                                const meta = COLLECTION_ITEM_FIELD_CATALOG[fieldKey];
+                                const checked = config.includedFields.includes(fieldKey);
+                                const disabled = !meta.resolverBacked;
+                                return (
+                                    <label
+                                        key={fieldKey}
+                                        className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] ${
+                                            disabled
+                                                ? "cursor-not-allowed border-alloy-stone/10 text-alloy-midnight/30"
+                                                : checked
+                                                  ? "border-alloy-pine bg-alloy-pine/10 text-alloy-midnight"
+                                                  : "border-alloy-stone/20 text-alloy-midnight/65"
+                                        }`}
+                                        title={disabled ? "Queue row resolver not available yet" : undefined}
+                                    >
+                                        <input
+                                            type="checkbox"
+                                            className="sr-only"
+                                            checked={checked}
+                                            disabled={disabled}
+                                            onChange={() => toggleIncludedField(fieldKey)}
+                                        />
+                                        {meta.label}
+                                    </label>
+                                );
+                            })}
+                        </div>
+                    </div>
+
+                    <label className="flex flex-col gap-1">
+                        <span className="text-[12px] font-medium text-alloy-midnight/75">Formatting</span>
+                        <select
+                            value={config.listFormat}
+                            onChange={(e) =>
+                                onChange({
+                                    ...config,
+                                    listFormat: e.target.value as CollectionFieldPresentationConfig["listFormat"],
+                                })
+                            }
+                            className="w-full rounded border border-alloy-stone/20 bg-white px-2.5 py-1.5 text-[12px] focus:border-alloy-pine focus:outline-none"
+                            data-inspector-collection-format
+                        >
+                            <option value="comma">Comma</option>
+                            <option value="bullet">Bullet</option>
+                            <option value="pipe">Pipe</option>
+                            <option value="newline">New line</option>
+                        </select>
+                    </label>
+
+                    <label className="flex flex-col gap-1">
+                        <span className="text-[12px] font-medium text-alloy-midnight/75">Max displayed</span>
+                        <select
+                            value={String(config.maxDisplayed)}
+                            onChange={(e) => {
+                                const raw = e.target.value;
+                                onChange({
+                                    ...config,
+                                    maxDisplayed: raw === "all" ? "all" : (Number(raw) as 1 | 2 | 3),
+                                });
+                            }}
+                            className="w-full rounded border border-alloy-stone/20 bg-white px-2.5 py-1.5 text-[12px] focus:border-alloy-pine focus:outline-none"
+                            data-inspector-collection-max
+                        >
+                            <option value="1">1</option>
+                            <option value="2">2</option>
+                            <option value="3">3</option>
+                            <option value="all">All</option>
+                        </select>
+                    </label>
+
+                    <label className="flex flex-col gap-1">
+                        <span className="text-[12px] font-medium text-alloy-midnight/75">Overflow behavior</span>
+                        <select
+                            value={config.overflowBehavior}
+                            onChange={(e) =>
+                                onChange({
+                                    ...config,
+                                    overflowBehavior: e.target.value as CollectionFieldPresentationConfig["overflowBehavior"],
+                                })
+                            }
+                            className="w-full rounded border border-alloy-stone/20 bg-white px-2.5 py-1.5 text-[12px] focus:border-alloy-pine focus:outline-none"
+                            data-inspector-collection-overflow
+                        >
+                            <option value="plus_n_more">+N more</option>
+                            <option value="ellipsis">Ellipsis</option>
+                            <option value="count_only">Count only</option>
+                        </select>
+                    </label>
+                </>
+            ) : null}
+        </div>
+    );
+}
+
 function FieldInspector({
     field,
     placedFields,
@@ -861,6 +1005,7 @@ function FieldInspector({
     onRemove,
     onSetLabel,
     onSetNameDisplay,
+    onSetCollectionPresentation,
     onMove,
     onSetInline,
     onReorder,
@@ -872,12 +1017,16 @@ function FieldInspector({
     onRemove: () => void;
     onSetLabel: (label: string) => void;
     onSetNameDisplay: (nameDisplay: QueueRecordNameDisplay) => void;
+    onSetCollectionPresentation: (presentation: CollectionFieldPresentationConfig) => void;
     onMove: (slot: CanvasAnatomyRegion, stackLine: number) => void;
     onSetInline: (inline: boolean) => void;
     onReorder: (dir: -1 | 1) => void;
     onSelectField: (fieldId: string) => void;
 }) {
     const supportsNameDisplay = field.kind === "field" && isQueueRowNameFieldKey(field.fieldKey);
+    const isCollectionField = field.kind === "field" && isCollectionFieldKey(field.fieldKey);
+    const collectionPresentation =
+        field.collectionPresentation ?? DEFAULT_CHILDREN_COLLECTION_PRESENTATION;
     return (
         <div className="rounded-xl border border-alloy-stone/14 bg-white shadow-sm" data-field-inspector={field.id}>
             <div className="flex items-center justify-between border-b border-alloy-stone/10 px-4 py-2.5">
@@ -908,6 +1057,12 @@ function FieldInspector({
                             <option value="first_name">First name</option>
                         </select>
                     </label>
+                ) : null}
+                {isCollectionField ? (
+                    <CollectionFieldInspector
+                        presentation={collectionPresentation}
+                        onChange={onSetCollectionPresentation}
+                    />
                 ) : null}
                 <div>
                     <p className="mb-1 text-[12px] font-medium text-alloy-midnight/75">Section</p>
@@ -1120,6 +1275,9 @@ export default function QueueRowBuilderV2({
                                 builderSlot: slot,
                                 stackLine,
                                 inlineWithPrevious,
+                                ...(fieldKey === "children"
+                                    ? { collectionPresentation: DEFAULT_CHILDREN_COLLECTION_PRESENTATION }
+                                    : {}),
                             },
                         },
                     };
@@ -1246,6 +1404,26 @@ export default function QueueRowBuilderV2({
         [selectedField],
     );
 
+    const updateFieldCollectionPresentation = useCallback(
+        (collectionPresentation: CollectionFieldPresentationConfig) => {
+            if (!selectedField) return;
+            mark((prev) =>
+                prev.map((z) => {
+                    if (z.key !== selectedField.zoneKey) return z;
+                    const prevPlacement = z.fieldPlacements[selectedField.fieldKey] ?? {};
+                    return {
+                        ...z,
+                        fieldPlacements: {
+                            ...z.fieldPlacements,
+                            [selectedField.fieldKey]: { ...prevPlacement, collectionPresentation },
+                        },
+                    };
+                }),
+            );
+        },
+        [selectedField],
+    );
+
     const moveSelectedField = useCallback(
         (slot: CanvasAnatomyRegion, stackLine: number) => {
             if (!selectedFieldId) return;
@@ -1346,6 +1524,7 @@ export default function QueueRowBuilderV2({
                     onRemove={removeSelectedField}
                     onSetLabel={updateFieldLabel}
                     onSetNameDisplay={updateFieldNameDisplay}
+                    onSetCollectionPresentation={updateFieldCollectionPresentation}
                     onMove={moveSelectedField}
                     onSetInline={setSelectedFieldInline}
                     onReorder={reorderSelectedField}

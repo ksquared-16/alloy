@@ -8,6 +8,7 @@ import type { LayoutCatalogField } from "@/lib/layout/fieldCatalog";
 import { nextQueueRecordBlockId, nextQueueRecordColumnId, nextQueueRecordFieldId } from "@/lib/layout/queueRecordLayoutIds";
 import type { QueueRecordColumnWidth } from "@/lib/layout/queueRecordLayoutConfig";
 import { queueRecordWidthToCss } from "@/lib/layout/queueRecordLayoutWidth";
+import type { CollectionFieldPresentationConfig } from "@/lib/presentation/collectionFieldPresentation";
 
 export type QueueRecordFieldDisplay =
     | "text"
@@ -49,6 +50,8 @@ export type QueueRecordFieldConfig = {
     emphasis?: QueueRecordFieldEmphasis;
     /** How to render resolved name values (full name vs first name only). */
     nameDisplay?: QueueRecordNameDisplay;
+    /** Configurable collection presentation (children, future parents/siblings/etc.). */
+    collectionPresentation?: CollectionFieldPresentationConfig;
     icon?: LayoutAdornmentIcon;
     display: QueueRecordFieldDisplay;
     inlineWithPrevious?: boolean;

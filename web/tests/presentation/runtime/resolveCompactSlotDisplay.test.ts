@@ -119,7 +119,27 @@ describe("resolveCompactSlotDisplay", () => {
         expect(resolveCompactSlotDisplay("groupCount", childContext(), slots, null)).toBe("Avery Lee");
     });
 
-    it("renders children.names on family-grain rows from related subjects", () => {
+    it("renders children collection field with configured presentation", () => {
+        const slots = {
+            visible: true,
+            label: "Children",
+            fieldKeys: ["children"],
+            collectionPresentationByFieldKey: {
+                children: {
+                    displayMode: "list" as const,
+                    includedFields: ["first_name", "last_name"] as const,
+                    listFormat: "comma" as const,
+                    maxDisplayed: "all" as const,
+                    overflowBehavior: "plus_n_more" as const,
+                },
+            },
+        };
+        expect(resolveCompactSlotDisplay("groupCount", familyContext(), slots, null)).toBe(
+            "Avery Lee, Rowan Lee",
+        );
+    });
+
+    it("legacy children.names still resolves for published configs", () => {
         const slots = {
             visible: true,
             label: "Children",
@@ -168,7 +188,7 @@ describe("resolveCompactSlotDisplay", () => {
         expect(resolveCompactSlotDisplay("groupCount", childContext(), slots, null)).toBe("Avery");
     });
 
-    it("renders children.names as first names when nameDisplay is first_name", () => {
+    it("legacy children.names first_name maps via collection included fields", () => {
         const slots = {
             visible: true,
             label: "Children",

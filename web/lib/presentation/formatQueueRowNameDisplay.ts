@@ -6,13 +6,12 @@ export const QUEUE_ROW_NAME_FIELD_KEYS = [
     "queue_row.subject_label",
     "person.primary_contact_name",
     "child.name",
-    "children.names",
     "sibling.names",
 ] as const;
 
 export type QueueRowNameFieldKey = (typeof QUEUE_ROW_NAME_FIELD_KEYS)[number];
 
-const LIST_NAME_FIELD_KEYS = new Set<string>(["children.names", "sibling.names"]);
+const LIST_NAME_FIELD_KEYS = new Set<string>(["sibling.names"]);
 
 export function isQueueRowNameFieldKey(fieldKey: string): fieldKey is QueueRowNameFieldKey {
     return (QUEUE_ROW_NAME_FIELD_KEYS as readonly string[]).includes(fieldKey.trim());

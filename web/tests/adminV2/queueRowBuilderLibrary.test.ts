@@ -37,9 +37,10 @@ describe("queue row builder library", () => {
             .filter((item) => item.kind === "field")
             .map((item) => item.fieldKey) ?? [];
         expect(fieldKeys).toContain("child.name");
-        expect(fieldKeys).toContain("children.count");
-        expect(fieldKeys).toContain("children.names");
-        expect(fieldKeys).toContain("children.summary");
+        expect(fieldKeys).toContain("children");
+        expect(fieldKeys).not.toContain("children.count");
+        expect(fieldKeys).not.toContain("children.names");
+        expect(fieldKeys).not.toContain("children.summary");
     });
 
     it("child category includes registry child fields and sibling vocabulary when available", () => {

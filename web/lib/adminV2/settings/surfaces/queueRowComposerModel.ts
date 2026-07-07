@@ -20,6 +20,7 @@ import {
     type QueueRowCanvasZoneKey,
 } from "@/lib/adminV2/settings/surfaces/queueRowCanvasRegions";
 import { SURFACE_FIELD_SECTION_LABELS } from "@/lib/adminV2/settings/surfaces/surfaceFieldComposer";
+import type { CollectionFieldPresentationConfig } from "@/lib/presentation/collectionFieldPresentation";
 
 export type ComposerZoneKey = QueueRowCanvasZoneKey;
 
@@ -35,6 +36,7 @@ export type PlacedFieldRef = {
     stackLine: number;
     inlineWithPrevious: boolean;
     nameDisplay?: QueueRecordNameDisplay;
+    collectionPresentation?: CollectionFieldPresentationConfig;
 };
 
 export type FieldPlacementOverride = {
@@ -42,6 +44,7 @@ export type FieldPlacementOverride = {
     stackLine?: number;
     inlineWithPrevious?: boolean;
     nameDisplay?: QueueRecordNameDisplay;
+    collectionPresentation?: CollectionFieldPresentationConfig;
 };
 
 export function placedFieldId(zoneKey: ComposerZoneKey, blockId: string, fieldKey: string): string {
@@ -126,6 +129,7 @@ export function listPlacedFields(zones: readonly ZoneComposerState[]): PlacedFie
                 stackLine: override.stackLine ?? zone.rowIndex ?? 0,
                 inlineWithPrevious: override.inlineWithPrevious ?? false,
                 nameDisplay: override.nameDisplay,
+                collectionPresentation: override.collectionPresentation,
             });
         }
     }
@@ -170,6 +174,7 @@ function synthesizeFieldConfig(field: PlacedFieldRef, template?: QueueRecordFiel
         display: template?.display ?? "text",
         inlineWithPrevious: field.inlineWithPrevious,
         nameDisplay: field.nameDisplay ?? template?.nameDisplay,
+        collectionPresentation: field.collectionPresentation ?? template?.collectionPresentation,
     };
 }
 
@@ -247,6 +252,8 @@ export function ingestConfigIntoZoneState(
                         stackLine: col.rowIndex ?? 0,
                         inlineWithPrevious: field.inlineWithPrevious ?? false,
                         nameDisplay: field.nameDisplay ?? zone.fieldPlacements[key]?.nameDisplay,
+                        collectionPresentation:
+                            field.collectionPresentation ?? zone.fieldPlacements[key]?.collectionPresentation,
                     };
                     let matched = false;
                     for (const group of zone.evidenceGroups) {

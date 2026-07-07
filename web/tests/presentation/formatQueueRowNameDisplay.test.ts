@@ -19,9 +19,9 @@ describe("formatQueueRowNameDisplay", () => {
         expect(formatQueueRowNameDisplay("Kelly Kurzman", "first_name", "person.primary_contact_name")).toBe("Kelly");
     });
 
-    it("returns first names for comma-separated list fields", () => {
+    it("returns first names for comma-separated sibling list fields", () => {
         expect(
-            formatQueueRowNameDisplay("Lennon Kurzman, Wrigley Kurzman", "first_name", "children.names"),
+            formatQueueRowNameDisplay("Lennon Kurzman, Wrigley Kurzman", "first_name", "sibling.names"),
         ).toBe("Lennon, Wrigley");
     });
 

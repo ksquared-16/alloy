@@ -55,6 +55,7 @@ import type {
     QueueRecordNameDisplay,
 } from "@/lib/layout/queueRecordLayoutV3";
 import { compactSlotForCanvasRegion, type CanvasAnatomyRegion } from "@/lib/adminV2/settings/surfaces/queueRowCanvasRegions";
+import type { CollectionFieldPresentationConfig } from "@/lib/presentation/collectionFieldPresentation";
 
 /** One compact-anatomy slot's resolved config: whether to render it + configured field keys. */
 export type CompactRowSlotConfig = {
@@ -69,6 +70,8 @@ export type CompactRowSlotConfig = {
     fieldKeys?: readonly string[];
     /** Per-field name display overrides keyed by field refKey. */
     nameDisplayByFieldKey?: Readonly<Partial<Record<string, QueueRecordNameDisplay>>>;
+    /** Per-field collection presentation overrides keyed by field refKey. */
+    collectionPresentationByFieldKey?: Readonly<Partial<Record<string, CollectionFieldPresentationConfig>>>;
 };
 
 /** The fixed compact-row slots the `CondensedQueueRow` renders (see anatomy in that file). */
@@ -98,6 +101,7 @@ const SLOT_FIELD_KEYS: Record<keyof CompactRowSlots, readonly string[]> = {
     groupCount: [
         "queue_row.group_count_label",
         "child.name",
+        "children",
         "children.count",
         "children.names",
         "children.summary",
@@ -162,6 +166,10 @@ function slotsFromBuilderAssignment(
     const labelsBySlot = new Map<keyof CompactRowSlots, string[]>();
     const keysBySlot = new Map<keyof CompactRowSlots, string[]>();
     const nameDisplayBySlot = new Map<keyof CompactRowSlots, Record<string, QueueRecordNameDisplay>>();
+    const collectionPresentationBySlot = new Map<
+        keyof CompactRowSlots,
+        Record<string, CollectionFieldPresentationConfig>
+    >();
 
     const sortedColumns = [...config.columns].sort(
         (a, b) => (a.rowIndex ?? 0) - (b.rowIndex ?? 0),
@@ -187,6 +195,12 @@ function slotsFromBuilderAssignment(
                     nameDisplayBySlot.set(compactSlot, nameDisplay);
                 }
 
+                if (field.collectionPresentation) {
+                    const collectionPresentation = collectionPresentationBySlot.get(compactSlot) ?? {};
+                    collectionPresentation[fieldKey] = field.collectionPresentation;
+                    collectionPresentationBySlot.set(compactSlot, collectionPresentation);
+                }
+
                 const label = typeof field.label === "string" ? field.label.trim() : "";
                 if (!label) continue;
                 const existing = labelsBySlot.get(compactSlot) ?? [];
@@ -202,12 +216,16 @@ function slotsFromBuilderAssignment(
 
     for (const [slot, fieldKeys] of keysBySlot) {
         const nameDisplayByFieldKey = nameDisplayBySlot.get(slot);
+        const collectionPresentationByFieldKey = collectionPresentationBySlot.get(slot);
         assigned[slot] = {
             visible: true,
             label: labelsBySlot.get(slot)?.join(" · ") || null,
             fieldKeys,
             ...(nameDisplayByFieldKey && Object.keys(nameDisplayByFieldKey).length > 0
                 ? { nameDisplayByFieldKey }
+                : {}),
+            ...(collectionPresentationByFieldKey && Object.keys(collectionPresentationByFieldKey).length > 0
+                ? { collectionPresentationByFieldKey }
                 : {}),
         };
     }
@@ -272,6 +290,9 @@ export function mapQueueRowSurfaceToCompactConfig(
             label,
             fieldKeys: [field.fieldKey.trim()],
             ...(field.nameDisplay ? { nameDisplayByFieldKey: { [field.fieldKey.trim()]: field.nameDisplay } } : {}),
+            ...(field.collectionPresentation
+                ? { collectionPresentationByFieldKey: { [field.fieldKey.trim()]: field.collectionPresentation } }
+                : {}),
         };
     }
 

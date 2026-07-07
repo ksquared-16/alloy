@@ -15,6 +15,9 @@ import type {
     QueueRecordScope,
 } from "@/lib/layout/queueRecordLayoutV3";
 import { formatQueueRowNameDisplay, isQueueRowNameFieldKey } from "@/lib/presentation/formatQueueRowNameDisplay";
+import { isCollectionFieldKey } from "@/lib/presentation/collectionFieldPresentation";
+import { resolveQueueRowChildrenFieldFromContext } from "@/lib/layout/runtime/queueRowChildrenFieldRegistry";
+import { readQueueRowContextFromRow } from "@/lib/workUnits/resolveQueueRowContextPresentation";
 import { formatQueueRecordStatusDisplay } from "@/lib/layout/runtime/queueRecordFieldDisplayBridge";
 import { isQueueRowSubjectFieldVisible } from "@/lib/layout/runtime/queueRowSubjectPresentation";
 
@@ -85,6 +88,21 @@ export function resolveQueueRecordFieldDisplay(
 ): { display: string | null; isPlaceholder: boolean } {
     const item = queueRecordFieldToLayoutItem(field);
     const resolved = resolveItemValue(record, item);
+
+    if (isCollectionFieldKey(field.fieldKey)) {
+        const context = readQueueRowContextFromRow(record);
+        if (context) {
+            const display = resolveQueueRowChildrenFieldFromContext(field.fieldKey, context, {
+                collectionPresentation: field.collectionPresentation,
+                nameDisplay: field.nameDisplay,
+                record,
+            });
+            if (hasResolvableValue(display)) {
+                return { display: String(display).trim(), isPlaceholder: false };
+            }
+        }
+    }
+
     if (hasResolvableValue(resolved.display) && !resolved.isPlaceholder) {
         let rawDisplay = String(resolved.display).trim();
         if (field.fieldKey === "child.name" || field.fieldKey === "child.display_name") {

@@ -338,7 +338,7 @@ export const focusPanelSurface: SurfaceSpec = {
                                 label: "Children Summary",
                                 purpose: "Who are the children and their status?",
                                 items: [
-                                    { key: "children.summary", label: "Children", kind: "field", namespace: "child" },
+                                    { key: "children", label: "Children", kind: "field", namespace: "child" },
                                 ],
                             },
                         ],

@@ -28,6 +28,7 @@ describe("Queue Row field vocabulary", () => {
         expect(compactSlotForFieldKey("queue_row.next_best_action_label")).toBe("work");
         expect(compactSlotForFieldKey("queue_row.group_count_label")).toBe("groupCount");
         expect(compactSlotForFieldKey("child.name")).toBe("groupCount");
+        expect(compactSlotForFieldKey("children")).toBe("groupCount");
         expect(compactSlotForFieldKey("children.count")).toBe("groupCount");
         expect(compactSlotForFieldKey("children.names")).toBe("groupCount");
         expect(compactSlotForFieldKey("children.summary")).toBe("groupCount");

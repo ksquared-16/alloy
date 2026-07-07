@@ -92,9 +92,7 @@ export const QUEUE_ZONE_EVIDENCE_GROUPS: Record<string, readonly CompositionEvid
             purpose: "Who are the children and what is their current status?",
             defaultFieldKeys: [
                 "child.name",
-                "children.count",
-                "children.names",
-                "children.summary",
+                "children",
                 "child.date_of_birth",
                 "child.dob_age",
                 "child.status",
@@ -168,9 +166,7 @@ export const QUEUE_ZONE_EVIDENCE_GROUPS_WAITLIST: Partial<typeof QUEUE_ZONE_EVID
             purpose: "Who is the candidate and what is their waitlist position?",
             defaultFieldKeys: [
                 "child.name",
-                "children.count",
-                "children.names",
-                "children.summary",
+                "children",
                 "child.date_of_birth",
                 "child.dob_age",
                 "child.status",

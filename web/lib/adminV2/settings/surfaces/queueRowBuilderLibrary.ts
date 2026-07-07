@@ -15,6 +15,7 @@ import {
 import { WAITLIST_PLACEMENT_FIELD_KEYS } from "@/lib/layout/runtime/queueWaitlistPlacementField";
 import { buildUnavailableSiblingLibraryEntries, isWaitlistCandidateGrainSiblingFieldKey, QUEUE_ROW_RESOLVER_BACKED_SIBLING_FIELD_KEYS, WAITLIST_CANDIDATE_SIBLING_FIELD_SCOPE_NOTE } from "@/lib/layout/runtime/queueRowSiblingFieldRegistry";
 import { buildUnavailableChildProfileLibraryEntries } from "@/lib/layout/runtime/queueRowChildProfileFieldRegistry";
+import { LEGACY_CHILDREN_COLLECTION_FIELD_KEYS } from "@/lib/presentation/collectionFieldPresentation";
 import type { TenantFieldDefinitionRow } from "@/lib/layout/tenantLayoutFieldPickerCatalog";
 import type { QueueRowSubjectFocusUi } from "@/lib/adminV2/settings/surfaces/queueRowSubjectFocus";
 
@@ -105,9 +106,7 @@ const FIELD_LIBRARY_LABELS: Record<string, string> = {
     "person.phone": "Phone",
     "person.email": "Email",
     "child.name": "Child name",
-    "children.count": "Children count",
-    "children.names": "Children names",
-    "children.summary": "Children summary",
+    children: "Children",
     "child.date_of_birth": "Date of birth",
     "child.dob_age": "Age",
     "child.age": "Age",
@@ -165,9 +164,7 @@ const FIELD_CATEGORY: Record<string, QueueRowLibraryCategoryKey> = {
     "person.phone": "family_parents",
     "person.email": "family_parents",
     "child.name": "child",
-    "children.count": "child",
-    "children.names": "child",
-    "children.summary": "child",
+    children: "child",
     "child.date_of_birth": "child",
     "child.dob_age": "child",
     "child.age": "child",
@@ -251,6 +248,7 @@ export function buildQueueRowLibraryCatalog(args: {
         }
         for (const field of availableFieldsForZone(zoneKey, args.isWaitlist, args.tenantFieldDefinitions)) {
             if (seenFieldKeys.has(field.key)) continue;
+            if ((LEGACY_CHILDREN_COLLECTION_FIELD_KEYS as readonly string[]).includes(field.key)) continue;
             seenFieldKeys.add(field.key);
             items.push(fieldItem(zoneKey, field));
         }

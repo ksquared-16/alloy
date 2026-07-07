@@ -106,7 +106,7 @@ export function applyQueueRowContextToLayoutRecord(
         mutable["queue_row.stage_label"] = presentation.stageLabel;
     }
 
-    for (const key of ["children.count", "children.names", "children.summary", "child.name"] as const) {
+    for (const key of ["children", "children.count", "children.names", "children.summary", "child.name"] as const) {
         const resolved = resolveQueueRowChildrenFieldFromContext(key, ctx);
         if (resolved) mutable[key] = resolved;
     }

@@ -6,13 +6,14 @@
  */
 
 import { formatQueueRowNameDisplay } from "@/lib/presentation/formatQueueRowNameDisplay";
-import type { QueueRowContext } from "@/lib/workUnits/lifecycleSubjectContracts";
+import { isCollectionFieldKey } from "@/lib/presentation/collectionFieldPresentation";
 import { resolveQueueRowChildrenFieldFromContext } from "@/lib/layout/runtime/queueRowChildrenFieldRegistry";
 import {
     resolveQueueRowProcessStageLabel,
     resolveQueueRowRecordStatusLabel,
 } from "@/lib/presentation/runtime/resolveQueueRowFieldLabelsFromContext";
 import { queueRowSubjectDisplayName } from "@/lib/presentation/runtime/types";
+import type { QueueRowContext } from "@/lib/workUnits/lifecycleSubjectContracts";
 import type { FocusedSubjectContext } from "@/lib/presentation/runtime/resolveQueueRowSubjectFocus";
 import type { CompactRowSlotConfig, CompactRowSlots } from "@/lib/presentation/runtime/queueRowSurfaceConfig";
 
@@ -122,6 +123,12 @@ export function resolveCompactSlotDisplay(
     if (config?.fieldKeys?.length) {
         const parts = config.fieldKeys
             .map((key) => {
+                if (isCollectionFieldKey(key)) {
+                    return resolveQueueRowChildrenFieldFromContext(key, context, {
+                        collectionPresentation: config.collectionPresentationByFieldKey?.[key],
+                        nameDisplay: config.nameDisplayByFieldKey?.[key],
+                    });
+                }
                 const raw = resolveQueueRowFieldValueFromContext(key, context);
                 if (!raw?.trim()) return null;
                 return formatQueueRowNameDisplay(raw, config.nameDisplayByFieldKey?.[key], key);

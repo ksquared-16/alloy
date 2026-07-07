@@ -45,6 +45,7 @@ const PIPELINE_QUEUE_ROW_ANCHOR_FIELD_REFS = [
     "queue_row.group_count_label",
     "queue_row.work_summary",
     "queue_row.next_best_action_label",
+    "children",
     "children.count",
     "children.names",
     "children.summary",

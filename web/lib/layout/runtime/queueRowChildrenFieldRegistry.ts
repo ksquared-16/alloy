@@ -3,14 +3,33 @@
  *
  * Resolves from frozen `QueueRowContext` for compact CondensedQueueRow rendering.
  * Sibling fields (`sibling.*`) are waitlist candidate-grain only — see queueRowSiblingFieldRegistry.
+ *
+ * Children presentation uses the shared collection field primitive (`children`).
+ * Legacy keys `children.count|names|summary` remain runtime-compatible via legacy mapping.
  */
 
+import type { QueueRecordFieldConfig, QueueRecordNameDisplay } from "@/lib/layout/queueRecordLayoutV3";
+import type { ProofRuntimeRecord } from "@/lib/layout/runtime/proofRecordContext";
+import {
+    extractChildrenCollectionItems,
+    isCollectionFieldKey,
+    isLegacyChildrenCollectionFieldKey,
+    LEGACY_CHILDREN_COLLECTION_FIELD_KEYS,
+    normalizeCollectionFieldKey,
+    renderCollectionFieldFromContext,
+    type CollectionFieldPresentationConfig,
+} from "@/lib/presentation/collectionFieldPresentation";
 import type { QueueRowContext } from "@/lib/workUnits/lifecycleSubjectContracts";
 
+/** Canonical children collection field key. */
+export const QUEUE_ROW_CHILDREN_COLLECTION_FIELD_KEY = "children" as const;
+
+/** @deprecated Use `children` collection field — kept for legacy config resolution. */
+export const QUEUE_ROW_LEGACY_CHILDREN_FIELD_KEYS = LEGACY_CHILDREN_COLLECTION_FIELD_KEYS;
+
 export const QUEUE_ROW_CHILDREN_FIELD_KEYS = [
-    "children.count",
-    "children.names",
-    "children.summary",
+    QUEUE_ROW_CHILDREN_COLLECTION_FIELD_KEY,
+    ...LEGACY_CHILDREN_COLLECTION_FIELD_KEYS,
 ] as const;
 
 export type QueueRowChildrenFieldKey = (typeof QUEUE_ROW_CHILDREN_FIELD_KEYS)[number];
@@ -31,65 +50,38 @@ export function isQueueRowChildrenFieldKey(fieldKey: string): boolean {
     return (QUEUE_ROW_CHILDREN_COMPACT_FIELD_KEYS as readonly string[]).includes(fieldKey.trim());
 }
 
-function visibleHouseholdChildren(context: QueueRowContext) {
-    return context.related_subjects_summary.filter((s) => s.visibility !== "hidden");
+export function isQueueRowChildrenCollectionFieldKey(fieldKey: string): boolean {
+    return normalizeCollectionFieldKey(fieldKey) === "children";
 }
 
-function visibleChildRelatedSubjects(context: QueueRowContext) {
-    return visibleHouseholdChildren(context).filter(
-        (s) => s.subject_type === "child" || s.subject_type === "candidate",
-    );
-}
+export { extractChildrenCollectionItems as queueRowChildrenCollectionItems };
 
 export function queueRowChildrenCount(context: QueueRowContext): number {
-    if (context.row_presentation_mode === "grouped_subjects") {
-        return context.row_subjects?.length ?? context.row_count ?? 0;
-    }
-    if (context.row_subject.subject_type === "child" || context.row_subject.subject_type === "candidate") {
-        const siblings = visibleChildRelatedSubjects(context).filter(
-            (s) => s.subject_id !== context.row_subject.subject_id,
-        );
-        return siblings.length > 0 ? siblings.length + 1 : 1;
-    }
-    const related = visibleChildRelatedSubjects(context);
-    if (related.length > 0) return related.length;
-    return 0;
+    return extractChildrenCollectionItems(context).length;
 }
 
 export function queueRowChildrenNames(context: QueueRowContext): string[] {
-    if (context.row_presentation_mode === "grouped_subjects" && context.row_subjects?.length) {
-        return context.row_subjects.map((s) => s.display_name.trim()).filter(Boolean);
-    }
-    if (context.row_subject.subject_type === "child" || context.row_subject.subject_type === "candidate") {
-        const name = context.row_subject.display_name.trim();
-        return name ? [name] : [];
-    }
-    return visibleChildRelatedSubjects(context)
-        .map((s) => s.display_name.trim())
-        .filter(Boolean);
+    return extractChildrenCollectionItems(context).map((item) => item.displayName.trim()).filter(Boolean);
 }
 
 export function resolveQueueRowChildrenFieldFromContext(
     fieldKey: string,
     context: QueueRowContext,
+    options?: {
+        collectionPresentation?: CollectionFieldPresentationConfig;
+        nameDisplay?: QueueRecordNameDisplay;
+        record?: ProofRuntimeRecord | null;
+    },
 ): string | null {
     const key = fieldKey.trim();
-    const names = queueRowChildrenNames(context);
-    const count = queueRowChildrenCount(context);
+
+    if (isCollectionFieldKey(key)) {
+        return renderCollectionFieldFromContext(key, context, options);
+    }
 
     switch (key) {
-        case "children.count": {
-            if (count <= 0) return null;
-            return `${count} ${count === 1 ? "child" : "children"}`;
-        }
-        case "children.names":
-            return names.length ? names.join(", ") : null;
-        case "children.summary": {
-            if (count <= 0) return null;
-            const unit = count === 1 ? "child" : "children";
-            return names.length ? `${count} ${unit}: ${names.join(", ")}` : `${count} ${unit}`;
-        }
         case "child.name": {
+            const names = queueRowChildrenNames(context);
             if (context.row_subject.subject_type === "child" || context.row_subject.subject_type === "candidate") {
                 return context.row_subject.display_name.trim() || null;
             }
@@ -98,16 +90,38 @@ export function resolveQueueRowChildrenFieldFromContext(
         case "inquiry_child.program":
             return (
                 context.placement_context?.program_label?.trim()
-                ?? visibleChildRelatedSubjects(context).map((s) => s.program_label?.trim()).find(Boolean)
+                ?? context.related_subjects_summary
+                    .filter((s) => s.visibility !== "hidden")
+                    .map((s) => s.program_label?.trim())
+                    .find(Boolean)
                 ?? null
             );
         case "inquiry_child.schedule_type":
             return (
                 context.placement_context?.schedule_label?.trim()
-                ?? visibleChildRelatedSubjects(context).map((s) => s.schedule_label?.trim()).find(Boolean)
+                ?? context.related_subjects_summary
+                    .filter((s) => s.visibility !== "hidden")
+                    .map((s) => s.schedule_label?.trim())
+                    .find(Boolean)
                 ?? null
             );
         default:
             return null;
     }
+}
+
+export function resolveQueueRowChildrenFieldFromFieldConfig(
+    field: QueueRecordFieldConfig,
+    context: QueueRowContext,
+    record?: ProofRuntimeRecord | null,
+): string | null {
+    return resolveQueueRowChildrenFieldFromContext(field.fieldKey, context, {
+        collectionPresentation: field.collectionPresentation,
+        nameDisplay: field.nameDisplay,
+        record,
+    });
+}
+
+export function isLegacyChildrenCollectionPrimitiveKey(fieldKey: string): boolean {
+    return isLegacyChildrenCollectionFieldKey(fieldKey);
 }
