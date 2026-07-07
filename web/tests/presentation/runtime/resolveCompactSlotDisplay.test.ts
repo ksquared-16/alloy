@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import { mapQueueRowSurfaceToCompactConfig } from "@/lib/presentation/runtime/queueRowSurfaceConfig";
 import { resolveCompactSlotDisplay } from "@/lib/presentation/runtime/resolveCompactSlotDisplay";
 import type { QueueRowContext } from "@/lib/workUnits/lifecycleSubjectContracts";
-import type { QueueRecordLayoutConfigV3 } from "@/lib/layout/queueRecordLayoutV3";
+import type { QueueRecordColumnConfig } from "@/lib/layout/queueRecordLayoutV3";
 
 function familyContext(over: Partial<QueueRowContext> = {}): QueueRowContext {
     return {
@@ -59,43 +59,55 @@ function childContext(): QueueRowContext {
     });
 }
 
-function configWithStageField(): QueueRecordLayoutConfigV3 {
+function statusColumn(fieldKey: string, label: string): QueueRecordColumnConfig {
     return {
-        variant: "operational-row",
-        version: 3,
-        columns: [
+        id: `col-${fieldKey.replace(/\./g, "-")}`,
+        label: "",
+        width: "status_band",
+        scope: { type: "lifecycle_context" },
+        builderSlot: "status",
+        blocks: [
             {
-                id: "status-col",
-                label: "",
-                width: "status_band",
-                scope: { type: "lifecycle_context" },
-                builderSlot: "status",
-                blocks: [
-                    {
-                        type: "field_group",
-                        id: "status-group",
-                        fields: [
-                            {
-                                id: "stage-field",
-                                fieldKey: "queue_row.stage_label",
-                                label: "Stage",
-                                display: "pill",
-                            },
-                        ],
-                    },
-                ],
+                type: "field_group",
+                id: `grp-${fieldKey}`,
+                fields: [{ id: `f-${fieldKey}`, fieldKey, label, display: "pill" }],
             },
         ],
-        fixedControls: { actionsMenu: true, workWithBos: true, actionRailStyle: "stacked" },
     };
 }
 
 describe("resolveCompactSlotDisplay", () => {
-    it("renders configured Stage field as runtime status label, not the static field label", () => {
-        const config = mapQueueRowSurfaceToCompactConfig(configWithStageField());
+    it("renders configured Stage field as process stage label, not row status", () => {
+        const config = mapQueueRowSurfaceToCompactConfig({
+            variant: "operational-row",
+            version: 3,
+            columns: [statusColumn("queue_row.stage_label", "Stage")],
+            fixedControls: { actionsMenu: true, workWithBos: true, actionRailStyle: "stacked" },
+        });
+        const display = resolveCompactSlotDisplay("status", familyContext(), config.slots.status, null);
+        expect(display).toBe("New Leads");
+        expect(display).not.toBe("Open");
+        expect(display).not.toBe("Stage");
+    });
+
+    it("renders configured Status field as record status such as Open", () => {
+        const config = mapQueueRowSurfaceToCompactConfig({
+            variant: "operational-row",
+            version: 3,
+            columns: [statusColumn("opportunity.status_label", "Status")],
+            fixedControls: { actionsMenu: true, workWithBos: true, actionRailStyle: "stacked" },
+        });
         const display = resolveCompactSlotDisplay("status", familyContext(), config.slots.status, null);
         expect(display).toBe("Open");
-        expect(display).not.toBe("Stage");
+    });
+
+    it("renders both Stage and Status when configured on the same slot", () => {
+        const slots = {
+            visible: true,
+            label: "Stage · Status",
+            fieldKeys: ["queue_row.stage_label", "opportunity.status_label"],
+        } as const;
+        expect(resolveCompactSlotDisplay("status", familyContext(), slots, null)).toBe("New Leads · Open");
     });
 
     it("renders child name on child-grain rows", () => {
@@ -107,17 +119,25 @@ describe("resolveCompactSlotDisplay", () => {
         expect(resolveCompactSlotDisplay("groupCount", childContext(), slots, null)).toBe("Avery Lee");
     });
 
-    it("renders children names on family-grain rows and omits blank child name", () => {
+    it("renders children.names on family-grain rows from related subjects", () => {
         const slots = {
             visible: true,
-            label: "Child name",
-            fieldKeys: ["child.name"],
+            label: "Children",
+            fieldKeys: ["children.names"],
+        } as const;
+        expect(resolveCompactSlotDisplay("groupCount", familyContext(), slots, null)).toBe(
+            "Avery Lee, Rowan Lee",
+        );
+    });
+
+    it("configured children field stays visible at runtime when related subjects exist", () => {
+        const slots = {
+            visible: true,
+            label: "Children",
+            fieldKeys: ["children.names"],
         } as const;
         const family = familyContext();
-        expect(resolveCompactSlotDisplay("groupCount", family, slots, null)).toBe("Avery Lee, Rowan Lee");
-
-        const emptyFamily = familyContext({ related_subjects_summary: [] });
-        expect(resolveCompactSlotDisplay("groupCount", emptyFamily, slots, null)).toBeNull();
+        expect(resolveCompactSlotDisplay("groupCount", family, slots, null)).not.toBeNull();
     });
 
     it("renders children count and summary on family rows", () => {

@@ -40,6 +40,7 @@ import {
 } from "@/lib/workUnits/buildPartialQueueRowContextHelpers";
 import { canonicalNewLeadStatusLabel } from "@/lib/lifecycle/enrollmentLeadStageStatusAliases";
 import { buildQueueCurrentWorkSummary } from "@/lib/workUnits/buildQueueCurrentWorkSummary";
+import { parseQueueRowCrmChildrenStructured } from "@/lib/ui-v2/crmQueueRowPreviewPresentation";
 
 export type { PartialQueueRowContextQueueMeta };
 export { resolveBoringCaseStatusLabel };
@@ -159,58 +160,130 @@ export function resolveRowPlacementContextFromInquiryChildren(
     return allSame ? placements[0] : undefined;
 }
 
+function relatedSubjectFromInquiryChildRaw(
+    raw: Record<string, unknown>,
+    member: ReturnType<typeof childLifecycleMembersFromInquiryChildren>[number] | undefined,
+    allowedLocationIds?: readonly string[] | null,
+): RelatedSubjectSummary | null {
+    const subjectId =
+        trimOrNull(raw.ocm_id) ??
+        trimOrNull(raw.id) ??
+        trimOrNull(raw.customer_member_id) ??
+        trimOrNull(raw.person_id);
+    if (!subjectId) return null;
+
+    const displayName =
+        trimOrNull(raw.display_name) ??
+        trimOrNull(raw.child_display_name) ??
+        trimOrNull(member?.display_name) ??
+        "Child";
+
+    const statusLabel =
+        trimOrNull(raw.outcome_status_label) ??
+        trimOrNull(member?.outcome_status_label) ??
+        resolveSubjectStatusLabel(member?.outcome_status_key);
+
+    const placement = buildSubjectPlacementFromInquiryChildRaw(raw);
+    const subjectLocationId = placement?.location_id ?? trimOrNull(raw.location_id);
+    const summary: RelatedSubjectSummary = {
+        subject_type: trimOrNull(raw.placement_candidate_id) ? "candidate" : "child",
+        subject_id: subjectId,
+        display_name: displayName,
+        status_label: statusLabel,
+        location_id: subjectLocationId,
+        location_label: placement?.location_label ?? trimOrNull(raw.location_label),
+        program_label: placement?.program_label ?? null,
+        room_label: placement?.room_label ?? trimOrNull(raw.program_room_cohort_label),
+        schedule_label: placement?.schedule_label ?? trimOrNull(raw.desired_schedule_label),
+    };
+    const visibility = relatedSubjectVisibilityForLocation(subjectLocationId, allowedLocationIds);
+    return applyRelatedSubjectLocationVisibility(summary, visibility);
+}
+
+function buildRelatedSubjectsSummaryFromHouseholdChildren(
+    row: Record<string, unknown>,
+): RelatedSubjectSummary[] {
+    const household = row._household_children;
+    if (!Array.isArray(household) || !household.length) return [];
+
+    const out: RelatedSubjectSummary[] = [];
+    for (const entry of household) {
+        if (entry == null || typeof entry !== "object" || Array.isArray(entry)) continue;
+        const raw = entry as Record<string, unknown>;
+        const subjectId =
+            trimOrNull(raw.customer_member_id) ??
+            trimOrNull(raw.id) ??
+            trimOrNull(raw.person_id);
+        const displayName =
+            trimOrNull(raw.display_name) ??
+            ([trimOrNull(raw.first_name), trimOrNull(raw.last_name)].filter(Boolean).join(" ").trim() || null);
+        if (!subjectId || !displayName) continue;
+        out.push({
+            subject_type: "child",
+            subject_id: subjectId,
+            display_name: displayName,
+            status_label: "—",
+        });
+    }
+    return out;
+}
+
+function buildRelatedSubjectsSummaryFromCrmCompactChildren(
+    row: Record<string, unknown>,
+): RelatedSubjectSummary[] {
+    const parsed = parseQueueRowCrmChildrenStructured(row._crm_compact_children);
+    if (!parsed.length) return [];
+
+    return parsed.map((line, index) => ({
+        subject_type: "child" as const,
+        subject_id:
+            line.ocmId?.trim()
+            || line.customerMemberId?.trim()
+            || line.personId?.trim()
+            || `crm-child-${index}`,
+        display_name: line.primary.trim(),
+        status_label: line.secondary?.trim() || "—",
+    }));
+}
+
 function buildRelatedSubjectsSummary(
     row: Record<string, unknown>,
     allowedLocationIds?: readonly string[] | null,
 ): RelatedSubjectSummary[] {
     const inquiryChildren = readInquiryChildrenFromRow(row);
-    if (!inquiryChildren.length) {
-        // TODO(phase-6): child-grain rows — derive siblings from OCM join, not metadata.inquiry_children.
-        return [];
+    if (inquiryChildren.length) {
+        const members = childLifecycleMembersFromInquiryChildren(inquiryChildren);
+        const out: RelatedSubjectSummary[] = [];
+        for (let i = 0; i < inquiryChildren.length; i++) {
+            const summary = relatedSubjectFromInquiryChildRaw(
+                inquiryChildren[i] as Record<string, unknown>,
+                members[i],
+                allowedLocationIds,
+            );
+            if (summary) out.push(summary);
+        }
+        if (out.length) return out;
     }
 
-    const members = childLifecycleMembersFromInquiryChildren(inquiryChildren);
-    const out: RelatedSubjectSummary[] = [];
+    const fromCrm = buildRelatedSubjectsSummaryFromCrmCompactChildren(row);
+    if (fromCrm.length) return fromCrm;
 
-    for (let i = 0; i < inquiryChildren.length; i++) {
-        const raw = inquiryChildren[i] as Record<string, unknown>;
-        const member = members[i];
-        const subjectId =
-            trimOrNull(raw.ocm_id) ??
-            trimOrNull(raw.id) ??
-            trimOrNull(raw.customer_member_id);
-        if (!subjectId) continue;
+    const fromHousehold = buildRelatedSubjectsSummaryFromHouseholdChildren(row);
+    if (fromHousehold.length) return fromHousehold;
 
-        const displayName =
-            trimOrNull(raw.display_name) ??
-            trimOrNull(raw.child_display_name) ??
-            trimOrNull(member?.display_name) ??
-            "Child";
-
-        const statusLabel =
-            trimOrNull(raw.outcome_status_label) ??
-            trimOrNull(member?.outcome_status_label) ??
-            resolveSubjectStatusLabel(member?.outcome_status_key);
-
-        const placement = buildSubjectPlacementFromInquiryChildRaw(raw);
-
-        const subjectLocationId = placement?.location_id ?? trimOrNull(raw.location_id);
-        const summary: RelatedSubjectSummary = {
-            subject_type: "child",
-            subject_id: subjectId,
-            display_name: displayName,
-            status_label: statusLabel,
-            location_id: subjectLocationId,
-            location_label: placement?.location_label ?? trimOrNull(raw.location_label),
-            program_label: placement?.program_label ?? null,
-            room_label: placement?.room_label ?? trimOrNull(raw.program_room_cohort_label),
-            schedule_label: placement?.schedule_label ?? trimOrNull(raw.desired_schedule_label),
-        };
-        const visibility = relatedSubjectVisibilityForLocation(subjectLocationId, allowedLocationIds);
-        out.push(applyRelatedSubjectLocationVisibility(summary, visibility));
+    const singleChild = trimOrNull(row._child_display_name);
+    if (singleChild) {
+        return [
+            {
+                subject_type: "child",
+                subject_id: trimOrNull(row._primary_child_person_id) ?? "primary-child",
+                display_name: singleChild,
+                status_label: "—",
+            },
+        ];
     }
 
-    return out;
+    return [];
 }
 
 function resolveLifecycleKey(queue: PartialQueueRowContextQueueMeta): string {

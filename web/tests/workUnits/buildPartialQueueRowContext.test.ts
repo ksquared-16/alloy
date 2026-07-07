@@ -216,6 +216,39 @@ describe("buildPartialQueueRowContext", () => {
         });
     });
 
+    it("builds related_subjects_summary from _crm_compact_children when inquiry children are absent", () => {
+        const ctx = buildPartialQueueRowContext({
+            row: {
+                id: "opp-1",
+                name: "Smith Household",
+                status_key: "open",
+                _crm_compact_children: [
+                    { primary: "Avery Lee", secondary: "Infant" },
+                    { primary: "Rowan Lee", secondary: "Toddler" },
+                ],
+            },
+            queue,
+        });
+
+        expect(ctx.related_subjects_summary.map((s) => s.display_name)).toEqual(["Avery Lee", "Rowan Lee"]);
+    });
+
+    it("builds related_subjects_summary from _child_display_name when only one child is known", () => {
+        const ctx = buildPartialQueueRowContext({
+            row: {
+                id: "opp-1",
+                name: "Smith Household",
+                status_key: "open",
+                _child_display_name: "Avery Lee",
+                _primary_child_person_id: "person-1",
+            },
+            queue,
+        });
+
+        expect(ctx.related_subjects_summary).toHaveLength(1);
+        expect(ctx.related_subjects_summary[0]?.display_name).toBe("Avery Lee");
+    });
+
     it("missing inquiry children does not crash and leaves placement unset", () => {
         const ctx = buildPartialQueueRowContext({
             row: { id: "opp-1", name: "Empty Case", status_key: "new_inquiry" },

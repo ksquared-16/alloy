@@ -97,15 +97,30 @@ describe("CondensedQueueRow — published surface config (visibility + labels)",
         expect(el.querySelector("[data-needs-attention]")).toBeNull();
     });
 
-    it("configured Stage field renders runtime status value, not the static field label", () => {
+    it("configured Stage field renders process stage, not row status or static label", () => {
         const cfg: CompactRowSlots = {
             ...GENERIC,
             status: { visible: true, label: "Stage", fieldKeys: ["queue_row.stage_label"] },
         };
         const el = render(<CondensedQueueRow row={row(fullContext())} rowConfig={cfg} onOpen={vi.fn()} />);
         const text = el.textContent ?? "";
-        expect(text).toContain("New Lead");
+        expect(text).toContain("New Leads");
         expect(text).not.toContain("Stage");
+    });
+
+    it("configured Status field renders row status such as Open", () => {
+        const statusCtx: QueueRowContext = {
+            ...fullContext(),
+            row_stage: "Contacting",
+            row_status_label: "Open",
+        };
+        const cfg: CompactRowSlots = {
+            ...GENERIC,
+            status: { visible: true, label: "Status", fieldKeys: ["opportunity.status_label"] },
+        };
+        const el = render(<CondensedQueueRow row={row(statusCtx)} rowConfig={cfg} onOpen={vi.fn()} />);
+        expect(el.textContent).toContain("Open");
+        expect(el.textContent).not.toContain("Contacting");
     });
 
     it("configured child name renders on child-grain rows", () => {

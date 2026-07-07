@@ -31,9 +31,13 @@ export function isQueueRowChildrenFieldKey(fieldKey: string): boolean {
     return (QUEUE_ROW_CHILDREN_COMPACT_FIELD_KEYS as readonly string[]).includes(fieldKey.trim());
 }
 
+function visibleHouseholdChildren(context: QueueRowContext) {
+    return context.related_subjects_summary.filter((s) => s.visibility !== "hidden");
+}
+
 function visibleChildRelatedSubjects(context: QueueRowContext) {
-    return context.related_subjects_summary.filter(
-        (s) => s.visibility !== "hidden" && s.subject_type === "child",
+    return visibleHouseholdChildren(context).filter(
+        (s) => s.subject_type === "child" || s.subject_type === "candidate",
     );
 }
 
@@ -41,11 +45,14 @@ export function queueRowChildrenCount(context: QueueRowContext): number {
     if (context.row_presentation_mode === "grouped_subjects") {
         return context.row_subjects?.length ?? context.row_count ?? 0;
     }
+    if (context.row_subject.subject_type === "child" || context.row_subject.subject_type === "candidate") {
+        const siblings = visibleChildRelatedSubjects(context).filter(
+            (s) => s.subject_id !== context.row_subject.subject_id,
+        );
+        return siblings.length > 0 ? siblings.length + 1 : 1;
+    }
     const related = visibleChildRelatedSubjects(context);
     if (related.length > 0) return related.length;
-    if (context.row_subject.subject_type === "child" || context.row_subject.subject_type === "candidate") {
-        return 1;
-    }
     return 0;
 }
 

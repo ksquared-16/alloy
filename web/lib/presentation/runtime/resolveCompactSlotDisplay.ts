@@ -7,6 +7,10 @@
 
 import type { QueueRowContext } from "@/lib/workUnits/lifecycleSubjectContracts";
 import { resolveQueueRowChildrenFieldFromContext } from "@/lib/layout/runtime/queueRowChildrenFieldRegistry";
+import {
+    resolveQueueRowProcessStageLabel,
+    resolveQueueRowRecordStatusLabel,
+} from "@/lib/presentation/runtime/resolveQueueRowFieldLabelsFromContext";
 import { queueRowSubjectDisplayName } from "@/lib/presentation/runtime/types";
 import type { FocusedSubjectContext } from "@/lib/presentation/runtime/resolveQueueRowSubjectFocus";
 import type { CompactRowSlotConfig, CompactRowSlots } from "@/lib/presentation/runtime/queueRowSurfaceConfig";
@@ -48,8 +52,9 @@ export function resolveQueueRowFieldValueFromContext(
 
     switch (key) {
         case "queue_row.stage_label":
+            return resolveQueueRowProcessStageLabel(context);
         case "opportunity.status_label":
-            return context.row_status_label?.trim() || context.row_stage?.trim() || null;
+            return resolveQueueRowRecordStatusLabel(context);
         case "customer.display_name":
         case "queue_row.subject_label":
             return queueRowSubjectDisplayName(context).trim() || null;
@@ -84,7 +89,7 @@ function defaultSlotDisplay(
         case "subject":
             return focus?.primary.display_name?.trim() || queueRowSubjectDisplayName(context).trim() || null;
         case "status":
-            return context.row_status_label?.trim() || context.row_stage?.trim() || null;
+            return resolveQueueRowRecordStatusLabel(context);
         case "contact":
             return focus ? focus.supportingLines.join(" · ") || contactLine(context) : contactLine(context);
         case "attention":
