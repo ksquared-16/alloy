@@ -1,7 +1,6 @@
 # /surfaces — Presentation Runtime Completion (sprint log)
 
-**Status:** Queue Row half landed + tested. Focus Panel nested-editing UI staged.
-**Branch:** `claude/surfaces-presentation-runtime-completion` (from `origin/staging`).
+**Status:** **Closed** — baseline `c99e381f3` on `origin/staging`. Queue Row builder half + Focus Panel nested editing landed. See `presentation-surfaces-settings-thread-closeout.md` for canonical handoff.
 
 This sprint finishes the visible /settings/surfaces **Queue Row** configuration experience so the Presentation Runtime work has something real to consume. It is visible builder behavior, not model-only.
 
@@ -40,15 +39,14 @@ Visible nested editing in /settings/surfaces → Focus Panel:
 
 Models: `nestedSurfaceEditorModel.ts` (registry + ops), `nestedSurfaceConfigService.ts` (persistence), `NestedSurfaceEditor.tsx` (UI), wired in `SurfacesConfigurationPage`.
 
-## Staged (still deferred)
+## Staged (intentionally deferred — next sprints only)
 
 ### Queue surface-entry collapse
 Retire the separate `waitlist-queue-row` catalog entry + API surface into one `queue-row` with a grain selector (the model + conditions already support it). Schema-level change to the catalog + route.
 
-## Tests
-- `queueRowStackedModel.test.ts` (12), `queueRowGrainModel.test.ts` (13), `surfacesBreadcrumbModel.test.ts` (7), `queueRowBuilderStacked.test.ts` (5 — real round-trip). Plus the existing composition suites still green.
+### Live runtime adoption (not builder blockers)
+- Stacked row `rowIndex` at runtime (builder preview is presentation-runtime-ready).
+- Column/field `visibleWhen` evaluation on live condensed row where not yet wired.
+- Focus Panel nested-surface config consumption at runtime overlay.
 
-## Runtime deferrals (explicit)
-- Live /work-unit runtime does not render stacked rows yet (presentation-runtime-ready preview).
-- Column/field `visibleWhen` (incl. waitlist condition) is authored + persisted; live runtime evaluation is the Runtime Adoption sprint.
-- FP nested-surface editing UI + queue surface-entry collapse are staged (above).
+**These are not open items from the closed thread** — see `presentation-surfaces-settings-thread-closeout.md` §4 for the authoritative deferred list (Placement ranking, Focus Panel Composer, unavailable registry fields).

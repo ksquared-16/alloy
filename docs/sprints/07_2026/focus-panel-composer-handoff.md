@@ -1,6 +1,8 @@
 # Focus Panel Composer — Next Phase Handoff
 
-**Prerequisite:** Queue Row Builder is **frozen** on `origin/staging` and is the **canonical Surface Composer interaction** (see `queue-row-builder-runtime-vocabulary-handoff.md`). Do not reopen Queue Row Builder except for production bugs.
+**Prerequisite:** Queue Row Builder is **frozen** on `origin/staging` (`c99e381f3`) and is the **canonical Surface Composer interaction** (see `queue-row-builder-runtime-vocabulary-handoff.md`). Do not reopen Queue Row Builder except for production bugs.
+
+**Canonical thread handoff:** `presentation-surfaces-settings-thread-closeout.md`
 
 **Goal:** Apply the **same field composer mental model** to Focus Panel surfaces — without redesigning nested surface drill-in, which already exists. Extend `surfaceFieldComposer.ts` and shared composer patterns; do not create a new builder paradigm.
 

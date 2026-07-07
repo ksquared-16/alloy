@@ -1,7 +1,9 @@
 # Queue Row Builder + Runtime Vocabulary — Final Handoff
 
 **Status:** **Frozen** on `origin/staging`  
-**Sprint close:** July 2026
+**Baseline SHA:** `c99e381f3105b7b433f1ba48206724f9f4ba0443`  
+**Sprint close:** July 2026  
+**Canonical thread handoff:** `presentation-surfaces-settings-thread-closeout.md`
 
 ## Freeze policy
 
@@ -24,8 +26,11 @@ Shared composer primitives live in `web/lib/adminV2/settings/surfaces/surfaceFie
 |-----|---------|
 | `48815f061` | `feat(surfaces): refine queue row field composer interaction` |
 | `43d4665ad` | `feat(surfaces): complete queue row sibling runtime vocabulary` |
-| `1f85137bc` | `docs(surfaces): close queue row builder and hand off focus panel composer` |
-| `992922372` | `chore(surfaces): queue row closeout cleanup` |
+| `0a4293855` | `feat(surfaces): add queue row name display options` |
+| `4157a37a6` | `chore(settings): align legacy field settings with platform configuration` |
+| `c99e381f3` | `chore(settings): close out legacy settings route reachability` |
+
+**Thread baseline:** `c99e381f3`
 
 ## What shipped
 
@@ -111,6 +116,14 @@ Platform fields register through:
 
 **Guardrails:** Builder does **not** hardcode sibling values. Unregistered sibling refKeys appear as **unavailable placeholders** (`QUEUE_ROW_SIBLING_PLACEHOLDER_FIELD_CATALOG`) and fail publish validation.
 
+### Name display options (July 2026)
+
+Person / child / family name fields support **Display as: Full name | First name** (`nameDisplay` on `QueueRecordFieldConfig`). Applied after runtime resolver (`formatQueueRowNameDisplay.ts`). List fields (`children.names`, `sibling.names`) format each comma-separated name.
+
+### Registry-backed unavailable fields
+
+Fields registered in the entity registry but **without queue row runtime resolver** appear in the library as **unavailable** — not active pickables. Example: `child.gender` (`queueRowChildProfileFieldRegistry.ts`) — registered for drawer/profile, no queue row resolver yet.
+
 ### Group / sort config status
 
 - **Group / sort** controls live in `QueueRowVariantSettings.tsx` below the canvas (variant-scoped).
@@ -166,13 +179,15 @@ cd web && npm run test -- \
   tests/adminV2/queueRowBuilderEditingCanvas.test.ts
 ```
 
-## Known gaps
+## Known gaps (intentional deferred only)
 
 | Gap | Notes |
 |-----|-------|
-| Placement ranking operator UI | Deferred to Placement settings sprint; builder shows disabled note only |
+| Placement ranking operator UI | Deferred — builder shows disabled note only |
 | Focus Panel composer | See `focus-panel-composer-handoff.md` |
-| `QUEUE_ROW_SIBLING_PLACEHOLDER_FIELD_CATALOG` | Empty — add entries here until resolver lands |
+| Registry fields without queue resolver | e.g. `child.gender` — unavailable in library until resolver lands |
+
+See `presentation-surfaces-settings-thread-closeout.md` §4 for the complete deferred list. **No other gaps are open from this thread.**
 
 ## Operator guidance
 

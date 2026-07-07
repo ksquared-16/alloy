@@ -10,10 +10,10 @@ Settings control plane — config steers presentation within platform guardrails
 
 | Plane | Settings route | Owns |
 |-------|----------------|------|
-| Fields | `/admin/settings/fields` | Field registry, types, visibility |
-| Field grouping | `/admin/settings/field-grouping` | Section labels |
-| Layouts | `/admin/settings/layouts` | Placements, drawer composition |
-| Actions | `/admin/settings/actions` | Org action placements |
+| Fields | `/settings/fields` | Field registry, types, visibility |
+| Field grouping | `/settings/field-sections` | Section labels |
+| Surfaces | `/settings/surfaces` | Surface composition (drawer, queue row, headers) |
+| Actions | `/settings/actions` | Org action placements |
 
 Plus: statuses, business processes, placement priority, org settings.
 
@@ -33,7 +33,7 @@ Plus: statuses, business processes, placement priority, org settings.
 | **`entity_layouts.doc`** | Canonical **visual surface layout** for drawer/queue composition (sections, fields, zones, `layoutEditorHidden`) | **Primary** — Layout Gallery + visual editor; opportunity drawer runtime adoption (Phase 4+) |
 | **`record_drawer_layouts.config_json`** | Legacy opportunity workflow v1 section order, show/hide, `field_placements_v1` | **Legacy** — still written by workflow v1 settings editors until per-org migration |
 
-Operators configuring opportunity drawer **composition** should use **Settings → Layout Gallery**. Legacy workflow v1 layout editors remain for field placement and section order until migrated; dual-write can produce conflicting visibility until cutover completes.
+Operators configuring opportunity drawer **composition** should use **Settings → Surfaces**. Legacy workflow v1 layout editors remain for field placement and section order until migrated; dual-write can produce conflicting visibility until cutover completes.
 
 Kill switch for Phase 4 visual config at runtime: `LAYOUT_RUNTIME_OPPORTUNITY_DRAWER_ENTITY_LAYOUTS_VISUAL_CONFIG=0` (server) / `NEXT_PUBLIC_LAYOUT_RUNTIME_OPPORTUNITY_DRAWER_ENTITY_LAYOUTS_VISUAL_CONFIG=0` (client).
 
@@ -43,7 +43,7 @@ Kill switch for Phase 4 visual config at runtime: `LAYOUT_RUNTIME_OPPORTUNITY_DR
 
 ## Business process builder
 
-Part of configuration plane — `/admin/settings/lifecycle` (UI: Business Processes).
+Part of configuration plane — `/settings/processes` (UI: Business Processes).
 
 ---
 

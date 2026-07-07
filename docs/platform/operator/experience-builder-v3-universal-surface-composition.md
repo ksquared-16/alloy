@@ -1,6 +1,6 @@
 # Experience Builder V3 — Universal Surface Composition
 
-**Status:** Canonical (July 2026). This doctrine **freezes the composition model that unifies every builder in Alloy.** It supersedes the per-builder mental models (Focus Panel "cards", Queue "zones", Header "tiles") with one hierarchy. It does not redesign the platform — it *converges* the builders that already exist onto a single engine.
+**Status:** Canonical (July 2026). This doctrine **freezes the composition model that unifies every builder in Alloy.** Queue Row Builder is the **canonical Surface Composer implementation** — future surfaces (Focus Panel next, then Workspace, Documents, Forms, Cards) **extend its interaction model** rather than inventing new builder paradigms. See `docs/sprints/07_2026/presentation-surfaces-settings-thread-closeout.md`.
 
 **Depends on / reconciles:**
 [`presentation-runtime-doctrine.md`](./presentation-runtime-doctrine.md) (Design Surface, Perspective, Viewpoint) ·
