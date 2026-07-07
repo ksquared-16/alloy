@@ -122,7 +122,7 @@ describe("renamed Work View labels flow purely from config", () => {
     });
 
     it("workspace tile WorkViewLinkModels carry the renamed labels", () => {
-        const links = navEntries.map(workViewLinkFromWorkQueuePreview);
+        const links = navEntries.map((entry) => workViewLinkFromWorkQueuePreview(entry));
         expect(links.map((l) => l.label)).toEqual(["Fresh Prospects", "Momentum", "Hot List"]);
         for (const link of links) {
             expectNoInternalLeak(link.label);

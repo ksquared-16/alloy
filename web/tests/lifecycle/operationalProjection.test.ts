@@ -278,16 +278,16 @@ describe("computeWorkViewOperationalSignals — per-view attention/overdue from 
         const signals = computeWorkViewOperationalSignals({ baseRows, workViews: VIEWS });
 
         // All Leads (include-all): 2 attention (a, c), 2 overdue (b, c).
-        expect(signals.all_leads).toEqual({ attentionCount: 2, overdueCount: 2 });
+        expect(signals.all_leads).toMatchObject({ attentionCount: 2, overdueCount: 2 });
         // New Leads (status=new_inquiry): rows a, b → 1 attention, 1 overdue.
-        expect(signals.new_leads).toEqual({ attentionCount: 1, overdueCount: 1 });
+        expect(signals.new_leads).toMatchObject({ attentionCount: 1, overdueCount: 1 });
         // Waitlist (status=waitlist): row c → 1 attention, 1 overdue.
-        expect(signals.waitlist).toEqual({ attentionCount: 1, overdueCount: 1 });
+        expect(signals.waitlist).toMatchObject({ attentionCount: 1, overdueCount: 1 });
     });
 
     it("rows without `_queue_row_context` contribute no signal (never a fabricated one)", () => {
         const baseRows = [{ id: "x", status_key: "new_inquiry" }];
         const signals = computeWorkViewOperationalSignals({ baseRows, workViews: VIEWS });
-        expect(signals.new_leads).toEqual({ attentionCount: 0, overdueCount: 0 });
+        expect(signals.new_leads).toMatchObject({ attentionCount: 0, overdueCount: 0 });
     });
 });

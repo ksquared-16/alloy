@@ -1437,6 +1437,7 @@ html[data-alloy-os-runtime-split="true"] [data-alloy-os-focus-panel="true"] {
   background: #fff;
   border-color: var(--alloy-os-bend-pine, #00a283);
   color: var(--alloy-os-bend-pine, #00a283);
+  font-weight: 600;
   box-shadow: inset 0 -2px 0 var(--alloy-os-bend-pine, #00a283);
 }
 
@@ -1451,7 +1452,7 @@ html[data-alloy-os-runtime="on"]
   border-width: 1.5px !important;
   background: color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 16%, #fff) !important;
   color: var(--alloy-os-midnight, #273f52) !important;
-  font-weight: 700 !important;
+  font-weight: 600 !important;
   box-shadow: inset 0 -2px 0 var(--alloy-os-bend-pine, #00a283);
 }
 

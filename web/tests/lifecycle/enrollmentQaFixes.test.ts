@@ -47,10 +47,11 @@ describe("QA2 — Work View grain scoping (no mixed-grain for single-stage views
         expect(validateWorkViewGrainConsistency(grains).valid).toBe(false);
     });
 
-    it("no stage filter → spans all process grains (unchanged behavior)", () => {
+    it("no stage filter → unscoped (does not infer all process grains)", () => {
         expect(stageKeysReferencedByWorkView([{ field_key: "opportunity_status", operator: "equals", value: "open" }])).toEqual([]);
         const grains = resolveWorkViewStageGrains([], STAGE_GRAIN_BY_KEY);
-        expect(new Set(grains)).toEqual(new Set(["family", "child"]));
+        expect(grains).toEqual([]);
+        expect(validateWorkViewGrainConsistency(grains).valid).toBe(true);
     });
 });
 

@@ -39,6 +39,10 @@ export const BUSINESS_PROCESS_WORK_VIEWS_INTRO =
     "Work Views define how operators focus on work in this process.";
 export const BUSINESS_PROCESS_WORK_VIEW_ADD = "Add Work View";
 export const BUSINESS_PROCESS_WORK_VIEW_SHOW_WORK_WHEN = "Show work when…";
+export const BUSINESS_PROCESS_WORK_VIEW_SHOW_WHEN_ALL = "All work in this process";
+export const BUSINESS_PROCESS_WORK_VIEW_SHOW_WHEN_CONDITIONS = "Conditions";
+export const BUSINESS_PROCESS_WORK_VIEW_CATCH_ALL_HELPER =
+    "All includes every eligible row in this process. Rows may come from different stages or grains.";
 export const BUSINESS_PROCESS_WORK_VIEW_DEFAULT_ORDER = "Display order";
 export const BUSINESS_PROCESS_WORK_VIEW_TECHNICAL_IDENTITY = "Advanced · Technical identity";
 export const BUSINESS_PROCESS_WORK_VIEW_UNSAVED_HINT =

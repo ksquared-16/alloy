@@ -48,6 +48,12 @@ function view(over: Partial<WorkViewLinkModel>): WorkViewLinkModel {
         href: "/workspace/work-unit/view",
         attentionCount: null,
         overdueCount: null,
+        primaryGrainCount: null,
+        supportingGrainCount: null,
+        primaryGrainKind: null,
+        supportingGrainKind: null,
+        primaryGrainLabel: null,
+        supportingGrainLabel: null,
         ...over,
     };
 }
@@ -64,8 +70,52 @@ describe("WorkViewList — per-view context + showCounts", () => {
         );
         expect(el.textContent).toContain("New Leads");
         expect(el.textContent).toContain("3"); // live count
-        const embers = el.querySelectorAll(".text-alloy-ember");
+        const embers = el.querySelectorAll("[data-work-view-attention]");
         expect(embers).toHaveLength(1);
+        expect(embers[0]?.textContent).toContain("Needs Attention");
+    });
+
+    it("renders dual grain counts with grain unit labels, not metric titles", () => {
+        const el = render(
+            <WorkViewList
+                workViews={[
+                    view({
+                        id: "all_leads",
+                        label: "All Leads",
+                        primaryGrainCount: 1,
+                        supportingGrainCount: 2,
+                        primaryGrainLabel: "Family",
+                        supportingGrainLabel: "Children",
+                        primaryGrainKind: "family",
+                        supportingGrainKind: "child",
+                    }),
+                ]}
+            />,
+        );
+        expect(el.textContent).toContain("1 Family");
+        expect(el.textContent).toContain("2 Children");
+        expect(el.textContent).not.toContain("Family Leads");
+        expect(el.textContent).not.toContain("Records");
+    });
+
+    it("derives grain labels from kinds when explicit labels are omitted", () => {
+        const el = render(
+            <WorkViewList
+                workViews={[
+                    view({
+                        id: "registration",
+                        label: "Registration",
+                        primaryGrainCount: 23,
+                        supportingGrainCount: 11,
+                        primaryGrainKind: "child",
+                        supportingGrainKind: "family",
+                    }),
+                ]}
+            />,
+        );
+        expect(el.textContent).toContain("23 Children");
+        expect(el.textContent).toContain("11 Families");
+        expect(el.textContent).not.toContain("Records");
     });
 
     it("showCounts=false hides the count slot (config)", () => {
@@ -76,6 +126,21 @@ describe("WorkViewList — per-view context + showCounts", () => {
             <WorkViewList workViews={[view({ id: "p", label: "P", count: 7 })]} showCounts={false} />,
         );
         expect(noCounts.textContent).not.toContain("7");
+    });
+
+    it("renders the configured Work View glyph, else the neutral fallback (never name-derived)", () => {
+        const el = render(
+            <WorkViewList
+                workViews={[
+                    view({ id: "new_leads", label: "New Leads", icon: "users" }),
+                    view({ id: "waitlist", label: "Waitlist", icon: null }),
+                ]}
+            />,
+        );
+        const rows = el.querySelectorAll("[data-work-view-id]");
+        expect(rows[0].querySelector("[data-work-view-icon]")?.getAttribute("data-work-view-icon")).toBe("users");
+        // Unmapped view falls back to the neutral glyph marker — not a guess from "Waitlist".
+        expect(rows[1].querySelector("[data-work-view-icon]")?.getAttribute("data-work-view-icon")).toBe("fallback");
     });
 });
 
@@ -115,15 +180,16 @@ describe("ProcessSummaryCard — fixed grammar + Primary Signal", () => {
         const el = render(<ProcessSummaryCard process={process({})} config={cfg} />);
         // Identity
         expect(el.textContent).toContain("Enrollment Pipeline");
-        // Primary Signal — the answer is the hero (state-framed), value supports it. Domain-neutral.
+        // Primary metric — number hero, label supports (no answer sentence or colored banner).
         const answer = el.querySelector("[data-process-answer]");
-        expect(answer?.textContent).toContain("Conversion on track"); // answer hero (not "Pipeline Health")
-        expect(answer?.textContent).toContain("31%"); // value supports
+        expect(answer?.textContent).toContain("31%");
+        expect(answer?.textContent).toContain("Conversion");
+        expect(answer?.querySelector("[data-process-metric-answer]")).toBeNull();
         // State word localized from the signal's canonical state.
         expect(el.querySelector("[data-process-status]")?.textContent).toContain("On track");
-        // Supporting Context — text only, no fabricated <svg> sparkline.
+        // Supporting Context — text only, no fabricated <svg> sparkline in the signal area.
         expect(el.querySelector("[data-process-context]")?.textContent).toContain("Target 80%");
-        expect(el.querySelectorAll("svg")).toHaveLength(0);
+        expect(el.querySelector("[data-process-answer]")?.querySelectorAll("svg")).toHaveLength(0);
         // Today's Work — live work-view rows with counts
         const tw = el.querySelector("[data-process-todays-work]");
         expect(tw?.textContent).toContain("New Leads");
@@ -155,8 +221,9 @@ describe("ProcessSummaryCard — fixed grammar + Primary Signal", () => {
             />,
         );
         const answer = el.querySelector("[data-process-answer]");
-        expect(answer?.textContent).toContain("Revenue vs plan on track");
         expect(answer?.textContent).toContain("$41.2k");
+        expect(answer?.textContent).toContain("Revenue vs plan");
+        expect(answer?.querySelector("[data-process-metric-answer]")).toBeNull();
         // No hardcoded "Health"/"Pipeline Health" anywhere.
         expect(el.textContent).not.toContain("Pipeline Health");
         expect(el.textContent).not.toContain("Operational Health");
@@ -198,7 +265,8 @@ describe("ProcessSummaryCard — fixed grammar + Primary Signal", () => {
         const status = el.querySelector("[data-process-status]")?.textContent ?? "";
         expect(status).toContain("No signal");
         expect(status).not.toContain("Needs attention");
-        expect(el.querySelectorAll("svg")).toHaveLength(0);
+        // No fabricated sparkline in the signal area (Work View rows may carry configured glyphs).
+        expect(el.querySelector("[data-process-answer]")?.querySelectorAll("svg")).toHaveLength(0);
     });
 });
 
@@ -226,16 +294,15 @@ describe("ProcessSummaryCard — operator-owned card identity (Surface Builder)"
         expect(el.querySelector("[data-process-identity-chip]")).toBeNull();
     });
 
-    it("accent drives left rail, identity chip, and CTA — pine uses Bend Pine brand token", () => {
+    it("accent drives identity chip, top accent, and CTA — pine uses Bend Pine brand token", () => {
         const el = render(<ProcessSummaryCard process={process({})} config={cfgWithCard({ accent: "pine", icon: "users" })} />);
         const chip = el.querySelector("[data-process-identity-chip]");
         expect(chip).not.toBeNull();
         expect(el.querySelector('[data-alloy-section="WS.PROCESS_SUMMARY_CARD"]')?.getAttribute("data-process-accent")).toBe("pine");
         expect(chip?.className).toContain("text-alloy-bend-pine");
-        const card = el.querySelector('[data-alloy-section="WS.PROCESS_SUMMARY_CARD"]');
-        expect(card?.className).toContain("border-l-alloy-bend-pine/80");
+        expect(el.querySelector('[data-alloy-section="WS.PROCESS_SUMMARY_CARD"]')?.className).toContain("border-t-alloy-bend-pine");
         expect(el.querySelector("[data-process-cta]")?.className).toContain("text-alloy-bend-pine");
-        expect(el.querySelector("[data-process-metric-value]")?.className).toContain("text-alloy-bend-pine");
+        expect(el.querySelector("[data-process-metric-value]")?.textContent).toBe("31%");
     });
 
     it("does not duplicate primary metric label/title when they are identical", () => {
@@ -256,9 +323,9 @@ describe("ProcessSummaryCard — operator-owned card identity (Surface Builder)"
                 config={cfgWithCard({ primarySignalLabel: "Active leads", accent: "pine" })}
             />,
         );
-        expect(el.querySelector("[data-process-metric-title]")).toBeNull();
+        expect(el.querySelector("[data-process-metric-title]")?.textContent).toBe("Active leads");
         expect(el.querySelector("[data-process-metric-value]")?.textContent).toBe("24");
-        expect(el.querySelector("[data-process-metric-answer]")?.textContent).toBe("Active leads");
+        expect(el.querySelector("[data-process-metric-answer]")).toBeNull();
     });
 
     it("primary + supporting metric title overrides render on the card", () => {
@@ -282,10 +349,52 @@ describe("ProcessSummaryCard — operator-owned card identity (Surface Builder)"
                 })}
             />,
         );
-        expect(el.querySelector("[data-process-composite-metric]")?.textContent).toBe(
-            "31% Pipeline health • 12 Tour volume",
-        );
+        expect(el.querySelector("[data-process-metrics-inline]")).not.toBeNull();
+        expect(el.querySelector("[data-process-metric-value]")?.textContent).toBe("31%");
+        expect(el.querySelector("[data-process-supporting-metric-value]")?.textContent).toBe("12");
         expect(el.querySelector("[data-process-supporting-signal]")).toBeNull();
+    });
+
+    it("metricPresentation=stacked keeps primary block above a separate supporting line (no composite)", () => {
+        const el = render(
+            <ProcessSummaryCard
+                process={process({
+                    primarySignal: {
+                        key: "enrollment.lead_count",
+                        label: "Families",
+                        answer: "Families",
+                        state: "neutral",
+                        value: "25",
+                        supportingContext: null,
+                        trend: null,
+                        drillHref: null,
+                    },
+                    supportingSignal: {
+                        key: "enrollment.active_leads",
+                        label: "Children",
+                        answer: "Children",
+                        state: "neutral",
+                        value: "42",
+                        supportingContext: null,
+                        trend: null,
+                        drillHref: null,
+                    },
+                })}
+                config={cfgWithCard({
+                    primarySignalLabel: "Families",
+                    supportingSignalLabel: "Children",
+                    metricPresentation: "stacked",
+                })}
+            />,
+        );
+        // No composite line; primary value dominant, supporting on its own line.
+        expect(el.querySelector("[data-process-composite-metric]")).toBeNull();
+        expect(el.querySelector("[data-process-metric-value]")?.textContent).toBe("25");
+        expect(el.querySelector("[data-process-supporting-metric-value]")?.textContent).toBe("42");
+        expect(el.querySelector("[data-process-supporting-metric-title]")?.textContent).toBe("Children");
+        expect(el.querySelector('[data-alloy-section="WS.PROCESS_SUMMARY_CARD"]')?.getAttribute(
+            "data-process-metric-presentation",
+        )).toBe("stacked");
     });
 
     it("composes configured primary + supporting values with labels inline", () => {
@@ -319,9 +428,11 @@ describe("ProcessSummaryCard — operator-owned card identity (Surface Builder)"
                 })}
             />,
         );
-        expect(el.querySelector("[data-process-composite-metric]")?.textContent).toBe(
-            "25 Families • 42 Children",
-        );
+        expect(el.querySelector("[data-process-composite-metric]")).not.toBeNull();
+        expect(el.querySelector("[data-process-metric-value]")?.textContent).toBe("25");
+        expect(el.querySelector("[data-process-supporting-metric-value]")?.textContent).toBe("42");
+        expect(el.querySelector("[data-process-metric-title]")?.textContent).toBe("Families");
+        expect(el.querySelector("[data-process-supporting-metric-title]")?.textContent).toBe("Children");
     });
 
     it("supporting signal renders a text-only second line when primary is unresolved", () => {
@@ -352,7 +463,8 @@ describe("ProcessSummaryCard — operator-owned card identity (Surface Builder)"
                 config={DEFAULT_WORKSPACE_PROCESS_SURFACE_CONFIG}
             />,
         );
-        expect(el.querySelector("[data-process-supporting-signal]")?.textContent).toBe("Tours scheduled: 12");
+        expect(el.querySelector("[data-process-supporting-metric-value]")?.textContent).toBe("12");
+        expect(el.querySelector("[data-process-supporting-metric-title]")?.textContent).toBe("Tours scheduled");
     });
 
     it("supporting metric no-data shows configured title once with em dash — not definition label", () => {

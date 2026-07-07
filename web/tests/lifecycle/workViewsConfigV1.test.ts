@@ -1,11 +1,13 @@
 import { describe, expect, it } from "vitest";
 import {
     createEmptyWorkViewDraft,
+    isWorkViewCatchAll,
     normalizeWorkViewsDisplayOrder,
     parseWorkViewsV1,
     resolveWorkViewMatchV1,
     slugifyWorkViewId,
     workViewsV1Equal,
+    WORK_VIEW_CATCH_ALL_SUMMARY,
 } from "@/lib/lifecycle/workViewsConfigV1";
 import { resolveProcessWorkViews } from "@/lib/lifecycle/workViewsCompatibility";
 
@@ -118,5 +120,17 @@ describe("work_views_v1 metadata", () => {
         // Garbage match value is not silently reinterpreted — falls back to AND.
         expect(resolveWorkViewMatchV1("sometimes")).toBe("all");
         expect(resolveWorkViewMatchV1("any")).toBe("any");
+    });
+
+    it("isWorkViewCatchAll is true for empty or absent filters_v1", () => {
+        expect(isWorkViewCatchAll({ filters_v1: [] })).toBe(true);
+        expect(isWorkViewCatchAll({})).toBe(true);
+        expect(isWorkViewCatchAll(null)).toBe(true);
+        expect(
+            isWorkViewCatchAll({
+                filters_v1: [{ field_key: "opportunity_status", operator: "equals", value: "open" }],
+            }),
+        ).toBe(false);
+        expect(WORK_VIEW_CATCH_ALL_SUMMARY).toBe("All work in this process");
     });
 });

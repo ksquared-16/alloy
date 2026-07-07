@@ -106,4 +106,24 @@ describe("WorkspaceHeader presentation", () => {
         const goldKpiIcon = el.querySelector("[data-workspace-header-kpi='2'] [data-workspace-header-kpi-icon]");
         expect(goldKpiIcon?.getAttribute("class")).toContain("text-alloy-gold-dark");
     });
+
+    it("workspace KPI glyph sits in a soft Alloy-token icon well", () => {
+        const model = buildWorkspaceHeaderPresentation(DEFAULT_WORKSPACE_HEADER_SURFACE_CONFIG, {
+            fallbackTitle: "Org",
+        });
+        const el = render(<WorkspaceHeader model={model} />);
+        const well = el.querySelector("[data-workspace-header-kpi='2'] [data-workspace-header-kpi-icon-well]");
+        expect(well).not.toBeNull();
+        // Gold accent slot → gold token tint (no arbitrary hex, no non-Alloy color).
+        expect(well?.getAttribute("class")).toContain("bg-alloy-gold");
+    });
+
+    it("work-unit variant KPIs share workspace KPI card grammar (icon well + chrome)", () => {
+        const model = buildWorkspaceHeaderPresentation(DEFAULT_WORKSPACE_HEADER_SURFACE_CONFIG, {
+            fallbackTitle: "Org",
+        });
+        const el = render(<WorkspaceHeader model={model} variant="work-unit" />);
+        expect(el.querySelector("[data-work-unit-header-kpi-icon-well]")).not.toBeNull();
+        expect(el.querySelector("[data-work-unit-header-kpi='1']")?.className).toContain("border-alloy-stone/15");
+    });
 });

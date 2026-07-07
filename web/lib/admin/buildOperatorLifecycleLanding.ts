@@ -29,6 +29,7 @@ import {
     pickDeptWorkViewHostWorkUnit,
 } from "@/lib/workspace/pickDeptPipelineWorkUnit";
 import { resolveWorkViewCanonicalLocation } from "@/lib/workspace/resolveWorkViewCanonicalLocation";
+import type { WorkViewGrainBucket } from "@/lib/lifecycle/stageGrainV1";
 import { tryLoadWorkUnitQueueDefinitionBundle } from "@/lib/config/queueDefinitionV2Runtime";
 import {
     operatorOperationalPerspectivesEnabled,
@@ -52,6 +53,8 @@ export const OPERATOR_DEFAULT_ENTRY_QUEUE_KEY = "new_leads" as const;
 
 export type OperatorLifecycleWorkQueuePreview = {
     label: string;
+    /** Optional Work View mission line from `work_views_v1` — presentation only, not a metric. */
+    description?: string | null;
     platformKey: string;
     href: string;
     /**
@@ -73,6 +76,11 @@ export type OperatorLifecycleWorkQueuePreview = {
      */
     attention_count?: number | null;
     overdue_count?: number | null;
+    /** Grain breakdown from operational projection rows — null when unresolved. */
+    primary_grain_count?: number | null;
+    supporting_grain_count?: number | null;
+    primary_grain_kind?: WorkViewGrainBucket | null;
+    supporting_grain_kind?: WorkViewGrainBucket | null;
 };
 
 export type OperatorLifecycleLandingCard = {
@@ -246,9 +254,11 @@ function workViewNavEntriesForDepartment(args: {
                     args.workUnits,
                     args.departmentId,
                 );
+                const mission = view.mission?.trim() || null;
                 return [
                     {
                         label: view.label.trim(),
+                        ...(mission ? { description: mission } : {}),
                         platformKey: view.id,
                         href: operatorWorkUnitHrefFromWorkViewSlug(routeKey),
                         work_view_id: view.id,

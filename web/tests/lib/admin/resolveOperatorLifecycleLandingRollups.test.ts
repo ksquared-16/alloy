@@ -75,7 +75,7 @@ describe("applyWorkViewOperationalSignalsToCards", () => {
 
     it("attaches per-view attention/overdue to matching entries by work_view_id + department", () => {
         const signals = new Map([
-            ["dept-1", { new_leads: { attentionCount: 2, overdueCount: 1 } }],
+            ["dept-1", { new_leads: { attentionCount: 2, overdueCount: 1, primaryGrainCount: null, supportingGrainCount: null, primaryGrainKind: null, supportingGrainKind: null } }],
         ]);
         const [out] = applyWorkViewOperationalSignalsToCards([card()], signals);
         expect(out.workQueues[0]).toMatchObject({ work_view_id: "new_leads", attention_count: 2, overdue_count: 1 });

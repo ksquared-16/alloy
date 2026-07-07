@@ -25,6 +25,26 @@ export type TodaysWorkSort =
     | "configured";
 
 /**
+ * Presentation-only layout for the primary + supporting metric block. Both modes render the
+ * SAME configured calculations + labels — no calculation logic, no new metric.
+ *   inline  — primary value+label beside supporting value+label (`25 Families • 42 Children`).
+ *   stacked — primary value+label above the supporting value+label, primary visually dominant.
+ * Absent → `inline` (the current runtime default).
+ */
+export const PROCESS_METRIC_PRESENTATIONS = ["inline", "stacked"] as const;
+export type ProcessMetricPresentation = (typeof PROCESS_METRIC_PRESENTATIONS)[number];
+
+export function normalizeProcessMetricPresentation(
+    raw: unknown,
+): ProcessMetricPresentation | undefined {
+    if (typeof raw !== "string") return undefined;
+    const key = raw.trim();
+    return (PROCESS_METRIC_PRESENTATIONS as readonly string[]).includes(key)
+        ? (key as ProcessMetricPresentation)
+        : undefined;
+}
+
+/**
  * Identity accents an operator may assign to a process card. A CLOSED set mapped to existing
  * Alloy tokens only (no new colors). Applied to the card's IDENTITY chip — never the semantic
  * state rail, which stays owned by the operational signal.
@@ -103,6 +123,8 @@ export type ProcessCardConfig = {
     primarySignalLabel?: string;
     /** Presentation label for the supporting signal metric; blank → calculation registry label. */
     supportingSignalLabel?: string;
+    /** Inline vs stacked layout for the primary + supporting metric block. Absent → inline. */
+    metricPresentation?: ProcessMetricPresentation;
 };
 
 export type WorkspaceProcessSurfaceConfig = {
@@ -120,6 +142,13 @@ export type WorkspaceProcessSurfaceConfig = {
      * as `primarySignalByProcess` — one keying scheme). Absent entry → all runtime defaults.
      */
     cardByProcess: Record<string, ProcessCardConfig>;
+    /**
+     * Per-Work-View row glyph, keyed by the Work View id (the nav entry's `work_view_id`, falling
+     * back to its `platformKey` for stage-backed lanes). Assigned in the Surface Builder; the Work
+     * View OWNS its icon. Absent key → the row renders the neutral fallback glyph. Never keyed by a
+     * stage/view NAME — no hardcoded Enrollment icons.
+     */
+    workViewIconById: Record<string, ProcessCardIcon>;
     /**
      * Lifecycle catalog ids (`departmentId:processId`) with an authored Workspace Process Summary.
      * When absent, the Surfaces UI bootstraps a single visible catalog process (Enrollment-only orgs).
@@ -141,6 +170,7 @@ export const DEFAULT_WORKSPACE_PROCESS_SURFACE_CONFIG: WorkspaceProcessSurfaceCo
     version: 1,
     primarySignalByProcess: {},
     cardByProcess: {},
+    workViewIconById: {},
     todaysWork: {
         visible: true,
         maxRows: 0,
@@ -186,8 +216,23 @@ function normalizeProcessCardConfig(value: unknown): ProcessCardConfig | null {
     if (primarySignalLabel) out.primarySignalLabel = primarySignalLabel;
     const supportingSignalLabel = trimmedOrUndefined(v.supportingSignalLabel);
     if (supportingSignalLabel) out.supportingSignalLabel = supportingSignalLabel;
+    const metricPresentation = normalizeProcessMetricPresentation(v.metricPresentation);
+    if (metricPresentation) out.metricPresentation = metricPresentation;
     // Drop an override that carries nothing (all fields empty/invalid).
     return Object.keys(out).length ? out : null;
+}
+
+/** Record<workViewId, ProcessCardIcon>, dropping empty keys and non-vocabulary icons. */
+function normalizeWorkViewIconMap(value: unknown): Record<string, ProcessCardIcon> {
+    if (!value || typeof value !== "object") return {};
+    const out: Record<string, ProcessCardIcon> = {};
+    for (const [k, raw] of Object.entries(value as Record<string, unknown>)) {
+        const key = k.trim();
+        if (!key) continue;
+        const icon = normalizeProcessCardIcon(raw);
+        if (icon) out[key] = icon;
+    }
+    return out;
 }
 
 /** Record<businessProcess, ProcessCardConfig>, ignoring empty/invalid entries. */
@@ -209,6 +254,7 @@ export function normalizeWorkspaceProcessSurfaceConfig(value: unknown): Workspac
     const v = value as Record<string, unknown>;
     const primarySignalByProcess = normalizePrimarySignalMap(v.primarySignalByProcess);
     const cardByProcess = normalizeCardByProcessMap(v.cardByProcess);
+    const workViewIconById = normalizeWorkViewIconMap(v.workViewIconById);
     const summaryCatalogIds = Array.isArray(v.summaryCatalogIds)
         ? v.summaryCatalogIds.filter((id): id is string => typeof id === "string" && id.includes(":"))
         : undefined;
@@ -218,6 +264,7 @@ export function normalizeWorkspaceProcessSurfaceConfig(value: unknown): Workspac
             ...d,
             primarySignalByProcess,
             cardByProcess,
+            workViewIconById,
             ...(summaryCatalogIds?.length ? { summaryCatalogIds } : {}),
         };
     }
@@ -232,6 +279,7 @@ export function normalizeWorkspaceProcessSurfaceConfig(value: unknown): Workspac
         version: 1,
         primarySignalByProcess,
         cardByProcess,
+        workViewIconById,
         ...(summaryCatalogIds?.length ? { summaryCatalogIds } : {}),
         todaysWork: {
             visible: typeof t.visible === "boolean" ? t.visible : d.todaysWork.visible,
@@ -260,6 +308,8 @@ export type ResolvedProcessCardIdentity = {
     primarySignalLabel: string | null;
     /** Supporting signal metric title override, or null → registry label. */
     supportingSignalLabel: string | null;
+    /** Metric block layout — always resolved ("inline" default). */
+    metricPresentation: ProcessMetricPresentation;
 };
 
 /**
@@ -281,7 +331,25 @@ export function resolveProcessCardConfig(
         ctaLabel: card?.ctaLabel?.trim() || null,
         primarySignalLabel: card?.primarySignalLabel?.trim() || null,
         supportingSignalLabel: card?.supportingSignalLabel?.trim() || null,
+        metricPresentation: card?.metricPresentation ?? "inline",
     };
+}
+
+/**
+ * Resolve the configured glyph for a Work View row. Prefers the `work_view_id` assignment, then
+ * the lane's `platformKey` (stage-backed lanes). Null → the row renders the neutral fallback glyph.
+ * Pure — the runtime maps rows through this so tile + builder agree on the icon.
+ */
+export function resolveWorkViewIcon(
+    config: WorkspaceProcessSurfaceConfig,
+    ids: { workViewId?: string | null; platformKey?: string | null },
+): ProcessCardIcon | null {
+    const map = config.workViewIconById ?? {};
+    const viewKey = ids.workViewId?.trim();
+    if (viewKey && map[viewKey]) return map[viewKey];
+    const laneKey = ids.platformKey?.trim();
+    if (laneKey && map[laneKey]) return map[laneKey];
+    return null;
 }
 
 function positive(n: number | null | undefined): number {

@@ -118,11 +118,15 @@ export default function WorkUnitHeaderSurfaceEditor({
         setPublishedAt(false);
     }, []);
 
-    function patchIdentity(patch: Partial<Pick<WorkUnitHeaderSurfaceConfig, "title" | "subtitle">>) {
+    function patchIdentity(
+        patch: Partial<Pick<WorkUnitHeaderSurfaceConfig, "title" | "subtitle" | "icon" | "accent">>,
+    ) {
         setConfig((prev) => ({
             ...prev,
             title: patch.title !== undefined ? (patch.title?.trim() || null) : prev.title,
             subtitle: patch.subtitle !== undefined ? (patch.subtitle?.trim() || null) : prev.subtitle,
+            icon: patch.icon !== undefined ? patch.icon : prev.icon,
+            accent: patch.accent !== undefined ? patch.accent : prev.accent,
         }));
         markDirty();
     }
@@ -275,6 +279,49 @@ export default function WorkUnitHeaderSurfaceEditor({
                                     className="rounded-md border border-alloy-stone/25 px-2 py-1.5 text-sm"
                                 />
                             </label>
+                            <div className="grid grid-cols-2 gap-2">
+                                <label className="flex flex-col gap-1">
+                                    <FieldLabel>Identity icon</FieldLabel>
+                                    <select
+                                        value={config.icon ?? ""}
+                                        onChange={(e) =>
+                                            patchIdentity({
+                                                icon: e.target.value
+                                                    ? (e.target.value as ProcessCardIcon)
+                                                    : null,
+                                            })
+                                        }
+                                        data-work-unit-header-identity-icon
+                                        className="rounded-md border border-alloy-stone/25 px-2 py-1.5 text-sm"
+                                    >
+                                        <option value="">None</option>
+                                        {ICON_OPTIONS.map((o) => (
+                                            <option key={o.value} value={o.value}>
+                                                {o.label}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </label>
+                                <label className="flex flex-col gap-1">
+                                    <FieldLabel>Identity accent</FieldLabel>
+                                    <select
+                                        value={config.accent ?? ""}
+                                        onChange={(e) =>
+                                            patchIdentity({
+                                                accent: (e.target.value || null) as ProcessCardAccent | null,
+                                            })
+                                        }
+                                        data-work-unit-header-identity-accent
+                                        className="rounded-md border border-alloy-stone/25 px-2 py-1.5 text-sm"
+                                    >
+                                        {ACCENT_OPTIONS.map((o) => (
+                                            <option key={o.value} value={o.value}>
+                                                {o.label}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </label>
+                            </div>
                         </InspectorSection>
 
                         {config.kpis.map((kpi) => {

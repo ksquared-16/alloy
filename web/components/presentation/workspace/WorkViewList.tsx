@@ -2,116 +2,219 @@
  * Presentation Runtime V2 — WS.PROCESS_TILE_WORK_VIEWS: the ONE Workspace render site for
  * the configured Work View rows inside a process tile.
  *
- * These rows ARE the launchpad — each one is "open this work," not a dashboard line. The
- * list is whatever `work_views_v1` configured for the process (no hardcoded view names, no
- * process-specific branches). Each row leads with its configured label, carries ONE
- * secondary operational signal when available (records needing attention, else overdue),
- * and keeps the raw count aligned but secondary. Rows are individually clickable (real
- * links with obvious hover / press feedback) while the tile itself stays inert; a
- * label-less/href-less view is a config edge case and renders as plain, non-interactive text.
- *
- * Pure presenter of `WorkViewLinkModel[]` — a future universal SurfaceRenderer can map the
- * same model to Surface Components without touching this markup (PR #64 drop-in).
+ * Each row: configured icon (process accent) → name → mission → grain counts → attention → affordance.
+ * Pure presenter of `WorkViewLinkModel[]` + process accent for identity consistency.
  */
 
 import Link from "next/link";
 import type { WorkViewLinkModel } from "@/lib/presentation/runtime";
+import type { ProcessCardAccent } from "@/lib/presentation/runtime/workspaceProcessSurfaceConfig";
+import { grainCountUnitLabel, type WorkViewGrainBucket } from "@/lib/lifecycle/stageGrainV1";
+import {
+    workViewRowHoverClass,
+    workViewRowIconClass,
+    workViewRowIconWellClass,
+    workViewRowIconWellHoverClass,
+} from "@/lib/presentation/runtime/processCardAccentStyles";
 import {
     PRESENTATION_RUNTIME_LABELS,
     runtimeLabelProps,
 } from "@/components/presentation/runtimeLabels";
+import { ProcessCardGlyph } from "./ProcessCardGlyph";
 
 function positive(n: number | null | undefined): number | null {
     return typeof n === "number" && n > 0 ? n : null;
 }
 
-function rowAriaLabel(view: WorkViewLinkModel): string {
-    const parts = [`Open ${view.label}`];
-    if (typeof view.count === "number") parts.push(`${view.count} in view`);
-    const attention = positive(view.attentionCount);
-    const overdue = positive(view.overdueCount);
-    if (attention) parts.push(`${attention} need attention`);
-    else if (overdue) parts.push(`${overdue} overdue`);
-    return parts.join(", ");
-}
-
-/** ONE secondary signal per row: attention (filled ember) takes priority over overdue (outlined). */
-function RowSignal({ view }: { view: WorkViewLinkModel }) {
-    const attention = positive(view.attentionCount);
-    if (attention) {
-        return (
-            <span
-                className="inline-flex items-center gap-1 rounded-full bg-alloy-ember/12 px-1.5 py-0.5 text-[10px] font-bold tabular-nums leading-none text-alloy-ember"
-                title={`${attention} need attention`}
-            >
-                <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-alloy-ember" />
-                {attention.toLocaleString()}
-            </span>
-        );
-    }
-    const overdue = positive(view.overdueCount);
-    if (overdue) {
-        return (
-            <span
-                className="inline-flex items-center gap-1 rounded-full border border-alloy-ember/35 px-1.5 py-0.5 text-[10px] font-bold tabular-nums leading-none text-alloy-ember/90"
-                title={`${overdue} overdue`}
-            >
-                <span aria-hidden className="text-[9px] leading-none">◷</span>
-                {overdue.toLocaleString()}
-            </span>
-        );
+function resolveGrainUnitLabel(args: {
+    kind?: WorkViewGrainBucket | null;
+    count?: number | null;
+    explicitLabel?: string | null;
+}): string | null {
+    const explicit = args.explicitLabel?.trim();
+    if (explicit) return explicit;
+    if (args.kind != null && typeof args.count === "number") {
+        return grainCountUnitLabel(args.kind, args.count);
     }
     return null;
 }
 
-function WorkViewRowBody({ view, showCounts }: { view: WorkViewLinkModel; showCounts: boolean }) {
+function rowAriaLabel(view: WorkViewLinkModel): string {
+    const parts = [`Open ${view.label}`];
+    if (view.description) parts.push(view.description);
+    const primaryCount = view.primaryGrainCount ?? view.count;
+    const primaryLabel = resolveGrainUnitLabel({
+        kind: view.primaryGrainKind,
+        count: primaryCount,
+        explicitLabel: view.primaryGrainLabel,
+    });
+    if (primaryLabel && primaryCount != null) {
+        parts.push(`${primaryCount} ${primaryLabel}`);
+    } else if (primaryCount != null) {
+        parts.push(String(primaryCount));
+    }
+    const supportingLabel = resolveGrainUnitLabel({
+        kind: view.supportingGrainKind,
+        count: view.supportingGrainCount,
+        explicitLabel: view.supportingGrainLabel,
+    });
+    if (supportingLabel && view.supportingGrainCount != null) {
+        parts.push(`${view.supportingGrainCount} ${supportingLabel}`);
+    }
+    const attention = positive(view.attentionCount);
+    if (attention) parts.push(`${attention} need attention`);
+    return parts.join(", ");
+}
+
+function RowGlyph({ view, accent }: { view: WorkViewLinkModel; accent: ProcessCardAccent | null }) {
     return (
-        <>
-            <span className="min-w-0 flex-1 truncate">{view.label}</span>
-            <RowSignal view={view} />
-            {/* Count: readable + right-aligned in a fixed slot so digits line up across rows and
-                the layout never jumps when a pending count resolves. Secondary to the signal.
-                Hidden when the surface config turns counts off. */}
-            {showCounts ? (
-                <span className="w-7 shrink-0 text-right text-xs font-semibold tabular-nums text-alloy-midnight/55">
-                    {view.count != null ? (
-                        view.count.toLocaleString()
-                    ) : (
-                        <span
-                            aria-hidden
-                            className="ml-auto inline-block h-3 w-4 animate-pulse rounded bg-alloy-midnight/10 align-middle"
-                        />
-                    )}
+        <span
+            aria-hidden
+            data-work-view-icon={view.icon ?? "fallback"}
+            className={`inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg transition-colors ${workViewRowIconWellClass(accent)} ${workViewRowIconWellHoverClass(accent)} ${workViewRowIconClass(accent)}`}
+        >
+            <ProcessCardGlyph icon={view.icon ?? "grid"} className="h-[14px] w-[14px]" />
+        </span>
+    );
+}
+
+function GrainCountLine({
+    count,
+    label,
+    prominent = false,
+}: {
+    count: number;
+    label: string | null;
+    prominent?: boolean;
+}) {
+    return (
+        <span
+            className={`tabular-nums leading-none ${prominent ? "text-[13px] font-semibold text-alloy-midnight" : "text-[10px] font-medium text-alloy-midnight/38"}`}
+            data-work-view-grain-count={prominent ? "primary" : "supporting"}
+        >
+            {count.toLocaleString()}
+            {label ? ` ${label}` : null}
+        </span>
+    );
+}
+
+function RowCounts({ view, showCounts }: { view: WorkViewLinkModel; showCounts: boolean }) {
+    if (!showCounts) return null;
+
+    const attention = positive(view.attentionCount);
+    const primaryCount = view.primaryGrainCount ?? view.count;
+    const primaryLabel = resolveGrainUnitLabel({
+        kind: view.primaryGrainKind,
+        count: primaryCount,
+        explicitLabel: view.primaryGrainLabel,
+    });
+    const supportingLabel = resolveGrainUnitLabel({
+        kind: view.supportingGrainKind,
+        count: view.supportingGrainCount,
+        explicitLabel: view.supportingGrainLabel,
+    });
+    const hasDualGrain =
+        view.primaryGrainCount != null &&
+        view.supportingGrainCount != null &&
+        view.supportingGrainCount > 0 &&
+        primaryLabel &&
+        supportingLabel;
+
+    if (primaryCount == null && view.count == null) {
+        return (
+            <span aria-hidden className="inline-block h-3.5 w-5 animate-pulse rounded bg-alloy-midnight/10" />
+        );
+    }
+
+    return (
+        <div className="flex shrink-0 flex-col items-end gap-0.5 pr-0.5 text-right" data-work-view-counts>
+            {hasDualGrain && view.primaryGrainCount != null ? (
+                <>
+                    <GrainCountLine
+                        count={view.primaryGrainCount}
+                        label={primaryLabel}
+                        prominent
+                    />
+                    <GrainCountLine
+                        count={view.supportingGrainCount!}
+                        label={supportingLabel}
+                    />
+                </>
+            ) : primaryCount != null ? (
+                <GrainCountLine count={primaryCount} label={primaryLabel} prominent />
+            ) : null}
+            {attention ? (
+                <span
+                    className="mt-0.5 inline-flex items-center gap-1 text-[10px] font-semibold leading-none text-alloy-ember"
+                    data-work-view-attention
+                    title={`${attention} need attention`}
+                >
+                    <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-alloy-ember" />
+                    {attention.toLocaleString()} Needs Attention
                 </span>
             ) : null}
-            {/* Always faintly present so a row reads as clickable at rest; strengthens + nudges on hover. */}
-            <span
-                aria-hidden
-                className="motion-control w-3 shrink-0 text-right text-alloy-juniper/40 group-hover/row:translate-x-0.5 group-hover/row:text-alloy-juniper"
-            >
-                →
+        </div>
+    );
+}
+
+function WorkViewRowBody({
+    view,
+    showCounts,
+    accent,
+}: {
+    view: WorkViewLinkModel;
+    showCounts: boolean;
+    accent: ProcessCardAccent | null;
+}) {
+    return (
+        <>
+            <RowGlyph view={view} accent={accent} />
+            <span className="min-w-0 flex-1">
+                <span className="block truncate text-[12px] font-semibold leading-snug text-alloy-midnight">
+                    {view.label}
+                </span>
+                {view.description ? (
+                    <span
+                        className="mt-0.5 block line-clamp-1 text-[10px] leading-relaxed text-alloy-midnight/40"
+                        data-work-view-description
+                    >
+                        {view.description}
+                    </span>
+                ) : null}
             </span>
+            <div className="flex shrink-0 items-center gap-3.5">
+                <RowCounts view={view} showCounts={showCounts} />
+                <span
+                    aria-hidden
+                    className="motion-control w-3.5 shrink-0 text-center text-[12px] text-alloy-midnight/28 group-hover/row:text-alloy-midnight/50"
+                >
+                    ›
+                </span>
+            </div>
         </>
     );
 }
 
 const ROW_BODY_CLASS =
-    "group/row flex w-full items-center gap-2 px-2 py-2 text-xs font-semibold text-alloy-midnight/80";
+    "group/row flex w-full items-center gap-2.5 rounded-lg border-l-2 border-l-transparent px-1.5 py-1.5 text-left transition-colors";
 
 export function WorkViewList({
     workViews,
     showCounts = true,
+    processAccent = null,
 }: {
     workViews: WorkViewLinkModel[];
-    /** Render the per-view count badge (Workspace Process Surface config). */
     showCounts?: boolean;
+    /** Process identity accent from Surface config — tints row icons and hover. */
+    processAccent?: ProcessCardAccent | null;
 }) {
     if (!workViews.length) return null;
+    const hoverClass = workViewRowHoverClass(processAccent);
     return (
         <ul
             {...runtimeLabelProps(PRESENTATION_RUNTIME_LABELS.processTileWorkViews)}
             data-alloy-section="WS.PROCESS_TILE_WORK_VIEWS"
-            className="-mx-2 flex flex-col divide-y divide-alloy-midnight/[0.06]"
+            className="divide-y divide-alloy-stone/18"
             aria-label="Work views"
         >
             {workViews.map((view) => (
@@ -120,13 +223,13 @@ export function WorkViewList({
                         <Link
                             href={view.href}
                             aria-label={rowAriaLabel(view)}
-                            className={`${ROW_BODY_CLASS} motion-control no-underline hover:bg-alloy-juniper/[0.1] hover:text-alloy-juniper active:bg-alloy-juniper/[0.18] focus-visible:relative focus-visible:z-10 focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-alloy-juniper`}
+                            className={`${ROW_BODY_CLASS} motion-control no-underline ${hoverClass} focus-visible:relative focus-visible:z-10 focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-alloy-midnight/25`}
                         >
-                            <WorkViewRowBody view={view} showCounts={showCounts} />
+                            <WorkViewRowBody view={view} showCounts={showCounts} accent={processAccent} />
                         </Link>
                     ) : (
-                        <div className={`${ROW_BODY_CLASS} text-alloy-midnight/55`}>
-                            <WorkViewRowBody view={view} showCounts={showCounts} />
+                        <div className={`${ROW_BODY_CLASS} text-alloy-midnight/50`}>
+                            <WorkViewRowBody view={view} showCounts={showCounts} accent={processAccent} />
                         </div>
                     )}
                 </li>

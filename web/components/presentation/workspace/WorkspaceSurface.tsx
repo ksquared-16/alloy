@@ -60,7 +60,7 @@ export function WorkspaceSurface() {
             // to this container, sliding the Workspace surface in FROM THE LEFT — returning to the
             // process overview (spatially opposite the Work Unit's drill-in from the right). The
             // skeleton state carries no enter.
-            className={`flex flex-col gap-5${model.ready ? " motion-surface-enter-back" : ""}`}
+            className={`flex flex-col gap-6${model.ready ? " motion-surface-enter-back" : ""}`}
         >
             {!model.ready ? (
                 <WorkspaceSurfaceSkeleton />

@@ -7,6 +7,11 @@ import {
 } from "@/lib/lifecycle/workViewEditorSummaries";
 
 describe("workViewEditorSummaries", () => {
+    it("formats empty filters as catch-all summary", () => {
+        expect(formatWorkViewConditionsSummary([])).toBe("All work in this process");
+        expect(formatWorkViewConditionsSummary(undefined)).toBe("All work in this process");
+    });
+
     it("formats condition summary with typed field label (legacy stage resolves to Stage)", () => {
         // V3: the process-stage field is labeled "Stage" (legacy `stage` key still canonicalizes to it).
         expect(

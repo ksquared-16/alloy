@@ -17,6 +17,7 @@ import {
     type QueueRowFilterState,
     type QueueRowSort,
 } from "@/lib/presentation/runtime/queueRowFilter";
+import { WS_FIELD_SEARCH_CHROME, WS_FIELD_SELECT_CHROME } from "@/components/workspace/workspaceTokens";
 
 const SORT_OPTIONS: { value: QueueRowSort; label: string }[] = [
     { value: "default", label: "Default order" },
@@ -24,9 +25,6 @@ const SORT_OPTIONS: { value: QueueRowSort; label: string }[] = [
     { value: "attention_first", label: "Needs attention first" },
     { value: "status_az", label: "Status A–Z" },
 ];
-
-const SELECT_CLASS =
-    "rounded-md border border-alloy-stone/40 bg-white px-2 py-1 text-[12px] text-alloy-midnight/85 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-alloy-pine";
 
 export function QueueFilterControls({
     facets,
@@ -72,7 +70,7 @@ export function QueueFilterControls({
                     placeholder="Search this view…"
                     data-testid="wu-record-filter-search"
                     aria-label="Search records"
-                    className="min-w-0 flex-1 rounded-md border border-alloy-stone/35 bg-white px-2.5 py-1 text-[12px] text-alloy-midnight placeholder:text-alloy-midnight/40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-alloy-pine"
+                    className={`min-w-0 flex-1 ${WS_FIELD_SEARCH_CHROME}`}
                 />
                 {hasAdvanced ? (
                     <button
@@ -81,10 +79,10 @@ export function QueueFilterControls({
                         disabled={disabled}
                         aria-expanded={advancedOpen}
                         data-testid="wu-record-filter-more-toggle"
-                        className={`inline-flex shrink-0 items-center gap-1.5 rounded-md border px-2.5 py-1 text-[12px] font-semibold transition-colors ${
+                        className={`inline-flex shrink-0 items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-[12px] font-semibold shadow-[0_1px_3px_rgba(24,39,58,0.06)] transition-colors ${
                             advancedOpen || advancedActiveCount > 0
-                                ? "border-alloy-pine/40 bg-alloy-pine/10 text-alloy-pine"
-                                : "border-alloy-stone/40 bg-white text-alloy-midnight/70 hover:border-alloy-pine/40 hover:text-alloy-pine"
+                                ? "border-alloy-bend-pine/50 bg-alloy-bend-pine/10 text-alloy-bend-pine"
+                                : "border-alloy-stone/55 bg-white text-alloy-midnight/70 hover:border-alloy-bend-pine/40 hover:text-alloy-bend-pine"
                         }`}
                     >
                         Filters
@@ -109,7 +107,7 @@ export function QueueFilterControls({
                 {active ? (
                     <span
                         data-testid="wu-record-filter-caption"
-                        className="shrink-0 text-[11px] tabular-nums text-alloy-midnight/50"
+                        className="shrink-0 text-[11px] tabular-nums text-alloy-midnight/42"
                     >
                         {matchedCount} of {loadedCount}
                     </span>
@@ -128,7 +126,7 @@ export function QueueFilterControls({
                             onChange={(e) => patch({ statusKey: e.target.value })}
                             aria-label="Status"
                             data-testid="wu-record-filter-status"
-                            className={SELECT_CLASS}
+                            className={WS_FIELD_SELECT_CHROME}
                         >
                             <option value="">All statuses</option>
                             {facets.statusOptions.map((o) => (
@@ -143,7 +141,7 @@ export function QueueFilterControls({
                             onChange={(e) => patch({ siteLabel: e.target.value })}
                             aria-label="Site"
                             data-testid="wu-record-filter-site"
-                            className={SELECT_CLASS}
+                            className={WS_FIELD_SELECT_CHROME}
                         >
                             <option value="">All sites</option>
                             {facets.siteOptions.map((o) => (
@@ -158,7 +156,7 @@ export function QueueFilterControls({
                             onChange={(e) => patch({ programLabel: e.target.value })}
                             aria-label="Program"
                             data-testid="wu-record-filter-program"
-                            className={SELECT_CLASS}
+                            className={WS_FIELD_SELECT_CHROME}
                         >
                             <option value="">All programs</option>
                             {facets.programOptions.map((o) => (
@@ -173,7 +171,7 @@ export function QueueFilterControls({
                             onChange={(e) => patch({ attentionReason: e.target.value })}
                             aria-label="Needs-attention reason"
                             data-testid="wu-record-filter-attention-reason"
-                            className={SELECT_CLASS}
+                            className={WS_FIELD_SELECT_CHROME}
                         >
                             <option value="">All records</option>
                             <option value="__needs__">Needs attention</option>
@@ -188,7 +186,7 @@ export function QueueFilterControls({
                         onChange={(e) => patch({ sort: e.target.value as QueueRowSort })}
                         aria-label="Sort"
                         data-testid="wu-record-filter-sort"
-                        className={SELECT_CLASS}
+                        className={WS_FIELD_SELECT_CHROME}
                     >
                         {SORT_OPTIONS.map((o) => (
                             <option key={o.value} value={o.value}>{o.label}</option>

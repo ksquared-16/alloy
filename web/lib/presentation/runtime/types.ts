@@ -26,8 +26,13 @@ import type { ResolvedMetricMap } from "@/lib/metrics/fetchResolvedMetrics";
 import type { WorkUnitHeaderCalculationCardVm } from "./workUnitHeaderCards";
 import type { CompactRowSlots } from "./queueRowSurfaceConfig";
 import type { FocusedSubjectContext } from "./resolveQueueRowSubjectFocus";
-import type { WorkspaceProcessSurfaceConfig } from "./workspaceProcessSurfaceConfig";
+import type {
+    ProcessCardIcon,
+    WorkspaceProcessSurfaceConfig,
+} from "./workspaceProcessSurfaceConfig";
 import type { WorkspaceHeaderPresentationModel } from "./workspaceHeaderSurfaceConfig";
+import type { WorkViewGrainBucket } from "@/lib/lifecycle/stageGrainV1";
+import { grainCountUnitLabel } from "@/lib/lifecycle/stageGrainV1";
 import { findOperationalCalculation } from "@/lib/analytics/calculations/registry";
 import { getDrillContract } from "@/lib/analytics/runtime/drillResolver";
 import { operatorWorkUnitHrefFromKey } from "@/lib/admin/canonicalOperatorRoutes";
@@ -51,11 +56,18 @@ export type OperationalAnswerModel = {
 export type WorkViewLinkModel = {
     id: string;
     label: string;
+    /** Optional Work View mission — configured copy, not a calculated metric. */
+    description?: string | null;
     isActive: boolean;
     /** Lane count when resolvable from queue summaries; null renders as no badge. */
     count: number | null;
     /** Workspace tile links soft-navigate; Work Unit pills select in-page (null). */
     href: string | null;
+    /**
+     * Configured Work View row glyph (Surface Builder → per work view). Null → the row uses the
+     * neutral fallback glyph. Never derived from a stage/view NAME — always config-resolved.
+     */
+    icon?: ProcessCardIcon | null;
     /**
      * Secondary operational context for the Workspace tile row (records needing attention /
      * overdue in this view) — from the operational projection. Null when unresolved or on the
@@ -64,6 +76,17 @@ export type WorkViewLinkModel = {
      */
     attentionCount: number | null;
     overdueCount: number | null;
+    /** Primary grain count (family/case or sole grain) from operational projection. */
+    primaryGrainCount: number | null;
+    /** Supporting grain count when the view spans both grains. */
+    supportingGrainCount: number | null;
+    /** Grain bucket for primary count — from operational projection. */
+    primaryGrainKind?: WorkViewGrainBucket | null;
+    /** Grain bucket for supporting count when dual-grain. */
+    supportingGrainKind?: WorkViewGrainBucket | null;
+    /** Presentation unit label derived from grain kind + count (e.g. `Family`, `Children`). */
+    primaryGrainLabel?: string | null;
+    supportingGrainLabel?: string | null;
 };
 
 /** A process tile — the collapsed state of a process on the Workspace surface. */
@@ -277,15 +300,34 @@ export function operationalAnswerModelsFromResolvedMetrics(
 export function workViewLinkFromWorkQueuePreview(
     entry: OperatorLifecycleWorkQueuePreview,
     count: number | null = null,
+    icon: ProcessCardIcon | null = null,
 ): WorkViewLinkModel {
+    const primaryKind = entry.primary_grain_kind ?? null;
+    const supportingKind = entry.supporting_grain_kind ?? null;
+    const primaryCount = entry.primary_grain_count;
+    const supportingCount = entry.supporting_grain_count;
     return {
         id: entry.platformKey,
         label: entry.label,
+        description: entry.description?.trim() || null,
         isActive: false,
         count,
         href: entry.href,
+        icon,
         attentionCount: entry.attention_count ?? null,
         overdueCount: entry.overdue_count ?? null,
+        primaryGrainCount: primaryCount ?? null,
+        supportingGrainCount: supportingCount ?? null,
+        primaryGrainKind: primaryKind,
+        supportingGrainKind: supportingKind,
+        primaryGrainLabel:
+            primaryKind != null && typeof primaryCount === "number"
+                ? grainCountUnitLabel(primaryKind, primaryCount)
+                : null,
+        supportingGrainLabel:
+            supportingKind != null && typeof supportingCount === "number"
+                ? grainCountUnitLabel(supportingKind, supportingCount)
+                : null,
     };
 }
 
@@ -319,6 +361,12 @@ export function workViewLinkModelsFromConfiguredViews(
             // Work Unit pills show no per-view operational indicators (Workspace-tile only).
             attentionCount: null,
             overdueCount: null,
+            primaryGrainCount: null,
+            supportingGrainCount: null,
+            primaryGrainKind: null,
+            supportingGrainKind: null,
+            primaryGrainLabel: null,
+            supportingGrainLabel: null,
         }));
 }
 
@@ -345,6 +393,8 @@ export function processTileModelFromLandingCard(
     card: OperatorLifecycleLandingCard,
     args?: {
         countForWorkView?: (entry: OperatorLifecycleWorkQueuePreview) => number | null;
+        /** Configured Work View row glyph resolver (Surface Builder). Absent → fallback glyph. */
+        iconForWorkView?: (entry: OperatorLifecycleWorkQueuePreview) => ProcessCardIcon | null;
         /** The resolved Primary Signal for this process (null when unconfigured/unresolved). */
         primarySignal?: PrimarySignalModel | null;
         /** The resolved supporting signal (second calculation), null when unconfigured. */
@@ -360,7 +410,11 @@ export function processTileModelFromLandingCard(
         activeRecordCount: card.activeRecordCount,
         needsAttentionCount: card.needsAttentionCount,
         workViews: card.workQueues.map((entry) =>
-            workViewLinkFromWorkQueuePreview(entry, args?.countForWorkView?.(entry) ?? null),
+            workViewLinkFromWorkQueuePreview(
+                entry,
+                args?.countForWorkView?.(entry) ?? null,
+                args?.iconForWorkView?.(entry) ?? null,
+            ),
         ),
         primarySignal: args?.primarySignal ?? null,
         supportingSignal: args?.supportingSignal ?? null,

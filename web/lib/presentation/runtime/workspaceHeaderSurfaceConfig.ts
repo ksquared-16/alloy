@@ -10,8 +10,12 @@
 
 import { findOperationalCalculation } from "@/lib/analytics/calculations/registry";
 import {
+    normalizeProcessCardAccent,
+} from "@/lib/presentation/runtime/processCardAccentStyles";
+import {
     PROCESS_CARD_ACCENTS,
     PROCESS_CARD_ICONS,
+    normalizeProcessCardIcon,
     type ProcessCardAccent,
     type ProcessCardIcon,
 } from "@/lib/presentation/runtime/workspaceProcessSurfaceConfig";
@@ -40,6 +44,10 @@ export type WorkspaceHeaderSurfaceConfig = {
     version: 1;
     title: string | null;
     subtitle: string | null;
+    /** Work Unit header identity glyph — optional; absent → no chip beside title. */
+    icon?: ProcessCardIcon | null;
+    /** Work Unit header identity accent — tints the identity chip. */
+    accent?: ProcessCardAccent | null;
     kpis: WorkspaceHeaderKpiSlot[];
 };
 
@@ -64,7 +72,7 @@ export const DEFAULT_WORKSPACE_HEADER_KPIS: readonly WorkspaceHeaderKpiSlot[] = 
     {
         slot: 3,
         enabled: true,
-        label: "Active leads",
+        label: "Active children",
         icon: "chart",
         sourceKey: "enrollment.active_leads",
         accent: null,
@@ -114,6 +122,8 @@ export function normalizeWorkspaceHeaderSurfaceConfig(raw: unknown): WorkspaceHe
     const r = raw as Record<string, unknown>;
     const title = typeof r.title === "string" && r.title.trim() ? r.title.trim() : null;
     const subtitle = typeof r.subtitle === "string" && r.subtitle.trim() ? r.subtitle.trim() : null;
+    const icon = normalizeProcessCardIcon(r.icon) ?? null;
+    const accent = normalizeProcessCardAccent(r.accent) ?? null;
     const incoming = Array.isArray(r.kpis) ? r.kpis : [];
     const kpis = DEFAULT_WORKSPACE_HEADER_KPIS.map((fallback, index) => {
         const slot = (index + 1) as 1 | 2 | 3 | 4 | 5;
@@ -125,7 +135,7 @@ export function normalizeWorkspaceHeaderSurfaceConfig(raw: unknown): WorkspaceHe
             kpi.enabled = true;
         }
     }
-    return { version: 1, title, subtitle, kpis };
+    return { version: 1, title, subtitle, icon, accent, kpis };
 }
 
 /** Enabled KPI slots in display order (max 5). */
@@ -149,6 +159,8 @@ export type WorkspaceHeaderKpiVm = {
 export type WorkspaceHeaderPresentationModel = {
     title: string;
     subtitle: string | null;
+    identityIcon: ProcessCardIcon | null;
+    identityAccent: ProcessCardAccent | null;
     kpis: WorkspaceHeaderKpiVm[];
 };
 
@@ -172,6 +184,8 @@ export function buildWorkspaceHeaderPresentation(
 ): WorkspaceHeaderPresentationModel {
     const title = config.title?.trim() || args.fallbackTitle?.trim() || "Workspace";
     const subtitle = config.subtitle?.trim() || null;
+    const identityIcon = config.icon ?? null;
+    const identityAccent = config.accent ?? null;
     const kpis = enabledWorkspaceHeaderKpis(config).map((slot) => {
         const calc = slot.sourceKey ? findOperationalCalculation(slot.sourceKey) : null;
         const label = slot.label?.trim() || calc?.label || "Metric";
@@ -190,7 +204,7 @@ export function buildWorkspaceHeaderPresentation(
             drillHref: slot.sourceKey ? drillHrefForMetricKey(slot.sourceKey) : null,
         } satisfies WorkspaceHeaderKpiVm;
     });
-    return { title, subtitle, kpis };
+    return { title, subtitle, identityIcon, identityAccent, kpis };
 }
 
 export function workspaceHeaderKpiSourceKeys(config: WorkspaceHeaderSurfaceConfig): OipMetricKey[] {

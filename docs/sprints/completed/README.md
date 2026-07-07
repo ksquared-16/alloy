@@ -25,6 +25,12 @@
 | BOS assist routing + comms drafting | `../06_2026/completed/bos_assist_routing_communication_drafting_closeout.md` |
 | Lifecycle builder hardening | `../06_2026/completed/lifecycle_builder_hardening_closeout.md` |
 
+### July 2026
+
+| Area | Closeout |
+|------|----------|
+| Operator Workspace visual freeze | `../07_2026/operator-workspace-visual-freeze-closeout.md` |
+
 ### May 2026
 
 | Area | Closeout |
