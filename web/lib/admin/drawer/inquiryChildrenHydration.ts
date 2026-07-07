@@ -143,6 +143,44 @@ export function inquiryChildAgeLabelFromDob(
     return { label };
 }
 
+/** Compact age label from inquiry-child row payload (queue row / header surfaces). */
+export function resolveInquiryChildAgeLabelFromRaw(raw: Record<string, unknown>): string | null {
+    const age = trimOrNull(raw.age);
+    if (age) {
+        const compact = age.replace(/\s+/g, "").replace(/years?/i, "y").replace(/months?/i, "m");
+        return compact.includes("y") || compact.includes("m") ? compact : age;
+    }
+    return inquiryChildAgeLabelFromDob(trimOrNull(raw.dob) ?? trimOrNull(raw.date_of_birth))?.label ?? null;
+}
+
+export function resolveInquiryChildDobFromRaw(raw: Record<string, unknown>): string | null {
+    return trimOrNull(raw.dob) ?? trimOrNull(raw.date_of_birth);
+}
+
+export function resolveInquiryChildGenderLabelFromRaw(raw: Record<string, unknown>): string | null {
+    const direct = trimOrNull(raw.gender);
+    if (direct) return direct;
+    const customFields = raw.custom_fields;
+    if (customFields != null && typeof customFields === "object" && !Array.isArray(customFields)) {
+        const fromCustom = trimOrNull((customFields as Record<string, unknown>).gender);
+        if (fromCustom) return fromCustom;
+    }
+    return null;
+}
+
+export function inquiryChildProfileFieldsFromRaw(raw: Record<string, unknown>): {
+    date_of_birth: string | null;
+    age_label: string | null;
+    gender_label: string | null;
+} {
+    const date_of_birth = resolveInquiryChildDobFromRaw(raw);
+    return {
+        date_of_birth,
+        age_label: resolveInquiryChildAgeLabelFromRaw(raw),
+        gender_label: resolveInquiryChildGenderLabelFromRaw(raw),
+    };
+}
+
 /**
  * Matches work-unit queue child membership filter (`QueueService.isActiveChildCustomerMemberRow`).
  * Drawer bootstrap queries use `.eq("is_active", true)` but historically omitted `is_active` from SELECT;

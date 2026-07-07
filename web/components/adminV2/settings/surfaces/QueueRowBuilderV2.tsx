@@ -63,10 +63,13 @@ import {
 } from "@/lib/adminV2/settings/surfaces/queueRowBuilderLibrary";
 import { isQueueRowNameFieldKey } from "@/lib/presentation/formatQueueRowNameDisplay";
 import {
+    CHILDREN_COLLECTION_GENDER_UNAVAILABLE_REASON,
     COLLECTION_ITEM_FIELD_CATALOG,
     DEFAULT_CHILDREN_COLLECTION_PRESENTATION,
     isCollectionFieldKey,
     normalizeCollectionFieldPresentation,
+    selectableChildrenCollectionItemFieldKeys,
+    unavailableChildrenCollectionItemFieldKeys,
     type CollectionFieldPresentationConfig,
     type CollectionItemFieldKey,
 } from "@/lib/presentation/collectionFieldPresentation";
@@ -903,27 +906,22 @@ function CollectionFieldInspector({
                     <div>
                         <p className="mb-2 text-[12px] font-medium text-alloy-midnight/75">Fields to include</p>
                         <div className="flex flex-wrap gap-1.5">
-                            {(Object.keys(COLLECTION_ITEM_FIELD_CATALOG) as CollectionItemFieldKey[]).map((fieldKey) => {
+                            {selectableChildrenCollectionItemFieldKeys().map((fieldKey) => {
                                 const meta = COLLECTION_ITEM_FIELD_CATALOG[fieldKey];
                                 const checked = config.includedFields.includes(fieldKey);
-                                const disabled = !meta.resolverBacked;
                                 return (
                                     <label
                                         key={fieldKey}
                                         className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] ${
-                                            disabled
-                                                ? "cursor-not-allowed border-alloy-stone/10 text-alloy-midnight/30"
-                                                : checked
-                                                  ? "border-alloy-pine bg-alloy-pine/10 text-alloy-midnight"
-                                                  : "border-alloy-stone/20 text-alloy-midnight/65"
+                                            checked
+                                                ? "border-alloy-pine bg-alloy-pine/10 text-alloy-midnight"
+                                                : "border-alloy-stone/20 text-alloy-midnight/65"
                                         }`}
-                                        title={disabled ? "Queue row resolver not available yet" : undefined}
                                     >
                                         <input
                                             type="checkbox"
                                             className="sr-only"
                                             checked={checked}
-                                            disabled={disabled}
                                             onChange={() => toggleIncludedField(fieldKey)}
                                         />
                                         {meta.label}
@@ -931,6 +929,23 @@ function CollectionFieldInspector({
                                 );
                             })}
                         </div>
+                        {unavailableChildrenCollectionItemFieldKeys().length > 0 ? (
+                            <div className="mt-3 space-y-1.5" data-inspector-collection-unavailable>
+                                {unavailableChildrenCollectionItemFieldKeys().map((fieldKey) => (
+                                    <p
+                                        key={fieldKey}
+                                        className="text-[10px] leading-snug text-alloy-midnight/45"
+                                    >
+                                        <span className="font-medium text-alloy-midnight/55">
+                                            {COLLECTION_ITEM_FIELD_CATALOG[fieldKey].label}:
+                                        </span>{" "}
+                                        {fieldKey === "gender"
+                                            ? CHILDREN_COLLECTION_GENDER_UNAVAILABLE_REASON
+                                            : "Not available in queue row runtime yet."}
+                                    </p>
+                                ))}
+                            </div>
+                        ) : null}
                     </div>
 
                     <label className="flex flex-col gap-1">
@@ -1174,7 +1189,11 @@ type Props = {
     controlledLayout?: QueueRecordLayoutConfigV3;
     onControlledLayoutChange?: (layout: QueueRecordLayoutConfigV3) => void;
     onDirtyChange?: (dirty: boolean) => void;
-    /** Candidate-grain library (waitlist fields/widgets) for the active variant. */
+    /** Process-level catalog grain — shared by Default and every variant. */
+    libraryCatalogIsWaitlist?: boolean;
+    /** Supplemental waitlist/placement library fields (variant may extend, not reduce). */
+    libraryIncludeWaitlistFields?: boolean;
+    /** @deprecated Use libraryCatalogIsWaitlist + libraryIncludeWaitlistFields. */
     libraryIsWaitlist?: boolean;
     /** Library category priority only — does not affect layout. */
     rowFocusUi?: QueueRowSubjectFocusUi;
@@ -1186,11 +1205,16 @@ export default function QueueRowBuilderV2({
     controlledLayout,
     onControlledLayoutChange,
     onDirtyChange,
+    libraryCatalogIsWaitlist,
+    libraryIncludeWaitlistFields,
     libraryIsWaitlist,
     rowFocusUi = "family",
 }: Props) {
     const isControlled = controlledLayout != null;
-    const catalogIsWaitlist = libraryIsWaitlist ?? surfaceId === "waitlist-queue-row";
+    const catalogIsWaitlist =
+        libraryCatalogIsWaitlist ?? libraryIsWaitlist ?? surfaceId === "waitlist-queue-row";
+    const includeWaitlistLibraryFields =
+        libraryIncludeWaitlistFields ?? libraryIsWaitlist ?? catalogIsWaitlist;
     const surfaceLabel = catalogIsWaitlist ? "Waitlist queue row" : "Queue row";
 
     const catalog = useMemo(() => buildCatalog(catalogIsWaitlist), [catalogIsWaitlist]);
@@ -1350,11 +1374,11 @@ export default function QueueRowBuilderV2({
         () =>
             buildQueueRowLibraryCatalog({
                 isWaitlist: catalogIsWaitlist,
-                includeWaitlistFields: libraryIsWaitlist ?? catalogIsWaitlist,
+                includeWaitlistFields: includeWaitlistLibraryFields,
                 inRowZoneKeys: zones.filter((z) => z.inRow).map((z) => z.key),
                 tenantFieldDefinitions,
             }),
-        [libraryIsWaitlist, catalogIsWaitlist, zones, tenantFieldDefinitions],
+        [includeWaitlistLibraryFields, catalogIsWaitlist, zones, tenantFieldDefinitions],
     );
 
     const removeSelectedField = useCallback(() => {

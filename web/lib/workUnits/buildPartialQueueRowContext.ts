@@ -9,6 +9,7 @@
  */
 
 import { humanizeSnakeCaseToken } from "@/lib/admin/activityTimelineFormat";
+import { inquiryChildProfileFieldsFromRaw } from "@/lib/admin/drawer/inquiryChildrenHydration";
 import {
     childLifecycleMembersFromInquiryChildren,
     type OpportunityChildLifecycleSummary,
@@ -185,6 +186,7 @@ function relatedSubjectFromInquiryChildRaw(
 
     const placement = buildSubjectPlacementFromInquiryChildRaw(raw);
     const subjectLocationId = placement?.location_id ?? trimOrNull(raw.location_id);
+    const profile = inquiryChildProfileFieldsFromRaw(raw);
     const summary: RelatedSubjectSummary = {
         subject_type: trimOrNull(raw.placement_candidate_id) ? "candidate" : "child",
         subject_id: subjectId,
@@ -195,6 +197,9 @@ function relatedSubjectFromInquiryChildRaw(
         program_label: placement?.program_label ?? null,
         room_label: placement?.room_label ?? trimOrNull(raw.program_room_cohort_label),
         schedule_label: placement?.schedule_label ?? trimOrNull(raw.desired_schedule_label),
+        date_of_birth: profile.date_of_birth,
+        age_label: profile.age_label,
+        gender_label: profile.gender_label,
     };
     const visibility = relatedSubjectVisibilityForLocation(subjectLocationId, allowedLocationIds);
     return applyRelatedSubjectLocationVisibility(summary, visibility);
@@ -218,11 +223,15 @@ function buildRelatedSubjectsSummaryFromHouseholdChildren(
             trimOrNull(raw.display_name) ??
             ([trimOrNull(raw.first_name), trimOrNull(raw.last_name)].filter(Boolean).join(" ").trim() || null);
         if (!subjectId || !displayName) continue;
+        const profile = inquiryChildProfileFieldsFromRaw(raw);
         out.push({
             subject_type: "child",
             subject_id: subjectId,
             display_name: displayName,
             status_label: "—",
+            date_of_birth: profile.date_of_birth,
+            age_label: profile.age_label,
+            gender_label: profile.gender_label,
         });
     }
     return out;

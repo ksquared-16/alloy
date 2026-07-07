@@ -18,7 +18,7 @@ function trimOrNull(raw: unknown): string | null {
     return t || null;
 }
 
-function readInquiryChildrenFromRow(row: Record<string, unknown>): unknown[] {
+export function readInquiryChildrenFromRow(row: Record<string, unknown>): unknown[] {
     const direct = row._inquiry_children;
     if (Array.isArray(direct) && direct.length) {
         return direct.filter((x) => x != null && typeof x === "object");

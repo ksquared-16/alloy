@@ -36,16 +36,43 @@ export function variantMatchesWaitlistStage(variant?: QueueRowVariant | null): b
 }
 
 /**
- * Whether waitlist / placement fields should appear in the builder library.
+ * Stable catalog grain for Default and every variant on this process.
+ * Variant rules must not flip pipeline ↔ waitlist catalog templates independently of Default.
  */
+export function resolveQueueRowCatalogIsWaitlist(args: {
+    catalogIsWaitlist?: boolean;
+    processStages?: readonly ProcessStageOption[];
+}): boolean {
+    if (args.catalogIsWaitlist != null) return args.catalogIsWaitlist;
+    if (args.processStages && processHasWaitlistStages(args.processStages)) return true;
+    return false;
+}
+
+/**
+ * Whether waitlist / placement supplemental fields should appear in the builder library.
+ * May extend beyond catalog grain when a variant targets waitlist context.
+ */
+export function resolveQueueRowIncludeWaitlistLibraryFields(args: {
+    includeWaitlistLibraryFields?: boolean;
+    activeVariant?: QueueRowVariant | null;
+    processStages?: readonly ProcessStageOption[];
+}): boolean {
+    if (args.includeWaitlistLibraryFields != null) return args.includeWaitlistLibraryFields;
+    if (args.activeVariant?.subjectFocus === "placement_candidate_child") return true;
+    if (variantMatchesWaitlistStage(args.activeVariant)) return true;
+    if (args.processStages && processHasWaitlistStages(args.processStages)) return true;
+    return false;
+}
+
+/** @deprecated Prefer {@link resolveQueueRowIncludeWaitlistLibraryFields} for library supplement. */
 export function resolveQueueRowLibraryIsWaitlist(args: {
     libraryIsWaitlist?: boolean;
     activeVariant?: QueueRowVariant | null;
     processStages?: readonly ProcessStageOption[];
 }): boolean {
     if (args.libraryIsWaitlist != null) return args.libraryIsWaitlist;
-    if (args.activeVariant?.subjectFocus === "placement_candidate_child") return true;
-    if (variantMatchesWaitlistStage(args.activeVariant)) return true;
-    if (args.processStages && processHasWaitlistStages(args.processStages)) return true;
-    return false;
+    return resolveQueueRowIncludeWaitlistLibraryFields({
+        activeVariant: args.activeVariant,
+        processStages: args.processStages,
+    });
 }

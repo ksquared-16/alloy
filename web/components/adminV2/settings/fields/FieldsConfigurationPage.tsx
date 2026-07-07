@@ -17,7 +17,11 @@ import {
     CHILDCARE_FIELDS_HUB_PRIMARY_ENTITIES,
     isChildcareFieldsHubVisibleEntity,
 } from "@/lib/fields/childcareFieldCatalogDoctrine";
-import { FIELDS_HUB_REGISTRY_TRUST_NOTE } from "@/lib/fields/fieldSettingsOperatorUi";
+import {
+    FIELDS_CUSTOM_FIELD_SURFACE_NOTE,
+    FIELDS_SURFACE_AVAILABILITY_INTRO,
+    FIELDS_HUB_REGISTRY_TRUST_NOTE,
+} from "@/lib/fields/fieldSettingsOperatorUi";
 import { SETTINGS_FIELDS_SUBTITLE } from "@/lib/adminV2/settingsPageSubtitles";
 
 const MANAGE_OPTION_SETS_HREF = "/settings/option-sets";
@@ -113,6 +117,18 @@ export default function FieldsConfigurationPage({ initialEntity }: { initialEnti
                     data-testid="fields-hub-registry-trust-note"
                 >
                     {FIELDS_HUB_REGISTRY_TRUST_NOTE}
+                </p>
+                <p
+                    className="rounded-lg border border-alloy-stone/12 bg-alloy-stone/[0.03] px-3 py-2 text-xs leading-relaxed text-alloy-midnight/60"
+                    data-testid="fields-surface-availability-intro"
+                >
+                    {FIELDS_SURFACE_AVAILABILITY_INTRO}
+                </p>
+                <p
+                    className="text-[11px] leading-relaxed text-alloy-midnight/50"
+                    data-testid="fields-custom-field-surface-note"
+                >
+                    {FIELDS_CUSTOM_FIELD_SURFACE_NOTE}
                 </p>
             </ConfigurationContext>
 

@@ -8,6 +8,7 @@
  */
 
 import { humanizeSnakeCaseToken } from "@/lib/admin/activityTimelineFormat";
+import { inquiryChildProfileFieldsFromRaw } from "@/lib/admin/drawer/inquiryChildrenHydration";
 import { placementCandidateQueueRowId } from "@/lib/orchestration/placement/placementWaitlistCandidateRowProjection";
 import { enrollmentOffersChildQueueRowId } from "@/lib/queues/childGrainEnrollmentQueue";
 import {
@@ -32,7 +33,7 @@ import {
     resolveSubjectStatusLabel,
     type PartialQueueRowContextQueueMeta,
 } from "@/lib/workUnits/buildPartialQueueRowContextHelpers";
-import { filterQueueRelevantInquiryChildren } from "@/lib/workUnits/filterQueueRelevantInquiryChildren";
+import { filterQueueRelevantInquiryChildren, readInquiryChildrenFromRow } from "@/lib/workUnits/filterQueueRelevantInquiryChildren";
 import { resolveChildProcessStageLabel } from "@/lib/lifecycle/childEnrollmentProcessStageLabel";
 
 export type BuildChildGrainQueueRowContextInput = {
@@ -47,21 +48,6 @@ function trimOrNull(raw: unknown): string | null {
     if (raw == null) return null;
     const t = String(raw).trim();
     return t || null;
-}
-
-function readInquiryChildrenFromRow(row: Record<string, unknown>): unknown[] {
-    const direct = row._inquiry_children;
-    if (Array.isArray(direct) && direct.length) {
-        return direct.filter((x) => x != null && typeof x === "object");
-    }
-    const md = row.metadata;
-    if (md != null && typeof md === "object" && !Array.isArray(md)) {
-        const ic = (md as { inquiry_children?: unknown }).inquiry_children;
-        if (Array.isArray(ic)) {
-            return ic.filter((x) => x != null && typeof x === "object");
-        }
-    }
-    return [];
 }
 
 function resolveCaseDisplayName(row: Record<string, unknown>): string {
@@ -344,6 +330,7 @@ function buildRelatedSubjectsSummary(
             program_label: placement?.program_label ?? null,
             room_label: placement?.room_label ?? (raw ? trimOrNull(raw.program_room_cohort_label) : null),
             schedule_label: placement?.schedule_label ?? (raw ? trimOrNull(raw.desired_schedule_label) : null),
+            ...(raw ? inquiryChildProfileFieldsFromRaw(raw) : {}),
         };
         const visibility = relatedSubjectVisibilityForLocation(subjectLocationId, allowedLocationIds);
         out.push(applyRelatedSubjectLocationVisibility(summary, visibility));
@@ -433,6 +420,15 @@ export function buildChildGrainQueueRowContext(input: BuildChildGrainQueueRowCon
     const placement_context = resolvePlacementContext(row, subjectType === "child" ? active.subjectId : null);
     const waitlist_context = subjectType === "candidate" ? resolveWaitlistContext(row) : undefined;
 
+    const activeInquiryRaw = readInquiryChildrenFromRow(row).find((entry) => {
+        if (entry == null || typeof entry !== "object" || Array.isArray(entry)) return false;
+        const raw = entry as Record<string, unknown>;
+        const subjectId =
+            trimOrNull(raw.ocm_id) ?? trimOrNull(raw.id) ?? trimOrNull(raw.customer_member_id);
+        return subjectId === active.subjectId;
+    }) as Record<string, unknown> | undefined;
+    const activeProfile = activeInquiryRaw ? inquiryChildProfileFieldsFromRaw(activeInquiryRaw) : null;
+
     return {
         contract_version: QUEUE_ROW_CONTEXT_CONTRACT_VERSION,
         row_presentation_mode: "single_subject",
@@ -440,6 +436,7 @@ export function buildChildGrainQueueRowContext(input: BuildChildGrainQueueRowCon
             subject_type: subjectType,
             subject_id: active.subjectId,
             display_name: active.displayName,
+            ...(activeProfile ?? {}),
         },
         row_count: 1,
         row_count_unit:

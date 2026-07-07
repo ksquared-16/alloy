@@ -119,6 +119,42 @@ describe("resolveCompactSlotDisplay", () => {
         expect(resolveCompactSlotDisplay("groupCount", childContext(), slots, null)).toBe("Avery Lee");
     });
 
+    it("renders children collection first name + age from context", () => {
+        const ctx = familyContext({
+            related_subjects_summary: [
+                {
+                    subject_type: "child",
+                    subject_id: "child-1",
+                    display_name: "Lennon Kurzman",
+                    status_label: "Lead",
+                    age_label: "2y",
+                },
+                {
+                    subject_type: "child",
+                    subject_id: "child-2",
+                    display_name: "Wrigley Kurzman",
+                    status_label: "Lead",
+                    age_label: "3m",
+                },
+            ],
+        });
+        const slots = {
+            visible: true,
+            label: "Children",
+            fieldKeys: ["children"],
+            collectionPresentationByFieldKey: {
+                children: {
+                    displayMode: "list" as const,
+                    includedFields: ["first_name", "age"] as const,
+                    listFormat: "comma" as const,
+                    maxDisplayed: "all" as const,
+                    overflowBehavior: "plus_n_more" as const,
+                },
+            },
+        };
+        expect(resolveCompactSlotDisplay("groupCount", ctx, slots, null)).toBe("Lennon (2y), Wrigley (3m)");
+    });
+
     it("renders children collection field with configured presentation", () => {
         const slots = {
             visible: true,

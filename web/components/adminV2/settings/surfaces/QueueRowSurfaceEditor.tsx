@@ -16,7 +16,10 @@ import {
     QUEUE_ROW_PUBLISH_EMPTY_COLUMNS_MESSAGE,
     type QueueRowSurfaceEnvelope,
 } from "@/lib/presentation/runtime/queueRowSurfaceMetadata";
-import { resolveQueueRowLibraryIsWaitlist } from "@/lib/adminV2/settings/surfaces/queueRowBuilderPreview";
+import {
+    resolveQueueRowCatalogIsWaitlist,
+    resolveQueueRowIncludeWaitlistLibraryFields,
+} from "@/lib/adminV2/settings/surfaces/queueRowBuilderPreview";
 import { subjectFocusToUi } from "@/lib/adminV2/settings/surfaces/queueRowSubjectFocus";
 import {
     defaultQueueRowSurfaceName,
@@ -216,7 +219,11 @@ export default function QueueRowSurfaceEditor({
             ? envelope?.layout.variants?.find((v) => v.id === activeVariantId)
             : null;
 
-    const libraryIsWaitlist = resolveQueueRowLibraryIsWaitlist({ activeVariant, processStages });
+    const libraryCatalogIsWaitlist = resolveQueueRowCatalogIsWaitlist({ processStages });
+    const libraryIncludeWaitlistFields = resolveQueueRowIncludeWaitlistLibraryFields({
+        activeVariant,
+        processStages,
+    });
     const rowFocusUi = subjectFocusToUi(activeVariant?.subjectFocus);
 
     return (
@@ -296,7 +303,8 @@ export default function QueueRowSurfaceEditor({
                             controlledLayout={activeLayout}
                             onControlledLayoutChange={patchActiveLayoutColumns}
                             onDirtyChange={setDirty}
-                            libraryIsWaitlist={libraryIsWaitlist}
+                            libraryCatalogIsWaitlist={libraryCatalogIsWaitlist}
+                            libraryIncludeWaitlistFields={libraryIncludeWaitlistFields}
                             rowFocusUi={rowFocusUi}
                         />
                         {activeVariant ? (

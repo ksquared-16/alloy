@@ -62,6 +62,12 @@ export type QueueRowSubjectPresentation = {
     subject_type: LifecycleSubjectType;
     subject_id: string;
     display_name: string;
+    /** ISO date-of-birth when known from inquiry / household child payload. */
+    date_of_birth?: string | null;
+    /** Compact age label (e.g. `2y`, `3m`) derived from DOB or inquiry age. */
+    age_label?: string | null;
+    /** Gender label when hydrated on queue row inquiry child payload. */
+    gender_label?: string | null;
 };
 
 export type QueueRowCaseContext = {
@@ -106,6 +112,12 @@ export type RelatedSubjectSummary = {
     program_label?: string | null;
     room_label?: string | null;
     schedule_label?: string | null;
+    /** ISO date-of-birth when known from inquiry / household child payload. */
+    date_of_birth?: string | null;
+    /** Compact age label (e.g. `2y`, `3m`) derived from DOB or inquiry age. */
+    age_label?: string | null;
+    /** Gender label when hydrated on queue row inquiry child payload. */
+    gender_label?: string | null;
 };
 
 export type QueueRowAttentionSummary = {

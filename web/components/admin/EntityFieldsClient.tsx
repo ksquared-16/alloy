@@ -40,6 +40,9 @@ import {
 } from "@/lib/fields/fieldPolicySettingsUi";
 import FieldDefinitionEditModal from "@/components/admin/fields/FieldDefinitionEditModal";
 import FieldRequiredInlineCell from "@/components/admin/fields/FieldRequiredInlineCell";
+import ChildProfileFieldsPanel from "@/components/adminV2/settings/fields/ChildProfileFieldsPanel";
+import FieldSurfaceAvailabilityBadges from "@/components/adminV2/settings/fields/FieldSurfaceAvailabilityBadges";
+import { resolveFieldSurfaceAvailability } from "@/lib/fields/fieldSurfaceAvailability";
 import {
     canOperatorEditRequirementInline,
     fieldBehaviorConfiguredOnRecordLayouts,
@@ -600,6 +603,7 @@ export default function EntityFieldsClient({
                     title={adminV2Chrome ? "Fields" : `${title} definitions`}
                     surfaceTone={adminV2Chrome ? "settingsPanel" : "default"}
                 >
+                    {adminV2Chrome && entityType === "inquiry_child" ? <ChildProfileFieldsPanel /> : null}
                     {ensureError && (
                         <div className="mb-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
                             {ensureError}
@@ -688,7 +692,9 @@ export default function EntityFieldsClient({
                                     {showPolicyColumnsInTable ? (
                                         <th className="pb-2 pr-4 font-semibold">Editability</th>
                                     ) : null}
-                                    <th className="pb-2 pr-4 font-semibold">Shows in</th>
+                                    <th className="pb-2 pr-4 font-semibold">
+                                        {adminV2Chrome ? "Surface availability" : "Shows in"}
+                                    </th>
                                     {canMutate && <th className="pb-2 font-semibold"> </th>}
                                 </tr>
                             </thead>
@@ -725,10 +731,16 @@ export default function EntityFieldsClient({
                                         ]
                                             .filter(Boolean)
                                             .join(", ");
+                                        const surfaceBadges = resolveFieldSurfaceAvailability(entityType, row);
                                         return (
                                         <tr key={row.id} className="border-b border-[#e6e8ec] align-middle">
                                             <td className="py-2.5 pr-4">
                                                 <div className="font-medium text-[#31394d]">{displayLabel}</div>
+                                                {adminV2Chrome ? (
+                                                    <p className="mt-0.5 font-mono text-[10px] text-alloy-midnight/40">
+                                                        {entityType}.{row.field_key}
+                                                    </p>
+                                                ) : null}
                                             </td>
                                             {showRequiredColumn ? (
                                                 <td className="py-2.5 pr-4">
@@ -755,7 +767,16 @@ export default function EntityFieldsClient({
                                                           : "Managed elsewhere"}
                                                 </td>
                                             ) : null}
-                                            <td className="py-2.5 pr-4 text-[#59678b]">{showsIn || "Hidden"}</td>
+                                            <td className="py-2.5 pr-4 text-[#59678b]">
+                                                {adminV2Chrome ? (
+                                                    <FieldSurfaceAvailabilityBadges
+                                                        badges={surfaceBadges}
+                                                        testId={`field-surface-badges-${row.field_key}`}
+                                                    />
+                                                ) : (
+                                                    showsIn || "Hidden"
+                                                )}
+                                            </td>
                                             {canMutate && (
                                                 <td className="py-2.5 text-right">
                                                     <div className="flex flex-wrap justify-end gap-1">

@@ -54,6 +54,12 @@ export const FIELDS_HUB_DATA_STRUCTURE_INTRO =
 export const FIELDS_HUB_REGISTRY_TRUST_NOTE =
     "Fields you create or edit here are the canonical registry. They appear in Layouts, Forms Builder, and Business Processes stage requirements without adding them to a separate catalog.";
 
+export const FIELDS_SURFACE_AVAILABILITY_INTRO =
+    "Fields define the canonical data model. A field can exist here without being available on every surface. Surface availability depends on runtime resolvers.";
+
+export const FIELDS_CUSTOM_FIELD_SURFACE_NOTE =
+    "Adding a custom field saves it to the registry. It is not immediately available on every surface — enable visibility here, then place the field on Layouts, Forms, Queue Rows, or Focus Panel where supported.";
+
 /** Layouts — record experience presentation reads from the same field registry (F1). */
 export const LAYOUTS_HUB_REGISTRY_TRUST_NOTE =
     "Layout fields come from the Fields registry. New fields appear here after you save them in Fields — no separate catalog step.";

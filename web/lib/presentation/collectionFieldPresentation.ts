@@ -7,6 +7,8 @@
  */
 
 import type { QueueRecordFieldConfig, QueueRecordNameDisplay } from "@/lib/layout/queueRecordLayoutV3";
+import { formatDisplayDate } from "@/lib/adminFormatters";
+import { inquiryChildAgeLabelFromDob } from "@/lib/admin/drawer/inquiryChildrenHydration";
 import type { ProofRuntimeRecord } from "@/lib/layout/runtime/proofRecordContext";
 import { readLayoutRuntimeRepeaterRows } from "@/lib/layout/runtime/readLayoutRuntimeRepeaterRows";
 import type { QueueRowContext } from "@/lib/workUnits/lifecycleSubjectContracts";
@@ -72,8 +74,12 @@ export const COLLECTION_ITEM_FIELD_CATALOG: Record<
     dob: { label: "DOB", resolverBacked: true },
     program: { label: "Program", resolverBacked: true },
     schedule: { label: "Schedule", resolverBacked: true },
-    gender: { label: "Gender", resolverBacked: false },
+    gender: { label: "Gender", resolverBacked: true },
 };
+
+/** Inspector copy when gender is registered but queue-row hydration is missing (should not show when resolver-backed). */
+export const CHILDREN_COLLECTION_GENDER_UNAVAILABLE_REASON =
+    "Gender is configured in Fields but is not available in queue row runtime yet.";
 
 export const DEFAULT_CHILDREN_COLLECTION_PRESENTATION: CollectionFieldPresentationConfig = {
     displayMode: "list",
@@ -100,6 +106,20 @@ export function isLegacyChildrenCollectionFieldKey(fieldKey: string): fieldKey i
 
 export function collectionItemFieldIsAvailable(fieldKey: CollectionItemFieldKey): boolean {
     return COLLECTION_ITEM_FIELD_CATALOG[fieldKey].resolverBacked;
+}
+
+/** Subfields operators may toggle in the Children collection inspector. */
+export function selectableChildrenCollectionItemFieldKeys(): CollectionItemFieldKey[] {
+    return (Object.keys(COLLECTION_ITEM_FIELD_CATALOG) as CollectionItemFieldKey[]).filter((key) =>
+        collectionItemFieldIsAvailable(key),
+    );
+}
+
+/** Subfields registered but not queue-row resolver-backed — inspector unavailable only. */
+export function unavailableChildrenCollectionItemFieldKeys(): CollectionItemFieldKey[] {
+    return (Object.keys(COLLECTION_ITEM_FIELD_CATALOG) as CollectionItemFieldKey[]).filter(
+        (key) => !collectionItemFieldIsAvailable(key),
+    );
 }
 
 export function normalizeCollectionFieldPresentation(
@@ -190,17 +210,42 @@ function visibleChildRelatedSubjects(context: QueueRowContext): RelatedSubjectSu
 
 function subjectSummaryToItem(summary: RelatedSubjectSummary): CollectionItem {
     const { first, last } = splitDisplayName(summary.display_name);
+    const dob = trimOrNull(summary.date_of_birth);
+    const ageLabel = trimOrNull(summary.age_label) ?? resolveAgeLabelFromDob(dob);
     return {
         subjectId: summary.subject_id,
         firstName: first,
         lastName: last,
         displayName: summary.display_name.trim(),
-        age: null,
-        dob: null,
+        age: ageLabel,
+        dob,
         program: trimOrNull(summary.program_label),
         schedule: trimOrNull(summary.schedule_label),
-        gender: null,
+        gender: trimOrNull(summary.gender_label),
     };
+}
+
+function compactStoredAgeLabel(rawAge: string): string {
+    const age = rawAge.trim();
+    if (!age) return age;
+    const compact = age.replace(/\s+/g, "").replace(/years?/i, "y").replace(/months?/i, "m");
+    return compact.includes("y") || compact.includes("m") ? compact : age;
+}
+
+function resolveAgeLabelFromDob(dob: string | null): string | null {
+    if (!dob?.trim()) return null;
+    return inquiryChildAgeLabelFromDob(dob)?.label ?? null;
+}
+
+function resolveItemAgeLabel(item: CollectionItem): string | null {
+    if (item.age?.trim()) return compactStoredAgeLabel(item.age);
+    return resolveAgeLabelFromDob(item.dob);
+}
+
+function resolveItemDobDisplay(item: CollectionItem): string | null {
+    const dob = item.dob?.trim();
+    if (!dob) return null;
+    return formatDisplayDate(dob) || dob;
 }
 
 function enrichItemFromChildRow(item: CollectionItem, row: ProofRuntimeRecord): CollectionItem {
@@ -217,6 +262,16 @@ function enrichItemFromChildRow(item: CollectionItem, row: ProofRuntimeRecord): 
         ?? trimOrNull(row["child.display_name"])
         ?? ([firstName, lastName].filter(Boolean).join(" ") || item.displayName);
 
+    const dob =
+        trimOrNull(row["child.date_of_birth"])
+        ?? trimOrNull(row["child.dob"])
+        ?? item.dob;
+    const ageLabel =
+        resolveAgeLabelFromDob(dob)
+        ?? (trimOrNull(row["child.age"]) ? compactStoredAgeLabel(String(row["child.age"])) : null)
+        ?? (trimOrNull(row["child.dob_age"]) ? compactStoredAgeLabel(String(row["child.dob_age"])) : null)
+        ?? item.age;
+
     return {
         ...item,
         subjectId:
@@ -227,8 +282,8 @@ function enrichItemFromChildRow(item: CollectionItem, row: ProofRuntimeRecord): 
         firstName: firstName ?? item.firstName,
         lastName: lastName ?? item.lastName,
         displayName: displayName ?? item.displayName,
-        age: trimOrNull(row["child.dob_age"]) ?? trimOrNull(row["child.age"]) ?? item.age,
-        dob: trimOrNull(row["child.date_of_birth"]) ?? trimOrNull(row["child.dob"]) ?? item.dob,
+        age: ageLabel,
+        dob,
         program:
             trimOrNull(row["inquiry_child.program"])
             ?? trimOrNull(row["child.program"])
@@ -280,6 +335,9 @@ export function extractChildrenCollectionItems(
                 subject_id: subject.subject_id,
                 display_name: subject.display_name,
                 status_label: "—",
+                date_of_birth: subject.date_of_birth ?? null,
+                age_label: subject.age_label ?? null,
+                gender_label: subject.gender_label ?? null,
             });
             const row = childRows.get(subject.subject_id);
             items.push(row ? enrichItemFromChildRow(base, row) : base);
@@ -295,18 +353,19 @@ export function extractChildrenCollectionItems(
             status_label: "—",
             program_label: context.placement_context?.program_label ?? null,
             schedule_label: context.placement_context?.schedule_label ?? null,
+            date_of_birth: context.row_subject.date_of_birth ?? null,
+            age_label: context.row_subject.age_label ?? null,
+            gender_label: context.row_subject.gender_label ?? null,
         });
         const primaryRow = childRows.get(context.row_subject.subject_id);
         items.push(primaryRow ? enrichItemFromChildRow(primary, primaryRow) : primary);
+
+        if (context.row_presentation_mode !== "grouped_subjects") {
+            return items.filter((item) => item.displayName.trim().length > 0);
+        }
     }
 
     for (const summary of visibleChildRelatedSubjects(context)) {
-        if (
-            (context.row_subject.subject_type === "child" || context.row_subject.subject_type === "candidate")
-            && summary.subject_id === context.row_subject.subject_id
-        ) {
-            continue;
-        }
         const base = subjectSummaryToItem(summary);
         const row = childRows.get(summary.subject_id);
         items.push(row ? enrichItemFromChildRow(base, row) : base);
@@ -326,9 +385,9 @@ export function resolveCollectionItemFieldValue(
         case "last_name":
             return item.lastName.trim() || null;
         case "age":
-            return item.age;
+            return resolveItemAgeLabel(item);
         case "dob":
-            return item.dob;
+            return resolveItemDobDisplay(item);
         case "program":
             return item.program;
         case "schedule":
@@ -341,10 +400,40 @@ export function resolveCollectionItemFieldValue(
 }
 
 function formatItemLine(item: CollectionItem, includedFields: readonly CollectionItemFieldKey[]): string | null {
-    const parts = includedFields
+    if (!includedFields.length) return item.displayName.trim() || null;
+
+    const nameFieldKeys = includedFields.filter((key) => key === "first_name" || key === "last_name");
+    const includesAge = includedFields.includes("age");
+    const includesDob = includedFields.includes("dob");
+    const tailFieldKeys = includedFields.filter(
+        (key) => key !== "first_name" && key !== "last_name" && key !== "age" && key !== "dob",
+    );
+
+    const nameParts = nameFieldKeys
         .map((key) => resolveCollectionItemFieldValue(item, key))
         .filter((value): value is string => Boolean(value?.trim()));
-    return parts.length > 0 ? parts.join(" ") : item.displayName.trim() || null;
+    const nameSegment = nameParts.length > 0 ? nameParts.join(" ") : null;
+
+    const ageLabel = includesAge ? resolveItemAgeLabel(item) : null;
+    const dobLabel = includesDob ? resolveItemDobDisplay(item) : null;
+
+    let head = nameSegment ?? "";
+    if (includesAge && ageLabel) {
+        head = head ? `${head} (${ageLabel})` : ageLabel;
+    } else if (!head && dobLabel) {
+        head = dobLabel;
+    } else if (head && includesDob && dobLabel) {
+        head = `${head} ${dobLabel}`;
+    } else if (!head) {
+        head = item.displayName.trim();
+    }
+
+    const tailParts = tailFieldKeys
+        .map((key) => resolveCollectionItemFieldValue(item, key))
+        .filter((value): value is string => Boolean(value?.trim()));
+
+    const segments = [head, ...tailParts].filter(Boolean);
+    return segments.length > 0 ? segments.join(" ") : null;
 }
 
 function listSeparator(format: CollectionListFormat): string {

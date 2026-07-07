@@ -138,4 +138,8 @@ export function previewRowModelFromConfig(config: QueueRecordLayoutConfigV3): Qu
     return base;
 }
 
-export { resolveQueueRowLibraryIsWaitlist } from "@/lib/adminV2/settings/surfaces/queueRowSubjectFocus";
+export {
+    resolveQueueRowCatalogIsWaitlist,
+    resolveQueueRowIncludeWaitlistLibraryFields,
+    resolveQueueRowLibraryIsWaitlist,
+} from "@/lib/adminV2/settings/surfaces/queueRowSubjectFocus";

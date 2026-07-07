@@ -6,7 +6,10 @@ import QueueRowBuilderV2 from "@/components/adminV2/settings/surfaces/QueueRowBu
 import QueueRowVariantSettings from "@/components/adminV2/settings/surfaces/QueueRowVariantSettings";
 import type { ProcessStageOption } from "@/components/adminV2/settings/surfaces/QueueRowVariantStagePicker";
 import { buildDefaultQueueRowSurfaceEnvelope, createQueueRowVariant, type QueueRowSurfaceEnvelope } from "@/lib/presentation/runtime/queueRowSurfaceMetadata";
-import { resolveQueueRowLibraryIsWaitlist } from "@/lib/adminV2/settings/surfaces/queueRowBuilderPreview";
+import {
+    resolveQueueRowCatalogIsWaitlist,
+    resolveQueueRowIncludeWaitlistLibraryFields,
+} from "@/lib/adminV2/settings/surfaces/queueRowBuilderPreview";
 import { subjectFocusToUi } from "@/lib/adminV2/settings/surfaces/queueRowSubjectFocus";
 import { defaultQueueRowSurfaceName } from "@/lib/adminV2/settings/surfaces/queueRowProcessCatalog";
 
@@ -30,7 +33,11 @@ export default function QueueRowSurfaceEditorDevClient() {
         const variant = envelope.layout.variants?.find((v) => v.id === activeVariantId);
         return variant ? { ...envelope.layout, columns: variant.columns, fixedControls: variant.fixedControls ?? envelope.layout.fixedControls } : envelope.layout;
     }, [envelope.layout, activeVariantId]);
-    const libraryIsWaitlist = resolveQueueRowLibraryIsWaitlist({ activeVariant, processStages: STAGES });
+    const libraryCatalogIsWaitlist = resolveQueueRowCatalogIsWaitlist({ processStages: STAGES });
+    const libraryIncludeWaitlistFields = resolveQueueRowIncludeWaitlistLibraryFields({
+        activeVariant,
+        processStages: STAGES,
+    });
     const rowFocusUi = subjectFocusToUi(activeVariant?.subjectFocus);
 
     return (
@@ -64,7 +71,8 @@ export default function QueueRowSurfaceEditorDevClient() {
                             setDirty(true);
                         }}
                         onDirtyChange={setDirty}
-                        libraryIsWaitlist={libraryIsWaitlist}
+                        libraryCatalogIsWaitlist={libraryCatalogIsWaitlist}
+                        libraryIncludeWaitlistFields={libraryIncludeWaitlistFields}
                         rowFocusUi={rowFocusUi}
                     />
                     {activeVariant ? (
