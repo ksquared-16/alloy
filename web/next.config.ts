@@ -72,6 +72,31 @@ const nextConfig: NextConfig = {
        */
       { source: "/settings/analytics", destination: "/settings/calculations", permanent: false },
       { source: "/settings/analytics/:path*", destination: "/settings/calculations/:path*", permanent: false },
+      /** Legacy Settings aliases → canonical Platform Configuration routes. */
+      { source: "/settings/entity-labels", destination: "/settings/entities", permanent: false },
+      { source: "/settings/entity-labels/:path*", destination: "/settings/entities", permanent: false },
+      { source: "/settings/label-entities", destination: "/settings/entities", permanent: false },
+      { source: "/settings/label-entities/:path*", destination: "/settings/entities", permanent: false },
+      { source: "/settings/user-access", destination: "/settings/users-roles", permanent: false },
+      { source: "/settings/user-access/:path*", destination: "/settings/users-roles", permanent: false },
+      { source: "/settings/kpis", destination: "/settings/calculations?tab=visibility", permanent: false },
+      { source: "/settings/kpis/:path*", destination: "/settings/calculations?tab=visibility", permanent: false },
+      /** Legacy admin system hub → Platform Configuration equivalents. */
+      { source: "/legacy-admin/system/person-fields", destination: "/settings/fields?entity=person", permanent: false },
+      { source: "/legacy-admin/system/location-fields", destination: "/settings/fields?entity=location", permanent: false },
+      { source: "/legacy-admin/system/customer-fields", destination: "/settings/fields?entity=customer", permanent: false },
+      { source: "/legacy-admin/system/job-fields", destination: "/settings/fields?entity=opportunity", permanent: false },
+      { source: "/legacy-admin/system/opportunity-fields", destination: "/settings/fields?entity=opportunity", permanent: false },
+      { source: "/legacy-admin/system/vendor-fields", destination: "/settings/fields", permanent: false },
+      { source: "/legacy-admin/system/schedule-fields", destination: "/settings/fields", permanent: false },
+      { source: "/legacy-admin/system/document-fields", destination: "/settings/documents/document-fields", permanent: false },
+      { source: "/legacy-admin/system/entity-labels", destination: "/settings/entities", permanent: false },
+      { source: "/legacy-admin/system/statuses", destination: "/settings/statuses", permanent: false },
+      { source: "/legacy-admin/system/option-sets", destination: "/settings/option-sets", permanent: false },
+      { source: "/legacy-admin/system/option-sets/:setKey", destination: "/settings/option-sets/:setKey", permanent: false },
+      { source: "/legacy-admin/system/field-sections", destination: "/settings/field-sections", permanent: false },
+      { source: "/legacy-admin/system/layouts", destination: "/settings/surfaces", permanent: false },
+      { source: "/legacy-admin/system/layouts/:path*", destination: "/settings/surfaces", permanent: false },
     ];
   },
   async rewrites() {

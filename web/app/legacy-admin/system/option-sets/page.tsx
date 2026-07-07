@@ -1,7 +1,8 @@
-import OptionSetsClient from "./OptionSetsClient";
+import { redirect } from "next/navigation";
 
 export const dynamic = "force-dynamic";
 
-export default function AdminSystemOptionSetsPage() {
-    return <OptionSetsClient />;
+/** Legacy route — option sets live under Platform Configuration. */
+export default function AdminSystemOptionSetsRedirectPage() {
+    redirect("/settings/option-sets");
 }

@@ -1,7 +1,8 @@
-import EntityLabelsClient from "./EntityLabelsClient";
+import { redirect } from "next/navigation";
 
-export const dynamic = 'force-dynamic';
+export const dynamic = "force-dynamic";
 
-export default function AdminSystemEntityLabelsPage() {
-    return <EntityLabelsClient />;
+/** Legacy route — entity labels live under Platform Configuration → Entities. */
+export default function AdminSystemEntityLabelsRedirectPage() {
+    redirect("/settings/entities");
 }

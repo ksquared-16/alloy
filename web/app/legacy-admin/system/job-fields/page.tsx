@@ -1,7 +1,8 @@
-import EntityFieldsClient from "@/components/admin/EntityFieldsClient";
+import { redirect } from "next/navigation";
 
-export const dynamic = 'force-dynamic';
+export const dynamic = "force-dynamic";
 
-export default function AdminSystemJobFieldsPage() {
-    return <EntityFieldsClient entityType="job" title="Job Fields" />;
+/** Legacy route — lead field settings live under Platform Configuration → Fields. */
+export default function AdminSystemJobFieldsRedirectPage() {
+    redirect("/settings/fields?entity=opportunity");
 }

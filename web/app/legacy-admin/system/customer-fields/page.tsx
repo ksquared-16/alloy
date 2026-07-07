@@ -1,7 +1,8 @@
-import EntityFieldsClient from "@/components/admin/EntityFieldsClient";
+import { redirect } from "next/navigation";
 
-export const dynamic = 'force-dynamic';
+export const dynamic = "force-dynamic";
 
-export default function AdminSystemCustomerFieldsPage() {
-    return <EntityFieldsClient entityType="customer" title="Customer Fields" />;
+/** Legacy route — family field settings live under Platform Configuration → Fields. */
+export default function AdminSystemCustomerFieldsRedirectPage() {
+    redirect("/settings/fields?entity=customer");
 }

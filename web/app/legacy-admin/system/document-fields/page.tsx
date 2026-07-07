@@ -1,7 +1,8 @@
-import DocumentFieldsClient from "./DocumentFieldsClient";
+import { redirect } from "next/navigation";
 
-export const dynamic = 'force-dynamic';
+export const dynamic = "force-dynamic";
 
-export default function AdminDocumentFieldsPage() {
-    return <DocumentFieldsClient />;
+/** Legacy route — document field settings live under Platform Configuration. */
+export default function AdminSystemDocumentFieldsRedirectPage() {
+    redirect("/settings/documents/document-fields");
 }

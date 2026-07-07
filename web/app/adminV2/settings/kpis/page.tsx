@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 
-/** Legacy route — workspace metric placement lives under Operational Intelligence. */
+/** Legacy route — workspace metric placement lives under Operational Calculations. */
 export default function AdminV2SettingsKpisRedirectPage() {
-    redirect("/settings/analytics?tab=visibility");
+    redirect("/settings/calculations?tab=visibility");
 }

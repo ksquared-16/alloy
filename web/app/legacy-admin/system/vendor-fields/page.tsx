@@ -1,7 +1,8 @@
-import EntityFieldsClient from "@/components/admin/EntityFieldsClient";
+import { redirect } from "next/navigation";
 
-export const dynamic = 'force-dynamic';
+export const dynamic = "force-dynamic";
 
-export default function AdminSystemVendorFieldsPage() {
-    return <EntityFieldsClient entityType="vendor" title="Vendor Fields" />;
+/** Legacy route — vendor fields are not in the childcare Fields hub; route to Fields home. */
+export default function AdminSystemVendorFieldsRedirectPage() {
+    redirect("/settings/fields");
 }
