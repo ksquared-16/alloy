@@ -7,13 +7,13 @@ import fs from "node:fs";
 import path from "node:path";
 import dotenv from "dotenv";
 import { createClient } from "@supabase/supabase-js";
-import { extractPdfAcroFormFields } from "../lib/pos/processingCase/structure/pdfAcroForm.ts";
+import { extractPdfAcroFormFields } from "../lib/pos/processingCase/structure/pdfAcroForm";
 import {
     expandQuestionsForDraftSave,
     seedReviewQuestionFromDraftField,
-} from "../lib/pos/processingCase/formDraft/questionResolutionModel.ts";
-import { detectionModeLabel, resolveDetectionMode } from "../lib/pos/processingCase/formDraft/detectionModeLabel.ts";
-import { formAuthoringWorkspacePath } from "../lib/admin/forms/formAuthoringWorkspacePath.ts";
+} from "../lib/pos/processingCase/formDraft/questionResolutionModel";
+import { detectionModeLabel, resolveDetectionMode } from "../lib/pos/processingCase/formDraft/detectionModeLabel";
+import { formAuthoringWorkspacePath } from "../lib/admin/forms/formAuthoringWorkspacePath";
 
 dotenv.config({ path: path.join(process.cwd(), ".env.local") });
 

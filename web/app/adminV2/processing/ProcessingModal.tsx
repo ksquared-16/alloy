@@ -27,6 +27,7 @@ import AdminV2WorkspaceBosModalShell from "@/app/adminV2/components/AdminV2Works
 import { warmProcessingQueueCache } from "@/lib/pos/processingQueueWarmCache";
 import OperationalModalHeader from "@/app/adminV2/components/OperationalModalHeader";
 import PosWorkspaceLayout from "@/app/adminV2/pos/PosWorkspaceLayout";
+import PosHome from "@/app/adminV2/pos/PosHome";
 import PosProcessingWorkspace from "@/app/adminV2/pos/PosProcessingWorkspace";
 import PosFormsWorkspace from "@/app/adminV2/pos/PosFormsWorkspace";
 import PosPacketsPanel from "@/app/adminV2/pos/PosPacketsPanel";
@@ -37,7 +38,7 @@ import { openFormAuthoringWorkspace } from "@/lib/admin/forms/formAuthoringWorks
 
 export default function ProcessingModal({ open, onClose }: { open: boolean; onClose: () => void }) {
     const [selectedCaseId, setSelectedCaseId] = useState<string | null>(null);
-    const [section, setSection] = useState<PosSection>("processing");
+    const [section, setSection] = useState<PosSection>("home");
 
     // Warm the shared Incoming queue cache the moment the modal opens (mirrors Inbox-on-open), so
     // the queue + KPI strip paint from cache instead of each firing the heavy endpoint on mount.
@@ -47,9 +48,14 @@ export default function ProcessingModal({ open, onClose }: { open: boolean; onCl
 
     const handleClose = useCallback(() => {
         setSelectedCaseId(null);
-        setSection("processing");
+        setSection("home");
         onClose();
     }, [onClose]);
+
+    const openCase = useCallback((caseId: string) => {
+        setSelectedCaseId(caseId);
+        setSection("processing");
+    }, []);
 
     // After generation: open canonical form workspace in a new tab.
     const openForm = useCallback((formId: string) => {
@@ -58,6 +64,9 @@ export default function ProcessingModal({ open, onClose }: { open: boolean; onCl
 
     let body: ReactNode;
     switch (section) {
+        case "home":
+            body = <PosHome onNavigate={setSection} onOpenCase={openCase} />;
+            break;
         case "processing":
             body = (
                 <PosProcessingWorkspace

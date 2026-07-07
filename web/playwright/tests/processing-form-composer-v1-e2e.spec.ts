@@ -85,7 +85,7 @@ function formDraftDetectResponse(page: Page) {
 }
 
 async function ensureQuestionsDetected(page: Page, scope: Locator) {
-    const resolveHeading = scope.getByText("Resolve detected questions", { exact: true });
+    const resolveHeading = scope.getByRole("heading", { name: "Review detected questions" });
     if (await resolveHeading.isVisible({ timeout: 5_000 }).catch(() => false)) return;
 
     const detectBtn = scope.getByRole("button", { name: /^Detect questions$/i });
@@ -103,6 +103,7 @@ function questionRow(scope: Page | Locator, evidencePattern: RegExp) {
 
 async function selectReviewOption(row: Locator, selectIndex: number, value: string) {
     const select = row.locator("select").nth(selectIndex);
+    await select.selectOption(value);
     await select.evaluate((el, val) => {
         const node = el as HTMLSelectElement;
         node.value = val;
@@ -145,7 +146,7 @@ test.describe("Processing Form Composer V1 E2E", () => {
             uploadCaseId = docsJson.documents?.find((d) => d.processingCaseId)?.processingCaseId ?? null;
             report.notes.push(`Upload response lacked processing_case_id; resolved from documents list: ${uploadCaseId ?? "none"}`);
         }
-        await expect(processingModal(page).getByText(/Uploaded — intake/i)).toBeVisible({ timeout: 60_000 });
+        await expect(processingModal(page).getByText(/Imported — open Incoming/i)).toBeVisible({ timeout: 60_000 });
         if (!uploadCaseId) {
             report.failed.push("Upload succeeded but no processing_case_id returned");
         } else {
@@ -184,12 +185,11 @@ test.describe("Processing Form Composer V1 E2E", () => {
         await ensureQuestionsDetected(page, modal);
         await expect(modal.getByText(/active questions/i).first()).toBeVisible({ timeout: 30_000 });
 
-        const detectionMode = processingModal(page).locator("text=Detection mode").locator("..").locator("span.font-semibold");
-        await expect(detectionMode).toContainText(/AcroForm/i, { timeout: 30_000 });
+        await expect(processingModal(page).getByText(/AcroForm/i).first()).toBeVisible({ timeout: 30_000 });
         report.detectedCleanly.push("Detection mode: AcroForm fields detected");
         await snap(page, "03-questions-detected");
 
-        await expect(modal.getByRole("button", { name: /^Generate native form$/i })).toBeVisible({ timeout: 15_000 });
+        await expect(modal.getByRole("button", { name: /^Continue to generate$/i })).toBeVisible({ timeout: 15_000 });
 
         // 5. Resolve questions (apply child name split last so later row edits do not reset it)
         const birthRow = questionRow(processingModal(page), /Birthdate/i);
@@ -226,6 +226,9 @@ test.describe("Processing Form Composer V1 E2E", () => {
             (r) => r.url().includes("/form-draft/create") && r.request().method() === "POST",
         );
         const popupPromise = context.waitForEvent("page", { timeout: 120_000 });
+        await processingModal(page).getByRole("button", { name: /^Continue to generate$/i }).click();
+        await expect(processingModal(page).getByRole("heading", { name: "Generate native form" })).toBeVisible({ timeout: 15_000 });
+        await snap(page, "04b-generate-summary");
         await processingModal(page).getByRole("button", { name: /^Generate native form$/i }).click();
         const saveResponse = await saveResponsePromise;
         const createResponse = await createResponsePromise;

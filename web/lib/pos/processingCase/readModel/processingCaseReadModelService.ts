@@ -28,6 +28,7 @@ import { parseStoredExtraction } from "../extraction/processingCaseExtractionDb"
 import { parseStoredDocumentFormPreview } from "../structure/documentFormPreviewDb";
 import { parseStoredFormDraftPreview } from "../formDraft/formDraftPreviewDb";
 import { parseFormDraftCreated } from "../formDraft/createFormFromCaseDraft";
+import { resolveDetectionMode } from "../formDraft/detectionModeLabel";
 
 function toRef(row: ReadModelSourceRow): SourceRef {
     return { kind: row.source_kind, id: row.source_id, role: row.role, linkedAt: row.linked_at };
@@ -81,6 +82,17 @@ export async function listProcessingCaseQueue(
             primarySource: primary,
             relatedSourceCount: g?.relatedCount ?? 0,
             sourceDisplay,
+            formDraftSummary: (() => {
+                const draft = parseStoredFormDraftPreview(c.metadata);
+                const created = parseFormDraftCreated(c.metadata);
+                if (!draft && !created) return null;
+                return {
+                    detectionMode: draft ? resolveDetectionMode(draft) : "unknown",
+                    questionCount: draft?.fields.length ?? 0,
+                    sectionCount: draft?.sections.length ?? 0,
+                    generatedFormId: created?.form_id ?? null,
+                };
+            })(),
         };
     });
 

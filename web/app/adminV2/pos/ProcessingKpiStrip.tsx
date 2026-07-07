@@ -35,9 +35,28 @@ export default function ProcessingKpiStrip() {
 
     const items: CompactKpiItem[] = [
         { key: "needs_review", label: "Needs review", value: String(counts.needs_review ?? 0), state: "attention" },
-        { key: "ready", label: "Ready to approve", value: String(counts.ready ?? 0), state: "ready" },
-        { key: "saved_today", label: "Saved today", value: String(savedToday), state: "done" },
-        { key: "needs_decision", label: "Needs a decision", value: String(counts.needs_resolution ?? 0), state: "pending" },
+        {
+            key: "ready_generate",
+            label: "Ready to generate",
+            value: String(
+                rows.filter(
+                    (r) =>
+                        (r.primarySource?.kind === "document" ||
+                            r.primarySource?.kind === "upload" ||
+                            r.primarySource?.kind === "recreated_document") &&
+                        r.formDraftSummary &&
+                        !r.formDraftSummary.generatedFormId
+                ).length
+            ),
+            state: "ready",
+        },
+        {
+            key: "ready_publish",
+            label: "Ready to publish",
+            value: String(rows.filter((r) => r.formDraftSummary?.generatedFormId).length),
+            state: "pending",
+        },
+        { key: "completed_today", label: "Completed today", value: String(savedToday), state: "done" },
     ];
 
     return <CompactKpiStrip items={items} loading={loading} ariaLabel="Processing status" />;

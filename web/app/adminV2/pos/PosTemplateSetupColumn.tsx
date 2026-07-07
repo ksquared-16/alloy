@@ -25,6 +25,7 @@ import type { StoredFormDraftPreview } from "@/lib/pos/processingCase/formDraft/
 import { computePageMaps, svgRectToPdfBbox, type FieldWithRegion } from "@/lib/pos/processingCase/structure/pdfFieldMap";
 import PosPdfFieldMap from "./PosPdfFieldMap";
 import { ProcessingQuestionReviewList } from "./ProcessingQuestionReviewList";
+import ProcessingWorkflowStepper from "./ProcessingWorkflowStepper";
 import { WS_ACTION_PRIMARY, WS_ACTION_SECONDARY } from "@/components/workspace/workspaceTokens";
 import {
     seedReviewQuestionFromDraftField,
@@ -34,7 +35,7 @@ import {
     deriveFieldSources,
     type ReviewQuestionInput,
 } from "@/lib/pos/processingCase/formDraft/questionResolutionModel";
-import { detectionModeLabel, detectionModeHelper } from "@/lib/pos/processingCase/formDraft/detectionModeLabel";
+import { detectionModeLabel } from "@/lib/pos/processingCase/formDraft/detectionModeLabel";
 
 function formatWhen(iso: string | null | undefined): string {
     if (!iso) return "—";
@@ -101,6 +102,7 @@ export default function PosTemplateSetupColumn({
     const [fullText, setFullText] = useState<string | null>(null);
     const [textQuery, setTextQuery] = useState("");
     const [mappingQuestionId, setMappingQuestionId] = useState<string | null>(null);
+    const [phase, setPhase] = useState<"review" | "generate">("review");
 
     const primary = detail?.sources.find((s) => s.role === "primary") ?? detail?.sources[0] ?? null;
     const docId = draft?.source_document_id ?? (primary?.kind === "document" ? (primary?.id ?? null) : null);
@@ -115,6 +117,7 @@ export default function PosTemplateSetupColumn({
         setErr(null);
         setSelectedQuestionId(null);
         setEditingQuestionId(null);
+        setPhase("review");
     }, [detail?.id, detail?.formDraftPreview]);
 
     // Signed URL for the actual PDF.
@@ -188,6 +191,28 @@ export default function PosTemplateSetupColumn({
             ? "strong"
             : "weak";
     const hasRegions = pageMaps.some((p) => p.rects.length > 0);
+
+    const summaryCounts = useMemo(() => {
+        let resolved = 0;
+        let processingOnly = 0;
+        let ignored = 0;
+        for (const q of reviewQuestions) {
+            if (q.ignored) {
+                ignored += 1;
+                continue;
+            }
+            if (q.questionSubject === "processing_only") processingOnly += 1;
+            else resolved += 1;
+        }
+        return { resolved, processingOnly, ignored };
+    }, [reviewQuestions]);
+
+    const includedQuestions = useMemo(() => {
+        return expandQuestionsForDraftSave(reviewQuestions).map((f) => ({
+            label: f.label,
+            section: f.section,
+        }));
+    }, [reviewQuestions]);
 
     // ---- question-list editing ----
     const updateQuestion = (id: string, patch: Partial<ReviewQuestionInput>) =>
@@ -369,42 +394,89 @@ export default function PosTemplateSetupColumn({
 
     return (
         <div className="flex h-full min-h-0 flex-col bg-white">
-            {/* Status strip — 6 columns including detection mode */}
-            <div className="grid shrink-0 grid-cols-2 gap-x-6 gap-y-1.5 border-b border-alloy-stone/12 px-4 py-2.5 sm:grid-cols-3 lg:grid-cols-6">
-                <StatusCell label="Setup status">
-                    {created ? (
-                        <span className="font-semibold text-emerald-700">Draft created</span>
-                    ) : (
-                        <span className="font-semibold text-alloy-midnight">Ready to review</span>
-                    )}
-                    <span className="ml-1 text-[10px] text-stone-400">
-                        {draft.generator_version} · {formatWhen(draft.generated_at)}
-                    </span>
-                </StatusCell>
-                <StatusCell label="Extracted text">
-                    {textAvailable ? `${textLen ?? "—"} characters` : "Unavailable"}
-                </StatusCell>
-                <StatusCell label="Detected structure">
-                    {sectionCount} section{sectionCount === 1 ? "" : "s"} · {activeFieldCount} question{activeFieldCount === 1 ? "" : "s"}
-                </StatusCell>
-                <StatusCell label="Detection mode">
-                    <span className="font-semibold">{detectionModeLabel(draft)}</span>
-                </StatusCell>
-                <StatusCell label="Source">
-                    <span className="truncate">{docTitle}</span>
-                </StatusCell>
-                <StatusCell label="Draft quality">
-                    <span
-                        className={`inline-block rounded-full px-2 py-0.5 text-[10.5px] font-semibold ${
-                            quality === "strong" ? "bg-emerald-50 text-emerald-700" : quality === "weak" ? "bg-amber-50 text-amber-700" : "bg-stone-100 text-stone-500"
-                        }`}
-                    >
-                        {quality === "strong" ? "High" : quality === "weak" ? "Low" : "None"}
-                    </span>
-                </StatusCell>
+            <div className="shrink-0 border-b border-alloy-stone/12 bg-white px-4 py-3">
+                <div className="mb-2">
+                    <ProcessingWorkflowStepper active={created ? "edit" : phase === "generate" ? "generate" : "review"} />
+                </div>
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div className="min-w-0">
+                        <div className="text-[10px] font-semibold uppercase tracking-wide text-alloy-juniper">
+                            {created ? "Step 4 · Edit form" : phase === "generate" ? "Step 3 · Generate native form" : "Step 2 · Review detected questions"}
+                        </div>
+                        <h2 className="mt-0.5 text-[16px] font-semibold text-alloy-midnight">
+                            {phase === "generate" ? "Generate native form" : "Review detected questions"}
+                        </h2>
+                        <p className="mt-1 max-w-2xl text-[12px] leading-relaxed text-stone-500">
+                            {phase === "generate"
+                                ? "Confirm what Alloy will include in your native form before generation."
+                                : "Alloy found questions in your document. Confirm what each question means."}
+                        </p>
+                    </div>
+                    <div className="min-w-[15rem] rounded-lg border border-alloy-stone/18 bg-alloy-stone/30 px-3 py-2">
+                        <div className="text-[9px] font-semibold uppercase tracking-wide text-stone-400">Source evidence</div>
+                        <div className="mt-0.5 truncate text-[12px] font-medium text-alloy-midnight">{docTitle}</div>
+                        <div className="mt-1 flex flex-wrap gap-1.5 text-[10px]">
+                            <span className="rounded-full bg-white px-2 py-0.5 font-medium text-stone-600">{detectionModeLabel(draft)}</span>
+                            <span className="rounded-full bg-white px-2 py-0.5 font-medium text-stone-600">
+                                {activeFieldCount} question{activeFieldCount === 1 ? "" : "s"}
+                            </span>
+                            <span className={`rounded-full px-2 py-0.5 font-medium ${quality === "strong" ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}`}>
+                                {quality === "strong" ? "Ready to generate" : "Needs review"}
+                            </span>
+                        </div>
+                    </div>
+                </div>
+                <details className="mt-2 text-[10.5px] text-stone-400">
+                    <summary className="cursor-pointer font-medium text-stone-500">Advanced detection details</summary>
+                    <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1">
+                        <span>{sectionCount} section{sectionCount === 1 ? "" : "s"}</span>
+                        <span>{textAvailable ? `${textLen ?? "—"} extracted characters` : "Extracted text unavailable"}</span>
+                        <span>{draft.generator_version} · {formatWhen(draft.generated_at)}</span>
+                    </div>
+                </details>
             </div>
 
-            {/* Two-pane review — PDF ↔ question resolution, both visible, independent scroll */}
+            {phase === "generate" && !created ? (
+                <div className="min-h-0 flex-1 overflow-y-auto p-4">
+                    <div className="grid gap-3 lg:grid-cols-3">
+                        <SummaryPanel title="Summary">
+                            <SummaryRow label="Resolved" value={summaryCounts.resolved} tone="emerald" />
+                            <SummaryRow label="Processing only" value={summaryCounts.processingOnly} tone="sky" />
+                            <SummaryRow label="Ignored" value={summaryCounts.ignored} tone="stone" />
+                        </SummaryPanel>
+                        <SummaryPanel title="What will be included">
+                            {includedQuestions.length === 0 ? (
+                                <p className="text-[11px] text-stone-400">No active questions to include.</p>
+                            ) : (
+                                <ul className="space-y-1.5">
+                                    {includedQuestions.map((q) => (
+                                        <li key={`${q.section}-${q.label}`} className="flex items-start gap-2 text-[11px]">
+                                            <span className="mt-0.5 h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-500" aria-hidden />
+                                            <span>
+                                                <span className="font-medium text-alloy-midnight">{q.label}</span>
+                                                <span className="block text-stone-400">{q.section}</span>
+                                            </span>
+                                        </li>
+                                    ))}
+                                </ul>
+                            )}
+                        </SummaryPanel>
+                        <SummaryPanel title="Document details">
+                            <dl className="space-y-1.5 text-[11px]">
+                                <DetailRow label="Filename" value={docTitle} />
+                                <DetailRow label="Detection mode" value={detectionModeLabel(draft)} />
+                                <DetailRow
+                                    label="Detection quality"
+                                    value={quality === "strong" ? "High" : quality === "weak" ? "Needs review" : "Low"}
+                                />
+                                <DetailRow label="Sections" value={String(sectionCount)} />
+                                <DetailRow label="Questions" value={String(activeFieldCount)} />
+                            </dl>
+                        </SummaryPanel>
+                    </div>
+                </div>
+            ) : (
+            <>
             <div className="flex min-h-0 flex-1 overflow-hidden">
                 {/* LEFT — source document: recognized regions or original PDF */}
                 <div className="flex min-w-0 flex-1 flex-col border-r border-alloy-stone/12">
@@ -488,8 +560,10 @@ export default function PosTemplateSetupColumn({
                 {/* RIGHT — resolve detected questions, tabbed */}
                 <div className="flex w-[22rem] shrink-0 flex-col">
                     <div className="shrink-0 border-b border-alloy-stone/10 px-3 pt-2">
-                        <div className="text-[12.5px] font-semibold text-alloy-midnight">Resolve detected questions</div>
-                        <p className="mt-0.5 text-[10.5px] text-stone-500">{detectionModeHelper(draft)}</p>
+                        <div className="text-[12.5px] font-semibold text-alloy-midnight">Detected questions</div>
+                        <p className="mt-0.5 text-[10.5px] text-stone-500">
+                            Alloy found questions in your document. Confirm what each question means.
+                        </p>
                         <div className="mt-1.5 flex gap-3">
                             {(["questions", "text"] as const).map((t) => (
                                 <button
@@ -559,6 +633,8 @@ export default function PosTemplateSetupColumn({
                     </div>
                 </div>
             </div>
+            </>
+            )}
 
             {/* Footer — generate / re-detect / open workspace */}
             <div className="shrink-0 border-t border-alloy-stone/12 bg-white px-3 py-2.5">
@@ -567,10 +643,16 @@ export default function PosTemplateSetupColumn({
                     <p className={`min-w-0 text-[10.5px] ${created ? "text-emerald-700" : "text-stone-400"}`}>
                         {created
                             ? "Native form created — open the form workspace to edit and publish."
-                            : "Generates an unpublished native form from resolved questions (PDF mapping preserved)."}
+                            : phase === "generate"
+                              ? "Alloy will create an unpublished native form from your reviewed questions."
+                              : "When you're done reviewing, continue to generate your native form."}
                     </p>
                     <div className="flex shrink-0 items-center gap-2">
-                        {!created ? (
+                        {!created && phase === "generate" ? (
+                            <button type="button" onClick={() => setPhase("review")} className={WS_ACTION_SECONDARY}>
+                                Back to review
+                            </button>
+                        ) : !created ? (
                             <button type="button" disabled={busy || creating} onClick={() => void handleDetect()} className={WS_ACTION_SECONDARY}>
                                 {busy ? "Re-detecting…" : "Re-detect questions"}
                             </button>
@@ -578,6 +660,15 @@ export default function PosTemplateSetupColumn({
                         {created ? (
                             <button type="button" onClick={() => created.form_id && onOpenForm?.(created.form_id)} className={WS_ACTION_PRIMARY}>
                                 Open form workspace
+                            </button>
+                        ) : phase === "review" ? (
+                            <button
+                                type="button"
+                                disabled={activeFieldCount === 0}
+                                onClick={() => setPhase("generate")}
+                                className={WS_ACTION_PRIMARY}
+                            >
+                                Continue to generate
                             </button>
                         ) : (
                             <button
@@ -596,11 +687,32 @@ export default function PosTemplateSetupColumn({
     );
 }
 
-function StatusCell({ label, children }: { label: string; children: ReactNode }) {
+function SummaryPanel({ title, children }: { title: string; children: ReactNode }) {
     return (
-        <div className="min-w-0">
-            <div className="text-[9px] font-semibold uppercase tracking-wide text-stone-400">{label}</div>
-            <div className="truncate text-[12px] text-alloy-midnight">{children}</div>
+        <section className="rounded-lg border border-alloy-stone/18 bg-alloy-stone/20 p-3">
+            <h3 className="text-[11px] font-semibold uppercase tracking-wide text-stone-500">{title}</h3>
+            <div className="mt-2">{children}</div>
+        </section>
+    );
+}
+
+function SummaryRow({ label, value, tone }: { label: string; value: number; tone: "emerald" | "sky" | "stone" }) {
+    const cls =
+        tone === "emerald" ? "text-emerald-700" : tone === "sky" ? "text-sky-700" : "text-stone-600";
+    return (
+        <div className="flex items-center justify-between text-[12px]">
+            <span className="text-stone-600">{label}</span>
+            <span className={`font-semibold tabular-nums ${cls}`}>{value}</span>
         </div>
     );
 }
+
+function DetailRow({ label, value }: { label: string; value: string }) {
+    return (
+        <div>
+            <dt className="text-stone-400">{label}</dt>
+            <dd className="font-medium text-alloy-midnight">{value}</dd>
+        </div>
+    );
+}
+

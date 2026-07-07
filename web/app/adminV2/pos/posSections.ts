@@ -39,6 +39,7 @@ export interface PosSectionDef {
  */
 export const POS_SECTIONS: PosSectionDef[] = [
     // Work mode — runtime processing
+    { key: "home", label: "Overview", group: "work" },
     { key: "processing", label: "Incoming", group: "work" },
     // Studio mode — setup / design-time assets
     { key: "documents", label: "Documents", group: "studio" },

@@ -53,7 +53,7 @@ function modeOf(section: PosSection): PosMode {
 
 /** First section to land on when entering a mode. */
 function defaultSectionFor(mode: PosMode): PosSection {
-    return POS_SECTIONS.find((s) => s.group === mode)?.key ?? "home";
+    return mode === "work" ? "home" : (POS_SECTIONS.find((s) => s.group === mode)?.key ?? "documents");
 }
 
 const MODES: ReadonlyArray<{ key: PosMode; label: string }> = [

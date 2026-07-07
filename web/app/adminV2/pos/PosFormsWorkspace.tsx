@@ -34,6 +34,7 @@ import {
     type BuilderFieldSpec,
 } from "@/lib/forms/formBuilderSchema";
 import PosPanel from "./PosPanel";
+import { openFormAuthoringWorkspace } from "@/lib/admin/forms/formAuthoringWorkspacePath";
 
 interface FormRow {
     id: string;
@@ -75,6 +76,26 @@ const BUILDER_PALETTE: Array<{ type: BuilderFieldType; label: string }> = [
 ];
 
 const EMPTY_PAYLOAD: FormPayload = { values: {}, groups: {}, signatures: {} };
+
+function formOriginLabel(form: FormRow): string {
+    return form.metadata?.source === "document_form_draft" ? "From document" : "Manual form";
+}
+
+function formStageLabel(form: FormRow, activeDraft: boolean): "Forms generated from documents" | "Draft forms" | "Published forms" {
+    if (form.metadata?.source === "document_form_draft") return "Forms generated from documents";
+    if (form.has_published_version && !activeDraft) return "Published forms";
+    return "Draft forms";
+}
+
+function fieldDestinationLabel(field: FormField): string {
+    const source = field.field_source;
+    if (!source) return "Processing only";
+    if (source.entity_type === "child" || source.entity_type === "customer_member") return "Child record";
+    if (source.entity_type === "guardian" || source.entity_type === "person") return "Parent / guardian record";
+    if (source.entity_type === "customer") return "Household record";
+    if (source.entity_type === "enrollment") return "Enrollment record";
+    return "Record";
+}
 
 function optionsToText(field: FormField | null): string {
     if (!field || (field.type !== "select" && field.type !== "multiselect")) return "";
@@ -326,6 +347,17 @@ export default function PosFormsWorkspace({ focusFormId = null }: { focusFormId?
 
     const selectedForm = forms?.find((f) => f.id === selectedFormId) ?? null;
     const selectedField = selectedFieldId ? fieldById.get(selectedFieldId) ?? null : null;
+    const groupedForms = useMemo(() => {
+        if (!forms) return [];
+        const buckets = new Map<string, FormRow[]>();
+        for (const form of forms) {
+            const key = formStageLabel(form, selectedFormId === form.id && editable);
+            buckets.set(key, [...(buckets.get(key) ?? []), form]);
+        }
+        return ["Forms generated from documents", "Draft forms", "Published forms"]
+            .map((label) => ({ label, forms: buckets.get(label) ?? [] }))
+            .filter((group) => group.forms.length > 0);
+    }, [forms, selectedFormId, editable]);
 
     useEffect(() => {
         setOptionsText(optionsToText(selectedField));
@@ -333,13 +365,13 @@ export default function PosFormsWorkspace({ focusFormId = null }: { focusFormId?
 
     return (
         <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-            <WorkspaceSectionHeader title="Forms" subtitle="Your form library. Build a form by hand or from a document — these are the building blocks for packets." />
+            <WorkspaceSectionHeader title="Forms" subtitle="Generated and manual forms, organized as sections and questions. Packets come later." />
 
             <div className="flex min-h-0 flex-1 overflow-x-auto">
                 {/* Column 1 — form list */}
                 <div className="flex w-[15rem] shrink-0 flex-col overflow-y-auto border-r border-alloy-stone/12 bg-white">
                     <div className="flex items-center justify-between px-3 py-2">
-                        <span className="text-[10px] font-semibold uppercase tracking-wider text-stone-400">All forms</span>
+                        <span className="text-[10px] font-semibold uppercase tracking-wider text-stone-400">Form workflow</span>
                         <button type="button" onClick={() => void createBlankForm()} className="inline-flex items-center gap-1 rounded bg-alloy-juniper px-1.5 py-0.5 text-[10px] font-semibold text-white hover:bg-alloy-juniper/90">
                             <Plus className="h-3 w-3" aria-hidden /> New
                         </button>
@@ -349,24 +381,33 @@ export default function PosFormsWorkspace({ focusFormId = null }: { focusFormId?
                     ) : !forms ? (
                         <div className="space-y-1.5 p-2">{[0, 1, 2].map((i) => <div key={i} className="h-9 animate-pulse rounded bg-stone-100" />)}</div>
                     ) : forms.length === 0 ? (
-                        <div className="p-3 text-[12px] text-stone-400">No forms yet — click New.</div>
+                        <div className="p-3 text-[12px] text-stone-400">No forms yet — import a document or click New.</div>
                     ) : (
-                        <ul>
-                            {forms.map((f) => {
-                                const active = f.id === selectedFormId;
-                                return (
-                                    <li key={f.id}>
-                                        <button type="button" onClick={() => void selectForm(f.id)} className={`flex w-full flex-col items-start border-l-2 px-3 py-2 text-left ${active ? "border-alloy-juniper bg-alloy-juniper/[0.07]" : "border-transparent hover:bg-alloy-stone/[0.05]"}`}>
-                                            <span className="truncate text-[12.5px] font-medium text-alloy-midnight">{f.name || f.key}</span>
-                                            <span className="mt-0.5 flex flex-wrap items-center gap-1">
-                                                {f.metadata?.source === "document_form_draft" ? <span className="rounded bg-sky-50 px-1 text-[9px] font-medium text-sky-700">From document</span> : null}
-                                                <span className="rounded bg-stone-100 px-1 text-[9px] text-stone-500">{f.has_published_version ? "Published" : "Draft"}</span>
-                                            </span>
-                                        </button>
-                                    </li>
-                                );
-                            })}
-                        </ul>
+                        <div className="space-y-3 px-2 pb-3">
+                            {groupedForms.map((group) => (
+                                <section key={group.label}>
+                                    <div className="px-1 py-1 text-[10px] font-semibold uppercase tracking-wide text-stone-400">
+                                        {group.label}
+                                    </div>
+                                    <ul className="space-y-1">
+                                        {group.forms.map((f) => {
+                                            const active = f.id === selectedFormId;
+                                            return (
+                                                <li key={f.id}>
+                                                    <button type="button" onClick={() => void selectForm(f.id)} className={`flex w-full flex-col items-start rounded-md border px-2.5 py-2 text-left ${active ? "border-alloy-juniper bg-alloy-juniper/[0.07]" : "border-stone-200 hover:bg-alloy-stone/[0.05]"}`}>
+                                                        <span className="truncate text-[12.5px] font-medium text-alloy-midnight">{f.name || f.key}</span>
+                                                        <span className="mt-1 flex flex-wrap items-center gap-1">
+                                                            <span className={`rounded px-1.5 py-0.5 text-[9px] font-medium ${f.metadata?.source === "document_form_draft" ? "bg-sky-50 text-sky-700" : "bg-stone-100 text-stone-500"}`}>{formOriginLabel(f)}</span>
+                                                            <span className="rounded bg-stone-100 px-1.5 py-0.5 text-[9px] text-stone-500">{f.has_published_version ? "Published" : "Draft"}</span>
+                                                        </span>
+                                                    </button>
+                                                </li>
+                                            );
+                                        })}
+                                    </ul>
+                                </section>
+                            ))}
+                        </div>
                     )}
                 </div>
 
@@ -389,6 +430,9 @@ export default function PosFormsWorkspace({ focusFormId = null }: { focusFormId?
                                     </div>
                                     {editable ? (
                                         <>
+                                            <button type="button" onClick={() => selectedFormId && openFormAuthoringWorkspace(selectedFormId)} className="rounded-md border border-stone-200 px-2 py-1 text-[11px] font-medium text-stone-600 hover:bg-stone-50">
+                                                Rich editor
+                                            </button>
                                             <button type="button" disabled={saving || !dirty} onClick={() => void saveDraft()} className="inline-flex items-center gap-1 rounded-md border border-stone-200 px-2 py-1 text-[11px] font-medium text-stone-600 hover:bg-stone-50 disabled:opacity-40">
                                                 <Save className="h-3.5 w-3.5" aria-hidden /> {saving ? "Saving…" : "Save"}
                                             </button>
@@ -430,7 +474,7 @@ export default function PosFormsWorkspace({ focusFormId = null }: { focusFormId?
                                                                 <button type="button" onClick={() => setSelectedFieldId(fid)} className={`flex w-full items-center justify-between gap-2 rounded-md border px-2.5 py-1.5 text-left ${active ? "border-emerald-300 bg-emerald-50/60" : "border-stone-200 bg-white hover:bg-stone-50"}`}>
                                                                     <span className="min-w-0">
                                                                         <span className="block truncate text-[12.5px] font-medium text-alloy-midnight">{field.label}</span>
-                                                                        <span className="block text-[10px] text-stone-400">{FIELD_TYPE_LABELS[field.type] ?? field.type}{field.field_source ? ` · ${field.field_source.entity_type}.${field.field_source.field_key}` : ""}</span>
+                                                                        <span className="block text-[10px] text-stone-400">{FIELD_TYPE_LABELS[field.type] ?? field.type} · {fieldDestinationLabel(field)}</span>
                                                                     </span>
                                                                     {field.required ? <span className="shrink-0 rounded bg-stone-100 px-1 text-[9px] font-medium text-stone-500">Required</span> : null}
                                                                 </button>
@@ -474,7 +518,13 @@ export default function PosFormsWorkspace({ focusFormId = null }: { focusFormId?
                                 <Prop label="Label" value={selectedField.label} />
                                 <Prop label="Type" value={FIELD_TYPE_LABELS[selectedField.type] ?? selectedField.type} />
                                 <Prop label="Required" value={selectedField.required ? "Yes" : "No"} />
-                                <Prop label="Record sync" value={selectedField.field_source ? `${selectedField.field_source.entity_type}.${selectedField.field_source.field_key}` : "Not linked"} mono />
+                                <Prop label="Answer goes to" value={fieldDestinationLabel(selectedField)} />
+                                {selectedField.field_source ? (
+                                    <details className="pt-1 text-[10.5px] text-stone-400">
+                                        <summary className="cursor-pointer">Advanced mapping</summary>
+                                        <code>{selectedField.field_source.entity_type}.{selectedField.field_source.field_key}</code>
+                                    </details>
+                                ) : null}
                             </dl>
                         ) : (
                             <div className="space-y-2 text-[11.5px]">
@@ -497,11 +547,15 @@ export default function PosFormsWorkspace({ focusFormId = null }: { focusFormId?
                                     </label>
                                 ) : null}
                                 <div className="rounded border border-stone-100 bg-stone-50/60 p-1.5">
-                                    <span className="text-[10px] text-stone-400">Record sync (optional)</span>
+                                    <span className="text-[10px] text-stone-400">Where should this answer go?</span>
+                                    <div className="mt-0.5 text-[11px] font-medium text-alloy-midnight">{fieldDestinationLabel(selectedField)}</div>
+                                    <details className="mt-1 text-[10.5px] text-stone-500">
+                                        <summary className="cursor-pointer">Advanced mapping</summary>
                                     <div className="mt-0.5 flex gap-1">
                                         <input placeholder="entity_type" value={selectedField.field_source?.entity_type ?? ""} onChange={(e) => mutate((s) => updateField(s, selectedField.id, { field_source: { entity_type: e.target.value, field_key: selectedField.field_source?.field_key ?? "" } }))} className="min-w-0 flex-1 rounded border border-stone-200 px-1.5 py-1 font-mono text-[10px]" />
                                         <input placeholder="field_key" value={selectedField.field_source?.field_key ?? ""} onChange={(e) => mutate((s) => updateField(s, selectedField.id, { field_source: { entity_type: selectedField.field_source?.entity_type ?? "", field_key: e.target.value } }))} className="min-w-0 flex-1 rounded border border-stone-200 px-1.5 py-1 font-mono text-[10px]" />
                                     </div>
+                                    </details>
                                 </div>
                                 <div className="flex items-center gap-1.5 pt-1">
                                     <button type="button" onClick={() => mutate((s) => moveFieldWithinSection(s, selectedField.id, -1))} className="rounded border border-stone-200 p-1 text-stone-500 hover:bg-stone-50"><ArrowUp className="h-3.5 w-3.5" /></button>

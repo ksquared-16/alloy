@@ -115,6 +115,48 @@ function formatAge(iso: string | null): string {
     return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
 
+function formDraftStatus(row: ProcessingCaseQueueRow): string {
+    const summary = row.formDraftSummary;
+    if (!summary) return row.primarySource?.kind === "document" ? "Needs questions" : "Needs review";
+    if (summary.generatedFormId) return "Generated form";
+    if (summary.questionCount > 0) return "Questions ready";
+    return "Needs questions";
+}
+
+function detectionModeText(row: ProcessingCaseQueueRow): string | null {
+    const mode = row.formDraftSummary?.detectionMode;
+    if (!mode || mode === "unknown") return null;
+    if (mode === "acroform") return "AcroForm";
+    if (mode === "text_assisted") return "Text-assisted";
+    if (mode === "manual_review") return "Reviewed";
+    if (mode === "manual_required") return "Manual";
+    return null;
+}
+
+type QueueDisplayRow = ProcessingCaseQueueRow & { duplicateCount?: number };
+
+function collapseDuplicateDocumentRows(rows: ProcessingCaseQueueRow[]): QueueDisplayRow[] {
+    const seen = new Map<string, QueueDisplayRow>();
+    const out: QueueDisplayRow[] = [];
+    for (const row of rows) {
+        if (row.primarySource?.kind !== "document") {
+            out.push(row);
+            continue;
+        }
+        const title = (row.sourceDisplay?.label ?? "").trim().toLowerCase();
+        const key = title || row.id;
+        const existing = seen.get(key);
+        if (existing) {
+            existing.duplicateCount = (existing.duplicateCount ?? 1) + 1;
+            continue;
+        }
+        const next: QueueDisplayRow = { ...row, duplicateCount: 1 };
+        seen.set(key, next);
+        out.push(next);
+    }
+    return out;
+}
+
 export default function ProcessingQueueList({
     selectedCaseId,
     onSelectCase,
@@ -199,8 +241,9 @@ export default function ProcessingQueueList({
     const availableFolders = FOLDER_ORDER.filter((f) => f.key === "all" || (folderCounts[f.key] ?? 0) > 0);
     const effectiveFolder: ProcessingFolderKey =
         showFolders && availableFolders.some((f) => f.key === activeFolder) ? activeFolder : "all";
-    const visibleRows =
+    const visibleRowsBase =
         effectiveFolder === "all" ? rows : rows.filter((r) => deriveFolder(r) === effectiveFolder);
+    const visibleRows = collapseDuplicateDocumentRows(visibleRowsBase);
 
     const renderLane = (lane: { key: ProcessingCaseStatus; label: string }) => {
         const laneRows = visibleRows.filter((r) => r.status === lane.key);
@@ -225,6 +268,8 @@ export default function ProcessingQueueList({
                         const title = row.sourceDisplay?.label ?? row.primarySource?.kind ?? "Untitled source";
                         const channel = row.sourceDisplay?.channel ?? null;
                         const rec = recommendations[row.id] ?? null;
+                        const mode = detectionModeText(row);
+                        const status = formDraftStatus(row);
                         return (
                             <li key={row.id}>
                                 <button
@@ -245,9 +290,16 @@ export default function ProcessingQueueList({
                                             </span>
                                             <span className="shrink-0 text-[10.5px] text-stone-400">{formatAge(row.sourceDisplay?.receivedAt ?? row.createdAt)}</span>
                                         </span>
-                                        <span className="mt-0.5 flex items-center gap-1.5 text-[11px] text-stone-500">
+                                        <span className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px] text-stone-500">
                                             <span className="rounded bg-stone-100 px-1.5 py-0.5 text-[10px] text-stone-600">{kindLabel}</span>
-                                            {channel ? <span className="truncate">via {channel}</span> : null}
+                                            <span className="rounded bg-emerald-50 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700">{status}</span>
+                                            {mode ? <span className="rounded bg-sky-50 px-1.5 py-0.5 text-[10px] font-medium text-sky-700">{mode}</span> : null}
+                                            {row.duplicateCount && row.duplicateCount > 1 ? (
+                                                <span className="rounded bg-stone-50 px-1.5 py-0.5 text-[10px] text-stone-500">
+                                                    {row.duplicateCount} similar uploads
+                                                </span>
+                                            ) : null}
+                                            {channel ? <span className="truncate">source: {channel}</span> : null}
                                             {row.relatedSourceCount > 0 ? <span>· +{row.relatedSourceCount} source{row.relatedSourceCount > 1 ? "s" : ""}</span> : null}
                                         </span>
                                         {rec ? (

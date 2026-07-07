@@ -88,6 +88,13 @@ export function ProcessingQuestionReviewList({
     onStartMapping,
 }: Props) {
     const activeCount = questions.filter((q) => !q.ignored).length;
+    const sections = questions.reduce<Array<{ title: string; questions: ReviewQuestionInput[] }>>((acc, q) => {
+        const title = q.section?.trim() || "Questions";
+        const existing = acc.find((s) => s.title === title);
+        if (existing) existing.questions.push(q);
+        else acc.push({ title, questions: [q] });
+        return acc;
+    }, []);
 
     return (
         <>
@@ -95,8 +102,18 @@ export function ProcessingQuestionReviewList({
                 {activeCount} active question{activeCount === 1 ? "" : "s"}
                 {questions.length > activeCount ? ` · ${questions.length - activeCount} ignored` : ""}
             </div>
-            <ol className="space-y-1.5">
-                {questions.map((q, i) => {
+            <div className="space-y-3">
+                {sections.map((section) => (
+                    <section key={section.title} className="space-y-1.5">
+                        <div className="flex items-center justify-between">
+                            <h3 className="truncate text-[11px] font-semibold text-alloy-midnight">{section.title}</h3>
+                            <span className="text-[10px] text-stone-400">
+                                {section.questions.filter((q) => !q.ignored).length} question{section.questions.filter((q) => !q.ignored).length === 1 ? "" : "s"}
+                            </span>
+                        </div>
+                        <ol className="space-y-1.5">
+                {section.questions.map((q) => {
+                    const i = questions.findIndex((item) => item.id === q.id);
                     const sel = selectedId === q.id;
                     const isEditing = editingId === q.id;
                     const mapped = typeof q.page === "number" && Array.isArray(q.bbox);
@@ -165,7 +182,7 @@ export function ProcessingQuestionReviewList({
                             {!q.ignored ? (
                                 <div className="space-y-2 border-t border-stone-100 px-2 py-2">
                                     <div>
-                                        <label className="mb-0.5 block text-[10px] font-medium text-stone-500">What is this question asking about?</label>
+                                        <label className="mb-0.5 block text-[10px] font-medium text-stone-500">Where should this answer go?</label>
                                         <select
                                             value={q.questionSubject ?? "processing_only"}
                                             onChange={(e) =>
@@ -230,7 +247,10 @@ export function ProcessingQuestionReviewList({
                         </li>
                     );
                 })}
-            </ol>
+                        </ol>
+                    </section>
+                ))}
+            </div>
         </>
     );
 }
