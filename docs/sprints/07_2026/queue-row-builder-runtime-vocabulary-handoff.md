@@ -1,7 +1,22 @@
 # Queue Row Builder + Runtime Vocabulary — Final Handoff
 
-**Status:** Complete on `origin/staging`  
+**Status:** **Frozen** on `origin/staging`  
 **Sprint close:** July 2026
+
+## Freeze policy
+
+**Queue Row Builder is now considered the canonical Surface Composer interaction.**
+
+Future surface authoring work should **extend this interaction model** — click surface → library → place → select → inspector (Section + Placement) — rather than creating new builder paradigms.
+
+| Rule | Detail |
+|------|--------|
+| **Frozen** | Queue Row Builder architecture, canvas, library shell, inspector pattern |
+| **Allowed** | Configuration-only changes (fields, variants, visibility, group/sort, registry/resolver wiring) |
+| **Production bugs only** | Do **not** reopen Queue Row Builder for feature work, redesign, or parallel composer UX |
+| **Next consumer** | **Focus Panel Composer** — see `focus-panel-composer-handoff.md` |
+
+Shared composer primitives live in `web/lib/adminV2/settings/surfaces/surfaceFieldComposer.ts`. Extend those for Focus Panel; do not fork a second interaction model.
 
 ## Staging commits
 
@@ -10,7 +25,7 @@
 | `48815f061` | `feat(surfaces): refine queue row field composer interaction` |
 | `43d4665ad` | `feat(surfaces): complete queue row sibling runtime vocabulary` |
 | `1f85137bc` | `docs(surfaces): close queue row builder and hand off focus panel composer` |
-| `1e7063424` | `chore(surfaces): queue row closeout cleanup` |
+| `992922372` | `chore(surfaces): queue row closeout cleanup` |
 
 ## What shipped
 
@@ -168,4 +183,6 @@ cd web && npm run test -- \
 
 ## Next phase
 
-See `focus-panel-composer-handoff.md` — apply the same composer mental model to Focus Panel cards/fields.
+**Focus Panel Composer** is the next consumer of the canonical Surface Composer interaction.
+
+See `focus-panel-composer-handoff.md` — apply the same composer mental model to Focus Panel cards/fields. Do **not** reopen Queue Row Builder except for production bugs.
