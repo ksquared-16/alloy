@@ -104,12 +104,15 @@ const CONSUMER_TO_LEGACY_SURFACE: Partial<Record<FieldConsumerSurface, FieldSurf
     focus_panel: "focus_panel",
 };
 
+type LegacyFieldSurfaceInput = Pick<
+    FieldDef,
+    "field_key" | "is_visible_in_form" | "is_visible_in_drawer" | "is_visible_in_table"
+> &
+    Partial<Pick<FieldDef, "field_type" | "label" | "is_system" | "is_active" | "config">>;
+
 function registryInputFromFieldDef(
     entityType: string,
-    row: Pick<
-        FieldDef,
-        "field_key" | "is_visible_in_form" | "is_visible_in_drawer" | "is_visible_in_table" | "field_type" | "label" | "is_system" | "is_active" | "config"
-    >,
+    row: LegacyFieldSurfaceInput,
 ): FieldRegistryAvailabilityInput {
     return {
         entity_type: entityType,
@@ -154,17 +157,11 @@ export function resolveFieldSurfaceAvailability(
 ): FieldSurfaceAvailabilityRow[];
 export function resolveFieldSurfaceAvailability(
     entityType: string,
-    row: Pick<
-        FieldDef,
-        "field_key" | "is_visible_in_form" | "is_visible_in_drawer" | "is_visible_in_table" | "field_type" | "label" | "is_system" | "is_active" | "config"
-    >,
+    row: LegacyFieldSurfaceInput,
 ): FieldSurfaceAvailabilityBadge[];
 export function resolveFieldSurfaceAvailability(
     entityTypeOrInput: string | FieldRegistryAvailabilityInput,
-    row?: Pick<
-        FieldDef,
-        "field_key" | "is_visible_in_form" | "is_visible_in_drawer" | "is_visible_in_table" | "field_type" | "label" | "is_system" | "is_active" | "config"
-    >,
+    row?: LegacyFieldSurfaceInput,
 ): FieldSurfaceAvailabilityRow[] | FieldSurfaceAvailabilityBadge[] {
     if (typeof entityTypeOrInput === "object") {
         return deriveRegistryFieldAvailability(entityTypeOrInput);
