@@ -21,6 +21,7 @@ import {
     BUSINESS_PROCESS_LENS_VISIBLE_IN_WORK_UNIT,
     BUSINESS_PROCESS_WORK_VIEW_DEFAULT_ORDER,
     BUSINESS_PROCESS_WORK_VIEW_TECHNICAL_IDENTITY,
+    BUSINESS_PROCESS_WORK_VIEW_CATCH_ALL_HELPER,
 } from "@/lib/lifecycle/businessProcessUiLabels";
 import {
     formatWorkViewBasicsSummary,
@@ -31,12 +32,37 @@ import {
 import { buildOperationalViewPreviewRuntimeHref } from "@/lib/adminV2/runtime/perspective/mergeOperationalViewMetadata";
 import type { WorkViewCompatQueueLane } from "@/lib/lifecycle/workViewsRuntimeConvergence";
 import type { WorkViewConfigV1Stored } from "@/lib/lifecycle/workViewsConfigV1";
+import { isWorkViewCatchAll } from "@/lib/lifecycle/workViewsConfigV1";
 import type { EntityLayoutRecord } from "@/lib/layout/layoutV2";
 import { publishedLayoutOptionsForAssignmentSlot } from "@/lib/layout/layoutAssignmentLayoutOptions";
-import { GRAIN_LABELS, resolveWorkViewStageGrains, validateWorkViewGrainConsistency } from "@/lib/lifecycle/stageGrainV1";
+import { GRAIN_LABELS, resolveWorkViewStageGrains, stageKeysReferencedByWorkView, validateWorkViewGrainConsistency } from "@/lib/lifecycle/stageGrainV1";
 import type { StageGrain } from "@/lib/lifecycle/stageGrainV1";
 
-function WorkViewGrainBanner({ stageGrains }: { stageGrains: (StageGrain | undefined)[] }) {
+function WorkViewGrainBanner({
+    stageGrains,
+    hasStageScope,
+    catchAll = false,
+}: {
+    stageGrains: (StageGrain | undefined)[];
+    /** True when the view filters by `opportunity_stage` — grain can be confirmed from stage config. */
+    hasStageScope: boolean;
+    /** Process-wide catch-all (`filters_v1: []`) — informational only, no mixed-grain warnings. */
+    catchAll?: boolean;
+}) {
+    if (catchAll) {
+        return (
+            <div
+                className="flex items-start gap-2 border-b border-alloy-bend-pine/15 bg-alloy-bend-pine/[0.04] px-4 py-2.5"
+                data-testid="work-view-grain-catch-all"
+            >
+                <span className="text-[11px] font-medium text-alloy-bend-pine">All work</span>
+                <p className="text-[11px] leading-relaxed text-alloy-midnight/55">
+                    {BUSINESS_PROCESS_WORK_VIEW_CATCH_ALL_HELPER}
+                </p>
+            </div>
+        );
+    }
+
     const defined = stageGrains.filter((g): g is StageGrain => g !== undefined);
     const consistency = validateWorkViewGrainConsistency(stageGrains);
 
@@ -54,13 +80,27 @@ function WorkViewGrainBanner({ stageGrains }: { stageGrains: (StageGrain | undef
     }
 
     if (defined.length === 0) {
+        if (!hasStageScope) {
+            return (
+                <div
+                    className="flex items-start gap-2 border-b border-alloy-stone/20 bg-alloy-stone/[0.03] px-4 py-2.5"
+                    data-testid="work-view-grain-unscoped"
+                >
+                    <span className="text-[11px] font-medium text-alloy-midnight/55">Row type</span>
+                    <p className="text-[11px] leading-relaxed text-alloy-midnight/50">
+                        No stage condition — row type is determined by the records that match at runtime.
+                        Add a stage condition to confirm a single row type, or split views when you need separate row types.
+                    </p>
+                </div>
+            );
+        }
         return (
             <div
                 className="flex items-center gap-2 border-b border-amber-200 bg-amber-50 px-4 py-2"
                 data-testid="work-view-grain-missing"
             >
                 <span className="text-[11px] font-medium text-amber-800">Row type</span>
-                <span className="text-[11px] text-amber-700">Missing stage grain — configure Row type in each stage's Stage Context.</span>
+                <span className="text-[11px] text-amber-700">Missing stage grain — configure Row type in each stage&apos;s Stage Context.</span>
             </div>
         );
     }
@@ -210,9 +250,11 @@ export default function WorkViewProcessEditorCard({
             </header>
 
             <WorkViewGrainBanner
+                catchAll={isWorkViewCatchAll(view)}
                 stageGrains={
                     stageGrainByKey ? resolveWorkViewStageGrains(view.filters_v1, stageGrainByKey) : stageGrains
                 }
+                hasStageScope={stageKeysReferencedByWorkView(view.filters_v1).length > 0}
             />
 
             <div className="space-y-0 px-4 pb-4">

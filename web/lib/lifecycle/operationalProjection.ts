@@ -27,6 +27,7 @@ import {
     type WorkViewFilterV1,
 } from "@/lib/lifecycle/workViewsConfigV1";
 import type { QueueRowContext } from "@/lib/workUnits/lifecycleSubjectContracts";
+import type { WorkViewGrainBucket } from "@/lib/lifecycle/stageGrainV1";
 
 export type OperationalProjectionRow = Record<string, unknown>;
 
@@ -204,9 +205,34 @@ export function computeOperationalProjection(params: {
 export type WorkViewOperationalSignals = {
     attentionCount: number;
     overdueCount: number;
+    /** Case/family-grain rows in this view (when mixed or family-only). */
+    primaryGrainCount: number | null;
+    /** Child/candidate-grain rows in this view (when mixed). */
+    supportingGrainCount: number | null;
+    /** Grain bucket for the primary count — drives presentation labels only. */
+    primaryGrainKind: WorkViewGrainBucket | null;
+    /** Grain bucket for the supporting count when dual-grain. */
+    supportingGrainKind: WorkViewGrainBucket | null;
 };
 
 const OVERDUE_DUE_LABEL = "Overdue";
+
+/** Bucket one queue row into family (case) vs child/candidate grain for tile breakdown. */
+function grainBucketForQueueRow(ctx: QueueRowContext): "family" | "child" | null {
+    const unit = ctx.row_count_unit;
+    if (unit === "cases") return "family";
+    if (unit === "children" || unit === "enrollment_track" || unit === "candidates") return "child";
+    if (ctx.row_presentation_mode === "grouped_subjects") return "family";
+    if (ctx.row_subjects && ctx.row_subjects.length > 1) return "family";
+    return "child";
+}
+
+function grainContribution(ctx: QueueRowContext, bucket: "family" | "child"): number {
+    if (bucket === "family") return 1;
+    if (typeof ctx.row_count === "number" && ctx.row_count > 0) return ctx.row_count;
+    if (ctx.row_subjects?.length) return ctx.row_subjects.length;
+    return 1;
+}
 
 export function computeWorkViewOperationalSignals(params: {
     baseRows: ReadonlyArray<OperationalProjectionRow>;
@@ -223,13 +249,41 @@ export function computeWorkViewOperationalSignals(params: {
     for (const view of projection.views) {
         let attentionCount = 0;
         let overdueCount = 0;
+        let familyCount = 0;
+        let childCount = 0;
         for (const row of view.rows) {
             const ctx = (row as { _queue_row_context?: QueueRowContext })._queue_row_context;
             if (!ctx) continue;
             if (ctx.attention_summary?.needs_attention === true) attentionCount += 1;
             if (ctx.current_work_summary?.due_label === OVERDUE_DUE_LABEL) overdueCount += 1;
+            const bucket = grainBucketForQueueRow(ctx);
+            if (bucket === "family") familyCount += grainContribution(ctx, "family");
+            else if (bucket === "child") childCount += grainContribution(ctx, "child");
         }
-        out[view.id] = { attentionCount, overdueCount };
+        let primaryGrainCount: number | null = null;
+        let supportingGrainCount: number | null = null;
+        let primaryGrainKind: WorkViewGrainBucket | null = null;
+        let supportingGrainKind: WorkViewGrainBucket | null = null;
+        if (familyCount > 0 && childCount > 0) {
+            primaryGrainCount = familyCount;
+            supportingGrainCount = childCount;
+            primaryGrainKind = "family";
+            supportingGrainKind = "child";
+        } else if (childCount > 0) {
+            primaryGrainCount = childCount;
+            primaryGrainKind = "child";
+        } else if (familyCount > 0) {
+            primaryGrainCount = familyCount;
+            primaryGrainKind = "family";
+        }
+        out[view.id] = {
+            attentionCount,
+            overdueCount,
+            primaryGrainCount,
+            supportingGrainCount,
+            primaryGrainKind,
+            supportingGrainKind,
+        };
     }
     return out;
 }

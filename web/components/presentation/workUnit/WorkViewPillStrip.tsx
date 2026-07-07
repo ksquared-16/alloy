@@ -41,10 +41,10 @@ function WorkViewPill({
             onPointerEnter={onPrefetch ? () => onPrefetch(view.id) : undefined}
             onFocus={onPrefetch ? () => onPrefetch(view.id) : undefined}
             onClick={() => onSelect(view.id)}
-            className={`motion-control inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border px-3 py-1 text-xs font-semibold ${
+            className={`motion-control inline-flex shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-full border px-3 py-1 text-xs min-w-[6.75rem] ${
                 view.isActive
-                    ? "border-alloy-juniper bg-alloy-juniper text-white shadow-sm"
-                    : "border-alloy-midnight/20 bg-white text-alloy-midnight/80 hover:border-alloy-juniper/45 hover:bg-alloy-juniper/[0.03]"
+                    ? "border-alloy-juniper bg-alloy-juniper font-semibold text-white shadow-sm"
+                    : "border-alloy-midnight/20 bg-white font-semibold text-alloy-midnight/80 hover:border-alloy-juniper/45 hover:bg-alloy-juniper/[0.03]"
             }${ack.className ? ` ${ack.className}` : ""}`}
         >
             <span>{view.label}</span>

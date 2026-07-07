@@ -23,7 +23,22 @@ import {
 import type { WorkViewLinkModel } from "@/lib/presentation/runtime";
 
 function view(over: Partial<WorkViewLinkModel>): WorkViewLinkModel {
-    return { id: "v", label: "V", isActive: false, count: null, href: "#", attentionCount: null, overdueCount: null, ...over };
+    return {
+        id: "v",
+        label: "V",
+        isActive: false,
+        count: null,
+        href: "#",
+        attentionCount: null,
+        overdueCount: null,
+        primaryGrainCount: null,
+        supportingGrainCount: null,
+        primaryGrainKind: null,
+        supportingGrainKind: null,
+        primaryGrainLabel: null,
+        supportingGrainLabel: null,
+        ...over,
+    };
 }
 function cfg(over: Partial<WorkspaceProcessSurfaceConfig["todaysWork"]>): WorkspaceProcessSurfaceConfig {
     return {

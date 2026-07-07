@@ -97,7 +97,15 @@ export function applyWorkViewOperationalSignalsToCards(
             const sig = viewId ? signals[viewId] : undefined;
             if (!sig) return entry;
             changed = true;
-            return { ...entry, attention_count: sig.attentionCount, overdue_count: sig.overdueCount };
+            return {
+                ...entry,
+                attention_count: sig.attentionCount,
+                overdue_count: sig.overdueCount,
+                primary_grain_count: sig.primaryGrainCount,
+                supporting_grain_count: sig.supportingGrainCount,
+                primary_grain_kind: sig.primaryGrainKind,
+                supporting_grain_kind: sig.supportingGrainKind,
+            };
         });
         return changed ? { ...card, workQueues } : card;
     });

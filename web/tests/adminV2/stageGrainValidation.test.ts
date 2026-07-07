@@ -1,5 +1,14 @@
 import { describe, it, expect } from "vitest";
-import { validateWorkViewGrainConsistency } from "@/lib/lifecycle/stageGrainV1";
+import { validateWorkViewGrainConsistency, grainCountUnitLabel } from "@/lib/lifecycle/stageGrainV1";
+
+describe("grainCountUnitLabel", () => {
+    it("pluralizes family and child grain units for Work View counts", () => {
+        expect(grainCountUnitLabel("family", 1)).toBe("Family");
+        expect(grainCountUnitLabel("family", 2)).toBe("Families");
+        expect(grainCountUnitLabel("child", 1)).toBe("Child");
+        expect(grainCountUnitLabel("child", 3)).toBe("Children");
+    });
+});
 
 describe("validateWorkViewGrainConsistency", () => {
     it("accepts a single defined grain", () => {

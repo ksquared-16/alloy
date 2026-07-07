@@ -55,6 +55,20 @@ export type WorkViewConfigV1Stored = {
     compat_queue_key?: string;
 };
 
+/** Summary label when a Work View includes all eligible process rows (empty `filters_v1`). */
+export const WORK_VIEW_CATCH_ALL_SUMMARY = "All work in this process" as const;
+
+/**
+ * Process-wide catch-all Work View — empty or absent `filters_v1`.
+ * Runtime: every row on the work unit all-records base passes the view predicate.
+ * Builder: "All work in this process" mode; skips mixed-grain stage validation.
+ */
+export function isWorkViewCatchAll(
+    view: Pick<WorkViewConfigV1Stored, "filters_v1"> | null | undefined,
+): boolean {
+    return !view?.filters_v1?.length;
+}
+
 const FILTER_OPERATORS = new Set<WorkViewFilterOperatorV1>([
     "equals",
     "not_equals",

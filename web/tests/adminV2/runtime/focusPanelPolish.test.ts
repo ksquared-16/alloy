@@ -171,6 +171,7 @@ describe("Focus Panel header composition guards", () => {
         const css = readSrc("app/adminV2/components/alloyOsRuntime.css");
         expect(css).toContain("--alloy-os-bend-pine");
         expect(css).toContain("alloy-os-focus-panel-mode-switch__tab--active");
+        expect(css).toMatch(/alloy-os-focus-panel-mode-switch__tab--active[\s\S]*font-weight: 600/);
     });
 
     it("header identity uses System 5 chip language", () => {

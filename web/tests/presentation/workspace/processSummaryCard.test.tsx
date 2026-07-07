@@ -48,6 +48,12 @@ function view(over: Partial<WorkViewLinkModel>): WorkViewLinkModel {
         href: "/workspace/work-unit/view",
         attentionCount: null,
         overdueCount: null,
+        primaryGrainCount: null,
+        supportingGrainCount: null,
+        primaryGrainKind: null,
+        supportingGrainKind: null,
+        primaryGrainLabel: null,
+        supportingGrainLabel: null,
         ...over,
     };
 }
@@ -66,6 +72,50 @@ describe("WorkViewList — per-view context + showCounts", () => {
         expect(el.textContent).toContain("3"); // live count
         const embers = el.querySelectorAll("[data-work-view-attention]");
         expect(embers).toHaveLength(1);
+        expect(embers[0]?.textContent).toContain("Needs Attention");
+    });
+
+    it("renders dual grain counts with grain unit labels, not metric titles", () => {
+        const el = render(
+            <WorkViewList
+                workViews={[
+                    view({
+                        id: "all_leads",
+                        label: "All Leads",
+                        primaryGrainCount: 1,
+                        supportingGrainCount: 2,
+                        primaryGrainLabel: "Family",
+                        supportingGrainLabel: "Children",
+                        primaryGrainKind: "family",
+                        supportingGrainKind: "child",
+                    }),
+                ]}
+            />,
+        );
+        expect(el.textContent).toContain("1 Family");
+        expect(el.textContent).toContain("2 Children");
+        expect(el.textContent).not.toContain("Family Leads");
+        expect(el.textContent).not.toContain("Records");
+    });
+
+    it("derives grain labels from kinds when explicit labels are omitted", () => {
+        const el = render(
+            <WorkViewList
+                workViews={[
+                    view({
+                        id: "registration",
+                        label: "Registration",
+                        primaryGrainCount: 23,
+                        supportingGrainCount: 11,
+                        primaryGrainKind: "child",
+                        supportingGrainKind: "family",
+                    }),
+                ]}
+            />,
+        );
+        expect(el.textContent).toContain("23 Children");
+        expect(el.textContent).toContain("11 Families");
+        expect(el.textContent).not.toContain("Records");
     });
 
     it("showCounts=false hides the count slot (config)", () => {
@@ -244,12 +294,13 @@ describe("ProcessSummaryCard — operator-owned card identity (Surface Builder)"
         expect(el.querySelector("[data-process-identity-chip]")).toBeNull();
     });
 
-    it("accent drives left rail, identity chip, and CTA — pine uses Bend Pine brand token", () => {
+    it("accent drives identity chip, top accent, and CTA — pine uses Bend Pine brand token", () => {
         const el = render(<ProcessSummaryCard process={process({})} config={cfgWithCard({ accent: "pine", icon: "users" })} />);
         const chip = el.querySelector("[data-process-identity-chip]");
         expect(chip).not.toBeNull();
         expect(el.querySelector('[data-alloy-section="WS.PROCESS_SUMMARY_CARD"]')?.getAttribute("data-process-accent")).toBe("pine");
         expect(chip?.className).toContain("text-alloy-bend-pine");
+        expect(el.querySelector('[data-alloy-section="WS.PROCESS_SUMMARY_CARD"]')?.className).toContain("border-t-alloy-bend-pine");
         expect(el.querySelector("[data-process-cta]")?.className).toContain("text-alloy-bend-pine");
         expect(el.querySelector("[data-process-metric-value]")?.textContent).toBe("31%");
     });

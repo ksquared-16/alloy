@@ -46,6 +46,11 @@ describe("workspaceHeaderSurfaceConfig", () => {
         ]);
     });
 
+    it("default KPI slot 3 label reflects participant grain (Active children)", () => {
+        expect(DEFAULT_WORKSPACE_HEADER_SURFACE_CONFIG.kpis[2]?.label).toBe("Active children");
+        expect(DEFAULT_WORKSPACE_HEADER_SURFACE_CONFIG.kpis[2]?.sourceKey).toBe("enrollment.active_leads");
+    });
+
     it("buildWorkspaceHeaderPresentation uses configured titles and no-data em dash", () => {
         const presentation = buildWorkspaceHeaderPresentation(DEFAULT_WORKSPACE_HEADER_SURFACE_CONFIG, {
             fallbackTitle: "Org Name",

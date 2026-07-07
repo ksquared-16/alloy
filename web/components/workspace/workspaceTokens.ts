@@ -39,6 +39,46 @@ export const WS_PANEL_ICON_BADGE = DRAWER_OVERVIEW_PANEL_ICON_BADGE;
 export const WS_PANEL_SURFACE_FLAT =
     "overflow-hidden rounded-lg border border-alloy-stone/15 bg-white shadow-[0_1px_4px_rgba(24,39,58,0.05)]";
 
+/** Search / filter field chrome — matches global search visual weight on white surfaces. */
+export const WS_FIELD_SEARCH_CHROME =
+    "rounded-md border border-alloy-stone/55 bg-white px-3 py-1.5 text-[12px] text-alloy-midnight shadow-[0_1px_3px_rgba(24,39,58,0.06)] placeholder:text-alloy-midnight/40 focus-visible:border-alloy-bend-pine/50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-alloy-bend-pine/35";
+
+/** Compact select matching WS_FIELD_SEARCH_CHROME. */
+export const WS_FIELD_SELECT_CHROME =
+    "rounded-md border border-alloy-stone/55 bg-white px-2.5 py-1.5 text-[12px] text-alloy-midnight shadow-[0_1px_3px_rgba(24,39,58,0.06)] focus-visible:border-alloy-bend-pine/50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-alloy-bend-pine/35";
+
+/**
+ * Queue utility toolbar — visually separates Search/Filters from the row list so the
+ * controls read as a toolbar, not the first queue card.
+ */
+export const WS_QUEUE_TOOLBAR_CHROME =
+    "border-b border-alloy-stone/30 bg-alloy-stone/[0.05] shadow-[0_2px_6px_rgba(24,39,58,0.06)]";
+
+/**
+ * Mini metric unit inside a process tile — miniature KPI card grammar.
+ * Border-first, soft lift, neutral wash; numbers hero, label supports.
+ */
+export const WS_METRIC_UNIT_CHROME =
+    "flex h-full min-h-[4.25rem] flex-col justify-end rounded-lg border border-alloy-stone/15 bg-alloy-stone/[0.025] px-2.5 py-2.5 shadow-[0_1px_3px_rgba(24,39,58,0.04)]";
+
+/**
+ * Workspace Header KPI card chrome — border-first separation from the canvas, then a soft lift.
+ * Lighter than process tiles so depth reads: canvas → KPI → process tile.
+ */
+export const WS_KPI_CARD_CHROME =
+    "rounded-xl border border-alloy-stone/15 bg-white shadow-[0_1px_4px_rgba(24,39,58,0.05)]";
+
+/**
+ * Workspace process tile chrome — primary object on the page; slightly stronger elevation than KPIs.
+ * Reuses the same Alloy shadow vocabulary as layout runtime cards (no new blur radii).
+ */
+export const WS_PROCESS_TILE_CHROME =
+    "rounded-xl border border-alloy-stone/18 bg-white shadow-[0_2px_8px_rgba(24,39,58,0.07)] ring-1 ring-alloy-stone/[0.04]";
+
+/** Resting process tile hover — quiet confidence, not floating dashboard cards. */
+export const WS_PROCESS_TILE_CHROME_HOVER =
+    "transition-shadow hover:shadow-[0_3px_12px_rgba(24,39,58,0.09)]";
+
 export const WS_EYEBROW = PRESENTATION_SECTION_EYEBROW;
 export const WS_SECTION_HEADER = PRESENTATION_SECTION_HEADER;
 

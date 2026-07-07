@@ -29,6 +29,7 @@ import {
     pickDeptWorkViewHostWorkUnit,
 } from "@/lib/workspace/pickDeptPipelineWorkUnit";
 import { resolveWorkViewCanonicalLocation } from "@/lib/workspace/resolveWorkViewCanonicalLocation";
+import type { WorkViewGrainBucket } from "@/lib/lifecycle/stageGrainV1";
 import { tryLoadWorkUnitQueueDefinitionBundle } from "@/lib/config/queueDefinitionV2Runtime";
 import {
     operatorOperationalPerspectivesEnabled,
@@ -75,6 +76,11 @@ export type OperatorLifecycleWorkQueuePreview = {
      */
     attention_count?: number | null;
     overdue_count?: number | null;
+    /** Grain breakdown from operational projection rows — null when unresolved. */
+    primary_grain_count?: number | null;
+    supporting_grain_count?: number | null;
+    primary_grain_kind?: WorkViewGrainBucket | null;
+    supporting_grain_kind?: WorkViewGrainBucket | null;
 };
 
 export type OperatorLifecycleLandingCard = {

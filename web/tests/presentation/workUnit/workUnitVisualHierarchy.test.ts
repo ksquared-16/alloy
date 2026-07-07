@@ -13,13 +13,14 @@ import { describe, expect, it } from "vitest";
 const read = (rel: string) =>
     readFileSync(resolve(__dirname, "../../../components/presentation", rel), "utf8");
 
-describe("Work Unit KPIs — compact bordered tiles", () => {
+describe("Work Unit KPIs — shared workspace KPI card grammar", () => {
     const src = read("workspace/WorkspaceHeader.tsx");
 
-    it("work-unit KPI tiles use a subtle border and equal-width grid strip", () => {
+    it("work-unit KPI tiles reuse WS_KPI_CARD_CHROME and icon wells", () => {
         expect(src).toMatch(/variant === "work-unit"/);
-        expect(src).toMatch(/border border-alloy-stone\/20/);
-        expect(src).toMatch(/auto-cols-fr grid-flow-col gap-2/);
+        expect(src).toMatch(/WS_KPI_CARD_CHROME/);
+        expect(src).toMatch(/data-work-unit-header-kpi-icon-well/);
+        expect(src).toMatch(/flex flex-wrap items-stretch justify-start gap-4/);
     });
 });
 
@@ -28,7 +29,12 @@ describe("Work View pills — inactive outline", () => {
 
     it("inactive pills keep a visible outlined border", () => {
         expect(src).toMatch(/border-alloy-midnight\/20 bg-white/);
-        expect(src).toMatch(/border-alloy-juniper bg-alloy-juniper text-white/);
+        expect(src).toMatch(/border-alloy-juniper bg-alloy-juniper/);
+    });
+
+    it("selected pill label stays semibold, not bold", () => {
+        expect(src).toMatch(/view\.isActive[\s\S]*font-semibold/);
+        expect(src).not.toMatch(/font-bold/);
     });
 });
 
@@ -40,6 +46,53 @@ describe("Queue Region — no redundant title/count", () => {
         expect(src).not.toMatch(/data-queue-region-count/);
         expect(src).toMatch(/data-queue-region-controls/);
         expect(src).toMatch(/QueueFilterControls/);
+    });
+
+    it("elevates the filter toolbar above the row list", () => {
+        expect(src).toMatch(/WS_QUEUE_TOOLBAR_CHROME/);
+    });
+});
+
+describe("Focus Panel boundary — header-only accent", () => {
+    const src = read("workUnit/FocusPanelSurface.tsx");
+
+    it("does not extend a green left rail down the full panel card", () => {
+        expect(src).toMatch(/data-focus-panel-boundary/);
+        expect(src).not.toMatch(/border-l-alloy-juniper/);
+        expect(src).not.toMatch(/border-l-alloy-bend-pine/);
+        expect(src).not.toMatch(/DRAWER_OVERVIEW_PANEL_SURFACE/);
+    });
+});
+
+describe("Work View row counts — grain labels, not generic Records", () => {
+    const src = read("workspace/WorkViewList.tsx");
+
+    it("derives unit labels from runtime grain kinds", () => {
+        expect(src).toMatch(/grainCountUnitLabel/);
+        expect(src).toMatch(/primaryGrainKind/);
+    });
+
+    it("never falls back to the generic Records label", () => {
+        expect(src).not.toMatch(/"Records"/);
+    });
+});
+
+describe("Work Unit header — title hierarchy vs workspace", () => {
+    const src = read("workspace/WorkspaceHeader.tsx");
+
+    it("workspace title stays sized but reads lighter than the work-unit page title", () => {
+        expect(src).toMatch(/text-\[26px\] font-semibold/);
+        expect(src).toMatch(/text-\[28px\] font-semibold/);
+    });
+
+    it("work-unit subtitle stays medium weight", () => {
+        expect(src).toMatch(/text-\[14px\] font-medium/);
+    });
+
+    it("work-unit identity chip is slightly larger than process tile icons", () => {
+        expect(src).toMatch(/data-work-unit-header-identity-chip/);
+        expect(src).toMatch(/h-11 w-11/);
+        expect(src).toMatch(/ProcessCardGlyph icon=\{model\.identityIcon\} className="h-5 w-5"/);
     });
 });
 

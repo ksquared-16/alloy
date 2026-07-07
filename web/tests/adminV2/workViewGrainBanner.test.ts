@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { validateWorkViewGrainConsistency, GRAIN_LABELS } from "@/lib/lifecycle/stageGrainV1";
+import { resolveWorkViewStageGrains, validateWorkViewGrainConsistency, GRAIN_LABELS } from "@/lib/lifecycle/stageGrainV1";
 import type { StageGrain } from "@/lib/lifecycle/stageGrainV1";
 
 /**
@@ -8,7 +8,11 @@ import type { StageGrain } from "@/lib/lifecycle/stageGrainV1";
  * which banner state to render (confirmed grain / missing / mixed-grain warning).
  */
 
-function grainBannerState(stageGrains: (StageGrain | undefined)[]): "ok" | "missing" | "mixed" {
+function grainBannerState(
+    stageGrains: (StageGrain | undefined)[],
+    catchAll = false,
+): "ok" | "missing" | "mixed" | "catch-all" {
+    if (catchAll) return "catch-all";
     const defined = stageGrains.filter((g): g is StageGrain => g !== undefined);
     if (defined.length === 0) return "missing";
     const { valid } = validateWorkViewGrainConsistency(stageGrains);
@@ -16,6 +20,11 @@ function grainBannerState(stageGrains: (StageGrain | undefined)[]): "ok" | "miss
 }
 
 describe("Work View grain banner — display state", () => {
+    it("shows catch-all informational state for process-wide All views", () => {
+        expect(grainBannerState(["family", "child"], true)).toBe("catch-all");
+        expect(grainBannerState([], true)).toBe("catch-all");
+    });
+
     it("shows confirmed family grain when all stages are family", () => {
         expect(grainBannerState(["family", "family"])).toBe("ok");
         expect(GRAIN_LABELS["family"]).toBe("Family");
@@ -59,6 +68,13 @@ describe("Work View mixed-grain save guardrail", () => {
         const { valid, message } = validateWorkViewGrainConsistency(["family", "child"]);
         expect(valid).toBe(false);
         expect(message).toBeTruthy();
+    });
+
+    it("save should be enabled when no stage scope (predicate-only views like All Leads)", () => {
+        const grains = resolveWorkViewStageGrains([], { lead: "family", waitlist: "child" });
+        expect(grains).toEqual([]);
+        const isMixedGrain = !validateWorkViewGrainConsistency(grains).valid;
+        expect(isMixedGrain).toBe(false);
     });
 
     it("save should be disabled when mixed grain (isMixedGrain = true)", () => {

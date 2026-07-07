@@ -12,6 +12,7 @@ import {
     queueRowModelFromQueueItem,
     queueRowModelsFromQueueItemsResult,
     queueRowSubjectDisplayName,
+    workViewLinkFromWorkQueuePreview,
     workViewLinkModelsFromConfiguredViews,
 } from "@/lib/presentation/runtime/types";
 
@@ -84,8 +85,8 @@ describe("processTileModelFromLandingCard", () => {
         // performanceMetrics was retired (no card-side health).
         expect(tile.primarySignal).toBeNull();
         expect(tile.workViews).toEqual([
-            { id: "new_leads", label: "New Leads", description: null, isActive: false, count: null, href: "/workspace/work-unit/new-leads", icon: null, attentionCount: null, overdueCount: null },
-            { id: "tours", label: "Tours", description: null, isActive: false, count: null, href: "/workspace/work-unit/tours", icon: null, attentionCount: null, overdueCount: null },
+            { id: "new_leads", label: "New Leads", description: null, isActive: false, count: null, href: "/workspace/work-unit/new-leads", icon: null, attentionCount: null, overdueCount: null, primaryGrainCount: null, supportingGrainCount: null, primaryGrainKind: null, supportingGrainKind: null, primaryGrainLabel: null, supportingGrainLabel: null },
+            { id: "tours", label: "Tours", description: null, isActive: false, count: null, href: "/workspace/work-unit/tours", icon: null, attentionCount: null, overdueCount: null, primaryGrainCount: null, supportingGrainCount: null, primaryGrainKind: null, supportingGrainKind: null, primaryGrainLabel: null, supportingGrainLabel: null },
         ]);
     });
 
@@ -96,6 +97,25 @@ describe("processTileModelFromLandingCard", () => {
         expect(tile.activeRecordCount).toBeNull();
         expect(tile.needsAttentionCount).toBeNull();
         expect(tile.primarySignal).toBeNull();
+    });
+});
+
+describe("workViewLinkFromWorkQueuePreview", () => {
+    it("derives grain unit labels from operational projection kinds, not metric titles", () => {
+        const link = workViewLinkFromWorkQueuePreview(
+            {
+                label: "All Leads",
+                platformKey: "all_leads",
+                href: "/workspace/work-unit/all-leads",
+                primary_grain_count: 1,
+                supporting_grain_count: 2,
+                primary_grain_kind: "family",
+                supporting_grain_kind: "child",
+            },
+            3,
+        );
+        expect(link.primaryGrainLabel).toBe("Family");
+        expect(link.supportingGrainLabel).toBe("Children");
     });
 });
 
@@ -196,14 +216,58 @@ describe("workViewLinkModelsFromConfiguredViews", () => {
         });
 
         expect(links).toEqual([
-            { id: "wv-a", label: "New Leads", isActive: false, count: null, href: null, attentionCount: null, overdueCount: null },
-            { id: "wv-b", label: "Tours", isActive: true, count: 5, href: null, attentionCount: null, overdueCount: null },
+            {
+                id: "wv-a",
+                label: "New Leads",
+                isActive: false,
+                count: null,
+                href: null,
+                attentionCount: null,
+                overdueCount: null,
+                primaryGrainCount: null,
+                supportingGrainCount: null,
+                primaryGrainKind: null,
+                supportingGrainKind: null,
+                primaryGrainLabel: null,
+                supportingGrainLabel: null,
+            },
+            {
+                id: "wv-b",
+                label: "Tours",
+                isActive: true,
+                count: 5,
+                href: null,
+                attentionCount: null,
+                overdueCount: null,
+                primaryGrainCount: null,
+                supportingGrainCount: null,
+                primaryGrainKind: null,
+                supportingGrainKind: null,
+                primaryGrainLabel: null,
+                supportingGrainLabel: null,
+            },
         ]);
     });
 
     it("resolves counts as null when no resolver is supplied", () => {
         const links = workViewLinkModelsFromConfiguredViews([workView()], { activeWorkViewId: null });
-        expect(links).toEqual([{ id: "wv-1", label: "All Leads", isActive: false, count: null, href: null, attentionCount: null, overdueCount: null }]);
+        expect(links).toEqual([
+            {
+                id: "wv-1",
+                label: "All Leads",
+                isActive: false,
+                count: null,
+                href: null,
+                attentionCount: null,
+                overdueCount: null,
+                primaryGrainCount: null,
+                supportingGrainCount: null,
+                primaryGrainKind: null,
+                supportingGrainKind: null,
+                primaryGrainLabel: null,
+                supportingGrainLabel: null,
+            },
+        ]);
     });
 });
 

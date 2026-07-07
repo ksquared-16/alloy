@@ -55,7 +55,7 @@ runtime label (`data-runtime-label`), and has exactly one render site. No duplic
 | **KPI source** | Operational Calculations registry — same resolve path as Work Unit header metrics (`useOperationalAnswers` + OIP warm cache). No parallel KPI system. |
 | **KPI = operational signals** | The org-level signals the mockup calls "Work View Signals" (Needs attention, Overdue work, SLA/at-risk) ARE these KPI slots — configured Operational Calculations, not a separate rail. There is no standalone signals right rail; the shell command rail is actions-only. |
 | **Presentation** | `buildWorkspaceHeaderPresentation` + shared `WorkspaceHeader` component — **builder preview and runtime must match** (typography, KPI layout, icon well, icon/accent color, no-data `—`) |
-| **Layout (workspace variant)** | KPI region anchors at the ~50% center point and flows right (left-aligned from the anchor, wrapping — never stretched full-width). Each KPI is a calm premium card: larger glyph in a soft Alloy-token icon well, bold value as hero, status gem + muted label below. No heavy shadows or colored blocks — whitespace and typography create hierarchy. The **work-unit variant is unchanged** (compact bordered tiles, no well). |
+| **Layout (workspace variant)** | KPI region anchors at the ~50% center point and flows right (left-aligned from the anchor, wrapping — never stretched full-width). Each KPI is a calm premium card: larger glyph in a soft Alloy-token icon well, bold value as hero, status gem + muted label below. Resting chrome uses `WS_KPI_CARD_CHROME` (subtle border + soft lift). Process tiles use `WS_PROCESS_TILE_CHROME` + optional accent top border — slightly stronger elevation, same Alloy vocabulary. **Work Unit header KPIs reuse the same card grammar** (icon well + `WS_KPI_CARD_CHROME`). Process tile primary/supporting metrics render as miniature KPI units (`WS_METRIC_UNIT_CHROME`). |
 | **Reveal** | `useWorkspaceSurfaceRuntime` gates `model.ready` on header config load + metric settle + process tile snapshot — **no default-template flash**; refresh keeps last complete header until the next atomic commit |
 | **API** | `GET/PUT /api/admin/surfaces/workspace-header` |
 
@@ -91,7 +91,7 @@ behavior — one card per real configured business process.
 | **Metrics** | Primary + supporting signals from Operational Calculations registry (`useOperationalAnswers` + `resolvePrimarySignal`). Metric **layout** (inline vs stacked) is presentation-only config (`ProcessCardConfig.metricPresentation`, default `inline`) — same calculations + labels either way; no calculation logic in presentation. |
 | **Health state** | Real, not fabricated: the Primary Signal's KPI `status` → `signalStateFromKpiStatus` → `SignalState` → the status pill word (`STATE_WORD`) + Alloy semantic token. A process has **no universal health score**; the pill reflects the selected calculation. Builder preview and runtime derive it the same way. |
 | **Work View row icons** | Each Work View owns its row glyph, assigned in the Surface Builder (`workspaceProcessSurface.workViewIconById`, keyed by `work_view_id`, falling back to the lane `platformKey`). Resolved by `resolveWorkViewIcon`; unmapped views render the neutral fallback glyph. **Never name-derived** — no hardcoded Enrollment/stage icons. |
-| **Presentation** | `ProcessSummaryCard` in builder preview and runtime — **builder/runtime parity required** (labels, no-data `—`, calm neutral card body, accent reserved for identity glyph + CTA link only, metric layout, work-view glyphs + optional mission descriptions) |
+| **Presentation** | `ProcessSummaryCard` in builder preview and runtime — **builder/runtime parity required** (labels, no-data `—`, calm neutral card body with `WS_PROCESS_TILE_CHROME` + faint accent top border, accent-rich identity well + bottom-right CTA text link, metric units in `WS_METRIC_UNIT_CHROME`, work-view glyphs + optional mission descriptions) |
 | **Reveal** | `useWorkspaceSurfaceRuntime` commits process tiles atomically with header — **no default-template flash**; holds last complete process snapshot during refresh |
 | **API** | `GET/PUT /api/admin/surfaces/workspace-processes` |
 
@@ -125,9 +125,9 @@ Three Surfaces-configurable workspace layouts on `entity_layouts` (`surface="wor
 - **Supporting Context** — text only (the calculation's target; trend when the data layer supplies
   it — never fabricated).
 - **Metric layout** — `metricPresentation` (`inline` | `stacked`) is presentation only. `inline`
-  renders primary + supporting as a two-column grid of metric units (number hero + label each);
-  `stacked` keeps the primary unit dominant with supporting below. Both render the SAME configured
-  calculations + labels — the renderer adds no math and no new metric type. No colored metric banner.
+  renders primary + supporting as a balanced two-column grid of metric units (`WS_METRIC_UNIT_CHROME` —
+  miniature KPI cards); `stacked` keeps the primary unit dominant with supporting below. Both render
+  the SAME configured calculations + labels — the renderer adds no math and no new metric type.
 - **Health/status** — subtle dot + word (`healthy` → "On track", `caution`, `critical`, `neutral`),
   derived from the calculation's KPI `status` (`signalStateFromKpiStatus`). Semantic Alloy tokens
   only; no filled pill background. If a process configures no primary signal, the status reads
@@ -178,6 +178,35 @@ surfaces it as the row's optional description line (configured copy, not a calcu
 projection (`WorkViewLinkModel.attentionCount` / `overdueCount`), not from stage definitions. Org-level
 signals (Needs attention, Overdue work, SLA/at-risk) are Workspace Header KPI slots — configured
 Operational Calculations. Neither is fabricated; builder preview and runtime read the same data.
+
+**Grain-aware row counts (July 2026 freeze).** Today's Work row counts resolve from the operational
+projection's grain buckets — not from metric titles or a generic "Records" label. The runtime maps
+`primary_grain_kind` / `supporting_grain_kind` + counts through `grainCountUnitLabel()` (e.g.
+`1 Family`, `2 Children`, `23 Children`, `11 Families`). Dual-grain views show both lines when the
+projection supplies both counts. Presentation only — math stays in `operationalProjection.ts` and
+landing rollups; `WorkViewList` is a pure presenter of `WorkViewLinkModel`.
+
+## Operator Workspace visual freeze (July 2026)
+
+**Status:** **FROZEN** — presentation-only polish sprint. **No new runtime. No new architecture.**
+Calculations, queue fetch, reveal gates, and config contracts are unchanged.
+
+### What shipped
+
+| Area | Decision |
+| --- | --- |
+| **Process tile** | Calm neutral card body (`WS_PROCESS_TILE_CHROME` + optional accent top border). Primary/supporting metrics as miniature KPI units (`WS_METRIC_UNIT_CHROME`). Identity accent on icon well only — not the card body. Bottom-right CTA text link. Today's Work rows: configured glyph, optional mission, grain counts, attention signal. |
+| **Work Unit parity** | Work Unit header KPIs reuse Workspace KPI card grammar (`WS_KPI_CARD_CHROME`, icon wells). Queue utility bar elevated (`WS_QUEUE_TOOLBAR_CHROME`) — distinct from the first queue row. Work-view pills below header; selected pill uses lane contrast without bold label weight. |
+| **Catch-all Work View** | Process-wide **All work in this process** = empty `filters_v1` (include-all over the work-unit all-records base). Builder exposes explicit scope mode; no grouped views, no new schema. See `configuration-runtime-v1.md` § Work View catch-all. |
+| **Focus Panel accent** | **Header-only** Bend Pine accent (`alloy-os-fp-header-compact__band` left rail + wash). `FocusPanelSurface` boundary stays a neutral container — **no full-card green left rail** down the panel body. |
+| **Typography hierarchy** | Progressive scan order: (1) org title, (2) Work Unit page title, (3) surface card titles, (4) section labels, (5) body. Workspace org title: `26px` **semibold** (organization identity). Work Unit page title: `28px` **semibold** (current page). Work Unit subtitle (e.g. Pipeline): **medium**. Selected Work View pill + Work/Activity mode tab: **semibold**, not bold. Secondary copy (descriptions, KPI labels, metadata) lightened — titles and primary numbers stay strongest. |
+| **Tokens** | Shared Alloy vocabulary in `web/components/workspace/workspaceTokens.ts` — field chrome, KPI/tile/metric units, queue toolbar. No new color system. |
+
+### Explicitly out of scope (deferred)
+
+- Grouped operator views (`kind: grouped`, parent/child Work View containers) — rejected; catch-all + flat views remain the model.
+- Settings Runtime preview migration onto `CondensedQueueRow` — separate sprint.
+- Browser-authenticated visual sign-off in CI — manual operator review only.
 
 ## Navigation
 
@@ -274,7 +303,7 @@ owners live in **`presentation-runtime-v2-handoff.md` §2**. Summary:
 | `WU.WORK_VIEW_PILLS` | `components/presentation/workUnit/WorkViewPillStrip.tsx` | configured views + `useWorkViewTotals` (active = live rows total) |
 | `WU.QUEUE` | `components/presentation/workUnit/QueueRegion.tsx` | rows API (`work_view_id`); order = Work View `sort_v1` (server) |
 | `WU.QUEUE_ROW` | `components/presentation/workUnit/CondensedQueueRow.tsx` | frozen `QueueRowContext` + published Queue Row surface (`pipeline-queue-row`) for slot visibility/labels |
-| `FP.SURFACE` | `components/presentation/workUnit/FocusPanelSurface.tsx` + `InlineOpportunityFocusPanel.tsx` | published Focus Panel Summary doc (composition engine) + drawer VM; modal shell suppressed on work-unit paths |
+| `FP.SURFACE` | `components/presentation/workUnit/FocusPanelSurface.tsx` + `InlineOpportunityFocusPanel.tsx` | published Focus Panel Summary doc (composition engine) + drawer VM; modal shell suppressed on work-unit paths; **neutral panel boundary** (header band owns Bend Pine accent — no full-card rail) |
 | `RR.SURFACE` | `components/presentation/rightRail/RightRailSurface.tsx` | inline anchor (hidden when empty) — the VISIBLE command rail is the shell rail below |
 | `LEFT_NAV` (shell) | `app/adminV2/components/Sidebar.tsx` | `OperatorLifecycleLandingCard` (same as tiles) + `useWorkViewTotals` counts |
 | `RIGHT_RAIL` (shell) | `app/adminV2/components/AdminV2PersistentCommandRail.tsx` + `workspace/WorkspaceCommandRailShell.tsx` + `CommandRailBosMount.tsx` | page-registered Actions/Telemetry + `GlobalAssistantContext` (BOS) |

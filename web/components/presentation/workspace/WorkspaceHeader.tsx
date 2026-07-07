@@ -16,6 +16,7 @@ import {
 import {
     workspaceHeaderKpiIconClass,
     workspaceHeaderKpiIconWellClass,
+    processTileIdentityWellClass,
 } from "@/lib/presentation/runtime/processCardAccentStyles";
 import type { ProcessCardAccent, ProcessCardIcon } from "@/lib/presentation/runtime/workspaceProcessSurfaceConfig";
 import type {
@@ -24,6 +25,7 @@ import type {
 } from "@/lib/presentation/runtime/workspaceHeaderSurfaceConfig";
 import { WORKSPACE_HEADER_NO_DATA_VALUE } from "@/lib/presentation/runtime/workspaceHeaderCards";
 import { ProcessCardGlyph } from "./ProcessCardGlyph";
+import { WS_KPI_CARD_CHROME } from "@/components/workspace/workspaceTokens";
 
 export type WorkspaceHeaderBuilderField =
     | "title"
@@ -157,86 +159,49 @@ function HeaderKpiCard({
     const valueAttr = variant === "work-unit" ? "data-work-unit-header-kpi-value" : "data-workspace-header-kpi-value";
     const labelAttr = variant === "work-unit" ? "data-work-unit-header-kpi-label" : "data-workspace-header-kpi-label";
     const statusAttr = variant === "work-unit" ? "data-work-unit-header-kpi-status" : "data-workspace-header-kpi-status";
-    // Work Unit KPIs are compact bordered metadata tiles with equal rhythm.
-    // Workspace identity KPIs stay open (no tile chrome) so this shared header
-    // only applies the work-unit structure when used on the process surface.
-    // Work Unit KPIs are compact bordered metadata tiles; Workspace identity KPIs get a premium
-    // card treatment (soft border/shadow + a larger glyph in an Alloy-token icon well).
-    const tileClass =
-        variant === "work-unit"
-            ? "flex h-full w-full min-w-0 flex-col justify-center rounded-lg border border-alloy-stone/20 bg-alloy-stone/[0.02] px-3 py-2 shadow-[0_1px_1px_rgba(15,23,42,0.03)]"
-            : "flex h-full min-w-[9.5rem] items-center gap-3.5 rounded-xl border border-alloy-stone/12 bg-white px-4 py-3.5";
-    const body =
-        variant === "work-unit" ? (
-            <div className={tileClass} {...{ [kpiAttr]: kpi.slot }} data-calculation-key={kpi.sourceKey ?? undefined}>
-                <div className="flex items-center gap-2">
-                    <KpiGlyph
-                        icon={kpi.icon}
-                        className={workspaceHeaderKpiIconClass({ accent: kpi.accent, status: kpi.status })}
-                        iconAttr={meta.kpiIconAttr}
-                    />
-                    <span
-                        className="text-[22px] font-bold leading-none tracking-[-0.03em] tabular-nums text-alloy-midnight"
-                        {...{ [valueAttr]: true }}
-                    >
-                        {kpi.formattedValue || WORKSPACE_HEADER_NO_DATA_VALUE}
-                    </span>
-                </div>
-                <div className="mt-1.5 flex items-center gap-1.5">
+    const iconWellAttr =
+        variant === "work-unit" ? "data-work-unit-header-kpi-icon-well" : "data-workspace-header-kpi-icon-well";
+    const tileClass = `flex h-full min-w-[9.5rem] items-center gap-3.5 px-4 py-3.5 ${WS_KPI_CARD_CHROME}`;
+    const body = (
+        <div className={tileClass} {...{ [kpiAttr]: kpi.slot }} data-calculation-key={kpi.sourceKey ?? undefined}>
+            <span
+                aria-hidden
+                {...{ [iconWellAttr]: true }}
+                className={`inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-xl ${workspaceHeaderKpiIconWellClass(
+                    { accent: kpi.accent, status: kpi.status },
+                )}`}
+            >
+                <KpiGlyph
+                    icon={kpi.icon}
+                    className={workspaceHeaderKpiIconClass({ accent: kpi.accent, status: kpi.status })}
+                    iconAttr={meta.kpiIconAttr}
+                    size="md"
+                />
+            </span>
+            <div className="min-w-0">
+                <span
+                    className="block text-[26px] font-bold leading-none tracking-[-0.03em] tabular-nums text-alloy-midnight"
+                    {...{ [valueAttr]: true }}
+                >
+                    {kpi.formattedValue || WORKSPACE_HEADER_NO_DATA_VALUE}
+                </span>
+                <span className="mt-2 flex items-center gap-1.5">
                     <span
                         aria-hidden
                         className={`h-2 w-2 shrink-0 rotate-45 ${gemClass(kpi)}`}
                         {...{ [statusAttr]: kpi.status }}
                     />
                     <span
-                        className="truncate text-[12px] font-medium leading-none text-alloy-midnight/50"
+                        className="truncate text-[12px] font-medium leading-none text-alloy-midnight/42"
                         {...{ [labelAttr]: true }}
                         title={kpi.label}
                     >
                         {kpi.label}
                     </span>
-                </div>
-            </div>
-        ) : (
-            <div className={tileClass} {...{ [kpiAttr]: kpi.slot }} data-calculation-key={kpi.sourceKey ?? undefined}>
-                <span
-                    aria-hidden
-                    data-workspace-header-kpi-icon-well
-                    className={`inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-xl ${workspaceHeaderKpiIconWellClass(
-                        { accent: kpi.accent, status: kpi.status },
-                    )}`}
-                >
-                    <KpiGlyph
-                        icon={kpi.icon}
-                        className={workspaceHeaderKpiIconClass({ accent: kpi.accent, status: kpi.status })}
-                        iconAttr={meta.kpiIconAttr}
-                        size="md"
-                    />
                 </span>
-                <div className="min-w-0">
-                    <span
-                        className="block text-[26px] font-bold leading-none tracking-[-0.03em] tabular-nums text-alloy-midnight"
-                        {...{ [valueAttr]: true }}
-                    >
-                        {kpi.formattedValue || WORKSPACE_HEADER_NO_DATA_VALUE}
-                    </span>
-                    <span className="mt-2 flex items-center gap-1.5">
-                        <span
-                            aria-hidden
-                            className={`h-2 w-2 shrink-0 rotate-45 ${gemClass(kpi)}`}
-                            {...{ [statusAttr]: kpi.status }}
-                        />
-                        <span
-                            className="truncate text-[12px] font-medium leading-none text-alloy-midnight/50"
-                            {...{ [labelAttr]: true }}
-                            title={kpi.label}
-                        >
-                            {kpi.label}
-                        </span>
-                    </span>
-                </div>
             </div>
-        );
+        </div>
+    );
 
     if (interactive && kpi.drillHref) {
         return (
@@ -278,12 +243,24 @@ export function WorkspaceHeader({
                       "flex flex-col gap-y-5 lg:grid lg:grid-cols-2 lg:items-center lg:gap-x-8"
             }
         >
-            <div className="min-w-0 max-w-xl">
+            <div className={`min-w-0 max-w-xl ${variant === "work-unit" ? "flex items-start gap-3" : ""}`}>
+                {variant === "work-unit" && model.identityIcon ? (
+                    <span
+                        aria-hidden
+                        data-work-unit-header-identity-chip
+                        className={`inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${processTileIdentityWellClass(model.identityAccent)} ${model.identityAccent ? workspaceHeaderKpiIconClass({ accent: model.identityAccent, status: "unknown" }) : "text-alloy-midnight/50"}`}
+                    >
+                        <ProcessCardGlyph icon={model.identityIcon} className="h-5 w-5" />
+                    </span>
+                ) : null}
+                <div className="min-w-0 flex-1">
                 <BuilderHit field="title" builder={builder} className="block w-full">
                     <h1
                         {...{ [titleAttr]: true }}
-                        className={`font-bold leading-tight tracking-[-0.02em] text-alloy-midnight ${
-                            variant === "work-unit" ? "text-[24px]" : "text-[26px]"
+                        className={`leading-tight tracking-[-0.02em] text-alloy-midnight ${
+                            variant === "work-unit"
+                                ? "text-[28px] font-semibold"
+                                : "text-[26px] font-semibold"
                         }`}
                     >
                         {model.title}
@@ -293,8 +270,10 @@ export function WorkspaceHeader({
                     <BuilderHit field="subtitle" builder={builder} className="mt-0.5 block w-full">
                         <p
                             {...{ [subtitleAttr]: true }}
-                            className={`font-semibold leading-snug text-alloy-bend-pine ${
-                                variant === "work-unit" ? "text-[14px]" : "text-[15px]"
+                            className={`leading-snug text-alloy-bend-pine ${
+                                variant === "work-unit"
+                                    ? "text-[14px] font-medium"
+                                    : "text-[15px] font-semibold"
                             }`}
                         >
                             {model.subtitle}
@@ -305,6 +284,7 @@ export function WorkspaceHeader({
                         <p className="text-[14px] italic text-alloy-midnight/35">Add subtitle…</p>
                     </BuilderHit>
                 ) : null}
+                </div>
             </div>
 
             {model.kpis.length > 0 ? (
@@ -314,7 +294,7 @@ export function WorkspaceHeader({
                     {...{ [kpisAttr]: true }}
                     className={
                         variant === "work-unit"
-                            ? "grid w-full max-w-xl flex-1 auto-cols-fr grid-flow-col gap-2 sm:max-w-none"
+                            ? "flex flex-wrap items-stretch justify-start gap-4"
                             : // Cards flow from the center anchor rightward, left-aligned, wrapping
                               // as needed — never stretched across the full row.
                               "flex flex-wrap items-stretch justify-start gap-4"

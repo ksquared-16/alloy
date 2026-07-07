@@ -1,11 +1,8 @@
 import { BUSINESS_PROCESS_PRESENTATION_SURFACE_DEFAULT_LABEL } from "@/lib/lifecycle/businessProcessUiLabels";
 import { formatLayoutTitleWithVersion } from "@/lib/layout/layoutVersionNaming";
 import type { EntityLayoutRecord } from "@/lib/layout/layoutV2";
-import {
-    WORK_VIEW_FILTER_OPERATOR_OPTIONS,
-    type WorkViewConfigV1Stored,
-    type WorkViewFilterV1,
-} from "@/lib/lifecycle/workViewsConfigV1";
+import type { WorkViewConfigV1Stored, WorkViewFilterV1 } from "@/lib/lifecycle/workViewsConfigV1";
+import { WORK_VIEW_CATCH_ALL_SUMMARY, WORK_VIEW_FILTER_OPERATOR_OPTIONS } from "@/lib/lifecycle/workViewsConfigV1";
 import { getWorkViewConditionField } from "@/lib/lifecycle/workViewConditionFieldRegistry";
 
 function fieldLabel(fieldKey: string): string {
@@ -36,7 +33,7 @@ function formatFilterValue(value: unknown): string {
 }
 
 export function formatWorkViewConditionsSummary(filters: WorkViewFilterV1[] | undefined): string {
-    if (!filters?.length) return "No conditions";
+    if (!filters?.length) return WORK_VIEW_CATCH_ALL_SUMMARY;
     const first = filters[0]!;
     const field = fieldLabel(first.field_key);
     const op = operatorLabel(first.operator);

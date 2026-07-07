@@ -49,7 +49,7 @@ The `/settings` landing uses a **compact context row** only:
 | **Locations** | Campuses, programs, rooms, and schedule templates |
 | **Fields** | Canonical data definitions |
 | **Statuses** | Status vocabulary |
-| **Processes** | Behavior — stages, Work Views, operating plan, process actions |
+| **Processes** | Behavior — stages, Work Views (including catch-all views with empty `filters_v1`), operating plan, process actions |
 | **Surfaces** | Presentation — queue rows, Focus Panel modes, cards, field placement, action placement |
 | **Access** | Users, roles, permissions, location/department scope |
 | **Communications** | Channels, templates, send rules, quiet hours, signatures |
@@ -58,6 +58,10 @@ The `/settings` landing uses a **compact context row** only:
 | **Action definitions** (internal `/settings/actions`) | Platform catalog only — not operator-facing configuration |
 
 See `configuration-ownership-doctrine.md` for the full matrix.
+
+### Work View catch-all (`filters_v1: []`)
+
+A process-wide **All work in this process** Work View is stored with **empty `filters_v1`**. The builder exposes this as an explicit scope mode; runtime treats empty filters as include-all over the work unit all-records base (no grouped views, no extra schema). Mixed-grain validation applies only when the operator scopes a view to incompatible stages — not for catch-all views.
 
 ## What changes after V1
 

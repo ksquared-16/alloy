@@ -31,6 +31,8 @@ import type {
     WorkspaceProcessSurfaceConfig,
 } from "./workspaceProcessSurfaceConfig";
 import type { WorkspaceHeaderPresentationModel } from "./workspaceHeaderSurfaceConfig";
+import type { WorkViewGrainBucket } from "@/lib/lifecycle/stageGrainV1";
+import { grainCountUnitLabel } from "@/lib/lifecycle/stageGrainV1";
 import { findOperationalCalculation } from "@/lib/analytics/calculations/registry";
 import { getDrillContract } from "@/lib/analytics/runtime/drillResolver";
 import { operatorWorkUnitHrefFromKey } from "@/lib/admin/canonicalOperatorRoutes";
@@ -74,6 +76,17 @@ export type WorkViewLinkModel = {
      */
     attentionCount: number | null;
     overdueCount: number | null;
+    /** Primary grain count (family/case or sole grain) from operational projection. */
+    primaryGrainCount: number | null;
+    /** Supporting grain count when the view spans both grains. */
+    supportingGrainCount: number | null;
+    /** Grain bucket for primary count — from operational projection. */
+    primaryGrainKind?: WorkViewGrainBucket | null;
+    /** Grain bucket for supporting count when dual-grain. */
+    supportingGrainKind?: WorkViewGrainBucket | null;
+    /** Presentation unit label derived from grain kind + count (e.g. `Family`, `Children`). */
+    primaryGrainLabel?: string | null;
+    supportingGrainLabel?: string | null;
 };
 
 /** A process tile — the collapsed state of a process on the Workspace surface. */
@@ -289,6 +302,10 @@ export function workViewLinkFromWorkQueuePreview(
     count: number | null = null,
     icon: ProcessCardIcon | null = null,
 ): WorkViewLinkModel {
+    const primaryKind = entry.primary_grain_kind ?? null;
+    const supportingKind = entry.supporting_grain_kind ?? null;
+    const primaryCount = entry.primary_grain_count;
+    const supportingCount = entry.supporting_grain_count;
     return {
         id: entry.platformKey,
         label: entry.label,
@@ -299,6 +316,18 @@ export function workViewLinkFromWorkQueuePreview(
         icon,
         attentionCount: entry.attention_count ?? null,
         overdueCount: entry.overdue_count ?? null,
+        primaryGrainCount: primaryCount ?? null,
+        supportingGrainCount: supportingCount ?? null,
+        primaryGrainKind: primaryKind,
+        supportingGrainKind: supportingKind,
+        primaryGrainLabel:
+            primaryKind != null && typeof primaryCount === "number"
+                ? grainCountUnitLabel(primaryKind, primaryCount)
+                : null,
+        supportingGrainLabel:
+            supportingKind != null && typeof supportingCount === "number"
+                ? grainCountUnitLabel(supportingKind, supportingCount)
+                : null,
     };
 }
 
@@ -332,6 +361,12 @@ export function workViewLinkModelsFromConfiguredViews(
             // Work Unit pills show no per-view operational indicators (Workspace-tile only).
             attentionCount: null,
             overdueCount: null,
+            primaryGrainCount: null,
+            supportingGrainCount: null,
+            primaryGrainKind: null,
+            supportingGrainKind: null,
+            primaryGrainLabel: null,
+            supportingGrainLabel: null,
         }));
 }
 

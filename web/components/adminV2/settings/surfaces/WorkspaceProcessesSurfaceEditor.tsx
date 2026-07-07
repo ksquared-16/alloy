@@ -129,6 +129,12 @@ function previewProcess(
         icon: workViewIconById[wv.id] ?? null,
         attentionCount: null,
         overdueCount: null,
+        primaryGrainCount: null,
+        supportingGrainCount: null,
+        primaryGrainKind: null,
+        supportingGrainKind: null,
+        primaryGrainLabel: null,
+        supportingGrainLabel: null,
     }));
     return {
         id: `preview-${catalogEntry.id}`,

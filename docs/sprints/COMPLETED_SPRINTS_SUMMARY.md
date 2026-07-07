@@ -55,6 +55,14 @@
 
 ---
 
+## July 2026 — shipped
+
+| Area | Closeout (authoritative) | Outcome |
+|------|--------------------------|---------|
+| **Operator Workspace visual freeze** | [`07_2026/operator-workspace-visual-freeze-closeout.md`](./07_2026/operator-workspace-visual-freeze-closeout.md) | Process tile + Work Unit parity, grain counts, catch-all builder, typography freeze — presentation only |
+
+---
+
 ## In flight / planning (June 2026 — not closed)
 
 | Topic | Doc |

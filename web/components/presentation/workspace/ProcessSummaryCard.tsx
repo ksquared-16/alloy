@@ -25,7 +25,7 @@ import {
     resolveProcessCardConfig,
     type WorkspaceProcessSurfaceConfig,
 } from "@/lib/presentation/runtime/workspaceProcessSurfaceConfig";
-import { PROCESS_CARD_ACCENT_STYLES } from "@/lib/presentation/runtime/processCardAccentStyles";
+import { PROCESS_CARD_ACCENT_STYLES, processTileAccentBorderHover, processTileAccentTopBorder, processTileIdentityWellClass } from "@/lib/presentation/runtime/processCardAccentStyles";
 import {
     formatProcessSummaryMetric,
     PROCESS_SUMMARY_METRIC_EMPTY,
@@ -44,6 +44,12 @@ import {
 } from "@/components/presentation/runtimeLabels";
 import { WorkViewList } from "./WorkViewList";
 import { ProcessCardGlyph } from "./ProcessCardGlyph";
+import {
+    WS_KPI_CARD_CHROME,
+    WS_METRIC_UNIT_CHROME,
+    WS_PROCESS_TILE_CHROME,
+    WS_PROCESS_TILE_CHROME_HOVER,
+} from "@/components/workspace/workspaceTokens";
 
 /** Display word for each state — localization of the canonical enum, not a classification. */
 const STATE_WORD: Record<SignalState, string> = {
@@ -66,32 +72,30 @@ const DEFAULT_CTA = "text-alloy-bend-pine hover:text-alloy-bend-pine/80 focus-vi
 
 function MetricUnit({
     formatted,
-    size = "primary",
     dataAttr,
+    role = "primary",
 }: {
     formatted: FormattedProcessSummaryMetric;
-    size?: "primary" | "supporting";
     dataAttr?: string;
+    role?: "primary" | "supporting";
 }) {
     const value =
         formatted.kind === "value" ? formatted.displayValue : PROCESS_SUMMARY_METRIC_EMPTY;
     return (
-        <div {...(dataAttr ? { [dataAttr]: true } : {})}>
+        <div className={WS_METRIC_UNIT_CHROME} {...(dataAttr ? { [dataAttr]: true } : {})}>
             <p
-                className={`font-bold tabular-nums tracking-[-0.03em] text-alloy-midnight ${
-                    size === "primary" ? "text-[28px] leading-none" : "text-[22px] leading-none"
-                }`}
-                data-process-metric-value={size === "primary" ? true : undefined}
-                data-process-supporting-metric-value={size === "supporting" ? true : undefined}
+                className="text-[24px] font-semibold tabular-nums leading-none tracking-[-0.03em] text-alloy-midnight"
+                {...(role === "primary"
+                    ? { "data-process-metric-value": true }
+                    : { "data-process-supporting-metric-value": true })}
             >
                 {value}
             </p>
             <p
-                className={`mt-1.5 font-medium text-alloy-midnight/50 ${
-                    size === "primary" ? "text-[13px] leading-snug" : "text-[12px] leading-snug"
-                }`}
-                data-process-metric-title={size === "primary" ? true : undefined}
-                data-process-supporting-metric-title={size === "supporting" ? true : undefined}
+                className="mt-1.5 text-[11px] font-medium leading-snug text-alloy-midnight/42"
+                {...(role === "primary"
+                    ? { "data-process-metric-title": true }
+                    : { "data-process-supporting-metric-title": true })}
             >
                 {formatted.title}
             </p>
@@ -184,7 +188,10 @@ export function ProcessSummaryCard({
     const supportingMetricLabel = identity.supportingSignalLabel ?? supporting?.label ?? null;
 
     const accentStyle = identity.accent ? PROCESS_CARD_ACCENT_STYLES[identity.accent] : null;
-    const chipClasses = accentStyle?.chip ?? NEUTRAL_CHIP;
+    const identityWellClasses =
+        showChip && accentStyle ? `${processTileIdentityWellClass(identity.accent)} ${accentStyle.metricText}` : NEUTRAL_CHIP;
+    const accentTopBorder = processTileAccentTopBorder(identity.accent);
+    const accentBorderHover = processTileAccentBorderHover(identity.accent);
     const ctaClasses = accentStyle ? `${accentStyle.metricText} hover:opacity-80` : DEFAULT_CTA;
 
     const slug = useMemo(
@@ -231,9 +238,9 @@ export function ProcessSummaryCard({
             data-process-id={process.id}
             data-process-accent={identity.accent ?? "none"}
             data-process-metric-presentation={identity.metricPresentation}
-            className="flex h-full min-h-[14rem] flex-col overflow-hidden rounded-xl border border-alloy-stone/15 bg-white transition-shadow hover:shadow-[0_2px_10px_rgba(15,23,42,0.05)]"
+            className={`flex h-full min-h-[9rem] flex-col overflow-hidden ${WS_PROCESS_TILE_CHROME} ${WS_PROCESS_TILE_CHROME_HOVER} ${accentTopBorder} ${accentBorderHover}`}
         >
-            <div className="flex flex-1 flex-col gap-5 px-5 pb-5 pt-5">
+            <div className="flex flex-1 flex-col gap-3 px-3.5 pb-3.5 pt-3.5">
                 {/* Header — identity + subtle health */}
                 <div className="flex items-start justify-between gap-4">
                     <div className="flex min-w-0 items-start gap-3">
@@ -242,11 +249,9 @@ export function ProcessSummaryCard({
                                 <span
                                     data-process-identity-chip={showChip ? true : undefined}
                                     data-process-icon={identity.icon}
-                                    className={`inline-flex h-10 w-10 items-center justify-center rounded-xl ${
-                                        showChip ? chipClasses : NEUTRAL_CHIP
-                                    }`}
+                                    className={`inline-flex h-8 w-8 items-center justify-center rounded-lg ${identityWellClasses}`}
                                 >
-                                    <ProcessCardGlyph icon={identity.icon} className="h-[18px] w-[18px]" />
+                                    <ProcessCardGlyph icon={identity.icon} className="h-[15px] w-[15px]" />
                                 </span>
                             </BuilderHit>
                         ) : null}
@@ -254,7 +259,7 @@ export function ProcessSummaryCard({
                             <BuilderHit field="title" builder={builder} className="block w-full">
                                 <h3
                                     data-process-title
-                                    className="min-w-0 truncate text-[18px] font-semibold leading-snug tracking-[-0.01em] text-alloy-midnight"
+                                    className="min-w-0 truncate text-[15px] font-semibold leading-snug tracking-[-0.01em] text-alloy-midnight"
                                 >
                                     {title}
                                 </h3>
@@ -263,7 +268,7 @@ export function ProcessSummaryCard({
                                 <BuilderHit field="subtitle" builder={builder} className="mt-1 block w-full">
                                     <p
                                         data-process-subtitle
-                                        className="line-clamp-2 text-[13px] leading-relaxed text-alloy-midnight/50"
+                                        className="line-clamp-2 text-[13px] leading-relaxed text-alloy-midnight/42"
                                     >
                                         {subtitle}
                                     </p>
@@ -276,7 +281,7 @@ export function ProcessSummaryCard({
                         </div>
                     </div>
                     <span
-                        className="inline-flex shrink-0 items-center gap-1.5 pt-0.5 text-[11px] font-medium text-alloy-midnight/50"
+                        className="inline-flex shrink-0 items-center gap-1.5 pt-0.5 text-[11px] font-medium text-alloy-midnight/40"
                         data-process-status
                     >
                         <span aria-hidden className={`h-1.5 w-1.5 rounded-full ${STATE_DOT[state]}`} />
@@ -286,29 +291,29 @@ export function ProcessSummaryCard({
 
                 {/* Metrics — numbers hero, labels support; no colored banner */}
                 {signal && primaryFormatted ? (
-                    <div className="space-y-4" data-process-answer>
+                    <div className="space-y-3" data-process-answer>
                         {showInlineMetricPair && supportingFormatted ? (
                             <div
-                                className="grid grid-cols-2 gap-6"
+                                className="grid grid-cols-2 items-stretch gap-2.5"
                                 data-process-metrics-inline
                                 data-process-composite-metric
                             >
-                                <BuilderHit field="primaryMetricTitle" builder={builder}>
-                                    <MetricUnit formatted={primaryFormatted} size="primary" />
+                                <BuilderHit field="primaryMetricTitle" builder={builder} className="block h-full min-w-0">
+                                    <MetricUnit formatted={primaryFormatted} dataAttr="data-process-primary-metric" />
                                 </BuilderHit>
-                                <BuilderHit field="supportingMetricTitle" builder={builder}>
-                                    <MetricUnit formatted={supportingFormatted} size="supporting" />
+                                <BuilderHit field="supportingMetricTitle" builder={builder} className="block h-full min-w-0">
+                                    <MetricUnit formatted={supportingFormatted} dataAttr="data-process-supporting-metric" role="supporting" />
                                 </BuilderHit>
                             </div>
                         ) : (
                             <>
                                 <BuilderHit field="primaryMetricTitle" builder={builder} className="block w-full">
-                                    <MetricUnit formatted={primaryFormatted} size="primary" />
+                                    <MetricUnit formatted={primaryFormatted} dataAttr="data-process-primary-metric" />
                                 </BuilderHit>
                                 {showStackedSupporting && supportingFormatted ? (
                                     <BuilderHit field="supportingMetricTitle" builder={builder} className="block w-full">
                                         <div data-process-supporting-signal>
-                                            <MetricUnit formatted={supportingFormatted} size="supporting" />
+                                            <MetricUnit formatted={supportingFormatted} dataAttr="data-process-supporting-metric" role="supporting" />
                                         </div>
                                     </BuilderHit>
                                 ) : builder ? (
@@ -324,29 +329,33 @@ export function ProcessSummaryCard({
                     </div>
                 ) : (
                     <div data-process-answer>
-                        <p className="text-sm font-medium text-alloy-midnight/45">No signal configured yet</p>
+                        <p className="text-sm font-medium text-alloy-midnight/40">No signal configured yet</p>
                     </div>
                 )}
 
                 {/* Supporting context — target/trend text only when the calculation supplies it */}
                 {signal && (signal.supportingContext || signal.trend) ? (
-                    <p className="-mt-2 text-[12px] leading-relaxed text-alloy-midnight/45" data-process-context>
+                    <p className="-mt-2 text-[12px] leading-relaxed text-alloy-midnight/38" data-process-context>
                         {[signal.trend, signal.supportingContext].filter(Boolean).join(" · ")}
                     </p>
                 ) : null}
 
                 {/* Today's Work */}
                 {showTodaysWork ? (
-                    <div className="border-t border-alloy-stone/20 pt-5" data-process-todays-work>
-                        <p className="mb-3 text-[10px] font-semibold uppercase tracking-[0.12em] text-alloy-midnight/40">
+                    <div className="border-t border-alloy-stone/22 pt-3" data-process-todays-work>
+                        <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-alloy-midnight/35">
                             Today&apos;s Work
                         </p>
-                        <WorkViewList workViews={todaysWork} showCounts={config.todaysWork.showCounts} />
+                        <WorkViewList
+                            workViews={todaysWork}
+                            showCounts={config.todaysWork.showCounts}
+                            processAccent={identity.accent}
+                        />
                     </div>
                 ) : null}
 
-                {/* Open workspace — text affordance, not a heavy button */}
-                <div className="mt-auto border-t border-alloy-stone/20 pt-4">
+                {/* Open workspace — text affordance, bottom-right continuation */}
+                <div className="mt-auto flex justify-end border-t border-alloy-stone/22 pt-2.5">
                     {builder ? (
                         <BuilderHit field="cta" builder={builder}>
                             <span

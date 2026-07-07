@@ -118,11 +118,12 @@ describe("WorkspaceHeader presentation", () => {
         expect(well?.getAttribute("class")).toContain("bg-alloy-gold");
     });
 
-    it("work-unit variant KPIs stay compact (no icon well)", () => {
+    it("work-unit variant KPIs share workspace KPI card grammar (icon well + chrome)", () => {
         const model = buildWorkspaceHeaderPresentation(DEFAULT_WORKSPACE_HEADER_SURFACE_CONFIG, {
             fallbackTitle: "Org",
         });
         const el = render(<WorkspaceHeader model={model} variant="work-unit" />);
-        expect(el.querySelector("[data-workspace-header-kpi-icon-well]")).toBeNull();
+        expect(el.querySelector("[data-work-unit-header-kpi-icon-well]")).not.toBeNull();
+        expect(el.querySelector("[data-work-unit-header-kpi='1']")?.className).toContain("border-alloy-stone/15");
     });
 });
