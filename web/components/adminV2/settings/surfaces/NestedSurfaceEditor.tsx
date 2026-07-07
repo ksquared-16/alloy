@@ -1,220 +1,375 @@
 "use client";
 
 /**
- * Nested Surface Editor — configure the evidence groups/fields inside a card's
- * expansion surface (Children Surface, Financial Configuration Surface).
+ * Nested Surface Composer — same interaction model as Queue Row and Focus Panel.
  *
- * Visible /surfaces behavior: view current fields · + Add Field (compatible
- * predefined + tenant custom) · remove · reorder · Save/Publish. Availability is
- * namespace-driven and never fabricates a field (honest empty state where no
- * compatible real field exists).
- *
- * Live runtime does not consume nested surface configs yet — labeled
- * presentation-runtime-ready.
- *
- * @see lib/adminV2/settings/surfaces/nestedSurfaceEditorModel.ts
- * @see lib/adminV2/settings/surfaces/nestedSurfaceConfigService.ts
+ * click group → library → place → select → inspector → publish → runtime
  */
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 
+import { ConfigurationPrimaryButton } from "@/components/adminV2/settings/configurationRuntime/ConfigurationModeLayout";
+import NestedSurfaceRuntimeCanvas from "@/components/adminV2/settings/surfaces/composer/NestedSurfaceRuntimeCanvas";
+import NestedSurfaceGroupInspector from "@/components/adminV2/settings/surfaces/composer/NestedSurfaceGroupInspector";
+import SurfaceFieldInspector from "@/components/adminV2/settings/surfaces/composer/SurfaceFieldInspector";
+import SurfaceItemLibraryPanel from "@/components/adminV2/settings/surfaces/composer/SurfaceItemLibraryPanel";
 import { useTenantFieldDefinitions } from "@/lib/adminV2/settings/surfaces/useTenantFieldDefinitions";
 import {
     addFieldToNestedGroup,
-    availableFieldsForNestedGroup,
     defaultNestedSurfaceConfig,
     groupDefsFor,
     moveFieldInNestedGroup,
     nestedSurfaceLabel,
     removeFieldFromNestedGroup,
-    selectedFieldKeys,
     type NestedSurfaceConfig,
+    type NestedSurfaceGroupConfig,
 } from "@/lib/adminV2/settings/surfaces/nestedSurfaceEditorModel";
+import {
+    HOUSEHOLD_CONTACT_SURFACE_ID,
+    HOUSEHOLD_SURFACE_ID,
+} from "@/lib/adminV2/settings/surfaces/nestedSurfaceDefinitionModel";
 import {
     loadNestedSurfaceConfig,
     saveNestedSurfaceConfig,
 } from "@/lib/adminV2/settings/surfaces/nestedSurfaceConfigService";
-import { availableFieldsForNamespaces, type AvailableField } from "@/lib/adminV2/settings/surfaces/compositionFieldAdapter";
+import {
+    buildNestedSurfaceLibraryForGroup,
+    nestedSurfaceLibraryCategories,
+    type NestedSurfaceLibraryItem,
+} from "@/lib/adminV2/settings/surfaces/nestedSurfaceBuilderLibrary";
+import {
+    listNestedPlacedFields,
+    toSurfaceComposerPlacedItemRef,
+} from "@/lib/adminV2/settings/surfaces/nestedSurfaceComposerModel";
+import {
+    SURFACE_COMPOSER_CANVAS_ATTR,
+    SURFACE_COMPOSER_EMPTY_HINT,
+    SURFACE_COMPOSER_INSPECTOR_ATTR,
+} from "@/lib/adminV2/settings/surfaces/surfaceComposer";
 
-function labelForKey(surfaceId: string, groupKey: string, fieldKey: string, tenantDefs: Parameters<typeof availableFieldsForNamespaces>[1]): string {
-    const def = groupDefsFor(surfaceId).find((g) => g.key === groupKey);
-    const all = def ? availableFieldsForNamespaces(def.acceptedNamespaces, tenantDefs) : [];
-    return all.find((f) => f.key === fieldKey)?.label
-        ?? fieldKey.replace(/^[a-z_]+\./, "").replace(/[._]/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
-}
+type Props = {
+    surfaceId: string;
+    grainEntityType?: string;
+    parentLabel?: string;
+    cardLabel?: string;
+    onBack?: () => void;
+    onDrillInSurface?: (surfaceId: string) => void;
+    /** Contact surface config when editing household (for live preview). */
+    contactConfig?: NestedSurfaceConfig | null;
+};
 
 export default function NestedSurfaceEditor({
     surfaceId,
     grainEntityType = "opportunities",
-}: {
-    surfaceId: string;
-    grainEntityType?: string;
-}) {
+    parentLabel = "Enrollment Focus Panel",
+    cardLabel,
+    onBack,
+    onDrillInSurface,
+    contactConfig,
+}: Props) {
     const { tenantFieldDefinitions } = useTenantFieldDefinitions(grainEntityType);
     const [config, setConfig] = useState<NestedSurfaceConfig>(() => defaultNestedSurfaceConfig(surfaceId));
     const [loading, setLoading] = useState(true);
     const [dirty, setDirty] = useState(false);
-    const [saving, setSaving] = useState(false);
-    const [savedAt, setSavedAt] = useState<boolean>(false);
+    const [publishing, setPublishing] = useState(false);
+    const [publishedAt, setPublishedAt] = useState(false);
     const [error, setError] = useState<string | null>(null);
-    const [addOpenGroup, setAddOpenGroup] = useState<string | null>(null);
+    const [selectedGroupKey, setSelectedGroupKey] = useState<string | null>(null);
+    const [selectedFieldId, setSelectedFieldId] = useState<string | null>(null);
+    const [libraryOpen, setLibraryOpen] = useState(false);
+    const [libraryGroupKey, setLibraryGroupKey] = useState<string | null>(null);
+
+    const [contactConfigState, setContactConfigState] = useState<NestedSurfaceConfig | null>(null);
+
+    useEffect(() => {
+        if (surfaceId !== HOUSEHOLD_SURFACE_ID) {
+            setContactConfigState(null);
+            return;
+        }
+        let cancelled = false;
+        loadNestedSurfaceConfig(HOUSEHOLD_CONTACT_SURFACE_ID)
+            .then((c) => {
+                if (!cancelled) setContactConfigState(c);
+            })
+            .catch(() => {
+                if (!cancelled) setContactConfigState(null);
+            });
+        return () => {
+            cancelled = true;
+        };
+    }, [surfaceId]);
+
+    const effectiveContactConfig = contactConfig ?? contactConfigState;
 
     useEffect(() => {
         let cancelled = false;
         setLoading(true);
         loadNestedSurfaceConfig(surfaceId)
-            .then((c) => { if (!cancelled) { setConfig(c); setDirty(false); } })
-            .catch(() => { if (!cancelled) setConfig(defaultNestedSurfaceConfig(surfaceId)); })
-            .finally(() => { if (!cancelled) setLoading(false); });
-        return () => { cancelled = true; };
+            .then((c) => {
+                if (!cancelled) {
+                    setConfig(c);
+                    setDirty(false);
+                }
+            })
+            .catch(() => {
+                if (!cancelled) setConfig(defaultNestedSurfaceConfig(surfaceId));
+            })
+            .finally(() => {
+                if (!cancelled) setLoading(false);
+            });
+        return () => {
+            cancelled = true;
+        };
     }, [surfaceId]);
 
     const mutate = useCallback((next: NestedSurfaceConfig) => {
         setConfig(next);
         setDirty(true);
-        setSavedAt(false);
+        setPublishedAt(false);
     }, []);
 
-    const groups = groupDefsFor(surfaceId);
+    const groupDefs = groupDefsFor(surfaceId);
+    const surfaceTitle = nestedSurfaceLabel(surfaceId);
 
-    async function handleSave() {
-        setSaving(true);
+    const placedByGroup = useMemo(() => {
+        const map = new Map<string, ReturnType<typeof listNestedPlacedFields>>();
+        for (const def of groupDefs) {
+            map.set(
+                def.key,
+                listNestedPlacedFields(surfaceId, def.key, config, tenantFieldDefinitions),
+            );
+        }
+        return map;
+    }, [config, groupDefs, surfaceId, tenantFieldDefinitions]);
+
+    const selectedPlacedField = useMemo(() => {
+        if (!selectedFieldId) return null;
+        for (const placed of placedByGroup.values()) {
+            const found = placed.find((f) => f.id === selectedFieldId);
+            if (found) return found;
+        }
+        return null;
+    }, [placedByGroup, selectedFieldId]);
+
+    const selectedGroupConfig = useMemo((): NestedSurfaceGroupConfig | null => {
+        if (!selectedGroupKey) return null;
+        return config.groups.find((g) => g.key === selectedGroupKey) ?? null;
+    }, [config.groups, selectedGroupKey]);
+
+    function patchGroupConfig(groupKey: string, next: NestedSurfaceGroupConfig) {
+        mutate({
+            ...config,
+            groups: config.groups.map((g) => (g.key === groupKey ? next : g)),
+        });
+    }
+
+    const libraryItems: NestedSurfaceLibraryItem[] = useMemo(() => {
+        if (!libraryGroupKey) return [];
+        return buildNestedSurfaceLibraryForGroup(
+            surfaceId,
+            libraryGroupKey,
+            config,
+            tenantFieldDefinitions,
+        );
+    }, [config, libraryGroupKey, surfaceId, tenantFieldDefinitions]);
+
+    const libraryCategories = useMemo(
+        () => nestedSurfaceLibraryCategories(libraryItems),
+        [libraryItems],
+    );
+
+    const openLibrary = useCallback((groupKey: string) => {
+        setLibraryGroupKey(groupKey);
+        setSelectedGroupKey(groupKey);
+        setSelectedFieldId(null);
+        setLibraryOpen(true);
+    }, []);
+
+    const handleLibraryPick = useCallback(
+        (item: NestedSurfaceLibraryItem) => {
+            if (item.kind !== "field") return;
+            mutate(addFieldToNestedGroup(config, item.groupKey, item.fieldKey));
+            setSelectedGroupKey(item.groupKey);
+            setSelectedFieldId(`${item.groupKey}:${item.fieldKey}`);
+            setLibraryOpen(false);
+            setLibraryGroupKey(null);
+        },
+        [config, mutate],
+    );
+
+    async function handlePublish() {
+        setPublishing(true);
         setError(null);
         try {
             await saveNestedSurfaceConfig(surfaceId, config);
             setDirty(false);
-            setSavedAt(true);
+            setPublishedAt(true);
         } catch (e) {
             setError((e as Error).message);
         } finally {
-            setSaving(false);
+            setPublishing(false);
         }
     }
 
+    const statusLabel = loading
+        ? "Loading…"
+        : dirty
+          ? "Unpublished changes"
+          : publishedAt
+            ? "Published"
+            : "No changes";
+
     return (
         <div className="flex h-full min-h-0 flex-col gap-3" data-nested-surface-editor={surfaceId}>
-            <header className="border-b border-alloy-stone/10 pb-2">
-                <p className="text-[11px] font-semibold uppercase tracking-wide text-alloy-pine">Nested Surface</p>
-                <h2 className="text-lg font-semibold tracking-tight text-alloy-midnight" data-nested-surface-title>
-                    {nestedSurfaceLabel(surfaceId)}
-                </h2>
-                <p className="mt-0.5 text-xs text-alloy-midnight/55">
-                    Configure the evidence groups and fields inside this expansion surface.
-                    Groups derive from the registered SurfaceSpec.
-                </p>
-            </header>
-
-            {loading ? (
-                <div className="h-24 animate-pulse rounded-xl border border-alloy-stone/12 bg-alloy-stone/5" />
-            ) : (
-                <div className="min-h-0 flex-1 space-y-3 overflow-auto">
-                    {groups.map((def) => {
-                        const selected = selectedFieldKeys(config, def.key);
-                        const available: AvailableField[] = availableFieldsForNestedGroup(surfaceId, def.key, config, tenantFieldDefinitions);
-                        const addOpen = addOpenGroup === def.key;
-                        return (
-                            <section
-                                key={def.key}
-                                className="rounded-xl border border-alloy-stone/14 bg-white p-3 shadow-sm"
-                                data-nested-group={def.key}
-                            >
-                                <div className="flex items-baseline justify-between">
-                                    <div>
-                                        <p className="text-sm font-semibold text-alloy-midnight">{def.label}</p>
-                                        {def.purpose && <p className="text-[11px] text-alloy-midnight/45">{def.purpose}</p>}
-                                    </div>
-                                    <button
-                                        type="button"
-                                        onClick={() => setAddOpenGroup(addOpen ? null : def.key)}
-                                        className="rounded-lg border border-alloy-pine/30 bg-white px-2 py-1 text-[11px] font-medium text-alloy-pine hover:bg-alloy-pine/[0.05]"
-                                        data-nested-add-field={def.key}
-                                    >
-                                        + Add Field
-                                    </button>
-                                </div>
-
-                                {/* Selected fields */}
-                                <div className="mt-2 space-y-1" data-nested-selected={def.key}>
-                                    {selected.length === 0 && (
-                                        <p className="rounded-md bg-alloy-stone/[0.05] px-2 py-1.5 text-[11px] text-alloy-midnight/35">
-                                            No fields yet — add compatible fields above.
-                                        </p>
-                                    )}
-                                    {selected.map((fieldKey, i) => (
-                                        <div
-                                            key={fieldKey}
-                                            className="flex items-center gap-2 rounded-md border border-alloy-stone/10 px-2 py-1"
-                                            data-nested-field={fieldKey}
-                                        >
-                                            <span className="flex-1 truncate text-[12px] text-alloy-midnight/80">
-                                                {labelForKey(surfaceId, def.key, fieldKey, tenantFieldDefinitions)}
-                                            </span>
-                                            <span className="font-mono text-[9px] text-alloy-midnight/25">{fieldKey}</span>
-                                            <button type="button" aria-label="Move up" disabled={i === 0}
-                                                onClick={() => mutate(moveFieldInNestedGroup(config, def.key, fieldKey, -1))}
-                                                className="rounded px-1 text-[10px] text-alloy-midnight/40 hover:text-alloy-pine disabled:opacity-30">↑</button>
-                                            <button type="button" aria-label="Move down" disabled={i === selected.length - 1}
-                                                onClick={() => mutate(moveFieldInNestedGroup(config, def.key, fieldKey, 1))}
-                                                className="rounded px-1 text-[10px] text-alloy-midnight/40 hover:text-alloy-pine disabled:opacity-30">↓</button>
-                                            <button type="button" aria-label={`Remove ${fieldKey}`}
-                                                onClick={() => mutate(removeFieldFromNestedGroup(config, def.key, fieldKey))}
-                                                className="rounded px-1 text-[11px] text-alloy-midnight/30 hover:text-red-500"
-                                                data-nested-remove-field={fieldKey}>✕</button>
-                                        </div>
-                                    ))}
-                                </div>
-
-                                {/* Add Field picker */}
-                                {addOpen && (
-                                    <div className="mt-2 rounded-lg border border-alloy-stone/14 bg-alloy-stone/[0.03] p-2" data-nested-add-picker={def.key}>
-                                        {available.length === 0 ? (
-                                            <p className="px-1 py-1 text-[11px] text-alloy-midnight/40">
-                                                No compatible fields available. Create a custom field for this record type, or none are modeled yet.
-                                            </p>
-                                        ) : (
-                                            <div className="flex flex-wrap gap-1.5">
-                                                {available.map((f) => (
-                                                    <button
-                                                        key={f.key}
-                                                        type="button"
-                                                        onClick={() => { mutate(addFieldToNestedGroup(config, def.key, f.key)); setAddOpenGroup(null); }}
-                                                        className="flex items-center gap-1 rounded-full border border-alloy-stone/20 bg-white px-2 py-1 text-[11px] text-alloy-midnight/70 hover:border-alloy-pine/40 hover:text-alloy-pine"
-                                                        data-nested-available-field={f.key}
-                                                    >
-                                                        {f.label}
-                                                        {!f.isSystemField && (
-                                                            <span className="rounded bg-alloy-pine/10 px-1 text-[9px] font-medium text-alloy-pine" data-custom-field-badge>Custom</span>
-                                                        )}
-                                                    </button>
-                                                ))}
-                                            </div>
-                                        )}
-                                    </div>
-                                )}
-                            </section>
-                        );
-                    })}
+            <div
+                className="process-config-workspace-toolbar flex flex-wrap items-center justify-between gap-3"
+                data-testid="surface-publish-toolbar"
+            >
+                <div className="min-w-0">
+                    <nav className="mb-1 flex flex-wrap items-center gap-1 text-[11px] text-alloy-midnight/45" data-nested-surface-breadcrumb="true">
+                        {onBack ?
+                            <button type="button" onClick={onBack} className="font-medium text-alloy-pine hover:underline" data-nested-surface-back>
+                                ← {parentLabel}
+                            </button>
+                        :   null}
+                        {cardLabel ?
+                            <>
+                                <span aria-hidden>/</span>
+                                <span>{cardLabel}</span>
+                            </>
+                        :   null}
+                        <span aria-hidden>/</span>
+                        <span className="text-alloy-midnight/70">{surfaceTitle}</span>
+                    </nav>
+                    <div className="flex items-baseline gap-2">
+                        <span className="config-typo-workspace-title">{surfaceTitle}</span>
+                        <span
+                            data-testid="surface-publish-status"
+                            data-surface-dirty={dirty ? "true" : "false"}
+                            className={[
+                                "config-typo-sublabel",
+                                dirty ? "text-amber-800" : publishedAt ? "text-alloy-pine" : "",
+                            ].join(" ")}
+                        >
+                            {statusLabel}
+                        </span>
+                    </div>
                 </div>
-            )}
-
-            <div className="flex items-center gap-3 border-t border-alloy-stone/10 pt-3">
-                <button
-                    type="button"
-                    onClick={handleSave}
-                    disabled={!dirty || saving}
-                    className="rounded-lg bg-alloy-pine px-4 py-2 text-sm font-semibold text-white hover:bg-alloy-pine/90 disabled:opacity-40"
+                <ConfigurationPrimaryButton
+                    data-testid="surface-publish"
                     data-nested-surface-save
+                    onClick={handlePublish}
+                    disabled={!dirty || publishing || loading}
                 >
-                    {saving ? "Publishing…" : "Save & Publish"}
-                </button>
-                <span className="text-[11px] font-medium text-alloy-midnight/50">
-                    {error ? <span className="text-red-500">{error}</span>
-                        : saving ? "Saving…"
-                        : savedAt && !dirty ? <span className="text-alloy-juniper">Published</span>
-                        : dirty ? "Unsaved changes"
-                        : "No changes"}
-                </span>
+                    {publishing ? "Publishing…" : "Publish"}
+                </ConfigurationPrimaryButton>
             </div>
+
+            {error ?
+                <p className="config-typo-sublabel text-alloy-ember" data-testid="surface-publish-note">{error}</p>
+            :   null}
+
+            {!selectedFieldId && !libraryOpen ?
+                <p className="text-[12px] text-alloy-midnight/45" data-nested-composer-hint="true">
+                    {SURFACE_COMPOSER_EMPTY_HINT}
+                </p>
+            :   null}
+
+            {loading ?
+                <div className="h-24 animate-pulse rounded-xl border border-alloy-stone/12 bg-alloy-stone/5" />
+            :   <div className="flex min-h-0 flex-1 gap-4">
+                    <div className="min-w-0 flex-1 overflow-auto">
+                        <NestedSurfaceRuntimeCanvas
+                            surfaceId={surfaceId}
+                            config={config}
+                            contactConfig={effectiveContactConfig}
+                            selectedGroupKey={selectedGroupKey}
+                            onSelectGroup={(key) => {
+                                setSelectedGroupKey(key);
+                                setSelectedFieldId(null);
+                            }}
+                            onDrillInSurface={onDrillInSurface}
+                        />
+                    </div>
+
+                    <div
+                        className="w-[360px] shrink-0 overflow-y-auto"
+                        data-surface-inspector="true"
+                        {...{ [SURFACE_COMPOSER_INSPECTOR_ATTR]: true }}
+                    >
+                        {selectedPlacedField ?
+                            <div className="process-config-setup-card p-4">
+                                <p className="config-typo-sublabel mb-3">
+                                    {groupDefs.find((g) => g.key === selectedPlacedField.groupKey)?.label}
+                                </p>
+                                <SurfaceFieldInspector
+                                    variant="nested"
+                                    field={toSurfaceComposerPlacedItemRef(selectedPlacedField)}
+                                    onChangeSection={() => {}}
+                                    onChangePlacement={() => {}}
+                                    onChangeLabel={() => {}}
+                                    onMoveEarlier={() => {
+                                        mutate(
+                                            moveFieldInNestedGroup(
+                                                config,
+                                                selectedPlacedField.groupKey,
+                                                selectedPlacedField.fieldKey,
+                                                -1,
+                                            ),
+                                        );
+                                    }}
+                                    onMoveLater={() => {
+                                        mutate(
+                                            moveFieldInNestedGroup(
+                                                config,
+                                                selectedPlacedField.groupKey,
+                                                selectedPlacedField.fieldKey,
+                                                1,
+                                            ),
+                                        );
+                                    }}
+                                    onRemove={() => {
+                                        mutate(
+                                            removeFieldFromNestedGroup(
+                                                config,
+                                                selectedPlacedField.groupKey,
+                                                selectedPlacedField.fieldKey,
+                                            ),
+                                        );
+                                        setSelectedFieldId(null);
+                                    }}
+                                />
+                            </div>
+                        : selectedGroupKey && selectedGroupConfig ?
+                            <NestedSurfaceGroupInspector
+                                surfaceId={surfaceId}
+                                groupDef={groupDefs.find((g) => g.key === selectedGroupKey)!}
+                                groupConfig={selectedGroupConfig}
+                                onChange={(next) => patchGroupConfig(selectedGroupKey, next)}
+                                onOpenLibrary={() => openLibrary(selectedGroupKey)}
+                            />
+                        :   <div className="process-config-setup-card flex h-full items-center justify-center p-6 text-center" data-surface-inspector-empty="true">
+                                <p className="config-typo-sublabel">{SURFACE_COMPOSER_EMPTY_HINT}</p>
+                            </div>
+                        }
+                    </div>
+                </div>
+            }
+
+            <SurfaceItemLibraryPanel<NestedSurfaceLibraryItem>
+                open={libraryOpen}
+                categories={libraryCategories}
+                sectionLabel="Add to group"
+                subtitle="Choose a field to place in this evidence group."
+                itemKey={(item) => item.fieldKey}
+                itemLabel={(item) => item.label}
+                itemMeta={(item) => (item.isSystemField ? null : "Custom")}
+                onPick={handleLibraryPick}
+                onClose={() => {
+                    setLibraryOpen(false);
+                    setLibraryGroupKey(null);
+                }}
+            />
         </div>
     );
 }

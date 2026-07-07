@@ -45,10 +45,10 @@ describe("Surfaces page — Configuration Runtime shell + naming", () => {
         expect(html).not.toContain("Opportunity · Summary");
     });
 
-    it("collapses navigation while editing (breadcrumb + canvas wins)", () => {
-        expect(page).toContain('data-testid="surfaces-breadcrumb"');
-        expect(page).toContain("FocusPanelSummarySurfaceEditor");
-        expect(page).toContain("editing && selectedObject");
+    it("opens Focus Panel in full-bleed builder like queue rows", () => {
+        expect(page).toContain("FocusPanelSurfaceEditor");
+        expect(page).toContain("isFocusPanelEditor");
+        expect(page).toContain("process-config-page");
     });
 });
 

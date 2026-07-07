@@ -232,9 +232,10 @@ describe("builder + runtime seams", () => {
         expect(builder).toContain("onOpenNestedSurface");
     });
 
-    it("Surfaces page wires canvas drill-in to nestedSurfaceId state", () => {
+    it("Surfaces page wires canvas drill-in to nested stack state", () => {
         const page = src("components/adminV2/settings/surfaces/SurfacesConfigurationPage.tsx");
-        expect(page).toContain("onOpenNestedSurface={setNestedSurfaceId}");
+        expect(page).toContain("setNestedStack");
+        expect(page).toContain("FocusPanelSurfaceEditor");
     });
 
     it("runtime ChildrenCard consumes the published nested config (no parallel persistence)", () => {
