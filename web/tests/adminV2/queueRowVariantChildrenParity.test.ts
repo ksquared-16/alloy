@@ -12,14 +12,10 @@ import {
     buildQueueRowLibraryCatalog,
     libraryItemsByCategory,
     prioritizeLibraryForRowFocus,
+    type QueueRowLibraryFieldItem,
 } from "@/lib/adminV2/settings/surfaces/queueRowBuilderLibrary";
-import {
-    listPlacedFields,
-    type ZoneComposerState,
-} from "@/lib/adminV2/settings/surfaces/queueRowComposerModel";
-import {
-    createQueueRowVariant,
-} from "@/lib/presentation/runtime/queueRowSurfaceMetadata";
+import { listPlacedFields } from "@/lib/adminV2/settings/surfaces/queueRowComposerModel";
+import { createQueueRowVariant } from "@/lib/presentation/runtime/queueRowSurfaceMetadata";
 import { resolveQueueRowCompactSlots } from "@/lib/presentation/runtime/queueRowVariantResolve";
 import { resolveCompactSlotDisplay } from "@/lib/presentation/runtime/resolveCompactSlotDisplay";
 import { DEFAULT_CHILDREN_COLLECTION_PRESENTATION } from "@/lib/presentation/collectionFieldPresentation";
@@ -35,10 +31,12 @@ const ENROLLMENT_STAGES = [
     { value: "waitlist", label: "Waitlist" },
 ];
 
+type RowZones = ReturnType<typeof stateFromConfig>;
+
 function libraryChildrenField(
     catalogIsWaitlist: boolean,
     includeWaitlistFields: boolean,
-): { kind: "field"; fieldKey: string } | undefined {
+): QueueRowLibraryFieldItem | undefined {
     const items = buildQueueRowLibraryCatalog({
         isWaitlist: catalogIsWaitlist,
         includeWaitlistFields,
@@ -46,18 +44,18 @@ function libraryChildrenField(
     });
     const childCategory = libraryItemsByCategory(items).find((c) => c.key === "child");
     return childCategory?.items.find(
-        (item): item is { kind: "field"; fieldKey: string } =>
+        (item): item is QueueRowLibraryFieldItem =>
             item.kind === "field" && item.fieldKey === "children",
     );
 }
 
 function enableChildrenCollection(
-    zones: ZoneComposerState[],
+    zones: RowZones,
     presentation = {
         ...DEFAULT_CHILDREN_COLLECTION_PRESENTATION,
         includedFields: ["first_name", "age"] as const,
     },
-): ZoneComposerState[] {
+): RowZones {
     return zones.map((z) => {
         if (z.key !== "children") return z;
         return {
@@ -75,7 +73,10 @@ function enableChildrenCollection(
             },
             evidenceGroups: z.evidenceGroups.map((g) => ({
                 ...g,
-                enabled: g.fields.some((f) => f.fieldKey === "children") || g.key.includes("summary") || g.key.includes("candidate"),
+                enabled:
+                    g.fields.some((f) => f.fieldKey === "children") ||
+                    g.blockId.includes("summary") ||
+                    g.blockId.includes("candidate"),
                 fields: g.fields.map((f) =>
                     f.fieldKey === "children" ? { ...f, enabled: true, label: "Children" } : f,
                 ),
@@ -171,7 +172,7 @@ describe("queue row variant / default Children collection parity", () => {
     it("Default can add Children collection and persist collectionPresentation", () => {
         const catalog = buildCatalog(false);
         const base = emptyQueueRowLayoutV3();
-        const zones = enableChildrenCollection(stateFromConfig(base, catalog, false) as ZoneComposerState[]);
+        const zones = enableChildrenCollection(stateFromConfig(base, catalog, false));
         const config = buildConfigFromState(base, zones, catalog);
 
         const childrenField = config.columns
@@ -189,7 +190,7 @@ describe("queue row variant / default Children collection parity", () => {
         const base = emptyQueueRowLayoutV3();
         const variant = createQueueRowVariant({ label: "Tour", priority: 10, appliesWhen: { stage_key: ["tour_scheduled"] } });
 
-        const zones = enableChildrenCollection(stateFromConfig(base, catalog, catalogIsWaitlist) as ZoneComposerState[]);
+        const zones = enableChildrenCollection(stateFromConfig(base, catalog, catalogIsWaitlist));
         const variantLayout = buildConfigFromState(base, zones, catalog);
         variant.columns = variantLayout.columns;
 
@@ -241,7 +242,7 @@ describe("queue row variant / default Children collection parity", () => {
 
         const catalog = buildCatalog(false);
         const base = emptyQueueRowLayoutV3();
-        const zones = enableChildrenCollection(stateFromConfig(base, catalog, false) as ZoneComposerState[]);
+        const zones = enableChildrenCollection(stateFromConfig(base, catalog, false));
         const defaultLayout = buildConfigFromState(base, zones, catalog);
 
         const variant = createQueueRowVariant({
@@ -272,9 +273,9 @@ describe("queue row variant / default Children collection parity", () => {
     it("composer round-trip preserves collectionPresentation for variant state", () => {
         const catalog = buildCatalog(false);
         const base = emptyQueueRowLayoutV3();
-        let zones = enableChildrenCollection(stateFromConfig(base, catalog, false) as ZoneComposerState[]);
+        let zones = enableChildrenCollection(stateFromConfig(base, catalog, false));
         const config = buildConfigFromState(base, zones, catalog);
-        zones = stateFromConfig(config, catalog, false) as ZoneComposerState[];
+        zones = stateFromConfig(config, catalog, false);
 
         const placed = listPlacedFields(zones).find((f) => f.fieldKey === "children");
         expect(placed?.collectionPresentation?.includedFields).toEqual(["first_name", "age"]);
