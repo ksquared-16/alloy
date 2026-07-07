@@ -128,33 +128,18 @@ const FIELD_LIBRARY_LABELS: Record<string, string> = {
     "waitlist.priorityLabel": "Child priority",
     "waitlist.waitSince": "Wait since",
     "waitlist.siblingContext": "Sibling context",
+    "sibling.names": "Sibling names",
+    "sibling.count": "Sibling count",
+    "sibling.enrolled": "Sibling enrolled",
+    "sibling.waitlisted": "Sibling waitlisted",
+    "sibling.location": "Sibling location",
+    "sibling.program": "Sibling program",
+    "household.otherChildren": "Other children",
     "overrides.flags": "Placement adjustment",
 };
 
-/** Registry gaps — shown disabled so operators know sibling fields are not fabricated. */
-export const QUEUE_ROW_UNAVAILABLE_SIBLING_LIBRARY: readonly QueueRowLibraryUnavailableItem[] = [
-    {
-        kind: "unavailable",
-        fieldKey: "sibling.enrolled",
-        label: "Sibling enrolled",
-        reason: "Not available yet — missing registry field",
-        category: "child",
-    },
-    {
-        kind: "unavailable",
-        fieldKey: "sibling.names",
-        label: "Sibling names",
-        reason: "Not available yet — missing registry field",
-        category: "child",
-    },
-    {
-        kind: "unavailable",
-        fieldKey: "sibling.count",
-        label: "Sibling count",
-        reason: "Not available yet — missing registry field",
-        category: "child",
-    },
-];
+/** Registry gaps — none for sibling vocabulary after runtime promotion sprint. */
+export const QUEUE_ROW_UNAVAILABLE_SIBLING_LIBRARY: readonly QueueRowLibraryUnavailableItem[] = [];
 
 const WIDGET_LIBRARY_LABELS: Record<string, string> = {
     attention: "Attention",
@@ -181,6 +166,13 @@ const FIELD_CATEGORY: Record<string, QueueRowLibraryCategoryKey> = {
     "inquiry_child.schedule_type": "child",
     "child.room": "child",
     "waitlist.siblingContext": "child",
+    "sibling.names": "child",
+    "sibling.count": "child",
+    "sibling.enrolled": "child",
+    "sibling.waitlisted": "child",
+    "sibling.location": "child",
+    "sibling.program": "child",
+    "household.otherChildren": "child",
     "queue_row.stage_label": "status",
     "opportunity.status_label": "status",
     "opportunity.attention_reason": "status",

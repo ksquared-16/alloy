@@ -115,9 +115,30 @@ Legacy `tasks` widget remains valid for existing layouts but is hidden from new 
 
 ### Waitlist placement fields
 
-`waitlist.positionLabel`, `waitlist.tierLabel`, `waitlist.priorityLabel`, `overrides.flags`, `waitlist.waitSince`, `waitlist.siblingContext` — candidate-grain only.
+Candidate-grain waitlist rows expose placement vocabulary via `queueWaitlistPlacementField.ts` and sibling/household child vocabulary via `queueRowSiblingFieldRegistry.ts` / `resolveQueueRowSiblingFields.ts`.
 
-Code: `queueWaitlistPlacementField.ts`, `queueRecordLayoutAllowList.ts`, `validateQueueRecordLayoutConfig.ts`.
+| RefKey | Operator label | Runtime source |
+|--------|----------------|----------------|
+| `waitlist.positionLabel` | Waitlist position | Candidate runtime position within section |
+| `waitlist.tierLabel` | Priority tier | Placement bucket label |
+| `waitlist.priorityLabel` | Priority | Alias of tier/bucket label |
+| `waitlist.waitSince` | Wait since | Candidate wait-since date |
+| `waitlist.siblingContext` | Sibling context | Composite first sibling context line |
+| `sibling.names` | Sibling names | Waitlisted + enrolled sibling display names (excludes row child) |
+| `sibling.count` | Sibling count | Count of siblings with waitlist/enrolled context |
+| `sibling.enrolled` | Sibling enrolled | Enrolled sibling name/program lines |
+| `sibling.waitlisted` | Sibling waitlisted | Waitlisted sibling name/program lines |
+| `sibling.location` | Sibling location | Enrolled sibling campus/location labels |
+| `sibling.program` | Sibling program | Waitlisted/enrolled sibling program labels |
+| `household.otherChildren` | Other children | Other inquiry children on family record (excludes row child) |
+| `overrides.flags` | Override flags | Active placement override kinds |
+| `overrides.reason` | Override reason | Pin/adjustment reason when present |
+
+**Visibility signal paths** (layout `visibleWhen` only, not picker fields): `_sibling.hasWaitlisted`, `_sibling.hasEnrolled`, `_household.hasMultipleChildren`.
+
+**Presets:** `QUEUE_ROW_SIBLING_VISIBILITY_PRESETS` — hide when empty (`exists`), show when sibling waitlisted/enrolled (`equals` on signal paths), show when household has multiple children.
+
+Pipeline queue rows reject waitlist/sibling refs at publish validation. Code: `queueRecordValidatorAllowList.ts`, `validateQueueRecordLayoutConfig.ts`.
 
 ---
 

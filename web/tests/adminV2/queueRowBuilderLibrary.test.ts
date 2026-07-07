@@ -26,7 +26,7 @@ const libraryPanelSrc = readFileSync(
 );
 
 describe("queue row builder library", () => {
-    it("child category includes registry child fields and sibling context when available", () => {
+    it("child category includes registry child fields and sibling vocabulary when available", () => {
         const items = buildQueueRowLibraryCatalog({
             isWaitlist: true,
             includeWaitlistFields: true,
@@ -44,18 +44,20 @@ describe("queue row builder library", () => {
         expect(fieldKeys).toContain("inquiry_child.schedule_type");
         expect(fieldKeys).toContain("child.start_date");
         expect(fieldKeys).toContain("waitlist.siblingContext");
+        expect(fieldKeys).toContain("sibling.names");
+        expect(fieldKeys).toContain("sibling.count");
+        expect(fieldKeys).toContain("sibling.enrolled");
+        expect(fieldKeys).toContain("household.otherChildren");
     });
 
-    it("shows unavailable sibling placeholders when registry fields are missing", () => {
+    it("does not show unavailable sibling placeholders once registry is complete", () => {
         const items = buildQueueRowLibraryCatalog({
             isWaitlist: false,
             inRowZoneKeys: ["children"],
         });
         const unavailable = items.filter((item) => item.kind === "unavailable");
-        expect(unavailable.map((item) => item.fieldKey)).toEqual(
-            QUEUE_ROW_UNAVAILABLE_SIBLING_LIBRARY.map((item) => item.fieldKey),
-        );
-        expect(libraryPanelSrc).toContain("data-library-unavailable");
+        expect(unavailable).toEqual([]);
+        expect(QUEUE_ROW_UNAVAILABLE_SIBLING_LIBRARY).toEqual([]);
     });
 
     it("children zone registry exposes expanded child field keys", () => {

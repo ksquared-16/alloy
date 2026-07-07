@@ -386,7 +386,7 @@ Until V2 ships, operators who create custom fields that need to appear in builde
 
 The parity correction sprint (PR #63) expanded the **predefined composition catalog** — it did **not** wire operator-created custom fields into any builder. Specifically:
 
-- Added waitlist/placement composition fields (`waitlist.positionLabel`, `waitlist.tierLabel`, `waitlist.waitSince`, `waitlist.siblingContext`, `overrides.flags`) to `QUEUE_FIELD_CATALOG`. These are platform-defined fields already present in `defaultWaitlistQueueLayoutV3()`, each guarded by a `visibleWhen: { type: "exists" }` condition so they render only when a persisted source exists.
+- Added waitlist/placement composition fields (`waitlist.positionLabel`, `waitlist.tierLabel`, `waitlist.waitSince`, `waitlist.siblingContext`, `overrides.flags`) to `QUEUE_FIELD_CATALOG`. Sibling vocabulary (`sibling.names`, `sibling.count`, `sibling.enrolled`, `sibling.waitlisted`, `sibling.location`, `sibling.program`, `household.otherChildren`) promotes existing waitlist candidate projection facts into first-class queue row fields via `queueRowSiblingFieldRegistry.ts` / `resolveQueueRowSiblingFields.ts`. Each is guarded by `visibleWhen` (typically `{ type: "exists" }` or signal-path `equals`) so empty rows stay calm.
 - Extended the Focus Panel `CONCEPT_TREE` with additional **predefined** concepts (Primary Contact address fields; Stage & Status branch; Program placement leaves).
 
 Both changes are **composition field catalog expansion**. The custom-field catalog integration described in items 1–5 above remains deferred to V2. Do not describe the builders as surfacing operator-created custom fields.

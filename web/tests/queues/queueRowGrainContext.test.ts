@@ -94,6 +94,12 @@ describe("queueRowGrainContext", () => {
                 siblingCohorts: [],
                 siblingContextLines: [],
                 siblingContextDiagnostics: null,
+                enrolledSiblings: [],
+                waitlistedSiblingCount: 0,
+                hasWaitlistedSibling: false,
+                hasEnrolledSibling: false,
+                householdOtherChildCount: 0,
+                householdOtherChildNames: null,
             },
         };
 

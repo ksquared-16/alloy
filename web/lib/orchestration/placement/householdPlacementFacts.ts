@@ -65,9 +65,9 @@ function factAbsent(source: string): FactValue {
     return { presence: "absent", source };
 }
 
-function isSelfChild(
+export function isSelfHouseholdChild(
     row: { opportunity_customer_member_id?: string | null; customer_member_id?: string | null },
-    candidate: HouseholdPlacementFactCandidateContext
+    candidate: HouseholdPlacementFactCandidateContext,
 ): boolean {
     const ocm = (candidate.opportunity_customer_member_id ?? "").trim();
     const cm = (candidate.customer_member_id ?? "").trim();
@@ -96,7 +96,7 @@ function enrolledSiblings(
     candidate: HouseholdPlacementFactCandidateContext
 ): HouseholdInquiryChildRecord[] {
     return household.inquiry_children.filter((row) => {
-        if (isSelfChild(row, candidate)) return false;
+        if (isSelfHouseholdChild(row, candidate)) return false;
         const key = (row.outcome_status_key ?? "").trim();
         return ENROLLED_SIBLING_OUTCOME_STATUS_KEYS.has(key);
     });
@@ -176,16 +176,47 @@ export function resolveSiblingWaitlistedPresent(
     candidate: HouseholdPlacementFactCandidateContext
 ): boolean {
     const ocmWaitlisted = household.inquiry_children.some((row) => {
-        if (isSelfChild(row, candidate)) return false;
+        if (isSelfHouseholdChild(row, candidate)) return false;
         return (row.outcome_status_key ?? "").trim() === "waitlisted";
     });
     if (ocmWaitlisted) return true;
 
     return household.active_placement_candidates.some((pc) => {
-        if (isSelfChild(pc, candidate)) return false;
+        if (pc.placement_candidate_id === candidate.placement_candidate_id) return false;
         const st = (pc.status ?? "").trim();
         return st === "active" || st === "paused";
     });
+}
+
+export type HouseholdOtherChildrenDisplay = {
+    count: number;
+    names: string | null;
+};
+
+/** Other inquiry children on the family record, excluding the row child. */
+export function resolveHouseholdOtherChildrenDisplay(
+    household: HouseholdPlacementFactHouseholdSlice,
+    candidate: HouseholdPlacementFactCandidateContext,
+): HouseholdOtherChildrenDisplay {
+    const others = household.inquiry_children.filter((row) => !isSelfHouseholdChild(row, candidate));
+    const names = joinUniqueDisplayNames(
+        others.map((row) => (row.child_display_name ?? "").trim()).filter(Boolean),
+    );
+    return {
+        count: others.length,
+        names: names || null,
+    };
+}
+
+function joinUniqueDisplayNames(names: string[]): string {
+    const seen = new Set<string>();
+    const out: string[] = [];
+    for (const name of names) {
+        if (!name || seen.has(name)) continue;
+        seen.add(name);
+        out.push(name);
+    }
+    return out.join(" · ");
 }
 
 /**

@@ -80,6 +80,17 @@ export function parsePlacementWaitlistCandidateRowVm(
         })),
     });
 
+    const enrolledSiblings = (o.sibling_context?.enrolled_siblings ?? []).map((ref) => ({
+        childDisplayName: ref.child_display_name ?? null,
+        cohortLabel: ref.cohort_label ?? null,
+        locationLabel: ref.location_label ?? null,
+        sameSiteAsCandidate: ref.same_site_as_candidate === true,
+    }));
+    const hasWaitlistedSibling = siblingCount > 0;
+    const hasEnrolledSibling = enrolledSiblings.length > 0;
+    const householdOtherChildCount = o.household_other_children?.count ?? 0;
+    const householdOtherChildNames = o.household_other_children?.names?.trim() || null;
+
     const siblingLabel =
         siblingCount === 1
             ? "1 sibling also waitlisted"
@@ -166,6 +177,12 @@ export function parsePlacementWaitlistCandidateRowVm(
         siblingCohorts,
         siblingContextLines: siblingContextBuilt.lines,
         siblingContextDiagnostics: siblingContextBuilt.diagnostics,
+        enrolledSiblings,
+        waitlistedSiblingCount: siblingCount,
+        hasWaitlistedSibling,
+        hasEnrolledSibling,
+        householdOtherChildCount,
+        householdOtherChildNames,
     };
 }
 

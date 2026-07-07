@@ -129,6 +129,13 @@ const QUEUE_FIELD_CATALOG: Record<string, { label: string; namespace: AvailableF
     "waitlist.tierLabel": { label: "Priority Tier", namespace: "queue_row", hint: "status_pill" },
     "waitlist.waitSince": { label: "Wait Since", namespace: "queue_row", hint: "date" },
     "waitlist.siblingContext": { label: "Sibling Context", namespace: "queue_row" },
+    "sibling.names": { label: "Sibling Names", namespace: "queue_row" },
+    "sibling.count": { label: "Sibling Count", namespace: "queue_row" },
+    "sibling.enrolled": { label: "Sibling Enrolled", namespace: "queue_row" },
+    "sibling.waitlisted": { label: "Sibling Waitlisted", namespace: "queue_row" },
+    "sibling.location": { label: "Sibling Location", namespace: "queue_row" },
+    "sibling.program": { label: "Sibling Program", namespace: "queue_row" },
+    "household.otherChildren": { label: "Other Children", namespace: "queue_row" },
     "overrides.flags": { label: "Override Flags", namespace: "queue_row", hint: "status_pill" },
 };
 
