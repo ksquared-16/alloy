@@ -6,7 +6,7 @@
  */
 
 import type { QueueRecordLayoutConfigV3, QueueRowVariant } from "@/lib/layout/queueRecordLayoutV3";
-import { emptyQueueRowLayoutV3 } from "@/lib/layout/queueRecordLayoutDefaults";
+import { emptyQueueRowLayoutV3, starterEnrollmentQueueRowVariants } from "@/lib/layout/queueRecordLayoutDefaults";
 import { nextQueueRecordBlockId } from "@/lib/layout/queueRecordLayoutIds";
 import { QUEUE_ROW_PUBLISH_EMPTY_COLUMNS_MESSAGE } from "@/lib/layout/runtime/validateQueueRecordLayoutConfig";
 
@@ -99,6 +99,13 @@ export function readQueueRowSurfaceFromDocMetadata(
         processKey: "",
         layout: legacyLayout,
     };
+}
+
+/** Optional template — adds Tour / Waitlist / Enrolling variant rules with empty slots. */
+export function applyEnrollmentStarterTemplate(layout: QueueRecordLayoutConfigV3): QueueRecordLayoutConfigV3 {
+    const existingIds = new Set((layout.variants ?? []).map((v) => v.id));
+    const templateVariants = starterEnrollmentQueueRowVariants().filter((v) => !existingIds.has(v.id));
+    return { ...layout, variants: [...(layout.variants ?? []), ...templateVariants] };
 }
 
 /** True when Default or at least one variant has configured row columns. */

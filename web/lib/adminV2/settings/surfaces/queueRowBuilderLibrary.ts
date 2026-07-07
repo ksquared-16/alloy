@@ -12,7 +12,10 @@ import {
     availableFieldsForZone,
     type AvailableField,
 } from "@/lib/adminV2/settings/surfaces/compositionFieldAdapter";
+import { WAITLIST_PLACEMENT_FIELD_KEYS } from "@/lib/layout/runtime/queueWaitlistPlacementField";
+import { buildUnavailableSiblingLibraryEntries } from "@/lib/layout/runtime/queueRowSiblingFieldRegistry";
 import type { TenantFieldDefinitionRow } from "@/lib/layout/tenantLayoutFieldPickerCatalog";
+import type { QueueRowSubjectFocusUi } from "@/lib/adminV2/settings/surfaces/queueRowSubjectFocus";
 
 export type QueueRowLibraryZoneKey = (typeof QUEUE_RECORD_LAYOUT_ZONES)[number];
 
@@ -36,7 +39,22 @@ export type QueueRowLibraryWidgetItem = {
     category: QueueRowLibraryCategoryKey;
 };
 
-export type QueueRowLibraryItem = QueueRowLibraryZoneItem | QueueRowLibraryFieldItem | QueueRowLibraryWidgetItem;
+export type QueueRowLibraryUnavailableItem = {
+    kind: "unavailable";
+    fieldKey: string;
+    label: string;
+    reason: string;
+    category: QueueRowLibraryCategoryKey;
+};
+
+export type QueueRowLibraryPickableItem =
+    | QueueRowLibraryFieldItem
+    | QueueRowLibraryWidgetItem;
+
+export type QueueRowLibraryItem =
+    | QueueRowLibraryZoneItem
+    | QueueRowLibraryPickableItem
+    | QueueRowLibraryUnavailableItem;
 
 export type QueueRowLibraryCategoryKey =
     | "family_parents"
@@ -49,16 +67,16 @@ export type QueueRowLibraryCategoryKey =
 export type QueueRowLibraryCategory = {
     key: QueueRowLibraryCategoryKey;
     label: string;
-    items: Array<QueueRowLibraryFieldItem | QueueRowLibraryWidgetItem>;
+    items: Array<QueueRowLibraryPickableItem | QueueRowLibraryUnavailableItem>;
 };
 
 const ZONE_OPERATOR_LABELS: Record<QueueRowLibraryZoneKey, string> = {
-    household: "Family / Parents",
+    household: "Family",
     children: "Child",
     status: "Status",
     attention: "Attention",
-    date_event: "Dates",
-    actions: "Actions",
+    date_event: "Tour",
+    actions: "Tasks",
 };
 
 const LIBRARY_CATEGORY_ORDER: QueueRowLibraryCategoryKey[] = [
@@ -71,12 +89,12 @@ const LIBRARY_CATEGORY_ORDER: QueueRowLibraryCategoryKey[] = [
 ];
 
 const LIBRARY_CATEGORY_LABELS: Record<QueueRowLibraryCategoryKey, string> = {
-    family_parents: "Family / Parents",
+    family_parents: "Identity",
     child: "Child",
     status: "Status",
     tour: "Tour",
-    waitlist_placement: "Waitlist / Placement",
-    operational: "Operational",
+    waitlist_placement: "Waitlist",
+    operational: "Tasks",
 };
 
 const FIELD_LIBRARY_LABELS: Record<string, string> = {
@@ -86,12 +104,16 @@ const FIELD_LIBRARY_LABELS: Record<string, string> = {
     "person.phone": "Phone",
     "person.email": "Email",
     "child.name": "Child name",
-    "child.date_of_birth": "Age / DOB",
+    "child.date_of_birth": "Date of birth",
+    "child.dob_age": "Age",
+    "child.age": "Age",
+    "child.age_band": "Age band",
     "child.status": "Child status",
     "child.start_date": "Desired start date",
-    "inquiry_child.program": "Program interest",
-    "inquiry_child.program_category": "Program preference",
-    "inquiry_child.schedule_type": "Schedule type",
+    "child.location": "Campus / location",
+    "inquiry_child.program": "Program",
+    "inquiry_child.program_category": "Program",
+    "inquiry_child.schedule_type": "Schedule",
     "child.room": "Room",
     "queue_row.stage_label": "Stage",
     "opportunity.status_label": "Status pill",
@@ -107,8 +129,19 @@ const FIELD_LIBRARY_LABELS: Record<string, string> = {
     "waitlist.priorityLabel": "Child priority",
     "waitlist.waitSince": "Wait since",
     "waitlist.siblingContext": "Sibling context",
+    "sibling.names": "Sibling names",
+    "sibling.count": "Sibling count",
+    "sibling.enrolled": "Sibling enrolled",
+    "sibling.waitlisted": "Sibling waitlisted",
+    "sibling.location": "Sibling location",
+    "sibling.program": "Sibling program",
+    "household.otherChildren": "Other children",
     "overrides.flags": "Placement adjustment",
 };
+
+/** Unavailable sibling placeholders — derived from placeholder catalog minus resolver-backed keys. */
+export const QUEUE_ROW_UNAVAILABLE_SIBLING_LIBRARY: readonly QueueRowLibraryUnavailableItem[] =
+    buildUnavailableSiblingLibraryEntries();
 
 const WIDGET_LIBRARY_LABELS: Record<string, string> = {
     attention: "Attention",
@@ -125,16 +158,28 @@ const FIELD_CATEGORY: Record<string, QueueRowLibraryCategoryKey> = {
     "person.email": "family_parents",
     "child.name": "child",
     "child.date_of_birth": "child",
+    "child.dob_age": "child",
+    "child.age": "child",
+    "child.age_band": "child",
     "child.status": "child",
     "child.start_date": "child",
+    "child.location": "child",
     "inquiry_child.program": "child",
     "inquiry_child.schedule_type": "child",
     "child.room": "child",
+    "waitlist.siblingContext": "child",
+    "sibling.names": "child",
+    "sibling.count": "child",
+    "sibling.enrolled": "child",
+    "sibling.waitlisted": "child",
+    "sibling.location": "child",
+    "sibling.program": "child",
+    "household.otherChildren": "child",
     "queue_row.stage_label": "status",
     "opportunity.status_label": "status",
     "opportunity.attention_reason": "status",
-    "queue_row.next_best_action_label": "status",
-    "opportunity.location": "status",
+    "queue_row.next_best_action_label": "child",
+    "opportunity.location": "child",
     "queue_row.group_count_label": "status",
     "opportunity.tour_date": "tour",
     "queue_row.work_summary": "operational",
@@ -143,8 +188,7 @@ const FIELD_CATEGORY: Record<string, QueueRowLibraryCategoryKey> = {
     "waitlist.tierLabel": "waitlist_placement",
     "waitlist.priorityLabel": "waitlist_placement",
     "waitlist.waitSince": "waitlist_placement",
-    "waitlist.siblingContext": "waitlist_placement",
-    "inquiry_child.program_category": "waitlist_placement",
+    "inquiry_child.program_category": "child",
     "overrides.flags": "waitlist_placement",
 };
 
@@ -180,11 +224,14 @@ function fieldCategory(fieldKey: string, zoneKey: QueueRowLibraryZoneKey): Queue
 
 export function buildQueueRowLibraryCatalog(args: {
     isWaitlist: boolean;
+    includeWaitlistFields?: boolean;
     inRowZoneKeys: readonly QueueRowLibraryZoneKey[];
     tenantFieldDefinitions?: readonly TenantFieldDefinitionRow[];
 }): QueueRowLibraryItem[] {
+    const includeWaitlist = args.isWaitlist || args.includeWaitlistFields === true;
     const inRow = new Set(args.inRowZoneKeys);
     const items: QueueRowLibraryItem[] = [];
+    const seenFieldKeys = new Set<string>();
 
     for (const zoneKey of QUEUE_RECORD_LAYOUT_ZONES) {
         if (zoneKey === "actions") continue;
@@ -192,7 +239,16 @@ export function buildQueueRowLibraryCatalog(args: {
             items.push({ kind: "zone", zoneKey, label: queueRowZoneLabel(zoneKey) });
         }
         for (const field of availableFieldsForZone(zoneKey, args.isWaitlist, args.tenantFieldDefinitions)) {
+            if (seenFieldKeys.has(field.key)) continue;
+            seenFieldKeys.add(field.key);
             items.push(fieldItem(zoneKey, field));
+        }
+        if (includeWaitlist && !args.isWaitlist) {
+            for (const field of supplementalWaitlistFields(zoneKey, args.tenantFieldDefinitions)) {
+                if (seenFieldKeys.has(field.key)) continue;
+                seenFieldKeys.add(field.key);
+                items.push(fieldItem(zoneKey, field));
+            }
         }
     }
 
@@ -208,7 +264,31 @@ export function buildQueueRowLibraryCatalog(args: {
         });
     }
 
+    const registeredKeys = new Set(
+        items.filter((item): item is QueueRowLibraryPickableItem => item.kind === "field" || item.kind === "widget").map(
+            (item) => (item.kind === "field" ? item.fieldKey : item.widgetKey),
+        ),
+    );
+    for (const unavailable of QUEUE_ROW_UNAVAILABLE_SIBLING_LIBRARY) {
+        if (!registeredKeys.has(unavailable.fieldKey)) {
+            items.push(unavailable);
+        }
+    }
+
     return items;
+}
+
+function supplementalWaitlistFields(
+    zoneKey: QueueRowLibraryZoneKey,
+    tenantFieldDefinitions?: readonly TenantFieldDefinitionRow[],
+): AvailableField[] {
+    const waitlistFields = availableFieldsForZone(zoneKey, true, tenantFieldDefinitions);
+    const pipelineKeys = new Set(availableFieldsForZone(zoneKey, false, tenantFieldDefinitions).map((f) => f.key));
+    return waitlistFields.filter(
+        (f) =>
+            WAITLIST_PLACEMENT_FIELD_KEYS.includes(f.key as (typeof WAITLIST_PLACEMENT_FIELD_KEYS)[number]) ||
+            !pipelineKeys.has(f.key),
+    );
 }
 
 function fieldItem(zoneKey: QueueRowLibraryZoneKey, field: AvailableField): QueueRowLibraryFieldItem {
@@ -222,16 +302,52 @@ function fieldItem(zoneKey: QueueRowLibraryZoneKey, field: AvailableField): Queu
     };
 }
 
+/** Library is slot-driven — no zone filtering. */
 export function filterLibraryForTargetZone(
     items: readonly QueueRowLibraryItem[],
-    targetZone: QueueRowLibraryZoneKey | null,
+    _targetZone: QueueRowLibraryZoneKey | null,
 ): QueueRowLibraryItem[] {
-    if (!targetZone) return [...items];
-    return items.filter((item) => item.zoneKey === targetZone || item.kind === "zone");
+    return [...items];
+}
+
+const ROW_FOCUS_CATEGORY_PRIORITY: Record<QueueRowSubjectFocusUi, QueueRowLibraryCategoryKey[]> = {
+    family: ["family_parents", "child", "status", "tour", "waitlist_placement", "operational"],
+    child: ["child", "family_parents", "waitlist_placement", "status", "tour", "operational"],
+};
+
+export function prioritizeLibraryForRowFocus(
+    categories: readonly QueueRowLibraryCategory[],
+    rowFocus: QueueRowSubjectFocusUi,
+): QueueRowLibraryCategory[] {
+    const order = ROW_FOCUS_CATEGORY_PRIORITY[rowFocus];
+    const rank = (key: QueueRowLibraryCategoryKey) => {
+        const idx = order.indexOf(key);
+        return idx === -1 ? order.length : idx;
+    };
+    return [...categories].sort((a, b) => rank(a.key) - rank(b.key));
+}
+
+export function filterLibraryBySearch(
+    items: readonly QueueRowLibraryItem[],
+    query: string,
+): QueueRowLibraryItem[] {
+    const q = query.trim().toLowerCase();
+    if (!q) return [...items];
+    return items.filter((item) => {
+        if (item.kind === "zone") return item.label.toLowerCase().includes(q);
+        if (item.kind === "unavailable") {
+            return item.label.toLowerCase().includes(q) || item.fieldKey.toLowerCase().includes(q);
+        }
+        const key = item.kind === "field" ? item.fieldKey : item.widgetKey;
+        return item.label.toLowerCase().includes(q) || key.toLowerCase().includes(q);
+    });
 }
 
 export function libraryItemsByCategory(items: readonly QueueRowLibraryItem[]): QueueRowLibraryCategory[] {
-    const buckets = new Map<QueueRowLibraryCategoryKey, Array<QueueRowLibraryFieldItem | QueueRowLibraryWidgetItem>>();
+    const buckets = new Map<
+        QueueRowLibraryCategoryKey,
+        Array<QueueRowLibraryPickableItem | QueueRowLibraryUnavailableItem>
+    >();
     for (const item of items) {
         if (item.kind === "zone") continue;
         const list = buckets.get(item.category) ?? [];

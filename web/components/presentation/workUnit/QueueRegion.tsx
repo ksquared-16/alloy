@@ -11,7 +11,7 @@
  * title/count header — only a compact Search/Filters utility bar, then rows.
  */
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import type { QueueRowModel, WorkUnitSurfaceModel } from "@/lib/presentation/runtime";
 import {
@@ -28,6 +28,7 @@ import {
     type QueueRowFilterState,
 } from "@/lib/presentation/runtime/queueRowFilter";
 import { WS_QUEUE_TOOLBAR_CHROME } from "@/components/workspace/workspaceTokens";
+import { markPerceived } from "@/lib/perf/perceivedPerf";
 import { CondensedQueueRow } from "./CondensedQueueRow";
 import { QueueFilterControls } from "./QueueFilterControls";
 import { useFocusPanelOpen } from "./FocusPanelSurface";
@@ -108,6 +109,27 @@ export function QueueRegion({
     const { openRecord, prefetchRecord } = useFocusPanelOpen();
     const renderState = queueRegionRenderState(queue);
     const workView = title?.trim() || null;
+
+    const lastMarkedQueueStateRef = useRef<string | null>(null);
+    useEffect(() => {
+        const held = renderState === "rows" && queue.loading;
+        const key = `${renderState}:${held ? "held" : "settled"}`;
+        if (lastMarkedQueueStateRef.current === key) return;
+        lastMarkedQueueStateRef.current = key;
+        const signal =
+            renderState === "cold-loading"
+                ? "intent"
+                : held
+                  ? "hold_start"
+                  : renderState === "rows"
+                    ? "reveal"
+                    : "hold_end";
+        markPerceived("queue_hold", signal, {
+            render_state: renderState,
+            work_unit_id: workUnitId ?? undefined,
+            view_id: workViewId ?? undefined,
+        });
+    }, [renderState, queue.loading, workUnitId, workViewId]);
 
     // Interactive filter/control row (re-homed from the pre-PRV2 WorkUnitQueueRecordFilterBar):
     // client-side narrowing over the loaded rows, facets derived from what's loaded. Server order

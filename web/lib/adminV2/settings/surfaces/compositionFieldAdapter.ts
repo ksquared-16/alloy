@@ -113,8 +113,12 @@ const QUEUE_FIELD_CATALOG: Record<string, { label: string; namespace: AvailableF
     // child
     "child.name": { label: "Child Name", namespace: "child" },
     "child.date_of_birth": { label: "Date of Birth", namespace: "child", hint: "date" },
+    "child.dob_age": { label: "Age", namespace: "child" },
+    "child.age": { label: "Age", namespace: "child" },
+    "child.age_band": { label: "Age Band", namespace: "child" },
     "child.status": { label: "Child Status", namespace: "child", hint: "status_pill" },
     "child.room": { label: "Room", namespace: "child" },
+    "child.location": { label: "Campus / Location", namespace: "child" },
     "child.start_date": { label: "Desired Start Date", namespace: "child", hint: "date" },
     // inquiry_child
     "inquiry_child.program": { label: "Program", namespace: "inquiry_child" },
@@ -125,6 +129,13 @@ const QUEUE_FIELD_CATALOG: Record<string, { label: string; namespace: AvailableF
     "waitlist.tierLabel": { label: "Priority Tier", namespace: "queue_row", hint: "status_pill" },
     "waitlist.waitSince": { label: "Wait Since", namespace: "queue_row", hint: "date" },
     "waitlist.siblingContext": { label: "Sibling Context", namespace: "queue_row" },
+    "sibling.names": { label: "Sibling Names", namespace: "queue_row" },
+    "sibling.count": { label: "Sibling Count", namespace: "queue_row" },
+    "sibling.enrolled": { label: "Sibling Enrolled", namespace: "queue_row" },
+    "sibling.waitlisted": { label: "Sibling Waitlisted", namespace: "queue_row" },
+    "sibling.location": { label: "Sibling Location", namespace: "queue_row" },
+    "sibling.program": { label: "Sibling Program", namespace: "queue_row" },
+    "household.otherChildren": { label: "Other Children", namespace: "queue_row" },
     "overrides.flags": { label: "Override Flags", namespace: "queue_row", hint: "status_pill" },
 };
 

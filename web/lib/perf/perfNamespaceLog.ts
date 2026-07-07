@@ -16,7 +16,8 @@ export type PerfNamespace =
     | "save"
     | "settings"
     | "intent"
-    | "section";
+    | "section"
+    | "perceived";
 
 const BLOCKED_KEYS = new Set([
     "email",
@@ -125,7 +126,16 @@ function isSafeKey(key: string): boolean {
         key === "section_count" ||
         key === "section_id" ||
         key === "section_name" ||
-        key === "blocking"
+        key === "blocking" ||
+        key === "interaction" ||
+        key === "signal" ||
+        key === "mode" ||
+        key === "render_state" ||
+        key === "warm_seam" ||
+        key === "same_host" ||
+        key === "view_id" ||
+        key === "since_intent_ms" ||
+        key === "elapsed_ms"
     );
 }
 

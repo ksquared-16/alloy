@@ -8,6 +8,7 @@ import type { PlacementPriorityV2CandidatePreview } from "@/lib/orchestration/pl
 import type { HouseholdPlacementFactContextByCustomerId } from "@/lib/orchestration/placement/bulkLoadHouseholdPlacementFactContext";
 import {
     resolveEnrolledSiblingDisplayRefs,
+    resolveHouseholdOtherChildrenDisplay,
     type HouseholdEnrolledSiblingDisplayRef,
     type HouseholdPlacementFactHouseholdSlice,
 } from "@/lib/orchestration/placement/householdPlacementFacts";
@@ -23,6 +24,11 @@ export type PlacementWaitlistSiblingCohortRef = {
 };
 
 export type PlacementWaitlistEnrolledSiblingRef = HouseholdEnrolledSiblingDisplayRef;
+
+export type PlacementWaitlistHouseholdOtherChildren = {
+    count: number;
+    names: string | null;
+};
 
 export type PlacementWaitlistSiblingContext = {
     has_siblings_on_waitlist: boolean;
@@ -51,6 +57,8 @@ export type PlacementWaitlistCandidateRowProjection = {
     wait_since?: string | null;
     is_synthetic_fallback?: boolean;
     sibling_context: PlacementWaitlistSiblingContext;
+    /** Other children on the family record (household inquiry children), excluding row child. */
+    household_other_children?: PlacementWaitlistHouseholdOtherChildren | null;
     placement_priority_v2: PlacementPriorityV2CandidatePreview;
     shadow_mode: boolean;
     /** Card 6 — optional informational forecast hints (max one shown in queue UI). */
@@ -241,6 +249,7 @@ export function expandOpportunityRowsToPlacementCandidateRows(
             );
 
             const siblingContext = buildSiblingContext(candidateId, allCandidates);
+            let householdOtherChildren: PlacementWaitlistHouseholdOtherChildren | null = null;
             if (household) {
                 const pcMatch = household.active_placement_candidates.find(
                     (pc) => pc.placement_candidate_id === candidateId
@@ -256,6 +265,12 @@ export function expandOpportunityRowsToPlacementCandidateRows(
                     options?.locationLabelsById ?? null
                 );
                 siblingContext.enrolled_siblings = enrolled;
+                householdOtherChildren = resolveHouseholdOtherChildrenDisplay(household, {
+                    placement_candidate_id: candidateId,
+                    opportunity_customer_member_id: pcMatch?.opportunity_customer_member_id ?? null,
+                    customer_member_id: pcMatch?.customer_member_id ?? null,
+                    site_id: candidateSiteId,
+                });
                 if (
                     (cand.bucket === "tier_sibling_enrolled" || cand.policy_bucket === "tier_sibling_enrolled") &&
                     enrolled.every((s) => !s.child_display_name?.trim())
@@ -289,6 +304,7 @@ export function expandOpportunityRowsToPlacementCandidateRows(
                 wait_since: cand.wait_since ?? null,
                 is_synthetic_fallback: cand.is_synthetic_fallback === true,
                 sibling_context: siblingContext,
+                household_other_children: householdOtherChildren,
                 placement_priority_v2: {
                     ...cand,
                     program_room_cohort_key: cohortKey,

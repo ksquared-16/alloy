@@ -53,6 +53,7 @@ import type {
     QueueRecordFieldConfig,
     QueueRecordLayoutConfigV3,
 } from "@/lib/layout/queueRecordLayoutV3";
+import { compactSlotForCanvasRegion, type CanvasAnatomyRegion } from "@/lib/adminV2/settings/surfaces/queueRowCanvasRegions";
 
 /** One compact-anatomy slot's resolved config: whether to render it + an optional label override. */
 export type CompactRowSlotConfig = {
@@ -137,6 +138,44 @@ function fieldsByKey(config: QueueRecordLayoutConfigV3): Map<string, QueueRecord
     return map;
 }
 
+
+function slotsFromBuilderAssignment(
+    config: QueueRecordLayoutConfigV3,
+): Partial<Record<keyof CompactRowSlots, CompactRowSlotConfig>> {
+    const assigned: Partial<Record<keyof CompactRowSlots, CompactRowSlotConfig>> = {};
+    const labelsBySlot = new Map<keyof CompactRowSlots, string[]>();
+
+    const sortedColumns = [...config.columns].sort(
+        (a, b) => (a.rowIndex ?? 0) - (b.rowIndex ?? 0),
+    );
+
+    for (const column of sortedColumns) {
+        const builderSlot = column.builderSlot as CanvasAnatomyRegion | undefined;
+        if (!builderSlot) continue;
+        const compactSlot = compactSlotForCanvasRegion(builderSlot);
+
+        for (const block of column.blocks) {
+            if (block.type !== "field_group" && block.type !== "repeated_record_block") continue;
+            for (const field of block.fields) {
+                const label = typeof field.label === "string" ? field.label.trim() : "";
+                if (!label) continue;
+                const existing = labelsBySlot.get(compactSlot) ?? [];
+                if (field.inlineWithPrevious && existing.length > 0) {
+                    existing[existing.length - 1] = `${existing[existing.length - 1]} · ${label}`;
+                } else {
+                    existing.push(label);
+                }
+                labelsBySlot.set(compactSlot, existing);
+            }
+        }
+    }
+
+    for (const [slot, labels] of labelsBySlot) {
+        assigned[slot] = { visible: true, label: labels.join(" · ") || null };
+    }
+    return assigned;
+}
+
 /** A generic-context slot: visible, no label override (the row uses its frozen context). */
 function genericSlot(): CompactRowSlotConfig {
     return { visible: true, label: null };
@@ -168,10 +207,17 @@ export function mapQueueRowSurfaceToCompactConfig(
     }
 
     const byKey = fieldsByKey(config);
+    const operatorAssigned = slotsFromBuilderAssignment(config);
     const slots = {} as CompactRowSlots;
     const fallbackSlots: (keyof CompactRowSlots)[] = [];
 
     for (const slot of SLOT_KEYS) {
+        const operatorSlot = operatorAssigned[slot];
+        if (operatorSlot) {
+            slots[slot] = operatorSlot;
+            continue;
+        }
+
         const field = SLOT_FIELD_KEYS[slot]
             .map((key) => byKey.get(key))
             .find((f): f is QueueRecordFieldConfig => f != null);

@@ -19,6 +19,7 @@ import {
     type WorkUnitSurfaceModel,
 } from "@/lib/presentation/runtime";
 import { BUILD_SHA } from "@/lib/runtime/buildInfo";
+import { markPerceived } from "@/lib/perf/perceivedPerf";
 import {
     PRESENTATION_RUNTIME_LABELS,
     runtimeLabelProps,
@@ -173,6 +174,17 @@ export function WorkUnitSurface() {
         hasPriorEstablished: lastEstablishedRef.current != null,
     });
     const shownModel = mode === "live" ? model : lastEstablishedRef.current;
+
+    const lastMarkedModeRef = useRef<WorkUnitSurfaceRenderMode | null>(null);
+    useEffect(() => {
+        if (lastMarkedModeRef.current === mode) return;
+        lastMarkedModeRef.current = mode;
+        const signal = mode === "held" ? "hold_start" : mode === "live" ? "reveal" : "intent";
+        markPerceived("work_unit_establish", signal, {
+            mode,
+            work_unit_id: model.workUnitId ?? undefined,
+        });
+    }, [mode, model.workUnitId]);
 
     return (
         <div

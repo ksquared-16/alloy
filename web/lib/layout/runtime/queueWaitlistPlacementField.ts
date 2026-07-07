@@ -5,6 +5,7 @@
 import type { ProofRuntimeRecord } from "@/lib/layout/runtime/proofRecordContext";
 import type { QueueRecordStatusPillTone } from "@/lib/layout/runtime/resolveQueueRecordStatusPillTone";
 import type { QueueRowPlacementWaitlistCandidateVm } from "@/lib/ui-v2/workspace-types";
+import { QUEUE_ROW_SIBLING_FIELD_KEYS } from "@/lib/layout/runtime/queueRowSiblingFieldRegistry";
 
 export const WAITLIST_PLACEMENT_FIELD_KEYS = [
     "waitlist.positionLabel",
@@ -12,11 +13,12 @@ export const WAITLIST_PLACEMENT_FIELD_KEYS = [
     "waitlist.priorityLabel",
     "waitlist.waitSince",
     "waitlist.siblingContext",
+    ...QUEUE_ROW_SIBLING_FIELD_KEYS,
     "overrides.flags",
     "overrides.reason",
 ] as const;
 
-export const WAITLIST_ONLY_FIELD_PREFIXES = ["waitlist.", "overrides."] as const;
+export const WAITLIST_ONLY_FIELD_PREFIXES = ["waitlist.", "overrides.", "sibling.", "household.otherChildren"] as const;
 
 export type WaitlistPlacementFieldKind =
     | "position"
@@ -36,6 +38,7 @@ export type QueueWaitlistPlacementPresentation = {
 
 export function isWaitlistOnlyFieldKey(fieldKey: string): boolean {
     const key = fieldKey.trim();
+    if (key === "household.otherChildren") return true;
     return WAITLIST_ONLY_FIELD_PREFIXES.some((prefix) => key.startsWith(prefix));
 }
 

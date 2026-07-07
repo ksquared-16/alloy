@@ -371,6 +371,18 @@ export type QueueRowPlacementWaitlistCandidateVm = {
   }>;
   siblingContextLines: string[];
   siblingContextDiagnostics: string | null;
+  /** Structured enrolled sibling refs from household load (presentation only). */
+  enrolledSiblings: Array<{
+    childDisplayName: string | null;
+    cohortLabel: string | null;
+    locationLabel: string | null;
+    sameSiteAsCandidate: boolean;
+  }>;
+  waitlistedSiblingCount: number;
+  hasWaitlistedSibling: boolean;
+  hasEnrolledSibling: boolean;
+  householdOtherChildCount: number;
+  householdOtherChildNames: string | null;
 };
 
 /** One child placement line under a family row (read-only). */

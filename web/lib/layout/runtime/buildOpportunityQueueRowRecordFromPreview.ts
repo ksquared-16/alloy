@@ -21,6 +21,7 @@ import type { QueueRowLayoutRuntimeEnrichment } from "./queueRowLayoutRuntimeEnr
 import { resolveQueueRecordLayoutConfig } from "./resolveQueueRecordLayoutConfig";
 import type { OpportunityQueueRowWithContext } from "@/lib/workUnits/lifecycleSubjectContracts";
 import { formatWaitlistOverrideFlags } from "@/lib/layout/runtime/queueWaitlistPlacementField";
+import { resolveQueueRowSiblingFields } from "@/lib/layout/runtime/resolveQueueRowSiblingFields";
 
 function pickDisplay(...values: unknown[]): string | null {
     for (const value of values) {
@@ -285,6 +286,7 @@ export function buildOpportunityQueueRowRecordFromPreview(
 
     if (waitlist) {
         const overrideFlags = formatWaitlistOverrideFlags(waitlist);
+        const siblingFields = resolveQueueRowSiblingFields(waitlist);
         const waitlistRecord = ensureQueueDocRefKeys({
             id: item.id,
             name: pickDisplay(waitlist.familyDisplayName, waitlist.childDisplayName, item.title) ?? "—",
@@ -299,7 +301,17 @@ export function buildOpportunityQueueRowRecordFromPreview(
             "waitlist.tierLabel": pickDisplay(waitlist.bucketLabel) ?? "",
             "waitlist.priorityLabel": pickDisplay(waitlist.bucketLabel) ?? "",
             "waitlist.waitSince": pickDisplay(waitlist.waitSinceLabel) ?? "",
-            "waitlist.siblingContext": pickDisplay(waitlist.siblingLabel, waitlist.siblingContextLines?.[0]) ?? "",
+            "waitlist.siblingContext": siblingFields["waitlist.siblingContext"],
+            "sibling.names": siblingFields["sibling.names"],
+            "sibling.count": siblingFields["sibling.count"],
+            "sibling.enrolled": siblingFields["sibling.enrolled"],
+            "sibling.waitlisted": siblingFields["sibling.waitlisted"],
+            "sibling.location": siblingFields["sibling.location"],
+            "sibling.program": siblingFields["sibling.program"],
+            "household.otherChildren": siblingFields["household.otherChildren"],
+            "_sibling.hasWaitlisted": siblingFields["_sibling.hasWaitlisted"],
+            "_sibling.hasEnrolled": siblingFields["_sibling.hasEnrolled"],
+            "_household.hasMultipleChildren": siblingFields["_household.hasMultipleChildren"],
             "overrides.flags": overrideFlags,
             "overrides.reason": pickDisplay(waitlist.manualAdjustmentReason) ?? "",
             _placement_waitlist_override_kinds: waitlist.activeOverrideKinds,

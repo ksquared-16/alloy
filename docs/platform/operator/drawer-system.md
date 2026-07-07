@@ -26,7 +26,7 @@ Drawers are **operational workspaces** for record detail — opened from queue r
 | Person / Child | `PersonsDrawerVmRuntime` | **Transitional** (VM flag default OFF) | **No** — required before drawer UX retires |
 | Other (location, job, …) | `AdminEntityDrawerLegacy` | **Legacy** — shrinking | **No** — location operating surface unresolved |
 
-Router: `AdminEntityDrawer.tsx`. Sunset status per area: [`drawer-sunset-roadmap.md`](./drawer-sunset-roadmap.md).
+Router shell: `AdminEntityDrawer.tsx` (dynamic import) → runtime owner `AdminEntityDrawerLegacy.tsx` for legacy entity paths. Ownership map: [`../governance/runtime-ownership-migration-map.md`](../governance/runtime-ownership-migration-map.md). Sunset status per area: [`drawer-sunset-roadmap.md`](./drawer-sunset-roadmap.md).
 
 ---
 
