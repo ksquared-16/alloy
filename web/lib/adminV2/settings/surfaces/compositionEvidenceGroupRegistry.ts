@@ -93,9 +93,10 @@ export const QUEUE_ZONE_EVIDENCE_GROUPS: Record<string, readonly CompositionEvid
             defaultFieldKeys: [
                 "child.name",
                 "child.date_of_birth",
+                "child.dob_age",
                 "child.status",
             ],
-            acceptedNamespaces: ["child", "inquiry_child"],
+            acceptedNamespaces: ["child", "inquiry_child", "opportunity"],
         },
         {
             key: "placement",
@@ -103,11 +104,14 @@ export const QUEUE_ZONE_EVIDENCE_GROUPS: Record<string, readonly CompositionEvid
             purpose: "Where is each child placed?",
             defaultFieldKeys: [
                 "inquiry_child.program",
+                "inquiry_child.program_category",
                 "child.room",
+                "child.location",
                 "inquiry_child.schedule_type",
                 "child.start_date",
+                "opportunity.location",
             ],
-            acceptedNamespaces: ["child", "inquiry_child"],
+            acceptedNamespaces: ["child", "inquiry_child", "opportunity"],
         },
     ],
     status: [
@@ -162,9 +166,10 @@ export const QUEUE_ZONE_EVIDENCE_GROUPS_WAITLIST: Partial<typeof QUEUE_ZONE_EVID
             defaultFieldKeys: [
                 "child.name",
                 "child.date_of_birth",
+                "child.dob_age",
                 "child.status",
             ],
-            acceptedNamespaces: ["child", "inquiry_child"],
+            acceptedNamespaces: ["child", "inquiry_child", "opportunity"],
         },
         {
             key: "placement_request",
@@ -172,10 +177,19 @@ export const QUEUE_ZONE_EVIDENCE_GROUPS_WAITLIST: Partial<typeof QUEUE_ZONE_EVID
             purpose: "What placement is this candidate waiting for?",
             defaultFieldKeys: [
                 "inquiry_child.program_category",
+                "inquiry_child.program",
                 "inquiry_child.schedule_type",
                 "child.start_date",
+                "child.location",
             ],
-            acceptedNamespaces: ["child", "inquiry_child"],
+            acceptedNamespaces: ["child", "inquiry_child", "opportunity"],
+        },
+        {
+            key: "sibling_context",
+            label: "Sibling Context",
+            purpose: "Sibling enrollment context for waitlist placement.",
+            defaultFieldKeys: ["waitlist.siblingContext"],
+            acceptedNamespaces: ["queue_row"],
         },
     ],
     status: [

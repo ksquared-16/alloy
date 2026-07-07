@@ -138,31 +138,40 @@ function fieldsByKey(config: QueueRecordLayoutConfigV3): Map<string, QueueRecord
     return map;
 }
 
-/** First published field in a column — operator slot assignment drives label override. */
-function firstFieldInColumn(column: QueueRecordLayoutConfigV3["columns"][number]): QueueRecordFieldConfig | null {
-    for (const block of column.blocks) {
-        if (block.type !== "field_group" && block.type !== "repeated_record_block") continue;
-        for (const field of block.fields) {
-            const key = field.fieldKey.trim();
-            if (key) return field;
-        }
-    }
-    return null;
-}
 
 function slotsFromBuilderAssignment(
     config: QueueRecordLayoutConfigV3,
 ): Partial<Record<keyof CompactRowSlots, CompactRowSlotConfig>> {
     const assigned: Partial<Record<keyof CompactRowSlots, CompactRowSlotConfig>> = {};
-    for (const column of config.columns) {
+    const labelsBySlot = new Map<keyof CompactRowSlots, string[]>();
+
+    const sortedColumns = [...config.columns].sort(
+        (a, b) => (a.rowIndex ?? 0) - (b.rowIndex ?? 0),
+    );
+
+    for (const column of sortedColumns) {
         const builderSlot = column.builderSlot as CanvasAnatomyRegion | undefined;
         if (!builderSlot) continue;
-        const field = firstFieldInColumn(column);
-        if (!field) continue;
         const compactSlot = compactSlotForCanvasRegion(builderSlot);
-        if (assigned[compactSlot]) continue;
-        const label = typeof field.label === "string" ? field.label.trim() || null : null;
-        assigned[compactSlot] = { visible: true, label };
+
+        for (const block of column.blocks) {
+            if (block.type !== "field_group" && block.type !== "repeated_record_block") continue;
+            for (const field of block.fields) {
+                const label = typeof field.label === "string" ? field.label.trim() : "";
+                if (!label) continue;
+                const existing = labelsBySlot.get(compactSlot) ?? [];
+                if (field.inlineWithPrevious && existing.length > 0) {
+                    existing[existing.length - 1] = `${existing[existing.length - 1]} · ${label}`;
+                } else {
+                    existing.push(label);
+                }
+                labelsBySlot.set(compactSlot, existing);
+            }
+        }
+    }
+
+    for (const [slot, labels] of labelsBySlot) {
+        assigned[slot] = { visible: true, label: labels.join(" · ") || null };
     }
     return assigned;
 }

@@ -88,3 +88,25 @@ export function occupiedCanvasRegions(zones: readonly ZoneCanvasState[]): Set<Ca
     }
     return occupied;
 }
+
+/** Inverse of {@link compactSlotForCanvasRegion} — maps compact slot → canvas region. */
+export function canvasRegionForCompactSlot(slot: keyof CompactRowSlots): CanvasAnatomyRegion | null {
+    switch (slot) {
+        case "subject":
+            return "identity";
+        case "groupCount":
+            return "groupCount";
+        case "attention":
+            return "attention";
+        case "status":
+            return "status";
+        case "work":
+            return "work";
+        default:
+            return null;
+    }
+}
+
+export function defaultCanvasSlotForZone(zoneKey: QueueRowCanvasZoneKey): CanvasAnatomyRegion | null {
+    return DEFAULT_ZONE_SLOT[zoneKey];
+}

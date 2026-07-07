@@ -3,12 +3,12 @@
 import "@/app/adminV2/components/alloyOsRuntime.css";
 import { useMemo, useState } from "react";
 import QueueRowBuilderV2 from "@/components/adminV2/settings/surfaces/QueueRowBuilderV2";
+import QueueRowVariantSettings from "@/components/adminV2/settings/surfaces/QueueRowVariantSettings";
 import type { ProcessStageOption } from "@/components/adminV2/settings/surfaces/QueueRowVariantStagePicker";
 import { buildDefaultQueueRowSurfaceEnvelope, createQueueRowVariant, type QueueRowSurfaceEnvelope } from "@/lib/presentation/runtime/queueRowSurfaceMetadata";
 import { resolveQueueRowLibraryIsWaitlist } from "@/lib/adminV2/settings/surfaces/queueRowBuilderPreview";
 import { subjectFocusToUi } from "@/lib/adminV2/settings/surfaces/queueRowSubjectFocus";
 import { defaultQueueRowSurfaceName } from "@/lib/adminV2/settings/surfaces/queueRowProcessCatalog";
-import type { QueueRowVariant } from "@/lib/layout/queueRecordLayoutV3";
 
 const STAGES: ProcessStageOption[] = [
     { value: "new_lead", label: "New Leads" },
@@ -31,7 +31,7 @@ export default function QueueRowSurfaceEditorDevClient() {
         return variant ? { ...envelope.layout, columns: variant.columns, fixedControls: variant.fixedControls ?? envelope.layout.fixedControls } : envelope.layout;
     }, [envelope.layout, activeVariantId]);
     const libraryIsWaitlist = resolveQueueRowLibraryIsWaitlist({ activeVariant, processStages: STAGES });
-    const rowFocus = activeVariant ? subjectFocusToUi(activeVariant.subjectFocus) : null;
+    const rowFocusUi = subjectFocusToUi(activeVariant?.subjectFocus);
 
     return (
         <div style={{ background: "#f4f6f9", minHeight: "100vh", padding: 24 }}>
@@ -39,16 +39,16 @@ export default function QueueRowSurfaceEditorDevClient() {
                 <header className="mb-3 border-b border-alloy-stone/10 pb-3">
                     <p className="text-lg font-semibold">{envelope.name || defaultQueueRowSurfaceName("Enrollment")}</p>
                 </header>
-                <div className="mb-3 flex gap-2">
+                <div className="mb-3 flex flex-wrap items-center gap-2">
                     <button type="button" onClick={() => setActiveVariantId(null)} className={`rounded-full px-3 py-1 text-xs font-semibold ${!activeVariantId ? "bg-alloy-pine text-white" : "bg-alloy-stone/10"}`}>Default</button>
                     {(envelope.layout.variants ?? []).map((v) => (
                         <button key={v.id} type="button" onClick={() => setActiveVariantId(v.id)} className={`rounded-full px-3 py-1 text-xs font-semibold ${activeVariantId === v.id ? "bg-alloy-pine text-white" : "bg-alloy-stone/10"}`}>{v.label}</button>
                     ))}
                     <button type="button" onClick={() => {
-                        const v = createQueueRowVariant({ label: `Variant ${(envelope.layout.variants?.length ?? 0) + 2}`, priority: 10 });
+                        const v = createQueueRowVariant({ label: "Variant", priority: 10 });
                         setEnvelope((p) => ({ ...p, layout: { ...p.layout, variants: [...(p.layout.variants ?? []), v] } }));
                         setActiveVariantId(v.id);
-                    }} className="rounded-full border border-dashed px-3 py-1 text-xs">+ Add variant</button>
+                    }} className="flex h-7 w-7 items-center justify-center rounded-full border border-dashed text-sm">+</button>
                 </div>
                 <div className="min-h-0 flex-1 overflow-auto">
                     <QueueRowBuilderV2
@@ -65,9 +65,17 @@ export default function QueueRowSurfaceEditorDevClient() {
                         }}
                         onDirtyChange={setDirty}
                         libraryIsWaitlist={libraryIsWaitlist}
-                        rowFocus={rowFocus}
-                        embeddedVariantEditor={activeVariant ? { variant: activeVariant, processStages: STAGES, stagesLoading: false, onPatch: (patch) => setEnvelope((p) => ({ ...p, layout: { ...p.layout, variants: (p.layout.variants ?? []).map((v) => v.id === activeVariant.id ? { ...v, ...patch } : v) } })), onClose: () => setActiveVariantId(null) } : undefined}
+                        rowFocusUi={rowFocusUi}
                     />
+                    {activeVariant ? (
+                        <div className="mt-4">
+                            <QueueRowVariantSettings
+                                variant={activeVariant}
+                                processStages={STAGES}
+                                onPatch={(patch) => setEnvelope((p) => ({ ...p, layout: { ...p.layout, variants: (p.layout.variants ?? []).map((v) => v.id === activeVariant.id ? { ...v, ...patch } : v) } }))}
+                            />
+                        </div>
+                    ) : null}
                 </div>
             </div>
         </div>

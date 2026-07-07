@@ -113,8 +113,12 @@ const QUEUE_FIELD_CATALOG: Record<string, { label: string; namespace: AvailableF
     // child
     "child.name": { label: "Child Name", namespace: "child" },
     "child.date_of_birth": { label: "Date of Birth", namespace: "child", hint: "date" },
+    "child.dob_age": { label: "Age", namespace: "child" },
+    "child.age": { label: "Age", namespace: "child" },
+    "child.age_band": { label: "Age Band", namespace: "child" },
     "child.status": { label: "Child Status", namespace: "child", hint: "status_pill" },
     "child.room": { label: "Room", namespace: "child" },
+    "child.location": { label: "Campus / Location", namespace: "child" },
     "child.start_date": { label: "Desired Start Date", namespace: "child", hint: "date" },
     // inquiry_child
     "inquiry_child.program": { label: "Program", namespace: "inquiry_child" },

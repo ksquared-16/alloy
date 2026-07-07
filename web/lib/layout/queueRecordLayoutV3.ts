@@ -172,6 +172,38 @@ export type QueueRowVariantSort = {
     nulls?: "first" | "last";
 };
 
+export type QueueRowVariantGroupBy =
+    | "none"
+    | "program"
+    | "room"
+    | "desired_start_date"
+    | "age_band"
+    | "location";
+
+/** Ordered queue grouping criterion (persisted on variant). */
+export type QueueRowVariantGroupCriterion = {
+    key: Exclude<QueueRowVariantGroupBy, "none">;
+};
+
+/** Ordered queue sort criterion (persisted on variant). */
+export type QueueRowVariantSortCriterion = {
+    key: string;
+    direction: "asc" | "desc";
+    nulls?: "first" | "last";
+};
+
+/** Waitlist placement ranking criterion — presentation config only. */
+export type QueueRowPlacementRankingCriterion = {
+    /** Stable catalog id (e.g. waitlist_rank). */
+    criterionId: string;
+    /** Registry field key when available. */
+    fieldKey: string;
+    enabled: boolean;
+    direction: "asc" | "desc";
+    /** Optional weight when scoring is supported for this signal. */
+    weight?: number;
+};
+
 export type QueueRowVariant = {
     id: string;
     label: string;
@@ -181,8 +213,16 @@ export type QueueRowVariant = {
     appliesWhen?: QueueRowVariantRule;
     /** Which subject the row anchors on. Omitted → resolves to "household". */
     subjectFocus?: QueueRowSubjectFocus;
-    /** Server-owned sort intent for the queue (drives sort_v1). */
+    /** Server-owned sort intent for the queue (drives sort_v1). Legacy single value. */
     sort?: QueueRowVariantSort;
+    /** Queue presentation grouping intent. Legacy single value. */
+    groupBy?: QueueRowVariantGroupBy;
+    /** Ordered grouping criteria (preferred over legacy `groupBy`). */
+    groupByCriteria?: QueueRowVariantGroupCriterion[];
+    /** Ordered sort criteria (preferred over legacy `sort`). */
+    sortCriteria?: QueueRowVariantSortCriterion[];
+    /** Waitlist placement ranking model — presentation only. */
+    placementRanking?: QueueRowPlacementRankingCriterion[];
     columns: QueueRecordColumnConfig[];
     fixedControls?: QueueRecordFixedControls;
 };

@@ -11,7 +11,6 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import type { LifecycleCatalogEntry } from "@/lib/lifecycle/lifecycleCatalogTypes";
 import type { QueueRowVariant } from "@/lib/layout/queueRecordLayoutV3";
 import {
-    applyEnrollmentStarterTemplate,
     createQueueRowVariant,
     queueRowSurfaceHasConfiguredColumns,
     QUEUE_ROW_PUBLISH_EMPTY_COLUMNS_MESSAGE,
@@ -30,10 +29,8 @@ import {
 } from "@/lib/adminV2/settings/surfaces/queueRowSurfaceService";
 import { workspaceDataFetchInit } from "@/lib/workspace/workspaceDataFetch";
 import QueueRowBuilderV2 from "@/components/adminV2/settings/surfaces/QueueRowBuilderV2";
-import {
-    formatVariantStageRuleSummary,
-    type ProcessStageOption,
-} from "@/components/adminV2/settings/surfaces/QueueRowVariantStagePicker";
+import QueueRowVariantSettings from "@/components/adminV2/settings/surfaces/QueueRowVariantSettings";
+import type { ProcessStageOption } from "@/components/adminV2/settings/surfaces/QueueRowVariantStagePicker";
 
 export type QueueRowSurfaceEditorProps = {
     catalogEntry: LifecycleCatalogEntry;
@@ -41,7 +38,7 @@ export type QueueRowSurfaceEditorProps = {
     onPublished?: () => void;
 };
 
-type VariantTab = { id: string; label: string; isDefault: boolean; stageSummary?: string };
+type VariantTab = { id: string; label: string; isDefault: boolean };
 
 export default function QueueRowSurfaceEditor({
     catalogEntry,
@@ -112,15 +109,14 @@ export default function QueueRowSurfaceEditor({
     const variantTabs = useMemo((): VariantTab[] => {
         const variants = envelope?.layout.variants ?? [];
         return [
-            { id: "__default__", label: "Default", isDefault: true, stageSummary: "Used when no stage-specific variant matches." },
+            { id: "__default__", label: "Default", isDefault: true },
             ...variants.map((v) => ({
                 id: v.id,
-                label: v.label,
+                label: v.label || "Variant",
                 isDefault: false,
-                stageSummary: formatVariantStageRuleSummary(v.appliesWhen?.stage_key, processStages),
             })),
         ];
-    }, [envelope?.layout.variants, processStages]);
+    }, [envelope?.layout.variants]);
 
     const activeLayout = useMemo(() => {
         if (!envelope) return null;
@@ -177,7 +173,7 @@ export default function QueueRowSurfaceEditor({
         if (!envelope) return;
         const priority = (envelope.layout.variants?.length ?? 0) + 1;
         const variant = createQueueRowVariant({
-            label: `Variant ${priority + 1}`,
+            label: "Variant",
             priority: priority * 10,
         });
         setEnvelope((prev) =>
@@ -215,18 +211,13 @@ export default function QueueRowSurfaceEditor({
         }
     }
 
-    function applyStarterTemplate() {
-        if (!envelope) return;
-        patchEnvelope({ layout: applyEnrollmentStarterTemplate(envelope.layout) });
-    }
-
     const activeVariant =
         activeVariantId && activeVariantId !== "__default__"
             ? envelope?.layout.variants?.find((v) => v.id === activeVariantId)
             : null;
 
     const libraryIsWaitlist = resolveQueueRowLibraryIsWaitlist({ activeVariant, processStages });
-    const rowFocus = activeVariant ? subjectFocusToUi(activeVariant.subjectFocus) : null;
+    const rowFocusUi = subjectFocusToUi(activeVariant?.subjectFocus);
 
     return (
         <div className="flex min-h-0 flex-1 flex-col" data-testid="queue-row-surface-editor">
@@ -249,7 +240,7 @@ export default function QueueRowSurfaceEditor({
                         data-testid="queue-row-surface-name"
                         disabled={loading || !envelope}
                     />
-                    <p className="text-sm text-alloy-midnight/55">{catalogEntry.lifecycle_name} · click the row to edit</p>
+                    <p className="text-sm text-alloy-midnight/55">{catalogEntry.lifecycle_name} · click the row to add content</p>
                 </div>
                 <button
                     type="button"
@@ -273,69 +264,50 @@ export default function QueueRowSurfaceEditor({
                             key={tab.id}
                             type="button"
                             onClick={() => setActiveVariantId(tab.isDefault ? null : tab.id)}
-                            className={`rounded-full px-3 py-1 text-left ${
+                            className={`rounded-full px-3 py-1 text-xs font-semibold ${
                                 (tab.isDefault && !activeVariantId) || activeVariantId === tab.id
                                     ? "bg-alloy-pine text-white"
                                     : "bg-alloy-stone/10 text-alloy-midnight/65 hover:bg-alloy-stone/20"
                             }`}
                             data-variant-tab={tab.id}
                         >
-                            <span className="block text-xs font-semibold">{tab.label}</span>
-                            {tab.stageSummary ? (
-                                <span
-                                    className={`block text-[9px] font-normal ${
-                                        (tab.isDefault && !activeVariantId) || activeVariantId === tab.id
-                                            ? "text-white/80"
-                                            : "text-alloy-midnight/45"
-                                    }`}
-                                >
-                                    {tab.stageSummary}
-                                </span>
-                            ) : null}
+                            {tab.label}
                         </button>
                     ))}
                     <button
                         type="button"
                         onClick={addVariant}
-                        className="rounded-full border border-dashed border-alloy-stone/30 px-3 py-1 text-xs font-medium text-alloy-midnight/50 hover:border-alloy-pine/40 hover:text-alloy-pine"
+                        className="flex h-7 w-7 items-center justify-center rounded-full border border-dashed border-alloy-stone/30 text-sm font-medium text-alloy-midnight/50 hover:border-alloy-pine/40 hover:text-alloy-pine"
+                        aria-label="Add variant"
                         data-testid="queue-row-add-variant"
                     >
-                        + Add variant
-                    </button>
-                    <button
-                        type="button"
-                        onClick={applyStarterTemplate}
-                        className="rounded-full border border-alloy-stone/20 px-3 py-1 text-xs font-medium text-alloy-midnight/55 hover:border-alloy-pine/40 hover:text-alloy-pine"
-                        data-testid="queue-row-apply-starter-template"
-                    >
-                        Use suggested template
+                        +
                     </button>
                 </div>
 
                 {loading || !envelope || !activeLayout ? (
                     <div className="h-32 animate-pulse rounded-xl bg-alloy-stone/10" />
                 ) : (
-                    <QueueRowBuilderV2
-                        key={activeVariantId ?? "__default__"}
-                        surfaceId={surfaceId}
-                        embedded
-                        controlledLayout={activeLayout}
-                        onControlledLayoutChange={patchActiveLayoutColumns}
-                        onDirtyChange={setDirty}
-                        libraryIsWaitlist={libraryIsWaitlist}
-                        rowFocus={rowFocus}
-                        embeddedVariantEditor={
-                            activeVariant
-                                ? {
-                                      variant: activeVariant,
-                                      processStages,
-                                      stagesLoading,
-                                      onPatch: (patch) => patchVariant(activeVariant.id, patch),
-                                      onClose: () => setActiveVariantId(null),
-                                  }
-                                : undefined
-                        }
-                    />
+                    <>
+                        <QueueRowBuilderV2
+                            key={activeVariantId ?? "__default__"}
+                            surfaceId={surfaceId}
+                            embedded
+                            controlledLayout={activeLayout}
+                            onControlledLayoutChange={patchActiveLayoutColumns}
+                            onDirtyChange={setDirty}
+                            libraryIsWaitlist={libraryIsWaitlist}
+                            rowFocusUi={rowFocusUi}
+                        />
+                        {activeVariant ? (
+                            <QueueRowVariantSettings
+                                variant={activeVariant}
+                                processStages={processStages}
+                                stagesLoading={stagesLoading}
+                                onPatch={(patch) => patchVariant(activeVariant.id, patch)}
+                            />
+                        ) : null}
+                    </>
                 )}
             </div>
         </div>
