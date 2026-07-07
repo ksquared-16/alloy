@@ -91,11 +91,22 @@ export type CompactRowConfig = {
     fallbackSlots: (keyof CompactRowSlots)[];
 };
 
+/** Person contact refKeys — render on the compact row contact line (line 2). */
+export const QUEUE_ROW_PERSON_CONTACT_FIELD_KEYS = [
+    "person.primary_contact_name",
+    "person.phone",
+    "person.email",
+] as const;
+
+export function isQueueRowPersonContactFieldKey(fieldKey: string): boolean {
+    return (QUEUE_ROW_PERSON_CONTACT_FIELD_KEYS as readonly string[]).includes(fieldKey.trim());
+}
+
 /** Compact slot → published fieldKey(s), first present wins for legacy label metadata. */
 const SLOT_FIELD_KEYS: Record<keyof CompactRowSlots, readonly string[]> = {
     subject: ["customer.display_name", "queue_row.subject_label"],
     status: ["opportunity.status_label", "queue_row.stage_label"],
-    contact: ["person.primary_contact_name"],
+    contact: [...QUEUE_ROW_PERSON_CONTACT_FIELD_KEYS],
     attention: ["opportunity.attention_reason"],
     work: ["queue_row.work_summary", "queue_row.next_best_action_label"],
     groupCount: [
@@ -232,6 +243,100 @@ function slotsFromBuilderAssignment(
     return assigned;
 }
 
+/**
+ * Person contact fields belong on the contact line even when the builder placed them on
+ * identity (Primary) or groupCount (Secondary). Children / household keys stay on their slot.
+ */
+function routePersonContactFieldsToContactSlot(slots: CompactRowSlots): CompactRowSlots {
+    const routedKeys: string[] = [];
+    const routedLabels: string[] = [];
+    const routedNameDisplay: Record<string, QueueRecordNameDisplay> = {};
+    const next = { ...slots } as CompactRowSlots;
+
+    for (const slot of SLOT_KEYS) {
+        if (slot === "contact") continue;
+        const config = next[slot];
+        const fieldKeys = config.fieldKeys;
+        if (!fieldKeys?.length) continue;
+
+        const contactKeys = fieldKeys.filter((key) => isQueueRowPersonContactFieldKey(key));
+        if (!contactKeys.length) continue;
+
+        const remaining = fieldKeys.filter((key) => !isQueueRowPersonContactFieldKey(key));
+        routedKeys.push(...contactKeys);
+
+        if (config.label) {
+            for (const key of contactKeys) {
+                const token = config.label.split(" · ").find((part) => part.trim().length > 0);
+                if (token && !routedLabels.includes(token)) routedLabels.push(token);
+            }
+        }
+        for (const key of contactKeys) {
+            const nd = config.nameDisplayByFieldKey?.[key];
+            if (nd) routedNameDisplay[key] = nd;
+        }
+
+        next[slot] = {
+            ...config,
+            fieldKeys: remaining.length > 0 ? remaining : undefined,
+            ...(remaining.length > 0
+                ? {}
+                : {
+                      label: null,
+                      nameDisplayByFieldKey: undefined,
+                  }),
+        };
+    }
+
+    if (!routedKeys.length) return slots;
+
+    const existingKeys = next.contact.fieldKeys ?? [];
+    const mergedKeys = [...existingKeys];
+    for (const key of routedKeys) {
+        if (!mergedKeys.includes(key)) mergedKeys.push(key);
+    }
+
+    const mergedNameDisplay = {
+        ...(next.contact.nameDisplayByFieldKey ?? {}),
+        ...routedNameDisplay,
+    };
+
+    next.contact = {
+        ...next.contact,
+        visible: true,
+        fieldKeys: mergedKeys,
+        label:
+            [next.contact.label, routedLabels.join(" · ")].filter(Boolean).join(" · ").trim() || null,
+        ...(Object.keys(mergedNameDisplay).length > 0 ? { nameDisplayByFieldKey: mergedNameDisplay } : {}),
+    };
+
+    return next;
+}
+
+function slotConfigFromPublishedFields(
+    slot: keyof CompactRowSlots,
+    fields: QueueRecordFieldConfig[],
+): CompactRowSlotConfig {
+    const fieldKeys = fields.map((f) => f.fieldKey.trim()).filter(Boolean);
+    const labels = fields
+        .map((f) => (typeof f.label === "string" ? f.label.trim() : ""))
+        .filter(Boolean);
+    const nameDisplayByFieldKey: Record<string, QueueRecordNameDisplay> = {};
+    const collectionPresentationByFieldKey: Record<string, CollectionFieldPresentationConfig> = {};
+    for (const field of fields) {
+        const key = field.fieldKey.trim();
+        if (field.nameDisplay) nameDisplayByFieldKey[key] = field.nameDisplay;
+        if (field.collectionPresentation) collectionPresentationByFieldKey[key] = field.collectionPresentation;
+    }
+    return {
+        visible: true,
+        label: labels.length > 0 ? labels.join(" · ") : null,
+        fieldKeys,
+        ...(Object.keys(nameDisplayByFieldKey).length > 0 ? { nameDisplayByFieldKey } : {}),
+        ...(Object.keys(collectionPresentationByFieldKey).length > 0 ? { collectionPresentationByFieldKey } : {}),
+    };
+}
+
 /** A generic-context slot: visible, no label override (the row uses its frozen context). */
 function genericSlot(): CompactRowSlotConfig {
     return { visible: true, label: null };
@@ -273,28 +378,17 @@ export function mapQueueRowSurfaceToCompactConfig(
             slots[slot] = operatorSlot;
             continue;
         }
-
-        const field = SLOT_FIELD_KEYS[slot]
+        const mappedFields = SLOT_FIELD_KEYS[slot]
             .map((key) => byKey.get(key))
-            .find((f): f is QueueRecordFieldConfig => f != null);
-        if (!field) {
+            .filter((f): f is QueueRecordFieldConfig => f != null);
+        if (!mappedFields.length) {
             // No published field for this slot → generic-context fallback (never a hide).
             slots[slot] = genericSlot();
             fallbackSlots.push(slot);
             continue;
         }
-        // Present field: visible; fieldKeys drive runtime values (labels are builder metadata only).
-        const label = typeof field.label === "string" ? field.label.trim() || null : null;
-        slots[slot] = {
-            visible: true,
-            label,
-            fieldKeys: [field.fieldKey.trim()],
-            ...(field.nameDisplay ? { nameDisplayByFieldKey: { [field.fieldKey.trim()]: field.nameDisplay } } : {}),
-            ...(field.collectionPresentation
-                ? { collectionPresentationByFieldKey: { [field.fieldKey.trim()]: field.collectionPresentation } }
-                : {}),
-        };
+        slots[slot] = slotConfigFromPublishedFields(slot, mappedFields);
     }
 
-    return { slots, fallbackSlots };
+    return { slots: routePersonContactFieldsToContactSlot(slots), fallbackSlots };
 }

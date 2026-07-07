@@ -19,8 +19,10 @@ import type { CompactRowSlotConfig, CompactRowSlots } from "@/lib/presentation/r
 
 function contactLine(context: QueueRowContext): string | null {
     const parts: string[] = [];
-    const contact = context.primary_contact?.display_name?.trim();
-    if (contact) parts.push(contact);
+    const contact = context.primary_contact;
+    if (contact?.display_name?.trim()) parts.push(contact.display_name.trim());
+    if (contact?.phone?.trim()) parts.push(contact.phone.trim());
+    if (contact?.email?.trim()) parts.push(contact.email.trim());
     const related = context.related_subjects_summary
         .filter((subject) => subject.visibility !== "hidden")
         .map((subject) => subject.display_name.trim())
@@ -62,6 +64,10 @@ export function resolveQueueRowFieldValueFromContext(
             return queueRowSubjectDisplayName(context).trim() || null;
         case "person.primary_contact_name":
             return context.primary_contact?.display_name?.trim() || null;
+        case "person.phone":
+            return context.primary_contact?.phone?.trim() || null;
+        case "person.email":
+            return context.primary_contact?.email?.trim() || null;
         case "opportunity.attention_reason":
             return context.attention_summary?.needs_attention
                 ? context.attention_summary.primary_reason_label?.trim() || null

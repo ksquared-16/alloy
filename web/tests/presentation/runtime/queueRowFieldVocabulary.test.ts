@@ -23,6 +23,8 @@ describe("Queue Row field vocabulary", () => {
         expect(compactSlotForFieldKey("opportunity.status_label")).toBe("status");
         expect(compactSlotForFieldKey("queue_row.stage_label")).toBe("status");
         expect(compactSlotForFieldKey("person.primary_contact_name")).toBe("contact");
+        expect(compactSlotForFieldKey("person.phone")).toBe("contact");
+        expect(compactSlotForFieldKey("person.email")).toBe("contact");
         expect(compactSlotForFieldKey("opportunity.attention_reason")).toBe("attention");
         expect(compactSlotForFieldKey("queue_row.work_summary")).toBe("work");
         expect(compactSlotForFieldKey("queue_row.next_best_action_label")).toBe("work");
@@ -33,7 +35,6 @@ describe("Queue Row field vocabulary", () => {
         expect(compactSlotForFieldKey("children.names")).toBe("groupCount");
         expect(compactSlotForFieldKey("children.summary")).toBe("groupCount");
         // Selectable-but-not-runtime-effective in the compact row:
-        expect(compactSlotForFieldKey("person.phone")).toBeNull();
         expect(compactSlotForFieldKey("opportunity.tour_date")).toBeNull();
         expect(compactSlotForFieldKey("waitlist.positionLabel")).toBeNull();
         expect(compactSlotForFieldKey("")).toBeNull();
@@ -73,5 +74,14 @@ describe("Queue Row field vocabulary", () => {
         expect(a.fallbackSlots).not.toContain("subject");
         expect(a.fallbackSlots).not.toContain("status");
         expect(a.fallbackSlots).not.toContain("contact");
+    });
+
+    it("default lead layout maps phone and email into contact slot fieldKeys", () => {
+        const mapped = mapQueueRowSurfaceToCompactConfig(defaultLeadQueueLayoutV3());
+        expect(mapped.slots.contact.fieldKeys).toEqual([
+            "person.primary_contact_name",
+            "person.phone",
+            "person.email",
+        ]);
     });
 });

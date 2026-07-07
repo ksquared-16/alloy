@@ -21,7 +21,11 @@ function familyContext(over: Partial<QueueRowContext> = {}): QueueRowContext {
             case_status_key: "open",
             case_status_label: "Open",
         },
-        primary_contact: { display_name: "Casey Lee" },
+        primary_contact: {
+            display_name: "Casey Lee",
+            phone: "(503) 555-4729",
+            email: "casey@example.com",
+        },
         related_subjects_summary: [
             {
                 subject_type: "child",
@@ -77,6 +81,145 @@ function statusColumn(fieldKey: string, label: string): QueueRecordColumnConfig 
 }
 
 describe("resolveCompactSlotDisplay", () => {
+    it("renders primary contact name, phone, and email together on the contact line", () => {
+        const slots = {
+            visible: true,
+            label: "Primary contact · Phone · Email",
+            fieldKeys: ["person.primary_contact_name", "person.phone", "person.email"],
+        } as const;
+        expect(resolveCompactSlotDisplay("contact", familyContext(), slots, null)).toBe(
+            "Casey Lee · (503) 555-4729 · casey@example.com",
+        );
+    });
+
+    it("omits missing phone and email without blank placeholders", () => {
+        const slots = {
+            visible: true,
+            label: null,
+            fieldKeys: ["person.primary_contact_name", "person.phone", "person.email"],
+        } as const;
+        const display = resolveCompactSlotDisplay(
+            "contact",
+            familyContext({ primary_contact: { display_name: "Casey Lee" } }),
+            slots,
+            null,
+        );
+        expect(display).toBe("Casey Lee");
+        expect(display).not.toContain("· ·");
+    });
+
+    it("preserves configured field order when joining multiple values", () => {
+        const slots = {
+            visible: true,
+            label: null,
+            fieldKeys: ["person.email", "person.phone", "person.primary_contact_name"],
+        } as const;
+        expect(resolveCompactSlotDisplay("contact", familyContext(), slots, null)).toBe(
+            "casey@example.com · (503) 555-4729 · Casey Lee",
+        );
+    });
+
+    it("routes person contact fields from groupCount to contact line via compact config", () => {
+        const config = mapQueueRowSurfaceToCompactConfig({
+            variant: "operational-row",
+            version: 3,
+            columns: [
+                {
+                    id: "col-identity",
+                    label: "",
+                    width: "identity",
+                    scope: { type: "main_record" },
+                    builderSlot: "identity",
+                    blocks: [
+                        {
+                            type: "field_group",
+                            id: "grp-household",
+                            fields: [
+                                {
+                                    id: "f-household",
+                                    fieldKey: "customer.display_name",
+                                    label: "Household name",
+                                    display: "text",
+                                },
+                            ],
+                        },
+                    ],
+                },
+                {
+                    id: "col-secondary",
+                    label: "",
+                    width: "identity",
+                    scope: { type: "main_record" },
+                    builderSlot: "groupCount",
+                    blocks: [
+                        {
+                            type: "field_group",
+                            id: "grp-contact",
+                            fields: [
+                                {
+                                    id: "f-contact",
+                                    fieldKey: "person.primary_contact_name",
+                                    label: "Primary contact",
+                                    display: "text",
+                                },
+                                {
+                                    id: "f-phone",
+                                    fieldKey: "person.phone",
+                                    label: "Phone",
+                                    display: "phone",
+                                    inlineWithPrevious: true,
+                                },
+                                {
+                                    id: "f-email",
+                                    fieldKey: "person.email",
+                                    label: "Email",
+                                    display: "email",
+                                    inlineWithPrevious: true,
+                                },
+                            ],
+                        },
+                    ],
+                },
+                {
+                    id: "col-children",
+                    label: "",
+                    width: "children",
+                    scope: { type: "repeated_related", relationshipKey: "children" },
+                    builderSlot: "attention",
+                    blocks: [
+                        {
+                            type: "field_group",
+                            id: "grp-children",
+                            fields: [{ id: "f-children", fieldKey: "children", label: "Children", display: "text" }],
+                        },
+                    ],
+                },
+            ],
+            fixedControls: { actionsMenu: true, workWithBos: true, actionRailStyle: "stacked" },
+        });
+
+        expect(config.slots.contact.fieldKeys).toEqual([
+            "person.primary_contact_name",
+            "person.phone",
+            "person.email",
+        ]);
+        expect(config.slots.subject.fieldKeys).toEqual(["customer.display_name"]);
+        expect(resolveCompactSlotDisplay("contact", familyContext(), config.slots.contact, null)).toBe(
+            "Casey Lee · (503) 555-4729 · casey@example.com",
+        );
+    });
+
+    it("does not emit builder labels when runtime values exist", () => {
+        const slots = {
+            visible: true,
+            label: "Stage",
+            fieldKeys: ["queue_row.stage_label"],
+        } as const;
+        const display = resolveCompactSlotDisplay("status", familyContext(), slots, null);
+        expect(display).toBe("New Leads");
+        expect(display).not.toBe("Stage");
+    });
+
     it("renders configured Stage field as process stage label, not row status", () => {
         const config = mapQueueRowSurfaceToCompactConfig({
             variant: "operational-row",
