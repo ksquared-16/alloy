@@ -130,6 +130,14 @@ export function isQueueRowSiblingFieldResolverBacked(fieldKey: string): boolean 
     return (QUEUE_ROW_RESOLVER_BACKED_SIBLING_FIELD_KEYS as readonly string[]).includes(key);
 }
 
+/** Sibling vocabulary resolves only on waitlist candidate-grain queue rows — not pipeline/family rows. */
+export function isWaitlistCandidateGrainSiblingFieldKey(fieldKey: string): boolean {
+    return isQueueRowSiblingFieldResolverBacked(fieldKey);
+}
+
+export const WAITLIST_CANDIDATE_SIBLING_FIELD_SCOPE_NOTE =
+    "Waitlist candidate rows only — sibling fields are not available on pipeline or family queue rows.";
+
 export function buildUnavailableSiblingLibraryEntries(): Array<{
     kind: "unavailable";
     fieldKey: string;

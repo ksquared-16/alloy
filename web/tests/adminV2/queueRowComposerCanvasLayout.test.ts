@@ -186,6 +186,8 @@ describe("queue row surface editor layout", () => {
         expect(editorSrc).not.toContain("QueueRowPlacementRankingEditor");
         expect(builderSrc).not.toContain("QueueRowPlacementRankingEditor");
         expect(variantSettingsSrc).not.toContain("QueueRowPlacementRankingEditor");
-        expect(variantInspectorSrc).toContain("QueueRowPlacementRankingEditor");
+        expect(variantInspectorSrc).not.toContain("QueueRowPlacementRankingEditor");
+        expect(variantInspectorSrc).toContain("queue-row-placement-ranking-deferred");
+        expect(variantInspectorSrc).toContain("Placement ranking configuration is handled in Placement settings.");
     });
 });

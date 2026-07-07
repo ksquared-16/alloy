@@ -135,8 +135,11 @@ export type QueueRowVariantGrain = "case" | "child" | "candidate";
 
 /**
  * Applicability rule. Every PRESENT clause must match (AND); an absent clause is unconstrained; an
- * absent/empty rule is a catch-all. `conditions` is an extensibility escape hatch (path-based
- * LayoutConditions) evaluated in a later phase — the typed clauses cover the required dimensions.
+ * absent/empty rule is a catch-all.
+ *
+ * `conditions` is **reserved** — path-based LayoutConditions for a future phase. They are **not**
+ * evaluated at runtime today (`queueRowVariantRuleMatches` ignores them) and are stripped on layout
+ * normalize/save so configs cannot imply behavior that does not exist.
  */
 export type QueueRowVariantRule = {
     stage_key?: string[];
@@ -146,6 +149,7 @@ export type QueueRowVariantRule = {
     work_view_key?: string[];
     process_key?: string[];
     row_type?: string[];
+    /** Reserved — not evaluated; stripped on normalize. */
     conditions?: LayoutCondition[];
 };
 

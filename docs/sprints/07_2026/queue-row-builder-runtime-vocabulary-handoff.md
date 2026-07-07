@@ -9,7 +9,8 @@
 |-----|---------|
 | `48815f061` | `feat(surfaces): refine queue row field composer interaction` |
 | `43d4665ad` | `feat(surfaces): complete queue row sibling runtime vocabulary` |
-| *(pending closeout)* | `docs(surfaces): close queue row builder and hand off focus panel composer` |
+| `1f85137bc` | `docs(surfaces): close queue row builder and hand off focus panel composer` |
+| `1e7063424` | `chore(surfaces): queue row closeout cleanup` |
 
 ## What shipped
 
@@ -102,9 +103,24 @@ Platform fields register through:
 
 ### Placement ranking — deferred
 
-- **Placement ranking UI** is hidden from the builder shell.
+- **Placement ranking UI** is hidden from the queue row builder shell.
+- `QueueRowVariantInspector` shows a disabled note only: *"Placement ranking configuration is handled in Placement settings."*
 - Underlying placement ranking catalog/config remains for future operator-facing work.
 - Do not remove persisted ranking data in this sprint.
+
+### Sibling field scope
+
+Granular sibling fields (`sibling.*`, `waitlist.siblingContext`, `household.otherChildren`) resolve **only** on **waitlist candidate-grain** queue rows.
+
+- **Library:** Pipeline surfaces show sibling fields as **unavailable** with scope note — not as active pickables (`queueRowBuilderLibrary.ts`).
+- **Publish:** `isWaitlistOnlyFieldKey` rejects sibling refKeys on pipeline layouts (`validateQueueRecordLayoutConfig`).
+- **Runtime:** `resolveQueueRowSiblingFields` runs on waitlist candidate VM only; pipeline rows do not populate sibling refKeys.
+
+### Variant rule `conditions` — reserved
+
+- `appliesWhen.conditions` (LayoutCondition[]) is **not evaluated** at runtime.
+- `queueRowVariantRuleMatches` uses typed clauses only (stage, grain, status, …).
+- `sanitizeQueueRowVariantRule` strips `conditions` on layout normalize/save so configs cannot imply unevaluated behavior.
 
 ## Runtime confirmation (tests)
 
@@ -139,11 +155,9 @@ cd web && npm run test -- \
 
 | Gap | Notes |
 |-----|-------|
-| Placement ranking operator UI | Config exists; UI deferred |
-| `rule.conditions` (LayoutCondition[]) on variants | Reserved; stage/grain/status clauses only today |
-| Pipeline-row sibling fields | Sibling vocabulary is waitlist candidate-grain only |
+| Placement ranking operator UI | Deferred to Placement settings sprint; builder shows disabled note only |
+| Focus Panel composer | See `focus-panel-composer-handoff.md` |
 | `QUEUE_ROW_SIBLING_PLACEHOLDER_FIELD_CATALOG` | Empty — add entries here until resolver lands |
-| Browser screenshots | Local only under `docs/sprints/07_2026/queue-row-builder-*-screenshots/` (not committed) |
 
 ## Operator guidance
 

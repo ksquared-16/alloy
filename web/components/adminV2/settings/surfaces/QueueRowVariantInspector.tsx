@@ -5,7 +5,6 @@ import QueueRowVariantStagePicker, {
     type ProcessStageOption,
 } from "@/components/adminV2/settings/surfaces/QueueRowVariantStagePicker";
 import QueueRowOrderedCriteriaEditor from "@/components/adminV2/settings/surfaces/QueueRowOrderedCriteriaEditor";
-import QueueRowPlacementRankingEditor from "@/components/adminV2/settings/surfaces/QueueRowPlacementRankingEditor";
 import {
     QUEUE_ROW_GROUP_BY_OPTIONS,
     QUEUE_ROW_SORT_BY_OPTIONS,
@@ -13,7 +12,6 @@ import {
     addSortCriterion,
     groupByOptionLabel,
     normalizeGroupByCriteria,
-    normalizePlacementRanking,
     normalizeSortCriteria,
     patchVariantDisplayFromCriteria,
     reorderCriteria,
@@ -42,7 +40,6 @@ function DisplayControls({
 }) {
     const groupCriteria = normalizeGroupByCriteria(variant);
     const sortCriteria = normalizeSortCriteria(variant);
-    const placementRanking = normalizePlacementRanking(variant);
 
     const patchDisplay = (
         nextGroup: typeof groupCriteria,
@@ -98,11 +95,12 @@ function DisplayControls({
                 }
             />
             {showWaitlistPlacement ? (
-                <QueueRowPlacementRankingEditor
-                    criteria={placementRanking}
-                    isWaitlist
-                    onChange={(next) => onPatch({ placementRanking: next })}
-                />
+                <p
+                    className="rounded-md border border-alloy-stone/14 bg-alloy-stone/5 px-3 py-2 text-[11px] text-alloy-midnight/55"
+                    data-testid="queue-row-placement-ranking-deferred"
+                >
+                    Placement ranking configuration is handled in Placement settings.
+                </p>
             ) : null}
         </>
     );

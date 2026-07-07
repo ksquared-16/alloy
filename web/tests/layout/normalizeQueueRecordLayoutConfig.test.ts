@@ -29,6 +29,27 @@ describe("normalizeQueueRecordLayoutConfig", () => {
         });
     });
 
+    it("strips reserved variant rule conditions on normalize", () => {
+        const base = defaultLeadQueueLayoutV3();
+        const withReservedConditions = {
+            ...base,
+            variants: [
+                {
+                    id: "waitlist",
+                    label: "Waitlist",
+                    priority: 10,
+                    appliesWhen: {
+                        stage_key: ["waitlist"],
+                        conditions: [{ type: "exists" as const, path: "sibling.names" }],
+                    },
+                    columns: base.columns,
+                },
+            ],
+        };
+        const normalized = normalizeQueueRecordLayoutConfig(withReservedConditions);
+        expect(normalized.variants?.[0]?.appliesWhen).toEqual({ stage_key: ["waitlist"] });
+    });
+
     it("defaults repeated block maxItems to 5 when missing", () => {
         const base = defaultLeadQueueLayoutV3();
         const childCol = base.columns.find((c) => c.scope.type === "repeated_related");

@@ -85,7 +85,8 @@ describe("queue row composer model", () => {
     it("variant inspector exposes group by, sort by, and waitlist placement config", () => {
         expect(variantInspectorSrc).toContain('testId="queue-row-variant-group-by"');
         expect(variantInspectorSrc).toContain('testId="queue-row-variant-sort-by"');
-        expect(variantInspectorSrc).toContain("QueueRowPlacementRankingEditor");
+        expect(variantInspectorSrc).not.toContain("QueueRowPlacementRankingEditor");
+        expect(variantInspectorSrc).toContain("queue-row-placement-ranking-deferred");
         expect(variantInspectorSrc).toContain("QueueRowOrderedCriteriaEditor");
         expect(sortKeyToVariantSort("waitlist_rank")?.key).toBe("waitlist.position");
     });

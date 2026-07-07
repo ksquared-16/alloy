@@ -50,14 +50,25 @@ describe("queue row builder library", () => {
         expect(fieldKeys).toContain("household.otherChildren");
     });
 
-    it("does not show unavailable sibling placeholders once registry is complete", () => {
-        const items = buildQueueRowLibraryCatalog({
+    it("does not show placeholder unavailable entries once registry is complete", () => {
+        expect(QUEUE_ROW_UNAVAILABLE_SIBLING_LIBRARY).toEqual([]);
+    });
+
+    it("scopes sibling fields to waitlist surfaces in the library", () => {
+        const pipelineOnly = buildQueueRowLibraryCatalog({
             isWaitlist: false,
             inRowZoneKeys: ["children"],
         });
-        const unavailable = items.filter((item) => item.kind === "unavailable");
-        expect(unavailable).toEqual([]);
-        expect(QUEUE_ROW_UNAVAILABLE_SIBLING_LIBRARY).toEqual([]);
+        const pipelineFieldKeys = pipelineOnly
+            .filter((item) => item.kind === "field")
+            .map((item) => item.fieldKey);
+        expect(pipelineFieldKeys).not.toContain("sibling.names");
+        expect(pipelineFieldKeys).not.toContain("waitlist.siblingContext");
+
+        const unavailable = pipelineOnly.filter((item) => item.kind === "unavailable");
+        expect(unavailable.length).toBeGreaterThan(0);
+        expect(unavailable.every((item) => item.reason.includes("Waitlist candidate rows only"))).toBe(true);
+        expect(unavailable.some((item) => item.fieldKey === "sibling.names")).toBe(true);
     });
 
     it("children zone registry exposes expanded child field keys", () => {

@@ -9,7 +9,9 @@ import type {
     QueueRecordFieldDisplay,
     QueueRecordFixedControls,
     QueueRecordLayoutConfigV3,
+    QueueRowVariant,
 } from "@/lib/layout/queueRecordLayoutV3";
+import { sanitizeQueueRowVariantRule } from "@/lib/presentation/runtime/resolveQueueRowVariant";
 import { normalizeQueueRecordFieldDisplay } from "@/lib/layout/runtime/queueRecordFieldDisplayBridge";
 import { normalizeQueueRecordWidgetBlockConfig } from "@/lib/layout/runtime/queueRecordWidgetConfig";
 
@@ -63,8 +65,15 @@ function normalizeBlock(block: QueueRecordBlockConfig): QueueRecordBlockConfig {
     return block;
 }
 
+function normalizeVariant(variant: QueueRowVariant): QueueRowVariant {
+    const appliesWhen = sanitizeQueueRowVariantRule(variant.appliesWhen);
+    if (appliesWhen === variant.appliesWhen) return variant;
+    return { ...variant, appliesWhen };
+}
+
 /** Apply runtime-safe defaults to saved queue record layout config. */
 export function normalizeQueueRecordLayoutConfig(config: QueueRecordLayoutConfigV3): QueueRecordLayoutConfigV3 {
+    const variants = config.variants?.map(normalizeVariant);
     return {
         ...config,
         fixedControls: normalizeFixedControls(config.fixedControls),
@@ -72,5 +81,6 @@ export function normalizeQueueRecordLayoutConfig(config: QueueRecordLayoutConfig
             ...col,
             blocks: col.blocks.map(normalizeBlock),
         })),
+        ...(variants ? { variants } : {}),
     };
 }

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
     queueRowVariantRuleMatches,
     resolveQueueRowVariant,
+    sanitizeQueueRowVariantRule,
     type QueueRowVariantMatchInput,
 } from "@/lib/presentation/runtime/resolveQueueRowVariant";
 import type { QueueRowVariant } from "@/lib/layout/queueRecordLayoutV3";
@@ -50,6 +51,25 @@ describe("queueRowVariantRuleMatches", () => {
         expect(queueRowVariantRuleMatches(shared, { stageKey: "tour" })).toBe(true);
         expect(queueRowVariantRuleMatches(shared, { stageKey: "decision" })).toBe(true);
         expect(queueRowVariantRuleMatches(shared, { stageKey: "lead" })).toBe(false);
+    });
+
+    it("ignores reserved conditions — they do not affect matching", () => {
+        const withConditions = {
+            stage_key: ["tour"],
+            conditions: [{ type: "equals" as const, path: "row.missing", value: "yes" }],
+        };
+        expect(queueRowVariantRuleMatches(withConditions, base)).toBe(true);
+    });
+});
+
+describe("sanitizeQueueRowVariantRule", () => {
+    it("strips reserved conditions while preserving typed clauses", () => {
+        const sanitized = sanitizeQueueRowVariantRule({
+            stage_key: ["waitlist"],
+            conditions: [{ type: "exists", path: "sibling.names" }],
+        });
+        expect(sanitized).toEqual({ stage_key: ["waitlist"] });
+        expect(sanitizeQueueRowVariantRule(undefined)).toBeUndefined();
     });
 });
 

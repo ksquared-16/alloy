@@ -32,9 +32,22 @@ function clauseMatches(allowed: readonly string[] | undefined, value: string | n
 }
 
 /**
+ * Strip reserved `conditions` from a variant rule so saved config cannot imply unevaluated behavior.
+ * Typed clauses (stage_key, grain, …) are preserved.
+ */
+export function sanitizeQueueRowVariantRule(
+    rule: QueueRowVariantRule | undefined,
+): QueueRowVariantRule | undefined {
+    if (!rule) return rule;
+    if (!rule.conditions || rule.conditions.length === 0) return rule;
+    const { conditions: _reserved, ...rest } = rule;
+    return rest;
+}
+
+/**
  * Whether a variant rule matches the input. Every present clause must match (AND). An absent or
- * empty rule is a catch-all (always matches). `rule.conditions` (LayoutCondition[]) is reserved for
- * a later phase and does not affect matching yet.
+ * empty rule is a catch-all (always matches). `rule.conditions` is reserved and ignored — see
+ * `sanitizeQueueRowVariantRule`.
  */
 export function queueRowVariantRuleMatches(
     rule: QueueRowVariantRule | undefined,

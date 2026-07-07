@@ -59,6 +59,7 @@ function layoutWithExtraField(fieldKey: string): QueueRecordLayoutConfigV3 {
                                 fieldKey,
                                 label: "Test sibling field",
                                 showLabel: false,
+                                display: "text",
                             },
                         ],
                     },
