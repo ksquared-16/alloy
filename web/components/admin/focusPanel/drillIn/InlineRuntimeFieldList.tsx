@@ -6,6 +6,7 @@ import { ChevronDown, ChevronUp, GripVertical, Plus, X } from "lucide-react";
 import {
     addFieldToNestedGroup,
     availableFieldsForNestedGroup,
+    fieldLayoutWidthForNestedGroup,
     fieldPresentationLabel,
     fieldVisibilityForNestedGroup,
     groupDefsFor,
@@ -13,9 +14,11 @@ import {
     removeFieldFromNestedGroup,
     selectedFieldKeys,
     setFieldPresentationLabel,
+    setFieldLayoutWidthInNestedGroup,
     setFieldVisibilityInNestedGroup,
     type NestedSurfaceConfig,
 } from "@/lib/adminV2/settings/surfaces/nestedSurfaceEditorModel";
+import type { NestedSurfaceFieldLayoutWidth } from "@/lib/adminV2/settings/surfaces/nestedSurfaceFieldLayout";
 import {
     SURFACE_FIELD_VISIBILITY_LABELS,
     type SurfaceFieldVisibility,
@@ -113,6 +116,7 @@ export default function InlineRuntimeFieldList({
                 const catalog = catalogLabelFor(surfaceId, groupKey, fieldKey, tenantFieldDefinitions);
                 const label = fieldPresentationLabel(config, groupKey, fieldKey, catalog);
                 const visibility = fieldVisibilityForNestedGroup(config, groupKey, fieldKey);
+                const layoutWidth = fieldLayoutWidthForNestedGroup(config, groupKey, fieldKey);
                 const preview = previewByFieldKey[fieldKey];
                 const editingLabel = editingLabelKey === fieldKey;
                 const selected =
@@ -164,6 +168,25 @@ export default function InlineRuntimeFieldList({
                                 <span className="fp-inline-field-row__preview">{preview}</span>
                             ) : null}
                         </div>
+                        <select
+                            className="fp-inline-field-row__layout"
+                            value={layoutWidth}
+                            aria-label={`Row width for ${label}`}
+                            onClick={(e) => e.stopPropagation()}
+                            onChange={(e) =>
+                                mutate(
+                                    setFieldLayoutWidthInNestedGroup(
+                                        config,
+                                        groupKey,
+                                        fieldKey,
+                                        e.target.value as NestedSurfaceFieldLayoutWidth,
+                                    ),
+                                )
+                            }
+                        >
+                            <option value="full">Full row</option>
+                            <option value="half">Half row</option>
+                        </select>
                         <select
                             className="fp-inline-field-row__behavior"
                             value={visibility}

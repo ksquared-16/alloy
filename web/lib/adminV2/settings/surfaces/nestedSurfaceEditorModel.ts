@@ -45,6 +45,7 @@ import {
     normalizeFieldVisibility,
     type SurfaceFieldVisibility,
 } from "@/lib/adminV2/settings/surfaces/nestedSurfaceFieldPolicy";
+import type { NestedSurfaceFieldLayoutWidth } from "@/lib/adminV2/settings/surfaces/nestedSurfaceFieldLayout";
 
 export const HOUSEHOLD_SURFACE_ID = "household_surface";
 export const CHILDREN_SURFACE_ID = "children_surface";
@@ -106,6 +107,8 @@ export type NestedSurfaceGroupConfig = {
     fieldPolicies?: Record<string, SurfaceFieldVisibility>;
     /** Operator-facing presentation labels (never schema names). */
     fieldLabels?: Record<string, string>;
+    /** Per-field row width — `half` pairs with the next consecutive half field on one row. */
+    fieldLayoutWidths?: Record<string, NestedSurfaceFieldLayoutWidth>;
     /**
      * Stable semantic identity for an operator-added section (from the platform section
      * catalog). Preserved so future BOS/AI understand what the section MEANS even after
@@ -330,6 +333,33 @@ export function setFieldPresentationLabel(
     };
 }
 
+export function fieldLayoutWidthForNestedGroup(
+    config: NestedSurfaceConfig,
+    groupKey: string,
+    fieldKey: string,
+): NestedSurfaceFieldLayoutWidth {
+    return config.groups.find((g) => g.key === groupKey)?.fieldLayoutWidths?.[fieldKey] ?? "full";
+}
+
+export function setFieldLayoutWidthInNestedGroup(
+    config: NestedSurfaceConfig,
+    groupKey: string,
+    fieldKey: string,
+    layoutWidth: NestedSurfaceFieldLayoutWidth,
+): NestedSurfaceConfig {
+    return {
+        ...config,
+        groups: config.groups.map((g) =>
+            g.key === groupKey
+                ? {
+                      ...g,
+                      fieldLayoutWidths: { ...(g.fieldLayoutWidths ?? {}), [fieldKey]: layoutWidth },
+                  }
+                : g,
+        ),
+    };
+}
+
 export function isNestedGroupEnabled(config: NestedSurfaceConfig, groupKey: string): boolean {
     const group = config.groups.find((g) => g.key === groupKey);
     if (!group) return false;
@@ -429,6 +459,7 @@ export function reconcileNestedSurfaceConfig(surfaceId: string, loaded: NestedSu
             fieldModes: found.fieldModes ?? g.fieldModes,
             fieldPolicies,
             fieldLabels: found.fieldLabels ? { ...found.fieldLabels } : undefined,
+            fieldLayoutWidths: found.fieldLayoutWidths ? { ...found.fieldLayoutWidths } : undefined,
             sectionSemantic: found.sectionSemantic,
             sectionLabel: found.sectionLabel,
         };
