@@ -3,7 +3,7 @@
 **Date:** 2026-07-08  
 **Branch:** `feat/processing-form-composer-v1` → `staging`  
 **Product name:** Digital Mailroom  
-**Status:** **Frozen** — shell is canonical; no further shell redesigns unless a functional gap is discovered during real operator use.
+**Status:** **Locked** — see `docs/sprints/07_2026/processing-v1-lock-closeout.md` for final closeout.
 
 ---
 

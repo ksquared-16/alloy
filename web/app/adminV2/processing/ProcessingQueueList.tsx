@@ -86,7 +86,7 @@ const LANE_TONE: Record<string, string> = {
 };
 
 const QUEUE_ROW_CLASS =
-    "flex w-full items-center gap-1 border-b border-alloy-stone/10 px-1.5 py-0 text-left transition-colors hover:bg-alloy-stone/[0.04]";
+    "flex w-full items-center gap-1 border-b border-alloy-stone/10 px-1.5 py-px text-left transition-colors hover:bg-alloy-stone/[0.04]";
 const QUEUE_ROW_SELECTED_CLASS =
     "border-l-2 border-l-alloy-bend-pine bg-alloy-bend-pine/[0.06] hover:bg-alloy-bend-pine/[0.08]";
 
@@ -270,7 +270,7 @@ export default function ProcessingQueueList({
                 >
                     <span className="min-w-0 flex-1">
                         <span className="flex items-baseline justify-between gap-1.5">
-                            <span className="min-w-0 flex-1 truncate text-[9px] font-medium leading-tight text-alloy-midnight">{title}</span>
+                            <span className="min-w-0 flex-1 truncate text-[10px] font-medium text-alloy-midnight">{title}</span>
                             <span className="shrink-0 text-[7px] tabular-nums text-alloy-midnight/30">{formatAge(row.sourceDisplay?.receivedAt ?? row.createdAt)}</span>
                         </span>
                         <span className={`flex items-center gap-1 truncate text-[7px] font-medium leading-tight ${laneTone}`}>
@@ -359,14 +359,14 @@ export default function ProcessingQueueList({
         <button
             type="button"
             onClick={() => toggleFolder(key)}
-            className={`flex w-full items-center justify-between px-1.5 py-0.5 text-left transition-colors hover:bg-alloy-stone/[0.04] ${
+            className={`flex w-full items-center justify-between px-2 py-1 text-left transition-colors hover:bg-alloy-stone/[0.04] ${
                 expanded ? "bg-alloy-stone/[0.03]" : ""
             }`}
             data-processing-folder={key}
         >
             <span className="flex min-w-0 items-center gap-2">
                 <ProcessingFolderIcon folderId={key} className="h-3 w-3 shrink-0 text-alloy-midnight/35" />
-                <span className="truncate text-[10px] font-semibold text-alloy-midnight/75">{label}</span>
+                <span className="truncate text-[11px] font-semibold text-alloy-midnight/70">{label}</span>
             </span>
             <span className="ml-2 shrink-0 px-1.5 text-[9px] font-semibold tabular-nums text-alloy-midnight/35">
                 {count}
