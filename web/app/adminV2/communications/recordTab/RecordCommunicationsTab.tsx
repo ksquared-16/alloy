@@ -16,6 +16,7 @@ import {
 export default function RecordCommunicationsTab(props: {
     entityType?: string;
     entityId?: string;
+    compactActivityLoading?: boolean;
     messages?: { id: string; channel?: string | null; direction?: string | null; created_at?: string | null; body?: string | null }[];
     notes?: { id: string; created_at?: string | null; body?: string | null }[];
     unread?: number;
@@ -28,7 +29,10 @@ export default function RecordCommunicationsTab(props: {
     if (isCommsV2FlagEnabled("comms_v2_live_workspace") && props.entityType && props.entityId) {
         return (
             <div data-cc-record-tab="communications" className="bg-white">
-                <FamilyCommunicationWorkspace entity={{ entityType: props.entityType, entityId: props.entityId }} />
+                <FamilyCommunicationWorkspace
+                    entity={{ entityType: props.entityType, entityId: props.entityId }}
+                    compactActivityLoading={props.compactActivityLoading}
+                />
             </div>
         );
     }

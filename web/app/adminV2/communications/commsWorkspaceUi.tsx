@@ -129,6 +129,25 @@ export function CommsWorkspacePanelReserve({ label = "Loading conversation…" }
     );
 }
 
+/** Compact reserve for Focus Panel Activity embed — structure visible, not a large blank block. */
+export function CommsActivityEmbedLoadingShell({ label = "Loading communications…" }: { label?: string }) {
+    return (
+        <div
+            className="flex min-h-0 flex-col gap-2 p-3"
+            data-comms-activity-embed-loading-shell="true"
+            aria-busy="true"
+            aria-label={label}
+        >
+            <div className="flex gap-1">
+                <div className="h-6 w-12 animate-pulse rounded-md bg-alloy-stone/[0.08]" aria-hidden />
+                <div className="h-6 w-10 animate-pulse rounded-md bg-alloy-stone/[0.06]" aria-hidden />
+            </div>
+            <div className="h-7 w-full animate-pulse rounded-md border border-alloy-stone/10 bg-alloy-stone/[0.04]" aria-hidden />
+            <div className="h-16 animate-pulse rounded-lg border border-alloy-stone/10 bg-alloy-stone/[0.03]" aria-hidden />
+        </div>
+    );
+}
+
 /** Compact inline reserve for compose / preview panels */
 export function CommsInlineListReserve({ rows = 2, label = "Loading content" }: { rows?: number; label?: string }) {
     return (

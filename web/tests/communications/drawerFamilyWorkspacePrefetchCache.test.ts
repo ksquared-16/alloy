@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@/lib/communications/v2/flags", () => ({
-    isCommsV2FlagEnabled: (key: string) => key === "comms_v2_live_workspace",
+    isCommsV2FlagEnabled: (key: string) =>
+        key === "comms_v2_live_workspace" || key === "comms_v2_record_tab",
 }));
 
 const fetchMock = vi.fn();
@@ -94,5 +95,17 @@ describe("drawerFamilyWorkspacePrefetchCache", () => {
         invalidateDrawerFamilyWorkspaceCache({ entityType: "opportunities", entityId: "opp-1" });
         expect(getDrawerFamilyWorkspaceWarm(emailParams)).toBeNull();
         expect(getDrawerFamilyWorkspaceWarm(smsParams)).toBeNull();
+    });
+
+    it("scheduleDeferredDrawerFamilyWorkspacePrefetch dedupes arm per entity", async () => {
+        vi.useFakeTimers();
+        const { scheduleDeferredDrawerFamilyWorkspacePrefetch } = await import(
+            "@/lib/communications/v2/drawerFamilyWorkspacePrefetchCache"
+        );
+        scheduleDeferredDrawerFamilyWorkspacePrefetch("opportunities", "opp-1");
+        scheduleDeferredDrawerFamilyWorkspacePrefetch("opportunities", "opp-1");
+        await vi.runAllTimersAsync();
+        expect(fetchMock.mock.calls.filter((c) => String(c[0]).includes("/family-workspace"))).toHaveLength(1);
+        vi.useRealTimers();
     });
 });

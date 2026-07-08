@@ -6,9 +6,11 @@ import { toggleRecipientSelection } from "@/lib/communications/v2/familyWorkspac
 import type { ComposerChannel, FamilyCommunicationWorkspaceVM, TimelineEventVM } from "@/lib/communications/v2/familyWorkspace/types";
 import type { FamilySendResult } from "@/lib/communications/v2/familyWorkspace/orchestrateFamilySend";
 import {
+    getDrawerFamilyWorkspaceInflight,
     getDrawerFamilyWorkspaceWarm,
     invalidateDrawerFamilyWorkspaceCache,
     prefetchDrawerFamilyWorkspace,
+    subscribeDrawerFamilyWorkspaceCache,
     type DrawerFamilyWorkspacePrefetchParams,
 } from "@/lib/communications/v2/drawerFamilyWorkspacePrefetchCache";
 import {
@@ -16,7 +18,7 @@ import {
     type WorkspaceMode,
 } from "@/lib/communications/v2/workspaceModeAvailability";
 import FamilyCommunicationWorkspaceView, { type WorkspaceTimelineMessage } from "@/app/adminV2/communications/FamilyCommunicationWorkspaceView";
-import { CommsWorkspacePanelReserve } from "@/app/adminV2/communications/commsWorkspaceUi";
+import { CommsActivityEmbedLoadingShell, CommsWorkspacePanelReserve } from "@/app/adminV2/communications/commsWorkspaceUi";
 
 /**
  * UI-6 / UI-6.1 — drawer Family Communication Workspace (no queue). Thin container: fetches the VM by
@@ -64,6 +66,8 @@ export default function FamilyCommunicationWorkspace(props: {
     customerId?: string;
     entity?: { entityType: string; entityId: string };
     channel?: "email" | "sms";
+    /** Activity cockpit embed — compact loading shell while warm cache resolves. */
+    compactActivityLoading?: boolean;
 }) {
     const [workspaceMode, setWorkspaceMode] = useState<WorkspaceMode>(() =>
         props.channel === "sms" ? "sms" : "email",
@@ -115,7 +119,8 @@ export default function FamilyCommunicationWorkspace(props: {
             setLoading(true);
             setError(null);
             try {
-                const workspace = await prefetchDrawerFamilyWorkspace(params, opts);
+                const pending = !opts?.force ? getDrawerFamilyWorkspaceInflight(params) : null;
+                const workspace = pending ? await pending : await prefetchDrawerFamilyWorkspace(params, opts);
                 if (!workspace) {
                     setError("Failed to load");
                     return;
@@ -135,9 +140,31 @@ export default function FamilyCommunicationWorkspace(props: {
         setSubjectDraft("");
         setBodyDraft("");
         setSendResult(null);
-        setServedFromWarmCache(false);
+        const params = resolvePrefetchParams(props, liveChannel, null);
+        const warm = params ? getDrawerFamilyWorkspaceWarm(params) : null;
+        setServedFromWarmCache(Boolean(warm));
         void load(null, true);
     }, [load]);
+
+    useEffect(() => {
+        const params = resolvePrefetchParams(props, liveChannel, selectedThreadId);
+        if (!params || vm) return;
+        return subscribeDrawerFamilyWorkspaceCache(() => {
+            const warm = getDrawerFamilyWorkspaceWarm(params);
+            if (!warm) return;
+            applyWorkspace(warm, true);
+            setLoading(false);
+            setServedFromWarmCache(true);
+        });
+    }, [
+        applyWorkspace,
+        liveChannel,
+        props.customerId,
+        props.entity?.entityType,
+        props.entity?.entityId,
+        selectedThreadId,
+        vm,
+    ]);
 
     const openThread = useCallback((threadId: string) => {
         setSelectedThreadId(threadId);
@@ -188,7 +215,10 @@ export default function FamilyCommunicationWorkspace(props: {
     const healthTone = health.engagementScore >= 66 ? "text-alloy-juniper" : health.engagementScore >= 33 ? "text-alloy-amber" : "text-red-600";
     const healthDot = health.engagementScore >= 66 ? "bg-alloy-juniper" : health.engagementScore >= 33 ? "bg-alloy-amber" : "bg-red-500";
 
-    if (loading && !vm) return <CommsWorkspacePanelReserve />;
+    if (loading && !vm) {
+        if (props.compactActivityLoading) return <CommsActivityEmbedLoadingShell />;
+        return <CommsWorkspacePanelReserve />;
+    }
     if (error && !vm) return <div className="p-4 text-xs text-alloy-ember">{error}</div>;
     if (!vm) return <div className="p-4 text-xs text-alloy-midnight/45">No conversation.</div>;
 

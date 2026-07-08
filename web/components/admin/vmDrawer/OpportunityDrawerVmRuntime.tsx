@@ -63,7 +63,10 @@ import OpportunityDrawerOpeningOverlay from "@/components/admin/OpportunityDrawe
 import { AlloyCanonicalLoadingSurface } from "@/lib/adminV2/runtime/alloyCanonicalLoadingSurface";
 import OpportunityDrawerTabBackgroundLoader from "@/components/admin/vmDrawer/OpportunityDrawerTabBackgroundLoader";
 import { scheduleDeferredCommunicationsDrawerPrefetch } from "@/lib/admin/communications/communicationsDrawerPrefetch";
-import { prefetchDrawerFamilyWorkspace } from "@/lib/communications/v2/drawerFamilyWorkspacePrefetchCache";
+import {
+    prefetchDrawerFamilyWorkspace,
+    scheduleDeferredDrawerFamilyWorkspacePrefetch,
+} from "@/lib/communications/v2/drawerFamilyWorkspacePrefetchCache";
 import { isCommsV2FlagEnabled } from "@/lib/communications/v2/flags";
 import { prefetchLinkedPersonsFromOpportunityRecord } from "@/lib/admin/drawer/prefetchLinkedPersonsFromOpportunityRecord";
 import { scheduleOpportunityDrawerTabPrefetch } from "@/lib/admin/opportunityDrawerTabPrefetch";
@@ -322,6 +325,7 @@ export default function OpportunityDrawerVmRuntime() {
         if (!layoutPrefetchId) return;
         scheduleDeferredCommunicationsDrawerPrefetch("opportunities", layoutPrefetchId);
         scheduleOpportunityDrawerTabPrefetch(layoutPrefetchId);
+        scheduleDeferredDrawerFamilyWorkspacePrefetch("opportunities", layoutPrefetchId);
     }, [layoutPrefetchId]);
 
     // Focus Panel mode prewarm: active mode wins; non-active modes warm after idle. Activity

@@ -22,6 +22,7 @@ type CacheEntry = {
 
 const cache = new Map<string, CacheEntry>();
 const inflight = new Map<string, Promise<FamilyCommunicationWorkspaceVM | null>>();
+const armedDeferredKeys = new Set<string>();
 const listeners = new Set<() => void>();
 
 function notify(): void {
@@ -145,9 +146,60 @@ export async function prefetchDrawerFamilyWorkspace(
     return promise;
 }
 
+/** In-flight warm request for the same entity/channel (join instead of duplicate fetch). */
+export function getDrawerFamilyWorkspaceInflight(
+    params: DrawerFamilyWorkspacePrefetchParams
+): Promise<FamilyCommunicationWorkspaceVM | null> | null {
+    const key = drawerFamilyWorkspaceCacheKey(params);
+    if (!key) return null;
+    return inflight.get(key) ?? null;
+}
+
+function deferAfterPaint(fn: () => void): void {
+    const scheduleIdle = (cb: () => void) => {
+        if (typeof window !== "undefined" && typeof window.requestIdleCallback === "function") {
+            window.requestIdleCallback(() => cb(), { timeout: 450 });
+        } else {
+            setTimeout(cb, 48);
+        }
+    };
+    if (typeof window !== "undefined" && typeof window.requestAnimationFrame === "function") {
+        window.requestAnimationFrame(() => scheduleIdle(fn));
+    } else {
+        scheduleIdle(fn);
+    }
+}
+
+/**
+ * Arm family-workspace warm load when the Focus Panel drawer opens for the active record.
+ * Deferred after paint (same cadence as legacy communications drawer prefetch).
+ * Idempotent per entity + default composer channel while cache/inflight is warm.
+ */
+export function scheduleDeferredDrawerFamilyWorkspacePrefetch(
+    entityType: string,
+    entityId: string,
+    composerChannel: ComposerChannel = "email"
+): void {
+    if (!isCommsV2FlagEnabled("comms_v2_live_workspace") || !isCommsV2FlagEnabled("comms_v2_record_tab")) {
+        return;
+    }
+    const params: DrawerFamilyWorkspacePrefetchParams = { entityType, entityId, composerChannel };
+    const key = drawerFamilyWorkspaceCacheKey(params);
+    if (!key) return;
+    if (getDrawerFamilyWorkspaceWarm(params)) return;
+    if (inflight.has(key) || armedDeferredKeys.has(key)) return;
+
+    armedDeferredKeys.add(key);
+    deferAfterPaint(() => {
+        armedDeferredKeys.delete(key);
+        void prefetchDrawerFamilyWorkspace(params);
+    });
+}
+
 /** Test-only reset. */
 export function resetDrawerFamilyWorkspacePrefetchCacheForTests(): void {
     cache.clear();
     inflight.clear();
+    armedDeferredKeys.clear();
     listeners.clear();
 }
