@@ -197,15 +197,21 @@ export function filterCatalogByOwnership(
 export const FIELD_SECTION_DISPLAY_ORDER = [
     "identity",
     "contact",
-    "child_profile",
     "enrollment",
+    "health",
+    "medical",
+    "child_profile",
     "profile",
     "requirements",
-    "runtime_signals",
+    "scheduling",
+    "attendance",
     "communications",
+    "billing",
+    "runtime_signals",
     "placement",
     "lifecycle",
     "system",
+    "custom",
     "general",
     "site",
 ] as const;
@@ -215,19 +221,31 @@ export function sectionDisplayLabel(sectionKey: string): string {
     const labels: Record<string, string> = {
         identity: "Identity",
         contact: "Contact",
-        child_profile: "Profile",
         enrollment: "Enrollment",
+        health: "Health",
+        medical: "Medical",
+        child_profile: "Profile",
+        enrollment_profile: "Enrollment",
         profile: "Profile",
         requirements: "Requirements",
+        scheduling: "Scheduling",
+        attendance: "Attendance",
         runtime_signals: "Runtime Signals",
         communications: "Communications",
+        billing: "Billing",
         placement: "Placement",
         lifecycle: "Lifecycle",
         system: "System",
+        custom: "Custom",
         general: "General",
         site: "Site",
     };
     return labels[key] ?? key.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+/** Operator-facing alias — categories are business concepts, not presentation sections. */
+export function categoryDisplayLabel(categoryKey: string): string {
+    return sectionDisplayLabel(categoryKey);
 }
 
 export function groupCatalogEntriesBySection(

@@ -2,6 +2,12 @@
 
 import { useEffect, useRef, useState } from "react";
 import { ADMIN_FIELD_TYPES } from "@/lib/fields/adminFieldTypeList";
+import ConfigurationAdvancedToggle from "@/components/adminV2/configuration/ConfigurationAdvancedToggle";
+import ConfigurationStatusToggle from "@/components/adminV2/configuration/ConfigurationStatusToggle";
+import {
+    fieldTypeOperatorLabel,
+    slugifyOperatorKey,
+} from "@/lib/fields/dataModelWorkspaceOperatorUi";
 import { DATA_MODEL_ICON_STROKE } from "@/lib/fields/dataModelWorkspaceIcons";
 import { Plus } from "lucide-react";
 
@@ -9,17 +15,14 @@ export type FieldInlineCreateValues = {
     label: string;
     field_key: string;
     field_type: string;
-    section_key: string;
+    category_key: string;
     description: string;
-    is_required: boolean;
-    is_visible_in_form: boolean;
-    is_visible_in_drawer: boolean;
-    is_visible_in_table: boolean;
+    is_active: boolean;
 };
 
 type Props = {
     open: boolean;
-    sectionOptions: Array<{ value: string; label: string }>;
+    categoryOptions: Array<{ value: string; label: string }>;
     saving?: boolean;
     error?: string | null;
     canMutate?: boolean;
@@ -27,32 +30,18 @@ type Props = {
     onCreate: (values: FieldInlineCreateValues) => void | Promise<void>;
 };
 
-function slugifyLabel(label: string): string {
-    return label
-        .trim()
-        .toLowerCase()
-        .replace(/\s+/g, "_")
-        .replace(/[^a-z0-9_]/g, "")
-        .replace(/_+/g, "_")
-        .replace(/^_|_$/g, "")
-        .slice(0, 64);
-}
-
 const EMPTY: FieldInlineCreateValues = {
     label: "",
     field_key: "",
     field_type: "text",
-    section_key: "custom",
+    category_key: "custom",
     description: "",
-    is_required: false,
-    is_visible_in_form: true,
-    is_visible_in_drawer: true,
-    is_visible_in_table: true,
+    is_active: true,
 };
 
 export default function DataModelFieldCreateRow({
     open,
-    sectionOptions,
+    categoryOptions,
     saving = false,
     error = null,
     canMutate = false,
@@ -60,20 +49,23 @@ export default function DataModelFieldCreateRow({
     onCreate,
 }: Props) {
     const [draft, setDraft] = useState<FieldInlineCreateValues>(EMPTY);
+    const [advancedOpen, setAdvancedOpen] = useState(false);
     const keyTouched = useRef(false);
 
     useEffect(() => {
         if (!open) return;
         setDraft({
             ...EMPTY,
-            section_key: sectionOptions.find((o) => o.value === "custom")?.value ?? sectionOptions[0]?.value ?? "custom",
+            category_key:
+                categoryOptions.find((o) => o.value === "custom")?.value ?? categoryOptions[0]?.value ?? "custom",
         });
         keyTouched.current = false;
-    }, [open, sectionOptions]);
+        setAdvancedOpen(false);
+    }, [open, categoryOptions]);
 
     useEffect(() => {
         if (!open || keyTouched.current) return;
-        const slug = slugifyLabel(draft.label);
+        const slug = slugifyOperatorKey(draft.label);
         if (slug.length >= 2) setDraft((d) => ({ ...d, field_key: slug }));
     }, [draft.label, open]);
 
@@ -90,7 +82,7 @@ export default function DataModelFieldCreateRow({
                 <p className="text-[13px] font-semibold text-alloy-midnight">New field</p>
             </div>
             <div className="grid gap-2.5 px-3 py-3 sm:grid-cols-2">
-                <label className="block space-y-1">
+                <label className="block space-y-1 sm:col-span-2">
                     <span className="text-[10px] font-medium uppercase tracking-wide text-alloy-midnight/45">Label</span>
                     <input
                         autoFocus
@@ -99,20 +91,6 @@ export default function DataModelFieldCreateRow({
                         className="w-full rounded-md border border-alloy-forge/15 bg-white px-2.5 py-1.5 text-sm"
                         data-testid="inline-create-label"
                         placeholder="e.g. Preferred name"
-                    />
-                </label>
-                <label className="block space-y-1">
-                    <span className="text-[10px] font-medium uppercase tracking-wide text-alloy-midnight/45">
-                        Field key
-                    </span>
-                    <input
-                        value={draft.field_key}
-                        onChange={(e) => {
-                            keyTouched.current = true;
-                            setDraft((d) => ({ ...d, field_key: e.target.value }));
-                        }}
-                        className="w-full rounded-md border border-alloy-forge/15 bg-white px-2.5 py-1.5 font-mono text-sm"
-                        data-testid="inline-create-key"
                     />
                 </label>
                 <label className="block space-y-1">
@@ -127,21 +105,23 @@ export default function DataModelFieldCreateRow({
                     >
                         {ADMIN_FIELD_TYPES.map((t) => (
                             <option key={t} value={t}>
-                                {t}
+                                {fieldTypeOperatorLabel(t)}
                             </option>
                         ))}
                     </select>
                 </label>
                 <label className="block space-y-1">
-                    <span className="text-[10px] font-medium uppercase tracking-wide text-alloy-midnight/45">Section</span>
+                    <span className="text-[10px] font-medium uppercase tracking-wide text-alloy-midnight/45">
+                        Category
+                    </span>
                     <select
-                        value={draft.section_key}
-                        onChange={(e) => setDraft((d) => ({ ...d, section_key: e.target.value }))}
+                        value={draft.category_key}
+                        onChange={(e) => setDraft((d) => ({ ...d, category_key: e.target.value }))}
                         className="w-full rounded-md border border-alloy-forge/15 bg-white px-2.5 py-1.5 text-sm"
-                        data-testid="inline-create-section"
+                        data-testid="inline-create-category"
                     >
-                        {sectionOptions.length === 0 ? <option value="custom">Custom</option> : null}
-                        {sectionOptions.map((opt) => (
+                        {categoryOptions.length === 0 ? <option value="custom">Custom</option> : null}
+                        {categoryOptions.map((opt) => (
                             <option key={opt.value} value={opt.value}>
                                 {opt.label}
                             </option>
@@ -158,26 +138,34 @@ export default function DataModelFieldCreateRow({
                         rows={2}
                         className="w-full rounded-md border border-alloy-forge/15 bg-white px-2.5 py-1.5 text-sm"
                         data-testid="inline-create-description"
+                        placeholder="What this field captures for your organization"
                     />
                 </label>
-                <div className="flex flex-wrap gap-3 sm:col-span-2">
-                    {(
-                        [
-                            ["is_required", "Required"],
-                            ["is_visible_in_form", "Forms"],
-                            ["is_visible_in_drawer", "Drawers"],
-                            ["is_visible_in_table", "Tables"],
-                        ] as const
-                    ).map(([key, label]) => (
-                        <label key={key} className="inline-flex items-center gap-1.5 text-[12px] text-alloy-midnight/75">
+                <div className="sm:col-span-2">
+                    <ConfigurationStatusToggle
+                        active={draft.is_active}
+                        onChange={(is_active) => setDraft((d) => ({ ...d, is_active }))}
+                    />
+                </div>
+                <div className="sm:col-span-2">
+                    <ConfigurationAdvancedToggle open={advancedOpen} onToggle={() => setAdvancedOpen((o) => !o)} />
+                    {advancedOpen ? (
+                        <label className="mt-2 block space-y-1">
+                            <span className="text-[10px] font-medium uppercase tracking-wide text-alloy-midnight/45">
+                                Internal key
+                            </span>
                             <input
-                                type="checkbox"
-                                checked={Boolean(draft[key])}
-                                onChange={(e) => setDraft((d) => ({ ...d, [key]: e.target.checked }))}
+                                value={draft.field_key}
+                                onChange={(e) => {
+                                    keyTouched.current = true;
+                                    setDraft((d) => ({ ...d, field_key: e.target.value }));
+                                }}
+                                className="w-full rounded-md border border-alloy-forge/15 bg-white px-2.5 py-1.5 font-mono text-sm"
+                                data-testid="inline-create-key"
                             />
-                            {label}
+                            <p className="text-[10px] text-alloy-midnight/40">Generated automatically from the label.</p>
                         </label>
-                    ))}
+                    ) : null}
                 </div>
             </div>
             {error ? (

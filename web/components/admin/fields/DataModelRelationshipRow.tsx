@@ -1,8 +1,13 @@
 "use client";
 
 import type { EntityRelationshipDefinition } from "@/lib/fields/entityRelationshipCatalog";
+import {
+    CONFIG_WORKSPACE_GHOST_ACTION_CLASS,
+    CONFIG_WORKSPACE_ROW_CLASS,
+    CONFIG_WORKSPACE_ROW_EXPANDED_CLASS,
+} from "@/lib/fields/dataModelWorkspaceOperatorUi";
 import { DATA_MODEL_ICON_STROKE } from "@/lib/fields/dataModelWorkspaceIcons";
-import { ArrowRight, Link2 } from "lucide-react";
+import { Link2 } from "lucide-react";
 
 type Props = {
     relationship: EntityRelationshipDefinition;
@@ -14,12 +19,10 @@ type Props = {
 export default function DataModelRelationshipRow({ relationship, expanded, onExpand, onCollapse }: Props) {
     return (
         <div
-            className={[
-                "border-b border-alloy-forge/10 last:border-b-0",
-                expanded ? "bg-alloy-bend-pine/[0.03]" : "hover:bg-alloy-stone/[0.22]",
-            ].join(" ")}
+            className={[CONFIG_WORKSPACE_ROW_CLASS, expanded ? CONFIG_WORKSPACE_ROW_EXPANDED_CLASS : ""].join(" ")}
             data-testid="data-model-relationship-row"
             data-relationship-id={relationship.id}
+            data-relationship-kind="platform"
             data-expanded={expanded ? "true" : "false"}
         >
             <div className="flex items-center gap-2 px-2.5 py-2">
@@ -28,9 +31,12 @@ export default function DataModelRelationshipRow({ relationship, expanded, onExp
                     <span className="block truncate text-[13px] font-semibold text-alloy-midnight">
                         {relationship.label}
                     </span>
+                    <span className="mt-0.5 block truncate text-[10px] text-alloy-midnight/45">
+                        {relationship.connection_label}
+                    </span>
                 </button>
-                <span className="hidden shrink-0 text-[11px] text-alloy-midnight/50 sm:inline">
-                    {relationship.target_label}
+                <span className="hidden shrink-0 rounded-full border border-alloy-forge/12 bg-alloy-stone/[0.35] px-1.5 py-0.5 text-[9px] font-medium text-alloy-midnight/50 sm:inline">
+                    Platform
                 </span>
                 <span className="shrink-0 text-[10px] text-alloy-midnight/40">{relationship.cardinality}</span>
                 <span
@@ -44,7 +50,7 @@ export default function DataModelRelationshipRow({ relationship, expanded, onExp
                 <button
                     type="button"
                     onClick={expanded ? onCollapse : onExpand}
-                    className="config-ghost-btn shrink-0 px-1.5 py-0.5 text-[11px] font-medium text-alloy-bend-pine hover:underline"
+                    className={[CONFIG_WORKSPACE_GHOST_ACTION_CLASS, expanded ? "opacity-100" : ""].join(" ")}
                     data-testid="data-model-relationship-edit"
                 >
                     {expanded ? "Close" : "View"}
@@ -55,23 +61,17 @@ export default function DataModelRelationshipRow({ relationship, expanded, onExp
                     className="space-y-2 border-t border-alloy-forge/8 px-3 pb-3 pt-2.5"
                     data-testid="data-model-relationship-detail"
                 >
-                    <p className="flex flex-wrap items-center gap-1.5 text-[12px] text-alloy-midnight/60">
-                        <ArrowRight size={12} strokeWidth={DATA_MODEL_ICON_STROKE} aria-hidden />
-                        <span>{relationship.target_label}</span>
-                        <span className="text-alloy-midnight/25">·</span>
-                        <span>{relationship.cardinality}</span>
-                        <span className="text-alloy-midnight/25">·</span>
-                        <span>{relationship.required ? "Required" : "Optional"}</span>
-                    </p>
+                    <p className="text-[12px] leading-snug text-alloy-midnight/65">{relationship.meaning}</p>
                     {relationship.role_note ? (
-                        <p className="text-[12px] leading-snug text-alloy-midnight/55">{relationship.role_note}</p>
+                        <p className="rounded-md border border-alloy-bend-pine/15 bg-alloy-bend-pine/[0.04] px-2.5 py-2 text-[11px] leading-snug text-alloy-midnight/55">
+                            {relationship.role_note}
+                        </p>
                     ) : null}
                     <p className="text-[11px] text-alloy-midnight/40">
                         Used in: {relationship.where_used.join(" · ")}
                     </p>
                     <p className="text-[11px] text-alloy-midnight/40">
-                        Platform relationship catalog entry. New vocabulary types are added with Add Relationship;
-                        full vocabulary management lives under Settings → Relationships.
+                        Platform relationships describe how Alloy models your organization. They are view-only here.
                     </p>
                     <div className="flex justify-end">
                         <button

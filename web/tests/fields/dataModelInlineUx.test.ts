@@ -32,6 +32,8 @@ describe("Data Model inline UX pass", () => {
         expect(fieldRow).toContain('data-testid="data-model-field-row"');
         expect(fieldRow).toContain('data-testid="data-model-field-editor"');
         expect(createRow).toContain('data-testid="data-model-field-create-row"');
+        expect(createRow).toContain("Category");
+        expect(createRow).toContain("ConfigurationAdvancedToggle");
     });
 
     it("relationships use rows + inline create (no modal)", () => {
@@ -42,6 +44,7 @@ describe("Data Model inline UX pass", () => {
         );
         expect(relTab).toContain("DataModelRelationshipRow");
         expect(relTab).toContain("DataModelRelationshipCreateRow");
+        expect(relTab).toContain("platform-relationships-section");
         expect(relTab).not.toContain("DataModelAddRelationshipModal");
         expect(create).toContain("customer-person-role-types");
         expect(create).toContain("person-relationship-type-settings");

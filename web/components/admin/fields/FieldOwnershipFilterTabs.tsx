@@ -33,8 +33,8 @@ export default function FieldOwnershipFilterTabs({ value, onChange, counts }: Pr
                         onClick={() => onChange(filter)}
                         className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
                             active
-                                ? "border-alloy-pine/40 bg-alloy-pine/[0.1] text-alloy-pine"
-                                : "border-alloy-forge/15 bg-white text-alloy-midnight/65 hover:border-alloy-forge/25"
+                                ? "border-alloy-bend-pine/30 bg-alloy-bend-pine/[0.08] text-alloy-bend-pine"
+                                : "border-alloy-forge/12 bg-white text-alloy-midnight/60 hover:border-alloy-forge/20 hover:bg-alloy-stone/[0.25]"
                         }`}
                         data-ownership-filter={filter}
                     >
