@@ -85,8 +85,11 @@ export default function PosProcessingWorkspace({
                     e.target.value = "";
                 }}
             />
-            <div className="flex min-h-0 flex-1 gap-2 overflow-hidden bg-alloy-stone/[0.03] p-2">
-                <ProcessingParentPanel title="Queue" className="w-[22%] min-w-[11rem] max-w-[15rem] shrink-0">
+            <div className="flex min-h-0 flex-1 overflow-hidden bg-white">
+                <ProcessingParentPanel
+                    title="Queue"
+                    className="w-[22%] min-w-[11rem] max-w-[15rem] shrink-0 rounded-none border-0 border-r border-alloy-stone/15 shadow-none"
+                >
                     <div className="min-h-0 flex-1 overflow-y-auto">
                         <ProcessingQueueList
                             selectedCaseId={selectedCaseId}
@@ -102,7 +105,7 @@ export default function PosProcessingWorkspace({
                 </ProcessingParentPanel>
 
                 {!selectedCaseId ? (
-                    <div className="flex min-w-[20rem] flex-1 flex-col overflow-hidden bg-white p-6">
+                    <div className="flex min-w-[20rem] flex-1 flex-col overflow-hidden border-l border-alloy-stone/15 bg-white p-6">
                         <div className="mx-auto flex w-full max-w-lg flex-1 flex-col justify-center">
                             <div className="text-center">
                                 <WorkspaceEmptyState
@@ -127,7 +130,7 @@ export default function PosProcessingWorkspace({
                         </div>
                     </div>
                 ) : detailLoading ? (
-                    <div className="flex min-w-[28rem] flex-1 flex-col overflow-hidden bg-white" aria-busy="true">
+                    <div className="flex min-w-[28rem] flex-1 flex-col overflow-hidden border-l border-alloy-stone/15 bg-white" aria-busy="true">
                         <div className="shrink-0 border-b border-alloy-stone/12 px-4 py-3">
                             <div className="h-5 w-48 animate-pulse rounded bg-alloy-stone/10" />
                             <div className="mt-2 h-3 w-72 animate-pulse rounded bg-alloy-stone/10" />
@@ -148,7 +151,7 @@ export default function PosProcessingWorkspace({
                         </div>
                     </div>
                 ) : isDocumentCase ? (
-                    <div className="flex min-w-[28rem] flex-1 flex-col overflow-hidden">
+                    <div className="flex min-w-[28rem] flex-1 flex-col overflow-hidden border-l border-alloy-stone/15">
                         <PosTemplateSetupColumn state={state} onOpenForm={onOpenForm} />
                     </div>
                 ) : (
