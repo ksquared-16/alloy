@@ -101,7 +101,7 @@ export default function DigitalMailroomShell({
             />
 
             <div
-                className={`${COMMS_WORKSPACE_EXECUTION_CLASS} !min-h-0 !border-t !border-alloy-stone/15 !bg-white !p-0`}
+                className={`${COMMS_WORKSPACE_EXECUTION_CLASS} !min-h-0 !border-t-0 !bg-white !p-0`}
                 data-mailroom-workspace-execution="true"
             >
                 {children}

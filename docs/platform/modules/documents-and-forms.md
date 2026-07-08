@@ -32,23 +32,59 @@ Forms engine, document handling, enrollment packets — industry-agnostic core w
 Digital Mailroom is the operator product for bringing external information into Alloy.
 Processing remains the engine underneath; it is not the operator-facing architecture.
 
-The frozen product spine is:
+**Canonical entry:** AdminV2 sidebar **Processing** → `ProcessingModal` (BOS workspace modal).
+Standalone `/admin/processing` is a deep-link host only; the modal is the product surface.
 
-1. **Overview** — launch point for importing, resuming active work, or building reusable assets.
-2. **Work** — active operational information organized by folders. The queue is one folder layer, not the product.
-3. **Studio** — reusable operational assets: Forms, Packets, Fields, Branding.
-4. **Builder** — opened from Studio Forms; the canvas-first builder owns editing and publishing.
+The operator never leaves the modal for `/admin/forms`. Processing owns form authoring and publishing
+in-modal via Studio → Forms → Builder.
 
-Overview is not a dashboard or admin page. It answers: *What am I trying to accomplish?*
+### Mode pattern (Work vs Studio)
+
+Digital Mailroom reuses the Communications operational modal pattern:
+
+| Level | Component | Work | Studio |
+|-------|-----------|------|--------|
+| Header | `OperationalModalHeader` | Title + subtitle + Close | same |
+| Mode (L1) | `AlloyModeSwitch` via `OperationalWorkspaceModeNav` | **Work** | **Studio** |
+| Section (L2) | `CommsModalTabBar` via `OperationalWorkspaceModeNav` | Overview · **Queue** | Forms · Packets · Fields · Branding |
+| Execution | `DigitalMailroomShell` children | landing or queue workspace | asset library / builder |
+
+**Visual dividers (locked):**
+
+- **Horizontal** — `border-b border-stone-200` under the level-2 tab row (`OperationalWorkspaceModeNav`)
+- **Vertical** — `border-r border-stone-200` between Queue column and review workspace (`PosProcessingWorkspace`)
+
+Shared nav: `web/app/adminV2/components/OperationalWorkspaceModeNav.tsx`
+
+### Tab hierarchy
+
+```
+ProcessingModal
+└── DigitalMailroomShell
+    ├── OperationalModalHeader ("Digital Mailroom")
+    ├── OperationalWorkspaceModeNav
+    └── execution
+        ├── mode=work,  workView=overview  → ProcessingOverviewLanding
+        ├── mode=work,  workView=work       → PosProcessingWorkspace (Queue)
+        └── mode=studio, studioTab=*        → ProcessingFormsStudio (+ ProcessingFormBuilder)
+```
+
+Sub-tab label under Work is **Queue** (not "Work"). Top-level mode label remains **Work**.
+
+### Product spine
+
+1. **Overview** — launch point for importing, resuming active work, or opening Studio assets.
+2. **Work → Queue** — folder-aware operational queue + document review.
+3. **Studio** — reusable assets: Forms (live), Packets / Fields / Branding (placeholders).
+4. **Builder** — canvas-first editor opened from Studio Forms; stays in-modal.
+
+Overview is not a dashboard. It answers: *What am I trying to accomplish?*
 
 The uploaded PDF is evidence. The generated native form is the source of truth.
 
 ### Work pipeline
 
-Import Form → Review Alloy's understanding → Generate native form → Builder.
-
-Digital Mailroom work **continues** into Studio Builder when a native form exists. The operator never leaves
-the modal for `/admin/forms`.
+Import Form → Review Alloy's understanding → Generate native form → Studio Builder.
 
 Review uses human language ("Where should this answer go?", "Store on Child"). Implementation
 labels stay under Advanced or off-screen.
@@ -62,29 +98,25 @@ Canvas-first interaction translated from Surface Builder:
 3. **Questions** — primary editable primitive (add via library modal)
 4. **Properties** — contextual inspector (360px, last)
 
-The legacy three-column list editor is not the Studio direction.
-
 Studio folders are configurable definitions with `id`, `label`, `description`, `order`, `accent`,
-`hidden`, and `system` behavior. Current defaults are starter folders only; tenant configuration
-should plug into the same shape.
+`hidden`, and `system` behavior. Current defaults are starter folders only.
 
 Intake prefill and embed doctrine: sprint closeouts in `docs/sprints/completed/`.
 
-### Work layout (frozen 2026-07-08)
+### Work layout (locked 2026-07-08)
 
-Work review for document imports uses three parent surfaces — no nested chrome inside them:
+Work review for document imports uses three parent surfaces:
 
-1. **Queue** (~22%) — folder-aware work list; Outlook-density rows
-2. **Source document** (~55%) — PDF or recognized regions (hero)
-3. **Review questions** (~23%) — grouped question resolution inspector
+1. **Queue** (~22%) — folder-aware work list
+2. **Source document** (~55%) — PDF or recognized regions (hero); scrollable multi-page
+3. **Review questions** (~23%) — question resolution inspector
 
-Shared panel chrome: `ProcessingParentPanel`. Folder icons: `ProcessingFolderIcon` (Work, Studio, Overview).
+Shared panel chrome: `ProcessingParentPanel`. Folder icons: `ProcessingFolderIcon`.
 
-Visual tokens: Midnight Forge, Bend Pine, Stone, White only in the Digital Mailroom shell.
+Visual tokens: Midnight Forge, Bend Pine, Stone, White in shell chrome.
 
-Navigation mirrors Communications via shared `OperationalWorkspaceModeNav` (Work | Studio → Overview | Queue). Queue column is separated from the review workspace by a vertical divider; review uses flat inspector rows with Bend Pine reserved for confidence and selection.
-
-**Freeze:** The Digital Mailroom modal shell is canonical. Further work (OCR, AI extraction, Packets, runtime, BOS, family experience) extends behavior **inside** this shell — not a redesign. See `docs/sprints/07_2026/processing-v1-productization-closeout.md`.
+**Lock:** Digital Mailroom V1 UI is approved and frozen. Extend behavior **inside** this shell only.
+See `docs/sprints/07_2026/processing-v1-lock-closeout.md`.
 
 ---
 
