@@ -486,8 +486,11 @@ export default function PosTemplateSetupColumn({
                         </div>
                     }
                 >
-                    <div className="min-h-0 flex-1 overflow-y-auto bg-alloy-stone/[0.02] p-1">
-                        <div className="h-full min-h-0">
+                    <div
+                        className={`min-h-0 flex-1 bg-alloy-stone/[0.02] p-2 ${
+                            leftView === "pdf" && pdfUrl ? "flex flex-col overflow-hidden" : "overflow-y-auto overscroll-y-contain"
+                        }`}
+                    >
                         {leftView === "highlights" ? (
                             hasRegions ? (
                                 <>
@@ -522,21 +525,16 @@ export default function PosTemplateSetupColumn({
                                 </div>
                             )
                         ) : pdfUrl ? (
-                            <object data={pdfUrl} type="application/pdf" className="h-full min-h-[28rem] w-full rounded border border-alloy-stone/15 bg-white">
-                                <iframe src={pdfUrl} title="Source PDF" className="h-full min-h-[28rem] w-full rounded border border-alloy-stone/15" />
-                                <div className="p-2 text-[11px] text-alloy-midnight/45">
-                                    Inline preview unavailable.{" "}
-                                    <a href={pdfUrl} target="_blank" rel="noopener noreferrer" className="text-alloy-bend-pine underline">
-                                        Open the PDF
-                                    </a>
-                                </div>
-                            </object>
+                            <iframe
+                                src={pdfUrl}
+                                title="Source PDF"
+                                className="min-h-0 flex-1 w-full rounded border border-alloy-stone/15 bg-white"
+                            />
                         ) : pdfErr ? (
                             <div className="text-[11px] text-alloy-midnight/40">{pdfErr}</div>
                         ) : (
-                            <div className="h-full min-h-[28rem] w-full animate-pulse rounded bg-alloy-stone/10" />
+                            <div className="h-64 w-full animate-pulse rounded bg-alloy-stone/10" />
                         )}
-                        </div>
                     </div>
                 </ProcessingParentPanel>
 

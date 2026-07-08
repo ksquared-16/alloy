@@ -31,7 +31,12 @@ import {
     CUSTOM_SECTION_OPTION,
 } from "@/lib/adminV2/settings/surfaces/sectionCatalog";
 import { sortByNestedSectionOrder, moveSectionInNestedConfig, HOUSEHOLD_DEFAULT_SECTION_ORDER } from "@/lib/adminV2/settings/surfaces/nestedSurfaceSectionOrder";
-import { childrenRosterCollapsedFieldKeysFromNestedConfig } from "@/lib/adminV2/runtime/focusPanel/children/childrenNestedSurfaceConfig";
+import {
+    CHILDREN_FOCUS_GROUP_KEYS,
+    childrenEvidenceSectionsFromNestedConfig,
+    childrenFocusRowsFromNestedConfig,
+    childrenRosterCollapsedFieldKeysFromNestedConfig,
+} from "@/lib/adminV2/runtime/focusPanel/children/childrenNestedSurfaceConfig";
 import { defaultNavigationTarget, resolveNavigationTarget } from "@/lib/adminV2/settings/surfaces/nestedSurfaceNavigation";
 import { composedChildDisplayName } from "@/lib/adminV2/runtime/focusPanel/children/childIdentityCompose";
 import { buildHouseholdCardEvidence } from "@/lib/adminV2/runtime/focusPanel/household/buildHouseholdCardEvidence";
@@ -488,27 +493,45 @@ describe("Final Focus Panel Composer ship fixes", () => {
         expect(childrenRosterCollapsedFieldKeysFromNestedConfig(config)).toEqual([]);
     });
 
-    it("keeps Children drill-in runtime-shaped while exposing selected-region field controls", () => {
+    it("keeps Children drill-in runtime-shaped with discoverable focus/evidence tiers", () => {
         expect(childrenCard).toContain("ComposableRegionShell");
         expect(childrenCard).toContain('groupKey="roster"');
-        expect(childrenCard).toContain('groupKey="placement"');
-        expect(childrenCard).toContain('groupKey="identity"');
-        expect(childrenCard).toContain("RegionEditLayer");
+        expect(childrenCard).toContain("data-children-focus-tier");
+        expect(childrenCard).toContain("data-children-evidence-tier");
+        expect(childrenCard).toContain("Focus fields");
+        expect(childrenCard).toContain("Evidence sections");
+        expect(childrenCard).toContain("discoverable");
+        expect(childrenCard).toContain("childrenFocusRowsFromNestedConfig");
+        expect(childrenCard).toContain("childrenEvidenceSectionsFromNestedConfig");
         expect(childrenCard).toContain("whenRegionSelectedOnly");
-        expect(childrenCard).toContain("childrenRosterCollapsedFieldKeysFromNestedConfig");
-        expect(childrenCard).toContain("childFocusViewFromConfig(childrenSurfaceConfig)");
         expect(childrenCard).not.toContain("ChildEnrollmentEdit");
     });
 
-    it("gives elevated drill-ins workspace height with internal body scroll", () => {
+    it("maps children focus vs evidence config tiers", () => {
+        let config = defaultNestedSurfaceConfig(CHILDREN_SURFACE_ID);
+        config = addFieldToNestedGroup(config, "placement", "inquiry_child.program");
+        config = addFieldToNestedGroup(config, "identity", "child.nickname");
+        config = setNestedGroupEnabled(config, "medical", true, { sectionSemantic: "medical" });
+
+        const focusRows = childrenFocusRowsFromNestedConfig(config);
+        expect(focusRows.some((row) => row.groupKey === "placement" && row.fieldKey === "inquiry_child.program")).toBe(true);
+        expect(focusRows.some((row) => row.groupKey === "identity" && row.fieldKey === "child.nickname")).toBe(true);
+        expect(CHILDREN_FOCUS_GROUP_KEYS).toEqual(["identity", "placement", "readiness"]);
+
+        const evidence = childrenEvidenceSectionsFromNestedConfig(config);
+        expect(evidence.some((section) => section.key === "medical")).toBe(true);
+        expect(evidence.every((section) => !CHILDREN_FOCUS_GROUP_KEYS.includes(section.key as (typeof CHILDREN_FOCUS_GROUP_KEYS)[number]))).toBe(true);
+    });
+
+    it("uses adaptive elevated drill-in height with internal body scroll", () => {
         expect(runtimeCss).toContain("[data-fp-composer-edit-mode=\"true\"]");
-        expect(runtimeCss).toContain("min-height: min(70vh, calc(100dvh - 64px))");
-        expect(runtimeCss).toContain("max-height: min(80vh, calc(100dvh - 48px))");
+        expect(runtimeCss).toContain("height: max-content");
+        expect(runtimeCss).toContain("max-height: min(75vh, calc(100dvh - 48px))");
+        expect(runtimeCss).not.toContain("min-height: min(70vh");
         expect(runtimeCss).not.toContain("min-height: min(70vh, calc(100% - 32px))");
         expect(runtimeCss).toContain(".alloy-os-ucard__body");
         expect(runtimeCss).toContain("overflow-y: auto");
         expect(runtimeCss).toContain("width: min(560px, calc(100% - 32px));");
-        expect(runtimeCss).toContain(".fp-composable-field__grip");
-        expect(runtimeCss).toContain(".fp-composable-region.is-selected");
+        expect(runtimeCss).toContain(".fp-composer-tier-label");
     });
 });
