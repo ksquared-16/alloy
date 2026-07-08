@@ -100,17 +100,6 @@ export function householdContactDirty(draft: PersonContactValues, baseline: Pers
     return CONTACT_FIELDS.some((key) => draft[key].trim() !== baseline[key].trim());
 }
 
-/** Dirty check honoring a published field policy (editable keys only). */
-export function householdContactDirtyForPolicy(
-    draft: PersonContactValues,
-    baseline: PersonContactValues,
-    editableKeys: ReadonlySet<keyof PersonContactValues>,
-): boolean {
-    return CONTACT_FIELDS.some(
-        (key) => editableKeys.has(key) && draft[key].trim() !== baseline[key].trim(),
-    );
-}
-
 /** Build the PATCH body from changed fields only; empty string → null. Pure. */
 export function householdContactPatch(
     draft: PersonContactValues,

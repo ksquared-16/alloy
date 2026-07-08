@@ -40,7 +40,7 @@ export default function FocusPanelSummaryEditBar({ onExit, onUndo, canUndo = fal
                 Working copy
             </span>
 
-            <span className="config-typo-sublabel">Hover a card to arrange · select a card to inspect</span>
+            <span className="config-typo-sublabel">Select a card to configure · hover for layout handles</span>
 
             <div className="ml-auto flex items-center gap-2">
                 {onUndo ?

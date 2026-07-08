@@ -44,6 +44,8 @@ export type OpportunityFocusPanelHeaderProps = {
     primaryHeaderAction?: ResolvedActionForClient | null;
     onPrimaryHeaderAction?: (action: ResolvedActionForClient) => void;
     primaryActionLoading?: boolean;
+    /** Composer preview — match runtime header without dismiss control. */
+    hideClose?: boolean;
 };
 
 export default function OpportunityFocusPanelHeader({
@@ -64,6 +66,7 @@ export default function OpportunityFocusPanelHeader({
     actionPreflightBlocked,
     onDismissActionPreflightBlocked,
     registryActionFeedback,
+    hideClose = false,
 }: OpportunityFocusPanelHeaderProps) {
     const subjectManageActions = useMemo(
         () => buildSubjectManageMenuFromResolvedActions(displayVm.actions.header_menu),
@@ -124,6 +127,7 @@ export default function OpportunityFocusPanelHeader({
             activeMode={activeMode}
             onModeChange={onModeChange}
             onClose={onClose}
+            hideClose={hideClose}
         />
     );
 }

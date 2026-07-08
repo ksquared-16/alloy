@@ -263,3 +263,225 @@ and the card re-renders from refreshed truth.
 Canonical doc: [`universal-nested-surface-drill-in.md`](./universal-nested-surface-drill-in.md).
 
 This supersedes the earlier "Expansion never creates a new surface" invariant: **Expanded = Open Surface** (a nested Surface via `openSurfaceId`), per [`experience-builder-v3-universal-surface-composition.md`](./experience-builder-v3-universal-surface-composition.md) §3.
+
+---
+
+## Surface Composer V3 — runtime edit mode (July 2026)
+
+> **The Surface Composer is not a builder. It is the runtime placed into an "Edit
+> Layout" mode.** Editing happens where the field renders; the operator edits the
+> product itself, not an abstraction of it.
+
+### Mental model
+
+Like Figma / Notion / Google Docs: the runtime stays visible and editable at all times,
+editing tools appear exactly where the operator is working, and the right inspector is
+**secondary** — card metadata only (Question · Conditions · Actions · AI · Behavior). There
+is no "runtime left / configuration right" split; the runtime IS the editor.
+
+- **One render path.** Composer mode WRAPS the runtime (`FocusPanelCardRenderer`, the same
+  component `/work-unit` mounts) — it never recreates it. There is no duplicate composer
+  card renderer. Runtime parity is structural: a composer edit produces the same published
+  configuration model as a direct runtime edit.
+- **Inline field editing.** Fields are relabeled (presentation label, never the schema
+  name), reordered, added (`+ Add field` → shared library), and given a per-field behavior
+  (**Editable / Read-only / Hidden**) directly on the runtime surface via
+  `InlineRuntimeFieldList`. Hidden fields do not render at runtime.
+- **Subtle affordances.** Hover outlines, fade-in grips/nudges, inline rename and behavior
+  pills. No builder chrome competes with the runtime; the "editing the product" illusion is
+  preserved.
+
+### The six distinctions (what the operator may change)
+
+| Layer | Meaning | Operator control |
+|-------|---------|------------------|
+| **Runtime structure** | The fixed anatomy of the surface (Core Four, rows, depth model). | Fixed — not editable in the composer. |
+| **Configurable sections** | Named, semantic sections added via **Add Section**. | Add / remove / relabel. Semantic identity preserved. |
+| **Configurable fields** | Fields inside a region. | Relabel · reorder · add · behavior (Editable/Read-only/Hidden). |
+| **Domain-locked regions** | Regions a domain owns (marked `Domain-locked`). | Read-only structure; fields may still show. |
+| **Evidence surfaces** | History / archive (e.g. *View all evidence*, related reports). | Browsed, not operated. Never competes with operational info. |
+| **Operational surfaces** | The fields/actions the operator works with daily. | Primary; actions live next to the field they affect. |
+
+### Add Section flow
+
+`+ Add section` offers **platform-defined sections** with stable semantic identities
+(preserved for future BOS/AI understanding) plus one **Custom Section** escape hatch:
+
+- Emergency Contact · Authorized Pickup · Billing Contact · Emergency Medical · Custom Notes
+- Custom Section — operator-named, carries a stable `custom` semantic.
+
+Catalog: `web/lib/adminV2/settings/surfaces/sectionCatalog.ts`. Sections map to optional
+evidence groups on the registered surface spec; no new storage — enablement + semantic +
+optional custom label persist on the nested-surface group config
+(`nestedSurfaceEditorModel.ts`).
+
+### Consistent field composition
+
+Every configurable region exposes the **same** editing affordances. Additional Contacts
+has field-composition parity with Primary Contact; both resolve fields per group through the
+same `renderContactFields` / `InlineRuntimeFieldList` path.
+
+### Child detail — one Edit mode + contextual History
+
+**One Edit** in the card footer enters operational edit mode (not scattered per-field
+edit buttons). **History →** sits beside Program / Room / Teacher — contextual, not a
+dedicated Related Views section. Schedule keeps its pill presentation; **Edit →** on the
+times row opens an inline start/end editor (no modal). **View all evidence** is a quiet
+bottom-right archive entry point.
+
+### Activity preload
+
+Whenever the Focus Panel opens, Activity-mode metadata prewarms in the background
+(`useFocusPanelModePrewarm` → `prewarmFocusPanelActivityMode`: comms, documents, activity
+timeline; notes ship on VM) so Work ↔ Activity switching is instant — no spinner, no layout
+shift. Sanctioned idle prefetch only; never changes a reveal gate.
+
+### Invariants (V3)
+
+- Composer wraps the runtime; no second render path; runtime ↔ composer parity holds.
+- Presentation labels never mutate schema keys.
+- Field behavior is Editable / Read-only / Hidden; Hidden hides at runtime.
+- Sections are semantic, platform-owned identities (+ one custom escape hatch); structure
+  stays fixed.
+- Evidence never competes with operational information.
+- Prefetch/preload is allowed; reveal gates are not touched.
+- No new runtime architecture — this is the runtime in "Edit Layout" mode.
+
+**Code:** `InlineRuntimeFieldList.tsx` · `AddSectionMenu.tsx` · `ComposableRegionShell.tsx` ·
+`FocusPanelDrillInInspector.tsx` (metadata-only) · `sectionCatalog.ts` ·
+`nestedSurfaceFieldPolicy.ts` · `nestedSurfaceEditorModel.ts`.
+Tests: `web/tests/adminV2/runtime/focusPanelDrillInComposition.test.ts`.
+
+---
+
+## Surface Composer V3.5 — operational surface completion (July 2026)
+
+> **The Focus Panel is not a collection of cards — it is operational surfaces connected
+> together.** Every level is another runtime surface; the composer configures those surfaces.
+
+### Navigation hierarchy
+
+```
+Runtime Surface (Focus Panel)
+  ↓ Nested Runtime Surface (Household · Children · Child detail)
+    ↓ Evidence Surface (Documents · Medical · Pickup · Notes …)
+      ↓ Operational Surface (Program · Room · Schedule · placement truth)
+        ↓ Composition Mode / Edit Mode (inline field + section authoring)
+```
+
+### Section reordering
+
+Sections inside a nested surface are **first-class and reorderable** (`moveSectionInNestedConfig`,
+persisted on `NestedSurfaceConfig.groups` order). Household sections (Primary Contact, Children,
+Emergency Contacts, Additional Contacts, …) can be reordered without invalidating structure.
+`InlineSectionControls` provides up/down affordances in Edit Mode.
+
+### Evidence as configurable surface
+
+Evidence is no longer a hardcoded expanded overlay. **Evidence sections** (Documents, Medical,
+Pickup, Communications, Notes, Nickname, Custom) are optional, add/remove/reorder/publish via
+the same nested-surface model as operational sections. Platform-owned evidence types keep stable
+semantics. **View all evidence** is the archive entry point (bottom-right); operational fields
+answer "what matters now?"
+
+### Child identity composition
+
+Child identity is composed from presentation fields (First Name, Last Name, Preferred Name,
+Nickname, Age, DOB) — never a single immutable "Child Name" schema field. The runtime identity
+block renders from configured fields (`childIdentityCompose.ts`); schema keys stay hidden from
+operators.
+
+### One Edit mode
+
+A **single Edit →** affordance enters edit/composition mode. Within Edit Mode: fields are
+draggable, labels editable, display policies editable, sections reorderable, add field / add
+section enabled. The runtime stays visually intact. In Settings, drill-in **is** Edit Mode
+(`isEditMode` on `FocusPanelComposerProvider`).
+
+### Runtime linking
+
+Nested surfaces link through a platform navigation registry (`nestedSurfaceNavigation.ts`):
+Household → Children → Child detail → Evidence → Documents. Link targets are configurable per
+section; defaults map to registered surface ids.
+
+### Runtime source of truth
+
+The composer wraps **`FocusPanelCardRenderer`** — the same component `/work-unit` mounts.
+No duplicate presentation path. Published nested-surface config is consumed by runtime evidence
+builders (`buildHouseholdCardEvidence`, `ChildrenCard`, …) on the next render.
+
+### Definition of done (V3.5)
+
+The Surface Composer feels like editing the application itself: enter Edit Mode, navigate runtime
+surfaces, reorder sections and fields, relabel fields, configure policies, configure evidence
+surfaces, configure navigation links, publish — and the runtime immediately consumes those changes.
+One runtime · one renderer · one navigation hierarchy · one composition experience.
+
+**Code:** `nestedSurfaceSectionOrder.ts` · `nestedSurfaceNavigation.ts` ·
+`InlineSectionControls.tsx` · `childIdentityCompose.ts` · `focusPanelActivityPrewarm.ts` ·
+evidence section catalog in `sectionCatalog.ts`.
+
+---
+
+## Final Surface Composer Doctrine (July 2026)
+
+> **Runtime layouts are frozen.** The composer is an **overlay**, not another renderer.
+> Edit Mode reveals editing affordances only; the operator should feel like they are editing
+> the actual product.
+
+### Sacred runtime
+
+Do **not** redesign Household, Children, Child Detail, Activity, or Billing layouts in the
+composer. The runtime is the source of truth. Every change must preserve runtime presentation.
+
+### Edit Mode affordances
+
+When Edit Mode is active (Settings drill-in / `isEditMode`):
+
+- Fields become draggable (grip handles on runtime rows)
+- Labels become editable
+- Display policy becomes editable
+- Sections become reorderable
+- **Add field** and **Add section** appear
+- The runtime itself stays visually unchanged except for these affordances
+
+### Overlay rules
+
+- Do **not** replace operational layouts with configuration layouts
+- Do **not** expose implementation concepts, evidence architecture, or presentation plumbing
+- Do **not** show a separate compose preview row that duplicates runtime structure
+- Edit-layer controls (`InlineRuntimeFieldList` with `suppressPreview`) appear **below**
+  runtime rows only when their region is selected
+- **One Edit mode** — no scattered Set/Edit links on individual fields (footer `Edit →` for
+  operational edit; schedule inline edit only inside operational edit preview)
+- **History** stays attached to operational fields; no Related Views section
+- **View all evidence** remains the single archive doorway (bottom-right)
+- Evidence sections keep runtime empty states; field configuration is an edit-layer overlay
+- Composer header omits the Focus Panel close control (`hideClose`) — title, icon, and pills
+  align with runtime
+
+### Definition of done
+
+A side-by-side screenshot of runtime and composer should show the **same layout**. The only
+acceptable differences are editing affordances (grips, section controls, add field/section,
+edit-layer chrome on selected regions).
+
+**Code:** `RegionEditLayer` · `ComposableFieldShell` · `InlineRuntimeFieldList` (`suppressPreview`,
+`whenRegionSelectedOnly`) · `FocusPanelCompactHeader` (`hideClose`).
+
+### Ship closeout additions (July 2026)
+
+- **Runtime is source of truth.** Composer is overlay/edit mode only — fixed structure +
+  configurable fields/sections; side-by-side parity required before ship.
+- **Child edit remains staging-owned.** Runtime edit uses `ChildFocusEdit` →
+  `FocusPanelMutation.saveInquiryChild` (existing identity + participation paths). Do not
+  invent a parallel child edit component. Domain-locked fields must not fake editability.
+- **Empty enabled sections must be actionable.** Emergency Contacts shows
+  `Add emergency contact →` and opens the existing relationship modal — never a dead `0`.
+- **Household section pin rules:** Primary Contact pinned top; Other Parent / Guardian pinned
+  directly below when present; Additional / Emergency / Children reorderable (Children may
+  precede Emergency). Adding Emergency reconciles required groups — never wipes Primary /
+  Children.
+- **Date doctrine:** Focus Panel dates use `focusPanelDateDisplay.ts` (presentation date +
+  derived age). No raw ISO / MM/DD/YYYY on operator Focus Panel surfaces.
+- **Inline work-unit** header uses `hideClose` (composer and runtime). Queue Row stays frozen.

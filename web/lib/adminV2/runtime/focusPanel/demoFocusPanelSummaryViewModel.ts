@@ -221,6 +221,23 @@ export function buildDemoFocusPanelSummaryViewModel(): {
                 "person.secondary_contact_name": "Taylor Johnson",
                 "person.secondary_phone": "(555) 987-6543",
                 "person.secondary_email": "taylor.johnson@example.com",
+                primary_person_id: "demo-p-1",
+                _opportunity_persons: [
+                    {
+                        person_id: "demo-p-2",
+                        role_type: "parent",
+                        name: "Taylor Johnson",
+                        phone: "(555) 987-6543",
+                        email: "taylor.johnson@example.com",
+                    },
+                    {
+                        person_id: "demo-p-emergency",
+                        role_type: "emergency_contact",
+                        name: "Sam Rivera",
+                        phone: "(555) 444-0199",
+                        email: "sam.rivera@example.com",
+                    },
+                ],
                 // Children collection — multiple siblings (related list, not flattened).
                 _inquiry_children: [
                     {
