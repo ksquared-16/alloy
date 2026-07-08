@@ -97,15 +97,13 @@ describe("drawerFamilyWorkspacePrefetchCache", () => {
         expect(getDrawerFamilyWorkspaceWarm(smsParams)).toBeNull();
     });
 
-    it("scheduleDeferredDrawerFamilyWorkspacePrefetch dedupes arm per entity", async () => {
-        vi.useFakeTimers();
-        const { scheduleDeferredDrawerFamilyWorkspacePrefetch } = await import(
+    it("prefetchActiveDrawerFamilyWorkspace starts fetch immediately without idle defer", async () => {
+        const { prefetchActiveDrawerFamilyWorkspace } = await import(
             "@/lib/communications/v2/drawerFamilyWorkspacePrefetchCache"
         );
-        scheduleDeferredDrawerFamilyWorkspacePrefetch("opportunities", "opp-1");
-        scheduleDeferredDrawerFamilyWorkspacePrefetch("opportunities", "opp-1");
-        await vi.runAllTimersAsync();
+        prefetchActiveDrawerFamilyWorkspace("opportunities", "opp-1");
+        prefetchActiveDrawerFamilyWorkspace("opportunities", "opp-1");
+        await Promise.resolve();
         expect(fetchMock.mock.calls.filter((c) => String(c[0]).includes("/family-workspace"))).toHaveLength(1);
-        vi.useRealTimers();
     });
 });

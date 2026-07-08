@@ -4,6 +4,7 @@
  */
 import { isCommsV2FlagEnabled } from "@/lib/communications/v2/flags";
 import type { ComposerChannel, FamilyCommunicationWorkspaceVM } from "@/lib/communications/v2/familyWorkspace/types";
+import { markDrawerFamilyWorkspaceTiming } from "@/lib/communications/v2/drawerFamilyWorkspacePrefetchTiming";
 
 const CACHE_TTL_MS = 90_000;
 
@@ -22,7 +23,6 @@ type CacheEntry = {
 
 const cache = new Map<string, CacheEntry>();
 const inflight = new Map<string, Promise<FamilyCommunicationWorkspaceVM | null>>();
-const armedDeferredKeys = new Set<string>();
 const listeners = new Set<() => void>();
 
 function notify(): void {
@@ -103,12 +103,26 @@ async function fetchAndStore(
 ): Promise<FamilyCommunicationWorkspaceVM | null> {
     const qs = buildFetchQuery(params);
     if (!qs) return null;
+    markDrawerFamilyWorkspaceTiming("prefetch_fetch_started", {
+        entity_id: params.entityId,
+        entity_type: params.entityType,
+        customer_id: params.customerId,
+        channel: params.composerChannel ?? "email",
+    });
+    const fetchStarted = typeof performance !== "undefined" ? performance.now() : Date.now();
     try {
         const res = await fetch(`/api/admin/communications/family-workspace?${qs}`, { credentials: "include" });
         const data = (await res.json().catch(() => ({}))) as {
             workspace?: FamilyCommunicationWorkspaceVM;
             error?: string;
         };
+        const fetchDone = typeof performance !== "undefined" ? performance.now() : Date.now();
+        markDrawerFamilyWorkspaceTiming("prefetch_fetch_done", {
+            entity_id: params.entityId,
+            entity_type: params.entityType,
+            ok: res.ok && Boolean(data.workspace),
+            fetch_ms: Math.round(fetchDone - fetchStarted),
+        });
         if (!res.ok || !data.workspace) return getDrawerFamilyWorkspaceWarm(params);
         const key = drawerFamilyWorkspaceCacheKey(params);
         if (key) {
@@ -117,6 +131,11 @@ async function fetchAndStore(
         }
         return data.workspace;
     } catch {
+        markDrawerFamilyWorkspaceTiming("prefetch_fetch_done", {
+            entity_id: params.entityId,
+            entity_type: params.entityType,
+            ok: false,
+        });
         return getDrawerFamilyWorkspaceWarm(params);
     }
 }
@@ -155,27 +174,11 @@ export function getDrawerFamilyWorkspaceInflight(
     return inflight.get(key) ?? null;
 }
 
-function deferAfterPaint(fn: () => void): void {
-    const scheduleIdle = (cb: () => void) => {
-        if (typeof window !== "undefined" && typeof window.requestIdleCallback === "function") {
-            window.requestIdleCallback(() => cb(), { timeout: 450 });
-        } else {
-            setTimeout(cb, 48);
-        }
-    };
-    if (typeof window !== "undefined" && typeof window.requestAnimationFrame === "function") {
-        window.requestAnimationFrame(() => scheduleIdle(fn));
-    } else {
-        scheduleIdle(fn);
-    }
-}
-
 /**
- * Arm family-workspace warm load when the Focus Panel drawer opens for the active record.
- * Deferred after paint (same cadence as legacy communications drawer prefetch).
- * Idempotent per entity + default composer channel while cache/inflight is warm.
+ * Start family-workspace prefetch immediately for the active Focus Panel record.
+ * Does not idle-defer — intended for the selected drawer entity only.
  */
-export function scheduleDeferredDrawerFamilyWorkspacePrefetch(
+export function prefetchActiveDrawerFamilyWorkspace(
     entityType: string,
     entityId: string,
     composerChannel: ComposerChannel = "email"
@@ -184,22 +187,21 @@ export function scheduleDeferredDrawerFamilyWorkspacePrefetch(
         return;
     }
     const params: DrawerFamilyWorkspacePrefetchParams = { entityType, entityId, composerChannel };
-    const key = drawerFamilyWorkspaceCacheKey(params);
-    if (!key) return;
     if (getDrawerFamilyWorkspaceWarm(params)) return;
-    if (inflight.has(key) || armedDeferredKeys.has(key)) return;
+    if (getDrawerFamilyWorkspaceInflight(params)) return;
 
-    armedDeferredKeys.add(key);
-    deferAfterPaint(() => {
-        armedDeferredKeys.delete(key);
-        void prefetchDrawerFamilyWorkspace(params);
+    markDrawerFamilyWorkspaceTiming("prefetch_scheduled", {
+        entity_type: entityType,
+        entity_id: entityId,
+        channel: composerChannel,
+        immediate: true,
     });
+    void prefetchDrawerFamilyWorkspace(params);
 }
 
 /** Test-only reset. */
 export function resetDrawerFamilyWorkspacePrefetchCacheForTests(): void {
     cache.clear();
     inflight.clear();
-    armedDeferredKeys.clear();
     listeners.clear();
 }

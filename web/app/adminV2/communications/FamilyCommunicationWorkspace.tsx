@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { computeCommunicationHealth } from "@/lib/communications/v2/communicationHealth";
 import { toggleRecipientSelection } from "@/lib/communications/v2/familyWorkspace/composerSelection";
 import type { ComposerChannel, FamilyCommunicationWorkspaceVM, TimelineEventVM } from "@/lib/communications/v2/familyWorkspace/types";
@@ -13,12 +13,13 @@ import {
     subscribeDrawerFamilyWorkspaceCache,
     type DrawerFamilyWorkspacePrefetchParams,
 } from "@/lib/communications/v2/drawerFamilyWorkspacePrefetchCache";
+import { markDrawerFamilyWorkspaceTiming } from "@/lib/communications/v2/drawerFamilyWorkspacePrefetchTiming";
 import {
     resolveWorkspaceModeAvailability,
     type WorkspaceMode,
 } from "@/lib/communications/v2/workspaceModeAvailability";
 import FamilyCommunicationWorkspaceView, { type WorkspaceTimelineMessage } from "@/app/adminV2/communications/FamilyCommunicationWorkspaceView";
-import { CommsActivityEmbedLoadingShell, CommsWorkspacePanelReserve } from "@/app/adminV2/communications/commsWorkspaceUi";
+import { CommsActivityEmbedHydratingShell, CommsWorkspacePanelReserve } from "@/app/adminV2/communications/commsWorkspaceUi";
 
 /**
  * UI-6 / UI-6.1 — drawer Family Communication Workspace (no queue). Thin container: fetches the VM by
@@ -90,6 +91,27 @@ export default function FamilyCommunicationWorkspace(props: {
     const [sendResult, setSendResult] = useState<FamilySendResult | null>(null);
     const [sendError, setSendError] = useState<string | null>(null);
     const [sending, setSending] = useState(false);
+    const mountedRef = useRef(false);
+
+    useEffect(() => {
+        if (mountedRef.current) return;
+        mountedRef.current = true;
+        markDrawerFamilyWorkspaceTiming("workspace_mounted", {
+            entity_type: props.entity?.entityType,
+            entity_id: props.entity?.entityId,
+            customer_id: props.customerId,
+            compact_activity: props.compactActivityLoading ?? false,
+        });
+        const params = resolvePrefetchParams(props, liveChannel, null);
+        markDrawerFamilyWorkspaceTiming(
+            params && getDrawerFamilyWorkspaceWarm(params) ? "warm_cache_hit" : "warm_cache_miss",
+            {
+                entity_type: props.entity?.entityType,
+                entity_id: props.entity?.entityId,
+                customer_id: props.customerId,
+            }
+        );
+    }, [liveChannel, props.customerId, props.entity?.entityType, props.entity?.entityId, props.compactActivityLoading]);
 
     const applyWorkspace = useCallback((workspace: FamilyCommunicationWorkspaceVM, resetSelection: boolean) => {
         setVm(workspace);
@@ -215,12 +237,24 @@ export default function FamilyCommunicationWorkspace(props: {
     const healthTone = health.engagementScore >= 66 ? "text-alloy-juniper" : health.engagementScore >= 33 ? "text-alloy-amber" : "text-red-600";
     const healthDot = health.engagementScore >= 66 ? "bg-alloy-juniper" : health.engagementScore >= 33 ? "bg-alloy-amber" : "bg-red-500";
 
-    if (loading && !vm) {
-        if (props.compactActivityLoading) return <CommsActivityEmbedLoadingShell />;
-        return <CommsWorkspacePanelReserve />;
-    }
     if (error && !vm) return <div className="p-4 text-xs text-alloy-ember">{error}</div>;
-    if (!vm) return <div className="p-4 text-xs text-alloy-midnight/45">No conversation.</div>;
+
+    if (!vm) {
+        if (props.compactActivityLoading) {
+            return (
+                <section
+                    data-cc-column="workspace"
+                    data-cc-drawer-workspace
+                    data-drawer-family-workspace-warm={servedFromWarmCache ? "true" : undefined}
+                    className="flex min-h-0 flex-col overflow-hidden"
+                >
+                    <CommsActivityEmbedHydratingShell joining={loading} />
+                </section>
+            );
+        }
+        if (loading) return <CommsWorkspacePanelReserve />;
+        return <div className="p-4 text-xs text-alloy-midnight/45">No conversation.</div>;
+    }
 
     const allRecipients = vm.recipientGroups.flatMap((g) => g.recipients);
     const childNames = vm.children.map((c) => (c.ageLabel ? `${c.name} (${c.ageLabel})` : c.name));

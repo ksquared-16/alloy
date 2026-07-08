@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import CommunicationsDrawerSection from "@/components/admin/communications/CommunicationsDrawerSection";
 import OpportunityDrawerVmTabPanes from "@/components/admin/vmDrawer/OpportunityDrawerVmTabPanes";
@@ -11,6 +11,7 @@ import type { ProofRuntimeRecord } from "@/lib/layout/runtime/proofRecordContext
 import type { OpportunityDrawerViewModel } from "@/lib/adminV2/viewModel/drawer/types";
 import type { DrawerTabKey } from "@/lib/entityPresentation";
 import { alloySectionDomAttrs } from "@/lib/perf/alloySectionMap";
+import { markDrawerFamilyWorkspaceTiming } from "@/lib/communications/v2/drawerFamilyWorkspacePrefetchTiming";
 
 type Props = {
     drawerId: string;
@@ -50,6 +51,10 @@ export default function OpportunityFocusPanelEmbeddedWorkspace({
     void _displayVm;
     const [workTab, setWorkTab] = useState<WorkTab>("items");
     const proofRecord = record as ProofRuntimeRecord;
+
+    useEffect(() => {
+        markDrawerFamilyWorkspaceTiming("activity_mounted", { entity_id: drawerId });
+    }, [drawerId]);
 
     const ribbonEntries = resolveLayoutRuntimeActivityTimeline({
         record: proofRecord,

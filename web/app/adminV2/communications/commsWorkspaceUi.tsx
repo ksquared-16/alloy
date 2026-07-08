@@ -148,6 +148,60 @@ export function CommsActivityEmbedLoadingShell({ label = "Loading communications
     );
 }
 
+/**
+ * Real communications chrome while family-workspace VM hydrates — header, mode tabs, empty copy,
+ * compact loader in the message area (not a large blank card).
+ */
+export function CommsActivityEmbedHydratingShell({
+    joining = true,
+    label = "Loading conversation…",
+}: {
+    joining?: boolean;
+    label?: string;
+}) {
+    return (
+        <div
+            className="flex min-h-0 flex-col overflow-hidden rounded-xl border border-alloy-stone/15 bg-white shadow-[0_1px_3px_rgba(15,23,42,0.05)]"
+            data-comms-activity-embed-hydrating-shell="true"
+            aria-busy={joining}
+            aria-label={joining ? label : "Communications"}
+        >
+            <div className={`${COMMS_WORKSPACE_NAV_CLASS} border-b border-alloy-stone/12`}>
+                <div className={COMMS_TAB_RAIL_CLASS} role="tablist" aria-label="Communication mode">
+                    <span className={COMMS_BEND_PINE_ACTIVE_TAB_CLASS} aria-current="true">
+                        Email
+                    </span>
+                    <span className={`${COMMS_TAB_INACTIVE_CLASS} opacity-70`} aria-disabled="true">
+                        SMS
+                    </span>
+                </div>
+            </div>
+            <div className={`${COMMS_WORKSPACE_EXECUTION_CLASS} min-h-[10rem]`}>
+                <div className={`${COMMS_EXECUTION_FRAME_CLASS} min-h-[8rem]`}>
+                    <div className="flex min-h-[7rem] flex-1 flex-col items-center justify-center gap-2 px-4 py-6 text-center">
+                        <p className="text-[13px] font-medium text-alloy-midnight/72">No communication yet</p>
+                        <p className="max-w-[18rem] text-[11px] leading-snug text-alloy-midnight/48">
+                            Message history and compose will appear here once this record loads.
+                        </p>
+                        {joining ? (
+                            <div
+                                className="mt-1 inline-flex items-center gap-2 text-[11px] text-alloy-midnight/55"
+                                data-comms-activity-inline-loader="true"
+                            >
+                                <span
+                                    className="inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-alloy-stone/25 border-t-alloy-juniper"
+                                    aria-hidden
+                                />
+                                {label}
+                            </div>
+                        ) : null}
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+}
+
 /** Compact inline reserve for compose / preview panels */
 export function CommsInlineListReserve({ rows = 2, label = "Loading content" }: { rows?: number; label?: string }) {
     return (

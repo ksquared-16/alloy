@@ -64,9 +64,9 @@ import { AlloyCanonicalLoadingSurface } from "@/lib/adminV2/runtime/alloyCanonic
 import OpportunityDrawerTabBackgroundLoader from "@/components/admin/vmDrawer/OpportunityDrawerTabBackgroundLoader";
 import { scheduleDeferredCommunicationsDrawerPrefetch } from "@/lib/admin/communications/communicationsDrawerPrefetch";
 import {
-    prefetchDrawerFamilyWorkspace,
-    scheduleDeferredDrawerFamilyWorkspacePrefetch,
+    prefetchActiveDrawerFamilyWorkspace,
 } from "@/lib/communications/v2/drawerFamilyWorkspacePrefetchCache";
+import { markDrawerFamilyWorkspaceTiming } from "@/lib/communications/v2/drawerFamilyWorkspacePrefetchTiming";
 import { isCommsV2FlagEnabled } from "@/lib/communications/v2/flags";
 import { prefetchLinkedPersonsFromOpportunityRecord } from "@/lib/admin/drawer/prefetchLinkedPersonsFromOpportunityRecord";
 import { scheduleOpportunityDrawerTabPrefetch } from "@/lib/admin/opportunityDrawerTabPrefetch";
@@ -129,9 +129,20 @@ export default function OpportunityDrawerVmRuntime() {
             onWorkUnitSurface: isWorkUnitQueueSurfacePath(pathname),
         });
     const focusPanelActive = useAlloyOsRuntimeSplitActive() || focusPanelSplitIntent;
-    const { mode: focusPanelMode, setMode: setFocusPanelMode } = useFocusPanelMode({
+    const { mode: focusPanelMode, setMode: setFocusPanelModeState } = useFocusPanelMode({
         subjectId: drawer.type === "opportunities" ? drawer.id : null,
     });
+    const setFocusPanelMode = useCallback(
+        (next: typeof focusPanelMode) => {
+            if (next === "activity") {
+                markDrawerFamilyWorkspaceTiming("activity_clicked", {
+                    entity_id: drawer.type === "opportunities" ? drawer.id : null,
+                });
+            }
+            setFocusPanelModeState(next);
+        },
+        [drawer.id, drawer.type, setFocusPanelModeState]
+    );
 
     const statusCanMutate = useMemo(
         () => resolveOpportunityVmStatusCanMutate(displayVm, authCanMutate),
@@ -311,6 +322,8 @@ export default function OpportunityDrawerVmRuntime() {
         drawerVmRender.type === "opportunities" && drawerVmRender.id ?
             String(drawerVmRender.id)
             : null;
+    const activeDrawerOpportunityId =
+        drawer.type === "opportunities" && drawer.id ? String(drawer.id) : null;
 
     const overviewLayoutBody = useDrawerLayoutRuntimeBody({
         cutoverEnabled: isLayoutRuntimeOpportunityDrawerBodyEnabledClient(),
@@ -325,8 +338,18 @@ export default function OpportunityDrawerVmRuntime() {
         if (!layoutPrefetchId) return;
         scheduleDeferredCommunicationsDrawerPrefetch("opportunities", layoutPrefetchId);
         scheduleOpportunityDrawerTabPrefetch(layoutPrefetchId);
-        scheduleDeferredDrawerFamilyWorkspacePrefetch("opportunities", layoutPrefetchId);
     }, [layoutPrefetchId]);
+
+    useLayoutEffect(() => {
+        if (!activeDrawerOpportunityId) return;
+        markDrawerFamilyWorkspaceTiming("row_selected", { entity_id: activeDrawerOpportunityId });
+        prefetchActiveDrawerFamilyWorkspace("opportunities", activeDrawerOpportunityId);
+    }, [activeDrawerOpportunityId]);
+
+    useEffect(() => {
+        if (!activeDrawerOpportunityId || !displayVm?.structureSettled) return;
+        markDrawerFamilyWorkspaceTiming("drawer_vm_ready", { entity_id: activeDrawerOpportunityId });
+    }, [activeDrawerOpportunityId, displayVm?.structureSettled]);
 
     // Focus Panel mode prewarm: active mode wins; non-active modes warm after idle. Activity
     // prefetches family-workspace for the V2 embed; legacy drawer prefetch stays for flag-off path.
@@ -344,11 +367,7 @@ export default function OpportunityDrawerVmRuntime() {
                         isCommsV2FlagEnabled("comms_v2_record_tab") &&
                         isCommsV2FlagEnabled("comms_v2_live_workspace")
                     ) {
-                        void prefetchDrawerFamilyWorkspace({
-                            entityType: "opportunities",
-                            entityId: layoutPrefetchId,
-                            composerChannel: "email",
-                        });
+                        prefetchActiveDrawerFamilyWorkspace("opportunities", layoutPrefetchId);
                     }
                 },
             }),
