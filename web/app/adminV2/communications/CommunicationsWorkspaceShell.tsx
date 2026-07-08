@@ -3,15 +3,13 @@
 import type { ReactNode } from "react";
 import { MessageSquare, Settings2 } from "lucide-react";
 
-import CommsModalTabBar from "@/app/adminV2/communications/CommsModalTabBar";
 import CommunicationsWorkspaceKpiStrip from "@/app/adminV2/communications/CommunicationsWorkspaceKpiStrip";
-import AlloyModeSwitch from "@/components/workspace/AlloyModeSwitch";
+import OperationalWorkspaceModeNav from "@/app/adminV2/components/OperationalWorkspaceModeNav";
 import OperationalModalHeader from "@/app/adminV2/components/OperationalModalHeader";
 import {
     COMMS_PRIMARY_BTN_CLASS,
     COMMS_SECONDARY_BTN_CLASS,
     COMMS_WORKSPACE_EXECUTION_CLASS,
-    COMMS_WORKSPACE_NAV_CLASS,
 } from "@/app/adminV2/communications/commsWorkspaceUi";
 import {
     COMMUNICATIONS_MODES,
@@ -54,7 +52,6 @@ export default function CommunicationsWorkspaceShell({
         <div
             className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-alloy-stone/20 bg-white"
             data-comms-workspace-shell="true"
-            data-comms-modal-version="workspace-inc2c"
         >
             <OperationalModalHeader
                 icon={<MessageSquare className="h-4 w-4" aria-hidden strokeWidth={2} />}
@@ -78,28 +75,19 @@ export default function CommunicationsWorkspaceShell({
 
             <CommunicationsWorkspaceKpiStrip activeTab={activeTab} />
 
-            <nav className={COMMS_WORKSPACE_NAV_CLASS} data-comms-workspace-nav="true" aria-label="Communications views">
-                {/* Primary level — Work / Studio mode. */}
-                <AlloyModeSwitch
-                    modes={COMMUNICATIONS_MODES}
-                    active={mode}
-                    onChange={onModeChange}
-                    ariaLabel="Communications mode"
-                />
-                {/* Child level — sections inside the active mode (subordinate to the mode).
-                    Underline tab strip sitting on a hairline baseline so it reads as attached
-                    to the mode context, not floating pills. */}
-                <div
-                    className="mt-1.5 flex flex-wrap items-end justify-between gap-x-4 gap-y-1 border-b border-alloy-stone/15"
-                    data-comms-mode-sections="true"
-                >
-                    <CommsModalTabBar
-                        tabs={modeTabs}
-                        activeKey={activeTab}
-                        onSelect={onTabChange}
-                        aria-label={mode === "studio" ? "Studio sections" : "Work sections"}
-                    />
-                    {mode === "studio" ? (
+            <OperationalWorkspaceModeNav
+                modes={COMMUNICATIONS_MODES}
+                activeMode={mode}
+                onModeChange={onModeChange}
+                modeAriaLabel="Communications mode"
+                sectionTabs={modeTabs}
+                activeSection={activeTab}
+                onSectionChange={onTabChange}
+                sectionAriaLabel={mode === "studio" ? "Studio sections" : "Work sections"}
+                navDataAttr="comms"
+                sectionsDataAttr="comms"
+                sectionTrailing={
+                    mode === "studio" ? (
                         <a
                             href="/adminV2/settings/communications"
                             className={`${COMMS_SECONDARY_BTN_CLASS} mb-1.5 inline-flex items-center gap-1.5 !px-2.5 !py-1 text-[11px]`}
@@ -108,9 +96,9 @@ export default function CommunicationsWorkspaceShell({
                             <Settings2 className="h-3.5 w-3.5" aria-hidden strokeWidth={2} />
                             Channels, signatures &amp; rules
                         </a>
-                    ) : null}
-                </div>
-            </nav>
+                    ) : null
+                }
+            />
 
             <div className={COMMS_WORKSPACE_EXECUTION_CLASS} data-comms-workspace-execution="true">
                 {children}

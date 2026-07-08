@@ -89,14 +89,14 @@ export function ProcessingQuestionReviewList({
 
     return (
         <>
-            <p className="mb-2 text-[10px] font-medium text-alloy-midnight/45">
+            <p className="mb-1.5 text-[9px] font-medium text-alloy-midnight/40">
                 {activeCount} active question{activeCount === 1 ? "" : "s"}
                 {questions.length > activeCount ? ` · ${questions.length - activeCount} ignored` : ""}
             </p>
-            <div className="space-y-3">
+            <div className="divide-y divide-alloy-stone/10">
                 {sections.map((section) => (
-                    <section key={section.title}>
-                        <div className="mb-1.5 flex items-baseline justify-between gap-2 px-0.5">
+                    <section key={section.title} className="py-2 first:pt-0 last:pb-0">
+                        <div className="mb-1 flex items-baseline justify-between gap-2">
                             <h3 className="text-[9px] font-semibold uppercase tracking-[0.1em] text-alloy-midnight/35">
                                 {section.title}
                             </h3>
@@ -104,7 +104,7 @@ export function ProcessingQuestionReviewList({
                                 {section.questions.filter((q) => !q.ignored).length}
                             </span>
                         </div>
-                        <ol className="space-y-1.5">
+                        <ol className="divide-y divide-alloy-stone/[0.08]">
                             {section.questions.map((q) => {
                                 const sel = selectedId === q.id;
                                 const isEditing = editingId === q.id;
@@ -121,22 +121,18 @@ export function ProcessingQuestionReviewList({
                                         key={q.id}
                                         data-testid={`review-question-${q.id}`}
                                         data-question-ignored={q.ignored ? "true" : undefined}
-                                        className={`rounded-lg border px-2 py-2 transition-colors ${
-                                            sel
-                                                ? "border-alloy-bend-pine/30 bg-alloy-bend-pine/[0.04]"
-                                                : "border-alloy-stone/12 bg-alloy-stone/[0.02]"
-                                        } ${q.ignored ? "opacity-60" : ""}`}
+                                        className={`py-1.5 transition-colors ${sel ? "bg-alloy-stone/[0.03]" : ""} ${q.ignored ? "opacity-55" : ""}`}
                                     >
-                                        <div className="flex items-start gap-1.5">
+                                        <div className="flex items-start gap-1">
                                             <button
                                                 type="button"
                                                 onClick={() => onSelect(sel ? null : q.id)}
-                                                className="flex min-w-0 flex-1 flex-col gap-0.5 text-left"
+                                                className="flex min-w-0 flex-1 flex-col gap-px text-left"
                                             >
                                                 <span className="text-[9px] text-alloy-midnight/40">
                                                     {q.evidenceLabel || "Untitled source field"}
                                                 </span>
-                                                <span className="text-[12px] font-semibold leading-snug text-alloy-midnight">
+                                                <span className="text-[11px] font-semibold leading-snug text-alloy-midnight">
                                                     {q.displayLabel || (
                                                         <span className="font-normal text-alloy-midnight/35">Untitled question</span>
                                                     )}
@@ -204,9 +200,9 @@ export function ProcessingQuestionReviewList({
                                         </div>
 
                                         {!q.ignored && sel ? (
-                                            <div className="mt-2 space-y-2 border-t border-alloy-stone/10 pt-2">
+                                            <div className="mt-1.5 space-y-1.5 border-t border-alloy-stone/[0.08] pt-1.5">
                                                 <div>
-                                                    <label className="mb-1 block text-[9px] font-semibold uppercase tracking-wide text-alloy-midnight/40">
+                                                    <label className="mb-0.5 block text-[9px] font-semibold uppercase tracking-wide text-alloy-midnight/40">
                                                         Destination
                                                     </label>
                                                     <select
@@ -218,7 +214,7 @@ export function ProcessingQuestionReviewList({
                                                                 field_source: undefined,
                                                             })
                                                         }
-                                                        className="w-full rounded-md border border-alloy-stone/20 bg-white px-2 py-1.5 text-[11px] text-alloy-midnight focus:border-alloy-bend-pine/40 focus:outline-none"
+                                                        className="w-full rounded border border-alloy-stone/20 bg-white px-2 py-1 text-[10px] text-alloy-midnight focus:border-alloy-bend-pine/40 focus:outline-none"
                                                     >
                                                         {QUESTION_SUBJECT_OPTIONS.map((o) => (
                                                             <option key={o.value} value={o.value}>
@@ -229,7 +225,7 @@ export function ProcessingQuestionReviewList({
                                                 </div>
                                                 {showNameRep ? (
                                                     <div>
-                                                        <label className="mb-1 block text-[9px] font-semibold uppercase tracking-wide text-alloy-midnight/40">
+                                                        <label className="mb-0.5 block text-[9px] font-semibold uppercase tracking-wide text-alloy-midnight/40">
                                                             Name format
                                                         </label>
                                                         <div className="flex flex-wrap gap-1">
@@ -248,8 +244,8 @@ export function ProcessingQuestionReviewList({
                                                                         }
                                                                         className={`rounded px-1.5 py-0.5 text-[9px] font-medium ${
                                                                             active
-                                                                                ? "bg-alloy-bend-pine/[0.1] text-alloy-bend-pine"
-                                                                                : "text-alloy-midnight/50 hover:bg-alloy-stone/30"
+                                                                                ? "text-alloy-bend-pine underline decoration-alloy-bend-pine/40 underline-offset-2"
+                                                                                : "text-alloy-midnight/50 hover:text-alloy-midnight/70"
                                                                         }`}
                                                                     >
                                                                         {o.label}
@@ -267,18 +263,18 @@ export function ProcessingQuestionReviewList({
                                         ) : null}
 
                                         {isEditing && !q.ignored ? (
-                                            <div className="mt-2 space-y-1.5 border-t border-alloy-stone/10 pt-2">
+                                            <div className="mt-1.5 space-y-1 border-t border-alloy-stone/[0.08] pt-1.5">
                                                 <input
                                                     value={q.displayLabel}
                                                     onChange={(e) => onUpdate(q.id, { displayLabel: e.target.value })}
                                                     placeholder="Display label"
-                                                    className="w-full rounded-md border border-alloy-stone/20 bg-white px-2 py-1 text-[11px] focus:border-alloy-bend-pine/40 focus:outline-none"
+                                                    className="w-full rounded border border-alloy-stone/20 bg-white px-2 py-1 text-[10px] focus:border-alloy-bend-pine/40 focus:outline-none"
                                                 />
                                                 <input
                                                     value={q.section}
                                                     onChange={(e) => onUpdate(q.id, { section: e.target.value })}
                                                     placeholder="Section"
-                                                    className="w-full rounded-md border border-alloy-stone/20 bg-white px-2 py-1 text-[10px] focus:border-alloy-bend-pine/40 focus:outline-none"
+                                                    className="w-full rounded border border-alloy-stone/20 bg-white px-2 py-1 text-[9px] focus:border-alloy-bend-pine/40 focus:outline-none"
                                                 />
                                             </div>
                                         ) : null}
