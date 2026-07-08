@@ -50,7 +50,7 @@ export default function OperationalWorkspaceModeNav<M extends string, S extends 
                 <AlloyModeSwitch modes={modes} active={activeMode} onChange={onModeChange} ariaLabel={modeAriaLabel} />
             </div>
             <div
-                className="flex flex-wrap items-end justify-between gap-x-4 gap-y-1 border-b border-alloy-stone/15 pt-2"
+                className="flex flex-wrap items-end justify-between gap-x-4 gap-y-1 border-b border-alloy-stone/20 pt-2 pb-0"
                 data-workspace-mode-sections={sectionsDataAttr ?? "true"}
             >
                 <CommsModalTabBar

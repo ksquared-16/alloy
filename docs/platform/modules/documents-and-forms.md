@@ -82,9 +82,9 @@ Shared panel chrome: `ProcessingParentPanel`. Folder icons: `ProcessingFolderIco
 
 Visual tokens: Midnight Forge, Bend Pine, Stone, White only in the Digital Mailroom shell.
 
-Navigation mirrors Communications via shared `OperationalWorkspaceModeNav` (Work | Studio → Overview | Queue). Queue column is separated from the review workspace by a vertical divider; review uses flat inspector rows with Bend Pine reserved for confidence and selection.
+Navigation mirrors Communications via shared `OperationalWorkspaceModeNav` (Work | Studio → Overview | Queue).
 
-**Freeze:** The Digital Mailroom modal shell is canonical. Further work (OCR, AI extraction, Packets, runtime, BOS, family experience) extends behavior **inside** this shell — not a redesign. See `docs/sprints/07_2026/processing-v1-productization-closeout.md`.
+**Freeze:** The Digital Mailroom modal shell is canonical. Further work (OCR, AI extraction, Packets, runtime, BOS, family experience) extends behavior **inside** this shell — not a redesign. See `docs/sprints/07_2026/processing-v1-freeze-closeout.md`.
 
 ---
 

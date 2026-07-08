@@ -89,15 +89,23 @@ export function ProcessingQuestionReviewList({
 
     return (
         <>
-            <p className="mb-1 text-[9px] text-alloy-midnight/40">
-                {activeCount} active · {questions.length} total
+            <p className="mb-1.5 text-[9px] font-medium text-alloy-midnight/40">
+                {activeCount} active question{activeCount === 1 ? "" : "s"}
+                {questions.length > activeCount ? ` · ${questions.length - activeCount} ignored` : ""}
             </p>
-            <div>
-                {sections.map((section, sectionIndex) => (
-                    <section key={section.title} className={sectionIndex > 0 ? "mt-2 border-t border-alloy-stone/10 pt-2" : ""}>
-                        <h3 className="mb-1 text-[10px] font-medium text-alloy-midnight/50">{section.title}</h3>
-                        <ol>
-                            {section.questions.map((q, qIndex) => {
+            <div className="divide-y divide-alloy-stone/10">
+                {sections.map((section) => (
+                    <section key={section.title} className="py-2 first:pt-0 last:pb-0">
+                        <div className="mb-1 flex items-baseline justify-between gap-2">
+                            <h3 className="text-[9px] font-semibold uppercase tracking-[0.1em] text-alloy-midnight/35">
+                                {section.title}
+                            </h3>
+                            <span className="text-[9px] tabular-nums text-alloy-midnight/30">
+                                {section.questions.filter((q) => !q.ignored).length}
+                            </span>
+                        </div>
+                        <ol className="divide-y divide-alloy-stone/[0.08]">
+                            {section.questions.map((q) => {
                                 const sel = selectedId === q.id;
                                 const isEditing = editingId === q.id;
                                 const mapped = typeof q.page === "number" && Array.isArray(q.bbox);
@@ -113,9 +121,7 @@ export function ProcessingQuestionReviewList({
                                         key={q.id}
                                         data-testid={`review-question-${q.id}`}
                                         data-question-ignored={q.ignored ? "true" : undefined}
-                                        className={`py-1.5 transition-colors ${
-                                            sel ? "border-l-2 border-l-alloy-bend-pine pl-1.5" : qIndex > 0 ? "border-t border-alloy-stone/[0.08]" : ""
-                                        } ${q.ignored ? "opacity-55" : ""}`}
+                                        className={`py-1.5 transition-colors ${sel ? "bg-alloy-stone/[0.03]" : ""} ${q.ignored ? "opacity-55" : ""}`}
                                     >
                                         <div className="flex items-start gap-1">
                                             <button
@@ -194,9 +200,9 @@ export function ProcessingQuestionReviewList({
                                         </div>
 
                                         {!q.ignored && sel ? (
-                                            <div className="mt-1 space-y-1.5 pt-1">
+                                            <div className="mt-1.5 space-y-1.5 border-t border-alloy-stone/[0.08] pt-1.5">
                                                 <div>
-                                                    <label className="mb-0.5 block text-[9px] font-medium text-alloy-midnight/45">
+                                                    <label className="mb-0.5 block text-[9px] font-semibold uppercase tracking-wide text-alloy-midnight/40">
                                                         Destination
                                                     </label>
                                                     <select
@@ -219,7 +225,7 @@ export function ProcessingQuestionReviewList({
                                                 </div>
                                                 {showNameRep ? (
                                                     <div>
-                                                        <label className="mb-0.5 block text-[9px] font-medium text-alloy-midnight/45">
+                                                        <label className="mb-0.5 block text-[9px] font-semibold uppercase tracking-wide text-alloy-midnight/40">
                                                             Name format
                                                         </label>
                                                         <div className="flex flex-wrap gap-1">
@@ -257,7 +263,7 @@ export function ProcessingQuestionReviewList({
                                         ) : null}
 
                                         {isEditing && !q.ignored ? (
-                                            <div className="mt-1 space-y-1 pt-1">
+                                            <div className="mt-1.5 space-y-1 border-t border-alloy-stone/[0.08] pt-1.5">
                                                 <input
                                                     value={q.displayLabel}
                                                     onChange={(e) => onUpdate(q.id, { displayLabel: e.target.value })}

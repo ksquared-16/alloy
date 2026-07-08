@@ -399,20 +399,22 @@ export default function PosTemplateSetupColumn({
 
     return (
         <div className="flex h-full min-h-0 flex-col bg-white">
-            <div className="shrink-0 border-b border-alloy-stone/12 bg-white px-2 py-0.5">
-                <ProcessingWorkflowStepper
-                    compact
-                    active={created ? "edit" : phase === "generate" ? "generate" : "review"}
-                />
-                <p className="mt-0.5 min-w-0 truncate text-[9px] text-alloy-midnight/50">
-                    <span className="font-medium text-alloy-midnight">{docTitle}</span>
-                    <span aria-hidden> · </span>
-                    {detectionModeLabel(draft)}
-                    <span aria-hidden> · </span>
-                    {activeFieldCount} question{activeFieldCount === 1 ? "" : "s"}
-                    <span aria-hidden> · </span>
-                    {quality === "strong" ? "Ready to generate" : "Needs review"}
-                </p>
+            <div className="shrink-0 border-b border-alloy-stone/10 bg-white px-2 py-1">
+                <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-0.5">
+                    <ProcessingWorkflowStepper
+                        compact
+                        active={created ? "edit" : phase === "generate" ? "generate" : "review"}
+                    />
+                    <p className="min-w-0 truncate text-[9px] text-alloy-midnight/45">
+                        <span className="font-medium text-alloy-midnight/70">{docTitle}</span>
+                        <span aria-hidden> · </span>
+                        {detectionModeLabel(draft)}
+                        <span aria-hidden> · </span>
+                        {activeFieldCount} question{activeFieldCount === 1 ? "" : "s"}
+                        <span aria-hidden> · </span>
+                        {quality === "strong" ? "Ready to generate" : "Needs review"}
+                    </p>
+                </div>
             </div>
 
             {phase === "generate" && !created ? (
@@ -459,19 +461,17 @@ export default function PosTemplateSetupColumn({
             <div className="flex min-h-0 flex-1 gap-2 overflow-hidden p-0">
                 <ProcessingParentPanel
                     title="Source document"
-                    className="min-w-0 flex-[55] rounded-none border-0 border-r border-alloy-stone/12 shadow-none"
+                    className="min-w-0 flex-[55]"
                     headerAction={
                         <div className="flex items-center gap-1.5">
-                            <div className="inline-flex gap-2">
+                            <div className="inline-flex rounded-md border border-alloy-stone/20 bg-white p-0.5">
                                 {(["highlights", "pdf"] as const).map((v) => (
                                     <button
                                         key={v}
                                         type="button"
                                         onClick={() => setLeftView(v)}
-                                        className={`text-[9px] font-semibold ${
-                                            leftView === v
-                                                ? "text-alloy-bend-pine underline decoration-alloy-bend-pine/40 underline-offset-2"
-                                                : "text-alloy-midnight/45 hover:text-alloy-midnight/70"
+                                        className={`rounded px-2 py-0.5 text-[9px] font-semibold ${
+                                            leftView === v ? "bg-alloy-bend-pine text-white" : "text-alloy-midnight/50 hover:text-alloy-midnight"
                                         }`}
                                     >
                                         {v === "pdf" ? "PDF" : "Regions"}
@@ -486,8 +486,11 @@ export default function PosTemplateSetupColumn({
                         </div>
                     }
                 >
-                    <div className="min-h-0 flex-1 overflow-y-auto bg-alloy-stone/[0.02] p-1">
-                        <div className="h-full min-h-0">
+                    <div
+                        className={`min-h-0 flex-1 bg-alloy-stone/[0.02] p-2 ${
+                            leftView === "pdf" && pdfUrl ? "flex flex-col overflow-hidden" : "overflow-y-auto overscroll-y-contain"
+                        }`}
+                    >
                         {leftView === "highlights" ? (
                             hasRegions ? (
                                 <>
@@ -522,27 +525,22 @@ export default function PosTemplateSetupColumn({
                                 </div>
                             )
                         ) : pdfUrl ? (
-                            <object data={pdfUrl} type="application/pdf" className="h-full min-h-[28rem] w-full rounded border border-alloy-stone/15 bg-white">
-                                <iframe src={pdfUrl} title="Source PDF" className="h-full min-h-[28rem] w-full rounded border border-alloy-stone/15" />
-                                <div className="p-2 text-[11px] text-alloy-midnight/45">
-                                    Inline preview unavailable.{" "}
-                                    <a href={pdfUrl} target="_blank" rel="noopener noreferrer" className="text-alloy-bend-pine underline">
-                                        Open the PDF
-                                    </a>
-                                </div>
-                            </object>
+                            <iframe
+                                src={pdfUrl}
+                                title="Source PDF"
+                                className="min-h-0 flex-1 w-full rounded border border-alloy-stone/15 bg-white"
+                            />
                         ) : pdfErr ? (
                             <div className="text-[11px] text-alloy-midnight/40">{pdfErr}</div>
                         ) : (
-                            <div className="h-full min-h-[28rem] w-full animate-pulse rounded bg-alloy-stone/10" />
+                            <div className="h-64 w-full animate-pulse rounded bg-alloy-stone/10" />
                         )}
-                        </div>
                     </div>
                 </ProcessingParentPanel>
 
                 <ProcessingParentPanel
                     title="Review questions"
-                    className="min-w-0 flex-[23] rounded-none border-0 shadow-none"
+                    className="min-w-0 flex-[23]"
                     headerAction={
                         <div className="flex gap-2">
                             {(["questions", "text"] as const).map((t) => (
