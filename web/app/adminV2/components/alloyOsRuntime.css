@@ -707,7 +707,11 @@ html[data-alloy-os-runtime-split="true"]
   [data-adminv2-record-modal-scroll] {
   display: flex;
   flex-direction: column;
-  overflow: hidden;
+  overflow: hidden !important;
+  flex: 1 1 auto;
+  min-height: 0;
+  padding-top: 8px;
+  padding-bottom: 8px;
 }
 
 html[data-alloy-os-runtime-split="true"]
@@ -716,11 +720,19 @@ html[data-alloy-os-runtime-split="true"]
   > div {
   flex: 1 1 auto;
   min-height: 0;
+  height: 100%;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
 }
 
 html[data-alloy-os-runtime-split="true"] .alloy-os-activity-cockpit {
+  flex: 1 1 auto;
+  min-height: 0;
+  height: auto;
+}
+
+html[data-alloy-os-runtime-split="true"] .alloy-os-activity-cockpit__body {
   flex: 1 1 auto;
   min-height: 0;
 }
@@ -1824,14 +1836,19 @@ html[data-alloy-os-runtime="on"]
 .alloy-os-activity-cockpit__body {
   flex: 1 1 auto;
   min-height: 0;
-  display: flex;
+  display: grid;
+  /* Communications hero ~72–75%; Work/Documents rail ~25–28% */
+  grid-template-columns: minmax(0, 1fr) minmax(220px, min(320px, 28vw));
+  grid-template-rows: minmax(0, 1fr);
   gap: 10px;
+  align-items: stretch;
+  overflow: hidden;
 }
 
 .alloy-os-activity-cockpit__comms {
-  flex: 0 0 64%;
   min-width: 0;
   min-height: 0;
+  height: 100%;
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -1860,31 +1877,46 @@ html[data-alloy-os-runtime="on"]
 
 .alloy-os-activity-cockpit__comms .alloy-os-activity-workspace__embed {
   flex: 1 1 auto;
-  height: auto;
   min-height: 0;
+  height: auto;
   max-height: none;
-  overflow: hidden; /* the two-pane workspace owns its own scroll — no page double-scroll */
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
 
-/* Communications hero fills its card: record-tab wrapper + workspace section stretch full height */
-.alloy-os-activity-cockpit__comms [data-cc-record-tab] {
+/* Communications hero fills its card: every wrapper in the embed chain stretches */
+.alloy-os-activity-cockpit__comms [data-cc-record-tab="communications"] {
   display: flex;
   flex-direction: column;
   flex: 1 1 auto;
   min-height: 0;
+  height: 100%;
+  overflow: hidden;
 }
 .alloy-os-activity-cockpit__comms [data-cc-drawer-workspace] {
   flex: 1 1 auto;
   min-height: 0;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.alloy-os-activity-cockpit__comms [data-cc-drawer-workspace] > [data-cc-surface-variant="activity_embed"] {
+  flex: 1 1 auto;
+  min-height: 0;
+  height: 100%;
+  overflow: hidden;
 }
 
 .alloy-os-activity-cockpit__stack {
-  flex: 1 1 auto;
   min-width: 0;
   min-height: 0;
+  height: 100%;
   display: flex;
   flex-direction: column;
   gap: 10px;
+  overflow: hidden;
 }
 
 .alloy-os-activity-cockpit__panel {
@@ -2047,17 +2079,26 @@ html[data-alloy-os-runtime="on"]
 .alloy-os-activity-cockpit__comms [data-cc-surface-variant="activity_embed"] {
   flex: 1 1 auto;
   min-height: 0;
+  height: 100%;
+  overflow: hidden;
 }
 .alloy-os-activity-cockpit__comms [data-cc-ws-column="threadlist"] {
   flex: 0 0 auto;
+  min-height: 0;
 }
 .alloy-os-activity-cockpit__comms [data-cc-ws-column="conversation"] {
   flex: 1 1 auto;
   min-height: 0;
+  overflow: hidden;
 }
 .alloy-os-activity-cockpit__comms [data-cc-ws-column="conversation"] > [data-cc-ws-section="timeline"] {
   flex: 1 1 auto;
   min-height: 0;
+  overflow: auto;
+}
+.alloy-os-activity-cockpit__comms [data-cc-ws-column="composer"] {
+  flex: 0 0 auto;
+  overflow: visible;
 }
 .alloy-os-activity-cockpit__comms [data-cc-surface-variant="activity_embed"] textarea[aria-label="Message body"] {
   min-height: 72px;
@@ -2117,10 +2158,10 @@ html[data-alloy-os-runtime="on"]
 
 @media (max-width: 900px) {
   .alloy-os-activity-cockpit__body {
-    flex-direction: column;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
   }
   .alloy-os-activity-cockpit__comms {
-    flex: 0 0 auto;
     min-height: min(360px, 46vh);
   }
 }

@@ -32,7 +32,14 @@ export default function RecordCommunicationsTab(props: {
     // Communication Workspace (same structure as the modal, no queue), scoped to this drawer.
     if (isCommsV2FlagEnabled("comms_v2_live_workspace") && props.entityType && props.entityId) {
         return (
-            <div data-cc-record-tab="communications" className="bg-white">
+            <div
+                data-cc-record-tab="communications"
+                className={
+                    props.surfaceVariant === "activity_embed"
+                        ? "flex h-full min-h-0 flex-1 flex-col overflow-hidden bg-white"
+                        : "bg-white"
+                }
+            >
                 <FamilyCommunicationWorkspace
                     entity={{ entityType: props.entityType, entityId: props.entityId }}
                     initialPreviewVm={props.initialPreviewVm}

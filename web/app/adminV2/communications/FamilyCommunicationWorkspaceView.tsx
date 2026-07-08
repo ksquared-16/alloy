@@ -578,7 +578,7 @@ export default function FamilyCommunicationWorkspaceView(props: FamilyCommunicat
     if (isActivityEmbed) {
         const activityThreadList = sortThreadsForStrip(threads);
         return (
-            <div data-cc-surface-variant={surfaceVariant} className="flex min-h-0 flex-1">
+            <div data-cc-surface-variant={surfaceVariant} className="flex h-full min-h-0 flex-1 overflow-hidden">
                 {/* THREAD LIST — recent conversations rollup (channel · count · timestamp) */}
                 <div
                     data-cc-ws-column="threadlist"

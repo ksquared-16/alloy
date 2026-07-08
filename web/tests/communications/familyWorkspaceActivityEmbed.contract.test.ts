@@ -36,9 +36,25 @@ describe("familyWorkspace activity_embed contract", () => {
         expect(view).toMatch(/onNewMessage\?\.\(\)/);
     });
 
+    it("Activity cockpit uses fill-height grid body and stretchable embed chain", () => {
+        const embedded = read("components/admin/focusPanel/OpportunityFocusPanelEmbeddedWorkspace.tsx");
+        const css = read("app/adminV2/components/alloyOsRuntime.css");
+        expect(embedded).toMatch(/data-activity-cockpit-embed="true"/);
+        expect(css).toMatch(/\.alloy-os-activity-cockpit__body[\s\S]*grid-template-columns/);
+        expect(css).toMatch(/grid-template-rows: minmax\(0, 1fr\)/);
+        expect(css).toMatch(/\.alloy-os-activity-cockpit__stack[\s\S]*height: 100%/);
+    });
+
     it("Recent Activity ribbon uses compact event count", () => {
         const embedded = read("components/admin/focusPanel/OpportunityFocusPanelEmbeddedWorkspace.tsx");
         expect(embedded).toMatch(/RIBBON_EVENT_COUNT = 3/);
+    });
+
+    it("activity embed record tab and workspace wrappers participate in flex height chain", () => {
+        const tab = read("app/adminV2/communications/recordTab/RecordCommunicationsTab.tsx");
+        const workspace = read("app/adminV2/communications/FamilyCommunicationWorkspace.tsx");
+        expect(tab).toMatch(/activity_embed[\s\S]*flex-1/);
+        expect(workspace).toMatch(/isActivityEmbed[\s\S]*flex-1/);
     });
 });
 

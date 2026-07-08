@@ -116,7 +116,11 @@ export default function OpportunityFocusPanelEmbeddedWorkspace({
                         </svg>
                         <span className="alloy-os-activity-cockpit__panel-title">Communications</span>
                     </header>
-                    <div className="alloy-os-activity-workspace__embed" data-embedded-workspace="communications">
+                    <div
+                        className="alloy-os-activity-workspace__embed flex min-h-0 flex-1 flex-col overflow-hidden"
+                        data-embedded-workspace="communications"
+                        data-activity-cockpit-embed="true"
+                    >
                         <CommunicationsDrawerSection
                             apiEntityType="opportunities"
                             entityId={drawerId}

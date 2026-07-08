@@ -340,7 +340,7 @@ export default function FamilyCommunicationWorkspace(props: {
             data-drawer-family-workspace-warm={servedFromWarmCache ? "true" : undefined}
             className={
                 isActivityEmbed
-                    ? "flex h-full min-h-0 flex-col overflow-hidden rounded-xl border border-alloy-stone/12 bg-white shadow-[0_1px_3px_rgba(20,30,25,0.05)]"
+                    ? "flex h-full min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-alloy-stone/12 bg-white shadow-[0_1px_3px_rgba(20,30,25,0.05)]"
                     : "flex h-full min-h-[520px] flex-col overflow-hidden rounded-2xl border border-alloy-stone/12 bg-white shadow-[0_1px_3px_rgba(20,30,25,0.05)]"
             }
         >
