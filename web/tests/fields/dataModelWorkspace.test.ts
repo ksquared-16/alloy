@@ -83,7 +83,8 @@ describe("Data Model workspace", () => {
     it("uses operator-facing entity labels without internal grains in rendered nav", () => {
         expect(adminFieldEntitySingularLabel({}, "inquiry_child")).toBe("Child");
         const navSrc = readFileSync(resolve(root, "components/admin/fields/FieldEntityNav.tsx"), "utf8");
-        expect(navSrc).toContain("Lead / Enrollment");
+        expect(navSrc).toContain("resolveConfigurationEntitySingularLabel");
+        expect(navSrc).toContain("configurationPrimaryHubEntities");
         expect(navSrc).toContain("All Entities");
         expect(navSrc).not.toContain("Inquiry child");
         expect(navSrc).not.toContain("placement_candidate");

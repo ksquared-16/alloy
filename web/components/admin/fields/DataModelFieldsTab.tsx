@@ -29,6 +29,12 @@ import {
     type SettingsHubEntityKey,
 } from "@/lib/fields/fieldCatalogForSettings";
 import { isOperatorHiddenField } from "@/lib/fields/fieldSettingsOperatorUi";
+import {
+    buildFieldLifecyclePatch,
+    readFieldLifecycleState,
+    type FieldDeleteSafetySummary,
+    type FieldLifecycleState,
+} from "@/lib/fields/fieldLifecycleModel";
 
 function toFieldDef(r: Record<string, unknown>): FieldDef {
     return {
@@ -91,6 +97,7 @@ export default function DataModelFieldsTab({
     const [rowError, setRowError] = useState<string | null>(null);
     const [createSaving, setCreateSaving] = useState(false);
     const [createError, setCreateError] = useState<string | null>(null);
+    const [deleteSafetyById, setDeleteSafetyById] = useState<Record<string, FieldDeleteSafetySummary>>({});
 
     useEffect(() => {
         setOwnershipFilter(initialOwnershipFilter);
@@ -173,6 +180,8 @@ export default function DataModelFieldsTab({
                 hubEntity,
                 entityTypes: hubEntityApiTypes(hubEntity),
                 customFields: visibleCustom,
+                includeHiddenCustom: true,
+                includeArchivedCustom: true,
             }),
         [hubEntity, visibleCustom],
     );
@@ -197,6 +206,8 @@ export default function DataModelFieldsTab({
         setRowSaving(true);
         setRowError(null);
         try {
+            const lifecycle = values.is_active ? "active" : readFieldLifecycleState(entry.fieldDef) === "archived" ? "archived" : "hidden";
+            const lifecyclePatch = buildFieldLifecyclePatch(lifecycle, entry.fieldDef);
             const res = await fetch(`/api/admin/field-definitions/${entry.fieldDef.id}`, {
                 method: "PATCH",
                 headers: { "Content-Type": "application/json" },
@@ -205,7 +216,7 @@ export default function DataModelFieldsTab({
                     description: values.description.trim() || null,
                     help_text: values.help_text.trim() || null,
                     section_key: values.category_key.trim() || "custom",
-                    is_active: values.is_active,
+                    ...lifecyclePatch,
                 }),
             });
             const json = await res.json().catch(() => ({}));
@@ -221,9 +232,50 @@ export default function DataModelFieldsTab({
         }
     };
 
+    const applyLifecycle = async (entry: SettingsFieldCatalogEntry, state: FieldLifecycleState) => {
+        if (!entry.fieldDef || !canMutate) return;
+        setRowSaving(true);
+        setRowError(null);
+        try {
+            const patch = buildFieldLifecyclePatch(state, entry.fieldDef);
+            const res = await fetch(`/api/admin/field-definitions/${entry.fieldDef.id}`, {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(patch),
+            });
+            const json = await res.json().catch(() => ({}));
+            if (!res.ok) throw new Error((json as { error?: string }).error ?? "Lifecycle update failed");
+            await fetchItems();
+        } catch (e) {
+            setRowError((e as Error).message);
+        } finally {
+            setRowSaving(false);
+        }
+    };
+
+    const loadDeleteSafety = async (entry: SettingsFieldCatalogEntry) => {
+        if (!entry.fieldDef || entry.ownership !== "custom") return;
+        try {
+            const res = await fetch(`/api/admin/field-definitions/${entry.fieldDef.id}/delete-safety`);
+            const json = await res.json().catch(() => ({}));
+            if (!res.ok) return;
+            setDeleteSafetyById((prev) => ({
+                ...prev,
+                [entry.fieldDef!.id]: json as FieldDeleteSafetySummary,
+            }));
+        } catch {
+            // non-blocking
+        }
+    };
+
     const deleteField = async (entry: SettingsFieldCatalogEntry) => {
         if (!entry.fieldDef || entry.fieldDef.is_system || !canMutate) return;
-        if (!window.confirm(`Delete "${entry.label}"? Stored values for this field will be removed.`)) {
+        const safety = deleteSafetyById[entry.fieldDef.id];
+        if (safety && !safety.safe) {
+            setRowError(safety.blockers.map((b) => b.label).join(" "));
+            return;
+        }
+        if (!window.confirm(`Delete "${entry.label}"? This cannot be undone.`)) {
             return;
         }
         setRowSaving(true);
@@ -231,7 +283,15 @@ export default function DataModelFieldsTab({
         try {
             const res = await fetch(`/api/admin/field-definitions/${entry.fieldDef.id}`, { method: "DELETE" });
             const json = await res.json().catch(() => ({}));
-            if (!res.ok) throw new Error((json as { error?: string }).error ?? "Delete failed");
+            if (!res.ok) {
+                const safety = (json as { safety?: FieldDeleteSafetySummary }).safety;
+                if (safety?.blockers?.length) {
+                    setRowError(safety.blockers.map((b) => b.label).join(" "));
+                } else {
+                    throw new Error((json as { error?: string }).error ?? "Delete failed");
+                }
+                return;
+            }
             setExpandedRefKey(null);
             await fetchItems();
         } catch (e) {
@@ -365,6 +425,7 @@ export default function DataModelFieldsTab({
                                             setCreating(false);
                                             setExpandedRefKey(entry.refKey);
                                             setRowError(null);
+                                            void loadDeleteSafety(entry);
                                         }}
                                         onCollapse={() => {
                                             setExpandedRefKey(null);
@@ -372,8 +433,12 @@ export default function DataModelFieldsTab({
                                         }}
                                         canMutate={canMutate}
                                         activeCategoryOptions={activeCategoryOptions}
+                                        deleteSafety={
+                                            entry.fieldDef ? deleteSafetyById[entry.fieldDef.id] ?? null : null
+                                        }
                                         saving={rowSaving && expandedRefKey === entry.refKey}
                                         error={expandedRefKey === entry.refKey ? rowError : null}
+                                        onLifecycle={(state) => applyLifecycle(entry, state)}
                                         onSave={(values) => saveEdit(entry, values)}
                                         onDelete={() => deleteField(entry)}
                                     />

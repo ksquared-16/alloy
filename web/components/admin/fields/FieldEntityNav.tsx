@@ -2,9 +2,11 @@
 
 import type { SettingsHubEntityKey } from "@/lib/fields/fieldCatalogForSettings";
 import { staticCatalogCountsForHubEntity, hubEntityApiTypes } from "@/lib/fields/fieldCatalogForSettings";
-import { adminFieldEntitySingularLabel } from "@/lib/admin/adminFieldEntityDisplayLabel";
+import {
+    configurationPrimaryHubEntities,
+    resolveConfigurationEntitySingularLabel,
+} from "@/lib/adminV2/configuration/configurationEntityCatalog";
 import { useEntityLabels } from "@/contexts/EntityLabelsContext";
-import { CHILDCARE_FIELDS_HUB_PRIMARY_ENTITIES } from "@/lib/fields/childcareFieldCatalogDoctrine";
 import { adminSettingsSubpathHref } from "@/lib/admin/canonicalAdminRoutes";
 import {
     DATA_MODEL_ENTITY_ICONS,
@@ -22,7 +24,7 @@ type Props = {
     totalFieldsByEntity?: Partial<Record<SettingsHubEntityKey, number>>;
 };
 
-const NAV_ENTITIES = CHILDCARE_FIELDS_HUB_PRIMARY_ENTITIES as readonly SettingsHubEntityKey[];
+const NAV_ENTITIES = configurationPrimaryHubEntities().map((e) => e.hubKey);
 
 export default function FieldEntityNav({ activeEntity, onSelect, totalFieldsByEntity = {} }: Props) {
     const { labels } = useEntityLabels();
@@ -42,8 +44,7 @@ export default function FieldEntityNav({ activeEntity, onSelect, totalFieldsByEn
                     const custom = totalFieldsByEntity[entity] ?? 0;
                     const totalFields = staticCounts.platform + staticCounts.computed + custom;
                     const active = activeEntity === entity;
-                    const label = adminFieldEntitySingularLabel(labels, entity);
-                    const displayLabel = entity === "opportunity" ? "Lead / Enrollment" : label;
+                    const label = resolveConfigurationEntitySingularLabel(labels, entity);
                     const Icon = DATA_MODEL_ENTITY_ICONS[entity];
                     return (
                         <button
@@ -72,7 +73,7 @@ export default function FieldEntityNav({ activeEntity, onSelect, totalFieldsByEn
                                         active ? "font-semibold text-alloy-midnight" : "font-medium",
                                     ].join(" ")}
                                 >
-                                    {displayLabel}
+                                    {label}
                                 </span>
                                 <span
                                     className="mt-0.5 block text-[10px] text-alloy-midnight/45"

@@ -52,9 +52,30 @@ Categories are reused across **Forms**, **Processing**, **Surface Builder**, **D
 
 ### Platform/system fields can be organized, not restructured
 
-Platform and system fields (`is_system` field definitions) are **presentation-editable**: operators may change the operator-facing **label**, **category**, and **description/help text** so platform fields organize alongside custom fields. Storage/source, field key, type, resolver, ownership, and delete stay **locked** — this is enforced both in the row (`fieldRowEditCapability`) and by the field-definition API (`FORBIDDEN_FOR_SYSTEM`).
+Platform and system fields (`is_system` field definitions) are **presentation-editable**: operators may change the operator-facing **label**, **category**, and **description/help text** so platform fields organize alongside custom fields. Storage/source, field key, type, resolver, ownership, archive, and delete stay **locked** — enforced in the row (`fieldRowEditCapability`, `fieldLifecycleActions`) and by the field-definition API (`FORBIDDEN_FOR_SYSTEM`, `is_active` blocked on system rows).
+
+Platform fields may be **Hidden** via visibility metadata (`is_visible_in_form`, `is_visible_in_drawer`, `is_visible_in_table`) when a persisted `field_definitions` row exists. Archive and delete are never available for platform fields.
 
 **Follow-up (not in scope for QA):** pure platform *catalog* fields that have no `field_definitions` row cannot yet persist a label/category override — there is no row to write to. Surfacing overrides for those requires a small materialize-on-edit step (or a metadata override layer) and should be scoped separately; it touches the field platform, not this doctrine.
+
+### Field lifecycle (Active · Hidden · Archived · Deleted)
+
+| State | Meaning | Custom | Platform (`is_system`) | Computed |
+| --- | --- | --- | --- | --- |
+| **Active** | Normal workflow; offered for new builder/form/process usage where capability allows | ✓ | ✓ | view-only |
+| **Hidden** | Not offered for new usage; existing stored data remains | ✓ (`is_active` + visibility) | ✓ (visibility flags only) | — |
+| **Archived** | Retired from normal workflow; excluded from pickers; historical data retained | ✓ (`config.lifecycle_state`) | — | — |
+| **Deleted** | Removed only when dependency checks pass | ✓ when safe | — | — |
+
+**Hidden** maps to `is_active: false` and cleared visibility flags for custom fields. **Archived** maps to `config.lifecycle_state: "archived"` plus inactive visibility. **Deleted** requires `GET /api/admin/field-definitions/[id]/delete-safety` and server-side guards (field values, forms, drawer layouts implemented; focus panel, queue rows, business processes, documents, processing documented as uncovered).
+
+Compact row actions: Hide · Show · Archive · Restore · Delete (when safe). Unsafe delete shows a short reason and offers Archive/Hidden instead. Confirm dialog only for destructive delete.
+
+### Entities workspace adopts Configuration Workspace Doctrine
+
+`/settings/entities` uses the same compact row grammar as Data Model. Entity labels, descriptions, and icons come from `configurationEntityCatalog.ts` — shared with the Data Model entity rail. Internal API grains (`inquiry_child`, `customer_member`, etc.) never appear in operator UI.
+
+Operator-facing hub names: Person · Family · Child · Lead / Enrollment · Location / Site.
 
 ---
 

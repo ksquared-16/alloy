@@ -20,6 +20,7 @@ import {
     type PlatformFieldDefinition,
 } from "@/lib/fields/platformFieldCatalog";
 import { operatorFieldDisplayLabel } from "@/lib/fields/fieldSettingsOperatorUi";
+import { readFieldLifecycleState } from "@/lib/fields/fieldLifecycleModel";
 
 export type SettingsHubEntityKey = ComputedFieldSettingsEntity;
 
@@ -134,6 +135,7 @@ export function buildSettingsFieldCatalogEntries(input: {
     entityTypes: readonly string[];
     customFields: readonly FieldDef[];
     includeHiddenCustom?: boolean;
+    includeArchivedCustom?: boolean;
 }): SettingsFieldCatalogEntry[] {
     const entries: SettingsFieldCatalogEntry[] = [];
     const seenRefKeys = new Set<string>();
@@ -156,7 +158,9 @@ export function buildSettingsFieldCatalogEntries(input: {
         if (!input.entityTypes.some((et) => et.trim().toLowerCase() === row.entity_type.trim().toLowerCase())) {
             continue;
         }
-        if (!input.includeHiddenCustom && row.is_active === false) continue;
+        const lifecycle = readFieldLifecycleState(row);
+        if (!input.includeArchivedCustom && lifecycle === "archived") continue;
+        if (!input.includeHiddenCustom && lifecycle === "hidden") continue;
         if (isPlatformNativeField(row.entity_type, row.field_key)) continue;
         const entry = customEntry(row.entity_type, row);
         if (seenRefKeys.has(entry.refKey)) continue;

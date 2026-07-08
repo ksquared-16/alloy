@@ -28,7 +28,7 @@ export default function DataModelEntityHeader({
     onAddField,
     onAddRelationship,
 }: Props) {
-    const displayLabel = hubEntity === "opportunity" ? "Lead / Enrollment" : entityLabel;
+    const displayLabel = entityLabel;
     const Icon = DATA_MODEL_ENTITY_ICONS[hubEntity];
     const [menuOpen, setMenuOpen] = useState(false);
     const menuRef = useRef<HTMLDivElement | null>(null);
