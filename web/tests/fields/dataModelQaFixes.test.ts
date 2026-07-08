@@ -154,6 +154,15 @@ describe("Data Model QA — archived categories", () => {
         expect(fieldRow).not.toContain("value={draft.category_key}");
         expect(createRow).toContain("activeCategoryOptions");
     });
+
+    it("Fields tab declares archivedKeys before sectionKeys filter (no TDZ crash)", () => {
+        const fieldsTab = readFileSync(resolve(root, "components/admin/fields/DataModelFieldsTab.tsx"), "utf8");
+        const archivedIdx = fieldsTab.indexOf("const archivedKeys = archivedCategoryKeys(categoryRegistry)");
+        const sectionIdx = fieldsTab.indexOf("const sectionKeys = orderedEntityCategoryKeys");
+        expect(archivedIdx).toBeGreaterThan(-1);
+        expect(sectionIdx).toBeGreaterThan(-1);
+        expect(archivedIdx).toBeLessThan(sectionIdx);
+    });
 });
 
 describe("Data Model QA — platform/system field organization overrides", () => {
