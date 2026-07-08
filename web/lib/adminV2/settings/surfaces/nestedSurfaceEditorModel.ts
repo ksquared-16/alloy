@@ -33,9 +33,51 @@ import { ensureRuntimeSurfacesRegistered } from "@/lib/platform/surfaceCompositi
 import { getSurface } from "@/lib/platform/surfaceComposition/surfaceRegistry";
 import { surfaceComponents } from "@/lib/platform/surfaceComposition/universalSurfaceModel";
 import type { TenantFieldDefinitionRow } from "@/lib/layout/tenantLayoutFieldPickerCatalog";
+import type { NestedSurfaceNavigationConfig } from "@/lib/adminV2/settings/surfaces/nestedSurfaceNavigation";
+import {
+    HOUSEHOLD_DEFAULT_SECTION_ORDER,
+    HOUSEHOLD_ALWAYS_ENABLED_KEYS,
+    orderNestedGroupsByCanonicalKeys,
+    enforceHouseholdPinnedSectionOrder,
+} from "@/lib/adminV2/settings/surfaces/nestedSurfaceSectionOrder";
+import {
+    defaultFieldVisibility,
+    normalizeFieldVisibility,
+    type SurfaceFieldVisibility,
+} from "@/lib/adminV2/settings/surfaces/nestedSurfaceFieldPolicy";
 
+export const HOUSEHOLD_SURFACE_ID = "household_surface";
 export const CHILDREN_SURFACE_ID = "children_surface";
 export const FINANCIAL_CONFIG_SURFACE_ID = "financial_configuration_surface";
+
+/**
+ * Groups an operator may add/remove as optional sections via the Add Section flow.
+ * Platform-defined section identities (semantics) live in `sectionCatalog.ts`; these are
+ * the group keys that stay hidden until the operator adds them.
+ */
+export const OPTIONAL_NESTED_GROUP_KEYS: Partial<Record<string, readonly string[]>> = {
+    [HOUSEHOLD_SURFACE_ID]: [
+        "emergency_contacts",
+        "authorized_pickups",
+        "billing_contact",
+        "emergency_medical",
+        "custom_notes",
+    ],
+    [CHILDREN_SURFACE_ID]: [
+        "medical",
+        "documents",
+        "pickup",
+        "communications",
+        "notes",
+        "nickname",
+        "custom_notes",
+    ],
+};
+
+/** Domain-locked groups — visible in runtime but not configurable in the composer. */
+export const DOMAIN_LOCKED_NESTED_GROUP_KEYS: Partial<Record<string, readonly string[]>> = {
+    [FINANCIAL_CONFIG_SURFACE_ID]: ["billing_periods", "line_items"],
+};
 
 export function isNestedSurfaceId(id: string): boolean {
     ensureRuntimeSurfacesRegistered();
@@ -55,13 +97,30 @@ export type NestedSurfaceGroupDef = {
 export type NestedSurfaceGroupConfig = {
     key: string;
     selectedFieldKeys: string[];
+    /** Optional sections (e.g. emergency_contacts) — false hides until operator adds the section. */
+    enabled?: boolean;
+    /** Legacy runtime field modes (displayed/editable) — kept for drill-in runtime parity. */
     displayOptions?: NestedSurfaceGroupDisplayOptions;
     fieldModes?: Record<string, NestedSurfaceFieldMode>;
+    /** Per-field editable / read-only / hidden policy. */
+    fieldPolicies?: Record<string, SurfaceFieldVisibility>;
+    /** Operator-facing presentation labels (never schema names). */
+    fieldLabels?: Record<string, string>;
+    /**
+     * Stable semantic identity for an operator-added section (from the platform section
+     * catalog). Preserved so future BOS/AI understand what the section MEANS even after
+     * the operator relabels it. Fixed structural groups leave this undefined.
+     */
+    sectionSemantic?: string;
+    /** Operator-chosen section label (custom sections); overrides the registry label. */
+    sectionLabel?: string;
 };
 
 export type NestedSurfaceConfig = {
     surfaceId: string;
     groups: NestedSurfaceGroupConfig[];
+    /** Per-section navigation link overrides (nested surface → nested surface). */
+    navigation?: NestedSurfaceNavigationConfig;
 };
 
 function namespacesForEvidenceGroup(
@@ -102,24 +161,33 @@ export function nestedSurfaceLabel(surfaceId: string): string {
     return getSurface(surfaceId)?.label ?? surfaceId;
 }
 
-/** Seed a default config (each group selects its default real fields + display/mode seeds). */
+function defaultGroupEnabled(surfaceId: string, groupKey: string): boolean {
+    const optional = OPTIONAL_NESTED_GROUP_KEYS[surfaceId] ?? [];
+    if (optional.includes(groupKey)) return false;
+    return true;
+}
+
+/** Seed a default config (each group selects its default real fields). */
 export function defaultNestedSurfaceConfig(surfaceId: string): NestedSurfaceConfig {
-    return {
-        surfaceId,
-        groups: groupDefsFor(surfaceId).map((g) => ({
-            key: g.key,
-            selectedFieldKeys: [...g.defaultFieldKeys],
-            displayOptions: defaultGroupDisplayOptionsForSurface(surfaceId, g.key),
-            fieldModes: defaultFieldModesForSurfaceGroup(surfaceId, g.key, g.defaultFieldKeys),
-        })),
-    };
+    let groups = groupDefsFor(surfaceId).map((g) => ({
+        key: g.key,
+        selectedFieldKeys:
+            g.key === "roster" && surfaceId === CHILDREN_SURFACE_ID ? [] : [...g.defaultFieldKeys],
+        enabled: defaultGroupEnabled(surfaceId, g.key),
+        displayOptions: defaultGroupDisplayOptionsForSurface(surfaceId, g.key),
+        fieldModes: defaultFieldModesForSurfaceGroup(surfaceId, g.key, g.defaultFieldKeys),
+    }));
+    if (surfaceId === HOUSEHOLD_SURFACE_ID) {
+        groups = orderNestedGroupsByCanonicalKeys(groups, HOUSEHOLD_DEFAULT_SECTION_ORDER);
+    }
+    return { surfaceId, groups };
 }
 
 function defaultGroupDisplayOptionsForSurface(
     surfaceId: string,
     groupKey: string,
 ): NestedSurfaceGroupDisplayOptions | undefined {
-    if (surfaceId === "household_surface") {
+    if (surfaceId === HOUSEHOLD_SURFACE_ID) {
         return defaultHouseholdGroupDisplayOptions(groupKey);
     }
     if (surfaceId === "child_surface" && groupKey === "identity") {
@@ -203,22 +271,196 @@ export function moveFieldInNestedGroup(config: NestedSurfaceConfig, groupKey: st
     });
 }
 
+export function setFieldVisibilityInNestedGroup(
+    config: NestedSurfaceConfig,
+    groupKey: string,
+    fieldKey: string,
+    visibility: SurfaceFieldVisibility,
+): NestedSurfaceConfig {
+    return {
+        ...config,
+        groups: config.groups.map((g) =>
+            g.key === groupKey
+                ? {
+                      ...g,
+                      fieldPolicies: { ...(g.fieldPolicies ?? {}), [fieldKey]: visibility },
+                  }
+                : g,
+        ),
+    };
+}
+
+export function fieldVisibilityForNestedGroup(
+    config: NestedSurfaceConfig,
+    groupKey: string,
+    fieldKey: string,
+): SurfaceFieldVisibility {
+    const group = config.groups.find((g) => g.key === groupKey);
+    const stored = group?.fieldPolicies?.[fieldKey];
+    if (stored) return normalizeFieldVisibility(stored);
+    return defaultFieldVisibility(config.surfaceId, groupKey);
+}
+
+export function fieldPresentationLabel(
+    config: NestedSurfaceConfig,
+    groupKey: string,
+    fieldKey: string,
+    catalogLabel: string,
+): string {
+    const custom = config.groups.find((g) => g.key === groupKey)?.fieldLabels?.[fieldKey];
+    return custom?.trim() || catalogLabel;
+}
+
+export function setFieldPresentationLabel(
+    config: NestedSurfaceConfig,
+    groupKey: string,
+    fieldKey: string,
+    label: string,
+): NestedSurfaceConfig {
+    return {
+        ...config,
+        groups: config.groups.map((g) =>
+            g.key === groupKey
+                ? {
+                      ...g,
+                      fieldLabels: { ...(g.fieldLabels ?? {}), [fieldKey]: label },
+                  }
+                : g,
+        ),
+    };
+}
+
+export function isNestedGroupEnabled(config: NestedSurfaceConfig, groupKey: string): boolean {
+    const group = config.groups.find((g) => g.key === groupKey);
+    if (!group) return false;
+    return group.enabled !== false;
+}
+
+export function setNestedGroupEnabled(
+    config: NestedSurfaceConfig,
+    groupKey: string,
+    enabled: boolean,
+    options?: { sectionSemantic?: string; sectionLabel?: string },
+): NestedSurfaceConfig {
+    const exists = config.groups.some((g) => g.key === groupKey);
+    if (!exists) {
+        const def = groupDefsFor(config.surfaceId).find((g) => g.key === groupKey);
+        if (!def) return config;
+        return {
+            ...config,
+            groups: [
+                ...config.groups,
+                {
+                    key: groupKey,
+                    selectedFieldKeys: [...def.defaultFieldKeys],
+                    enabled,
+                    displayOptions: defaultGroupDisplayOptionsForSurface(config.surfaceId, groupKey),
+                    fieldModes: defaultFieldModesForSurfaceGroup(
+                        config.surfaceId,
+                        groupKey,
+                        def.defaultFieldKeys,
+                    ),
+                    sectionSemantic: options?.sectionSemantic,
+                    sectionLabel: options?.sectionLabel,
+                },
+            ],
+        };
+    }
+    return {
+        ...config,
+        groups: config.groups.map((g) =>
+            g.key === groupKey
+                ? {
+                      ...g,
+                      enabled,
+                      sectionSemantic: options?.sectionSemantic ?? g.sectionSemantic,
+                      sectionLabel: options?.sectionLabel ?? g.sectionLabel,
+                  }
+                : g,
+        ),
+    };
+}
+
+/** Operator-facing label for a section group (custom section label wins over registry). */
+export function nestedGroupLabel(config: NestedSurfaceConfig, groupKey: string): string | null {
+    const group = config.groups.find((g) => g.key === groupKey);
+    if (group?.sectionLabel?.trim()) return group.sectionLabel.trim();
+    return groupDefsFor(config.surfaceId).find((g) => g.key === groupKey)?.label ?? null;
+}
+
+export function isDomainLockedGroup(surfaceId: string, groupKey: string): boolean {
+    return (DOMAIN_LOCKED_NESTED_GROUP_KEYS[surfaceId] ?? []).includes(groupKey);
+}
+
+export function isOptionalNestedGroup(surfaceId: string, groupKey: string): boolean {
+    return (OPTIONAL_NESTED_GROUP_KEYS[surfaceId] ?? []).includes(groupKey);
+}
+
+/** Evidence sections on a nested surface (configurable archive regions). */
+export function isEvidenceSection(surfaceId: string, groupKey: string): boolean {
+    if (surfaceId !== CHILDREN_SURFACE_ID) return false;
+    return (OPTIONAL_NESTED_GROUP_KEYS[CHILDREN_SURFACE_ID] ?? []).includes(groupKey);
+}
+
+/** Enabled evidence sections in persisted order. */
+export function enabledEvidenceSections(config: NestedSurfaceConfig): NestedSurfaceGroupConfig[] {
+    return config.groups.filter(
+        (g) => isEvidenceSection(config.surfaceId, g.key) && isNestedGroupEnabled(config, g.key),
+    );
+}
+
 /** Merge a loaded config with the current registry (adds new groups, drops stale). */
 export function reconcileNestedSurfaceConfig(surfaceId: string, loaded: NestedSurfaceConfig | null): NestedSurfaceConfig {
     const base = defaultNestedSurfaceConfig(surfaceId);
     if (!loaded) return base;
+    const mergedGroups = base.groups.map((g) => {
+        const found = loaded.groups.find((lg) => lg.key === g.key);
+        if (!found) return g;
+        const fieldPolicies = found.fieldPolicies
+            ? Object.fromEntries(
+                  Object.entries(found.fieldPolicies).map(([k, v]) => [k, normalizeFieldVisibility(v)]),
+              )
+            : undefined;
+        return {
+            key: g.key,
+            selectedFieldKeys: [...found.selectedFieldKeys],
+            enabled: found.enabled ?? defaultGroupEnabled(surfaceId, g.key),
+            displayOptions: found.displayOptions ?? g.displayOptions,
+            fieldModes: found.fieldModes ?? g.fieldModes,
+            fieldPolicies,
+            fieldLabels: found.fieldLabels ? { ...found.fieldLabels } : undefined,
+            sectionSemantic: found.sectionSemantic,
+            sectionLabel: found.sectionLabel,
+        };
+    });
+
+    // Preserve operator-authored section order from loaded config; unknown keys use canonical order.
+    const orderIndex = new Map(loaded.groups.map((g, i) => [g.key, i]));
+    const canonicalFallback =
+        surfaceId === HOUSEHOLD_SURFACE_ID
+            ? new Map(HOUSEHOLD_DEFAULT_SECTION_ORDER.map((k, i) => [k, i]))
+            : new Map(base.groups.map((g, i) => [g.key, i]));
+    mergedGroups.sort((a, b) => {
+        const ai = orderIndex.get(a.key) ?? canonicalFallback.get(a.key) ?? 999;
+        const bi = orderIndex.get(b.key) ?? canonicalFallback.get(b.key) ?? 999;
+        return ai - bi;
+    });
+
+    let groupsOut = mergedGroups;
+    if (surfaceId === HOUSEHOLD_SURFACE_ID) {
+        groupsOut = enforceHouseholdPinnedSectionOrder(
+            groupsOut.map((g) => ({
+                ...g,
+                enabled: (HOUSEHOLD_ALWAYS_ENABLED_KEYS as readonly string[]).includes(g.key)
+                    ? true
+                    : g.enabled,
+            })),
+        );
+    }
+
     return {
         surfaceId,
-        groups: base.groups.map((g) => {
-            const found = loaded.groups.find((lg) => lg.key === g.key);
-            return found
-                ? {
-                      key: g.key,
-                      selectedFieldKeys: [...found.selectedFieldKeys],
-                      displayOptions: found.displayOptions ?? g.displayOptions,
-                      fieldModes: found.fieldModes ?? g.fieldModes,
-                  }
-                : g;
-        }),
+        groups: groupsOut,
+        navigation: loaded.navigation ? { ...loaded.navigation } : undefined,
     };
 }

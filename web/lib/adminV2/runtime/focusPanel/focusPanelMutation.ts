@@ -40,6 +40,7 @@ import {
     ADMINV2_OPEN_TOUR_SCHEDULE_MODAL,
     postTourBookingAction,
 } from "@/lib/tours/actions/tourBookingActionClient";
+import { dispatchOpenRelationshipActionModal } from "@/lib/admin/relationship/relationshipActionClient";
 
 /** Primary-contact/person fields editable on the Household card (V1). */
 export type PersonContactValues = {
@@ -82,6 +83,8 @@ export type FocusPanelMutation = {
         patch: ChildFocusSavePatch;
         identityBaseline: InquiryChildIdentityPatch;
     }) => Promise<FocusPanelSaveResult>;
+    /** Open the existing add-emergency-contact relationship modal. */
+    openAddEmergencyContact: () => void;
     /** Tour status actions — present whenever a tour booking row exists and can be acted on. */
     tour: FocusPanelTourMutation;
     /** Communications actions — present for all opportunities. */
@@ -317,6 +320,13 @@ export function buildOpportunityFocusPanelMutation(input: BuildFocusPanelMutatio
                 record: merged,
             });
             return { ok: true };
+        },
+        openAddEmergencyContact: () => {
+            dispatchOpenRelationshipActionModal({
+                action_key: "add_emergency_contact",
+                opportunity_id: opportunityId,
+                source_surface: "opportunity_drawer",
+            });
         },
         tour: {
             cancelTour: async (bookingId) => {

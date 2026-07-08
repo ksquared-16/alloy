@@ -151,6 +151,8 @@ type Props = {
     onDuplicate?: () => void;
     onRemove?: () => void;
     history: HistoryInfo;
+    /** Drill-in mode: hide presentation/evidence field authoring — those live inline on the runtime. */
+    metadataOnly?: boolean;
 };
 
 const FIELD = "config-runtime-input";
@@ -166,8 +168,16 @@ export default function FocusPanelCardInspector({
     onDuplicate,
     onRemove,
     history,
+    metadataOnly = false,
 }: Props) {
-    const [tab, setTab] = useState<InspectorTab>("question");
+    const visibleTabs = useMemo(
+        () =>
+            metadataOnly
+                ? (["question", "conditions", "actions", "ai", "behavior"] as const)
+                : INSPECTOR_TABS,
+        [metadataOnly],
+    );
+    const [tab, setTab] = useState<InspectorTab>(metadataOnly ? "question" : "question");
     const reference = getFocusPanelCardReference(baseModel.key);
 
     const appearance = config.appearance ?? {};
@@ -275,7 +285,7 @@ export default function FocusPanelCardInspector({
             </header>
 
             <div role="tablist" aria-label="Card inspector" className="flex flex-wrap gap-1 border-b border-alloy-stone/30 px-3 py-2">
-                {INSPECTOR_TABS.map((t) => {
+                {visibleTabs.map((t) => {
                     const active = t === tab;
                     return (
                         <button

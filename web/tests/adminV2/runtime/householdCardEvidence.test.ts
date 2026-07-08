@@ -4,6 +4,13 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 
 import { buildHouseholdCardEvidence } from "@/lib/adminV2/runtime/focusPanel/household/buildHouseholdCardEvidence";
+import {
+    defaultNestedSurfaceConfig,
+    HOUSEHOLD_SURFACE_ID,
+    reconcileNestedSurfaceConfig,
+    setNestedGroupEnabled,
+} from "@/lib/adminV2/settings/surfaces/nestedSurfaceEditorModel";
+import { moveSectionInNestedConfig } from "@/lib/adminV2/settings/surfaces/nestedSurfaceSectionOrder";
 import type { OperationalContext } from "@/lib/adminV2/runtime/operationalContext/types";
 
 /** Minimal Operational Context wrapper for the pure evidence assembly. */
@@ -174,6 +181,39 @@ describe("buildHouseholdCardEvidence", () => {
         withPref["person.preferred_contact_method"] = "Text";
         expect(buildHouseholdCardEvidence(ctx(withPref)).preferredContactMethod).toBe("Text");
         expect(buildHouseholdCardEvidence(ctx(baseRecord())).preferredContactMethod).toBeNull();
+    });
+
+    it("keeps required household sections when only emergency is enabled in published config", () => {
+        const loaded = {
+            surfaceId: HOUSEHOLD_SURFACE_ID,
+            groups: [
+                {
+                    key: "emergency_contacts",
+                    selectedFieldKeys: ["person.phone"],
+                    enabled: true,
+                },
+            ],
+        };
+        const config = reconcileNestedSurfaceConfig(HOUSEHOLD_SURFACE_ID, loaded);
+        const ev = buildHouseholdCardEvidence(ctx(baseRecord()), { nestedConfig: config });
+        const keys = ev.groups.map((g) => g.key);
+        expect(keys).toContain("primary_contact");
+        expect(keys).toContain("other_parent_guardian");
+        expect(keys).toContain("children");
+        expect(keys).toContain("emergency_contacts");
+        expect(keys.indexOf("other_parent_guardian")).toBeGreaterThan(keys.indexOf("primary_contact"));
+    });
+
+    it("orders children before emergency when published config says so", () => {
+        let config = defaultNestedSurfaceConfig(HOUSEHOLD_SURFACE_ID);
+        config = setNestedGroupEnabled(config, "emergency_contacts", true);
+        const childrenIdx = config.groups.findIndex((g) => g.key === "children");
+        const emergencyIdx = config.groups.findIndex((g) => g.key === "emergency_contacts");
+        expect(childrenIdx).toBeGreaterThan(emergencyIdx);
+        config = moveSectionInNestedConfig(config, "children", emergencyIdx - childrenIdx);
+        const ev = buildHouseholdCardEvidence(ctx(baseRecord()), { nestedConfig: config });
+        const keys = ev.groups.map((g) => g.key);
+        expect(keys.indexOf("children")).toBeLessThan(keys.indexOf("emergency_contacts"));
     });
 });
 

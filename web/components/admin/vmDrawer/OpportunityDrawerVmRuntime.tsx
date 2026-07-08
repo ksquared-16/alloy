@@ -719,6 +719,7 @@ export default function OpportunityDrawerVmRuntime() {
                 activeMode={focusPanelMode}
                 onModeChange={setFocusPanelMode}
                 onClose={closeDrawer}
+                hideClose
                 onSubjectManageActionSelect={onActionSelect}
                 subjectManageActionLoadingKey={actionLoadingKey}
                 actionPreflightBlocked={actionPreflightBlocked}
@@ -766,6 +767,7 @@ export default function OpportunityDrawerVmRuntime() {
                 activeMode={focusPanelMode}
                 onModeChange={setFocusPanelMode}
                 onClose={closeDrawer}
+                hideClose
             />
         );
     }, [

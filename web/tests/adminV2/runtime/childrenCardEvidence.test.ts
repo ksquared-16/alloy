@@ -67,10 +67,10 @@ describe("buildChildrenCardEvidence", () => {
         expect(emma.schedule).toBe("M–F · Full day");
         expect(emma.status).toBe("Enrolled");
         expect(emma.statusTone).toBe("positive");
-        expect(emma.startDate).toBe("2025-08-26");
+        expect(emma.startDate).toBe("Aug 26, 2025");
         expect(emma.needsAttention).toBe(false);
         // Answer-first sentence evidence (no labeled field grid).
-        expect(emma.detailLine).toBe("Preschool · Sunflower · M–F · Full day · starts 2025-08-26");
+        expect(emma.detailLine).toBe("Preschool · Sunflower · M–F · Full day · starts Aug 26, 2025");
         expect(emma.missingLine).toBeNull();
         expect(evidence.enrolledCount).toBe(1);
     });

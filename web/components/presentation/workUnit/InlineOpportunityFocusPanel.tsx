@@ -58,8 +58,10 @@ import { useOpportunityDrawerRegistryActionFeedback } from "@/lib/admin/actions/
 import { resolvePortalRecordManageAccess } from "@/lib/admin/adminPortalRolePick";
 import { resolveFocusPanelSubjectReveal } from "@/lib/admin/drawer/focusPanelSubjectReveal";
 import { formatOpportunityInquiryDrawerTitle } from "@/lib/admin/drawer/opportunityInquiryDrawerTitle";
+import { prewarmFocusPanelActivityMode } from "@/lib/adminV2/runtime/focusPanel/focusPanelActivityPrewarm";
 import { useBosOpportunityDrawerContextSeed } from "@/lib/adminV2/bos/useBosDrawerOperationalContextSeed";
 import { useFocusPanelMode } from "@/lib/adminV2/runtime/focusPanel/useFocusPanelMode";
+import { useFocusPanelModePrewarm } from "@/lib/adminV2/runtime/focusPanel/useFocusPanelModePrewarm";
 import { resolveOpportunityVmStatusCanMutate } from "@/lib/adminV2/viewModel/drawer/vmRuntime/resolveOpportunityVmStatusCanMutate";
 import { resolveOpportunityVmStatusLabel } from "@/lib/adminV2/viewModel/drawer/vmRuntime/resolveOpportunityVmStatusLabel";
 import { useOpportunityDrawerVmHeaderActions } from "@/lib/adminV2/viewModel/drawer/vmRuntime/useOpportunityDrawerVmHeaderActions";
@@ -87,6 +89,26 @@ export function InlineOpportunityFocusPanel() {
         });
 
     const record = displayVm?.above_fold.record ?? null;
+
+    // Activity-mode background prewarm (sanctioned idle prefetch — never a reveal gate).
+    // Whenever the Focus Panel is open, warm Activity metadata (comms, documents, timeline;
+    // notes ship on VM) on idle so Work → Activity switches feel instant.
+    const prewarmSubjectId = drawer.type === "opportunities" && drawer.id != null ? String(drawer.id) : null;
+    const modePrewarm = useMemo(
+        () => ({
+            activity: () => {
+                if (!prewarmSubjectId) return;
+                prewarmFocusPanelActivityMode(prewarmSubjectId);
+            },
+        }),
+        [prewarmSubjectId],
+    );
+    useFocusPanelModePrewarm({
+        enabled: prewarmSubjectId != null,
+        activeMode: focusPanelMode,
+        subjectId: prewarmSubjectId,
+        prewarm: modePrewarm,
+    });
 
     useBosOpportunityDrawerContextSeed({
         drawerId: drawer.type === "opportunities" ? drawer.id : null,
@@ -261,6 +283,7 @@ export function InlineOpportunityFocusPanel() {
             >
                 <div
                     className="sticky top-0 z-10 shrink-0 border-b border-alloy-stone/12 bg-white"
+                    data-inline-focus-panel-header="true"
                     // Reserve a stable height so the seed compact header (short) → resolved
                     // header (taller: status control + actions) does not jump vertically.
                     style={{ minHeight: "5.25rem" }}
@@ -281,6 +304,7 @@ export function InlineOpportunityFocusPanel() {
                             activeMode={focusPanelMode}
                             onModeChange={setFocusPanelMode}
                             onClose={closeDrawer}
+                            hideClose
                             onSubjectManageActionSelect={onActionSelect}
                             subjectManageActionLoadingKey={actionLoadingKey}
                             actionPreflightBlocked={actionPreflightBlocked}
@@ -296,6 +320,7 @@ export function InlineOpportunityFocusPanel() {
                             activeMode={focusPanelMode}
                             onModeChange={setFocusPanelMode}
                             onClose={closeDrawer}
+                            hideClose
                         />}
                 </div>
                 <div
