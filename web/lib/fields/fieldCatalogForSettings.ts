@@ -163,6 +163,72 @@ export function buildSettingsFieldCatalogEntries(input: {
     });
 }
 
+/**
+ * What an operator may change on a field row.
+ *
+ * - `full`: tenant custom field — label, category, help/description, status, delete.
+ * - `presentation`: platform/system field_definition — safe organization only
+ *   (label, category, help/description). Storage, type, resolver, ownership, delete stay locked.
+ * - `view`: pure platform-catalog or computed field — read-only until a persisted
+ *   override layer exists (see follow-up in configuration-workspace-doctrine.md).
+ */
+export type FieldEditMode = "full" | "presentation" | "view";
+
+export type FieldEditCapability = {
+    mode: FieldEditMode;
+    canEditLabel: boolean;
+    canEditCategory: boolean;
+    canEditDescription: boolean;
+    /** Storage/type is never operator-editable — platform runtime safety. */
+    canEditType: boolean;
+    canEditStatus: boolean;
+    canDelete: boolean;
+};
+
+const VIEW_ONLY_CAPABILITY: FieldEditCapability = {
+    mode: "view",
+    canEditLabel: false,
+    canEditCategory: false,
+    canEditDescription: false,
+    canEditType: false,
+    canEditStatus: false,
+    canDelete: false,
+};
+
+export function fieldRowEditCapability(
+    entry: SettingsFieldCatalogEntry,
+    canMutate: boolean,
+): FieldEditCapability {
+    if (!canMutate) return VIEW_ONLY_CAPABILITY;
+    if (entry.ownership !== "custom" || !entry.fieldDef) return VIEW_ONLY_CAPABILITY;
+
+    const isSystem = entry.fieldDef.is_system === true;
+    if (isSystem) {
+        // Platform/system field: organize safely, never mutate storage/type/ownership.
+        return {
+            mode: "presentation",
+            canEditLabel: true,
+            canEditCategory: true,
+            canEditDescription: true,
+            canEditType: false,
+            canEditStatus: false,
+            canDelete: false,
+        };
+    }
+
+    if (!entry.configurable) return VIEW_ONLY_CAPABILITY;
+
+    return {
+        mode: "full",
+        canEditLabel: true,
+        canEditCategory: true,
+        canEditDescription: true,
+        canEditType: false,
+        canEditStatus: true,
+        canDelete: true,
+    };
+}
+
 export function countFieldsByOwnership(entries: readonly SettingsFieldCatalogEntry[]): FieldOwnershipCounts {
     const counts: FieldOwnershipCounts = { platform: 0, custom: 0, computed: 0, total: entries.length };
     for (const entry of entries) {

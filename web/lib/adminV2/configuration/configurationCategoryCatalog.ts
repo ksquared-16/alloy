@@ -86,6 +86,15 @@ function titleCaseCategoryKey(key: string): string {
     return key.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
+/** Section keys for categories that have been archived — never selectable for new assignment. */
+export function archivedCategoryKeys(registry: readonly FieldSectionRegistryRow[]): Set<string> {
+    const out = new Set<string>();
+    for (const row of registry) {
+        if (row.is_archived && row.section_key.trim()) out.add(row.section_key.trim());
+    }
+    return out;
+}
+
 export function registryLabelMap(registry: readonly FieldSectionRegistryRow[]): Map<string, string> {
     const map = new Map<string, string>();
     for (const row of registry) {
@@ -127,6 +136,7 @@ export function buildConfigurationCategoryOptions(
     const includeSyntheticCustom = options?.includeSyntheticCustom !== false;
     const seen = new Set<string>();
     const out: ConfigurationCategoryOption[] = [];
+    const archived = archivedCategoryKeys(registry);
 
     const activeRegistry = registry.filter((r) => !r.is_archived);
     const regSorted = [...activeRegistry].sort(
@@ -149,7 +159,7 @@ export function buildConfigurationCategoryOptions(
     }
 
     for (const raw of [...inUseCategoryKeys].map((k) => String(k).trim()).filter(Boolean).sort()) {
-        if (seen.has(raw)) continue;
+        if (seen.has(raw) || archived.has(raw)) continue;
         seen.add(raw);
         out.push({ value: raw, label: platformCategoryLabel(raw, hubEntity) });
     }

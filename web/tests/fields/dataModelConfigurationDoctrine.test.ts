@@ -77,12 +77,14 @@ describe("Configuration workspace doctrine", () => {
         expect(create).not.toContain("is_visible_in_form");
     });
 
-    it("field edit exposes Advanced + internal key only when editing", () => {
+    it("field edit hides Advanced and internal key entirely", () => {
         const row = readFileSync(resolve(root, "components/admin/fields/DataModelFieldRow.tsx"), "utf8");
         expect(row).toContain("inline-field-category");
         expect(row).toContain("ConfigurationStatusToggle");
-        expect(row).toContain("ConfigurationAdvancedToggle");
-        expect(row).toContain("inline-field-key");
+        // QA: Advanced disclosure and the internal key are removed from the field workflow.
+        expect(row).not.toContain("ConfigurationAdvancedToggle");
+        expect(row).not.toContain("inline-field-key");
+        expect(row).not.toContain("Internal key");
         expect(row).not.toContain("data-model-field-availability-hint");
         expect(row).toContain("data-model-field-unavailable-hint");
         expect(row).not.toContain('["is_required", "Required"]');

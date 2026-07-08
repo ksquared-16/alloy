@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import type { FieldDef } from "@/app/api/admin/field-definitions/route";
 import ConfigurationCategoryHeader from "@/components/adminV2/configuration/ConfigurationCategoryHeader";
 import {
+    archivedCategoryKeys,
     buildConfigurationCategoryOptions,
     orderedEntityCategoryKeys,
     resolveConfigurationCategoryLabel,
@@ -184,6 +185,7 @@ export default function DataModelFieldsTab({
     const filtered = filterCatalogByOwnership(entries, ownershipFilter);
     const groups = groupCatalogEntriesBySection(filtered);
     const sectionKeys = orderedEntityCategoryKeys(hubEntity, groups.keys(), categoryRegistry);
+    const archivedKeys = archivedCategoryKeys(categoryRegistry);
 
     const saveEdit = async (entry: SettingsFieldCatalogEntry, values: FieldInlineEditValues) => {
         if (!entry.fieldDef || !canMutate) return;
@@ -332,9 +334,15 @@ export default function DataModelFieldsTab({
                 {sectionKeys.map((sectionKey) => {
                     const sectionEntries = groups.get(sectionKey) ?? [];
                     if (sectionEntries.length === 0) return null;
-                    const label = resolveConfigurationCategoryLabel(sectionKey, categoryRegistry, hubEntity);
+                    const baseLabel = resolveConfigurationCategoryLabel(sectionKey, categoryRegistry, hubEntity);
+                    const isArchived = archivedKeys.has(sectionKey);
+                    const label = isArchived ? `${baseLabel} · Archived` : baseLabel;
                     return (
-                        <section key={sectionKey} data-testid={`field-category-group-${sectionKey}`}>
+                        <section
+                            key={sectionKey}
+                            data-testid={`field-category-group-${sectionKey}`}
+                            data-archived={isArchived ? "true" : "false"}
+                        >
                             <ConfigurationCategoryHeader label={label} testId={`field-category-${sectionKey}`} />
                             <div
                                 className="overflow-hidden rounded-lg border border-alloy-forge/12 bg-white"

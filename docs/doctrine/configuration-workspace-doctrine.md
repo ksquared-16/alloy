@@ -34,7 +34,9 @@ The Overview tab answers **“What is this entity?”** — relationships, field
 
 ### Business concepts first. Implementation details only under Advanced.
 
-Operators work with field names, categories, types, descriptions, and status. Internal keys, surface placement, and capability details stay behind **Advanced** on **edit** — never during creation.
+Operators work with field names, categories, types, descriptions, and status. Surface placement and capability details are derived, not configured here.
+
+**Field workflow (QA, July 2026):** the field internal key and the **Advanced** disclosure are **hidden entirely** from the Data Model field create/edit flow. Operators never see or set an internal key; it is auto-derived on create. If key inspection is ever needed it must be dev-only. (Relationship create still keeps its key behind Advanced.)
 
 ### Categories are entity-owned organizational primitives
 
@@ -44,7 +46,15 @@ Each entity has default category seeds (Identity, Contact, …) scoped in `confi
 
 **Categories tab** is the management surface: view, create, rename, archive, reorder. Fields **consume** categories — category creation does not belong in field creation.
 
+**Archived categories** are never selectable for new or edited assignments: excluded from Add Field and Edit Field pickers, and excluded from the entity picker even if a field still references the key. Fields that still reference an archived category remain visible under that category group, marked `· Archived`, so no field is silently lost. Reassigning is an explicit operator action; field data is never mutated automatically.
+
 Categories are reused across **Forms**, **Processing**, **Surface Builder**, **Documents**, **Search**, **Reports**, and future configuration workspaces.
+
+### Platform/system fields can be organized, not restructured
+
+Platform and system fields (`is_system` field definitions) are **presentation-editable**: operators may change the operator-facing **label**, **category**, and **description/help text** so platform fields organize alongside custom fields. Storage/source, field key, type, resolver, ownership, and delete stay **locked** — this is enforced both in the row (`fieldRowEditCapability`) and by the field-definition API (`FORBIDDEN_FOR_SYSTEM`).
+
+**Follow-up (not in scope for QA):** pure platform *catalog* fields that have no `field_definitions` row cannot yet persist a label/category override — there is no row to write to. Surfacing overrides for those requires a small materialize-on-edit step (or a metadata override layer) and should be scoped separately; it touches the field platform, not this doctrine.
 
 ---
 
@@ -114,15 +124,15 @@ Future configuration pages should adopt:
 
 ### Never ask for implementation details during creation
 
-| Create flow | Edit + Advanced only |
+| Create flow | Edit |
 | --- | --- |
-| Field name | Internal key (read-only or auto-generated) |
-| Category | — |
-| Field type | — |
-| Description | Help text |
+| Field name | Field name |
+| Category | Category |
+| Field type | Description / Help text |
+| Description | Status |
 | Status | — |
 
-Relationship create: label, kind, description, status — key behind Advanced.
+Field internal key is **not shown** in create or edit — it is auto-derived. Relationship create still keeps its key behind Advanced.
 
 ### Categories (not Sections)
 
