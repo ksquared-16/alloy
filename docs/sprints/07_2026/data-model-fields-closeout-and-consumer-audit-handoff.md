@@ -25,12 +25,12 @@ Do **not** open another standalone Data Model implementation sprint unless doctr
 ## Final staging hash
 
 ```
-d373d678d4833e38f55860fca5b70ac18c5b98f4
+4998576ed75695d02efdd55afc585a186cee6eba
 ```
 
 | Artifact | Hash |
 | --- | --- |
-| **Final staging** | `d373d678d` — Data Model closeout handoff hash update on `9f0b75e85` |
+| **Final staging** | `4998576ed` — sprint closeout handoff on `origin/staging` |
 | Data Model merge | `cf1de3aa2` — merge `feat/data-model-qa-fixes` onto `0e72e3051` |
 | Category picker QA | `3e0511a9e` — `fix(settings): Data Model category picker and reassignment QA` |
 | Closeout handoff doc | `0482a6bb6` — `docs(sprint): Data Model closeout and consumer audit handoff` |
