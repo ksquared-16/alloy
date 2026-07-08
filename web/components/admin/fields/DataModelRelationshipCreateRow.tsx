@@ -1,7 +1,13 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useAdminAuth } from "@/contexts/AdminAuthContext";
+import ConfigurationAdvancedToggle from "@/components/adminV2/configuration/ConfigurationAdvancedToggle";
+import ConfigurationStatusToggle from "@/components/adminV2/configuration/ConfigurationStatusToggle";
+import {
+    RELATIONSHIP_KIND_OPERATOR_OPTIONS,
+    slugifyOperatorKey,
+} from "@/lib/fields/dataModelWorkspaceOperatorUi";
 import type { SettingsHubEntityKey } from "@/lib/fields/fieldCatalogForSettings";
 import { DATA_MODEL_ICON_STROKE } from "@/lib/fields/dataModelWorkspaceIcons";
 import { Plus } from "lucide-react";
@@ -17,23 +23,12 @@ type Props = {
 
 const KEY_REGEX = /^[a-z0-9_]{2,64}$/;
 
-function slugifyKey(label: string): string {
-    return label
-        .trim()
-        .toLowerCase()
-        .replace(/\s+/g, "_")
-        .replace(/[^a-z0-9_]/g, "")
-        .replace(/_+/g, "_")
-        .replace(/^_|_$/g, "")
-        .slice(0, 64);
-}
-
 function defaultKindForEntity(hubEntity: SettingsHubEntityKey): RelationshipKind {
     if (hubEntity === "person") return "person_relationship";
     return "family_role";
 }
 
-/** Inline relationship vocabulary create — stays in the Data Model workspace. */
+/** Inline custom relationship vocabulary create — stays in the Data Model workspace. */
 export default function DataModelRelationshipCreateRow({ open, hubEntity, onCancel, onCreated }: Props) {
     const { canMutate } = useAdminAuth();
     const [kind, setKind] = useState<RelationshipKind>(() => defaultKindForEntity(hubEntity));
@@ -41,8 +36,12 @@ export default function DataModelRelationshipCreateRow({ open, hubEntity, onCanc
     const [key, setKey] = useState("");
     const keyTouched = useRef(false);
     const [description, setDescription] = useState("");
+    const [active, setActive] = useState(true);
+    const [advancedOpen, setAdvancedOpen] = useState(false);
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState<string | null>(null);
+
+    const kindMeta = RELATIONSHIP_KIND_OPERATOR_OPTIONS.find((o) => o.value === kind)!;
 
     useEffect(() => {
         if (!open) return;
@@ -51,21 +50,20 @@ export default function DataModelRelationshipCreateRow({ open, hubEntity, onCanc
         setKey("");
         keyTouched.current = false;
         setDescription("");
+        setActive(true);
+        setAdvancedOpen(false);
         setError(null);
     }, [open, hubEntity]);
 
     useEffect(() => {
         if (!open || keyTouched.current) return;
-        setKey(slugifyKey(label));
+        setKey(slugifyOperatorKey(label));
     }, [label, open]);
 
-    const endpoint = useMemo(
-        () =>
-            kind === "family_role"
-                ? "/api/admin/customer-person-role-types"
-                : "/api/admin/person-relationship-type-settings",
-        [kind],
-    );
+    const endpoint =
+        kind === "family_role"
+            ? "/api/admin/customer-person-role-types"
+            : "/api/admin/person-relationship-type-settings";
 
     if (!open) return null;
 
@@ -77,7 +75,7 @@ export default function DataModelRelationshipCreateRow({ open, hubEntity, onCanc
             return;
         }
         if (!KEY_REGEX.test(normalizedKey)) {
-            setError("Key must be 2–64 characters: lowercase letters, numbers, underscores only.");
+            setError("Could not derive a valid key from the label.");
             return;
         }
         setSaving(true);
@@ -91,19 +89,19 @@ export default function DataModelRelationshipCreateRow({ open, hubEntity, onCanc
                     label: label.trim(),
                     description: description.trim() || null,
                     sort_order: 100,
-                    is_active: true,
+                    is_active: active,
                 }),
             });
             const json = await res.json().catch(() => ({}));
             if (res.status === 409) {
-                setError("Key already exists.");
+                setError("This relationship name already exists.");
                 return;
             }
             if (!res.ok) {
                 const err = (json as { error?: { message?: string } | string }).error;
                 const message =
                     typeof err === "string" ? err : err && typeof err === "object" ? err.message : undefined;
-                throw new Error(message ?? "Could not create relationship type.");
+                throw new Error(message ?? "Could not create relationship.");
             }
             onCreated?.();
             onCancel();
@@ -122,7 +120,7 @@ export default function DataModelRelationshipCreateRow({ open, hubEntity, onCanc
         >
             <div className="flex items-center gap-2 border-b border-alloy-bend-pine/15 px-2.5 py-2">
                 <Plus size={14} strokeWidth={DATA_MODEL_ICON_STROKE} className="text-alloy-bend-pine" aria-hidden />
-                <p className="text-[13px] font-semibold text-alloy-midnight">New relationship</p>
+                <p className="text-[13px] font-semibold text-alloy-midnight">New custom relationship</p>
             </div>
             <div className="grid gap-2.5 px-3 py-3 sm:grid-cols-2">
                 <label className="block space-y-1 sm:col-span-2">
@@ -135,31 +133,23 @@ export default function DataModelRelationshipCreateRow({ open, hubEntity, onCanc
                         className="w-full rounded-md border border-alloy-forge/15 bg-white px-2.5 py-1.5 text-sm"
                         data-testid="inline-relationship-kind"
                     >
-                        <option value="family_role">Family role (customer ↔ person)</option>
-                        <option value="person_relationship">Person relationship (person ↔ person)</option>
+                        {RELATIONSHIP_KIND_OPERATOR_OPTIONS.map((opt) => (
+                            <option key={opt.value} value={opt.value}>
+                                {opt.label}
+                            </option>
+                        ))}
                     </select>
+                    <p className="text-[11px] leading-snug text-alloy-midnight/45">{kindMeta.hint}</p>
                 </label>
-                <label className="block space-y-1">
+                <label className="block space-y-1 sm:col-span-2">
                     <span className="text-[10px] font-medium uppercase tracking-wide text-alloy-midnight/45">Label</span>
                     <input
                         autoFocus
                         value={label}
                         onChange={(e) => setLabel(e.target.value)}
-                        placeholder={kind === "family_role" ? "e.g. Authorized Pickup" : "e.g. Grandparent"}
+                        placeholder={kind === "family_role" ? "e.g. Authorized pickup" : "e.g. Grandparent"}
                         className="w-full rounded-md border border-alloy-forge/15 bg-white px-2.5 py-1.5 text-sm"
                         data-testid="inline-relationship-label"
-                    />
-                </label>
-                <label className="block space-y-1">
-                    <span className="text-[10px] font-medium uppercase tracking-wide text-alloy-midnight/45">Key</span>
-                    <input
-                        value={key}
-                        onChange={(e) => {
-                            keyTouched.current = true;
-                            setKey(e.target.value);
-                        }}
-                        className="w-full rounded-md border border-alloy-forge/15 bg-white px-2.5 py-1.5 font-mono text-sm"
-                        data-testid="inline-relationship-key"
                     />
                 </label>
                 <label className="block space-y-1 sm:col-span-2">
@@ -172,8 +162,32 @@ export default function DataModelRelationshipCreateRow({ open, hubEntity, onCanc
                         rows={2}
                         className="w-full rounded-md border border-alloy-forge/15 bg-white px-2.5 py-1.5 text-sm"
                         data-testid="inline-relationship-description"
+                        placeholder="When staff should use this relationship"
                     />
                 </label>
+                <div className="sm:col-span-2">
+                    <ConfigurationStatusToggle active={active} onChange={setActive} />
+                </div>
+                <div className="sm:col-span-2">
+                    <ConfigurationAdvancedToggle open={advancedOpen} onToggle={() => setAdvancedOpen((o) => !o)} />
+                    {advancedOpen ? (
+                        <label className="mt-2 block space-y-1">
+                            <span className="text-[10px] font-medium uppercase tracking-wide text-alloy-midnight/45">
+                                Internal key
+                            </span>
+                            <input
+                                value={key}
+                                onChange={(e) => {
+                                    keyTouched.current = true;
+                                    setKey(e.target.value);
+                                }}
+                                className="w-full rounded-md border border-alloy-forge/15 bg-white px-2.5 py-1.5 font-mono text-sm"
+                                data-testid="inline-relationship-key"
+                            />
+                            <p className="text-[10px] text-alloy-midnight/40">Generated automatically from the label.</p>
+                        </label>
+                    ) : null}
+                </div>
             </div>
             {error ? (
                 <p className="px-3 text-xs text-alloy-ember" data-testid="inline-relationship-error">

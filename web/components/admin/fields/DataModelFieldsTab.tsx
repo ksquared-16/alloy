@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { FieldDef } from "@/app/api/admin/field-definitions/route";
+import ConfigurationCategoryHeader from "@/components/adminV2/configuration/ConfigurationCategoryHeader";
 import DataModelFieldCreateRow, {
     type FieldInlineCreateValues,
 } from "@/components/admin/fields/DataModelFieldCreateRow";
@@ -16,12 +17,12 @@ import {
 } from "@/lib/admin/fieldSectionSelectOptions";
 import {
     buildSettingsFieldCatalogEntries,
+    categoryDisplayLabel,
     countFieldsByOwnership,
     filterCatalogByOwnership,
     groupCatalogEntriesBySection,
     hubEntityApiTypes,
     orderedSectionKeys,
-    sectionDisplayLabel,
     type SettingsFieldCatalogEntry,
     type SettingsHubEntityKey,
 } from "@/lib/fields/fieldCatalogForSettings";
@@ -79,7 +80,7 @@ export default function DataModelFieldsTab({
     const [ownershipFilter, setOwnershipFilter] = useState<FieldOwnershipFilter>("all");
     const [expandedRefKey, setExpandedRefKey] = useState<string | null>(null);
     const [creating, setCreating] = useState(false);
-    const [sectionOptions, setSectionOptions] = useState<Array<{ value: string; label: string }>>([]);
+    const [categoryOptions, setCategoryOptions] = useState<Array<{ value: string; label: string }>>([]);
     const [rowSaving, setRowSaving] = useState(false);
     const [rowError, setRowError] = useState<string | null>(null);
     const [createSaving, setCreateSaving] = useState(false);
@@ -117,7 +118,14 @@ export default function DataModelFieldsTab({
             const inUse = new Set(
                 items.map((i) => i.section_key).filter((k): k is string => typeof k === "string" && k.trim().length > 0),
             );
-            if (!cancelled) setSectionOptions(mergeFieldSectionSelectOptions(registry, inUse));
+            if (!cancelled) {
+                setCategoryOptions(
+                    mergeFieldSectionSelectOptions(registry, inUse).map((opt) => ({
+                        value: opt.value,
+                        label: categoryDisplayLabel(opt.value),
+                    })),
+                );
+            }
         })();
         return () => {
             cancelled = true;
@@ -183,12 +191,8 @@ export default function DataModelFieldsTab({
                     label: values.label.trim() || null,
                     description: values.description.trim() || null,
                     help_text: values.help_text.trim() || null,
-                    section_key: values.section_key.trim() || "custom",
-                    is_required: values.is_required,
+                    section_key: values.category_key.trim() || "custom",
                     is_active: values.is_active,
-                    is_visible_in_form: values.is_visible_in_form,
-                    is_visible_in_drawer: values.is_visible_in_drawer,
-                    is_visible_in_table: values.is_visible_in_table,
                 }),
             });
             const json = await res.json().catch(() => ({}));
@@ -204,7 +208,7 @@ export default function DataModelFieldsTab({
 
     const deleteField = async (entry: SettingsFieldCatalogEntry) => {
         if (!entry.fieldDef || entry.fieldDef.is_system || !canMutate) return;
-        if (!window.confirm(`Delete custom field "${entry.fieldDef.field_key}"? Stored values will be removed.`)) {
+        if (!window.confirm(`Delete "${entry.label}"? Stored values for this field will be removed.`)) {
             return;
         }
         setRowSaving(true);
@@ -226,7 +230,7 @@ export default function DataModelFieldsTab({
         if (!canMutate) return;
         const key = values.field_key.trim().toLowerCase().replace(/\s+/g, "_").replace(/[^a-z0-9_]/g, "");
         if (!/^[a-z0-9_]{2,64}$/.test(key)) {
-            setCreateError("Key must be 2–64 characters: lowercase letters, numbers, underscores only.");
+            setCreateError("Could not derive a valid key from the label.");
             return;
         }
         setCreateSaving(true);
@@ -241,12 +245,13 @@ export default function DataModelFieldsTab({
                     label: values.label.trim() || key,
                     description: values.description.trim() || null,
                     field_type: values.field_type,
-                    section_key: values.section_key.trim() || "custom",
+                    section_key: values.category_key.trim() || "custom",
                     sort_order: 100,
-                    is_required: values.is_required,
-                    is_visible_in_form: values.is_visible_in_form,
-                    is_visible_in_drawer: values.is_visible_in_drawer,
-                    is_visible_in_table: values.is_visible_in_table,
+                    is_required: false,
+                    is_active: values.is_active,
+                    is_visible_in_form: values.is_active,
+                    is_visible_in_drawer: values.is_active,
+                    is_visible_in_table: values.is_active,
                 }),
             });
             const json = await res.json().catch(() => ({}));
@@ -297,7 +302,7 @@ export default function DataModelFieldsTab({
 
             <DataModelFieldCreateRow
                 open={creating}
-                sectionOptions={sectionOptions}
+                categoryOptions={categoryOptions}
                 saving={createSaving}
                 error={createError}
                 canMutate={canMutate}
@@ -316,12 +321,10 @@ export default function DataModelFieldsTab({
                 {sectionKeys.map((sectionKey) => {
                     const sectionEntries = groups.get(sectionKey) ?? [];
                     if (sectionEntries.length === 0) return null;
-                    const label = sectionDisplayLabel(sectionKey);
+                    const label = categoryDisplayLabel(sectionKey);
                     return (
-                        <section key={sectionKey} data-testid={`field-section-group-${sectionKey}`}>
-                            <h2 className="mb-1 px-0.5 text-[10px] font-semibold uppercase tracking-wide text-alloy-midnight/40">
-                                {label}
-                            </h2>
+                        <section key={sectionKey} data-testid={`field-category-group-${sectionKey}`}>
+                            <ConfigurationCategoryHeader label={label} testId={`field-category-${sectionKey}`} />
                             <div
                                 className="overflow-hidden rounded-lg border border-alloy-forge/12 bg-white"
                                 data-testid="data-model-field-section-list"
@@ -342,7 +345,7 @@ export default function DataModelFieldsTab({
                                             setRowError(null);
                                         }}
                                         canMutate={canMutate}
-                                        sectionOptions={sectionOptions}
+                                        categoryOptions={categoryOptions}
                                         saving={rowSaving && expandedRefKey === entry.refKey}
                                         error={expandedRefKey === entry.refKey ? rowError : null}
                                         onSave={(values) => saveEdit(entry, values)}
