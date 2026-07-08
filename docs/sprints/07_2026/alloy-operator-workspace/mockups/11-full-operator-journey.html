@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Full Operator Journey — Alloy</title>
+  <link rel="stylesheet" href="shared/alloy-workspace.css">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script src="shared/mockup-ui.js"></script>
+</head>
+<body>
+  <div class="journey-strip" id="journey">
+    <button class="journey-step" data-i="0">Open record</button>
+    <button class="journey-step" data-i="1">Work in Focus</button>
+    <button class="journey-step" data-i="2">Complete</button>
+    <button class="journey-step" data-i="3">Next step</button>
+    <button class="journey-step" data-i="4">Continue</button>
+    <button class="journey-step" data-i="5">Finish</button>
+  </div>
+  <div class="os-frame" style="height:calc(100vh - 48px)" id="frame">
+    <!-- populated by JS -->
+  </div>
+  <div class="mockup-gallery-bar"><a href="index.html">Gallery</a></div>
+  <script>
+    const steps = [
+      { title:'Qualify Family', sub:'2 of 3', cta:'Complete Qualification', hint:'Qualify family · 2 of 3', focus:false, note:'Operator opens record — Current Work immediately visible' },
+      { title:'Qualify Family', sub:'2 of 3', cta:'Complete Qualification', hint:'Qualify family', focus:true, note:'Focus open — checklist, BOS, supporting' },
+      { title:'Qualify Family', sub:'Confirming…', cta:'…', hint:'Qualifying…', focus:true, note:'Completion inside Focus — no modal' },
+      { title:'Schedule Tour', sub:'0 of 3', cta:'Schedule Tour', hint:'Schedule tour · 0 of 3', focus:true, note:'Runtime refreshed — next Current Work in Focus' },
+      { title:'Schedule Tour', sub:'0 of 3', cta:'Schedule Tour', hint:'Schedule tour', focus:false, note:'Dismiss Focus — Summary already updated' },
+      { title:'Enrollment complete', sub:'', cta:null, hint:'Complete', focus:false, terminal:true, note:'Terminal — no primary CTA' },
+    ];
+    function render(i) {
+      const s = steps[i];
+      document.getElementById('frame').innerHTML = `
+      <aside class="sidebar"><div class="sidebar-icon active">⊞</div></aside>
+      <div class="os-main">
+        <div class="wu-header"><div class="wu-breadcrumb"><strong>Enrollment</strong></div></div>
+        <div class="os-split">
+          <div class="queue-panel"><div class="queue-row active"><div class="name">Digan Family</div><div class="hint">${s.hint}</div></div></div>
+          <div class="fp-panel" style="position:relative">
+            ${s.focus ? `<div class="focus-scrim" style="display:flex;position:absolute;inset:0"><div class="focus-card" style="margin:auto;max-width:480px"><div class="focus-card-body"><div class="obj-title" style="font-size:20px">${s.title}</div><p style="color:var(--muted);margin:8px 0">${s.sub}</p>${s.cta?`<button class="btn-primary">${s.cta}</button>`:'<p style="color:var(--juniper);font-weight:600">✓ Done</p>'}</div></div></div>` : ''}
+            <div class="fp-scroll" style="${s.focus?'filter:blur(2px);opacity:0.35':''}">
+              <div class="card-objective card-current-work"><div class="card-label">Current Work</div><div class="obj-title">${s.title}</div>${s.sub?`<div class="progress-meta"><span>${s.sub}</span></div>`:''}${s.cta&&!s.terminal?`<button class="btn-primary">${s.cta}</button>`:s.terminal?'<p style="margin-top:8px;color:var(--juniper);font-weight:600">✓ Enrollment complete</p>':''}</div>
+            </div>
+          </div>
+          <aside class="bos-rail"><div class="bos-rail-btn">BOS</div></aside>
+        </div>
+      </div>`;
+      document.querySelectorAll('.journey-step').forEach((el,j)=>{el.classList.toggle('active',j===i);el.classList.toggle('done',j<i);});
+    }
+    document.getElementById('journey').addEventListener('click',e=>{if(e.target.dataset.i)render(+e.target.dataset.i);});
+    render(0);
+  </script>
+</body>
+</html>

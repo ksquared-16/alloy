@@ -1,18 +1,42 @@
 "use client";
 
 import { useCallback, useState } from "react";
+import { useAdminDrawerOptional } from "@/contexts/AdminDrawerContext";
 import {
     dispatchOpportunityDrawerOperationalTasksRefresh,
 } from "@/lib/admin/opportunityDrawerTargetedRefresh";
 import { dispatchOpportunityQueueUpdated } from "@/lib/admin/opportunityQueueRefreshEvent";
 import { completeStageWorkWithSelectedOutcome } from "@/lib/lifecycle/stageWorkOutcomePickerClient";
 import type { WorkIntentRuntimeProjection } from "@/lib/lifecycle/workIntentRuntimeTypes";
-import { useOpportunityDrawerVmPayload } from "@/lib/adminV2/viewModel/drawer/vmRuntime/useOpportunityDrawerVmPayload";
+import { fetchFreshOpportunityDrawerViewModel } from "@/lib/adminV2/viewModel/drawer/vmRuntime/fetchFreshOpportunityDrawerViewModel";
+import { buildOpportunityDrawerOpenPreloadFromViewModel } from "@/lib/adminV2/viewModel/drawer/opportunity/buildOpportunityDrawerOpenPreloadFromViewModel";
+import { putDrawerViewModelCacheEntry } from "@/lib/adminV2/viewModel/drawer/drawerViewModelSessionCache";
 
 export function useWorkIntentOutcomeCompletion(opportunityId: string) {
-    const { reloadOpportunityDisplayVm } = useOpportunityDrawerVmPayload();
+    const drawerCtx = useAdminDrawerOptional();
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState<string | null>(null);
+
+    const reloadOpportunityDisplayVm = useCallback(async () => {
+        if (!drawerCtx) return;
+        const vm = await fetchFreshOpportunityDrawerViewModel(drawerCtx.drawer);
+        if (!vm) return;
+        putDrawerViewModelCacheEntry(
+            {
+                entityType: "opportunities",
+                entityId: vm.entity.id,
+                surface: "opportunity",
+                preload: buildOpportunityDrawerOpenPreloadFromViewModel(vm),
+                generation: vm.generation,
+                cachedAt: Date.now(),
+            },
+            {
+                departmentId: drawerCtx.drawer.opportunityWorkspaceContext?.department_id ?? null,
+                workUnitId: drawerCtx.drawer.opportunityWorkspaceContext?.work_unit_id ?? null,
+            },
+        );
+        drawerCtx.completeDrawerRuntimeTransition();
+    }, [drawerCtx]);
 
     const completeOutcome = useCallback(
         async (projection: WorkIntentRuntimeProjection, outcomeKey: string) => {

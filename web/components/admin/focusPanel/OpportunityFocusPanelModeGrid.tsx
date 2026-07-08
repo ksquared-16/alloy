@@ -22,6 +22,7 @@ import type { CompositionCardInput } from "@/lib/adminV2/runtime/focusPanel/comp
 import { publishedLayoutReadingOrder } from "@/lib/adminV2/runtime/focusPanel/composition/focusPanelPublishedLayout";
 import {
     isElevatedLevel,
+    resolveElevatedCellKey,
     type FocusPanelActiveDepth,
     type FocusPanelCoordination,
     type FocusPanelDepthEntry,
@@ -35,6 +36,7 @@ import type { FocusPanelCardKey } from "@/lib/adminV2/runtime/focusPanel/focusPa
 import type { OpportunityDrawerViewModel } from "@/lib/adminV2/viewModel/drawer/types";
 import type { RuntimePerspective } from "@/lib/adminV2/runtime/perspective/deriveRuntimePerspective";
 import type { ResolvedActionForClient } from "@/lib/admin/actions/types";
+import { resolveCommunicationsComposerAction } from "@/lib/adminV2/runtime/focusPanel/currentWork/resolveCommunicationsComposerAction";
 import type { DrawerTabKey } from "@/lib/entityPresentation";
 
 /** Reverse-zoom dismiss window — matches CSS `--alloy-os-fp-depth-ms` (240ms). */
@@ -51,6 +53,7 @@ type Props = {
     canMutate: boolean;
     onSelectTab: (tab: DrawerTabKey) => void;
     onHeaderAction?: (action: ResolvedActionForClient) => void;
+    onModeChange?: (mode: FocusPanelMode) => void;
 };
 
 /** Renders a mode grid from derived Universal Card models — never from layout sections. */
@@ -65,6 +68,7 @@ export default function OpportunityFocusPanelModeGrid({
     canMutate,
     onSelectTab,
     onHeaderAction,
+    onModeChange,
 }: Props) {
     const { grid: defaultGrid, cards } = useMemo(
         () =>
@@ -226,12 +230,6 @@ export default function OpportunityFocusPanelModeGrid({
         },
         [],
     );
-    const coordination = useMemo<FocusPanelCoordination>(
-        () => ({ request: focusRequest, requestFocus, activeDepth, reportPerspective, dismissed, dismiss, previousFocus, back }),
-        [focusRequest, requestFocus, activeDepth, reportPerspective, dismissed, dismiss, previousFocus, back],
-    );
-    const elevatedCellKey = activeDepth?.card ?? null;
-
     // Edit seam (Household V1): a separate injected save capability (NOT a write on
     // the read-only Operational Context). Persists via the existing person PATCH path
     // and broadcasts the existing record-patch events → VM merge → context recompose.
@@ -276,6 +274,10 @@ export default function OpportunityFocusPanelModeGrid({
         return map;
     }, [grid, instanceMap]);
     const cellResolution = isSummary ? summaryInputs!.cellResolution : legacyCellResolution;
+    const elevatedCellKey = useMemo(
+        () => resolveElevatedCellKey(activeDepth?.card ?? null, cellResolution),
+        [activeDepth?.card, cellResolution],
+    );
 
     const legacyGridRows = useMemo(
         () =>
@@ -293,6 +295,64 @@ export default function OpportunityFocusPanelModeGrid({
         [grid, cards],
     );
     const gridRows = isSummary ? summaryInputs!.gridRows : legacyGridRows;
+
+    const focusTargets = useMemo(() => {
+        const set = new Set<FocusPanelCardKey>();
+        for (const row of gridRows) {
+            for (const cell of row.cells) {
+                const typeKey = (cellResolution.get(cell.key)?.typeKey ?? cell.key) as FocusPanelCardKey;
+                if (cards.get(typeKey)?.visible !== false) {
+                    set.add(typeKey);
+                }
+            }
+        }
+        if (publishedLayout) {
+            for (const cardKey of publishedLayoutReadingOrder(publishedLayout)) {
+                const typeKey = cardKey as FocusPanelCardKey;
+                if (cards.get(typeKey)?.visible !== false) {
+                    set.add(typeKey);
+                }
+            }
+        }
+        return set;
+    }, [gridRows, cellResolution, cards, publishedLayout]);
+
+    const headerMenuActions = displayVm.actions.header_menu;
+    const resolveCommsAction = useCallback(
+        () => resolveCommunicationsComposerAction(headerMenuActions),
+        [headerMenuActions],
+    );
+
+    const coordination = useMemo<FocusPanelCoordination>(
+        () => ({
+            focusTargets,
+            openFocusPanelMode: onModeChange,
+            invokeHeaderAction: onHeaderAction,
+            resolveCommunicationsComposerAction: resolveCommsAction,
+            request: focusRequest,
+            requestFocus,
+            activeDepth,
+            reportPerspective,
+            dismissed,
+            dismiss,
+            previousFocus,
+            back,
+        }),
+        [
+            focusTargets,
+            onModeChange,
+            onHeaderAction,
+            resolveCommsAction,
+            focusRequest,
+            requestFocus,
+            activeDepth,
+            reportPerspective,
+            dismissed,
+            dismiss,
+            previousFocus,
+            back,
+        ],
+    );
 
     // Composition Engine input — Summary is COMPOSED from card semantics (lanes /
     // stack), not laid out as equal grid cells. Reading order + visibility stay

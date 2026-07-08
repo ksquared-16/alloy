@@ -75,7 +75,9 @@
         "dev:layout:verify-person-drawer-v2": "tsx --tsconfig tsconfig.json scripts/publishPersonDrawerV2ForOrg.ts --verify-only",
         "dev:layout:publish-child-drawer-v2": "tsx --tsconfig tsconfig.json scripts/publishChildDrawerV2ForOrg.ts",
         "dev:layout:publish-child-drawer-v2:execute": "tsx --tsconfig tsconfig.json scripts/publishChildDrawerV2ForOrg.ts --execute",
-        "dev:layout:verify-child-drawer-v2": "tsx --tsconfig tsconfig.json scripts/publishChildDrawerV2ForOrg.ts --verify-only"
+        "dev:layout:verify-child-drawer-v2": "tsx --tsconfig tsconfig.json scripts/publishChildDrawerV2ForOrg.ts --verify-only",
+        "dev:qa:reconcile-orphaned-stage-work": "tsx --tsconfig tsconfig.json scripts/qaReconcileOrphanedStageWork.ts",
+        "test:playwright-current-work": "playwright test playwright/tests/current-work-journey.spec.ts"
     },
     "dependencies": {
         "@radix-ui/react-dropdown-menu": "^2.1.16",

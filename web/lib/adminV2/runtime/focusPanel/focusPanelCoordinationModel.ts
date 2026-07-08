@@ -16,6 +16,8 @@
  */
 
 import type { FocusPanelCardKey } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardModel";
+import type { FocusPanelMode } from "@/lib/adminV2/runtime/focusPanel/focusPanelMode";
+import type { ResolvedActionForClient } from "@/lib/admin/actions/types";
 
 /** "Open card X and focus target Y (a group key / child id / item id)." */
 export type FocusPanelFocusRequest = {
@@ -59,6 +61,14 @@ export type FocusPanelDepthEntry = {
 };
 
 export type FocusPanelCoordination = {
+    /** Card types mounted and visible in the active mode grid (handoff guard). */
+    focusTargets?: ReadonlySet<FocusPanelCardKey>;
+    /** Switch Focus Panel mode (e.g. Activity for communications). */
+    openFocusPanelMode?: (mode: FocusPanelMode) => void;
+    /** Invoke a registry header action (composer / send). */
+    invokeHeaderAction?: (action: ResolvedActionForClient) => void;
+    /** Resolve a send/composer action for outreach handoff fallback. */
+    resolveCommunicationsComposerAction?: () => ResolvedActionForClient | null;
     /** The current handoff request, or null. */
     request: FocusPanelFocusRequest | null;
     /**
@@ -92,6 +102,8 @@ export function focusPanelCardBackLabel(card: FocusPanelCardKey): string {
             return "Communications";
         case "documents":
             return "Documents";
+        case "current_work":
+            return "Current Work";
         default:
             return "panel";
     }
@@ -107,10 +119,9 @@ export function isElevatedLevel(level: FocusPanelPerspectiveLevel): boolean {
  * land — Billing, Schedule, Staff, Documents, Communications). When they go deeper
  * than Evidence they become the centered Focus Card (elevate + recede the rest).
  *
- * Diagnostic / coordinating cards (Readiness, Current Work, Attention) do NOT own
- * truth: they diagnose or route. They must never become a Focus Card workspace —
- * they expand in place (Evidence inline) or hand off attention to the owner card
- * via `requestFocus`. This is the canvas rule, not a new primitive.
+ * Diagnostic cards (Readiness) do NOT own truth: they diagnose or route. Work-owning
+ * cards (Current Work) own completion interaction and may elevate to Focus. Truth cards
+ * own entity fields. This is the canvas rule, not a new primitive.
  *
  * @see docs/sprints/06_2026/focus-panel-canvas-finalization
  */
@@ -122,9 +133,22 @@ const OPERATIONAL_TRUTH_CARDS: ReadonlySet<FocusPanelCardKey> = new Set<FocusPan
     "communications",
 ]);
 
+/** Work-owning cards reach Focus to run completion — not because they store entity truth. */
+const WORK_OWNING_CARDS: ReadonlySet<FocusPanelCardKey> = new Set<FocusPanelCardKey>(["current_work"]);
+
 /** True when this card may elevate into a centered Focus Card. */
 export function isOperationalTruthCard(card: FocusPanelCardKey): boolean {
     return OPERATIONAL_TRUTH_CARDS.has(card);
+}
+
+/** True when this card owns stage work completion inside Focus. */
+export function isWorkOwningCard(card: FocusPanelCardKey): boolean {
+    return WORK_OWNING_CARDS.has(card);
+}
+
+/** True when a card may report focused/edit depth (centered Focus Card). */
+export function isFocusElevatingCard(card: FocusPanelCardKey): boolean {
+    return isOperationalTruthCard(card) || isWorkOwningCard(card);
 }
 
 /**
@@ -135,7 +159,7 @@ export function clampPerspectiveForCard(
     card: FocusPanelCardKey,
     level: FocusPanelPerspectiveLevel,
 ): FocusPanelPerspectiveLevel {
-    if (isOperationalTruthCard(card)) return level;
+    if (isFocusElevatingCard(card)) return level;
     return isElevatedLevel(level) ? "evidence" : level;
 }
 
@@ -145,4 +169,19 @@ export function isFocusRequestFor(
     card: FocusPanelCardKey,
 ): boolean {
     return coordination?.request?.card === card;
+}
+
+/**
+ * Map an active card TYPE to the grid cell key that hosts it. `activeDepth` reports
+ * card types; grid cells use `instanceKey` when the layout doc assigns one.
+ */
+export function resolveElevatedCellKey(
+    activeCard: FocusPanelCardKey | null | undefined,
+    cellResolution: ReadonlyMap<string, { typeKey: FocusPanelCardKey }>,
+): string | null {
+    if (!activeCard) return null;
+    for (const [cellKey, { typeKey }] of cellResolution) {
+        if (typeKey === activeCard) return cellKey;
+    }
+    return activeCard;
 }

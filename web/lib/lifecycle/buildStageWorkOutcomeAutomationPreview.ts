@@ -26,12 +26,24 @@ function effectLabelForRule(
         return `Needs attention: ${attention.attention_reason.trim()}`;
     }
 
-    const nextWork = rule.targets.find((t) => t.kind === "create_next_work" && t.template_key?.trim());
+    const nextWork = rule.targets.find(
+        (t) =>
+            (t.kind === "create_next_work" || t.kind === "reopen_work") && t.template_key?.trim(),
+    );
     if (nextWork?.template_key) {
         const tpl = plan.work_templates.find((w) => w.template_key === nextWork.template_key);
-        return tpl?.label?.trim() || humanizeSnakeCaseToken(nextWork.template_key.trim());
+        const label = tpl?.label?.trim() || humanizeSnakeCaseToken(nextWork.template_key.trim());
+        if (nextWork.kind === "reopen_work") {
+            return label.toLowerCase().endsWith(" work") ? `Continue ${label}` : `Continue ${label} work`;
+        }
+        return label;
     }
 
+    if (rule.targets.some((t) => t.kind === "mark_stage_work_complete")) {
+        return "Complete this work item";
+    }
+
+    // no_movement-only rules have no operator-facing side effect beyond stay/retry.
     return null;
 }
 

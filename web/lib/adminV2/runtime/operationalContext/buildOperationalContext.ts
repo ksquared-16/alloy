@@ -238,6 +238,8 @@ export function buildOperationalContext(input: BuildOperationalContextInput): Op
         truth,
         grain: "case",
         signals: buildOperationalContextSignals(subjectVm, truth, new Date()),
+        stageWorkRuntime: subjectVm.workspace.stage_work_runtime ?? null,
+        recordHeaderActions: subjectVm.actions.record_header ?? null,
         capabilities: {
             canMutate,
             maskedChannels: input.maskedChannels ?? false,

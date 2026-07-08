@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Today vs Tomorrow — Alloy</title>
+  <link rel="stylesheet" href="shared/alloy-workspace.css">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script src="shared/mockup-ui.js"></script>
+  <script>document.documentElement.classList.add('presentation-mode');</script>
+</head>
+<body style="margin:0">
+  <div class="exec-compare">
+    <div class="exec-panel before">
+      <div class="exec-label">Today's Alloy — record-centric</div>
+      <div class="os-frame" style="height:100%">
+        <aside class="sidebar"><div class="sidebar-icon active">⊞</div></aside>
+        <div class="os-main">
+          <div class="wu-header"><div class="wu-breadcrumb"><strong>Enrollment</strong></div></div>
+          <div class="os-split" style="grid-template-columns:200px 1fr 120px">
+            <div class="queue-panel"><div class="queue-row active"><div class="name">Digan Family</div><div class="hint" style="color:var(--danger)">Lead · New Inquiry</div></div></div>
+            <div class="fp-panel">
+              <div class="fp-chrome"><div class="fp-record-bar"><div class="fp-identity"><h1>Digan Family</h1><div class="sub" style="color:var(--danger)">Lead · New Inquiry · Enrollment</div></div></div></div>
+              <div class="fp-scroll">
+                <div class="card-grid-ws">
+                  <div class="card-support"><div class="card-label">Household</div><h3>Rob Digan</h3></div>
+                  <div class="card-support"><div class="card-label">Status</div><h3>New Inquiry</h3></div>
+                  <div class="card-support"><div class="card-label">Readiness</div><h3>3 fields missing</h3></div>
+                  <div class="card-support"><div class="card-label">Current Work</div><h3>Make contact</h3></div>
+                </div>
+              </div>
+            </div>
+            <div style="background:#f8fafc;border-left:1px solid var(--border);padding:8px;font-size:10px">
+              <div style="font-weight:700;margin-bottom:8px;color:var(--muted)">ACTIONS</div>
+              <div style="padding:6px;border:1px solid var(--border);margin-bottom:4px;border-radius:4px">Update Status</div>
+              <div style="padding:6px;border:1px solid var(--border);margin-bottom:4px;border-radius:4px">Move to Tour</div>
+              <div style="padding:6px;border:1px solid var(--border);margin-bottom:4px;border-radius:4px">Qualify</div>
+              <div style="padding:6px;border:1px solid var(--border);border-radius:4px">Schedule Tour</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="exec-panel after">
+      <div class="exec-label">Tomorrow's Alloy — work-centric</div>
+      <div class="os-frame" style="height:100%">
+        <aside class="sidebar"><div class="sidebar-icon active">⊞</div></aside>
+        <div class="os-main">
+          <div class="wu-header"><div class="wu-breadcrumb"><strong>Enrollment</strong></div></div>
+          <div class="os-split">
+            <div class="queue-panel"><div class="queue-row active"><div class="name">Digan Family</div><div class="hint">Qualify family · 2 of 3</div></div></div>
+            <div class="fp-panel">
+              <div class="fp-chrome"><div class="fp-record-bar"><div class="fp-avatar">DF</div><div class="fp-identity"><h1>Digan Family</h1><div class="sub">Enrollment · North Campus</div></div></div></div>
+              <div class="fp-scroll">
+                <div class="card-objective card-current-work" style="margin-bottom:10px"><div class="card-label">Current Work</div><div class="obj-title">Qualify Family</div><div class="obj-desc">Contact the family and determine if they are a good fit.</div><div class="progress-meta"><span>2 of 3</span></div><button class="btn-primary">Complete Qualification</button></div>
+                <div class="card-grid-ws"><div class="card-support"><div class="card-label">Household</div><h3>Rob Digan</h3></div><div class="card-support"><div class="card-label">Children</div><h3>Robbie & Zara</h3></div></div>
+              </div>
+            </div>
+            <aside class="bos-rail"><div class="bos-rail-btn">BOS</div></aside>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="mockup-gallery-bar"><a href="index.html">Gallery</a></div>
+</body>
+</html>

@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Complete Work — Alloy</title>
+  <link rel="stylesheet" href="shared/alloy-workspace.css">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script src="shared/mockup-ui.js"></script>
+</head>
+<body>
+  <nav class="nav-bar"><a href="02-current-work-focus.html">← Focus</a><span class="sep">→</span><a href="06-runtime-refresh.html">After</a></nav>
+  <div class="phase-nav">
+    <button class="phase-btn active" onclick="show('select')">What happened?</button>
+    <button class="phase-btn" onclick="show('confirm')">Confirm</button>
+    <button class="phase-btn" onclick="show('done')">Finishing</button>
+  </div>
+  <div class="os-frame" style="height:calc(100vh - 80px)">
+    <div class="os-main" style="grid-column:span 2">
+      <div class="os-split" style="grid-template-columns:1fr var(--bos-rail-w)">
+        <div class="fp-panel" style="position:relative;background:var(--stone)">
+          <div class="focus-scrim" style="position:relative;display:flex;min-height:100%;background:rgba(26,35,50,0.08)">
+            <div class="focus-card" style="margin:auto">
+              <div class="focus-card-header"><button class="focus-back">← Back</button><span class="focus-card-label" id="lbl">Complete Qualification</span></div>
+              <div class="focus-card-body" id="p-select">
+                <p style="font-weight:600;margin-bottom:14px">What happened when you finished?</p>
+                <div class="outcome-option selected"><div class="outcome-radio"></div><div class="outcome-label">Family wants a tour</div></div>
+                <div class="outcome-option"><div class="outcome-radio"></div><div class="outcome-label">Add to waitlist now</div></div>
+                <div class="outcome-option"><div class="outcome-radio"></div><div class="outcome-label">Not interested</div></div>
+                <button class="btn-primary" style="margin-top:16px" onclick="show('confirm')">Continue</button>
+              </div>
+              <div class="focus-card-body" id="p-confirm" style="display:none">
+                <p>You selected: <strong>Family wants a tour</strong></p>
+                <ul class="effects-list" style="margin:14px 0">
+                  <li>Schedule the family's tour</li>
+                  <li>Set up tour scheduling work for you</li>
+                  <li>Update your work queue</li>
+                </ul>
+                <button class="btn-primary" onclick="location.href='06-runtime-refresh.html'">Confirm</button>
+              </div>
+              <div class="focus-card-body" id="p-done" style="display:none;text-align:center;padding:32px">
+                <div style="font-size:36px;color:var(--juniper)">✓</div>
+                <div style="font-size:18px;font-weight:700;margin-top:8px">Finished!</div>
+                <p style="color:var(--muted);margin-top:4px">Finishing up…</p>
+              </div>
+            </div>
+          </div>
+        </div>
+        <aside class="bos-rail"><div class="bos-rail-btn">BOS</div></aside>
+      </div>
+    </div>
+  </div>
+  <script>
+    function show(p){
+      ['select','confirm','done'].forEach(x=>document.getElementById('p-'+x).style.display=x===p?'block':'none');
+      document.getElementById('lbl').textContent=p==='select'?'Complete Qualification':p==='confirm'?'Confirm':'Finishing up…';
+      document.querySelectorAll('.phase-btn').forEach((b,i)=>b.classList.toggle('active',['select','confirm','done'].indexOf(p)===i));
+    }
+  </script>
+</body>
+</html>

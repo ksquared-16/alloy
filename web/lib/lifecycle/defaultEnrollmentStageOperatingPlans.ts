@@ -100,9 +100,18 @@ const ENROLLMENT_STAGE_OPERATING_DEFAULTS: Record<string, Omit<StageOperatingPla
                 targets: [{ kind: "no_movement" }],
             },
             {
-                rule_key: "needs_more_info_stay",
+                // Needs more info: keep review as a recorded attempt, reopen Contact Family
+                // outreach, and raise attention — all via existing outcome target kinds.
+                rule_key: "needs_more_info_follow_up",
                 when_outcome_key: "needs_more_information",
-                targets: [{ kind: "no_movement" }],
+                targets: [
+                    {
+                        kind: "create_needs_attention",
+                        attention_reason: "Needs more information from family",
+                        wait_bucket: "waiting_on_family",
+                    },
+                    { kind: "reopen_work", template_key: "contact_family", due_days: 1 },
+                ],
             },
             {
                 rule_key: "duplicate_close",

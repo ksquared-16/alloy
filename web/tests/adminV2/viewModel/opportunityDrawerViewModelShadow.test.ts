@@ -104,6 +104,7 @@ function minimalViewModel(): OpportunityDrawerViewModel {
             header: [...preload.headerActions.header],
             header_menu: [...preload.headerActions.header],
             manage_menu: [],
+            record_header: null,
         },
         layout: {
             mode: "workflow_v1",
@@ -204,7 +205,7 @@ describe("diffOpportunityDrawerViewModelShadow", () => {
         const legacy = assembleLegacyDrawerOpenShadowSnapshot(preload);
         const vm = extractOpportunityDrawerViewModelShadowSnapshot({
             ...minimalViewModel(),
-            actions: { header: [], header_menu: [], manage_menu: [] },
+            actions: { header: [], header_menu: [], manage_menu: [], record_header: null },
         });
         const diff = diffOpportunityDrawerViewModelShadow(legacy, vm);
         expect(diff.structural_mismatches.some((m) => m.field === "header_action_keys")).toBe(true);
@@ -331,7 +332,7 @@ describe("scheduleOpportunityDrawerViewModelShadow", () => {
             ok: true,
             viewModel: {
                 ...minimalViewModel(),
-                actions: { header: [], header_menu: [], manage_menu: [] },
+                actions: { header: [], header_menu: [], manage_menu: [], record_header: null },
             },
         });
 

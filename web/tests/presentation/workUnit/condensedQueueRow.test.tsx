@@ -50,7 +50,13 @@ function fullContext(): QueueRowContext {
         related_subjects_summary: [],
         attention_summary: { needs_attention: true, primary_reason_label: "Overdue follow-up" },
         work_summary: { open_count: 1, primary_open_label: "Call family" },
-        current_work_summary: { label: "Schedule tour", state: "open", due_label: "Tue" },
+        current_work_summary: {
+            label: "Schedule tour",
+            state: "open",
+            due_label: "Tue",
+            progress_hint: "2 of 3 complete",
+            blocker_hint: null,
+        },
         next_best_action: null,
         drawer_open: { entity_type: "opportunities", entity_id: "opp-1" },
     };

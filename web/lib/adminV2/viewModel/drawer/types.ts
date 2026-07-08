@@ -1,4 +1,4 @@
-import type { ResolvedActionForClient } from "@/lib/admin/actions/types";
+import type { ResolvedActionForClient, ResolvedActionsBySlot } from "@/lib/admin/actions/types";
 import type { TourBookingRow } from "@/lib/tours/bookings/types";
 import type { InquirySummaryTaskPreviewPayload } from "@/lib/admin/drawer/opportunityInquirySummaryTaskPreview";
 import type { WorkIntentRuntimeProjection } from "@/lib/lifecycle/workIntentRuntimeTypes";
@@ -157,6 +157,8 @@ export type OpportunityDrawerViewModel = {
         header_menu: ResolvedActionForClient[];
         /** Subject-local Manage menu — mirrors header_menu (registry-backed). */
         manage_menu: ResolvedActionForClient[];
+        /** Full record_header slots — Current Work supporting actions source. */
+        record_header: ResolvedActionsBySlot | null;
     };
     layout: {
         mode: "workflow_v1";

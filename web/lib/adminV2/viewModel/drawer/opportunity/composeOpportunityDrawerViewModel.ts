@@ -414,6 +414,7 @@ export async function composeOpportunityDrawerViewModel(
             header: headerActions,
             header_menu: headerMenuActions,
             manage_menu: headerMenuActions,
+            record_header: resolvedActions,
         },
         layout,
         above_fold: {

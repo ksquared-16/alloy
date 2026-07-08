@@ -76,7 +76,7 @@ function buildRealisticVm(recordId: string): OpportunityDrawerViewModel {
             status_can_mutate: false,
             oper_trust_preview: null,
         },
-        actions: { header: [], header_menu: [], manage_menu: [] },
+        actions: { header: [], header_menu: [], manage_menu: [], record_header: null },
         layout: {
             mode: "workflow_v1",
             tabs: [...OPPORTUNITY_INQUIRY_WORKFLOW_TAB_STRIP] as DrawerTabKey[],

@@ -142,7 +142,15 @@ export default function FocusPanelCardRenderer({
         return <TourCard model={model} context={context} receded={receded} mutation={mutation} />;
     }
     if (model.key === "communications") {
-        return <CommunicationsCard model={model} context={context} receded={receded} mutation={mutation} />;
+        return (
+            <CommunicationsCard
+                model={model}
+                context={context}
+                receded={receded}
+                coordination={coordination}
+                mutation={mutation}
+            />
+        );
     }
     if (model.key === "billing_preview") {
         return <BillingPreviewCard model={model} context={context} receded={receded} coordination={coordination} />;

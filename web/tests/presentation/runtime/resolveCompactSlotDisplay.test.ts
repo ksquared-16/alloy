@@ -418,4 +418,22 @@ describe("resolveCompactSlotDisplay", () => {
         };
         expect(resolveCompactSlotDisplay("groupCount", familyContext(), slots, null)).toBe("Avery, Rowan");
     });
+
+    it("renders work slot with progress hint", () => {
+        const display = resolveCompactSlotDisplay(
+            "work",
+            familyContext({
+                current_work_summary: {
+                    label: "Review Lead",
+                    state: "open",
+                    due_label: null,
+                    progress_hint: "1 of 3 complete",
+                    blocker_hint: null,
+                },
+            }),
+            undefined,
+            null,
+        );
+        expect(display).toBe("Review Lead · 1 of 3 complete");
+    });
 });

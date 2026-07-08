@@ -67,6 +67,9 @@ import { warmOperatorWorkUnitEntryFromHref } from "@/lib/admin/operatorWorkUnitE
 import { resolveWorkViewTargetHref } from "@/lib/presentation/runtime/workViewTargetHref";
 import type { ResolvedActionForClient } from "@/lib/admin/actions/types";
 import { fetchWorkUnitRightRailResolvedActions } from "@/lib/workspace/fetchWorkUnitRightRailResolvedActions";
+import { filterRightRailActionsForCurrentWork } from "@/lib/adminV2/runtime/focusPanel/currentWork/filterRightRailActionsForCurrentWork";
+import { useOpportunityDrawerVmPayload } from "@/lib/adminV2/viewModel/drawer/vmRuntime/useOpportunityDrawerVmPayload";
+import { useAdminAuth } from "@/contexts/AdminAuthContext";
 import type { QueueItemsResult, QueueSummary } from "@/lib/queues/types";
 import { useOperationalAnswers } from "./useOperationalAnswers";
 import { useWorkUnitHeaderSurfaceConfigState } from "./useWorkUnitHeaderSurfaceConfig";
@@ -701,6 +704,8 @@ export function useWorkUnitSurfaceRuntime(): WorkUnitSurfaceRuntime {
     // right-rail handoff §5), expose them on the model; RR.SURFACE renders + the existing
     // action runtime executes. Deduped + TTL, so no double-fetch. Never invents actions.
     const [rightRailActions, setRightRailActions] = useState<ResolvedActionForClient[]>([]);
+    const { displayVm } = useOpportunityDrawerVmPayload();
+    const { canMutate: authCanMutate } = useAdminAuth();
     useEffect(() => {
         if (!departmentId || !workUnitId) {
             setRightRailActions([]);
@@ -723,6 +728,15 @@ export function useWorkUnitSurfaceRuntime(): WorkUnitSurfaceRuntime {
         };
     }, [departmentId, workUnitId]);
 
+    const filteredRightRailActions = useMemo(
+        () =>
+            filterRightRailActionsForCurrentWork(rightRailActions, {
+                stageWorkRuntime: displayVm?.workspace.stage_work_runtime,
+                canMutate: authCanMutate,
+            }),
+        [rightRailActions, displayVm?.workspace.stage_work_runtime, authCanMutate],
+    );
+
     // ── Resolved model ───────────────────────────────────────────────────────────────────
     const model = useMemo<WorkUnitSurfaceModel>(
         () => ({
@@ -741,7 +755,7 @@ export function useWorkUnitSurfaceRuntime(): WorkUnitSurfaceRuntime {
             },
             activeWorkViewId: runtimeCtx.workViewId,
             selectedRecordId,
-            rightRailActions,
+            rightRailActions: filteredRightRailActions,
             departmentId,
             workUnitId,
             // Above-fold identity + configured views resolved; queue carries its own state.
@@ -766,7 +780,7 @@ export function useWorkUnitSurfaceRuntime(): WorkUnitSurfaceRuntime {
             queueError,
             runtimeCtx.workViewId,
             selectedRecordId,
-            rightRailActions,
+            filteredRightRailActions,
             departmentId,
             workUnitId,
             configSettled,

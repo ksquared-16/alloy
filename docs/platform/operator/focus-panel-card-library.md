@@ -57,14 +57,16 @@ Each child row: program · room · schedule · teacher · desired start · enrol
 | **Key** | `current_work` |
 | **Archetype** | Action |
 | **Tier** | Work |
+| **Card class** | **Work-owning** |
 | **Operational question** | "What needs to happen next on this record?" |
-| **Lifecycle** | Summary only (diagnostic — never becomes a Focus Card) |
-| **Evidence source** | `context.signals.work` (via `buildCurrentWorkCardEvidence`) |
-| **Capabilities** | supportsExpanded |
-| **Expansion groups** | work_items |
-| **Footprint** | narrow (1 column) |
+| **Lifecycle** | Summary → Focus (completion inside Focus) |
+| **Evidence source** | `projectCurrentWork(context)` from `context.stageWorkRuntime` + `context.signals.work` |
+| **Capabilities** | supportsFocus (no expanded overlay — Focus replaces it) |
+| **Footprint** | full (default row 1; configurable via `/settings/surfaces`) |
 
-Primary work item + due label in 2 seconds. Full queue appears as a card-anchored inline overlay without moving the base surface. Clicking an item hands off to the owning card (contact work → Household; enrollment work → Children). Ownerless items are inert.
+Primary work title, purpose, and progress in 2 seconds on Summary. Click or Bend Pine CTA opens Focus — same grammar as Household. Focus holds checklist (work-surface handoffs), blockers, and outcome completion via existing `completeStageWorkWithOutcome` path. Outreach items hand off to Communications; contact-data verification to Household; program/fit to Children; packet work to Documents — never edit truth here.
+
+See [current-work-surface.md](./current-work-surface.md) and [actions-current-work-alignment.md](./actions-current-work-alignment.md).
 
 ---
 

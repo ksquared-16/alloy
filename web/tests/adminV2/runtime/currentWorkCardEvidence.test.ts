@@ -4,6 +4,7 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 
 import { buildCurrentWorkCardEvidence } from "@/lib/adminV2/runtime/focusPanel/currentWork/buildCurrentWorkCardEvidence";
+import type { StageWorkRuntimeProjection } from "@/lib/lifecycle/stageWorkRuntimeTypes";
 import type {
     OperationalContext,
     OperationalContextSignals,
@@ -24,7 +25,10 @@ function workItem(partial: Partial<OperationalWorkItem>): OperationalWorkItem {
     };
 }
 
-function ctx(work: Partial<OperationalContextSignals["work"]>): OperationalContext {
+function ctx(
+    work: Partial<OperationalContextSignals["work"]>,
+    runtime?: StageWorkRuntimeProjection | null,
+): OperationalContext {
     const signals: OperationalContextSignals = {
         work: {
             primary: null,
@@ -46,58 +50,133 @@ function ctx(work: Partial<OperationalContextSignals["work"]>): OperationalConte
         perspective: null,
         truth: { id: "opp-1" },
         signals,
+        stageWorkRuntime: runtime ?? null,
         capabilities: { canMutate: true, maskedChannels: false },
         status: "ready",
     };
 }
 
 describe("buildCurrentWorkCardEvidence", () => {
-    it("returns empty when there are no work items", () => {
+    it("returns empty when stage work is not configured", () => {
         const evidence = buildCurrentWorkCardEvidence(ctx({}));
         expect(evidence.isEmpty).toBe(true);
-        expect(evidence.answerLine).toBe("No open work");
-        expect(evidence.statusChip).toBe("Clear");
-        expect(evidence.statusTone).toBe("ready");
+        expect(evidence.answerLine).toBe("No current work configured");
+        expect(evidence.statusChip).toBeNull();
+        expect(evidence.statusTone).toBe("neutral");
     });
 
-    it("surfaces a next action when no tasks but an action is configured", () => {
-        const evidence = buildCurrentWorkCardEvidence(ctx({ nextActionLabel: "Advance to enrolled" }));
-        expect(evidence.isEmpty).toBe(true);
-        expect(evidence.answerLine).toBe("Advance to enrolled");
-    });
-
-    it("answers with the most-urgent item and an open-count chip", () => {
-        const primary = workItem({});
+    it("does not synthesize work from signals.work when stage runtime is absent", () => {
         const evidence = buildCurrentWorkCardEvidence(
-            ctx({
-                primary,
-                items: [primary, workItem({ id: "t2", label: "Send packet", urgency: "upcoming", dueLabel: "Due Jun 30" })],
-                openCount: 2,
-            }),
+            ctx({ nextActionLabel: "Advance to enrolled", openCount: 2, primary: workItem({}) }),
         );
+        expect(evidence.isEmpty).toBe(true);
+        expect(evidence.answerLine).toBe("No current work configured");
+    });
+
+    it("answers from configured stage work, not signals.work items", () => {
+        const runtime: StageWorkRuntimeProjection = {
+            stage_key: "tour",
+            stage_label: "Tour",
+            purpose: "Confirm tour booking",
+            journey_segment: "family",
+            template_keys: ["confirm_tour"],
+            primary: {
+                template_key: "confirm_tour",
+                label: "Confirm tour booking",
+                role: "primary",
+                state: "open",
+                requires_outcome_picker: false,
+                work_id: "w1",
+                due_at: null,
+                due_urgency: "due_today",
+                attempt_count: 0,
+                last_outcome: null,
+                completed_at: null,
+                outcomes: [],
+                completion_policy_summary: null,
+                completion_policy_min_attempts: null,
+                completion_policy_max_attempts: null,
+                outcome_automation_preview: [],
+            },
+            additional: [
+                {
+                    template_key: "send_packet",
+                    label: "Send packet",
+                    role: "secondary",
+                    state: "open",
+                    requires_outcome_picker: false,
+                    work_id: "w2",
+                    due_at: null,
+                    due_urgency: "none",
+                    attempt_count: 0,
+                    last_outcome: null,
+                    completed_at: null,
+                    outcomes: [],
+                    completion_policy_summary: null,
+                    completion_policy_min_attempts: null,
+                    completion_policy_max_attempts: null,
+                    outcome_automation_preview: [],
+                },
+            ],
+            execution: {
+                department_id: "dept-1",
+                subject: { journey_segment: "family", opportunity_id: "opp-1" },
+                requires_outcome_picker: false,
+            },
+        };
+        const evidence = buildCurrentWorkCardEvidence(ctx({ openCount: 2, overdueCount: 0 }, runtime));
         expect(evidence.isEmpty).toBe(false);
         expect(evidence.answerLine).toBe("Confirm tour booking");
-        expect(evidence.supportingLine).toBe("Due today · 2 open tasks");
-        expect(evidence.statusChip).toBe("2 open");
-        expect(evidence.statusTone).toBe("due");
+        expect(evidence.supportingLine).toContain("Confirm tour booking");
+        expect(evidence.statusChip).toBe("0 of 2 complete");
     });
 
-    it("escalates to blocked tone when work is overdue", () => {
-        const overdue = workItem({ urgency: "overdue", dueLabel: "Overdue 2 days" });
+    it("escalates to blocked tone when work signals report overdue", () => {
+        const runtime: StageWorkRuntimeProjection = {
+            stage_key: "tour",
+            stage_label: "Tour",
+            purpose: null,
+            journey_segment: "family",
+            template_keys: ["confirm_tour"],
+            primary: {
+                template_key: "confirm_tour",
+                label: "Confirm tour booking",
+                role: "primary",
+                state: "open",
+                requires_outcome_picker: false,
+                work_id: "w1",
+                due_at: null,
+                due_urgency: "overdue",
+                attempt_count: 0,
+                last_outcome: null,
+                completed_at: null,
+                outcomes: [],
+                completion_policy_summary: null,
+                completion_policy_min_attempts: null,
+                completion_policy_max_attempts: null,
+                outcome_automation_preview: [],
+            },
+            additional: [],
+            execution: {
+                department_id: "dept-1",
+                subject: { journey_segment: "family", opportunity_id: "opp-1" },
+                requires_outcome_picker: false,
+            },
+        };
         const evidence = buildCurrentWorkCardEvidence(
-            ctx({ primary: overdue, items: [overdue], openCount: 1, overdueCount: 1 }),
+            ctx({ openCount: 1, overdueCount: 1 }, runtime),
         );
         expect(evidence.hasOverdue).toBe(true);
         expect(evidence.statusTone).toBe("blocked");
         expect(evidence.statusChip).toBe("Overdue");
     });
 
-    it("observes the Operational Context (signals.work), not the drawer VM", () => {
+    it("observes stage work runtime via projectCurrentWork, not the drawer VM", () => {
         const source = readFileSync(
             path.join(process.cwd(), "lib/adminV2/runtime/focusPanel/currentWork/buildCurrentWorkCardEvidence.ts"),
             "utf8",
         );
-        expect(source).toContain("context.signals.work");
+        expect(source).toContain("projectCurrentWork(context)");
         expect(source).not.toMatch(/OpportunityDrawerViewModel|displayVm|drawerId|DrawerTabKey/);
     });
 });

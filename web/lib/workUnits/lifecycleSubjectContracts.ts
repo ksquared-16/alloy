@@ -134,6 +134,10 @@ export type QueueRowCurrentWorkSummary = {
     label: string;
     state: "open" | "completed" | "planned" | "none";
     due_label: string | null;
+    /** e.g. "2 of 3 complete" — work language, not stage/status. */
+    progress_hint: string | null;
+    /** Primary blocker or attention reason for the queue hint line. */
+    blocker_hint: string | null;
 };
 
 export type QueueRowNextBestAction = {
