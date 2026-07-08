@@ -5,6 +5,9 @@
 
 export type NestedSurfaceFieldLayoutWidth = "full" | "half";
 
+/** Visual drag target — beside pairs fields; below starts a new full row. */
+export type NestedSurfaceFieldDropZone = "beside" | "below";
+
 /** Field keys that always occupy a full row (multi-line / composite blocks). */
 export const NESTED_SURFACE_FORCE_FULL_ROW_FIELD_KEYS = new Set<string>([
     "inquiry_child.schedule_type",

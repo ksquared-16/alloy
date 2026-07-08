@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
     defaultNestedSurfaceConfig,
+    applyNestedSurfaceFieldDrop,
     fieldLayoutWidthForNestedGroup,
     reconcileNestedSurfaceConfig,
     setFieldLayoutWidthInNestedGroup,
@@ -70,5 +71,22 @@ describe("nestedSurfaceFieldLayout", () => {
         expect(last?.layoutWidth).toBe("half");
         expect(dob?.layoutWidth).toBe("half");
         expect(age?.layoutWidth).toBe("half");
+    });
+
+    it("pairs fields when dragged beside each other", () => {
+        let config = defaultNestedSurfaceConfig(CHILDREN_SURFACE_ID);
+        config = applyNestedSurfaceFieldDrop(config, "identity", "child.first_name", "child.last_name", "beside");
+        expect(fieldLayoutWidthForNestedGroup(config, "identity", "child.first_name")).toBe("half");
+        expect(fieldLayoutWidthForNestedGroup(config, "identity", "child.last_name")).toBe("half");
+        const keys = config.groups.find((g) => g.key === "identity")?.selectedFieldKeys ?? [];
+        expect(keys.indexOf("child.first_name")).toBeGreaterThan(keys.indexOf("child.last_name"));
+    });
+
+    it("stacks a field on a new full row when dropped below", () => {
+        let config = defaultNestedSurfaceConfig(CHILDREN_SURFACE_ID);
+        config = setFieldLayoutWidthInNestedGroup(config, "identity", "child.first_name", "half");
+        config = setFieldLayoutWidthInNestedGroup(config, "identity", "child.last_name", "half");
+        config = applyNestedSurfaceFieldDrop(config, "identity", "child.dob_age", "child.last_name", "below");
+        expect(fieldLayoutWidthForNestedGroup(config, "identity", "child.dob_age")).toBe("full");
     });
 });
