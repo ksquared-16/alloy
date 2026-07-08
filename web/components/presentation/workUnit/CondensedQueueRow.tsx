@@ -183,7 +183,12 @@ export function CondensedQueueRow({
     const workLabel = showWork
         ? resolveCompactSlotDisplay("work", context, rowConfig?.work, focus)
         : null;
-    const dueLabel = showWork ? context.current_work_summary?.due_label ?? null : null;
+    const dueLabel =
+        showWork ?
+            context.current_work_summary?.blocker_hint
+            ?? context.current_work_summary?.due_label
+            ?? null
+        :   null;
     const hasFooterLine = countChip != null || workLabel != null || dueLabel != null;
 
     return (

@@ -102,6 +102,8 @@ export function previewRowModelFromConfig(config: QueueRecordLayoutConfigV3): Qu
             label: compactConfig.slots.work.label,
             state: "open",
             due_label: null,
+            progress_hint: null,
+            blocker_hint: null,
         };
     }
     if (compactConfig.slots.groupCount.label) {
@@ -120,7 +122,13 @@ export function previewRowModelFromConfig(config: QueueRecordLayoutConfigV3): Qu
                 };
             }
             if (widgetKey === "current_work" || widgetKey === "activity_timeline") {
-                ctx.current_work_summary = { label, state: "open", due_label: null };
+                ctx.current_work_summary = {
+                    label,
+                    state: "open",
+                    due_label: null,
+                    progress_hint: null,
+                    blocker_hint: null,
+                };
             }
             continue;
         }

@@ -12,10 +12,11 @@ import {
     lifecycleBuilderFromDepartmentMetadata,
 } from "@/lib/lifecycle/lifecycleBuilderConfig";
 import type { StageOutcomeExecutionSubject } from "@/lib/lifecycle/executeStageOperatingOutcome";
+import { resolveEnrollmentDepartmentForOpportunity } from "@/lib/lifecycle/resolveStageWorkOutcomeContext";
 import { resolveEffectiveStageOperatingPlan } from "@/lib/lifecycle/resolveEffectiveStageOperatingPlan";
 import { resolvePrimaryWorkIntentForStage } from "@/lib/lifecycle/resolvePrimaryWorkIntentForStage";
 import { completionPolicySummary } from "@/lib/lifecycle/stageWorkCompletionPolicy";
-import { resolveEnrollmentDepartmentForOpportunity } from "@/lib/lifecycle/resolveStageWorkOutcomeContext";
+import { resolveWorkDefinitionKeyFromTemplate } from "@/lib/lifecycle/resolveWorkDefinitionKeyFromTemplate";
 import {
     type StageOperatingPlanV1,
     type StageWorkTemplateV1,
@@ -102,6 +103,21 @@ function taskRowFromDb(row: TaskDbRow, orgId: string, opportunityId: string): Op
     };
 }
 
+function templateWorkDefinitionKey(
+    template: Pick<StageWorkTemplateV1, "template_key" | "work_definition_key">,
+): string | null {
+    const resolved = resolveWorkDefinitionKeyFromTemplate(template);
+    if (resolved.ok) return resolved.work_definition_key;
+    return trimOrNull(template.work_definition_key);
+}
+
+/** Legacy spawn keys that resolve to the same platform work definition as a template. */
+function legacyIntentWorkDefinitionKey(workIntentKey: string | null): string | null {
+    if (!workIntentKey) return null;
+    if (workIntentKey === "make_contact") return "contact_family";
+    return null;
+}
+
 export function taskMatchesStageWorkTemplate(
     row: TaskDbRow,
     stageKey: string,
@@ -119,17 +135,20 @@ export function taskMatchesStageWorkTemplate(
     const work = parseOperationalWorkViewFromTaskRow(taskRowFromDb(row, "", ""));
     const snapshotStage = trimOrNull(work.context_snapshot?.lifecycle_stage_key);
     const stage = mdStage ?? snapshotStage;
-    if (stage !== stageKey) return false;
 
-    const templateDefinitionKey = trimOrNull(template.work_definition_key);
-    const rowDefinitionKey = trimOrNull(work.work_definition_key) ?? trimOrNull(md.work_definition_key);
-    if (
-        templateDefinitionKey &&
-        rowDefinitionKey === templateDefinitionKey &&
-        trimOrNull(md.lifecycle_provenance) === "lifecycle_template"
-    ) {
-        return true;
+    const templateDefinitionKey = templateWorkDefinitionKey(template);
+    const rowDefinitionKey =
+        trimOrNull(work.work_definition_key)
+        ?? trimOrNull(md.work_definition_key)
+        ?? legacyIntentWorkDefinitionKey(mdWorkIntent);
+
+    if (!templateDefinitionKey || !rowDefinitionKey || rowDefinitionKey !== templateDefinitionKey) {
+        return false;
     }
+
+    // Same platform work definition — bind when stage aligns (or stage is unknown on legacy rows).
+    if (!stage || stage === stageKey) return true;
+    if (trimOrNull(md.lifecycle_provenance) === "lifecycle_template") return true;
 
     return false;
 }

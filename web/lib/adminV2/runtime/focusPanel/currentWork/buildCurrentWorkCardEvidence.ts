@@ -3,47 +3,25 @@
  *
  * Operational question: "What needs to happen next on this record?"
  *
- * Derives entirely from the Operational Context (`context.signals.work`), which the
- * adapter projects from the composed work runtime + open tasks. No drawer VM, no
- * card-local fetch. The single most-urgent item is the overview answer; expansion
- * is local UI over the already-projected item list.
+ * Derives from `projectCurrentWork(context)` — the Operational Context adapter
+ * supplies `stageWorkRuntime` + `signals.work`. No drawer VM, no card-local fetch.
  *
- * @see docs/platform/operator/card-archetypes.md (Work)
+ * @see docs/platform/operator/current-work-surface.md
  */
 
-import type { FocusPanelCardKey } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardModel";
-import type {
-    OperationalContext,
-    OperationalWorkItem,
-} from "@/lib/adminV2/runtime/operationalContext/types";
+import type { OperationalContext } from "@/lib/adminV2/runtime/operationalContext/types";
+
+import { inferWorkItemOwner } from "./inferWorkItemOwner";
+import { projectCurrentWork, type CurrentWorkViewModel } from "./projectCurrentWork";
+
+export type { WorkItemOwner } from "./inferWorkItemOwner";
+export { inferWorkItemOwner };
 
 export type CurrentWorkStatusTone = "due" | "blocked" | "ready" | "neutral";
 
-/** Where a work item's truth lives, so Current Work can hand off instead of editing. */
-export type WorkItemOwner = { card: FocusPanelCardKey; focus: string | null };
-
-/**
- * Current Work is a coordinating card: a work item should route to the card that
- * OWNS the underlying truth rather than open an editing workspace here. We infer the
- * owner conservatively from the item label — only obvious contact/enrollment intents
- * route; anything ambiguous returns null (the item expands inline). Pure + testable.
- */
-export function inferWorkItemOwner(item: OperationalWorkItem): WorkItemOwner | null {
-    const label = item.label.toLowerCase();
-    // Reaching the family → Household owns contact truth.
-    if (/\b(call|contact|reach|phone|email|follow[\s-]?up|text|message)\b/.test(label)) {
-        return { card: "household", focus: "primary_contact" };
-    }
-    // Enrollment/program/schedule for a child → Children owns operational truth.
-    if (/\b(program|schedule|enroll|enrollment|child|roster|placement)\b/.test(label)) {
-        return { card: "children", focus: null };
-    }
-    return null;
-}
-
 export type CurrentWorkCardEvidence = {
-    primary: OperationalWorkItem | null;
-    items: OperationalWorkItem[];
+    viewModel: CurrentWorkViewModel;
+    primary: CurrentWorkViewModel["primaryWorkItem"];
     openCount: number;
     overdueCount: number;
     nextActionLabel: string | null;
@@ -55,64 +33,70 @@ export type CurrentWorkCardEvidence = {
     hasOverdue: boolean;
 };
 
-export function buildCurrentWorkCardEvidence(context: OperationalContext): CurrentWorkCardEvidence {
-    const work = context.signals.work;
-    const items = work.items;
-    const primary = work.primary;
-    const isEmpty = items.length === 0;
-    const hasOverdue = work.overdueCount > 0;
-
-    if (isEmpty) {
+function statusFromViewModel(vm: CurrentWorkViewModel): {
+    statusChip: string | null;
+    statusTone: CurrentWorkStatusTone;
+} {
+    if (vm.isEmpty) {
+        return { statusChip: null, statusTone: "neutral" };
+    }
+    if (vm.hasOverdue) {
         return {
+            statusChip: vm.openCount === 1 ? "Overdue" : `${vm.openCount} overdue`,
+            statusTone: "blocked",
+        };
+    }
+    if (vm.blockers.length > 0) {
+        return {
+            statusChip: vm.blockers.length === 1 ? "Blocked" : `${vm.blockers.length} blockers`,
+            statusTone: "blocked",
+        };
+    }
+    if (vm.progressLabel) {
+        return { statusChip: vm.progressLabel, statusTone: "due" };
+    }
+    if (vm.openCount > 0) {
+        return { statusChip: `${vm.openCount} open`, statusTone: "neutral" };
+    }
+    return { statusChip: null, statusTone: "neutral" };
+}
+
+export function buildCurrentWorkCardEvidence(context: OperationalContext): CurrentWorkCardEvidence {
+    const vm = projectCurrentWork(context);
+    const { statusChip, statusTone } = statusFromViewModel(vm);
+
+    if (vm.isEmpty) {
+        return {
+            viewModel: vm,
             primary: null,
-            items,
             openCount: 0,
             overdueCount: 0,
-            nextActionLabel: work.nextActionLabel,
-            answerLine: work.nextActionLabel ?? "No open work",
-            supportingLine: work.nextActionLabel
-                ? "No tasks queued — next action available"
-                : "Nothing needs action right now",
-            statusChip: work.nextActionLabel ? null : "Clear",
-            statusTone: "ready",
+            nextActionLabel: null,
+            answerLine: "No current work configured",
+            supportingLine: "Stage work is not configured for this record",
+            statusChip,
+            statusTone,
             isEmpty: true,
             hasOverdue: false,
         };
     }
 
-    const answerLine = primary?.label ?? "Open work";
-
     const supportingParts: string[] = [];
-    if (primary?.dueLabel) supportingParts.push(primary.dueLabel);
-    if (work.openCount > 0) {
-        supportingParts.push(`${work.openCount} open task${work.openCount === 1 ? "" : "s"}`);
-    }
+    if (vm.purpose) supportingParts.push(vm.purpose);
+    else if (vm.progressVerdict) supportingParts.push(vm.progressVerdict);
     const supportingLine = supportingParts.length > 0 ? supportingParts.join(" · ") : null;
 
-    let statusChip: string | null = null;
-    let statusTone: CurrentWorkStatusTone = "neutral";
-    if (hasOverdue) {
-        statusChip = work.overdueCount === 1 ? "Overdue" : `${work.overdueCount} overdue`;
-        statusTone = "blocked";
-    } else if (primary?.urgency === "today") {
-        statusChip = work.openCount > 0 ? `${work.openCount} open` : "Due today";
-        statusTone = "due";
-    } else if (work.openCount > 0) {
-        statusChip = `${work.openCount} open`;
-        statusTone = "neutral";
-    }
-
     return {
-        primary,
-        items,
-        openCount: work.openCount,
-        overdueCount: work.overdueCount,
-        nextActionLabel: work.nextActionLabel,
-        answerLine,
+        viewModel: vm,
+        primary: vm.primaryWorkItem,
+        openCount: vm.openCount,
+        overdueCount: context.signals.work.overdueCount,
+        nextActionLabel: vm.primaryActionLabel,
+        answerLine: vm.title,
         supportingLine,
         statusChip,
         statusTone,
         isEmpty: false,
-        hasOverdue,
+        hasOverdue: vm.hasOverdue,
     };
 }

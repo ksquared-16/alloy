@@ -167,15 +167,25 @@ describe("filterResidualOperationalTasks", () => {
 });
 
 describe("buildStageWorkOutcomeAutomationPreview", () => {
-    it("projects outcome automation labels for review lead", () => {
+    it("projects outcome automation labels for review lead from operating plan", () => {
         const plan = defaultStageOperatingPlanForEnrollmentStage("lead");
         expect(plan).not.toBeNull();
         const preview = buildStageWorkOutcomeAutomationPreview({
             plan: plan!,
             templateKey: "review_lead",
         });
-        expect(preview.some((line) => line.outcome_label === "Qualified")).toBe(true);
-        expect(preview.some((line) => line.effect_label.toLowerCase().includes("qualification"))).toBe(true);
+        // review_lead labels Reviewed / Needs More Information / Duplicate / Closed Lost —
+        // not "Qualified" (that outcome belongs to qualify_fit).
+        expect(preview.some((line) => line.outcome_label === "Qualified")).toBe(false);
+        expect(preview.some((line) => line.outcome_key === "needs_more_information")).toBe(true);
+        expect(
+            preview.some(
+                (line) =>
+                    line.outcome_key === "needs_more_information"
+                    && /needs attention/i.test(line.effect_label),
+            ),
+        ).toBe(true);
+        expect(preview.some((line) => line.outcome_key === "duplicate")).toBe(true);
     });
 });
 
@@ -188,11 +198,24 @@ describe("buildQueueCurrentWorkSummary", () => {
         expect(summary?.state).toBe("open");
     });
 
+    it("formats queue current work line with progress hint", () => {
+        const line = formatQueueCurrentWorkLine({
+            label: "Review Lead",
+            state: "open",
+            due_label: null,
+            progress_hint: "1 of 3 complete",
+            blocker_hint: null,
+        });
+        expect(line).toBe("Review Lead · 1 of 3 complete");
+    });
+
     it("formats queue current work line", () => {
         const line = formatQueueCurrentWorkLine({
             label: "Review Lead",
             state: "open",
             due_label: "Due today",
+            progress_hint: null,
+            blocker_hint: null,
         });
         expect(line).toContain("Review Lead");
         expect(line).toContain("Open");
@@ -204,6 +227,8 @@ describe("buildQueueCurrentWorkSummary", () => {
             label: "Contact Family",
             state: "planned",
             due_label: null,
+            progress_hint: null,
+            blocker_hint: null,
         });
         expect(line).toContain("Contact Family");
         expect(line).toContain("Planned");

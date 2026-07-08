@@ -263,8 +263,20 @@ describe("computeWorkViewOperationalSignals — per-view attention/overdue from 
         _queue_row_context: {
             attention_summary: { needs_attention: opts.attention === true, primary_reason_label: null },
             current_work_summary: opts.overdue
-                ? { label: "Review", state: "open", due_label: "Overdue" }
-                : { label: "Review", state: "open", due_label: "Upcoming" },
+                ? {
+                      label: "Review",
+                      state: "open",
+                      due_label: "Overdue",
+                      progress_hint: null,
+                      blocker_hint: null,
+                  }
+                : {
+                      label: "Review",
+                      state: "open",
+                      due_label: "Upcoming",
+                      progress_hint: null,
+                      blocker_hint: null,
+                  },
         },
     });
 

@@ -359,6 +359,7 @@ export function InlineOpportunityFocusPanel() {
                             canMutate={statusCanMutate}
                             onSelectTab={selectFromDrawerTab}
                             onHeaderAction={onActionSelect}
+                            onModeChange={setFocusPanelMode}
                         />
                     : heldPrior ?
                         // Hold the prior resolved grid during a row → row switch (no flash).
@@ -372,6 +373,7 @@ export function InlineOpportunityFocusPanel() {
                             canMutate={statusCanMutate}
                             onSelectTab={selectFromDrawerTab}
                             onHeaderAction={onActionSelect}
+                            onModeChange={setFocusPanelMode}
                         />
                     : subjectPending ?
                         // Pending final-layout load: the published-grid skeleton (same

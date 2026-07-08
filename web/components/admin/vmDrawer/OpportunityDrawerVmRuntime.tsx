@@ -965,6 +965,7 @@ export default function OpportunityDrawerVmRuntime() {
                                     canMutate={statusCanMutate}
                                     onSelectTab={onTabSelect}
                                     onHeaderAction={onActionSelect}
+                                    onModeChange={setFocusPanelMode}
                                 />
                             : drawerTab === "overview" ?
                                 <OpportunityDrawerOverviewBody

@@ -14,6 +14,7 @@ import { resolveStageOperatingPlanForStage } from "@/lib/lifecycle/stageOperatin
 import { shouldCloseWorkAfterStageOutcome } from "@/lib/lifecycle/shouldCloseWorkAfterStageOutcome";
 import { shouldRepeatWorkAfterRetryOutcome } from "@/lib/lifecycle/stageWorkCompletionPolicy";
 import { reopenStageWorkWithDueDate } from "@/lib/lifecycle/reopenStageWorkWithDueDate";
+import { recordStageWorkContactOutcomeTrace } from "@/lib/lifecycle/recordStageWorkContactOutcomeTrace";
 
 export type CompleteStageWorkWithOutcomeInput = {
     supabase: SupabaseClient;
@@ -111,6 +112,23 @@ export async function completeStageWorkWithOutcome(
             attempt_count,
             outcome_execution,
         };
+    }
+
+    const workTemplateKey = outcome.work_template_key?.trim() ?? plan.work_templates[0]?.template_key ?? "";
+    if (workTemplateKey) {
+        await recordStageWorkContactOutcomeTrace({
+            supabase: input.supabase,
+            orgId: input.orgId,
+            userId: input.userId,
+            opportunityId: input.subject.opportunity_id,
+            stageKey,
+            workId: input.workId,
+            workTemplateKey,
+            outcomeKey,
+            outcomeLabel: outcome.label,
+            plan,
+            departmentMetadata: metadata,
+        });
     }
 
     if (!closeDecision.shouldClose && attempt_count != null) {

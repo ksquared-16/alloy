@@ -74,13 +74,20 @@ export function resolveQueueRowFieldValueFromContext(
             return context.attention_summary?.needs_attention
                 ? context.attention_summary.primary_reason_label?.trim() || null
                 : null;
-        case "queue_row.work_summary":
-            return (
-                context.current_work_summary?.label?.trim()
-                ?? context.next_best_action?.label?.trim()
-                ?? context.work_summary?.primary_open_label?.trim()
-                ?? null
-            );
+        case "queue_row.work_summary": {
+            const summary = context.current_work_summary;
+            if (!summary?.label?.trim()) {
+                return (
+                    context.next_best_action?.label?.trim()
+                    ?? context.work_summary?.primary_open_label?.trim()
+                    ?? null
+                );
+            }
+            const parts = [summary.label.trim()];
+            if (summary.progress_hint) parts.push(summary.progress_hint);
+            else if (summary.blocker_hint) parts.push(summary.blocker_hint);
+            return parts.join(" · ");
+        }
         case "queue_row.next_best_action_label":
             return context.next_best_action?.label?.trim() ?? null;
         case "queue_row.group_count_label":
@@ -106,13 +113,19 @@ function defaultSlotDisplay(
             return context.attention_summary?.needs_attention
                 ? context.attention_summary.primary_reason_label?.trim() || null
                 : null;
-        case "work":
+        case "work": {
+            const summary = context.current_work_summary;
+            if (summary?.label?.trim()) {
+                const parts = [summary.label.trim()];
+                if (summary.progress_hint) parts.push(summary.progress_hint);
+                return parts.join(" · ");
+            }
             return (
-                context.current_work_summary?.label?.trim()
-                ?? context.next_best_action?.label?.trim()
+                context.next_best_action?.label?.trim()
                 ?? context.work_summary?.primary_open_label?.trim()
                 ?? null
             );
+        }
         case "groupCount":
             return focus?.siblings ? focusSiblingChip(focus.siblings) : groupedCountLabel(context);
         default:

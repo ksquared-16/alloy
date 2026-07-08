@@ -300,19 +300,22 @@ html[data-adminv2-workspace-shell="v2"] .adminv2-command-rail-executable-actions
   gap: 4px;
 }
 
+/* Secondary assistive actions — related to Current Work CTA language (Bend Pine)
+ * but clearly not the dominant primary. Current Work owns the filled --cta treatment. */
 html[data-adminv2-workspace-shell="v2"] .adminv2-command-rail-executable-action {
   display: flex;
   width: 100%;
   align-items: center;
   gap: 10px;
   box-sizing: border-box;
-  border: 1px solid rgba(39, 63, 82, 0.12);
+  border: 1px solid color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 18%, rgba(39, 63, 82, 0.12));
   border-radius: 10px;
   background: #ffffff;
   padding: 9px 10px;
   text-align: left;
   cursor: pointer;
   font-family: inherit;
+  box-shadow: none;
   transition:
     border-color var(--motion-instant) var(--motion-ease-move),
     background-color var(--motion-instant) var(--motion-ease-move),
@@ -320,8 +323,8 @@ html[data-adminv2-workspace-shell="v2"] .adminv2-command-rail-executable-action 
 }
 
 html[data-adminv2-workspace-shell="v2"] .adminv2-command-rail-executable-action:hover:not(:disabled) {
-  border-color: rgba(0, 162, 131, 0.35);
-  background: rgba(0, 162, 131, 0.04);
+  border-color: color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 42%, rgba(39, 63, 82, 0.12));
+  background: color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 6%, #fff);
   box-shadow: 0 1px 3px rgba(39, 63, 82, 0.06);
 }
 
@@ -344,6 +347,7 @@ html[data-adminv2-workspace-shell="v2"] .adminv2-command-rail-executable-action-
   shrink: 0;
   align-items: center;
   justify-content: center;
+  color: var(--alloy-os-bend-pine, #00a283);
 }
 
 html[data-adminv2-workspace-shell="v2"] .adminv2-command-rail-executable-action-chevron {

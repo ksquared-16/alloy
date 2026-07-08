@@ -1,3 +1,6 @@
+import type { StageWorkRuntimeProjection } from "@/lib/lifecycle/stageWorkRuntimeTypes";
+import type { ResolvedActionsBySlot } from "@/lib/admin/actions/types";
+
 /**
  * Operational Context — the forward-facing runtime boundary for cards.
  *
@@ -174,6 +177,16 @@ export type OperationalContext = {
      * answer is not a flat record field. @see OperationalContextSignals.
      */
     signals: OperationalContextSignals;
+    /**
+     * Stage operating-plan runtime projection — read-only source for Current Work.
+     * Populated by `buildOperationalContext`; cards never fetch this separately.
+     */
+    stageWorkRuntime?: StageWorkRuntimeProjection | null;
+    /**
+     * Registry-backed record_header action slots — supporting actions for Current Work.
+     * Populated by `buildOperationalContext`; cards never fetch separately.
+     */
+    recordHeaderActions?: ResolvedActionsBySlot | null;
     capabilities: OperationalContextCapabilities;
     status: OperationalContextStatus;
 };

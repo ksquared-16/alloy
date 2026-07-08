@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Runtime Refresh — Alloy</title>
+  <link rel="stylesheet" href="shared/alloy-workspace.css">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script src="shared/mockup-ui.js"></script>
+  <script>if(!location.search.includes('screenshot'))location.search='?screenshot=1';</script>
+</head>
+<body>
+  <nav class="nav-bar"><a href="06-runtime-refresh.html">Workspace</a><span class="sep">→</span><a href="01-enrollment-workspace.html">Dismiss Focus</a></nav>
+  <div class="os-frame">
+    <aside class="sidebar"><div class="sidebar-icon active">⊞</div></aside>
+    <div class="os-main">
+      <header class="top-bar"><span class="campus">North Campus</span></header>
+      <div class="wu-header"><div class="wu-breadcrumb"><strong>Enrollment</strong></div></div>
+      <div class="os-split">
+        <div class="queue-panel"><div class="queue-row active"><div class="name">Digan Family</div><div class="hint">Schedule tour · 0 of 3</div></div></div>
+        <div class="fp-panel" style="position:relative">
+          <div class="fp-chrome">
+            <div class="fp-record-bar">
+              <div class="fp-avatar">DF</div>
+              <div class="fp-identity"><h1>Digan Family</h1><div class="sub">Enrollment · North Campus</div></div>
+            </div>
+          </div>
+          <div class="fp-scroll" style="opacity:0.4;filter:blur(1px)"></div>
+          <div class="focus-scrim" style="display:flex">
+            <div class="focus-card">
+              <div class="focus-card-header"><button class="focus-back" onclick="location.href='01-enrollment-workspace.html'">← Back</button><span class="focus-card-label">Current Work · updated</span></div>
+              <div class="focus-card-body">
+                <div style="background:var(--juniper-light);padding:10px 14px;border-radius:8px;font-size:12px;color:var(--juniper);font-weight:600;margin-bottom:14px">Qualification complete — here's your next step</div>
+                <div class="obj-title" style="font-size:22px">Schedule Tour</div>
+                <p style="color:var(--muted);margin:8px 0 16px">Set up a visit for the family at North Campus.</p>
+                <div class="progress-meta"><span>0 of 3 done</span><span class="progress-verdict">Getting started</span></div>
+                <ul class="checklist">
+                  <li class="open"><a href="#"><span class="icon">→</span> Pick date and time <span class="chev">›</span></a></li>
+                  <li class="open"><a href="#"><span class="icon">→</span> Confirm program <span class="chev">›</span></a></li>
+                </ul>
+                <button class="btn-primary">Schedule Tour</button>
+              </div>
+            </div>
+          </div>
+        </div>
+        <aside class="bos-rail"><div class="bos-rail-btn">BOS</div></aside>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

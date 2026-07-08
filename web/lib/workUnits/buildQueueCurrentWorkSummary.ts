@@ -1,13 +1,18 @@
+/**
+ * Queue row current work summary — shared with Focus Panel Current Work projection.
+ */
+
 import type { InquirySummaryTaskPreviewPayload } from "@/lib/admin/drawer/opportunityInquirySummaryTaskPreview";
 import { operationalTaskDueUrgency } from "@/lib/agent/taskAssist/taskAssistOperationalUrgency";
+import {
+    formatCurrentWorkProgress,
+    projectCurrentWorkFromStageRuntime,
+} from "@/lib/adminV2/runtime/focusPanel/currentWork/projectCurrentWorkFromRuntime";
 import type { StageWorkItemProjection, StageWorkRuntimeProjection } from "@/lib/lifecycle/stageWorkRuntimeTypes";
 import type { WorkIntentRuntimeProjection, WorkIntentRuntimeState } from "@/lib/lifecycle/workIntentRuntimeTypes";
+import type { QueueRowCurrentWorkSummary } from "@/lib/workUnits/lifecycleSubjectContracts";
 
-export type QueueRowCurrentWorkSummary = {
-    label: string;
-    state: WorkIntentRuntimeState;
-    due_label: string | null;
-};
+export type { QueueRowCurrentWorkSummary };
 
 const DUE_LABEL = {
     overdue: "Overdue",
@@ -61,12 +66,18 @@ export function pickQueueCurrentWorkItem(
     return null;
 }
 
-function summaryFromStageWorkItem(item: StageWorkItemProjection): QueueRowCurrentWorkSummary {
+function summaryFromStageWorkItem(
+    item: StageWorkItemProjection,
+    runtime: StageWorkRuntimeProjection,
+): QueueRowCurrentWorkSummary {
     const state = normalizeState(item.state);
+    const projection = projectCurrentWorkFromStageRuntime(runtime);
     return {
         label: queueLabelForWorkItem(item),
         state,
         due_label: state === "open" ? dueLabelFromIso(item.due_at) : null,
+        progress_hint: projection.progressLabel,
+        blocker_hint: projection.blockerHint,
     };
 }
 
@@ -76,7 +87,7 @@ export function buildQueueCurrentWorkSummary(row: Record<string, unknown>): Queu
     if (runtime && typeof runtime === "object" && !Array.isArray(runtime)) {
         const stageRuntime = runtime as StageWorkRuntimeProjection;
         const item = pickQueueCurrentWorkItem(stageRuntime);
-        if (item) return summaryFromStageWorkItem(item);
+        if (item) return summaryFromStageWorkItem(item, stageRuntime);
     }
 
     const workIntent = row._work_intent_runtime;
@@ -88,6 +99,8 @@ export function buildQueueCurrentWorkSummary(row: Record<string, unknown>): Queu
                 label: primary.label,
                 state,
                 due_label: state === "open" ? dueLabelFromIso(primary.due_at) : null,
+                progress_hint: null,
+                blocker_hint: null,
             };
         }
     }
@@ -106,14 +119,22 @@ export function buildQueueCurrentWorkSummary(row: Record<string, unknown>): Queu
         label: stageTask.title.trim() || "Current work",
         state: "open",
         due_label: dueLabelFromIso(stageTask.due_at),
+        progress_hint: null,
+        blocker_hint: null,
     };
 }
 
 export function formatQueueCurrentWorkLine(summary: QueueRowCurrentWorkSummary | null): string | null {
     if (!summary) return null;
-    const state = normalizeState(summary.state);
-    const stateLabel = STATE_LABEL[state] ?? "";
-    const parts = [summary.label.trim(), stateLabel].filter(Boolean);
-    if (summary.due_label) parts.push(summary.due_label);
-    return parts.join(" · ") || null;
+    const parts: string[] = [summary.label.trim()];
+    if (summary.progress_hint) {
+        parts.push(summary.progress_hint);
+    } else {
+        const state = normalizeState(summary.state);
+        const stateLabel = STATE_LABEL[state] ?? "";
+        if (stateLabel) parts.push(stateLabel);
+    }
+    if (summary.blocker_hint) parts.push(summary.blocker_hint);
+    else if (summary.due_label) parts.push(summary.due_label);
+    return parts.filter(Boolean).join(" · ") || null;
 }

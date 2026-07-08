@@ -136,6 +136,7 @@ export function buildDemoFocusPanelSummaryViewModel(): {
                     workflow_id: null,
                 },
             ],
+            record_header: null,
         },
         layout: {
             mode: "workflow_v1",

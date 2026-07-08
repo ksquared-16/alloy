@@ -3,8 +3,8 @@
 import OpportunityFocusPanelModeGrid from "@/components/admin/focusPanel/OpportunityFocusPanelModeGrid";
 import { useActiveRuntimePerspective } from "@/lib/adminV2/runtime/perspective/RuntimePerspectiveContext";
 import type { FocusPanelMode } from "@/lib/adminV2/runtime/focusPanel/focusPanelMode";
-import type { ResolvedActionForClient } from "@/lib/admin/actions/types";
 import type { OpportunityDrawerViewModel } from "@/lib/adminV2/viewModel/drawer/types";
+import type { ResolvedActionForClient } from "@/lib/admin/actions/types";
 import type { DrawerTabKey } from "@/lib/entityPresentation";
 
 type Props = {
@@ -17,6 +17,7 @@ type Props = {
     canMutate: boolean;
     onSelectTab: (tab: DrawerTabKey) => void;
     onHeaderAction?: (action: ResolvedActionForClient) => void;
+    onModeChange?: (mode: FocusPanelMode) => void;
 };
 
 export default function OpportunityFocusPanelModeBody({
@@ -29,6 +30,7 @@ export default function OpportunityFocusPanelModeBody({
     canMutate,
     onSelectTab,
     onHeaderAction,
+    onModeChange,
 }: Props) {
     const perspective = useActiveRuntimePerspective();
 
@@ -44,6 +46,7 @@ export default function OpportunityFocusPanelModeBody({
             canMutate={canMutate}
             onSelectTab={onSelectTab}
             onHeaderAction={onHeaderAction}
+            onModeChange={onModeChange}
         />
     );
 }

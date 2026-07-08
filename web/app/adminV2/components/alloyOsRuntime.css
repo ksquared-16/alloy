@@ -1515,7 +1515,6 @@ html[data-alloy-os-runtime="on"]
 .alloy-os-ucard[data-card-role="critical"],
 .alloy-os-ucard[data-universal-card-key="attention"],
 .alloy-os-ucard[data-universal-card-key="current_mission"],
-.alloy-os-ucard[data-universal-card-key="current_work"],
 .alloy-os-ucard[data-universal-card-key="primary_next_action"] {
   border-left-width: 3px;
   border-left-color: #d97706;
@@ -1530,8 +1529,7 @@ html[data-alloy-os-runtime="on"]
 .alloy-os-ucard--tier-attention .alloy-os-ucard__title,
 .alloy-os-ucard--tier-work .alloy-os-ucard__title,
 .alloy-os-ucard[data-universal-card-key="attention"] .alloy-os-ucard__title,
-.alloy-os-ucard[data-universal-card-key="current_mission"] .alloy-os-ucard__title,
-.alloy-os-ucard[data-universal-card-key="current_work"] .alloy-os-ucard__title {
+.alloy-os-ucard[data-universal-card-key="current_mission"] .alloy-os-ucard__title {
   font-size: 11px;
   font-weight: 800;
   color: var(--alloy-os-midnight, #273f52);
@@ -1540,8 +1538,7 @@ html[data-alloy-os-runtime="on"]
 .alloy-os-ucard--tier-attention .alloy-os-ucard__insight,
 .alloy-os-ucard--tier-work .alloy-os-ucard__insight,
 .alloy-os-ucard[data-universal-card-key="attention"] .alloy-os-ucard__insight,
-.alloy-os-ucard[data-universal-card-key="current_mission"] .alloy-os-ucard__insight,
-.alloy-os-ucard[data-universal-card-key="current_work"] .alloy-os-ucard__insight {
+.alloy-os-ucard[data-universal-card-key="current_mission"] .alloy-os-ucard__insight {
   font-size: 14px;
   font-weight: 700;
 }
@@ -1549,8 +1546,7 @@ html[data-alloy-os-runtime="on"]
 .alloy-os-ucard--tier-attention .alloy-os-ucard__footer,
 .alloy-os-ucard--tier-work .alloy-os-ucard__footer,
 .alloy-os-ucard[data-universal-card-key="attention"] .alloy-os-ucard__footer,
-.alloy-os-ucard[data-universal-card-key="current_mission"] .alloy-os-ucard__footer,
-.alloy-os-ucard[data-universal-card-key="current_work"] .alloy-os-ucard__footer {
+.alloy-os-ucard[data-universal-card-key="current_mission"] .alloy-os-ucard__footer {
   padding: 6px 12px 10px;
   border-top-color: color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 22%, var(--alloy-os-border, #e5e9ef));
 }
@@ -1658,6 +1654,7 @@ html[data-alloy-os-runtime="on"]
 .alloy-os-ucard__action--primary {
   color: var(--alloy-os-bend-pine, #00a283);
 }
+
 
 .alloy-os-focus-panel-grid--work {
   /* Match the Activity cockpit rhythm exactly (10px gap + 10px padding) so both modes feel identical. */
@@ -2280,6 +2277,17 @@ html[data-alloy-os-runtime="on"]
   display: contents;
 }
 
+/* Work-owning card wrapper — same as Household: no positioning box between the grid
+ * cell and `.alloy-os-ucard`, so the centered Focus Card anchors to the canvas. */
+.alloy-os-currentwork {
+  display: contents;
+}
+
+/* Communications — same elevation anchor rule as Household / Current Work. */
+.alloy-os-communications {
+  display: contents;
+}
+
 .alloy-os-household__summary {
   display: flex;
   flex-direction: column;
@@ -2558,6 +2566,11 @@ html[data-alloy-os-runtime="on"]
 .alloy-os-card-pill--work {
   background: color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 12%, #fff);
   color: var(--alloy-os-bend-pine, #00a283);
+}
+.alloy-os-card-pill--work[data-work-status-pill="open"] {
+  border: none;
+  background: color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 10%, #fff);
+  font-weight: 600;
 }
 .alloy-os-card-pill--risk {
   background: color-mix(in srgb, #dc2626 12%, #fff);
@@ -3200,6 +3213,28 @@ html[data-alloy-os-runtime-split="true"]
   text-decoration: underline;
   text-underline-offset: 3px;
 }
+
+/* Dominant operational CTA (Current Work primary) — filled Bend Pine, not a text link.
+ * Declared after the generic link action rules so fill/padding win. */
+.alloy-os-ucard__action--cta,
+.alloy-os-card-nav .alloy-os-ucard__action--cta {
+  padding: 8px 14px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  color: #fff;
+  background: var(--alloy-os-bend-pine, #00a283);
+  border: 1px solid var(--alloy-os-bend-pine, #00a283);
+  text-decoration: none;
+}
+.alloy-os-ucard__action--cta:hover,
+.alloy-os-card-nav .alloy-os-ucard__action--cta:hover {
+  background: color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 88%, #000);
+  color: #fff;
+  text-decoration: none;
+}
+
 /* Edit preview = clean value rows, NOT gray input boxes. Reads like the focused
  * evidence with field labels; mutation seam lands here later. */
 .alloy-os-card-edit {
@@ -4022,18 +4057,343 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
  * wrappers become a block box that exactly fills the cell (no visual change — the
  * card still provides all chrome). This is set ALWAYS (not just while open) so there
  * is no display toggle / reflow at the moment the overlay opens. */
-.alloy-os-focus-panel-grid:not(.alloy-os-focus-panel-grid--work) .alloy-os-readiness,
-.alloy-os-focus-panel-grid:not(.alloy-os-focus-panel-grid--work) .alloy-os-currentwork {
+.alloy-os-focus-panel-grid:not(.alloy-os-focus-panel-grid--work) .alloy-os-readiness {
   display: block;
   position: relative;
 }
 /* When its overlay is open the card lifts above neighbours so the dropdown can paint
  * over the card below it. The card footprint is unchanged — only the absolute overlay
  * extends downward. */
-.alloy-os-readiness[data-fp-overlay-open="true"],
-.alloy-os-currentwork[data-fp-overlay-open="true"] {
+.alloy-os-readiness[data-fp-overlay-open="true"] {
   z-index: 40;
 }
+
+.alloy-os-currentwork__purpose {
+  margin-bottom: 8px;
+}
+
+.alloy-os-currentwork__progress {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 12px;
+  color: rgba(26, 35, 50, 0.62);
+  margin-bottom: 10px;
+}
+
+.alloy-os-currentwork__progress-verdict {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  /* Product language: Bend Pine. Legacy token `alloy-juniper` is the same #00A283. */
+  color: var(--alloy-os-bend-pine, #00a283);
+}
+
+.alloy-os-currentwork__blockers {
+  background: rgba(185, 28, 28, 0.06);
+  border: 1px solid rgba(185, 28, 28, 0.12);
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin-bottom: 12px;
+}
+
+.alloy-os-currentwork__blockers-title {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #b91c1c;
+  margin-bottom: 6px;
+}
+
+.alloy-os-currentwork__blocker {
+  font-size: 12px;
+  color: #991b1b;
+  line-height: 1.45;
+}
+
+.alloy-os-currentwork__checklist {
+  list-style: none;
+  margin: 0 0 12px;
+  padding: 0;
+}
+
+.alloy-os-currentwork__error {
+  font-size: 12px;
+  color: #b91c1c;
+  margin-bottom: 8px;
+}
+
+.alloy-os-communications__focus {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-bottom: 4px;
+}
+.alloy-os-communications__fact {
+  margin: 0;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--alloy-os-midnight, #273f52);
+}
+.alloy-os-communications__hint {
+  margin: 4px 0 0;
+  font-size: 11.5px;
+  line-height: 1.4;
+  color: var(--alloy-os-text-secondary, #4b5563);
+}
+
+.alloy-os-currentwork__outcomes-gap {
+  margin: 0 0 10px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px dashed color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 28%, var(--alloy-os-border, #e5e9ef));
+  background: color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 5%, #fff);
+  font-size: 12px;
+  color: var(--alloy-os-text-secondary, #4b5563);
+}
+.alloy-os-currentwork__handoff-notice {
+  margin: 0 0 10px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid color-mix(in srgb, var(--alloy-os-midnight, #273f52) 14%, var(--alloy-os-border, #e5e9ef));
+  background: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 4%, #fff);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--alloy-os-midnight, #273f52);
+}
+
+/* Stage-work outcome picker — Focus Panel tiles (Bend Pine), not utility black/white. */
+.alloy-os-outcome-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.alloy-os-outcome-picker--focus {
+  gap: 8px;
+}
+.alloy-os-outcome-picker--focus .alloy-os-outcome-picker__title {
+  font-size: 14px;
+}
+.alloy-os-outcome-picker--focus .alloy-os-outcome-picker__hint {
+  font-size: 11.5px;
+}
+.alloy-os-outcome-picker--focus .alloy-os-outcome-picker__list {
+  gap: 4px;
+  max-height: min(220px, 42vh);
+  overflow-y: auto;
+}
+.alloy-os-outcome-picker--focus .alloy-os-outcome-picker__tile {
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-height: 40px;
+  padding: 7px 10px;
+  border-radius: 8px;
+  box-shadow: none;
+}
+.alloy-os-outcome-picker--focus .alloy-os-outcome-picker__tile-label {
+  font-size: 12.5px;
+  font-weight: 600;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.alloy-os-outcome-picker--focus .alloy-os-outcome-picker__tile-effect {
+  font-size: 11px;
+  text-align: right;
+  flex: 0 0 auto;
+  max-width: 48%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--alloy-os-text-tertiary, #9ca3af);
+}
+.alloy-os-outcome-picker__eyebrow {
+  margin: 0;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--alloy-os-text-tertiary, #9ca3af);
+}
+.alloy-os-outcome-picker__title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1.3;
+  color: var(--alloy-os-midnight, #273f52);
+}
+.alloy-os-outcome-picker__hint {
+  margin: 0;
+  font-size: 12px;
+  color: var(--alloy-os-text-secondary, #4b5563);
+}
+.alloy-os-outcome-picker__empty {
+  margin: 0;
+  padding: 14px 12px;
+  border-radius: 10px;
+  border: 1px dashed color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 28%, var(--alloy-os-border, #e5e9ef));
+  background: color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 5%, #fff);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--alloy-os-midnight, #273f52);
+}
+.alloy-os-outcome-picker__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.alloy-os-outcome-picker__tile {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  width: 100%;
+  text-align: left;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid color-mix(in srgb, var(--alloy-os-midnight, #273f52) 12%, var(--alloy-os-border, #e5e9ef));
+  background: var(--alloy-os-surface, #fff);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+  cursor: pointer;
+  transition:
+    border-color var(--motion-instant, 120ms) ease,
+    background-color var(--motion-instant, 120ms) ease,
+    box-shadow var(--motion-instant, 120ms) ease;
+}
+.alloy-os-outcome-picker__tile:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 45%, var(--alloy-os-border, #e5e9ef));
+  background: color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 6%, #fff);
+}
+.alloy-os-outcome-picker__tile--selected,
+.alloy-os-outcome-picker__tile[data-outcome-selected="true"] {
+  border-color: var(--alloy-os-bend-pine, #00a283);
+  background: color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 10%, #fff);
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 35%, transparent),
+    0 2px 8px -2px rgba(15, 23, 42, 0.12);
+}
+.alloy-os-outcome-picker__tile:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.alloy-os-outcome-picker__tile-label {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--alloy-os-midnight, #273f52);
+}
+.alloy-os-outcome-picker__tile-effect {
+  font-size: 11.5px;
+  line-height: 1.35;
+  color: var(--alloy-os-text-secondary, #4b5563);
+}
+
+.alloy-os-outcome-confirm {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.alloy-os-outcome-confirm__effects {
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 18%, var(--alloy-os-border, #e5e9ef));
+  background: color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 5%, #fff);
+}
+.alloy-os-outcome-confirm__effects-title {
+  margin: 0 0 6px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--alloy-os-text-tertiary, #9ca3af);
+}
+.alloy-os-outcome-confirm__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12.5px;
+  color: var(--alloy-os-midnight, #273f52);
+}
+.alloy-os-outcome-confirm__list li::before {
+  content: "→ ";
+  color: var(--alloy-os-bend-pine, #00a283);
+  font-weight: 700;
+}
+
+.alloy-os-currentwork__supporting {
+  margin: 4px 0 8px;
+}
+.alloy-os-currentwork__supporting-title {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--alloy-os-text-tertiary, #9ca3af);
+  margin-bottom: 4px;
+}
+.alloy-os-currentwork__supporting-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  font-size: 12px;
+  color: var(--alloy-os-text-secondary, #4b5563);
+}
+.alloy-os-currentwork__supporting-list li {
+  padding: 2px 0;
+}
+.alloy-os-currentwork__supporting-action {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  font: inherit;
+  color: var(--alloy-os-midnight, #273f52);
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.alloy-os-currentwork__supporting-action:hover {
+  color: var(--alloy-os-bend-pine, #00a283);
+}
+
+.alloy-os-currentwork__row--action {
+  border: 1px solid color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 22%, transparent);
+  border-radius: 8px;
+  padding: 6px 8px;
+  margin: 2px 0;
+  background: color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 4%, #fff);
+}
+
+.alloy-os-currentwork__row--action:hover {
+  background: color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 8%, #fff);
+}
+
+/* Focused Current Work — neutral elevated card; green emphasis via status pill only. */
+.alloy-os-focus-panel-grid[data-fp-depth="active"]
+  .alloy-os-focus-panel-grid__cell[data-fp-elevated="true"]
+  .alloy-os-currentwork[data-work-card-perspective="focused"]
+  .alloy-os-ucard {
+  box-shadow:
+    0 1px 0 0 rgba(255, 255, 255, 0.7) inset,
+    0 2px 8px -3px rgba(15, 23, 42, 0.16),
+    0 24px 44px -22px rgba(15, 23, 42, 0.34),
+    0 56px 110px -44px rgba(15, 23, 42, 0.5),
+    0 0 0 1px color-mix(in srgb, var(--alloy-os-midnight, #273f52) 10%, transparent);
+}
+
+/* Summary accent rail — Bend Pine (operational emphasis, not alert amber). */
+.alloy-os-focus-panel-grid:not(.alloy-os-focus-panel-grid--work)
+  .alloy-os-currentwork[data-work-card-perspective="summary"]
+  .alloy-os-ucard {
+  border-left: 4px solid var(--alloy-os-bend-pine, #00a283);
+}
+
 
 /* Invisible click-out catcher — NO harsh scrim for inline overlays. */
 .alloy-os-card-overlay__backdrop {
