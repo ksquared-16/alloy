@@ -1,5 +1,6 @@
 "use client";
 
+import FieldSurfaceAvailabilityBadges from "@/components/admin/fields/FieldSurfaceAvailabilityBadges";
 import {
     SURFACE_COMPOSER_INSPECTOR_ATTR,
     SURFACE_FIELD_INSPECTOR_ATTRS,
@@ -12,11 +13,19 @@ import {
     type SurfaceFieldPlacementMode,
     type SurfaceFieldSectionKey,
 } from "@/lib/adminV2/settings/surfaces/surfaceComposer";
+import {
+    focusPanelSurfaceStatus,
+} from "@/lib/adminV2/settings/surfaces/focusPanelFieldAvailability";
+import type { FieldSurfaceAvailabilityRow } from "@/lib/fields/fieldSurfaceAvailability";
 
 export type SurfaceFieldInspectorProps = {
     field: SurfaceComposerPlacedItemRef;
     /** `nested` hides section/placement — nested surfaces only support order. */
     variant?: "full" | "nested";
+    /** Optional concept path for Focus Panel / nested capability badges. */
+    availabilityConcept?: string | null;
+    /** Precomputed availability rows; overrides concept resolution when provided. */
+    availabilityRows?: readonly FieldSurfaceAvailabilityRow[] | null;
     onChangeSection: (section: SurfaceFieldSectionKey) => void;
     onChangePlacement: (mode: SurfaceFieldPlacementMode) => void;
     onChangeLabel: (label: string) => void;
@@ -33,6 +42,8 @@ const SECTION_KEYS = Object.keys(SURFACE_FIELD_SECTION_LABELS) as SurfaceFieldSe
 export default function SurfaceFieldInspector({
     field,
     variant = "full",
+    availabilityConcept = null,
+    availabilityRows = null,
     onChangeSection,
     onChangePlacement,
     onChangeLabel,
@@ -42,6 +53,9 @@ export default function SurfaceFieldInspector({
 }: SurfaceFieldInspectorProps) {
     const placementMode = surfaceComposerPlacementModeFromInline(field.inlineWithPrevious);
     const nested = variant === "nested";
+    const resolvedAvailability =
+        availabilityRows ??
+        (availabilityConcept ? focusPanelSurfaceStatus(availabilityConcept).rows : null);
 
     return (
         <div className="space-y-4" {...{ [SURFACE_COMPOSER_INSPECTOR_ATTR]: nested ? "nested-field" : "field" }}>
@@ -110,6 +124,20 @@ export default function SurfaceFieldInspector({
                     </div>
                 </>
             :   null}
+
+            {resolvedAvailability && resolvedAvailability.length > 0 ? (
+                <div data-testid="surface-field-availability" data-inspector-availability="true">
+                    <p className="config-typo-sublabel mb-1.5">Surface availability</p>
+                    <FieldSurfaceAvailabilityBadges rows={resolvedAvailability} compact />
+                </div>
+            ) : availabilityConcept ? (
+                <div data-testid="surface-field-availability" data-inspector-availability="platform">
+                    <p className="config-typo-sublabel mb-1.5">Surface availability</p>
+                    <span className="inline-flex items-center rounded-full border border-alloy-bend-pine/30 bg-alloy-bend-pine/[0.08] px-2 py-0.5 text-[10px] font-medium text-alloy-bend-pine">
+                        Focus Panel
+                    </span>
+                </div>
+            ) : null}
 
             <div {...{ [SURFACE_FIELD_INSPECTOR_ATTRS.fieldList]: true }}>
                 <p className="config-typo-sublabel mb-2">Order</p>

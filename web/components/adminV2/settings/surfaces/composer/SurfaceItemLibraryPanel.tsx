@@ -15,6 +15,8 @@ export type SurfaceItemLibraryPanelProps<TItem> = {
     itemKey: (item: TItem) => string;
     itemLabel: (item: TItem) => string;
     itemMeta?: (item: TItem) => string | null;
+    /** Optional availability status for capability-engine badges in the library. */
+    itemAvailability?: (item: TItem) => "available" | "unavailable" | "unknown" | null;
     onPick: (item: TItem) => void;
     onClose: () => void;
     headerNote?: React.ReactNode;
@@ -29,6 +31,7 @@ export default function SurfaceItemLibraryPanel<TItem>({
     itemKey,
     itemLabel,
     itemMeta,
+    itemAvailability,
     onPick,
     onClose,
     headerNote,
@@ -93,18 +96,34 @@ export default function SurfaceItemLibraryPanel<TItem>({
                                 <ul className="space-y-0.5">
                                     {category.items.map((item) => {
                                         const meta = itemMeta?.(item);
+                                        const availability = itemAvailability?.(item) ?? null;
                                         return (
                                             <li key={itemKey(item)}>
                                                 <button
                                                     type="button"
-                                                    className="flex w-full items-center justify-between rounded-md px-2 py-1.5 text-left text-sm hover:bg-alloy-pine/[0.06]"
+                                                    className={[
+                                                        "flex w-full items-center justify-between rounded-md px-2 py-1.5 text-left text-sm hover:bg-alloy-bend-pine/[0.06]",
+                                                        availability === "unavailable" ? "opacity-70" : "",
+                                                    ].join(" ")}
                                                     data-library-item={itemKey(item)}
+                                                    data-library-availability={availability ?? undefined}
                                                     onClick={() => onPick(item)}
                                                 >
                                                     <span className="font-medium text-alloy-midnight">{itemLabel(item)}</span>
-                                                    {meta ?
-                                                        <span className="ml-2 truncate text-[10px] text-alloy-midnight/40">{meta}</span>
-                                                    :   null}
+                                                    <span className="ml-2 flex shrink-0 items-center gap-1.5">
+                                                        {availability === "unavailable" ? (
+                                                            <span className="rounded-full border border-alloy-stone/30 bg-alloy-stone/[0.08] px-1.5 py-px text-[9px] font-medium text-alloy-midnight/45">
+                                                                Unavailable
+                                                            </span>
+                                                        ) : availability === "available" ? (
+                                                            <span className="rounded-full border border-alloy-bend-pine/30 bg-alloy-bend-pine/[0.08] px-1.5 py-px text-[9px] font-medium text-alloy-bend-pine">
+                                                                Available
+                                                            </span>
+                                                        ) : null}
+                                                        {meta ?
+                                                            <span className="truncate text-[10px] text-alloy-midnight/40">{meta}</span>
+                                                        :   null}
+                                                    </span>
                                                 </button>
                                             </li>
                                         );

@@ -58,6 +58,7 @@ import {
     focusPanelLibraryCategories,
     type FocusPanelLibraryItem,
 } from "@/lib/adminV2/settings/surfaces/focusPanelBuilderLibrary";
+import { focusPanelSurfaceStatus } from "@/lib/adminV2/settings/surfaces/focusPanelFieldAvailability";
 import {
     addFocusPanelFieldFromLibrary,
     listPlacedFocusPanelFields,
@@ -531,6 +532,7 @@ export default function FocusPanelSummarySurfaceEditor({ onOpenNestedSurface }: 
                                 <p className="config-typo-workspace-title mb-3 text-sm">Field</p>
                                 <SurfaceFieldInspector
                                     field={toSurfaceComposerPlacedItemRef(selectedPlacedField)}
+                                    availabilityConcept={selectedPlacedField.concept}
                                     onChangeSection={(section) => {
                                         const next = moveFocusPanelFieldToSection(
                                             selectedCardConfig,
@@ -613,6 +615,9 @@ export default function FocusPanelSummarySurfaceEditor({ onOpenNestedSurface }: 
                 }
                 itemLabel={(item) => item.label}
                 itemMeta={(item) => (item.kind === "field" ? item.groupLabel : null)}
+                itemAvailability={(item) =>
+                    item.kind === "field" ? focusPanelSurfaceStatus(item.concept).status : null
+                }
                 onPick={handleLibraryPick}
                 onClose={() => {
                     setLibraryOpen(false);
