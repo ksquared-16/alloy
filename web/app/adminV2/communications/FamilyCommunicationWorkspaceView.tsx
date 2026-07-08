@@ -52,8 +52,6 @@ export type WorkspaceDetail = {
 };
 export type WorkspaceSelected = { id: string; family_label?: string | null; sla_state?: string | null; assignment_state?: string | null; attention_state?: string | null };
 
-const ACTIVITY_THREAD_STRIP_LIMIT = 5;
-
 function threadChipLabel(thread: ThreadVM): string {
     const subject = thread.subject?.trim();
     if (subject) return subject;
@@ -175,7 +173,6 @@ export default function FamilyCommunicationWorkspaceView(props: FamilyCommunicat
     const composeMode = workspaceMode === "email" || workspaceMode === "sms";
     const activeModeReason =
         workspaceMode === "note" || workspaceMode === "tasks" ? null : modeAvailability[workspaceMode]?.reason ?? null;
-    const activityThreadStrip = isActivityEmbed ? sortThreadsForStrip(threads).slice(0, ACTIVITY_THREAD_STRIP_LIMIT) : [];
 
     const renderRecipientTiers = (compact?: boolean) =>
         liveRecipientGroups?.map((g) => (
@@ -237,14 +234,8 @@ export default function FamilyCommunicationWorkspaceView(props: FamilyCommunicat
         </button>
     );
 
-    return (
-        <div
-            data-cc-surface-variant={surfaceVariant}
-            className={`grid min-h-0 flex-1 gap-0 ${isActivityEmbed ? "grid-cols-1" : "grid-cols-[minmax(0,1fr)_minmax(380px,1.35fr)]"}`}
-        >
-            {/* CONVERSATION — compact snapshot band + chat history */}
-            <div data-cc-ws-column="timeline" className="flex min-h-0 flex-col border-r border-alloy-stone/20 bg-white">
-                <div data-cc-ws-section="snapshot" className="shrink-0 border-b border-alloy-stone/15 bg-white px-3.5 py-2.5">
+    const snapshotBand = (
+        <div data-cc-ws-section="snapshot" className="shrink-0 border-b border-alloy-stone/15 bg-white px-3.5 py-2.5">
                     <div className="flex items-center gap-2.5">
                         <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-alloy-juniper/15 text-alloy-juniper ring-1 ring-alloy-juniper/60">
                             <Users className="h-4 w-4" />
@@ -350,50 +341,9 @@ export default function FamilyCommunicationWorkspaceView(props: FamilyCommunicat
                         ) : null}
                     </div>
                 </div>
+    );
 
-                {/* conversation history — reads like a chat */}
-                <div data-cc-ws-section="timeline" className={`min-h-0 flex-1 overflow-auto ${COMMS_SURFACE_MUTED_CLASS} px-3.5 py-3`}>
-                    {isActivityEmbed && LIVE_WORKSPACE ? (
-                        <div data-cc-thread-strip className="mb-2 flex flex-wrap items-center gap-1.5 border-b border-alloy-stone/12 pb-2">
-                            {activityThreadStrip.length === 0 ? (
-                                <span className="text-[10px] text-alloy-midnight/45">No threads yet</span>
-                            ) : (
-                                activityThreadStrip.map((thread) => {
-                                    const active = selectedThreadId === thread.id;
-                                    const ChannelIcon = thread.channel === "sms" ? MessageSquare : Mail;
-                                    return (
-                                        <button
-                                            key={thread.id}
-                                            type="button"
-                                            data-cc-thread-chip={thread.id}
-                                            aria-pressed={active}
-                                            onClick={() => onOpenThread(thread.id)}
-                                            className={`inline-flex max-w-[9.5rem] items-center gap-1 truncate rounded-full px-2 py-0.5 text-[10px] font-medium transition ${active ? "bg-alloy-juniper text-white" : "bg-white text-alloy-midnight/70 ring-1 ring-alloy-stone/25 hover:ring-alloy-juniper/40"}`}
-                                        >
-                                            <ChannelIcon className="h-3 w-3 shrink-0" />
-                                            <span className="truncate">{threadChipLabel(thread)}</span>
-                                        </button>
-                                    );
-                                })
-                            )}
-                            <button
-                                type="button"
-                                data-cc-new-message
-                                aria-pressed={selectedThreadId == null}
-                                onClick={() => onNewMessage?.()}
-                                className={`ml-auto inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold transition ${selectedThreadId == null ? "bg-alloy-juniper/15 text-alloy-juniper ring-1 ring-alloy-juniper/50" : "text-alloy-juniper hover:bg-alloy-juniper/10"}`}
-                            >
-                                <Plus className="h-3 w-3" /> New message
-                            </button>
-                        </div>
-                    ) : null}
-                    {!isActivityEmbed && LIVE_WORKSPACE && selectedThreadId ? (
-                        <div className="mb-2 flex items-center justify-between rounded-md border border-alloy-juniper/50 bg-alloy-juniper/10 px-2 py-1 text-[10px] text-alloy-juniper">
-                            <span>Viewing one thread</span>
-                            <button type="button" onClick={onAllMessages} className="font-semibold underline">All messages</button>
-                        </div>
-                    ) : null}
-                    {messages.length === 0 ? (
+    const messageListBody = messages.length === 0 ? (
                         <div className="text-[11px] text-alloy-midnight/45">No communication yet.</div>
                     ) : (
                         <ol data-cc-timeline className="space-y-3">
@@ -441,12 +391,10 @@ export default function FamilyCommunicationWorkspaceView(props: FamilyCommunicat
                                 );
                             })}
                         </ol>
-                    )}
-                </div>
-            </div>
+                    );
 
-            {/* COMPOSER — top-anchored, full height, body dominant */}
-            <div data-cc-ws-column="composer" data-cc-ws-section="composer" className="flex min-h-0 flex-col bg-white px-4 py-3">
+    const composerColumn = (
+        <div data-cc-ws-column="composer" data-cc-ws-section="composer" className="flex min-h-0 flex-col bg-white px-4 py-3">
                 <div data-cc-composer-channels className="inline-flex w-fit overflow-hidden rounded-lg border border-alloy-stone/20 bg-white text-[11px] shadow-sm">
                     {renderModeTab("email", "Email")}
                     {renderModeTab("sms", "SMS")}
@@ -624,7 +572,93 @@ export default function FamilyCommunicationWorkspaceView(props: FamilyCommunicat
                 </div>
                 </>
                 ) : null}
+        </div>
+    );
+
+    if (isActivityEmbed) {
+        const activityThreadList = sortThreadsForStrip(threads);
+        return (
+            <div data-cc-surface-variant={surfaceVariant} className="flex min-h-0 flex-1">
+                {/* THREAD LIST — recent conversations rollup (channel · count · timestamp) */}
+                <div
+                    data-cc-ws-column="threadlist"
+                    data-cc-thread-strip
+                    className="flex min-h-0 w-[40%] min-w-[8.5rem] max-w-[13.5rem] shrink-0 flex-col border-r border-alloy-stone/15 bg-white"
+                >
+                    <div className="flex shrink-0 items-center justify-between gap-2 border-b border-alloy-stone/12 px-2.5 py-1.5">
+                        <span className="text-[10px] font-semibold uppercase tracking-[0.06em] text-alloy-midnight/45">Conversations</span>
+                        <button
+                            type="button"
+                            data-cc-new-message
+                            aria-pressed={selectedThreadId == null}
+                            onClick={() => onNewMessage?.()}
+                            className={`inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold transition ${selectedThreadId == null ? "bg-alloy-juniper/15 text-alloy-juniper ring-1 ring-alloy-juniper/50" : "text-alloy-juniper hover:bg-alloy-juniper/10"}`}
+                        >
+                            <Plus className="h-3 w-3" /> New
+                        </button>
+                    </div>
+                    <div className="min-h-0 flex-1 overflow-auto px-1.5 py-1.5">
+                        {activityThreadList.length === 0 ? (
+                            <p className="px-1 py-1.5 text-[10px] text-alloy-midnight/45">No threads yet</p>
+                        ) : (
+                            activityThreadList.map((thread) => {
+                                const active = selectedThreadId === thread.id;
+                                const ChannelIcon = thread.channel === "sms" ? MessageSquare : Mail;
+                                return (
+                                    <button
+                                        key={thread.id}
+                                        type="button"
+                                        data-cc-thread-chip={thread.id}
+                                        aria-pressed={active}
+                                        onClick={() => onOpenThread(thread.id)}
+                                        className={`mb-1 flex w-full flex-col gap-0.5 rounded-lg border px-2 py-1.5 text-left transition ${active ? "border-alloy-juniper/45 bg-alloy-juniper/10 ring-1 ring-alloy-juniper/20" : "border-alloy-stone/15 bg-white hover:border-alloy-juniper/40"}`}
+                                    >
+                                        <span className="flex items-center gap-1.5">
+                                            <ChannelIcon className="h-3 w-3 shrink-0 text-alloy-juniper" />
+                                            <span className="min-w-0 flex-1 truncate text-[11px] font-semibold text-alloy-midnight">{threadChipLabel(thread)}</span>
+                                            {thread.unread > 0 ? <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-alloy-juniper" aria-label="Unread" /> : null}
+                                        </span>
+                                        <span className="flex items-center justify-between gap-1 text-[9.5px] text-alloy-midnight/45">
+                                            <span className="truncate">{thread.channel === "sms" ? "SMS" : "Email"} · {thread.messageCount} msg</span>
+                                            <span className="shrink-0">{relTime(thread.lastActivityAt)}</span>
+                                        </span>
+                                    </button>
+                                );
+                            })
+                        )}
+                    </div>
+                </div>
+
+                {/* CONVERSATION + COMPOSER — selected thread detail, composer pinned below */}
+                <div data-cc-ws-column="conversation" className="flex min-h-0 flex-1 flex-col bg-white">
+                    <div data-cc-ws-section="timeline" className={`min-h-0 flex-1 overflow-auto ${COMMS_SURFACE_MUTED_CLASS} px-3 py-2.5`}>
+                        {messageListBody}
+                    </div>
+                    {composerColumn}
+                </div>
             </div>
+        );
+    }
+
+    return (
+        <div
+            data-cc-surface-variant={surfaceVariant}
+            className="grid min-h-0 flex-1 gap-0 grid-cols-[minmax(0,1fr)_minmax(380px,1.35fr)]"
+        >
+            {/* CONVERSATION — compact snapshot band + chat history */}
+            <div data-cc-ws-column="timeline" className="flex min-h-0 flex-col border-r border-alloy-stone/20 bg-white">
+                {snapshotBand}
+                <div data-cc-ws-section="timeline" className={`min-h-0 flex-1 overflow-auto ${COMMS_SURFACE_MUTED_CLASS} px-3.5 py-3`}>
+                    {LIVE_WORKSPACE && selectedThreadId ? (
+                        <div className="mb-2 flex items-center justify-between rounded-md border border-alloy-juniper/50 bg-alloy-juniper/10 px-2 py-1 text-[10px] text-alloy-juniper">
+                            <span>Viewing one thread</span>
+                            <button type="button" onClick={onAllMessages} className="font-semibold underline">All messages</button>
+                        </div>
+                    ) : null}
+                    {messageListBody}
+                </div>
+            </div>
+            {composerColumn}
         </div>
     );
 }

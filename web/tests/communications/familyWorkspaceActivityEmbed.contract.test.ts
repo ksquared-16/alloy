@@ -23,9 +23,14 @@ describe("familyWorkspace activity_embed contract", () => {
         expect(workspace).toMatch(/threads=\{vm\.threads\}/);
     });
 
-    it("activity_embed view renders thread strip and New message affordance", () => {
+    it("activity_embed view renders a two-pane conversation workspace (thread list | conversation)", () => {
         const view = read("app/adminV2/communications/FamilyCommunicationWorkspaceView.tsx");
+        // Thread rollup list (repurposed data-cc-thread-strip) with per-thread chips.
         expect(view).toMatch(/data-cc-thread-strip/);
+        expect(view).toMatch(/data-cc-ws-column="threadlist"/);
+        expect(view).toMatch(/data-cc-thread-chip/);
+        // Selected conversation + pinned composer on the right pane.
+        expect(view).toMatch(/data-cc-ws-column="conversation"/);
         expect(view).toMatch(/data-cc-new-message/);
         expect(view).toMatch(/data-cc-recipient-compact/);
         expect(view).toMatch(/onNewMessage\?\.\(\)/);
@@ -33,7 +38,7 @@ describe("familyWorkspace activity_embed contract", () => {
 
     it("Recent Activity ribbon uses compact event count", () => {
         const embedded = read("components/admin/focusPanel/OpportunityFocusPanelEmbeddedWorkspace.tsx");
-        expect(embedded).toMatch(/RIBBON_EVENT_COUNT = 4/);
+        expect(embedded).toMatch(/RIBBON_EVENT_COUNT = 3/);
     });
 });
 
