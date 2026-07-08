@@ -11,7 +11,10 @@ import DataModelRelationshipsTab from "@/components/admin/fields/DataModelRelati
 import DataModelWorkspaceTabs, { type DataModelWorkspaceTab } from "@/components/admin/fields/DataModelWorkspaceTabs";
 import FieldEntityNav, { FIELD_SETTINGS_NAV_ENTITIES } from "@/components/admin/fields/FieldEntityNav";
 import { useEntityLabels } from "@/contexts/EntityLabelsContext";
-import { adminFieldEntitySingularLabel } from "@/lib/admin/adminFieldEntityDisplayLabel";
+import {
+    configurationHubEntity,
+    resolveConfigurationEntitySingularLabel,
+} from "@/lib/adminV2/configuration/configurationEntityCatalog";
 import { isChildcareFieldsHubVisibleEntity } from "@/lib/fields/childcareFieldCatalogDoctrine";
 import {
     buildSettingsFieldCatalogEntries,
@@ -20,7 +23,6 @@ import {
     type SettingsHubEntityKey,
 } from "@/lib/fields/fieldCatalogForSettings";
 import { dataModelStatsForEntity } from "@/lib/fields/dataModelWorkspaceModel";
-import { SETTINGS_ENTITY_FIELD_EXPLANATIONS } from "@/lib/fields/computedFieldCatalog";
 import type { FieldDef } from "@/app/api/admin/field-definitions/route";
 
 export type FieldEntityKey = SettingsHubEntityKey;
@@ -115,7 +117,14 @@ export default function DataModelWorkspaceClient({
     const [focusFieldRefKey, setFocusFieldRefKey] = useState<string | null>(null);
     const [fieldsOwnershipFilter, setFieldsOwnershipFilter] = useState<FieldOwnershipFilter>(ownershipFromUrl);
 
-    const entityLabel = useMemo(() => adminFieldEntitySingularLabel(labels, entity), [labels, entity]);
+    const entityLabel = useMemo(
+        () => resolveConfigurationEntitySingularLabel(labels, entity),
+        [labels, entity],
+    );
+    const entityExplanation = useMemo(
+        () => configurationHubEntity(entity)?.description ?? "",
+        [entity],
+    );
     const primaryEntityType = entity === "inquiry_child" ? "customer_member" : entity;
 
     const replaceWorkspaceUrl = useCallback(
@@ -239,7 +248,7 @@ export default function DataModelWorkspaceClient({
                         hubEntity={entity}
                         entityLabel={entityLabel}
                         stats={stats}
-                        explanation={SETTINGS_ENTITY_FIELD_EXPLANATIONS[entity]}
+                        explanation={entityExplanation}
                         onViewUsage={() => onTabChange("overview")}
                         onAddField={triggerAddField}
                         onAddRelationship={triggerAddRelationship}
