@@ -87,6 +87,7 @@ describe("Data Model workspace", () => {
         expect(navSrc).not.toContain("Inquiry child");
         expect(navSrc).not.toContain("placement_candidate");
         expect(navSrc).not.toContain("OCM");
+        expect(navSrc).not.toContain("👶");
     });
 
     it("configured gender is available to business process requirements with child context", () => {

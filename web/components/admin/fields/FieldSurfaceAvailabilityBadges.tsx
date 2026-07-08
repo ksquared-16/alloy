@@ -10,7 +10,7 @@ type Props = {
 
 function badgeClass(status: FieldSurfaceAvailabilityRow["status"]): string {
     return status === "available"
-        ? "border-alloy-pine/30 bg-alloy-pine/[0.08] text-alloy-pine"
+        ? "border-alloy-bend-pine/30 bg-alloy-bend-pine/[0.08] text-alloy-bend-pine"
         : "border-alloy-stone/35 bg-alloy-stone/[0.06] text-alloy-midnight/55";
 }
 

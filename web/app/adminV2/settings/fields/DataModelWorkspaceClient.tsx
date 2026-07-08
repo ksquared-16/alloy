@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import EntityFieldsClient from "@/components/admin/EntityFieldsClient";
+import DataModelAddRelationshipModal from "@/components/admin/fields/DataModelAddRelationshipModal";
 import DataModelComputedSignalsTab from "@/components/admin/fields/DataModelComputedSignalsTab";
 import DataModelEntityHeader from "@/components/admin/fields/DataModelEntityHeader";
 import DataModelOverviewTab from "@/components/admin/fields/DataModelOverviewTab";
@@ -169,16 +170,18 @@ export default function DataModelWorkspaceClient({
         onTabChange("fields");
     };
 
+    const openRelationshipModal = () => setRelationshipModalOpen(true);
+
     return (
         <div className="w-full min-w-0" data-testid="data-model-workspace">
-            <div className="flex flex-col gap-6 lg:flex-row lg:items-start">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:gap-5">
                 <FieldEntityNav
                     activeEntity={entity}
                     onSelect={onEntityChange}
                     totalFieldsByEntity={totalFieldsByEntity}
                 />
 
-                <div className="min-w-0 flex-1 space-y-4">
+                <div className="min-w-0 flex-1 space-y-3">
                     <DataModelEntityHeader
                         hubEntity={entity}
                         entityLabel={entityLabel}
@@ -186,10 +189,7 @@ export default function DataModelWorkspaceClient({
                         explanation={SETTINGS_ENTITY_FIELD_EXPLANATIONS[entity]}
                         onViewUsage={() => onTabChange("overview")}
                         onAddField={triggerAddField}
-                        onAddRelationship={() => {
-                            setRelationshipModalOpen(true);
-                            onTabChange("relationships");
-                        }}
+                        onAddRelationship={openRelationshipModal}
                     />
 
                     <DataModelWorkspaceTabs activeTab={tab} onSelect={onTabChange} />
@@ -202,30 +202,16 @@ export default function DataModelWorkspaceClient({
                             onViewAllRelationships={() => onTabChange("relationships")}
                             onViewAllComputed={() => onTabChange("computed_signals")}
                             onAddField={triggerAddField}
-                            onAddRelationship={() => {
-                                setRelationshipModalOpen(true);
-                                onTabChange("relationships");
-                            }}
+                            onAddRelationship={openRelationshipModal}
                             onSelectField={setSelectedEntry}
                         />
                     ) : null}
 
                     {tab === "relationships" ? (
-                        <>
-                            <DataModelRelationshipsTab
-                                hubEntity={entity}
-                                onAddRelationship={() => setRelationshipModalOpen(true)}
-                            />
-                            {relationshipModalOpen ? (
-                                <div
-                                    className="rounded-lg border border-alloy-pine/20 bg-alloy-pine/[0.04] px-3 py-2 text-xs text-alloy-midnight/70"
-                                    data-testid="add-relationship-modal-placeholder"
-                                >
-                                    Relationship authoring opens from the Relationships settings vocabulary. Platform
-                                    relationship types are configured under Settings → Relationships.
-                                </div>
-                            ) : null}
-                        </>
+                        <DataModelRelationshipsTab
+                            hubEntity={entity}
+                            onAddRelationship={openRelationshipModal}
+                        />
                     ) : null}
 
                     {tab === "fields" ? (
@@ -269,6 +255,12 @@ export default function DataModelWorkspaceClient({
                           }
                         : undefined
                 }
+            />
+
+            <DataModelAddRelationshipModal
+                open={relationshipModalOpen}
+                hubEntity={entity}
+                onClose={() => setRelationshipModalOpen(false)}
             />
         </div>
     );

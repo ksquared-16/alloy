@@ -6,6 +6,11 @@ import { adminFieldEntitySingularLabel } from "@/lib/admin/adminFieldEntityDispl
 import { useEntityLabels } from "@/contexts/EntityLabelsContext";
 import { CHILDCARE_FIELDS_HUB_PRIMARY_ENTITIES } from "@/lib/fields/childcareFieldCatalogDoctrine";
 import { adminSettingsSubpathHref } from "@/lib/admin/canonicalAdminRoutes";
+import {
+    DATA_MODEL_ENTITY_ICONS,
+    DATA_MODEL_ICON_STROKE,
+} from "@/lib/fields/dataModelWorkspaceIcons";
+import { Settings2 } from "lucide-react";
 
 export type FieldEntityNavCounts = {
     totalFields: number;
@@ -19,62 +24,73 @@ type Props = {
 
 const NAV_ENTITIES = CHILDCARE_FIELDS_HUB_PRIMARY_ENTITIES as readonly SettingsHubEntityKey[];
 
-const ENTITY_ICONS: Record<SettingsHubEntityKey, string> = {
-    inquiry_child: "👶",
-    person: "👤",
-    customer: "🏠",
-    opportunity: "📋",
-    location: "📍",
-};
-
 export default function FieldEntityNav({ activeEntity, onSelect, totalFieldsByEntity = {} }: Props) {
     const { labels } = useEntityLabels();
 
     return (
         <nav
-            className="w-full shrink-0 space-y-1 lg:w-[168px] xl:w-[180px]"
+            className="configuration-section-queue w-full shrink-0 lg:w-[168px] xl:w-[180px]"
             aria-label="Data model entities"
             data-testid="field-entity-nav"
         >
-            <p className="px-2 text-[10px] font-semibold uppercase tracking-wide text-alloy-midnight/40">
+            <p className="px-2 pb-1.5 text-[11px] font-semibold uppercase tracking-wide text-alloy-forge/55">
                 All Entities
             </p>
-            {NAV_ENTITIES.map((entity) => {
-                const staticCounts = staticCatalogCountsForHubEntity(entity);
-                const custom = totalFieldsByEntity[entity] ?? 0;
-                const totalFields = staticCounts.platform + staticCounts.computed + custom;
-                const active = activeEntity === entity;
-                const label = adminFieldEntitySingularLabel(labels, entity);
-                const displayLabel = entity === "opportunity" ? "Lead / Enrollment" : label;
-                return (
-                    <button
-                        key={entity}
-                        type="button"
-                        onClick={() => onSelect(entity)}
-                        className={`w-full rounded-lg border px-2.5 py-2 text-left transition-colors ${
-                            active
-                                ? "border-alloy-pine/30 bg-alloy-pine/[0.08] text-alloy-midnight"
-                                : "border-transparent text-alloy-midnight/75 hover:border-alloy-forge/12 hover:bg-white/80"
-                        }`}
-                        data-testid={`field-entity-nav-${entity}`}
-                        data-active={active ? "true" : "false"}
-                    >
-                        <span className="flex items-center gap-2">
-                            <span aria-hidden>{ENTITY_ICONS[entity]}</span>
-                            <span className="block text-sm font-semibold">{displayLabel}</span>
-                        </span>
-                        <span className="mt-1 block pl-6 text-[10px] text-alloy-midnight/50" data-count-fields={totalFields}>
-                            {totalFields} fields
-                        </span>
-                    </button>
-                );
-            })}
+            <div className="space-y-0.5">
+                {NAV_ENTITIES.map((entity) => {
+                    const staticCounts = staticCatalogCountsForHubEntity(entity);
+                    const custom = totalFieldsByEntity[entity] ?? 0;
+                    const totalFields = staticCounts.platform + staticCounts.computed + custom;
+                    const active = activeEntity === entity;
+                    const label = adminFieldEntitySingularLabel(labels, entity);
+                    const displayLabel = entity === "opportunity" ? "Lead / Enrollment" : label;
+                    const Icon = DATA_MODEL_ENTITY_ICONS[entity];
+                    return (
+                        <button
+                            key={entity}
+                            type="button"
+                            onClick={() => onSelect(entity)}
+                            className={[
+                                "process-config-nav-item flex w-full items-start gap-2 rounded-lg border px-2.5 py-2 text-left transition-colors",
+                                active
+                                    ? "process-config-nav-item--active border-alloy-bend-pine/30 bg-alloy-bend-pine/[0.08] text-alloy-midnight shadow-[inset_3px_0_0_#00a283]"
+                                    : "border-transparent text-alloy-midnight/75 hover:bg-alloy-stone/[0.35]",
+                            ].join(" ")}
+                            data-testid={`field-entity-nav-${entity}`}
+                            data-active={active ? "true" : "false"}
+                        >
+                            <Icon
+                                size={15}
+                                strokeWidth={DATA_MODEL_ICON_STROKE}
+                                className={active ? "mt-0.5 shrink-0 text-alloy-bend-pine" : "mt-0.5 shrink-0 text-alloy-forge/55"}
+                                aria-hidden
+                            />
+                            <span className="min-w-0 flex-1">
+                                <span
+                                    className={[
+                                        "block text-sm leading-snug",
+                                        active ? "font-semibold text-alloy-midnight" : "font-medium",
+                                    ].join(" ")}
+                                >
+                                    {displayLabel}
+                                </span>
+                                <span
+                                    className="mt-0.5 block text-[10px] text-alloy-midnight/45"
+                                    data-count-fields={totalFields}
+                                >
+                                    {totalFields} fields
+                                </span>
+                            </span>
+                        </button>
+                    );
+                })}
+            </div>
             <a
-                href={adminSettingsSubpathHref("entity-labels")}
-                className="mt-3 flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-xs text-alloy-midnight/55 hover:bg-white/80"
+                href={adminSettingsSubpathHref("entities")}
+                className="mt-3 flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-[11px] font-medium text-alloy-midnight/45 transition-colors hover:bg-alloy-stone/[0.35] hover:text-alloy-midnight/70"
                 data-testid="field-entity-nav-manage"
             >
-                <span aria-hidden>⚙</span>
+                <Settings2 size={13} strokeWidth={DATA_MODEL_ICON_STROKE} aria-hidden />
                 Manage Entities
             </a>
         </nav>
