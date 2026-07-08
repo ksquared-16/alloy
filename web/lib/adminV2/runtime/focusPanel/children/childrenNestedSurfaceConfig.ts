@@ -8,6 +8,7 @@ import type { LayoutDoc } from "@/lib/layout/layoutV2";
 import {
     CHILDREN_SURFACE_ID,
     enabledEvidenceSections,
+    fieldLayoutWidthForNestedGroup,
     fieldPresentationLabel,
     fieldVisibilityForNestedGroup,
     groupDefsFor,
@@ -15,6 +16,7 @@ import {
     selectedFieldKeys,
     type NestedSurfaceConfig,
 } from "@/lib/adminV2/settings/surfaces/nestedSurfaceEditorModel";
+import type { NestedSurfaceFieldLayoutWidth } from "@/lib/adminV2/settings/surfaces/nestedSurfaceFieldLayout";
 import { fieldShouldRender } from "@/lib/adminV2/settings/surfaces/nestedSurfaceFieldPolicy";
 import {
     CHILD_FOCUS_FIELD_DEFS,
@@ -35,6 +37,7 @@ export type ChildrenFocusFieldRow = {
     groupKey: (typeof CHILDREN_FOCUS_GROUP_KEYS)[number];
     displayed: boolean;
     editable: boolean;
+    layoutWidth: NestedSurfaceFieldLayoutWidth;
 };
 
 export type ChildrenEvidenceSectionView = {
@@ -87,6 +90,7 @@ export function childrenFocusRowsFromNestedConfig(config: NestedSurfaceConfig | 
                 groupKey,
                 displayed,
                 editable,
+                layoutWidth: fieldLayoutWidthForNestedGroup(config, groupKey, fieldKey),
             });
         }
     }
