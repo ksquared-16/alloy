@@ -80,9 +80,43 @@ Browser validation artifact: `docs/sprints/07_2026/perceived-performance-browser
 
 ---
 
-## Phase 2 candidates (deferred)
+## Phase 2 — C3 same-host pill queue prefetch (complete, browser-limited)
 
-C3 same-host pill queue prefetch, E1 seed placeholders, A3 warm-cache Surface Hold, C2 pill focus continuity, H1 back navigation hold. **Do not start until Phase 1.5 merges.**
+**Branch:** `feat/perceived-performance-phase-2`
+
+### Validation path
+
+`/workspace/work-unit/new-leads` — 6 Work View pills (New Leads, Active Pipeline, Registration, Waitlist, Tours, All Leads). New Leads has records.
+
+### Implementation
+
+| File | Change |
+|------|--------|
+| `sameHostPillQueueWarm.ts` | Pure plan mirrors `resolveSelectWorkViewAction` |
+| `useWorkUnitSurfaceRuntime.ts` | Same-host hover warms queue rows via existing `dedupeAdminFetchWithTtlMeta` (30s); active rows GET shares TTL; cross-host keeps entry warm |
+| `perfNamespaceLog.ts` | Safe key `warm_result` |
+| `sameHostPillQueueWarm.test.ts` | Unit coverage for noop / same-host queue / cross-host entry plans |
+| `runC3PillPrefetchValidation.mjs` | Browser harness (3× before/after on multi-pill path) |
+| `probeMultiPillWorkUnits.mjs`, `probeSameHostPills.mjs`, `probeWorkViewHosts.mjs` | Path discovery helpers |
+
+### Validation summary
+
+**Unit tests prove same-host planning and warm behavior.** `resolveSameHostPillQueueWarmPlan` and `prefetchWorkView` are covered for noop, `same_host_queue`, and `cross_host_entry` paths; pill switching, queue hold, and surface hold regressions pass.
+
+**Demo tenant did not contain a browser-visible same-host pill pair.** On the Firefly enrollment demo, inactive pills on `/workspace/work-unit/new-leads` resolve to cross-host navigation (`resolveSelectWorkViewAction` → `navigate`). No inactive pill on that path produced `warm_seam: same_host_queue` marks in browser runs.
+
+**Browser validation therefore proved no regression, not same-host warm hits.** Before/after runs on the multi-pill path show stable pill ack, queue hold, and cross-host entry warm marks. C3 same-host queue warm hits were not observable in browser because the demo tenant lacks a same-host inactive pill pair — not because the seam is untested (unit coverage covers it).
+
+**Final timed-out rerun excluded as dev-server flake.** One post-C3 AFTER rerun timed out waiting for Work View pills (60s). Earlier successful AFTER runs and unit tests are authoritative; the timed-out rerun is excluded from the validation record.
+
+Browser validation artifacts:
+- `docs/sprints/07_2026/perceived-performance-c3-validation-before.json`
+- `docs/sprints/07_2026/perceived-performance-c3-validation-after.json`
+- `docs/sprints/07_2026/perceived-performance-c3-validation-after-c3.json`
+
+### Remaining Phase 2 candidates (not started)
+
+E1 seed placeholders, A3 warm-cache Surface Hold, C2 pill focus continuity, H1 back navigation hold.
 
 ---
 
@@ -90,10 +124,9 @@ C3 same-host pill queue prefetch, E1 seed placeholders, A3 warm-cache Surface Ho
 
 ```bash
 cd /Users/Kelly/Alloy/.worktrees/perceived-performance-sprint/web
-NODE_OPTIONS=--max-old-space-size=8192 npx tsc --noEmit
-npm run test -- tests/admin/alloyOperationalBootShell.test.tsx \
-  tests/presentation/workUnit/queueRegionHold.test.ts \
+npm run test -- tests/presentation/runtime/sameHostPillQueueWarm.test.ts \
   tests/presentation/runtime/workUnitPillSwitching.test.ts \
+  tests/presentation/workUnit/queueRegionHold.test.ts \
   tests/presentation/workUnit/workUnitSurfaceHold.test.ts
-npx tsx scripts/runBootShellColdLoadValidation.mjs   # requires dev server on :3001
+npx tsx scripts/runC3PillPrefetchValidation.mjs   # requires dev server on :3001
 ```

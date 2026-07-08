@@ -51,7 +51,12 @@ import {
 } from "@/lib/workspace/resolveWorkViewCanonicalLocation";
 import { appendWorkspaceSiteToUrl } from "@/lib/adminV2/workspaceSiteFilterClient";
 import { resolveWorkUnitQueueRowsFetchLimit } from "@/lib/adminV2/workUnitQueueRowsFetchLimit";
-import { dedupeAdminFetch } from "@/lib/workspace/workspaceAdminFetchDedupe";
+import { dedupeAdminFetch, dedupeAdminFetchWithTtlMeta } from "@/lib/workspace/workspaceAdminFetchDedupe";
+import { markPerceived } from "@/lib/perf/perceivedPerf";
+import {
+    resolveSameHostPillQueueWarmPlan,
+    SAME_HOST_PILL_QUEUE_WARM_TTL_MS,
+} from "@/lib/presentation/runtime/sameHostPillQueueWarm";
 import { workspaceDataFetchInit } from "@/lib/workspace/workspaceDataFetch";
 import {
     OPPORTUNITY_QUEUE_UPDATED_EVENT,
@@ -64,7 +69,6 @@ import { bustOperatorRuntimeReadCaches } from "@/lib/admin/operatorRuntimeReadCa
 import { prefetchOpportunityDrawerOnRowIntent } from "@/lib/admin/opportunityDrawerIntentPrefetch";
 import { resolveQueueRowWarmTarget } from "@/lib/presentation/runtime/queueRowWarmTarget";
 import { warmOperatorWorkUnitEntryFromHref } from "@/lib/admin/operatorWorkUnitEntryWarm";
-import { resolveWorkViewTargetHref } from "@/lib/presentation/runtime/workViewTargetHref";
 import type { ResolvedActionForClient } from "@/lib/admin/actions/types";
 import { fetchWorkUnitRightRailResolvedActions } from "@/lib/workspace/fetchWorkUnitRightRailResolvedActions";
 import type { QueueItemsResult, QueueSummary } from "@/lib/queues/types";
@@ -333,8 +337,10 @@ export function useWorkUnitSurfaceRuntime(): WorkUnitSurfaceRuntime {
             limit: fetchLimit,
             selectedSiteId,
         });
-        void dedupeAdminFetch(route, workspaceDataFetchInit())
-            .then(async (res) => {
+        // TTL matches C3 same-host pill warm so hover can seed the click apply path.
+        // Mutations already call bustLifecycleSiblingFetchDedupe (clears /api/admin/queues/).
+        void dedupeAdminFetchWithTtlMeta(route, workspaceDataFetchInit(), SAME_HOST_PILL_QUEUE_WARM_TTL_MS)
+            .then(async ({ response: res }) => {
                 const json = (await res.json().catch(() => ({}))) as { error?: string };
                 if (!res.ok) throw new Error(json.error ?? "Failed to load queue items");
                 // Stale-response guard: only the latest request may apply.
@@ -564,25 +570,90 @@ export function useWorkUnitSurfaceRuntime(): WorkUnitSurfaceRuntime {
         ],
     );
 
-    // Hover/focus warm: prefetch the target route of a Work View pill — the SAME route
-    // selectWorkView will push — so switching views lands on a resolved host without a cold
-    // shell (matters most for views hosted on a different work unit). Skips the active view
-    // (already here) and unresolvable views. Reuses the shared operator-entry warm the left
-    // nav uses for its work-view links; fire-and-forget + deduped, safe per pointer.
+    // Hover/focus warm:
+    //   - Same-host (C3): prefetch the queue-rows GET the in-page switch will apply, via the
+    //     existing dedupeAdminFetch TTL path — so click joins an in-flight warm or hits the
+    //     short warm seed. No new cache/runtime.
+    //   - Cross-host: keep the operator-entry warm (slug + bootstrap) for the target href.
     const prefetchWorkView = useCallback(
         (workViewId: string) => {
-            const id = workViewId.trim();
-            if (!id || id === runtimeCtx.workViewId) return;
-            const href = resolveWorkViewTargetHref(id, {
+            const targetInputs = {
                 views: savedViews,
                 canonicalLocationByViewId,
                 selectedSiteId,
+            };
+            const plan = resolveSameHostPillQueueWarmPlan({
+                workViewId,
+                currentWorkViewId: runtimeCtx.workViewId,
+                currentWorkUnitId: workUnitId,
+                canonicalLocationByViewId,
+                hostBaseQueueKey: fetchQueueKey,
+                targetInputs,
             });
-            if (href) {
-                warmOperatorWorkUnitEntryFromHref(href, selectedSiteId, "work_view_pill_intent");
+            if (plan.kind === "noop") return;
+
+            if (plan.kind === "same_host_queue") {
+                if (!configSettled) return;
+                const route = queueRowsRouteForView({
+                    workUnitId: plan.workUnitId,
+                    baseQueueKey: plan.baseQueueKey,
+                    workViewId: plan.workViewId,
+                    limit: fetchLimit,
+                    selectedSiteId,
+                });
+                markPerceived("pill_switch", "warm", {
+                    view_id: plan.workViewId,
+                    work_unit_id: plan.workUnitId,
+                    queue_key: plan.baseQueueKey,
+                    warm_seam: "same_host_queue",
+                    same_host: true,
+                    warm_result: "intent",
+                });
+                void dedupeAdminFetchWithTtlMeta(
+                    route,
+                    workspaceDataFetchInit(),
+                    SAME_HOST_PILL_QUEUE_WARM_TTL_MS,
+                )
+                    .then(({ cache_hit, inflight_join }) => {
+                        markPerceived("pill_switch", "warm", {
+                            view_id: plan.workViewId,
+                            work_unit_id: plan.workUnitId,
+                            queue_key: plan.baseQueueKey,
+                            warm_seam: "same_host_queue",
+                            same_host: true,
+                            warm_result: cache_hit ? "hit" : inflight_join ? "inflight_join" : "miss",
+                            client_cache_hit: cache_hit,
+                        });
+                    })
+                    .catch(() => {
+                        markPerceived("pill_switch", "warm", {
+                            view_id: plan.workViewId,
+                            warm_seam: "same_host_queue",
+                            same_host: true,
+                            warm_result: "miss",
+                        });
+                    });
+                return;
             }
+
+            markPerceived("pill_switch", "warm", {
+                view_id: plan.workViewId,
+                warm_seam: "cross_host_entry",
+                same_host: false,
+                warm_result: "intent",
+            });
+            warmOperatorWorkUnitEntryFromHref(plan.href, selectedSiteId, "work_view_pill_intent");
         },
-        [savedViews, canonicalLocationByViewId, selectedSiteId, runtimeCtx.workViewId],
+        [
+            savedViews,
+            canonicalLocationByViewId,
+            selectedSiteId,
+            runtimeCtx.workViewId,
+            workUnitId,
+            fetchQueueKey,
+            fetchLimit,
+            configSettled,
+        ],
     );
 
     const openRecord = useCallback(
