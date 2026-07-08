@@ -445,6 +445,7 @@ describe("Final Focus Panel ship blockers — empty emergency / child edit / dat
 describe("Final Focus Panel Composer ship fixes", () => {
     const householdSpec = readSrc("lib/platform/surfaceComposition/definitions/recursiveSurfaceProofs.ts");
     const childrenCard = readSrc("components/admin/focusPanel/cards/ChildrenCard.tsx");
+    const runtimeCss = readSrc("app/adminV2/components/alloyOsRuntime.css");
 
     it("registers other_parent_guardian directly after primary_contact on household surface", () => {
         const primaryIdx = householdSpec.indexOf('key: "primary_contact"');
@@ -485,5 +486,20 @@ describe("Final Focus Panel Composer ship fixes", () => {
     it("defaults roster collapsed detail field keys to empty until configured", () => {
         const config = defaultNestedSurfaceConfig(CHILDREN_SURFACE_ID);
         expect(childrenRosterCollapsedFieldKeysFromNestedConfig(config)).toEqual([]);
+    });
+
+    it("keeps Children drill-in runtime-shaped while exposing selected-region field controls", () => {
+        expect(childrenCard).toContain("ComposableRegionShell");
+        expect(childrenCard).toContain('groupKey="roster"');
+        expect(childrenCard).toContain("InlineRuntimeFieldList");
+        expect(childrenCard).toContain("childrenRosterCollapsedFieldKeysFromNestedConfig");
+        expect(childrenCard).not.toContain("ChildEnrollmentEdit");
+    });
+
+    it("keeps composer drill-ins on the runtime focus-card footprint", () => {
+        expect(runtimeCss).toContain("[data-fp-composer-edit-mode=\"true\"]");
+        expect(runtimeCss).toContain("width: min(560px, calc(100% - 32px));");
+        expect(runtimeCss).toContain(".fp-composable-field__grip");
+        expect(runtimeCss).toContain(".fp-composable-region.is-selected");
     });
 });

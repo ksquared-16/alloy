@@ -3065,10 +3065,233 @@ html[data-alloy-os-runtime-split="true"]
   .alloy-os-focus-panel-grid[data-fp-depth="active"]
   .alloy-os-focus-panel-grid__cell[data-fp-elevated="true"]
   .alloy-os-ucard {
-  width: min(92%, calc(100% - 24px));
-  max-width: 720px;
-  max-height: min(78vh, calc(100% - 24px));
-  min-height: min(68vh, 520px);
+  width: min(560px, calc(100% - 32px));
+  max-width: 560px;
+  max-height: min(76vh, calc(100% - 32px));
+  min-height: 252px;
+}
+
+/* Surface Composer V3.5 — runtime-shaped nested surfaces with quiet edit affordances. */
+.fp-composable-region {
+  position: relative;
+  border-radius: 10px;
+  outline: 1px solid transparent;
+  outline-offset: 4px;
+  transition:
+    outline-color var(--motion-instant, 100ms) var(--motion-ease-move, ease),
+    background var(--motion-instant, 100ms) var(--motion-ease-move, ease);
+}
+.fp-composable-region:hover,
+.fp-composable-region.is-selected {
+  outline-color: color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 34%, transparent);
+  background: color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 3%, transparent);
+}
+.fp-composable-region.is-selected {
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 8%, transparent);
+}
+.fp-composable-region__lock {
+  position: absolute;
+  right: 0;
+  top: -18px;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--alloy-os-text-tertiary, #9ca3af);
+}
+.fp-composable-field {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  border-radius: 4px;
+  outline: 1px solid transparent;
+  outline-offset: 2px;
+  cursor: pointer;
+}
+.fp-composable-field.is-selected {
+  outline-color: color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 36%, transparent);
+  background: color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 5%, transparent);
+}
+.fp-composable-field__grip {
+  position: absolute;
+  left: -13px;
+  top: 50%;
+  color: var(--alloy-os-text-tertiary, #9ca3af);
+  opacity: 0;
+  transform: translateY(-50%);
+  transition: opacity var(--motion-instant, 100ms) var(--motion-ease-move, ease);
+  pointer-events: none;
+}
+.fp-composable-field:hover .fp-composable-field__grip,
+.fp-composable-field.is-selected .fp-composable-field__grip {
+  opacity: 0.75;
+}
+.fp-inline-field-list {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin-top: 8px;
+  padding: 7px;
+  border: 1px dashed color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 26%, transparent);
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 4%, #fff);
+}
+.fp-inline-field-list--edit-layer {
+  background: color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 3%, #fff);
+}
+.fp-inline-field-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  padding: 4px 5px;
+  border-radius: 7px;
+  border: 1px solid transparent;
+  background: rgba(255,255,255,0.72);
+}
+.fp-inline-field-row:hover,
+.fp-inline-field-row.is-selected {
+  border-color: color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 22%, transparent);
+}
+.fp-inline-field-row__grip {
+  flex-shrink: 0;
+  color: var(--alloy-os-text-tertiary, #9ca3af);
+  opacity: 0.45;
+}
+.fp-inline-field-row__main {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+.fp-inline-field-row__label,
+.fp-inline-field-row__label-input {
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  text-align: left;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--alloy-os-midnight, #273f52);
+}
+.fp-inline-field-row__label {
+  cursor: text;
+}
+.fp-inline-field-row__label-input {
+  width: 100%;
+  border-bottom: 1px solid color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 36%, transparent);
+  outline: none;
+}
+.fp-inline-field-row__preview {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 10.5px;
+  color: var(--alloy-os-text-tertiary, #9ca3af);
+}
+.fp-inline-field-row__behavior {
+  max-width: 96px;
+  border: 1px solid var(--alloy-os-border, #e5e9ef);
+  border-radius: 6px;
+  background: #fff;
+  padding: 2px 5px;
+  font-size: 10px;
+  color: var(--alloy-os-text-secondary, #4b5563);
+}
+.fp-inline-field-row__nudges {
+  display: inline-flex;
+  align-items: center;
+  gap: 1px;
+}
+.fp-inline-field-row__nudges button,
+.fp-inline-field-list__add {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  background: transparent;
+  color: var(--alloy-os-bend-pine, #00a283);
+  cursor: pointer;
+}
+.fp-inline-field-row__nudges button {
+  width: 18px;
+  height: 18px;
+  color: var(--alloy-os-text-tertiary, #9ca3af);
+}
+.fp-inline-field-row__nudges button:disabled {
+  opacity: 0.25;
+  cursor: default;
+}
+.fp-inline-field-list__add-wrap {
+  position: relative;
+}
+.fp-inline-field-list__add {
+  gap: 4px;
+  padding: 3px 2px 1px;
+  font-size: 11px;
+  font-weight: 700;
+}
+.fp-inline-field-library {
+  position: absolute;
+  left: 0;
+  top: calc(100% + 4px);
+  z-index: 75;
+  display: flex;
+  min-width: 180px;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px;
+  border: 1px solid var(--alloy-os-border, #e5e9ef);
+  border-radius: 9px;
+  background: #fff;
+  box-shadow: var(--alloy-os-fp-overlay-shadow);
+}
+.fp-inline-field-library__item {
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  padding: 5px 7px;
+  text-align: left;
+  font-size: 11px;
+  color: var(--alloy-os-text-secondary, #4b5563);
+  cursor: pointer;
+}
+.fp-inline-field-library__item:hover {
+  background: color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 7%, transparent);
+  color: var(--alloy-os-bend-pine, #00a283);
+}
+.fp-inline-section-controls {
+  display: inline-flex;
+  align-items: center;
+  gap: 1px;
+  color: var(--alloy-os-text-tertiary, #9ca3af);
+  opacity: 0;
+  transition: opacity var(--motion-instant, 100ms) var(--motion-ease-move, ease);
+}
+.fp-composable-region:hover .fp-inline-section-controls,
+.fp-composable-region.is-selected .fp-inline-section-controls {
+  opacity: 0.75;
+}
+.fp-inline-section-controls__grip {
+  width: 12px;
+  height: 12px;
+}
+.fp-inline-section-controls__btn {
+  display: inline-flex;
+  width: 16px;
+  height: 16px;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+.fp-inline-section-controls__btn:disabled {
+  opacity: 0.28;
+  cursor: default;
 }
 /* Focused card typography + spacing step up so it reads as a different layer. */
 .alloy-os-focus-panel-grid[data-fp-depth="active"]

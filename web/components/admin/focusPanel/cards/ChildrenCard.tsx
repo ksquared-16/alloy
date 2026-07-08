@@ -18,11 +18,14 @@ import {
 import UniversalCard from "@/components/admin/focusPanel/UniversalCard";
 import CardAvatar from "@/components/admin/focusPanel/CardAvatar";
 import ChildFocusEdit from "@/components/admin/focusPanel/cards/ChildFocusEdit";
+import ComposableRegionShell from "@/components/admin/focusPanel/drillIn/ComposableRegionShell";
+import InlineRuntimeFieldList from "@/components/admin/focusPanel/drillIn/InlineRuntimeFieldList";
 import {
     buildChildrenCardEvidence,
     type ChildrenEvidenceChild,
 } from "@/lib/adminV2/runtime/focusPanel/children/buildChildrenCardEvidence";
 import {
+    CHILD_SURFACE_ID,
     CHILD_DOMAIN_LOCKED_EVIDENCE_SECTIONS,
     childFocusViewFromConfig,
     readChildNestedConfigFromDoc,
@@ -32,9 +35,11 @@ import {
 import { seedChildFocusEditValues } from "@/lib/adminV2/runtime/focusPanel/children/childFocusEditState";
 import { usePublishedFocusPanelSummaryDoc } from "@/lib/adminV2/runtime/focusPanel/usePublishedFocusPanelSummaryDoc";
 import {
+    childrenRosterCollapsedFieldKeysFromNestedConfig,
     childrenDetailFieldKeysFromNestedConfig,
     readChildrenNestedConfigFromDoc,
 } from "@/lib/adminV2/runtime/focusPanel/children/childrenNestedSurfaceConfig";
+import { CHILDREN_SURFACE_ID } from "@/lib/adminV2/settings/surfaces/nestedSurfaceEditorModel";
 import { cardCapabilities, cardRelatedViews } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardLifecycle";
 import type { FocusPanelCardModel } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardModel";
 import type { FocusPanelMutation } from "@/lib/adminV2/runtime/focusPanel/focusPanelMutation";
@@ -48,6 +53,7 @@ import {
     useReportPerspective,
 } from "@/lib/adminV2/runtime/focusPanel/useFocusPanelCoordination";
 import type { OperationalContext } from "@/lib/adminV2/runtime/operationalContext/types";
+import { useFocusPanelComposer } from "@/lib/adminV2/settings/surfaces/focusPanelComposerContext";
 
 type ChildrenComposerPreview = {
     perspective: "roster" | "child_focus" | "child_edit";
@@ -95,16 +101,29 @@ export default function ChildrenCard({
     mutation,
     composerPreview,
 }: Props) {
+    const composer = useFocusPanelComposer();
     const publishedDoc = usePublishedFocusPanelSummaryDoc(true);
-    const childSurfaceConfig = useMemo(() => readChildNestedConfigFromDoc(publishedDoc), [publishedDoc]);
+    const composingChildrenSurface = composer?.isComposingSurface(CHILDREN_SURFACE_ID) ?? false;
+    const childrenSurfaceConfig = useMemo(
+        () => (composingChildrenSurface ? composer?.configFor(CHILDREN_SURFACE_ID) ?? null : readChildrenNestedConfigFromDoc(publishedDoc)),
+        [composer, composingChildrenSurface, publishedDoc],
+    );
+    const childSurfaceConfig = useMemo(
+        () => (composer?.isComposingSurface(CHILD_SURFACE_ID) ? composer.configFor(CHILD_SURFACE_ID) : readChildNestedConfigFromDoc(publishedDoc)),
+        [composer, publishedDoc],
+    );
     const childFocusView = useMemo(
         () => composerPreview?.childFocusView ?? childFocusViewFromConfig(childSurfaceConfig),
         [composerPreview?.childFocusView, childSurfaceConfig],
     );
-    const childDetailFieldKeys = useMemo(() => {
-        const config = readChildrenNestedConfigFromDoc(publishedDoc);
-        return childrenDetailFieldKeysFromNestedConfig(config);
-    }, [publishedDoc]);
+    const childDetailFieldKeys = useMemo(
+        () => childrenDetailFieldKeysFromNestedConfig(childrenSurfaceConfig),
+        [childrenSurfaceConfig],
+    );
+    const childRosterFieldKeys = useMemo(
+        () => childrenRosterCollapsedFieldKeysFromNestedConfig(childrenSurfaceConfig),
+        [childrenSurfaceConfig],
+    );
     const evidence = useMemo(
         () => buildChildrenCardEvidence(context, { childDetailFieldKeys }),
         [context, childDetailFieldKeys],
@@ -303,16 +322,30 @@ export default function ChildrenCard({
     } else {
         lifecycle = "summary";
         body = (
-            <div className="alloy-os-children__roster" data-children-roster>
-                {evidence.children.map((child) => (
-                    <ChildSummaryRow
-                        key={child.id}
-                        child={child}
-                        onFocus={() => focusChild(child.id)}
-                        fieldKeys={childDetailFieldKeys}
-                    />
-                ))}
-            </div>
+            <ComposableRegionShell
+                surfaceId={CHILDREN_SURFACE_ID}
+                groupKey="roster"
+                label="Roster rows"
+                className="alloy-os-children__composer-region"
+                dataAttrs={{ "data-children-roster-region": "true" }}
+            >
+                <div className="alloy-os-children__roster" data-children-roster>
+                    {evidence.children.map((child) => (
+                        <ChildSummaryRow
+                            key={child.id}
+                            child={child}
+                            onFocus={() => focusChild(child.id)}
+                            fieldKeys={childRosterFieldKeys}
+                        />
+                    ))}
+                </div>
+                <InlineRuntimeFieldList
+                    surfaceId={CHILDREN_SURFACE_ID}
+                    groupKey="roster"
+                    suppressPreview
+                    whenRegionSelectedOnly
+                />
+            </ComposableRegionShell>
         );
     }
 
