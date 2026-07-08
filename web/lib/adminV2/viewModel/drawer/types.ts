@@ -1,4 +1,5 @@
 import type { ResolvedActionForClient, ResolvedActionsBySlot } from "@/lib/admin/actions/types";
+import type { FamilyCommunicationWorkspacePreviewVM } from "@/lib/communications/v2/familyWorkspace/types";
 import type { TourBookingRow } from "@/lib/tours/bookings/types";
 import type { InquirySummaryTaskPreviewPayload } from "@/lib/admin/drawer/opportunityInquirySummaryTaskPreview";
 import type { WorkIntentRuntimeProjection } from "@/lib/lifecycle/workIntentRuntimeTypes";
@@ -165,6 +166,9 @@ export type OpportunityDrawerViewModel = {
         tabs: DrawerTabKey[];
         default_tab: DrawerTabKey;
         shell: DrawerShellContract;
+    };
+    activity: {
+        communicationsPreviewVm: FamilyCommunicationWorkspacePreviewVM | null;
     };
     above_fold: {
         render_model: DrawerAboveFoldRenderModel;

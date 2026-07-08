@@ -107,6 +107,9 @@ function buildFixtureVm(recordId: string): OpportunityDrawerViewModel {
                 })),
             },
         },
+        activity: {
+            communicationsPreviewVm: null,
+        },
         above_fold: { render_model: aboveFold, record },
         summaries: {
             tasks: { state: "loaded", open_count: 0, open_tasks: [] },

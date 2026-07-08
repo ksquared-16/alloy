@@ -120,6 +120,9 @@ function minimalViewModel(): OpportunityDrawerViewModel {
                 layout_config_snapshot: {},
             },
         },
+        activity: {
+            communicationsPreviewVm: null,
+        },
         above_fold: {
             render_model: {
                 sections: [

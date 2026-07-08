@@ -1,8 +1,10 @@
 /** Staging/local timing marks for Focus Panel Activity family-workspace warm load. */
 
 export type DrawerFamilyWorkspaceTimingEvent =
+    | "queue_row_click"
     | "row_selected"
     | "drawer_vm_ready"
+    | "preview_vm_ready"
     | "prefetch_scheduled"
     | "prefetch_fetch_started"
     | "prefetch_fetch_done"

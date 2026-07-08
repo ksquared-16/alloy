@@ -45,10 +45,9 @@ const RIBBON_EVENT_COUNT = 7;
 export default function OpportunityFocusPanelEmbeddedWorkspace({
     drawerId,
     record,
-    displayVm: _displayVm,
+    displayVm,
     onSelectTab,
 }: Props) {
-    void _displayVm;
     const [workTab, setWorkTab] = useState<WorkTab>("items");
     const proofRecord = record as ProofRuntimeRecord;
 
@@ -121,6 +120,7 @@ export default function OpportunityFocusPanelEmbeddedWorkspace({
                         <CommunicationsDrawerSection
                             apiEntityType="opportunities"
                             entityId={drawerId}
+                            initialPreviewVm={displayVm.activity?.communicationsPreviewVm ?? null}
                             embedded
                             embeddedHeaderMode="description_only"
                         />

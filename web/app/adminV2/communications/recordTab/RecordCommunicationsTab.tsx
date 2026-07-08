@@ -6,6 +6,7 @@ import {
     buildRecordCommunicationsModel,
     type RecordTimelineEntry,
 } from "@/lib/communications/v2/recordTabModel";
+import type { FamilyCommunicationWorkspacePreviewVM } from "@/lib/communications/v2/familyWorkspace/types";
 
 /**
  * Record-drawer Communications tab (PKG-13) — DARK (self-gated behind comms_v2_record_tab).
@@ -16,6 +17,7 @@ import {
 export default function RecordCommunicationsTab(props: {
     entityType?: string;
     entityId?: string;
+    initialPreviewVm?: FamilyCommunicationWorkspacePreviewVM | null;
     compactActivityLoading?: boolean;
     messages?: { id: string; channel?: string | null; direction?: string | null; created_at?: string | null; body?: string | null }[];
     notes?: { id: string; created_at?: string | null; body?: string | null }[];
@@ -31,6 +33,7 @@ export default function RecordCommunicationsTab(props: {
             <div data-cc-record-tab="communications" className="bg-white">
                 <FamilyCommunicationWorkspace
                     entity={{ entityType: props.entityType, entityId: props.entityId }}
+                    initialPreviewVm={props.initialPreviewVm}
                     compactActivityLoading={props.compactActivityLoading}
                 />
             </div>

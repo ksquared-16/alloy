@@ -168,6 +168,9 @@ export function minimalSettledOpportunityDrawerViewModel(
                 layout_config_snapshot: { inquiry_drawer_mode: "workflow_v1", overview_section_order: [] },
             },
         },
+        activity: {
+            communicationsPreviewVm: null,
+        },
         above_fold: {
             render_model: {
                 sections: [

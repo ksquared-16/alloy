@@ -59,6 +59,7 @@ import { resolvePortalRecordManageAccess } from "@/lib/admin/adminPortalRolePick
 import { resolveFocusPanelSubjectReveal } from "@/lib/admin/drawer/focusPanelSubjectReveal";
 import { formatOpportunityInquiryDrawerTitle } from "@/lib/admin/drawer/opportunityInquiryDrawerTitle";
 import { prewarmFocusPanelActivityMode } from "@/lib/adminV2/runtime/focusPanel/focusPanelActivityPrewarm";
+import { markDrawerFamilyWorkspaceTiming } from "@/lib/communications/v2/drawerFamilyWorkspacePrefetchTiming";
 import { useBosOpportunityDrawerContextSeed } from "@/lib/adminV2/bos/useBosDrawerOperationalContextSeed";
 import { useFocusPanelMode } from "@/lib/adminV2/runtime/focusPanel/useFocusPanelMode";
 import { useFocusPanelModePrewarm } from "@/lib/adminV2/runtime/focusPanel/useFocusPanelModePrewarm";
@@ -82,11 +83,22 @@ export function InlineOpportunityFocusPanel() {
     } = useOpportunityDrawerVmPayload();
 
     const bodyScrollRef = useRef<HTMLDivElement | null>(null);
-    const { mode: focusPanelMode, setMode: setFocusPanelMode, selectFromDrawerTab } =
+    const { mode: focusPanelMode, setMode: setFocusPanelModeState, selectFromDrawerTab } =
         useFocusPanelMode({
             subjectId: drawer.type === "opportunities" ? drawer.id : null,
             bodyScrollRef,
         });
+    const setFocusPanelMode = useCallback(
+        (next: typeof focusPanelMode) => {
+            if (next === "activity") {
+                markDrawerFamilyWorkspaceTiming("activity_clicked", {
+                    entity_id: drawer.type === "opportunities" ? drawer.id : null,
+                });
+            }
+            setFocusPanelModeState(next);
+        },
+        [drawer.id, drawer.type, setFocusPanelModeState]
+    );
 
     const record = displayVm?.above_fold.record ?? null;
 
@@ -94,6 +106,20 @@ export function InlineOpportunityFocusPanel() {
     // Whenever the Focus Panel is open, warm Activity metadata (comms, documents, timeline;
     // notes ship on VM) on idle so Work → Activity switches feel instant.
     const prewarmSubjectId = drawer.type === "opportunities" && drawer.id != null ? String(drawer.id) : null;
+
+    useEffect(() => {
+        if (!prewarmSubjectId) return;
+        markDrawerFamilyWorkspaceTiming("row_selected", { entity_id: prewarmSubjectId });
+    }, [prewarmSubjectId]);
+
+    useEffect(() => {
+        if (!prewarmSubjectId || !displayVm?.structureSettled) return;
+        markDrawerFamilyWorkspaceTiming("drawer_vm_ready", { entity_id: prewarmSubjectId });
+        markDrawerFamilyWorkspaceTiming("preview_vm_ready", {
+            entity_id: prewarmSubjectId,
+            has_preview: Boolean(displayVm.activity?.communicationsPreviewVm),
+        });
+    }, [prewarmSubjectId, displayVm?.structureSettled, displayVm?.activity?.communicationsPreviewVm]);
     const modePrewarm = useMemo(
         () => ({
             activity: () => {

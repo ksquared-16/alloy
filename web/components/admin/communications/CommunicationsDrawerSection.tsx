@@ -28,6 +28,7 @@ import type { CommunicationMessage, DeliveryState } from "@/lib/communications/d
 import { deliveryStatePresentation, mapToDeliveryState } from "@/lib/communications/deliveryStateAdapter";
 import { normalizeRecipientKeyEmail, normalizeRecipientKeySms } from "@/lib/communications/recipientKey";
 import type { OpportunityComposeContext } from "@/lib/communications/opportunityComposeTemplates";
+import type { FamilyCommunicationWorkspacePreviewVM } from "@/lib/communications/v2/familyWorkspace/types";
 
 type ThreadRow = {
     id: string;
@@ -114,6 +115,8 @@ export interface CommunicationsDrawerSectionProps {
      * @default true
      */
     active?: boolean;
+    /** First-paint Activity communications preview from selected Focus Panel VM. */
+    initialPreviewVm?: FamilyCommunicationWorkspacePreviewVM | null;
     /** Warm threads/messages/bindings while drawer Overview is visible (no UI). */
     backgroundPreload?: boolean;
     /** Embedded in overview — compact summary, expand in place, messages only after expand + thread pick. */
@@ -1410,6 +1413,7 @@ export default function CommunicationsDrawerSection(props: CommunicationsDrawerS
             <RecordCommunicationsTab
                 entityType={props.apiEntityType}
                 entityId={props.entityId}
+                initialPreviewVm={props.initialPreviewVm}
                 compactActivityLoading={props.embedded}
             />
         );

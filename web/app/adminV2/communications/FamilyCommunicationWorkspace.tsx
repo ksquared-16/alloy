@@ -3,7 +3,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { computeCommunicationHealth } from "@/lib/communications/v2/communicationHealth";
 import { toggleRecipientSelection } from "@/lib/communications/v2/familyWorkspace/composerSelection";
-import type { ComposerChannel, FamilyCommunicationWorkspaceVM, TimelineEventVM } from "@/lib/communications/v2/familyWorkspace/types";
+import type {
+    ComposerChannel,
+    FamilyCommunicationWorkspacePreviewVM,
+    FamilyCommunicationWorkspaceVM,
+    PersonPreferenceProfile,
+    TimelineEventVM,
+} from "@/lib/communications/v2/familyWorkspace/types";
 import type { FamilySendResult } from "@/lib/communications/v2/familyWorkspace/orchestrateFamilySend";
 import {
     getDrawerFamilyWorkspaceInflight,
@@ -29,6 +35,48 @@ import { CommsActivityEmbedHydratingShell, CommsWorkspacePanelReserve } from "@/
 const toWorkspaceMessage = (e: TimelineEventVM): WorkspaceTimelineMessage => ({
     id: e.id, direction: e.direction, channel: e.channel, body: e.body, created_at: e.createdAt, kind: e.kind, thread_id: e.threadId, status: e.status,
 });
+
+const UNSET_PREFERENCE_PROFILE: PersonPreferenceProfile = {
+    email_transactional: "unset",
+    sms_transactional: "unset",
+    email_marketing: "unset",
+    sms_marketing: "unset",
+};
+
+function workspaceFromPreview(preview: FamilyCommunicationWorkspacePreviewVM): FamilyCommunicationWorkspaceVM {
+    const contactIds = [...preview.eligibleRecipients, ...preview.disabledRecipients].map((r) => r.id);
+    const byContact = Object.fromEntries(
+        contactIds.map((id) => [id, { email: "unset" as const, sms: "unset" as const, marketing: "unset" as const }])
+    );
+    return {
+        family: preview.family,
+        children: preview.children,
+        recipientGroups: preview.recipientGroups,
+        eligibleRecipients: preview.eligibleRecipients,
+        disabledRecipients: preview.disabledRecipients,
+        selectedRecipients: preview.selectedRecipients,
+        consentSummary: {
+            byContact,
+            household: { email: "unset", sms: "unset", marketing: "unset" },
+            preferenceProfile: UNSET_PREFERENCE_PROFILE,
+            displayFlags: { email: true, sms: true, marketing: true },
+        },
+        composerDraft: preview.composerDraft,
+        scope: preview.scope,
+        threads: preview.recentThreads,
+        selectedThread: null,
+        messages: [],
+        timelineEvents: preview.recentTimelineEvents,
+        healthSummary: {
+            status: "healthy",
+            engagementScore: 66,
+            responseRate: null,
+            lastContactAt: preview.recentTimelineEvents.at(-1)?.createdAt ?? null,
+            unreadCount: 0,
+        },
+        relatedTasks: [],
+    };
+}
 
 function resolvePrefetchParams(
     props: {
@@ -67,6 +115,7 @@ export default function FamilyCommunicationWorkspace(props: {
     customerId?: string;
     entity?: { entityType: string; entityId: string };
     channel?: "email" | "sms";
+    initialPreviewVm?: FamilyCommunicationWorkspacePreviewVM | null;
     /** Activity cockpit embed — compact loading shell while warm cache resolves. */
     compactActivityLoading?: boolean;
 }) {
@@ -78,14 +127,16 @@ export default function FamilyCommunicationWorkspace(props: {
         () => resolvePrefetchParams(props, liveChannel, null),
         [props.customerId, props.entity?.entityType, props.entity?.entityId, liveChannel]
     );
-    const [vm, setVm] = useState<FamilyCommunicationWorkspaceVM | null>(() =>
-        initialPrefetchParams ? getDrawerFamilyWorkspaceWarm(initialPrefetchParams) : null
-    );
+    const [vm, setVm] = useState<FamilyCommunicationWorkspaceVM | null>(() => {
+        const warm = initialPrefetchParams ? getDrawerFamilyWorkspaceWarm(initialPrefetchParams) : null;
+        if (warm) return warm;
+        return props.initialPreviewVm ? workspaceFromPreview(props.initialPreviewVm) : null;
+    });
     const [loading, setLoading] = useState(() => !vm);
     const [servedFromWarmCache, setServedFromWarmCache] = useState(() => Boolean(vm));
     const [error, setError] = useState<string | null>(null);
     const [selectedThreadId, setSelectedThreadId] = useState<string | null>(null);
-    const [selectedRecipientIds, setSelectedRecipientIds] = useState<string[]>([]);
+    const [selectedRecipientIds, setSelectedRecipientIds] = useState<string[]>(() => vm?.selectedRecipients ?? []);
     const [subjectDraft, setSubjectDraft] = useState("");
     const [bodyDraft, setBodyDraft] = useState("");
     const [sendResult, setSendResult] = useState<FamilySendResult | null>(null);
@@ -104,14 +155,15 @@ export default function FamilyCommunicationWorkspace(props: {
         });
         const params = resolvePrefetchParams(props, liveChannel, null);
         markDrawerFamilyWorkspaceTiming(
-            params && getDrawerFamilyWorkspaceWarm(params) ? "warm_cache_hit" : "warm_cache_miss",
+            params && (getDrawerFamilyWorkspaceWarm(params) || props.initialPreviewVm) ? "warm_cache_hit" : "warm_cache_miss",
             {
                 entity_type: props.entity?.entityType,
                 entity_id: props.entity?.entityId,
                 customer_id: props.customerId,
+                source: params && getDrawerFamilyWorkspaceWarm(params) ? "full_cache" : props.initialPreviewVm ? "preview_vm" : "miss",
             }
         );
-    }, [liveChannel, props.customerId, props.entity?.entityType, props.entity?.entityId, props.compactActivityLoading]);
+    }, [liveChannel, props.customerId, props.entity?.entityType, props.entity?.entityId, props.compactActivityLoading, props.initialPreviewVm]);
 
     const applyWorkspace = useCallback((workspace: FamilyCommunicationWorkspaceVM, resetSelection: boolean) => {
         setVm(workspace);
@@ -164,9 +216,9 @@ export default function FamilyCommunicationWorkspace(props: {
         setSendResult(null);
         const params = resolvePrefetchParams(props, liveChannel, null);
         const warm = params ? getDrawerFamilyWorkspaceWarm(params) : null;
-        setServedFromWarmCache(Boolean(warm));
+        setServedFromWarmCache(Boolean(warm || props.initialPreviewVm));
         void load(null, true);
-    }, [load]);
+    }, [load, props.initialPreviewVm]);
 
     useEffect(() => {
         const params = resolvePrefetchParams(props, liveChannel, selectedThreadId);

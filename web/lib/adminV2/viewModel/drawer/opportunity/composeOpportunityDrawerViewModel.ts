@@ -55,6 +55,7 @@ import {
     resolveOpportunityDrawerFirstPaintDependencies,
     tourBookingsFromFirstPaintData,
 } from "@/lib/adminV2/viewModel/drawer/opportunity/resolveOpportunityDrawerFirstPaintDependencies";
+import { resolveFamilyCommunicationWorkspacePreview } from "@/lib/communications/v2/familyWorkspace";
 import type { OpportunityAttentionResult } from "@/lib/opportunities/opportunityAttentionResolver";
 import { logOpportunityDrawerViewModelComposeShadowSummary } from "@/lib/adminV2/viewModel/drawer/shadow/logDrawerViewModelShadowServer";
 import type {
@@ -343,15 +344,31 @@ export async function composeOpportunityDrawerViewModel(
     const currentStageKey = lifecycle_rail?.current_stage_key ?? null;
     const currentStageLabel =
         lifecycle_rail?.stages.find((s) => s.key === currentStageKey)?.label ?? null;
-    const stage_work_runtime = await projectStageWorkRuntime({
-        supabase,
-        orgId,
-        opportunityId,
-        departmentId,
-        departmentMetadata: deptMetadata,
-        builderStageKey: currentStageKey,
-        stageLabel: currentStageLabel,
-    });
+    const communicationsPreviewP = (async () => {
+        const tCommsPreview0 = Date.now();
+        const preview = await resolveFamilyCommunicationWorkspacePreview(supabase, orgId, {
+            entityType: "opportunities",
+            entityId: opportunityId,
+            focusOpportunityId: opportunityId,
+            composerChannel: "email",
+            viewerUserId: gate.userId,
+            familyStageLabel: currentStageLabel,
+        });
+        phases.activity_comms_preview_ms = Date.now() - tCommsPreview0;
+        return preview;
+    })();
+    const [stage_work_runtime, communicationsPreviewVm] = await Promise.all([
+        projectStageWorkRuntime({
+            supabase,
+            orgId,
+            opportunityId,
+            departmentId,
+            departmentMetadata: deptMetadata,
+            builderStageKey: currentStageKey,
+            stageLabel: currentStageLabel,
+        }),
+        communicationsPreviewP,
+    ]);
     const work_intent_runtime = primaryWorkIntentProjectionFromStageWork(stage_work_runtime);
     const rawTasksSummary = parseInquirySummaryTasksFromRecord(record);
     const filteredTasksSummary = filterResidualOperationalTasks(rawTasksSummary, stage_work_runtime);
@@ -417,6 +434,9 @@ export async function composeOpportunityDrawerViewModel(
             record_header: resolvedActions,
         },
         layout,
+        activity: {
+            communicationsPreviewVm,
+        },
         above_fold: {
             render_model: aboveFoldRenderModel,
             record: stripOpportunityDrawerRecordStaging(record),

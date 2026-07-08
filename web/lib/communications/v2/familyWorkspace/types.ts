@@ -154,3 +154,33 @@ export type FamilyCommunicationWorkspaceVM = {
     /** Open operational tasks for the focused opportunity (when resolvable). */
     relatedTasks: RelatedTaskBrief[];
 };
+
+/**
+ * Path C — lightweight Activity communications FIRST-PAINT VM.
+ *
+ * Loads with the selected Focus Panel record (row-select), so Activity can render the real
+ * workspace (channels, recipients, recent thread, composer defaults) with NO blank shell.
+ * Deliberately excludes the heavy tail the full VM adds later (consent/preferences bundle,
+ * related tasks, full timeline health) — those revalidate in the background after mount.
+ *
+ * SMS enable/disable + eligibility come from the SAME assembler rules as the full VM
+ * (projected, never recomputed) — this VM does not change eligibility, provider, or send logic.
+ */
+export const FAMILY_WORKSPACE_PREVIEW_VERSION = "preview-1" as const;
+
+export type FamilyCommunicationWorkspacePreviewVM = {
+    version: typeof FAMILY_WORKSPACE_PREVIEW_VERSION;
+    family: FamilyRef;
+    children: ChildRef[];
+    recipientGroups: RecipientGroup[];
+    eligibleRecipients: RecipientVM[];
+    disabledRecipients: RecipientVM[];
+    selectedRecipients: string[];
+    /** Provider channel availability + SMS/email disabled reasons + default recipients. */
+    composerDraft: ComposerDraftVM;
+    scope: WorkspaceScope;
+    /** Recent threads (capped) needed for first paint. */
+    recentThreads: ThreadVM[];
+    /** Latest messages across the family (capped, chronological asc) for first paint. */
+    recentTimelineEvents: TimelineEventVM[];
+};

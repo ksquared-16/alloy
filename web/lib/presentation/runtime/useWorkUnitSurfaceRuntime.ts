@@ -62,6 +62,7 @@ import {
 } from "@/lib/admin/opportunityQueueRefreshEvent";
 import { bustOperatorRuntimeReadCaches } from "@/lib/admin/operatorRuntimeReadCacheBust";
 import { prefetchOpportunityDrawerOnRowIntent } from "@/lib/admin/opportunityDrawerIntentPrefetch";
+import { markDrawerFamilyWorkspaceTiming } from "@/lib/communications/v2/drawerFamilyWorkspacePrefetchTiming";
 import { resolveQueueRowWarmTarget } from "@/lib/presentation/runtime/queueRowWarmTarget";
 import { warmOperatorWorkUnitEntryFromHref } from "@/lib/admin/operatorWorkUnitEntryWarm";
 import { resolveWorkViewTargetHref } from "@/lib/presentation/runtime/workViewTargetHref";
@@ -614,9 +615,14 @@ export function useWorkUnitSurfaceRuntime(): WorkUnitSurfaceRuntime {
             // the preview seed lets the inline Focus Panel own the clicked subject identity
             // before the record payload resolves (resolveFocusPanelSubjectReveal).
             const drawerOpen = row.context?.drawer_open ?? null;
+            const opportunityId = drawerOpen?.entity_id?.trim() || row.entityId;
+            markDrawerFamilyWorkspaceTiming("queue_row_click", {
+                entity_id: opportunityId,
+                entity_type: row.entityType,
+            });
             openDrawer({
                 type: "opportunities",
-                id: drawerOpen?.entity_id?.trim() || row.entityId,
+                id: opportunityId,
                 source: PRESENTATION_RUNTIME_QUEUE_ROW_OPEN_SOURCE,
                 opportunityWorkspaceContext:
                     departmentId && workUnitId ?
