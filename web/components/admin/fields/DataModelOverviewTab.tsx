@@ -49,15 +49,15 @@ function OverviewCard({
     return (
         <section
             className={[
-                "process-config-setup-card rounded-xl border border-alloy-forge/12 bg-white p-3.5 shadow-[0_1px_3px_rgba(24,39,58,0.04)] transition-shadow hover:shadow-[0_4px_14px_rgba(24,39,58,0.06)]",
+                "rounded-lg border border-alloy-forge/10 bg-white px-3 py-2.5",
                 className,
             ].join(" ")}
             data-testid={testId}
         >
-            <div className="mb-2.5 flex items-center justify-between gap-2">
+            <div className="mb-1.5 flex items-center justify-between gap-2">
                 <div className="flex items-center gap-1.5">
-                    <Icon size={14} strokeWidth={DATA_MODEL_ICON_STROKE} className="text-alloy-bend-pine" aria-hidden />
-                    <h2 className="text-[13px] font-semibold text-alloy-midnight">{title}</h2>
+                    <Icon size={13} strokeWidth={DATA_MODEL_ICON_STROKE} className="text-alloy-bend-pine" aria-hidden />
+                    <h2 className="text-[12px] font-semibold text-alloy-midnight">{title}</h2>
                 </div>
                 {action}
             </div>
@@ -94,7 +94,7 @@ export default function DataModelOverviewTab({
     const computedGroups = computedSignalPreviewGroups(entries, 3);
 
     return (
-        <div className="grid gap-3 xl:grid-cols-2" data-testid="data-model-overview-tab">
+        <div className="grid gap-2.5 xl:grid-cols-2" data-testid="data-model-overview-tab">
             <OverviewCard
                 title="Relationships"
                 icon={DATA_MODEL_SECTION_ICONS.relationships}

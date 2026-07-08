@@ -1,19 +1,24 @@
 "use client";
 
-import FieldCatalogCard from "@/components/admin/fields/FieldCatalogCard";
+import { useEffect, useState } from "react";
+import DataModelFieldRow from "@/components/admin/fields/DataModelFieldRow";
 import type { SettingsHubEntityKey, SettingsFieldCatalogEntry } from "@/lib/fields/fieldCatalogForSettings";
 import { computedSignalPreviewGroups } from "@/lib/fields/dataModelWorkspaceModel";
 
 type Props = {
     hubEntity: SettingsHubEntityKey;
     entries: readonly SettingsFieldCatalogEntry[];
-    selectedRefKey?: string | null;
-    onSelectEntry: (entry: SettingsFieldCatalogEntry) => void;
+    focusRefKey?: string | null;
 };
 
-export default function DataModelComputedSignalsTab({ hubEntity, entries, selectedRefKey, onSelectEntry }: Props) {
+export default function DataModelComputedSignalsTab({ hubEntity, entries, focusRefKey = null }: Props) {
     const computed = entries.filter((e) => e.ownership === "computed");
     const groups = computedSignalPreviewGroups(computed, 99);
+    const [expandedRefKey, setExpandedRefKey] = useState<string | null>(focusRefKey);
+
+    useEffect(() => {
+        if (focusRefKey) setExpandedRefKey(focusRefKey);
+    }, [focusRefKey]);
 
     if (computed.length === 0) {
         return <p className="text-sm text-alloy-midnight/55">No computed signals for this entity.</p>;
@@ -26,27 +31,28 @@ export default function DataModelComputedSignalsTab({ hubEntity, entries, select
                 inputs.
             </p>
             {groups.map((group) => (
-                <section key={group.status} className="space-y-2" data-testid={`computed-group-${group.status}`}>
-                    <div className="flex items-center gap-2">
+                <section key={group.status} className="space-y-1" data-testid={`computed-group-${group.status}`}>
+                    <div className="flex items-center gap-2 px-0.5">
                         <span
                             className={[
                                 "inline-block h-1.5 w-1.5 rounded-full",
                                 group.status === "now" ? "bg-alloy-bend-pine" : "bg-alloy-forge/30",
                             ].join(" ")}
                         />
-                        <h3 className="text-[11px] font-semibold uppercase tracking-wide text-alloy-forge/55">
+                        <h3 className="text-[10px] font-semibold uppercase tracking-wide text-alloy-forge/55">
                             {group.label}
                         </h3>
                         <span className="text-[10px] text-alloy-midnight/35">{group.entries.length}</span>
                     </div>
-                    <div className="grid gap-2.5">
+                    <div className="overflow-hidden rounded-lg border border-alloy-forge/12 bg-white">
                         {group.entries.map((entry) => (
-                            <FieldCatalogCard
+                            <DataModelFieldRow
                                 key={entry.id}
                                 entry={entry}
                                 hubEntity={hubEntity}
-                                selected={selectedRefKey === entry.refKey}
-                                onSelect={() => onSelectEntry(entry)}
+                                expanded={expandedRefKey === entry.refKey}
+                                onExpand={() => setExpandedRefKey(entry.refKey)}
+                                onCollapse={() => setExpandedRefKey(null)}
                             />
                         ))}
                     </div>

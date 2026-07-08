@@ -34,13 +34,18 @@ describe("Data Model finish pass", () => {
         expect(page).not.toContain("data-model-registry-trust-note");
     });
 
-    it("Add Relationship uses in-workspace modal (not placeholder)", () => {
+    it("Add Relationship uses inline create row (not modal / placeholder)", () => {
         const client = readFileSync(resolve(root, "app/adminV2/settings/fields/DataModelWorkspaceClient.tsx"), "utf8");
-        const modal = readFileSync(resolve(root, "components/admin/fields/DataModelAddRelationshipModal.tsx"), "utf8");
-        expect(client).toContain("DataModelAddRelationshipModal");
+        const create = readFileSync(
+            resolve(root, "components/admin/fields/DataModelRelationshipCreateRow.tsx"),
+            "utf8",
+        );
+        expect(client).not.toContain("DataModelAddRelationshipModal");
         expect(client).not.toContain("add-relationship-modal-placeholder");
-        expect(modal).toContain("customer-person-role-types");
-        expect(modal).toContain("person-relationship-type-settings");
+        expect(client).toContain("creatingRelationship");
+        expect(create).toContain("customer-person-role-types");
+        expect(create).toContain("person-relationship-type-settings");
+        expect(create).not.toContain("fixed inset-0");
     });
 
     it("overview field preview groups with overflow counts", () => {
