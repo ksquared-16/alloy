@@ -12,6 +12,7 @@ import {
     canonicalSingularLabel,
     configurationHubEntities,
     configurationPrimaryHubEntities,
+    resolveConfigurationEntityPluralLabel,
     resolveConfigurationEntitySingularLabel,
 } from "@/lib/adminV2/configuration/configurationEntityCatalog";
 
@@ -242,5 +243,24 @@ describe("entities workspace adoption", () => {
         expect(person?.labelsKey).toBe("persons");
         expect(child?.labelsKey).toBe("customer_members");
         expect(resolveConfigurationEntitySingularLabel({}, "opportunity")).toBe("Lead / Enrollment");
+    });
+
+    it("org overrides win over canonical defaults for opportunity and location", () => {
+        const labels = {
+            opportunities: { singular: "Admissions", plural: "Admissions" },
+            locations: { singular: "Campus", plural: "Campuses" },
+        };
+        expect(resolveConfigurationEntitySingularLabel(labels, "opportunity")).toBe("Admissions");
+        expect(resolveConfigurationEntityPluralLabel(labels, "location")).toBe("Campuses");
+    });
+
+    it("hides industry selector when only one supported industry exists", () => {
+        const workspace = readFileSync(
+            resolve(root, "components/adminV2/settings/entities/EntitiesWorkspaceClient.tsx"),
+            "utf8",
+        );
+        expect(workspace).toContain("showIndustrySelector");
+        expect(workspace).toContain("industryOptions.length > 1");
+        expect(workspace).not.toContain("CONFIG_WORKSPACE_INLINE_EDITOR_SHELL_CLASS");
     });
 });

@@ -1,8 +1,44 @@
 # Data Model / Fields Sprint — Closeout & Consumer Audit Handoff
 
-**Status:** Closed — July 2026 (final controls + entities adoption)  
+## FINAL STATUS
+
+### Data Model Workspace
+
+**Status: FROZEN**
+
+Reference implementation for:
+
+- **Configuration Workspace Doctrine**
+- **Configuration Entity Catalog**
+- **Canonical Field Platform**
+- **Entity-owned Categories**
+- **Inline Configuration Grammar**
+- **Business-first terminology**
+
+Consumer adoption starts after this merge. No additional standalone Data Model implementation work.
+
+---
+
+**Status:** **FROZEN** — July 2026 (final QA hotfix complete; Field Platform Consumer Audit is next)  
 **Workspace:** Settings → Data Model (`/settings/fields`) · Settings → Entities (`/settings/entities`)  
-**Staging baseline:** `c2647eb4f` — lifecycle + entities adoption on `origin/staging`
+**Staging baseline:** update after merge of final Data Model QA hotfix (post-push)
+
+---
+
+## Final QA hotfix (July 2026)
+
+Last standalone Data Model sprint before consumer audit. Fixes only — no redesign.
+
+| Issue | Fix |
+| --- | --- |
+| Industry selector noise | Hide when `industryOptions.length <= 1` (non-generic industries); restores automatically when multiple industries exist |
+| Entities layout | Remove centered `CONFIG_WORKSPACE_INLINE_EDITOR_SHELL_CLASS`; left-aligned full-width list matching Data Model rhythm |
+| Entity label persistence (blocker) | `resolveConfigurationEntitySingularLabel` / `Plural` no longer hardcode `opportunity` / `location` to canonical labels; honor `EntityLabelsContext` effective map |
+| Shared entity source | Entities workspace + Data Model rail both use `configurationEntityCatalog.ts` + `EntityLabelsContext` |
+
+**Root cause (persistence):** `configurationEntityCatalog.ts` returned canonical strings for `opportunity` and `location`, bypassing org overrides saved via `PUT /api/admin/entity-labels` even though the API persisted correctly.
+
+**Secondary hardening:** `entityLabelsResolve.ts` now includes org overrides not present in industry defaults in the `effective` array.
 
 ---
 
@@ -225,17 +261,19 @@ Compare Data Model reference against each consumer. Document gaps; do not redesi
 | Consumer | Audit focus |
 | --- | --- |
 | **Surface Builder** | Category headers, row density, inline grammar, availability hints |
+| **Focus Panel** | Composer field library, inspector language, availability |
 | **Forms** | Field picker vocabulary, category assignment, ownership chips |
 | **Processing** | Category consumption, operator language |
 | **Business Processes** | Field requirements picker, capability honesty |
 | **Documents** | Field/category assignment surfaces |
-| **Focus Panel** | Composer field library, inspector language, availability |
+| **Queue Rows** | Row field vocabulary, entity labels, preview column language |
 
 For each gap, classify:
 
-1. Consumer adoption issue → fix in consumer
-2. Field platform issue → fix in `web/lib/fields/**` or API
-3. Doctrine issue → revise `configuration-workspace-doctrine.md` first
+1. **Consumer adoption** → fix in consumer
+2. **Field Platform** → fix in `web/lib/fields/**` or API
+3. **Entity Model** → entity catalog, labels, or hub mapping
+4. **Configuration Workspace Doctrine** → revise `configuration-workspace-doctrine.md` first
 
 ---
 
