@@ -703,6 +703,12 @@ html[data-alloy-os-runtime-split="true"] [data-focus-panel-boundary] {
 
 /* Activity mode — cockpit fills the panel body; internal panes scroll (no page double-scroll) */
 html[data-alloy-os-runtime-split="true"]
+  [data-inline-focus-panel="true"][data-inline-focus-panel-mode="activity"] {
+  min-height: 0;
+  flex: 1 1 auto;
+}
+
+html[data-alloy-os-runtime-split="true"]
   [data-inline-focus-panel-mode="activity"]
   [data-adminv2-record-modal-scroll] {
   display: flex;
@@ -710,8 +716,7 @@ html[data-alloy-os-runtime-split="true"]
   overflow: hidden !important;
   flex: 1 1 auto;
   min-height: 0;
-  padding-top: 8px;
-  padding-bottom: 8px;
+  padding: 8px 8px 8px !important;
 }
 
 html[data-alloy-os-runtime-split="true"]
@@ -726,15 +731,19 @@ html[data-alloy-os-runtime-split="true"]
   overflow: hidden;
 }
 
+/* height:100% (not auto) — grid 1fr rows need a definite parent height to fill the shell */
+html[data-alloy-os-runtime-split="true"] [data-focus-panel-cockpit="true"],
 html[data-alloy-os-runtime-split="true"] .alloy-os-activity-cockpit {
   flex: 1 1 auto;
   min-height: 0;
-  height: auto;
+  height: 100%;
 }
 
 html[data-alloy-os-runtime-split="true"] .alloy-os-activity-cockpit__body {
   flex: 1 1 auto;
   min-height: 0;
+  height: 100%;
+  overflow: hidden;
 }
 
 /* ── Compressed queue row presentation — Queue UX Concept B (State 2 only) ──────────
@@ -1875,11 +1884,12 @@ html[data-alloy-os-runtime="on"]
   border-bottom: 1px solid var(--alloy-os-border-soft, #eef0f2);
 }
 
-.alloy-os-activity-cockpit__comms .alloy-os-activity-workspace__embed {
+.alloy-os-activity-cockpit__comms .alloy-os-activity-workspace__embed,
+.alloy-os-activity-cockpit [data-activity-cockpit-embed="true"] {
   flex: 1 1 auto;
-  min-height: 0;
-  height: auto;
-  max-height: none;
+  min-height: 0 !important;
+  max-height: none !important;
+  height: 100%;
   overflow: hidden;
   display: flex;
   flex-direction: column;
